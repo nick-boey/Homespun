@@ -1,6 +1,8 @@
 @page "/projects/{Id}/edit"
+@using TreeAgent.Web.Data.Entities
 @using TreeAgent.Web.Services
 @inject ProjectService ProjectService
+@inject SystemPromptService PromptService
 @inject NavigationManager Navigation
 @rendermode InteractiveServer
 
@@ -20,30 +22,65 @@ else if (_notFound)
 else
 {
     <form @onsubmit="HandleSubmit">
-        <div class="mb-3">
-            <label for="name" class="form-label">Name</label>
-            <input type="text" class="form-control" id="name" @bind="_name" required />
+        <div class="row">
+            <div class="col-md-6">
+                <h5>General Settings</h5>
+
+                <div class="mb-3">
+                    <label for="name" class="form-label">Name</label>
+                    <input type="text" class="form-control" id="name" @bind="_name" required />
+                </div>
+
+                <div class="mb-3">
+                    <label for="localPath" class="form-label">Local Path</label>
+                    <input type="text" class="form-control" id="localPath" @bind="_localPath" required placeholder="/path/to/repository" />
+                </div>
+
+                <div class="mb-3">
+                    <label for="gitHubOwner" class="form-label">GitHub Owner (optional)</label>
+                    <input type="text" class="form-control" id="gitHubOwner" @bind="_gitHubOwner" placeholder="owner" />
+                </div>
+
+                <div class="mb-3">
+                    <label for="gitHubRepo" class="form-label">GitHub Repository (optional)</label>
+                    <input type="text" class="form-control" id="gitHubRepo" @bind="_gitHubRepo" placeholder="repo" />
+                </div>
+
+                <div class="mb-3">
+                    <label for="defaultBranch" class="form-label">Default Branch</label>
+                    <input type="text" class="form-control" id="defaultBranch" @bind="_defaultBranch" />
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <h5>Default System Prompt</h5>
+                <p class="text-muted small">Configure the default prompt used for new agents in this project.</p>
+
+                <div class="mb-3">
+                    <label for="templateSelect" class="form-label">Use Template</label>
+                    <select class="form-select" id="templateSelect" @bind="_selectedTemplateId">
+                        <option value="">None (use custom prompt below)</option>
+                        @foreach (var template in _templates)
+                        {
+                            <option value="@template.Id">@template.Name</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label for="customPrompt" class="form-label">Custom Prompt</label>
+                    <textarea class="form-control font-monospace" id="customPrompt" rows="8"
+                              @bind="_defaultSystemPrompt"
+                              placeholder="Enter a custom system prompt or leave empty to use template..."></textarea>
+                    <div class="form-text">
+                        Use variables like <code>@("{{FEATURE_TITLE}}")</code> for dynamic content.
+                        <a href="prompts">View all available variables</a>
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <div class="mb-3">
-            <label for="localPath" class="form-label">Local Path</label>
-            <input type="text" class="form-control" id="localPath" @bind="_localPath" required placeholder="/path/to/repository" />
-        </div>
-
-        <div class="mb-3">
-            <label for="gitHubOwner" class="form-label">GitHub Owner (optional)</label>
-            <input type="text" class="form-control" id="gitHubOwner" @bind="_gitHubOwner" placeholder="owner" />
-        </div>
-
-        <div class="mb-3">
-            <label for="gitHubRepo" class="form-label">GitHub Repository (optional)</label>
-            <input type="text" class="form-control" id="gitHubRepo" @bind="_gitHubRepo" placeholder="repo" />
-        </div>
-
-        <div class="mb-3">
-            <label for="defaultBranch" class="form-label">Default Branch</label>
-            <input type="text" class="form-control" id="defaultBranch" @bind="_defaultBranch" />
-        </div>
+        <hr />
 
         <button type="submit" class="btn btn-primary">Save</button>
         <a href="projects" class="btn btn-secondary">Cancel</a>
@@ -61,9 +98,14 @@ else
     private string? _gitHubOwner;
     private string? _gitHubRepo;
     private string _defaultBranch = "main";
+    private string? _defaultSystemPrompt;
+    private string? _selectedTemplateId;
+    private List<SystemPromptTemplate> _templates = [];
 
     protected override async Task OnInitializedAsync()
     {
+        _templates = await PromptService.GetGlobalTemplatesAsync();
+
         var project = await ProjectService.GetByIdAsync(Id);
         if (project == null)
         {
@@ -76,13 +118,23 @@ else
             _gitHubOwner = project.GitHubOwner;
             _gitHubRepo = project.GitHubRepo;
             _defaultBranch = project.DefaultBranch;
+            _defaultSystemPrompt = project.DefaultSystemPrompt;
+            _selectedTemplateId = project.DefaultPromptTemplateId;
         }
         _loading = false;
     }
 
     private async Task HandleSubmit()
     {
-        await ProjectService.UpdateAsync(Id, _name, _localPath, _gitHubOwner, _gitHubRepo, _defaultBranch);
+        await ProjectService.UpdateAsync(
+            Id,
+            _name,
+            _localPath,
+            _gitHubOwner,
+            _gitHubRepo,
+            _defaultBranch,
+            _defaultSystemPrompt,
+            _selectedTemplateId);
         Navigation.NavigateTo("projects");
     }
 }
