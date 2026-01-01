@@ -57,23 +57,23 @@ Integrate with Claude Code CLI to spawn and manage agent instances.
 
 ---
 
-## Milestone 3: Git Worktree Management
+## Milestone 3: Git Worktree Management (Complete)
 
 Implement worktree creation and lifecycle management.
 
 ### Tasks
 
-- [ ] Implement GitWorktreeService
-  - [ ] Create worktree for feature branch
-  - [ ] List existing worktrees
-  - [ ] Remove worktree (with cleanup)
-- [ ] Integrate with feature lifecycle
-  - [ ] Auto-create worktree when feature starts
-  - [ ] Prune worktree when feature completes
-- [ ] Handle edge cases
-  - [ ] Worktree already exists
-  - [ ] Branch conflicts
-  - [ ] Dirty worktree cleanup
+- [x] Implement GitWorktreeService
+  - [x] Create worktree for feature branch
+  - [x] List existing worktrees
+  - [x] Remove worktree (with cleanup)
+- [x] Integrate with feature lifecycle
+  - [x] Auto-create worktree when feature starts
+  - [x] Prune worktree when feature completes
+- [x] Handle edge cases
+  - [x] Worktree already exists
+  - [x] Branch conflicts
+  - [x] Dirty worktree cleanup
 
 ### Deliverables
 

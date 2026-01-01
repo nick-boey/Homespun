@@ -13,6 +13,9 @@ builder.Services.AddDbContext<TreeAgentDbContext>(options =>
 builder.Services.AddScoped<ProjectService>();
 builder.Services.AddSingleton<IClaudeCodeProcessFactory, ClaudeCodeProcessFactory>();
 builder.Services.AddSingleton<ClaudeCodeProcessManager>();
+builder.Services.AddSingleton<ICommandRunner, CommandRunner>();
+builder.Services.AddSingleton<GitWorktreeService>();
+builder.Services.AddScoped<FeatureService>();
 builder.Services.AddScoped<AgentService>();
 
 builder.Services.AddRazorComponents()
