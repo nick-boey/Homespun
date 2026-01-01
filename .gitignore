@@ -482,3 +482,11 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Temporary folder for reference projects
+.tmp/
+
+# SQLite database files
+*.db
+*.db-shm
+*.db-wal
