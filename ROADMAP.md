@@ -29,25 +29,25 @@ Establish the core project structure and basic infrastructure.
 
 ---
 
-## Milestone 2: Claude Code Integration
+## Milestone 2: Claude Code Integration (Complete)
 
 Integrate with Claude Code CLI to spawn and manage agent instances.
 
 ### Tasks
 
-- [ ] Review happy-cli reference implementation for patterns
-  - [ ] Clone to .tmp/happy-cli if needed
-  - [ ] Document relevant patterns
-- [ ] Implement ClaudeCodeProcessManager
-  - [ ] Start Claude Code in headless/JSON mode
-  - [ ] Parse JSON output stream
-  - [ ] Handle process lifecycle (start, stop, crash)
-- [ ] Create message parsing service
-  - [ ] Parse structured responses
-  - [ ] Store messages to SQLite
-- [ ] Build agent status monitoring
-  - [ ] Track running processes
-  - [ ] Detect and report errors
+- [x] Review happy-cli reference implementation for patterns
+  - [x] Clone to .tmp/happy-cli if needed
+  - [x] Document relevant patterns
+- [x] Implement ClaudeCodeProcessManager
+  - [x] Start Claude Code in headless/JSON mode
+  - [x] Parse JSON output stream
+  - [x] Handle process lifecycle (start, stop, crash)
+- [x] Create message parsing service
+  - [x] Parse structured responses
+  - [x] Store messages to SQLite
+- [x] Build agent status monitoring
+  - [x] Track running processes
+  - [x] Detect and report errors
 
 ### Deliverables
 

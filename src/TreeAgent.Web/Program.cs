@@ -11,6 +11,9 @@ builder.Services.AddDbContext<TreeAgentDbContext>(options =>
     options.UseSqlite($"Data Source={dbPath}"));
 
 builder.Services.AddScoped<ProjectService>();
+builder.Services.AddSingleton<IClaudeCodeProcessFactory, ClaudeCodeProcessFactory>();
+builder.Services.AddSingleton<ClaudeCodeProcessManager>();
+builder.Services.AddScoped<AgentService>();
 
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
