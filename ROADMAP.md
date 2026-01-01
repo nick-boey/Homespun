@@ -83,24 +83,24 @@ Implement worktree creation and lifecycle management.
 
 ---
 
-## Milestone 4: GitHub Synchronization
+## Milestone 4: GitHub Synchronization (Complete)
 
 Sync features with GitHub pull requests.
 
 ### Tasks
 
-- [ ] Implement GitHubService using Octokit
-  - [ ] Authenticate with GitHub token
-  - [ ] Fetch open pull requests
-  - [ ] Fetch closed/merged pull requests
-- [ ] Sync PR data to features
-  - [ ] Import existing PRs as features
-  - [ ] Update feature status from PR state
-  - [ ] Handle PR merges and closes
-- [ ] Create PR from feature
-  - [ ] Push branch to remote
-  - [ ] Create PR via API
-  - [ ] Link PR number to feature
+- [x] Implement GitHubService using Octokit
+  - [x] Authenticate with GitHub token
+  - [x] Fetch open pull requests
+  - [x] Fetch closed/merged pull requests
+- [x] Sync PR data to features
+  - [x] Import existing PRs as features
+  - [x] Update feature status from PR state
+  - [x] Handle PR merges and closes
+- [x] Create PR from feature
+  - [x] Push branch to remote
+  - [x] Create PR via API
+  - [x] Link PR number to feature
 
 ### Deliverables
 

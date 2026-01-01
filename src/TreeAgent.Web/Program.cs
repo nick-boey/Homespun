@@ -17,6 +17,8 @@ builder.Services.AddSingleton<ICommandRunner, CommandRunner>();
 builder.Services.AddSingleton<GitWorktreeService>();
 builder.Services.AddScoped<FeatureService>();
 builder.Services.AddScoped<AgentService>();
+builder.Services.AddSingleton<IGitHubClientWrapper, GitHubClientWrapper>();
+builder.Services.AddScoped<IGitHubService, GitHubService>();
 
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
