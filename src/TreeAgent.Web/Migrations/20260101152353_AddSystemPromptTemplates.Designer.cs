@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using TreeAgent.Web.Data;
 
@@ -10,9 +11,11 @@ using TreeAgent.Web.Data;
 namespace TreeAgent.Web.Migrations
 {
     [DbContext(typeof(TreeAgentDbContext))]
-    partial class TreeAgentDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260101152353_AddSystemPromptTemplates")]
+    partial class AddSystemPromptTemplates
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.1");

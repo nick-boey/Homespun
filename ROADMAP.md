@@ -163,22 +163,22 @@ Build detailed agent monitoring and message inspection.
 
 ---
 
-## Milestone 7: Custom System Prompts
+## Milestone 7: Custom System Prompts (Complete)
 
 Enable customization of agent behavior.
 
 ### Tasks
 
-- [ ] System prompt editor
-  - [ ] Per-feature system prompt
-  - [ ] Project-level default prompts
-  - [ ] Template variables (project name, feature title, etc.)
-- [ ] Context injection
-  - [ ] Inject feature tree context
-  - [ ] Include related feature information
-- [ ] Prompt library
-  - [ ] Save and reuse prompts
-  - [ ] Share prompts across projects
+- [x] System prompt editor
+  - [x] Per-feature system prompt
+  - [x] Project-level default prompts
+  - [x] Template variables (project name, feature title, etc.)
+- [x] Context injection
+  - [x] Inject feature tree context
+  - [x] Include related feature information
+- [x] Prompt library
+  - [x] Save and reuse prompts
+  - [x] Share prompts across projects
 
 ### Deliverables
 

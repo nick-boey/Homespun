@@ -13,6 +13,7 @@ public class TreeAgentDbContext : DbContext
     public DbSet<Feature> Features => Set<Feature>();
     public DbSet<Agent> Agents => Set<Agent>();
     public DbSet<Message> Messages => Set<Message>();
+    public DbSet<SystemPromptTemplate> SystemPromptTemplates => Set<SystemPromptTemplate>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -62,6 +63,26 @@ public class TreeAgentDbContext : DbContext
                 .WithMany(a => a.Messages)
                 .HasForeignKey(e => e.AgentId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<SystemPromptTemplate>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name).IsRequired();
+            entity.Property(e => e.Content).IsRequired();
+
+            entity.HasOne(e => e.Project)
+                .WithMany(p => p.PromptTemplates)
+                .HasForeignKey(e => e.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<Project>(entity =>
+        {
+            entity.HasOne(e => e.DefaultPromptTemplate)
+                .WithMany()
+                .HasForeignKey(e => e.DefaultPromptTemplateId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
     }
 }

@@ -41,7 +41,15 @@ public class ProjectService
         return project;
     }
 
-    public async Task<Project?> UpdateAsync(string id, string name, string localPath, string? gitHubOwner, string? gitHubRepo, string defaultBranch)
+    public async Task<Project?> UpdateAsync(
+        string id,
+        string name,
+        string localPath,
+        string? gitHubOwner,
+        string? gitHubRepo,
+        string defaultBranch,
+        string? defaultSystemPrompt = null,
+        string? defaultPromptTemplateId = null)
     {
         var project = await _db.Projects.FindAsync(id);
         if (project == null) return null;
@@ -51,6 +59,8 @@ public class ProjectService
         project.GitHubOwner = gitHubOwner;
         project.GitHubRepo = gitHubRepo;
         project.DefaultBranch = defaultBranch;
+        project.DefaultSystemPrompt = defaultSystemPrompt;
+        project.DefaultPromptTemplateId = string.IsNullOrEmpty(defaultPromptTemplateId) ? null : defaultPromptTemplateId;
         project.UpdatedAt = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();

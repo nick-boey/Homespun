@@ -20,6 +20,7 @@ builder.Services.AddScoped<FeatureService>();
 builder.Services.AddScoped<AgentService>();
 builder.Services.AddSingleton<IGitHubClientWrapper, GitHubClientWrapper>();
 builder.Services.AddScoped<IGitHubService, GitHubService>();
+builder.Services.AddScoped<SystemPromptService>();
 builder.Services.AddSingleton<IAgentHubNotifier, AgentHubNotifier>();
 
 builder.Services.AddSignalR();
