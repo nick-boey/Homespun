@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.SignalR;
 
-namespace TreeAgent.Web.Hubs;
+namespace TreeAgent.Web.Features.Agents.Hubs;
 
 /// <summary>
 /// SignalR hub for real-time agent updates

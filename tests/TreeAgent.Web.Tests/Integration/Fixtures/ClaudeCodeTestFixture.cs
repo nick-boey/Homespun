@@ -1,5 +1,5 @@
 using System.Diagnostics;
-using TreeAgent.Web.Services;
+using TreeAgent.Web.Features.Agents.Services;
 
 namespace TreeAgent.Web.Tests.Integration.Fixtures;
 

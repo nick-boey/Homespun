@@ -1,4 +1,4 @@
-namespace TreeAgent.Web.Data.Entities;
+namespace TreeAgent.Web.Features.Agents.Data;
 
 public enum AgentStatus
 {

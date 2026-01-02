@@ -1,7 +1,9 @@
 @page "/agents/{Id}"
+@using Microsoft.AspNetCore.Components.Web
 @using Microsoft.AspNetCore.SignalR.Client
-@using TreeAgent.Web.Data.Entities
-@using TreeAgent.Web.Services
+@using static Microsoft.AspNetCore.Components.Web.RenderMode
+@using TreeAgent.Web.Features.Agents.Data
+@using TreeAgent.Web.Features.Agents.Services
 @inject AgentService AgentService
 @inject NavigationManager NavigationManager
 @implements IAsyncDisposable

@@ -1,4 +1,6 @@
-namespace TreeAgent.Web.Data.Entities;
+using TreeAgent.Web.Data.Entities;
+
+namespace TreeAgent.Web.Features.Agents.Data;
 
 public class Agent
 {

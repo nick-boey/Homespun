@@ -1,4 +1,4 @@
-namespace TreeAgent.Web.Services;
+namespace TreeAgent.Web.Features.Agents.Services;
 
 /// <summary>
 /// Resolves the path to the Claude Code executable.

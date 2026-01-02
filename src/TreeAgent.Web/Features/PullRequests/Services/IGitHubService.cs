@@ -1,6 +1,4 @@
-using TreeAgent.Web.Data.Entities;
-
-namespace TreeAgent.Web.Services;
+namespace TreeAgent.Web.Features.PullRequests.Services;
 
 /// <summary>
 /// Represents a GitHub pull request

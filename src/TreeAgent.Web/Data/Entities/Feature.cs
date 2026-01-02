@@ -1,3 +1,5 @@
+using TreeAgent.Web.Features.Agents.Data;
+
 namespace TreeAgent.Web.Data.Entities;
 
 public class Feature

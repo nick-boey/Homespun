@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using TreeAgent.Web.Data.Entities;
+using TreeAgent.Web.Features.Agents.Data;
 
 namespace TreeAgent.Web.Data;
 
