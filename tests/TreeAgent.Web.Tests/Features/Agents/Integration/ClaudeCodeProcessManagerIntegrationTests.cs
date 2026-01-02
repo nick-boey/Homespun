@@ -5,12 +5,25 @@ using TreeAgent.Web.Tests.Integration.Fixtures;
 namespace TreeAgent.Web.Tests.Features.Agents.Integration;
 
 /// <summary>
-/// Integration tests for ClaudeCodeProcessManager that test multiple agent management.
-/// These tests require Claude Code to be installed and available on the PATH.
+/// DEPRECATED: These tests use the old interactive mode approach which has reliability issues.
+///
+/// Use ClaudeCodeQueryIntegrationTests instead, which uses:
+/// - --print mode for one-shot queries
+/// - --output-format stream-json for structured output parsing
+/// - Parallel test execution for faster runs
+///
+/// These tests are kept for reference but should not be used for new development.
+/// The main issues with this approach:
+/// 1. Uses fixed Task.Delay waits which are unreliable
+/// 2. Cannot reliably detect when Claude is ready
+/// 3. Tests run sequentially (no parallelization)
+/// 4. Interactive mode requires stdin/stdout coordination that often fails
 /// </summary>
 [TestFixture]
 [Category("Integration")]
 [Category("ClaudeCode")]
+[Category("Deprecated")]
+[Explicit("Use ClaudeCodeQueryIntegrationTests instead - this approach is deprecated")]
 public class ClaudeCodeProcessManagerIntegrationTests
 {
     private ClaudeCodeTestFixture _fixture = null!;
