@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using TreeAgent.Web.Services;
 
 namespace TreeAgent.Web.Tests.Integration.Fixtures;
 
@@ -23,8 +24,8 @@ public class ClaudeCodeTestFixture : IDisposable
         // Create a minimal test file for Claude to work with
         File.WriteAllText(Path.Combine(WorkingDirectory, "test.txt"), "Hello, World!");
 
-        // Determine Claude Code path
-        ClaudeCodePath = Environment.GetEnvironmentVariable("CLAUDE_CODE_PATH") ?? "claude";
+        // Determine Claude Code path using the resolver (checks env var and default locations)
+        ClaudeCodePath = new ClaudeCodePathResolver().Resolve();
 
         // Check if Claude Code is available
         IsClaudeCodeAvailable = CheckClaudeCodeAvailable();
