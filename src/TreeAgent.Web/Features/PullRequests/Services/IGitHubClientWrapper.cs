@@ -10,6 +10,8 @@ public interface IGitHubClientWrapper
     Task<IReadOnlyList<PullRequest>> GetPullRequestsAsync(string owner, string repo, PullRequestRequest request);
     Task<PullRequest> GetPullRequestAsync(string owner, string repo, int number);
     Task<PullRequest> CreatePullRequestAsync(string owner, string repo, NewPullRequest newPullRequest);
+    Task<IReadOnlyList<PullRequestReview>> GetPullRequestReviewsAsync(string owner, string repo, int number);
+    Task<CombinedCommitStatus> GetCombinedCommitStatusAsync(string owner, string repo, string reference);
 }
 
 /// <summary>
@@ -63,5 +65,15 @@ public class GitHubClientWrapper : IGitHubClientWrapper
     public async Task<PullRequest> CreatePullRequestAsync(string owner, string repo, NewPullRequest newPullRequest)
     {
         return await GetClient().PullRequest.Create(owner, repo, newPullRequest);
+    }
+
+    public async Task<IReadOnlyList<PullRequestReview>> GetPullRequestReviewsAsync(string owner, string repo, int number)
+    {
+        return await GetClient().PullRequest.Review.GetAll(owner, repo, number);
+    }
+
+    public async Task<CombinedCommitStatus> GetCombinedCommitStatusAsync(string owner, string repo, string reference)
+    {
+        return await GetClient().Repository.Status.GetCombined(owner, repo, reference);
     }
 }

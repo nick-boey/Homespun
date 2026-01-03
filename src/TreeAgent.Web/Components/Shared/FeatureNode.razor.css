@@ -45,19 +45,45 @@
 }
 
 .status-indicator.status-in-development {
-    background-color: #0d6efd;
+    background-color: #ffc107; /* Yellow - In Progress */
 }
 
 .status-indicator.status-ready-for-review {
-    background-color: #ffc107;
+    background-color: #ffc107; /* Yellow - flashing */
+    animation: pulse 1.5s ease-in-out infinite;
 }
 
 .status-indicator.status-merged {
-    background-color: #198754;
+    background-color: #6f42c1; /* Purple */
 }
 
 .status-indicator.status-cancelled {
-    background-color: #dc3545;
+    background-color: #dc3545; /* Red */
+}
+
+/* Additional PR workflow statuses */
+.status-indicator.status-checks-failing {
+    background-color: #dc3545; /* Red */
+}
+
+.status-indicator.status-conflict {
+    background-color: #fd7e14; /* Orange */
+}
+
+.status-indicator.status-ready-for-merging {
+    background-color: #198754; /* Green */
+}
+
+/* Flashing animation for Ready for Review */
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.5;
+        transform: scale(0.9);
+    }
 }
 
 .feature-title {

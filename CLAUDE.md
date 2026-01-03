@@ -119,6 +119,7 @@ dotnet ef migrations add <MigrationName>
 Environment variables:
 - `TREEAGENT_DB_PATH`: Path to SQLite database (default: `treeagent.db`)
 - `GITHUB_TOKEN`: GitHub personal access token for PR operations
+- `TREEAGENT_VERBOSE_SQL`: Set to `true` to enable detailed EF Core SQL logging
 
 ## Health Checks
 
