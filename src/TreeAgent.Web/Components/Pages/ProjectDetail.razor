@@ -76,6 +76,11 @@ else
                                             Syncing PRs...
                                         </span>
                                     }
+                                    else if (_tokenMissing)
+                                    {
+                                        <span class="badge bg-warning text-dark ms-2" title="Set GITHUB_TOKEN environment variable to enable PR sync">Token missing</span>
+                                        <button class="btn btn-sm btn-link p-0 ms-1" @onclick="SyncPullRequestsAsync">Retry</button>
+                                    }
                                     else if (_syncError != null)
                                     {
                                         <span class="badge bg-danger ms-2" title="@_syncError">Sync failed</span>
@@ -107,6 +112,7 @@ else
     private Feature? _selectedFeature;
     private string? _selectedFeatureId;
     private bool _isSyncingPRs;
+    private bool _tokenMissing;
     private string? _syncError;
     private SyncResult? _lastSyncResult;
 
@@ -138,15 +144,28 @@ else
         if (_project == null || _isSyncingPRs)
             return;
 
-        // Check if GitHub is configured for this project
+        // Check if GitHub owner/repo are configured
+        var hasGitHubConfig = !string.IsNullOrEmpty(_project.GitHubOwner) &&
+                              !string.IsNullOrEmpty(_project.GitHubRepo);
+        if (!hasGitHubConfig)
+        {
+            // No GitHub config at all - nothing to sync
+            return;
+        }
+
+        // Check if GitHub is fully configured (including token)
         var isConfigured = await GitHubService.IsConfiguredAsync(_project.Id);
         if (!isConfigured)
         {
-            Logger.LogDebug("Skipping PR sync for project {ProjectId}: GitHub not configured or token missing", _project.Id);
+            // GitHub owner/repo set but token missing
+            _tokenMissing = true;
+            Logger.LogWarning("PR sync skipped for project {ProjectId}: GITHUB_TOKEN not configured", _project.Id);
+            StateHasChanged();
             return;
         }
 
         _isSyncingPRs = true;
+        _tokenMissing = false;
         _syncError = null;
         StateHasChanged();
 
