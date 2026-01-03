@@ -1,232 +1,337 @@
 # TreeAgent Development Roadmap
 
-This document outlines the development roadmap for TreeAgent, organized into milestones that can be developed incrementally.
+This document outlines the development roadmap for the Pull Request Workflow feature.
 
-## Current Status
+## Overview
 
-**All core milestones (1-8) are complete.** TreeAgent is production-ready with the following capabilities:
-
-- Project and feature management with hierarchical tree visualization
-- Git worktree integration for isolated feature development
-- GitHub pull request synchronization
-- Claude Code agent orchestration with real-time message streaming
-- Customizable system prompts with template variables
-- Health checks and structured logging
-- Comprehensive test coverage
+TreeAgent manages past, present, and future pull requests in a unified workflow. Past and present PRs form a single chain on the main branch, while future changes branch into a tree structure. As PRs are merged, parallel branches are "zipped" back into the trunk through automatic rebasing.
 
 ---
 
-## Milestone 1: Foundation (Complete)
+## Pull Request Workflow
 
-Establish the core project structure and basic infrastructure.
+### Time Dimension
 
-### Tasks
+Each pull request is assigned an integer time value `t`:
+- `t < 0`: Past (merged/closed) PRs, ordered by merge time
+- `t = 0`: Most recently merged PR (head of main)
+- `t = 1`: Current open PRs (may be multiple, parallel branches)
+- `t > 1`: Future planned changes (stored in ROADMAP.json)
 
-- [x] Create .NET solution with single web project
-  - [x] TreeAgent.Web (Blazor SSR, services, data)
-  - [x] Components/ for Blazor components
-  - [x] Data/ for EF Core entities and DbContext
-  - [x] Services/ for business logic
-- [x] Set up SQLite database with EF Core
-  - [x] Projects table
-  - [x] Features table
-  - [x] Agents table
-  - [x] Messages table
-- [x] Implement basic project CRUD operations
-- [x] Create minimal Blazor layout and navigation
+### Current PR Status Workflow
 
-### Deliverables
+```mermaid
+stateDiagram-v2
+    [*] --> InProgress : Agent opens PR
+    InProgress --> ReadyForReview : Agent completes work
+    ReadyForReview --> InProgress : User adds code comments
+    ReadyForReview --> ChecksFailing : CI checks fail
+    ChecksFailing --> InProgress : Agent fixes issues
+    InProgress --> ChecksFailing : CI checks fail
+    ReadyForReview --> ReadyForMerging : User approves (no comments)
+    ChecksFailing --> ReadyForReview : Agent fixes, checks pass
+    ReadyForMerging --> [*] : User merges PR
 
-- Running Blazor application
-- Database migrations working
-- Project create/list/edit functionality
+    note right of InProgress : Yellow status
+    note right of ReadyForReview : Flashing yellow status
+    note right of ChecksFailing : Red status
+    note right of ReadyForMerging : Green status
+```
 
----
+### Status Definitions
 
-## Milestone 2: Claude Code Integration (Complete)
-
-Integrate with Claude Code CLI to spawn and manage agent instances.
-
-### Tasks
-
-- [x] Review happy-cli reference implementation for patterns
-  - [x] Clone to .tmp/happy-cli if needed
-  - [x] Document relevant patterns
-- [x] Implement ClaudeCodeProcessManager
-  - [x] Start Claude Code in headless/JSON mode
-  - [x] Parse JSON output stream
-  - [x] Handle process lifecycle (start, stop, crash)
-- [x] Create message parsing service
-  - [x] Parse structured responses
-  - [x] Store messages to SQLite
-- [x] Build agent status monitoring
-  - [x] Track running processes
-  - [x] Detect and report errors
-
-### Deliverables
-
-- Ability to spawn Claude Code instance
-- Message capture and storage
-- Agent status tracking
+| Status | Color | Description |
+|--------|-------|-------------|
+| In Progress | Yellow | Agent is actively working on the PR |
+| Ready for Review | Flashing Yellow | Agent completed, awaiting user review |
+| Checks Failing | Red | CI/CD checks have failed |
+| Ready for Merging | Green | Approved and ready to merge |
+| Merged | Purple | PR has been merged (past) |
+| Closed | Red | PR was closed without merging (past) |
 
 ---
 
-## Milestone 3: Git Worktree Management (Complete)
+## ROADMAP.json Schema
 
-Implement worktree creation and lifecycle management.
+Future changes are stored in a `ROADMAP.json` file on the default branch. This schema defines the structure:
 
-### Tasks
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "TreeAgent Roadmap",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "string",
+      "description": "Schema version"
+    },
+    "lastUpdated": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of last update"
+    },
+    "changes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/futureChange"
+      }
+    }
+  },
+  "required": ["version", "changes"],
+  "definitions": {
+    "futureChange": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+$",
+          "description": "Short identifier for the change (used in branch naming)"
+        },
+        "group": {
+          "type": "string",
+          "description": "Project/component group this change belongs to"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["feature", "bug", "refactor", "docs", "test", "chore"],
+          "description": "Type of change"
+        },
+        "title": {
+          "type": "string",
+          "description": "Short title describing the change"
+        },
+        "description": {
+          "type": "string",
+          "description": "Detailed description of the change"
+        },
+        "instructions": {
+          "type": "string",
+          "description": "Implementation instructions for agents (more specific for lower t values)"
+        },
+        "t": {
+          "type": "integer",
+          "minimum": 2,
+          "description": "Time position (must be >= 2 for future changes)"
+        },
+        "parentId": {
+          "type": ["string", "null"],
+          "description": "ID of parent change (null for root-level changes based on t=1)"
+        },
+        "thread": {
+          "type": "string",
+          "description": "Thread name linking related changes across the tree"
+        },
+        "priority": {
+          "type": "string",
+          "enum": ["high", "medium", "low"],
+          "description": "Priority level"
+        },
+        "estimatedComplexity": {
+          "type": "string",
+          "enum": ["small", "medium", "large"],
+          "description": "Estimated implementation complexity"
+        }
+      },
+      "required": ["id", "group", "type", "title", "t", "thread"]
+    }
+  }
+}
+```
 
-- [x] Implement GitWorktreeService
-  - [x] Create worktree for feature branch
-  - [x] List existing worktrees
-  - [x] Remove worktree (with cleanup)
-- [x] Integrate with feature lifecycle
-  - [x] Auto-create worktree when feature starts
-  - [x] Prune worktree when feature completes
-- [x] Handle edge cases
-  - [x] Worktree already exists
-  - [x] Branch conflicts
-  - [x] Dirty worktree cleanup
+### Branch Naming Convention
 
-### Deliverables
+Branches follow the pattern: `{group}/{type}/{id}`
 
-- Automatic worktree management
-- Worktree status in UI
-- Clean worktree lifecycle
-
----
-
-## Milestone 4: GitHub Synchronization (Complete)
-
-Sync features with GitHub pull requests.
-
-### Tasks
-
-- [x] Implement GitHubService using Octokit
-  - [x] Authenticate with GitHub token
-  - [x] Fetch open pull requests
-  - [x] Fetch closed/merged pull requests
-- [x] Sync PR data to features
-  - [x] Import existing PRs as features
-  - [x] Update feature status from PR state
-  - [x] Handle PR merges and closes
-- [x] Create PR from feature
-  - [x] Push branch to remote
-  - [x] Create PR via API
-  - [x] Link PR number to feature
-
-### Deliverables
-
-- Two-way sync with GitHub PRs
-- Feature status reflects PR state
-- Create PRs from planned features
-
----
-
-## Milestone 5: Feature Tree Visualization (Complete)
-
-Build the tree visualization for the feature roadmap.
-
-### Tasks
-
-- [x] Design tree data structure
-  - [x] Parent-child relationships
-  - [x] Ordering within siblings
-- [x] Implement tree rendering component
-  - [x] Hierarchical list or simple tree view
-  - [x] Color coding by status
-  - [x] Node selection
-- [x] Feature detail panel
-  - [x] View/edit feature metadata
-  - [x] View linked agent and messages
-  - [x] Quick actions (start, cancel)
-
-### Deliverables
-
-- Visual tree of features
-- Status color coding
-- Feature detail view
-
----
-
-## Milestone 6: Agent UI and Message Inspector (Complete)
-
-Build detailed agent monitoring and message inspection.
-
-### Tasks
-
-- [x] Agent dashboard
-  - [x] List all active agents
-  - [x] Show agent status
-  - [x] Quick actions (stop, restart)
-- [x] Message inspector component
-  - [x] Real-time message stream
-  - [x] Message filtering and search
-  - [x] Syntax highlighting for code
-- [x] Implement SignalR for real-time updates
-  - [x] Push new messages to UI
-  - [x] Agent status changes
-  - [x] Feature status changes
-
-### Deliverables
-
-- Real-time agent monitoring
-- Message drill-down capability
-- Live updates without refresh
+Examples:
+- `core/feature/pr-time-dimension`
+- `web/bug/fix-status-colors`
+- `services/refactor/github-sync`
 
 ---
 
-## Milestone 7: Custom System Prompts (Complete)
+## Implementation Plan
 
-Enable customization of agent behavior.
+This implementation follows TDD principles: write failing tests first, then implement to make them pass.
 
-### Tasks
+### Phase 1: Data Model and Schema
 
-- [x] System prompt editor
-  - [x] Per-feature system prompt
-  - [x] Project-level default prompts
-  - [x] Template variables (project name, feature title, etc.)
-- [x] Context injection
-  - [x] Inject feature tree context
-  - [x] Include related feature information
-- [x] Prompt library
-  - [x] Save and reuse prompts
-  - [x] Share prompts across projects
+#### 1.1 Define PullRequestState Entity
 
-### Deliverables
+**Tests:**
+- `PullRequestState_HasRequiredProperties_TimeGroupTypeId`
+- `PullRequestState_TimeValue_CanBeNegativeZeroOrPositive`
+- `PullRequestState_Status_MapsToCorrectColors`
 
-- Customizable agent instructions
-- Context-aware prompting
-- Prompt management
+**Implementation:**
+- Create `PullRequestState` entity with properties: `Id`, `Time`, `Group`, `Type`, `Title`, `Status`, `Thread`, `GitHubPrNumber`
+- Add `PullRequestStatus` enum: `InProgress`, `ReadyForReview`, `ChecksFailing`, `ReadyForMerging`, `Merged`, `Closed`
+- Add EF Core migration
 
----
+#### 1.2 Create ROADMAP.json Parser
 
-## Milestone 8: Polish and Production Readiness (Complete)
+**Tests:**
+- `RoadmapParser_ValidJson_ParsesAllChanges`
+- `RoadmapParser_InvalidJson_ThrowsValidationException`
+- `RoadmapParser_MissingRequiredFields_ThrowsValidationException`
+- `RoadmapParser_ValidatesTimeGreaterThanOne`
 
-Prepare for production deployment.
+**Implementation:**
+- Create `RoadmapChange` model matching schema
+- Create `RoadmapParser` service with JSON schema validation
+- Add file watcher for ROADMAP.json changes
 
-### Tasks
+### Phase 2: GitHub Integration Refactor
 
-- [x] Error handling and recovery
-  - [x] Graceful degradation
-  - [x] Retry mechanisms
-  - [x] User-friendly error messages
-- [x] Logging and diagnostics
-  - [x] Structured logging
-  - [x] Health checks
-- [x] Documentation
-  - [x] User guide
-  - [x] Deployment guide
-- [x] Testing
-  - [x] Unit tests for services
-  - [x] Integration tests for agents
+#### 2.1 Past PR Synchronization
 
-### Deliverables
+**Tests:**
+- `GitHubSync_MergedPRs_AssignsNegativeTimeInOrder`
+- `GitHubSync_ClosedPRs_AssignsNegativeTimeInOrder`
+- `GitHubSync_MostRecentMerge_HasTimeZero`
+- `GitHubSync_PreservesExistingTimeValues`
 
-- Production-ready application
-- Documentation
-- Test coverage
+**Implementation:**
+- Modify `GitHubService` to fetch merged/closed PRs with merge timestamps
+- Assign `t` values based on merge order (most recent = 0, older = negative)
+- Update sync to preserve existing time values for already-synced PRs
+
+#### 2.2 Current PR Status Tracking
+
+**Tests:**
+- `CurrentPR_NewPR_HasInProgressStatus`
+- `CurrentPR_AgentComplete_HasReadyForReviewStatus`
+- `CurrentPR_ReviewComments_ReturnsToInProgress`
+- `CurrentPR_ChecksFailing_HasChecksFailing Status`
+- `CurrentPR_Approved_HasReadyForMergingStatus`
+- `CurrentPR_AllCurrentPRs_HaveTimeOne`
+
+**Implementation:**
+- Track PR review state from GitHub webhooks or polling
+- Detect CI check status via GitHub API
+- Implement status transition logic matching the state diagram
+- Ensure all open PRs maintain `t = 1`
+
+#### 2.3 Automatic Rebasing
+
+**Tests:**
+- `AutoRebase_OnMerge_RebasesAllOpenPRs`
+- `AutoRebase_ConflictDetected_ReportsConflict`
+- `AutoRebase_Success_UpdatesAllBranches`
+
+**Implementation:**
+- Detect when a PR is merged (t=1 -> t=0)
+- Trigger rebase of all other t=1 branches onto new main HEAD
+- Handle rebase conflicts with user notification
+- Update GitHub branches after successful rebase
+
+### Phase 3: Future Changes (ROADMAP.json)
+
+#### 3.1 Read and Display Future Changes
+
+**Tests:**
+- `FutureChanges_LoadFromRoadmap_DisplaysInTree`
+- `FutureChanges_ParentChild_DisplaysHierarchy`
+- `FutureChanges_Thread_GroupsRelatedChanges`
+- `FutureChanges_TimeOrdering_DisplaysCorrectDepth`
+
+**Implementation:**
+- Load ROADMAP.json on startup and file change
+- Display future changes in feature tree with parent-child relationships
+- Show thread information for related changes
+- Order by `t` value within siblings
+
+#### 3.2 Promote Future Change to Current PR
+
+**Tests:**
+- `PromoteChange_CreatesWorktree_WithCorrectBranchName`
+- `PromoteChange_CreatesPR_WithChangeDetails`
+- `PromoteChange_RemovesFromRoadmap_AddsToCurrentPRs`
+- `PromoteChange_UpdatesChildParents_ToNewPR`
+
+**Implementation:**
+- When agent starts work on a future change, create worktree with branch `{group}/{type}/{id}`
+- Open PR with title and description from the change
+- Remove the change from ROADMAP.json (requires plan-update PR if only plan changes)
+- Update any child changes to reference the new PR as parent
+
+#### 3.3 Plan Update PRs
+
+**Tests:**
+- `PlanUpdate_OnlyRoadmapChanges_CreatesSpecialThread`
+- `PlanUpdate_MustMergeFirst_BeforeOtherPRs`
+- `PlanUpdate_ValidatesSchema_BeforeMerge`
+
+**Implementation:**
+- Detect PRs that only modify ROADMAP.json
+- Assign to special `plan-update` thread
+- Block merging of other PRs until plan-update PRs are merged
+- Validate ROADMAP.json schema on PR creation
+
+### Phase 4: UI Updates
+
+#### 4.1 Timeline Visualization
+
+**Tests:**
+- `Timeline_PastPRs_ShowsMergeOrder`
+- `Timeline_CurrentPRs_ShowsParallelBranches`
+- `Timeline_FutureChnges_ShowsTree`
+- `Timeline_StatusColors_MatchDefinitions`
+
+**Implementation:**
+- Redesign feature tree to show time dimension
+- Add visual distinction between past (linear), current (parallel), future (tree)
+- Apply correct status colors per the status definitions table
+
+#### 4.2 Thread Visualization
+
+**Tests:**
+- `Threads_RelatedPRs_ShowsConnection`
+- `Threads_CrossTimespan_LinksAllStages`
+- `Threads_FilterByThread_ShowsOnlyRelated`
+
+**Implementation:**
+- Add visual thread indicators connecting related PRs/changes
+- Allow filtering the view by thread
+- Show thread timeline spanning past -> current -> future
+
+#### 4.3 Status Workflow UI
+
+**Tests:**
+- `StatusUI_InProgress_ShowsYellow`
+- `StatusUI_ReadyForReview_ShowsFlashingYellow`
+- `StatusUI_ChecksFailing_ShowsRed`
+- `StatusUI_ReadyForMerging_ShowsGreen`
+
+**Implementation:**
+- Add flashing animation for Ready for Review status
+- Update color scheme to match status definitions
+- Add status transition buttons where applicable
+
+### Phase 5: Agent Integration
+
+#### 5.1 Agent Status Updates
+
+**Tests:**
+- `Agent_StartWork_PRMovesToInProgress`
+- `Agent_CompleteWork_PRMovesToReadyForReview`
+- `Agent_RoadmapUpdate_CreatesplanUpdatePR`
+
+**Implementation:**
+- Agent lifecycle updates PR status automatically
+- Detect agent completion and transition to Ready for Review
+- When agent modifies ROADMAP.json, create special plan-update PR
+
+#### 5.2 Review Comment Handling
+
+**Tests:**
+- `ReviewComments_Received_SpawnsNewAgent`
+- `ReviewComments_Agent_MovesToInProgress`
+- `ReviewComments_Resolved_MovesToReadyForReview`
+
+**Implementation:**
+- Detect new review comments on Ready for Review PRs
+- Spawn new agent to address comments
+- Track comment resolution status
 
 ---
 
@@ -254,6 +359,8 @@ Features for potential future development, organized by priority:
 - **Mobile Companion App**: Monitor agents and approve PRs from mobile devices
 - **Self-hosting Guide**: Docker/Kubernetes deployment documentation
 
-### Contributing
+---
+
+## Contributing
 
 Contributions are welcome. Please see the [SPECIFICATION.md](SPECIFICATION.md) for technical details and architecture overview before submitting pull requests.

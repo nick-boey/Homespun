@@ -120,11 +120,72 @@ TreeAgent supports customizable system prompts with template variables:
 
 Create prompt templates in the Prompt Templates page to reuse across features and projects.
 
-### GitHub Integration
+### Pull Request Workflow
 
-- **Sync PRs**: Import existing pull requests as features
+TreeAgent organizes development as a continuous chain of pull requests across three time stages:
+
+#### Time Dimension
+
+Each pull request is assigned an integer time value `t`:
+- **Past (`t <= 0`)**: Merged/closed PRs ordered by merge time. The most recently merged PR has `t = 0`, older PRs have negative values.
+- **Present (`t = 1`)**: Currently open PRs. Multiple PRs can exist in parallel at this stage.
+- **Future (`t > 1`)**: Planned changes stored in `ROADMAP.json`, organized as a tree of dependent features.
+
+#### PR Status Workflow
+
+```mermaid
+stateDiagram-v2
+    [*] --> InProgress : Agent opens PR
+    InProgress --> ReadyForReview : Agent completes work
+    ReadyForReview --> InProgress : User adds code comments
+    ReadyForReview --> ChecksFailing : CI checks fail
+    ChecksFailing --> InProgress : Agent fixes issues
+    ReadyForReview --> ReadyForMerging : User approves (no comments)
+    ReadyForMerging --> [*] : User merges PR
+```
+
+| Status | Color | Description |
+|--------|-------|-------------|
+| In Progress | Yellow | Agent is actively working on the PR |
+| Ready for Review | Flashing Yellow | Agent completed, awaiting user review |
+| Checks Failing | Red | CI/CD checks have failed |
+| Ready for Merging | Green | Approved and ready to merge |
+| Merged | Purple | PR has been merged (past) |
+| Closed | Red | PR was closed without merging (past) |
+
+#### Automatic Rebasing
+
+When a PR is merged, all other open PRs (`t = 1`) are automatically rebased onto the new main branch HEAD. This keeps all parallel branches up-to-date and ensures clean merges.
+
+#### Branch Naming Convention
+
+Branches follow the pattern: `{group}/{type}/{id}`
+- `group`: Project or component (e.g., `core`, `web`, `services`)
+- `type`: Change type (`feature`, `bug`, `refactor`, `docs`, `test`, `chore`)
+- `id`: Short identifier describing the change
+
+Examples: `core/feature/pr-time-dimension`, `web/bug/fix-status-colors`
+
+#### Future Changes (ROADMAP.json)
+
+Planned changes are stored in `ROADMAP.json` on the default branch:
+- Each change includes `id`, `group`, `type`, `title`, `instructions`, and `thread`
+- Changes are organized hierarchically with parent-child relationships
+- Threads link related changes across past, present, and future stages
+- When an agent starts work on a future change, it becomes a current PR
+
+#### Plan Update PRs
+
+Changes to `ROADMAP.json` require a special `plan-update` thread PR. These PRs:
+- Contain only modifications to the roadmap file
+- Must be merged before other PRs
+- Ensure the single source of truth for planning is always consistent
+
+#### GitHub Sync
+
+- **Past PRs**: Imported from closed/merged PRs with correct time ordering
+- **Current PRs**: Synced with open PRs, status reflects review/check state
 - **Create PRs**: Push branches and create PRs directly from TreeAgent
-- **Status Updates**: Feature status automatically reflects PR state (open, merged, closed)
 
 ## API Endpoints
 
