@@ -13,7 +13,7 @@ public record FutureChangeWithTime(RoadmapChange Change, int Time, int Depth);
 /// <summary>
 /// Service for managing ROADMAP.json and future changes.
 /// </summary>
-public class RoadmapService
+public class RoadmapService : IRoadmapService
 {
     private readonly TreeAgentDbContext _db;
     private readonly ICommandRunner _commandRunner;
