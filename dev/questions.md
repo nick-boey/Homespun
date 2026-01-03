@@ -13,11 +13,9 @@ When automatic rebasing fails due to conflicts, what should happen?
 
 Should closed (not merged) PRs be included in the `t` ordering, or excluded entirely from the timeline? The spec shows them as red/past, but it's unclear if they get assigned negative `t` values.
 
-## 3. Thread scope
+## 3. ~~Thread scope~~ (RESOLVED)
 
-Is a thread meant to:
-- Link a single feature across past → current → future (like one PR per thread), or
-- Group multiple related PRs together (like an epic containing several PRs)?
+*Resolved: "Thread" has been replaced with "group". Groups are used to organize PRs by project/component (e.g., `core`, `web`, `services`). This is reflected in branch naming: `{group}/{type}/{id}`.*
 
 ## 4. Plan-update PR blocking
 
