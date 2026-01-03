@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Octokit;
 using TreeAgent.Web.Features.Commands;
+using TreeAgent.Web.Features.PullRequests;
 using TreeAgent.Web.Features.PullRequests.Data;
 using TreeAgent.Web.Features.PullRequests.Data.Entities;
 using TrackedPullRequest = TreeAgent.Web.Features.PullRequests.Data.Entities.PullRequest;
@@ -45,7 +46,7 @@ public class GitHubService(
         return true;
     }
 
-    public async Task<List<GitHubPullRequest>> GetOpenPullRequestsAsync(string projectId)
+    public async Task<List<PullRequestInfo>> GetOpenPullRequestsAsync(string projectId)
     {
         var project = await db.Projects.FindAsync(projectId);
         if (project == null || string.IsNullOrEmpty(project.GitHubOwner) || string.IsNullOrEmpty(project.GitHubRepo))
@@ -66,7 +67,7 @@ public class GitHubService(
 
             var prs = await githubClient.GetPullRequestsAsync(project.GitHubOwner, project.GitHubRepo, request);
             logger.LogInformation("Retrieved {Count} open PRs from {Owner}/{Repo}", prs.Count, project.GitHubOwner, project.GitHubRepo);
-            return prs.Select(MapPullRequest).ToList();
+            return prs.Select(MapToPullRequestInfo).ToList();
         }
         catch (Exception ex)
         {
@@ -75,7 +76,7 @@ public class GitHubService(
         }
     }
 
-    public async Task<List<GitHubPullRequest>> GetClosedPullRequestsAsync(string projectId)
+    public async Task<List<PullRequestInfo>> GetClosedPullRequestsAsync(string projectId)
     {
         var project = await db.Projects.FindAsync(projectId);
         if (project == null || string.IsNullOrEmpty(project.GitHubOwner) || string.IsNullOrEmpty(project.GitHubRepo))
@@ -96,7 +97,7 @@ public class GitHubService(
 
             var prs = await githubClient.GetPullRequestsAsync(project.GitHubOwner, project.GitHubRepo, request);
             logger.LogInformation("Retrieved {Count} closed PRs from {Owner}/{Repo}", prs.Count, project.GitHubOwner, project.GitHubRepo);
-            return prs.Select(MapPullRequest).ToList();
+            return prs.Select(MapToPullRequestInfo).ToList();
         }
         catch (Exception ex)
         {
@@ -105,7 +106,7 @@ public class GitHubService(
         }
     }
 
-    public async Task<GitHubPullRequest?> GetPullRequestAsync(string projectId, int prNumber)
+    public async Task<PullRequestInfo?> GetPullRequestAsync(string projectId, int prNumber)
     {
         var project = await db.Projects.FindAsync(projectId);
         if (project == null || string.IsNullOrEmpty(project.GitHubOwner) || string.IsNullOrEmpty(project.GitHubRepo))
@@ -121,7 +122,7 @@ public class GitHubService(
             logger.LogInformation("Fetching PR #{PrNumber} from {Owner}/{Repo}", prNumber, project.GitHubOwner, project.GitHubRepo);
             var pr = await githubClient.GetPullRequestAsync(project.GitHubOwner, project.GitHubRepo, prNumber);
             logger.LogDebug("Retrieved PR #{PrNumber}: {Title}", prNumber, pr.Title);
-            return MapPullRequest(pr);
+            return MapToPullRequestInfo(pr);
         }
         catch (Exception ex)
         {
@@ -130,7 +131,7 @@ public class GitHubService(
         }
     }
 
-    public async Task<GitHubPullRequest?> CreatePullRequestAsync(string projectId, string pullRequestId)
+    public async Task<PullRequestInfo?> CreatePullRequestAsync(string projectId, string pullRequestId)
     {
         var pullRequest = await db.PullRequests
             .Include(pr => pr.Project)
@@ -182,7 +183,7 @@ public class GitHubService(
             pullRequest.UpdatedAt = DateTime.UtcNow;
             await db.SaveChangesAsync();
 
-            return MapPullRequest(pr);
+            return MapToPullRequestInfo(pr);
         }
         catch (Exception ex)
         {
@@ -332,20 +333,36 @@ public class GitHubService(
         }
     }
 
-    private static GitHubPullRequest MapPullRequest(Octokit.PullRequest pr)
+    private static PullRequestInfo MapToPullRequestInfo(Octokit.PullRequest pr)
     {
-        return new GitHubPullRequest
+        PullRequestStatus status;
+
+        if (pr.Merged)
+        {
+            status = PullRequestStatus.Merged;
+        }
+        else if (pr.State.Value == ItemState.Closed)
+        {
+            status = PullRequestStatus.Closed;
+        }
+        else
+        {
+            // Open PRs default to InProgress; refined status requires additional API calls
+            status = PullRequestStatus.InProgress;
+        }
+
+        return new PullRequestInfo
         {
             Number = pr.Number,
             Title = pr.Title,
             Body = pr.Body,
-            State = pr.State.StringValue,
-            Merged = pr.Merged,
+            Status = status,
             BranchName = pr.Head.Ref,
             HtmlUrl = pr.HtmlUrl,
             CreatedAt = pr.CreatedAt.UtcDateTime,
             MergedAt = pr.MergedAt?.UtcDateTime,
-            ClosedAt = pr.ClosedAt?.UtcDateTime
+            ClosedAt = pr.ClosedAt?.UtcDateTime,
+            UpdatedAt = pr.UpdatedAt.UtcDateTime
         };
     }
 }

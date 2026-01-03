@@ -5,6 +5,7 @@ using Moq;
 using Octokit;
 using TreeAgent.Web.Features.Commands;
 using TreeAgent.Web.Features.GitHub;
+using TreeAgent.Web.Features.PullRequests;
 using TreeAgent.Web.Features.PullRequests.Data;
 using TreeAgent.Web.Features.PullRequests.Data.Entities;
 using Project = TreeAgent.Web.Features.PullRequests.Data.Entities.Project;
@@ -209,7 +210,7 @@ public class GitHubServiceTests
 
         // Assert
         Assert.That(result, Has.Count.EqualTo(1));
-        Assert.That(result[0].Merged, Is.True);
+        Assert.That(result[0].Status, Is.EqualTo(PullRequestStatus.Merged));
     }
 
     [Test]
