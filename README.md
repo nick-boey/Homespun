@@ -120,11 +120,77 @@ TreeAgent supports customizable system prompts with template variables:
 
 Create prompt templates in the Prompt Templates page to reuse across features and projects.
 
-### GitHub Integration
+### Pull Request Workflow
 
-- **Sync PRs**: Import existing pull requests as features
+TreeAgent organizes development as a continuous chain of pull requests across three time stages:
+
+#### Time Dimension
+
+Each pull request has a calculated time value `t` based on its position in the workflow. This value is not stored but computed dynamically:
+
+- **Past (`t <= 0`)**: Merged/closed PRs. The value is calculated from merge order - most recent merge has `t = 0`, older PRs have negative values (`t = -1`, `t = -2`, etc.).
+- **Present (`t = 1`)**: All currently open PRs have `t = 1`. Multiple PRs can exist in parallel at this stage.
+- **Future (`t > 1`)**: Planned changes stored in `ROADMAP.json`. The value is calculated from the change's depth in the tree structure.
+
+#### PR Status Workflow
+
+```mermaid
+stateDiagram-v2
+    [*] --> InProgress : Agent opens PR
+    InProgress --> ReadyForReview : Agent completes work
+    ReadyForReview --> InProgress : User adds code comments
+    ReadyForReview --> ChecksFailing : CI checks fail
+    ChecksFailing --> InProgress : Agent fixes issues
+    ReadyForReview --> ReadyForMerging : User approves (no comments)
+    ReadyForMerging --> [*] : User merges PR
+    InProgress --> Conflict : Rebase fails
+    Conflict --> InProgress : User/agent resolves
+```
+
+| Status | Color | Description |
+|--------|-------|-------------|
+| In Progress | Yellow | Agent is actively working on the PR |
+| Ready for Review | Flashing Yellow | Agent completed, awaiting user review |
+| Checks Failing | Red | CI/CD checks have failed |
+| Conflict | Orange | Rebase failed due to merge conflicts |
+| Ready for Merging | Green | Approved and ready to merge |
+| Merged | Purple | PR has been merged (past) |
+| Closed | Red | PR was closed without merging (past) |
+
+#### Automatic Rebasing
+
+When a PR is merged, all other open PRs (`t = 1`) are automatically rebased onto the new main branch HEAD. This keeps all parallel branches up-to-date and ensures clean merges.
+
+#### Branch Naming Convention
+
+Branches follow the pattern: `{group}/{type}/{id}`
+- `group`: Project or component (e.g., `core`, `web`, `services`)
+- `type`: Change type (`feature`, `bug`, `refactor`, `docs`, `test`, `chore`)
+- `id`: Short identifier describing the change
+
+Examples: `core/feature/pr-time-dimension`, `web/bug/fix-status-colors`
+
+#### Future Changes (ROADMAP.json)
+
+Planned changes are stored in `ROADMAP.json` on the default branch:
+- Each change includes `id`, `group`, `type`, `title`, and `instructions`
+- Changes are organized as a recursive tree structure with nested children
+- When an agent starts work on a future change, it becomes a current PR
+
+#### Plan Update PRs
+
+When a PR contains *only* modifications to `ROADMAP.json` (planning changes without code), it is treated as a special `plan-update` group PR. These PRs:
+- Contain only modifications to the roadmap file (no code changes)
+- Must be merged before other PRs
+- Ensure the single source of truth for planning is always consistent
+
+Note: When a future change is promoted to a current PR, the `ROADMAP.json` is also updated to remove that change. This is a normal PR, not a plan-update PR, since it includes code changes.
+
+#### GitHub Sync
+
+- **Past PRs**: Imported from closed/merged PRs with correct time ordering
+- **Current PRs**: Synced with open PRs, status reflects review/check state
 - **Create PRs**: Push branches and create PRs directly from TreeAgent
-- **Status Updates**: Feature status automatically reflects PR state (open, merged, closed)
 
 ## API Endpoints
 
