@@ -13,6 +13,15 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
 
+// Enable verbose EF Core SQL logging if TREEAGENT_VERBOSE_SQL is set
+var verboseSql = builder.Configuration["TREEAGENT_VERBOSE_SQL"]
+    ?? Environment.GetEnvironmentVariable("TREEAGENT_VERBOSE_SQL");
+if (!string.IsNullOrEmpty(verboseSql) && verboseSql.Equals("true", StringComparison.OrdinalIgnoreCase))
+{
+    builder.Logging.AddFilter("Microsoft.EntityFrameworkCore", LogLevel.Information);
+    builder.Logging.AddFilter("Microsoft.EntityFrameworkCore.Database.Command", LogLevel.Information);
+}
+
 // Add services to the container.
 var dbPath = builder.Configuration["TREEAGENT_DB_PATH"] ?? "treeagent.db";
 

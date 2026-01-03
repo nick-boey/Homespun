@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Moq;
 using Octokit;
 using TreeAgent.Web.Data;
@@ -17,6 +18,7 @@ public class GitHubServiceTests
     private Mock<ICommandRunner> _mockRunner = null!;
     private Mock<IConfiguration> _mockConfig = null!;
     private Mock<IGitHubClientWrapper> _mockGitHubClient = null!;
+    private Mock<ILogger<GitHubService>> _mockLogger = null!;
     private GitHubService _service = null!;
 
     [SetUp]
@@ -30,10 +32,11 @@ public class GitHubServiceTests
         _mockRunner = new Mock<ICommandRunner>();
         _mockConfig = new Mock<IConfiguration>();
         _mockGitHubClient = new Mock<IGitHubClientWrapper>();
+        _mockLogger = new Mock<ILogger<GitHubService>>();
 
         _mockConfig.Setup(c => c["GITHUB_TOKEN"]).Returns("test-token");
 
-        _service = new GitHubService(_db, _mockRunner.Object, _mockConfig.Object, _mockGitHubClient.Object);
+        _service = new GitHubService(_db, _mockRunner.Object, _mockConfig.Object, _mockGitHubClient.Object, _mockLogger.Object);
     }
 
     [TearDown]
@@ -112,7 +115,7 @@ public class GitHubServiceTests
         noTokenConfig.Setup(c => c["GITHUB_TOKEN"]).Returns((string?)null);
 
         // Create a new service with the no-token config
-        var service = new GitHubService(_db, _mockRunner.Object, noTokenConfig.Object, _mockGitHubClient.Object);
+        var service = new GitHubService(_db, _mockRunner.Object, noTokenConfig.Object, _mockGitHubClient.Object, _mockLogger.Object);
 
         // Clear environment variable for this test (save and restore)
         var originalToken = Environment.GetEnvironmentVariable("GITHUB_TOKEN");
@@ -574,7 +577,8 @@ public class GitHubServiceIntegrationTests
 
         var runner = new CommandRunner();
         var client = new GitHubClientWrapper();
-        var service = new GitHubService(_db, runner, config, client);
+        var logger = new Microsoft.Extensions.Logging.Abstractions.NullLogger<GitHubService>();
+        var service = new GitHubService(_db, runner, config, client, logger);
 
         // Act
         var result = await service.GetOpenPullRequestsAsync(project.Id);
