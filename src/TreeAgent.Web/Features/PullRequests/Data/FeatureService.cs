@@ -8,7 +8,7 @@ namespace TreeAgent.Web.Features.PullRequests.Data;
 /// Service for managing locally tracked pull requests.
 /// Only open PRs are stored in the database.
 /// </summary>
-public class PullRequestDataService(TreeAgentDbContext db, GitWorktreeService worktreeService)
+public class PullRequestDataService(TreeAgentDbContext db, IGitWorktreeService worktreeService)
 {
     public async Task<List<PullRequest>> GetByProjectIdAsync(string projectId)
     {
