@@ -1,6 +1,6 @@
 using Octokit;
 
-namespace TreeAgent.Web.Services;
+namespace TreeAgent.Web.Features.PullRequests.Services;
 
 /// <summary>
 /// Wrapper interface for Octokit's GitHubClient to enable testing

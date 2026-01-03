@@ -25,26 +25,47 @@ Use Test Driven Development practices where possible:
 3. **Test naming** - Use descriptive test names that explain the scenario and expected outcome
 4. **Test coverage** - Aim for comprehensive coverage of business logic in services
 
-### Project Structure
+### Project Structure (Vertical Slice Architecture)
+
+The project follows Vertical Slice Architecture, organizing code by feature rather than technical layer.
 
 ```
 src/TreeAgent.Web/
-├── Components/           # Blazor components
-│   ├── Layout/          # Layout components
-│   ├── Pages/           # Page components (routed)
-│   └── Shared/          # Shared/reusable components
+├── Features/                    # Feature slices
+│   ├── Agents/                  # Claude Code agent management
+│   │   ├── Components/Pages/    # Agent UI pages
+│   │   ├── Data/                # Agent-related entities
+│   │   ├── Hubs/                # SignalR hub for agents
+│   │   └── Services/            # Agent services
+│   └── PullRequests/            # GitHub PR management
+│       └── Services/            # GitHub services
+├── Components/                  # Shared Blazor components
+│   ├── Layout/                  # Layout components
+│   ├── Pages/                   # Shared page components
+│   └── Shared/                  # Shared/reusable components
 ├── Data/
-│   └── Entities/        # EF Core entity classes
-├── HealthChecks/        # Health check implementations
-├── Hubs/                # SignalR hubs
-├── Migrations/          # EF Core migrations
-├── Services/            # Business logic services
-└── Program.cs           # Application entry point
+│   └── Entities/                # Shared EF Core entities
+├── HealthChecks/                # Health check implementations
+├── Migrations/                  # EF Core migrations
+├── Services/                    # Shared services
+└── Program.cs                   # Application entry point
 
 tests/TreeAgent.Web.Tests/
-├── Services/            # Service unit tests
-└── ...
+├── Features/                    # Tests organized by feature
+│   ├── Agents/
+│   │   ├── Services/            # Agent service unit tests
+│   │   └── Integration/         # Agent integration tests
+│   └── PullRequests/
+│       └── Services/            # GitHub service tests
+├── Integration/
+│   └── Fixtures/                # Test fixtures
+└── Services/                    # Shared service tests
 ```
+
+### Feature Slices
+
+- **Agents**: Claude Code agent orchestration, process management, message streaming
+- **PullRequests**: GitHub PR synchronization using Octokit
 
 ### Running the Application
 
@@ -76,12 +97,22 @@ dotnet ef migrations add <MigrationName>
 
 ## Key Services
 
+### Shared Services (in Services/)
 - **ProjectService**: CRUD operations for projects
 - **FeatureService**: Feature management with tree structure and worktree integration
-- **AgentService**: Agent lifecycle management with Claude Code process orchestration
-- **GitHubService**: GitHub PR synchronization using Octokit
 - **GitWorktreeService**: Git worktree operations
 - **SystemPromptService**: Template processing for agent system prompts
+
+### Agents Feature (in Features/Agents/)
+- **AgentService**: Agent lifecycle management with Claude Code process orchestration
+- **ClaudeCodeProcessManager**: Process pool management for Claude Code instances
+- **ClaudeCodePathResolver**: Platform-aware Claude Code executable discovery
+- **MessageParser**: JSON message parser for Claude Code output
+- **AgentHub**: SignalR hub for real-time agent updates
+
+### PullRequests Feature (in Features/PullRequests/)
+- **GitHubService**: GitHub PR synchronization using Octokit
+- **GitHubClientWrapper**: Octokit abstraction for testability
 
 ## Configuration
 

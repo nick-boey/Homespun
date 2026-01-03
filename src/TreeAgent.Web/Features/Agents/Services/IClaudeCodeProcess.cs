@@ -1,6 +1,6 @@
-using TreeAgent.Web.Data.Entities;
+using TreeAgent.Web.Features.Agents.Data;
 
-namespace TreeAgent.Web.Services;
+namespace TreeAgent.Web.Features.Agents.Services;
 
 public interface IClaudeCodeProcess : IDisposable
 {

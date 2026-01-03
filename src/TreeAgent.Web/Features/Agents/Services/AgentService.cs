@@ -1,9 +1,10 @@
 using Microsoft.EntityFrameworkCore;
 using TreeAgent.Web.Data;
 using TreeAgent.Web.Data.Entities;
-using TreeAgent.Web.Hubs;
+using TreeAgent.Web.Features.Agents.Data;
+using TreeAgent.Web.Features.Agents.Hubs;
 
-namespace TreeAgent.Web.Services;
+namespace TreeAgent.Web.Features.Agents.Services;
 
 public class AgentService : IDisposable
 {

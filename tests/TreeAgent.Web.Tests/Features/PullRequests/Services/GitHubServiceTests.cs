@@ -4,10 +4,11 @@ using Moq;
 using Octokit;
 using TreeAgent.Web.Data;
 using TreeAgent.Web.Data.Entities;
+using TreeAgent.Web.Features.PullRequests.Services;
 using TreeAgent.Web.Services;
 using Project = TreeAgent.Web.Data.Entities.Project;
 
-namespace TreeAgent.Web.Tests.Services;
+namespace TreeAgent.Web.Tests.Features.PullRequests.Services;
 
 [TestFixture]
 public class GitHubServiceTests
@@ -105,13 +106,31 @@ public class GitHubServiceTests
     {
         // Arrange
         var project = await CreateTestProject();
-        _mockConfig.Setup(c => c["GITHUB_TOKEN"]).Returns((string?)null);
 
-        // Act
-        var result = await _service.IsConfiguredAsync(project.Id);
+        // Create a new mock config that returns null for token
+        var noTokenConfig = new Mock<IConfiguration>();
+        noTokenConfig.Setup(c => c["GITHUB_TOKEN"]).Returns((string?)null);
 
-        // Assert
-        Assert.That(result, Is.False);
+        // Create a new service with the no-token config
+        var service = new GitHubService(_db, _mockRunner.Object, noTokenConfig.Object, _mockGitHubClient.Object);
+
+        // Clear environment variable for this test (save and restore)
+        var originalToken = Environment.GetEnvironmentVariable("GITHUB_TOKEN");
+        Environment.SetEnvironmentVariable("GITHUB_TOKEN", null);
+
+        try
+        {
+            // Act
+            var result = await service.IsConfiguredAsync(project.Id);
+
+            // Assert
+            Assert.That(result, Is.False);
+        }
+        finally
+        {
+            // Restore environment variable
+            Environment.SetEnvironmentVariable("GITHUB_TOKEN", originalToken);
+        }
     }
 
     [Test]

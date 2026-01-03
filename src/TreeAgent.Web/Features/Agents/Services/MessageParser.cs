@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace TreeAgent.Web.Services;
+namespace TreeAgent.Web.Features.Agents.Services;
 
 public class MessageParser
 {

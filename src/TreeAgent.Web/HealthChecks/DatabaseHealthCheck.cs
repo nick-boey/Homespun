@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using TreeAgent.Web.Data;
-using TreeAgent.Web.Services;
+using TreeAgent.Web.Features.Agents.Services;
 
 namespace TreeAgent.Web.HealthChecks;
 

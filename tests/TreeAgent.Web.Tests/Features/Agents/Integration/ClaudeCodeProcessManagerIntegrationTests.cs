@@ -1,8 +1,8 @@
-using TreeAgent.Web.Data.Entities;
-using TreeAgent.Web.Services;
+using TreeAgent.Web.Features.Agents.Data;
+using TreeAgent.Web.Features.Agents.Services;
 using TreeAgent.Web.Tests.Integration.Fixtures;
 
-namespace TreeAgent.Web.Tests.Integration;
+namespace TreeAgent.Web.Tests.Features.Agents.Integration;
 
 /// <summary>
 /// Integration tests for ClaudeCodeProcessManager that test multiple agent management.

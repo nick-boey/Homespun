@@ -2,8 +2,9 @@ using Microsoft.EntityFrameworkCore;
 using Octokit;
 using TreeAgent.Web.Data;
 using TreeAgent.Web.Data.Entities;
+using TreeAgent.Web.Services;
 
-namespace TreeAgent.Web.Services;
+namespace TreeAgent.Web.Features.PullRequests.Services;
 
 public class GitHubService : IGitHubService
 {

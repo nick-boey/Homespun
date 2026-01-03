@@ -1,8 +1,10 @@
 using Microsoft.EntityFrameworkCore;
 using TreeAgent.Web.Components;
 using TreeAgent.Web.Data;
+using TreeAgent.Web.Features.Agents.Hubs;
+using TreeAgent.Web.Features.Agents.Services;
+using TreeAgent.Web.Features.PullRequests.Services;
 using TreeAgent.Web.HealthChecks;
-using TreeAgent.Web.Hubs;
 using TreeAgent.Web.Services;
 
 var builder = WebApplication.CreateBuilder(args);
