@@ -14,6 +14,7 @@ public class AgentWorkflowService : IAgentWorkflowService
     private readonly IOpenCodeConfigGenerator _configGenerator;
     private readonly PullRequestDataService _pullRequestService;
     private readonly IRoadmapService _roadmapService;
+    private readonly IFutureChangeTransitionService _transitionService;
     private readonly ILogger<AgentWorkflowService> _logger;
 
     public AgentWorkflowService(
@@ -22,6 +23,7 @@ public class AgentWorkflowService : IAgentWorkflowService
         IOpenCodeConfigGenerator configGenerator,
         PullRequestDataService pullRequestService,
         IRoadmapService roadmapService,
+        IFutureChangeTransitionService transitionService,
         ILogger<AgentWorkflowService> logger)
     {
         _serverManager = serverManager;
@@ -29,6 +31,7 @@ public class AgentWorkflowService : IAgentWorkflowService
         _configGenerator = configGenerator;
         _pullRequestService = pullRequestService;
         _roadmapService = roadmapService;
+        _transitionService = transitionService;
         _logger = logger;
     }
 
@@ -98,29 +101,46 @@ public class AgentWorkflowService : IAgentWorkflowService
         var change = await _roadmapService.FindChangeByIdAsync(projectId, changeId)
             ?? throw new InvalidOperationException($"Roadmap change {changeId} not found in project {projectId}");
 
-        // Promote to pull request (creates branch and worktree)
-        var pullRequest = await _roadmapService.PromoteChangeAsync(projectId, changeId)
-            ?? throw new InvalidOperationException($"Failed to promote change {changeId} to pull request");
-
-        // Start agent
-        var status = await StartAgentForPullRequestAsync(pullRequest.Id, model, ct);
-
-        // Send initial prompt with change instructions
-        if (status.ActiveSession != null)
+        // Transition to InProgress status
+        var transitionResult = await _transitionService.TransitionToInProgressAsync(projectId, changeId);
+        if (!transitionResult.Success)
         {
-            var initialPrompt = BuildInitialPrompt(change);
-            await _client.SendPromptAsyncNoWait(
-                status.Server.BaseUrl, 
-                status.ActiveSession.Id, 
-                PromptRequest.FromText(initialPrompt, model), 
-                ct);
-
-            _logger.LogInformation(
-                "Sent initial prompt for change {ChangeId} to session {SessionId}",
-                changeId, status.ActiveSession.Id);
+            throw new InvalidOperationException(
+                $"Failed to transition change {changeId} to InProgress: {transitionResult.Error}");
         }
 
-        return status;
+        try
+        {
+            // Promote to pull request (creates branch and worktree)
+            var pullRequest = await _roadmapService.PromoteChangeAsync(projectId, changeId)
+                ?? throw new InvalidOperationException($"Failed to promote change {changeId} to pull request");
+
+            // Start agent
+            var status = await StartAgentForPullRequestAsync(pullRequest.Id, model, ct);
+
+            // Send initial prompt with change instructions
+            if (status.ActiveSession != null)
+            {
+                var initialPrompt = BuildInitialPrompt(change);
+                await _client.SendPromptAsyncNoWait(
+                    status.Server.BaseUrl, 
+                    status.ActiveSession.Id, 
+                    PromptRequest.FromText(initialPrompt, model), 
+                    ct);
+
+                _logger.LogInformation(
+                    "Sent initial prompt for change {ChangeId} to session {SessionId}",
+                    changeId, status.ActiveSession.Id);
+            }
+
+            return status;
+        }
+        catch (Exception ex)
+        {
+            // Handle agent failure - revert status to Pending
+            await _transitionService.HandleAgentFailureAsync(projectId, changeId, ex.Message);
+            throw;
+        }
     }
 
     public async Task StopAgentAsync(string pullRequestId, CancellationToken ct = default)

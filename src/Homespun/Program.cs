@@ -44,6 +44,7 @@ builder.Services.AddSingleton<IGitHubClientWrapper, GitHubClientWrapper>();
 builder.Services.AddScoped<IGitHubService, GitHubService>();
 builder.Services.AddScoped<PullRequestWorkflowService>();
 builder.Services.AddScoped<IRoadmapService, RoadmapService>();
+builder.Services.AddScoped<IFutureChangeTransitionService, FutureChangeTransitionService>();
 
 // OpenCode services
 builder.Services.Configure<OpenCodeOptions>(
