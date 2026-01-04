@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace TreeAgent.Web.Features.PullRequests.Data.Entities;
 
 public class Project
@@ -18,5 +20,7 @@ public class Project
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
+    // Navigation property excluded from JSON serialization - populated at runtime
+    [JsonIgnore]
     public ICollection<PullRequest> PullRequests { get; set; } = [];
 }

@@ -1,4 +1,3 @@
-using Microsoft.EntityFrameworkCore;
 using TreeAgent.Web.Components;
 using TreeAgent.Web.Features.Commands;
 using TreeAgent.Web.Features.Git;
@@ -17,27 +16,22 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
 
-// Enable verbose EF Core SQL logging if TREEAGENT_VERBOSE_SQL is set
-var verboseSql = builder.Configuration["TREEAGENT_VERBOSE_SQL"]
-    ?? Environment.GetEnvironmentVariable("TREEAGENT_VERBOSE_SQL");
-if (!string.IsNullOrEmpty(verboseSql) && verboseSql.Equals("true", StringComparison.OrdinalIgnoreCase))
-{
-    builder.Logging.AddFilter("Microsoft.EntityFrameworkCore", LogLevel.Information);
-    builder.Logging.AddFilter("Microsoft.EntityFrameworkCore.Database.Command", LogLevel.Information);
-}
-
 // Add services to the container.
-var dbPath = builder.Configuration["TREEAGENT_DB_PATH"] ?? "treeagent.db";
+var dataPath = builder.Configuration["TREEAGENT_DATA_PATH"] ?? "treeagent-data.json";
 
-// Ensure the database directory exists
-var dbDirectory = Path.GetDirectoryName(dbPath);
-if (!string.IsNullOrEmpty(dbDirectory) && !Directory.Exists(dbDirectory))
+// Ensure the data directory exists
+var dataDirectory = Path.GetDirectoryName(dataPath);
+if (!string.IsNullOrEmpty(dataDirectory) && !Directory.Exists(dataDirectory))
 {
-    Directory.CreateDirectory(dbDirectory);
+    Directory.CreateDirectory(dataDirectory);
 }
 
-builder.Services.AddDbContext<TreeAgentDbContext>(options =>
-    options.UseSqlite($"Data Source={dbPath}"));
+// Register JSON data store as singleton
+builder.Services.AddSingleton<IDataStore>(sp =>
+{
+    var logger = sp.GetRequiredService<ILogger<JsonDataStore>>();
+    return new JsonDataStore(dataPath, logger);
+});
 
 // Core services
 builder.Services.AddScoped<ProjectService>();
@@ -62,13 +56,6 @@ builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
 var app = builder.Build();
-
-// Apply migrations on startup
-using (var scope = app.Services.CreateScope())
-{
-    var db = scope.ServiceProvider.GetRequiredService<TreeAgentDbContext>();
-    db.Database.Migrate();
-}
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())

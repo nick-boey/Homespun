@@ -1,4 +1,3 @@
-using Microsoft.EntityFrameworkCore;
 using TreeAgent.Web.Features.Git;
 using TreeAgent.Web.Features.PullRequests.Data.Entities;
 
@@ -6,36 +5,47 @@ namespace TreeAgent.Web.Features.PullRequests.Data;
 
 /// <summary>
 /// Service for managing locally tracked pull requests.
-/// Only open PRs are stored in the database.
+/// Only open PRs are stored.
 /// </summary>
-public class PullRequestDataService(TreeAgentDbContext db, IGitWorktreeService worktreeService)
+public class PullRequestDataService(IDataStore dataStore, IGitWorktreeService worktreeService)
 {
-    public async Task<List<PullRequest>> GetByProjectIdAsync(string projectId)
+    public Task<List<PullRequest>> GetByProjectIdAsync(string projectId)
     {
-        return await db.PullRequests
-            .Where(pr => pr.ProjectId == projectId)
+        var pullRequests = dataStore.GetPullRequestsByProject(projectId)
             .OrderBy(pr => pr.CreatedAt)
-            .ToListAsync();
+            .ToList();
+        return Task.FromResult(pullRequests);
     }
 
-    public async Task<PullRequest?> GetByIdAsync(string id)
+    public Task<PullRequest?> GetByIdAsync(string id)
     {
-        return await db.PullRequests
-            .Include(pr => pr.Project)
-            .Include(pr => pr.Children)
-            .FirstOrDefaultAsync(pr => pr.Id == id);
+        var pullRequest = dataStore.GetPullRequest(id);
+        if (pullRequest != null)
+        {
+            // Populate navigation properties
+            pullRequest.Project = dataStore.GetProject(pullRequest.ProjectId)!;
+            pullRequest.Children = dataStore.PullRequests
+                .Where(pr => pr.ParentId == id)
+                .ToList();
+        }
+        return Task.FromResult(pullRequest);
     }
 
-    public async Task<List<PullRequest>> GetTreeAsync(string projectId)
+    public Task<List<PullRequest>> GetTreeAsync(string projectId)
     {
-        var pullRequests = await db.PullRequests
-            .Where(pr => pr.ProjectId == projectId)
-            .Include(pr => pr.Children)
+        var pullRequests = dataStore.GetPullRequestsByProject(projectId)
             .OrderBy(pr => pr.CreatedAt)
-            .ToListAsync();
+            .ToList();
+
+        // Build the tree structure by populating Children
+        var pullRequestMap = pullRequests.ToDictionary(pr => pr.Id);
+        foreach (var pr in pullRequests)
+        {
+            pr.Children = pullRequests.Where(child => child.ParentId == pr.Id).ToList();
+        }
 
         // Return only root pull requests (those without parents)
-        return pullRequests.Where(pr => pr.ParentId == null).ToList();
+        return Task.FromResult(pullRequests.Where(pr => pr.ParentId == null).ToList());
     }
 
     public async Task<PullRequest> CreateAsync(
@@ -55,8 +65,7 @@ public class PullRequestDataService(TreeAgentDbContext db, IGitWorktreeService w
             Status = OpenPullRequestStatus.InDevelopment
         };
 
-        db.PullRequests.Add(pullRequest);
-        await db.SaveChangesAsync();
+        await dataStore.AddPullRequestAsync(pullRequest);
         return pullRequest;
     }
 
@@ -67,7 +76,7 @@ public class PullRequestDataService(TreeAgentDbContext db, IGitWorktreeService w
         string? branchName,
         OpenPullRequestStatus status)
     {
-        var pullRequest = await db.PullRequests.FindAsync(id);
+        var pullRequest = dataStore.GetPullRequest(id);
         if (pullRequest == null) return null;
 
         pullRequest.Title = title;
@@ -76,44 +85,43 @@ public class PullRequestDataService(TreeAgentDbContext db, IGitWorktreeService w
         pullRequest.Status = status;
         pullRequest.UpdatedAt = DateTime.UtcNow;
 
-        await db.SaveChangesAsync();
+        await dataStore.UpdatePullRequestAsync(pullRequest);
         return pullRequest;
     }
 
     public async Task<bool> DeleteAsync(string id)
     {
-        var pullRequest = await db.PullRequests
-            .Include(pr => pr.Project)
-            .FirstOrDefaultAsync(pr => pr.Id == id);
-
+        var pullRequest = dataStore.GetPullRequest(id);
         if (pullRequest == null) return false;
 
+        // Get project for worktree cleanup
+        var project = dataStore.GetProject(pullRequest.ProjectId);
+
         // Clean up worktree if exists
-        if (!string.IsNullOrEmpty(pullRequest.WorktreePath))
+        if (!string.IsNullOrEmpty(pullRequest.WorktreePath) && project != null)
         {
-            await worktreeService.RemoveWorktreeAsync(pullRequest.Project.LocalPath, pullRequest.WorktreePath);
+            await worktreeService.RemoveWorktreeAsync(project.LocalPath, pullRequest.WorktreePath);
         }
 
-        db.PullRequests.Remove(pullRequest);
-        await db.SaveChangesAsync();
+        await dataStore.RemovePullRequestAsync(id);
         return true;
     }
 
     public async Task<bool> StartDevelopmentAsync(string id)
     {
-        var pullRequest = await db.PullRequests
-            .Include(pr => pr.Project)
-            .FirstOrDefaultAsync(pr => pr.Id == id);
-
+        var pullRequest = dataStore.GetPullRequest(id);
         if (pullRequest == null) return false;
         if (string.IsNullOrEmpty(pullRequest.BranchName)) return false;
 
+        var project = dataStore.GetProject(pullRequest.ProjectId);
+        if (project == null) return false;
+
         // Create worktree for the pull request
         var worktreePath = await worktreeService.CreateWorktreeAsync(
-            pullRequest.Project.LocalPath,
+            project.LocalPath,
             pullRequest.BranchName,
             createBranch: true,
-            baseBranch: pullRequest.Project.DefaultBranch);
+            baseBranch: project.DefaultBranch);
 
         if (worktreePath == null) return false;
 
@@ -121,19 +129,19 @@ public class PullRequestDataService(TreeAgentDbContext db, IGitWorktreeService w
         pullRequest.Status = OpenPullRequestStatus.InDevelopment;
         pullRequest.UpdatedAt = DateTime.UtcNow;
 
-        await db.SaveChangesAsync();
+        await dataStore.UpdatePullRequestAsync(pullRequest);
         return true;
     }
 
     public async Task<bool> MarkReadyForReviewAsync(string id)
     {
-        var pullRequest = await db.PullRequests.FindAsync(id);
+        var pullRequest = dataStore.GetPullRequest(id);
         if (pullRequest == null) return false;
 
         pullRequest.Status = OpenPullRequestStatus.ReadyForReview;
         pullRequest.UpdatedAt = DateTime.UtcNow;
 
-        await db.SaveChangesAsync();
+        await dataStore.UpdatePullRequestAsync(pullRequest);
         return true;
     }
 
@@ -143,33 +151,31 @@ public class PullRequestDataService(TreeAgentDbContext db, IGitWorktreeService w
     /// </summary>
     public async Task<bool> CompleteAsync(string id)
     {
-        var pullRequest = await db.PullRequests
-            .Include(pr => pr.Project)
-            .FirstOrDefaultAsync(pr => pr.Id == id);
-
+        var pullRequest = dataStore.GetPullRequest(id);
         if (pullRequest == null) return false;
 
+        var project = dataStore.GetProject(pullRequest.ProjectId);
+
         // Clean up worktree
-        if (!string.IsNullOrEmpty(pullRequest.WorktreePath))
+        if (!string.IsNullOrEmpty(pullRequest.WorktreePath) && project != null)
         {
-            await worktreeService.RemoveWorktreeAsync(pullRequest.Project.LocalPath, pullRequest.WorktreePath);
+            await worktreeService.RemoveWorktreeAsync(project.LocalPath, pullRequest.WorktreePath);
         }
 
         // Remove from local tracking - merged/cancelled PRs should be fetched from GitHub
-        db.PullRequests.Remove(pullRequest);
-        await db.SaveChangesAsync();
+        await dataStore.RemovePullRequestAsync(id);
         return true;
     }
 
     public async Task<bool> SetParentAsync(string id, string? parentId)
     {
-        var pullRequest = await db.PullRequests.FindAsync(id);
+        var pullRequest = dataStore.GetPullRequest(id);
         if (pullRequest == null) return false;
 
         // Prevent circular references
         if (parentId != null)
         {
-            var parent = await db.PullRequests.FindAsync(parentId);
+            var parent = dataStore.GetPullRequest(parentId);
             if (parent == null) return false;
 
             // Check if setting this parent would create a cycle
@@ -178,7 +184,7 @@ public class PullRequestDataService(TreeAgentDbContext db, IGitWorktreeService w
             {
                 if (currentParent.Id == id) return false;
                 currentParent = currentParent.ParentId != null
-                    ? await db.PullRequests.FindAsync(currentParent.ParentId)
+                    ? dataStore.GetPullRequest(currentParent.ParentId)
                     : null;
             }
         }
@@ -186,13 +192,13 @@ public class PullRequestDataService(TreeAgentDbContext db, IGitWorktreeService w
         pullRequest.ParentId = parentId;
         pullRequest.UpdatedAt = DateTime.UtcNow;
 
-        await db.SaveChangesAsync();
+        await dataStore.UpdatePullRequestAsync(pullRequest);
         return true;
     }
 
     public async Task CleanupStaleWorktreesAsync(string projectId)
     {
-        var project = await db.Projects.FindAsync(projectId);
+        var project = dataStore.GetProject(projectId);
         if (project == null) return;
 
         await worktreeService.PruneWorktreesAsync(project.LocalPath);

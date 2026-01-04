@@ -1,21 +1,21 @@
-using Microsoft.EntityFrameworkCore;
 using TreeAgent.Web.Features.PullRequests.Data;
 using TreeAgent.Web.Features.PullRequests.Data.Entities;
 
 namespace TreeAgent.Web.Features.Projects;
 
-public class ProjectService(TreeAgentDbContext db)
+public class ProjectService(IDataStore dataStore)
 {
-    public async Task<List<Project>> GetAllAsync()
+    public Task<List<Project>> GetAllAsync()
     {
-        return await db.Projects
+        var projects = dataStore.Projects
             .OrderByDescending(p => p.UpdatedAt)
-            .ToListAsync();
+            .ToList();
+        return Task.FromResult(projects);
     }
 
-    public async Task<Project?> GetByIdAsync(string id)
+    public Task<Project?> GetByIdAsync(string id)
     {
-        return await db.Projects.FindAsync(id);
+        return Task.FromResult(dataStore.GetProject(id));
     }
 
     public async Task<Project> CreateAsync(string name, string localPath, string? gitHubOwner = null, string? gitHubRepo = null, string defaultBranch = "main")
@@ -29,8 +29,7 @@ public class ProjectService(TreeAgentDbContext db)
             DefaultBranch = defaultBranch
         };
 
-        db.Projects.Add(project);
-        await db.SaveChangesAsync();
+        await dataStore.AddProjectAsync(project);
         return project;
     }
 
@@ -43,7 +42,7 @@ public class ProjectService(TreeAgentDbContext db)
         string defaultBranch,
         string? defaultModel = null)
     {
-        var project = await db.Projects.FindAsync(id);
+        var project = dataStore.GetProject(id);
         if (project == null) return null;
 
         project.Name = name;
@@ -54,17 +53,16 @@ public class ProjectService(TreeAgentDbContext db)
         project.DefaultModel = defaultModel;
         project.UpdatedAt = DateTime.UtcNow;
 
-        await db.SaveChangesAsync();
+        await dataStore.UpdateProjectAsync(project);
         return project;
     }
 
     public async Task<bool> DeleteAsync(string id)
     {
-        var project = await db.Projects.FindAsync(id);
+        var project = dataStore.GetProject(id);
         if (project == null) return false;
 
-        db.Projects.Remove(project);
-        await db.SaveChangesAsync();
+        await dataStore.RemoveProjectAsync(id);
         return true;
     }
 }
