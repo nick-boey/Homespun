@@ -5,11 +5,32 @@ namespace Homespun.Features.PullRequests.Data.Entities;
 public class Project
 {
     public string Id { get; set; } = Guid.NewGuid().ToString();
+
+    /// <summary>
+    /// Project name (derived from repository name during creation).
+    /// </summary>
     public required string Name { get; set; }
+
+    /// <summary>
+    /// Path to the local Git repository worktree for the default branch.
+    /// Format: ~/.homespun/src/{repository-name}/{branch-name}
+    /// </summary>
     public required string LocalPath { get; set; }
-    public string? GitHubOwner { get; set; }
-    public string? GitHubRepo { get; set; }
-    public string DefaultBranch { get; set; } = "main";
+
+    /// <summary>
+    /// GitHub repository owner (user or organization).
+    /// </summary>
+    public required string GitHubOwner { get; set; }
+
+    /// <summary>
+    /// GitHub repository name.
+    /// </summary>
+    public required string GitHubRepo { get; set; }
+
+    /// <summary>
+    /// Default branch name retrieved from GitHub.
+    /// </summary>
+    public required string DefaultBranch { get; set; }
 
     /// <summary>
     /// Default model used for new agent sessions in this project.

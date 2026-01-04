@@ -20,18 +20,37 @@ public class GitHubService(
         return configuration["GITHUB_TOKEN"] ?? Environment.GetEnvironmentVariable("GITHUB_TOKEN");
     }
 
+    public async Task<string?> GetDefaultBranchAsync(string owner, string repo)
+    {
+        var token = GetGitHubToken();
+        if (string.IsNullOrEmpty(token))
+        {
+            logger.LogWarning("Cannot get default branch: GITHUB_TOKEN not found");
+            return null;
+        }
+
+        ConfigureClient();
+
+        try
+        {
+            logger.LogInformation("Fetching repository info for {Owner}/{Repo}", owner, repo);
+            var repository = await githubClient.GetRepositoryAsync(owner, repo);
+            logger.LogDebug("Default branch for {Owner}/{Repo} is {DefaultBranch}", owner, repo, repository.DefaultBranch);
+            return repository.DefaultBranch;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to get repository info for {Owner}/{Repo}", owner, repo);
+            return null;
+        }
+    }
+
     public Task<bool> IsConfiguredAsync(string projectId)
     {
         var project = dataStore.GetProject(projectId);
         if (project == null)
         {
             logger.LogDebug("GitHub not configured: project {ProjectId} not found", projectId);
-            return Task.FromResult(false);
-        }
-
-        if (string.IsNullOrEmpty(project.GitHubOwner) || string.IsNullOrEmpty(project.GitHubRepo))
-        {
-            logger.LogDebug("GitHub not configured for project {ProjectId}: owner or repo not set", projectId);
             return Task.FromResult(false);
         }
 
@@ -48,9 +67,9 @@ public class GitHubService(
     public async Task<List<PullRequestInfo>> GetOpenPullRequestsAsync(string projectId)
     {
         var project = dataStore.GetProject(projectId);
-        if (project == null || string.IsNullOrEmpty(project.GitHubOwner) || string.IsNullOrEmpty(project.GitHubRepo))
+        if (project == null)
         {
-            logger.LogWarning("Cannot fetch open PRs: project {ProjectId} not found or GitHub not configured", projectId);
+            logger.LogWarning("Cannot fetch open PRs: project {ProjectId} not found", projectId);
             return [];
         }
 
@@ -78,9 +97,9 @@ public class GitHubService(
     public async Task<List<PullRequestInfo>> GetClosedPullRequestsAsync(string projectId)
     {
         var project = dataStore.GetProject(projectId);
-        if (project == null || string.IsNullOrEmpty(project.GitHubOwner) || string.IsNullOrEmpty(project.GitHubRepo))
+        if (project == null)
         {
-            logger.LogWarning("Cannot fetch closed PRs: project {ProjectId} not found or GitHub not configured", projectId);
+            logger.LogWarning("Cannot fetch closed PRs: project {ProjectId} not found", projectId);
             return [];
         }
 
@@ -108,9 +127,9 @@ public class GitHubService(
     public async Task<PullRequestInfo?> GetPullRequestAsync(string projectId, int prNumber)
     {
         var project = dataStore.GetProject(projectId);
-        if (project == null || string.IsNullOrEmpty(project.GitHubOwner) || string.IsNullOrEmpty(project.GitHubRepo))
+        if (project == null)
         {
-            logger.LogWarning("Cannot fetch PR #{PrNumber}: project {ProjectId} not found or GitHub not configured", prNumber, projectId);
+            logger.LogWarning("Cannot fetch PR #{PrNumber}: project {ProjectId} not found", prNumber, projectId);
             return null;
         }
 
@@ -146,11 +165,9 @@ public class GitHubService(
             return null;
         }
 
-        if (string.IsNullOrEmpty(project.GitHubOwner) ||
-            string.IsNullOrEmpty(project.GitHubRepo) ||
-            string.IsNullOrEmpty(pullRequest.BranchName))
+        if (string.IsNullOrEmpty(pullRequest.BranchName))
         {
-            logger.LogWarning("Cannot create PR: GitHub not configured or branch not set for pull request {PullRequestId}", pullRequestId);
+            logger.LogWarning("Cannot create PR: branch not set for pull request {PullRequestId}", pullRequestId);
             return null;
         }
 
@@ -229,10 +246,10 @@ public class GitHubService(
         var result = new SyncResult();
 
         var project = dataStore.GetProject(projectId);
-        if (project == null || string.IsNullOrEmpty(project.GitHubOwner) || string.IsNullOrEmpty(project.GitHubRepo))
+        if (project == null)
         {
-            logger.LogWarning("Cannot sync PRs: project {ProjectId} not found or GitHub not configured", projectId);
-            result.Errors.Add("Project not found or GitHub not configured");
+            logger.LogWarning("Cannot sync PRs: project {ProjectId} not found", projectId);
+            result.Errors.Add("Project not found");
             return result;
         }
 

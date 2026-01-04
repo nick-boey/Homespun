@@ -1,4 +1,4 @@
-﻿using Octokit;
+using Octokit;
 
 namespace Homespun.Features.GitHub;
 
@@ -63,5 +63,10 @@ public class GitHubClientWrapper : IGitHubClientWrapper
     public async Task<CombinedCommitStatus> GetCombinedCommitStatusAsync(string owner, string repo, string reference)
     {
         return await GetClient().Repository.Status.GetCombined(owner, repo, reference);
+    }
+
+    public async Task<Repository> GetRepositoryAsync(string owner, string repo)
+    {
+        return await GetClient().Repository.Get(owner, repo);
     }
 }
