@@ -12,7 +12,11 @@ public class GitWorktreeService(ICommandRunner commandRunner) : IGitWorktreeServ
     public async Task<string?> CreateWorktreeAsync(string repoPath, string branchName, bool createBranch = false, string? baseBranch = null)
     {
         var sanitizedName = SanitizeBranchName(branchName);
-        var worktreePath = Path.Combine(repoPath, ".worktrees", sanitizedName);
+        // Create worktree as sibling of the main repo, not inside it
+        // e.g., ~/.homespun/src/repo/main -> ~/.homespun/src/repo/<branch-name>
+        var parentDir = Path.GetDirectoryName(repoPath) 
+            ?? throw new InvalidOperationException($"Cannot determine parent directory of {repoPath}");
+        var worktreePath = Path.Combine(parentDir, sanitizedName);
 
         if (createBranch)
         {
