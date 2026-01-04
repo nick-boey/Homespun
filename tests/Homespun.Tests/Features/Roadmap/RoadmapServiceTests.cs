@@ -491,4 +491,128 @@ public class RoadmapServiceTests
     }
 
     #endregion
+
+    #region 3.4 Add New Change
+
+    [Test]
+    public async Task AddChange_AppendsToExistingRoadmap()
+    {
+        // Arrange
+        var project = await CreateTestProject();
+        CreateRoadmapFile("""
+        {
+            "version": "1.0",
+            "changes": [
+                {
+                    "id": "existing-feature",
+                    "group": "core",
+                    "type": "feature",
+                    "title": "Existing Feature"
+                }
+            ]
+        }
+        """);
+
+        var newChange = new RoadmapChange
+        {
+            Id = "new-feature",
+            Group = "web",
+            Type = ChangeType.Feature,
+            Title = "New Feature"
+        };
+
+        // Act
+        var result = await _service.AddChangeAsync(project.Id, newChange);
+
+        // Assert
+        Assert.That(result, Is.True);
+        var roadmapPath = Path.Combine(_tempDir, "ROADMAP.json");
+        var updatedRoadmap = await RoadmapParser.LoadAsync(roadmapPath);
+        Assert.That(updatedRoadmap.Changes, Has.Count.EqualTo(2));
+        Assert.That(updatedRoadmap.Changes[0].Id, Is.EqualTo("existing-feature"));
+        Assert.That(updatedRoadmap.Changes[1].Id, Is.EqualTo("new-feature"));
+    }
+
+    [Test]
+    public async Task AddChange_CreatesRoadmapIfNotExists()
+    {
+        // Arrange
+        var project = await CreateTestProject();
+        var roadmapPath = Path.Combine(_tempDir, "ROADMAP.json");
+        Assert.That(File.Exists(roadmapPath), Is.False);
+
+        var newChange = new RoadmapChange
+        {
+            Id = "first-feature",
+            Group = "core",
+            Type = ChangeType.Feature,
+            Title = "First Feature"
+        };
+
+        // Act
+        var result = await _service.AddChangeAsync(project.Id, newChange);
+
+        // Assert
+        Assert.That(result, Is.True);
+        Assert.That(File.Exists(roadmapPath), Is.True);
+        var createdRoadmap = await RoadmapParser.LoadAsync(roadmapPath);
+        Assert.That(createdRoadmap.Version, Is.EqualTo("1.0"));
+        Assert.That(createdRoadmap.Changes, Has.Count.EqualTo(1));
+        Assert.That(createdRoadmap.Changes[0].Id, Is.EqualTo("first-feature"));
+    }
+
+    [Test]
+    public async Task AddChange_PreservesOptionalFields()
+    {
+        // Arrange
+        var project = await CreateTestProject();
+
+        var newChange = new RoadmapChange
+        {
+            Id = "detailed-feature",
+            Group = "backend",
+            Type = ChangeType.Bug,
+            Title = "Fix Critical Bug",
+            Description = "This is a critical bug fix",
+            Instructions = "Step 1: Find the bug\nStep 2: Fix it",
+            Priority = Priority.High,
+            EstimatedComplexity = Complexity.Large
+        };
+
+        // Act
+        var result = await _service.AddChangeAsync(project.Id, newChange);
+
+        // Assert
+        Assert.That(result, Is.True);
+        var roadmapPath = Path.Combine(_tempDir, "ROADMAP.json");
+        var createdRoadmap = await RoadmapParser.LoadAsync(roadmapPath);
+        var savedChange = createdRoadmap.Changes[0];
+        
+        Assert.That(savedChange.Description, Is.EqualTo("This is a critical bug fix"));
+        Assert.That(savedChange.Instructions, Is.EqualTo("Step 1: Find the bug\nStep 2: Fix it"));
+        Assert.That(savedChange.Priority, Is.EqualTo(Priority.High));
+        Assert.That(savedChange.EstimatedComplexity, Is.EqualTo(Complexity.Large));
+    }
+
+    [Test]
+    public async Task AddChange_ReturnsFalseIfProjectNotFound()
+    {
+        // Arrange
+        var newChange = new RoadmapChange
+        {
+            Id = "some-feature",
+            Group = "core",
+            Type = ChangeType.Feature,
+            Title = "Some Feature"
+        };
+
+        // Act
+        var result = await _service.AddChangeAsync("non-existent-project", newChange);
+
+        // Assert
+        Assert.That(result, Is.False);
+    }
+
+    #endregion
 }
+

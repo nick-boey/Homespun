@@ -17,4 +17,9 @@ public interface IRoadmapService
     Task<bool> ValidateRoadmapAsync(string pullRequestId);
     Task<PullRequest?> CreatePlanUpdatePullRequestAsync(string projectId, string description);
     string GeneratePlanUpdateBranchName(string description);
+    
+    /// <summary>
+    /// Adds a new change to the roadmap. If no ROADMAP.json exists, creates one.
+    /// </summary>
+    Task<bool> AddChangeAsync(string projectId, RoadmapChange change);
 }
