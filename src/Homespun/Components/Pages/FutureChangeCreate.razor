@@ -31,10 +31,10 @@ else
                 }
 
                 <div class="mb-3">
-                    <label for="id" class="form-label">ID <span class="text-danger">*</span></label>
-                    <InputText id="id" class="form-control" @bind-Value="_model.Id" placeholder="my-feature-id" />
+                    <label for="shortTitle" class="form-label">Short Title (Branch ID) <span class="text-danger">*</span></label>
+                    <InputText id="shortTitle" class="form-control" @bind-Value="_model.ShortTitle" placeholder="my-feature-id" />
                     <div class="form-text">Lowercase letters, numbers, and hyphens only. Used for branch naming.</div>
-                    <ValidationMessage For="() => _model.Id" class="text-danger" />
+                    <ValidationMessage For="() => _model.ShortTitle" class="text-danger" />
                 </div>
 
                 <div class="mb-3">
@@ -56,11 +56,22 @@ else
                         <InputSelect id="type" class="form-select" @bind-Value="_model.Type">
                             @foreach (var type in Enum.GetValues<ChangeType>())
                             {
-                                <option value="@type">@type</option>
+                                <option value="@type">@type.ToString().ToLowerInvariant()</option>
                             }
                         </InputSelect>
                     </div>
                 </div>
+
+                @if (!string.IsNullOrWhiteSpace(_model.ShortTitle) && !string.IsNullOrWhiteSpace(_model.Group))
+                {
+                    <div class="mb-3">
+                        <label class="form-label">Branch Name (Generated)</label>
+                        <div class="form-control-plaintext font-monospace bg-light p-2 rounded">
+                            @GetGeneratedBranchName()
+                        </div>
+                        <div class="form-text">This will be the git branch name and unique ID for this change.</div>
+                    </div>
+                }
 
                 <div class="mb-3">
                     <label for="description" class="form-label">Description</label>
@@ -127,6 +138,14 @@ else
         _project = await ProjectService.GetByIdAsync(ProjectId);
     }
 
+    private string GetGeneratedBranchName()
+    {
+        var group = _model.Group?.Trim().ToLowerInvariant() ?? "";
+        var type = _model.Type.ToString().ToLowerInvariant();
+        var shortTitle = _model.ShortTitle?.Trim() ?? "";
+        return $"{group}/{type}/{shortTitle}";
+    }
+
     private async Task HandleSubmit()
     {
         _isSubmitting = true;
@@ -135,9 +154,9 @@ else
         try
         {
             // Validate required fields
-            if (string.IsNullOrWhiteSpace(_model.Id))
+            if (string.IsNullOrWhiteSpace(_model.ShortTitle))
             {
-                _errorMessage = "ID is required.";
+                _errorMessage = "Short Title is required.";
                 return;
             }
 
@@ -153,18 +172,24 @@ else
                 return;
             }
 
-            // Validate ID format
-            if (!System.Text.RegularExpressions.Regex.IsMatch(_model.Id, "^[a-z0-9-]+$"))
+            // Validate shortTitle format (lowercase alphanumeric + hyphens)
+            var shortTitle = _model.ShortTitle.Trim();
+            if (!System.Text.RegularExpressions.Regex.IsMatch(shortTitle, "^[a-z0-9-]+$"))
             {
-                _errorMessage = "ID must contain only lowercase letters, numbers, and hyphens.";
+                _errorMessage = "Short Title must contain only lowercase letters, numbers, and hyphens.";
                 return;
             }
 
+            var group = _model.Group.Trim().ToLowerInvariant();
+            var type = _model.Type.ToString().ToLowerInvariant();
+            var id = $"{group}/{type}/{shortTitle}";
+
             var change = new RoadmapChange
             {
-                Id = _model.Id.Trim(),
+                Id = id,
+                ShortTitle = shortTitle,
                 Title = _model.Title.Trim(),
-                Group = _model.Group.Trim(),
+                Group = group,
                 Type = _model.Type,
                 Description = string.IsNullOrWhiteSpace(_model.Description) ? null : _model.Description.Trim(),
                 Instructions = string.IsNullOrWhiteSpace(_model.Instructions) ? null : _model.Instructions.Trim(),
@@ -199,7 +224,7 @@ else
 
     private class FutureChangeModel
     {
-        public string Id { get; set; } = "";
+        public string ShortTitle { get; set; } = "";
         public string Title { get; set; } = "";
         public string Group { get; set; } = "";
         public ChangeType Type { get; set; } = ChangeType.Feature;

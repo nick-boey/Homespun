@@ -22,4 +22,15 @@ public interface IRoadmapService
     /// Adds a new change to the roadmap. If no ROADMAP.json exists, creates one.
     /// </summary>
     Task<bool> AddChangeAsync(string projectId, RoadmapChange change);
+
+    /// <summary>
+    /// Updates the status of a change in the roadmap.
+    /// </summary>
+    Task<bool> UpdateChangeStatusAsync(string projectId, string changeId, FutureChangeStatus status);
+
+    /// <summary>
+    /// Removes a parent reference from all changes that reference it.
+    /// Used when a parent change is promoted to a PR.
+    /// </summary>
+    Task<bool> RemoveParentReferenceAsync(string projectId, string parentId);
 }

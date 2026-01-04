@@ -71,24 +71,7 @@ public class RoadmapService(
     public async Task<RoadmapChange?> FindChangeByIdAsync(string projectId, string changeId)
     {
         var roadmap = await LoadRoadmapAsync(projectId);
-        if (roadmap == null) return null;
-
-        return FindChangeById(roadmap.Changes, changeId);
-    }
-
-    private static RoadmapChange? FindChangeById(List<RoadmapChange> changes, string id)
-    {
-        foreach (var change in changes)
-        {
-            if (change.Id == id)
-                return change;
-
-            var found = FindChangeById(change.Children, id);
-            if (found != null)
-                return found;
-        }
-
-        return null;
+        return roadmap?.Changes.FirstOrDefault(c => c.Id == changeId);
     }
 
     #endregion
@@ -107,11 +90,11 @@ public class RoadmapService(
         if (!File.Exists(roadmapPath)) return null;
 
         var roadmap = await RoadmapParser.LoadAsync(roadmapPath);
-        var change = FindChangeById(roadmap.Changes, changeId);
+        var change = roadmap.Changes.FirstOrDefault(c => c.Id == changeId);
         if (change == null) return null;
 
-        // Generate branch name
-        var branchName = change.GetBranchName();
+        // The Id IS the branch name in the new schema
+        var branchName = change.Id;
 
         // Create worktree
         var worktreePath = await worktreeService.CreateWorktreeAsync(
@@ -141,48 +124,27 @@ public class RoadmapService(
 
         await dataStore.AddPullRequestAsync(pullRequest);
 
-        // Update roadmap - remove the promoted change and promote children
-        await RemoveChangeAndPromoteChildrenAsync(roadmap, changeId, roadmapPath);
+        // Update roadmap - remove the promoted change and update parent references
+        await RemoveChangeAndUpdateParentsAsync(roadmap, changeId, roadmapPath);
 
         return pullRequest;
     }
 
-    private async Task RemoveChangeAndPromoteChildrenAsync(Roadmap roadmap, string changeId, string roadmapPath)
+    private async Task RemoveChangeAndUpdateParentsAsync(Roadmap roadmap, string changeId, string roadmapPath)
     {
-        var removed = RemoveChangeAndPromoteChildren(roadmap.Changes, changeId, null);
+        // Remove the change from the list
+        var changeToRemove = roadmap.Changes.FirstOrDefault(c => c.Id == changeId);
+        if (changeToRemove == null) return;
 
-        if (removed)
+        roadmap.Changes.Remove(changeToRemove);
+
+        // Remove this change's ID from all other changes' parent lists
+        foreach (var change in roadmap.Changes)
         {
-            await RoadmapParser.SaveAsync(roadmap, roadmapPath);
-        }
-    }
-
-    private static bool RemoveChangeAndPromoteChildren(List<RoadmapChange> changes, string id, List<RoadmapChange>? parentList)
-    {
-        for (int i = 0; i < changes.Count; i++)
-        {
-            var change = changes[i];
-
-            if (change.Id == id)
-            {
-                // Remove the change
-                changes.RemoveAt(i);
-
-                // Promote children to this level
-                if (change.Children.Count > 0)
-                {
-                    changes.InsertRange(i, change.Children);
-                }
-
-                return true;
-            }
-
-            // Recursively search children
-            if (RemoveChangeAndPromoteChildren(change.Children, id, changes))
-                return true;
+            change.Parents.Remove(changeId);
         }
 
-        return false;
+        await RoadmapParser.SaveAsync(roadmap, roadmapPath);
     }
 
     #endregion
@@ -314,7 +276,7 @@ public class RoadmapService(
         {
             roadmap = new Roadmap
             {
-                Version = "1.0"
+                Version = "1.1"
             };
         }
 
@@ -326,5 +288,59 @@ public class RoadmapService(
     }
 
     #endregion
-}
 
+    #region 3.5 Update Change Status
+
+    /// <summary>
+    /// Updates the status of a change in the roadmap.
+    /// </summary>
+    public async Task<bool> UpdateChangeStatusAsync(string projectId, string changeId, FutureChangeStatus status)
+    {
+        var project = dataStore.GetProject(projectId);
+        if (project == null) return false;
+
+        var roadmapPath = Path.Combine(project.LocalPath, "ROADMAP.json");
+        if (!File.Exists(roadmapPath)) return false;
+
+        var roadmap = await RoadmapParser.LoadAsync(roadmapPath);
+        var change = roadmap.Changes.FirstOrDefault(c => c.Id == changeId);
+        if (change == null) return false;
+
+        change.Status = status;
+        await RoadmapParser.SaveAsync(roadmap, roadmapPath);
+        return true;
+    }
+
+    /// <summary>
+    /// Removes a parent reference from all changes that reference it.
+    /// Used when a parent change is promoted to a PR.
+    /// </summary>
+    public async Task<bool> RemoveParentReferenceAsync(string projectId, string parentId)
+    {
+        var project = dataStore.GetProject(projectId);
+        if (project == null) return false;
+
+        var roadmapPath = Path.Combine(project.LocalPath, "ROADMAP.json");
+        if (!File.Exists(roadmapPath)) return false;
+
+        var roadmap = await RoadmapParser.LoadAsync(roadmapPath);
+        var modified = false;
+
+        foreach (var change in roadmap.Changes)
+        {
+            if (change.Parents.Remove(parentId))
+            {
+                modified = true;
+            }
+        }
+
+        if (modified)
+        {
+            await RoadmapParser.SaveAsync(roadmap, roadmapPath);
+        }
+
+        return modified;
+    }
+
+    #endregion
+}

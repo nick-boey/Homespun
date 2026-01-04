@@ -6,19 +6,25 @@ namespace Homespun.Features.Roadmap;
 
 /// <summary>
 /// Parses and validates ROADMAP.json files.
+/// Uses flat list structure with parent references (DAG).
 /// </summary>
-public static class RoadmapParser
+public static partial class RoadmapParser
 {
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
         PropertyNameCaseInsensitive = true,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         WriteIndented = true
     };
 
-    // Pattern for valid ID: lowercase alphanumeric and hyphens only
-    private static readonly Regex IdPattern = new("^[a-z0-9-]+$", RegexOptions.Compiled);
+    // Pattern for valid shortTitle: lowercase alphanumeric and hyphens only
+    [GeneratedRegex("^[a-z0-9-]+$", RegexOptions.Compiled)]
+    private static partial Regex ShortTitlePattern();
+
+    // Pattern for valid ID: group/type/shortTitle (allows slashes)
+    [GeneratedRegex("^[a-z0-9-]+/[a-z]+/[a-z0-9-]+$", RegexOptions.Compiled)]
+    private static partial Regex IdPattern();
 
     /// <summary>
     /// Parses a ROADMAP.json string into a Roadmap object.
@@ -89,17 +95,30 @@ public static class RoadmapParser
             throw new RoadmapValidationException("Missing required field: version");
         }
 
-        ValidateChanges(roadmap.Changes, "root");
+        ValidateChanges(roadmap.Changes);
     }
 
-    private static void ValidateChanges(List<RoadmapChange> changes, string path)
+    /// <summary>
+    /// Validates changes using flat list schema with parents.
+    /// </summary>
+    private static void ValidateChanges(List<RoadmapChange> changes)
     {
+        // Collect all IDs first for parent validation
+        var allIds = new HashSet<string>();
+        foreach (var change in changes)
+        {
+            if (!string.IsNullOrWhiteSpace(change.Id))
+            {
+                allIds.Add(change.Id);
+            }
+        }
+
         var seenIds = new HashSet<string>();
 
         for (int i = 0; i < changes.Count; i++)
         {
             var change = changes[i];
-            var changePath = $"{path}/changes[{i}]";
+            var changePath = $"changes[{i}]";
 
             // Validate required fields
             if (string.IsNullOrWhiteSpace(change.Id))
@@ -107,40 +126,70 @@ public static class RoadmapParser
                 throw new RoadmapValidationException($"Missing required field: id at {changePath}");
             }
 
-            if (!IdPattern.IsMatch(change.Id))
+            // Validate shortTitle is present
+            if (string.IsNullOrWhiteSpace(change.ShortTitle))
             {
-                throw new RoadmapValidationException(
-                    $"Invalid id pattern at {changePath}: '{change.Id}'. " +
-                    "ID must contain only lowercase letters, numbers, and hyphens.");
+                throw new RoadmapValidationException($"Missing required field: shortTitle at {changePath}");
             }
 
+            // Validate shortTitle pattern (lowercase alphanumeric + hyphens, no slashes)
+            if (!ShortTitlePattern().IsMatch(change.ShortTitle))
+            {
+                throw new RoadmapValidationException(
+                    $"Invalid shortTitle pattern at {changePath}: '{change.ShortTitle}'. " +
+                    "shortTitle must contain only lowercase letters, numbers, and hyphens.");
+            }
+
+            // Validate ID format: group/type/shortTitle
+            if (!IdPattern().IsMatch(change.Id))
+            {
+                throw new RoadmapValidationException(
+                    $"Invalid id format at {changePath}: '{change.Id}'. " +
+                    "ID must follow the pattern: group/type/shortTitle (e.g., 'core/feature/add-auth').");
+            }
+
+            // Validate ID matches group/type/shortTitle
+            var expectedId = $"{change.Group}/{change.Type.ToString().ToLowerInvariant()}/{change.ShortTitle}";
+            if (change.Id != expectedId)
+            {
+                throw new RoadmapValidationException(
+                    $"ID mismatch at {changePath}: id is '{change.Id}' but should be '{expectedId}' " +
+                    $"based on group='{change.Group}', type='{change.Type}', shortTitle='{change.ShortTitle}'.");
+            }
+
+            // Check for duplicate IDs
             if (seenIds.Contains(change.Id))
             {
                 throw new RoadmapValidationException($"Duplicate id at {changePath}: '{change.Id}'");
             }
             seenIds.Add(change.Id);
 
+            // Validate group
             if (string.IsNullOrWhiteSpace(change.Group))
             {
                 throw new RoadmapValidationException($"Missing required field: group at {changePath}");
             }
 
+            // Validate title
             if (string.IsNullOrWhiteSpace(change.Title))
             {
                 throw new RoadmapValidationException($"Missing required field: title at {changePath}");
             }
 
-            // Type is validated during deserialization, but check for default value
-            // which might indicate a parsing issue
+            // Validate type
             if (!Enum.IsDefined(typeof(ChangeType), change.Type))
             {
                 throw new RoadmapValidationException($"Invalid type at {changePath}");
             }
 
-            // Recursively validate children
-            if (change.Children.Count > 0)
+            // Validate parent references exist
+            foreach (var parentId in change.Parents)
             {
-                ValidateChanges(change.Children, $"{changePath}/{change.Id}");
+                if (!allIds.Contains(parentId))
+                {
+                    throw new RoadmapValidationException(
+                        $"Invalid parent reference at {changePath}: '{parentId}' does not exist in the roadmap.");
+                }
             }
         }
     }
