@@ -50,6 +50,7 @@ builder.Services.AddScoped<IFutureChangeTransitionService, FutureChangeTransitio
 builder.Services.Configure<OpenCodeOptions>(
     builder.Configuration.GetSection(OpenCodeOptions.SectionName));
 builder.Services.AddHttpClient<IOpenCodeClient, OpenCodeClient>();
+builder.Services.AddSingleton<IPortAllocationService, PortAllocationService>();
 builder.Services.AddSingleton<IOpenCodeServerManager, OpenCodeServerManager>();
 builder.Services.AddScoped<IOpenCodeConfigGenerator, OpenCodeConfigGenerator>();
 builder.Services.AddScoped<IAgentWorkflowService, AgentWorkflowService>();

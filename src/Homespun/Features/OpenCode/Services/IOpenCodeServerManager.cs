@@ -43,15 +43,4 @@ public interface IOpenCodeServerManager : IDisposable
     /// <param name="ct">Cancellation token</param>
     /// <returns>True if healthy, false otherwise</returns>
     Task<bool> IsHealthyAsync(OpenCodeServer server, CancellationToken ct = default);
-
-    /// <summary>
-    /// Allocates the next available port for a new server.
-    /// </summary>
-    int AllocatePort();
-
-    /// <summary>
-    /// Releases a port back to the pool.
-    /// </summary>
-    /// <param name="port">The port to release</param>
-    void ReleasePort(int port);
 }

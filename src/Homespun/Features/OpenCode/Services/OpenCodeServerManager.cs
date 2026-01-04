@@ -1,7 +1,5 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using System.Net;
-using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using Homespun.Features.OpenCode.Models;
 using Microsoft.Extensions.Options;
@@ -15,23 +13,22 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
 {
     private readonly OpenCodeOptions _options;
     private readonly IOpenCodeClient _client;
+    private readonly IPortAllocationService _portAllocationService;
     private readonly ILogger<OpenCodeServerManager> _logger;
     private readonly ConcurrentDictionary<string, OpenCodeServer> _servers = new();
-    private readonly ConcurrentBag<int> _releasedPorts = [];
     private readonly string _resolvedExecutablePath;
-    private int _nextPort;
-    private int _allocatedCount;
     private bool _disposed;
 
     public OpenCodeServerManager(
         IOptions<OpenCodeOptions> options,
         IOpenCodeClient client,
+        IPortAllocationService portAllocationService,
         ILogger<OpenCodeServerManager> logger)
     {
         _options = options.Value;
         _client = client;
+        _portAllocationService = portAllocationService;
         _logger = logger;
-        _nextPort = _options.BasePort;
         _resolvedExecutablePath = ResolveExecutablePath(_options.ExecutablePath);
         _logger.LogDebug("Resolved OpenCode executable path: {Path}", _resolvedExecutablePath);
     }
@@ -189,33 +186,6 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
         return executableName;
     }
 
-    public int AllocatePort()
-    {
-        if (_allocatedCount >= _options.MaxConcurrentServers)
-        {
-            throw new InvalidOperationException(
-                $"Maximum concurrent servers ({_options.MaxConcurrentServers}) reached. Stop a server before starting a new one.");
-        }
-
-        // Try to reuse a released port first
-        if (_releasedPorts.TryTake(out var releasedPort))
-        {
-            _allocatedCount++;
-            return releasedPort;
-        }
-
-        var port = _nextPort;
-        _nextPort++;
-        _allocatedCount++;
-        return port;
-    }
-
-    public void ReleasePort(int port)
-    {
-        _releasedPorts.Add(port);
-        _allocatedCount--;
-    }
-
     public async Task<OpenCodeServer> StartServerAsync(string pullRequestId, string worktreePath, bool continueSession = false, CancellationToken ct = default)
     {
         // Check if already running
@@ -230,7 +200,7 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
             _servers.TryRemove(pullRequestId, out _);
         }
 
-        var port = AllocatePort();
+        var port = _portAllocationService.AllocatePort();
         var server = new OpenCodeServer
         {
             PullRequestId = pullRequestId,
@@ -261,7 +231,7 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
         {
             server.Status = OpenCodeServerStatus.Failed;
             _servers.TryRemove(pullRequestId, out _);
-            ReleasePort(port);
+            _portAllocationService.ReleasePort(port);
             
             if (server.Process is { HasExited: false })
             {
@@ -294,7 +264,7 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
             }
         }
 
-        ReleasePort(server.Port);
+        _portAllocationService.ReleasePort(server.Port);
         server.Status = OpenCodeServerStatus.Stopped;
         _logger.LogInformation("OpenCode server stopped for PR {PullRequestId}", pullRequestId);
     }
@@ -327,13 +297,6 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
 
     private Process StartServerProcess(int port, string workingDirectory, bool continueSession = false)
     {
-        // Check if port is already in use - prevents connecting to wrong server
-        if (IsPortInUse(port))
-        {
-            throw new InvalidOperationException(
-                $"Port {port} is already in use. Another OpenCode server may be running.");
-        }
-        
         var arguments = $"serve --port {port} --hostname 127.0.0.1";
         if (continueSession)
         {
@@ -358,24 +321,6 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
         
         _logger.LogDebug("Started OpenCode process with PID {ProcessId} on port {Port}", process.Id, port);
         return process;
-    }
-    
-    /// <summary>
-    /// Checks if a port is already in use by attempting to bind to it.
-    /// </summary>
-    private static bool IsPortInUse(int port)
-    {
-        try
-        {
-            using var listener = new TcpListener(IPAddress.Loopback, port);
-            listener.Start();
-            listener.Stop();
-            return false;
-        }
-        catch (SocketException)
-        {
-            return true;
-        }
     }
 
     private async Task WaitForHealthyAsync(OpenCodeServer server, CancellationToken ct)

@@ -37,9 +37,14 @@ public class OpenCodeIntegrationTests
         var httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
         _client = new OpenCodeClient(httpClient, Mock.Of<ILogger<OpenCodeClient>>());
         
+        var portAllocationService = new PortAllocationService(
+            _options,
+            Mock.Of<ILogger<PortAllocationService>>());
+        
         _serverManager = new OpenCodeServerManager(
             _options,
             _client,
+            portAllocationService,
             Mock.Of<ILogger<OpenCodeServerManager>>());
 
         _configGenerator = new OpenCodeConfigGenerator(
@@ -339,9 +344,13 @@ public class OpenCodeIntegrationTests
         
         using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
         var testClient = new OpenCodeClient(httpClient, Mock.Of<ILogger<OpenCodeClient>>());
+        var testPortAllocationService = new PortAllocationService(
+            testOptions,
+            Mock.Of<ILogger<PortAllocationService>>());
         using var testServerManager = new OpenCodeServerManager(
             testOptions,
             testClient,
+            testPortAllocationService,
             Mock.Of<ILogger<OpenCodeServerManager>>());
         var testConfigGenerator = new OpenCodeConfigGenerator(
             testOptions,
