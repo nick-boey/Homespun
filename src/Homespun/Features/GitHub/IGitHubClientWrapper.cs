@@ -7,6 +7,7 @@ namespace Homespun.Features.GitHub;
 /// </summary>
 public interface IGitHubClientWrapper
 {
+    Task<Repository> GetRepositoryAsync(string owner, string repo);
     Task<IReadOnlyList<PullRequest>> GetPullRequestsAsync(string owner, string repo, PullRequestRequest request);
     Task<PullRequest> GetPullRequestAsync(string owner, string repo, int number);
     Task<PullRequest> CreatePullRequestAsync(string owner, string repo, NewPullRequest newPullRequest);

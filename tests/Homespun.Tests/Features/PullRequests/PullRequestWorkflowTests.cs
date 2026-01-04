@@ -40,14 +40,14 @@ public class PullRequestWorkflowTests
         _dataStore.Clear();
     }
 
-    private async Task<Project> CreateTestProject(bool withGitHub = true)
+    private async Task<Project> CreateTestProject()
     {
         var project = new Project
         {
-            Name = "Test Project",
+            Name = "test-repo",
             LocalPath = "/test/path",
-            GitHubOwner = withGitHub ? "test-owner" : null,
-            GitHubRepo = withGitHub ? "test-repo" : null,
+            GitHubOwner = "test-owner",
+            GitHubRepo = "test-repo",
             DefaultBranch = "main"
         };
 

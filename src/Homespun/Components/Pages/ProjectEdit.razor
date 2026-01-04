@@ -22,31 +22,21 @@ else
     <form @onsubmit="HandleSubmit">
         <div class="row">
             <div class="col-md-6">
-                <h5>General Settings</h5>
+                <h5>Project Information</h5>
 
                 <div class="mb-3">
-                    <label for="name" class="form-label">Name</label>
-                    <input type="text" class="form-control" id="name" @bind="_name" required />
+                    <label class="form-label">Repository</label>
+                    <p class="form-control-plaintext">@_gitHubOwner/@_gitHubRepo</p>
                 </div>
 
                 <div class="mb-3">
-                    <label for="localPath" class="form-label">Local Path</label>
-                    <input type="text" class="form-control" id="localPath" @bind="_localPath" required placeholder="/path/to/repository" />
+                    <label class="form-label">Default Branch</label>
+                    <p class="form-control-plaintext">@_defaultBranch</p>
                 </div>
 
                 <div class="mb-3">
-                    <label for="gitHubOwner" class="form-label">GitHub Owner (optional)</label>
-                    <input type="text" class="form-control" id="gitHubOwner" @bind="_gitHubOwner" placeholder="owner" />
-                </div>
-
-                <div class="mb-3">
-                    <label for="gitHubRepo" class="form-label">GitHub Repository (optional)</label>
-                    <input type="text" class="form-control" id="gitHubRepo" @bind="_gitHubRepo" placeholder="repo" />
-                </div>
-
-                <div class="mb-3">
-                    <label for="defaultBranch" class="form-label">Default Branch</label>
-                    <input type="text" class="form-control" id="defaultBranch" @bind="_defaultBranch" />
+                    <label class="form-label">Local Path</label>
+                    <p class="form-control-plaintext text-muted" style="font-size: 0.9em;">@_localPath</p>
                 </div>
             </div>
 
@@ -82,9 +72,9 @@ else
     private bool _notFound = false;
     private string _name = "";
     private string _localPath = "";
-    private string? _gitHubOwner;
-    private string? _gitHubRepo;
-    private string _defaultBranch = "main";
+    private string _gitHubOwner = "";
+    private string _gitHubRepo = "";
+    private string _defaultBranch = "";
     private string? _defaultModel;
 
     protected override async Task OnInitializedAsync()
@@ -108,14 +98,7 @@ else
 
     private async Task HandleSubmit()
     {
-        await ProjectService.UpdateAsync(
-            Id,
-            _name,
-            _localPath,
-            _gitHubOwner,
-            _gitHubRepo,
-            _defaultBranch,
-            _defaultModel);
+        await ProjectService.UpdateAsync(Id, _defaultModel);
         Navigation.NavigateTo("projects");
     }
 }

@@ -8,6 +8,11 @@ namespace Homespun.Features.GitHub;
 public interface IGitHubService
 {
     /// <summary>
+    /// Get the default branch name for a repository from GitHub
+    /// </summary>
+    Task<string?> GetDefaultBranchAsync(string owner, string repo);
+
+    /// <summary>
     /// Check if GitHub is configured for the project
     /// </summary>
     Task<bool> IsConfiguredAsync(string projectId);

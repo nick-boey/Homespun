@@ -47,10 +47,11 @@ public class GitHubServiceIntegrationTests
         // Add a project pointing to a real repo
         var project = new Project
         {
-            Name = "Test",
+            Name = "Hello-World",
             LocalPath = ".",
             GitHubOwner = "octocat",  // Change to your test repo
-            GitHubRepo = "Hello-World"
+            GitHubRepo = "Hello-World",
+            DefaultBranch = "master"
         };
         await _dataStore.AddProjectAsync(project);
 

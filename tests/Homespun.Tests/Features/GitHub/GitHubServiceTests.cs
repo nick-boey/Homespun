@@ -42,14 +42,14 @@ public class GitHubServiceTests
         _dataStore.Clear();
     }
 
-    private async Task<Project> CreateTestProject(bool withGitHub = true)
+    private async Task<Project> CreateTestProject()
     {
         var project = new Project
         {
-            Name = "Test Project",
+            Name = "test-repo",
             LocalPath = "/test/path",
-            GitHubOwner = withGitHub ? "test-owner" : null,
-            GitHubRepo = withGitHub ? "test-repo" : null,
+            GitHubOwner = "test-owner",
+            GitHubRepo = "test-repo",
             DefaultBranch = "main"
         };
 
@@ -84,19 +84,6 @@ public class GitHubServiceTests
 
         // Assert
         Assert.That(result, Is.True);
-    }
-
-    [Test]
-    public async Task IsConfigured_WithoutGitHubSettings_ReturnsFalse()
-    {
-        // Arrange
-        var project = await CreateTestProject(withGitHub: false);
-
-        // Act
-        var result = await _service.IsConfiguredAsync(project.Id);
-
-        // Assert
-        Assert.That(result, Is.False);
     }
 
     [Test]
@@ -166,19 +153,6 @@ public class GitHubServiceTests
         Assert.That(result, Has.Count.EqualTo(2));
         Assert.That(result[0].Title, Is.EqualTo("PR 1"));
         Assert.That(result[1].Title, Is.EqualTo("PR 2"));
-    }
-
-    [Test]
-    public async Task GetOpenPullRequests_ProjectNotConfigured_ReturnsEmpty()
-    {
-        // Arrange
-        var project = await CreateTestProject(withGitHub: false);
-
-        // Act
-        var result = await _service.GetOpenPullRequestsAsync(project.Id);
-
-        // Assert
-        Assert.That(result, Is.Empty);
     }
 
     [Test]
