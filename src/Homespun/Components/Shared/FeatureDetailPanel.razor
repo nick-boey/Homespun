@@ -98,7 +98,8 @@
             }
             else
             {
-                <button class="btn btn-sm btn-success" @onclick="StartAgent" disabled="@_isAgentLoading || !CanStartAgent()">
+                <button class="btn btn-sm btn-success" @onclick="StartAgent"
+                        disabled="@StartAgentDisabled">
                     @if (_isAgentLoading)
                     {
                         <span class="spinner-border spinner-border-sm me-1" role="status"></span>
@@ -198,11 +199,9 @@
         }
     }
 
-    private bool CanStartAgent()
-    {
-        // Agent can be started if there's a worktree path
-        return !string.IsNullOrEmpty(PullRequest.WorktreePath);
-    }
+    // Agent can be started if there's a branch name (worktree will be created automatically if needed)
+    private bool StartAgentDisabled => string.IsNullOrEmpty(PullRequest.BranchName) || _isAgentLoading;
+
 
     private async Task SkipReview()
     {

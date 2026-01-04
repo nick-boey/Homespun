@@ -47,10 +47,28 @@ public class AgentWorkflowService : IAgentWorkflowService
         var pullRequest = await _pullRequestService.GetByIdAsync(pullRequestId)
             ?? throw new InvalidOperationException($"Pull request {pullRequestId} not found");
 
+        // Create worktree if it doesn't exist
         if (string.IsNullOrEmpty(pullRequest.WorktreePath))
         {
-            throw new InvalidOperationException(
-                $"Pull request {pullRequestId} does not have a worktree. Start development first.");
+            if (string.IsNullOrEmpty(pullRequest.BranchName))
+            {
+                throw new InvalidOperationException(
+                    $"Pull request {pullRequestId} does not have a branch name. Cannot create worktree.");
+            }
+
+            _logger.LogInformation("Creating worktree for PR {PullRequestId} on branch {BranchName}", 
+                pullRequestId, pullRequest.BranchName);
+            
+            var success = await _pullRequestService.StartDevelopmentAsync(pullRequestId);
+            if (!success)
+            {
+                throw new InvalidOperationException(
+                    $"Failed to create worktree for pull request {pullRequestId}");
+            }
+
+            // Refresh pull request to get the worktree path
+            pullRequest = await _pullRequestService.GetByIdAsync(pullRequestId)
+                ?? throw new InvalidOperationException($"Pull request {pullRequestId} not found after creating worktree");
         }
 
         // Check if server already running
@@ -63,7 +81,7 @@ public class AgentWorkflowService : IAgentWorkflowService
 
         // Pull latest changes before starting agent
         _logger.LogInformation("Pulling latest changes for PR {PullRequestId}", pullRequestId);
-        var pullSuccess = await _worktreeService.PullLatestAsync(pullRequest.WorktreePath);
+        var pullSuccess = await _worktreeService.PullLatestAsync(pullRequest.WorktreePath!);
         if (!pullSuccess)
         {
             _logger.LogWarning("Failed to pull latest changes for PR {PullRequestId}, continuing anyway", pullRequestId);
@@ -72,10 +90,10 @@ public class AgentWorkflowService : IAgentWorkflowService
         // Generate config with model from: parameter -> project -> global default
         var effectiveModel = model ?? pullRequest.Project.DefaultModel;
         var config = _configGenerator.CreateDefaultConfig(effectiveModel);
-        await _configGenerator.GenerateConfigAsync(pullRequest.WorktreePath, config, ct);
+        await _configGenerator.GenerateConfigAsync(pullRequest.WorktreePath!, config, ct);
 
         // Start server
-        var server = await _serverManager.StartServerAsync(pullRequestId, pullRequest.WorktreePath, continueSession: false, ct);
+        var server = await _serverManager.StartServerAsync(pullRequestId, pullRequest.WorktreePath!, continueSession: false, ct);
 
         // Get or create session
         var status = await BuildAgentStatusAsync(server, ct);
