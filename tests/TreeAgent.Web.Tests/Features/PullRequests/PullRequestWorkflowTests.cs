@@ -1,4 +1,3 @@
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Moq;
 using Octokit;
@@ -7,6 +6,7 @@ using TreeAgent.Web.Features.GitHub;
 using TreeAgent.Web.Features.PullRequests;
 using TreeAgent.Web.Features.PullRequests.Data;
 using TreeAgent.Web.Features.PullRequests.Data.Entities;
+using TreeAgent.Web.Tests.Helpers;
 using Project = TreeAgent.Web.Features.PullRequests.Data.Entities.Project;
 using TrackedPullRequest = TreeAgent.Web.Features.PullRequests.Data.Entities.PullRequest;
 using PullRequestStatus = TreeAgent.Web.Features.PullRequests.PullRequestStatus;
@@ -16,7 +16,7 @@ namespace TreeAgent.Web.Tests.Features.PullRequests;
 [TestFixture]
 public class PullRequestWorkflowTests
 {
-    private TreeAgentDbContext _db = null!;
+    private TestDataStore _dataStore = null!;
     private Mock<ICommandRunner> _mockRunner = null!;
     private Mock<IConfiguration> _mockConfig = null!;
     private Mock<IGitHubClientWrapper> _mockGitHubClient = null!;
@@ -25,24 +25,20 @@ public class PullRequestWorkflowTests
     [SetUp]
     public void SetUp()
     {
-        var options = new DbContextOptionsBuilder<TreeAgentDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .Options;
-
-        _db = new TreeAgentDbContext(options);
+        _dataStore = new TestDataStore();
         _mockRunner = new Mock<ICommandRunner>();
         _mockConfig = new Mock<IConfiguration>();
         _mockGitHubClient = new Mock<IGitHubClientWrapper>();
 
         _mockConfig.Setup(c => c["GITHUB_TOKEN"]).Returns("test-token");
 
-        _service = new PullRequestWorkflowService(_db, _mockRunner.Object, _mockConfig.Object, _mockGitHubClient.Object);
+        _service = new PullRequestWorkflowService(_dataStore, _mockRunner.Object, _mockConfig.Object, _mockGitHubClient.Object);
     }
 
     [TearDown]
     public void TearDown()
     {
-        _db.Dispose();
+        _dataStore.Clear();
     }
 
     private async Task<Project> CreateTestProject(bool withGitHub = true)
@@ -56,8 +52,7 @@ public class PullRequestWorkflowTests
             DefaultBranch = "main"
         };
 
-        _db.Projects.Add(project);
-        await _db.SaveChangesAsync();
+        await _dataStore.AddProjectAsync(project);
         return project;
     }
 
@@ -401,8 +396,8 @@ public class PullRequestWorkflowTests
         // Create pull requests for open PRs
         var pr1 = new TrackedPullRequest { ProjectId = project.Id, Title = "PR 1", BranchName = "feature/one", Status = OpenPullRequestStatus.InDevelopment };
         var pr2 = new TrackedPullRequest { ProjectId = project.Id, Title = "PR 2", BranchName = "feature/two", Status = OpenPullRequestStatus.InDevelopment };
-        _db.PullRequests.AddRange(pr1, pr2);
-        await _db.SaveChangesAsync();
+        await _dataStore.AddPullRequestAsync(pr1);
+        await _dataStore.AddPullRequestAsync(pr2);
 
         // Mock successful rebases
         _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.Contains("fetch")), project.LocalPath))
@@ -427,8 +422,7 @@ public class PullRequestWorkflowTests
         var project = await CreateTestProject();
 
         var pullRequest = new TrackedPullRequest { ProjectId = project.Id, Title = "Conflicting PR", BranchName = "feature/conflict", Status = OpenPullRequestStatus.InDevelopment };
-        _db.PullRequests.Add(pullRequest);
-        await _db.SaveChangesAsync();
+        await _dataStore.AddPullRequestAsync(pullRequest);
 
         // Mock fetch success but rebase conflict
         _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.Contains("fetch")), project.LocalPath))
@@ -455,8 +449,7 @@ public class PullRequestWorkflowTests
         var project = await CreateTestProject();
 
         var pullRequest = new TrackedPullRequest { ProjectId = project.Id, Title = "Test PR", BranchName = "feature/test", Status = OpenPullRequestStatus.InDevelopment };
-        _db.PullRequests.Add(pullRequest);
-        await _db.SaveChangesAsync();
+        await _dataStore.AddPullRequestAsync(pullRequest);
 
         _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.Contains("fetch")), project.LocalPath))
             .ReturnsAsync(new CommandResult { Success = true });

@@ -1,4 +1,3 @@
-using Microsoft.EntityFrameworkCore;
 using Octokit;
 using TreeAgent.Web.Features.Commands;
 using TreeAgent.Web.Features.Git;
@@ -14,7 +13,7 @@ namespace TreeAgent.Web.Features.PullRequests;
 /// Service for managing PR workflow including status tracking, time calculation, and rebasing.
 /// </summary>
 public class PullRequestWorkflowService(
-    TreeAgentDbContext db,
+    IDataStore dataStore,
     ICommandRunner commandRunner,
     IConfiguration configuration,
     IGitHubClientWrapper githubClient)
@@ -41,7 +40,7 @@ public class PullRequestWorkflowService(
     /// </summary>
     public async Task<List<PullRequestWithTime>> GetMergedPullRequestsWithTimeAsync(string projectId)
     {
-        var project = await db.Projects.FindAsync(projectId);
+        var project = dataStore.GetProject(projectId);
         if (project == null || string.IsNullOrEmpty(project.GitHubOwner) || string.IsNullOrEmpty(project.GitHubRepo))
         {
             return [];
@@ -80,7 +79,7 @@ public class PullRequestWorkflowService(
     /// </summary>
     public async Task<List<PullRequestWithTime>> GetClosedPullRequestsWithTimeAsync(string projectId)
     {
-        var project = await db.Projects.FindAsync(projectId);
+        var project = dataStore.GetProject(projectId);
         if (project == null || string.IsNullOrEmpty(project.GitHubOwner) || string.IsNullOrEmpty(project.GitHubRepo))
         {
             return [];
@@ -124,7 +123,7 @@ public class PullRequestWorkflowService(
     /// </summary>
     public async Task<List<PullRequestWithStatus>> GetOpenPullRequestsWithStatusAsync(string projectId)
     {
-        var project = await db.Projects.FindAsync(projectId);
+        var project = dataStore.GetProject(projectId);
         if (project == null || string.IsNullOrEmpty(project.GitHubOwner) || string.IsNullOrEmpty(project.GitHubRepo))
         {
             return [];
@@ -240,7 +239,7 @@ public class PullRequestWorkflowService(
     {
         var result = new RebaseResult();
 
-        var project = await db.Projects.FindAsync(projectId);
+        var project = dataStore.GetProject(projectId);
         if (project == null)
         {
             result.Errors.Add("Project not found");
@@ -248,10 +247,9 @@ public class PullRequestWorkflowService(
         }
 
         // Get all tracked pull requests that are open
-        var pullRequests = await db.PullRequests
-            .Where(pr => pr.ProjectId == projectId &&
-                       pr.BranchName != null)
-            .ToListAsync();
+        var pullRequests = dataStore.GetPullRequestsByProject(projectId)
+            .Where(pr => pr.BranchName != null)
+            .ToList();
 
         // Fetch latest from origin
         var fetchResult = await commandRunner.RunAsync("git", "fetch origin", project.LocalPath);

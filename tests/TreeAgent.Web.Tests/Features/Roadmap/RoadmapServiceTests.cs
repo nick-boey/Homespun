@@ -1,10 +1,10 @@
-using Microsoft.EntityFrameworkCore;
 using Moq;
 using TreeAgent.Web.Features.Commands;
 using TreeAgent.Web.Features.Git;
 using TreeAgent.Web.Features.PullRequests.Data;
 using TreeAgent.Web.Features.PullRequests.Data.Entities;
 using TreeAgent.Web.Features.Roadmap;
+using TreeAgent.Web.Tests.Helpers;
 using Project = TreeAgent.Web.Features.PullRequests.Data.Entities.Project;
 using TrackedPullRequest = TreeAgent.Web.Features.PullRequests.Data.Entities.PullRequest;
 
@@ -13,7 +13,7 @@ namespace TreeAgent.Web.Tests.Features.Roadmap;
 [TestFixture]
 public class RoadmapServiceTests
 {
-    private TreeAgentDbContext _db = null!;
+    private TestDataStore _dataStore = null!;
     private Mock<ICommandRunner> _mockRunner = null!;
     private Mock<IGitWorktreeService> _mockWorktreeService = null!;
     private RoadmapService _service = null!;
@@ -22,24 +22,19 @@ public class RoadmapServiceTests
     [SetUp]
     public void SetUp()
     {
-        var options = new DbContextOptionsBuilder<TreeAgentDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .Options;
-
-        _db = new TreeAgentDbContext(options);
+        _dataStore = new TestDataStore();
         _mockRunner = new Mock<ICommandRunner>();
         _mockWorktreeService = new Mock<IGitWorktreeService>();
 
         _tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
         Directory.CreateDirectory(_tempDir);
 
-        _service = new RoadmapService(_db, _mockRunner.Object, _mockWorktreeService.Object);
+        _service = new RoadmapService(_dataStore, _mockRunner.Object, _mockWorktreeService.Object);
     }
 
     [TearDown]
     public void TearDown()
     {
-        _db.Dispose();
         if (Directory.Exists(_tempDir))
         {
             Directory.Delete(_tempDir, recursive: true);
@@ -57,8 +52,7 @@ public class RoadmapServiceTests
             DefaultBranch = "main"
         };
 
-        _db.Projects.Add(project);
-        await _db.SaveChangesAsync();
+        await _dataStore.AddProjectAsync(project);
         return project;
     }
 
@@ -425,8 +419,7 @@ public class RoadmapServiceTests
             BranchName = "plan-update/add-features",
             Status = OpenPullRequestStatus.InDevelopment
         };
-        _db.PullRequests.Add(pullRequest);
-        await _db.SaveChangesAsync();
+        await _dataStore.AddPullRequestAsync(pullRequest);
 
         // Mock git diff showing only ROADMAP.json changed
         _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.Contains("diff") && s.Contains("--name-only")), It.IsAny<string>()))
@@ -451,8 +444,7 @@ public class RoadmapServiceTests
             BranchName = "core/feature/mixed",
             Status = OpenPullRequestStatus.InDevelopment
         };
-        _db.PullRequests.Add(pullRequest);
-        await _db.SaveChangesAsync();
+        await _dataStore.AddPullRequestAsync(pullRequest);
 
         // Mock git diff showing multiple files changed
         _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.Contains("diff") && s.Contains("--name-only")), It.IsAny<string>()))

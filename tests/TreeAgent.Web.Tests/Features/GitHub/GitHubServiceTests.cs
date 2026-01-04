@@ -1,4 +1,3 @@
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Moq;
@@ -8,6 +7,7 @@ using TreeAgent.Web.Features.GitHub;
 using TreeAgent.Web.Features.PullRequests;
 using TreeAgent.Web.Features.PullRequests.Data;
 using TreeAgent.Web.Features.PullRequests.Data.Entities;
+using TreeAgent.Web.Tests.Helpers;
 using Project = TreeAgent.Web.Features.PullRequests.Data.Entities.Project;
 using TrackedPullRequest = TreeAgent.Web.Features.PullRequests.Data.Entities.PullRequest;
 
@@ -16,7 +16,7 @@ namespace TreeAgent.Web.Tests.Features.GitHub;
 [TestFixture]
 public class GitHubServiceTests
 {
-    private TreeAgentDbContext _db = null!;
+    private TestDataStore _dataStore = null!;
     private Mock<ICommandRunner> _mockRunner = null!;
     private Mock<IConfiguration> _mockConfig = null!;
     private Mock<IGitHubClientWrapper> _mockGitHubClient = null!;
@@ -26,11 +26,7 @@ public class GitHubServiceTests
     [SetUp]
     public void SetUp()
     {
-        var options = new DbContextOptionsBuilder<TreeAgentDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .Options;
-
-        _db = new TreeAgentDbContext(options);
+        _dataStore = new TestDataStore();
         _mockRunner = new Mock<ICommandRunner>();
         _mockConfig = new Mock<IConfiguration>();
         _mockGitHubClient = new Mock<IGitHubClientWrapper>();
@@ -38,13 +34,13 @@ public class GitHubServiceTests
 
         _mockConfig.Setup(c => c["GITHUB_TOKEN"]).Returns("test-token");
 
-        _service = new GitHubService(_db, _mockRunner.Object, _mockConfig.Object, _mockGitHubClient.Object, _mockLogger.Object);
+        _service = new GitHubService(_dataStore, _mockRunner.Object, _mockConfig.Object, _mockGitHubClient.Object, _mockLogger.Object);
     }
 
     [TearDown]
     public void TearDown()
     {
-        _db.Dispose();
+        _dataStore.Clear();
     }
 
     private async Task<Project> CreateTestProject(bool withGitHub = true)
@@ -58,8 +54,7 @@ public class GitHubServiceTests
             DefaultBranch = "main"
         };
 
-        _db.Projects.Add(project);
-        await _db.SaveChangesAsync();
+        await _dataStore.AddProjectAsync(project);
         return project;
     }
 
@@ -75,8 +70,7 @@ public class GitHubServiceTests
             Status = OpenPullRequestStatus.InDevelopment
         };
 
-        _db.PullRequests.Add(pullRequest);
-        await _db.SaveChangesAsync();
+        await _dataStore.AddPullRequestAsync(pullRequest);
         return pullRequest;
     }
 
@@ -117,7 +111,7 @@ public class GitHubServiceTests
         noTokenConfig.Setup(c => c["GITHUB_TOKEN"]).Returns((string?)null);
 
         // Create a new service with the no-token config
-        var service = new GitHubService(_db, _mockRunner.Object, noTokenConfig.Object, _mockGitHubClient.Object, _mockLogger.Object);
+        var service = new GitHubService(_dataStore, _mockRunner.Object, noTokenConfig.Object, _mockGitHubClient.Object, _mockLogger.Object);
 
         // Clear environment variable for this test (save and restore)
         var originalToken = Environment.GetEnvironmentVariable("GITHUB_TOKEN");
@@ -311,7 +305,7 @@ public class GitHubServiceTests
         Assert.That(result!.Number, Is.EqualTo(123));
 
         // Verify feature was updated
-        var updatedFeature = await _db.PullRequests.FindAsync(feature.Id);
+        var updatedFeature = _dataStore.GetPullRequest(feature.Id);
         Assert.That(updatedFeature!.GitHubPRNumber, Is.EqualTo(123));
         Assert.That(updatedFeature.Status, Is.EqualTo(OpenPullRequestStatus.ReadyForReview));
     }
@@ -379,7 +373,7 @@ public class GitHubServiceTests
         Assert.That(result.Updated, Is.EqualTo(0));
         Assert.That(result.Errors, Is.Empty);
 
-        var features = await _db.PullRequests.Where(f => f.ProjectId == project.Id).ToListAsync();
+        var features = _dataStore.GetPullRequestsByProject(project.Id);
         Assert.That(features, Has.Count.EqualTo(1));
         Assert.That(features[0].Title, Is.EqualTo("New Feature"));
         Assert.That(features[0].GitHubPRNumber, Is.EqualTo(1));
@@ -392,7 +386,7 @@ public class GitHubServiceTests
         var project = await CreateTestProject();
         var existingPullRequest = await CreateTestPullRequest(project.Id, "feature/existing", prNumber: 1);
         existingPullRequest.Title = "Old Title";
-        await _db.SaveChangesAsync();
+        await _dataStore.UpdatePullRequestAsync(existingPullRequest);
 
         var openPrs = new List<Octokit.PullRequest>
         {
@@ -412,7 +406,7 @@ public class GitHubServiceTests
         Assert.That(result.Imported, Is.EqualTo(0));
         Assert.That(result.Updated, Is.EqualTo(1));
 
-        var updatedPullRequest = await _db.PullRequests.FindAsync(existingPullRequest.Id);
+        var updatedPullRequest = _dataStore.GetPullRequest(existingPullRequest.Id);
         Assert.That(updatedPullRequest!.Title, Is.EqualTo("Updated Title"));
     }
 
@@ -423,7 +417,7 @@ public class GitHubServiceTests
         var project = await CreateTestProject();
         var existingPullRequest = await CreateTestPullRequest(project.Id, "feature/existing", prNumber: 1);
         existingPullRequest.Status = OpenPullRequestStatus.ReadyForReview;
-        await _db.SaveChangesAsync();
+        await _dataStore.UpdatePullRequestAsync(existingPullRequest);
 
         // PR is no longer in open PRs list (it was closed/merged on GitHub)
         var openPrs = new List<Octokit.PullRequest>();
@@ -441,7 +435,7 @@ public class GitHubServiceTests
         Assert.That(result.Removed, Is.EqualTo(1));
         Assert.That(result.Updated, Is.EqualTo(0));
 
-        var removedPullRequest = await _db.PullRequests.FindAsync(existingPullRequest.Id);
+        var removedPullRequest = _dataStore.GetPullRequest(existingPullRequest.Id);
         Assert.That(removedPullRequest, Is.Null);
     }
 
@@ -468,7 +462,7 @@ public class GitHubServiceTests
 
         // Assert
         Assert.That(result, Is.True);
-        var updatedFeature = await _db.PullRequests.FindAsync(feature.Id);
+        var updatedFeature = _dataStore.GetPullRequest(feature.Id);
         Assert.That(updatedFeature!.GitHubPRNumber, Is.EqualTo(42));
     }
 
@@ -566,7 +560,7 @@ public class GitHubServiceTests
         Assert.That(result.Updated, Is.EqualTo(0));
         Assert.That(result.Errors, Is.Empty);
 
-        var pullRequests = await _db.PullRequests.Where(pr => pr.ProjectId == project.Id).ToListAsync();
+        var pullRequests = _dataStore.GetPullRequestsByProject(project.Id);
         Assert.That(pullRequests, Has.Count.EqualTo(2));
         Assert.That(pullRequests, Has.All.Matches<TrackedPullRequest>(pr => pr.Status == OpenPullRequestStatus.ReadyForReview));
     }

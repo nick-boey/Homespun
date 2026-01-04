@@ -1,4 +1,3 @@
-using Microsoft.EntityFrameworkCore;
 using Octokit;
 using TreeAgent.Web.Features.Commands;
 using TreeAgent.Web.Features.PullRequests;
@@ -9,7 +8,7 @@ using TrackedPullRequest = TreeAgent.Web.Features.PullRequests.Data.Entities.Pul
 namespace TreeAgent.Web.Features.GitHub;
 
 public class GitHubService(
-    TreeAgentDbContext db,
+    IDataStore dataStore,
     ICommandRunner commandRunner,
     IConfiguration configuration,
     IGitHubClientWrapper githubClient,
@@ -21,34 +20,34 @@ public class GitHubService(
         return configuration["GITHUB_TOKEN"] ?? Environment.GetEnvironmentVariable("GITHUB_TOKEN");
     }
 
-    public async Task<bool> IsConfiguredAsync(string projectId)
+    public Task<bool> IsConfiguredAsync(string projectId)
     {
-        var project = await db.Projects.FindAsync(projectId);
+        var project = dataStore.GetProject(projectId);
         if (project == null)
         {
             logger.LogDebug("GitHub not configured: project {ProjectId} not found", projectId);
-            return false;
+            return Task.FromResult(false);
         }
 
         if (string.IsNullOrEmpty(project.GitHubOwner) || string.IsNullOrEmpty(project.GitHubRepo))
         {
             logger.LogDebug("GitHub not configured for project {ProjectId}: owner or repo not set", projectId);
-            return false;
+            return Task.FromResult(false);
         }
 
         var token = GetGitHubToken();
         if (string.IsNullOrEmpty(token))
         {
             logger.LogWarning("GitHub not configured for project {ProjectId}: GITHUB_TOKEN not found in configuration or environment", projectId);
-            return false;
+            return Task.FromResult(false);
         }
 
-        return true;
+        return Task.FromResult(true);
     }
 
     public async Task<List<PullRequestInfo>> GetOpenPullRequestsAsync(string projectId)
     {
-        var project = await db.Projects.FindAsync(projectId);
+        var project = dataStore.GetProject(projectId);
         if (project == null || string.IsNullOrEmpty(project.GitHubOwner) || string.IsNullOrEmpty(project.GitHubRepo))
         {
             logger.LogWarning("Cannot fetch open PRs: project {ProjectId} not found or GitHub not configured", projectId);
@@ -78,7 +77,7 @@ public class GitHubService(
 
     public async Task<List<PullRequestInfo>> GetClosedPullRequestsAsync(string projectId)
     {
-        var project = await db.Projects.FindAsync(projectId);
+        var project = dataStore.GetProject(projectId);
         if (project == null || string.IsNullOrEmpty(project.GitHubOwner) || string.IsNullOrEmpty(project.GitHubRepo))
         {
             logger.LogWarning("Cannot fetch closed PRs: project {ProjectId} not found or GitHub not configured", projectId);
@@ -108,7 +107,7 @@ public class GitHubService(
 
     public async Task<PullRequestInfo?> GetPullRequestAsync(string projectId, int prNumber)
     {
-        var project = await db.Projects.FindAsync(projectId);
+        var project = dataStore.GetProject(projectId);
         if (project == null || string.IsNullOrEmpty(project.GitHubOwner) || string.IsNullOrEmpty(project.GitHubRepo))
         {
             logger.LogWarning("Cannot fetch PR #{PrNumber}: project {ProjectId} not found or GitHub not configured", prNumber, projectId);
@@ -133,17 +132,20 @@ public class GitHubService(
 
     public async Task<PullRequestInfo?> CreatePullRequestAsync(string projectId, string pullRequestId)
     {
-        var pullRequest = await db.PullRequests
-            .Include(pr => pr.Project)
-            .FirstOrDefaultAsync(pr => pr.Id == pullRequestId);
-
+        var pullRequest = dataStore.GetPullRequest(pullRequestId);
         if (pullRequest == null)
         {
             logger.LogWarning("Cannot create PR: pull request {PullRequestId} not found", pullRequestId);
             return null;
         }
 
-        var project = pullRequest.Project;
+        var project = dataStore.GetProject(pullRequest.ProjectId);
+        if (project == null)
+        {
+            logger.LogWarning("Cannot create PR: project {ProjectId} not found", pullRequest.ProjectId);
+            return null;
+        }
+
         if (string.IsNullOrEmpty(project.GitHubOwner) ||
             string.IsNullOrEmpty(project.GitHubRepo) ||
             string.IsNullOrEmpty(pullRequest.BranchName))
@@ -181,7 +183,7 @@ public class GitHubService(
             pullRequest.GitHubPRNumber = pr.Number;
             pullRequest.Status = OpenPullRequestStatus.ReadyForReview;
             pullRequest.UpdatedAt = DateTime.UtcNow;
-            await db.SaveChangesAsync();
+            await dataStore.UpdatePullRequestAsync(pullRequest);
 
             return MapToPullRequestInfo(pr);
         }
@@ -194,7 +196,7 @@ public class GitHubService(
 
     public async Task<bool> PushBranchAsync(string projectId, string branchName)
     {
-        var project = await db.Projects.FindAsync(projectId);
+        var project = dataStore.GetProject(projectId);
         if (project == null)
         {
             logger.LogWarning("Cannot push branch: project {ProjectId} not found", projectId);
@@ -226,7 +228,7 @@ public class GitHubService(
     {
         var result = new SyncResult();
 
-        var project = await db.Projects.FindAsync(projectId);
+        var project = dataStore.GetProject(projectId);
         if (project == null || string.IsNullOrEmpty(project.GitHubOwner) || string.IsNullOrEmpty(project.GitHubRepo))
         {
             logger.LogWarning("Cannot sync PRs: project {ProjectId} not found or GitHub not configured", projectId);
@@ -241,9 +243,9 @@ public class GitHubService(
         var openPrNumbers = openPrs.Select(pr => pr.Number).ToHashSet();
 
         // Get existing tracked pull requests
-        var existingPullRequests = await db.PullRequests
-            .Where(pr => pr.ProjectId == projectId && pr.GitHubPRNumber != null)
-            .ToListAsync();
+        var existingPullRequests = dataStore.GetPullRequestsByProject(projectId)
+            .Where(pr => pr.GitHubPRNumber != null)
+            .ToList();
 
         // Remove PRs that are no longer open on GitHub
         foreach (var pr in existingPullRequests)
@@ -251,7 +253,7 @@ public class GitHubService(
             if (pr.GitHubPRNumber.HasValue && !openPrNumbers.Contains(pr.GitHubPRNumber.Value))
             {
                 logger.LogInformation("Removing closed/merged PR #{PrNumber} from local tracking", pr.GitHubPRNumber);
-                db.PullRequests.Remove(pr);
+                await dataStore.RemovePullRequestAsync(pr.Id);
                 result.Removed++;
             }
         }
@@ -272,6 +274,7 @@ public class GitHubService(
                     pullRequest.Title = pr.Title;
                     pullRequest.Description = pr.Body;
                     pullRequest.UpdatedAt = DateTime.UtcNow;
+                    await dataStore.UpdatePullRequestAsync(pullRequest);
                     result.Updated++;
                 }
                 else
@@ -288,7 +291,7 @@ public class GitHubService(
                         CreatedAt = pr.CreatedAt
                     };
 
-                    db.PullRequests.Add(pullRequest);
+                    await dataStore.AddPullRequestAsync(pullRequest);
                     result.Imported++;
                 }
             }
@@ -299,7 +302,6 @@ public class GitHubService(
             }
         }
 
-        await db.SaveChangesAsync();
         logger.LogInformation("PR sync completed: {Imported} imported, {Updated} updated, {Removed} removed, {Errors} errors",
             result.Imported, result.Updated, result.Removed, result.Errors.Count);
         return result;
@@ -307,7 +309,7 @@ public class GitHubService(
 
     public async Task<bool> LinkPullRequestAsync(string pullRequestId, int prNumber)
     {
-        var pullRequest = await db.PullRequests.FindAsync(pullRequestId);
+        var pullRequest = dataStore.GetPullRequest(pullRequestId);
         if (pullRequest == null)
         {
             logger.LogWarning("Cannot link PR: pull request {PullRequestId} not found", pullRequestId);
@@ -317,7 +319,7 @@ public class GitHubService(
         logger.LogInformation("Linking PR #{PrNumber} to pull request {PullRequestId}", prNumber, pullRequestId);
         pullRequest.GitHubPRNumber = prNumber;
         pullRequest.UpdatedAt = DateTime.UtcNow;
-        await db.SaveChangesAsync();
+        await dataStore.UpdatePullRequestAsync(pullRequest);
 
         return true;
     }

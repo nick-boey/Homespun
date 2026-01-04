@@ -1,9 +1,9 @@
-﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using TreeAgent.Web.Features.Commands;
 using TreeAgent.Web.Features.GitHub;
 using TreeAgent.Web.Features.PullRequests.Data;
 using TreeAgent.Web.Features.PullRequests.Data.Entities;
+using TreeAgent.Web.Tests.Helpers;
 
 namespace TreeAgent.Web.Tests.Features.GitHub;
 
@@ -15,22 +15,18 @@ namespace TreeAgent.Web.Tests.Features.GitHub;
 [Category("Integration")]
 public class GitHubServiceIntegrationTests
 {
-    private TreeAgentDbContext _db = null!;
+    private TestDataStore _dataStore = null!;
 
     [SetUp]
     public void SetUp()
     {
-        var options = new DbContextOptionsBuilder<TreeAgentDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .Options;
-
-        _db = new TreeAgentDbContext(options);
+        _dataStore = new TestDataStore();
     }
 
     [TearDown]
     public void TearDown()
     {
-        _db.Dispose();
+        _dataStore.Clear();
     }
 
     [Test]
@@ -57,8 +53,7 @@ public class GitHubServiceIntegrationTests
             GitHubOwner = "octocat",  // Change to your test repo
             GitHubRepo = "Hello-World"
         };
-        _db.Projects.Add(project);
-        await _db.SaveChangesAsync();
+        await _dataStore.AddProjectAsync(project);
 
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -70,7 +65,7 @@ public class GitHubServiceIntegrationTests
         var runner = new CommandRunner();
         var client = new GitHubClientWrapper();
         var logger = new Microsoft.Extensions.Logging.Abstractions.NullLogger<GitHubService>();
-        var service = new GitHubService(_db, runner, config, client, logger);
+        var service = new GitHubService(_dataStore, runner, config, client, logger);
 
         // Act
         var result = await service.GetOpenPullRequestsAsync(project.Id);

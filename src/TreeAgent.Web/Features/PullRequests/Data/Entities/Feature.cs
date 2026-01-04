@@ -1,8 +1,9 @@
+using System.Text.Json.Serialization;
 
 namespace TreeAgent.Web.Features.PullRequests.Data.Entities;
 
 /// <summary>
-/// Represents a locally tracked pull request. Only open PRs are stored in the database.
+/// Represents a locally tracked pull request. Only open PRs are stored.
 /// Closed/merged PRs should be retrieved from GitHub, and future work comes from ROADMAP.json.
 /// </summary>
 public class PullRequest
@@ -25,7 +26,13 @@ public class PullRequest
     /// </summary>
     public int? AgentServerPort { get; set; }
 
+    // Navigation properties excluded from JSON serialization - populated at runtime if needed
+    [JsonIgnore]
     public Project Project { get; set; } = null!;
+    
+    [JsonIgnore]
     public PullRequest? Parent { get; set; }
+    
+    [JsonIgnore]
     public ICollection<PullRequest> Children { get; set; } = [];
 }

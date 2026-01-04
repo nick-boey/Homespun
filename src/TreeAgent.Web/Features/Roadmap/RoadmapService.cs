@@ -1,4 +1,3 @@
-using Microsoft.EntityFrameworkCore;
 using TreeAgent.Web.Features.Commands;
 using TreeAgent.Web.Features.Git;
 using TreeAgent.Web.Features.PullRequests.Data;
@@ -10,7 +9,7 @@ namespace TreeAgent.Web.Features.Roadmap;
 /// Service for managing ROADMAP.json and future changes.
 /// </summary>
 public class RoadmapService(
-    TreeAgentDbContext db,
+    IDataStore dataStore,
     ICommandRunner commandRunner,
     IGitWorktreeService worktreeService)
     : IRoadmapService
@@ -20,12 +19,12 @@ public class RoadmapService(
     /// <summary>
     /// Gets the path to the ROADMAP.json file for a project.
     /// </summary>
-    public async Task<string?> GetRoadmapPathAsync(string projectId)
+    public Task<string?> GetRoadmapPathAsync(string projectId)
     {
-        var project = await db.Projects.FindAsync(projectId);
-        if (project == null) return null;
+        var project = dataStore.GetProject(projectId);
+        if (project == null) return Task.FromResult<string?>(null);
 
-        return Path.Combine(project.LocalPath, "ROADMAP.json");
+        return Task.FromResult<string?>(Path.Combine(project.LocalPath, "ROADMAP.json"));
     }
 
     /// <summary>
@@ -101,7 +100,7 @@ public class RoadmapService(
     /// </summary>
     public async Task<PullRequest?> PromoteChangeAsync(string projectId, string changeId)
     {
-        var project = await db.Projects.FindAsync(projectId);
+        var project = dataStore.GetProject(projectId);
         if (project == null) return null;
 
         var roadmapPath = Path.Combine(project.LocalPath, "ROADMAP.json");
@@ -140,8 +139,7 @@ public class RoadmapService(
             WorktreePath = worktreePath
         };
 
-        db.PullRequests.Add(pullRequest);
-        await db.SaveChangesAsync();
+        await dataStore.AddPullRequestAsync(pullRequest);
 
         // Update roadmap - remove the promoted change and promote children
         await RemoveChangeAndPromoteChildrenAsync(roadmap, changeId, roadmapPath);
@@ -205,14 +203,14 @@ public class RoadmapService(
     /// </summary>
     public async Task<bool> IsPlanUpdateOnlyAsync(string pullRequestId)
     {
-        var pullRequest = await db.PullRequests
-            .Include(pr => pr.Project)
-            .FirstOrDefaultAsync(pr => pr.Id == pullRequestId);
-
+        var pullRequest = dataStore.GetPullRequest(pullRequestId);
         if (pullRequest == null) return false;
 
-        var workingDir = pullRequest.WorktreePath ?? pullRequest.Project.LocalPath;
-        var baseBranch = pullRequest.Project.DefaultBranch ?? "main";
+        var project = dataStore.GetProject(pullRequest.ProjectId);
+        if (project == null) return false;
+
+        var workingDir = pullRequest.WorktreePath ?? project.LocalPath;
+        var baseBranch = project.DefaultBranch ?? "main";
 
         // Get list of changed files
         var result = await commandRunner.RunAsync(
@@ -236,13 +234,13 @@ public class RoadmapService(
     /// </summary>
     public async Task<bool> ValidateRoadmapAsync(string pullRequestId)
     {
-        var pullRequest = await db.PullRequests
-            .Include(pr => pr.Project)
-            .FirstOrDefaultAsync(pr => pr.Id == pullRequestId);
-
+        var pullRequest = dataStore.GetPullRequest(pullRequestId);
         if (pullRequest == null) return false;
 
-        var workingDir = pullRequest.WorktreePath ?? pullRequest.Project.LocalPath;
+        var project = dataStore.GetProject(pullRequest.ProjectId);
+        if (project == null) return false;
+
+        var workingDir = pullRequest.WorktreePath ?? project.LocalPath;
         var roadmapPath = Path.Combine(workingDir, "ROADMAP.json");
 
         if (!File.Exists(roadmapPath)) return true; // No roadmap is valid
@@ -263,7 +261,7 @@ public class RoadmapService(
     /// </summary>
     public async Task<PullRequest?> CreatePlanUpdatePullRequestAsync(string projectId, string description)
     {
-        var project = await db.Projects.FindAsync(projectId);
+        var project = dataStore.GetProject(projectId);
         if (project == null) return null;
 
         var branchName = GeneratePlanUpdateBranchName(description);
@@ -288,8 +286,7 @@ public class RoadmapService(
             WorktreePath = worktreePath
         };
 
-        db.PullRequests.Add(pullRequest);
-        await db.SaveChangesAsync();
+        await dataStore.AddPullRequestAsync(pullRequest);
 
         return pullRequest;
     }
