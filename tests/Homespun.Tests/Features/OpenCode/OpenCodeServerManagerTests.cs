@@ -139,4 +139,35 @@ public class OpenCodeServerManagerTests
         
         Assert.That(result, Is.False);
     }
+
+    #region ContinueSession Tests
+
+    [Test]
+    public void OpenCodeServer_ContinueSession_DefaultsToFalse()
+    {
+        var server = new OpenCodeServer
+        {
+            PullRequestId = "pr-123",
+            WorktreePath = "/path/to/worktree",
+            Port = 5000
+        };
+        
+        Assert.That(server.ContinueSession, Is.False);
+    }
+
+    [Test]
+    public void OpenCodeServer_ContinueSession_CanBeSetToTrue()
+    {
+        var server = new OpenCodeServer
+        {
+            PullRequestId = "pr-123",
+            WorktreePath = "/path/to/worktree",
+            Port = 5000,
+            ContinueSession = true
+        };
+        
+        Assert.That(server.ContinueSession, Is.True);
+    }
+
+    #endregion
 }

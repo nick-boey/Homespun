@@ -60,7 +60,7 @@ public class AgentWorkflowService : IAgentWorkflowService
         await _configGenerator.GenerateConfigAsync(pullRequest.WorktreePath, config, ct);
 
         // Start server
-        var server = await _serverManager.StartServerAsync(pullRequestId, pullRequest.WorktreePath, ct);
+        var server = await _serverManager.StartServerAsync(pullRequestId, pullRequest.WorktreePath, continueSession: false, ct);
 
         // Get or create session
         var status = await BuildAgentStatusAsync(server, ct);
@@ -168,12 +168,16 @@ public class AgentWorkflowService : IAgentWorkflowService
         };
     }
 
-    private static string BuildInitialPrompt(RoadmapChange change)
+    internal static string BuildInitialPrompt(RoadmapChange change)
     {
+        // Determine the base branch for the PR
+        var baseBranch = change.Parents.Count > 0 ? change.Parents[0] : "main";
+        
         var prompt = $"""
             Please implement the following change:
 
             **Title:** {change.Title}
+            **Branch:** {change.Id}
             """;
 
         if (!string.IsNullOrEmpty(change.Description))
@@ -185,6 +189,22 @@ public class AgentWorkflowService : IAgentWorkflowService
         {
             prompt += $"\n\n**Instructions:**\n{change.Instructions}";
         }
+
+        prompt += $"""
+
+
+            ## Workflow Instructions
+
+            1. Implement the change described above
+            2. Write tests for your implementation where appropriate
+            3. Commit your changes to the current branch ({change.Id})
+            4. When complete, create a pull request using the following command:
+               ```
+               gh pr create --base {baseBranch} --title "{change.Title}" --body "Implements {change.ShortTitle}"
+               ```
+
+            **Important:** After creating the PR, signal completion so the system can verify and track the PR.
+            """;
 
         return prompt;
     }

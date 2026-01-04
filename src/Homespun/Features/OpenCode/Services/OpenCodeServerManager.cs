@@ -98,7 +98,7 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
         _allocatedCount--;
     }
 
-    public async Task<OpenCodeServer> StartServerAsync(string pullRequestId, string worktreePath, CancellationToken ct = default)
+    public async Task<OpenCodeServer> StartServerAsync(string pullRequestId, string worktreePath, bool continueSession = false, CancellationToken ct = default)
     {
         // Check if already running
         if (_servers.TryGetValue(pullRequestId, out var existing))
@@ -118,12 +118,13 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
             PullRequestId = pullRequestId,
             WorktreePath = worktreePath,
             Port = port,
-            Status = OpenCodeServerStatus.Starting
+            Status = OpenCodeServerStatus.Starting,
+            ContinueSession = continueSession
         };
 
         try
         {
-            var process = StartServerProcess(port, worktreePath);
+            var process = StartServerProcess(port, worktreePath, continueSession);
             server.Process = process;
 
             if (!_servers.TryAdd(pullRequestId, server))
@@ -206,12 +207,18 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
         }
     }
 
-    private Process StartServerProcess(int port, string workingDirectory)
+    private Process StartServerProcess(int port, string workingDirectory, bool continueSession = false)
     {
+        var arguments = $"serve --port {port} --hostname 127.0.0.1";
+        if (continueSession)
+        {
+            arguments += " --continue";
+        }
+        
         var startInfo = new ProcessStartInfo
         {
             FileName = _resolvedExecutablePath,
-            Arguments = $"serve --port {port} --hostname 127.0.0.1",
+            Arguments = arguments,
             WorkingDirectory = workingDirectory,
             UseShellExecute = false,
             RedirectStandardOutput = true,

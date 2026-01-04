@@ -12,9 +12,10 @@ public interface IOpenCodeServerManager : IDisposable
     /// </summary>
     /// <param name="pullRequestId">The pull request ID this server is for</param>
     /// <param name="worktreePath">The worktree directory to run the server in</param>
+    /// <param name="continueSession">Whether to start with --continue to resume existing session</param>
     /// <param name="ct">Cancellation token</param>
     /// <returns>The started server instance</returns>
-    Task<OpenCodeServer> StartServerAsync(string pullRequestId, string worktreePath, CancellationToken ct = default);
+    Task<OpenCodeServer> StartServerAsync(string pullRequestId, string worktreePath, bool continueSession = false, CancellationToken ct = default);
 
     /// <summary>
     /// Stops a running server for a pull request.
