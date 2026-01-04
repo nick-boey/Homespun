@@ -10,4 +10,11 @@ public interface IGitWorktreeService
     Task<List<WorktreeInfo>> ListWorktreesAsync(string repoPath);
     Task PruneWorktreesAsync(string repoPath);
     Task<bool> WorktreeExistsAsync(string repoPath, string branchName);
+    
+    /// <summary>
+    /// Pull the latest changes from the remote for a worktree.
+    /// </summary>
+    /// <param name="worktreePath">Path to the worktree directory</param>
+    /// <returns>True if successful, false otherwise</returns>
+    Task<bool> PullLatestAsync(string worktreePath);
 }

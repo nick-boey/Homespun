@@ -90,6 +90,26 @@ public class GitWorktreeService(ICommandRunner commandRunner) : IGitWorktreeServ
         return worktrees.Any(w => w.Branch?.EndsWith(branchName) == true);
     }
 
+    public async Task<bool> PullLatestAsync(string worktreePath)
+    {
+        // First fetch from remote
+        var fetchResult = await commandRunner.RunAsync("git", "fetch origin", worktreePath);
+        if (!fetchResult.Success)
+        {
+            // Fetch might fail if no remote tracking, that's ok for local-only branches
+            // Continue to try pull anyway
+        }
+
+        // Try to pull with rebase to get latest changes
+        var pullResult = await commandRunner.RunAsync("git", "pull --rebase --autostash", worktreePath);
+        
+        // Pull might fail if no upstream is set, which is fine for new branches
+        // Return true if successful or if there's simply nothing to pull
+        return pullResult.Success || 
+               pullResult.Error.Contains("no tracking information") ||
+               pullResult.Error.Contains("There is no tracking information");
+    }
+
     public static string SanitizeBranchName(string branchName)
     {
         // Replace slashes and special characters with dashes

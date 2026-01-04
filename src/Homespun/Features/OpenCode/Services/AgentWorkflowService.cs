@@ -1,3 +1,4 @@
+using Homespun.Features.Git;
 using Homespun.Features.OpenCode.Models;
 using Homespun.Features.PullRequests.Data;
 using Homespun.Features.Roadmap;
@@ -15,6 +16,7 @@ public class AgentWorkflowService : IAgentWorkflowService
     private readonly PullRequestDataService _pullRequestService;
     private readonly IRoadmapService _roadmapService;
     private readonly IFutureChangeTransitionService _transitionService;
+    private readonly IGitWorktreeService _worktreeService;
     private readonly ILogger<AgentWorkflowService> _logger;
 
     public AgentWorkflowService(
@@ -24,6 +26,7 @@ public class AgentWorkflowService : IAgentWorkflowService
         PullRequestDataService pullRequestService,
         IRoadmapService roadmapService,
         IFutureChangeTransitionService transitionService,
+        IGitWorktreeService worktreeService,
         ILogger<AgentWorkflowService> logger)
     {
         _serverManager = serverManager;
@@ -32,6 +35,7 @@ public class AgentWorkflowService : IAgentWorkflowService
         _pullRequestService = pullRequestService;
         _roadmapService = roadmapService;
         _transitionService = transitionService;
+        _worktreeService = worktreeService;
         _logger = logger;
     }
 
@@ -55,6 +59,14 @@ public class AgentWorkflowService : IAgentWorkflowService
         {
             _logger.LogInformation("Server already running for PR {PullRequestId}", pullRequestId);
             return await BuildAgentStatusAsync(existingServer, ct);
+        }
+
+        // Pull latest changes before starting agent
+        _logger.LogInformation("Pulling latest changes for PR {PullRequestId}", pullRequestId);
+        var pullSuccess = await _worktreeService.PullLatestAsync(pullRequest.WorktreePath);
+        if (!pullSuccess)
+        {
+            _logger.LogWarning("Failed to pull latest changes for PR {PullRequestId}, continuing anyway", pullRequestId);
         }
 
         // Generate config with model from: parameter -> project -> global default

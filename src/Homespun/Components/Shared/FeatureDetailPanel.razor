@@ -53,84 +53,80 @@
             <dd class="col-8">@PullRequest.UpdatedAt.ToLocalTime().ToString("g")</dd>
         </dl>
 
-        @* Agent Controls *@
-        @if (!string.IsNullOrEmpty(PullRequest.WorktreePath) && PullRequest.Status == OpenPullRequestStatus.InDevelopment)
+        @* Agent Status Display *@
+        @if (_agentStatus != null)
         {
             <div class="border-top pt-3 mt-3">
                 <h6>OpenCode Agent</h6>
-                @if (_agentStatus != null)
-                {
-                    <div class="mb-2">
-                        <small class="text-muted">
-                            Server: <code>@_agentStatus.Server.BaseUrl</code><br/>
-                            Session: <code>@(_agentStatus.ActiveSession?.Id ?? "None")</code>
-                        </small>
-                    </div>
-                    <button class="btn btn-sm btn-outline-danger" @onclick="StopAgent" disabled="@_isAgentLoading">
-                        @if (_isAgentLoading)
-                        {
-                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                        }
-                        Stop Agent
-                    </button>
-                }
-                else
-                {
-                    <button class="btn btn-sm btn-success" @onclick="StartAgent" disabled="@_isAgentLoading">
-                        @if (_isAgentLoading)
-                        {
-                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                        }
-                        Start Agent
-                    </button>
-                }
+                <div class="mb-2">
+                    <span class="badge bg-success">Running</span>
+                    <small class="text-muted ms-2">
+                        Server: <code>@_agentStatus.Server.BaseUrl</code>
+                    </small>
+                </div>
                 @if (!string.IsNullOrEmpty(_agentErrorMessage))
                 {
                     <div class="alert alert-danger mt-2 mb-0 py-1 px-2 small">@_agentErrorMessage</div>
                 }
             </div>
         }
-        else if (string.IsNullOrEmpty(PullRequest.WorktreePath))
-        {
-            <div class="border-top pt-3 mt-3">
-                <h6>OpenCode Agent</h6>
-                <p class="text-muted small mb-0">Start development to enable the agent.</p>
-            </div>
-        }
     </div>
     <div class="card-footer">
         <div class="d-flex flex-wrap gap-2">
-            @switch (PullRequest.Status)
+            @* Skip review - only when Ready for Review *@
+            @if (PullRequest.Status == OpenPullRequestStatus.ReadyForReview)
             {
-                case OpenPullRequestStatus.InDevelopment:
-                    <button class="btn btn-sm btn-warning" @onclick="MarkReadyForReview" disabled="@_isLoading">
-                        Ready for Review
-                    </button>
-                    <button class="btn btn-sm btn-outline-success" @onclick="CreateGitHubPullRequest"
-                            disabled="@_isLoading || !CanCreatePR()">
-                        Create PR
-                    </button>
-                    break;
-                case OpenPullRequestStatus.ReadyForReview:
-                    <button class="btn btn-sm btn-success" @onclick="Complete" disabled="@_isLoading">
-                        Complete (Remove from tracking)
-                    </button>
-                    break;
+                <button class="btn btn-sm btn-outline-warning" @onclick="SkipReview" disabled="@_isLoading">
+                    @if (_isLoading)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                    }
+                    Skip Review
+                </button>
             }
 
-            <button class="btn btn-sm btn-outline-danger" @onclick="Delete" disabled="@_isLoading">
-                Delete
-            </button>
+            @* Start/Stop Agent - available for all statuses *@
+            @if (_agentStatus != null)
+            {
+                <button class="btn btn-sm btn-outline-danger" @onclick="StopAgent" disabled="@_isAgentLoading">
+                    @if (_isAgentLoading)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                    }
+                    Stop Agent
+                </button>
+            }
+            else
+            {
+                <button class="btn btn-sm btn-success" @onclick="StartAgent" disabled="@_isAgentLoading || !CanStartAgent()">
+                    @if (_isAgentLoading)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                    }
+                    Start Agent
+                </button>
+            }
 
-            <a href="projects/@PullRequest.ProjectId/pull-requests/@PullRequest.Id/edit"
-               class="btn btn-sm btn-outline-secondary">
-                Edit
-            </a>
+            @* Merge - only when Approved *@
+            @if (PullRequest.Status == OpenPullRequestStatus.Approved && PullRequest.GitHubPRNumber.HasValue)
+            {
+                <button class="btn btn-sm btn-primary" @onclick="MergePullRequest" disabled="@_isLoading">
+                    @if (_isLoading)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                    }
+                    Merge
+                </button>
+            }
         </div>
 
         @if (!string.IsNullOrEmpty(_errorMessage))
         {
             <div class="alert alert-danger mt-2 mb-0 py-1 px-2 small">@_errorMessage</div>
+        }
+        @if (!string.IsNullOrEmpty(_agentErrorMessage))
+        {
+            <div class="alert alert-danger mt-2 mb-0 py-1 px-2 small">@_agentErrorMessage</div>
         }
     </div>
 </div>
@@ -202,22 +198,20 @@
         }
     }
 
-    private bool CanCreatePR()
+    private bool CanStartAgent()
     {
-        return !string.IsNullOrEmpty(PullRequest.BranchName) &&
-               !PullRequest.GitHubPRNumber.HasValue &&
-               PullRequest.Project != null &&
-               !string.IsNullOrEmpty(PullRequest.Project.GitHubOwner) &&
-               !string.IsNullOrEmpty(PullRequest.Project.GitHubRepo);
+        // Agent can be started if there's a worktree path
+        return !string.IsNullOrEmpty(PullRequest.WorktreePath);
     }
 
-    private async Task MarkReadyForReview()
+    private async Task SkipReview()
     {
         _isLoading = true;
         _errorMessage = null;
         try
         {
-            await PullRequestDataService.MarkReadyForReviewAsync(PullRequest.Id);
+            // Move back to InDevelopment so agent can continue working
+            await PullRequestDataService.UpdateStatusAsync(PullRequest.Id, OpenPullRequestStatus.InDevelopment);
             await OnActionCompleted.InvokeAsync();
         }
         catch (Exception ex)
@@ -230,67 +224,39 @@
         }
     }
 
-    private async Task CreateGitHubPullRequest()
+    private async Task MergePullRequest()
     {
+        if (!PullRequest.GitHubPRNumber.HasValue)
+        {
+            _errorMessage = "No GitHub PR linked to this pull request.";
+            return;
+        }
+
         _isLoading = true;
         _errorMessage = null;
         try
         {
-            var pr = await GitHubService.CreatePullRequestAsync(PullRequest.ProjectId, PullRequest.Id);
-            if (pr == null)
-            {
-                _errorMessage = "Failed to create pull request.";
-            }
-
-            await OnActionCompleted.InvokeAsync();
-        }
-        catch (Exception ex)
-        {
-            _errorMessage = ex.Message;
-        }
-        finally
-        {
-            _isLoading = false;
-        }
-    }
-
-    private async Task Complete()
-    {
-        _isLoading = true;
-        _errorMessage = null;
-        try
-        {
-            // Stop agent if running
+            // Stop agent if running before merge
             if (_agentStatus != null)
             {
                 await AgentWorkflowService.StopAgentAsync(PullRequest.Id);
+                _agentStatus = null;
             }
-            await PullRequestDataService.CompleteAsync(PullRequest.Id);
-            await OnActionCompleted.InvokeAsync();
-        }
-        catch (Exception ex)
-        {
-            _errorMessage = ex.Message;
-        }
-        finally
-        {
-            _isLoading = false;
-        }
-    }
 
-    private async Task Delete()
-    {
-        _isLoading = true;
-        _errorMessage = null;
-        try
-        {
-            // Stop agent if running
-            if (_agentStatus != null)
+            var success = await GitHubService.MergePullRequestAsync(
+                PullRequest.ProjectId,
+                PullRequest.GitHubPRNumber.Value);
+
+            if (!success)
             {
-                await AgentWorkflowService.StopAgentAsync(PullRequest.Id);
+                _errorMessage = "Failed to merge pull request.";
             }
-            await PullRequestDataService.DeleteAsync(PullRequest.Id);
-            await OnActionCompleted.InvokeAsync();
+            else
+            {
+                // Remove from local tracking after successful merge
+                await PullRequestDataService.CompleteAsync(PullRequest.Id);
+                await OnActionCompleted.InvokeAsync();
+            }
         }
         catch (Exception ex)
         {

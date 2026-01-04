@@ -145,6 +145,18 @@ public class PullRequestDataService(IDataStore dataStore, IGitWorktreeService wo
         return true;
     }
 
+    public async Task<bool> UpdateStatusAsync(string id, OpenPullRequestStatus status)
+    {
+        var pullRequest = dataStore.GetPullRequest(id);
+        if (pullRequest == null) return false;
+
+        pullRequest.Status = status;
+        pullRequest.UpdatedAt = DateTime.UtcNow;
+
+        await dataStore.UpdatePullRequestAsync(pullRequest);
+        return true;
+    }
+
     /// <summary>
     /// Completes a pull request by removing it from local tracking.
     /// Merged/cancelled PRs should be retrieved from GitHub, not stored locally.
