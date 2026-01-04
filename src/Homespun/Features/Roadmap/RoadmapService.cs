@@ -292,4 +292,39 @@ public class RoadmapService(
     }
 
     #endregion
+
+    #region 3.4 Add New Change
+
+    /// <summary>
+    /// Adds a new change to the roadmap. Creates ROADMAP.json if it doesn't exist.
+    /// </summary>
+    public async Task<bool> AddChangeAsync(string projectId, RoadmapChange change)
+    {
+        var project = dataStore.GetProject(projectId);
+        if (project == null) return false;
+
+        var roadmapPath = Path.Combine(project.LocalPath, "ROADMAP.json");
+        
+        Roadmap roadmap;
+        if (File.Exists(roadmapPath))
+        {
+            roadmap = await RoadmapParser.LoadAsync(roadmapPath);
+        }
+        else
+        {
+            roadmap = new Roadmap
+            {
+                Version = "1.0"
+            };
+        }
+
+        // Add the new change to the end of the changes list
+        roadmap.Changes.Add(change);
+
+        await RoadmapParser.SaveAsync(roadmap, roadmapPath);
+        return true;
+    }
+
+    #endregion
 }
+
