@@ -341,6 +341,96 @@ public class GitHubService(
         return true;
     }
 
+    public async Task<ReviewSummary> GetPullRequestReviewsAsync(string projectId, int prNumber)
+    {
+        var project = dataStore.GetProject(projectId);
+        if (project == null)
+        {
+            logger.LogWarning("Cannot fetch reviews: project {ProjectId} not found", projectId);
+            return new ReviewSummary();
+        }
+
+        ConfigureClient();
+
+        try
+        {
+            logger.LogInformation("Fetching reviews for PR #{PrNumber} from {Owner}/{Repo}", prNumber, project.GitHubOwner, project.GitHubRepo);
+            
+            var reviews = await githubClient.GetPullRequestReviewsAsync(project.GitHubOwner, project.GitHubRepo, prNumber);
+            var reviewComments = await githubClient.GetPullRequestReviewCommentsAsync(project.GitHubOwner, project.GitHubRepo, prNumber);
+            
+            var summary = new ReviewSummary
+            {
+                TotalReviews = reviews.Count,
+                Reviews = reviews.Select(r => new PullRequestReviewInfo
+                {
+                    Id = r.Id,
+                    User = r.User.Login,
+                    State = r.State.StringValue,
+                    Body = r.Body,
+                    SubmittedAt = r.SubmittedAt.UtcDateTime
+                }).ToList()
+            };
+
+            summary.Approvals = summary.Reviews.Count(r => r.IsApproval);
+            summary.ChangesRequested = summary.Reviews.Count(r => r.IsChangesRequested);
+            summary.Comments = reviewComments.Count;
+            summary.LastReviewAt = summary.Reviews.MaxBy(r => r.SubmittedAt)?.SubmittedAt;
+
+            logger.LogInformation(
+                "PR #{PrNumber} has {TotalReviews} reviews: {Approvals} approvals, {ChangesRequested} changes requested, {Comments} comments",
+                prNumber, summary.TotalReviews, summary.Approvals, summary.ChangesRequested, summary.Comments);
+
+            return summary;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to fetch reviews for PR #{PrNumber} from {Owner}/{Repo}", prNumber, project.GitHubOwner, project.GitHubRepo);
+            return new ReviewSummary();
+        }
+    }
+
+    public async Task<bool> MergePullRequestAsync(string projectId, int prNumber, string? commitMessage = null)
+    {
+        var project = dataStore.GetProject(projectId);
+        if (project == null)
+        {
+            logger.LogWarning("Cannot merge PR: project {ProjectId} not found", projectId);
+            return false;
+        }
+
+        ConfigureClient();
+
+        try
+        {
+            logger.LogInformation("Merging PR #{PrNumber} in {Owner}/{Repo}", prNumber, project.GitHubOwner, project.GitHubRepo);
+            
+            var merge = new MergePullRequest
+            {
+                CommitMessage = commitMessage,
+                MergeMethod = PullRequestMergeMethod.Squash
+            };
+
+            var result = await githubClient.MergePullRequestAsync(project.GitHubOwner, project.GitHubRepo, prNumber, merge);
+            
+            if (result.Merged)
+            {
+                logger.LogInformation("Successfully merged PR #{PrNumber} with SHA {Sha}", prNumber, result.Sha);
+                return true;
+            }
+            else
+            {
+                logger.LogWarning("PR #{PrNumber} was not merged: {Message}", prNumber, result.Message);
+                return false;
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to merge PR #{PrNumber} in {Owner}/{Repo}", prNumber, project.GitHubOwner, project.GitHubRepo);
+            return false;
+        }
+    }
+
     private void ConfigureClient()
     {
         var token = GetGitHubToken();

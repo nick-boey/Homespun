@@ -13,4 +13,6 @@ public interface IGitHubClientWrapper
     Task<PullRequest> CreatePullRequestAsync(string owner, string repo, NewPullRequest newPullRequest);
     Task<IReadOnlyList<PullRequestReview>> GetPullRequestReviewsAsync(string owner, string repo, int number);
     Task<CombinedCommitStatus> GetCombinedCommitStatusAsync(string owner, string repo, string reference);
+    Task<PullRequestMerge> MergePullRequestAsync(string owner, string repo, int number, MergePullRequest merge);
+    Task<IReadOnlyList<PullRequestReviewComment>> GetPullRequestReviewCommentsAsync(string owner, string repo, int number);
 }

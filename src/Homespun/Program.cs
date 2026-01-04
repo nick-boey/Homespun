@@ -54,6 +54,11 @@ builder.Services.AddSingleton<IOpenCodeServerManager, OpenCodeServerManager>();
 builder.Services.AddScoped<IOpenCodeConfigGenerator, OpenCodeConfigGenerator>();
 builder.Services.AddScoped<IAgentWorkflowService, AgentWorkflowService>();
 
+// Review polling service
+builder.Services.Configure<ReviewPollingOptions>(
+    builder.Configuration.GetSection(ReviewPollingOptions.SectionName));
+builder.Services.AddHostedService<ReviewPollingService>();
+
 builder.Services.AddSignalR();
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();

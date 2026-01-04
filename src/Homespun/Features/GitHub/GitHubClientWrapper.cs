@@ -69,4 +69,14 @@ public class GitHubClientWrapper : IGitHubClientWrapper
     {
         return await GetClient().Repository.Get(owner, repo);
     }
+
+    public async Task<PullRequestMerge> MergePullRequestAsync(string owner, string repo, int number, MergePullRequest merge)
+    {
+        return await GetClient().PullRequest.Merge(owner, repo, number, merge);
+    }
+
+    public async Task<IReadOnlyList<PullRequestReviewComment>> GetPullRequestReviewCommentsAsync(string owner, string repo, int number)
+    {
+        return await GetClient().PullRequest.ReviewComment.GetAll(owner, repo, number);
+    }
 }
