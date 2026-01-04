@@ -1,0 +1,167 @@
+/* ==========================================================================
+   Work Item Styles - Unified component for PRs and Future Changes
+   ========================================================================== */
+
+.work-item {
+    display: flex;
+    align-items: stretch;
+    gap: var(--spacing-sm);
+    padding: 0 var(--spacing-sm);
+    border-radius: var(--radius-sm);
+    transition: background-color var(--transition-fast);
+    min-height: 2.25rem;
+}
+
+.work-item:hover {
+    background-color: var(--bg-hover);
+}
+
+.work-item.clickable {
+    cursor: pointer;
+}
+
+.work-item.selected {
+    background-color: var(--bg-selected);
+}
+
+/* ==========================================================================
+   Git Graph - Node and Lines
+   ========================================================================== */
+
+.item-graph {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 16px;
+    flex-shrink: 0;
+}
+
+.graph-line {
+    width: 2px;
+    flex: 1;
+    background-color: var(--border-color);
+}
+
+.graph-line.hidden {
+    visibility: hidden;
+}
+
+.graph-line-top {
+    min-height: 4px;
+}
+
+.graph-line-bottom {
+    min-height: 4px;
+}
+
+.graph-node {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    border: 2px solid var(--bg-primary);
+    box-sizing: content-box;
+}
+
+/* ==========================================================================
+   Status Colors
+   ========================================================================== */
+
+.graph-node.status-default {
+    background-color: var(--color-basalt-light);
+}
+
+.graph-node.status-merged {
+    background-color: var(--status-merged);
+}
+
+.graph-node.status-closed {
+    background-color: var(--status-error);
+}
+
+.graph-node.status-in-development {
+    background-color: var(--color-ocean);
+}
+
+.graph-node.status-ready-for-review {
+    background-color: var(--status-warning);
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+.graph-node.status-feature {
+    background-color: var(--color-ocean);
+}
+
+.graph-node.status-bug {
+    background-color: var(--status-error);
+}
+
+.graph-node.status-chore {
+    background-color: var(--color-basalt-light);
+}
+
+.graph-node.status-docs {
+    background-color: var(--status-info);
+}
+
+.graph-node.status-refactor {
+    background-color: var(--status-merged);
+}
+
+.graph-node.status-test {
+    background-color: var(--status-success);
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.6;
+        transform: scale(0.85);
+    }
+}
+
+/* ==========================================================================
+   Item Content
+   ========================================================================== */
+
+.item-body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: var(--spacing-xs) 0;
+}
+
+.item-title {
+    display: block;
+    font-size: 0.8125rem;
+    color: var(--text-primary);
+    text-decoration: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: 1.3;
+}
+
+a.item-title:hover {
+    text-decoration: underline;
+    color: var(--link-hover);
+}
+
+.item-number {
+    color: var(--text-muted);
+    margin-right: 0.25rem;
+}
+
+.item-subtitle {
+    font-size: 0.6875rem;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: 1.3;
+}
