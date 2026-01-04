@@ -1,16 +1,34 @@
-﻿@inherits LayoutComponentBase
+@inherits LayoutComponentBase
+@inject NavigationManager NavigationManager
 
-<div class="page">
-    <div class="sidebar">
+<div class="page @(_sidebarOpen ? "sidebar-open" : "sidebar-closed")">
+    <header class="top-bar">
+        <button class="sidebar-toggle" @onclick="ToggleSidebar" title="Toggle sidebar">
+            <span class="toggle-icon"></span>
+        </button>
+        <nav class="breadcrumbs" aria-label="Breadcrumb">
+            <a href="" class="brand">Homespun</a>
+            @foreach (var crumb in _breadcrumbs)
+            {
+                <span class="separator">/</span>
+                @if (crumb.Url != null)
+                {
+                    <a href="@crumb.Url">@crumb.Title</a>
+                }
+                else
+                {
+                    <span class="current">@crumb.Title</span>
+                }
+            }
+        </nav>
+    </header>
+
+    <aside class="sidebar">
         <NavMenu />
-    </div>
+    </aside>
 
-    <main>
-        <div class="top-row px-4">
-            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
-        </div>
-
-        <article class="content px-4">
+    <main class="main-content">
+        <article class="content">
             @Body
         </article>
     </main>
@@ -19,5 +37,80 @@
 <div id="blazor-error-ui" data-nosnippet>
     An unhandled error has occurred.
     <a href="." class="reload">Reload</a>
-    <span class="dismiss">🗙</span>
+    <span class="dismiss">X</span>
 </div>
+
+@code {
+    private bool _sidebarOpen = true;
+    private List<Breadcrumb> _breadcrumbs = new();
+
+    protected override void OnInitialized()
+    {
+        NavigationManager.LocationChanged += OnLocationChanged;
+        UpdateBreadcrumbs();
+    }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        UpdateBreadcrumbs();
+        StateHasChanged();
+    }
+
+    private void UpdateBreadcrumbs()
+    {
+        _breadcrumbs.Clear();
+        var uri = new Uri(NavigationManager.Uri);
+        var path = uri.AbsolutePath.Trim('/');
+        
+        if (string.IsNullOrEmpty(path))
+        {
+            return;
+        }
+
+        var segments = path.Split('/');
+        var currentPath = "";
+
+        for (int i = 0; i < segments.Length; i++)
+        {
+            var segment = segments[i];
+            currentPath += "/" + segment;
+            var isLast = i == segments.Length - 1;
+            
+            var title = segment switch
+            {
+                "projects" => "Projects",
+                "create" => "Create",
+                "edit" => "Edit",
+                "pull-requests" => "Pull Requests",
+                "features" => "Features",
+                _ when Guid.TryParse(segment, out _) => null, // Skip GUIDs as titles
+                _ => segment
+            };
+
+            if (title != null)
+            {
+                _breadcrumbs.Add(new Breadcrumb
+                {
+                    Title = title,
+                    Url = isLast ? null : currentPath
+                });
+            }
+        }
+    }
+
+    private void ToggleSidebar()
+    {
+        _sidebarOpen = !_sidebarOpen;
+    }
+
+    public void Dispose()
+    {
+        NavigationManager.LocationChanged -= OnLocationChanged;
+    }
+
+    private class Breadcrumb
+    {
+        public string Title { get; set; } = "";
+        public string? Url { get; set; }
+    }
+}
