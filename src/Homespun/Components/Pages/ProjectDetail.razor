@@ -36,7 +36,6 @@ else
                 @if (_isLoadingPastPRs)
                 {
                     <div class="timeline-section-header">
-                        <span class="section-title">Past Pull Requests</span>
                         <span class="spinner-border spinner-border-sm ms-2" role="status"></span>
                     </div>
                 }
@@ -45,11 +44,7 @@ else
                     var orderedPastPRs = _pastPRs.OrderBy(p => p.Time).ToList();
                     var hiddenCount = Math.Max(0, orderedPastPRs.Count - _pastPRsDisplayCount);
                     var visiblePastPRs = orderedPastPRs.Skip(hiddenCount).ToList();
-                    
-                    <div class="timeline-section-header">
-                        <span class="section-title">Past Pull Requests</span>
-                        <span class="section-count">@_pastPRs.Count</span>
-                    </div>
+
                     @if (hiddenCount > 0)
                     {
                         <button class="timeline-action-btn" @onclick="LoadMorePastPRs">
@@ -59,10 +54,12 @@ else
                                 <div class="graph-line graph-line-bottom"></div>
                             </div>
                             <div class="item-body">
-                                <span class="item-title action-title">@hiddenCount older PRs (load @Math.Min(5, hiddenCount) more)</span>
+                                <span
+                                    class="item-title action-title">@hiddenCount older PRs (load @Math.Min(5, hiddenCount) more)</span>
                             </div>
                         </button>
                     }
+
                     @for (var i = 0; i < visiblePastPRs.Count; i++)
                     {
                         var prWithTime = visiblePastPRs[i];
@@ -74,18 +71,11 @@ else
                                   StatusTooltip="@prWithTime.PullRequest.Status.ToString()"
                                   Subtitle="@GetPastPRSubtitle(prWithTime.PullRequest)"
                                   IsFirst="@isFirstInTimeline"
-                                  IsLast="false" />
+                                  IsLast="false"/>
                     }
                 }
 
                 @* Current PRs - from database *@
-                <div class="timeline-section-header">
-                    <span class="section-title">Current Pull Requests</span>
-                    @if (_rootPullRequests != null && _rootPullRequests.Count > 0)
-                    {
-                        <span class="section-count">@GetTotalCurrentPRCount()</span>
-                    }
-                </div>
                 @if (_pastPRs != null && _pastPRs.Count > 0)
                 {
                     <div class="timeline-section-label">
@@ -93,6 +83,10 @@ else
                             <div class="graph-line"></div>
                         </div>
                         <div class="label-text">Current</div>
+                        @if (_rootPullRequests != null && _rootPullRequests.Count > 0)
+                        {
+                            <span class="section-count">@GetTotalCurrentPRCount()</span>
+                        }
                     </div>
                 }
                 @if (_rootPullRequests == null || _rootPullRequests.Count == 0)
@@ -109,7 +103,6 @@ else
                     @for (var i = 0; i < _flattenedCurrentPRs.Count; i++)
                     {
                         var pr = _flattenedCurrentPRs[i];
-                        var isFirst = i == 0;
                         <WorkItem Title="@pr.PullRequest.Title"
                                   Number="@pr.PullRequest.GitHubPRNumber"
                                   StatusColor="@GetCurrentPRStatusColor(pr.PullRequest.Status)"
@@ -118,31 +111,28 @@ else
                                   IndentLevel="@pr.Level"
                                   IsSelected="@(_selectedPullRequestId == pr.PullRequest.Id)"
                                   IsClickable="true"
-                                  IsFirst="@isFirst"
+                                  IsFirst="false"
                                   IsLast="false"
-                                  OnClick="@(() => SelectPullRequest(pr.PullRequest.Id))" />
+                                  OnClick="@(() => SelectPullRequest(pr.PullRequest.Id))"/>
                     }
                 }
 
                 @* Future Changes - from ROADMAP.json *@
-                <div class="timeline-section-header">
-                    <span class="section-title">Future Changes</span>
-                    @if (_futureChanges != null && _futureChanges.Count > 0)
-                    {
-                        <span class="section-count">@_futureChanges.Count</span>
-                    }
-                </div>
                 <div class="timeline-section-label">
                     <div class="label-graph">
                         <div class="graph-line"></div>
                     </div>
                     <div class="label-text">Future</div>
+                    @if (_futureChanges != null && _futureChanges.Count > 0)
+                    {
+                        <span class="section-count">@_futureChanges.Count</span>
+                    }
                 </div>
                 @if (_futureChanges == null || _futureChanges.Count == 0)
                 {
                     <a href="projects/@Id/features/create" class="add-item">
                         <div class="item-graph">
-                            <div class="graph-line graph-line-top hidden"></div>
+                            <div class="graph-line graph-line-top"></div>
                             <div class="graph-node status-add">+</div>
                             <div class="graph-line graph-line-bottom hidden"></div>
                         </div>
@@ -156,15 +146,15 @@ else
                     @for (var i = 0; i < _futureChanges.Count; i++)
                     {
                         var change = _futureChanges[i];
-                        var isFirst = i == 0;
                         <WorkItem Title="@change.Change.Title"
                                   StatusColor="@GetChangeTypeStatusColor(change.Change.Type)"
                                   StatusTooltip="@change.Change.Type.ToString()"
                                   Subtitle="@GetFutureChangeSubtitle(change.Change)"
                                   IndentLevel="@change.Depth"
-                                  IsFirst="@isFirst"
-                                  IsLast="false" />
+                                  IsFirst="false"
+                                  IsLast="false"/>
                     }
+
                     <a href="projects/@Id/features/create" class="add-item">
                         <div class="item-graph">
                             <div class="graph-line graph-line-top"></div>
@@ -184,7 +174,7 @@ else
             {
                 <FeatureDetailPanel PullRequest="_selectedPullRequest"
                                     OnActionCompleted="RefreshData"
-                                    OnClose="() => _selectedPullRequest = null" />
+                                    OnClose="() => _selectedPullRequest = null"/>
             }
             else
             {
@@ -200,7 +190,8 @@ else
                             {
                                 <dt>GitHub</dt>
                                 <dd>
-                                    <a href="https://github.com/@_project.GitHubOwner/@_project.GitHubRepo" target="_blank">
+                                    <a href="https://github.com/@_project.GitHubOwner/@_project.GitHubRepo"
+                                       target="_blank">
                                         @_project.GitHubOwner/@_project.GitHubRepo
                                     </a>
                                     @if (_isSyncingPRs)
@@ -212,20 +203,28 @@ else
                                     }
                                     else if (_tokenMissing)
                                     {
-                                        <span class="badge bg-warning text-dark ms-2" title="Set GITHUB_TOKEN environment variable">Token missing</span>
-                                        <button class="btn btn-sm btn-link p-0 ms-1" @onclick="SyncPullRequestsAsync">Retry</button>
+                                        <span class="badge bg-warning text-dark ms-2"
+                                              title="Set GITHUB_TOKEN environment variable">Token missing</span>
+                                        <button class="btn btn-sm btn-link p-0 ms-1" @onclick="SyncPullRequestsAsync">
+                                            Retry
+                                        </button>
                                     }
                                     else if (_syncError != null)
                                     {
                                         <span class="badge bg-danger ms-2" title="@_syncError">Sync failed</span>
-                                        <button class="btn btn-sm btn-link p-0 ms-1" @onclick="SyncPullRequestsAsync">Retry</button>
+                                        <button class="btn btn-sm btn-link p-0 ms-1" @onclick="SyncPullRequestsAsync">
+                                            Retry
+                                        </button>
                                     }
                                     else if (_lastSyncResult != null)
                                     {
-                                        <span class="badge bg-success ms-2" title="Imported: @_lastSyncResult.Imported, Updated: @_lastSyncResult.Updated, Removed: @_lastSyncResult.Removed">
+                                        <span class="badge bg-success ms-2"
+                                              title="Imported: @_lastSyncResult.Imported, Updated: @_lastSyncResult.Updated, Removed: @_lastSyncResult.Removed">
                                             Synced
                                         </span>
-                                        <button class="btn btn-sm btn-link p-0 ms-1" @onclick="SyncPullRequestsAsync">Refresh</button>
+                                        <button class="btn btn-sm btn-link p-0 ms-1" @onclick="SyncPullRequestsAsync">
+                                            Refresh
+                                        </button>
                                     }
                                 </dd>
                             }
@@ -244,31 +243,31 @@ else
         gap: var(--spacing-md);
         align-items: start;
     }
-    
+
     @@media (max-width: 900px) {
         .project-layout {
             grid-template-columns: 1fr;
         }
-        
+
         .detail-column {
             order: -1;
         }
     }
-    
+
     .timeline-column {
         min-width: 0;
     }
-    
+
     .detail-column {
         position: sticky;
         top: var(--spacing-md);
     }
-    
+
     .timeline-list {
         display: flex;
         flex-direction: column;
     }
-    
+
     .timeline-section-header {
         display: flex;
         align-items: center;
@@ -280,14 +279,14 @@ else
         text-transform: uppercase;
         letter-spacing: 0.05em;
     }
-    
+
     .section-count {
         background: var(--bg-tertiary);
         padding: 0.125rem 0.375rem;
         border-radius: var(--radius-full);
         font-size: 0.6875rem;
     }
-    
+
     /* Inline section label with continuous graph line */
     .timeline-section-label {
         display: flex;
@@ -296,7 +295,7 @@ else
         padding: 0 var(--spacing-sm);
         min-height: 1.25rem;
     }
-    
+
     .timeline-section-label .label-graph {
         display: flex;
         flex-direction: column;
@@ -304,15 +303,14 @@ else
         width: 16px;
         flex-shrink: 0;
     }
-    
+
     .timeline-section-label .graph-line {
         width: 2px;
         flex: 1;
         background-color: var(--border-color);
     }
-    
+
     .timeline-section-label .label-text {
-        flex: 1;
         display: flex;
         align-items: center;
         font-size: 0.6875rem;
@@ -321,6 +319,10 @@ else
         letter-spacing: 0.03em;
     }
     
+    .timeline-section-label .section-count {
+        margin-left: var(--spacing-xs);
+    }
+
     /* Timeline action buttons (load more, add item) */
     .timeline-action-btn,
     .add-item {
@@ -338,12 +340,12 @@ else
         width: 100%;
         text-align: left;
     }
-    
+
     .timeline-action-btn:hover,
     .add-item:hover {
         background-color: var(--bg-hover);
     }
-    
+
     .timeline-action-btn .item-graph,
     .add-item .item-graph {
         display: flex;
@@ -352,29 +354,29 @@ else
         width: 16px;
         flex-shrink: 0;
     }
-    
+
     .timeline-action-btn .graph-line,
     .add-item .graph-line {
         width: 2px;
         flex: 1;
         background-color: var(--border-color);
     }
-    
+
     .timeline-action-btn .graph-line.hidden,
     .add-item .graph-line.hidden {
         visibility: hidden;
     }
-    
+
     .timeline-action-btn .graph-line-top,
     .add-item .graph-line-top {
         min-height: 4px;
     }
-    
+
     .timeline-action-btn .graph-line-bottom,
     .add-item .graph-line-bottom {
         min-height: 4px;
     }
-    
+
     .timeline-action-btn .graph-node,
     .add-item .graph-node {
         width: 10px;
@@ -390,17 +392,17 @@ else
         font-weight: bold;
         color: white;
     }
-    
+
     .timeline-action-btn .graph-node.status-load-more {
         background-color: var(--text-muted);
         font-size: 0.625rem;
         letter-spacing: -0.5px;
     }
-    
+
     .add-item .graph-node.status-add {
         background-color: var(--color-ocean);
     }
-    
+
     .timeline-action-btn .item-body,
     .add-item .item-body {
         flex: 1;
@@ -410,47 +412,46 @@ else
         justify-content: center;
         padding: var(--spacing-xs) 0;
     }
-    
+
     .timeline-action-btn .action-title,
     .add-item .add-title {
         font-size: 0.8125rem;
         color: var(--text-muted);
         font-style: italic;
     }
-    
+
     .timeline-action-btn:hover .action-title {
         color: var(--text-primary);
     }
-    
+
     .add-item:hover .add-title {
         color: var(--color-ocean);
     }
-    
+
     .info-list {
         margin: 0;
         font-size: 0.8125rem;
     }
-    
+
     .info-list dt {
         font-weight: var(--font-weight-medium);
         color: var(--text-secondary);
         margin-top: var(--spacing-sm);
     }
-    
+
     .info-list dt:first-child {
         margin-top: 0;
     }
-    
+
     .info-list dd {
         margin: 0;
         margin-top: 0.125rem;
     }
-    
+
 </style>
 
 @code {
-    [Parameter]
-    public string Id { get; set; } = "";
+    [Parameter] public string Id { get; set; } = "";
 
     private Project? _project;
     private List<PullRequest>? _rootPullRequests;
@@ -513,6 +514,7 @@ else
                 result.AddRange(FlattenPRs(pr.Children.ToList(), level + 1));
             }
         }
+
         return result;
     }
 
@@ -656,38 +658,39 @@ else
     private static string? GetPastPRSubtitle(PullRequestInfo pr)
     {
         var parts = new List<string>();
-        
+
         if (pr.MergedAt.HasValue)
             parts.Add($"Merged {pr.MergedAt.Value:MMM d, yyyy}");
         else if (pr.ClosedAt.HasValue)
             parts.Add($"Closed {pr.ClosedAt.Value:MMM d, yyyy}");
-            
+
         if (!string.IsNullOrEmpty(pr.Group))
             parts.Add(pr.Group);
-            
+
         return parts.Count > 0 ? string.Join(" - ", parts) : null;
     }
 
     private static string? GetCurrentPRSubtitle(PullRequest pr)
     {
         var parts = new List<string>();
-        
+
         if (!string.IsNullOrEmpty(pr.BranchName))
             parts.Add(pr.BranchName);
-            
+
         return parts.Count > 0 ? string.Join(" - ", parts) : null;
     }
 
     private static string? GetFutureChangeSubtitle(RoadmapChange change)
     {
         var parts = new List<string>();
-        
+
         if (!string.IsNullOrEmpty(change.Group))
             parts.Add(change.Group);
-            
+
         if (!string.IsNullOrEmpty(change.Description))
             parts.Add(change.Description);
-            
+
         return parts.Count > 0 ? string.Join(" - ", parts) : null;
     }
+
 }
