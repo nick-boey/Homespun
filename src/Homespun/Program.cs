@@ -17,7 +17,9 @@ builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
 
 // Add services to the container.
-var dataPath = builder.Configuration["HOMESPUN_DATA_PATH"] ?? "homespun-data.json";
+var homespunDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".homespun");
+var defaultDataPath = Path.Combine(homespunDir, "homespun-data.json");
+var dataPath = builder.Configuration["HOMESPUN_DATA_PATH"] ?? defaultDataPath;
 
 // Ensure the data directory exists
 var dataDirectory = Path.GetDirectoryName(dataPath);
