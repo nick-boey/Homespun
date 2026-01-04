@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Net;
+using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using Homespun.Features.OpenCode.Models;
 using Microsoft.Extensions.Options;
@@ -209,6 +211,13 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
 
     private Process StartServerProcess(int port, string workingDirectory, bool continueSession = false)
     {
+        // Check if port is already in use - prevents connecting to wrong server
+        if (IsPortInUse(port))
+        {
+            throw new InvalidOperationException(
+                $"Port {port} is already in use. Another OpenCode server may be running.");
+        }
+        
         var arguments = $"serve --port {port} --hostname 127.0.0.1";
         if (continueSession)
         {
@@ -233,6 +242,24 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
         
         _logger.LogDebug("Started OpenCode process with PID {ProcessId} on port {Port}", process.Id, port);
         return process;
+    }
+    
+    /// <summary>
+    /// Checks if a port is already in use by attempting to bind to it.
+    /// </summary>
+    private static bool IsPortInUse(int port)
+    {
+        try
+        {
+            using var listener = new TcpListener(IPAddress.Loopback, port);
+            listener.Start();
+            listener.Stop();
+            return false;
+        }
+        catch (SocketException)
+        {
+            return true;
+        }
     }
 
     private async Task WaitForHealthyAsync(OpenCodeServer server, CancellationToken ct)
