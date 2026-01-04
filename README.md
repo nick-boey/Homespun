@@ -25,7 +25,11 @@ Homespun provides a visual interface for planning and executing software develop
   - Red: Cancelled
   - Yellow: In development
   - Green: Ready for review
+  - Orange: Has review comments
+  - Cyan: Approved
   - Grey: Future/planned
+- Automated review polling from GitHub
+- Agent status panel with real-time updates
 
 ## Technology Stack
 
@@ -149,12 +153,11 @@ stateDiagram-v2
 
 | Status | Color | Description |
 |--------|-------|-------------|
-| In Progress | Yellow | Agent is actively working on the PR |
-| Ready for Review | Flashing Yellow | Agent completed, awaiting user review |
-| Checks Failing | Red | CI/CD checks have failed |
-| Conflict | Orange | Rebase failed due to merge conflicts |
-| Ready for Merging | Green | Approved and ready to merge |
-| Merged | Purple | PR has been merged (past) |
+| In Development | Yellow | Agent is actively working on the PR |
+| Ready for Review | Green | Agent completed, awaiting user review |
+| Has Review Comments | Orange | PR has review comments needing attention |
+| Approved | Cyan | PR approved and ready to merge |
+| Merged | Blue | PR has been merged (past) |
 | Closed | Red | PR was closed without merging (past) |
 
 #### Automatic Rebasing
