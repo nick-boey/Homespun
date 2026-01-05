@@ -1,6 +1,7 @@
 using Homespun.Features.Commands;
 using Homespun.Features.Git;
 using Homespun.Features.GitHub;
+using Homespun.Features.Notifications;
 using Homespun.Features.OpenCode;
 using Homespun.Features.OpenCode.Hubs;
 using Homespun.Features.OpenCode.Services;
@@ -8,6 +9,7 @@ using Homespun.Features.Projects;
 using Homespun.Features.PullRequests;
 using Homespun.Features.PullRequests.Data;
 using Homespun.Features.Roadmap;
+using Homespun.Features.Roadmap.Sync;
 using Homespun.Components;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -45,6 +47,15 @@ builder.Services.AddScoped<IGitHubService, GitHubService>();
 builder.Services.AddScoped<PullRequestWorkflowService>();
 builder.Services.AddScoped<IRoadmapService, RoadmapService>();
 builder.Services.AddScoped<IFutureChangeTransitionService, FutureChangeTransitionService>();
+
+// Notification services
+builder.Services.AddSingleton<INotificationService, NotificationService>();
+
+// Roadmap sync services
+builder.Services.AddScoped<IRoadmapSyncService, RoadmapSyncService>();
+builder.Services.Configure<RoadmapPollingOptions>(
+    builder.Configuration.GetSection(RoadmapPollingOptions.SectionName));
+builder.Services.AddHostedService<RoadmapPollingService>();
 
 // OpenCode services
 builder.Services.Configure<OpenCodeOptions>(
@@ -84,5 +95,6 @@ app.MapRazorComponents<App>()
 
 // Map SignalR hubs
 app.MapHub<AgentHub>("/hubs/agent");
+app.MapHub<NotificationHub>("/hubs/notifications");
 
 app.Run();

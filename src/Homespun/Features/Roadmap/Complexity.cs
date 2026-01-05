@@ -8,12 +8,7 @@ namespace Homespun.Features.Roadmap;
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum Complexity
 {
-    [JsonPropertyName("small")]
-    Small,
-
-    [JsonPropertyName("medium")]
-    Medium,
-
-    [JsonPropertyName("large")]
-    Large
+    [JsonPropertyName("small")] Small,
+    [JsonPropertyName("medium")] Medium,
+    [JsonPropertyName("large")] Large
 }

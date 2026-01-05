@@ -7,7 +7,7 @@ namespace Homespun.Features.Roadmap;
 /// The schema uses a flat list with parent references (DAG) instead of nested children.
 /// The Id is the full branch name: {group}/{type}/{shortTitle}
 /// </summary>
-public class RoadmapChange
+public class FutureChange
 {
     /// <summary>
     /// The full branch name serving as the unique identifier.

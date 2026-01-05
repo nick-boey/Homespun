@@ -16,19 +16,19 @@ public class Roadmap
     public DateTime? LastUpdated { get; set; }
 
     [JsonPropertyName("changes")]
-    public List<RoadmapChange> Changes { get; set; } = [];
+    public List<FutureChange> Changes { get; set; } = [];
 
     /// <summary>
     /// Gets all changes with their calculated time values based on dependency depth.
     /// Depth is calculated from the longest parent chain.
     /// </summary>
-    public List<(RoadmapChange Change, int Time, int Depth)> GetAllChangesWithTime()
+    public List<(FutureChange Change, int Time, int Depth)> GetAllChangesWithTime()
     {
         // Build a lookup for fast parent resolution
         var changeLookup = Changes.ToDictionary(c => c.Id, c => c);
         var depthCache = new Dictionary<string, int>();
 
-        var result = new List<(RoadmapChange, int, int)>();
+        var result = new List<(FutureChange, int, int)>();
 
         foreach (var change in Changes)
         {
@@ -46,8 +46,8 @@ public class Roadmap
     /// A change with parents has depth = max(parent depths) + 1.
     /// </summary>
     private static int CalculateDepth(
-        RoadmapChange change,
-        Dictionary<string, RoadmapChange> lookup,
+        FutureChange change,
+        Dictionary<string, FutureChange> lookup,
         Dictionary<string, int> cache)
     {
         // Check cache first

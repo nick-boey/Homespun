@@ -3,6 +3,7 @@ using Homespun.Features.Git;
 using Homespun.Features.PullRequests.Data.Entities;
 using Homespun.Features.Roadmap;
 using Homespun.Tests.Helpers;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Project = Homespun.Features.PullRequests.Data.Entities.Project;
 using TrackedPullRequest = Homespun.Features.PullRequests.Data.Entities.PullRequest;
@@ -17,6 +18,7 @@ public class RoadmapServiceTests
     private Mock<IGitWorktreeService> _mockWorktreeService = null!;
     private RoadmapService _service = null!;
     private string _tempDir = null!;
+    private string _projectDir = null!;
 
     [SetUp]
     public void SetUp()
@@ -25,10 +27,16 @@ public class RoadmapServiceTests
         _mockRunner = new Mock<ICommandRunner>();
         _mockWorktreeService = new Mock<IGitWorktreeService>();
 
+        // Create temp directory structure: tempDir/main (to mimic ~/.homespun/src/repo/main)
         _tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
-        Directory.CreateDirectory(_tempDir);
+        _projectDir = Path.Combine(_tempDir, "main");
+        Directory.CreateDirectory(_projectDir);
 
-        _service = new RoadmapService(_dataStore, _mockRunner.Object, _mockWorktreeService.Object);
+        _service = new RoadmapService(
+            _dataStore, 
+            _mockRunner.Object, 
+            _mockWorktreeService.Object,
+            NullLogger<RoadmapService>.Instance);
     }
 
     [TearDown]
@@ -45,7 +53,7 @@ public class RoadmapServiceTests
         var project = new Project
         {
             Name = "Test Project",
-            LocalPath = _tempDir,
+            LocalPath = _projectDir, // Use the "main" subdirectory
             GitHubOwner = "test-owner",
             GitHubRepo = "test-repo",
             DefaultBranch = "main"
@@ -57,7 +65,13 @@ public class RoadmapServiceTests
 
     private void CreateRoadmapFile(string content)
     {
-        File.WriteAllText(Path.Combine(_tempDir, "ROADMAP.json"), content);
+        // Write to ROADMAP.local.json at the parent directory level (not in the project dir)
+        File.WriteAllText(Path.Combine(_tempDir, "ROADMAP.local.json"), content);
+    }
+
+    private string GetLocalRoadmapPath()
+    {
+        return Path.Combine(_tempDir, "ROADMAP.local.json");
     }
 
     #region 3.1 Read and Display Future Changes
@@ -367,7 +381,7 @@ public class RoadmapServiceTests
         await _service.PromoteChangeAsync(project.Id, "core/feature/feature-to-promote");
 
         // Assert - Verify the roadmap was updated
-        var roadmapPath = Path.Combine(_tempDir, "ROADMAP.json");
+        var roadmapPath = GetLocalRoadmapPath();
         var updatedRoadmap = await RoadmapParser.LoadAsync(roadmapPath);
 
         // Promoted change should be removed
@@ -482,7 +496,7 @@ public class RoadmapServiceTests
         }
         """);
 
-        var newChange = new RoadmapChange
+        var newChange = new FutureChange
         {
             Id = "web/feature/new-feature",
             ShortTitle = "new-feature",
@@ -496,7 +510,7 @@ public class RoadmapServiceTests
 
         // Assert
         Assert.That(result, Is.True);
-        var roadmapPath = Path.Combine(_tempDir, "ROADMAP.json");
+        var roadmapPath = GetLocalRoadmapPath();
         var updatedRoadmap = await RoadmapParser.LoadAsync(roadmapPath);
         Assert.That(updatedRoadmap.Changes, Has.Count.EqualTo(2));
         Assert.That(updatedRoadmap.Changes[0].Id, Is.EqualTo("core/feature/existing-feature"));
@@ -508,10 +522,10 @@ public class RoadmapServiceTests
     {
         // Arrange
         var project = await CreateTestProject();
-        var roadmapPath = Path.Combine(_tempDir, "ROADMAP.json");
+        var roadmapPath = GetLocalRoadmapPath();
         Assert.That(File.Exists(roadmapPath), Is.False);
 
-        var newChange = new RoadmapChange
+        var newChange = new FutureChange
         {
             Id = "core/feature/first-feature",
             ShortTitle = "first-feature",
@@ -538,7 +552,7 @@ public class RoadmapServiceTests
         // Arrange
         var project = await CreateTestProject();
 
-        var newChange = new RoadmapChange
+        var newChange = new FutureChange
         {
             Id = "backend/bug/detailed-feature",
             ShortTitle = "detailed-feature",
@@ -556,7 +570,7 @@ public class RoadmapServiceTests
 
         // Assert
         Assert.That(result, Is.True);
-        var roadmapPath = Path.Combine(_tempDir, "ROADMAP.json");
+        var roadmapPath = GetLocalRoadmapPath();
         var createdRoadmap = await RoadmapParser.LoadAsync(roadmapPath);
         var savedChange = createdRoadmap.Changes[0];
         
@@ -570,7 +584,7 @@ public class RoadmapServiceTests
     public async Task AddChange_ReturnsFalseIfProjectNotFound()
     {
         // Arrange
-        var newChange = new RoadmapChange
+        var newChange = new FutureChange
         {
             Id = "core/feature/some-feature",
             ShortTitle = "some-feature",
@@ -617,7 +631,7 @@ public class RoadmapServiceTests
 
         // Assert
         Assert.That(result, Is.True);
-        var roadmapPath = Path.Combine(_tempDir, "ROADMAP.json");
+        var roadmapPath = GetLocalRoadmapPath();
         var updatedRoadmap = await RoadmapParser.LoadAsync(roadmapPath);
         Assert.That(updatedRoadmap.Changes[0].Status, Is.EqualTo(FutureChangeStatus.InProgress));
     }
@@ -664,7 +678,7 @@ public class RoadmapServiceTests
 
         // Assert
         Assert.That(result, Is.True);
-        var roadmapPath = Path.Combine(_tempDir, "ROADMAP.json");
+        var roadmapPath = GetLocalRoadmapPath();
         var updatedRoadmap = await RoadmapParser.LoadAsync(roadmapPath);
         
         Assert.That(updatedRoadmap.Changes[1].Parents, Is.Empty);

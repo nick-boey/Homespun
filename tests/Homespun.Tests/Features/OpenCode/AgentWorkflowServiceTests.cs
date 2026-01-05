@@ -170,9 +170,9 @@ public class AgentWorkflowServiceTests
 
     #region Helper Methods
 
-    private static RoadmapChange CreateTestChange()
+    private static FutureChange CreateTestChange()
     {
-        return new RoadmapChange
+        return new FutureChange
         {
             Id = "core/feature/add-auth",
             ShortTitle = "add-auth",

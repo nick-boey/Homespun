@@ -2,7 +2,7 @@ namespace Homespun.Features.PullRequests;
 
 /// <summary>
 /// Status of a pull request in the workflow.
-/// Note: This differs from FeatureStatus which is used for features/tasks.
+/// Note: This differs from OpenPullRequestStatus which is used for features/tasks.
 /// </summary>
 public enum PullRequestStatus
 {

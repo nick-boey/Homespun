@@ -1,6 +1,7 @@
 @inherits LayoutComponentBase
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JSRuntime
+@using Homespun.Components.Shared
 
 <div class="page @(_sidebarOpen ? "sidebar-open" : "sidebar-closed")">
     <header class="top-bar">
@@ -34,6 +35,7 @@
 
     <main class="main-content">
         <article class="content">
+            <NotificationBanner />
             @Body
         </article>
     </main>

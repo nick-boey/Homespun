@@ -67,7 +67,7 @@ public class FutureChangeTransitionServiceTests
         var changeId = "non-existent";
         
         _mockRoadmapService.Setup(s => s.FindChangeByIdAsync(projectId, changeId))
-            .ReturnsAsync((RoadmapChange?)null);
+            .ReturnsAsync((FutureChange?)null);
 
         // Act
         var result = await _sut.TransitionToInProgressAsync(projectId, changeId);
@@ -398,7 +398,7 @@ public class FutureChangeTransitionServiceTests
         var changeId = "non-existent";
         
         _mockRoadmapService.Setup(s => s.FindChangeByIdAsync(projectId, changeId))
-            .ReturnsAsync((RoadmapChange?)null);
+            .ReturnsAsync((FutureChange?)null);
 
         // Act
         var result = await _sut.GetStatusAsync(projectId, changeId);
@@ -441,9 +441,9 @@ public class FutureChangeTransitionServiceTests
 
     #endregion
 
-    private static RoadmapChange CreateChange(string id, FutureChangeStatus status)
+    private static FutureChange CreateChange(string id, FutureChangeStatus status)
     {
-        return new RoadmapChange
+        return new FutureChange
         {
             Id = id,
             ShortTitle = "test-change",

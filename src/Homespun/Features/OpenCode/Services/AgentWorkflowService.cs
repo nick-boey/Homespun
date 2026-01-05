@@ -243,7 +243,7 @@ public class AgentWorkflowService : IAgentWorkflowService
         };
     }
 
-    internal static string BuildInitialPrompt(RoadmapChange change)
+    internal static string BuildInitialPrompt(FutureChange change)
     {
         // Determine the base branch for the PR
         var baseBranch = change.Parents.Count > 0 ? change.Parents[0] : "main";

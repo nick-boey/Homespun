@@ -447,7 +447,7 @@ public class RoadmapSchemaV2Tests
             Version = "1.1",
             Changes =
             [
-                new RoadmapChange
+                new FutureChange
                 {
                     Id = "core/feature/test",
                     ShortTitle = "test",
@@ -610,7 +610,7 @@ public class RoadmapSchemaV2Tests
             LastUpdated = DateTime.UtcNow,
             Changes =
             [
-                new RoadmapChange
+                new FutureChange
                 {
                     Id = "core/feature/base",
                     ShortTitle = "base",
@@ -621,7 +621,7 @@ public class RoadmapSchemaV2Tests
                     Parents = [],
                     Status = FutureChangeStatus.Pending
                 },
-                new RoadmapChange
+                new FutureChange
                 {
                     Id = "core/feature/dependent",
                     ShortTitle = "dependent",
@@ -658,7 +658,7 @@ public class RoadmapSchemaV2Tests
             Version = "1.1",
             Changes =
             [
-                new RoadmapChange
+                new FutureChange
                 {
                     Id = "core/feature/test",
                     ShortTitle = "test",

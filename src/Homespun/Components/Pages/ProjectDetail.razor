@@ -147,12 +147,15 @@ else
                     {
                         var change = _futureChanges[i];
                         <WorkItem Title="@change.Change.Title"
-                                  StatusColor="@GetChangeTypeStatusColor(change.Change.Type)"
-                                  StatusTooltip="@change.Change.Type.ToString()"
+                                  StatusColor="@GetFutureChangeStatusColor(change.Change)"
+                                  StatusTooltip="@GetFutureChangeStatusTooltip(change.Change)"
                                   Subtitle="@GetFutureChangeSubtitle(change.Change)"
                                   IndentLevel="@change.Depth"
+                                  IsSelected="@(_selectedFutureChangeId == change.Change.Id)"
+                                  IsClickable="true"
                                   IsFirst="false"
-                                  IsLast="false"/>
+                                  IsLast="false"
+                                  OnClick="@(() => SelectFutureChange(change.Change.Id))"/>
                     }
 
                     <a href="projects/@Id/features/create" class="add-item">
@@ -172,9 +175,16 @@ else
         <div class="detail-column">
             @if (_selectedPullRequest != null)
             {
-                <FeatureDetailPanel PullRequest="_selectedPullRequest"
-                                    OnActionCompleted="RefreshData"
-                                    OnClose="() => _selectedPullRequest = null"/>
+                <CurrentPullRequestDetailPanel PullRequest="_selectedPullRequest"
+                                               OnActionCompleted="RefreshData"
+                                               OnClose="ClearSelection"/>
+            }
+            else if (_selectedFutureChange != null)
+            {
+                <FutureChangeDetailPanel ProjectId="@Id"
+                                         Change="_selectedFutureChange"
+                                         OnActionCompleted="RefreshData"
+                                         OnClose="ClearSelection"/>
             }
             else
             {
@@ -458,6 +468,8 @@ else
     private List<FlattenedPR> _flattenedCurrentPRs = [];
     private PullRequest? _selectedPullRequest;
     private string? _selectedPullRequestId;
+    private FutureChange? _selectedFutureChange;
+    private string? _selectedFutureChangeId;
     private bool _isSyncingPRs;
     private bool _isLoadingPastPRs;
     private bool _tokenMissing;
@@ -621,8 +633,30 @@ else
 
     private async Task SelectPullRequest(string pullRequestId)
     {
+        // Clear any future change selection
+        _selectedFutureChangeId = null;
+        _selectedFutureChange = null;
+        
         _selectedPullRequestId = pullRequestId;
         _selectedPullRequest = await PullRequestDataService.GetByIdAsync(pullRequestId);
+    }
+
+    private void SelectFutureChange(string changeId)
+    {
+        // Clear any pull request selection
+        _selectedPullRequestId = null;
+        _selectedPullRequest = null;
+        
+        _selectedFutureChangeId = changeId;
+        _selectedFutureChange = _futureChanges?.FirstOrDefault(c => c.Change.Id == changeId)?.Change;
+    }
+
+    private void ClearSelection()
+    {
+        _selectedPullRequestId = null;
+        _selectedPullRequest = null;
+        _selectedFutureChangeId = null;
+        _selectedFutureChange = null;
     }
 
     private int GetTotalCurrentPRCount()
@@ -657,6 +691,30 @@ else
         _ => "status-default"
     };
 
+    private static string GetFutureChangeStatusColor(FutureChange change)
+    {
+        // If in progress or awaiting PR, show working status; otherwise show type-based color
+        return change.Status switch
+        {
+            FutureChangeStatus.InProgress => "status-in-development",
+            FutureChangeStatus.AwaitingPR => "status-ready-for-review",
+            FutureChangeStatus.Complete => "status-approved",
+            _ => GetChangeTypeStatusColor(change.Type)
+        };
+    }
+
+    private static string GetFutureChangeStatusTooltip(FutureChange change)
+    {
+        return change.Status switch
+        {
+            FutureChangeStatus.Pending => $"{change.Type} (Pending)",
+            FutureChangeStatus.InProgress => $"{change.Type} (In Progress)",
+            FutureChangeStatus.AwaitingPR => $"{change.Type} (Awaiting PR)",
+            FutureChangeStatus.Complete => $"{change.Type} (Complete)",
+            _ => change.Type.ToString()
+        };
+    }
+
     private static string? GetPastPRSubtitle(PullRequestInfo pr)
     {
         var parts = new List<string>();
@@ -682,7 +740,7 @@ else
         return parts.Count > 0 ? string.Join(" - ", parts) : null;
     }
 
-    private static string? GetFutureChangeSubtitle(RoadmapChange change)
+    private static string? GetFutureChangeSubtitle(FutureChange change)
     {
         var parts = new List<string>();
 

@@ -101,7 +101,7 @@ public static partial class RoadmapParser
     /// <summary>
     /// Validates changes using flat list schema with parents.
     /// </summary>
-    private static void ValidateChanges(List<RoadmapChange> changes)
+    private static void ValidateChanges(List<FutureChange> changes)
     {
         // Collect all IDs first for parent validation
         var allIds = new HashSet<string>();

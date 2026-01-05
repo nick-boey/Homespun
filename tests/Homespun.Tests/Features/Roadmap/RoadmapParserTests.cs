@@ -351,7 +351,7 @@ public class RoadmapParserTests
             LastUpdated = DateTime.UtcNow,
             Changes =
             [
-                new RoadmapChange
+                new FutureChange
                 {
                     Id = "core/feature/test-feature",
                     ShortTitle = "test-feature",
@@ -362,7 +362,7 @@ public class RoadmapParserTests
                     Priority = Priority.High,
                     Parents = []
                 },
-                new RoadmapChange
+                new FutureChange
                 {
                     Id = "core/bug/child-feature",
                     ShortTitle = "child-feature",
