@@ -30,6 +30,14 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
         var worktreePath = Path.Combine(parentDir, sanitizedName);
         logger.LogDebug("Worktree path will be {WorktreePath}", worktreePath);
 
+        // Ensure parent directories exist for nested branch names (e.g., app/feature/id)
+        var worktreeParentDir = Path.GetDirectoryName(worktreePath);
+        if (!string.IsNullOrEmpty(worktreeParentDir) && !Directory.Exists(worktreeParentDir))
+        {
+            logger.LogDebug("Creating parent directory {ParentDir}", worktreeParentDir);
+            Directory.CreateDirectory(worktreeParentDir);
+        }
+
         if (createBranch)
         {
             var baseRef = baseBranch ?? "HEAD";
@@ -205,13 +213,17 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
 
     public static string SanitizeBranchName(string branchName)
     {
-        // Replace slashes and special characters with dashes
-        var sanitized = Regex.Replace(branchName, @"[/\\@#\s]+", "-");
-        // Remove any remaining invalid characters
-        sanitized = Regex.Replace(sanitized, @"[^a-zA-Z0-9\-_.]", "-");
+        // Normalize path separators to forward slashes
+        var sanitized = branchName.Replace('\\', '/');
+        // Replace special characters (except forward slash) with dashes
+        sanitized = Regex.Replace(sanitized, @"[@#\s]+", "-");
+        // Remove any remaining invalid characters (keep forward slashes for folder structure)
+        sanitized = Regex.Replace(sanitized, @"[^a-zA-Z0-9\-_./]", "-");
         // Remove consecutive dashes
         sanitized = Regex.Replace(sanitized, @"-+", "-");
-        // Trim dashes from ends
-        return sanitized.Trim('-');
+        // Remove consecutive slashes
+        sanitized = Regex.Replace(sanitized, @"/+", "/");
+        // Trim dashes and slashes from ends
+        return sanitized.Trim('-', '/');
     }
 }
