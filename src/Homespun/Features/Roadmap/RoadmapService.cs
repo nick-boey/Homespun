@@ -382,6 +382,7 @@ public class RoadmapService : IRoadmapService
     /// <summary>
     /// Creates a git worktree for a FutureChange without promoting it to a PR.
     /// Updates the change's WorktreePath property in the roadmap.
+    /// Fetches and updates the default branch before creating the worktree.
     /// </summary>
     public async Task<string?> CreateWorktreeForChangeAsync(string projectId, string changeId)
     {
@@ -398,12 +399,17 @@ public class RoadmapService : IRoadmapService
         // The Id IS the branch name
         var branchName = change.Id;
 
-        // Create worktree
+        // Fetch and update the default branch to ensure we're creating from the latest
+        var defaultBranch = project.DefaultBranch ?? "main";
+        _logger.LogInformation("Fetching latest {DefaultBranch} before creating worktree", defaultBranch);
+        await _worktreeService.FetchAndUpdateBranchAsync(project.LocalPath, defaultBranch);
+
+        // Create worktree based on the updated default branch
         var worktreePath = await _worktreeService.CreateWorktreeAsync(
             project.LocalPath,
             branchName,
             createBranch: true,
-            baseBranch: project.DefaultBranch);
+            baseBranch: $"origin/{defaultBranch}");
 
         if (worktreePath == null)
         {

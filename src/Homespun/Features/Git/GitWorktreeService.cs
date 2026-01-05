@@ -179,6 +179,30 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
         return success;
     }
 
+    public async Task<bool> FetchAndUpdateBranchAsync(string repoPath, string branchName)
+    {
+        logger.LogDebug("Fetching and updating branch {BranchName} in repo {RepoPath}", branchName, repoPath);
+
+        // Fetch the specific branch from origin
+        var fetchResult = await commandRunner.RunAsync("git", $"fetch origin {branchName}:{branchName}", repoPath);
+        
+        if (!fetchResult.Success)
+        {
+            // Try a simple fetch if the branch update fails (might be checked out)
+            logger.LogDebug("Direct branch update failed, trying simple fetch: {Error}", fetchResult.Error);
+            var simpleFetchResult = await commandRunner.RunAsync("git", "fetch origin", repoPath);
+            
+            if (!simpleFetchResult.Success)
+            {
+                logger.LogWarning("Failed to fetch from origin in {RepoPath}: {Error}", repoPath, simpleFetchResult.Error);
+                return false;
+            }
+        }
+
+        logger.LogInformation("Successfully fetched and updated branch {BranchName}", branchName);
+        return true;
+    }
+
     public static string SanitizeBranchName(string branchName)
     {
         // Replace slashes and special characters with dashes
