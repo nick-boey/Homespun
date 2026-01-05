@@ -3,6 +3,7 @@ using Homespun.Features.Git;
 using Homespun.Features.PullRequests.Data.Entities;
 using Homespun.Features.Roadmap;
 using Homespun.Tests.Helpers;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Project = Homespun.Features.PullRequests.Data.Entities.Project;
 using TrackedPullRequest = Homespun.Features.PullRequests.Data.Entities.PullRequest;
@@ -17,6 +18,7 @@ public class RoadmapServiceTests
     private Mock<IGitWorktreeService> _mockWorktreeService = null!;
     private RoadmapService _service = null!;
     private string _tempDir = null!;
+    private string _projectDir = null!;
 
     [SetUp]
     public void SetUp()
@@ -25,10 +27,16 @@ public class RoadmapServiceTests
         _mockRunner = new Mock<ICommandRunner>();
         _mockWorktreeService = new Mock<IGitWorktreeService>();
 
+        // Create temp directory structure: tempDir/main (to mimic ~/.homespun/src/repo/main)
         _tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
-        Directory.CreateDirectory(_tempDir);
+        _projectDir = Path.Combine(_tempDir, "main");
+        Directory.CreateDirectory(_projectDir);
 
-        _service = new RoadmapService(_dataStore, _mockRunner.Object, _mockWorktreeService.Object);
+        _service = new RoadmapService(
+            _dataStore, 
+            _mockRunner.Object, 
+            _mockWorktreeService.Object,
+            NullLogger<RoadmapService>.Instance);
     }
 
     [TearDown]
@@ -45,7 +53,7 @@ public class RoadmapServiceTests
         var project = new Project
         {
             Name = "Test Project",
-            LocalPath = _tempDir,
+            LocalPath = _projectDir, // Use the "main" subdirectory
             GitHubOwner = "test-owner",
             GitHubRepo = "test-repo",
             DefaultBranch = "main"
@@ -57,31 +65,41 @@ public class RoadmapServiceTests
 
     private void CreateRoadmapFile(string content)
     {
-        File.WriteAllText(Path.Combine(_tempDir, "ROADMAP.json"), content);
+        // Write to ROADMAP.local.json at the parent directory level (not in the project dir)
+        File.WriteAllText(Path.Combine(_tempDir, "ROADMAP.local.json"), content);
+    }
+
+    private string GetLocalRoadmapPath()
+    {
+        return Path.Combine(_tempDir, "ROADMAP.local.json");
     }
 
     #region 3.1 Read and Display Future Changes
 
     [Test]
-    public async Task FutureChanges_LoadFromRoadmap_DisplaysInTree()
+    public async Task FutureChanges_LoadFromRoadmap_DisplaysInList()
     {
         // Arrange
         var project = await CreateTestProject();
         CreateRoadmapFile("""
         {
-            "version": "1.0",
+            "version": "1.1",
             "changes": [
                 {
-                    "id": "feature-one",
+                    "id": "core/feature/feature-one",
+                    "shortTitle": "feature-one",
                     "group": "core",
                     "type": "feature",
-                    "title": "Feature One"
+                    "title": "Feature One",
+                    "parents": []
                 },
                 {
-                    "id": "feature-two",
+                    "id": "web/bug/bug-fix",
+                    "shortTitle": "bug-fix",
                     "group": "web",
                     "type": "bug",
-                    "title": "Bug Fix"
+                    "title": "Bug Fix",
+                    "parents": []
                 }
             ]
         }
@@ -92,38 +110,42 @@ public class RoadmapServiceTests
 
         // Assert
         Assert.That(result, Has.Count.EqualTo(2));
-        Assert.That(result[0].Change.Id, Is.EqualTo("feature-one"));
-        Assert.That(result[1].Change.Id, Is.EqualTo("feature-two"));
+        Assert.That(result[0].Change.Id, Is.EqualTo("core/feature/feature-one"));
+        Assert.That(result[1].Change.Id, Is.EqualTo("web/bug/bug-fix"));
     }
 
     [Test]
-    public async Task FutureChanges_NestedChildren_DisplaysHierarchy()
+    public async Task FutureChanges_WithParents_DisplaysAll()
     {
         // Arrange
         var project = await CreateTestProject();
         CreateRoadmapFile("""
         {
-            "version": "1.0",
+            "version": "1.1",
             "changes": [
                 {
-                    "id": "parent",
+                    "id": "core/feature/parent",
+                    "shortTitle": "parent",
                     "group": "core",
                     "type": "feature",
                     "title": "Parent",
-                    "children": [
-                        {
-                            "id": "child-1",
-                            "group": "core",
-                            "type": "feature",
-                            "title": "Child 1"
-                        },
-                        {
-                            "id": "child-2",
-                            "group": "core",
-                            "type": "feature",
-                            "title": "Child 2"
-                        }
-                    ]
+                    "parents": []
+                },
+                {
+                    "id": "core/feature/child-1",
+                    "shortTitle": "child-1",
+                    "group": "core",
+                    "type": "feature",
+                    "title": "Child 1",
+                    "parents": ["core/feature/parent"]
+                },
+                {
+                    "id": "core/feature/child-2",
+                    "shortTitle": "child-2",
+                    "group": "core",
+                    "type": "feature",
+                    "title": "Child 2",
+                    "parents": ["core/feature/parent"]
                 }
             ]
         }
@@ -134,41 +156,43 @@ public class RoadmapServiceTests
 
         // Assert - Should return flat list with all changes
         Assert.That(result, Has.Count.EqualTo(3));
-        Assert.That(result.Any(r => r.Change.Id == "parent"), Is.True);
-        Assert.That(result.Any(r => r.Change.Id == "child-1"), Is.True);
-        Assert.That(result.Any(r => r.Change.Id == "child-2"), Is.True);
+        Assert.That(result.Any(r => r.Change.Id == "core/feature/parent"), Is.True);
+        Assert.That(result.Any(r => r.Change.Id == "core/feature/child-1"), Is.True);
+        Assert.That(result.Any(r => r.Change.Id == "core/feature/child-2"), Is.True);
     }
 
     [Test]
-    public async Task FutureChanges_CalculatesTimeFromDepth()
+    public async Task FutureChanges_CalculatesTimeFromDependencyDepth()
     {
         // Arrange
         var project = await CreateTestProject();
         CreateRoadmapFile("""
         {
-            "version": "1.0",
+            "version": "1.1",
             "changes": [
                 {
-                    "id": "root",
+                    "id": "core/feature/root",
+                    "shortTitle": "root",
                     "group": "core",
                     "type": "feature",
                     "title": "Root",
-                    "children": [
-                        {
-                            "id": "child",
-                            "group": "core",
-                            "type": "feature",
-                            "title": "Child",
-                            "children": [
-                                {
-                                    "id": "grandchild",
-                                    "group": "core",
-                                    "type": "feature",
-                                    "title": "Grandchild"
-                                }
-                            ]
-                        }
-                    ]
+                    "parents": []
+                },
+                {
+                    "id": "core/feature/child",
+                    "shortTitle": "child",
+                    "group": "core",
+                    "type": "feature",
+                    "title": "Child",
+                    "parents": ["core/feature/root"]
+                },
+                {
+                    "id": "core/feature/grandchild",
+                    "shortTitle": "grandchild",
+                    "group": "core",
+                    "type": "feature",
+                    "title": "Grandchild",
+                    "parents": ["core/feature/child"]
                 }
             ]
         }
@@ -178,9 +202,9 @@ public class RoadmapServiceTests
         var result = await _service.GetFutureChangesAsync(project.Id);
 
         // Assert - Root at depth 0 -> t=2, child at depth 1 -> t=3, grandchild at depth 2 -> t=4
-        Assert.That(result.First(r => r.Change.Id == "root").Time, Is.EqualTo(2));
-        Assert.That(result.First(r => r.Change.Id == "child").Time, Is.EqualTo(3));
-        Assert.That(result.First(r => r.Change.Id == "grandchild").Time, Is.EqualTo(4));
+        Assert.That(result.First(r => r.Change.ShortTitle == "root").Time, Is.EqualTo(2));
+        Assert.That(result.First(r => r.Change.ShortTitle == "child").Time, Is.EqualTo(3));
+        Assert.That(result.First(r => r.Change.ShortTitle == "grandchild").Time, Is.EqualTo(4));
     }
 
     [Test]
@@ -190,25 +214,31 @@ public class RoadmapServiceTests
         var project = await CreateTestProject();
         CreateRoadmapFile("""
         {
-            "version": "1.0",
+            "version": "1.1",
             "changes": [
                 {
-                    "id": "core-feature",
+                    "id": "core/feature/core-feature",
+                    "shortTitle": "core-feature",
                     "group": "core",
                     "type": "feature",
-                    "title": "Core Feature"
+                    "title": "Core Feature",
+                    "parents": []
                 },
                 {
-                    "id": "web-feature",
+                    "id": "web/feature/web-feature",
+                    "shortTitle": "web-feature",
                     "group": "web",
                     "type": "feature",
-                    "title": "Web Feature"
+                    "title": "Web Feature",
+                    "parents": []
                 },
                 {
-                    "id": "api-feature",
+                    "id": "api/feature/api-feature",
+                    "shortTitle": "api-feature",
                     "group": "api",
                     "type": "feature",
-                    "title": "API Feature"
+                    "title": "API Feature",
+                    "parents": []
                 }
             ]
         }
@@ -232,19 +262,21 @@ public class RoadmapServiceTests
     #region 3.2 Promote Future Change to Current PR
 
     [Test]
-    public async Task PromoteChange_CreatesWorktree_WithCorrectBranchName()
+    public async Task PromoteChange_CreatesWorktree_WithIdAsBranchName()
     {
         // Arrange
         var project = await CreateTestProject();
         CreateRoadmapFile("""
         {
-            "version": "1.0",
+            "version": "1.1",
             "changes": [
                 {
-                    "id": "new-feature",
+                    "id": "core/feature/new-feature",
+                    "shortTitle": "new-feature",
                     "group": "core",
                     "type": "feature",
-                    "title": "New Feature"
+                    "title": "New Feature",
+                    "parents": []
                 }
             ]
         }
@@ -258,7 +290,7 @@ public class RoadmapServiceTests
             .ReturnsAsync("/worktrees/core-feature-new-feature");
 
         // Act
-        var result = await _service.PromoteChangeAsync(project.Id, "new-feature");
+        var result = await _service.PromoteChangeAsync(project.Id, "core/feature/new-feature");
 
         // Assert
         Assert.That(result, Is.Not.Null);
@@ -276,14 +308,16 @@ public class RoadmapServiceTests
         var project = await CreateTestProject();
         CreateRoadmapFile("""
         {
-            "version": "1.0",
+            "version": "1.1",
             "changes": [
                 {
-                    "id": "new-feature",
+                    "id": "core/feature/new-feature",
+                    "shortTitle": "new-feature",
                     "group": "core",
                     "type": "feature",
                     "title": "New Feature Title",
-                    "description": "Detailed description of the feature"
+                    "description": "Detailed description of the feature",
+                    "parents": []
                 }
             ]
         }
@@ -297,7 +331,7 @@ public class RoadmapServiceTests
             .ReturnsAsync("/worktrees/new-feature");
 
         // Act
-        var result = await _service.PromoteChangeAsync(project.Id, "new-feature");
+        var result = await _service.PromoteChangeAsync(project.Id, "core/feature/new-feature");
 
         // Assert
         Assert.That(result, Is.Not.Null);
@@ -308,25 +342,29 @@ public class RoadmapServiceTests
     }
 
     [Test]
-    public async Task PromoteChange_RemovesFromRoadmap_UpdatesTree()
+    public async Task PromoteChange_RemovesFromRoadmap_AndUpdatesParentReferences()
     {
         // Arrange
         var project = await CreateTestProject();
         CreateRoadmapFile("""
         {
-            "version": "1.0",
+            "version": "1.1",
             "changes": [
                 {
-                    "id": "feature-to-promote",
+                    "id": "core/feature/feature-to-promote",
+                    "shortTitle": "feature-to-promote",
                     "group": "core",
                     "type": "feature",
-                    "title": "Feature To Promote"
+                    "title": "Feature To Promote",
+                    "parents": []
                 },
                 {
-                    "id": "other-feature",
+                    "id": "core/feature/dependent-feature",
+                    "shortTitle": "dependent-feature",
                     "group": "core",
                     "type": "feature",
-                    "title": "Other Feature"
+                    "title": "Dependent Feature",
+                    "parents": ["core/feature/feature-to-promote"]
                 }
             ]
         }
@@ -340,66 +378,18 @@ public class RoadmapServiceTests
             .ReturnsAsync("/worktrees/feature");
 
         // Act
-        await _service.PromoteChangeAsync(project.Id, "feature-to-promote");
+        await _service.PromoteChangeAsync(project.Id, "core/feature/feature-to-promote");
 
         // Assert - Verify the roadmap was updated
-        var roadmapPath = Path.Combine(_tempDir, "ROADMAP.json");
+        var roadmapPath = GetLocalRoadmapPath();
         var updatedRoadmap = await RoadmapParser.LoadAsync(roadmapPath);
 
+        // Promoted change should be removed
         Assert.That(updatedRoadmap.Changes, Has.Count.EqualTo(1));
-        Assert.That(updatedRoadmap.Changes[0].Id, Is.EqualTo("other-feature"));
-    }
-
-    [Test]
-    public async Task PromoteChange_PromotesChildren_ToParentLevel()
-    {
-        // Arrange
-        var project = await CreateTestProject();
-        CreateRoadmapFile("""
-        {
-            "version": "1.0",
-            "changes": [
-                {
-                    "id": "parent-feature",
-                    "group": "core",
-                    "type": "feature",
-                    "title": "Parent Feature",
-                    "children": [
-                        {
-                            "id": "child-1",
-                            "group": "core",
-                            "type": "feature",
-                            "title": "Child 1"
-                        },
-                        {
-                            "id": "child-2",
-                            "group": "core",
-                            "type": "feature",
-                            "title": "Child 2"
-                        }
-                    ]
-                }
-            ]
-        }
-        """);
-
-        _mockWorktreeService.Setup(w => w.CreateWorktreeAsync(
-            It.IsAny<string>(),
-            It.IsAny<string>(),
-            It.IsAny<bool>(),
-            It.IsAny<string?>()))
-            .ReturnsAsync("/worktrees/feature");
-
-        // Act
-        await _service.PromoteChangeAsync(project.Id, "parent-feature");
-
-        // Assert - Children should be promoted to root level
-        var roadmapPath = Path.Combine(_tempDir, "ROADMAP.json");
-        var updatedRoadmap = await RoadmapParser.LoadAsync(roadmapPath);
-
-        Assert.That(updatedRoadmap.Changes, Has.Count.EqualTo(2));
-        Assert.That(updatedRoadmap.Changes.Any(c => c.Id == "child-1"), Is.True);
-        Assert.That(updatedRoadmap.Changes.Any(c => c.Id == "child-2"), Is.True);
+        Assert.That(updatedRoadmap.Changes[0].Id, Is.EqualTo("core/feature/dependent-feature"));
+        
+        // Parent reference should be removed from dependent feature
+        Assert.That(updatedRoadmap.Changes[0].Parents, Is.Empty);
     }
 
     #endregion
@@ -462,26 +452,17 @@ public class RoadmapServiceTests
         // Arrange
         var project = await CreateTestProject();
         // Create invalid ROADMAP.json
-        CreateRoadmapFile("""{ "version": "1.0", "changes": [{ "invalid": true }] }""");
+        CreateRoadmapFile("""{ "version": "1.1", "changes": [{ "invalid": true }] }""");
 
         // Act & Assert
         var ex = Assert.ThrowsAsync<RoadmapValidationException>(
             async () => await _service.GetFutureChangesAsync(project.Id));
-        Assert.That(ex!.Message, Does.Contain("id").Or.Contain("required"));
+        Assert.That(ex!.Message, Does.Contain("id").Or.Contain("required").Or.Contain("shortTitle"));
     }
 
     [Test]
-    public async Task PlanUpdate_UsesPlanUpdateGroup_InBranchNaming()
+    public void PlanUpdate_UsesPlanUpdateGroup_InBranchNaming()
     {
-        // Arrange
-        var project = await CreateTestProject();
-        CreateRoadmapFile("""
-        {
-            "version": "1.0",
-            "changes": []
-        }
-        """);
-
         // Act
         var branchName = _service.GeneratePlanUpdateBranchName("add-new-features");
 
@@ -501,21 +482,24 @@ public class RoadmapServiceTests
         var project = await CreateTestProject();
         CreateRoadmapFile("""
         {
-            "version": "1.0",
+            "version": "1.1",
             "changes": [
                 {
-                    "id": "existing-feature",
+                    "id": "core/feature/existing-feature",
+                    "shortTitle": "existing-feature",
                     "group": "core",
                     "type": "feature",
-                    "title": "Existing Feature"
+                    "title": "Existing Feature",
+                    "parents": []
                 }
             ]
         }
         """);
 
-        var newChange = new RoadmapChange
+        var newChange = new FutureChange
         {
-            Id = "new-feature",
+            Id = "web/feature/new-feature",
+            ShortTitle = "new-feature",
             Group = "web",
             Type = ChangeType.Feature,
             Title = "New Feature"
@@ -526,11 +510,11 @@ public class RoadmapServiceTests
 
         // Assert
         Assert.That(result, Is.True);
-        var roadmapPath = Path.Combine(_tempDir, "ROADMAP.json");
+        var roadmapPath = GetLocalRoadmapPath();
         var updatedRoadmap = await RoadmapParser.LoadAsync(roadmapPath);
         Assert.That(updatedRoadmap.Changes, Has.Count.EqualTo(2));
-        Assert.That(updatedRoadmap.Changes[0].Id, Is.EqualTo("existing-feature"));
-        Assert.That(updatedRoadmap.Changes[1].Id, Is.EqualTo("new-feature"));
+        Assert.That(updatedRoadmap.Changes[0].Id, Is.EqualTo("core/feature/existing-feature"));
+        Assert.That(updatedRoadmap.Changes[1].Id, Is.EqualTo("web/feature/new-feature"));
     }
 
     [Test]
@@ -538,12 +522,13 @@ public class RoadmapServiceTests
     {
         // Arrange
         var project = await CreateTestProject();
-        var roadmapPath = Path.Combine(_tempDir, "ROADMAP.json");
+        var roadmapPath = GetLocalRoadmapPath();
         Assert.That(File.Exists(roadmapPath), Is.False);
 
-        var newChange = new RoadmapChange
+        var newChange = new FutureChange
         {
-            Id = "first-feature",
+            Id = "core/feature/first-feature",
+            ShortTitle = "first-feature",
             Group = "core",
             Type = ChangeType.Feature,
             Title = "First Feature"
@@ -556,9 +541,9 @@ public class RoadmapServiceTests
         Assert.That(result, Is.True);
         Assert.That(File.Exists(roadmapPath), Is.True);
         var createdRoadmap = await RoadmapParser.LoadAsync(roadmapPath);
-        Assert.That(createdRoadmap.Version, Is.EqualTo("1.0"));
+        Assert.That(createdRoadmap.Version, Is.EqualTo("1.1"));
         Assert.That(createdRoadmap.Changes, Has.Count.EqualTo(1));
-        Assert.That(createdRoadmap.Changes[0].Id, Is.EqualTo("first-feature"));
+        Assert.That(createdRoadmap.Changes[0].Id, Is.EqualTo("core/feature/first-feature"));
     }
 
     [Test]
@@ -567,9 +552,10 @@ public class RoadmapServiceTests
         // Arrange
         var project = await CreateTestProject();
 
-        var newChange = new RoadmapChange
+        var newChange = new FutureChange
         {
-            Id = "detailed-feature",
+            Id = "backend/bug/detailed-feature",
+            ShortTitle = "detailed-feature",
             Group = "backend",
             Type = ChangeType.Bug,
             Title = "Fix Critical Bug",
@@ -584,7 +570,7 @@ public class RoadmapServiceTests
 
         // Assert
         Assert.That(result, Is.True);
-        var roadmapPath = Path.Combine(_tempDir, "ROADMAP.json");
+        var roadmapPath = GetLocalRoadmapPath();
         var createdRoadmap = await RoadmapParser.LoadAsync(roadmapPath);
         var savedChange = createdRoadmap.Changes[0];
         
@@ -598,9 +584,10 @@ public class RoadmapServiceTests
     public async Task AddChange_ReturnsFalseIfProjectNotFound()
     {
         // Arrange
-        var newChange = new RoadmapChange
+        var newChange = new FutureChange
         {
-            Id = "some-feature",
+            Id = "core/feature/some-feature",
+            ShortTitle = "some-feature",
             Group = "core",
             Type = ChangeType.Feature,
             Title = "Some Feature"
@@ -614,5 +601,89 @@ public class RoadmapServiceTests
     }
 
     #endregion
-}
 
+    #region 3.5 Update Change Status
+
+    [Test]
+    public async Task UpdateChangeStatus_UpdatesStatusInRoadmap()
+    {
+        // Arrange
+        var project = await CreateTestProject();
+        CreateRoadmapFile("""
+        {
+            "version": "1.1",
+            "changes": [
+                {
+                    "id": "core/feature/test-feature",
+                    "shortTitle": "test-feature",
+                    "group": "core",
+                    "type": "feature",
+                    "title": "Test Feature",
+                    "parents": [],
+                    "status": "pending"
+                }
+            ]
+        }
+        """);
+
+        // Act
+        var result = await _service.UpdateChangeStatusAsync(project.Id, "core/feature/test-feature", FutureChangeStatus.InProgress);
+
+        // Assert
+        Assert.That(result, Is.True);
+        var roadmapPath = GetLocalRoadmapPath();
+        var updatedRoadmap = await RoadmapParser.LoadAsync(roadmapPath);
+        Assert.That(updatedRoadmap.Changes[0].Status, Is.EqualTo(FutureChangeStatus.InProgress));
+    }
+
+    [Test]
+    public async Task RemoveParentReference_RemovesFromAllChanges()
+    {
+        // Arrange
+        var project = await CreateTestProject();
+        CreateRoadmapFile("""
+        {
+            "version": "1.1",
+            "changes": [
+                {
+                    "id": "core/feature/parent",
+                    "shortTitle": "parent",
+                    "group": "core",
+                    "type": "feature",
+                    "title": "Parent",
+                    "parents": []
+                },
+                {
+                    "id": "core/feature/child-1",
+                    "shortTitle": "child-1",
+                    "group": "core",
+                    "type": "feature",
+                    "title": "Child 1",
+                    "parents": ["core/feature/parent"]
+                },
+                {
+                    "id": "core/feature/child-2",
+                    "shortTitle": "child-2",
+                    "group": "core",
+                    "type": "feature",
+                    "title": "Child 2",
+                    "parents": ["core/feature/parent"]
+                }
+            ]
+        }
+        """);
+
+        // Act
+        var result = await _service.RemoveParentReferenceAsync(project.Id, "core/feature/parent");
+
+        // Assert
+        Assert.That(result, Is.True);
+        var roadmapPath = GetLocalRoadmapPath();
+        var updatedRoadmap = await RoadmapParser.LoadAsync(roadmapPath);
+        
+        Assert.That(updatedRoadmap.Changes[1].Parents, Is.Empty);
+        Assert.That(updatedRoadmap.Changes[2].Parents, Is.Empty);
+    }
+
+    #endregion
+}

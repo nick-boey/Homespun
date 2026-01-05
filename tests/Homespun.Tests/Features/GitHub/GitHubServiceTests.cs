@@ -593,4 +593,120 @@ public class GitHubServiceTests
             activeLockReason: null
         );
     }
+
+    #region GetPullRequestReviewsAsync Tests
+
+    [Test]
+    public async Task GetPullRequestReviewsAsync_WithNonExistentProject_ReturnsEmptySummary()
+    {
+        // Act
+        var result = await _service.GetPullRequestReviewsAsync("non-existent", 42);
+
+        // Assert
+        Assert.That(result.TotalReviews, Is.EqualTo(0));
+        Assert.That(result.Reviews, Is.Empty);
+    }
+
+    [Test]
+    public async Task GetPullRequestReviewsAsync_OnApiError_ReturnsEmptySummary()
+    {
+        // Arrange
+        var project = await CreateTestProject();
+
+        _mockGitHubClient.Setup(c => c.GetPullRequestReviewsAsync(project.GitHubOwner, project.GitHubRepo, 42))
+            .ThrowsAsync(new Exception("API error"));
+
+        // Act
+        var result = await _service.GetPullRequestReviewsAsync(project.Id, 42);
+
+        // Assert
+        Assert.That(result.TotalReviews, Is.EqualTo(0));
+    }
+
+    #endregion
+
+    #region MergePullRequestAsync Tests
+
+    [Test]
+    public async Task MergePullRequestAsync_SuccessfulMerge_ReturnsTrue()
+    {
+        // Arrange
+        var project = await CreateTestProject();
+        var mergeResult = new PullRequestMerge("sha123", true, "Merged");
+
+        _mockGitHubClient.Setup(c => c.MergePullRequestAsync(
+            project.GitHubOwner, 
+            project.GitHubRepo, 
+            42, 
+            It.IsAny<MergePullRequest>()))
+            .ReturnsAsync(mergeResult);
+
+        // Act
+        var result = await _service.MergePullRequestAsync(project.Id, 42);
+
+        // Assert
+        Assert.That(result, Is.True);
+    }
+
+    [Test]
+    public async Task MergePullRequestAsync_FailedMerge_ReturnsFalse()
+    {
+        // Arrange
+        var project = await CreateTestProject();
+        var mergeResult = new PullRequestMerge(null, false, "Merge conflict");
+
+        _mockGitHubClient.Setup(c => c.MergePullRequestAsync(
+            project.GitHubOwner, 
+            project.GitHubRepo, 
+            42, 
+            It.IsAny<MergePullRequest>()))
+            .ReturnsAsync(mergeResult);
+
+        // Act
+        var result = await _service.MergePullRequestAsync(project.Id, 42);
+
+        // Assert
+        Assert.That(result, Is.False);
+    }
+
+    [Test]
+    public async Task MergePullRequestAsync_WithNonExistentProject_ReturnsFalse()
+    {
+        // Act
+        var result = await _service.MergePullRequestAsync("non-existent", 42);
+
+        // Assert
+        Assert.That(result, Is.False);
+    }
+
+    [Test]
+    public async Task MergePullRequestAsync_WithCommitMessage_PassesMessage()
+    {
+        // Arrange
+        var project = await CreateTestProject();
+        var mergeResult = new PullRequestMerge("sha123", true, "Merged");
+        var commitMessage = "Custom merge message";
+
+        _mockGitHubClient.Setup(c => c.MergePullRequestAsync(
+            project.GitHubOwner, 
+            project.GitHubRepo, 
+            42, 
+            It.Is<MergePullRequest>(m => m.CommitMessage == commitMessage)))
+            .ReturnsAsync(mergeResult);
+
+        // Act
+        var result = await _service.MergePullRequestAsync(project.Id, 42, commitMessage);
+
+        // Assert
+        Assert.That(result, Is.True);
+        _mockGitHubClient.Verify(c => c.MergePullRequestAsync(
+            project.GitHubOwner, 
+            project.GitHubRepo, 
+            42, 
+            It.Is<MergePullRequest>(m => m.CommitMessage == commitMessage)), 
+            Times.Once);
+    }
+
+    #endregion
+
 }

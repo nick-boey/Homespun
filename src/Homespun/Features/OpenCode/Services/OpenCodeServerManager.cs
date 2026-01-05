@@ -13,92 +13,180 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
 {
     private readonly OpenCodeOptions _options;
     private readonly IOpenCodeClient _client;
+    private readonly IPortAllocationService _portAllocationService;
     private readonly ILogger<OpenCodeServerManager> _logger;
     private readonly ConcurrentDictionary<string, OpenCodeServer> _servers = new();
-    private readonly ConcurrentBag<int> _releasedPorts = [];
     private readonly string _resolvedExecutablePath;
-    private int _nextPort;
-    private int _allocatedCount;
     private bool _disposed;
 
     public OpenCodeServerManager(
         IOptions<OpenCodeOptions> options,
         IOpenCodeClient client,
+        IPortAllocationService portAllocationService,
         ILogger<OpenCodeServerManager> logger)
     {
         _options = options.Value;
         _client = client;
+        _portAllocationService = portAllocationService;
         _logger = logger;
-        _nextPort = _options.BasePort;
         _resolvedExecutablePath = ResolveExecutablePath(_options.ExecutablePath);
         _logger.LogDebug("Resolved OpenCode executable path: {Path}", _resolvedExecutablePath);
     }
 
     /// <summary>
-    /// Resolves the full path to an executable by searching PATH.
+    /// Resolves the full path to an executable by searching PATH and common installation locations.
     /// </summary>
-    private static string ResolveExecutablePath(string executableName)
+    private string ResolveExecutablePath(string executableName)
     {
         // If it's already an absolute path, use it directly
         if (Path.IsPathRooted(executableName) && File.Exists(executableName))
         {
+            _logger.LogDebug("Using absolute path for OpenCode: {Path}", executableName);
             return executableName;
         }
-
-        // Get the PATH environment variable
-        var pathEnv = Environment.GetEnvironmentVariable("PATH") ?? "";
-        var pathSeparator = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? ';' : ':';
-        var paths = pathEnv.Split(pathSeparator, StringSplitOptions.RemoveEmptyEntries);
 
         // Extensions to try on Windows
         var extensions = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
             ? new[] { ".cmd", ".exe", ".bat", "" }
             : new[] { "" };
 
-        foreach (var path in paths)
+        // Build list of directories to search
+        var searchPaths = new List<string>();
+        
+        // 1. Add PATH directories
+        var pathEnv = Environment.GetEnvironmentVariable("PATH") ?? "";
+        var pathSeparator = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? ';' : ':';
+        searchPaths.AddRange(pathEnv.Split(pathSeparator, StringSplitOptions.RemoveEmptyEntries));
+        
+        // 2. Add common installation locations
+        var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            // npm global installation paths on Windows
+            searchPaths.Add(Path.Combine(appData, "npm"));
+            searchPaths.Add(Path.Combine(localAppData, "npm"));
+            searchPaths.Add(Path.Combine(userProfile, "AppData", "Roaming", "npm"));
+            
+            // pnpm global installation path
+            searchPaths.Add(Path.Combine(localAppData, "pnpm"));
+            
+            // yarn global bin
+            searchPaths.Add(Path.Combine(localAppData, "Yarn", "bin"));
+            
+            // nvm for Windows
+            var nvmHome = Environment.GetEnvironmentVariable("NVM_HOME");
+            if (!string.IsNullOrEmpty(nvmHome))
+            {
+                searchPaths.Add(nvmHome);
+            }
+            
+            // Scoop
+            searchPaths.Add(Path.Combine(userProfile, "scoop", "shims"));
+            
+            // Chocolatey
+            var chocoPath = Environment.GetEnvironmentVariable("ChocolateyInstall");
+            if (!string.IsNullOrEmpty(chocoPath))
+            {
+                searchPaths.Add(Path.Combine(chocoPath, "bin"));
+            }
+            else
+            {
+                searchPaths.Add(@"C:\ProgramData\chocolatey\bin");
+            }
+            
+            // Volta
+            searchPaths.Add(Path.Combine(localAppData, "Volta", "bin"));
+            
+            // fnm (Fast Node Manager)
+            searchPaths.Add(Path.Combine(localAppData, "fnm_multishells"));
+            var fnmDir = Path.Combine(localAppData, "fnm_multishells");
+            if (Directory.Exists(fnmDir))
+            {
+                try
+                {
+                    // fnm creates subdirectories for each shell session
+                    foreach (var dir in Directory.GetDirectories(fnmDir))
+                    {
+                        searchPaths.Add(dir);
+                    }
+                }
+                catch { /* ignore directory access errors */ }
+            }
+        }
+        else
+        {
+            // Unix-like systems (macOS, Linux)
+            
+            // npm global paths
+            searchPaths.Add(Path.Combine(userProfile, ".npm-global", "bin"));
+            searchPaths.Add("/usr/local/bin");
+            searchPaths.Add("/usr/bin");
+            searchPaths.Add(Path.Combine(userProfile, ".local", "bin"));
+            
+            // nvm
+            var nvmDir = Environment.GetEnvironmentVariable("NVM_DIR") 
+                         ?? Path.Combine(userProfile, ".nvm");
+            if (Directory.Exists(nvmDir))
+            {
+                // Try to find the current node version's bin directory
+                var versionsDir = Path.Combine(nvmDir, "versions", "node");
+                if (Directory.Exists(versionsDir))
+                {
+                    try
+                    {
+                        foreach (var versionDir in Directory.GetDirectories(versionsDir))
+                        {
+                            searchPaths.Add(Path.Combine(versionDir, "bin"));
+                        }
+                    }
+                    catch { /* ignore */ }
+                }
+            }
+            
+            // pnpm
+            searchPaths.Add(Path.Combine(userProfile, ".local", "share", "pnpm"));
+            
+            // yarn
+            searchPaths.Add(Path.Combine(userProfile, ".yarn", "bin"));
+            
+            // Homebrew (macOS)
+            searchPaths.Add("/opt/homebrew/bin");
+            searchPaths.Add("/usr/local/Cellar");
+            
+            // Volta
+            searchPaths.Add(Path.Combine(userProfile, ".volta", "bin"));
+            
+            // asdf
+            searchPaths.Add(Path.Combine(userProfile, ".asdf", "shims"));
+        }
+
+        // Search all paths
+        foreach (var searchPath in searchPaths.Where(p => !string.IsNullOrWhiteSpace(p)))
         {
             foreach (var ext in extensions)
             {
-                var fullPath = Path.Combine(path, executableName + ext);
+                var fullPath = Path.Combine(searchPath, executableName + ext);
                 if (File.Exists(fullPath))
                 {
+                    _logger.LogDebug("Found OpenCode at: {Path}", fullPath);
                     return fullPath;
                 }
             }
         }
 
         // If not found, return the original name and let the process fail with a clear error
+        _logger.LogWarning(
+            "Could not find '{ExecutableName}' in PATH or common installation locations. " +
+            "Searched {PathCount} directories. The process may fail to start.",
+            executableName, searchPaths.Count);
+        
         return executableName;
     }
 
-    public int AllocatePort()
-    {
-        if (_allocatedCount >= _options.MaxConcurrentServers)
-        {
-            throw new InvalidOperationException(
-                $"Maximum concurrent servers ({_options.MaxConcurrentServers}) reached. Stop a server before starting a new one.");
-        }
-
-        // Try to reuse a released port first
-        if (_releasedPorts.TryTake(out var releasedPort))
-        {
-            _allocatedCount++;
-            return releasedPort;
-        }
-
-        var port = _nextPort;
-        _nextPort++;
-        _allocatedCount++;
-        return port;
-    }
-
-    public void ReleasePort(int port)
-    {
-        _releasedPorts.Add(port);
-        _allocatedCount--;
-    }
-
-    public async Task<OpenCodeServer> StartServerAsync(string pullRequestId, string worktreePath, CancellationToken ct = default)
+    public async Task<OpenCodeServer> StartServerAsync(string pullRequestId, string worktreePath, bool continueSession = false, CancellationToken ct = default)
     {
         // Check if already running
         if (_servers.TryGetValue(pullRequestId, out var existing))
@@ -112,18 +200,19 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
             _servers.TryRemove(pullRequestId, out _);
         }
 
-        var port = AllocatePort();
+        var port = _portAllocationService.AllocatePort();
         var server = new OpenCodeServer
         {
             PullRequestId = pullRequestId,
             WorktreePath = worktreePath,
             Port = port,
-            Status = OpenCodeServerStatus.Starting
+            Status = OpenCodeServerStatus.Starting,
+            ContinueSession = continueSession
         };
 
         try
         {
-            var process = StartServerProcess(port, worktreePath);
+            var process = StartServerProcess(port, worktreePath, continueSession);
             server.Process = process;
 
             if (!_servers.TryAdd(pullRequestId, server))
@@ -142,11 +231,11 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
         {
             server.Status = OpenCodeServerStatus.Failed;
             _servers.TryRemove(pullRequestId, out _);
-            ReleasePort(port);
+            _portAllocationService.ReleasePort(port);
             
             if (server.Process is { HasExited: false })
             {
-                try { server.Process.Kill(); } catch { /* ignore */ }
+                try { server.Process.Kill(entireProcessTree: true); } catch { /* ignore */ }
             }
             
             _logger.LogError(ex, "Failed to start OpenCode server for PR {PullRequestId}", pullRequestId);
@@ -162,20 +251,33 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
             return;
         }
 
+        _logger.LogInformation(
+            "Stopping OpenCode server for PR {PullRequestId}, port {Port}, PID {ProcessId}",
+            pullRequestId, server.Port, server.Process?.Id);
+
         if (server.Process is { HasExited: false })
         {
             try
             {
-                server.Process.Kill();
+                // On Windows, .cmd scripts spawn child processes that need to be killed separately
+                // Use Kill(entireProcessTree: true) to kill the process and all its children
+                _logger.LogDebug("Killing process tree for PID {ProcessId}", server.Process.Id);
+                server.Process.Kill(entireProcessTree: true);
                 await server.Process.WaitForExitAsync(ct);
+                _logger.LogDebug("Process {ProcessId} exited with code {ExitCode}", 
+                    server.Process.Id, server.Process.ExitCode);
             }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Error killing server process for PR {PullRequestId}", pullRequestId);
             }
         }
+        else
+        {
+            _logger.LogDebug("Process already exited for PR {PullRequestId}", pullRequestId);
+        }
 
-        ReleasePort(server.Port);
+        _portAllocationService.ReleasePort(server.Port);
         server.Status = OpenCodeServerStatus.Stopped;
         _logger.LogInformation("OpenCode server stopped for PR {PullRequestId}", pullRequestId);
     }
@@ -206,12 +308,18 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
         }
     }
 
-    private Process StartServerProcess(int port, string workingDirectory)
+    private Process StartServerProcess(int port, string workingDirectory, bool continueSession = false)
     {
+        var arguments = $"serve --port {port} --hostname 127.0.0.1";
+        if (continueSession)
+        {
+            arguments += " --continue";
+        }
+        
         var startInfo = new ProcessStartInfo
         {
             FileName = _resolvedExecutablePath,
-            Arguments = $"serve --port {port} --hostname 127.0.0.1",
+            Arguments = arguments,
             WorkingDirectory = workingDirectory,
             UseShellExecute = false,
             RedirectStandardOutput = true,
@@ -269,7 +377,8 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
             {
                 try
                 {
-                    server.Process.Kill();
+                    _logger.LogDebug("Disposing: killing process tree for PID {ProcessId}", server.Process.Id);
+                    server.Process.Kill(entireProcessTree: true);
                 }
                 catch (Exception ex)
                 {

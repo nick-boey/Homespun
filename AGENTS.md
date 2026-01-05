@@ -125,6 +125,8 @@ dotnet ef migrations add <MigrationName>
 ### GitHub (Features/GitHub/)
 - **GitHubService**: GitHub PR synchronization using Octokit
 - **GitHubClientWrapper**: Octokit abstraction for testability
+- **ReviewPollingService**: Background service polling GitHub for PR reviews (60s interval)
+- **PullRequestReviewInfo**: Review data models (ReviewSummary with approval/comment counts)
 
 ### Projects (Features/Projects/)
 - **ProjectService**: CRUD operations for projects
@@ -137,6 +139,15 @@ dotnet ef migrations add <MigrationName>
 ### Roadmap (Features/Roadmap/)
 - **RoadmapService**: Roadmap file loading and future change calculations
 - **RoadmapParser**: YAML roadmap file parsing
+- **FutureChangeTransitionService**: Status transitions for roadmap changes (Pending → InProgress → AwaitingPR → Complete)
+
+### OpenCode (Features/OpenCode/)
+- **AgentWorkflowService**: End-to-end agent workflow orchestration
+- **AgentCompletionMonitor**: Monitors agent completion and triggers status transitions
+- **OpenCodeClient**: HTTP client for OpenCode server API
+- **OpenCodeServerManager**: Manages OpenCode server lifecycle
+- **OpenCodeConfigGenerator**: Generates OpenCode configuration files
+- **AgentHub**: SignalR hub for real-time agent updates
 
 ## Configuration
 

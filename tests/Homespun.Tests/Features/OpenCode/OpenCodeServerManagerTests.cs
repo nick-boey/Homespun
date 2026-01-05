@@ -11,6 +11,7 @@ namespace Homespun.Tests.Features.OpenCode;
 public class OpenCodeServerManagerTests
 {
     private Mock<IOpenCodeClient> _mockClient = null!;
+    private Mock<IPortAllocationService> _mockPortAllocationService = null!;
     private Mock<ILogger<OpenCodeServerManager>> _mockLogger = null!;
     private IOptions<OpenCodeOptions> _options = null!;
     private OpenCodeServerManager _manager = null!;
@@ -19,6 +20,7 @@ public class OpenCodeServerManagerTests
     public void SetUp()
     {
         _mockClient = new Mock<IOpenCodeClient>();
+        _mockPortAllocationService = new Mock<IPortAllocationService>();
         _mockLogger = new Mock<ILogger<OpenCodeServerManager>>();
         _options = Options.Create(new OpenCodeOptions
         {
@@ -27,49 +29,22 @@ public class OpenCodeServerManagerTests
             ServerStartTimeoutMs = 1000,
             ExecutablePath = "opencode"
         });
-        _manager = new OpenCodeServerManager(_options, _mockClient.Object, _mockLogger.Object);
+        
+        // Default port allocation behavior
+        var nextPort = 5000;
+        _mockPortAllocationService.Setup(p => p.AllocatePort()).Returns(() => nextPort++);
+        
+        _manager = new OpenCodeServerManager(
+            _options, 
+            _mockClient.Object, 
+            _mockPortAllocationService.Object, 
+            _mockLogger.Object);
     }
 
     [TearDown]
     public void TearDown()
     {
         _manager.Dispose();
-    }
-
-    [Test]
-    public void AllocatePort_ReturnsBasePort_WhenNoServersRunning()
-    {
-        var port = _manager.AllocatePort();
-        Assert.That(port, Is.EqualTo(5000));
-    }
-
-    [Test]
-    public void AllocatePort_ReturnsNextPort_AfterFirstAllocation()
-    {
-        _manager.AllocatePort();
-        var port = _manager.AllocatePort();
-        Assert.That(port, Is.EqualTo(5001));
-    }
-
-    [Test]
-    public void AllocatePort_ReusesReleasedPort()
-    {
-        var port1 = _manager.AllocatePort();
-        _manager.AllocatePort();
-        _manager.ReleasePort(port1);
-        
-        var port3 = _manager.AllocatePort();
-        Assert.That(port3, Is.EqualTo(port1));
-    }
-
-    [Test]
-    public void AllocatePort_ThrowsWhenMaxServersReached()
-    {
-        _manager.AllocatePort();
-        _manager.AllocatePort();
-        _manager.AllocatePort();
-        
-        Assert.Throws<InvalidOperationException>(() => _manager.AllocatePort());
     }
 
     [Test]
@@ -139,4 +114,35 @@ public class OpenCodeServerManagerTests
         
         Assert.That(result, Is.False);
     }
+
+    #region ContinueSession Tests
+
+    [Test]
+    public void OpenCodeServer_ContinueSession_DefaultsToFalse()
+    {
+        var server = new OpenCodeServer
+        {
+            PullRequestId = "pr-123",
+            WorktreePath = "/path/to/worktree",
+            Port = 5000
+        };
+        
+        Assert.That(server.ContinueSession, Is.False);
+    }
+
+    [Test]
+    public void OpenCodeServer_ContinueSession_CanBeSetToTrue()
+    {
+        var server = new OpenCodeServer
+        {
+            PullRequestId = "pr-123",
+            WorktreePath = "/path/to/worktree",
+            Port = 5000,
+            ContinueSession = true
+        };
+        
+        Assert.That(server.ContinueSession, Is.True);
+    }
+
+    #endregion
 }

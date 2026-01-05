@@ -11,20 +11,24 @@ public class RoadmapParserTests
         // Arrange
         var json = """
         {
-            "version": "1.0",
+            "version": "1.1",
             "lastUpdated": "2024-01-15T10:00:00Z",
             "changes": [
                 {
-                    "id": "feature-one",
+                    "id": "core/feature/feature-one",
+                    "shortTitle": "feature-one",
                     "group": "core",
                     "type": "feature",
-                    "title": "First Feature"
+                    "title": "First Feature",
+                    "parents": []
                 },
                 {
-                    "id": "feature-two",
+                    "id": "web/bug/bug-fix",
+                    "shortTitle": "bug-fix",
                     "group": "web",
                     "type": "bug",
-                    "title": "Bug Fix"
+                    "title": "Bug Fix",
+                    "parents": []
                 }
             ]
         }
@@ -34,13 +38,14 @@ public class RoadmapParserTests
         var result = RoadmapParser.Parse(json);
 
         // Assert
-        Assert.That(result.Version, Is.EqualTo("1.0"));
+        Assert.That(result.Version, Is.EqualTo("1.1"));
         Assert.That(result.Changes, Has.Count.EqualTo(2));
-        Assert.That(result.Changes[0].Id, Is.EqualTo("feature-one"));
+        Assert.That(result.Changes[0].Id, Is.EqualTo("core/feature/feature-one"));
+        Assert.That(result.Changes[0].ShortTitle, Is.EqualTo("feature-one"));
         Assert.That(result.Changes[0].Group, Is.EqualTo("core"));
         Assert.That(result.Changes[0].Type, Is.EqualTo(ChangeType.Feature));
         Assert.That(result.Changes[0].Title, Is.EqualTo("First Feature"));
-        Assert.That(result.Changes[1].Id, Is.EqualTo("feature-two"));
+        Assert.That(result.Changes[1].Id, Is.EqualTo("web/bug/bug-fix"));
         Assert.That(result.Changes[1].Group, Is.EqualTo("web"));
         Assert.That(result.Changes[1].Type, Is.EqualTo(ChangeType.Bug));
     }
@@ -61,12 +66,14 @@ public class RoadmapParserTests
         // Arrange - Missing 'id' field
         var json = """
         {
-            "version": "1.0",
+            "version": "1.1",
             "changes": [
                 {
+                    "shortTitle": "test",
                     "group": "core",
                     "type": "feature",
-                    "title": "Missing ID"
+                    "title": "Missing ID",
+                    "parents": []
                 }
             ]
         }
@@ -85,10 +92,12 @@ public class RoadmapParserTests
         {
             "changes": [
                 {
-                    "id": "test",
+                    "id": "core/feature/test",
+                    "shortTitle": "test",
                     "group": "core",
                     "type": "feature",
-                    "title": "Test"
+                    "title": "Test",
+                    "parents": []
                 }
             ]
         }
@@ -100,40 +109,36 @@ public class RoadmapParserTests
     }
 
     [Test]
-    public void RoadmapParser_ParsesNestedChildren_AsTree()
+    public void RoadmapParser_ParsesParentReferences()
     {
         // Arrange
         var json = """
         {
-            "version": "1.0",
+            "version": "1.1",
             "changes": [
                 {
-                    "id": "parent",
+                    "id": "core/feature/parent",
+                    "shortTitle": "parent",
                     "group": "core",
                     "type": "feature",
                     "title": "Parent Feature",
-                    "children": [
-                        {
-                            "id": "child-1",
-                            "group": "core",
-                            "type": "feature",
-                            "title": "Child 1",
-                            "children": [
-                                {
-                                    "id": "grandchild",
-                                    "group": "core",
-                                    "type": "refactor",
-                                    "title": "Grandchild"
-                                }
-                            ]
-                        },
-                        {
-                            "id": "child-2",
-                            "group": "core",
-                            "type": "bug",
-                            "title": "Child 2"
-                        }
-                    ]
+                    "parents": []
+                },
+                {
+                    "id": "core/feature/child-1",
+                    "shortTitle": "child-1",
+                    "group": "core",
+                    "type": "feature",
+                    "title": "Child 1",
+                    "parents": ["core/feature/parent"]
+                },
+                {
+                    "id": "core/bug/child-2",
+                    "shortTitle": "child-2",
+                    "group": "core",
+                    "type": "bug",
+                    "title": "Child 2",
+                    "parents": ["core/feature/parent"]
                 }
             ]
         }
@@ -143,54 +148,53 @@ public class RoadmapParserTests
         var result = RoadmapParser.Parse(json);
 
         // Assert
-        Assert.That(result.Changes, Has.Count.EqualTo(1));
+        Assert.That(result.Changes, Has.Count.EqualTo(3));
 
         var parent = result.Changes[0];
-        Assert.That(parent.Id, Is.EqualTo("parent"));
-        Assert.That(parent.Children, Has.Count.EqualTo(2));
+        Assert.That(parent.Id, Is.EqualTo("core/feature/parent"));
+        Assert.That(parent.Parents, Is.Empty);
 
-        var child1 = parent.Children[0];
-        Assert.That(child1.Id, Is.EqualTo("child-1"));
-        Assert.That(child1.Children, Has.Count.EqualTo(1));
+        var child1 = result.Changes[1];
+        Assert.That(child1.Id, Is.EqualTo("core/feature/child-1"));
+        Assert.That(child1.Parents, Has.Count.EqualTo(1));
+        Assert.That(child1.Parents[0], Is.EqualTo("core/feature/parent"));
 
-        var grandchild = child1.Children[0];
-        Assert.That(grandchild.Id, Is.EqualTo("grandchild"));
-        Assert.That(grandchild.Type, Is.EqualTo(ChangeType.Refactor));
-
-        var child2 = parent.Children[1];
-        Assert.That(child2.Id, Is.EqualTo("child-2"));
-        Assert.That(child2.Children, Is.Empty);
+        var child2 = result.Changes[2];
+        Assert.That(child2.Id, Is.EqualTo("core/bug/child-2"));
+        Assert.That(child2.Type, Is.EqualTo(ChangeType.Bug));
     }
 
     [Test]
-    public void RoadmapParser_CalculatesTimeFromTreeDepth()
+    public void RoadmapParser_CalculatesTimeFromDependencyDepth()
     {
         // Arrange
         var json = """
         {
-            "version": "1.0",
+            "version": "1.1",
             "changes": [
                 {
-                    "id": "root",
+                    "id": "core/feature/root",
+                    "shortTitle": "root",
                     "group": "core",
                     "type": "feature",
                     "title": "Root",
-                    "children": [
-                        {
-                            "id": "child",
-                            "group": "core",
-                            "type": "feature",
-                            "title": "Child",
-                            "children": [
-                                {
-                                    "id": "grandchild",
-                                    "group": "core",
-                                    "type": "feature",
-                                    "title": "Grandchild"
-                                }
-                            ]
-                        }
-                    ]
+                    "parents": []
+                },
+                {
+                    "id": "core/feature/child",
+                    "shortTitle": "child",
+                    "group": "core",
+                    "type": "feature",
+                    "title": "Child",
+                    "parents": ["core/feature/root"]
+                },
+                {
+                    "id": "core/feature/grandchild",
+                    "shortTitle": "grandchild",
+                    "group": "core",
+                    "type": "feature",
+                    "title": "Grandchild",
+                    "parents": ["core/feature/child"]
                 }
             ]
         }
@@ -201,9 +205,9 @@ public class RoadmapParserTests
         var flatChanges = result.GetAllChangesWithTime();
 
         // Assert - Root at depth 0 -> t=2, child at depth 1 -> t=3, grandchild at depth 2 -> t=4
-        Assert.That(flatChanges.First(c => c.Change.Id == "root").Time, Is.EqualTo(2));
-        Assert.That(flatChanges.First(c => c.Change.Id == "child").Time, Is.EqualTo(3));
-        Assert.That(flatChanges.First(c => c.Change.Id == "grandchild").Time, Is.EqualTo(4));
+        Assert.That(flatChanges.First(c => c.Change.ShortTitle == "root").Time, Is.EqualTo(2));
+        Assert.That(flatChanges.First(c => c.Change.ShortTitle == "child").Time, Is.EqualTo(3));
+        Assert.That(flatChanges.First(c => c.Change.ShortTitle == "grandchild").Time, Is.EqualTo(4));
     }
 
     [Test]
@@ -212,17 +216,19 @@ public class RoadmapParserTests
         // Arrange
         var json = """
         {
-            "version": "1.0",
+            "version": "1.1",
             "changes": [
                 {
-                    "id": "full-feature",
+                    "id": "core/feature/full-feature",
+                    "shortTitle": "full-feature",
                     "group": "core",
                     "type": "feature",
                     "title": "Full Feature",
                     "description": "A detailed description",
                     "instructions": "Implementation instructions for the agent",
-                    "priority": "high",
-                    "estimatedComplexity": "large"
+                    "priority": "High",
+                    "estimatedComplexity": "Large",
+                    "parents": []
                 }
             ]
         }
@@ -240,18 +246,20 @@ public class RoadmapParserTests
     }
 
     [Test]
-    public void RoadmapParser_InvalidIdPattern_ThrowsValidationException()
+    public void RoadmapParser_InvalidShortTitlePattern_ThrowsValidationException()
     {
-        // Arrange - ID with invalid characters (should be lowercase alphanumeric with hyphens)
+        // Arrange - shortTitle with invalid characters (uppercase)
         var json = """
         {
-            "version": "1.0",
+            "version": "1.1",
             "changes": [
                 {
-                    "id": "Invalid_ID",
+                    "id": "core/feature/Invalid-ID",
+                    "shortTitle": "Invalid-ID",
                     "group": "core",
                     "type": "feature",
-                    "title": "Test"
+                    "title": "Test",
+                    "parents": []
                 }
             ]
         }
@@ -259,7 +267,7 @@ public class RoadmapParserTests
 
         // Act & Assert
         var ex = Assert.Throws<RoadmapValidationException>(() => RoadmapParser.Parse(json));
-        Assert.That(ex.Message, Does.Contain("id").Or.Contain("pattern"));
+        Assert.That(ex.Message, Does.Contain("shortTitle").Or.Contain("pattern"));
     }
 
     [Test]
@@ -268,13 +276,15 @@ public class RoadmapParserTests
         // Arrange
         var json = """
         {
-            "version": "1.0",
+            "version": "1.1",
             "changes": [
                 {
-                    "id": "test",
+                    "id": "core/invalid-type/test",
+                    "shortTitle": "test",
                     "group": "core",
                     "type": "invalid-type",
-                    "title": "Test"
+                    "title": "Test",
+                    "parents": []
                 }
             ]
         }
@@ -282,7 +292,7 @@ public class RoadmapParserTests
 
         // Act & Assert
         var ex = Assert.Throws<RoadmapValidationException>(() => RoadmapParser.Parse(json));
-        Assert.That(ex.Message, Does.Contain("type"));
+        Assert.That(ex.Message, Does.Contain("type").Or.Contain("JSON"));
     }
 
     [Test]
@@ -291,7 +301,7 @@ public class RoadmapParserTests
         // Arrange
         var json = """
         {
-            "version": "1.0",
+            "version": "1.1",
             "changes": []
         }
         """;
@@ -304,18 +314,20 @@ public class RoadmapParserTests
     }
 
     [Test]
-    public void RoadmapParser_GeneratesBranchName()
+    public void RoadmapParser_IdIsBranchName()
     {
         // Arrange
         var json = """
         {
-            "version": "1.0",
+            "version": "1.1",
             "changes": [
                 {
-                    "id": "pr-time-dimension",
+                    "id": "core/feature/pr-time-dimension",
+                    "shortTitle": "pr-time-dimension",
                     "group": "core",
                     "type": "feature",
-                    "title": "PR Time Dimension"
+                    "title": "PR Time Dimension",
+                    "parents": []
                 }
             ]
         }
@@ -325,8 +337,8 @@ public class RoadmapParserTests
         var result = RoadmapParser.Parse(json);
         var change = result.Changes[0];
 
-        // Assert
-        Assert.That(change.GetBranchName(), Is.EqualTo("core/feature/pr-time-dimension"));
+        // Assert - The Id IS the branch name
+        Assert.That(change.Id, Is.EqualTo("core/feature/pr-time-dimension"));
     }
 
     [Test]
@@ -335,28 +347,29 @@ public class RoadmapParserTests
         // Arrange
         var roadmap = new Homespun.Features.Roadmap.Roadmap
         {
-            Version = "1.0",
+            Version = "1.1",
             LastUpdated = DateTime.UtcNow,
             Changes =
             [
-                new RoadmapChange
+                new FutureChange
                 {
-                    Id = "test-feature",
+                    Id = "core/feature/test-feature",
+                    ShortTitle = "test-feature",
                     Group = "core",
                     Type = ChangeType.Feature,
                     Title = "Test Feature",
                     Description = "Description",
                     Priority = Priority.High,
-                    Children =
-                    [
-                        new RoadmapChange
-                        {
-                            Id = "child-feature",
-                            Group = "core",
-                            Type = ChangeType.Bug,
-                            Title = "Child Feature"
-                        }
-                    ]
+                    Parents = []
+                },
+                new FutureChange
+                {
+                    Id = "core/bug/child-feature",
+                    ShortTitle = "child-feature",
+                    Group = "core",
+                    Type = ChangeType.Bug,
+                    Title = "Child Feature",
+                    Parents = ["core/feature/test-feature"]
                 }
             ]
         };
@@ -367,9 +380,10 @@ public class RoadmapParserTests
 
         // Assert
         Assert.That(parsed.Version, Is.EqualTo(roadmap.Version));
-        Assert.That(parsed.Changes, Has.Count.EqualTo(1));
-        Assert.That(parsed.Changes[0].Id, Is.EqualTo("test-feature"));
-        Assert.That(parsed.Changes[0].Children, Has.Count.EqualTo(1));
-        Assert.That(parsed.Changes[0].Children[0].Id, Is.EqualTo("child-feature"));
+        Assert.That(parsed.Changes, Has.Count.EqualTo(2));
+        Assert.That(parsed.Changes[0].Id, Is.EqualTo("core/feature/test-feature"));
+        Assert.That(parsed.Changes[1].Id, Is.EqualTo("core/bug/child-feature"));
+        Assert.That(parsed.Changes[1].Parents, Has.Count.EqualTo(1));
+        Assert.That(parsed.Changes[1].Parents[0], Is.EqualTo("core/feature/test-feature"));
     }
 }

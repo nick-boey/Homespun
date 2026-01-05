@@ -5,6 +5,7 @@ namespace Homespun.Features.Roadmap;
 
 /// <summary>
 /// Represents the ROADMAP.json file structure containing future planned changes.
+/// Uses a flat list with parent references (DAG structure) for dependencies.
 /// </summary>
 public class Roadmap
 {
@@ -15,32 +16,68 @@ public class Roadmap
     public DateTime? LastUpdated { get; set; }
 
     [JsonPropertyName("changes")]
-    public List<RoadmapChange> Changes { get; set; } = [];
+    public List<FutureChange> Changes { get; set; } = [];
 
     /// <summary>
-    /// Gets all changes flattened with their calculated time values.
+    /// Gets all changes with their calculated time values based on dependency depth.
+    /// Depth is calculated from the longest parent chain.
     /// </summary>
-    public List<(RoadmapChange Change, int Time, int Depth)> GetAllChangesWithTime()
+    public List<(FutureChange Change, int Time, int Depth)> GetAllChangesWithTime()
     {
-        var result = new List<(RoadmapChange, int, int)>();
-        CollectChanges(Changes, 0, result);
+        // Build a lookup for fast parent resolution
+        var changeLookup = Changes.ToDictionary(c => c.Id, c => c);
+        var depthCache = new Dictionary<string, int>();
+
+        var result = new List<(FutureChange, int, int)>();
+
+        foreach (var change in Changes)
+        {
+            var depth = CalculateDepth(change, changeLookup, depthCache);
+            var time = PullRequestTimeCalculator.CalculateTimeForFutureChange(depth);
+            result.Add((change, time, depth));
+        }
+
         return result;
     }
 
-    private static void CollectChanges(
-        List<RoadmapChange> changes,
-        int depth,
-        List<(RoadmapChange, int, int)> result)
+    /// <summary>
+    /// Calculates the depth of a change based on its longest parent chain.
+    /// A change with no parents has depth 0.
+    /// A change with parents has depth = max(parent depths) + 1.
+    /// </summary>
+    private static int CalculateDepth(
+        FutureChange change,
+        Dictionary<string, FutureChange> lookup,
+        Dictionary<string, int> cache)
     {
-        foreach (var change in changes)
+        // Check cache first
+        if (cache.TryGetValue(change.Id, out var cachedDepth))
         {
-            var time = PullRequestTimeCalculator.CalculateTimeForFutureChange(depth);
-            result.Add((change, time, depth));
-
-            if (change.Children.Count > 0)
-            {
-                CollectChanges(change.Children, depth + 1, result);
-            }
+            return cachedDepth;
         }
+
+        // No parents = root level = depth 0
+        if (change.Parents.Count == 0)
+        {
+            cache[change.Id] = 0;
+            return 0;
+        }
+
+        // Calculate max parent depth
+        var maxParentDepth = 0;
+        foreach (var parentId in change.Parents)
+        {
+            if (lookup.TryGetValue(parentId, out var parent))
+            {
+                var parentDepth = CalculateDepth(parent, lookup, cache);
+                maxParentDepth = Math.Max(maxParentDepth, parentDepth);
+            }
+            // If parent not found, treat as if it's at depth -1 (external dependency)
+            // This means this change would be at depth 0
+        }
+
+        var depth = maxParentDepth + 1;
+        cache[change.Id] = depth;
+        return depth;
     }
 }

@@ -51,4 +51,14 @@ public interface IGitHubService
     /// Link a pull request number to a feature
     /// </summary>
     Task<bool> LinkPullRequestAsync(string featureId, int prNumber);
+
+    /// <summary>
+    /// Get reviews for a pull request
+    /// </summary>
+    Task<ReviewSummary> GetPullRequestReviewsAsync(string projectId, int prNumber);
+
+    /// <summary>
+    /// Merge a pull request using the GitHub API
+    /// </summary>
+    Task<bool> MergePullRequestAsync(string projectId, int prNumber, string? commitMessage = null);
 }

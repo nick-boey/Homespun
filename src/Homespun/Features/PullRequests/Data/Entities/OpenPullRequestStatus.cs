@@ -10,5 +10,11 @@ public enum OpenPullRequestStatus
     InDevelopment,
 
     /// <summary>Ready for code review on GitHub</summary>
-    ReadyForReview
+    ReadyForReview,
+
+    /// <summary>Has review comments that need to be addressed</summary>
+    HasReviewComments,
+
+    /// <summary>PR has been approved and is ready to merge</summary>
+    Approved
 }

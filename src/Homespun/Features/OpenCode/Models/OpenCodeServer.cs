@@ -16,6 +16,11 @@ public class OpenCodeServer
     public DateTime StartedAt { get; init; } = DateTime.UtcNow;
     public OpenCodeServerStatus Status { get; set; } = OpenCodeServerStatus.Starting;
     public string? ActiveSessionId { get; set; }
+    
+    /// <summary>
+    /// Whether the server was started with --continue to resume an existing session.
+    /// </summary>
+    public bool ContinueSession { get; init; }
 }
 
 public enum OpenCodeServerStatus

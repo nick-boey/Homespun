@@ -28,13 +28,15 @@ development as a tree where each node represents a feature or fix that correspon
 
 Features are color-coded by status:
 
-| Status           | Color  | Description                            |
-|------------------|--------|----------------------------------------|
-| Merged           | Blue   | Complete and merged into target branch |
-| Cancelled        | Red    | Closed without merging                 |
-| In Development   | Yellow | Active development in progress         |
-| Ready for Review | Green  | PR created, awaiting human review      |
-| Future           | Grey   | Planned but not yet started            |
+| Status              | Color   | Description                              |
+|---------------------|---------|------------------------------------------|
+| Merged              | Blue    | Complete and merged into target branch   |
+| Cancelled           | Red     | Closed without merging                   |
+| In Development      | Yellow  | Active development in progress           |
+| Ready for Review    | Green   | PR created, awaiting human review        |
+| Has Review Comments | Orange  | PR has review comments needing attention |
+| Approved            | Cyan    | PR approved and ready to merge           |
+| Future              | Grey    | Planned but not yet started              |
 
 ## 3. Technical Architecture
 
@@ -133,6 +135,9 @@ Homespun/
 | `SystemPromptService`      | Template processing for agent system prompts                      |
 | `ClaudeCodeProcessManager` | Process lifecycle for Claude Code CLI instances                   |
 | `MessageParser`            | Parse JSON output from Claude Code agents                         |
+| `FutureChangeTransitionService` | Status transitions for roadmap changes (Pending → InProgress → AwaitingPR → Complete) |
+| `ReviewPollingService`     | Background service polling GitHub for PR reviews                  |
+| `AgentWorkflowService`     | End-to-end agent workflow orchestration                          |
 
 ## 4. Functional Requirements
 
@@ -358,3 +363,103 @@ System prompts support the following template variables:
 | `{{WorktreePath}}`       | Absolute path to the worktree directory      |
 | `{{ParentFeature}}`      | Title of the parent feature (if any)         |
 | `{{ChildFeatures}}`      | Comma-separated list of child feature titles |
+
+## 10. Agent Workflow
+
+### 10.1 Workflow Overview
+
+The agent workflow automates the development lifecycle from roadmap planning to PR merge:
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        Agent Workflow Lifecycle                          │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  ROADMAP.json          Agent Started           PR Created              │
+│  ┌──────────┐         ┌────────────┐         ┌────────────┐            │
+│  │ Pending  │────────>│ InProgress │────────>│ AwaitingPR │            │
+│  └──────────┘         └────────────┘         └────────────┘            │
+│       │                     │                      │                     │
+│       │                     │ (failure)            │ (merged)           │
+│       │<────────────────────┘                      v                     │
+│                                              ┌────────────┐            │
+│                                              │  Complete  │            │
+│                                              └────────────┘            │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### 10.2 Future Change Status
+
+Roadmap changes (`ROADMAP.json`) have the following status flow:
+
+| Status      | Description                                      |
+|-------------|--------------------------------------------------|
+| Pending     | Change is planned but not started                |
+| InProgress  | Agent is actively working on the change          |
+| AwaitingPR  | PR has been created, awaiting review/merge       |
+| Complete    | PR has been merged                               |
+
+### 10.3 Open PR Status
+
+Open PRs are tracked with detailed review status:
+
+| Status           | Description                                        |
+|------------------|---------------------------------------------------|
+| InDevelopment    | Work in progress, agent may be active              |
+| ReadyForReview   | Agent completed, PR ready for human review         |
+| HasReviewComments| PR has review comments needing attention           |
+| Approved         | PR approved and ready to merge                     |
+
+### 10.4 Workflow Services
+
+- **AgentWorkflowService**: Orchestrates the end-to-end workflow:
+  - Starts OpenCode agent for a feature
+  - Monitors agent completion
+  - Handles success/failure transitions
+  
+- **FutureChangeTransitionService**: Manages roadmap status:
+  - Updates `ROADMAP.json` when status changes
+  - Broadcasts status changes via SignalR
+  - Handles agent failure recovery
+
+- **ReviewPollingService**: Background polling for reviews:
+  - Polls GitHub every 60 seconds (configurable)
+  - Updates PR status based on review state
+  - Broadcasts review updates via SignalR
+
+### 10.5 SignalR Events
+
+Agent workflow events broadcast via SignalR:
+
+| Event                      | Payload                                  | Description                    |
+|---------------------------|------------------------------------------|--------------------------------|
+| `FutureChangeStatusChanged` | projectId, changeId, newStatus         | Roadmap change status updated  |
+| `PullRequestReviewsUpdated` | projectId, prId, prNumber, reviews     | PR review state changed        |
+| `AgentStarted`             | pullRequestId, agentStatus              | Agent started for a PR         |
+| `AgentStopped`             | pullRequestId                           | Agent stopped                  |
+| `AgentEvent`               | pullRequestId, event                    | Agent activity event           |
+
+## 11. Later (Future Enhancements)
+
+The following features are planned for future implementation:
+
+### 11.1 GitHub Webhooks
+
+Replace polling with real-time webhook notifications:
+- **PR Review Events**: Instant notification when reviews are submitted
+- **PR Merge Events**: Trigger rebase of dependent branches
+- **Check Events**: CI/CD status updates
+
+### 11.2 Automatic Review Response
+
+Configure agents to automatically respond to review comments:
+- Parse review comment content
+- Generate responses using AI
+- Create review responses or code fixes
+
+### 11.3 Multi-Agent Coordination
+
+Support multiple agents working on related features:
+- Dependency-aware task assignment
+- Conflict detection and resolution
+- Coordinated rebasing

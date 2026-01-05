@@ -44,6 +44,21 @@ public class PullRequestInfo
     public bool HasUnresolvedComments { get; set; }
 
     /// <summary>
+    /// Total number of review comments on this PR.
+    /// </summary>
+    public int ReviewCommentCount { get; set; }
+
+    /// <summary>
+    /// Number of pending review requests (changes requested).
+    /// </summary>
+    public int ChangesRequestedCount { get; set; }
+
+    /// <summary>
+    /// Number of approvals on this PR.
+    /// </summary>
+    public int ApprovalCount { get; set; }
+
+    /// <summary>
     /// Validates that the PR state is consistent.
     /// </summary>
     public bool IsValid()

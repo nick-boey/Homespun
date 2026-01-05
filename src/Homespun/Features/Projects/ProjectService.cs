@@ -2,6 +2,7 @@ using Homespun.Features.Commands;
 using Homespun.Features.GitHub;
 using Homespun.Features.PullRequests.Data;
 using Homespun.Features.PullRequests.Data.Entities;
+using Homespun.Features.Roadmap.Sync;
 
 namespace Homespun.Features.Projects;
 
@@ -21,7 +22,8 @@ public class CreateProjectResult
 public class ProjectService(
     IDataStore dataStore,
     IGitHubService gitHubService,
-    ICommandRunner commandRunner)
+    ICommandRunner commandRunner,
+    IRoadmapSyncService? roadmapSyncService = null)
 {
     /// <summary>
     /// Base path for all project worktrees.
@@ -37,9 +39,17 @@ public class ProjectService(
         return Task.FromResult(projects);
     }
 
-    public Task<Project?> GetByIdAsync(string id)
+    public async Task<Project?> GetByIdAsync(string id)
     {
-        return Task.FromResult(dataStore.GetProject(id));
+        var project = dataStore.GetProject(id);
+        
+        // Initialize local roadmap when project is loaded
+        if (project != null && roadmapSyncService != null)
+        {
+            await roadmapSyncService.InitializeLocalRoadmapAsync(project.Id);
+        }
+        
+        return project;
     }
 
     /// <summary>
@@ -100,6 +110,13 @@ public class ProjectService(
         };
 
         await dataStore.AddProjectAsync(project);
+
+        // Initialize local roadmap for new project
+        if (roadmapSyncService != null)
+        {
+            await roadmapSyncService.InitializeLocalRoadmapAsync(project.Id);
+        }
+
         return CreateProjectResult.Ok(project);
     }
 
