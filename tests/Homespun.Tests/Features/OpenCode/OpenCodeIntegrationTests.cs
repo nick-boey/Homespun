@@ -486,6 +486,31 @@ public class OpenCodeIntegrationTests
             Console.WriteLine($"Version: {health.Version}");
             Assert.That(health.Healthy, Is.True, "Server should be healthy");
 
+            // Step 4.5: Verify working directory
+            Console.WriteLine();
+            Console.WriteLine("=== Step 4.5: Verify Working Directory ===");
+            var reportedPath = await testClient.GetCurrentPathAsync(server.BaseUrl);
+            Console.WriteLine($"Reported path from /path endpoint: {reportedPath}");
+            Console.WriteLine($"Expected path: {worktreePath}");
+
+            if (reportedPath != null)
+            {
+                var normalizedReported = Path.GetFullPath(reportedPath);
+                var normalizedExpected = Path.GetFullPath(worktreePath);
+                var pathsMatch = string.Equals(normalizedReported, normalizedExpected, StringComparison.OrdinalIgnoreCase);
+                
+                Console.WriteLine($"Normalized reported: {normalizedReported}");
+                Console.WriteLine($"Normalized expected: {normalizedExpected}");
+                Console.WriteLine($"Paths match: {pathsMatch}");
+                
+                Assert.That(pathsMatch, Is.True, 
+                    $"Working directory mismatch! Expected: {normalizedExpected}, Actual: {normalizedReported}");
+            }
+            else
+            {
+                Console.WriteLine("WARNING: Could not verify working directory - /path returned null");
+            }
+
             // Step 5: Create session
             Console.WriteLine();
             Console.WriteLine("=== Step 5: Create Session ===");
