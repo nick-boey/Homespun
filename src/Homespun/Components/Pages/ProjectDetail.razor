@@ -83,13 +83,13 @@ else
                             <div class="graph-line"></div>
                         </div>
                         <div class="label-text">Current</div>
-                        @if (_rootPullRequests != null && _rootPullRequests.Count > 0)
+                        @if (GetTotalCurrentCount() > 0)
                         {
-                            <span class="section-count">@GetTotalCurrentPRCount()</span>
+                            <span class="section-count">@GetTotalCurrentCount()</span>
                         }
                     </div>
                 }
-                @if (_rootPullRequests == null || _rootPullRequests.Count == 0)
+                @if ((_rootPullRequests == null || _rootPullRequests.Count == 0) && (_inProgressChanges == null || _inProgressChanges.Count == 0))
                 {
                     <div class="timeline-section-label">
                         <div class="label-graph">
@@ -114,6 +114,25 @@ else
                                   IsFirst="false"
                                   IsLast="false"
                                   OnClick="@(() => SelectPullRequest(pr.PullRequest.Id))"/>
+                    }
+
+                    @* In-progress FutureChanges (shown in Current section) *@
+                    @if (_inProgressChanges != null)
+                    {
+                        @for (var i = 0; i < _inProgressChanges.Count; i++)
+                        {
+                            var change = _inProgressChanges[i];
+                            <WorkItem Title="@change.Change.Title"
+                                      StatusColor="@GetFutureChangeStatusColor(change.Change)"
+                                      StatusTooltip="@GetFutureChangeStatusTooltip(change.Change)"
+                                      Subtitle="@GetFutureChangeSubtitle(change.Change)"
+                                      IndentLevel="@change.Depth"
+                                      IsSelected="@(_selectedFutureChangeId == change.Change.Id)"
+                                      IsClickable="true"
+                                      IsFirst="false"
+                                      IsLast="false"
+                                      OnClick="@(() => SelectFutureChange(change.Change.Id))"/>
+                        }
                     }
                 }
 
@@ -477,6 +496,7 @@ else
     private SyncResult? _lastSyncResult;
     private List<PullRequestWithTime>? _pastPRs;
     private List<FutureChangeWithTime>? _futureChanges;
+    private List<FutureChangeWithTime>? _inProgressChanges;
     private int _pastPRsDisplayCount = 10;
 
     private record FlattenedPR(PullRequest PullRequest, int Level);
@@ -505,12 +525,20 @@ else
 
             try
             {
-                _futureChanges = await RoadmapService.GetFutureChangesAsync(Id);
+                var allChanges = await RoadmapService.GetFutureChangesAsync(Id);
+                // Separate in-progress changes (InProgress, AwaitingPR) from future changes (Pending)
+                _inProgressChanges = allChanges
+                    .Where(c => c.Change.Status is FutureChangeStatus.InProgress or FutureChangeStatus.AwaitingPR)
+                    .ToList();
+                _futureChanges = allChanges
+                    .Where(c => c.Change.Status == FutureChangeStatus.Pending)
+                    .ToList();
             }
             catch (Exception ex)
             {
                 Logger.LogWarning(ex, "Failed to load future changes for project {ProjectId}", Id);
                 _futureChanges = [];
+                _inProgressChanges = [];
             }
         }
     }
@@ -662,6 +690,11 @@ else
     private int GetTotalCurrentPRCount()
     {
         return _flattenedCurrentPRs.Count;
+    }
+
+    private int GetTotalCurrentCount()
+    {
+        return _flattenedCurrentPRs.Count + (_inProgressChanges?.Count ?? 0);
     }
 
     private static string GetPastPRStatusColor(PullRequestStatus status) => status switch

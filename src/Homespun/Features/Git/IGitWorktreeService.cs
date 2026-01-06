@@ -17,4 +17,13 @@ public interface IGitWorktreeService
     /// <param name="worktreePath">Path to the worktree directory</param>
     /// <returns>True if successful, false otherwise</returns>
     Task<bool> PullLatestAsync(string worktreePath);
+
+    /// <summary>
+    /// Fetch and update a specific branch from remote to ensure it's up to date.
+    /// This fetches the branch and updates the local ref without checking it out.
+    /// </summary>
+    /// <param name="repoPath">Path to the repository</param>
+    /// <param name="branchName">Name of the branch to update (e.g., "main")</param>
+    /// <returns>True if successful, false otherwise</returns>
+    Task<bool> FetchAndUpdateBranchAsync(string repoPath, string branchName);
 }

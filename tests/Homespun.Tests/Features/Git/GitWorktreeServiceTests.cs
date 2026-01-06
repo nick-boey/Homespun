@@ -24,7 +24,6 @@ public class GitWorktreeServiceTests
         // Arrange
         var repoPath = "/repo";
         var branchName = "feature/test";
-        var expectedWorktreePath = "/repo/.worktrees/feature-test";
 
         _mockRunner.Setup(r => r.RunAsync("git", It.IsAny<string>(), repoPath))
             .ReturnsAsync(new CommandResult { Success = true, Output = "" });
@@ -34,7 +33,8 @@ public class GitWorktreeServiceTests
 
         // Assert
         Assert.That(result, Is.Not.Null);
-        Assert.That(result, Does.Contain("feature-test"));
+        // Slashes are now preserved for folder structure
+        Assert.That(result, Does.Contain("feature/test"));
     }
 
     [Test]
@@ -140,23 +140,43 @@ public class GitWorktreeServiceTests
     }
 
     [Test]
-    public void SanitizeBranchName_RemovesSlashes()
+    public void SanitizeBranchName_PreservesSlashes()
     {
         // Act
         var result = GitWorktreeService.SanitizeBranchName("feature/new-thing");
 
-        // Assert
-        Assert.That(result, Is.EqualTo("feature-new-thing"));
+        // Assert - slashes are preserved for folder structure
+        Assert.That(result, Is.EqualTo("feature/new-thing"));
     }
 
     [Test]
-    public void SanitizeBranchName_RemovesSpecialCharacters()
+    public void SanitizeBranchName_RemovesSpecialCharactersButPreservesSlashes()
     {
         // Act
         var result = GitWorktreeService.SanitizeBranchName("feature/test@branch#1");
 
-        // Assert
-        Assert.That(result, Is.EqualTo("feature-test-branch-1"));
+        // Assert - slashes preserved, special chars replaced with dashes
+        Assert.That(result, Is.EqualTo("feature/test-branch-1"));
+    }
+
+    [Test]
+    public void SanitizeBranchName_NormalizesBackslashesToForwardSlashes()
+    {
+        // Act
+        var result = GitWorktreeService.SanitizeBranchName("app\\feature\\test");
+
+        // Assert - backslashes converted to forward slashes
+        Assert.That(result, Is.EqualTo("app/feature/test"));
+    }
+
+    [Test]
+    public void SanitizeBranchName_TrimsSlashesFromEnds()
+    {
+        // Act
+        var result = GitWorktreeService.SanitizeBranchName("/feature/test/");
+
+        // Assert - leading/trailing slashes removed
+        Assert.That(result, Is.EqualTo("feature/test"));
     }
 
     [Test]

@@ -30,6 +30,14 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
         var worktreePath = Path.Combine(parentDir, sanitizedName);
         logger.LogDebug("Worktree path will be {WorktreePath}", worktreePath);
 
+        // Ensure parent directories exist for nested branch names (e.g., app/feature/id)
+        var worktreeParentDir = Path.GetDirectoryName(worktreePath);
+        if (!string.IsNullOrEmpty(worktreeParentDir) && !Directory.Exists(worktreeParentDir))
+        {
+            logger.LogDebug("Creating parent directory {ParentDir}", worktreeParentDir);
+            Directory.CreateDirectory(worktreeParentDir);
+        }
+
         if (createBranch)
         {
             var baseRef = baseBranch ?? "HEAD";
@@ -179,15 +187,43 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
         return success;
     }
 
+    public async Task<bool> FetchAndUpdateBranchAsync(string repoPath, string branchName)
+    {
+        logger.LogDebug("Fetching and updating branch {BranchName} in repo {RepoPath}", branchName, repoPath);
+
+        // Fetch the specific branch from origin
+        var fetchResult = await commandRunner.RunAsync("git", $"fetch origin {branchName}:{branchName}", repoPath);
+        
+        if (!fetchResult.Success)
+        {
+            // Try a simple fetch if the branch update fails (might be checked out)
+            logger.LogDebug("Direct branch update failed, trying simple fetch: {Error}", fetchResult.Error);
+            var simpleFetchResult = await commandRunner.RunAsync("git", "fetch origin", repoPath);
+            
+            if (!simpleFetchResult.Success)
+            {
+                logger.LogWarning("Failed to fetch from origin in {RepoPath}: {Error}", repoPath, simpleFetchResult.Error);
+                return false;
+            }
+        }
+
+        logger.LogInformation("Successfully fetched and updated branch {BranchName}", branchName);
+        return true;
+    }
+
     public static string SanitizeBranchName(string branchName)
     {
-        // Replace slashes and special characters with dashes
-        var sanitized = Regex.Replace(branchName, @"[/\\@#\s]+", "-");
-        // Remove any remaining invalid characters
-        sanitized = Regex.Replace(sanitized, @"[^a-zA-Z0-9\-_.]", "-");
+        // Normalize path separators to forward slashes
+        var sanitized = branchName.Replace('\\', '/');
+        // Replace special characters (except forward slash) with dashes
+        sanitized = Regex.Replace(sanitized, @"[@#\s]+", "-");
+        // Remove any remaining invalid characters (keep forward slashes for folder structure)
+        sanitized = Regex.Replace(sanitized, @"[^a-zA-Z0-9\-_./]", "-");
         // Remove consecutive dashes
         sanitized = Regex.Replace(sanitized, @"-+", "-");
-        // Trim dashes from ends
-        return sanitized.Trim('-');
+        // Remove consecutive slashes
+        sanitized = Regex.Replace(sanitized, @"/+", "/");
+        // Trim dashes and slashes from ends
+        return sanitized.Trim('-', '/');
     }
 }
