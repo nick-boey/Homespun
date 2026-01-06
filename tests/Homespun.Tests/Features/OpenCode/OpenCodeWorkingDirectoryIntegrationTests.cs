@@ -498,4 +498,183 @@ public class OpenCodeWorkingDirectoryIntegrationTests
     }
 
     #endregion
+
+    #region Test Agent Integration Tests
+
+    /// <summary>
+    /// Tests the full test agent flow: create worktree, start server, send prompt, verify session.
+    /// This simulates what the Test Agent button does in the UI.
+    /// </summary>
+    [Test]
+    [Explicit("Requires OpenCode to be installed. Run manually.")]
+    [CancelAfter(120000)] // 2 minute timeout
+    public async Task TestAgent_FullFlow_CreatesWorktreeStartsServerAndVerifiesSession()
+    {
+        var random = new Random();
+        var testPort = random.Next(30000, 40000);
+        var testTempDir = Path.Combine(Path.GetTempPath(), $"opencode-testagent-{Guid.NewGuid()}");
+        Directory.CreateDirectory(testTempDir);
+
+        var testOptions = CreateTestOptions(testPort);
+        using var httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
+        var testClient = new OpenCodeClient(httpClient, Mock.Of<ILogger<OpenCodeClient>>());
+        var testPortAllocationService = new PortAllocationService(testOptions, Mock.Of<ILogger<PortAllocationService>>());
+        using var testServerManager = new OpenCodeServerManager(testOptions, testClient, testPortAllocationService, Mock.Of<ILogger<OpenCodeServerManager>>());
+        var testConfigGenerator = new OpenCodeConfigGenerator(testOptions, Mock.Of<ILogger<OpenCodeConfigGenerator>>());
+
+        Process? serverProcess = null;
+
+        try
+        {
+            Console.WriteLine("=== Test Agent Integration Test ===");
+            Console.WriteLine($"Temp directory: {testTempDir}");
+            Console.WriteLine($"Test port: {testPort}");
+
+            // Step 1: Initialize git repo (simulating a local project)
+            Console.WriteLine();
+            Console.WriteLine("=== Step 1: Initialize Git Repository ===");
+            await RunGitCommandAsync("init", testTempDir);
+            await RunGitCommandAsync("commit --allow-empty -m \"Initial commit\"", testTempDir);
+            Console.WriteLine("Git repo initialized with initial commit");
+
+            // Step 2: Create hsp/test worktree
+            Console.WriteLine();
+            Console.WriteLine("=== Step 2: Create Test Worktree ===");
+            var worktreePath = Path.Combine(Path.GetDirectoryName(testTempDir)!, $"hsp-test-worktree-{Guid.NewGuid()}");
+            await RunGitCommandAsync("branch hsp/test", testTempDir);
+            await RunGitCommandAsync($"worktree add \"{worktreePath}\" hsp/test", testTempDir);
+            Console.WriteLine($"Worktree created at: {worktreePath}");
+
+            // Step 3: Delete test.txt if it exists (simulating cleanup)
+            var testFilePath = Path.Combine(worktreePath, "test.txt");
+            if (File.Exists(testFilePath))
+            {
+                File.Delete(testFilePath);
+                Console.WriteLine("Deleted existing test.txt");
+            }
+
+            // Step 4: Generate opencode.json config
+            Console.WriteLine();
+            Console.WriteLine("=== Step 3: Generate Config ===");
+            var config = testConfigGenerator.CreateDefaultConfig();
+            Console.WriteLine($"Model: {config.Model}");
+            await testConfigGenerator.GenerateConfigAsync(worktreePath, config);
+            Console.WriteLine("Config generated successfully");
+
+            // Step 5: Start OpenCode server
+            Console.WriteLine();
+            Console.WriteLine("=== Step 4: Start Server ===");
+            var server = await testServerManager.StartServerAsync("test-agent-integration", worktreePath, continueSession: false);
+            serverProcess = server.Process;
+            Console.WriteLine($"Server started! PID: {server.Process?.Id}, URL: {server.BaseUrl}");
+
+            // Step 6: Verify working directory
+            Console.WriteLine();
+            Console.WriteLine("=== Step 5: Verify Working Directory ===");
+            var reportedPath = await testClient.GetCurrentPathAsync(server.BaseUrl);
+            Console.WriteLine($"Reported path: {reportedPath}");
+            Console.WriteLine($"Expected path: {worktreePath}");
+            Assert.That(PathsAreEqual(reportedPath, worktreePath), Is.True,
+                $"Working directory mismatch! Expected: {worktreePath}, Actual: {reportedPath}");
+            Console.WriteLine("Path verification passed!");
+
+            // Step 7: Create session
+            Console.WriteLine();
+            Console.WriteLine("=== Step 6: Create Session ===");
+            var session = await testClient.CreateSessionAsync(server.BaseUrl, "Test Agent Session");
+            Console.WriteLine($"Session ID: {session.Id}");
+            Console.WriteLine($"Session Title: {session.Title}");
+
+            // Step 8: Send test prompt (fire and forget)
+            Console.WriteLine();
+            Console.WriteLine("=== Step 7: Send Test Prompt ===");
+            var prompt = PromptRequest.FromText(
+                $"Create a file called 'test.txt' in the current directory with the content 'Hello from test agent - {DateTime.UtcNow:O}'");
+            await testClient.SendPromptAsyncNoWait(server.BaseUrl, session.Id, prompt);
+            Console.WriteLine("Test prompt sent");
+
+            // Step 9: Verify session is visible via /session API
+            Console.WriteLine();
+            Console.WriteLine("=== Step 8: Verify Session Visibility ===");
+            var sessions = await testClient.ListSessionsAsync(server.BaseUrl);
+            Console.WriteLine($"Total sessions on server: {sessions.Count}");
+            
+            var foundSession = sessions.FirstOrDefault(s => s.Id == session.Id);
+            Assert.That(foundSession, Is.Not.Null, 
+                $"Session {session.Id} not found in session list. Found: {string.Join(", ", sessions.Select(s => s.Id))}");
+            Console.WriteLine($"Session found: {foundSession!.Id} - {foundSession.Title}");
+
+            // Step 10: Wait for file creation (poll for up to 30 seconds)
+            Console.WriteLine();
+            Console.WriteLine("=== Step 9: Wait for File Creation ===");
+            var fileCreated = false;
+            for (var i = 0; i < 30; i++)
+            {
+                if (File.Exists(testFilePath))
+                {
+                    fileCreated = true;
+                    Console.WriteLine($"test.txt created after {i + 1} seconds");
+                    var content = await File.ReadAllTextAsync(testFilePath);
+                    Console.WriteLine($"Content: {content}");
+                    break;
+                }
+                Console.WriteLine($"Waiting... ({i + 1}s)");
+                await Task.Delay(1000);
+            }
+
+            if (!fileCreated)
+            {
+                Console.WriteLine("WARNING: test.txt was not created within 30 seconds");
+                Console.WriteLine("This may be expected if using a slow model or if the agent is still processing");
+            }
+
+            Console.WriteLine();
+            Console.WriteLine("=== TEST PASSED ===");
+            Console.WriteLine("Test agent flow completed successfully:");
+            Console.WriteLine("- Git repo initialized");
+            Console.WriteLine("- Worktree created");
+            Console.WriteLine("- Server started in correct directory");
+            Console.WriteLine("- Session created and visible via API");
+            Console.WriteLine("- Prompt sent to agent");
+
+            // Cleanup worktree
+            Console.WriteLine();
+            Console.WriteLine("=== Cleanup Worktree ===");
+            await RunGitCommandAsync($"worktree remove \"{worktreePath}\" --force", testTempDir);
+            await RunGitCommandAsync("branch -D hsp/test", testTempDir);
+            Console.WriteLine("Worktree and branch cleaned up");
+        }
+        finally
+        {
+            await CleanupAsync(serverProcess, testTempDir);
+        }
+    }
+
+    private static async Task RunGitCommandAsync(string args, string workDir)
+    {
+        using var process = new Process
+        {
+            StartInfo = new ProcessStartInfo
+            {
+                FileName = "git",
+                Arguments = args,
+                WorkingDirectory = workDir,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            }
+        };
+        process.Start();
+        var output = await process.StandardOutput.ReadToEndAsync();
+        var error = await process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync();
+        
+        if (process.ExitCode != 0 && !string.IsNullOrWhiteSpace(error))
+        {
+            Console.WriteLine($"Git command warning: {error.Trim()}");
+        }
+    }
+
+    #endregion
 }

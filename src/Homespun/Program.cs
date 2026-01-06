@@ -64,6 +64,9 @@ builder.Services.AddSingleton<IOpenCodeServerManager, OpenCodeServerManager>();
 builder.Services.AddScoped<IOpenCodeConfigGenerator, OpenCodeConfigGenerator>();
 builder.Services.AddScoped<IAgentCompletionMonitor, AgentCompletionMonitor>();
 builder.Services.AddScoped<IAgentWorkflowService, AgentWorkflowService>();
+#if DEBUG
+builder.Services.AddSingleton<ITestAgentService, TestAgentService>();
+#endif
 
 // Review polling service
 builder.Services.Configure<ReviewPollingOptions>(
