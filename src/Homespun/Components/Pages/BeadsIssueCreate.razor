@@ -7,6 +7,7 @@
 @inject ProjectService ProjectService
 @inject IBeadsService BeadsService
 @inject NavigationManager NavigationManager
+@inject ILogger<BeadsIssueCreate> Logger
 @rendermode InteractiveServer
 
 <PageTitle>New Issue</PageTitle>
@@ -33,14 +34,14 @@ else
                 }
 
                 <div class="mb-3">
-                    <label for="title" class="form-label">Title <span class="text-danger">*</span></label>
+                    <label for="title" class="form-label small">Title <span class="text-danger">*</span></label>
                     <input type="text" id="title" class="form-control" @bind="_model.Title" @bind:event="oninput" 
                            @onchange="OnTitleChanged" placeholder="Implement feature X" />
                 </div>
 
                 <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label for="group" class="form-label">Group <span class="text-danger">*</span></label>
+                    <div class="col-md-4 mb-3 mt-3">
+                        <label for="group" class="form-label small">Group <span class="text-danger">*</span></label>
                         <input type="text" id="group" class="form-control" list="groupList" 
                                @bind="_model.Group" @bind:event="oninput" placeholder="frontend, core, api, etc." />
                         <datalist id="groupList">
@@ -49,15 +50,14 @@ else
                                 <option value="@group" />
                             }
                         </datalist>
-                        <div class="form-text">Logical grouping for branch naming (e.g., core, frontend, api)</div>
                         @if (!string.IsNullOrWhiteSpace(_model.Group) && !BeadsBranchLabel.IsValidGroup(_model.Group.Trim().ToLowerInvariant()))
                         {
                             <div class="text-danger small">Group must be lowercase alphanumeric with hyphens (e.g., "frontend", "my-group")</div>
                         }
                     </div>
 
-                    <div class="col-md-6 mb-3">
-                        <label for="type" class="form-label">Type <span class="text-danger">*</span></label>
+                    <div class="col-md-4 mb-3 mt-3">
+                        <label for="type" class="form-label small">Type <span class="text-danger">*</span></label>
                         <InputSelect id="type" class="form-select" @bind-Value="_model.Type">
                             @foreach (var type in Enum.GetValues<BeadsIssueType>())
                             {
@@ -65,22 +65,21 @@ else
                             }
                         </InputSelect>
                     </div>
+
+                    <div class="col-md-4 mb-3 mt-3">
+                        <label for="branchId" class="form-label small">Branch ID <span class="text-danger">*</span></label>
+                        <input type="text" id="branchId" class="form-control font-monospace" 
+                               @bind="_model.BranchId" @bind:event="oninput" @onfocus="OnBranchIdFocus" placeholder="update-page" />
+                        @if (!string.IsNullOrWhiteSpace(_model.BranchId) && !BeadsBranchLabel.IsValidBranchId(_model.BranchId.Trim().ToLowerInvariant()))
+                        {
+                            <div class="text-danger small">Branch ID must be lowercase alphanumeric with hyphens (e.g., "update-page", "fix-login")</div>
+                        }
+                    </div>
                 </div>
 
-                <div class="mb-3">
-                    <label for="branchId" class="form-label">Branch ID <span class="text-danger">*</span></label>
-                    <input type="text" id="branchId" class="form-control font-monospace" 
-                           @bind="_model.BranchId" @bind:event="oninput" @onfocus="OnBranchIdFocus" placeholder="update-page" />
-                    <div class="form-text">Short identifier for the branch (lowercase, hyphens allowed)</div>
-                    @if (!string.IsNullOrWhiteSpace(_model.BranchId) && !BeadsBranchLabel.IsValidBranchId(_model.BranchId.Trim().ToLowerInvariant()))
-                    {
-                        <div class="text-danger small">Branch ID must be lowercase alphanumeric with hyphens (e.g., "update-page", "fix-login")</div>
-                    }
-                </div>
-
-                <div class="mb-3 p-3 bg-light rounded">
-                    <label class="form-label fw-bold">Branch Name Preview</label>
-                    <div class="font-monospace fs-6 @(IsPreviewValid() ? "" : "text-muted")">
+                <div class="mb-3 mt-3 p-3 bg-light rounded">
+                    <label class="form-label small text-muted">Branch Name</label>
+                    <div class="font-monospace fs-5 @(IsPreviewValid() ? "fw-semibold" : "text-muted")">
                         @GetBranchNamePreview()
                     </div>
                     <div class="form-text mt-2">
@@ -88,16 +87,16 @@ else
                     </div>
                 </div>
 
-                <div class="mb-3">
-                    <label for="description" class="form-label">Description</label>
-                    <InputTextArea id="description" class="form-control" rows="6" @bind-Value="_model.Description" 
+                <div class="mb-3 mt-3">
+                    <label for="description" class="form-label small">Description</label>
+                    <InputTextArea id="description" class="form-control" rows="12" @bind-Value="_model.Description" 
                         placeholder="Detailed description and implementation instructions for the AI agent..." />
                     <div class="form-text">Include implementation details, acceptance criteria, and any specific instructions.</div>
                 </div>
 
                 <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label for="priority" class="form-label">Priority</label>
+                    <div class="col-md-6 mb-3 mt-3">
+                        <label for="priority" class="form-label small">Priority</label>
                         <InputSelect id="priority" class="form-select" @bind-Value="_model.Priority">
                             <option value="">Not set</option>
                             <option value="0">P0 - Critical</option>
@@ -108,26 +107,26 @@ else
                         </InputSelect>
                     </div>
 
-                    <div class="col-md-6 mb-3">
-                        <label for="parentId" class="form-label">Parent Issue (for subtasks)</label>
+                    <div class="col-md-6 mb-3 mt-3">
+                        <label for="parentId" class="form-label small">Parent Issue (for subtasks)</label>
                         <InputText id="parentId" class="form-control" @bind-Value="_model.ParentId" placeholder="bd-XXXX" />
                         <div class="form-text">Optional: Parent issue ID for hierarchical organization</div>
                     </div>
                 </div>
 
-                <div class="mb-3">
-                    <label for="labels" class="form-label">Additional Labels</label>
+                <div class="mb-3 mt-3">
+                    <label for="labels" class="form-label small">Additional Labels</label>
                     <InputText id="labels" class="form-control" @bind-Value="_model.Labels" placeholder="label1, label2" />
                     <div class="form-text">Comma-separated list of additional labels (the hsp: label is added automatically)</div>
                 </div>
 
-                <div class="mb-3">
-                    <label for="blockedBy" class="form-label">Blocked By</label>
+                <div class="mb-3 mt-3">
+                    <label for="blockedBy" class="form-label small">Blocked By</label>
                     <InputText id="blockedBy" class="form-control" @bind-Value="_model.BlockedBy" placeholder="bd-XXXX, bd-YYYY" />
                     <div class="form-text">Comma-separated list of issue IDs that block this issue</div>
                 </div>
 
-                <div class="d-flex gap-2">
+                <div class="d-flex gap-2 mt-4">
                     <button type="submit" class="btn btn-primary" disabled="@(_isSubmitting || !IsFormValid())">
                         @if (_isSubmitting)
                         {
@@ -221,7 +220,13 @@ else
 
     private async Task HandleSubmit()
     {
-        if (_project == null) return;
+        Logger.LogInformation("HandleSubmit called for project {ProjectId}", ProjectId);
+        
+        if (_project == null)
+        {
+            Logger.LogWarning("HandleSubmit: _project is null, returning early");
+            return;
+        }
         
         _isSubmitting = true;
         _errorMessage = null;
@@ -232,6 +237,7 @@ else
             if (string.IsNullOrWhiteSpace(_model.Title))
             {
                 _errorMessage = "Title is required.";
+                Logger.LogWarning("HandleSubmit: Title validation failed");
                 return;
             }
 
@@ -241,17 +247,20 @@ else
             if (!BeadsBranchLabel.IsValidGroup(group))
             {
                 _errorMessage = "Group must be lowercase alphanumeric with hyphens.";
+                Logger.LogWarning("HandleSubmit: Group validation failed for value '{Group}'", group);
                 return;
             }
 
             if (!BeadsBranchLabel.IsValidBranchId(branchId))
             {
                 _errorMessage = "Branch ID must be lowercase alphanumeric with hyphens.";
+                Logger.LogWarning("HandleSubmit: BranchId validation failed for value '{BranchId}'", branchId);
                 return;
             }
 
             // Create the hsp: label
             var hspLabel = BeadsBranchLabel.Create(group, branchId);
+            Logger.LogInformation("HandleSubmit: Created hsp label '{HspLabel}'", hspLabel);
 
             // Parse additional labels and add the hsp: label
             var labels = new List<string> { hspLabel };
@@ -275,15 +284,23 @@ else
                 BlockedBy = blockedBy
             };
 
+            Logger.LogInformation("HandleSubmit: Creating issue with title '{Title}'", options.Title);
             var issue = await BeadsService.CreateIssueAsync(_project.LocalPath, options);
+            Logger.LogInformation("HandleSubmit: Issue created successfully");
 
             // Sync to ensure the issue is persisted
+            Logger.LogInformation("HandleSubmit: Syncing beads...");
             await BeadsService.SyncAsync(_project.LocalPath);
+            Logger.LogInformation("HandleSubmit: Sync completed");
 
-            NavigationManager.NavigateTo($"projects/{ProjectId}");
+            var targetUrl = $"projects/{ProjectId}";
+            Logger.LogInformation("HandleSubmit: Navigating to '{TargetUrl}'", targetUrl);
+            NavigationManager.NavigateTo(targetUrl, forceLoad: true);
+            Logger.LogInformation("HandleSubmit: Navigation called");
         }
         catch (Exception ex)
         {
+            Logger.LogError(ex, "HandleSubmit: Failed to create issue");
             _errorMessage = $"Failed to create issue: {ex.Message}";
         }
         finally
