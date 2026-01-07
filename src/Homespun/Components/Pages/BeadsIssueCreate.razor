@@ -4,9 +4,11 @@
 @using Homespun.Features.Beads.Services
 @using Homespun.Features.Projects
 @using Homespun.Features.PullRequests.Data.Entities
+@using Homespun.Features.Notifications
 @inject ProjectService ProjectService
 @inject IBeadsService BeadsService
 @inject NavigationManager NavigationManager
+@inject INotificationService NotificationService
 @inject ILogger<BeadsIssueCreate> Logger
 @rendermode InteractiveServer
 
@@ -127,11 +129,7 @@ else
                 </div>
 
                 <div class="d-flex gap-2 mt-4">
-                    <button type="submit" class="btn btn-primary" disabled="@(_isSubmitting || !IsFormValid())">
-                        @if (_isSubmitting)
-                        {
-                            <span class="spinner-border spinner-border-sm me-1"></span>
-                        }
+                    <button type="submit" class="btn btn-primary" disabled="@(!IsFormValid())">
                         Create Issue
                     </button>
                     <a href="projects/@ProjectId" class="btn btn-secondary">Cancel</a>
@@ -147,7 +145,6 @@ else
 
     private Project? _project;
     private BeadsIssueModel _model = new();
-    private bool _isSubmitting;
     private string? _errorMessage;
     private List<string> _existingGroups = [];
     private bool _branchIdManuallyEdited;
@@ -218,7 +215,7 @@ else
         return $"Label: hsp:{group}/-/{branchId}";
     }
 
-    private async Task HandleSubmit()
+    private void HandleSubmit()
     {
         Logger.LogInformation("HandleSubmit called for project {ProjectId}", ProjectId);
         
@@ -228,84 +225,90 @@ else
             return;
         }
         
-        _isSubmitting = true;
-        _errorMessage = null;
+        // Validate required fields before navigating
+        if (string.IsNullOrWhiteSpace(_model.Title))
+        {
+            _errorMessage = "Title is required.";
+            Logger.LogWarning("HandleSubmit: Title validation failed");
+            return;
+        }
 
+        var group = _model.Group?.Trim().ToLowerInvariant() ?? "";
+        var branchId = _model.BranchId?.Trim().ToLowerInvariant() ?? "";
+
+        if (!BeadsBranchLabel.IsValidGroup(group))
+        {
+            _errorMessage = "Group must be lowercase alphanumeric with hyphens.";
+            Logger.LogWarning("HandleSubmit: Group validation failed for value '{Group}'", group);
+            return;
+        }
+
+        if (!BeadsBranchLabel.IsValidBranchId(branchId))
+        {
+            _errorMessage = "Branch ID must be lowercase alphanumeric with hyphens.";
+            Logger.LogWarning("HandleSubmit: BranchId validation failed for value '{BranchId}'", branchId);
+            return;
+        }
+
+        // Create the hsp: label
+        var hspLabel = BeadsBranchLabel.Create(group, branchId);
+        Logger.LogInformation("HandleSubmit: Created hsp label '{HspLabel}'", hspLabel);
+
+        // Parse additional labels and add the hsp: label
+        var labels = new List<string> { hspLabel };
+        if (!string.IsNullOrWhiteSpace(_model.Labels))
+        {
+            labels.AddRange(_model.Labels.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+        }
+        
+        var blockedBy = string.IsNullOrWhiteSpace(_model.BlockedBy)
+            ? null
+            : _model.BlockedBy.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+
+        var options = new BeadsCreateOptions
+        {
+            Title = _model.Title.Trim(),
+            Description = string.IsNullOrWhiteSpace(_model.Description) ? null : _model.Description.Trim(),
+            Type = _model.Type,
+            Priority = _model.Priority,
+            Labels = labels,
+            ParentId = string.IsNullOrWhiteSpace(_model.ParentId) ? null : _model.ParentId.Trim(),
+            BlockedBy = blockedBy
+        };
+
+        // Navigate immediately, create issue in background
+        var projectPath = _project.LocalPath;
+        var projectId = ProjectId;
+        
+        _ = CreateIssueInBackgroundAsync(projectPath, projectId, options);
+        
+        NavigationManager.NavigateTo($"projects/{ProjectId}");
+    }
+
+    private async Task CreateIssueInBackgroundAsync(string projectPath, string projectId, BeadsCreateOptions options)
+    {
         try
         {
-            // Validate required fields
-            if (string.IsNullOrWhiteSpace(_model.Title))
-            {
-                _errorMessage = "Title is required.";
-                Logger.LogWarning("HandleSubmit: Title validation failed");
-                return;
-            }
+            Logger.LogInformation("CreateIssueInBackground: Creating issue with title '{Title}'", options.Title);
+            await BeadsService.CreateIssueAsync(projectPath, options);
+            Logger.LogInformation("CreateIssueInBackground: Issue created successfully");
 
-            var group = _model.Group?.Trim().ToLowerInvariant() ?? "";
-            var branchId = _model.BranchId?.Trim().ToLowerInvariant() ?? "";
-
-            if (!BeadsBranchLabel.IsValidGroup(group))
-            {
-                _errorMessage = "Group must be lowercase alphanumeric with hyphens.";
-                Logger.LogWarning("HandleSubmit: Group validation failed for value '{Group}'", group);
-                return;
-            }
-
-            if (!BeadsBranchLabel.IsValidBranchId(branchId))
-            {
-                _errorMessage = "Branch ID must be lowercase alphanumeric with hyphens.";
-                Logger.LogWarning("HandleSubmit: BranchId validation failed for value '{BranchId}'", branchId);
-                return;
-            }
-
-            // Create the hsp: label
-            var hspLabel = BeadsBranchLabel.Create(group, branchId);
-            Logger.LogInformation("HandleSubmit: Created hsp label '{HspLabel}'", hspLabel);
-
-            // Parse additional labels and add the hsp: label
-            var labels = new List<string> { hspLabel };
-            if (!string.IsNullOrWhiteSpace(_model.Labels))
-            {
-                labels.AddRange(_model.Labels.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
-            }
-            
-            var blockedBy = string.IsNullOrWhiteSpace(_model.BlockedBy)
-                ? null
-                : _model.BlockedBy.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
-
-            var options = new BeadsCreateOptions
-            {
-                Title = _model.Title.Trim(),
-                Description = string.IsNullOrWhiteSpace(_model.Description) ? null : _model.Description.Trim(),
-                Type = _model.Type,
-                Priority = _model.Priority,
-                Labels = labels,
-                ParentId = string.IsNullOrWhiteSpace(_model.ParentId) ? null : _model.ParentId.Trim(),
-                BlockedBy = blockedBy
-            };
-
-            Logger.LogInformation("HandleSubmit: Creating issue with title '{Title}'", options.Title);
-            var issue = await BeadsService.CreateIssueAsync(_project.LocalPath, options);
-            Logger.LogInformation("HandleSubmit: Issue created successfully");
-
-            // Sync to ensure the issue is persisted
-            Logger.LogInformation("HandleSubmit: Syncing beads...");
-            await BeadsService.SyncAsync(_project.LocalPath);
-            Logger.LogInformation("HandleSubmit: Sync completed");
-
-            var targetUrl = $"projects/{ProjectId}";
-            Logger.LogInformation("HandleSubmit: Navigating to '{TargetUrl}'", targetUrl);
-            NavigationManager.NavigateTo(targetUrl, forceLoad: true);
-            Logger.LogInformation("HandleSubmit: Navigation called");
+            Logger.LogInformation("CreateIssueInBackground: Syncing beads...");
+            await BeadsService.SyncAsync(projectPath);
+            Logger.LogInformation("CreateIssueInBackground: Sync completed");
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "HandleSubmit: Failed to create issue");
-            _errorMessage = $"Failed to create issue: {ex.Message}";
-        }
-        finally
-        {
-            _isSubmitting = false;
+            Logger.LogError(ex, "CreateIssueInBackground: Failed to create issue");
+            
+            NotificationService.AddNotification(new Notification
+            {
+                Type = NotificationType.Warning,
+                Title = "Failed to create issue",
+                Message = $"Could not create issue '{options.Title}': {ex.Message}",
+                ProjectId = projectId,
+                IsDismissible = true
+            });
         }
     }
 
