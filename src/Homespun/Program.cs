@@ -18,32 +18,16 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
 
-// Log startup configuration for debugging
-Console.WriteLine("=== Homespun Startup Configuration ===");
-Console.WriteLine($"Environment: {builder.Environment.EnvironmentName}");
-Console.WriteLine($"HOMESPUN_DATA_PATH from config: {builder.Configuration["HOMESPUN_DATA_PATH"] ?? "(not set)"}");
-Console.WriteLine($"HOMESPUN_BASE_PATH from config: {builder.Configuration["HOMESPUN_BASE_PATH"] ?? "(not set)"}");
-Console.WriteLine($"User profile directory: {Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)}");
-
-// Add services to the container.
+// Resolve data path from configuration or use default
 var homespunDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".homespun");
 var defaultDataPath = Path.Combine(homespunDir, "homespun-data.json");
 var dataPath = builder.Configuration["HOMESPUN_DATA_PATH"] ?? defaultDataPath;
 
-Console.WriteLine($"Data path (resolved): {dataPath}");
-
 // Ensure the data directory exists
 var dataDirectory = Path.GetDirectoryName(dataPath);
-Console.WriteLine($"Data directory: {dataDirectory}");
-
 if (!string.IsNullOrEmpty(dataDirectory) && !Directory.Exists(dataDirectory))
 {
-    Console.WriteLine($"Creating data directory: {dataDirectory}");
     Directory.CreateDirectory(dataDirectory);
-}
-else
-{
-    Console.WriteLine($"Data directory exists: {Directory.Exists(dataDirectory)}");
 }
 
 // Register JSON data store as singleton
@@ -56,37 +40,14 @@ builder.Services.AddSingleton<IDataStore>(sp =>
 // Configure Data Protection to persist keys in the data directory
 // This ensures keys survive container restarts and prevents antiforgery token errors
 var dataProtectionKeysPath = Path.Combine(dataDirectory!, "DataProtection-Keys");
-Console.WriteLine($"Data Protection keys path: {dataProtectionKeysPath}");
-
 if (!Directory.Exists(dataProtectionKeysPath))
 {
-    Console.WriteLine($"Creating Data Protection keys directory: {dataProtectionKeysPath}");
     Directory.CreateDirectory(dataProtectionKeysPath);
-}
-else
-{
-    Console.WriteLine($"Data Protection keys directory exists: {Directory.Exists(dataProtectionKeysPath)}");
-    // List existing keys
-    try
-    {
-        var keyFiles = Directory.GetFiles(dataProtectionKeysPath, "*.xml");
-        Console.WriteLine($"Existing key files: {keyFiles.Length}");
-        foreach (var keyFile in keyFiles)
-        {
-            Console.WriteLine($"  - {Path.GetFileName(keyFile)}");
-        }
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"Error listing key files: {ex.Message}");
-    }
 }
 
 builder.Services.AddDataProtection()
     .PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeysPath))
     .SetApplicationName("Homespun");
-
-Console.WriteLine("=== End Startup Configuration ===");
 
 // Core services
 builder.Services.AddScoped<ProjectService>();

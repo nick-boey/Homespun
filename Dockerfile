@@ -20,10 +20,11 @@ RUN dotnet restore
 COPY . .
 
 # Build and publish
+# Note: Cannot use --no-restore here because Blazor framework files
+# (blazor.web.js, etc.) are in an implicit package that's only resolved during publish
 RUN dotnet publish src/Homespun/Homespun.csproj \
     -c Release \
-    -o /app/publish \
-    --no-restore
+    -o /app/publish
 
 # =============================================================================
 # Stage 2: Runtime
