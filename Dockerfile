@@ -16,6 +16,9 @@ COPY tests/Homespun.Tests/Homespun.Tests.csproj tests/Homespun.Tests/
 # Restore dependencies
 RUN dotnet restore
 
+# Cache-busting build argument
+ARG CACHEBUST=1
+
 # Copy everything else
 COPY . .
 
