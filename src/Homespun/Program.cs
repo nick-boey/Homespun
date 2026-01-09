@@ -82,9 +82,7 @@ builder.Services.AddSingleton<IAgentStartupTracker, AgentStartupTracker>();
 builder.Services.AddHostedService<AgentStartupBroadcaster>();
 builder.Services.AddScoped<IAgentCompletionMonitor, AgentCompletionMonitor>();
 builder.Services.AddScoped<IAgentWorkflowService, AgentWorkflowService>();
-#if DEBUG
 builder.Services.AddSingleton<ITestAgentService, TestAgentService>();
-#endif
 
 // GitHub sync polling service (PR sync, review polling, issue linking)
 builder.Services.Configure<GitHubSyncPollingOptions>(
@@ -104,6 +102,7 @@ if (!app.Environment.IsDevelopment())
     // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
+
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 
 // Note: HTTPS redirection removed - container runs HTTP-only behind a reverse proxy
