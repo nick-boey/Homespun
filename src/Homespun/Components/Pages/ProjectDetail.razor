@@ -18,7 +18,9 @@
 @inject IAgentStartupTracker StartupTracker
 @inject ILogger<ProjectDetail> Logger
 @inject NavigationManager NavigationManager
-@inject ITestAgentService? TestAgentService
+#if DEBUG
+@inject ITestAgentService TestAgentService
+#endif
 @rendermode InteractiveServer
 
 <PageTitle>@(_project?.Name ?? "Project")</PageTitle>
@@ -251,7 +253,7 @@ else
                         </dl>
                         
                         @* DEBUG-only test agent controls *@
-                        @if (IsDebugBuild && TestAgentService != null)
+                        @if (IsDebugBuild)
                         {
                             <div class="border-top mt-3 pt-3">
                                 <h6 class="text-muted mb-2">Debug Tools</h6>
@@ -595,12 +597,14 @@ else
         StartupTracker.StateChanged += OnStartupStateChanged;
         
         await LoadData();
-        
+
         // Check for existing test agent (DEBUG builds only)
-        if (IsDebugBuild && TestAgentService != null && _project != null)
+#if DEBUG
+        if (IsDebugBuild && _project != null)
         {
             _testAgentStatus = TestAgentService.GetTestAgentStatus(_project.Id);
         }
+#endif
         
         // Start sync and load past PRs after project is loaded
         // Using Task.Run to not block the initial render
@@ -951,8 +955,8 @@ else
 
     private async Task StartTestAgent()
     {
-        if (_project == null || TestAgentService == null) return;
-        
+        if (_project == null) return;
+
         _isTestAgentLoading = true;
         _testAgentError = null;
         _verificationResult = null;
@@ -982,8 +986,8 @@ else
 
     private async Task StopTestAgent()
     {
-        if (_project == null || TestAgentService == null) return;
-        
+        if (_project == null) return;
+
         _isTestAgentLoading = true;
         _testAgentError = null;
         _verificationResult = null;
@@ -1006,8 +1010,8 @@ else
 
     private async Task VerifySession()
     {
-        if (_project == null || TestAgentService == null) return;
-        
+        if (_project == null) return;
+
         _isVerifying = true;
         StateHasChanged();
 
