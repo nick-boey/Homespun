@@ -23,7 +23,7 @@ docker build -t homespun:local .
 ### Step 2: Run with the automated script
 
 ```powershell
-.\install\container\run-homespun-container.ps1
+.\install\container\run.ps1
 ```
 
 This script will:
@@ -49,8 +49,10 @@ docker build -t homespun:local .
 
 This will:
 - Use the multi-stage build process to compile the application
-- Install required dependencies (git, gh CLI, beads)
+- Install required dependencies (git, gh CLI, beads, OpenCode)
 - Create a production-ready container image
+
+**Note:** The build process installs OpenCode for AI agent functionality. This may take a few minutes on first build.
 
 ## Running the Container Manually
 
@@ -305,5 +307,7 @@ For production deployments, consider:
 
 - The container runs as a non-root user (`homespun`) for security
 - Node.js and beads (bd) are pre-installed for git workflow management
+- OpenCode is pre-installed for AI agent orchestration
 - The GitHub CLI (gh) is available for PR operations
+- Data Protection keys are persisted to prevent antiforgery token errors across container restarts
 - Health checks run every 30 seconds on the `/health` endpoint

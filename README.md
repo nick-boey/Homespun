@@ -223,7 +223,7 @@ For detailed deployment instructions, see the [Installation Guide](docs/installa
 **Docker (Windows):**
 ```powershell
 docker build -t homespun:local .
-.\install\container\run-homespun-container.ps1
+.\install\container\run.ps1
 ```
 
 **Docker (Linux/macOS):**

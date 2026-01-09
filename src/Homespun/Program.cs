@@ -10,6 +10,7 @@ using Homespun.Features.Projects;
 using Homespun.Features.PullRequests;
 using Homespun.Features.PullRequests.Data;
 using Homespun.Components;
+using Microsoft.AspNetCore.DataProtection;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -35,6 +36,17 @@ builder.Services.AddSingleton<IDataStore>(sp =>
     var logger = sp.GetRequiredService<ILogger<JsonDataStore>>();
     return new JsonDataStore(dataPath, logger);
 });
+
+// Configure Data Protection to persist keys in the data directory
+// This ensures keys survive container restarts and prevents antiforgery token errors
+var dataProtectionKeysPath = Path.Combine(dataDirectory!, "DataProtection-Keys");
+if (!Directory.Exists(dataProtectionKeysPath))
+{
+    Directory.CreateDirectory(dataProtectionKeysPath);
+}
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeysPath))
+    .SetApplicationName("Homespun");
 
 // Core services
 builder.Services.AddScoped<ProjectService>();
@@ -92,7 +104,12 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
-app.UseHttpsRedirection();
+
+// Only redirect to HTTPS in production environments where HTTPS is configured
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
 
 app.UseAntiforgery();
 

@@ -156,7 +156,7 @@ docker build -t homespun:local .
 Use the PowerShell script which automatically configures everything:
 
 ```powershell
-.\install\container\run-homespun-container.ps1
+.\install\container\run.ps1
 ```
 
 This script will:
