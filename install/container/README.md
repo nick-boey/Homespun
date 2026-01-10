@@ -178,6 +178,8 @@ docker-compose up -d
 | `ASPNETCORE_ENVIRONMENT` | Environment (Development/Production) | `Production` |
 | `HOMESPUN_DATA_PATH` | Path to data file | `/data/.homespun/homespun-data.json` |
 | `GITHUB_TOKEN` | GitHub personal access token | (none) |
+| `TAILSCALE_AUTH_KEY` | Tailscale auth key (optional) | (none) |
+| `TAILSCALE_HOSTNAME` | Hostname for Tailscale | `homespun-container` |
 
 ## Volumes and Filesystem
 
@@ -197,7 +199,7 @@ When using the PowerShell script or bind mounts, your data is stored at:
 **Windows:** `C:\Users\<username>\.homespun-container\data\`
 
 You can access this directory directly from Windows Explorer to:
-- View the SQLite database
+- View the JSON data file
 - Inspect configuration files
 - Backup data
 - Debug issues
@@ -249,7 +251,7 @@ To set the GitHub token:
 dotnet user-secrets set "GitHub:Token" "your_token_here" --project src/Homespun
 ```
 
-### Database issues
+### Data file issues
 
 **With bind mount:**
 Delete the data directory:

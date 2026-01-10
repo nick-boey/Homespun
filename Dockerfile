@@ -59,6 +59,9 @@ RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - \
 # Install beads (bd) and OpenCode globally
 RUN npm install -g @beads/bd opencode-ai@latest
 
+# Install Tailscale
+RUN curl -fsSL https://tailscale.com/install.sh | sh
+
 # Create non-root user for security
 RUN useradd --create-home --shell /bin/bash homespun
 
@@ -67,6 +70,10 @@ RUN mkdir -p /data/.homespun && chown -R homespun:homespun /data
 
 # Copy published application
 COPY --from=build /app/publish .
+
+# Copy start script
+COPY src/Homespun/start.sh .
+RUN chmod +x start.sh
 
 # Set ownership
 RUN chown -R homespun:homespun /app
@@ -88,4 +95,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8080/health || exit 1
 
 # Set entrypoint
-ENTRYPOINT ["dotnet", "Homespun.dll"]
+ENTRYPOINT ["./start.sh"]

@@ -69,6 +69,13 @@ variable "github_token" {
   sensitive   = true
 }
 
+variable "tailscale_auth_key" {
+  description = "Tailscale auth key (reusable, ephemeral disabled)"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
 variable "cpu" {
   description = "CPU cores for the container (0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0)"
   type        = number
@@ -225,6 +232,11 @@ resource "azurerm_container_app" "main" {
     value = var.github_token
   }
 
+  secret {
+    name  = "tailscale-auth-key"
+    value = var.tailscale_auth_key
+  }
+
   template {
     min_replicas = var.min_replicas
     max_replicas = var.max_replicas
@@ -253,6 +265,16 @@ resource "azurerm_container_app" "main" {
       env {
         name        = "GITHUB_TOKEN"
         secret_name = "github-token"
+      }
+
+      env {
+        name        = "TAILSCALE_AUTH_KEY"
+        secret_name = "tailscale-auth-key"
+      }
+
+      env {
+        name  = "TAILSCALE_HOSTNAME"
+        value = "homespun-prod"
       }
 
       volume_mounts {

@@ -10,7 +10,7 @@ Homespun provides a visual interface for planning and executing software develop
 - **Multiple Projects**: Work on multiple repositories simultaneously
 - **Git Worktrees**: Automatically manage worktrees for each feature branch
 - **Claude Code Agents**: Spawn and manage headless Claude Code instances
-- **Message Persistence**: Store all agent communications in SQLite
+- **Message Persistence**: Store all agent communications in JSON storage
 
 ## Features
 
@@ -35,7 +35,7 @@ Homespun provides a visual interface for planning and executing software develop
 
 - **.NET 8+**: Core runtime
 - **Blazor Server**: Web frontend with SSR
-- **SQLite + EF Core**: Persistence
+- **JSON File Storage**: Persistence
 - **SignalR**: Real-time updates
 - **Claude Code CLI**: AI agent
 - **Tailscale**: Optional secure remote access
@@ -64,7 +64,7 @@ Set the following environment variables before running:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `HOMESPUN_DB_PATH` | Path to SQLite database | `homespun.db` |
+| `HOMESPUN_DATA_PATH` | Path to data file | `~/.homespun/homespun-data.json` |
 | `GITHUB_TOKEN` | GitHub personal access token for PR operations | (required for GitHub sync) |
 | `HOMESPUN_WORKTREE_ROOT` | Base directory for worktrees | (uses project path) |
 | `CLAUDE_CODE_PATH` | Path to Claude Code CLI executable | (uses PATH) |
@@ -72,7 +72,7 @@ Set the following environment variables before running:
 Example:
 ```bash
 export GITHUB_TOKEN="ghp_your_token_here"
-export HOMESPUN_DB_PATH="/data/homespun.db"
+export HOMESPUN_DATA_PATH="/data/.homespun/homespun-data.json"
 ```
 
 ### Running
@@ -203,7 +203,7 @@ Note: When a future change is promoted to a current PR, the `ROADMAP.json` is al
 GET /health
 ```
 
-Returns application health status including database connectivity and process manager state.
+Returns application health status including data store accessibility and process manager state.
 
 ## Real-time Updates
 
@@ -257,15 +257,6 @@ terraform init && terraform apply -var="github_token=ghp_xxx"
 ```bash
 dotnet test
 ```
-
-### Creating Database Migrations
-
-```bash
-cd src/Homespun
-dotnet ef migrations add <MigrationName>
-```
-
-Migrations are applied automatically on startup.
 
 ## Known Issues
 

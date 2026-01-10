@@ -300,10 +300,10 @@ memory = "1Gi"
 
 ```bash
 # Preview changes
-terraform plan -var="github_token=ghp_your_token_here"
+terraform plan -var="github_token=ghp_xxx" -var="tailscale_auth_key=tskey-auth-xxx"
 
 # Apply changes
-terraform apply -var="github_token=ghp_your_token_here"
+terraform apply -var="github_token=ghp_xxx" -var="tailscale_auth_key=tskey-auth-xxx"
 ```
 
 ### Step 4: Build and push the container image
@@ -341,11 +341,21 @@ terraform output container_app_url
 
 ### Tailscale with Azure Container Apps
 
-Azure Container Apps provides a public HTTPS endpoint by default. For Tailscale-only access:
+The container includes built-in Tailscale support for secure access without exposing public endpoints.
 
-1. **Disable public ingress**: Set `external_enabled = false` in the Terraform configuration
-2. **Use Azure VPN Gateway**: Connect your Tailscale network to Azure via VPN Gateway
-3. **Tailscale Funnel**: Use [Tailscale Funnel](https://tailscale.com/kb/1223/funnel) to expose a local Tailscale node that proxies to Azure
+1.  **Generate an Auth Key**:
+    *   Go to [Tailscale Admin Console > Settings > Keys](https://login.tailscale.com/admin/settings/keys).
+    *   Generate a new auth key.
+    *   **Important**: Disable "Ephemeral" (since we persist state).
+    *   Add tags (e.g., `tag:homespun`) if using ACLs.
+
+2.  **Deploy**:
+    *   Pass the key to Terraform using `-var="tailscale_auth_key=tskey-auth-..."`.
+
+3.  **Access**:
+    *   The app will register as `homespun-prod` (or your configured hostname).
+    *   Access it at `http://homespun-prod:8080` from any device on your Tailscale network.
+    *   You can now disable public ingress in Terraform if desired.
 
 ### Terraform variables reference
 
@@ -357,6 +367,7 @@ Azure Container Apps provides a public HTTPS endpoint by default. For Tailscale-
 | `app_name` | Container App name | `homespun` |
 | `container_image` | Container image reference | `homespun:latest` |
 | `github_token` | GitHub PAT (required) | - |
+| `tailscale_auth_key` | Tailscale auth key (optional) | - |
 | `cpu` | CPU cores (0.25-2.0) | `0.5` |
 | `memory` | Memory allocation | `1Gi` |
 | `min_replicas` | Minimum replicas | `1` |
