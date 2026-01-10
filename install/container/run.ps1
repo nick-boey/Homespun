@@ -25,7 +25,10 @@
 #Requires -Version 7.0
 
 [CmdletBinding()]
-param()
+param(
+    [string]$TailscaleAuthKey,
+    [string]$TailscaleHostname = "homespun-container"
+)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
@@ -166,7 +169,10 @@ Write-Host "[4/6] Setting up directories..." -ForegroundColor Cyan
 
 # Expand ~ to full path
 $homeDir = [Environment]::GetFolderPath('UserProfile')
-$dataDir = Join-Path $homeDir ".homespun-container\data"
+
+# Construct paths in a cross-platform way
+$dataDir = Join-Path $homeDir ".homespun-container"
+$dataDir = Join-Path $dataDir "data"
 $sshDir = Join-Path $homeDir ".ssh"
 
 # Create data directory if it doesn't exist
@@ -207,6 +213,9 @@ Write-Host "  Data mount:  $dataDir" -ForegroundColor White
 if ($mountSsh) {
     Write-Host "  SSH mount:   $sshDir (read-only)" -ForegroundColor White
 }
+if (-not [string]::IsNullOrWhiteSpace($TailscaleAuthKey)) {
+    Write-Host "  Tailscale:   Enabled ($TailscaleHostname)" -ForegroundColor White
+}
 Write-Host "======================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Starting container in interactive mode..." -ForegroundColor Yellow
@@ -214,6 +223,7 @@ Write-Host "Press Ctrl+C to stop the container." -ForegroundColor Yellow
 Write-Host ""
 
 # Convert Windows paths to Unix-style for Docker (use forward slashes)
+# On Linux, path separators are already forward slashes, but this replace is safe
 $dataDirUnix = $dataDir -replace '\\', '/'
 $sshDirUnix = $sshDir -replace '\\', '/'
 
@@ -237,6 +247,14 @@ if ($mountSsh) {
 if (-not [string]::IsNullOrWhiteSpace($githubToken)) {
     $dockerArgs += "-e"
     $dockerArgs += "GITHUB_TOKEN=$githubToken"
+}
+
+# Add Tailscale config if available
+if (-not [string]::IsNullOrWhiteSpace($TailscaleAuthKey)) {
+    $dockerArgs += "-e"
+    $dockerArgs += "TAILSCALE_AUTH_KEY=$TailscaleAuthKey"
+    $dockerArgs += "-e"
+    $dockerArgs += "TAILSCALE_HOSTNAME=$TailscaleHostname"
 }
 
 # Add image name

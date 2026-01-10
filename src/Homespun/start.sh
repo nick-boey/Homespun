@@ -42,6 +42,11 @@ if [ ! -z "$TAILSCALE_AUTH_KEY" ]; then
         --hostname="${TS_HOSTNAME}" \
         --ssh \
         --accept-routes
+
+    # Serve the application on the Tailscale network (Port 80 -> Localhost 8080)
+    # This enables access via http://hostname on the tailnet
+    echo "Configuring Tailscale Serve..."
+    tailscale --socket=/tmp/tailscale/tailscaled.sock serve --bg --http=80 tcp://localhost:8080
         
     echo "Tailscale started."
 fi

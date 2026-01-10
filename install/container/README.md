@@ -37,6 +37,44 @@ The application will be available at `http://localhost:8080`
 
 Press `Ctrl+C` to stop the container.
 
+## Running on Azure Linux VM (with Tailscale)
+
+To run Homespun on a cloud VM and access it securely via Tailscale:
+
+1.  **Generate a Tailscale Auth Key:**
+    - Go to [Tailscale Admin Console](https://login.tailscale.com/admin/settings/keys)
+    - Generate an ephemeral key (reusable if you plan to spin up multiple instances, or single-use)
+    - Ensure the key has tags if you use ACLs (e.g., `tag:homespun`)
+
+2.  **Run with Tailscale:**
+
+    **Using the PowerShell script (if PowerShell is installed):**
+    ```powershell
+    ./install/container/run.ps1 -TailscaleAuthKey "tskey-auth-..." -TailscaleHostname "homespun-azure"
+    ```
+
+    **Using the Bash script (Linux/macOS):**
+    ```bash
+    ./install/container/run.sh --tailscale-auth-key "tskey-auth-..." --tailscale-hostname "homespun-azure"
+    ```
+
+    **Using Docker directly:**
+    ```bash
+    docker run --rm -it \
+      --name homespun-azure \
+      -p 8080:8080 \
+      -v ~/.homespun-container/data:/data \
+      -e GITHUB_TOKEN=your_token \
+      -e TAILSCALE_AUTH_KEY=tskey-auth-... \
+      -e TAILSCALE_HOSTNAME=homespun-azure \
+      homespun:local
+    ```
+
+3.  **Access the Application:**
+    - The application will join your Tailscale network.
+    - It uses `tailscale serve` to expose the application on port 80 of its Tailscale IP.
+    - Access it from another device on your tailnet via: `http://homespun-azure` (or the MagicDNS name).
+
 ## Manual Container Operations
 
 ### Building the Container

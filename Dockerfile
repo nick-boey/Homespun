@@ -18,6 +18,7 @@ RUN dotnet restore
 
 # Cache-busting build argument
 ARG CACHEBUST=1
+ARG VERSION=1.0.0
 
 # Copy everything else
 COPY . .
@@ -27,6 +28,7 @@ COPY . .
 # (blazor.web.js, etc.) are in an implicit package that's only resolved during publish
 RUN dotnet publish src/Homespun/Homespun.csproj \
     -c Release \
+    /p:Version=$VERSION \
     -o /app/publish
 
 # =============================================================================
@@ -35,12 +37,14 @@ RUN dotnet publish src/Homespun/Homespun.csproj \
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 
-# Install dependencies: git, gh CLI, Node.js (for beads)
+# Install dependencies: git, gh CLI, Node.js (for beads), iproute2, iptables (for networking)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     curl \
     ca-certificates \
     gnupg \
+    iproute2 \
+    iptables \
     && rm -rf /var/lib/apt/lists/*
 
 # Install GitHub CLI
@@ -65,8 +69,9 @@ RUN curl -fsSL https://tailscale.com/install.sh | sh
 # Create non-root user for security
 RUN useradd --create-home --shell /bin/bash homespun
 
-# Create data directory
-RUN mkdir -p /data/.homespun && chown -R homespun:homespun /data
+# Create data directory and tailscale state directories
+RUN mkdir -p /data/.homespun /var/run/tailscale /var/cache/tailscale /var/lib/tailscale \
+    && chown -R homespun:homespun /data /var/run/tailscale /var/cache/tailscale /var/lib/tailscale
 
 # Copy published application
 COPY --from=build /app/publish .
