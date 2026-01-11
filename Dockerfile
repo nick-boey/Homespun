@@ -70,7 +70,7 @@ RUN curl -fsSL https://tailscale.com/install.sh | sh
 RUN useradd --create-home --shell /bin/bash homespun
 
 # Create data directory and tailscale state directories
-RUN mkdir -p /data/.homespun /var/run/tailscale /var/cache/tailscale /var/lib/tailscale \
+RUN mkdir -p /data /var/run/tailscale /var/cache/tailscale /var/lib/tailscale \
     && chown -R homespun:homespun /data /var/run/tailscale /var/cache/tailscale /var/lib/tailscale
 
 # Copy published application
@@ -89,7 +89,7 @@ USER homespun
 # Configure environment
 ENV ASPNETCORE_ENVIRONMENT=Production
 ENV ASPNETCORE_URLS=http://+:8080
-ENV HOMESPUN_DATA_PATH=/data/.homespun/homespun-data.json
+ENV HOMESPUN_DATA_PATH=/data/homespun-data.json
 ENV DOTNET_PRINT_TELEMETRY_MESSAGE=false
 
 # Expose port

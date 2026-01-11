@@ -7,7 +7,7 @@ if [ ! -z "$TAILSCALE_AUTH_KEY" ]; then
     
     # Use persistent storage for Tailscale state
     # This ensures the device ID remains consistent across container restarts
-    TS_STATE_DIR="/data/.homespun/tailscale"
+    TS_STATE_DIR="/data/tailscale"
     mkdir -p "$TS_STATE_DIR"
     mkdir -p /tmp/tailscale
 
