@@ -94,13 +94,18 @@ log_info "[4/6] Setting up directories..."
 DATA_DIR="$HOME/.homespun-container/data"
 SSH_DIR="$HOME/.ssh"
 
-# Create data directory
+# Create data directory with permissions for container user (UID 1000)
 if [ ! -d "$DATA_DIR" ]; then
     mkdir -p "$DATA_DIR"
     log_success "      Created data directory: $DATA_DIR"
 else
     log_success "      Data directory exists: $DATA_DIR"
 fi
+
+# Ensure container user can write to the data directory
+# The container runs as 'homespun' user (UID 1000)
+chmod 777 "$DATA_DIR" 2>/dev/null || true
+log_success "      Set data directory permissions for container access"
 
 # Check SSH directory
 MOUNT_SSH=false
