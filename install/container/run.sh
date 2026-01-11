@@ -132,6 +132,7 @@ log_info "======================================"
 log_info "  Container Configuration"
 log_info "======================================"
 echo "  Name:        $CONTAINER_NAME"
+echo "  User:        $(id -u):$(id -g)"
 echo "  Port:        8080"
 echo "  URL:         http://localhost:8080"
 echo "  Environment: Production"
@@ -149,13 +150,18 @@ log_warn "Press Ctrl+C to stop the container."
 echo
 
 # Build docker run command
+# Run as host user so files created in mounted volumes have correct ownership
 DOCKER_CMD=(docker run --rm -it)
+DOCKER_CMD+=("--user" "$(id -u):$(id -g)")
 DOCKER_CMD+=("--name" "$CONTAINER_NAME")
 DOCKER_CMD+=("-p" "8080:8080")
 DOCKER_CMD+=("-v" "$DATA_DIR:/data")
+# Set HOME for the container user (needed for SSH and git)
+DOCKER_CMD+=("-e" "HOME=/home/containeruser")
+DOCKER_CMD+=("-v" "$DATA_DIR:/home/containeruser")
 
 if [ "$MOUNT_SSH" = true ]; then
-    DOCKER_CMD+=("-v" "$SSH_DIR:/home/homespun/.ssh:ro")
+    DOCKER_CMD+=("-v" "$SSH_DIR:/home/containeruser/.ssh:ro")
 fi
 
 if [ -n "$GITHUB_TOKEN" ]; then
