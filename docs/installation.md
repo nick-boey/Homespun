@@ -1,13 +1,12 @@
 # Homespun installation guide
 
-This guide covers deploying Homespun to Ubuntu virtual machines, Docker containers, and Azure Container Apps.
+This guide covers deploying Homespun to Ubuntu virtual machines and Docker containers.
 
 ## Table of contents
 
 - [Prerequisites](#prerequisites)
 - [VM deployment](#vm-deployment)
 - [Container deployment](#container-deployment)
-- [Azure Container Apps deployment](#azure-container-apps-deployment)
 - [Post-deployment configuration](#post-deployment-configuration)
 - [Troubleshooting](#troubleshooting)
 
@@ -28,12 +27,6 @@ This guide covers deploying Homespun to Ubuntu virtual machines, Docker containe
 
 - Docker 20.10 or later
 - Docker Compose (optional, for easier management)
-
-### Azure-specific requirements
-
-- Azure subscription
-- Azure CLI (`az`) installed and authenticated
-- Terraform 1.0 or later
 
 ## VM deployment
 
@@ -191,6 +184,21 @@ docker run -d \
   homespun:local
 ```
 
+**Production with pre-built image from GHCR:**
+
+Pre-built images are published to GitHub Container Registry on each release:
+
+```bash
+docker run -d \
+  --name homespun \
+  -p 8080:8080 \
+  -v homespun-data:/data \
+  -e GITHUB_TOKEN=ghp_your_token_here \
+  -e ASPNETCORE_ENVIRONMENT=Production \
+  --restart unless-stopped \
+  ghcr.io/nick-boey/homespun:latest
+```
+
 ### Step 3: Verify the deployment
 
 **Interactive mode (Windows script):**
@@ -248,6 +256,43 @@ Run with:
 GITHUB_TOKEN=ghp_your_token docker-compose up -d
 ```
 
+### Automatic updates with Watchtower
+
+For production deployments using the pre-built GHCR image, use [Watchtower](https://containrrr.dev/watchtower/) to automatically update when new releases are published:
+
+```yaml
+version: '3.8'
+
+services:
+  homespun:
+    image: ghcr.io/nick-boey/homespun:latest
+    container_name: homespun
+    ports:
+      - "8080:8080"
+    volumes:
+      - homespun-data:/data
+    environment:
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - ASPNETCORE_ENVIRONMENT=Production
+    restart: unless-stopped
+
+  watchtower:
+    image: containrrr/watchtower
+    container_name: watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_POLL_INTERVAL=300
+    restart: unless-stopped
+    command: homespun
+
+volumes:
+  homespun-data:
+```
+
+See [install/container/README.md](../install/container/README.md#vm-deployment-with-automatic-updates) for detailed Watchtower configuration options.
+
 ### Tailscale integration for containers
 
 To make your container accessible via Tailscale:
@@ -267,113 +312,6 @@ docker run -d \
 **Option B: Tailscale sidecar**
 
 Use a Tailscale container as a sidecar. See [Tailscale Docker documentation](https://tailscale.com/kb/1282/docker).
-
-## Azure Container Apps deployment
-
-Deploy Homespun to Azure Container Apps with Terraform, including persistent storage and Azure Container Registry.
-
-### Step 1: Prepare the infrastructure
-
-```bash
-cd install/cloud/azure
-
-# Initialize Terraform
-terraform init
-```
-
-### Step 2: Configure variables (optional)
-
-Create a `terraform.tfvars` file to customize the deployment:
-
-```hcl
-resource_group_name = "rg-homespun-prod"
-location            = "australiaeast"
-app_name            = "homespun"
-acr_name            = "acrmyhomespun"  # Must be globally unique
-
-# Container resources
-cpu    = 0.5
-memory = "1Gi"
-```
-
-### Step 3: Deploy infrastructure
-
-```bash
-# Preview changes
-terraform plan -var="github_token=ghp_xxx" -var="tailscale_auth_key=tskey-auth-xxx"
-
-# Apply changes
-terraform apply -var="github_token=ghp_xxx" -var="tailscale_auth_key=tskey-auth-xxx"
-```
-
-### Step 4: Build and push the container image
-
-```bash
-# Get ACR credentials from Terraform output
-ACR_NAME=$(terraform output -raw acr_login_server | cut -d'.' -f1)
-
-# Login to ACR
-az acr login --name $ACR_NAME
-
-# Build and push
-docker build -f ../../container/Dockerfile -t homespun:latest ../../../
-docker tag homespun:latest $(terraform output -raw acr_login_server)/homespun:latest
-docker push $(terraform output -raw acr_login_server)/homespun:latest
-```
-
-### Step 5: Update the Container App
-
-```bash
-# Trigger a new revision with the pushed image
-az containerapp update \
-  -n $(terraform output -raw container_app_name) \
-  -g $(terraform output -raw resource_group_name) \
-  --image $(terraform output -raw acr_login_server)/homespun:latest
-```
-
-### Step 6: Access Homespun
-
-Get the application URL:
-
-```bash
-terraform output container_app_url
-```
-
-### Tailscale with Azure Container Apps
-
-The container includes built-in Tailscale support for secure access without exposing public endpoints.
-
-1.  **Generate an Auth Key**:
-    *   Go to [Tailscale Admin Console > Settings > Keys](https://login.tailscale.com/admin/settings/keys).
-    *   Generate a new auth key.
-    *   **Important**: Disable "Ephemeral" (since we persist state).
-    *   Add tags (e.g., `tag:homespun`) if using ACLs.
-
-2.  **Deploy**:
-    *   Pass the key to Terraform using `-var="tailscale_auth_key=tskey-auth-..."`.
-
-3.  **Access**:
-    *   The app will register as `homespun-prod` (or your configured hostname).
-    *   Access it at `http://homespun-prod:8080` from any device on your Tailscale network.
-    *   You can now disable public ingress in Terraform if desired.
-
-### Terraform variables reference
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `resource_group_name` | Azure resource group name | `rg-homespun` |
-| `location` | Azure region | `australiaeast` |
-| `environment_name` | Container Apps environment name | `homespun-env` |
-| `app_name` | Container App name | `homespun` |
-| `container_image` | Container image reference | `homespun:latest` |
-| `github_token` | GitHub PAT (required) | - |
-| `tailscale_auth_key` | Tailscale auth key (optional) | - |
-| `cpu` | CPU cores (0.25-2.0) | `0.5` |
-| `memory` | Memory allocation | `1Gi` |
-| `min_replicas` | Minimum replicas | `1` |
-| `max_replicas` | Maximum replicas | `1` |
-| `use_acr` | Create Azure Container Registry | `true` |
-| `acr_name` | ACR name (globally unique) | `acrhomespun` |
 
 ## Post-deployment configuration
 
@@ -404,7 +342,6 @@ Homespun stores data in the `.homespun` folder. Ensure this is persisted:
 |------------|-------------------|
 | VM | `/var/lib/homespun/.homespun` (default) |
 | Container | Volume mount to `/data` |
-| Azure | Azure File Share mounted to `/data` |
 
 ## Troubleshooting
 
@@ -454,39 +391,11 @@ docker run -it --rm homespun:latest /bin/bash
 docker exec homespun curl localhost:8080/health
 ```
 
-### Azure deployment
-
-**Terraform errors:**
-
-```bash
-# Refresh state
-terraform refresh
-
-# Check Azure CLI authentication
-az account show
-```
-
-**Container App not starting:**
-
-```bash
-# View logs
-az containerapp logs show \
-  -n homespun \
-  -g rg-homespun \
-  --follow
-
-# Check revision status
-az containerapp revision list \
-  -n homespun \
-  -g rg-homespun \
-  --output table
-```
-
 ### General issues
 
 **SignalR/WebSocket connection failures:**
 
-- Ensure your reverse proxy (nginx or Azure) is configured for WebSocket upgrade
+- Ensure your reverse proxy (nginx) is configured for WebSocket upgrade
 - Check that `/hubs/` paths have extended timeouts
 
 **GitHub sync not working:**

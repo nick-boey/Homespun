@@ -1,45 +1,123 @@
 # Homespun Docker Container
 
-This directory contains documentation and scripts for building and running Homespun in a container.
+This directory contains Docker Compose configuration and scripts for running Homespun in a container with automatic updates via Watchtower.
 
 **Note:** The `Dockerfile` and `.dockerignore` files are located at the repository root, not in this directory.
 
 ## Prerequisites
 
 - Docker installed on your system
-- Docker Compose (optional, for easier configuration)
-- PowerShell 7.0+ (for the automated run script on Windows)
+- Docker Compose V2 (included with Docker Desktop, or install separately)
+- PowerShell 7.0+ (for the Windows script only)
 
-## Quick Start (Windows)
+## Quick Start (Linux/VM - Recommended)
 
-### Step 1: Build the container
+The easiest way to run Homespun on a Linux VM with automatic updates:
 
-From the repository root:
+### Step 1: Configure credentials
 
-```powershell
-docker build -t homespun:local .
+For one-time or temporary use, export environment variables:
+
+```bash
+export GITHUB_TOKEN="ghp_your_token_here"
 ```
 
-### Step 2: Run with the automated script
+For persistent VM deployments, add credentials to `/etc/environment` so they persist across reboots and are available to all users:
 
-```powershell
-.\install\container\run.ps1
+```bash
+# Edit /etc/environment (requires sudo)
+sudo nano /etc/environment
+
+# Add these lines:
+HSP_GITHUB_TOKEN="ghp_your_token_here"
+HSP_TAILSCALE_AUTH="tskey-auth-your_key_here"  # Optional, for Tailscale access
 ```
 
-This script will:
-- ✅ Validate Docker is running and the image exists
-- ✅ Read your GitHub token from .NET user secrets
-- ✅ Create `~/.homespun-container/data` for persistent storage
-- ✅ Mount your SSH keys for git operations
-- ✅ Run the container in interactive mode on port 8080
+Then reload the environment:
+
+```bash
+source /etc/environment
+```
+
+**Credential priority:** The script checks for credentials in this order:
+1. Command line arguments
+2. `HSP_GITHUB_TOKEN` / `HSP_TAILSCALE_AUTH` environment variables
+3. `GITHUB_TOKEN` / `TAILSCALE_AUTH_KEY` environment variables
+4. `.env` file in the install/container directory
+
+### Step 2: Run with the script
+
+```bash
+./install/container/run.sh
+```
+
+This will:
+- Pull the latest pre-built image from GHCR (`ghcr.io/nick-boey/homespun:latest`)
+- Start Homespun in detached mode on port 8080
+- Start Watchtower to automatically update when new releases are published
+- Create `~/.homespun-container/data` for persistent storage
 
 The application will be available at `http://localhost:8080`
 
-Press `Ctrl+C` to stop the container.
+### Common commands
 
-## Running on Azure Linux VM (with Tailscale)
+```bash
+# View logs
+./install/container/run.sh --logs
 
-To run Homespun on a cloud VM and access it securely via Tailscale:
+# Stop containers
+./install/container/run.sh --stop
+
+# Pull latest image and restart
+./install/container/run.sh --pull
+
+# Run interactively (foreground)
+./install/container/run.sh -it
+```
+
+## Quick Start (Windows)
+
+For Windows development, use the PowerShell script with a locally built image:
+
+```powershell
+# Build the image
+docker build -t homespun:local .
+
+# Run interactively
+.\install\container\run.ps1
+```
+
+## Development Mode
+
+For local development without Watchtower, use the `--local` flag:
+
+```bash
+# Build the local image first
+docker build -t homespun:local .
+
+# Run with local image (no Watchtower)
+./install/container/run.sh --local
+
+# Run interactively for debugging
+./install/container/run.sh --local -it
+```
+
+## Pre-built Container Images
+
+Pre-built container images are automatically published to GitHub Container Registry (GHCR) when new releases are created:
+
+```bash
+docker pull ghcr.io/nick-boey/homespun:latest
+```
+
+Available tags:
+- `latest` - Most recent release
+- `x.y.z` - Specific version (e.g., `1.0.0`)
+- `x.y` - Latest patch of a minor version (e.g., `1.0`)
+
+## Tailscale Integration
+
+To run Homespun on a VM and access it securely via Tailscale:
 
 1.  **Generate a Tailscale Auth Key:**
     - Go to [Tailscale Admin Console](https://login.tailscale.com/admin/settings/keys)
@@ -48,39 +126,21 @@ To run Homespun on a cloud VM and access it securely via Tailscale:
 
 2.  **Run with Tailscale:**
 
-    **Using the PowerShell script (if PowerShell is installed):**
-    ```powershell
-    ./install/container/run.ps1 -TailscaleAuthKey "tskey-auth-..." -TailscaleHostname "homespun-azure"
-    ```
-
-    **Using the Bash script (Linux/macOS):**
     ```bash
     export GITHUB_TOKEN="ghp_..."
-    ./install/container/run.sh --tailscale-auth-key "tskey-auth-..." --tailscale-hostname "homespun-azure"
+    ./install/container/run.sh --tailscale-auth-key "tskey-auth-..." --tailscale-hostname "homespun-vm"
     ```
 
-    **Note:** The bash script reads `GITHUB_TOKEN` from the environment. Set it before running the script.
-
-    **Using Docker directly:**
+    Or add to your `.env` file:
     ```bash
-    docker run --rm -it \
-      --user "$(id -u):$(id -g)" \
-      --name homespun-azure \
-      -p 8080:8080 \
-      -v ~/.homespun-container/data:/data \
-      -v ~/.homespun-container/data:/home/containeruser \
-      -v ~/.ssh:/home/containeruser/.ssh:ro \
-      -e HOME=/home/containeruser \
-      -e GITHUB_TOKEN=your_token \
-      -e TAILSCALE_AUTH_KEY=tskey-auth-... \
-      -e TAILSCALE_HOSTNAME=homespun-azure \
-      homespun:local
+    TAILSCALE_AUTH_KEY=tskey-auth-your_key_here
+    TAILSCALE_HOSTNAME=homespun-vm
     ```
 
 3.  **Access the Application:**
-    - The application will join your Tailscale network.
-    - It uses `tailscale serve` to expose the application on port 80 of its Tailscale IP.
-    - Access it from another device on your tailnet via: `http://homespun-azure` (or the MagicDNS name).
+    - The application will join your Tailscale network
+    - It uses `tailscale serve` to expose the application on port 80 of its Tailscale IP
+    - Access it from another device on your tailnet via: `http://homespun-vm` (or the MagicDNS name)
 
 ## Manual Container Operations
 
@@ -186,36 +246,36 @@ To explore the container or debug issues:
 docker run -it --entrypoint /bin/bash homespun:local
 ```
 
-## Docker Compose (Alternative)
+## Docker Compose Configuration
 
-Create a `docker-compose.yml` file in the project root:
+This directory includes a `docker-compose.yml` that configures:
+- **Homespun**: The main application with health checks
+- **Watchtower**: Automatic updates when new releases are published (production profile only)
+
+The `run.sh` script handles all the configuration automatically. For advanced customization, you can modify `docker-compose.yml` directly.
+
+### Watchtower behavior
+
+When running in production mode (default), Watchtower will:
+- Check for new images every 5 minutes (300 seconds)
+- Automatically pull and restart the container when a new release is published
+- Clean up old images to save disk space
+- Only monitor the `homespun` container (not other containers on the system)
+
+### Customizing update schedule
+
+Edit `docker-compose.yml` to change `WATCHTOWER_POLL_INTERVAL` (in seconds):
 
 ```yaml
-version: '3.8'
-
-services:
-  homespun:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    ports:
-      - "8080:8080"
-    volumes:
-      - homespun-data:/data
-      - ./repos:/repos
-    environment:
-      - GITHUB_TOKEN=${GITHUB_TOKEN}
-      - ASPNETCORE_ENVIRONMENT=Production
-    restart: unless-stopped
-
-volumes:
-  homespun-data:
+environment:
+  - WATCHTOWER_POLL_INTERVAL=3600  # Check hourly
 ```
 
-Then run:
+Or use a cron schedule:
 
-```bash
-docker-compose up -d
+```yaml
+environment:
+  - WATCHTOWER_SCHEDULE=0 0 4 * * *  # Check at 4 AM daily
 ```
 
 ## Environment Variables
