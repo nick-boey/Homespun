@@ -22,18 +22,24 @@ public class CommandRunner : ICommandRunner
     {
         var stopwatch = Stopwatch.StartNew();
 
-        // Translate container paths to host paths for beads commands
-        // The beads daemon runs on the host and needs host paths
-        var effectiveWorkingDirectory = TranslatePathForBeads(command, workingDirectory);
+        // Translate container paths to host paths for beads commands on Linux hosts.
+        // On Windows hosts, paths don't need translation (no host daemon or different path handling).
+        var effectiveWorkingDirectory = IsLinuxHostPath(HostDataPath)
+            ? TranslatePathForBeads(command, workingDirectory)
+            : workingDirectory;
+
+        // Add --no-daemon flag for beads commands to bypass daemon socket communication.
+        // TODO: Make --no-daemon configurable via BeadsService options
+        var effectiveArguments = AddBeadsFlags(command, arguments);
 
         _logger.LogInformation(
             "Executing command: {Command} {Arguments} in {WorkingDirectory}",
-            command, arguments, effectiveWorkingDirectory);
+            command, effectiveArguments, effectiveWorkingDirectory);
 
         var startInfo = new ProcessStartInfo
         {
             FileName = command,
-            Arguments = arguments,
+            Arguments = effectiveArguments,
             WorkingDirectory = effectiveWorkingDirectory,
             UseShellExecute = false,
             RedirectStandardOutput = true,
@@ -115,6 +121,55 @@ public class CommandRunner : ICommandRunner
             return trimmed;
 
         return trimmed[..maxLength] + "... [truncated]";
+    }
+
+    /// <summary>
+    /// Determines if the host data path looks like a Linux path.
+    /// Windows paths typically contain drive letters (C:/ or /c/) while Linux paths
+    /// start with /home/, /data/, /var/, etc.
+    /// </summary>
+    private static bool IsLinuxHostPath(string? hostPath)
+    {
+        if (string.IsNullOrEmpty(hostPath))
+            return false;
+
+        // Windows paths in Docker typically look like:
+        // - C:/Users/... or C:\Users\...
+        // - /c/Users/... (Git Bash / MSYS style)
+        // - /mnt/c/Users/... (WSL style)
+
+        // Check for Windows drive letter patterns
+        if (hostPath.Length >= 2 && char.IsLetter(hostPath[0]) && hostPath[1] == ':')
+            return false;
+
+        if (hostPath.StartsWith("/mnt/", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        // Check for /c/ style paths (single letter after leading slash)
+        if (hostPath.Length >= 3 && hostPath[0] == '/' && char.IsLetter(hostPath[1]) && hostPath[2] == '/')
+            return false;
+
+        // Assume Linux if starts with typical Linux paths
+        return hostPath.StartsWith("/home/", StringComparison.Ordinal) ||
+               hostPath.StartsWith("/var/", StringComparison.Ordinal) ||
+               hostPath.StartsWith("/opt/", StringComparison.Ordinal) ||
+               hostPath.StartsWith("/srv/", StringComparison.Ordinal) ||
+               hostPath.StartsWith("/root/", StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Adds flags to beads (bd) commands.
+    /// Currently adds --no-daemon to bypass socket communication with the host daemon.
+    /// </summary>
+    private static string AddBeadsFlags(string command, string arguments)
+    {
+        if (!command.Equals("bd", StringComparison.OrdinalIgnoreCase))
+            return arguments;
+
+        // Prepend --no-daemon to bypass daemon socket communication
+        return string.IsNullOrEmpty(arguments)
+            ? "--no-daemon"
+            : $"--no-daemon {arguments}";
     }
 
     /// <summary>
