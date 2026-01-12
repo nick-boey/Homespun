@@ -24,7 +24,7 @@ public class TestAgentService(
     private const string TestEntityPrefix = "test-agent-";
 
     // Use GLM-4.7 for test agents as it's free and doesn't require an API key
-    private const string TestAgentModel = "glm-4.7";
+    private const string TestAgentModel = "opencode/glm-4.7-free";
     
     private readonly ConcurrentDictionary<string, TestAgentStatus> _activeTestAgents = new();
 
