@@ -100,6 +100,10 @@ if (isContainerMode)
     builder.Services.AddSingleton<AgentProxyRouteManager>();
     builder.Services.AddSingleton<Yarp.ReverseProxy.Configuration.IProxyConfigProvider>(
         sp => sp.GetRequiredService<AgentProxyRouteManager>());
+
+    // Register response transform to rewrite absolute paths in HTML responses
+    builder.Services.AddSingleton<Yarp.ReverseProxy.Transforms.Builder.ITransformProvider, AgentProxyResponseTransform>();
+
     builder.Services.AddReverseProxy();
 }
 

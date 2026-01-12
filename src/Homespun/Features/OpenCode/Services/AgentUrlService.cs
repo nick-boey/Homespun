@@ -39,8 +39,9 @@ public class AgentUrlService : IAgentUrlService
             return GetInternalBaseUrl(port);
         }
 
-        var portSuffix = _options.ExternalPort == 80 ? "" : $":{_options.ExternalPort}";
-        return $"http://{_externalHostname}{portSuffix}{_options.AgentProxyBasePath}/{port}";
+        // Return relative URL (no hostname) - works across all access methods
+        // (localhost, tailnet, or any other hostname)
+        return $"{_options.AgentProxyBasePath}/{port}";
     }
 
     public string? GetWebViewUrl(int port, string worktreePath, string? sessionId)
