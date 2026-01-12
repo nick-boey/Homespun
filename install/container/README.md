@@ -10,6 +10,19 @@ This directory contains documentation and scripts for building and running Homes
 - Docker Compose (optional, for easier configuration)
 - PowerShell 7.0+ (for the automated run script on Windows)
 
+## Pre-built Container Images
+
+Pre-built container images are automatically published to GitHub Container Registry (GHCR) when new releases are created. You can pull the latest image without building locally:
+
+```bash
+docker pull ghcr.io/nick-boey/homespun:latest
+```
+
+Available tags:
+- `latest` - Most recent release
+- `x.y.z` - Specific version (e.g., `1.0.0`)
+- `x.y` - Latest patch of a minor version (e.g., `1.0`)
+
 ## Quick Start (Windows)
 
 ### Step 1: Build the container
@@ -216,6 +229,109 @@ Then run:
 
 ```bash
 docker-compose up -d
+```
+
+## VM Deployment with Automatic Updates
+
+For production deployments on a virtual machine, use [Watchtower](https://containrrr.dev/watchtower/) to automatically update the container when new releases are published to GHCR.
+
+### Docker Compose with Watchtower
+
+Create a `docker-compose.yml` file on your VM:
+
+```yaml
+version: '3.8'
+
+services:
+  homespun:
+    image: ghcr.io/nick-boey/homespun:latest
+    container_name: homespun
+    ports:
+      - "8080:8080"
+    volumes:
+      - homespun-data:/data
+      - ~/.ssh:/home/containeruser/.ssh:ro
+    environment:
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - ASPNETCORE_ENVIRONMENT=Production
+      - TAILSCALE_AUTH_KEY=${TAILSCALE_AUTH_KEY}
+      - TAILSCALE_HOSTNAME=${TAILSCALE_HOSTNAME:-homespun-vm}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  watchtower:
+    image: containrrr/watchtower
+    container_name: watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_POLL_INTERVAL=300
+      - WATCHTOWER_INCLUDE_STOPPED=false
+    restart: unless-stopped
+    command: homespun
+
+volumes:
+  homespun-data:
+```
+
+### Configuration
+
+Create a `.env` file alongside `docker-compose.yml`:
+
+```bash
+GITHUB_TOKEN=ghp_your_token_here
+TAILSCALE_AUTH_KEY=tskey-auth-your_key_here
+TAILSCALE_HOSTNAME=homespun-vm
+```
+
+### Start the services
+
+```bash
+docker-compose up -d
+```
+
+### Watchtower behavior
+
+Watchtower will:
+- Check for new images every 5 minutes (300 seconds)
+- Automatically pull and restart the container when a new release is published
+- Clean up old images to save disk space
+- Only monitor the `homespun` container (not other containers on the system)
+
+### Manual update
+
+To manually update immediately:
+
+```bash
+docker-compose pull homespun
+docker-compose up -d homespun
+```
+
+### View Watchtower logs
+
+```bash
+docker logs watchtower
+```
+
+### Customizing update schedule
+
+To change the update interval, modify `WATCHTOWER_POLL_INTERVAL` (in seconds). For example, to check hourly:
+
+```yaml
+environment:
+  - WATCHTOWER_POLL_INTERVAL=3600
+```
+
+You can also use a cron schedule instead:
+
+```yaml
+environment:
+  - WATCHTOWER_SCHEDULE=0 0 4 * * *  # Check at 4 AM daily
 ```
 
 ## Environment Variables
