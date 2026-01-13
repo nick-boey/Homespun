@@ -82,9 +82,14 @@ public partial class AgentProxyResponseTransform : ITransformProvider
 
     /// <summary>
     /// Rewrites absolute paths in HTML content to include the proxy base path.
+    /// Also injects a base tag to fix client-side routing (React Router).
     /// </summary>
     private static string RewriteAbsolutePaths(string html, string basePath)
     {
+        // Inject <base> tag for client-side routing (React Router needs this)
+        // Insert after <head> tag if present
+        html = InjectBaseTag(html, basePath);
+
         // Rewrite src="/..." attributes (scripts, images, etc.)
         html = SrcHrefPattern().Replace(html, $"$1=\"{basePath}$2");
 
@@ -93,6 +98,29 @@ public partial class AgentProxyResponseTransform : ITransformProvider
 
         // Rewrite action="/..." in forms
         html = ActionPattern().Replace(html, $"action=\"{basePath}$1");
+
+        return html;
+    }
+
+    /// <summary>
+    /// Injects a base tag into the HTML head to fix client-side routing.
+    /// </summary>
+    private static string InjectBaseTag(string html, string basePath)
+    {
+        // Check if there's already a base tag
+        if (BaseTagPattern().IsMatch(html))
+        {
+            // Replace existing base tag with our path
+            return BaseTagPattern().Replace(html, $"<base href=\"{basePath}/\">");
+        }
+
+        // Insert base tag after <head> or <head ...>
+        var headMatch = HeadTagPattern().Match(html);
+        if (headMatch.Success)
+        {
+            var insertPosition = headMatch.Index + headMatch.Length;
+            return html.Insert(insertPosition, $"\n    <base href=\"{basePath}/\">");
+        }
 
         return html;
     }
@@ -109,4 +137,12 @@ public partial class AgentProxyResponseTransform : ITransformProvider
     // Match action="/..."
     [GeneratedRegex(@"action=""(/(?!/)[^""]*)")]
     private static partial Regex ActionPattern();
+
+    // Match existing <base> tag
+    [GeneratedRegex(@"<base\s+href=""[^""]*""\s*/?>", RegexOptions.IgnoreCase)]
+    private static partial Regex BaseTagPattern();
+
+    // Match <head> or <head ...> opening tag
+    [GeneratedRegex(@"<head(\s[^>]*)?>", RegexOptions.IgnoreCase)]
+    private static partial Regex HeadTagPattern();
 }
