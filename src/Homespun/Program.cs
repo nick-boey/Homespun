@@ -130,23 +130,36 @@ app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages:
 
 // Note: HTTPS redirection removed - container runs HTTP-only behind a reverse proxy
 
+// Agent proxy middleware must run BEFORE routing
+// to intercept /global/... requests that would otherwise 404
+if (isContainerMode)
+{
+    // Rewrite OpenCode API requests based on Referer header
+    app.UseMiddleware<AgentRefererRewriteMiddleware>();
+
+    // Redirect to add absolute ?url= parameter for session pages
+    app.UseMiddleware<AgentUrlRedirectMiddleware>();
+}
+
+// Explicit routing - must come after rewrite middleware but before antiforgery
+app.UseRouting();
+
+// Antiforgery must come after UseRouting()
 app.UseAntiforgery();
 
 app.MapStaticAssets();
+
+// YARP must be registered BEFORE Blazor to handle /agent/{port}/* routes
+if (isContainerMode)
+{
+    app.MapReverseProxy();
+}
+
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
 // Map SignalR hubs
 app.MapHub<AgentHub>("/hubs/agent");
 app.MapHub<NotificationHub>("/hubs/notifications");
-
-// Map YARP reverse proxy for agent servers (only in container mode)
-if (isContainerMode)
-{
-    // Redirect middleware must run BEFORE YARP to avoid Content-Length mismatches
-    // when converting relative ?url= to absolute URL
-    app.UseMiddleware<AgentUrlRedirectMiddleware>();
-    app.MapReverseProxy();
-}
 
 app.Run();
