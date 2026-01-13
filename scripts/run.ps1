@@ -27,6 +27,10 @@
     Runs with Tailscale sidecar for tailnet access.
 
 .EXAMPLE
+    .\run.ps1 -ExternalHostname "homespun.tail1234.ts.net"
+    Runs with external hostname for agent URLs.
+
+.EXAMPLE
     .\run.ps1 -Stop
     Stops all containers.
 
@@ -39,9 +43,10 @@
     Port: 8080 (or via Tailscale)
     Data directory: ~/.homespun-container/data
 
-    Environment Variables (checked in order):
+    Environment Variables (checked in order, with .env file fallback):
     - HSP_GITHUB_TOKEN / GITHUB_TOKEN - GitHub personal access token
     - HSP_TAILSCALE_AUTH_KEY / TAILSCALE_AUTH_KEY - Tailscale auth key
+    - HSP_EXTERNAL_HOSTNAME - External hostname for agent URLs
 #>
 
 #Requires -Version 7.0
@@ -72,6 +77,9 @@ param(
     [Parameter(ParameterSetName = 'Run')]
     [string]$TailscaleHostname = "homespun",
 
+    [Parameter(ParameterSetName = 'Run')]
+    [string]$ExternalHostname,
+
     [Parameter(ParameterSetName = 'Stop')]
     [switch]$Stop,
 
@@ -88,10 +96,39 @@ $RepoRoot = (Resolve-Path (Join-Path $ScriptDir "..")).Path
 
 # Constants
 $UserSecretsId = "2cfc6c57-72da-4b56-944b-08f2c1df76f6"
+$EnvFilePath = Join-Path $RepoRoot ".env"
 
 # ============================================================================
 # Functions
 # ============================================================================
+
+function Get-EnvFileValue {
+    param(
+        [string]$Key,
+        [string]$EnvFilePath
+    )
+
+    if (-not (Test-Path $EnvFilePath)) {
+        return $null
+    }
+
+    try {
+        $content = Get-Content $EnvFilePath -Raw
+        # Match KEY=value, handling optional quotes
+        if ($content -match "(?m)^$Key=([`"']?)(.+?)\1\s*$") {
+            return $Matches[2]
+        }
+        # Also try without quotes for simple values
+        if ($content -match "(?m)^$Key=(.+?)\s*$") {
+            $value = $Matches[1] -replace '^["'']|["'']$', ''
+            return $value
+        }
+        return $null
+    }
+    catch {
+        return $null
+    }
+}
 
 function Test-DockerRunning {
     try {
@@ -120,7 +157,10 @@ function Test-DockerImageExists {
 }
 
 function Get-GitHubToken {
-    param([string]$UserSecretsId)
+    param(
+        [string]$UserSecretsId,
+        [string]$EnvFilePath
+    )
 
     # Check environment variables first (HSP_GITHUB_TOKEN takes precedence)
     $token = $env:HSP_GITHUB_TOKEN
@@ -136,25 +176,33 @@ function Get-GitHubToken {
     # Fall back to .NET user secrets
     $secretsPath = Join-Path $env:APPDATA "Microsoft\UserSecrets\$UserSecretsId\secrets.json"
 
-    if (-not (Test-Path $secretsPath)) {
-        return $null
+    if (Test-Path $secretsPath) {
+        try {
+            $secrets = Get-Content $secretsPath -Raw | ConvertFrom-Json
+            $token = $secrets.'GitHub:Token'
+            if (-not [string]::IsNullOrWhiteSpace($token)) {
+                return $token
+            }
+        }
+        catch {
+            # Continue to next fallback
+        }
     }
 
-    try {
-        $secrets = Get-Content $secretsPath -Raw | ConvertFrom-Json
-        $token = $secrets.'GitHub:Token'
-        if ([string]::IsNullOrWhiteSpace($token)) {
-            return $null
-        }
+    # Fall back to .env file
+    $token = Get-EnvFileValue -Key "GITHUB_TOKEN" -EnvFilePath $EnvFilePath
+    if (-not [string]::IsNullOrWhiteSpace($token)) {
         return $token
     }
-    catch {
-        return $null
-    }
+
+    return $null
 }
 
 function Get-TailscaleAuthKey {
-    param([string]$ParamValue)
+    param(
+        [string]$ParamValue,
+        [string]$EnvFilePath
+    )
 
     if (-not [string]::IsNullOrWhiteSpace($ParamValue)) {
         return $ParamValue
@@ -168,6 +216,36 @@ function Get-TailscaleAuthKey {
     $key = $env:TAILSCALE_AUTH_KEY
     if (-not [string]::IsNullOrWhiteSpace($key)) {
         return $key
+    }
+
+    # Fall back to .env file
+    $key = Get-EnvFileValue -Key "TAILSCALE_AUTH_KEY" -EnvFilePath $EnvFilePath
+    if (-not [string]::IsNullOrWhiteSpace($key)) {
+        return $key
+    }
+
+    return $null
+}
+
+function Get-ExternalHostname {
+    param(
+        [string]$ParamValue,
+        [string]$EnvFilePath
+    )
+
+    if (-not [string]::IsNullOrWhiteSpace($ParamValue)) {
+        return $ParamValue
+    }
+
+    $hostname = $env:HSP_EXTERNAL_HOSTNAME
+    if (-not [string]::IsNullOrWhiteSpace($hostname)) {
+        return $hostname
+    }
+
+    # Fall back to .env file
+    $hostname = Get-EnvFileValue -Key "HSP_EXTERNAL_HOSTNAME" -EnvFilePath $EnvFilePath
+    if (-not [string]::IsNullOrWhiteSpace($hostname)) {
+        return $hostname
     }
 
     return $null
@@ -235,7 +313,7 @@ try {
 
     # Step 3: Read GitHub token
     Write-Host "[3/5] Reading GitHub token..." -ForegroundColor Cyan
-    $githubToken = Get-GitHubToken -UserSecretsId $UserSecretsId
+    $githubToken = Get-GitHubToken -UserSecretsId $UserSecretsId -EnvFilePath $EnvFilePath
 
     if ([string]::IsNullOrWhiteSpace($githubToken)) {
         Write-Warning "      GitHub token not found."
@@ -247,11 +325,17 @@ try {
     }
 
     # Read Tailscale auth key
-    $tailscaleKey = Get-TailscaleAuthKey -ParamValue $TailscaleAuthKey
+    $tailscaleKey = Get-TailscaleAuthKey -ParamValue $TailscaleAuthKey -EnvFilePath $EnvFilePath
     if (-not [string]::IsNullOrWhiteSpace($tailscaleKey)) {
         $Tailscale = $true
         $maskedTsKey = $tailscaleKey.Substring(0, [Math]::Min(15, $tailscaleKey.Length)) + "..."
         Write-Host "      Tailscale auth key found: $maskedTsKey" -ForegroundColor Green
+    }
+
+    # Read external hostname
+    $externalHostnameValue = Get-ExternalHostname -ParamValue $ExternalHostname -EnvFilePath $EnvFilePath
+    if (-not [string]::IsNullOrWhiteSpace($externalHostnameValue)) {
+        Write-Host "      External hostname: $externalHostnameValue" -ForegroundColor Green
     }
 
     # Step 4: Set up directories
@@ -288,6 +372,7 @@ try {
     $env:GITHUB_TOKEN = $githubToken
     $env:TAILSCALE_AUTH_KEY = $tailscaleKey
     $env:TAILSCALE_HOSTNAME = $TailscaleHostname
+    $env:HSP_EXTERNAL_HOSTNAME = $externalHostnameValue
 
     # Determine compose profiles
     $composeProfiles = @()
@@ -316,6 +401,9 @@ try {
     }
     if ($Tailscale) {
         Write-Host "  Tailscale:   Enabled via sidecar ($TailscaleHostname)"
+    }
+    if (-not [string]::IsNullOrWhiteSpace($externalHostnameValue)) {
+        Write-Host "  Agent URLs:  http://$($externalHostnameValue):<port>"
     }
     if (-not $Local) {
         Write-Host "  Watchtower:  Enabled (auto-updates every 5 min)"
