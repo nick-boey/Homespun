@@ -186,6 +186,11 @@ if [ -z "$TAILSCALE_AUTH_KEY" ]; then
     TAILSCALE_AUTH_KEY="${HSP_TAILSCALE_AUTH_KEY:-${TAILSCALE_AUTH_KEY:-}}"
 fi
 
+# Try reading Tailscale auth key from .env file if not set
+if [ -z "$TAILSCALE_AUTH_KEY" ] && [ -f "$REPO_ROOT/.env" ]; then
+    TAILSCALE_AUTH_KEY=$(grep -E "^TAILSCALE_AUTH_KEY=" "$REPO_ROOT/.env" 2>/dev/null | cut -d'=' -f2- | tr -d '"' | tr -d "'" || true)
+fi
+
 # If Tailscale auth key is set, enable Tailscale mode
 if [ -n "$TAILSCALE_AUTH_KEY" ]; then
     USE_TAILSCALE=true
@@ -221,6 +226,15 @@ echo
 # Read external hostname from environment if not passed as argument
 if [ -z "$EXTERNAL_HOSTNAME" ]; then
     EXTERNAL_HOSTNAME="${HSP_EXTERNAL_HOSTNAME:-}"
+fi
+
+# Try reading external hostname from .env file if not set
+if [ -z "$EXTERNAL_HOSTNAME" ] && [ -f "$REPO_ROOT/.env" ]; then
+    EXTERNAL_HOSTNAME=$(grep -E "^HSP_EXTERNAL_HOSTNAME=" "$REPO_ROOT/.env" 2>/dev/null | cut -d'=' -f2- | tr -d '"' | tr -d "'" || true)
+fi
+
+if [ -n "$EXTERNAL_HOSTNAME" ]; then
+    log_success "      External hostname: $EXTERNAL_HOSTNAME"
 fi
 
 # Export environment variables for docker-compose
