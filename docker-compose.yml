@@ -67,6 +67,8 @@ services:
       # The beads daemon runs on the host and sees the full host path,
       # while the container sees /data. This allows path translation.
       - HSP_HOST_DATA_PATH=${DATA_DIR:-}
+      # External hostname for agent URLs (e.g., homespun.tail1234.ts.net)
+      - HSP_EXTERNAL_HOSTNAME=${HSP_EXTERNAL_HOSTNAME:-}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
