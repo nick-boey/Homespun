@@ -94,6 +94,7 @@ builder.Services.Configure<GitHubSyncPollingOptions>(
 builder.Services.AddHostedService<GitHubSyncPollingService>();
 
 builder.Services.AddSignalR();
+builder.Services.AddHealthChecks();
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
@@ -120,5 +121,8 @@ app.MapRazorComponents<App>()
 // Map SignalR hubs
 app.MapHub<AgentHub>("/hubs/agent");
 app.MapHub<NotificationHub>("/hubs/notifications");
+
+// Map health check endpoint
+app.MapHealthChecks("/health");
 
 app.Run();
