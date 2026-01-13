@@ -30,7 +30,7 @@ set -e
 #
 # Environment Variables:
 #   HSP_GITHUB_TOKEN            GitHub token (preferred for VM secrets)
-#   HSP_TAILSCALE_AUTH          Tailscale auth key (preferred for VM secrets)
+#   HSP_TAILSCALE_AUTH_KEY          Tailscale auth key (preferred for VM secrets)
 #   HSP_EXTERNAL_HOSTNAME       External hostname for agent URLs
 #   GITHUB_TOKEN                GitHub token (fallback)
 #   TAILSCALE_AUTH_KEY          Tailscale auth key (fallback)
@@ -182,8 +182,8 @@ fi
 
 # Read Tailscale auth key from environment if not passed as argument
 if [ -z "$TAILSCALE_AUTH_KEY" ]; then
-    # Check HSP_TAILSCALE_AUTH first (for VM secrets), then TAILSCALE_AUTH_KEY
-    TAILSCALE_AUTH_KEY="${HSP_TAILSCALE_AUTH:-${TAILSCALE_AUTH_KEY:-}}"
+    # Check HSP_TAILSCALE_AUTH_KEY first (for VM secrets), then TAILSCALE_AUTH_KEY
+    TAILSCALE_AUTH_KEY="${HSP_TAILSCALE_AUTH_KEY:-${TAILSCALE_AUTH_KEY:-}}"
 fi
 
 # If Tailscale auth key is set, enable Tailscale mode

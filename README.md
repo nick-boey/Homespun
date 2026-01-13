@@ -283,7 +283,7 @@ The application will be available at `http://homespun-vm.<your-tailnet>.ts.net:8
 | `TAILSCALE_AUTH_KEY` | Tailscale auth key | (none) |
 | `TAILSCALE_HOSTNAME` | Tailscale hostname | `homespun` |
 | `HSP_GITHUB_TOKEN` | Alternative GitHub token (VM secrets) | (none) |
-| `HSP_TAILSCALE_AUTH` | Alternative Tailscale key (VM secrets) | (none) |
+| `HSP_TAILSCALE_AUTH_KEY` | Alternative Tailscale key (VM secrets) | (none) |
 
 ### Pre-built Images
 

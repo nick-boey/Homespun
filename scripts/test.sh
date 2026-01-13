@@ -15,7 +15,7 @@ set -e
 #
 # Environment Variables:
 #   HSP_GITHUB_TOKEN       GitHub token
-#   HSP_TAILSCALE_AUTH     Tailscale auth key
+#   HSP_TAILSCALE_AUTH_KEY     Tailscale auth key
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -61,8 +61,8 @@ if [ -z "$HSP_GITHUB_TOKEN" ]; then
     log_warn "HSP_GITHUB_TOKEN not set"
 fi
 
-if [ -z "$HSP_TAILSCALE_AUTH" ]; then
-    log_warn "HSP_TAILSCALE_AUTH not set (Tailscale will not be configured)"
+if [ -z "$HSP_TAILSCALE_AUTH_KEY" ]; then
+    log_warn "HSP_TAILSCALE_AUTH_KEY not set (Tailscale will not be configured)"
 fi
 
 # Build the container

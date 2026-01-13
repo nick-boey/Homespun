@@ -41,7 +41,7 @@
 
     Environment Variables (checked in order):
     - HSP_GITHUB_TOKEN / GITHUB_TOKEN - GitHub personal access token
-    - HSP_TAILSCALE_AUTH / TAILSCALE_AUTH_KEY - Tailscale auth key
+    - HSP_TAILSCALE_AUTH_KEY / TAILSCALE_AUTH_KEY - Tailscale auth key
 #>
 
 #Requires -Version 7.0
@@ -160,7 +160,7 @@ function Get-TailscaleAuthKey {
         return $ParamValue
     }
 
-    $key = $env:HSP_TAILSCALE_AUTH
+    $key = $env:HSP_TAILSCALE_AUTH_KEY
     if (-not [string]::IsNullOrWhiteSpace($key)) {
         return $key
     }
