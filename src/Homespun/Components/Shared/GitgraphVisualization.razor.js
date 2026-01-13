@@ -4,6 +4,84 @@
 const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
 const graphs = new Map();
 
+// Tooltip element (shared across all graphs)
+let tooltip = null;
+
+function createTooltip() {
+    tooltip = document.createElement('div');
+    tooltip.className = 'graph-tooltip';
+    tooltip.style.cssText = `
+        position: fixed;
+        background: var(--bg-primary, #1a1a2e);
+        border: 1px solid var(--text-muted, #6c757d);
+        border-radius: 8px;
+        padding: 12px;
+        max-width: 350px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        z-index: 1000;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.15s ease;
+        font-size: 13px;
+        line-height: 1.4;
+    `;
+    document.body.appendChild(tooltip);
+}
+
+function showTooltip(data, event) {
+    if (!tooltip) createTooltip();
+
+    let content = '';
+
+    if (data.nodeType.includes('PullRequest')) {
+        content = `
+            <div style="font-weight: 600; margin-bottom: 8px; color: var(--text-primary, #eaeaea);">
+                PR #${data.pullRequestNumber}: ${data.subject.replace(/^#\d+:\s*/, '')}
+            </div>
+            <div style="color: var(--text-secondary, #a0a0a0); margin-bottom: 6px;">
+                <span style="display: inline-block; padding: 2px 8px; border-radius: 4px; background: ${data.color}; color: white; font-size: 11px; margin-right: 8px;">
+                    ${data.status}
+                </span>
+                Branch: <code style="background: var(--bg-secondary, #16213e); padding: 2px 4px; border-radius: 3px;">${data.branch}</code>
+            </div>
+            <div style="color: var(--text-secondary, #a0a0a0);">${data.description || data.subject}</div>
+        `;
+    } else {
+        content = `
+            <div style="font-weight: 600; margin-bottom: 8px; color: var(--text-primary, #eaeaea);">
+                ${data.issueId}: ${data.subject.replace(/^\[.*?\]\s*/, '')}
+            </div>
+            <div style="color: var(--text-secondary, #a0a0a0); margin-bottom: 6px;">
+                <span style="display: inline-block; padding: 2px 8px; border-radius: 4px; background: ${data.color}; color: white; font-size: 11px; margin-right: 8px;">
+                    ${data.tag || 'issue'}
+                </span>
+            </div>
+            <div style="color: var(--text-secondary, #a0a0a0);">${data.description || data.subject}</div>
+        `;
+    }
+
+    tooltip.innerHTML = content;
+    tooltip.style.opacity = '1';
+
+    // Position tooltip near cursor
+    const x = event.clientX + 15;
+    const y = event.clientY + 15;
+
+    // Adjust if tooltip would go off screen
+    const rect = tooltip.getBoundingClientRect();
+    const maxX = window.innerWidth - 360;
+    const maxY = window.innerHeight - rect.height - 20;
+
+    tooltip.style.left = Math.min(x, maxX) + 'px';
+    tooltip.style.top = Math.min(y, maxY) + 'px';
+}
+
+function hideTooltip() {
+    if (tooltip) {
+        tooltip.style.opacity = '0';
+    }
+}
+
 // Load Gitgraph.js from CDN if not already loaded
 async function ensureGitgraphLoaded() {
     if (window.GitgraphJS) {
@@ -54,6 +132,11 @@ function createIssueRenderDot(commit, data, dotNetRef) {
         dotNetRef.invokeMethodAsync('HandleNodeClick', data.nodeType, data.hash, data.pullRequestNumber, data.issueId);
     });
 
+    // Tooltip on hover
+    g.addEventListener('mouseenter', (e) => showTooltip(data, e));
+    g.addEventListener('mousemove', (e) => showTooltip(data, e));
+    g.addEventListener('mouseleave', hideTooltip);
+
     return g;
 }
 
@@ -78,6 +161,11 @@ function createPRRenderDot(commit, data, dotNetRef) {
     g.addEventListener('click', () => {
         dotNetRef.invokeMethodAsync('HandleNodeClick', data.nodeType, data.hash, data.pullRequestNumber, data.issueId);
     });
+
+    // Tooltip on hover
+    g.addEventListener('mouseenter', (e) => showTooltip(data, e));
+    g.addEventListener('mousemove', (e) => showTooltip(data, e));
+    g.addEventListener('mouseleave', hideTooltip);
 
     return g;
 }
@@ -109,20 +197,21 @@ export async function initializeGraph(containerId, graphData, dotNetRef) {
         const GitgraphJS = await ensureGitgraphLoaded();
         const themeColors = getThemeColors();
 
-        // Create custom template
+        // Create custom template - settings match tested values
         const template = GitgraphJS.templateExtend(GitgraphJS.TemplateName.Metro, {
             colors: [themeColors.main, themeColors.branch1, themeColors.branch2, themeColors.branch3, themeColors.branch4],
             branch: {
-                lineWidth: 2,
-                spacing: 50,
+                lineWidth: 1.5,
+                spacing: 15,
                 label: {
-                    display: false  // Hide branch labels for cleaner look
+                    display: true,
+                    font: '12px sans-serif'
                 }
             },
             commit: {
-                spacing: 50,
+                spacing: 25,
                 dot: {
-                    size: 8,
+                    size: 5,
                     strokeWidth: 0
                 },
                 message: {
@@ -136,8 +225,7 @@ export async function initializeGraph(containerId, graphData, dotNetRef) {
         // Create the graph
         const gitgraph = GitgraphJS.createGitgraph(container, {
             template,
-            orientation: GitgraphJS.Orientation.VerticalReverse,  // Oldest at top
-            mode: GitgraphJS.Mode.Compact
+            orientation: GitgraphJS.Orientation.VerticalReverse  // Oldest at top
         });
 
         // Track created branches
@@ -147,30 +235,19 @@ export async function initializeGraph(containerId, graphData, dotNetRef) {
         const mainBranch = gitgraph.branch(graphData.mainBranchName);
         branches.set(graphData.mainBranchName, mainBranch);
 
-        // Create branches from the data
+        // Build branch color lookup from data
+        const branchColors = {};
         for (const branchData of graphData.branches) {
-            if (branchData.name === graphData.mainBranchName) continue;
-
-            const parentBranch = branches.get(branchData.parentBranch || graphData.mainBranchName) || mainBranch;
-            const branch = parentBranch.branch({
-                name: branchData.name,
-                style: branchData.color ? { color: branchData.color } : undefined
-            });
-            branches.set(branchData.name, branch);
+            branchColors[branchData.name] = branchData.color;
         }
 
-        // Add commits
-        for (const commitData of graphData.commits) {
-            let branch = branches.get(commitData.branch);
-            if (!branch) {
-                // Create branch on-the-fly if needed
-                branch = mainBranch.branch(commitData.branch);
-                branches.set(commitData.branch, branch);
-            }
+        // Get text color for messages
+        const textColor = getComputedStyle(document.documentElement).getPropertyValue('--text-primary').trim() || '#000';
 
+        // Helper to create commit options
+        function createCommitOptions(commitData) {
             const isIssue = commitData.nodeType.includes('Issue');
-
-            branch.commit({
+            return {
                 subject: commitData.subject,
                 hash: commitData.hash,
                 style: {
@@ -182,11 +259,11 @@ export async function initializeGraph(containerId, graphData, dotNetRef) {
                     ? (commit) => createIssueRenderDot(commit, commitData, dotNetRef)
                     : (commit) => createPRRenderDot(commit, commitData, dotNetRef),
                 renderMessage: (commit) => {
-                    // Custom message rendering with click handler
+                    // Custom message rendering with click handler and proper vertical alignment
                     const text = document.createElementNS(SVG_NAMESPACE, 'text');
-                    text.setAttribute('alignment-baseline', 'central');
-                    text.setAttribute('dominant-baseline', 'central');
-                    text.setAttribute('fill', getComputedStyle(document.documentElement).getPropertyValue('--text-primary').trim() || '#000');
+                    text.setAttribute('dominant-baseline', 'middle');
+                    text.setAttribute('dy', '0.35em');  // Fine-tune vertical alignment
+                    text.setAttribute('fill', textColor);
                     text.style.cursor = 'pointer';
                     text.textContent = commit.subject;
 
@@ -194,9 +271,32 @@ export async function initializeGraph(containerId, graphData, dotNetRef) {
                         dotNetRef.invokeMethodAsync('HandleNodeClick', commitData.nodeType, commitData.hash, commitData.pullRequestNumber, commitData.issueId);
                     });
 
+                    // Tooltip on hover
+                    text.addEventListener('mouseenter', (e) => showTooltip(commitData, e));
+                    text.addEventListener('mousemove', (e) => showTooltip(commitData, e));
+                    text.addEventListener('mouseleave', hideTooltip);
+
                     return text;
                 }
-            });
+            };
+        }
+
+        // Process commits - create branches lazily when first needed
+        // This ensures branches are created at the right point in the graph
+        for (const commitData of graphData.commits) {
+            let branch = branches.get(commitData.branch);
+
+            // If branch doesn't exist yet, create it from main (at current HEAD)
+            if (!branch) {
+                const color = branchColors[commitData.branch];
+                branch = mainBranch.branch({
+                    name: commitData.branch,
+                    style: color ? { color: color } : undefined
+                });
+                branches.set(commitData.branch, branch);
+            }
+
+            branch.commit(createCommitOptions(commitData));
         }
 
         // Store reference for later updates

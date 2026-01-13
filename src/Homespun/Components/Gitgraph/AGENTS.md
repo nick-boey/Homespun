@@ -57,16 +57,33 @@ The integration uses Gitgraph.js loaded from CDN:
 https://cdn.jsdelivr.net/npm/@gitgraph/js@1.4.0/lib/gitgraph.umd.min.js
 ```
 
+### Known Issue: Hash Length
+
+GitgraphJS has a rendering bug with long hash values. When hashes like `issue-hsp-xxx` are used, the text positioning breaks and appears misaligned. Short hashes like `pr-35` or sequential numbers work correctly.
+
+**Workaround**: The `GitgraphApiMapper` converts issue IDs to sequential numbers (starting at 100) for the hash field. The original issue ID is preserved in the `IssueId` property for click handling.
+
 ### Custom Rendering
 
 The JS module (`GitgraphVisualization.razor.js`) provides custom `renderDot` functions:
 
-- **PRs**: Standard circles with click handlers
-- **Issues**: Diamond shapes via custom SVG path
+- **PRs**: Standard circles with click handlers and tooltips
+- **Issues**: Diamond shapes via custom SVG path with tooltips
 
 ```javascript
 // Diamond path for issues
 const d = `M ${size} 0 L ${size * 2} ${size} L ${size} ${size * 2} L 0 ${size} Z`;
+
+// Text alignment fix for vertical positioning
+text.setAttribute('dominant-baseline', 'middle');
+text.setAttribute('dy', '0.35em');
+```
+
+### Template Settings
+
+```javascript
+branch: { lineWidth: 1.5, spacing: 15 }
+commit: { spacing: 25, dot: { size: 5 } }
 ```
 
 ## Vendored Library
@@ -106,3 +123,13 @@ tests/Homespun.Tests/Features/Gitgraph/GraphBuilderTests.cs
 ```
 
 Run tests: `dotnet test --filter "FullyQualifiedName~Gitgraph"`
+
+### Manual Test Page
+
+A standalone HTML/JS test page exists for testing the visualization:
+```
+tests/gitgraph/index.html
+tests/gitgraph/gitgraph-test.js
+```
+
+Open `index.html` directly in a browser to test GitgraphJS rendering with example data from the Homespun repository.
