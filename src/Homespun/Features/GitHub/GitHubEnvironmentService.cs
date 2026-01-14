@@ -22,10 +22,34 @@ public partial class GitHubEnvironmentService : IGitHubEnvironmentService, IDisp
     {
         _configuration = configuration;
         _logger = logger;
-        _homespunDir = Path.Combine(
+        _homespunDir = ResolveHomespunDirectory();
+        _askPassScriptPath = CreateGitAskPassScript();
+    }
+
+    /// <summary>
+    /// Resolves the Homespun data directory, using the same logic as Program.cs.
+    /// In containers, this uses HOMESPUN_DATA_PATH which points to a writable volume.
+    /// </summary>
+    private string ResolveHomespunDirectory()
+    {
+        // Check for configured data path (used in containers)
+        var configuredDataPath = _configuration["HOMESPUN_DATA_PATH"];
+        if (!string.IsNullOrEmpty(configuredDataPath))
+        {
+            var dataDir = Path.GetDirectoryName(configuredDataPath);
+            if (!string.IsNullOrEmpty(dataDir))
+            {
+                _logger.LogDebug("Using data directory from HOMESPUN_DATA_PATH: {DataDir}", dataDir);
+                return dataDir;
+            }
+        }
+
+        // Default to ~/.homespun
+        var defaultDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
             ".homespun");
-        _askPassScriptPath = CreateGitAskPassScript();
+        _logger.LogDebug("Using default homespun directory: {Dir}", defaultDir);
+        return defaultDir;
     }
 
     /// <summary>
