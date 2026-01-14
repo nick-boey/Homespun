@@ -215,6 +215,15 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
             ContinueSession = continueSession
         };
 
+        // Log URL configuration for debugging
+        _logger.LogInformation(
+            "Creating server for entity {EntityId}: Port={Port}, ExternalHostname={ExternalHostname}, BaseUrl={BaseUrl}, ExternalBaseUrl={ExternalBaseUrl}",
+            entityId,
+            port,
+            OpenCodeServer.ExternalHostname ?? "(null)",
+            server.BaseUrl,
+            server.ExternalBaseUrl);
+
         try
         {
             var process = StartServerProcess(port, worktreePath, continueSession);
@@ -349,6 +358,7 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
 
     /// <summary>
     /// Broadcasts the current list of running servers to all connected SignalR clients.
+    /// Uses external URLs for UI display when configured.
     /// </summary>
     private async Task BroadcastServerListAsync()
     {
@@ -357,13 +367,13 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
             {
                 EntityId = s.EntityId,
                 Port = s.Port,
-                BaseUrl = s.BaseUrl,
+                BaseUrl = s.ExternalBaseUrl, // Use external URL for UI display
                 WorktreePath = s.WorktreePath,
                 StartedAt = s.StartedAt,
                 ActiveSessionId = s.ActiveSessionId,
                 WebViewUrl = s.WebViewUrl
             }).ToList();
-        
+
         await _hubContext.BroadcastServerListChanged(servers);
     }
 

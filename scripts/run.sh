@@ -17,30 +17,38 @@ set -e
 #
 # Options:
 #   --local                     Use locally built image (homespun:local)
+#   --debug                     Build in Debug configuration (use with --local)
 #   -it, --interactive          Run in interactive mode (foreground)
 #   -d, --detach                Run in detached mode (background) [default]
 #   --stop                      Stop running containers
 #   --logs                      Follow container logs
 #   --pull                      Pull latest image before starting
-#   --tailscale-auth-key KEY    Set Tailscale auth key
-#   --tailscale-hostname NAME   Set Tailscale hostname
+#   --tailscale                 Enable Tailscale sidecar for tailnet access
+#   --tailscale-auth-key KEY    Set Tailscale auth key (implies --tailscale)
+#   --tailscale-hostname NAME   Set Tailscale hostname (default: homespun)
+#   --external-hostname HOST    Set external hostname for agent URLs (e.g., homespun.tail1234.ts.net)
 #
 # Environment Variables:
 #   HSP_GITHUB_TOKEN            GitHub token (preferred for VM secrets)
-#   HSP_TAILSCALE_AUTH          Tailscale auth key (preferred for VM secrets)
+#   HSP_TAILSCALE_AUTH_KEY          Tailscale auth key (preferred for VM secrets)
+#   HSP_EXTERNAL_HOSTNAME       External hostname for agent URLs
 #   GITHUB_TOKEN                GitHub token (fallback)
 #   TAILSCALE_AUTH_KEY          Tailscale auth key (fallback)
 
-# Get script directory
+# Get script directory and repository root
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # Default values
 USE_LOCAL=false
+USE_DEBUG=false
 DETACHED=true
 ACTION="start"
 PULL_FIRST=false
+USE_TAILSCALE=false
 TAILSCALE_AUTH_KEY=""
-TAILSCALE_HOSTNAME="homespun-vm"
+TAILSCALE_HOSTNAME="homespun"
+EXTERNAL_HOSTNAME=""
 USER_SECRETS_ID="2cfc6c57-72da-4b56-944b-08f2c1df76f6"
 
 # Colors
@@ -65,21 +73,24 @@ show_help() {
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         --local) USE_LOCAL=true ;;
+        --debug) USE_DEBUG=true ;;
         -it|--interactive) DETACHED=false ;;
         -d|--detach) DETACHED=true ;;
         --stop) ACTION="stop" ;;
         --logs) ACTION="logs" ;;
         --pull) PULL_FIRST=true ;;
-        --tailscale-auth-key) TAILSCALE_AUTH_KEY="$2"; shift ;;
+        --tailscale) USE_TAILSCALE=true ;;
+        --tailscale-auth-key) TAILSCALE_AUTH_KEY="$2"; USE_TAILSCALE=true; shift ;;
         --tailscale-hostname) TAILSCALE_HOSTNAME="$2"; shift ;;
+        --external-hostname) EXTERNAL_HOSTNAME="$2"; shift ;;
         -h|--help) show_help ;;
         *) log_error "Unknown parameter: $1"; show_help ;;
     esac
     shift
 done
 
-# Change to script directory for docker-compose
-cd "$SCRIPT_DIR"
+# Change to repository root for docker-compose
+cd "$REPO_ROOT"
 
 echo
 log_info "=== Homespun Docker Compose Runner ==="
@@ -88,7 +99,7 @@ echo
 # Handle stop action
 if [ "$ACTION" = "stop" ]; then
     log_info "Stopping containers..."
-    docker compose --profile production down 2>/dev/null || docker compose down
+    docker compose --profile production --profile tailscale --profile standalone down 2>/dev/null || docker compose down
     log_success "Containers stopped."
     exit 0
 fi
@@ -112,19 +123,20 @@ if ! docker compose version >/dev/null 2>&1; then
 fi
 log_success "      Docker and Docker Compose are available."
 
-# Step 2: Check image availability
+# Step 2: Check/build image
 log_info "[2/5] Checking container image..."
 if [ "$USE_LOCAL" = true ]; then
     IMAGE_NAME="homespun:local"
-    if ! docker images --format "{{.Repository}}:{{.Tag}}" | grep -q "^${IMAGE_NAME}$"; then
-        log_error "Local image '${IMAGE_NAME}' not found."
-        echo
-        echo "Please build the image first:"
-        echo "    docker build -t ${IMAGE_NAME} ."
-        echo
+    BUILD_CONFIG="Release"
+    if [ "$USE_DEBUG" = true ]; then
+        BUILD_CONFIG="Debug"
+    fi
+    log_info "      Building local image from $REPO_ROOT ($BUILD_CONFIG)..."
+    if ! docker build -t "$IMAGE_NAME" --build-arg BUILD_CONFIGURATION="$BUILD_CONFIG" "$REPO_ROOT"; then
+        log_error "Failed to build Docker image."
         exit 1
     fi
-    log_success "      Local image found: $IMAGE_NAME"
+    log_success "      Local image built: $IMAGE_NAME ($BUILD_CONFIG)"
 else
     IMAGE_NAME="ghcr.io/nick-boey/homespun:latest"
     if [ "$PULL_FIRST" = true ]; then
@@ -155,8 +167,8 @@ if [ -z "$GITHUB_TOKEN" ]; then
 fi
 
 # Try reading from .env file
-if [ -z "$GITHUB_TOKEN" ] && [ -f "$SCRIPT_DIR/.env" ]; then
-    GITHUB_TOKEN=$(grep -E "^GITHUB_TOKEN=" "$SCRIPT_DIR/.env" 2>/dev/null | cut -d'=' -f2- | tr -d '"' | tr -d "'" || true)
+if [ -z "$GITHUB_TOKEN" ] && [ -f "$REPO_ROOT/.env" ]; then
+    GITHUB_TOKEN=$(grep -E "^GITHUB_TOKEN=" "$REPO_ROOT/.env" 2>/dev/null | cut -d'=' -f2- | tr -d '"' | tr -d "'" || true)
 fi
 
 if [ -z "$GITHUB_TOKEN" ]; then
@@ -170,11 +182,18 @@ fi
 
 # Read Tailscale auth key from environment if not passed as argument
 if [ -z "$TAILSCALE_AUTH_KEY" ]; then
-    # Check HSP_TAILSCALE_AUTH first (for VM secrets), then TAILSCALE_AUTH_KEY
-    TAILSCALE_AUTH_KEY="${HSP_TAILSCALE_AUTH:-${TAILSCALE_AUTH_KEY:-}}"
+    # Check HSP_TAILSCALE_AUTH_KEY first (for VM secrets), then TAILSCALE_AUTH_KEY
+    TAILSCALE_AUTH_KEY="${HSP_TAILSCALE_AUTH_KEY:-${TAILSCALE_AUTH_KEY:-}}"
 fi
 
+# Try reading Tailscale auth key from .env file if not set
+if [ -z "$TAILSCALE_AUTH_KEY" ] && [ -f "$REPO_ROOT/.env" ]; then
+    TAILSCALE_AUTH_KEY=$(grep -E "^TAILSCALE_AUTH_KEY=" "$REPO_ROOT/.env" 2>/dev/null | cut -d'=' -f2- | tr -d '"' | tr -d "'" || true)
+fi
+
+# If Tailscale auth key is set, enable Tailscale mode
 if [ -n "$TAILSCALE_AUTH_KEY" ]; then
+    USE_TAILSCALE=true
     MASKED_TS_KEY="${TAILSCALE_AUTH_KEY:0:15}..."
     log_success "      Tailscale auth key found: $MASKED_TS_KEY"
 fi
@@ -204,15 +223,28 @@ fi
 log_info "[5/5] Starting containers..."
 echo
 
+# Read external hostname from environment if not passed as argument
+if [ -z "$EXTERNAL_HOSTNAME" ]; then
+    EXTERNAL_HOSTNAME="${HSP_EXTERNAL_HOSTNAME:-}"
+fi
+
+# Try reading external hostname from .env file if not set
+if [ -z "$EXTERNAL_HOSTNAME" ] && [ -f "$REPO_ROOT/.env" ]; then
+    EXTERNAL_HOSTNAME=$(grep -E "^HSP_EXTERNAL_HOSTNAME=" "$REPO_ROOT/.env" 2>/dev/null | cut -d'=' -f2- | tr -d '"' | tr -d "'" || true)
+fi
+
+if [ -n "$EXTERNAL_HOSTNAME" ]; then
+    log_success "      External hostname: $EXTERNAL_HOSTNAME"
+fi
+
 # Export environment variables for docker-compose
 export HOMESPUN_IMAGE="$IMAGE_NAME"
-export HOST_UID="$(id -u)"
-export HOST_GID="$(id -g)"
 export DATA_DIR="$DATA_DIR"
 export SSH_DIR="${SSH_DIR:-/dev/null}"
 export GITHUB_TOKEN="$GITHUB_TOKEN"
 export TAILSCALE_AUTH_KEY="$TAILSCALE_AUTH_KEY"
 export TAILSCALE_HOSTNAME="$TAILSCALE_HOSTNAME"
+export HSP_EXTERNAL_HOSTNAME="$EXTERNAL_HOSTNAME"
 
 # Check if Tailscale is available on the host and get the IP
 TAILSCALE_IP=""
@@ -229,12 +261,16 @@ COMPOSE_PROFILES=""
 if [ "$USE_LOCAL" = false ]; then
     COMPOSE_PROFILES="--profile production"
 fi
+if [ "$USE_TAILSCALE" = true ]; then
+    COMPOSE_PROFILES="$COMPOSE_PROFILES --profile tailscale"
+else
+    COMPOSE_PROFILES="$COMPOSE_PROFILES --profile standalone"
+fi
 
 log_info "======================================"
 log_info "  Container Configuration"
 log_info "======================================"
 echo "  Image:       $IMAGE_NAME"
-echo "  User:        $(id -u):$(id -g)"
 echo "  Port:        8080"
 echo "  URL:         http://localhost:8080"
 if [ -n "$TAILSCALE_URL" ]; then
@@ -244,8 +280,11 @@ echo "  Data mount:  $DATA_DIR"
 if [ -n "$SSH_DIR" ] && [ "$SSH_DIR" != "/dev/null" ]; then
     echo "  SSH mount:   $SSH_DIR (read-only)"
 fi
-if [ -n "$TAILSCALE_AUTH_KEY" ]; then
-    echo "  Tailscale:   Enabled ($TAILSCALE_HOSTNAME)"
+if [ "$USE_TAILSCALE" = true ]; then
+    echo "  Tailscale:   Enabled via sidecar ($TAILSCALE_HOSTNAME)"
+fi
+if [ -n "$EXTERNAL_HOSTNAME" ]; then
+    echo "  Agent URLs:  http://$EXTERNAL_HOSTNAME:<port>"
 fi
 if [ "$USE_LOCAL" = false ]; then
     echo "  Watchtower:  Enabled (auto-updates every 5 min)"
@@ -262,9 +301,14 @@ if [ "$DETACHED" = true ]; then
     log_success "Containers started successfully!"
     echo
     echo "Access URLs:"
-    echo "  Local:       http://localhost:8080"
-    if [ -n "$TAILSCALE_URL" ]; then
-        echo "  Tailnet:     $TAILSCALE_URL"
+    if [ "$USE_TAILSCALE" = true ]; then
+        echo "  Tailnet:     http://${TAILSCALE_HOSTNAME}.<your-tailnet>.ts.net:8080"
+        echo "  OpenCode:    http://${TAILSCALE_HOSTNAME}.<your-tailnet>.ts.net:4096-4105"
+    else
+        echo "  Local:       http://localhost:8080"
+        if [ -n "$TAILSCALE_URL" ]; then
+            echo "  Tailnet:     $TAILSCALE_URL"
+        fi
     fi
     echo
     echo "Useful commands:"
