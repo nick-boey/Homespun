@@ -169,7 +169,7 @@
         try
         {
             _hubConnection = new HubConnectionBuilder()
-                .WithUrl(NavigationManager.ToAbsoluteUri("/hubs/agent"))
+                .WithUrl("/hubs/agent")
                 .WithAutomaticReconnect()
                 .Build();
                 
