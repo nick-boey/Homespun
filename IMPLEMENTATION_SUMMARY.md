@@ -32,6 +32,10 @@ Implemented an **environment-only approach** - inject `GITHUB_TOKEN`, `GH_TOKEN`
 - `GH_TOKEN` - Same token (gh CLI uses both)
 - `GIT_ASKPASS` - Path to credential helper script
 - `GIT_TERMINAL_PROMPT=0` - Disable interactive prompts
+- `GIT_AUTHOR_NAME` - Git author name (defaults to "Homespun Bot")
+- `GIT_AUTHOR_EMAIL` - Git author email (defaults to "homespun@localhost")
+- `GIT_COMMITTER_NAME` - Git committer name (same as author)
+- `GIT_COMMITTER_EMAIL` - Git committer email (same as author)
 
 ### 2. OpenCodeServerManager Enhancement
 **File:** `src/Homespun/Features/OpenCode/Services/OpenCodeServerManager.cs`
@@ -96,6 +100,11 @@ Follow-up issue for Settings page enhancements.
 2. Configuration: `GITHUB_TOKEN`
 3. Environment variable: `GITHUB_TOKEN`
 
+## Git Identity Resolution Priority
+1. Configuration: `Git:AuthorName`, `Git:AuthorEmail`
+2. Environment variable: `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`
+3. Default: "Homespun Bot" / "homespun@localhost"
+
 ## Files Modified/Created
 
 ### New Files
@@ -150,7 +159,7 @@ Follow-up issue for Settings page enhancements.
    ```
 
 ### Unit Tests
-All 267 tests pass, including new tests for `GitHubEnvironmentService`.
+All 278 non-integration tests pass, including new tests for `GitHubEnvironmentService`.
 
 ## Benefits
 
