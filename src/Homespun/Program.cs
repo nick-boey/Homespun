@@ -1,13 +1,18 @@
+using Homespun.Features.Agents;
+using Homespun.Features.Agents.Abstractions;
+using Homespun.Features.Agents.Hubs;
+using Homespun.Features.Agents.Services;
 using Homespun.Features.Beads.Services;
+using Homespun.Features.ClaudeCodeUI;
+using Homespun.Features.ClaudeCodeUI.Services;
 using Homespun.Features.Commands;
 using Homespun.Features.Git;
 using Homespun.Features.GitHub;
 using Homespun.Features.Gitgraph.Services;
 using Homespun.Features.Notifications;
 using Homespun.Features.OpenCode;
-using Homespun.Features.OpenCode.Hubs;
 using Homespun.Features.OpenCode.Models;
-using Homespun.Features.OpenCode.Services;
+using OpenCodeServices = Homespun.Features.OpenCode.Services;
 using Homespun.Features.Projects;
 using Homespun.Features.PullRequests;
 using Homespun.Features.PullRequests.Data;
@@ -75,20 +80,37 @@ builder.Services.AddScoped<IIssuePrLinkingService, IssuePrLinkingService>();
 // Notification services
 builder.Services.AddSingleton<INotificationService, NotificationService>();
 
-// OpenCode services
+// Agent harness abstractions
+builder.Services.Configure<AgentOptions>(
+    builder.Configuration.GetSection(AgentOptions.SectionName));
+
+// OpenCode harness services
 builder.Services.Configure<OpenCodeOptions>(
     builder.Configuration.GetSection(OpenCodeOptions.SectionName));
 builder.Services.Configure<AgentCompletionOptions>(
     builder.Configuration.GetSection("AgentCompletion"));
-builder.Services.AddHttpClient<IOpenCodeClient, OpenCodeClient>();
-builder.Services.AddSingleton<IPortAllocationService, PortAllocationService>();
-builder.Services.AddSingleton<IOpenCodeServerManager, OpenCodeServerManager>();
-builder.Services.AddSingleton<IOpenCodeConfigGenerator, OpenCodeConfigGenerator>();
-builder.Services.AddSingleton<IAgentStartupTracker, AgentStartupTracker>();
-builder.Services.AddHostedService<AgentStartupBroadcaster>();
-builder.Services.AddScoped<IAgentCompletionMonitor, AgentCompletionMonitor>();
-builder.Services.AddScoped<IAgentWorkflowService, AgentWorkflowService>();
-builder.Services.AddSingleton<ITestAgentService, TestAgentService>();
+builder.Services.AddHttpClient<OpenCodeServices.IOpenCodeClient, OpenCodeServices.OpenCodeClient>();
+builder.Services.AddSingleton<OpenCodeServices.IPortAllocationService, OpenCodeServices.PortAllocationService>();
+builder.Services.AddSingleton<OpenCodeServices.IOpenCodeServerManager, OpenCodeServices.OpenCodeServerManager>();
+builder.Services.AddSingleton<OpenCodeServices.IOpenCodeConfigGenerator, OpenCodeServices.OpenCodeConfigGenerator>();
+builder.Services.AddSingleton<OpenCodeServices.IAgentStartupTracker, OpenCodeServices.AgentStartupTracker>();
+builder.Services.AddHostedService<OpenCodeServices.AgentStartupBroadcaster>();
+builder.Services.AddScoped<OpenCodeServices.IAgentCompletionMonitor, OpenCodeServices.AgentCompletionMonitor>();
+builder.Services.AddSingleton<OpenCodeServices.ITestAgentService, OpenCodeServices.TestAgentService>();
+builder.Services.AddSingleton<OpenCodeHarness>();
+builder.Services.AddSingleton<IAgentHarness>(sp => sp.GetRequiredService<OpenCodeHarness>());
+
+// Claude Code UI harness services
+builder.Services.Configure<ClaudeCodeUIOptions>(
+    builder.Configuration.GetSection(ClaudeCodeUIOptions.SectionName));
+builder.Services.AddHttpClient<IClaudeCodeUIClient, ClaudeCodeUIClient>();
+builder.Services.AddSingleton<ClaudeCodeUIServerManager>();
+builder.Services.AddSingleton<ClaudeCodeUIHarness>();
+builder.Services.AddSingleton<IAgentHarness>(sp => sp.GetRequiredService<ClaudeCodeUIHarness>());
+
+// Harness factory and workflow service
+builder.Services.AddSingleton<IAgentHarnessFactory, AgentHarnessFactory>();
+builder.Services.AddScoped<IAgentWorkflowService, Homespun.Features.Agents.Services.AgentWorkflowService>();
 
 // GitHub sync polling service (PR sync, review polling, issue linking)
 builder.Services.Configure<GitHubSyncPollingOptions>(
@@ -171,7 +193,7 @@ app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
 // Map SignalR hubs
-app.MapHub<AgentHub>("/hubs/agent");
+app.MapHub<Homespun.Features.Agents.Hubs.AgentHub>("/hubs/agent");
 app.MapHub<NotificationHub>("/hubs/notifications");
 
 // Map health check endpoint
