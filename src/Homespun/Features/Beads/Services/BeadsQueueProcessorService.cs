@@ -507,13 +507,14 @@ public class BeadsQueueProcessorService : BackgroundService
     {
         await using var cmd = connection.CreateCommand();
         cmd.CommandText = """
-            INSERT INTO events (issue_id, event_type, old_value, new_value, created_at)
-            VALUES ($issueId, $eventType, $oldValue, $newValue, $createdAt)
+            INSERT INTO events (issue_id, event_type, old_value, new_value, actor, created_at)
+            VALUES ($issueId, $eventType, $oldValue, $newValue, $actor, $createdAt)
             """;
         cmd.Parameters.AddWithValue("$issueId", issueId);
         cmd.Parameters.AddWithValue("$eventType", eventType);
         cmd.Parameters.AddWithValue("$oldValue", oldValue ?? (object)DBNull.Value);
         cmd.Parameters.AddWithValue("$newValue", newValue ?? (object)DBNull.Value);
+        cmd.Parameters.AddWithValue("$actor", "homespun");
         cmd.Parameters.AddWithValue("$createdAt", DateTime.UtcNow.ToString("O"));
         await cmd.ExecuteNonQueryAsync(ct);
     }
