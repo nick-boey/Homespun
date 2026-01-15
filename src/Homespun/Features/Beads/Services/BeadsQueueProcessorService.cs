@@ -289,8 +289,8 @@ public class BeadsQueueProcessorService : BackgroundService
         await using var cmd = connection.CreateCommand();
 
         cmd.CommandText = """
-            INSERT INTO issues (id, title, description, status, priority, issue_type, parent_id, created_at, updated_at)
-            VALUES ($id, $title, $description, 'open', $priority, $issueType, $parentId, $createdAt, $updatedAt)
+            INSERT INTO issues (id, title, description, status, priority, issue_type, created_at, updated_at)
+            VALUES ($id, $title, $description, 'open', $priority, $issueType, $createdAt, $updatedAt)
             """;
 
         cmd.Parameters.AddWithValue("$id", item.IssueId);
@@ -298,7 +298,6 @@ public class BeadsQueueProcessorService : BackgroundService
         cmd.Parameters.AddWithValue("$description", options.Description ?? (object)DBNull.Value);
         cmd.Parameters.AddWithValue("$priority", options.Priority ?? 2);
         cmd.Parameters.AddWithValue("$issueType", options.Type.ToString().ToLowerInvariant());
-        cmd.Parameters.AddWithValue("$parentId", options.ParentId ?? (object)DBNull.Value);
         cmd.Parameters.AddWithValue("$createdAt", DateTime.UtcNow.ToString("O"));
         cmd.Parameters.AddWithValue("$updatedAt", DateTime.UtcNow.ToString("O"));
 
@@ -359,11 +358,7 @@ public class BeadsQueueProcessorService : BackgroundService
             parameters.Add(("$assignee", options.Assignee));
         }
 
-        if (options.ParentId != null)
-        {
-            setClauses.Add("parent_id = $parentId");
-            parameters.Add(("$parentId", options.ParentId));
-        }
+        // Note: parent_id is not stored in beads SQLite schema - skip if provided
 
         if (setClauses.Count > 0)
         {

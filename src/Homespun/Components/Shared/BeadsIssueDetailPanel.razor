@@ -7,7 +7,7 @@
 
 @inject IAgentWorkflowService AgentWorkflowService
 @inject IAgentStartupTracker StartupTracker
-@inject IBeadsService BeadsService
+@inject IBeadsDatabaseService BeadsDatabaseService
 @inject ProjectService ProjectService
 @inject NavigationManager NavigationManager
 
@@ -427,12 +427,12 @@
         var project = await ProjectService.GetByIdAsync(ProjectId);
         _projectLocalPath = project?.LocalPath;
         
-        // Load existing groups for autocomplete
+        // Load existing groups for autocomplete (from cache - synchronous)
         if (_projectLocalPath != null)
         {
             try
             {
-                _existingGroups = await BeadsService.GetUniqueGroupsAsync(_projectLocalPath);
+                _existingGroups = BeadsDatabaseService.GetUniqueGroups(_projectLocalPath).ToList();
             }
             catch
             {
@@ -606,17 +606,15 @@
             if (labelsToRemove.Count > 0)
                 updateOptions.LabelsToRemove = labelsToRemove;
             
-            // Perform update
-            var success = await BeadsService.UpdateIssueAsync(_projectLocalPath, Issue.Id, updateOptions);
-            
+            // Perform update (updates cache immediately, queues DB write)
+            var success = await BeadsDatabaseService.UpdateIssueAsync(_projectLocalPath, Issue.Id, updateOptions);
+
             if (!success)
             {
                 _errorMessage = "Failed to update issue.";
                 return;
             }
-            
-            // Sync changes
-            await BeadsService.SyncAsync(_projectLocalPath);
+            // Note: bd sync is handled by the queue processor after debounce
             
             _isEditMode = false;
             await OnActionCompleted.InvokeAsync();
@@ -785,15 +783,14 @@
 
         try
         {
-            var success = await BeadsService.CloseIssueAsync(_projectLocalPath, Issue.Id);
-            
+            var success = await BeadsDatabaseService.CloseIssueAsync(_projectLocalPath, Issue.Id);
+
             if (!success)
             {
                 _errorMessage = "Failed to close issue.";
                 return;
             }
-
-            await BeadsService.SyncAsync(_projectLocalPath);
+            // Note: bd sync is handled by the queue processor after debounce
             await OnActionCompleted.InvokeAsync();
         }
         catch (Exception ex)
@@ -829,16 +826,15 @@
 
         try
         {
-            var success = await BeadsService.DeleteIssueAsync(_projectLocalPath, Issue.Id);
-            
+            var success = await BeadsDatabaseService.DeleteIssueAsync(_projectLocalPath, Issue.Id);
+
             if (!success)
             {
                 _errorMessage = "Failed to delete issue.";
                 _showDeleteConfirmation = false;
                 return;
             }
-
-            await BeadsService.SyncAsync(_projectLocalPath);
+            // Note: bd sync is handled by the queue processor after debounce
             _showDeleteConfirmation = false;
             await OnActionCompleted.InvokeAsync();
             await OnClose.InvokeAsync();
