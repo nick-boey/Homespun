@@ -80,6 +80,11 @@ public class ClaudeCodeUIServerManager : IDisposable
             // Enable platform mode to disable authentication (Tailscale provides network security)
             startInfo.Environment["VITE_IS_PLATFORM"] = "true";
 
+            // Set database path to persist auth data in the working directory
+            // This ensures the registered user survives server restarts
+            var dbPath = Path.Combine(workingDirectory, ".cloudcli-auth.db");
+            startInfo.Environment["DATABASE_PATH"] = dbPath;
+
             // GitHub token for gh CLI
             var githubToken = Environment.GetEnvironmentVariable("GITHUB_TOKEN");
             if (!string.IsNullOrEmpty(githubToken))
