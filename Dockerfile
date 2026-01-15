@@ -60,8 +60,18 @@ RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
+# Install build dependencies for native npm packages (node-pty requires compilation)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    python3-setuptools \
+    && rm -rf /var/lib/apt/lists/*
+
 # Install beads (bd), OpenCode, Claude Code, and Claude Code UI (cloudcli) globally
 RUN npm install -g @beads/bd opencode-ai@latest @anthropic-ai/claude-code @siteboon/claude-code-ui
+
+# Clean up build dependencies to reduce image size
+RUN apt-get update && apt-get remove -y build-essential && apt-get autoremove -y \
+    && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user for security
 RUN useradd --create-home --shell /bin/bash homespun

@@ -199,4 +199,45 @@ app.MapHub<NotificationHub>("/hubs/notifications");
 // Map health check endpoint
 app.MapHealthChecks("/health");
 
+// Parse CLI arguments for test agent auto-start
+var startTestAgentProject = args
+    .FirstOrDefault(a => a.StartsWith("--start-test-agent="))
+    ?.Split('=', 2).ElementAtOrDefault(1);
+
+if (!string.IsNullOrEmpty(startTestAgentProject))
+{
+    app.Logger.LogInformation("Test agent auto-start requested for project: {ProjectId}", startTestAgentProject);
+
+    // Start the test agent in a background task after the app is ready
+    _ = Task.Run(async () =>
+    {
+        // Wait for the application to be fully ready
+        await Task.Delay(3000);
+
+        try
+        {
+            using var scope = app.Services.CreateScope();
+            var testAgentService = scope.ServiceProvider.GetRequiredService<OpenCodeServices.ITestAgentService>();
+
+            app.Logger.LogInformation("Starting test agent for project: {ProjectId}", startTestAgentProject);
+            var result = await testAgentService.StartTestAgentAsync(startTestAgentProject);
+
+            if (result.Success)
+            {
+                app.Logger.LogInformation(
+                    "Test agent started successfully. ServerUrl: {ServerUrl}, WorktreePath: {WorktreePath}",
+                    result.ServerUrl, result.WorktreePath);
+            }
+            else
+            {
+                app.Logger.LogError("Test agent failed to start: {Error}", result.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            app.Logger.LogError(ex, "Exception starting test agent for project: {ProjectId}", startTestAgentProject);
+        }
+    });
+}
+
 app.Run();
