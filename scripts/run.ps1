@@ -346,7 +346,7 @@ try {
     $homeDir = [Environment]::GetFolderPath('UserProfile')
     $dataDir = Join-Path $homeDir ".homespun-container" "data"
     $sshDir = Join-Path $homeDir ".ssh"
-    $claudeConfigDir = Join-Path $homeDir ".claude"
+    $claudeCredentialsFile = Join-Path $homeDir ".claude\.credentials.json"
 
     if (-not (Test-Path $dataDir)) {
         New-Item -ItemType Directory -Path $dataDir -Force | Out-Null
@@ -361,14 +361,14 @@ try {
         $sshDir = ""
     }
 
-    # Check Claude Code config directory (for OAuth authentication)
-    if (-not (Test-Path $claudeConfigDir)) {
-        Write-Warning "      Claude config not found: $claudeConfigDir"
+    # Check Claude Code credentials file (for OAuth authentication)
+    if (-not (Test-Path $claudeCredentialsFile)) {
+        Write-Warning "      Claude credentials not found: $claudeCredentialsFile"
         Write-Warning "      Run 'claude login' on host to authenticate Claude Code."
-        $claudeConfigDir = ""
+        $claudeCredentialsFile = ""
     }
     else {
-        Write-Host "      Claude config found: $claudeConfigDir" -ForegroundColor Green
+        Write-Host "      Claude credentials found: $claudeCredentialsFile" -ForegroundColor Green
     }
 
     # Step 5: Start containers
@@ -378,13 +378,13 @@ try {
     # Convert paths for Docker
     $dataDirUnix = $dataDir -replace '\\', '/'
     $sshDirUnix = if ($sshDir) { $sshDir -replace '\\', '/' } else { "/dev/null" }
-    $claudeConfigDirUnix = if ($claudeConfigDir) { $claudeConfigDir -replace '\\', '/' } else { "/dev/null" }
+    $claudeCredentialsFileUnix = if ($claudeCredentialsFile) { $claudeCredentialsFile -replace '\\', '/' } else { "/dev/null" }
 
     # Set environment variables for docker-compose
     $env:HOMESPUN_IMAGE = $ImageName
     $env:DATA_DIR = $dataDirUnix
     $env:SSH_DIR = $sshDirUnix
-    $env:CLAUDE_CONFIG_DIR = $claudeConfigDirUnix
+    $env:CLAUDE_CREDENTIALS_FILE = $claudeCredentialsFileUnix
     $env:GITHUB_TOKEN = $githubToken
     $env:TAILSCALE_AUTH_KEY = $tailscaleKey
     $env:TAILSCALE_HOSTNAME = $TailscaleHostname
@@ -415,8 +415,8 @@ try {
     if ($sshDir) {
         Write-Host "  SSH mount:   $sshDir (read-only)"
     }
-    if ($claudeConfigDir) {
-        Write-Host "  Claude auth: $claudeConfigDir (read-only)"
+    if ($claudeCredentialsFile) {
+        Write-Host "  Claude auth: $claudeCredentialsFile (read-only)"
     }
     if ($Tailscale) {
         Write-Host "  Tailscale:   Enabled via sidecar ($TailscaleHostname)"

@@ -206,7 +206,7 @@ log_info "[4/5] Setting up directories..."
 
 DATA_DIR="$HOME/.homespun-container/data"
 SSH_DIR="$HOME/.ssh"
-CLAUDE_CONFIG_DIR="$HOME/.claude"
+CLAUDE_CREDENTIALS_FILE="$HOME/.claude/.credentials.json"
 
 if [ ! -d "$DATA_DIR" ]; then
     mkdir -p "$DATA_DIR"
@@ -223,13 +223,13 @@ if [ ! -d "$SSH_DIR" ]; then
     SSH_DIR=""
 fi
 
-# Check Claude Code config directory (for OAuth authentication)
-if [ ! -d "$CLAUDE_CONFIG_DIR" ]; then
-    log_warn "      Claude config not found: $CLAUDE_CONFIG_DIR"
+# Check Claude Code credentials file (for OAuth authentication)
+if [ ! -f "$CLAUDE_CREDENTIALS_FILE" ]; then
+    log_warn "      Claude credentials not found: $CLAUDE_CREDENTIALS_FILE"
     log_warn "      Run 'claude login' on host to authenticate Claude Code."
-    CLAUDE_CONFIG_DIR=""
+    CLAUDE_CREDENTIALS_FILE=""
 else
-    log_success "      Claude config found: $CLAUDE_CONFIG_DIR"
+    log_success "      Claude credentials found: $CLAUDE_CREDENTIALS_FILE"
 fi
 
 # Step 5: Start containers
@@ -254,7 +254,7 @@ fi
 export HOMESPUN_IMAGE="$IMAGE_NAME"
 export DATA_DIR="$DATA_DIR"
 export SSH_DIR="${SSH_DIR:-/dev/null}"
-export CLAUDE_CONFIG_DIR="${CLAUDE_CONFIG_DIR:-/dev/null}"
+export CLAUDE_CREDENTIALS_FILE="${CLAUDE_CREDENTIALS_FILE:-/dev/null}"
 export GITHUB_TOKEN="$GITHUB_TOKEN"
 export TAILSCALE_AUTH_KEY="$TAILSCALE_AUTH_KEY"
 export TAILSCALE_HOSTNAME="$TAILSCALE_HOSTNAME"
@@ -300,8 +300,8 @@ echo "  Data mount:  $DATA_DIR"
 if [ -n "$SSH_DIR" ] && [ "$SSH_DIR" != "/dev/null" ]; then
     echo "  SSH mount:   $SSH_DIR (read-only)"
 fi
-if [ -n "$CLAUDE_CONFIG_DIR" ] && [ "$CLAUDE_CONFIG_DIR" != "/dev/null" ]; then
-    echo "  Claude auth: $CLAUDE_CONFIG_DIR (read-only)"
+if [ -n "$CLAUDE_CREDENTIALS_FILE" ] && [ "$CLAUDE_CREDENTIALS_FILE" != "/dev/null" ]; then
+    echo "  Claude auth: $CLAUDE_CREDENTIALS_FILE (read-only)"
 fi
 if [ "$USE_TAILSCALE" = true ]; then
     echo "  Tailscale:   Enabled via sidecar ($TAILSCALE_HOSTNAME)"
