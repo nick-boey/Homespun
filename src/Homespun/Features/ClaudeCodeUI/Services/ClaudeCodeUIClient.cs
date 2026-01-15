@@ -241,4 +241,48 @@ public class ClaudeCodeUIClient : IClaudeCodeUIClient
                 break;
         }
     }
+
+    public async Task<bool> EnsureDefaultUserAsync(string baseUrl, CancellationToken ct = default)
+    {
+        try
+        {
+            // Try to register a default user for platform mode
+            // This only succeeds if no users exist in the database
+            var registerRequest = new
+            {
+                username = "homespun",
+                password = "homespun-platform-user"
+            };
+
+            var response = await _httpClient.PostAsJsonAsync(
+                $"{baseUrl}/api/auth/register",
+                registerRequest,
+                _jsonOptions,
+                ct);
+
+            if (response.IsSuccessStatusCode)
+            {
+                _logger.LogInformation("Created default platform user for Claude Code UI");
+                return true;
+            }
+
+            // 403 means a user already exists, which is fine for platform mode
+            if (response.StatusCode == System.Net.HttpStatusCode.Forbidden)
+            {
+                _logger.LogDebug("Platform user already exists for Claude Code UI");
+                return true;
+            }
+
+            var content = await response.Content.ReadAsStringAsync(ct);
+            _logger.LogWarning(
+                "Failed to ensure default user: {StatusCode} - {Content}",
+                response.StatusCode, content);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error ensuring default user for {BaseUrl}", baseUrl);
+            return false;
+        }
+    }
 }

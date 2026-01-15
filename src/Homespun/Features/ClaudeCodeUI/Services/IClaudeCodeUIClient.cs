@@ -48,4 +48,10 @@ public interface IClaudeCodeUIClient
         string baseUrl,
         string? sessionId = null,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Ensures a default user exists for platform mode authentication.
+    /// Registers a user if the database is empty.
+    /// </summary>
+    Task<bool> EnsureDefaultUserAsync(string baseUrl, CancellationToken ct = default);
 }

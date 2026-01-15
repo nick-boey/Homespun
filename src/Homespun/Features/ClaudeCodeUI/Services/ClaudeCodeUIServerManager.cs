@@ -77,6 +77,9 @@ public class ClaudeCodeUIServerManager : IDisposable
             // Add environment variables
             startInfo.Environment["ANTHROPIC_API_KEY"] = Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY") ?? "";
 
+            // Enable platform mode to disable authentication (Tailscale provides network security)
+            startInfo.Environment["VITE_IS_PLATFORM"] = "true";
+
             // GitHub token for gh CLI
             var githubToken = Environment.GetEnvironmentVariable("GITHUB_TOKEN");
             if (!string.IsNullOrEmpty(githubToken))
@@ -104,6 +107,16 @@ public class ClaudeCodeUIServerManager : IDisposable
                 await StopServerAsync(entityId, ct);
                 throw new InvalidOperationException(
                     $"Claude Code UI server failed to become healthy within {_options.ServerStartTimeoutMs}ms");
+            }
+
+            // Ensure a default user exists for platform mode authentication
+            // Platform mode bypasses token validation but requires at least one user in the database
+            var userCreated = await _client.EnsureDefaultUserAsync(server.BaseUrl, ct);
+            if (!userCreated)
+            {
+                _logger.LogWarning(
+                    "Failed to ensure default user for Claude Code UI server on port {Port}. " +
+                    "Authentication may not work correctly.", port);
             }
 
             server.Status = ClaudeCodeUIServerStatus.Running;
