@@ -60,8 +60,8 @@ RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
-# Install beads (bd), OpenCode, and Claude Code globally
-RUN npm install -g @beads/bd opencode-ai@latest @anthropic-ai/claude-code
+# Install beads (bd), OpenCode, Claude Code, and Claude Code UI (cloudcli) globally
+RUN npm install -g @beads/bd opencode-ai@latest @anthropic-ai/claude-code @siteboon/claude-code-ui
 
 # Create non-root user for security
 RUN useradd --create-home --shell /bin/bash homespun

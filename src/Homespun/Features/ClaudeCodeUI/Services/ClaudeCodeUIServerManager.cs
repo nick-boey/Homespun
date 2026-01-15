@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using Homespun.Features.ClaudeCodeUI.Models;
 using Homespun.Features.OpenCode.Services;
 using Microsoft.Extensions.Options;
@@ -59,7 +60,7 @@ public class ClaudeCodeUIServerManager : IDisposable
         try
         {
             // Find executable
-            var executablePath = await FindExecutableAsync(ct);
+            var executablePath = ResolveExecutablePath(_options.ExecutablePath);
 
             // Start process
             var startInfo = new ProcessStartInfo
@@ -204,58 +205,113 @@ public class ClaudeCodeUIServerManager : IDisposable
         return false;
     }
 
-    private async Task<string> FindExecutableAsync(CancellationToken ct)
+    /// <summary>
+    /// Resolves the full path to an executable by searching PATH and common installation locations.
+    /// </summary>
+    private string ResolveExecutablePath(string executableName)
     {
-        var executablePath = _options.ExecutablePath;
-
-        // Check if it's an absolute path
-        if (Path.IsPathRooted(executablePath) && File.Exists(executablePath))
+        // If it's already an absolute path, use it directly
+        if (Path.IsPathRooted(executableName) && File.Exists(executableName))
         {
-            return executablePath;
+            _logger.LogDebug("Using absolute path for cloudcli: {Path}", executableName);
+            return executableName;
         }
 
-        // Try to find in PATH
+        // Extensions to try on Windows
+        var extensions = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+            ? new[] { ".cmd", ".exe", ".bat", "" }
+            : new[] { "" };
+
+        // Build list of directories to search
+        var searchPaths = new List<string>();
+
+        // 1. Add PATH directories
         var pathEnv = Environment.GetEnvironmentVariable("PATH") ?? "";
-        var paths = pathEnv.Split(Path.PathSeparator);
+        var pathSeparator = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? ';' : ':';
+        searchPaths.AddRange(pathEnv.Split(pathSeparator, StringSplitOptions.RemoveEmptyEntries));
 
-        foreach (var path in paths)
+        // 2. Add common installation locations
+        var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
-            var fullPath = Path.Combine(path, executablePath);
-            if (File.Exists(fullPath))
+            // npm global installation paths on Windows
+            searchPaths.Add(Path.Combine(appData, "npm"));
+            searchPaths.Add(Path.Combine(localAppData, "npm"));
+            searchPaths.Add(Path.Combine(userProfile, "AppData", "Roaming", "npm"));
+
+            // pnpm global installation path
+            searchPaths.Add(Path.Combine(localAppData, "pnpm"));
+
+            // yarn global bin
+            searchPaths.Add(Path.Combine(localAppData, "Yarn", "bin"));
+
+            // Scoop
+            searchPaths.Add(Path.Combine(userProfile, "scoop", "shims"));
+
+            // Chocolatey
+            var chocoPath = Environment.GetEnvironmentVariable("ChocolateyInstall");
+            if (!string.IsNullOrEmpty(chocoPath))
             {
-                return fullPath;
+                searchPaths.Add(Path.Combine(chocoPath, "bin"));
+            }
+            else
+            {
+                searchPaths.Add(@"C:\ProgramData\chocolatey\bin");
             }
 
-            // Try with .exe on Windows
-            if (OperatingSystem.IsWindows())
-            {
-                var exePath = fullPath + ".exe";
-                if (File.Exists(exePath))
-                {
-                    return exePath;
-                }
+            // Volta
+            searchPaths.Add(Path.Combine(localAppData, "Volta", "bin"));
+        }
+        else
+        {
+            // Unix-like systems (macOS, Linux)
 
-                var cmdPath = fullPath + ".cmd";
-                if (File.Exists(cmdPath))
+            // npm global paths
+            searchPaths.Add(Path.Combine(userProfile, ".npm-global", "bin"));
+            searchPaths.Add("/usr/local/bin");
+            searchPaths.Add("/usr/bin");
+            searchPaths.Add(Path.Combine(userProfile, ".local", "bin"));
+
+            // pnpm
+            searchPaths.Add(Path.Combine(userProfile, ".local", "share", "pnpm"));
+
+            // yarn
+            searchPaths.Add(Path.Combine(userProfile, ".yarn", "bin"));
+
+            // Homebrew (macOS)
+            searchPaths.Add("/opt/homebrew/bin");
+
+            // Volta
+            searchPaths.Add(Path.Combine(userProfile, ".volta", "bin"));
+
+            // asdf
+            searchPaths.Add(Path.Combine(userProfile, ".asdf", "shims"));
+        }
+
+        // Search all paths
+        foreach (var searchPath in searchPaths.Where(p => !string.IsNullOrWhiteSpace(p)))
+        {
+            foreach (var ext in extensions)
+            {
+                var fullPath = Path.Combine(searchPath, executableName + ext);
+                if (File.Exists(fullPath))
                 {
-                    return cmdPath;
+                    _logger.LogDebug("Found cloudcli at: {Path}", fullPath);
+                    return fullPath;
                 }
             }
         }
 
-        // Check npm global directory
-        if (OperatingSystem.IsWindows())
-        {
-            var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-            var npmPath = Path.Combine(appData, "npm", $"{executablePath}.cmd");
-            if (File.Exists(npmPath))
-            {
-                return npmPath;
-            }
-        }
+        // If not found, return the original name and let the process fail with a clear error
+        _logger.LogWarning(
+            "Could not find '{ExecutableName}' in PATH or common installation locations. " +
+            "Searched {PathCount} directories. The process may fail to start.",
+            executableName, searchPaths.Count);
 
-        // Return the original path and let the system try to resolve it
-        return executablePath;
+        return executableName;
     }
 
     public void Dispose()
