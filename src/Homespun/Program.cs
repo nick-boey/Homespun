@@ -105,6 +105,7 @@ builder.Services.AddSingleton<OpenCodeServices.IAgentStartupTracker, OpenCodeSer
 builder.Services.AddHostedService<OpenCodeServices.AgentStartupBroadcaster>();
 builder.Services.AddScoped<OpenCodeServices.IAgentCompletionMonitor, OpenCodeServices.AgentCompletionMonitor>();
 builder.Services.AddSingleton<OpenCodeServices.ITestAgentService, OpenCodeServices.TestAgentService>();
+builder.Services.AddSingleton<OpenCodeServices.IOpenCodeModelsService, OpenCodeServices.OpenCodeModelsService>();
 builder.Services.AddSingleton<OpenCodeHarness>();
 builder.Services.AddSingleton<IAgentHarness>(sp => sp.GetRequiredService<OpenCodeHarness>());
 
