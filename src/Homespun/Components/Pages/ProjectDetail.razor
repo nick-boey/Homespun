@@ -11,6 +11,7 @@
 @using Homespun.Features.PullRequests
 @using Homespun.Features.PullRequests.Data
 @using Homespun.Features.PullRequests.Data.Entities
+@using Microsoft.AspNetCore.SignalR.Client
 @inject ProjectService ProjectService
 @inject PullRequestDataService PullRequestDataService
 @inject PullRequestWorkflowService PullRequestWorkflowService
@@ -36,7 +37,14 @@ else
         <div class="timeline-column">
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <h1>@_project.Name</h1>
-                <div>
+                <div class="btn-group">
+                    <button class="btn btn-outline-secondary btn-sm" @onclick="RefreshData" disabled="@_isRefreshing">
+                        @if (_isRefreshing)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                        }
+                        <i class="bi bi-arrow-clockwise"></i> Refresh
+                    </button>
                     <a href="projects/@Id/edit" class="btn btn-outline-secondary btn-sm">Edit Project</a>
                 </div>
             </div>
@@ -388,6 +396,8 @@ else
     private List<BeadsIssueWithMetadata>? _inProgressIssues;
     private List<string> _existingGroups = [];
     private GitgraphVisualization? _graphVisualization;
+    private HubConnection? _hubConnection;
+    private bool _isRefreshing;
 
     // Test agent state
     private bool _isStartingTestAgent;
@@ -403,6 +413,7 @@ else
         StartupTracker.OnStateChanged += OnStartupStateChanged;
 
         await LoadData();
+        await SetupSignalRConnection();
 
         // Start sync and load past PRs after project is loaded
         // Using Task.Run to not block the initial render
@@ -422,12 +433,46 @@ else
     public void Dispose()
     {
         StartupTracker.OnStateChanged -= OnStartupStateChanged;
+        _ = _hubConnection?.DisposeAsync();
     }
 
     private async void OnStartupStateChanged(string entityId, AgentStartupState state)
     {
         // Re-render when any startup state changes
         await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task SetupSignalRConnection()
+    {
+        try
+        {
+            _hubConnection = new HubConnectionBuilder()
+                .WithUrl(NavigationManager.ToAbsoluteUri("/hubs/agent"))
+                .Build();
+
+            // Listen for pull request sync events
+            _hubConnection.On<string, SyncResult>("PullRequestsSynced", async (projectId, syncResult) =>
+            {
+                // Only refresh if this event is for our project
+                if (projectId == Id)
+                {
+                    Logger.LogInformation("Received PullRequestsSynced event for project {ProjectId}", projectId);
+                    _lastSyncResult = syncResult;
+                    await InvokeAsync(async () =>
+                    {
+                        await RefreshData();
+                        StateHasChanged();
+                    });
+                }
+            });
+
+            await _hubConnection.StartAsync();
+            Logger.LogInformation("SignalR connection established for project {ProjectId}", Id);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to setup SignalR connection");
+        }
     }
 
     private async Task LoadData()
@@ -576,12 +621,25 @@ else
 
     private async Task RefreshData()
     {
-        await LoadData();
-        if (_selectedPullRequestId != null)
+        if (_isRefreshing) return;
+
+        _isRefreshing = true;
+        StateHasChanged();
+
+        try
         {
-            _selectedPullRequest = await PullRequestDataService.GetByIdAsync(_selectedPullRequestId);
+            await LoadData();
+            if (_selectedPullRequestId != null)
+            {
+                _selectedPullRequest = await PullRequestDataService.GetByIdAsync(_selectedPullRequestId);
+            }
+            await _graphVisualization?.RefreshAsync()!;
         }
-        await _graphVisualization?.RefreshAsync()!;
+        finally
+        {
+            _isRefreshing = false;
+            StateHasChanged();
+        }
     }
 
     private async Task SelectPullRequest(string pullRequestId)
