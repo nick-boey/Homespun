@@ -9,9 +9,17 @@ namespace Homespun.Tests.Features.OpenCode.Services;
 [TestFixture]
 public class OpenCodeModelsServiceTests
 {
-    private readonly Mock<IDataStore> _mockDataStore = new();
-    private readonly Mock<IOpencodeCommandRunner> _mockCommandRunner = new();
-    private readonly Mock<ILogger<OpenCodeModelsService>> _mockLogger = new();
+    private Mock<IDataStore> _mockDataStore = null!;
+    private Mock<IOpencodeCommandRunner> _mockCommandRunner = null!;
+    private Mock<ILogger<OpenCodeModelsService>> _mockLogger = null!;
+
+    [SetUp]
+    public void SetUp()
+    {
+        _mockDataStore = new Mock<IDataStore>();
+        _mockCommandRunner = new Mock<IOpencodeCommandRunner>();
+        _mockLogger = new Mock<ILogger<OpenCodeModelsService>>();
+    }
 
     [Test]
     public async Task GetModelsAsync_ShouldCacheResults()
@@ -112,13 +120,8 @@ public class OpenCodeModelsServiceTests
     }
 
     [Test]
-    public void GetModelsGroupedByProvider_ShouldGroupByProvider_WithFavoritesFirst()
+    public async Task GetModelsGroupedByProvider_ShouldGroupByProvider_WithFavoritesFirst()
     {
-        var service = new OpenCodeModelsService(
-            _mockCommandRunner.Object,
-            _mockDataStore.Object,
-            _mockLogger.Object);
-
         var models = new List<ModelInfo>
         {
             new ModelInfo { Id = "opus-4", ProviderId = "anthropic", Name = "Opus 4" },
@@ -126,8 +129,19 @@ public class OpenCodeModelsServiceTests
             new ModelInfo { Id = "sonnet-4", ProviderId = "anthropic", Name = "Sonnet 4" }
         };
 
-        var favoriteIds = new List<string> { "anthropic/opus-4" };
+        _mockCommandRunner
+            .Setup(r => r.GetModelsAsync())
+            .ReturnsAsync(models);
 
+        var service = new OpenCodeModelsService(
+            _mockCommandRunner.Object,
+            _mockDataStore.Object,
+            _mockLogger.Object);
+
+        // Load models into the service first
+        await service.GetModelsAsync();
+
+        var favoriteIds = new List<string> { "anthropic/opus-4" };
         var grouped = service.GetModelsGroupedByProvider(favoriteIds);
 
         var groupList = grouped.ToList();
@@ -139,13 +153,8 @@ public class OpenCodeModelsServiceTests
     }
 
     [Test]
-    public void GetModelsGroupedByProvider_ShouldFilterBySearchTerm()
+    public async Task GetModelsGroupedByProvider_ShouldFilterBySearchTerm()
     {
-        var service = new OpenCodeModelsService(
-            _mockCommandRunner.Object,
-            _mockDataStore.Object,
-            _mockLogger.Object);
-
         var models = new List<ModelInfo>
         {
             new ModelInfo { Id = "opus-4", ProviderId = "anthropic", Name = "Claude Opus 4" },
@@ -153,24 +162,30 @@ public class OpenCodeModelsServiceTests
             new ModelInfo { Id = "sonnet-4", ProviderId = "anthropic", Name = "Claude Sonnet 4" }
         };
 
-        var favoriteIds = new List<string>();
+        _mockCommandRunner
+            .Setup(r => r.GetModelsAsync())
+            .ReturnsAsync(models);
 
-        var grouped = service.GetModelsGroupedByProvider(favoriteIds, searchTerm: "Opus");
-
-        var groupList = grouped.ToList();
-        Assert.That(groupList, Has.Count.EqualTo(1));
-        Assert.That(groupList[0], Has.Count.EqualTo(1));
-        Assert.That(groupList[0].First().Id, Is.EqualTo("opus-4"));
-    }
-
-    [Test]
-    public void GetModelsGroupedByProvider_ShouldFilterByProvider()
-    {
         var service = new OpenCodeModelsService(
             _mockCommandRunner.Object,
             _mockDataStore.Object,
             _mockLogger.Object);
 
+        // Load models into the service first
+        await service.GetModelsAsync();
+
+        var favoriteIds = new List<string>();
+        var grouped = service.GetModelsGroupedByProvider(favoriteIds, searchTerm: "Opus");
+
+        var groupList = grouped.ToList();
+        Assert.That(groupList, Has.Count.EqualTo(1));
+        Assert.That(groupList[0].Count(), Is.EqualTo(1));
+        Assert.That(groupList[0].First().Id, Is.EqualTo("opus-4"));
+    }
+
+    [Test]
+    public async Task GetModelsGroupedByProvider_ShouldFilterByProvider()
+    {
         var models = new List<ModelInfo>
         {
             new ModelInfo { Id = "opus-4", ProviderId = "anthropic", Name = "Opus 4" },
@@ -178,8 +193,19 @@ public class OpenCodeModelsServiceTests
             new ModelInfo { Id = "sonnet-4", ProviderId = "anthropic", Name = "Sonnet 4" }
         };
 
-        var favoriteIds = new List<string>();
+        _mockCommandRunner
+            .Setup(r => r.GetModelsAsync())
+            .ReturnsAsync(models);
 
+        var service = new OpenCodeModelsService(
+            _mockCommandRunner.Object,
+            _mockDataStore.Object,
+            _mockLogger.Object);
+
+        // Load models into the service first
+        await service.GetModelsAsync();
+
+        var favoriteIds = new List<string>();
         var grouped = service.GetModelsGroupedByProvider(favoriteIds, providerFilter: "anthropic");
 
         var groupList = grouped.ToList();
