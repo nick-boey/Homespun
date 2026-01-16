@@ -1,18 +1,19 @@
 using Homespun.Features.OpenCode.Data.Models;
 using Homespun.Features.OpenCode.Services;
 using Homespun.Features.PullRequests.Data;
+using Microsoft.Extensions.Logging;
 using Moq;
-using Xunit;
 
 namespace Homespun.Tests.Features.OpenCode.Services;
 
+[TestFixture]
 public class OpenCodeModelsServiceTests
 {
     private readonly Mock<IDataStore> _mockDataStore = new();
     private readonly Mock<IOpencodeCommandRunner> _mockCommandRunner = new();
     private readonly Mock<ILogger<OpenCodeModelsService>> _mockLogger = new();
 
-    [Fact]
+    [Test]
     public async Task GetModelsAsync_ShouldCacheResults()
     {
         var service = new OpenCodeModelsService(
@@ -33,12 +34,12 @@ public class OpenCodeModelsServiceTests
         var result1 = await service.GetModelsAsync();
         var result2 = await service.GetModelsAsync();
 
-        Assert.Equal(2, result1.Count);
-        Assert.Same(result1, result2);
+        Assert.That(result1.Count, Is.EqualTo(2));
+        Assert.That(result2, Is.SameAs(result1));
         _mockCommandRunner.Verify(r => r.GetModelsAsync(), Times.Once);
     }
 
-    [Fact]
+    [Test]
     public async Task RefreshModelsAsync_ShouldCallCommandRunner()
     {
         var service = new OpenCodeModelsService(
@@ -57,12 +58,12 @@ public class OpenCodeModelsServiceTests
 
         var result = await service.RefreshModelsAsync();
 
-        Assert.Single(result);
-        Assert.Equal("test-1", result[0].Id);
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].Id, Is.EqualTo("test-1"));
         _mockCommandRunner.Verify(r => r.GetModelsAsync(), Times.Once);
     }
 
-    [Fact]
+    [Test]
     public async Task AddFavoriteAsync_ShouldAddToDataStore()
     {
         var service = new OpenCodeModelsService(
@@ -77,7 +78,7 @@ public class OpenCodeModelsServiceTests
         _mockDataStore.Verify(d => d.AddFavoriteModelAsync(modelId), Times.Once);
     }
 
-    [Fact]
+    [Test]
     public async Task RemoveFavoriteAsync_ShouldRemoveFromDataStore()
     {
         var service = new OpenCodeModelsService(
@@ -92,7 +93,7 @@ public class OpenCodeModelsServiceTests
         _mockDataStore.Verify(d => d.RemoveFavoriteModelAsync(modelId), Times.Once);
     }
 
-    [Fact]
+    [Test]
     public async Task IsFavoriteAsync_ShouldCheckDataStore()
     {
         _mockDataStore.Setup(d => d.IsFavoriteModel("anthropic/claude-opus-4")).Returns(true);
@@ -106,11 +107,11 @@ public class OpenCodeModelsServiceTests
         var isFavorite1 = await service.IsFavoriteAsync("anthropic/claude-opus-4");
         var isFavorite2 = await service.IsFavoriteAsync("github-copilot/gpt-4");
 
-        Assert.True(isFavorite1);
-        Assert.False(isFavorite2);
+        Assert.That(isFavorite1, Is.True);
+        Assert.That(isFavorite2, Is.False);
     }
 
-    [Fact]
+    [Test]
     public void GetModelsGroupedByProvider_ShouldGroupByProvider_WithFavoritesFirst()
     {
         var service = new OpenCodeModelsService(
@@ -130,14 +131,14 @@ public class OpenCodeModelsServiceTests
         var grouped = service.GetModelsGroupedByProvider(favoriteIds);
 
         var groupList = grouped.ToList();
-        Assert.Equal(2, groupList.Count);
+        Assert.That(groupList, Has.Count.EqualTo(2));
 
         var firstGroup = groupList[0];
-        Assert.Equal("anthropic", firstGroup.Key);
-        Assert.Contains(firstGroup, m => m.Id == "opus-4");
+        Assert.That(firstGroup.Key, Is.EqualTo("anthropic"));
+        Assert.That(firstGroup.Any(m => m.Id == "opus-4"), Is.True);
     }
 
-    [Fact]
+    [Test]
     public void GetModelsGroupedByProvider_ShouldFilterBySearchTerm()
     {
         var service = new OpenCodeModelsService(
@@ -157,12 +158,12 @@ public class OpenCodeModelsServiceTests
         var grouped = service.GetModelsGroupedByProvider(favoriteIds, searchTerm: "Opus");
 
         var groupList = grouped.ToList();
-        Assert.Single(groupList);
-        Assert.Single(groupList[0]);
-        Assert.Equal("opus-4", groupList[0].First().Id);
+        Assert.That(groupList, Has.Count.EqualTo(1));
+        Assert.That(groupList[0], Has.Count.EqualTo(1));
+        Assert.That(groupList[0].First().Id, Is.EqualTo("opus-4"));
     }
 
-    [Fact]
+    [Test]
     public void GetModelsGroupedByProvider_ShouldFilterByProvider()
     {
         var service = new OpenCodeModelsService(
@@ -182,8 +183,8 @@ public class OpenCodeModelsServiceTests
         var grouped = service.GetModelsGroupedByProvider(favoriteIds, providerFilter: "anthropic");
 
         var groupList = grouped.ToList();
-        Assert.Single(groupList);
-        Assert.Equal("anthropic", groupList[0].Key);
-        Assert.Equal(2, groupList[0].Count());
+        Assert.That(groupList, Has.Count.EqualTo(1));
+        Assert.That(groupList[0].Key, Is.EqualTo("anthropic"));
+        Assert.That(groupList[0].Count(), Is.EqualTo(2));
     }
 }

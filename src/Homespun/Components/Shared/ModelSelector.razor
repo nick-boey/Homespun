@@ -37,7 +37,7 @@
                                    @oninput="OnSearchChanged" />
                             <select class="form-select form-select-sm"
                                     @bind="_selectedProvider"
-                                    @onchange="OnProviderChanged">
+                                    @bind:after="ApplyFilters">
                                 <option value="">All providers</option>
                                 @foreach (var provider in _providers)
                                 {
@@ -124,7 +124,7 @@
 
     private IReadOnlyList<ModelInfo>? _models;
     private List<ModelInfo> _favoriteModels = [];
-    private IOrderedEnumerable<IGrouping<string, ModelInfo>> _groupedModels = [];
+    private List<IGrouping<string, ModelInfo>> _groupedModels = [];
     private List<string> _providers = [];
     private string _searchTerm = "";
     private string? _selectedProvider = null;
@@ -141,13 +141,6 @@
     private void OnSearchChanged(ChangeEventArgs e)
     {
         _searchTerm = e.Value?.ToString() ?? "";
-        ApplyFilters();
-    }
-
-    private void OnProviderChanged(ChangeEventArgs e)
-    {
-        var value = e.Value?.ToString();
-        _selectedProvider = string.IsNullOrEmpty(value) ? null : value;
         ApplyFilters();
     }
 
@@ -180,10 +173,11 @@
             .OrderBy(g => g.Key)
             .SelectMany(g => g.OrderBy(m => m.Name))
             .GroupBy(m => m.ProviderId)
-            .OrderBy(g => g.Key);
+            .OrderBy(g => g.Key)
+            .ToList();
     }
 
-    private void SelectModel(ModelInfo model)
+    private async Task SelectModel(ModelInfo model)
     {
         SelectedModel = model.FullId;
         await SelectedModelChanged.InvokeAsync(model.FullId);

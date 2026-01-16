@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Homespun.Features.Commands;
 using Homespun.Features.OpenCode.Data.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;

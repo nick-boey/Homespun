@@ -35,7 +35,7 @@
             <div class="col-md-3">
                 <select class="form-select"
                         @bind="_providerFilter"
-                        @onchange="OnProviderFilterChanged">
+                        @bind:after="ApplyFilters">
                     <option value="">All providers</option>
                     @foreach (var provider in _providers)
                     {
@@ -104,7 +104,7 @@
     private bool _isLoading = true;
     private IReadOnlyList<ModelInfo> _models = [];
     private List<ModelInfo> _favoriteModels = [];
-    private IOrderedEnumerable<IGrouping<string, ModelInfo>> _groupedModels = [];
+    private List<IGrouping<string, ModelInfo>> _groupedModels = [];
     private List<string> _providers = [];
     private string _searchTerm = "";
     private string? _providerFilter = null;
@@ -142,13 +142,6 @@
     private void OnSearchChanged(ChangeEventArgs e)
     {
         _searchTerm = e.Value?.ToString() ?? "";
-        ApplyFilters();
-    }
-
-    private void OnProviderFilterChanged(ChangeEventArgs e)
-    {
-        var value = e.Value?.ToString();
-        _providerFilter = string.IsNullOrEmpty(value) ? null : value;
         ApplyFilters();
     }
 
