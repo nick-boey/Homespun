@@ -251,7 +251,7 @@ public class ClaudeCodeUIClient : IClaudeCodeUIClient
             var registerRequest = new
             {
                 username = "homespun",
-                password = "homespun-platform-user"
+                password = "homespun"
             };
 
             var response = await _httpClient.PostAsJsonAsync(
