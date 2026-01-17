@@ -21,10 +21,10 @@ public class PullRequest
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
     /// <summary>
-    /// Port of the running OpenCode server for this PR, if any.
-    /// Null means no agent is currently running.
+    /// Session ID of the active Claude Code session for this PR, if any.
+    /// Null means no session is currently active.
     /// </summary>
-    public int? AgentServerPort { get; set; }
+    public string? ActiveSessionId { get; set; }
     
     /// <summary>
     /// The beads issue ID that this PR implements, if applicable.

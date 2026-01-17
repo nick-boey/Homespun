@@ -31,10 +31,10 @@ public class BeadsIssueMetadata
     public string? BranchName { get; set; }
     
     /// <summary>
-    /// The server ID of the active OpenCode agent working on this issue.
-    /// Null when no agent is active.
+    /// The session ID of the active Claude Code session working on this issue.
+    /// Null when no session is active.
     /// </summary>
-    public string? ActiveAgentServerId { get; set; }
+    public string? ActiveSessionId { get; set; }
     
     /// <summary>
     /// When the agent was started for this issue.
