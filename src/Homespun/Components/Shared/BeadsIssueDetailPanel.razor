@@ -6,6 +6,7 @@
 @using Homespun.Features.Projects
 
 @inject IClaudeSessionStore SessionStore
+@inject IClaudeSessionService SessionService
 @inject IAgentStartupTracker StartupTracker
 @inject IBeadsDatabaseService BeadsDatabaseService
 @inject ProjectService ProjectService
@@ -657,21 +658,71 @@
         return BeadsBranchLabel.Create(_branchInfo.Value.Group, _branchInfo.Value.BranchId);
     }
 
-    private void StartPlanning()
+    private async Task StartPlanning()
     {
-        StartupTracker.MarkAsStarting(Issue.Id);
-        // TODO: Integrate with ClaudeSessionService in Phase 5
-        // For now, just navigate to a placeholder session page
-        _errorMessage = "Session service not yet implemented. Coming soon!";
-        StartupTracker.MarkAsFailed(Issue.Id, "Not implemented");
+        await StartSession(SessionMode.Plan);
     }
 
-    private void StartBuilding()
+    private async Task StartBuilding()
     {
+        await StartSession(SessionMode.Build);
+    }
+
+    private async Task StartSession(SessionMode mode)
+    {
+        if (_projectLocalPath == null)
+        {
+            _errorMessage = "Project path not available.";
+            return;
+        }
+
         StartupTracker.MarkAsStarting(Issue.Id);
-        // TODO: Integrate with ClaudeSessionService in Phase 5
-        _errorMessage = "Session service not yet implemented. Coming soon!";
-        StartupTracker.MarkAsFailed(Issue.Id, "Not implemented");
+        _errorMessage = null;
+
+        try
+        {
+            var systemPrompt = GenerateSystemPrompt();
+            _session = await SessionService.StartSessionAsync(
+                Issue.Id,
+                ProjectId,
+                _projectLocalPath,
+                mode,
+                _selectedModel,
+                systemPrompt);
+
+            StartupTracker.MarkAsStarted(Issue.Id);
+
+            // Navigate to the session chat page
+            NavigationManager.NavigateTo($"/session/{_session.Id}");
+        }
+        catch (Exception ex)
+        {
+            StartupTracker.MarkAsFailed(Issue.Id, ex.Message);
+            _errorMessage = $"Failed to start session: {ex.Message}";
+            _session = null;
+        }
+    }
+
+    private string? GenerateSystemPrompt()
+    {
+        // Build a context-aware system prompt based on the issue
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"You are working on issue {Issue.Id}: {Issue.Title}");
+
+        if (!string.IsNullOrEmpty(Issue.Description))
+        {
+            sb.AppendLine();
+            sb.AppendLine("Issue Description:");
+            sb.AppendLine(Issue.Description);
+        }
+
+        if (_branchInfo != null)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"Branch: {GetBranchPreview()}");
+        }
+
+        return sb.ToString();
     }
 
     private async Task StopSession()
@@ -682,8 +733,7 @@
         _errorMessage = null;
         try
         {
-            // TODO: Integrate with ClaudeSessionService in Phase 5
-            SessionStore.Remove(_session.Id);
+            await SessionService.StopSessionAsync(_session.Id);
             _session = null;
             await OnActionCompleted.InvokeAsync();
         }

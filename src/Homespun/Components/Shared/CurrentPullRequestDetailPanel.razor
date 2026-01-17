@@ -5,9 +5,11 @@
 @using Homespun.Features.PullRequests.Data.Entities
 
 @inject IClaudeSessionStore SessionStore
+@inject IClaudeSessionService SessionService
 @inject IAgentStartupTracker StartupTracker
 @inject PullRequestDataService PullRequestDataService
 @inject IGitHubService GitHubService
+@inject NavigationManager NavigationManager
 
 <div class="card pull-request-detail-panel">
     <div class="card-header d-flex justify-content-between align-items-center">
@@ -215,22 +217,77 @@
         _selectedModel = modelId;
     }
 
-    private void StartPlanning()
+    private async Task StartPlanning()
     {
-        _sessionErrorMessage = null;
-        StartupTracker.MarkAsStarting(PullRequest.Id);
-        // TODO: Integrate with ClaudeSessionService in Phase 5
-        _sessionErrorMessage = "Session service not yet implemented. Coming soon!";
-        StartupTracker.MarkAsFailed(PullRequest.Id, "Not implemented");
+        await StartSession(SessionMode.Plan);
     }
 
-    private void StartBuilding()
+    private async Task StartBuilding()
     {
-        _sessionErrorMessage = null;
+        await StartSession(SessionMode.Build);
+    }
+
+    private async Task StartSession(SessionMode mode)
+    {
+        if (string.IsNullOrEmpty(PullRequest.WorktreePath))
+        {
+            _sessionErrorMessage = "No worktree path available for this pull request.";
+            return;
+        }
+
         StartupTracker.MarkAsStarting(PullRequest.Id);
-        // TODO: Integrate with ClaudeSessionService in Phase 5
-        _sessionErrorMessage = "Session service not yet implemented. Coming soon!";
-        StartupTracker.MarkAsFailed(PullRequest.Id, "Not implemented");
+        _sessionErrorMessage = null;
+
+        try
+        {
+            var systemPrompt = GenerateSystemPrompt();
+            _session = await SessionService.StartSessionAsync(
+                PullRequest.Id,
+                PullRequest.ProjectId,
+                PullRequest.WorktreePath,
+                mode,
+                _selectedModel,
+                systemPrompt);
+
+            StartupTracker.MarkAsStarted(PullRequest.Id);
+
+            // Navigate to the session chat page
+            NavigationManager.NavigateTo($"/session/{_session.Id}");
+        }
+        catch (Exception ex)
+        {
+            StartupTracker.MarkAsFailed(PullRequest.Id, ex.Message);
+            _sessionErrorMessage = $"Failed to start session: {ex.Message}";
+            _session = null;
+        }
+    }
+
+    private string? GenerateSystemPrompt()
+    {
+        // Build a context-aware system prompt based on the pull request
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"You are working on PR: {PullRequest.Title}");
+
+        if (!string.IsNullOrEmpty(PullRequest.Description))
+        {
+            sb.AppendLine();
+            sb.AppendLine("PR Description:");
+            sb.AppendLine(PullRequest.Description);
+        }
+
+        if (!string.IsNullOrEmpty(PullRequest.BranchName))
+        {
+            sb.AppendLine();
+            sb.AppendLine($"Branch: {PullRequest.BranchName}");
+        }
+
+        if (!string.IsNullOrEmpty(PullRequest.BeadsIssueId))
+        {
+            sb.AppendLine();
+            sb.AppendLine($"Linked Issue: {PullRequest.BeadsIssueId}");
+        }
+
+        return sb.ToString();
     }
 
     private async Task StopSession()
@@ -241,8 +298,7 @@
         _sessionErrorMessage = null;
         try
         {
-            // TODO: Integrate with ClaudeSessionService in Phase 5
-            SessionStore.Remove(_session.Id);
+            await SessionService.StopSessionAsync(_session.Id);
             _session = null;
             StartupTracker.Clear(PullRequest.Id);
             await OnActionCompleted.InvokeAsync();
@@ -300,7 +356,7 @@
             // Stop session if running before merge
             if (_session != null)
             {
-                SessionStore.Remove(_session.Id);
+                await SessionService.StopSessionAsync(_session.Id);
                 _session = null;
             }
 
