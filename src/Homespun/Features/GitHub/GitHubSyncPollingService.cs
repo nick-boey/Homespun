@@ -1,5 +1,5 @@
-using Homespun.Features.Agents.Hubs;
 using Homespun.Features.Beads.Services;
+using Homespun.Features.Notifications;
 using Homespun.Features.PullRequests.Data;
 using Homespun.Features.PullRequests.Data.Entities;
 using Microsoft.AspNetCore.SignalR;
@@ -16,7 +16,7 @@ namespace Homespun.Features.GitHub;
 /// </summary>
 public class GitHubSyncPollingService(
     IServiceScopeFactory scopeFactory,
-    IHubContext<AgentHub> hubContext,
+    IHubContext<NotificationHub> hubContext,
     IOptions<GitHubSyncPollingOptions> options,
     ILogger<GitHubSyncPollingService> logger)
     : BackgroundService

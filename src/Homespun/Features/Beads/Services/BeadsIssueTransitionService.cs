@@ -1,5 +1,5 @@
-using Homespun.Features.Agents.Hubs;
 using Homespun.Features.Beads.Data;
+using Homespun.Features.Notifications;
 using Homespun.Features.PullRequests.Data;
 using Microsoft.AspNetCore.SignalR;
 
@@ -13,7 +13,7 @@ namespace Homespun.Features.Beads.Services;
 public class BeadsIssueTransitionService(
     IBeadsDatabaseService beadsDatabaseService,
     IDataStore dataStore,
-    IHubContext<AgentHub> hubContext,
+    IHubContext<NotificationHub> hubContext,
     ILogger<BeadsIssueTransitionService> logger)
     : IBeadsIssueTransitionService
 {

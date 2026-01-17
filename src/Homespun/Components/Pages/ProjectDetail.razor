@@ -3,10 +3,8 @@
 @using Homespun.Features.Beads
 @using Homespun.Features.Beads.Data
 @using Homespun.Features.Beads.Services
-@using Homespun.Features.Agents.Services
+@using Homespun.Features.ClaudeCode.Services
 @using Homespun.Features.GitHub
-@using Homespun.Features.Gitgraph.Services
-@using Homespun.Features.OpenCode.Services
 @using Homespun.Features.Projects
 @using Homespun.Features.PullRequests
 @using Homespun.Features.PullRequests.Data
@@ -20,7 +18,6 @@
 @inject IAgentStartupTracker StartupTracker
 @inject ILogger<ProjectDetail> Logger
 @inject NavigationManager NavigationManager
-@inject ITestAgentService TestAgentService
 @rendermode InteractiveServer
 
 <PageTitle>@(_project?.Name ?? "Project")</PageTitle>
@@ -118,87 +115,6 @@ else
                             }
                         </dl>
 
-                        @* DEBUG-only test agent controls *@
-                        @if (IsDebugBuild)
-                        {
-                            <div class="border-top mt-3 pt-3">
-                                <h6 class="text-muted mb-2">Debug Tools</h6>
-
-                                @if (_testAgentStatus == null)
-                                {
-                                    <button class="btn btn-outline-warning btn-sm"
-                                            @onclick="StartTestAgent"
-                                            disabled="@_isTestAgentLoading">
-                                        @if (_isTestAgentLoading)
-                                        {
-                                            <span class="spinner-border spinner-border-sm me-1"></span>
-                                        }
-                                        Start Test Agent
-                                    </button>
-                                }
-                                else
-                                {
-                                    <div class="mb-2">
-                                        <span class="badge bg-success">Test Agent Running</span>
-                                    </div>
-                                    <div class="mb-2 small">
-                                        <div><strong>Server:</strong> <code>@_testAgentStatus.ServerUrl</code></div>
-                                        <div><strong>Session:</strong> <code>@_testAgentStatus.SessionId</code></div>
-                                        <div><strong>Worktree:</strong> <code
-                                                class="text-break">@_testAgentStatus.WorktreePath</code></div>
-                                    </div>
-                                    <div class="btn-group btn-group-sm mb-2">
-                                        <a href="@(_testAgentStatus.WebViewUrl ?? _testAgentStatus.ServerUrl)"
-                                           target="_blank" class="btn btn-outline-primary">
-                                            Open Web View
-                                        </a>
-                                        <button class="btn btn-outline-info" @onclick="VerifySession"
-                                                disabled="@_isVerifying">
-                                            @if (_isVerifying)
-                                            {
-                                                <span class="spinner-border spinner-border-sm me-1"></span>
-                                            }
-                                            Verify Session
-                                        </button>
-                                        <button class="btn btn-outline-danger" @onclick="StopTestAgent"
-                                                disabled="@_isTestAgentLoading">
-                                            Stop
-                                        </button>
-                                    </div>
-
-                                    @if (_verificationResult != null)
-                                    {
-                                        <div class="p-2 border rounded small">
-                                            <strong>Session Verification:</strong>
-                                            @if (_verificationResult.SessionFound)
-                                            {
-                                                <span class="text-success ms-1">Found</span>
-                                                <div>Title: @_verificationResult.SessionTitle</div>
-                                            }
-                                            else
-                                            {
-                                                <span class="text-danger ms-1">Not Found</span>
-                                                @if (!string.IsNullOrEmpty(_verificationResult.Error))
-                                                {
-                                                    <div class="text-danger">@_verificationResult.Error</div>
-                                                }
-                                            }
-                                            <div>Total sessions: @_verificationResult.TotalSessions</div>
-                                            @if (_verificationResult.AllSessionIds.Count > 0)
-                                            {
-                                                <div>
-                                                    IDs: @string.Join(", ", _verificationResult.AllSessionIds.Take(3))@(_verificationResult.AllSessionIds.Count > 3 ? "..." : "")</div>
-                                            }
-                                        </div>
-                                    }
-                                }
-
-                                @if (!string.IsNullOrEmpty(_testAgentError))
-                                {
-                                    <div class="alert alert-danger mt-2 py-1 px-2 small mb-0">@_testAgentError</div>
-                                }
-                            </div>
-                        }
                     </div>
                 </div>
             }
@@ -446,35 +362,14 @@ else
     private List<string> _existingGroups = [];
     private GitgraphVisualization? _graphVisualization;
 
-    // Debug-only fields (always declared, only used in DEBUG builds)
-    private TestAgentStatus? _testAgentStatus;
-    private bool _isTestAgentLoading;
-    private bool _isVerifying;
-    private string? _testAgentError;
-    private SessionVerificationResult? _verificationResult;
-
-#if DEBUG
-    private static bool IsDebugBuild => true;
-#else
-    private static bool IsDebugBuild => false;
-#endif
-
     private record FlattenedPR(PullRequest PullRequest, int Level);
 
     protected override async Task OnInitializedAsync()
     {
         // Subscribe to agent startup state changes to update UI
-        StartupTracker.StateChanged += OnStartupStateChanged;
+        StartupTracker.OnStateChanged += OnStartupStateChanged;
 
         await LoadData();
-
-        // Check for existing test agent (DEBUG builds only)
-#if DEBUG
-        if (IsDebugBuild && _project != null)
-        {
-            _testAgentStatus = TestAgentService.GetTestAgentStatus(_project.Id);
-        }
-#endif
 
         // Start sync and load past PRs after project is loaded
         // Using Task.Run to not block the initial render
@@ -493,10 +388,10 @@ else
 
     public void Dispose()
     {
-        StartupTracker.StateChanged -= OnStartupStateChanged;
+        StartupTracker.OnStateChanged -= OnStartupStateChanged;
     }
 
-    private async void OnStartupStateChanged(AgentStartupInfo info)
+    private async void OnStartupStateChanged(string entityId, AgentStartupState state)
     {
         // Re-render when any startup state changes
         await InvokeAsync(StateHasChanged);
@@ -822,96 +717,16 @@ else
         return parts.Count > 0 ? string.Join(" - ", parts) : null;
     }
 
-    private AgentStartupState? GetStartupState(string entityId)
+    private AgentStartupStatus? GetStartupState(string entityId)
     {
-        var info = StartupTracker.GetState(entityId);
-        return info.State == AgentStartupState.NotStarted ? null : info.State;
+        var state = StartupTracker.GetState(entityId);
+        return state?.Status;
     }
 
     private string? GetStartupErrorMessage(string entityId)
     {
-        var info = StartupTracker.GetState(entityId);
-        return info.ErrorMessage;
-    }
-
-    private async Task StartTestAgent()
-    {
-        if (_project == null) return;
-
-        _isTestAgentLoading = true;
-        _testAgentError = null;
-        _verificationResult = null;
-        StateHasChanged();
-
-        try
-        {
-            var result = await TestAgentService.StartTestAgentAsync(_project.Id);
-            if (result.Success)
-            {
-                _testAgentStatus = TestAgentService.GetTestAgentStatus(_project.Id);
-            }
-            else
-            {
-                _testAgentError = result.Error;
-            }
-        }
-        catch (Exception ex)
-        {
-            _testAgentError = ex.Message;
-        }
-        finally
-        {
-            _isTestAgentLoading = false;
-        }
-    }
-
-    private async Task StopTestAgent()
-    {
-        if (_project == null) return;
-
-        _isTestAgentLoading = true;
-        _testAgentError = null;
-        _verificationResult = null;
-        StateHasChanged();
-
-        try
-        {
-            await TestAgentService.StopTestAgentAsync(_project.Id);
-            _testAgentStatus = null;
-        }
-        catch (Exception ex)
-        {
-            _testAgentError = ex.Message;
-        }
-        finally
-        {
-            _isTestAgentLoading = false;
-        }
-    }
-
-    private async Task VerifySession()
-    {
-        if (_project == null) return;
-
-        _isVerifying = true;
-        StateHasChanged();
-
-        try
-        {
-            _verificationResult = await TestAgentService.VerifySessionVisibilityAsync(_project.Id);
-        }
-        catch (Exception ex)
-        {
-            _verificationResult = new SessionVerificationResult
-            {
-                SessionFound = false,
-                Error = ex.Message
-            };
-        }
-        finally
-        {
-            _isVerifying = false;
-        }
+        var state = StartupTracker.GetState(entityId);
+        return state?.ErrorMessage;
     }
 
 }

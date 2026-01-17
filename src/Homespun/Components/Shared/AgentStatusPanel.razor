@@ -1,21 +1,21 @@
-@using Homespun.Features.Agents.Services
-@using Homespun.Features.Agents.Hubs
-@using Homespun.Features.OpenCode.Services
+@using Homespun.Features.ClaudeCode.Data
+@using Homespun.Features.ClaudeCode.Services
 @using Microsoft.AspNetCore.SignalR.Client
 @implements IAsyncDisposable
-@inject IAgentWorkflowService AgentWorkflowService
+
+@inject IClaudeSessionStore SessionStore
+@inject IAgentStartupTracker StartupTracker
 @inject NavigationManager NavigationManager
-@using Homespun.Components
 
 <div class="agent-status-panel @(IsRunning ? "running" : "")">
     <div class="panel-header">
-        <h6>OpenCode Agent</h6>
+        <h6>Claude Code Session</h6>
         @if (IsRunning)
         {
             <span class="status-indicator running"></span>
         }
     </div>
-    
+
     @if (IsLoading)
     {
         <div class="panel-body">
@@ -26,55 +26,73 @@
             </div>
         </div>
     }
-    else if (_agentStatus != null)
+    else if (_session != null)
     {
         <div class="panel-body">
             <div class="status-info">
                 <small class="text-muted">
-                    Harness: <code>@_agentStatus.HarnessType</code>
+                    Mode: <span class="badge @(_session.Mode == SessionMode.Plan ? "bg-info" : "bg-success") ms-1">@_session.Mode</span>
                 </small>
-                @if (!string.IsNullOrEmpty(_agentStatus.Agent.ActiveSessionId))
-                {
-                    <small class="text-muted d-block">
-                        Session: <code>@_agentStatus.Agent.ActiveSessionId[..Math.Min(8, _agentStatus.Agent.ActiveSessionId.Length)]...</code>
-                    </small>
-                }
+                <small class="text-muted d-block">
+                    Model: <code>@GetModelDisplayName(_session.Model)</code>
+                </small>
+                <small class="text-muted d-block">
+                    Status: <code>@_session.Status</code>
+                </small>
             </div>
-            
-            @if (!string.IsNullOrEmpty(LastMessage))
+
+            @if (_session.Messages.Count > 0)
             {
                 <div class="last-message mt-2">
-                    <small class="text-muted">Last activity:</small>
-                    <div class="message-content">@LastMessage</div>
+                    <small class="text-muted">Messages: @_session.Messages.Count</small>
                 </div>
             }
         </div>
         <div class="panel-footer">
-            <button class="btn btn-sm btn-outline-danger" @onclick="StopAgent" disabled="@IsLoading">
-                Stop Agent
+            <a href="/session/@_session.Id" class="btn btn-sm btn-outline-primary me-2">
+                Open Chat
+            </a>
+            <button class="btn btn-sm btn-outline-danger" @onclick="StopSession" disabled="@IsLoading">
+                Stop Session
             </button>
+        </div>
+    }
+    else if (StartupTracker.IsStarting(EntityId))
+    {
+        <div class="panel-body">
+            <div class="d-flex align-items-center gap-2">
+                <div class="spinner-border spinner-border-sm" role="status">
+                    <span class="visually-hidden">Starting...</span>
+                </div>
+                <small class="text-muted">Starting session...</small>
+            </div>
         </div>
     }
     else
     {
         <div class="panel-body">
-            <p class="text-muted small mb-0">No agent running.</p>
+            <p class="text-muted small mb-0">No session active.</p>
         </div>
         @if (CanStart)
         {
             <div class="panel-footer">
-                <div class="d-flex gap-2 align-items-center">
-                    <ModelSelector Id="@($"agent-{PullRequestId}")"
-                                 SelectedModel="_selectedModel"
+                <div class="mb-2">
+                    <ModelSelector Id="@($"agent-{EntityId}")"
+                                 SelectedModel="@_selectedModel"
                                  SelectedModelChanged="OnModelChanged" />
-                    <button class="btn btn-sm btn-success" @onclick="StartAgent" disabled="@IsLoading">
-                        Start Agent
+                </div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-sm btn-outline-primary" @onclick="StartPlanning" disabled="@IsLoading" title="Read-only planning session">
+                        Plan
+                    </button>
+                    <button class="btn btn-sm btn-success" @onclick="StartBuilding" disabled="@IsLoading" title="Full code editing session">
+                        Build
                     </button>
                 </div>
             </div>
         }
     }
-    
+
     @if (!string.IsNullOrEmpty(ErrorMessage))
     {
         <div class="alert alert-danger m-2 py-1 px-2 small mb-0">@ErrorMessage</div>
@@ -87,11 +105,11 @@
         border-radius: var(--radius-md);
         border: 1px solid var(--border-color);
     }
-    
+
     .agent-status-panel.running {
         border-color: var(--status-success);
     }
-    
+
     .panel-header {
         padding: var(--spacing-sm) var(--spacing-md);
         border-bottom: 1px solid var(--border-color);
@@ -99,45 +117,42 @@
         justify-content: space-between;
         align-items: center;
     }
-    
+
     .panel-header h6 {
         margin: 0;
         font-size: 0.8125rem;
     }
-    
+
     .status-indicator {
         width: 8px;
         height: 8px;
         border-radius: 50%;
         background: var(--text-muted);
     }
-    
+
     .status-indicator.running {
         background: var(--status-success);
         animation: pulse 1.5s ease-in-out infinite;
     }
-    
+
     .panel-body {
         padding: var(--spacing-sm) var(--spacing-md);
     }
-    
+
     .panel-footer {
         padding: var(--spacing-sm) var(--spacing-md);
         border-top: 1px solid var(--border-color);
     }
-    
+
     .status-info code {
         font-size: 0.6875rem;
     }
-    
-    .message-content {
+
+    .last-message {
         font-size: 0.75rem;
         color: var(--text-secondary);
-        max-height: 3rem;
-        overflow: hidden;
-        text-overflow: ellipsis;
     }
-    
+
     @@keyframes pulse {
         0%, 100% { opacity: 1; }
         50% { opacity: 0.5; }
@@ -145,103 +160,62 @@
 </style>
 
 @code {
-    [Parameter] public string PullRequestId { get; set; } = "";
+    [Parameter] public string EntityId { get; set; } = "";
     [Parameter] public bool CanStart { get; set; } = true;
     [Parameter] public EventCallback OnStatusChanged { get; set; }
 
-    private WorkflowAgentStatus? _agentStatus;
+    private ClaudeSession? _session;
     private bool IsLoading { get; set; }
     private string? ErrorMessage { get; set; }
-    private string? LastMessage { get; set; }
-    private HubConnection? _hubConnection;
-    private string _selectedModel = "anthropic/claude-opus-4";
+    private string _selectedModel = "anthropic/claude-sonnet-4-20250514";
 
-    private bool IsRunning => _agentStatus != null;
-    
-    protected override async Task OnInitializedAsync()
-    {
-        await RefreshStatus();
-        await SetupSignalRConnection();
-    }
-    
-    private async Task SetupSignalRConnection()
-    {
-        try
-        {
-            _hubConnection = new HubConnectionBuilder()
-                .WithUrl("/hubs/agent")
-                .WithAutomaticReconnect()
-                .Build();
-                
-            _hubConnection.On<string, object>("AgentEvent", (pullRequestId, evt) =>
-            {
-                if (pullRequestId == PullRequestId)
-                {
-                    // Update last message
-                    LastMessage = "Agent activity detected...";
-                    InvokeAsync(StateHasChanged);
-                }
-            });
-            
-            _hubConnection.On<string, WorkflowAgentStatus>("AgentStarted", (pullRequestId, status) =>
-            {
-                if (pullRequestId == PullRequestId)
-                {
-                    _agentStatus = status;
-                    InvokeAsync(async () =>
-                    {
-                        StateHasChanged();
-                        await OnStatusChanged.InvokeAsync();
-                    });
-                }
-            });
+    private bool IsRunning => _session != null &&
+        (_session.Status == ClaudeSessionStatus.Running ||
+         _session.Status == ClaudeSessionStatus.Processing ||
+         _session.Status == ClaudeSessionStatus.WaitingForInput);
 
-            _hubConnection.On<string>("AgentStopped", pullRequestId =>
-            {
-                if (pullRequestId == PullRequestId)
-                {
-                    _agentStatus = null;
-                    InvokeAsync(async () =>
-                    {
-                        StateHasChanged();
-                        await OnStatusChanged.InvokeAsync();
-                    });
-                }
-            });
-            
-            await _hubConnection.StartAsync();
-            await _hubConnection.InvokeAsync("JoinAgentGroup", PullRequestId);
-        }
-        catch (Exception ex)
-        {
-            ErrorMessage = $"Failed to connect to SignalR: {ex.Message}";
-        }
-    }
-    
-    private async Task RefreshStatus()
+    protected override void OnParametersSet()
     {
-        try
-        {
-            _agentStatus = await AgentWorkflowService.GetAgentStatusAsync(PullRequestId);
-        }
-        catch
-        {
-            _agentStatus = null;
-        }
+        RefreshStatus();
     }
-    
+
+    private void RefreshStatus()
+    {
+        _session = SessionStore.GetByEntityId(EntityId);
+    }
+
     private void OnModelChanged(string modelId)
     {
         _selectedModel = modelId;
     }
 
-    private async Task StartAgent()
+    private void StartPlanning()
     {
+        StartupTracker.MarkAsStarting(EntityId);
+        // TODO: Integrate with ClaudeSessionService in Phase 5
+        ErrorMessage = "Session service not yet implemented. Coming soon!";
+        StartupTracker.MarkAsFailed(EntityId, "Not implemented");
+    }
+
+    private void StartBuilding()
+    {
+        StartupTracker.MarkAsStarting(EntityId);
+        // TODO: Integrate with ClaudeSessionService in Phase 5
+        ErrorMessage = "Session service not yet implemented. Coming soon!";
+        StartupTracker.MarkAsFailed(EntityId, "Not implemented");
+    }
+
+    private async Task StopSession()
+    {
+        if (_session == null) return;
+
         IsLoading = true;
         ErrorMessage = null;
         try
         {
-            _agentStatus = await AgentWorkflowService.StartAgentForPullRequestAsync(PullRequestId, _selectedModel);
+            // TODO: Integrate with ClaudeSessionService in Phase 5
+            SessionStore.Remove(_session.Id);
+            _session = null;
             await OnStatusChanged.InvokeAsync();
         }
         catch (Exception ex)
@@ -254,36 +228,14 @@
         }
     }
 
-    private async Task StopAgent()
+    private static string GetModelDisplayName(string model)
     {
-        IsLoading = true;
-        ErrorMessage = null;
-        try
-        {
-            await AgentWorkflowService.StopAgentAsync(PullRequestId);
-            _agentStatus = null;
-            await OnStatusChanged.InvokeAsync();
-        }
-        catch (Exception ex)
-        {
-            ErrorMessage = ex.Message;
-        }
-        finally
-        {
-            IsLoading = false;
-        }
+        var parts = model.Split('/');
+        return parts.Length > 1 ? parts[1] : model;
     }
-    
-    public async ValueTask DisposeAsync()
+
+    public ValueTask DisposeAsync()
     {
-        if (_hubConnection != null)
-        {
-            try
-            {
-                await _hubConnection.InvokeAsync("LeaveAgentGroup", PullRequestId);
-                await _hubConnection.DisposeAsync();
-            }
-            catch { }
-        }
+        return ValueTask.CompletedTask;
     }
 }

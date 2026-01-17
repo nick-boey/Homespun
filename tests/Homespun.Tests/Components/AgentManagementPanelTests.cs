@@ -1,4 +1,4 @@
-using Homespun.Features.OpenCode.Models;
+using Homespun.Features.ClaudeCode.Data;
 using NUnit.Framework;
 
 namespace Homespun.Tests.Components;
@@ -16,10 +16,10 @@ public class AgentManagementPanelTests
     {
         // Arrange
         var uptime = TimeSpan.FromSeconds(45);
-        
+
         // Act
         var result = FormatUptime(uptime);
-        
+
         // Assert
         Assert.That(result, Is.EqualTo("45s"));
     }
@@ -29,10 +29,10 @@ public class AgentManagementPanelTests
     {
         // Arrange
         var uptime = TimeSpan.FromMinutes(5).Add(TimeSpan.FromSeconds(30));
-        
+
         // Act
         var result = FormatUptime(uptime);
-        
+
         // Assert
         Assert.That(result, Is.EqualTo("5m 30s"));
     }
@@ -42,10 +42,10 @@ public class AgentManagementPanelTests
     {
         // Arrange
         var uptime = TimeSpan.FromHours(2).Add(TimeSpan.FromMinutes(30));
-        
+
         // Act
         var result = FormatUptime(uptime);
-        
+
         // Assert
         Assert.That(result, Is.EqualTo("2h 30m"));
     }
@@ -55,10 +55,10 @@ public class AgentManagementPanelTests
     {
         // Arrange
         var uptime = TimeSpan.FromHours(1);
-        
+
         // Act
         var result = FormatUptime(uptime);
-        
+
         // Assert
         Assert.That(result, Is.EqualTo("1h 0m"));
     }
@@ -68,7 +68,7 @@ public class AgentManagementPanelTests
     {
         // Arrange & Act
         var result = GetEntityTypeBadgeClass("PR");
-        
+
         // Assert
         Assert.That(result, Is.EqualTo("pr"));
     }
@@ -78,19 +78,9 @@ public class AgentManagementPanelTests
     {
         // Arrange & Act
         var result = GetEntityTypeBadgeClass("Issue");
-        
+
         // Assert
         Assert.That(result, Is.EqualTo("issue"));
-    }
-
-    [Test]
-    public void GetEntityTypeBadgeClass_Change_ReturnsChangeClass()
-    {
-        // Arrange & Act
-        var result = GetEntityTypeBadgeClass("Change");
-        
-        // Assert
-        Assert.That(result, Is.EqualTo("change"));
     }
 
     [Test]
@@ -98,7 +88,7 @@ public class AgentManagementPanelTests
     {
         // Arrange & Act
         var result = GetEntityTypeBadgeClass("Unknown");
-        
+
         // Assert
         Assert.That(result, Is.EqualTo("pr"));
     }
@@ -108,9 +98,59 @@ public class AgentManagementPanelTests
     {
         // Arrange & Act
         var result = GetEntityTypeBadgeClass("issue");
-        
+
         // Assert
         Assert.That(result, Is.EqualTo("issue"));
+    }
+
+    [Test]
+    public void GetStatusIndicatorClass_Running_ReturnsRunningClass()
+    {
+        // Arrange & Act
+        var result = GetStatusIndicatorClass(ClaudeSessionStatus.Running);
+
+        // Assert
+        Assert.That(result, Is.EqualTo("running"));
+    }
+
+    [Test]
+    public void GetStatusIndicatorClass_Processing_ReturnsProcessingClass()
+    {
+        // Arrange & Act
+        var result = GetStatusIndicatorClass(ClaudeSessionStatus.Processing);
+
+        // Assert
+        Assert.That(result, Is.EqualTo("processing"));
+    }
+
+    [Test]
+    public void GetStatusIndicatorClass_WaitingForInput_ReturnsWaitingClass()
+    {
+        // Arrange & Act
+        var result = GetStatusIndicatorClass(ClaudeSessionStatus.WaitingForInput);
+
+        // Assert
+        Assert.That(result, Is.EqualTo("waiting"));
+    }
+
+    [Test]
+    public void GetStatusIndicatorClass_Stopped_ReturnsStoppedClass()
+    {
+        // Arrange & Act
+        var result = GetStatusIndicatorClass(ClaudeSessionStatus.Stopped);
+
+        // Assert
+        Assert.That(result, Is.EqualTo("stopped"));
+    }
+
+    [Test]
+    public void GetStatusIndicatorClass_Error_ReturnsErrorClass()
+    {
+        // Arrange & Act
+        var result = GetStatusIndicatorClass(ClaudeSessionStatus.Error);
+
+        // Assert
+        Assert.That(result, Is.EqualTo("error"));
     }
 
     // Helper methods that mirror the component's private methods
@@ -127,8 +167,18 @@ public class AgentManagementPanelTests
     {
         "pr" => "pr",
         "issue" => "issue",
-        "change" => "change",
         _ => "pr"
+    };
+
+    private static string GetStatusIndicatorClass(ClaudeSessionStatus status) => status switch
+    {
+        ClaudeSessionStatus.Running => "running",
+        ClaudeSessionStatus.Processing => "processing",
+        ClaudeSessionStatus.WaitingForInput => "waiting",
+        ClaudeSessionStatus.Starting => "processing",
+        ClaudeSessionStatus.Stopped => "stopped",
+        ClaudeSessionStatus.Error => "error",
+        _ => "stopped"
     };
 }
 
@@ -139,36 +189,28 @@ public class AgentManagementPanelTests
 public class AgentManagementPanelGroupingTests
 {
     [Test]
-    public void GroupServersByProject_EmptyList_ReturnsEmptyGroups()
+    public void GroupSessionsByProject_EmptyList_ReturnsEmptyGroups()
     {
         // Arrange
-        var servers = new List<RunningServerInfo>();
+        var sessions = new List<ClaudeSession>();
         var entityInfoCache = new Dictionary<string, EntityInfo>();
-        
+
         // Act
-        var result = GroupServersByProject(servers, entityInfoCache);
-        
+        var result = GroupSessionsByProject(sessions, entityInfoCache);
+
         // Assert
         Assert.That(result, Is.Empty);
     }
 
     [Test]
-    public void GroupServersByProject_SingleProject_CreatesSingleGroup()
+    public void GroupSessionsByProject_SingleProject_CreatesSingleGroup()
     {
         // Arrange
-        var servers = new List<RunningServerInfo>
+        var sessions = new List<ClaudeSession>
         {
-            new()
-            {
-                EntityId = "pr-1",
-                Port = 4099,
-                BaseUrl = "http://127.0.0.1:4099",
-                WorktreePath = @"C:\test",
-                StartedAt = DateTime.UtcNow,
-                Sessions = new List<OpenCodeSession>()
-            }
+            CreateTestSession("session-1", "pr-1", "proj-1")
         };
-        
+
         var entityInfoCache = new Dictionary<string, EntityInfo>
         {
             ["pr-1"] = new EntityInfo
@@ -179,42 +221,26 @@ public class AgentManagementPanelGroupingTests
                 ProjectName = "Test Project"
             }
         };
-        
+
         // Act
-        var result = GroupServersByProject(servers, entityInfoCache);
-        
+        var result = GroupSessionsByProject(sessions, entityInfoCache);
+
         // Assert
         Assert.That(result, Has.Count.EqualTo(1));
         Assert.That(result[0].ProjectName, Is.EqualTo("Test Project"));
-        Assert.That(result[0].Servers, Has.Count.EqualTo(1));
+        Assert.That(result[0].Sessions, Has.Count.EqualTo(1));
     }
 
     [Test]
-    public void GroupServersByProject_MultipleProjects_GroupsCorrectly()
+    public void GroupSessionsByProject_MultipleProjects_GroupsCorrectly()
     {
         // Arrange
-        var servers = new List<RunningServerInfo>
+        var sessions = new List<ClaudeSession>
         {
-            new()
-            {
-                EntityId = "pr-1",
-                Port = 4099,
-                BaseUrl = "http://127.0.0.1:4099",
-                WorktreePath = @"C:\test1",
-                StartedAt = DateTime.UtcNow,
-                Sessions = new List<OpenCodeSession>()
-            },
-            new()
-            {
-                EntityId = "pr-2",
-                Port = 4100,
-                BaseUrl = "http://127.0.0.1:4100",
-                WorktreePath = @"C:\test2",
-                StartedAt = DateTime.UtcNow,
-                Sessions = new List<OpenCodeSession>()
-            }
+            CreateTestSession("session-1", "pr-1", "proj-1"),
+            CreateTestSession("session-2", "pr-2", "proj-2")
         };
-        
+
         var entityInfoCache = new Dictionary<string, EntityInfo>
         {
             ["pr-1"] = new EntityInfo
@@ -232,41 +258,25 @@ public class AgentManagementPanelGroupingTests
                 ProjectName = "Project B"
             }
         };
-        
+
         // Act
-        var result = GroupServersByProject(servers, entityInfoCache);
-        
+        var result = GroupSessionsByProject(sessions, entityInfoCache);
+
         // Assert
         Assert.That(result, Has.Count.EqualTo(2));
         Assert.That(result.Select(g => g.ProjectName), Is.EquivalentTo(new[] { "Project A", "Project B" }));
     }
 
     [Test]
-    public void GroupServersByProject_OrdersProjectsAlphabetically()
+    public void GroupSessionsByProject_OrdersProjectsAlphabetically()
     {
         // Arrange
-        var servers = new List<RunningServerInfo>
+        var sessions = new List<ClaudeSession>
         {
-            new()
-            {
-                EntityId = "pr-1",
-                Port = 4099,
-                BaseUrl = "http://127.0.0.1:4099",
-                WorktreePath = @"C:\test1",
-                StartedAt = DateTime.UtcNow,
-                Sessions = new List<OpenCodeSession>()
-            },
-            new()
-            {
-                EntityId = "pr-2",
-                Port = 4100,
-                BaseUrl = "http://127.0.0.1:4100",
-                WorktreePath = @"C:\test2",
-                StartedAt = DateTime.UtcNow,
-                Sessions = new List<OpenCodeSession>()
-            }
+            CreateTestSession("session-1", "pr-1", "proj-1"),
+            CreateTestSession("session-2", "pr-2", "proj-2")
         };
-        
+
         var entityInfoCache = new Dictionary<string, EntityInfo>
         {
             ["pr-1"] = new EntityInfo
@@ -284,31 +294,46 @@ public class AgentManagementPanelGroupingTests
                 ProjectName = "Alpha Project"
             }
         };
-        
+
         // Act
-        var result = GroupServersByProject(servers, entityInfoCache);
-        
+        var result = GroupSessionsByProject(sessions, entityInfoCache);
+
         // Assert
         Assert.That(result[0].ProjectName, Is.EqualTo("Alpha Project"));
         Assert.That(result[1].ProjectName, Is.EqualTo("Zulu Project"));
     }
 
     // Helper methods
-    private static List<ProjectGroupInfo> GroupServersByProject(
-        List<RunningServerInfo> servers, 
+    private static ClaudeSession CreateTestSession(string sessionId, string entityId, string projectId)
+    {
+        return new ClaudeSession
+        {
+            Id = sessionId,
+            EntityId = entityId,
+            ProjectId = projectId,
+            WorkingDirectory = "/test/path",
+            Model = "claude-sonnet-4-20250514",
+            Mode = SessionMode.Build,
+            Status = ClaudeSessionStatus.Running,
+            CreatedAt = DateTime.UtcNow
+        };
+    }
+
+    private static List<ProjectGroupInfo> GroupSessionsByProject(
+        List<ClaudeSession> sessions,
         Dictionary<string, EntityInfo> entityInfoCache)
     {
-        return servers
-            .Select(server => new
+        return sessions
+            .Select(session => new
             {
-                Server = server,
-                EntityInfo = entityInfoCache.GetValueOrDefault(server.EntityId)
+                Session = session,
+                EntityInfo = entityInfoCache.GetValueOrDefault(session.EntityId)
             })
             .GroupBy(x => x.EntityInfo?.ProjectName ?? "Unknown Project")
             .Select(group => new ProjectGroupInfo
             {
                 ProjectName = group.Key,
-                Servers = group.Select(x => x.Server)
+                Sessions = group.Select(x => x.Session)
                     .OrderBy(s => entityInfoCache.GetValueOrDefault(s.EntityId)?.Title ?? s.EntityId)
                     .ToList()
             })
@@ -319,7 +344,7 @@ public class AgentManagementPanelGroupingTests
     private class ProjectGroupInfo
     {
         public required string ProjectName { get; set; }
-        public required List<RunningServerInfo> Servers { get; set; }
+        public required List<ClaudeSession> Sessions { get; set; }
     }
 
     private class EntityInfo
