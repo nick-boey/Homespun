@@ -8,7 +8,7 @@
     - Validates Docker is running
     - Reads GitHub token from environment variables or .NET user secrets
     - Creates the ~/.homespun-container/data directory
-    - Runs Homespun via Docker Compose with optional Tailscale sidecar
+    - Runs Homespun via Docker Compose with optional Tailscale
 
 .EXAMPLE
     .\run.ps1
@@ -23,8 +23,8 @@
     Runs with locally built image in Debug configuration.
 
 .EXAMPLE
-    .\run.ps1 -Tailscale -TailscaleAuthKey "tskey-auth-..."
-    Runs with Tailscale sidecar for tailnet access.
+    .\run.ps1 -TailscaleAuthKey "tskey-auth-..."
+    Runs with Tailscale enabled for HTTPS access.
 
 .EXAMPLE
     .\run.ps1 -ExternalHostname "homespun.tail1234.ts.net"
@@ -40,7 +40,7 @@
 
 .NOTES
     Container name: homespun
-    Port: 8080 (or via Tailscale)
+    Port: 8080 (or via Tailscale HTTPS)
     Data directory: ~/.homespun-container/data
 
     Environment Variables (checked in order, with .env file fallback):
@@ -70,9 +70,6 @@ param(
 
     [Parameter(ParameterSetName = 'Run')]
     [switch]$Pull,
-
-    [Parameter(ParameterSetName = 'Run')]
-    [switch]$Tailscale,
 
     [Parameter(ParameterSetName = 'Run')]
     [string]$TailscaleAuthKey,
@@ -268,7 +265,7 @@ try {
     # Handle Stop action
     if ($Stop) {
         Write-Host "Stopping containers..." -ForegroundColor Cyan
-        docker compose --profile production --profile tailscale --profile standalone down 2>$null
+        docker compose --profile production down 2>$null
         if ($LASTEXITCODE -ne 0) {
             docker compose down
         }
@@ -330,7 +327,6 @@ try {
     # Read Tailscale auth key
     $tailscaleKey = Get-TailscaleAuthKey -ParamValue $TailscaleAuthKey -EnvFilePath $EnvFilePath
     if (-not [string]::IsNullOrWhiteSpace($tailscaleKey)) {
-        $Tailscale = $true
         $maskedTsKey = $tailscaleKey.Substring(0, [Math]::Min(15, $tailscaleKey.Length)) + "..."
         Write-Host "      Tailscale auth key found: $maskedTsKey" -ForegroundColor Green
     }
@@ -347,6 +343,7 @@ try {
     $dataDir = Join-Path $homeDir ".homespun-container" "data"
     $sshDir = Join-Path $homeDir ".ssh"
     $claudeCredentialsFile = Join-Path $homeDir ".claude\.credentials.json"
+    $tailscaleStateDir = Join-Path $dataDir "tailscale"
 
     if (-not (Test-Path $dataDir)) {
         New-Item -ItemType Directory -Path $dataDir -Force | Out-Null
@@ -354,6 +351,12 @@ try {
     }
     else {
         Write-Host "      Data directory exists: $dataDir" -ForegroundColor Green
+    }
+
+    # Create Tailscale state directory
+    if (-not (Test-Path $tailscaleStateDir)) {
+        New-Item -ItemType Directory -Path $tailscaleStateDir -Force | Out-Null
+        Write-Host "      Created Tailscale state directory: $tailscaleStateDir" -ForegroundColor Green
     }
 
     if (-not (Test-Path $sshDir)) {
@@ -379,6 +382,7 @@ try {
     $dataDirUnix = $dataDir -replace '\\', '/'
     $sshDirUnix = if ($sshDir) { $sshDir -replace '\\', '/' } else { "/dev/null" }
     $claudeCredentialsFileUnix = if ($claudeCredentialsFile) { $claudeCredentialsFile -replace '\\', '/' } else { "/dev/null" }
+    $tailscaleStateDirUnix = $tailscaleStateDir -replace '\\', '/'
 
     # Set environment variables for docker-compose
     $env:HOMESPUN_IMAGE = $ImageName
@@ -388,21 +392,14 @@ try {
     $env:GITHUB_TOKEN = $githubToken
     $env:TAILSCALE_AUTH_KEY = $tailscaleKey
     $env:TAILSCALE_HOSTNAME = $TailscaleHostname
+    $env:TAILSCALE_STATE_DIR = $tailscaleStateDirUnix
     $env:HSP_EXTERNAL_HOSTNAME = $externalHostnameValue
 
-    # Determine compose profiles
+    # Determine compose profiles (only production profile for Watchtower)
     $composeProfiles = @()
     if (-not $Local) {
         $composeProfiles += "--profile"
         $composeProfiles += "production"
-    }
-    if ($Tailscale) {
-        $composeProfiles += "--profile"
-        $composeProfiles += "tailscale"
-    }
-    else {
-        $composeProfiles += "--profile"
-        $composeProfiles += "standalone"
     }
 
     Write-Host "======================================" -ForegroundColor Cyan
@@ -418,8 +415,11 @@ try {
     if ($claudeCredentialsFile) {
         Write-Host "  Claude auth: $claudeCredentialsFile (read-only)"
     }
-    if ($Tailscale) {
-        Write-Host "  Tailscale:   Enabled via sidecar ($TailscaleHostname)"
+    if (-not [string]::IsNullOrWhiteSpace($tailscaleKey)) {
+        Write-Host "  Tailscale:   Enabled ($TailscaleHostname)"
+    }
+    else {
+        Write-Host "  Tailscale:   Disabled (no auth key)"
     }
     if (-not [string]::IsNullOrWhiteSpace($externalHostnameValue)) {
         Write-Host "  Agent URLs:  https://$($externalHostnameValue):<port>"
@@ -445,12 +445,9 @@ try {
         Write-Host "Containers started successfully!" -ForegroundColor Green
         Write-Host ""
         Write-Host "Access URLs:"
-        if ($Tailscale) {
+        Write-Host "  Local:       http://localhost:8080"
+        if (-not [string]::IsNullOrWhiteSpace($tailscaleKey)) {
             Write-Host "  Tailnet:     https://$TailscaleHostname.<your-tailnet>.ts.net"
-            Write-Host "  OpenCode:    https://$TailscaleHostname.<your-tailnet>.ts.net:4096-4105"
-        }
-        else {
-            Write-Host "  Local:       http://localhost:8080"
         }
         Write-Host ""
         Write-Host "Useful commands:"

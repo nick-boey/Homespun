@@ -3,7 +3,9 @@
 @using Homespun.Features.Beads
 @using Homespun.Features.Beads.Data
 @using Homespun.Features.Beads.Services
+@using Homespun.Features.ClaudeCode.Data
 @using Homespun.Features.ClaudeCode.Services
+@using Homespun.Features.Git
 @using Homespun.Features.GitHub
 @using Homespun.Features.Projects
 @using Homespun.Features.PullRequests
@@ -15,6 +17,8 @@
 @inject IBeadsService BeadsService
 @inject IDataStore DataStore
 @inject IGitHubService GitHubService
+@inject IGitWorktreeService GitWorktreeService
+@inject IClaudeSessionService SessionService
 @inject IAgentStartupTracker StartupTracker
 @inject ILogger<ProjectDetail> Logger
 @inject NavigationManager NavigationManager
@@ -115,6 +119,29 @@ else
                             }
                         </dl>
 
+                        <hr class="my-3" />
+
+                        <div class="d-flex flex-column gap-2">
+                            <button class="btn btn-outline-primary btn-sm"
+                                    @onclick="StartTestAgentAsync"
+                                    disabled="@_isStartingTestAgent">
+                                @if (_isStartingTestAgent)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                    <span>Starting...</span>
+                                }
+                                else
+                                {
+                                    <span>Start Test Agent</span>
+                                }
+                            </button>
+                            @if (!string.IsNullOrEmpty(_testAgentError))
+                            {
+                                <div class="alert alert-danger py-1 px-2 mb-0 small">
+                                    @_testAgentError
+                                </div>
+                            }
+                        </div>
                     </div>
                 </div>
             }
@@ -361,6 +388,12 @@ else
     private List<BeadsIssueWithMetadata>? _inProgressIssues;
     private List<string> _existingGroups = [];
     private GitgraphVisualization? _graphVisualization;
+
+    // Test agent state
+    private bool _isStartingTestAgent;
+    private string? _testAgentError;
+    private const string TestAgentEntityId = "test-agent";
+    private const string TestBranchName = "hsp/test";
 
     private record FlattenedPR(PullRequest PullRequest, int Level);
 
@@ -727,6 +760,72 @@ else
     {
         var state = StartupTracker.GetState(entityId);
         return state?.ErrorMessage;
+    }
+
+    private async Task StartTestAgentAsync()
+    {
+        if (_project == null)
+            return;
+
+        _isStartingTestAgent = true;
+        _testAgentError = null;
+        StateHasChanged();
+
+        try
+        {
+            // Create worktree for hsp/test branch
+            var worktreePath = await GitWorktreeService.CreateWorktreeAsync(
+                _project.LocalPath,
+                TestBranchName,
+                createBranch: true,
+                baseBranch: _project.DefaultBranch);
+
+            if (string.IsNullOrEmpty(worktreePath))
+            {
+                _testAgentError = "Failed to create worktree for test branch.";
+                return;
+            }
+
+            Logger.LogInformation("Created test worktree at {WorktreePath}", worktreePath);
+
+            // Generate system prompt for the test agent
+            var timestamp = DateTime.UtcNow.ToString("O");
+            var systemPrompt = $"""
+                You are a test agent. Your task is to create a file named `test.txt` in the current directory
+                containing the following timestamp: {timestamp}
+
+                After creating the file, confirm that it was created successfully.
+                """;
+
+            // Start the agent session
+            StartupTracker.MarkAsStarting(TestAgentEntityId);
+
+            var session = await SessionService.StartSessionAsync(
+                TestAgentEntityId,
+                Id,
+                worktreePath,
+                SessionMode.Build,
+                "claude-sonnet-4-20250514",
+                systemPrompt);
+
+            StartupTracker.MarkAsStarted(TestAgentEntityId);
+
+            Logger.LogInformation("Started test agent session {SessionId}", session.Id);
+
+            // Navigate to the session chat page
+            NavigationManager.NavigateTo($"/session/{session.Id}");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to start test agent");
+            StartupTracker.MarkAsFailed(TestAgentEntityId, ex.Message);
+            _testAgentError = $"Failed to start test agent: {ex.Message}";
+        }
+        finally
+        {
+            _isStartingTestAgent = false;
+            StateHasChanged();
+        }
     }
 
 }

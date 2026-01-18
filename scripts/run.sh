@@ -23,8 +23,7 @@ set -e
 #   --stop                      Stop running containers
 #   --logs                      Follow container logs
 #   --pull                      Pull latest image before starting
-#   --tailscale                 Enable Tailscale sidecar for tailnet access
-#   --tailscale-auth-key KEY    Set Tailscale auth key (implies --tailscale)
+#   --tailscale-auth-key KEY    Set Tailscale auth key for HTTPS access
 #   --tailscale-hostname NAME   Set Tailscale hostname (default: homespun)
 #   --external-hostname HOST    Set external hostname for agent URLs (e.g., homespun.tail1234.ts.net)
 #
@@ -48,7 +47,6 @@ USE_DEBUG=false
 DETACHED=true
 ACTION="start"
 PULL_FIRST=false
-USE_TAILSCALE=false
 TAILSCALE_AUTH_KEY=""
 TAILSCALE_HOSTNAME="homespun"
 EXTERNAL_HOSTNAME=""
@@ -82,8 +80,7 @@ while [[ "$#" -gt 0 ]]; do
         --stop) ACTION="stop" ;;
         --logs) ACTION="logs" ;;
         --pull) PULL_FIRST=true ;;
-        --tailscale) USE_TAILSCALE=true ;;
-        --tailscale-auth-key) TAILSCALE_AUTH_KEY="$2"; USE_TAILSCALE=true; shift ;;
+        --tailscale-auth-key) TAILSCALE_AUTH_KEY="$2"; shift ;;
         --tailscale-hostname) TAILSCALE_HOSTNAME="$2"; shift ;;
         --external-hostname) EXTERNAL_HOSTNAME="$2"; shift ;;
         -h|--help) show_help ;;
@@ -102,7 +99,7 @@ echo
 # Handle stop action
 if [ "$ACTION" = "stop" ]; then
     log_info "Stopping containers..."
-    docker compose --profile production --profile tailscale --profile standalone down 2>/dev/null || docker compose down
+    docker compose --profile production down 2>/dev/null || docker compose down
     log_success "Containers stopped."
     exit 0
 fi
@@ -194,9 +191,7 @@ if [ -z "$TAILSCALE_AUTH_KEY" ] && [ -f "$REPO_ROOT/.env" ]; then
     TAILSCALE_AUTH_KEY=$(grep -E "^TAILSCALE_AUTH_KEY=" "$REPO_ROOT/.env" 2>/dev/null | cut -d'=' -f2- | tr -d '"' | tr -d "'" || true)
 fi
 
-# If Tailscale auth key is set, enable Tailscale mode
 if [ -n "$TAILSCALE_AUTH_KEY" ]; then
-    USE_TAILSCALE=true
     MASKED_TS_KEY="${TAILSCALE_AUTH_KEY:0:15}..."
     log_success "      Tailscale auth key found: $MASKED_TS_KEY"
 fi
@@ -207,6 +202,7 @@ log_info "[4/5] Setting up directories..."
 DATA_DIR="$HOME/.homespun-container/data"
 SSH_DIR="$HOME/.ssh"
 CLAUDE_CREDENTIALS_FILE="$HOME/.claude/.credentials.json"
+TAILSCALE_STATE_DIR="$DATA_DIR/tailscale"
 
 if [ ! -d "$DATA_DIR" ]; then
     mkdir -p "$DATA_DIR"
@@ -215,7 +211,14 @@ else
     log_success "      Data directory exists: $DATA_DIR"
 fi
 
+# Create Tailscale state directory
+if [ ! -d "$TAILSCALE_STATE_DIR" ]; then
+    mkdir -p "$TAILSCALE_STATE_DIR"
+    log_success "      Created Tailscale state directory: $TAILSCALE_STATE_DIR"
+fi
+
 chmod 777 "$DATA_DIR" 2>/dev/null || true
+chmod 777 "$TAILSCALE_STATE_DIR" 2>/dev/null || true
 
 # Check SSH directory
 if [ ! -d "$SSH_DIR" ]; then
@@ -258,6 +261,7 @@ export CLAUDE_CREDENTIALS_FILE="${CLAUDE_CREDENTIALS_FILE:-/dev/null}"
 export GITHUB_TOKEN="$GITHUB_TOKEN"
 export TAILSCALE_AUTH_KEY="$TAILSCALE_AUTH_KEY"
 export TAILSCALE_HOSTNAME="$TAILSCALE_HOSTNAME"
+export TAILSCALE_STATE_DIR="$TAILSCALE_STATE_DIR"
 export HSP_EXTERNAL_HOSTNAME="$EXTERNAL_HOSTNAME"
 
 # Export host user UID/GID so container runs as the same user
@@ -275,15 +279,10 @@ if command -v tailscale &>/dev/null; then
     fi
 fi
 
-# Determine compose profiles
+# Determine compose profiles (only production profile for Watchtower)
 COMPOSE_PROFILES=""
 if [ "$USE_LOCAL" = false ]; then
     COMPOSE_PROFILES="--profile production"
-fi
-if [ "$USE_TAILSCALE" = true ]; then
-    COMPOSE_PROFILES="$COMPOSE_PROFILES --profile tailscale"
-else
-    COMPOSE_PROFILES="$COMPOSE_PROFILES --profile standalone"
 fi
 
 log_info "======================================"
@@ -303,8 +302,10 @@ fi
 if [ -n "$CLAUDE_CREDENTIALS_FILE" ] && [ "$CLAUDE_CREDENTIALS_FILE" != "/dev/null" ]; then
     echo "  Claude auth: $CLAUDE_CREDENTIALS_FILE (read-only)"
 fi
-if [ "$USE_TAILSCALE" = true ]; then
-    echo "  Tailscale:   Enabled via sidecar ($TAILSCALE_HOSTNAME)"
+if [ -n "$TAILSCALE_AUTH_KEY" ]; then
+    echo "  Tailscale:   Enabled ($TAILSCALE_HOSTNAME)"
+else
+    echo "  Tailscale:   Disabled (no auth key)"
 fi
 if [ -n "$EXTERNAL_HOSTNAME" ]; then
     echo "  Agent URLs:  https://$EXTERNAL_HOSTNAME:<port>"
@@ -324,14 +325,12 @@ if [ "$DETACHED" = true ]; then
     log_success "Containers started successfully!"
     echo
     echo "Access URLs:"
-    if [ "$USE_TAILSCALE" = true ]; then
+    echo "  Local:       http://localhost:8080"
+    if [ -n "$TAILSCALE_AUTH_KEY" ]; then
         echo "  Tailnet:     https://${TAILSCALE_HOSTNAME}.<your-tailnet>.ts.net"
-        echo "  OpenCode:    https://${TAILSCALE_HOSTNAME}.<your-tailnet>.ts.net:4096-4105"
-    else
-        echo "  Local:       http://localhost:8080"
-        if [ -n "$TAILSCALE_URL" ]; then
-            echo "  Tailnet:     $TAILSCALE_URL"
-        fi
+    fi
+    if [ -n "$TAILSCALE_URL" ]; then
+        echo "  Host Tailnet: $TAILSCALE_URL"
     fi
     echo
     echo "Useful commands:"

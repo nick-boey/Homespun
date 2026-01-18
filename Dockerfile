@@ -38,13 +38,21 @@ RUN dotnet publish src/Homespun/Homespun.csproj \
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 
-# Install dependencies: git, gh CLI, Node.js (for beads)
-# Note: Tailscale networking is handled by a sidecar container
+# Install dependencies: git, gh CLI, Node.js (for beads), Tailscale
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     curl \
     ca-certificates \
     gnupg \
+    iptables \
+    iproute2 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Tailscale
+RUN curl -fsSL https://pkgs.tailscale.com/stable/debian/bookworm.noarmor.gpg | tee /usr/share/keyrings/tailscale-archive-keyring.gpg >/dev/null \
+    && curl -fsSL https://pkgs.tailscale.com/stable/debian/bookworm.tailscale-keyring.list | tee /etc/apt/sources.list.d/tailscale.list \
+    && apt-get update \
+    && apt-get install -y tailscale \
     && rm -rf /var/lib/apt/lists/*
 
 # Install GitHub CLI
@@ -76,9 +84,9 @@ RUN apt-get update && apt-get remove -y build-essential && apt-get autoremove -y
 # Create non-root user for security
 RUN useradd --create-home --shell /bin/bash homespun
 
-# Create data directory
-RUN mkdir -p /data \
-    && chown -R homespun:homespun /data
+# Create data directory and Tailscale state directory
+RUN mkdir -p /data /var/lib/tailscale \
+    && chown -R homespun:homespun /data /var/lib/tailscale
 
 # Make home directory accessible to any runtime user
 # This is needed because docker-compose may override the runtime user (HOST_UID/HOST_GID)
@@ -99,8 +107,8 @@ COPY --from=build /app/publish .
 COPY src/Homespun/start.sh .
 RUN chmod +x start.sh
 
-# Set ownership
-RUN chown -R homespun:homespun /app
+# Set ownership (including Tailscale state directory)
+RUN chown -R homespun:homespun /app /var/lib/tailscale
 
 # Switch to non-root user
 USER homespun
@@ -111,8 +119,8 @@ ENV ASPNETCORE_URLS=http://+:8080
 ENV HOMESPUN_DATA_PATH=/data/homespun-data.json
 ENV DOTNET_PRINT_TELEMETRY_MESSAGE=false
 
-# Expose port
-EXPOSE 8080
+# Expose ports (8080 for direct HTTP, 443 for Tailscale HTTPS)
+EXPOSE 8080 443
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \

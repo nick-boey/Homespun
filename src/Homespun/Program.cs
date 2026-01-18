@@ -1,4 +1,5 @@
 using Homespun.Features.Beads.Services;
+using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.ClaudeCode.Hubs;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Commands;
@@ -122,5 +123,78 @@ app.MapHub<ClaudeCodeHub>("/hubs/claudecode");
 
 // Map health check endpoint
 app.MapHealthChecks("/health");
+
+// Map test agent endpoint for curl-based testing
+app.MapGet("/test-agent", async (ILogger<Program> logger) =>
+{
+    var testDir = Path.Combine(Directory.GetCurrentDirectory(), "test");
+
+    // Create test directory if it doesn't exist
+    if (!Directory.Exists(testDir))
+    {
+        Directory.CreateDirectory(testDir);
+        logger.LogInformation("Created test directory: {TestDir}", testDir);
+    }
+
+    var timestamp = DateTime.UtcNow.ToString("O");
+    var prompt = $"Create a file named test.txt containing the timestamp: {timestamp}";
+
+    // Run claude CLI directly to avoid SDK permission mode bug
+    var processStartInfo = new System.Diagnostics.ProcessStartInfo
+    {
+        FileName = "claude",
+        Arguments = $"-p \"{prompt}\" --dangerously-skip-permissions",
+        WorkingDirectory = testDir,
+        RedirectStandardOutput = true,
+        RedirectStandardError = true,
+        UseShellExecute = false,
+        CreateNoWindow = true
+    };
+
+    try
+    {
+        logger.LogInformation("Starting test agent in {TestDir} with prompt: {Prompt}", testDir, prompt);
+
+        var sessionId = Guid.NewGuid().ToString();
+
+        // Run the agent in the background
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                using var process = System.Diagnostics.Process.Start(processStartInfo);
+                if (process != null)
+                {
+                    var output = await process.StandardOutput.ReadToEndAsync();
+                    var error = await process.StandardError.ReadToEndAsync();
+                    await process.WaitForExitAsync();
+
+                    logger.LogInformation("Test agent completed. Exit code: {ExitCode}", process.ExitCode);
+                    if (!string.IsNullOrEmpty(output))
+                        logger.LogInformation("Output: {Output}", output);
+                    if (!string.IsNullOrEmpty(error))
+                        logger.LogWarning("Stderr: {Error}", error);
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error running test agent");
+            }
+        });
+
+        return Results.Ok(new
+        {
+            message = "Test agent started",
+            sessionId,
+            workingDirectory = testDir,
+            prompt
+        });
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Failed to start test agent");
+        return Results.Problem($"Failed to start test agent: {ex.Message}");
+    }
+});
 
 app.Run();
