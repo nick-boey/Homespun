@@ -525,7 +525,7 @@
             return;
         }
 
-        if (_projectLocalPath == null)
+        if (_project?.LocalPath == null)
         {
             _errorMessage = "Project path not available.";
             return;
@@ -605,7 +605,7 @@
                 updateOptions.LabelsToRemove = labelsToRemove;
 
             // Perform update (updates cache immediately, queues DB write)
-            var success = await BeadsDatabaseService.UpdateIssueAsync(_projectLocalPath, Issue.Id, updateOptions);
+            var success = await BeadsDatabaseService.UpdateIssueAsync(_project?.LocalPath, Issue.Id, updateOptions);
 
             if (!success)
             {
@@ -778,7 +778,7 @@
 
     private async Task CloseIssue()
     {
-        if (_projectLocalPath == null)
+        if (_project?.LocalPath == null)
         {
             _errorMessage = "Project path not available.";
             return;
@@ -789,7 +789,7 @@
 
         try
         {
-            var success = await BeadsDatabaseService.CloseIssueAsync(_projectLocalPath, Issue.Id);
+            var success = await BeadsDatabaseService.CloseIssueAsync(_project?.LocalPath, Issue.Id);
 
             if (!success)
             {
@@ -820,7 +820,7 @@
 
     private async Task DeleteIssue()
     {
-        if (_projectLocalPath == null)
+        if (_project?.LocalPath == null)
         {
             _errorMessage = "Project path not available.";
             return;
@@ -831,7 +831,7 @@
 
         try
         {
-            var success = await BeadsDatabaseService.DeleteIssueAsync(_projectLocalPath, Issue.Id);
+            var success = await BeadsDatabaseService.DeleteIssueAsync(_project?.LocalPath, Issue.Id);
 
             if (!success)
             {
