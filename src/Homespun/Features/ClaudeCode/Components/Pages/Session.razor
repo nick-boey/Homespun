@@ -345,6 +345,7 @@
     private string _inputMessage = string.Empty;
     private ElementReference _messagesContainer;
     private HubConnection? _hubConnection;
+    private string? _signalRError;
 
     protected override async Task OnInitializedAsync()
     {
@@ -352,7 +353,17 @@
 
         if (_session != null)
         {
-            await SetupSignalR();
+            try
+            {
+                await SetupSignalR();
+            }
+            catch (Exception ex)
+            {
+                // SignalR connection failed - this can happen when accessing via external hostname
+                // that the container can't resolve. Continue without real-time updates.
+                _signalRError = $"Real-time updates unavailable: {ex.Message}";
+                Console.WriteLine($"SignalR connection failed: {ex.Message}");
+            }
         }
     }
 
@@ -511,7 +522,18 @@
     {
         if (_hubConnection != null)
         {
-            await _hubConnection.SendAsync("LeaveSession", SessionId);
+            try
+            {
+                if (_hubConnection.State == HubConnectionState.Connected)
+                {
+                    await _hubConnection.SendAsync("LeaveSession", SessionId);
+                }
+            }
+            catch
+            {
+                // Ignore errors when leaving session - connection may already be closed
+            }
+
             await _hubConnection.DisposeAsync();
         }
     }
