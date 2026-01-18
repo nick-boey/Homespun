@@ -1,6 +1,11 @@
 # Homespun Dockerfile
 # Multi-stage build for .NET 10 Blazor Server application
 # Includes: git, gh CLI, and beads (bd) tools
+#
+# Environment Variables (passed at runtime via scripts/run.sh):
+#   GITHUB_TOKEN              - GitHub personal access token for PR operations
+#   CLAUDE_CODE_OAUTH_TOKEN   - Claude Code OAuth token for authentication
+#   TAILSCALE_AUTH_KEY        - Tailscale auth key for VPN access (optional)
 
 # =============================================================================
 # Stage 1: Build
@@ -38,21 +43,12 @@ RUN dotnet publish src/Homespun/Homespun.csproj \
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 
-# Install dependencies: git, gh CLI, Node.js (for beads), Tailscale
+# Install dependencies: git, gh CLI, Node.js (for beads)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     curl \
     ca-certificates \
     gnupg \
-    iptables \
-    iproute2 \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install Tailscale
-RUN curl -fsSL https://pkgs.tailscale.com/stable/debian/bookworm.noarmor.gpg | tee /usr/share/keyrings/tailscale-archive-keyring.gpg >/dev/null \
-    && curl -fsSL https://pkgs.tailscale.com/stable/debian/bookworm.tailscale-keyring.list | tee /etc/apt/sources.list.d/tailscale.list \
-    && apt-get update \
-    && apt-get install -y tailscale \
     && rm -rf /var/lib/apt/lists/*
 
 # Install GitHub CLI
@@ -81,21 +77,31 @@ RUN npm install -g @beads/bd opencode-ai@latest @anthropic-ai/claude-code @siteb
 RUN apt-get update && apt-get remove -y build-essential && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/*
 
+# Install Tailscale for VPN access
+RUN curl -fsSL https://pkgs.tailscale.com/stable/debian/bookworm.noarmor.gpg | tee /usr/share/keyrings/tailscale-archive-keyring.gpg >/dev/null \
+    && curl -fsSL https://pkgs.tailscale.com/stable/debian/bookworm.tailscale-keyring.list | tee /etc/apt/sources.list.d/tailscale.list \
+    && apt-get update \
+    && apt-get install -y tailscale \
+    && rm -rf /var/lib/apt/lists/*
+
 # Create non-root user for security
 RUN useradd --create-home --shell /bin/bash homespun
 
-# Create data directory and Tailscale state directory
-RUN mkdir -p /data /var/lib/tailscale \
-    && chown -R homespun:homespun /data /var/lib/tailscale
+# Create data directory
+RUN mkdir -p /data \
+    && chown -R homespun:homespun /data
 
 # Make home directory accessible to any runtime user
 # This is needed because docker-compose may override the runtime user (HOST_UID/HOST_GID)
 # for proper file ownership on mounted volumes, but HOME still points to /home/homespun
 # Also create .claude directory structure for Claude Code runtime data (todos, debug, sessions)
+# Create Tailscale state directory for userspace networking
 RUN chmod 777 /home/homespun \
     && mkdir -p /home/homespun/.local/share /home/homespun/.config /home/homespun/.cache \
     && mkdir -p /home/homespun/.claude/todos /home/homespun/.claude/debug /home/homespun/.claude/projects /home/homespun/.claude/statsig \
-    && chmod -R 777 /home/homespun/.local /home/homespun/.config /home/homespun/.cache /home/homespun/.claude
+    && mkdir -p /var/lib/tailscale \
+    && chmod -R 777 /home/homespun/.local /home/homespun/.config /home/homespun/.cache /home/homespun/.claude \
+    && chmod 777 /var/lib/tailscale
 
 # Configure git to trust mounted directories (avoids "dubious ownership" errors)
 RUN git config --global --add safe.directory '*'
@@ -107,8 +113,8 @@ COPY --from=build /app/publish .
 COPY src/Homespun/start.sh .
 RUN chmod +x start.sh
 
-# Set ownership (including Tailscale state directory)
-RUN chown -R homespun:homespun /app /var/lib/tailscale
+# Set ownership
+RUN chown -R homespun:homespun /app
 
 # Switch to non-root user
 USER homespun
@@ -119,8 +125,8 @@ ENV ASPNETCORE_URLS=http://+:8080
 ENV HOMESPUN_DATA_PATH=/data/homespun-data.json
 ENV DOTNET_PRINT_TELEMETRY_MESSAGE=false
 
-# Expose ports (8080 for direct HTTP, 443 for Tailscale HTTPS)
-EXPOSE 8080 443
+# Expose port
+EXPOSE 8080
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \

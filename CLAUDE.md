@@ -139,9 +139,30 @@ dotnet test
 
 ## Configuration
 
-Environment variables:
+### Environment Variables
+
 - `HOMESPUN_DATA_PATH`: Path to data file (default: `~/.homespun/homespun-data.json`)
 - `GITHUB_TOKEN`: GitHub personal access token for PR operations
+- `CLAUDE_CODE_OAUTH_TOKEN`: Claude Code OAuth token for API authentication
+- `TAILSCALE_AUTH_KEY`: Tailscale auth key for VPN access (optional)
+
+### Docker Deployment
+
+The recommended way to provide credentials for Docker deployment is to create a credentials file at `~/.homespun/env`:
+
+```bash
+export GITHUB_TOKEN=ghp_your_token_here
+export CLAUDE_CODE_OAUTH_TOKEN=your_oauth_token_here
+export TAILSCALE_AUTH_KEY=tskey-auth-your_key_here  # Optional, for VPN access
+```
+
+The `scripts/run.sh` script will automatically source this file when starting the container.
+
+Alternative methods (checked in order):
+1. `~/.homespun/env` file (recommended)
+2. `HSP_*` prefixed environment variables (for VM secrets)
+3. Standard environment variables (`GITHUB_TOKEN`, `CLAUDE_CODE_OAUTH_TOKEN`, `TAILSCALE_AUTH_KEY`)
+4. `.env` file in the repository root
 
 ## Health Checks
 

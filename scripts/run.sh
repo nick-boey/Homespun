@@ -2,10 +2,10 @@
 set -e
 
 # ============================================================================
-# Homespun Docker Compose Runner
+# Homespun Docker Runner
 # ============================================================================
 #
-# This script runs Homespun using Docker Compose with optional Watchtower
+# This script runs Homespun using Docker with optional Watchtower
 # for automatic updates from GHCR.
 #
 # Usage:
@@ -23,16 +23,22 @@ set -e
 #   --stop                      Stop running containers
 #   --logs                      Follow container logs
 #   --pull                      Pull latest image before starting
-#   --tailscale-auth-key KEY    Set Tailscale auth key for HTTPS access
-#   --tailscale-hostname NAME   Set Tailscale hostname (default: homespun)
-#   --external-hostname HOST    Set external hostname for agent URLs (e.g., homespun.tail1234.ts.net)
+#   --external-hostname HOST    Set external hostname for agent URLs
 #
 # Environment Variables:
 #   HSP_GITHUB_TOKEN            GitHub token (preferred for VM secrets)
+#   HSP_CLAUDE_CODE_OAUTH_TOKEN Claude Code OAuth token (preferred for VM secrets)
 #   HSP_TAILSCALE_AUTH_KEY      Tailscale auth key (preferred for VM secrets)
 #   HSP_EXTERNAL_HOSTNAME       External hostname for agent URLs
 #   GITHUB_TOKEN                GitHub token (fallback)
+#   CLAUDE_CODE_OAUTH_TOKEN     Claude Code OAuth token (fallback)
 #   TAILSCALE_AUTH_KEY          Tailscale auth key (fallback)
+#
+# Configuration File:
+#   Place credentials in ~/.homespun/env to auto-load them:
+#     export GITHUB_TOKEN=ghp_...
+#     export CLAUDE_CODE_OAUTH_TOKEN=...
+#     export TAILSCALE_AUTH_KEY=tskey-auth-...
 #
 # Volume Mounts:
 #   Claude Code config (~/.claude) is automatically mounted for OAuth authentication
@@ -47,8 +53,6 @@ USE_DEBUG=false
 DETACHED=true
 ACTION="start"
 PULL_FIRST=false
-TAILSCALE_AUTH_KEY=""
-TAILSCALE_HOSTNAME="homespun"
 EXTERNAL_HOSTNAME=""
 USER_SECRETS_ID="2cfc6c57-72da-4b56-944b-08f2c1df76f6"
 
@@ -66,7 +70,7 @@ log_warn() { echo -e "${YELLOW}$1${NC}"; }
 log_error() { echo -e "${RED}$1${NC}"; }
 
 show_help() {
-    head -25 "$0" | tail -20
+    head -35 "$0" | tail -30
     exit 0
 }
 
@@ -80,8 +84,6 @@ while [[ "$#" -gt 0 ]]; do
         --stop) ACTION="stop" ;;
         --logs) ACTION="logs" ;;
         --pull) PULL_FIRST=true ;;
-        --tailscale-auth-key) TAILSCALE_AUTH_KEY="$2"; shift ;;
-        --tailscale-hostname) TAILSCALE_HOSTNAME="$2"; shift ;;
         --external-hostname) EXTERNAL_HOSTNAME="$2"; shift ;;
         -h|--help) show_help ;;
         *) log_error "Unknown parameter: $1"; show_help ;;
@@ -89,17 +91,20 @@ while [[ "$#" -gt 0 ]]; do
     shift
 done
 
-# Change to repository root for docker-compose
+# Change to repository root
 cd "$REPO_ROOT"
 
 echo
-log_info "=== Homespun Docker Compose Runner ==="
+log_info "=== Homespun Docker Runner ==="
 echo
 
 # Handle stop action
 if [ "$ACTION" = "stop" ]; then
     log_info "Stopping containers..."
-    docker compose --profile production down 2>/dev/null || docker compose down
+    docker stop homespun 2>/dev/null || true
+    docker stop watchtower 2>/dev/null || true
+    docker rm homespun 2>/dev/null || true
+    docker rm watchtower 2>/dev/null || true
     log_success "Containers stopped."
     exit 0
 fi
@@ -107,7 +112,7 @@ fi
 # Handle logs action
 if [ "$ACTION" = "logs" ]; then
     log_info "Following container logs (Ctrl+C to exit)..."
-    docker compose logs -f homespun
+    docker logs -f homespun
     exit 0
 fi
 
@@ -117,11 +122,7 @@ if ! docker version >/dev/null 2>&1; then
     log_error "Docker is not running. Please start Docker and try again."
     exit 1
 fi
-if ! docker compose version >/dev/null 2>&1; then
-    log_error "Docker Compose is not available. Please install Docker Compose."
-    exit 1
-fi
-log_success "      Docker and Docker Compose are available."
+log_success "      Docker is available."
 
 # Step 2: Check/build image
 log_info "[2/5] Checking container image..."
@@ -146,10 +147,17 @@ else
     log_success "      Using GHCR image: $IMAGE_NAME"
 fi
 
-# Step 3: Read GitHub token
-log_info "[3/5] Reading GitHub token..."
+# Step 3: Read credentials
+log_info "[3/5] Reading credentials..."
 
-# Check environment variables in order of preference:
+# Source ~/.homespun/env if it exists (recommended location for credentials)
+HOMESPUN_ENV_FILE="$HOME/.homespun/env"
+if [ -f "$HOMESPUN_ENV_FILE" ]; then
+    log_info "      Loading credentials from $HOMESPUN_ENV_FILE"
+    source "$HOMESPUN_ENV_FILE"
+fi
+
+# GitHub Token: Check environment variables in order of preference
 # 1. HSP_GITHUB_TOKEN (for VM secrets)
 # 2. GITHUB_TOKEN (standard)
 GITHUB_TOKEN="${HSP_GITHUB_TOKEN:-${GITHUB_TOKEN:-}}"
@@ -173,25 +181,44 @@ fi
 
 if [ -z "$GITHUB_TOKEN" ]; then
     log_warn "      GitHub token not found."
-    log_warn "      Set HSP_GITHUB_TOKEN or GITHUB_TOKEN environment variable."
-    log_warn "      See .env.example for template."
+    log_warn "      Set GITHUB_TOKEN in ~/.homespun/env or environment."
 else
     MASKED_TOKEN="${GITHUB_TOKEN:0:10}..."
     log_success "      GitHub token found: $MASKED_TOKEN"
 fi
 
-# Read Tailscale auth key from environment if not passed as argument
-if [ -z "$TAILSCALE_AUTH_KEY" ]; then
-    # Check HSP_TAILSCALE_AUTH_KEY first (for VM secrets), then TAILSCALE_AUTH_KEY
-    TAILSCALE_AUTH_KEY="${HSP_TAILSCALE_AUTH_KEY:-${TAILSCALE_AUTH_KEY:-}}"
+# Claude Code OAuth Token: Check environment variables
+# 1. HSP_CLAUDE_CODE_OAUTH_TOKEN (for VM secrets)
+# 2. CLAUDE_CODE_OAUTH_TOKEN (standard)
+CLAUDE_CODE_OAUTH_TOKEN="${HSP_CLAUDE_CODE_OAUTH_TOKEN:-${CLAUDE_CODE_OAUTH_TOKEN:-}}"
+
+# Try reading from .env file
+if [ -z "$CLAUDE_CODE_OAUTH_TOKEN" ] && [ -f "$REPO_ROOT/.env" ]; then
+    CLAUDE_CODE_OAUTH_TOKEN=$(grep -E "^CLAUDE_CODE_OAUTH_TOKEN=" "$REPO_ROOT/.env" 2>/dev/null | cut -d'=' -f2- | tr -d '"' | tr -d "'" || true)
 fi
 
-# Try reading Tailscale auth key from .env file if not set
+if [ -z "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
+    log_warn "      Claude Code OAuth token not found."
+    log_warn "      Set CLAUDE_CODE_OAUTH_TOKEN in ~/.homespun/env or environment."
+else
+    MASKED_CC_TOKEN="${CLAUDE_CODE_OAUTH_TOKEN:0:15}..."
+    log_success "      Claude Code OAuth token found: $MASKED_CC_TOKEN"
+fi
+
+# Tailscale Auth Key: Check environment variables
+# 1. HSP_TAILSCALE_AUTH_KEY (for VM secrets)
+# 2. TAILSCALE_AUTH_KEY (standard)
+TAILSCALE_AUTH_KEY="${HSP_TAILSCALE_AUTH_KEY:-${TAILSCALE_AUTH_KEY:-}}"
+
+# Try reading from .env file
 if [ -z "$TAILSCALE_AUTH_KEY" ] && [ -f "$REPO_ROOT/.env" ]; then
     TAILSCALE_AUTH_KEY=$(grep -E "^TAILSCALE_AUTH_KEY=" "$REPO_ROOT/.env" 2>/dev/null | cut -d'=' -f2- | tr -d '"' | tr -d "'" || true)
 fi
 
-if [ -n "$TAILSCALE_AUTH_KEY" ]; then
+if [ -z "$TAILSCALE_AUTH_KEY" ]; then
+    log_warn "      Tailscale auth key not found (Tailscale will be disabled)."
+    log_warn "      Set TAILSCALE_AUTH_KEY in ~/.homespun/env for VPN access."
+else
     MASKED_TS_KEY="${TAILSCALE_AUTH_KEY:0:15}..."
     log_success "      Tailscale auth key found: $MASKED_TS_KEY"
 fi
@@ -201,8 +228,7 @@ log_info "[4/5] Setting up directories..."
 
 DATA_DIR="$HOME/.homespun-container/data"
 SSH_DIR="$HOME/.ssh"
-CLAUDE_CREDENTIALS_FILE="$HOME/.claude/.credentials.json"
-TAILSCALE_STATE_DIR="$DATA_DIR/tailscale"
+CLAUDE_DIR="$HOME/.claude"
 
 if [ ! -d "$DATA_DIR" ]; then
     mkdir -p "$DATA_DIR"
@@ -211,35 +237,27 @@ else
     log_success "      Data directory exists: $DATA_DIR"
 fi
 
-# Create Tailscale state directory
-if [ ! -d "$TAILSCALE_STATE_DIR" ]; then
-    mkdir -p "$TAILSCALE_STATE_DIR"
-    log_success "      Created Tailscale state directory: $TAILSCALE_STATE_DIR"
-fi
-
 chmod 777 "$DATA_DIR" 2>/dev/null || true
-chmod 777 "$TAILSCALE_STATE_DIR" 2>/dev/null || true
 
 # Check SSH directory
-if [ ! -d "$SSH_DIR" ]; then
-    log_warn "      SSH directory not found: $SSH_DIR"
-    SSH_DIR=""
-fi
-
-# Check Claude Code credentials file (for OAuth authentication)
-if [ ! -f "$CLAUDE_CREDENTIALS_FILE" ]; then
-    log_warn "      Claude credentials not found: $CLAUDE_CREDENTIALS_FILE"
-    log_warn "      Run 'claude login' on host to authenticate Claude Code."
-    CLAUDE_CREDENTIALS_FILE=""
+SSH_MOUNT=""
+if [ -d "$SSH_DIR" ]; then
+    SSH_MOUNT="-v $SSH_DIR:/home/homespun/.ssh:ro"
+    log_success "      SSH directory found: $SSH_DIR"
 else
-    log_success "      Claude credentials found: $CLAUDE_CREDENTIALS_FILE"
+    log_warn "      SSH directory not found: $SSH_DIR"
 fi
 
-# Step 5: Start containers
-log_info "[5/5] Starting containers..."
-echo
+# Check Claude directory
+CLAUDE_MOUNT=""
+if [ -d "$CLAUDE_DIR" ]; then
+    CLAUDE_MOUNT="-v $CLAUDE_DIR:/home/homespun/.claude:ro"
+    log_success "      Claude config found: $CLAUDE_DIR"
+else
+    log_warn "      Claude config not found: $CLAUDE_DIR"
+fi
 
-# Read external hostname from environment if not passed as argument
+# Read external hostname
 if [ -z "$EXTERNAL_HOSTNAME" ]; then
     EXTERNAL_HOSTNAME="${HSP_EXTERNAL_HOSTNAME:-}"
 fi
@@ -249,41 +267,13 @@ if [ -z "$EXTERNAL_HOSTNAME" ] && [ -f "$REPO_ROOT/.env" ]; then
     EXTERNAL_HOSTNAME=$(grep -E "^HSP_EXTERNAL_HOSTNAME=" "$REPO_ROOT/.env" 2>/dev/null | cut -d'=' -f2- | tr -d '"' | tr -d "'" || true)
 fi
 
-if [ -n "$EXTERNAL_HOSTNAME" ]; then
-    log_success "      External hostname: $EXTERNAL_HOSTNAME"
-fi
-
-# Export environment variables for docker-compose
-export HOMESPUN_IMAGE="$IMAGE_NAME"
-export DATA_DIR="$DATA_DIR"
-export SSH_DIR="${SSH_DIR:-/dev/null}"
-export CLAUDE_CREDENTIALS_FILE="${CLAUDE_CREDENTIALS_FILE:-/dev/null}"
-export GITHUB_TOKEN="$GITHUB_TOKEN"
-export TAILSCALE_AUTH_KEY="$TAILSCALE_AUTH_KEY"
-export TAILSCALE_HOSTNAME="$TAILSCALE_HOSTNAME"
-export TAILSCALE_STATE_DIR="$TAILSCALE_STATE_DIR"
-export HSP_EXTERNAL_HOSTNAME="$EXTERNAL_HOSTNAME"
+# Step 5: Start containers
+log_info "[5/5] Starting containers..."
+echo
 
 # Export host user UID/GID so container runs as the same user
-# This ensures files created in mounted volumes are accessible to the host user
-export HOST_UID="$(id -u)"
-export HOST_GID="$(id -g)"
-
-# Check if Tailscale is available on the host and get the IP
-TAILSCALE_IP=""
-TAILSCALE_URL=""
-if command -v tailscale &>/dev/null; then
-    TAILSCALE_IP=$(tailscale ip -4 2>/dev/null || true)
-    if [ -n "$TAILSCALE_IP" ]; then
-        TAILSCALE_URL="http://${TAILSCALE_IP}:8080"
-    fi
-fi
-
-# Determine compose profiles (only production profile for Watchtower)
-COMPOSE_PROFILES=""
-if [ "$USE_LOCAL" = false ]; then
-    COMPOSE_PROFILES="--profile production"
-fi
+HOST_UID="$(id -u)"
+HOST_GID="$(id -g)"
 
 log_info "======================================"
 log_info "  Container Configuration"
@@ -292,20 +282,15 @@ echo "  Image:       $IMAGE_NAME"
 echo "  User:        $HOST_UID:$HOST_GID (host user)"
 echo "  Port:        8080"
 echo "  URL:         http://localhost:8080"
-if [ -n "$TAILSCALE_URL" ]; then
-    echo "  Tailnet URL: $TAILSCALE_URL"
-fi
 echo "  Data mount:  $DATA_DIR"
-if [ -n "$SSH_DIR" ] && [ "$SSH_DIR" != "/dev/null" ]; then
+if [ -n "$SSH_MOUNT" ]; then
     echo "  SSH mount:   $SSH_DIR (read-only)"
 fi
-if [ -n "$CLAUDE_CREDENTIALS_FILE" ] && [ "$CLAUDE_CREDENTIALS_FILE" != "/dev/null" ]; then
-    echo "  Claude auth: $CLAUDE_CREDENTIALS_FILE (read-only)"
+if [ -n "$CLAUDE_MOUNT" ]; then
+    echo "  Claude auth: $CLAUDE_DIR (read-only)"
 fi
 if [ -n "$TAILSCALE_AUTH_KEY" ]; then
-    echo "  Tailscale:   Enabled ($TAILSCALE_HOSTNAME)"
-else
-    echo "  Tailscale:   Disabled (no auth key)"
+    echo "  Tailscale:   Enabled (will connect on startup)"
 fi
 if [ -n "$EXTERNAL_HOSTNAME" ]; then
     echo "  Agent URLs:  https://$EXTERNAL_HOSTNAME:<port>"
@@ -318,20 +303,72 @@ fi
 log_info "======================================"
 echo
 
+# Stop existing containers first
+docker stop homespun 2>/dev/null || true
+docker rm homespun 2>/dev/null || true
+
+# Build docker run command
+DOCKER_CMD="docker run"
 if [ "$DETACHED" = true ]; then
-    log_info "Starting containers in detached mode..."
-    docker compose $COMPOSE_PROFILES up -d
-    echo
-    log_success "Containers started successfully!"
-    echo
-    echo "Access URLs:"
-    echo "  Local:       http://localhost:8080"
-    if [ -n "$TAILSCALE_AUTH_KEY" ]; then
-        echo "  Tailnet:     https://${TAILSCALE_HOSTNAME}.<your-tailnet>.ts.net"
+    DOCKER_CMD="$DOCKER_CMD -d"
+fi
+DOCKER_CMD="$DOCKER_CMD --name homespun"
+DOCKER_CMD="$DOCKER_CMD --user $HOST_UID:$HOST_GID"
+DOCKER_CMD="$DOCKER_CMD -p 8080:8080"
+DOCKER_CMD="$DOCKER_CMD -v $DATA_DIR:/data"
+DOCKER_CMD="$DOCKER_CMD $SSH_MOUNT"
+DOCKER_CMD="$DOCKER_CMD $CLAUDE_MOUNT"
+DOCKER_CMD="$DOCKER_CMD -e HOME=/home/homespun"
+DOCKER_CMD="$DOCKER_CMD -e ASPNETCORE_ENVIRONMENT=Production"
+DOCKER_CMD="$DOCKER_CMD -e HSP_HOST_DATA_PATH=$DATA_DIR"
+
+if [ -n "$GITHUB_TOKEN" ]; then
+    DOCKER_CMD="$DOCKER_CMD -e GITHUB_TOKEN=$GITHUB_TOKEN"
+fi
+
+if [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
+    DOCKER_CMD="$DOCKER_CMD -e CLAUDE_CODE_OAUTH_TOKEN=$CLAUDE_CODE_OAUTH_TOKEN"
+fi
+
+if [ -n "$TAILSCALE_AUTH_KEY" ]; then
+    DOCKER_CMD="$DOCKER_CMD -e TAILSCALE_AUTH_KEY=$TAILSCALE_AUTH_KEY"
+fi
+
+if [ -n "$EXTERNAL_HOSTNAME" ]; then
+    DOCKER_CMD="$DOCKER_CMD -e HSP_EXTERNAL_HOSTNAME=$EXTERNAL_HOSTNAME"
+fi
+
+DOCKER_CMD="$DOCKER_CMD --restart unless-stopped"
+DOCKER_CMD="$DOCKER_CMD --health-cmd 'curl -f http://localhost:8080/health || exit 1'"
+DOCKER_CMD="$DOCKER_CMD --health-interval 30s"
+DOCKER_CMD="$DOCKER_CMD --health-timeout 10s"
+DOCKER_CMD="$DOCKER_CMD --health-retries 3"
+DOCKER_CMD="$DOCKER_CMD --health-start-period 10s"
+DOCKER_CMD="$DOCKER_CMD $IMAGE_NAME"
+
+if [ "$DETACHED" = true ]; then
+    log_info "Starting container in detached mode..."
+    eval $DOCKER_CMD
+
+    # Start Watchtower for production mode
+    if [ "$USE_LOCAL" = false ]; then
+        docker stop watchtower 2>/dev/null || true
+        docker rm watchtower 2>/dev/null || true
+        docker run -d \
+            --name watchtower \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -e WATCHTOWER_CLEANUP=true \
+            -e WATCHTOWER_POLL_INTERVAL=${WATCHTOWER_POLL_INTERVAL:-300} \
+            -e WATCHTOWER_INCLUDE_STOPPED=false \
+            -e WATCHTOWER_ROLLING_RESTART=true \
+            --restart unless-stopped \
+            containrrr/watchtower homespun
     fi
-    if [ -n "$TAILSCALE_URL" ]; then
-        echo "  Host Tailnet: $TAILSCALE_URL"
-    fi
+
+    echo
+    log_success "Container started successfully!"
+    echo
+    echo "Access URL: http://localhost:8080"
     echo
     echo "Useful commands:"
     echo "  View logs:     $0 --logs"
@@ -339,10 +376,10 @@ if [ "$DETACHED" = true ]; then
     echo "  Health check:  curl http://localhost:8080/health"
     echo
 else
-    log_warn "Starting containers in interactive mode..."
+    log_warn "Starting container in interactive mode..."
     log_warn "Press Ctrl+C to stop."
     echo
-    docker compose $COMPOSE_PROFILES up
+    eval $DOCKER_CMD
     echo
-    log_warn "Containers stopped."
+    log_warn "Container stopped."
 fi
