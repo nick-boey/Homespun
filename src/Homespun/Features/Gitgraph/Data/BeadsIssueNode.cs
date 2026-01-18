@@ -11,17 +11,20 @@ public class BeadsIssueNode : IGraphNode
     private readonly IReadOnlyList<string> _parentIds;
     private readonly int _timeDimension;
     private readonly bool _isOrphan;
+    private readonly string? _customBranchName;
 
     public BeadsIssueNode(
         BeadsIssue issue,
         IReadOnlyList<string> parentIds,
         int timeDimension,
-        bool isOrphan = false)
+        bool isOrphan = false,
+        string? customBranchName = null)
     {
         _issue = issue;
         _parentIds = parentIds;
         _timeDimension = timeDimension;
         _isOrphan = isOrphan;
+        _customBranchName = customBranchName;
     }
 
     public string Id => $"issue-{_issue.Id}";
@@ -46,9 +49,9 @@ public class BeadsIssueNode : IGraphNode
 
     public IReadOnlyList<string> ParentIds => _parentIds;
 
-    public string BranchName => _isOrphan
+    public string BranchName => _customBranchName ?? (_isOrphan
         ? "orphan-issues"
-        : $"issue-{_issue.Id}";
+        : $"issue-{_issue.Id}");
 
     public DateTime SortDate => _issue.Status == BeadsIssueStatus.Closed
         ? _issue.ClosedAt ?? _issue.UpdatedAt

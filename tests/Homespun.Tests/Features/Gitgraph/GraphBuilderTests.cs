@@ -1,3 +1,4 @@
+using Homespun.Features.Beads;
 using Homespun.Features.Beads.Data;
 using Homespun.Features.Gitgraph.Data;
 using Homespun.Features.Gitgraph.Services;
@@ -419,6 +420,111 @@ public class GraphBuilderTests
         Assert.That(bd003Index, Is.GreaterThan(bd002Index));
     }
 
+    [Test]
+    public void Build_OrphanIssues_GroupedByLabel()
+    {
+        // Arrange - Orphan issues with different group labels
+        var issues = new List<BeadsIssue>
+        {
+            CreateIssueWithGroup("bd-001", "frontend", "update-page"),
+            CreateIssueWithGroup("bd-002", "backend", "api-fix"),
+            CreateIssueWithGroup("bd-003", "frontend", "add-button"),
+        };
+
+        // Act
+        var graph = _builder.Build([], issues, []);
+
+        // Assert - Should have 2 orphan branches (backend and frontend)
+        Assert.That(graph.Branches.ContainsKey("orphan-issues-backend"), Is.True);
+        Assert.That(graph.Branches.ContainsKey("orphan-issues-frontend"), Is.True);
+
+        var orphanNodes = graph.Nodes.OfType<BeadsIssueNode>().ToList();
+        Assert.That(orphanNodes, Has.Count.EqualTo(3));
+
+        // Frontend issues should be on frontend branch
+        var frontendNodes = orphanNodes.Where(n => n.Issue.Id == "bd-001" || n.Issue.Id == "bd-003").ToList();
+        Assert.That(frontendNodes.All(n => n.BranchName == "orphan-issues-frontend"), Is.True);
+
+        // Backend issues should be on backend branch
+        var backendNodes = orphanNodes.Where(n => n.Issue.Id == "bd-002").ToList();
+        Assert.That(backendNodes.All(n => n.BranchName == "orphan-issues-backend"), Is.True);
+    }
+
+    [Test]
+    public void Build_OrphanIssues_GroupsSortedAlphabetically()
+    {
+        // Arrange - Orphan issues with groups that need alphabetical sorting
+        var issues = new List<BeadsIssue>
+        {
+            CreateIssueWithGroup("bd-001", "zebra", "task-1"),
+            CreateIssueWithGroup("bd-002", "alpha", "task-2"),
+            CreateIssueWithGroup("bd-003", "middle", "task-3"),
+        };
+
+        // Act
+        var graph = _builder.Build([], issues, []);
+
+        // Assert - Groups should be processed in alphabetical order
+        var orphanNodes = graph.Nodes.OfType<BeadsIssueNode>().ToList();
+
+        // The order should be: alpha (td=2), middle (td=3), zebra (td=4)
+        var alphaNode = orphanNodes.First(n => n.Issue.Id == "bd-002");
+        var middleNode = orphanNodes.First(n => n.Issue.Id == "bd-003");
+        var zebraNode = orphanNodes.First(n => n.Issue.Id == "bd-001");
+
+        Assert.That(alphaNode.TimeDimension, Is.EqualTo(2));
+        Assert.That(middleNode.TimeDimension, Is.EqualTo(3));
+        Assert.That(zebraNode.TimeDimension, Is.EqualTo(4));
+    }
+
+    [Test]
+    public void Build_OrphanIssues_WithinGroupOrderedByPriorityThenAge()
+    {
+        // Arrange - Multiple issues in same group with different priorities
+        var issues = new List<BeadsIssue>
+        {
+            CreateIssueWithGroup("bd-001", "frontend", "task-1", priority: 3, createdAt: DateTime.UtcNow.AddDays(-1)),
+            CreateIssueWithGroup("bd-002", "frontend", "task-2", priority: 1, createdAt: DateTime.UtcNow.AddDays(-2)),
+            CreateIssueWithGroup("bd-003", "frontend", "task-3", priority: 1, createdAt: DateTime.UtcNow.AddDays(-3)),
+        };
+
+        // Act
+        var graph = _builder.Build([], issues, []);
+
+        // Assert - Within frontend group, order should be: bd-003 (P1, oldest), bd-002 (P1, older), bd-001 (P3, newer)
+        var orphanNodes = graph.Nodes.OfType<BeadsIssueNode>().OrderBy(n => n.Id).ToList();
+        var nodeOrder = orphanNodes.Select(n => n.Issue.Id).ToList();
+
+        Assert.That(nodeOrder[0], Is.EqualTo("bd-003"));
+        Assert.That(nodeOrder[1], Is.EqualTo("bd-002"));
+        Assert.That(nodeOrder[2], Is.EqualTo("bd-001"));
+    }
+
+    [Test]
+    public void Build_OrphanIssues_WithoutGroupLabel_UsesDefaultBranch()
+    {
+        // Arrange - Mix of issues with and without group labels
+        var issues = new List<BeadsIssue>
+        {
+            CreateIssueWithGroup("bd-001", "frontend", "task-1"),
+            CreateIssue("bd-002"),  // No group label
+        };
+
+        // Act
+        var graph = _builder.Build([], issues, []);
+
+        // Assert - Should have both orphan-issues-frontend and orphan-issues branches
+        Assert.That(graph.Branches.ContainsKey("orphan-issues-frontend"), Is.True);
+        Assert.That(graph.Branches.ContainsKey("orphan-issues"), Is.True);
+
+        var orphanNodes = graph.Nodes.OfType<BeadsIssueNode>().ToList();
+        var frontendNode = orphanNodes.First(n => n.Issue.Id == "bd-001");
+        var defaultNode = orphanNodes.First(n => n.Issue.Id == "bd-002");
+
+        Assert.That(frontendNode.BranchName, Is.EqualTo("orphan-issues-frontend"));
+        Assert.That(defaultNode.BranchName, Is.EqualTo("orphan-issues"));
+    }
+
     #endregion
 
     #region MaxPastPRs Filtering
@@ -615,6 +721,13 @@ public class GraphBuilderTests
         CreatedAt = createdAt ?? DateTime.UtcNow,
         UpdatedAt = createdAt ?? DateTime.UtcNow
     };
+
+    private static BeadsIssue CreateIssueWithGroup(string id, string group, string branchId, int? priority = null, DateTime? createdAt = null)
+    {
+        var issue = CreateIssue(id, priority, createdAt);
+        issue.Labels = [BeadsBranchLabel.Create(group, branchId)];
+        return issue;
+    }
 
     #endregion
 }

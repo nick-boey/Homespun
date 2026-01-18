@@ -333,7 +333,8 @@ public class GraphBuilder
     }
 
     /// <summary>
-    /// Adds orphan issues (no dependencies) in a chain.
+    /// Adds orphan issues (no dependencies) grouped by their group label.
+    /// Each group gets its own branch, and groups are sorted alphabetically.
     /// </summary>
     private void AddOrphanIssues(
         List<BeadsIssue> orphanIssues,
@@ -343,35 +344,103 @@ public class GraphBuilder
     {
         if (orphanIssues.Count == 0) return;
 
-        // Create orphan branch
-        const string orphanBranchName = "orphan-issues";
-        branches[orphanBranchName] = new GraphBranch
+        // Group orphan issues by their group label
+        var issuesByGroup = new Dictionary<string, List<BeadsIssue>>(StringComparer.OrdinalIgnoreCase);
+        var issuesWithoutGroup = new List<BeadsIssue>();
+
+        foreach (var issue in orphanIssues)
         {
-            Name = orphanBranchName,
-            Color = "#6b7280",  // Gray
-            ParentBranch = _mainBranchName,
-            ParentCommitId = latestMergedPr?.Id
-        };
+            var parsed = BeadsBranchLabel.Parse(issue.Labels);
+            if (parsed != null)
+            {
+                var group = parsed.Value.Group;
+                if (!issuesByGroup.TryGetValue(group, out var groupIssues))
+                {
+                    groupIssues = [];
+                    issuesByGroup[group] = groupIssues;
+                }
+                groupIssues.Add(issue);
+            }
+            else
+            {
+                issuesWithoutGroup.Add(issue);
+            }
+        }
 
-        // Sort by priority then creation date
-        var sortedOrphans = orphanIssues
-            .OrderBy(i => i.Priority ?? int.MaxValue)
-            .ThenBy(i => i.CreatedAt)
-            .ToList();
+        // Sort groups alphabetically
+        var sortedGroups = issuesByGroup.Keys.OrderBy(g => g, StringComparer.OrdinalIgnoreCase).ToList();
 
-        string? previousId = latestMergedPr?.Id;
         var timeDimension = 2;
 
-        foreach (var issue in sortedOrphans)
+        // Process each group separately
+        foreach (var group in sortedGroups)
         {
-            var parentIds = previousId != null
-                ? new List<string> { previousId }
-                : new List<string>();
+            var groupIssues = issuesByGroup[group];
 
-            var node = new BeadsIssueNode(issue, parentIds, timeDimension++, isOrphan: true);
-            nodes.Add(node);
+            // Create a branch for this group
+            var orphanBranchName = $"orphan-issues-{group}";
+            branches[orphanBranchName] = new GraphBranch
+            {
+                Name = orphanBranchName,
+                Color = "#6b7280",  // Gray
+                ParentBranch = _mainBranchName,
+                ParentCommitId = latestMergedPr?.Id
+            };
 
-            previousId = node.Id;
+            // Sort issues within group by priority then creation date
+            var sortedGroupIssues = groupIssues
+                .OrderBy(i => i.Priority ?? int.MaxValue)
+                .ThenBy(i => i.CreatedAt)
+                .ToList();
+
+            string? previousId = latestMergedPr?.Id;
+
+            foreach (var issue in sortedGroupIssues)
+            {
+                var parentIds = previousId != null
+                    ? new List<string> { previousId }
+                    : new List<string>();
+
+                var node = new BeadsIssueNode(issue, parentIds, timeDimension, isOrphan: true, customBranchName: orphanBranchName);
+                nodes.Add(node);
+
+                previousId = node.Id;
+            }
+
+            timeDimension++;
+        }
+
+        // Handle issues without a group label (fallback to original behavior)
+        if (issuesWithoutGroup.Count > 0)
+        {
+            const string orphanBranchName = "orphan-issues";
+            branches[orphanBranchName] = new GraphBranch
+            {
+                Name = orphanBranchName,
+                Color = "#6b7280",  // Gray
+                ParentBranch = _mainBranchName,
+                ParentCommitId = latestMergedPr?.Id
+            };
+
+            // Sort by priority then creation date
+            var sortedOrphans = issuesWithoutGroup
+                .OrderBy(i => i.Priority ?? int.MaxValue)
+                .ThenBy(i => i.CreatedAt)
+                .ToList();
+
+            string? previousId = latestMergedPr?.Id;
+
+            foreach (var issue in sortedOrphans)
+            {
+                var parentIds = previousId != null
+                    ? new List<string> { previousId }
+                    : new List<string>();
+
+                var node = new BeadsIssueNode(issue, parentIds, timeDimension, isOrphan: true);
+                nodes.Add(node);
+
+                previousId = node.Id;
+            }
         }
     }
 
