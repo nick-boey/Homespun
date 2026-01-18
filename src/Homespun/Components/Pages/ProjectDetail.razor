@@ -876,16 +876,7 @@ else
 
             Logger.LogInformation("Created test worktree at {WorktreePath}", worktreePath);
 
-            // Generate system prompt for the test agent
-            var timestamp = DateTime.UtcNow.ToString("O");
-            var systemPrompt = $"""
-                You are a test agent. Your task is to create a file named `test.txt` in the current directory
-                containing the following timestamp: {timestamp}
-
-                After creating the file, confirm that it was created successfully.
-                """;
-
-            // Start the agent session
+            // Start the agent session without a system prompt
             StartupTracker.MarkAsStarting(TestAgentEntityId);
 
             var session = await SessionService.StartSessionAsync(
@@ -894,15 +885,21 @@ else
                 worktreePath,
                 SessionMode.Build,
                 "claude-sonnet-4-20250514",
-                systemPrompt);
+                systemPrompt: null);
 
             StartupTracker.MarkAsStarted(TestAgentEntityId);
 
             Logger.LogInformation("Started test agent session {SessionId}", session.Id);
 
-            // Send initial message to kick off the agent's task
-            // Claude CLI with --input-format stream-json waits for input before acting
-            await SessionService.SendMessageAsync(session.Id, "Please complete your task.");
+            // Send the task instruction as the initial message
+            // This way the full instruction is visible in the chat
+            var timestamp = DateTime.UtcNow.ToString("O");
+            var taskMessage = $"""
+                Create a file named `test.txt` in the current directory containing the following timestamp: {timestamp}
+
+                After creating the file, confirm that it was created successfully.
+                """;
+            await SessionService.SendMessageAsync(session.Id, taskMessage);
 
             // Navigate to the session chat page
             NavigationManager.NavigateTo($"/session/{session.Id}");
