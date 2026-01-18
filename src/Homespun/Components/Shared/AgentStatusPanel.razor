@@ -167,7 +167,7 @@
     private ClaudeSession? _session;
     private bool IsLoading { get; set; }
     private string? ErrorMessage { get; set; }
-    private string _selectedModel = "anthropic/claude-sonnet-4-20250514";
+    private string _selectedModel = "sonnet";
 
     private bool IsRunning => _session != null &&
         (_session.Status == ClaudeSessionStatus.Running ||

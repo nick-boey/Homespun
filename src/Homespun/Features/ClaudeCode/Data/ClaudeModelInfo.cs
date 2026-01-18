@@ -6,7 +6,7 @@ namespace Homespun.Features.ClaudeCode.Data;
 public class ClaudeModelInfo
 {
     /// <summary>
-    /// The model ID (e.g., "claude-sonnet-4-20250514").
+    /// The model ID (e.g., "sonnet", "opus", "haiku").
     /// </summary>
     public required string Id { get; init; }
 
@@ -16,14 +16,9 @@ public class ClaudeModelInfo
     public required string Name { get; init; }
 
     /// <summary>
-    /// Provider ID (always "anthropic" for Claude models).
+    /// Full ID for the model (same as Id for simple names like "sonnet").
     /// </summary>
-    public string ProviderId => "anthropic";
-
-    /// <summary>
-    /// Full ID including provider (e.g., "anthropic/claude-sonnet-4-20250514").
-    /// </summary>
-    public string FullId => $"{ProviderId}/{Id}";
+    public string FullId => Id;
 
     /// <summary>
     /// Whether this model supports extended thinking.
@@ -42,37 +37,26 @@ public class ClaudeModelInfo
 
     /// <summary>
     /// Pre-defined list of available Claude models.
+    /// Uses simple names that resolve to the latest version.
     /// </summary>
     public static readonly IReadOnlyList<ClaudeModelInfo> AvailableModels =
     [
         new ClaudeModelInfo
         {
-            Id = "claude-opus-4-20250514",
-            Name = "Claude Opus 4",
+            Id = "opus",
+            Name = "Claude Opus",
             SupportsThinking = true
         },
         new ClaudeModelInfo
         {
-            Id = "claude-sonnet-4-20250514",
-            Name = "Claude Sonnet 4",
+            Id = "sonnet",
+            Name = "Claude Sonnet",
             SupportsThinking = true
         },
         new ClaudeModelInfo
         {
-            Id = "claude-3-7-sonnet-20250219",
-            Name = "Claude 3.7 Sonnet",
-            SupportsThinking = true
-        },
-        new ClaudeModelInfo
-        {
-            Id = "claude-3-5-sonnet-20241022",
-            Name = "Claude 3.5 Sonnet",
-            SupportsThinking = false
-        },
-        new ClaudeModelInfo
-        {
-            Id = "claude-3-5-haiku-20241022",
-            Name = "Claude 3.5 Haiku",
+            Id = "haiku",
+            Name = "Claude Haiku",
             SupportsThinking = false
         }
     ];
