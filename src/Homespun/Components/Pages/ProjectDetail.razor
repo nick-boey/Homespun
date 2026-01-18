@@ -5,6 +5,7 @@
 @using Homespun.Features.Beads.Services
 @using Homespun.Features.ClaudeCode.Data
 @using Homespun.Features.ClaudeCode.Services
+@using Homespun.Features.Commands
 @using Homespun.Features.Git
 @using Homespun.Features.GitHub
 @using Homespun.Features.Projects
@@ -19,6 +20,7 @@
 @inject IDataStore DataStore
 @inject IGitHubService GitHubService
 @inject IGitWorktreeService GitWorktreeService
+@inject ICommandRunner CommandRunner
 @inject IClaudeSessionService SessionService
 @inject IAgentStartupTracker StartupTracker
 @inject ILogger<ProjectDetail> Logger
@@ -831,6 +833,34 @@ else
 
         try
         {
+            // Calculate the expected worktree path (same logic as GitWorktreeService)
+            var parentDir = Path.GetDirectoryName(_project.LocalPath);
+            if (string.IsNullOrEmpty(parentDir))
+            {
+                _testAgentError = "Cannot determine parent directory of repository.";
+                return;
+            }
+            var expectedWorktreePath = Path.GetFullPath(Path.Combine(parentDir, TestBranchName));
+
+            // Clean up existing worktree and branch if they exist
+            Logger.LogInformation("Cleaning up existing test worktree at {WorktreePath}", expectedWorktreePath);
+
+            // Try to remove the worktree first (this handles the git worktree tracking)
+            await GitWorktreeService.RemoveWorktreeAsync(_project.LocalPath, expectedWorktreePath);
+
+            // If the directory still exists (e.g., worktree was already pruned), delete it manually
+            if (Directory.Exists(expectedWorktreePath))
+            {
+                Logger.LogInformation("Deleting existing directory at {WorktreePath}", expectedWorktreePath);
+                Directory.Delete(expectedWorktreePath, recursive: true);
+            }
+
+            // Delete the branch if it exists (force delete to handle unmerged changes)
+            await CommandRunner.RunAsync("git", $"branch -D \"{TestBranchName}\"", _project.LocalPath);
+
+            // Prune any stale worktree references
+            await GitWorktreeService.PruneWorktreesAsync(_project.LocalPath);
+
             // Create worktree for hsp/test branch
             var worktreePath = await GitWorktreeService.CreateWorktreeAsync(
                 _project.LocalPath,
