@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Text.Json;
 using Homespun.ClaudeAgentSdk;
 using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.ClaudeCode.Hubs;
@@ -184,14 +185,36 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
     {
         switch (sdkMessage)
         {
+            case StreamEvent streamEvent:
+                // Handle partial streaming updates for real-time display
+                await ProcessStreamEventAsync(sessionId, session, assistantMessage, streamEvent, cancellationToken);
+                break;
+
             case AssistantMessage assistantMsg:
+                // Complete message received - finalize any streaming content blocks
                 foreach (var block in assistantMsg.Content)
                 {
                     var content = ConvertContentBlock(block);
                     if (content != null)
                     {
-                        assistantMessage.Content.Add(content);
-                        await _hubContext.BroadcastContentBlockReceived(sessionId, content);
+                        // Check if we already have this content block from streaming
+                        var existingBlock = assistantMessage.Content.LastOrDefault(c =>
+                            c.Type == content.Type && c.IsStreaming);
+
+                        if (existingBlock != null)
+                        {
+                            // Update the existing streaming block with final content
+                            existingBlock.Text = content.Text;
+                            existingBlock.ToolName = content.ToolName;
+                            existingBlock.ToolInput = content.ToolInput;
+                            existingBlock.IsStreaming = false;
+                            await _hubContext.BroadcastContentBlockReceived(sessionId, existingBlock);
+                        }
+                        else
+                        {
+                            assistantMessage.Content.Add(content);
+                            await _hubContext.BroadcastContentBlockReceived(sessionId, content);
+                        }
                     }
                 }
                 break;
@@ -206,6 +229,144 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                 _logger.LogDebug("System message received: {Subtype}", systemMsg.Subtype);
                 break;
         }
+    }
+
+    private async Task ProcessStreamEventAsync(
+        string sessionId,
+        ClaudeSession session,
+        ClaudeMessage assistantMessage,
+        StreamEvent streamEvent,
+        CancellationToken cancellationToken)
+    {
+        if (streamEvent.Event == null || !streamEvent.Event.TryGetValue("type", out var typeObj))
+            return;
+
+        var eventType = typeObj is JsonElement typeElement ? typeElement.GetString() : typeObj?.ToString();
+
+        switch (eventType)
+        {
+            case "content_block_start":
+                await HandleContentBlockStart(sessionId, assistantMessage, streamEvent.Event, cancellationToken);
+                break;
+
+            case "content_block_delta":
+                await HandleContentBlockDelta(sessionId, assistantMessage, streamEvent.Event, cancellationToken);
+                break;
+
+            case "content_block_stop":
+                await HandleContentBlockStop(sessionId, assistantMessage, streamEvent.Event, cancellationToken);
+                break;
+
+            default:
+                _logger.LogDebug("Unhandled stream event type: {EventType}", eventType);
+                break;
+        }
+    }
+
+    private async Task HandleContentBlockStart(
+        string sessionId,
+        ClaudeMessage assistantMessage,
+        Dictionary<string, object> eventData,
+        CancellationToken cancellationToken)
+    {
+        if (!eventData.TryGetValue("content_block", out var blockObj))
+            return;
+
+        var blockJson = blockObj is JsonElement element ? element.GetRawText() : JsonSerializer.Serialize(blockObj);
+        var blockData = JsonSerializer.Deserialize<Dictionary<string, object>>(blockJson);
+        if (blockData == null) return;
+
+        var blockType = GetStringValue(blockData, "type");
+        ClaudeMessageContent? content = blockType switch
+        {
+            "text" => new ClaudeMessageContent
+            {
+                Type = ClaudeContentType.Text,
+                Text = "",
+                IsStreaming = true
+            },
+            "thinking" => new ClaudeMessageContent
+            {
+                Type = ClaudeContentType.Thinking,
+                Text = "",
+                IsStreaming = true
+            },
+            "tool_use" => new ClaudeMessageContent
+            {
+                Type = ClaudeContentType.ToolUse,
+                ToolName = GetStringValue(blockData, "name") ?? "unknown",
+                ToolInput = "",
+                IsStreaming = true
+            },
+            _ => null
+        };
+
+        if (content != null)
+        {
+            assistantMessage.Content.Add(content);
+            await _hubContext.BroadcastStreamingContentStarted(sessionId, content);
+        }
+    }
+
+    private async Task HandleContentBlockDelta(
+        string sessionId,
+        ClaudeMessage assistantMessage,
+        Dictionary<string, object> eventData,
+        CancellationToken cancellationToken)
+    {
+        if (!eventData.TryGetValue("delta", out var deltaObj))
+            return;
+
+        var deltaJson = deltaObj is JsonElement element ? element.GetRawText() : JsonSerializer.Serialize(deltaObj);
+        var deltaData = JsonSerializer.Deserialize<Dictionary<string, object>>(deltaJson);
+        if (deltaData == null) return;
+
+        var deltaType = GetStringValue(deltaData, "type");
+
+        // Find the last streaming content block
+        var streamingBlock = assistantMessage.Content.LastOrDefault(c => c.IsStreaming);
+        if (streamingBlock == null) return;
+
+        switch (deltaType)
+        {
+            case "text_delta":
+                var textDelta = GetStringValue(deltaData, "text") ?? "";
+                streamingBlock.Text = (streamingBlock.Text ?? "") + textDelta;
+                await _hubContext.BroadcastStreamingContentDelta(sessionId, streamingBlock, textDelta);
+                break;
+
+            case "thinking_delta":
+                var thinkingDelta = GetStringValue(deltaData, "thinking") ?? "";
+                streamingBlock.Text = (streamingBlock.Text ?? "") + thinkingDelta;
+                await _hubContext.BroadcastStreamingContentDelta(sessionId, streamingBlock, thinkingDelta);
+                break;
+
+            case "input_json_delta":
+                var inputDelta = GetStringValue(deltaData, "partial_json") ?? "";
+                streamingBlock.ToolInput = (streamingBlock.ToolInput ?? "") + inputDelta;
+                await _hubContext.BroadcastStreamingContentDelta(sessionId, streamingBlock, inputDelta);
+                break;
+        }
+    }
+
+    private async Task HandleContentBlockStop(
+        string sessionId,
+        ClaudeMessage assistantMessage,
+        Dictionary<string, object> eventData,
+        CancellationToken cancellationToken)
+    {
+        var streamingBlock = assistantMessage.Content.LastOrDefault(c => c.IsStreaming);
+        if (streamingBlock != null)
+        {
+            streamingBlock.IsStreaming = false;
+            await _hubContext.BroadcastStreamingContentStopped(sessionId, streamingBlock);
+        }
+    }
+
+    private static string? GetStringValue(Dictionary<string, object> data, string key)
+    {
+        if (!data.TryGetValue(key, out var value)) return null;
+        return value is JsonElement element ? element.GetString() : value?.ToString();
     }
 
     private static ClaudeMessageContent? ConvertContentBlock(object block)

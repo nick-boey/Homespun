@@ -60,17 +60,39 @@
                             <div class="message-content">
                                 @foreach (var content in message.Content)
                                 {
-                                    <div class="content-block @GetContentBlockClass(content.Type)">
+                                    <div class="content-block @GetContentBlockClass(content.Type) @(content.IsStreaming ? "streaming" : "")">
                                         @switch (content.Type)
                                         {
                                             case ClaudeContentType.Text:
-                                                <div class="text-content">@content.Text</div>
+                                                <div class="text-content">
+                                                    @content.Text
+                                                    @if (content.IsStreaming)
+                                                    {
+                                                        <span class="streaming-cursor">▌</span>
+                                                    }
+                                                </div>
                                                 break;
 
                                             case ClaudeContentType.Thinking:
-                                                <details class="thinking-block">
-                                                    <summary>Thinking...</summary>
-                                                    <div class="thinking-content">@content.Text</div>
+                                                <details class="thinking-block" open="@content.IsStreaming">
+                                                    <summary>
+                                                        @if (content.IsStreaming)
+                                                        {
+                                                            <span>Thinking</span>
+                                                            <span class="streaming-dots">...</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span>Thinking...</span>
+                                                        }
+                                                    </summary>
+                                                    <div class="thinking-content">
+                                                        @content.Text
+                                                        @if (content.IsStreaming)
+                                                        {
+                                                            <span class="streaming-cursor">▌</span>
+                                                        }
+                                                    </div>
                                                 </details>
                                                 break;
 
@@ -79,10 +101,16 @@
                                                     <div class="tool-header">
                                                         <span class="tool-icon">🔧</span>
                                                         <span class="tool-name">@content.ToolName</span>
+                                                        @if (content.IsStreaming)
+                                                        {
+                                                            <span class="tool-streaming-indicator">
+                                                                <span class="spinner-border spinner-border-sm ms-2" role="status"></span>
+                                                            </span>
+                                                        }
                                                     </div>
                                                     @if (!string.IsNullOrEmpty(content.ToolInput))
                                                     {
-                                                        <pre class="tool-input">@content.ToolInput</pre>
+                                                        <pre class="tool-input">@content.ToolInput@(content.IsStreaming ? "▌" : "")</pre>
                                                     }
                                                 </div>
                                                 break;
@@ -301,6 +329,32 @@
         color: var(--text-muted);
     }
 
+    /* Streaming content indicators */
+    .streaming-cursor {
+        animation: blink 1s step-end infinite;
+        color: var(--primary);
+    }
+
+    .streaming-dots {
+        animation: dots 1.5s ease-in-out infinite;
+    }
+
+    .content-block.streaming {
+        border-left: 2px solid var(--primary);
+        padding-left: var(--spacing-sm);
+    }
+
+    @@keyframes blink {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0; }
+    }
+
+    @@keyframes dots {
+        0%, 20% { content: '.'; }
+        40% { content: '..'; }
+        60%, 100% { content: '...'; }
+    }
+
     .input-area {
         display: flex;
         gap: var(--spacing-sm);
@@ -397,6 +451,75 @@
                 if (lastMessage != null && !lastMessage.Content.Contains(content))
                 {
                     lastMessage.Content.Add(content);
+                }
+                StateHasChanged();
+            });
+        });
+
+        // Handle streaming content events
+        _hubConnection.On<ClaudeMessageContent>("StreamingContentStarted", (content) =>
+        {
+            InvokeAsync(() =>
+            {
+                // Ensure we have an assistant message to add streaming content to
+                var lastMessage = _session?.Messages.LastOrDefault(m => m.Role == ClaudeMessageRole.Assistant);
+                if (lastMessage == null && _session != null)
+                {
+                    lastMessage = new ClaudeMessage
+                    {
+                        SessionId = SessionId,
+                        Role = ClaudeMessageRole.Assistant,
+                        Content = []
+                    };
+                    _session.Messages.Add(lastMessage);
+                }
+
+                // Add the streaming content block
+                if (lastMessage != null && !lastMessage.Content.Any(c => c.IsStreaming && c.Type == content.Type))
+                {
+                    lastMessage.Content.Add(content);
+                }
+                StateHasChanged();
+            });
+        });
+
+        _hubConnection.On<ClaudeMessageContent, string>("StreamingContentDelta", (content, delta) =>
+        {
+            InvokeAsync(() =>
+            {
+                // Find and update the streaming content block
+                var lastMessage = _session?.Messages.LastOrDefault(m => m.Role == ClaudeMessageRole.Assistant);
+                var streamingBlock = lastMessage?.Content.LastOrDefault(c => c.IsStreaming && c.Type == content.Type);
+
+                if (streamingBlock != null)
+                {
+                    // Apply the delta
+                    switch (content.Type)
+                    {
+                        case ClaudeContentType.Text:
+                        case ClaudeContentType.Thinking:
+                            streamingBlock.Text = (streamingBlock.Text ?? "") + delta;
+                            break;
+                        case ClaudeContentType.ToolUse:
+                            streamingBlock.ToolInput = (streamingBlock.ToolInput ?? "") + delta;
+                            break;
+                    }
+                }
+                StateHasChanged();
+            });
+        });
+
+        _hubConnection.On<ClaudeMessageContent>("StreamingContentStopped", (content) =>
+        {
+            InvokeAsync(() =>
+            {
+                // Mark the content block as no longer streaming
+                var lastMessage = _session?.Messages.LastOrDefault(m => m.Role == ClaudeMessageRole.Assistant);
+                var streamingBlock = lastMessage?.Content.LastOrDefault(c => c.IsStreaming && c.Type == content.Type);
+
+                if (streamingBlock != null)
+                {
+                    streamingBlock.IsStreaming = false;
                 }
                 StateHasChanged();
             });
