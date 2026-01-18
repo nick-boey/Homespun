@@ -612,6 +612,31 @@
                 _errorMessage = "Failed to update issue.";
                 return;
             }
+            // Note: bd sync is handled by the queue processor after debounce
+
+            // Update the Issue parameter directly from the edit model so the UI shows the new values immediately
+            // This prevents the need to wait for the parent component to refresh and reselect
+            Issue.Title = _editModel.Title.Trim();
+            Issue.Description = string.IsNullOrWhiteSpace(_editModel.Description) ? null : _editModel.Description.Trim();
+            Issue.Type = _editModel.Type;
+            Issue.Priority = int.TryParse(_editModel.Priority, out var priority) ? priority : null;
+            Issue.ParentId = string.IsNullOrWhiteSpace(_editModel.ParentId) ? null : _editModel.ParentId.Trim();
+
+            // Update labels: keep non-hsp labels from edit model, add new hsp label if present
+            var updatedLabels = new List<string>();
+            if (!string.IsNullOrWhiteSpace(_editModel.Labels))
+            {
+                updatedLabels.AddRange(_editModel.Labels
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+            }
+            if (newHspLabel != null)
+            {
+                updatedLabels.Add(newHspLabel);
+            }
+            Issue.Labels = updatedLabels;
+
+            // Update branch info for UI display
+            _branchInfo = BeadsBranchLabel.Parse(Issue.Labels);
 
             _isEditMode = false;
             await OnActionCompleted.InvokeAsync();
