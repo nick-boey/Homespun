@@ -152,10 +152,11 @@ public static class ClaudeCodeHubExtensions
     public static async Task BroadcastStreamingContentStarted(
         this IHubContext<ClaudeCodeHub> hubContext,
         string sessionId,
-        ClaudeMessageContent content)
+        ClaudeMessageContent content,
+        int index = -1)
     {
         await hubContext.Clients.Group($"session-{sessionId}")
-            .SendAsync("StreamingContentStarted", content);
+            .SendAsync("StreamingContentStarted", content, index);
     }
 
     /// <summary>
@@ -165,10 +166,11 @@ public static class ClaudeCodeHubExtensions
         this IHubContext<ClaudeCodeHub> hubContext,
         string sessionId,
         ClaudeMessageContent content,
-        string delta)
+        string delta,
+        int index = -1)
     {
         await hubContext.Clients.Group($"session-{sessionId}")
-            .SendAsync("StreamingContentDelta", content, delta);
+            .SendAsync("StreamingContentDelta", content, delta, index);
     }
 
     /// <summary>
@@ -177,9 +179,10 @@ public static class ClaudeCodeHubExtensions
     public static async Task BroadcastStreamingContentStopped(
         this IHubContext<ClaudeCodeHub> hubContext,
         string sessionId,
-        ClaudeMessageContent content)
+        ClaudeMessageContent content,
+        int index = -1)
     {
         await hubContext.Clients.Group($"session-{sessionId}")
-            .SendAsync("StreamingContentStopped", content);
+            .SendAsync("StreamingContentStopped", content, index);
     }
 }

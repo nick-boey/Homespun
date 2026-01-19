@@ -2,6 +2,7 @@ using Homespun.ClaudeAgentSdk;
 using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.ClaudeCode.Services;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR.Client;
 
 namespace Homespun.Features.ClaudeCode.Controllers;
 
@@ -473,6 +474,246 @@ public class AgentTestController : ControllerBase
             });
         }
     }
+
+    /// <summary>
+    /// Test SignalR streaming - verifies that SignalR events reach clients.
+    /// Creates a test session, connects as a SignalR client, sends a message,
+    /// and compares server events vs client-received events.
+    /// </summary>
+    [HttpGet("signalr-stream")]
+    public async Task<IActionResult> TestSignalRStreaming([FromQuery] string prompt = "Say 'Hello streaming world!' and nothing else.")
+    {
+        _logger.LogInformation("Testing SignalR streaming");
+
+        var clientEvents = new List<SignalREventRecord>();
+        var testDir = Path.Combine(Directory.GetCurrentDirectory(), "test");
+        ClaudeSession? session = null;
+        HubConnection? hubConnection = null;
+
+        try
+        {
+            // Create test directory if needed
+            if (!Directory.Exists(testDir))
+                Directory.CreateDirectory(testDir);
+
+            // Create a test session first
+            session = await _sessionService.StartSessionAsync(
+                entityId: $"signalr-test-{Guid.NewGuid():N}",
+                projectId: "test-project",
+                workingDirectory: testDir,
+                mode: SessionMode.Plan,
+                model: "sonnet",
+                systemPrompt: "You are a helpful assistant. Keep responses very brief.");
+
+            _logger.LogInformation("Created test session {SessionId}", session.Id);
+
+            // Set up SignalR client connection
+            var baseUrl = "http://localhost:5093"; // Default development port
+            hubConnection = new HubConnectionBuilder()
+                .WithUrl($"{baseUrl}/hubs/claudecode")
+                .WithAutomaticReconnect()
+                .Build();
+
+            // Track all events received
+            var receivedSessionState = false;
+            ClaudeSession? sessionState = null;
+
+            hubConnection.On<ClaudeSession>("SessionState", (s) =>
+            {
+                receivedSessionState = true;
+                sessionState = s;
+                clientEvents.Add(new SignalREventRecord
+                {
+                    Type = "SessionState",
+                    Timestamp = DateTime.UtcNow,
+                    Details = $"Session {s.Id}, Status: {s.Status}, Messages: {s.Messages.Count}"
+                });
+            });
+
+            hubConnection.On<ClaudeMessage>("MessageReceived", (message) =>
+            {
+                clientEvents.Add(new SignalREventRecord
+                {
+                    Type = "MessageReceived",
+                    Timestamp = DateTime.UtcNow,
+                    Details = $"Role: {message.Role}, ContentBlocks: {message.Content.Count}"
+                });
+            });
+
+            hubConnection.On<ClaudeMessageContent>("StreamingContentStarted", (content) =>
+            {
+                clientEvents.Add(new SignalREventRecord
+                {
+                    Type = "StreamingContentStarted",
+                    Timestamp = DateTime.UtcNow,
+                    Details = $"Type: {content.Type}, ToolName: {content.ToolName}"
+                });
+            });
+
+            hubConnection.On<ClaudeMessageContent, string>("StreamingContentDelta", (content, delta) =>
+            {
+                clientEvents.Add(new SignalREventRecord
+                {
+                    Type = "StreamingContentDelta",
+                    Timestamp = DateTime.UtcNow,
+                    DeltaLength = delta.Length,
+                    Details = $"Type: {content.Type}, DeltaLen: {delta.Length}"
+                });
+            });
+
+            hubConnection.On<ClaudeMessageContent>("StreamingContentStopped", (content) =>
+            {
+                clientEvents.Add(new SignalREventRecord
+                {
+                    Type = "StreamingContentStopped",
+                    Timestamp = DateTime.UtcNow,
+                    Details = $"Type: {content.Type}, FinalTextLen: {content.Text?.Length ?? 0}"
+                });
+            });
+
+            hubConnection.On<ClaudeMessageContent>("ContentBlockReceived", (content) =>
+            {
+                clientEvents.Add(new SignalREventRecord
+                {
+                    Type = "ContentBlockReceived",
+                    Timestamp = DateTime.UtcNow,
+                    Details = $"Type: {content.Type}"
+                });
+            });
+
+            hubConnection.On<string, ClaudeSessionStatus>("SessionStatusChanged", (sessionId, status) =>
+            {
+                clientEvents.Add(new SignalREventRecord
+                {
+                    Type = "SessionStatusChanged",
+                    Timestamp = DateTime.UtcNow,
+                    Details = $"Status: {status}"
+                });
+            });
+
+            hubConnection.On<string, decimal, long>("SessionResultReceived", (sessionId, cost, duration) =>
+            {
+                clientEvents.Add(new SignalREventRecord
+                {
+                    Type = "SessionResultReceived",
+                    Timestamp = DateTime.UtcNow,
+                    Details = $"Cost: ${cost:F6}, Duration: {duration}ms"
+                });
+            });
+
+            // Connect to SignalR hub
+            _logger.LogInformation("Connecting to SignalR hub...");
+            await hubConnection.StartAsync();
+            _logger.LogInformation("SignalR connected, joining session {SessionId}", session.Id);
+
+            // Join the session group
+            await hubConnection.SendAsync("JoinSession", session.Id);
+
+            // Wait for SessionState to be received
+            await Task.Delay(100);
+            _logger.LogInformation("Received SessionState: {Received}", receivedSessionState);
+
+            // Now send a message that will trigger streaming
+            _logger.LogInformation("Sending message to trigger streaming...");
+            var sendTask = _sessionService.SendMessageAsync(session.Id, prompt);
+
+            // Wait for message processing to complete
+            await sendTask;
+
+            // Give SignalR time to deliver remaining events
+            await Task.Delay(500);
+
+            // Count streaming events in client received list
+            var streamingDeltaCount = clientEvents.Count(e => e.Type == "StreamingContentDelta");
+            var streamingStartCount = clientEvents.Count(e => e.Type == "StreamingContentStarted");
+            var streamingStopCount = clientEvents.Count(e => e.Type == "StreamingContentStopped");
+
+            // Get session to check final state
+            var finalSession = _sessionService.GetSession(session.Id);
+
+            // Determine if streaming is working
+            var isStreamingWorking = streamingDeltaCount > 5;
+            var streamingFidelity = streamingDeltaCount > 0 ? 1.0 : 0.0;
+
+            return Ok(new
+            {
+                Success = true,
+                SessionId = session.Id,
+                ReceivedSessionState = receivedSessionState,
+                ClientEventCount = clientEvents.Count,
+                StreamingDeltaCount = streamingDeltaCount,
+                StreamingStartCount = streamingStartCount,
+                StreamingStopCount = streamingStopCount,
+                StreamingFidelity = streamingFidelity,
+                Verdict = isStreamingWorking
+                    ? "STREAMING WORKING - Multiple delta events received by SignalR client"
+                    : "EVENTS MAY BE LOST - Few delta events received, check server-side streaming",
+                EventsReceived = clientEvents.Select(e => new
+                {
+                    e.Type,
+                    e.Timestamp,
+                    e.DeltaLength,
+                    e.Details
+                }),
+                FinalSessionState = finalSession != null ? new
+                {
+                    finalSession.Status,
+                    MessageCount = finalSession.Messages.Count,
+                    finalSession.TotalCostUsd,
+                    finalSession.TotalDurationMs
+                } : null
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "SignalR streaming test failed");
+            return Ok(new
+            {
+                Success = false,
+                Error = ex.Message,
+                StackTrace = ex.StackTrace,
+                ClientEventsBeforeError = clientEvents.Count,
+                EventsReceived = clientEvents.Select(e => new { e.Type, e.Timestamp, e.Details })
+            });
+        }
+        finally
+        {
+            // Clean up SignalR connection
+            if (hubConnection != null)
+            {
+                try
+                {
+                    if (session != null)
+                    {
+                        await hubConnection.SendAsync("LeaveSession", session.Id);
+                    }
+                    await hubConnection.DisposeAsync();
+                }
+                catch { }
+            }
+
+            // Clean up session
+            if (session != null)
+            {
+                try
+                {
+                    await _sessionService.StopSessionAsync(session.Id);
+                }
+                catch { }
+            }
+        }
+    }
+}
+
+/// <summary>
+/// Record of a SignalR event received by the test client.
+/// </summary>
+public class SignalREventRecord
+{
+    public required string Type { get; set; }
+    public DateTime Timestamp { get; set; }
+    public int? DeltaLength { get; set; }
+    public string? Details { get; set; }
 }
 
 public class SessionTestRequest
