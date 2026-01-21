@@ -1,20 +1,20 @@
-using Homespun.Features.Beads.Data;
+using Fleece.Core.Models;
 
 namespace Homespun.Features.Gitgraph.Data;
 
 /// <summary>
-/// Adapts a BeadsIssue to the IGraphNode interface for graph visualization.
+/// Adapts a Fleece Issue to the IGraphNode interface for graph visualization.
 /// </summary>
-public class BeadsIssueNode : IGraphNode
+public class IssueNode : IGraphNode
 {
-    private readonly BeadsIssue _issue;
+    private readonly Issue _issue;
     private readonly IReadOnlyList<string> _parentIds;
     private readonly int _timeDimension;
     private readonly bool _isOrphan;
     private readonly string? _customBranchName;
 
-    public BeadsIssueNode(
-        BeadsIssue issue,
+    public IssueNode(
+        Issue issue,
         IReadOnlyList<string> parentIds,
         int timeDimension,
         bool isOrphan = false,
@@ -37,13 +37,11 @@ public class BeadsIssueNode : IGraphNode
 
     public GraphNodeStatus Status => _issue.Status switch
     {
-        BeadsIssueStatus.Closed => GraphNodeStatus.Completed,
-        BeadsIssueStatus.InProgress => GraphNodeStatus.InProgress,
-        BeadsIssueStatus.Blocked => GraphNodeStatus.Blocked,
-        BeadsIssueStatus.Deferred => GraphNodeStatus.Abandoned,
-        BeadsIssueStatus.Tombstone => GraphNodeStatus.Abandoned,
-        BeadsIssueStatus.Open => GraphNodeStatus.Open,
-        BeadsIssueStatus.Pinned => GraphNodeStatus.Pending,
+        IssueStatus.Closed => GraphNodeStatus.Completed,
+        IssueStatus.Complete => GraphNodeStatus.Completed,
+        IssueStatus.Open => GraphNodeStatus.Open,
+        IssueStatus.Archived => GraphNodeStatus.Abandoned,
+        IssueStatus.Deleted => GraphNodeStatus.Abandoned,
         _ => GraphNodeStatus.Open
     };
 
@@ -53,9 +51,9 @@ public class BeadsIssueNode : IGraphNode
         ? "orphan-issues"
         : $"issue-{_issue.Id}");
 
-    public DateTime SortDate => _issue.Status == BeadsIssueStatus.Closed
-        ? _issue.ClosedAt ?? _issue.UpdatedAt
-        : _issue.CreatedAt;
+    public DateTime SortDate => _issue.Status is IssueStatus.Closed or IssueStatus.Complete
+        ? _issue.StatusLastUpdate.DateTime
+        : _issue.CreatedAt.DateTime;
 
     public int TimeDimension => _timeDimension;
 
@@ -70,9 +68,9 @@ public class BeadsIssueNode : IGraphNode
     public string? IssueId => _issue.Id;
 
     /// <summary>
-    /// Original BeadsIssue for access to additional properties.
+    /// Original Fleece Issue for access to additional properties.
     /// </summary>
-    public BeadsIssue Issue => _issue;
+    public Issue Issue => _issue;
 
     /// <summary>
     /// Priority level for sorting within the same time dimension.
@@ -84,13 +82,13 @@ public class BeadsIssueNode : IGraphNode
     /// </summary>
     public bool IsOrphan => _isOrphan;
 
-    private static string GetTypeColor(BeadsIssueType type) => type switch
+    private static string GetTypeColor(IssueType type) => type switch
     {
-        BeadsIssueType.Bug => "#ef4444",      // Red
-        BeadsIssueType.Feature => "#a855f7",  // Purple
-        BeadsIssueType.Task => "#3b82f6",     // Blue
-        BeadsIssueType.Epic => "#f97316",     // Orange
-        BeadsIssueType.Chore => "#6b7280",    // Gray
-        _ => "#6b7280"                        // Gray
+        IssueType.Bug => "#ef4444",      // Red
+        IssueType.Feature => "#a855f7",  // Purple
+        IssueType.Task => "#3b82f6",     // Blue
+        IssueType.Idea => "#f97316",     // Orange
+        IssueType.Chore => "#6b7280",    // Gray
+        _ => "#6b7280"                   // Gray
     };
 }

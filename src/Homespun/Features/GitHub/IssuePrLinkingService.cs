@@ -1,28 +1,29 @@
-using Homespun.Features.Beads.Services;
+using Fleece.Core.Models;
+using Homespun.Features.Fleece.Services;
 using Homespun.Features.PullRequests;
 using Homespun.Features.PullRequests.Data;
 
 namespace Homespun.Features.GitHub;
 
 /// <summary>
-/// Service for linking beads issues to pull requests.
-/// Handles the bidirectional link: PR.BeadsIssueId and issue label hsp:pr-{number}.
-/// Uses direct SQLite access via IBeadsDatabaseService for performance.
+/// Service for linking Fleece issues to pull requests.
+/// Handles the link from PR.BeadsIssueId to the issue.
+/// Uses IFleeceService for direct file access.
 /// </summary>
 public class IssuePrLinkingService(
     IDataStore dataStore,
-    IBeadsDatabaseService beadsDatabaseService,
+    IFleeceService fleeceService,
     ILogger<IssuePrLinkingService> logger)
     : IIssuePrLinkingService
 {
     /// <summary>
-    /// Links a pull request to a beads issue by setting the BeadsIssueId
-    /// and adding the hsp:pr-{prNumber} label to the issue.
+    /// Links a pull request to a Fleece issue by setting the BeadsIssueId (legacy name).
+    /// Note: Fleece.Core doesn't support a LinkedPR property on issues, so only the PR side is updated.
     /// </summary>
     /// <param name="projectId">The project ID.</param>
     /// <param name="pullRequestId">The pull request ID.</param>
-    /// <param name="issueId">The beads issue ID to link.</param>
-    /// <param name="prNumber">The GitHub PR number for the label.</param>
+    /// <param name="issueId">The Fleece issue ID to link.</param>
+    /// <param name="prNumber">The GitHub PR number (unused, kept for API compatibility).</param>
     /// <returns>True if linking succeeded, false otherwise.</returns>
     public async Task<bool> LinkPullRequestToIssueAsync(
         string projectId,
@@ -56,26 +57,13 @@ public class IssuePrLinkingService(
         pullRequest.UpdatedAt = DateTime.UtcNow;
         await dataStore.UpdatePullRequestAsync(pullRequest);
 
-        logger.LogInformation("Linked PR {PullRequestId} to beads issue {IssueId}", pullRequestId, issueId);
-
-        // Add the label to the beads issue (updates cache immediately, queues DB write)
-        var label = BranchNameParser.GetPrLabel(prNumber);
-        var labelAdded = await beadsDatabaseService.AddLabelAsync(project.LocalPath, issueId, label);
-
-        if (!labelAdded)
-        {
-            logger.LogWarning("Failed to add label {Label} to issue {IssueId}, but PR link was created locally", label, issueId);
-        }
-        else
-        {
-            logger.LogInformation("Added label {Label} to beads issue {IssueId}", label, issueId);
-        }
+        logger.LogInformation("Linked PR {PullRequestId} to issue {IssueId}", pullRequestId, issueId);
 
         return true;
     }
 
     /// <summary>
-    /// Attempts to link a pull request to a beads issue by extracting the issue ID
+    /// Attempts to link a pull request to a Fleece issue by extracting the issue ID
     /// from the branch name.
     /// </summary>
     /// <param name="projectId">The project ID.</param>
@@ -97,7 +85,7 @@ public class IssuePrLinkingService(
             return pullRequest.BeadsIssueId;
         }
 
-        // Can't link without a PR number (needed for the label)
+        // Can't link without a PR number (needed for the LinkedPR)
         if (!pullRequest.GitHubPRNumber.HasValue)
         {
             logger.LogDebug("Cannot link PR {PullRequestId} by branch: no GitHub PR number", pullRequestId);
@@ -118,12 +106,12 @@ public class IssuePrLinkingService(
     }
 
     /// <summary>
-    /// Closes the beads issue linked to a pull request.
+    /// Closes the Fleece issue linked to a pull request.
     /// Used when a PR is merged or closed.
     /// </summary>
     /// <param name="projectId">The project ID.</param>
     /// <param name="pullRequestId">The pull request ID.</param>
-    /// <param name="reason">The reason for closing (e.g., "PR #123 merged").</param>
+    /// <param name="reason">The reason for closing (unused in Fleece, kept for API compatibility).</param>
     /// <returns>True if the issue was closed, false if no linked issue or close failed.</returns>
     public async Task<bool> CloseLinkedIssueAsync(string projectId, string pullRequestId, string? reason = null)
     {
@@ -147,17 +135,19 @@ public class IssuePrLinkingService(
             return false;
         }
 
-        var closed = await beadsDatabaseService.CloseIssueAsync(project.LocalPath, pullRequest.BeadsIssueId, reason);
+        // Close the issue by setting status to Closed
+        var updated = await fleeceService.UpdateIssueAsync(
+            project.LocalPath,
+            pullRequest.BeadsIssueId,
+            status: IssueStatus.Closed);
 
-        if (closed)
+        if (updated != null)
         {
-            logger.LogInformation("Closed beads issue {IssueId} linked to PR {PullRequestId}", pullRequest.BeadsIssueId, pullRequestId);
-        }
-        else
-        {
-            logger.LogWarning("Failed to close beads issue {IssueId} linked to PR {PullRequestId}", pullRequest.BeadsIssueId, pullRequestId);
+            logger.LogInformation("Closed issue {IssueId} linked to PR {PullRequestId}", pullRequest.BeadsIssueId, pullRequestId);
+            return true;
         }
 
-        return closed;
+        logger.LogWarning("Failed to close issue {IssueId} linked to PR {PullRequestId}", pullRequest.BeadsIssueId, pullRequestId);
+        return false;
     }
 }

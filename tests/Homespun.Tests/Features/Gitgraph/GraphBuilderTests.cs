@@ -1,5 +1,4 @@
-using Homespun.Features.Beads;
-using Homespun.Features.Beads.Data;
+using Fleece.Core.Models;
 using Homespun.Features.Gitgraph.Data;
 using Homespun.Features.Gitgraph.Services;
 using Homespun.Features.PullRequests;
@@ -31,7 +30,7 @@ public class GraphBuilderTests
         };
 
         // Act
-        var graph = _builder.Build(prs, [], []);
+        var graph = _builder.Build(prs, []);
 
         // Assert - Should be ordered: PR2 (oldest), PR3, PR1 (newest)
         var prNodes = graph.Nodes.OfType<PullRequestNode>().ToList();
@@ -51,7 +50,7 @@ public class GraphBuilderTests
         };
 
         // Act
-        var graph = _builder.Build(prs, [], []);
+        var graph = _builder.Build(prs, []);
 
         // Assert
         var prNode = graph.Nodes.OfType<PullRequestNode>().Single();
@@ -70,7 +69,7 @@ public class GraphBuilderTests
         };
 
         // Act
-        var graph = _builder.Build(prs, [], []);
+        var graph = _builder.Build(prs, []);
 
         // Assert - All merged PRs should have non-positive time dimension
         var prNodes = graph.Nodes.OfType<PullRequestNode>().ToList();
@@ -89,7 +88,7 @@ public class GraphBuilderTests
         };
 
         // Act
-        var graph = _builder.Build(prs, [], []);
+        var graph = _builder.Build(prs, []);
 
         // Assert - Closed PR should be between the two merged PRs by date
         var prNodes = graph.Nodes.OfType<PullRequestNode>().ToList();
@@ -108,7 +107,7 @@ public class GraphBuilderTests
         };
 
         // Act
-        var graph = _builder.Build(prs, [], []);
+        var graph = _builder.Build(prs, []);
 
         // Assert
         var prNode = graph.Nodes.OfType<PullRequestNode>().Single();
@@ -130,7 +129,7 @@ public class GraphBuilderTests
         };
 
         // Act
-        var graph = _builder.Build(prs, [], []);
+        var graph = _builder.Build(prs, []);
 
         // Assert
         Assert.That(graph.Nodes.All(n => n.TimeDimension == 1), Is.True);
@@ -148,7 +147,7 @@ public class GraphBuilderTests
         };
 
         // Act
-        var graph = _builder.Build(prs, [], []);
+        var graph = _builder.Build(prs, []);
 
         // Assert - Ordered by created date (oldest first)
         var prNodes = graph.Nodes.OfType<PullRequestNode>().ToList();
@@ -167,7 +166,7 @@ public class GraphBuilderTests
         };
 
         // Act
-        var graph = _builder.Build(prs, [], []);
+        var graph = _builder.Build(prs, []);
 
         // Assert
         var prNode = graph.Nodes.OfType<PullRequestNode>().Single();
@@ -185,7 +184,7 @@ public class GraphBuilderTests
         };
 
         // Act
-        var graph = _builder.Build(prs, [], []);
+        var graph = _builder.Build(prs, []);
 
         // Assert - Open PR should come after merged PR regardless of dates
         var prNodes = graph.Nodes.OfType<PullRequestNode>().ToList();
@@ -201,7 +200,7 @@ public class GraphBuilderTests
         pr.BranchName = "feature/my-feature";
 
         // Act
-        var graph = _builder.Build([pr], [], []);
+        var graph = _builder.Build([pr], []);
 
         // Assert
         var prNode = graph.Nodes.OfType<PullRequestNode>().Single();
@@ -221,13 +220,13 @@ public class GraphBuilderTests
             CreateMergedPR(1, DateTime.UtcNow.AddDays(-2)),
             CreateMergedPR(2, DateTime.UtcNow)  // Latest merged
         };
-        var issues = new List<BeadsIssue> { CreateIssue("bd-001") };
+        var issues = new List<Issue> { CreateIssue("bd-001") };
 
         // Act
-        var graph = _builder.Build(prs, issues, []);
+        var graph = _builder.Build(prs, issues);
 
         // Assert - Issue should have latest merged PR as parent
-        var issueNode = graph.Nodes.OfType<BeadsIssueNode>().First();
+        var issueNode = graph.Nodes.OfType<IssueNode>().First();
         Assert.That(issueNode.ParentIds, Contains.Item("pr-2"));
     }
 
@@ -236,23 +235,18 @@ public class GraphBuilderTests
     {
         // Arrange: bd-001 blocks bd-002, bd-002 blocks bd-003
         // (bd-001 must complete before bd-002, bd-002 must complete before bd-003)
-        var issues = new List<BeadsIssue>
+        var issues = new List<Issue>
         {
             CreateIssue("bd-001"),
-            CreateIssue("bd-002"),
-            CreateIssue("bd-003")
-        };
-        var dependencies = new List<BeadsDependency>
-        {
-            new() { FromIssueId = "bd-002", ToIssueId = "bd-001", Type = BeadsDependencyType.Blocks },
-            new() { FromIssueId = "bd-003", ToIssueId = "bd-002", Type = BeadsDependencyType.Blocks }
+            CreateIssueWithParent("bd-002", "bd-001"),
+            CreateIssueWithParent("bd-003", "bd-002")
         };
 
         // Act
-        var graph = _builder.Build([], issues, dependencies);
+        var graph = _builder.Build([], issues);
 
         // Assert - DFS order: bd-001 -> bd-002 -> bd-003
-        var issueNodes = graph.Nodes.OfType<BeadsIssueNode>().ToList();
+        var issueNodes = graph.Nodes.OfType<IssueNode>().ToList();
         Assert.That(issueNodes[0].Issue.Id, Is.EqualTo("bd-001"));
         Assert.That(issueNodes[1].Issue.Id, Is.EqualTo("bd-002"));
         Assert.That(issueNodes[2].Issue.Id, Is.EqualTo("bd-003"));
@@ -262,23 +256,18 @@ public class GraphBuilderTests
     public void Build_Issues_MultipleParents_WaitForAllParents()
     {
         // Arrange: bd-003 is blocked by both bd-001 and bd-002
-        var issues = new List<BeadsIssue>
+        var issues = new List<Issue>
         {
             CreateIssue("bd-001"),
             CreateIssue("bd-002"),
-            CreateIssue("bd-003")
-        };
-        var dependencies = new List<BeadsDependency>
-        {
-            new() { FromIssueId = "bd-003", ToIssueId = "bd-001", Type = BeadsDependencyType.Blocks },
-            new() { FromIssueId = "bd-003", ToIssueId = "bd-002", Type = BeadsDependencyType.Blocks }
+            CreateIssueWithParents("bd-003", ["bd-001", "bd-002"])
         };
 
         // Act
-        var graph = _builder.Build([], issues, dependencies);
+        var graph = _builder.Build([], issues);
 
         // Assert - bd-003 should come after both bd-001 and bd-002
-        var issueNodes = graph.Nodes.OfType<BeadsIssueNode>().ToList();
+        var issueNodes = graph.Nodes.OfType<IssueNode>().ToList();
         var bd003Index = issueNodes.FindIndex(n => n.Issue.Id == "bd-003");
         var bd001Index = issueNodes.FindIndex(n => n.Issue.Id == "bd-001");
         var bd002Index = issueNodes.FindIndex(n => n.Issue.Id == "bd-002");
@@ -291,23 +280,18 @@ public class GraphBuilderTests
     public void Build_Issues_MultipleParents_AllReferenced()
     {
         // Arrange: bd-003 is blocked by both bd-001 and bd-002
-        var issues = new List<BeadsIssue>
+        var issues = new List<Issue>
         {
             CreateIssue("bd-001"),
             CreateIssue("bd-002"),
-            CreateIssue("bd-003")
-        };
-        var dependencies = new List<BeadsDependency>
-        {
-            new() { FromIssueId = "bd-003", ToIssueId = "bd-001", Type = BeadsDependencyType.Blocks },
-            new() { FromIssueId = "bd-003", ToIssueId = "bd-002", Type = BeadsDependencyType.Blocks }
+            CreateIssueWithParents("bd-003", ["bd-001", "bd-002"])
         };
 
         // Act
-        var graph = _builder.Build([], issues, dependencies);
+        var graph = _builder.Build([], issues);
 
         // Assert - bd-003 should reference both parents
-        var node3 = graph.Nodes.OfType<BeadsIssueNode>().First(n => n.Issue.Id == "bd-003");
+        var node3 = graph.Nodes.OfType<IssueNode>().First(n => n.Issue.Id == "bd-003");
         Assert.That(node3.ParentIds, Contains.Item("issue-bd-001"));
         Assert.That(node3.ParentIds, Contains.Item("issue-bd-002"));
     }
@@ -316,13 +300,13 @@ public class GraphBuilderTests
     public void Build_Issues_HaveTimeDimensionTwoOrGreater()
     {
         // Arrange
-        var issues = new List<BeadsIssue> { CreateIssue("bd-001") };
+        var issues = new List<Issue> { CreateIssue("bd-001") };
 
         // Act
-        var graph = _builder.Build([], issues, []);
+        var graph = _builder.Build([], issues);
 
         // Assert - Issues are in the future (time dimension >= 2)
-        var issueNode = graph.Nodes.OfType<BeadsIssueNode>().First();
+        var issueNode = graph.Nodes.OfType<IssueNode>().First();
         Assert.That(issueNode.TimeDimension, Is.GreaterThanOrEqualTo(2));
     }
 
@@ -334,15 +318,15 @@ public class GraphBuilderTests
         {
             CreateOpenPR(1, PullRequestStatus.InProgress)
         };
-        var issues = new List<BeadsIssue> { CreateIssue("bd-001") };
+        var issues = new List<Issue> { CreateIssue("bd-001") };
 
         // Act
-        var graph = _builder.Build(prs, issues, []);
+        var graph = _builder.Build(prs, issues);
 
         // Assert - Issue should come after open PR
         var nodeList = graph.Nodes.ToList();
         var prIndex = nodeList.FindIndex(n => n is PullRequestNode);
-        var issueIndex = nodeList.FindIndex(n => n is BeadsIssueNode);
+        var issueIndex = nodeList.FindIndex(n => n is IssueNode);
         Assert.That(issueIndex, Is.GreaterThan(prIndex));
     }
 
@@ -354,17 +338,17 @@ public class GraphBuilderTests
     public void Build_OrphanIssues_ChainedOffMain()
     {
         // Arrange - Issues with no dependencies are orphans
-        var issues = new List<BeadsIssue>
+        var issues = new List<Issue>
         {
             CreateIssue("bd-001"),
             CreateIssue("bd-002")
         };
 
         // Act
-        var graph = _builder.Build([], issues, []);
+        var graph = _builder.Build([], issues);
 
         // Assert - Should be on orphan branch and chained together
-        var orphanNodes = graph.Nodes.OfType<BeadsIssueNode>().ToList();
+        var orphanNodes = graph.Nodes.OfType<IssueNode>().ToList();
         Assert.That(orphanNodes, Has.Count.EqualTo(2));
         Assert.That(orphanNodes.All(n => n.NodeType == GraphNodeType.OrphanIssue), Is.True);
         // Second orphan should have first orphan as parent
@@ -375,7 +359,7 @@ public class GraphBuilderTests
     public void Build_OrphanIssues_OrderedByPriorityThenAge()
     {
         // Arrange
-        var issues = new List<BeadsIssue>
+        var issues = new List<Issue>
         {
             CreateIssue("bd-001", priority: 3, createdAt: DateTime.UtcNow.AddDays(-1)),  // Lower priority, newer
             CreateIssue("bd-002", priority: 1, createdAt: DateTime.UtcNow.AddDays(-2)),  // Higher priority, older
@@ -383,10 +367,10 @@ public class GraphBuilderTests
         };
 
         // Act
-        var graph = _builder.Build([], issues, []);
+        var graph = _builder.Build([], issues);
 
         // Assert - Order: bd-003 (P1, oldest), bd-002 (P1, older), bd-001 (P3, newer)
-        var orphanNodes = graph.Nodes.OfType<BeadsIssueNode>().ToList();
+        var orphanNodes = graph.Nodes.OfType<IssueNode>().ToList();
         Assert.That(orphanNodes[0].Issue.Id, Is.EqualTo("bd-003"));
         Assert.That(orphanNodes[1].Issue.Id, Is.EqualTo("bd-002"));
         Assert.That(orphanNodes[2].Issue.Id, Is.EqualTo("bd-001"));
@@ -396,22 +380,18 @@ public class GraphBuilderTests
     public void Build_OrphanIssues_PlacedAtEnd()
     {
         // Arrange - Mix of dependent issues and orphan issues
-        var issues = new List<BeadsIssue>
+        var issues = new List<Issue>
         {
             CreateIssue("bd-001"),  // Will be root (has child)
-            CreateIssue("bd-002"),  // Child of bd-001
+            CreateIssueWithParent("bd-002", "bd-001"),  // Child of bd-001
             CreateIssue("bd-003")   // Orphan (no deps)
-        };
-        var dependencies = new List<BeadsDependency>
-        {
-            new() { FromIssueId = "bd-002", ToIssueId = "bd-001", Type = BeadsDependencyType.Blocks }
         };
 
         // Act
-        var graph = _builder.Build([], issues, dependencies);
+        var graph = _builder.Build([], issues);
 
         // Assert - Orphan (bd-003) should come after dependent issues (bd-001, bd-002)
-        var issueNodes = graph.Nodes.OfType<BeadsIssueNode>().ToList();
+        var issueNodes = graph.Nodes.OfType<IssueNode>().ToList();
         var bd003Index = issueNodes.FindIndex(n => n.Issue.Id == "bd-003");
         var bd001Index = issueNodes.FindIndex(n => n.Issue.Id == "bd-001");
         var bd002Index = issueNodes.FindIndex(n => n.Issue.Id == "bd-002");
@@ -421,24 +401,24 @@ public class GraphBuilderTests
     }
 
     [Test]
-    public void Build_OrphanIssues_GroupedByLabel()
+    public void Build_OrphanIssues_GroupedByGroup()
     {
-        // Arrange - Orphan issues with different group labels
-        var issues = new List<BeadsIssue>
+        // Arrange - Orphan issues with different groups
+        var issues = new List<Issue>
         {
-            CreateIssueWithGroup("bd-001", "frontend", "update-page"),
-            CreateIssueWithGroup("bd-002", "backend", "api-fix"),
-            CreateIssueWithGroup("bd-003", "frontend", "add-button"),
+            CreateIssueWithGroup("bd-001", "frontend"),
+            CreateIssueWithGroup("bd-002", "backend"),
+            CreateIssueWithGroup("bd-003", "frontend"),
         };
 
         // Act
-        var graph = _builder.Build([], issues, []);
+        var graph = _builder.Build([], issues);
 
         // Assert - Should have 2 orphan branches (backend and frontend)
         Assert.That(graph.Branches.ContainsKey("orphan-issues-backend"), Is.True);
         Assert.That(graph.Branches.ContainsKey("orphan-issues-frontend"), Is.True);
 
-        var orphanNodes = graph.Nodes.OfType<BeadsIssueNode>().ToList();
+        var orphanNodes = graph.Nodes.OfType<IssueNode>().ToList();
         Assert.That(orphanNodes, Has.Count.EqualTo(3));
 
         // Frontend issues should be on frontend branch
@@ -454,18 +434,18 @@ public class GraphBuilderTests
     public void Build_OrphanIssues_GroupsSortedAlphabetically()
     {
         // Arrange - Orphan issues with groups that need alphabetical sorting
-        var issues = new List<BeadsIssue>
+        var issues = new List<Issue>
         {
-            CreateIssueWithGroup("bd-001", "zebra", "task-1"),
-            CreateIssueWithGroup("bd-002", "alpha", "task-2"),
-            CreateIssueWithGroup("bd-003", "middle", "task-3"),
+            CreateIssueWithGroup("bd-001", "zebra"),
+            CreateIssueWithGroup("bd-002", "alpha"),
+            CreateIssueWithGroup("bd-003", "middle"),
         };
 
         // Act
-        var graph = _builder.Build([], issues, []);
+        var graph = _builder.Build([], issues);
 
         // Assert - Groups should be processed in alphabetical order
-        var orphanNodes = graph.Nodes.OfType<BeadsIssueNode>().ToList();
+        var orphanNodes = graph.Nodes.OfType<IssueNode>().ToList();
 
         // The order should be: alpha (td=2), middle (td=3), zebra (td=4)
         var alphaNode = orphanNodes.First(n => n.Issue.Id == "bd-002");
@@ -481,18 +461,18 @@ public class GraphBuilderTests
     public void Build_OrphanIssues_WithinGroupOrderedByPriorityThenAge()
     {
         // Arrange - Multiple issues in same group with different priorities
-        var issues = new List<BeadsIssue>
+        var issues = new List<Issue>
         {
-            CreateIssueWithGroup("bd-001", "frontend", "task-1", priority: 3, createdAt: DateTime.UtcNow.AddDays(-1)),
-            CreateIssueWithGroup("bd-002", "frontend", "task-2", priority: 1, createdAt: DateTime.UtcNow.AddDays(-2)),
-            CreateIssueWithGroup("bd-003", "frontend", "task-3", priority: 1, createdAt: DateTime.UtcNow.AddDays(-3)),
+            CreateIssueWithGroup("bd-001", "frontend", priority: 3, createdAt: DateTime.UtcNow.AddDays(-1)),
+            CreateIssueWithGroup("bd-002", "frontend", priority: 1, createdAt: DateTime.UtcNow.AddDays(-2)),
+            CreateIssueWithGroup("bd-003", "frontend", priority: 1, createdAt: DateTime.UtcNow.AddDays(-3)),
         };
 
         // Act
-        var graph = _builder.Build([], issues, []);
+        var graph = _builder.Build([], issues);
 
         // Assert - Within frontend group, order should be: bd-003 (P1, oldest), bd-002 (P1, older), bd-001 (P3, newer)
-        var orphanNodes = graph.Nodes.OfType<BeadsIssueNode>().ToList();
+        var orphanNodes = graph.Nodes.OfType<IssueNode>().ToList();
         var nodeOrder = orphanNodes.Select(n => n.Issue.Id).ToList();
 
         Assert.That(nodeOrder[0], Is.EqualTo("bd-003"));
@@ -501,23 +481,23 @@ public class GraphBuilderTests
     }
 
     [Test]
-    public void Build_OrphanIssues_WithoutGroupLabel_UsesDefaultBranch()
+    public void Build_OrphanIssues_WithoutGroup_UsesDefaultBranch()
     {
-        // Arrange - Mix of issues with and without group labels
-        var issues = new List<BeadsIssue>
+        // Arrange - Mix of issues with and without groups
+        var issues = new List<Issue>
         {
-            CreateIssueWithGroup("bd-001", "frontend", "task-1"),
-            CreateIssue("bd-002"),  // No group label
+            CreateIssueWithGroup("bd-001", "frontend"),
+            CreateIssue("bd-002"),  // No group
         };
 
         // Act
-        var graph = _builder.Build([], issues, []);
+        var graph = _builder.Build([], issues);
 
         // Assert - Should have both orphan-issues-frontend and orphan-issues branches
         Assert.That(graph.Branches.ContainsKey("orphan-issues-frontend"), Is.True);
         Assert.That(graph.Branches.ContainsKey("orphan-issues"), Is.True);
 
-        var orphanNodes = graph.Nodes.OfType<BeadsIssueNode>().ToList();
+        var orphanNodes = graph.Nodes.OfType<IssueNode>().ToList();
         var frontendNode = orphanNodes.First(n => n.Issue.Id == "bd-001");
         var defaultNode = orphanNodes.First(n => n.Issue.Id == "bd-002");
 
@@ -538,7 +518,7 @@ public class GraphBuilderTests
             .ToList();
 
         // Act - Request only 5 most recent
-        var graph = _builder.Build(prs, [], [], maxPastPRs: 5);
+        var graph = _builder.Build(prs, [], maxPastPRs: 5);
 
         // Assert - Should only have 5 PRs (the most recent ones: 6, 7, 8, 9, 10)
         var prNodes = graph.Nodes.OfType<PullRequestNode>().ToList();
@@ -556,7 +536,7 @@ public class GraphBuilderTests
             .ToList();
 
         // Act - Request only 5
-        var graph = _builder.Build(prs, [], [], maxPastPRs: 5);
+        var graph = _builder.Build(prs, [], maxPastPRs: 5);
 
         // Assert
         Assert.That(graph.HasMorePastPRs, Is.True);
@@ -572,7 +552,7 @@ public class GraphBuilderTests
             .ToList();
 
         // Act - Request 5 but only 3 exist
-        var graph = _builder.Build(prs, [], [], maxPastPRs: 5);
+        var graph = _builder.Build(prs, [], maxPastPRs: 5);
 
         // Assert
         Assert.That(graph.HasMorePastPRs, Is.False);
@@ -588,7 +568,7 @@ public class GraphBuilderTests
             .ToList();
 
         // Act - No limit
-        var graph = _builder.Build(prs, [], [], maxPastPRs: null);
+        var graph = _builder.Build(prs, [], maxPastPRs: null);
 
         // Assert - Should show all 10
         var prNodes = graph.Nodes.OfType<PullRequestNode>().ToList();
@@ -609,7 +589,7 @@ public class GraphBuilderTests
         var allPrs = mergedPrs.Concat(openPrs).ToList();
 
         // Act - Limit to 5 past PRs
-        var graph = _builder.Build(allPrs, [], [], maxPastPRs: 5);
+        var graph = _builder.Build(allPrs, [], maxPastPRs: 5);
 
         // Assert - Should have 5 merged + 3 open = 8 total PRs
         var prNodes = graph.Nodes.OfType<PullRequestNode>().ToList();
@@ -635,7 +615,7 @@ public class GraphBuilderTests
         var allPrs = mergedPrs.Concat(closedPrs).ToList();
 
         // Act - Limit to 5 past PRs
-        var graph = _builder.Build(allPrs, [], [], maxPastPRs: 5);
+        var graph = _builder.Build(allPrs, [], maxPastPRs: 5);
 
         // Assert - Should have 5 most recent (which includes both merged and closed)
         var prNodes = graph.Nodes.OfType<PullRequestNode>()
@@ -656,7 +636,7 @@ public class GraphBuilderTests
         var prs = new List<PullRequestInfo> { CreateMergedPR(1, DateTime.UtcNow) };
 
         // Act
-        var graph = _builder.Build(prs, [], []);
+        var graph = _builder.Build(prs, []);
 
         // Assert
         Assert.That(graph.Branches.ContainsKey("main"), Is.True);
@@ -671,7 +651,7 @@ public class GraphBuilderTests
         pr.BranchName = "feature/test";
 
         // Act
-        var graph = _builder.Build([pr], [], []);
+        var graph = _builder.Build([pr], []);
 
         // Assert
         Assert.That(graph.Branches.ContainsKey("feature/test"), Is.True);
@@ -711,23 +691,52 @@ public class GraphBuilderTests
         BranchName = $"pr-{number}"
     };
 
-    private static BeadsIssue CreateIssue(string id, int? priority = null, DateTime? createdAt = null) => new()
+    private static Issue CreateIssue(string id, int? priority = null, DateTime? createdAt = null) => new()
     {
         Id = id,
         Title = $"Issue {id}",
-        Status = BeadsIssueStatus.Open,
-        Type = BeadsIssueType.Task,
+        Status = IssueStatus.Open,
+        Type = IssueType.Task,
         Priority = priority,
-        CreatedAt = createdAt ?? DateTime.UtcNow,
-        UpdatedAt = createdAt ?? DateTime.UtcNow
+        CreatedAt = createdAt ?? DateTimeOffset.UtcNow,
+        LastUpdate = createdAt ?? DateTimeOffset.UtcNow
     };
 
-    private static BeadsIssue CreateIssueWithGroup(string id, string group, string branchId, int? priority = null, DateTime? createdAt = null)
+    private static Issue CreateIssueWithGroup(string id, string group, int? priority = null, DateTime? createdAt = null) => new()
     {
-        var issue = CreateIssue(id, priority, createdAt);
-        issue.Labels = [BeadsBranchLabel.Create(group, branchId)];
-        return issue;
-    }
+        Id = id,
+        Title = $"Issue {id}",
+        Status = IssueStatus.Open,
+        Type = IssueType.Task,
+        Priority = priority,
+        Group = group,
+        CreatedAt = createdAt ?? DateTimeOffset.UtcNow,
+        LastUpdate = createdAt ?? DateTimeOffset.UtcNow
+    };
+
+    private static Issue CreateIssueWithParent(string id, string parentId, int? priority = null, DateTime? createdAt = null) => new()
+    {
+        Id = id,
+        Title = $"Issue {id}",
+        Status = IssueStatus.Open,
+        Type = IssueType.Task,
+        Priority = priority,
+        ParentIssues = [parentId],
+        CreatedAt = createdAt ?? DateTimeOffset.UtcNow,
+        LastUpdate = createdAt ?? DateTimeOffset.UtcNow
+    };
+
+    private static Issue CreateIssueWithParents(string id, List<string> parentIds, int? priority = null, DateTime? createdAt = null) => new()
+    {
+        Id = id,
+        Title = $"Issue {id}",
+        Status = IssueStatus.Open,
+        Type = IssueType.Task,
+        Priority = priority,
+        ParentIssues = parentIds,
+        CreatedAt = createdAt ?? DateTimeOffset.UtcNow,
+        LastUpdate = createdAt ?? DateTimeOffset.UtcNow
+    };
 
     #endregion
 }

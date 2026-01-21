@@ -1,5 +1,4 @@
-using Homespun.Features.Beads;
-using Homespun.Features.Beads.Data;
+using Fleece.Core.Models;
 using Homespun.Features.Gitgraph.Data;
 using Homespun.Features.PullRequests;
 
@@ -23,15 +22,14 @@ public class GraphBuilder
 
     /// <summary>
     /// Builds a graph from PRs and issues following the ordering rules.
+    /// Uses Issue.ParentIssues for dependency information.
     /// </summary>
     /// <param name="pullRequests">All pull requests to include in the graph.</param>
     /// <param name="issues">All issues to include in the graph.</param>
-    /// <param name="dependencies">All dependencies between issues.</param>
     /// <param name="maxPastPRs">Maximum number of past (closed/merged) PRs to show. If null, shows all.</param>
     public Graph Build(
         IEnumerable<PullRequestInfo> pullRequests,
-        IEnumerable<BeadsIssue> issues,
-        IEnumerable<BeadsDependency> dependencies,
+        IEnumerable<Issue> issues,
         int? maxPastPRs = null)
     {
         var nodes = new List<IGraphNode>();
@@ -39,10 +37,9 @@ public class GraphBuilder
 
         var prList = pullRequests.ToList();
         var issueList = issues.ToList();
-        var depList = dependencies.ToList();
 
-        // Build dependency lookup (issue -> list of issues that block it)
-        var blockingDependencies = BuildDependencyLookup(depList);
+        // Build dependency lookup from ParentIssues (issue -> list of issues that block it)
+        var blockingDependencies = BuildDependencyLookup(issueList);
 
         // Add main branch
         branches[_mainBranchName] = new GraphBranch
@@ -69,20 +66,27 @@ public class GraphBuilder
 
     /// <summary>
     /// Builds a lookup from issue ID to list of issue IDs that block it.
+    /// Uses Issue.ParentIssues property.
     /// </summary>
-    private static Dictionary<string, List<string>> BuildDependencyLookup(List<BeadsDependency> dependencies)
+    private static Dictionary<string, List<string>> BuildDependencyLookup(List<Issue> issues)
     {
-        var lookup = new Dictionary<string, List<string>>();
+        var lookup = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        var issueIds = issues.Select(i => i.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var dep in dependencies.Where(d => d.Type == BeadsDependencyType.Blocks))
+        foreach (var issue in issues)
         {
-            // FromIssueId is blocked BY ToIssueId
-            if (!lookup.TryGetValue(dep.FromIssueId, out var blockers))
+            if (issue.ParentIssues.Count > 0)
             {
-                blockers = [];
-                lookup[dep.FromIssueId] = blockers;
+                // Filter to only parent issues that exist in our issue list
+                var validParents = issue.ParentIssues
+                    .Where(p => issueIds.Contains(p))
+                    .ToList();
+
+                if (validParents.Count > 0)
+                {
+                    lookup[issue.Id] = validParents;
+                }
             }
-            blockers.Add(dep.ToIssueId);
         }
 
         return lookup;
@@ -169,15 +173,15 @@ public class GraphBuilder
     /// Classifies issues into root issues (have children but no parents),
     /// orphan issues (no dependencies), and dependent issues (have parents).
     /// </summary>
-    private static (List<BeadsIssue> roots, List<BeadsIssue> orphans, List<BeadsIssue> dependent) ClassifyIssues(
-        List<BeadsIssue> issues,
+    private static (List<Issue> roots, List<Issue> orphans, List<Issue> dependent) ClassifyIssues(
+        List<Issue> issues,
         Dictionary<string, List<string>> blockingDependencies)
     {
-        var issueIds = issues.Select(i => i.Id).ToHashSet();
-        var hasBlockers = blockingDependencies.Keys.ToHashSet();
+        var issueIds = issues.Select(i => i.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var hasBlockers = blockingDependencies.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         // Build reverse lookup: what issues does this issue block?
-        var blocksLookup = new Dictionary<string, HashSet<string>>();
+        var blocksLookup = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
         foreach (var (blockedId, blockerIds) in blockingDependencies)
         {
             foreach (var blockerId in blockerIds.Where(id => issueIds.Contains(id)))
@@ -191,12 +195,12 @@ public class GraphBuilder
             }
         }
 
-        var isBlockingSomething = blocksLookup.Keys.ToHashSet();
+        var isBlockingSomething = blocksLookup.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         // Root issues: either block something and have no blockers, or have blockers outside the issue set
-        var roots = new List<BeadsIssue>();
-        var dependent = new List<BeadsIssue>();
-        var orphans = new List<BeadsIssue>();
+        var roots = new List<Issue>();
+        var dependent = new List<Issue>();
+        var orphans = new List<Issue>();
 
         foreach (var issue in issues)
         {
@@ -228,18 +232,18 @@ public class GraphBuilder
     /// Adds issues with dependencies using depth-first traversal.
     /// </summary>
     private void AddIssuesDepthFirst(
-        List<BeadsIssue> rootIssues,
-        List<BeadsIssue> dependentIssues,
+        List<Issue> rootIssues,
+        List<Issue> dependentIssues,
         Dictionary<string, List<string>> blockingDependencies,
         List<IGraphNode> nodes,
         Dictionary<string, GraphBranch> branches,
         PullRequestNode? latestMergedPr)
     {
-        var visited = new HashSet<string>();
-        var allIssues = rootIssues.Concat(dependentIssues).ToDictionary(i => i.Id);
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var allIssues = rootIssues.Concat(dependentIssues).ToDictionary(i => i.Id, StringComparer.OrdinalIgnoreCase);
 
         // Build reverse lookup: what issues does this issue block?
-        var blocksLookup = new Dictionary<string, List<string>>();
+        var blocksLookup = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
         foreach (var (blockedId, blockerIds) in blockingDependencies)
         {
             foreach (var blockerId in blockerIds.Where(id => allIssues.ContainsKey(id)))
@@ -255,7 +259,7 @@ public class GraphBuilder
 
         var currentTimeDimension = 2;
 
-        void VisitIssue(BeadsIssue issue, int depth)
+        void VisitIssue(Issue issue, int depth)
         {
             if (visited.Contains(issue.Id)) return;
             visited.Add(issue.Id);
@@ -287,7 +291,7 @@ public class GraphBuilder
                 ParentCommitId = parentIds.FirstOrDefault()
             };
 
-            var node = new BeadsIssueNode(issue, parentIds, currentTimeDimension + depth, isOrphan: false);
+            var node = new IssueNode(issue, parentIds, currentTimeDimension + depth, isOrphan: false);
             nodes.Add(node);
 
             // Visit children (issues that this issue blocks)
@@ -334,27 +338,26 @@ public class GraphBuilder
     }
 
     /// <summary>
-    /// Adds orphan issues (no dependencies) grouped by their group label.
+    /// Adds orphan issues (no dependencies) grouped by their group property.
     /// Each group gets its own branch, and groups are sorted alphabetically.
     /// </summary>
     private void AddOrphanIssues(
-        List<BeadsIssue> orphanIssues,
+        List<Issue> orphanIssues,
         List<IGraphNode> nodes,
         Dictionary<string, GraphBranch> branches,
         PullRequestNode? latestMergedPr)
     {
         if (orphanIssues.Count == 0) return;
 
-        // Group orphan issues by their group label
-        var issuesByGroup = new Dictionary<string, List<BeadsIssue>>(StringComparer.OrdinalIgnoreCase);
-        var issuesWithoutGroup = new List<BeadsIssue>();
+        // Group orphan issues by their Group property
+        var issuesByGroup = new Dictionary<string, List<Issue>>(StringComparer.OrdinalIgnoreCase);
+        var issuesWithoutGroup = new List<Issue>();
 
         foreach (var issue in orphanIssues)
         {
-            var parsed = BeadsBranchLabel.Parse(issue.Labels);
-            if (parsed != null)
+            if (!string.IsNullOrWhiteSpace(issue.Group))
             {
-                var group = parsed.Value.Group;
+                var group = issue.Group;
                 if (!issuesByGroup.TryGetValue(group, out var groupIssues))
                 {
                     groupIssues = [];
@@ -402,7 +405,7 @@ public class GraphBuilder
                     ? new List<string> { previousId }
                     : new List<string>();
 
-                var node = new BeadsIssueNode(issue, parentIds, timeDimension, isOrphan: true, customBranchName: orphanBranchName);
+                var node = new IssueNode(issue, parentIds, timeDimension, isOrphan: true, customBranchName: orphanBranchName);
                 nodes.Add(node);
 
                 previousId = node.Id;
@@ -411,7 +414,7 @@ public class GraphBuilder
             timeDimension++;
         }
 
-        // Handle issues without a group label (fallback to original behavior)
+        // Handle issues without a group (fallback to original behavior)
         if (issuesWithoutGroup.Count > 0)
         {
             const string orphanBranchName = "orphan-issues";
@@ -437,7 +440,7 @@ public class GraphBuilder
                     ? new List<string> { previousId }
                     : new List<string>();
 
-                var node = new BeadsIssueNode(issue, parentIds, timeDimension, isOrphan: true);
+                var node = new IssueNode(issue, parentIds, timeDimension, isOrphan: true);
                 nodes.Add(node);
 
                 previousId = node.Id;
@@ -462,13 +465,13 @@ public class GraphBuilder
         _ => "#6b7280"                                 // Gray
     };
 
-    private static string GetIssueTypeColor(BeadsIssueType type) => type switch
+    private static string GetIssueTypeColor(IssueType type) => type switch
     {
-        BeadsIssueType.Bug => "#ef4444",      // Red
-        BeadsIssueType.Feature => "#a855f7",  // Purple
-        BeadsIssueType.Task => "#3b82f6",     // Blue
-        BeadsIssueType.Epic => "#f97316",     // Orange
-        BeadsIssueType.Chore => "#6b7280",    // Gray
-        _ => "#6b7280"                        // Gray
+        IssueType.Bug => "#ef4444",      // Red
+        IssueType.Feature => "#a855f7",  // Purple
+        IssueType.Task => "#3b82f6",     // Blue
+        IssueType.Idea => "#f97316",     // Orange
+        IssueType.Chore => "#6b7280",    // Gray
+        _ => "#6b7280"                   // Gray
     };
 }

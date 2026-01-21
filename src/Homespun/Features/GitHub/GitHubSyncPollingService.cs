@@ -1,4 +1,5 @@
-using Homespun.Features.Beads.Services;
+using Fleece.Core.Models;
+using Homespun.Features.Fleece.Services;
 using Homespun.Features.Notifications;
 using Homespun.Features.PullRequests.Data;
 using Homespun.Features.PullRequests.Data.Entities;
@@ -103,10 +104,9 @@ public class GitHubSyncPollingService(
                 "PR sync for {Owner}/{Repo}: {Imported} imported, {Updated} updated, {Removed} removed",
                 project.GitHubOwner, project.GitHubRepo, syncResult.Imported, syncResult.Updated, syncResult.Removed);
 
-            // Close linked beads issues for removed (merged/closed) PRs
-            // Uses IBeadsDatabaseService for direct SQLite access (updates cache immediately, queues DB write)
+            // Close linked Fleece issues for removed (merged/closed) PRs
             using var closeScope = scopeFactory.CreateScope();
-            var beadsDatabaseService = closeScope.ServiceProvider.GetRequiredService<IBeadsDatabaseService>();
+            var fleeceService = closeScope.ServiceProvider.GetRequiredService<IFleeceService>();
 
             foreach (var removedPr in syncResult.RemovedPrs)
             {
@@ -114,29 +114,28 @@ public class GitHubSyncPollingService(
                 {
                     try
                     {
-                        var reason = removedPr.GitHubPrNumber.HasValue
-                            ? $"PR #{removedPr.GitHubPrNumber} merged/closed"
-                            : "PR merged/closed";
+                        var updated = await fleeceService.UpdateIssueAsync(
+                            project.LocalPath,
+                            removedPr.BeadsIssueId,
+                            status: IssueStatus.Closed);
 
-                        var closed = await beadsDatabaseService.CloseIssueAsync(project.LocalPath, removedPr.BeadsIssueId, reason);
-
-                        if (closed)
+                        if (updated != null)
                         {
                             logger.LogInformation(
-                                "Closed beads issue {IssueId} linked to merged/closed PR #{PrNumber}",
+                                "Closed issue {IssueId} linked to merged/closed PR #{PrNumber}",
                                 removedPr.BeadsIssueId, removedPr.GitHubPrNumber);
                         }
                         else
                         {
                             logger.LogWarning(
-                                "Failed to close beads issue {IssueId} linked to merged/closed PR #{PrNumber}",
+                                "Failed to close issue {IssueId} linked to merged/closed PR #{PrNumber}",
                                 removedPr.BeadsIssueId, removedPr.GitHubPrNumber);
                         }
                     }
                     catch (Exception ex)
                     {
                         logger.LogError(ex,
-                            "Error closing beads issue {IssueId} linked to merged/closed PR #{PrNumber}",
+                            "Error closing issue {IssueId} linked to merged/closed PR #{PrNumber}",
                             removedPr.BeadsIssueId, removedPr.GitHubPrNumber);
                     }
                 }

@@ -1,4 +1,3 @@
-using Homespun.Features.Beads.Data;
 using Homespun.Features.PullRequests.Data;
 using Homespun.Features.PullRequests.Data.Entities;
 
@@ -11,12 +10,10 @@ public class TestDataStore : IDataStore
 {
     private readonly List<Project> _projects = [];
     private readonly List<PullRequest> _pullRequests = [];
-    private readonly List<BeadsIssueMetadata> _beadsIssueMetadata = [];
     private readonly List<string> _favoriteModels = [];
 
     public IReadOnlyList<Project> Projects => _projects.AsReadOnly();
     public IReadOnlyList<PullRequest> PullRequests => _pullRequests.AsReadOnly();
-    public IReadOnlyList<BeadsIssueMetadata> BeadsIssueMetadata => _beadsIssueMetadata.AsReadOnly();
     public IReadOnlyList<string> FavoriteModels => _favoriteModels.AsReadOnly();
 
     public Project? GetProject(string id) => _projects.FirstOrDefault(p => p.Id == id);
@@ -25,12 +22,6 @@ public class TestDataStore : IDataStore
 
     public IReadOnlyList<PullRequest> GetPullRequestsByProject(string projectId) =>
         _pullRequests.Where(pr => pr.ProjectId == projectId).ToList().AsReadOnly();
-    
-    public BeadsIssueMetadata? GetBeadsIssueMetadata(string issueId) =>
-        _beadsIssueMetadata.FirstOrDefault(m => m.IssueId == issueId);
-    
-    public IReadOnlyList<BeadsIssueMetadata> GetBeadsIssueMetadataByProject(string projectId) =>
-        _beadsIssueMetadata.Where(m => m.ProjectId == projectId).ToList().AsReadOnly();
 
     public Task AddProjectAsync(Project project)
     {
@@ -52,7 +43,6 @@ public class TestDataStore : IDataStore
     {
         _projects.RemoveAll(p => p.Id == projectId);
         _pullRequests.RemoveAll(pr => pr.ProjectId == projectId);
-        _beadsIssueMetadata.RemoveAll(m => m.ProjectId == projectId);
         return Task.CompletedTask;
     }
 
@@ -75,33 +65,6 @@ public class TestDataStore : IDataStore
     public Task RemovePullRequestAsync(string pullRequestId)
     {
         _pullRequests.RemoveAll(pr => pr.Id == pullRequestId);
-        return Task.CompletedTask;
-    }
-    
-    public Task AddBeadsIssueMetadataAsync(BeadsIssueMetadata metadata)
-    {
-        _beadsIssueMetadata.Add(metadata);
-        return Task.CompletedTask;
-    }
-    
-    public Task UpdateBeadsIssueMetadataAsync(BeadsIssueMetadata metadata)
-    {
-        var index = _beadsIssueMetadata.FindIndex(m => m.IssueId == metadata.IssueId);
-        if (index >= 0)
-        {
-            metadata.UpdatedAt = DateTime.UtcNow;
-            _beadsIssueMetadata[index] = metadata;
-        }
-        else
-        {
-            _beadsIssueMetadata.Add(metadata);
-        }
-        return Task.CompletedTask;
-    }
-    
-    public Task RemoveBeadsIssueMetadataAsync(string issueId)
-    {
-        _beadsIssueMetadata.RemoveAll(m => m.IssueId == issueId);
         return Task.CompletedTask;
     }
 
@@ -131,7 +94,6 @@ public class TestDataStore : IDataStore
     {
         _projects.Clear();
         _pullRequests.Clear();
-        _beadsIssueMetadata.Clear();
         _favoriteModels.Clear();
     }
 }

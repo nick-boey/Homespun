@@ -1,11 +1,10 @@
 @page "/projects/{ProjectId}/issues/{IssueId}/edit"
-@using Homespun.Features.Beads
-@using Homespun.Features.Beads.Data
-@using Homespun.Features.Beads.Services
+@using Fleece.Core.Models
+@using Homespun.Features.Fleece.Services
 @using Homespun.Features.Projects
 @using Homespun.Features.PullRequests.Data.Entities
 @inject ProjectService ProjectService
-@inject IBeadsDatabaseService BeadsDatabaseService
+@inject IFleeceService FleeceService
 @inject NavigationManager Navigation
 @inject ILogger<IssueEdit> Logger
 @rendermode InteractiveServer
@@ -62,7 +61,7 @@ else
                             <div class="col-md-4">
                                 <label for="type" class="form-label">Type</label>
                                 <select class="form-select" id="type" @bind="_type">
-                                    @foreach (var type in Enum.GetValues<BeadsIssueType>())
+                                    @foreach (var type in Enum.GetValues<IssueType>())
                                     {
                                         <option value="@type">@type</option>
                                     }
@@ -71,7 +70,7 @@ else
                             <div class="col-md-4">
                                 <label for="status" class="form-label">Status</label>
                                 <select class="form-select" id="status" @bind="_status">
-                                    @foreach (var status in Enum.GetValues<BeadsIssueStatus>().Where(s => s != BeadsIssueStatus.Tombstone))
+                                    @foreach (var status in Enum.GetValues<IssueStatus>().Where(s => s != IssueStatus.Deleted))
                                     {
                                         <option value="@status">@status</option>
                                     }
@@ -89,20 +88,6 @@ else
                                 </select>
                             </div>
                         </div>
-
-                        <div class="mb-3">
-                            <label for="assignee" class="form-label">Assignee</label>
-                            <input type="text" class="form-control" id="assignee"
-                                   @bind="_assignee"
-                                   placeholder="Username or name" />
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="parentId" class="form-label">Parent Issue</label>
-                            <input type="text" class="form-control" id="parentId"
-                                   @bind="_parentId"
-                                   placeholder="hsp-XXXX (for subtasks of epics)" />
-                        </div>
                     </div>
                 </div>
             </div>
@@ -111,66 +96,10 @@ else
                 <div class="card mb-3">
                     <div class="card-header">Branch Information</div>
                     <div class="card-body">
-                        <div class="mb-3">
-                            <label for="group" class="form-label">Group</label>
-                            <input type="text" class="form-control" id="group"
-                                   list="groupList"
-                                   @bind="_group"
-                                   placeholder="e.g., frontend, backend, api" />
-                            <datalist id="groupList">
-                                @foreach (var group in _existingGroups)
-                                {
-                                    <option value="@group" />
-                                }
-                            </datalist>
-                            <div class="form-text">Used to organize branches by area.</div>
+                        <div class="p-2 bg-light rounded small">
+                            <strong>Branch Preview:</strong><br/>
+                            <code>@GetBranchPreview()</code>
                         </div>
-
-                        <div class="mb-3">
-                            <label for="branchId" class="form-label">Branch ID</label>
-                            <input type="text" class="form-control font-monospace" id="branchId"
-                                   @bind="_branchId"
-                                   placeholder="e.g., add-login-page" />
-                            <div class="form-text">Short, lowercase identifier for the branch.</div>
-                        </div>
-
-                        @if (!string.IsNullOrWhiteSpace(_group) || !string.IsNullOrWhiteSpace(_branchId))
-                        {
-                            <div class="p-2 bg-light rounded small">
-                                <strong>Branch Preview:</strong><br/>
-                                <code>@GetBranchPreview()</code>
-                                <br/><br/>
-                                <strong>Label:</strong><br/>
-                                <code>@GetHspLabelPreview()</code>
-                            </div>
-                        }
-                    </div>
-                </div>
-
-                <div class="card mb-3">
-                    <div class="card-header">Labels</div>
-                    <div class="card-body">
-                        <div class="mb-3">
-                            <label for="labels" class="form-label">Additional Labels</label>
-                            <input type="text" class="form-control" id="labels"
-                                   @bind="_labels"
-                                   placeholder="label1, label2, label3" />
-                            <div class="form-text">Comma-separated list (hsp: label is managed separately)</div>
-                        </div>
-
-                        @if (_issue?.Labels.Count > 0)
-                        {
-                            <div class="mb-0">
-                                <label class="form-label small text-muted">Current Labels:</label>
-                                <div>
-                                    @foreach (var label in _issue.Labels)
-                                    {
-                                        var isHsp = BeadsBranchLabel.IsHomespunLabel(label);
-                                        <span class="badge @(isHsp ? "bg-info" : "bg-secondary") me-1 mb-1">@label</span>
-                                    }
-                                </div>
-                            </div>
-                        }
                     </div>
                 </div>
 
@@ -180,13 +109,6 @@ else
                         <dl class="row small mb-0">
                             <dt class="col-5 text-muted">Created</dt>
                             <dd class="col-7">@_issue?.CreatedAt.ToString("g")</dd>
-                            <dt class="col-5 text-muted">Updated</dt>
-                            <dd class="col-7">@_issue?.UpdatedAt.ToString("g")</dd>
-                            @if (_issue?.ClosedAt != null)
-                            {
-                                <dt class="col-5 text-muted">Closed</dt>
-                                <dd class="col-7">@_issue.ClosedAt?.ToString("g")</dd>
-                            }
                         </dl>
                     </div>
                 </div>
@@ -244,20 +166,14 @@ else
     private string? _successMessage;
 
     private Project? _project;
-    private BeadsIssue? _issue;
-    private List<string> _existingGroups = [];
+    private Issue? _issue;
 
     // Form fields
     private string _title = "";
     private string _description = "";
-    private BeadsIssueType _type = BeadsIssueType.Feature;
-    private BeadsIssueStatus _status = BeadsIssueStatus.Open;
+    private IssueType _type = IssueType.Feature;
+    private IssueStatus _status = IssueStatus.Open;
     private string _priority = "";
-    private string _assignee = "";
-    private string _parentId = "";
-    private string _group = "";
-    private string _branchId = "";
-    private string _labels = "";
 
     protected override async Task OnInitializedAsync()
     {
@@ -280,23 +196,14 @@ else
                 return;
             }
 
-            // Ensure the database is loaded
-            if (!BeadsDatabaseService.IsProjectLoaded(_project.LocalPath))
-            {
-                await BeadsDatabaseService.RefreshFromDatabaseAsync(_project.LocalPath);
-            }
-
-            // Load issue from cache
-            _issue = BeadsDatabaseService.GetIssue(_project.LocalPath, IssueId);
+            // Load issue from Fleece
+            _issue = await FleeceService.GetIssueAsync(_project.LocalPath, IssueId);
             if (_issue == null)
             {
                 _notFound = true;
                 _loading = false;
                 return;
             }
-
-            // Load existing groups for autocomplete
-            _existingGroups = BeadsDatabaseService.GetUniqueGroups(_project.LocalPath).ToList();
 
             // Initialize form fields
             InitializeFormFromIssue();
@@ -321,24 +228,6 @@ else
         _type = _issue.Type;
         _status = _issue.Status;
         _priority = _issue.Priority?.ToString() ?? "";
-        _assignee = _issue.Assignee ?? "";
-        _parentId = _issue.ParentId ?? "";
-
-        // Parse group and branch ID from hsp: label
-        var branchInfo = BeadsBranchLabel.Parse(_issue.Labels);
-        if (branchInfo != null)
-        {
-            _group = branchInfo.Value.Group;
-            _branchId = branchInfo.Value.BranchId;
-        }
-        else
-        {
-            _group = "";
-            _branchId = "";
-        }
-
-        // Get non-hsp labels as comma-separated string
-        _labels = string.Join(", ", _issue.Labels.Where(l => !BeadsBranchLabel.IsHomespunLabel(l)));
     }
 
     private async Task HandleSubmit()
@@ -361,100 +250,31 @@ else
 
         try
         {
-            var group = _group.Trim().ToLowerInvariant();
-            var branchId = _branchId.Trim().ToLowerInvariant();
-
-            // Validate group and branch ID if provided
-            if (!string.IsNullOrWhiteSpace(group) && !BeadsBranchLabel.IsValidGroup(group))
-            {
-                _errorMessage = "Group must be lowercase alphanumeric with hyphens (no leading/trailing hyphens).";
-                return;
-            }
-
-            if (!string.IsNullOrWhiteSpace(branchId) && !BeadsBranchLabel.IsValidBranchId(branchId))
-            {
-                _errorMessage = "Branch ID must be lowercase alphanumeric with hyphens (no leading/trailing hyphens).";
-                return;
-            }
-
-            // Build update options - only include changed fields
-            var updateOptions = new BeadsUpdateOptions();
-
-            if (_title.Trim() != _issue.Title)
-                updateOptions.Title = _title.Trim();
-
-            if (_description.Trim() != (_issue.Description ?? ""))
-                updateOptions.Description = _description.Trim();
-
-            if (_type != _issue.Type)
-                updateOptions.Type = _type;
-
-            if (_status != _issue.Status)
-                updateOptions.Status = _status;
-
+            // Parse priority
+            int? priority = null;
             if (int.TryParse(_priority, out var priorityValue))
             {
-                if (priorityValue != _issue.Priority)
-                    updateOptions.Priority = priorityValue;
-            }
-            else if (_issue.Priority.HasValue && string.IsNullOrEmpty(_priority))
-            {
-                // Priority was cleared - we can't clear it via update, so skip
-                // (BeadsUpdateOptions doesn't support setting null priority)
+                priority = priorityValue;
             }
 
-            if (_assignee.Trim() != (_issue.Assignee ?? ""))
-                updateOptions.Assignee = string.IsNullOrWhiteSpace(_assignee) ? null : _assignee.Trim();
-
-            if (_parentId.Trim() != (_issue.ParentId ?? ""))
-                updateOptions.ParentId = string.IsNullOrWhiteSpace(_parentId) ? null : _parentId.Trim();
-
-            // Handle hsp: label changes
-            var currentBranchInfo = BeadsBranchLabel.Parse(_issue.Labels);
-            var newHspLabel = !string.IsNullOrWhiteSpace(group) && !string.IsNullOrWhiteSpace(branchId)
-                ? BeadsBranchLabel.Create(group, branchId)
-                : null;
-            var oldHspLabel = currentBranchInfo != null
-                ? BeadsBranchLabel.Create(currentBranchInfo.Value.Group, currentBranchInfo.Value.BranchId)
-                : null;
-
-            var labelsToAdd = new List<string>();
-            var labelsToRemove = new List<string>();
-
-            // Handle hsp: label change
-            if (newHspLabel != oldHspLabel)
-            {
-                if (oldHspLabel != null)
-                    labelsToRemove.Add(oldHspLabel);
-                if (newHspLabel != null)
-                    labelsToAdd.Add(newHspLabel);
-            }
-
-            // Handle other labels
-            var currentOtherLabels = _issue.Labels.Where(l => !BeadsBranchLabel.IsHomespunLabel(l)).ToHashSet();
-            var newOtherLabels = _labels
-                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .ToHashSet();
-
-            foreach (var label in newOtherLabels.Except(currentOtherLabels))
-            {
-                labelsToAdd.Add(label);
-            }
-
-            foreach (var label in currentOtherLabels.Except(newOtherLabels))
-            {
-                labelsToRemove.Add(label);
-            }
-
-            if (labelsToAdd.Count > 0)
-                updateOptions.LabelsToAdd = labelsToAdd;
-            if (labelsToRemove.Count > 0)
-                updateOptions.LabelsToRemove = labelsToRemove;
+            // Only pass changed values
+            var titleToUpdate = _title.Trim() != _issue.Title ? _title.Trim() : null;
+            var descToUpdate = _description.Trim() != (_issue.Description ?? "") ? _description.Trim() : null;
+            var typeToUpdate = _type != _issue.Type ? _type : (IssueType?)null;
+            var statusToUpdate = _status != _issue.Status ? _status : (IssueStatus?)null;
+            var priorityToUpdate = priority != _issue.Priority ? priority : null;
 
             // Perform update
-            var success = await BeadsDatabaseService.UpdateIssueAsync(_project.LocalPath, _issue.Id, updateOptions);
+            var updated = await FleeceService.UpdateIssueAsync(
+                _project.LocalPath,
+                _issue.Id,
+                title: titleToUpdate,
+                status: statusToUpdate,
+                type: typeToUpdate,
+                description: descToUpdate,
+                priority: priorityToUpdate);
 
-            if (!success)
+            if (updated == null)
             {
                 _errorMessage = "Failed to update issue.";
                 return;
@@ -486,24 +306,28 @@ else
 
     private string GetBranchPreview()
     {
-        var group = _group.Trim().ToLowerInvariant();
-        var branchId = _branchId.Trim().ToLowerInvariant();
         var type = _type.ToString().ToLowerInvariant();
+        var branchId = SanitizeForBranch(_title);
 
-        if (string.IsNullOrWhiteSpace(group)) group = "<group>";
-        if (string.IsNullOrWhiteSpace(branchId)) branchId = "<branch-id>";
-
-        return $"{group}/{type}/{branchId}+{IssueId}";
+        return $"issues/{type}/{branchId}+{IssueId}";
     }
 
-    private string GetHspLabelPreview()
+    private static string SanitizeForBranch(string input)
     {
-        var group = _group.Trim().ToLowerInvariant();
-        var branchId = _branchId.Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(input)) return "<title>";
 
-        if (string.IsNullOrWhiteSpace(group)) group = "<group>";
-        if (string.IsNullOrWhiteSpace(branchId)) branchId = "<branch-id>";
+        // Convert to lowercase, replace spaces with hyphens, remove special chars
+        var sanitized = input.ToLowerInvariant()
+            .Replace(" ", "-")
+            .Replace("_", "-");
 
-        return $"hsp:{group}/-/{branchId}";
+        // Remove any character that isn't alphanumeric or hyphen
+        sanitized = System.Text.RegularExpressions.Regex.Replace(sanitized, "[^a-z0-9-]", "");
+
+        // Remove consecutive hyphens
+        sanitized = System.Text.RegularExpressions.Regex.Replace(sanitized, "-+", "-");
+
+        // Trim hyphens from start and end
+        return sanitized.Trim('-');
     }
 }

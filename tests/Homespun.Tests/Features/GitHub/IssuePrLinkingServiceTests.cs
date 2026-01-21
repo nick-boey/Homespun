@@ -1,4 +1,5 @@
-using Homespun.Features.Beads.Services;
+using Fleece.Core.Models;
+using Homespun.Features.Fleece.Services;
 using Homespun.Features.GitHub;
 using Homespun.Features.PullRequests.Data;
 using Homespun.Features.PullRequests.Data.Entities;
@@ -12,7 +13,7 @@ namespace Homespun.Tests.Features.GitHub;
 public class IssuePrLinkingServiceTests
 {
     private TestDataStore _dataStore = null!;
-    private Mock<IBeadsDatabaseService> _mockBeadsDatabaseService = null!;
+    private Mock<IFleeceService> _mockFleeceService = null!;
     private Mock<ILogger<IssuePrLinkingService>> _mockLogger = null!;
     private IssuePrLinkingService _service = null!;
 
@@ -20,9 +21,9 @@ public class IssuePrLinkingServiceTests
     public void SetUp()
     {
         _dataStore = new TestDataStore();
-        _mockBeadsDatabaseService = new Mock<IBeadsDatabaseService>();
+        _mockFleeceService = new Mock<IFleeceService>();
         _mockLogger = new Mock<ILogger<IssuePrLinkingService>>();
-        _service = new IssuePrLinkingService(_dataStore, _mockBeadsDatabaseService.Object, _mockLogger.Object);
+        _service = new IssuePrLinkingService(_dataStore, _mockFleeceService.Object, _mockLogger.Object);
     }
 
     [TearDown]
@@ -63,15 +64,11 @@ public class IssuePrLinkingServiceTests
     #region LinkPullRequestToIssueAsync Tests
 
     [Test]
-    public async Task LinkPullRequestToIssueAsync_WithValidInputs_SetsBeadsIssueIdAndAddsLabel()
+    public async Task LinkPullRequestToIssueAsync_WithValidInputs_SetsBeadsIssueId()
     {
         // Arrange
         var project = await CreateTestProject();
         var pr = await CreateTestPullRequest(project.Id, "issues/feature/test+hsp-123", 42);
-
-        _mockBeadsDatabaseService
-            .Setup(b => b.AddLabelAsync(project.LocalPath, "hsp-123", "hsp:pr-42"))
-            .ReturnsAsync(true);
 
         // Act
         var result = await _service.LinkPullRequestToIssueAsync(project.Id, pr.Id, "hsp-123", 42);
@@ -81,8 +78,6 @@ public class IssuePrLinkingServiceTests
 
         var updatedPr = _dataStore.GetPullRequest(pr.Id);
         Assert.That(updatedPr!.BeadsIssueId, Is.EqualTo("hsp-123"));
-
-        _mockBeadsDatabaseService.Verify(b => b.AddLabelAsync(project.LocalPath, "hsp-123", "hsp:pr-42"), Times.Once);
     }
 
     [Test]
@@ -93,7 +88,6 @@ public class IssuePrLinkingServiceTests
 
         // Assert
         Assert.That(result, Is.False);
-        _mockBeadsDatabaseService.Verify(b => b.AddLabelAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
     }
 
     [Test]
@@ -107,11 +101,10 @@ public class IssuePrLinkingServiceTests
 
         // Assert
         Assert.That(result, Is.False);
-        _mockBeadsDatabaseService.Verify(b => b.AddLabelAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
     }
 
     [Test]
-    public async Task LinkPullRequestToIssueAsync_WhenAlreadyLinked_DoesNotAddLabelAgain()
+    public async Task LinkPullRequestToIssueAsync_WhenAlreadyLinked_DoesNotUpdateAgain()
     {
         // Arrange
         var project = await CreateTestProject();
@@ -124,28 +117,6 @@ public class IssuePrLinkingServiceTests
 
         // Assert
         Assert.That(result, Is.True);
-        _mockBeadsDatabaseService.Verify(b => b.AddLabelAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
-    }
-
-    [Test]
-    public async Task LinkPullRequestToIssueAsync_WhenLabelAddFails_StillLinksLocally()
-    {
-        // Arrange
-        var project = await CreateTestProject();
-        var pr = await CreateTestPullRequest(project.Id, "issues/feature/test+hsp-123", 42);
-
-        _mockBeadsDatabaseService
-            .Setup(b => b.AddLabelAsync(project.LocalPath, "hsp-123", "hsp:pr-42"))
-            .ReturnsAsync(false);
-
-        // Act
-        var result = await _service.LinkPullRequestToIssueAsync(project.Id, pr.Id, "hsp-123", 42);
-
-        // Assert - should still succeed locally even if label add fails
-        Assert.That(result, Is.True);
-
-        var updatedPr = _dataStore.GetPullRequest(pr.Id);
-        Assert.That(updatedPr!.BeadsIssueId, Is.EqualTo("hsp-123"));
     }
 
     #endregion
@@ -158,10 +129,6 @@ public class IssuePrLinkingServiceTests
         // Arrange
         var project = await CreateTestProject();
         var pr = await CreateTestPullRequest(project.Id, "issues/feature/test+hsp-123", 42);
-
-        _mockBeadsDatabaseService
-            .Setup(b => b.AddLabelAsync(project.LocalPath, "hsp-123", "hsp:pr-42"))
-            .ReturnsAsync(true);
 
         // Act
         var result = await _service.TryLinkByBranchNameAsync(project.Id, pr.Id);
@@ -204,7 +171,7 @@ public class IssuePrLinkingServiceTests
 
         // Assert
         Assert.That(result, Is.EqualTo("hsp-123"));
-        _mockBeadsDatabaseService.Verify(b => b.AddLabelAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+        _mockFleeceService.Verify(f => f.UpdateIssueAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<IssueStatus?>(), It.IsAny<IssueType?>(), It.IsAny<string?>(), It.IsAny<int?>(), default), Times.Never);
     }
 
     [Test]
@@ -217,7 +184,7 @@ public class IssuePrLinkingServiceTests
         // Act
         var result = await _service.TryLinkByBranchNameAsync(project.Id, pr.Id);
 
-        // Assert - can't link without a PR number for the label
+        // Assert - can't link without a PR number for the LinkedPR
         Assert.That(result, Is.Null);
     }
 
@@ -248,16 +215,16 @@ public class IssuePrLinkingServiceTests
         pr.BeadsIssueId = "hsp-123";
         await _dataStore.UpdatePullRequestAsync(pr);
 
-        _mockBeadsDatabaseService
-            .Setup(b => b.CloseIssueAsync(project.LocalPath, "hsp-123", It.IsAny<string>()))
-            .ReturnsAsync(true);
+        _mockFleeceService
+            .Setup(f => f.UpdateIssueAsync(project.LocalPath, "hsp-123", null, IssueStatus.Closed, null, null, null, default))
+            .ReturnsAsync(new Issue { Id = "hsp-123", Title = "Test Issue", Status = IssueStatus.Closed, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow });
 
         // Act
         var result = await _service.CloseLinkedIssueAsync(project.Id, pr.Id, "PR #42 merged");
 
         // Assert
         Assert.That(result, Is.True);
-        _mockBeadsDatabaseService.Verify(b => b.CloseIssueAsync(project.LocalPath, "hsp-123", "PR #42 merged"), Times.Once);
+        _mockFleeceService.Verify(f => f.UpdateIssueAsync(project.LocalPath, "hsp-123", null, IssueStatus.Closed, null, null, null, default), Times.Once);
     }
 
     [Test]
@@ -272,7 +239,7 @@ public class IssuePrLinkingServiceTests
 
         // Assert
         Assert.That(result, Is.False);
-        _mockBeadsDatabaseService.Verify(b => b.CloseIssueAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+        _mockFleeceService.Verify(f => f.UpdateIssueAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<IssueStatus?>(), It.IsAny<IssueType?>(), It.IsAny<string?>(), It.IsAny<int?>(), default), Times.Never);
     }
 
     [Test]
