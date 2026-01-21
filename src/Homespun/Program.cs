@@ -1,8 +1,8 @@
-using Homespun.Features.Beads.Services;
 using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.ClaudeCode.Hubs;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Commands;
+using Homespun.Features.Fleece.Services;
 using Homespun.Features.Git;
 using Homespun.Features.GitHub;
 using Homespun.Features.Gitgraph.Services;
@@ -60,17 +60,9 @@ builder.Services.AddSingleton<IGitHubClientWrapper, GitHubClientWrapper>();
 builder.Services.AddScoped<IGitHubService, GitHubService>();
 builder.Services.AddScoped<PullRequestWorkflowService>();
 
-// Beads services (CLI-based - kept as fallback)
-builder.Services.AddScoped<IBeadsService, BeadsService>();
-builder.Services.AddScoped<IBeadsInitializer, BeadsInitializer>();
-builder.Services.AddScoped<IBeadsIssueTransitionService, BeadsIssueTransitionService>();
-
-// Beads direct database access services (high-performance)
-builder.Services.Configure<BeadsDatabaseOptions>(
-    builder.Configuration.GetSection(BeadsDatabaseOptions.SectionName));
-builder.Services.AddSingleton<IBeadsQueueService, BeadsQueueService>();
-builder.Services.AddSingleton<IBeadsDatabaseService, BeadsDatabaseService>();
-builder.Services.AddHostedService<BeadsQueueProcessorService>();
+// Fleece services (file-based issue tracking)
+builder.Services.AddSingleton<IFleeceService, FleeceService>();
+builder.Services.AddScoped<IFleeceIssueTransitionService, FleeceIssueTransitionService>();
 
 // Gitgraph services
 builder.Services.AddScoped<IGraphService, GraphService>();

@@ -1,11 +1,10 @@
 @page "/projects/{Id}"
 @implements IDisposable
-@using Homespun.Features.Beads
-@using Homespun.Features.Beads.Data
-@using Homespun.Features.Beads.Services
+@using Fleece.Core.Models
 @using Homespun.Features.ClaudeCode.Data
 @using Homespun.Features.ClaudeCode.Services
 @using Homespun.Features.Commands
+@using Homespun.Features.Fleece.Services
 @using Homespun.Features.Git
 @using Homespun.Features.GitHub
 @using Homespun.Features.Projects
@@ -16,8 +15,7 @@
 @inject ProjectService ProjectService
 @inject PullRequestDataService PullRequestDataService
 @inject PullRequestWorkflowService PullRequestWorkflowService
-@inject IBeadsService BeadsService
-@inject IDataStore DataStore
+@inject IFleeceService FleeceService
 @inject IGitHubService GitHubService
 @inject IGitWorktreeService GitWorktreeService
 @inject ICommandRunner CommandRunner
@@ -55,7 +53,7 @@ else
                 @ref="_graphVisualization"
                 ProjectId="@Id"
                 OnPullRequestClick="@SelectPullRequestByNumber"
-                OnIssueClick="@SelectBeadsIssue"
+                OnIssueClick="@SelectIssue"
                 SelectedNodeId="@GetSelectedNodeId()" />
         </div>
 
@@ -66,13 +64,12 @@ else
                                                OnActionCompleted="RefreshData"
                                                OnClose="ClearSelection"/>
             }
-            else if (_selectedBeadsIssue != null)
+            else if (_selectedIssue != null)
             {
-                <BeadsIssueDetailPanel ProjectId="@Id"
-                                       Issue="_selectedBeadsIssue.Issue"
-                                       Metadata="_selectedBeadsIssue.Metadata"
-                                       OnActionCompleted="RefreshData"
-                                       OnClose="ClearSelection"/>
+                <IssueDetailPanel ProjectId="@Id"
+                                  Issue="_selectedIssue"
+                                  OnActionCompleted="RefreshData"
+                                  OnClose="ClearSelection"/>
             }
             else
             {
@@ -159,7 +156,6 @@ else
 
     <QuickIssueCreateBar ProjectId="@Id"
                          LocalPath="@_project.LocalPath"
-                         ExistingGroups="_existingGroups"
                          OnIssueCreated="RefreshData"/>
 }
 
@@ -386,16 +382,15 @@ else
     private List<FlattenedPR> _flattenedCurrentPRs = [];
     private PullRequest? _selectedPullRequest;
     private string? _selectedPullRequestId;
-    private BeadsIssueWithMetadata? _selectedBeadsIssue;
-    private string? _selectedBeadsIssueId;
+    private Issue? _selectedIssue;
+    private string? _selectedIssueId;
     private bool _isSyncingPRs;
     private bool _tokenMissing;
     private string? _syncError;
     private SyncResult? _lastSyncResult;
     private List<PullRequestWithTime>? _pastPRs;
-    private List<BeadsIssueWithMetadata>? _openIssues;
-    private List<BeadsIssueWithMetadata>? _inProgressIssues;
-    private List<string> _existingGroups = [];
+    private List<Issue>? _openIssues;
+    private List<Issue>? _inProgressIssues;
     private GitgraphVisualization? _graphVisualization;
     private HubConnection? _hubConnection;
     private bool _isRefreshing;
@@ -488,42 +483,22 @@ else
 
             try
             {
-                // Load beads issues from the CLI
-                var allIssues = await BeadsService.ListIssuesAsync(_project.LocalPath);
+                // Load all issues from Fleece
+                var allIssues = await FleeceService.ListIssuesAsync(_project.LocalPath);
 
-                // Load local metadata for matching
-                var metadataList = DataStore.GetBeadsIssueMetadataByProject(Id);
-                var metadataLookup = metadataList.ToDictionary(m => m.IssueId);
-
-                // Convert to BeadsIssueWithMetadata
-                var issuesWithMeta = allIssues.Select((issue, index) => new BeadsIssueWithMetadata
-                {
-                    Issue = issue,
-                    Metadata = metadataLookup.GetValueOrDefault(issue.Id),
-                    Time = index,
-                    Depth = 0 // Flat for now; could calculate from dependencies
-                }).ToList();
-
-                // Separate in-progress issues (InProgress, Blocked with awaiting-pr label) from open issues
-                // Filter out issues that have a hsp:pr-* label (they are linked to a PR and shown there instead)
-                _inProgressIssues = issuesWithMeta
-                    .Where(i => i.Issue.Status == BeadsIssueStatus.InProgress ||
-                                (i.Issue.Status == BeadsIssueStatus.Blocked && i.Issue.Labels.Contains("awaiting-pr")))
-                    .Where(i => !BranchNameParser.HasPrLabel(i.Issue.Labels))
-                    .ToList();
-                _openIssues = issuesWithMeta
-                    .Where(i => i.Issue.Status == BeadsIssueStatus.Open)
+                // Get open issues
+                _openIssues = allIssues
+                    .Where(i => i.Status == IssueStatus.Open)
                     .ToList();
 
-                // Extract unique groups for the quick create bar
-                _existingGroups = BeadsBranchLabel.ExtractUniqueGroups(allIssues.Select(i => i.Labels));
+                // In-progress issues could be tracked separately if needed
+                _inProgressIssues = [];
             }
             catch (Exception ex)
             {
-                Logger.LogWarning(ex, "Failed to load beads issues for project {ProjectId}", Id);
+                Logger.LogWarning(ex, "Failed to load issues for project {ProjectId}", Id);
                 _openIssues = [];
                 _inProgressIssues = [];
-                _existingGroups = [];
             }
         }
     }
@@ -647,30 +622,30 @@ else
 
     private async Task SelectPullRequest(string pullRequestId)
     {
-        // Clear any beads issue selection
-        _selectedBeadsIssueId = null;
-        _selectedBeadsIssue = null;
+        // Clear any issue selection
+        _selectedIssueId = null;
+        _selectedIssue = null;
 
         _selectedPullRequestId = pullRequestId;
         _selectedPullRequest = await PullRequestDataService.GetByIdAsync(pullRequestId);
     }
 
-    private void SelectBeadsIssue(string issueId)
+    private void SelectIssue(string issueId)
     {
         // Clear any pull request selection
         _selectedPullRequestId = null;
         _selectedPullRequest = null;
 
-        _selectedBeadsIssueId = issueId;
-        _selectedBeadsIssue = _openIssues?.FirstOrDefault(i => i.Issue.Id == issueId)
-                              ?? _inProgressIssues?.FirstOrDefault(i => i.Issue.Id == issueId);
+        _selectedIssueId = issueId;
+        _selectedIssue = _openIssues?.FirstOrDefault(i => i.Id == issueId)
+                         ?? _inProgressIssues?.FirstOrDefault(i => i.Id == issueId);
     }
 
     private async Task SelectPullRequestByNumber(int prNumber)
     {
-        // Clear any beads issue selection
-        _selectedBeadsIssueId = null;
-        _selectedBeadsIssue = null;
+        // Clear any issue selection
+        _selectedIssueId = null;
+        _selectedIssue = null;
 
         // Find the PR in current PRs (internal database)
         var currentPr = _flattenedCurrentPRs.FirstOrDefault(p => p.PullRequest.GitHubPRNumber == prNumber);
@@ -694,9 +669,9 @@ else
             return $"pr-{_selectedPullRequest.GitHubPRNumber}";
         }
 
-        if (_selectedBeadsIssueId != null)
+        if (_selectedIssueId != null)
         {
-            return $"issue-{_selectedBeadsIssueId}";
+            return $"issue-{_selectedIssueId}";
         }
 
         return null;
@@ -706,8 +681,8 @@ else
     {
         _selectedPullRequestId = null;
         _selectedPullRequest = null;
-        _selectedBeadsIssueId = null;
-        _selectedBeadsIssue = null;
+        _selectedIssueId = null;
+        _selectedIssue = null;
     }
 
     private int GetTotalCurrentPRCount()
@@ -736,32 +711,25 @@ else
         _ => "status-default"
     };
 
-    private static string GetBeadsIssueTypeStatusColor(BeadsIssueType type) => type switch
+    private static string GetIssueTypeStatusColor(IssueType type) => type switch
     {
-        BeadsIssueType.Feature => "status-feature",
-        BeadsIssueType.Bug => "status-bug",
-        BeadsIssueType.Chore => "status-chore",
-        BeadsIssueType.Task => "status-task",
-        BeadsIssueType.Epic => "status-epic",
+        IssueType.Feature => "status-feature",
+        IssueType.Bug => "status-bug",
+        IssueType.Chore => "status-chore",
+        IssueType.Task => "status-task",
+        IssueType.Idea => "status-idea",
         _ => "status-default"
     };
 
-    private static string GetBeadsIssueStatusColor(BeadsIssue issue)
+    private static string GetIssueStatusColor(Issue issue)
     {
-        // If in progress or awaiting PR, show working status; otherwise show type-based color
-        if (issue.Status == BeadsIssueStatus.InProgress)
-            return "status-in-development";
-        if (issue.Status == BeadsIssueStatus.Blocked && issue.Labels.Contains("awaiting-pr"))
-            return "status-ready-for-review";
-        if (issue.Status == BeadsIssueStatus.Closed)
+        if (issue.Status == IssueStatus.Closed || issue.Status == IssueStatus.Complete)
             return "status-approved";
-        return GetBeadsIssueTypeStatusColor(issue.Type);
+        return GetIssueTypeStatusColor(issue.Type);
     }
 
-    private static string GetBeadsIssueStatusTooltip(BeadsIssue issue)
+    private static string GetIssueStatusTooltip(Issue issue)
     {
-        if (issue.Status == BeadsIssueStatus.Blocked && issue.Labels.Contains("awaiting-pr"))
-            return $"{issue.Type} (Awaiting PR)";
         return $"{issue.Type} ({issue.Status})";
     }
 
@@ -790,25 +758,18 @@ else
         return parts.Count > 0 ? string.Join(" - ", parts) : null;
     }
 
-    private static string? GetBeadsIssueSubtitle(BeadsIssueWithMetadata issueWithMeta)
+    private static string? GetIssueSubtitle(Issue issue)
     {
-        var parts = new List<string>();
-
-        // Parse group from hsp: label
-        var branchInfo = BeadsBranchLabel.Parse(issueWithMeta.Issue.Labels);
-        if (branchInfo != null)
-            parts.Add(branchInfo.Value.Group);
-
-        if (!string.IsNullOrEmpty(issueWithMeta.Issue.Description))
+        if (!string.IsNullOrEmpty(issue.Description))
         {
             // Truncate description for subtitle display
-            var desc = issueWithMeta.Issue.Description;
+            var desc = issue.Description;
             if (desc.Length > 60)
                 desc = desc[..57] + "...";
-            parts.Add(desc);
+            return desc;
         }
 
-        return parts.Count > 0 ? string.Join(" - ", parts) : null;
+        return null;
     }
 
     private AgentStartupStatus? GetStartupState(string entityId)

@@ -1,5 +1,3 @@
-using Homespun.Features.Beads.Data;
-
 namespace Homespun.Features.PullRequests.Data;
 
 /// <summary>
@@ -67,40 +65,6 @@ public interface IDataStore
     /// Gets pull requests for a specific project.
     /// </summary>
     IReadOnlyList<Entities.PullRequest> GetPullRequestsByProject(string projectId);
-    
-    #endregion
-    
-    #region Beads Issue Metadata
-    
-    /// <summary>
-    /// Gets all beads issue metadata.
-    /// </summary>
-    IReadOnlyList<BeadsIssueMetadata> BeadsIssueMetadata { get; }
-    
-    /// <summary>
-    /// Adds beads issue metadata to the store.
-    /// </summary>
-    Task AddBeadsIssueMetadataAsync(BeadsIssueMetadata metadata);
-    
-    /// <summary>
-    /// Updates beads issue metadata in the store.
-    /// </summary>
-    Task UpdateBeadsIssueMetadataAsync(BeadsIssueMetadata metadata);
-    
-    /// <summary>
-    /// Removes beads issue metadata from the store.
-    /// </summary>
-    Task RemoveBeadsIssueMetadataAsync(string issueId);
-    
-    /// <summary>
-    /// Gets beads issue metadata by issue ID.
-    /// </summary>
-    BeadsIssueMetadata? GetBeadsIssueMetadata(string issueId);
-    
-    /// <summary>
-    /// Gets beads issue metadata for a specific project.
-    /// </summary>
-    IReadOnlyList<BeadsIssueMetadata> GetBeadsIssueMetadataByProject(string projectId);
     
     #endregion
 

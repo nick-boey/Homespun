@@ -1,4 +1,3 @@
-using Homespun.Features.Beads.Services;
 using Homespun.Features.Commands;
 using Homespun.Features.GitHub;
 using Homespun.Features.Projects;
@@ -15,7 +14,6 @@ public class ProjectServiceTests
     private TestDataStore _dataStore = null!;
     private Mock<IGitHubService> _mockGitHubService = null!;
     private Mock<ICommandRunner> _mockCommandRunner = null!;
-    private Mock<IBeadsInitializer> _mockBeadsInitializer = null!;
     private Mock<IConfiguration> _mockConfiguration = null!;
     private Mock<ILogger<ProjectService>> _mockLogger = null!;
     private ProjectService _service = null!;
@@ -26,24 +24,16 @@ public class ProjectServiceTests
         _dataStore = new TestDataStore();
         _mockGitHubService = new Mock<IGitHubService>();
         _mockCommandRunner = new Mock<ICommandRunner>();
-        _mockBeadsInitializer = new Mock<IBeadsInitializer>();
         _mockConfiguration = new Mock<IConfiguration>();
         _mockLogger = new Mock<ILogger<ProjectService>>();
-        
-        // Default beads initializer behavior - not initialized, successful init
-        _mockBeadsInitializer.Setup(b => b.IsInitializedAsync(It.IsAny<string>()))
-            .ReturnsAsync(false);
-        _mockBeadsInitializer.Setup(b => b.InitializeAsync(It.IsAny<string>(), It.IsAny<string>()))
-            .ReturnsAsync(true);
-        
+
         // Default configuration - no overrides, use default paths
         _mockConfiguration.Setup(c => c[It.IsAny<string>()]).Returns((string?)null);
 
         _service = new ProjectService(
-            _dataStore, 
-            _mockGitHubService.Object, 
-            _mockCommandRunner.Object, 
-            _mockBeadsInitializer.Object,
+            _dataStore,
+            _mockGitHubService.Object,
+            _mockCommandRunner.Object,
             _mockConfiguration.Object,
             _mockLogger.Object);
     }

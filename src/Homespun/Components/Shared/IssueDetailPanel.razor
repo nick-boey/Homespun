@@ -1,8 +1,7 @@
-@using Homespun.Features.Beads
-@using Homespun.Features.Beads.Data
-@using Homespun.Features.Beads.Services
+@using Fleece.Core.Models
 @using Homespun.Features.ClaudeCode.Data
 @using Homespun.Features.ClaudeCode.Services
+@using Homespun.Features.Fleece.Services
 @using Homespun.Features.Git
 @using Homespun.Features.Projects
 @using Homespun.Features.PullRequests.Data.Entities
@@ -10,13 +9,13 @@
 @inject IClaudeSessionStore SessionStore
 @inject IClaudeSessionService SessionService
 @inject IAgentStartupTracker StartupTracker
-@inject IBeadsDatabaseService BeadsDatabaseService
+@inject IFleeceService FleeceService
 @inject IGitWorktreeService GitWorktreeService
 @inject ProjectService ProjectService
 @inject NavigationManager NavigationManager
-@inject ILogger<BeadsIssueDetailPanel> Logger
+@inject ILogger<IssueDetailPanel> Logger
 
-<div class="card beads-issue-detail-panel">
+<div class="card issue-detail-panel">
     <div class="card-header d-flex justify-content-between align-items-center">
         <span>Issue Details</span>
         <div class="d-flex gap-1">
@@ -65,62 +64,20 @@
             }
 
             <dl class="row small">
-                @if (Metadata != null && !string.IsNullOrEmpty(Metadata.BranchName))
-                {
-                    <dt class="col-4">Branch</dt>
-                    <dd class="col-8"><code>@Metadata.BranchName</code></dd>
-                }
-                else if (_branchInfo != null)
-                {
-                    <dt class="col-4">Branch Preview</dt>
-                    <dd class="col-8"><code>@GetBranchPreview()</code></dd>
-                }
+                <dt class="col-4">Branch Preview</dt>
+                <dd class="col-8"><code>@GetBranchPreview()</code></dd>
 
-                @if (_branchInfo != null)
+                @if (Issue.ParentIssues.Count > 0)
                 {
-                    <dt class="col-4">Group</dt>
-                    <dd class="col-8">@_branchInfo.Value.Group</dd>
-
-                    <dt class="col-4">Branch ID</dt>
-                    <dd class="col-8">@_branchInfo.Value.BranchId</dd>
-                }
-
-                @if (Issue.Labels.Count > 0)
-                {
-                    <dt class="col-4">Labels</dt>
+                    <dt class="col-4">Parent Issues</dt>
                     <dd class="col-8">
-                        @foreach (var label in Issue.Labels.Where(l => !BeadsBranchLabel.IsHomespunLabel(l)))
+                        @foreach (var parentId in Issue.ParentIssues)
                         {
-                            <span class="badge bg-light text-dark me-1">@label</span>
-                        }
-                        @if (_branchInfo != null)
-                        {
-                            <span class="badge bg-info text-dark me-1" title="Homespun branch label">@GetHspLabel()</span>
+                            <code class="me-1">@parentId</code>
                         }
                     </dd>
                 }
-
-                @if (!string.IsNullOrEmpty(Issue.ParentId))
-                {
-                    <dt class="col-4">Parent</dt>
-                    <dd class="col-8"><code>@Issue.ParentId</code></dd>
-                }
-
-                @if (!string.IsNullOrEmpty(Issue.Assignee))
-                {
-                    <dt class="col-4">Assignee</dt>
-                    <dd class="col-8">@Issue.Assignee</dd>
-                }
             </dl>
-
-            @* Warning if no hsp: label *@
-            @if (_branchInfo == null)
-            {
-                <div class="alert alert-warning py-2 small">
-                    <strong>Missing branch label:</strong> This issue needs an <code>hsp:</code> label to start development.
-                    <a href="projects/@ProjectId/issues/@Issue.Id/edit" class="btn btn-sm btn-link p-0 ms-1">Add one now</a>
-                </div>
-            }
 
             @* Session Status Display *@
             @if (_session != null)
@@ -146,11 +103,11 @@
             }
         </div>
         <div class="card-footer">
-            @if (_branchInfo != null && _session == null && !StartupTracker.IsStarting(Issue.Id))
+            @if (_session == null && !StartupTracker.IsStarting(Issue.Id))
             {
                 <div class="mb-2">
                     <label class="form-label small mb-1">Model</label>
-                    <ModelSelector Id="@($"beads-model-{Issue.Id}")"
+                    <ModelSelector Id="@($"issue-model-{Issue.Id}")"
                                    SelectedModel="@_selectedModel"
                                    SelectedModelChanged="@(m => _selectedModel = m)" />
                 </div>
@@ -177,7 +134,7 @@
                         Stop Session
                     </button>
                 }
-                else if (Issue.Status == BeadsIssueStatus.Open && _branchInfo != null)
+                else if (Issue.Status == IssueStatus.Open)
                 {
                     <button class="btn btn-sm btn-outline-primary" @onclick="StartPlanning" title="Start a read-only planning session">
                         Start Planning
@@ -186,22 +143,8 @@
                         Start Building
                     </button>
                 }
-                else if (Issue.Status == BeadsIssueStatus.Open && _branchInfo == null)
-                {
-                    <button class="btn btn-sm btn-secondary" disabled title="Add an hsp: label to enable development">
-                        Start Development
-                    </button>
-                }
-                else if ((Issue.Status == BeadsIssueStatus.InProgress ||
-                         (Issue.Status == BeadsIssueStatus.Blocked && Issue.Labels.Contains("awaiting-pr")))
-                         && _session == null && _branchInfo != null)
-                {
-                    <button class="btn btn-sm btn-success" @onclick="StartBuilding">
-                        Resume Building
-                    </button>
-                }
 
-                @if (Issue.Status == BeadsIssueStatus.Open || Issue.Status == BeadsIssueStatus.InProgress || Issue.Status == BeadsIssueStatus.Blocked || Issue.Status == BeadsIssueStatus.Deferred)
+                @if (Issue.Status == IssueStatus.Open)
                 {
                     <button class="btn btn-sm btn-outline-primary" @onclick="CloseIssue" disabled="@_isLoading" title="Mark issue as completed">
                         Close Issue
@@ -231,7 +174,7 @@
                         </div>
                         <div class="modal-body">
                             <p>Are you sure you want to delete issue <strong>@Issue.Id</strong>?</p>
-                            <p class="mb-0">This action will mark the issue as tombstone and cannot be undone.</p>
+                            <p class="mb-0">This action cannot be undone.</p>
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" @onclick="HideDeleteConfirmation">Cancel</button>
@@ -265,9 +208,7 @@
 @code {
     [Parameter] public required string ProjectId { get; set; }
 
-    [Parameter] public required BeadsIssue Issue { get; set; }
-
-    [Parameter] public BeadsIssueMetadata? Metadata { get; set; }
+    [Parameter] public required Issue Issue { get; set; }
 
     [Parameter] public EventCallback OnActionCompleted { get; set; }
 
@@ -277,7 +218,6 @@
     private bool _showDeleteConfirmation;
     private string? _errorMessage;
     private ClaudeSession? _session;
-    private (string Group, string BranchId)? _branchInfo;
     private Project? _project;
     private string _selectedModel = "sonnet";
 
@@ -298,9 +238,6 @@
         _session = null;
         _errorMessage = null;
 
-        // Parse group and branch ID from hsp: label
-        _branchInfo = BeadsBranchLabel.Parse(Issue.Labels);
-
         // Check for existing session
         _session = SessionStore.GetByEntityId(Issue.Id);
     }
@@ -312,14 +249,24 @@
 
     private string GetBranchPreview()
     {
-        if (_branchInfo == null) return "";
-        return $"{_branchInfo.Value.Group}/{Issue.Type.ToString().ToLowerInvariant()}/{_branchInfo.Value.BranchId}+{Issue.Id}";
+        return $"issues/{Issue.Type.ToString().ToLowerInvariant()}/{SanitizeForBranch(Issue.Title)}+{Issue.Id}";
     }
 
-    private string GetHspLabel()
+    private static string SanitizeForBranch(string input)
     {
-        if (_branchInfo == null) return "";
-        return BeadsBranchLabel.Create(_branchInfo.Value.Group, _branchInfo.Value.BranchId);
+        // Convert to lowercase, replace spaces with hyphens, remove special chars
+        var sanitized = input.ToLowerInvariant()
+            .Replace(" ", "-")
+            .Replace("_", "-");
+
+        // Remove any character that isn't alphanumeric or hyphen
+        sanitized = System.Text.RegularExpressions.Regex.Replace(sanitized, "[^a-z0-9-]", "");
+
+        // Remove consecutive hyphens
+        sanitized = System.Text.RegularExpressions.Regex.Replace(sanitized, "-+", "-");
+
+        // Trim hyphens from start and end
+        return sanitized.Trim('-');
     }
 
     private async Task StartPlanning()
@@ -337,12 +284,6 @@
         if (_project == null)
         {
             _errorMessage = "Project not available.";
-            return;
-        }
-
-        if (_branchInfo == null)
-        {
-            _errorMessage = "Issue must have branch information (hsp: label) before starting an agent.";
             return;
         }
 
@@ -406,11 +347,8 @@
             sb.AppendLine(Issue.Description);
         }
 
-        if (_branchInfo != null)
-        {
-            sb.AppendLine();
-            sb.AppendLine($"Branch: {GetBranchPreview()}");
-        }
+        sb.AppendLine();
+        sb.AppendLine($"Branch: {GetBranchPreview()}");
 
         return sb.ToString();
     }
@@ -450,9 +388,9 @@
 
         try
         {
-            var success = await BeadsDatabaseService.CloseIssueAsync(_project?.LocalPath, Issue.Id);
+            var updated = await FleeceService.UpdateIssueAsync(_project.LocalPath, Issue.Id, status: IssueStatus.Closed);
 
-            if (!success)
+            if (updated == null)
             {
                 _errorMessage = "Failed to close issue.";
                 return;
@@ -492,7 +430,7 @@
 
         try
         {
-            var success = await BeadsDatabaseService.DeleteIssueAsync(_project?.LocalPath, Issue.Id);
+            var success = await FleeceService.DeleteIssueAsync(_project.LocalPath, Issue.Id);
 
             if (!success)
             {
@@ -515,30 +453,25 @@
         }
     }
 
-    private string GetStatusDisplay()
-    {
-        if (Issue.Status == BeadsIssueStatus.Blocked && Issue.Labels.Contains("awaiting-pr"))
-            return "Awaiting PR";
-        return Issue.Status.ToString();
-    }
+    private string GetStatusDisplay() => Issue.Status.ToString();
 
     private string GetTypeBadgeClass() => Issue.Type switch
     {
-        BeadsIssueType.Feature => "bg-primary",
-        BeadsIssueType.Bug => "bg-danger",
-        BeadsIssueType.Task => "bg-info",
-        BeadsIssueType.Epic => "bg-purple",
-        BeadsIssueType.Chore => "bg-dark",
+        IssueType.Feature => "bg-primary",
+        IssueType.Bug => "bg-danger",
+        IssueType.Task => "bg-info",
+        IssueType.Idea => "bg-purple",
+        IssueType.Chore => "bg-dark",
         _ => "bg-secondary"
     };
 
     private string GetStatusBadgeClass() => Issue.Status switch
     {
-        BeadsIssueStatus.Open => "bg-secondary",
-        BeadsIssueStatus.InProgress => "bg-primary",
-        BeadsIssueStatus.Blocked => Issue.Labels.Contains("awaiting-pr") ? "bg-info" : "bg-warning text-dark",
-        BeadsIssueStatus.Closed => "bg-success",
-        BeadsIssueStatus.Deferred => "bg-light text-dark",
+        IssueStatus.Open => "bg-secondary",
+        IssueStatus.Complete => "bg-primary",
+        IssueStatus.Closed => "bg-success",
+        IssueStatus.Archived => "bg-light text-dark",
+        IssueStatus.Deleted => "bg-danger",
         _ => "bg-secondary"
     };
 

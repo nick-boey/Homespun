@@ -1,5 +1,4 @@
 using System.Text.Json;
-using Homespun.Features.Beads.Data;
 using Homespun.Features.PullRequests.Data.Entities;
 
 namespace Homespun.Features.PullRequests.Data;
@@ -46,18 +45,6 @@ public class JsonDataStore : IDataStore
         _data.PullRequests.Where(pr => pr.ProjectId == projectId).ToList().AsReadOnly();
     
     #endregion
-    
-    #region Beads Issue Metadata
-    
-    public IReadOnlyList<BeadsIssueMetadata> BeadsIssueMetadata => _data.BeadsIssueMetadata.AsReadOnly();
-    
-    public BeadsIssueMetadata? GetBeadsIssueMetadata(string issueId) => 
-        _data.BeadsIssueMetadata.FirstOrDefault(m => m.IssueId == issueId);
-    
-    public IReadOnlyList<BeadsIssueMetadata> GetBeadsIssueMetadataByProject(string projectId) =>
-        _data.BeadsIssueMetadata.Where(m => m.ProjectId == projectId).ToList().AsReadOnly();
-    
-    #endregion
 
     public async Task AddProjectAsync(Project project)
     {
@@ -97,9 +84,8 @@ public class JsonDataStore : IDataStore
         try
         {
             _data.Projects.RemoveAll(p => p.Id == projectId);
-            // Also remove associated pull requests and beads issue metadata
+            // Also remove associated pull requests
             _data.PullRequests.RemoveAll(pr => pr.ProjectId == projectId);
-            _data.BeadsIssueMetadata.RemoveAll(m => m.ProjectId == projectId);
             await SaveInternalAsync();
         }
         finally
@@ -153,63 +139,6 @@ public class JsonDataStore : IDataStore
             _lock.Release();
         }
     }
-    
-    #region Beads Issue Metadata Operations
-    
-    public async Task AddBeadsIssueMetadataAsync(BeadsIssueMetadata metadata)
-    {
-        await _lock.WaitAsync();
-        try
-        {
-            _data.BeadsIssueMetadata.Add(metadata);
-            await SaveInternalAsync();
-        }
-        finally
-        {
-            _lock.Release();
-        }
-    }
-    
-    public async Task UpdateBeadsIssueMetadataAsync(BeadsIssueMetadata metadata)
-    {
-        await _lock.WaitAsync();
-        try
-        {
-            var index = _data.BeadsIssueMetadata.FindIndex(m => m.IssueId == metadata.IssueId);
-            if (index >= 0)
-            {
-                metadata.UpdatedAt = DateTime.UtcNow;
-                _data.BeadsIssueMetadata[index] = metadata;
-                await SaveInternalAsync();
-            }
-            else
-            {
-                // If not found, add it
-                _data.BeadsIssueMetadata.Add(metadata);
-                await SaveInternalAsync();
-            }
-        }
-        finally
-        {
-            _lock.Release();
-        }
-    }
-    
-    public async Task RemoveBeadsIssueMetadataAsync(string issueId)
-    {
-        await _lock.WaitAsync();
-        try
-        {
-            _data.BeadsIssueMetadata.RemoveAll(m => m.IssueId == issueId);
-            await SaveInternalAsync();
-        }
-        finally
-        {
-            _lock.Release();
-        }
-    }
-    
-    #endregion
 
     #region Favorite Models
 
@@ -271,8 +200,8 @@ public class JsonDataStore : IDataStore
             {
                 var json = File.ReadAllText(_filePath);
                 _data = JsonSerializer.Deserialize<StoreData>(json, JsonOptions) ?? new StoreData();
-                _logger.LogInformation("Loaded data store from {FilePath}: {ProjectCount} projects, {PullRequestCount} pull requests, {MetadataCount} beads metadata",
-                    _filePath, _data.Projects.Count, _data.PullRequests.Count, _data.BeadsIssueMetadata.Count);
+                _logger.LogInformation("Loaded data store from {FilePath}: {ProjectCount} projects, {PullRequestCount} pull requests",
+                    _filePath, _data.Projects.Count, _data.PullRequests.Count);
             }
             else
             {
@@ -315,7 +244,6 @@ public class JsonDataStore : IDataStore
     {
         public List<Project> Projects { get; set; } = [];
         public List<PullRequest> PullRequests { get; set; } = [];
-        public List<BeadsIssueMetadata> BeadsIssueMetadata { get; set; } = [];
         public List<string> FavoriteModels { get; set; } = [];
     }
 }

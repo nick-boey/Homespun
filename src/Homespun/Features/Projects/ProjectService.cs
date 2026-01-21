@@ -1,4 +1,3 @@
-using Homespun.Features.Beads.Services;
 using Homespun.Features.Commands;
 using Homespun.Features.GitHub;
 using Homespun.Features.PullRequests.Data;
@@ -23,7 +22,6 @@ public class ProjectService(
     IDataStore dataStore,
     IGitHubService gitHubService,
     ICommandRunner commandRunner,
-    IBeadsInitializer beadsInitializer,
     IConfiguration configuration,
     ILogger<ProjectService> logger)
 {
@@ -68,17 +66,10 @@ public class ProjectService(
         return Task.FromResult(projects);
     }
 
-    public async Task<Project?> GetByIdAsync(string id)
+    public Task<Project?> GetByIdAsync(string id)
     {
         var project = dataStore.GetProject(id);
-        
-        if (project != null)
-        {
-            // Initialize beads if not already initialized
-            await InitializeBeadsIfNeededAsync(project);
-        }
-        
-        return project;
+        return Task.FromResult(project);
     }
 
     /// <summary>
@@ -152,7 +143,6 @@ public class ProjectService(
             };
 
             await dataStore.AddProjectAsync(project);
-            await InitializeBeadsIfNeededAsync(project);
 
             logger.LogInformation("Created local project {Name} at {LocalPath}", name, localPath);
             return CreateProjectResult.Ok(project);
@@ -259,10 +249,6 @@ public class ProjectService(
             logger.LogInformation("Adding project to data store: {ProjectName} at {LocalPath}", project.Name, project.LocalPath);
             await dataStore.AddProjectAsync(project);
 
-            // Initialize beads for new project
-            logger.LogInformation("Initializing beads for project {ProjectName}", project.Name);
-            await InitializeBeadsIfNeededAsync(project);
-
             logger.LogInformation("Project {ProjectName} created successfully", project.Name);
             return CreateProjectResult.Ok(project);
         }
@@ -270,37 +256,6 @@ public class ProjectService(
         {
             logger.LogError(ex, "Exception during CreateAsync for {OwnerRepo}", ownerRepo);
             return CreateProjectResult.Error($"Failed to create project: {ex.Message}");
-        }
-    }
-    
-    /// <summary>
-    /// Initializes beads for a project if not already initialized.
-    /// Sets up the beads-sync branch for synchronization.
-    /// </summary>
-    private async Task InitializeBeadsIfNeededAsync(Project project)
-    {
-        try
-        {
-            if (!await beadsInitializer.IsInitializedAsync(project.LocalPath))
-            {
-                logger.LogInformation("Initializing beads for project {ProjectName} at {LocalPath}", 
-                    project.Name, project.LocalPath);
-                
-                var success = await beadsInitializer.InitializeAsync(project.LocalPath, syncBranch: "beads-sync");
-                
-                if (success)
-                {
-                    logger.LogInformation("Successfully initialized beads for project {ProjectName}", project.Name);
-                }
-                else
-                {
-                    logger.LogWarning("Failed to initialize beads for project {ProjectName}", project.Name);
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Error initializing beads for project {ProjectName}", project.Name);
         }
     }
 

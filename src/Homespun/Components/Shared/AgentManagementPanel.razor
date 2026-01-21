@@ -1,15 +1,14 @@
-@using Homespun.Features.Beads
-@using Homespun.Features.Beads.Data
-@using Homespun.Features.Beads.Services
+@using Fleece.Core.Models
 @using Homespun.Features.ClaudeCode.Data
 @using Homespun.Features.ClaudeCode.Services
+@using Homespun.Features.Fleece.Services
 @using Homespun.Features.Projects
 @using Homespun.Features.PullRequests.Data
 
 @inject IClaudeSessionStore SessionStore
 @inject ProjectService ProjectService
 @inject PullRequestDataService PullRequestDataService
-@inject IBeadsService BeadsService
+@inject IFleeceService FleeceService
 
 <div class="agent-management-panel">
     @if (_sessions.Count == 0)
@@ -344,20 +343,25 @@
                     continue;
                 }
 
-                // Try as a beads issue - check the project this session belongs to
+                // Try as a Fleece issue - check the project this session belongs to
                 var project = projects.FirstOrDefault(p => p.Id == session.ProjectId);
                 if (project != null)
                 {
                     try
                     {
-                        var issue = await BeadsService.GetIssueAsync(project.LocalPath, session.EntityId);
+                        var issue = await FleeceService.GetIssueAsync(project.LocalPath, session.EntityId);
                         if (issue != null)
                         {
-                            var branchInfo = BeadsBranchLabel.Parse(issue.Labels);
+                            // Build branch name from issue properties
                             string? branchName = null;
-                            if (branchInfo != null)
+                            if (!string.IsNullOrEmpty(issue.Group))
                             {
-                                branchName = $"{branchInfo.Value.Group}/{issue.Type.ToString().ToLowerInvariant()}/{branchInfo.Value.BranchId}+{issue.Id}";
+                                var branchId = issue.Title.ToLowerInvariant()
+                                    .Replace(" ", "-")
+                                    .Replace("_", "-");
+                                branchId = System.Text.RegularExpressions.Regex.Replace(branchId, "[^a-z0-9-]", "");
+                                branchId = System.Text.RegularExpressions.Regex.Replace(branchId, "-+", "-").Trim('-');
+                                branchName = $"{issue.Group}/{issue.Type.ToString().ToLowerInvariant()}/{branchId}+{issue.Id}";
                             }
 
                             _entityInfoCache[session.EntityId] = new EntityInfo

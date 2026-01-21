@@ -32,9 +32,8 @@ The project follows Vertical Slice Architecture, organizing code by feature rath
 ```
 src/Homespun/
 ├── Features/                    # Feature slices (all business logic)
-│   ├── Beads/                   # Beads issue tracking integration
-│   │   ├── Data/                # BeadsIssue, BeadsIssueMetadata entities
-│   │   └── Services/            # BeadsDatabaseService, BeadsQueueService
+│   ├── Fleece/                  # Fleece issue tracking integration
+│   │   └── Services/            # FleeceService, FleeceIssueTransitionService
 │   ├── ClaudeCode/              # Claude Code SDK session management
 │   │   ├── Components/Pages/    # Session.razor chat UI
 │   │   ├── Data/                # ClaudeSession, ClaudeMessage, SessionMode
@@ -57,7 +56,6 @@ src/Homespun/
 
 tests/Homespun.Tests/
 ├── Features/                    # Tests organized by feature (mirrors src structure)
-│   ├── Beads/                   # Beads service tests
 │   ├── ClaudeCode/              # ClaudeCode service and hub tests
 │   ├── Git/                     # Git worktree tests
 │   ├── GitHub/                  # GitHub service tests
@@ -67,7 +65,7 @@ tests/Homespun.Tests/
 
 ### Feature Slices
 
-- **Beads**: Integration with beads issue tracking system - direct SQLite database access for fast reads, queued writes
+- **Fleece**: Integration with Fleece issue tracking - JSONL-based storage in `.fleece/` directory, uses Fleece.Core types directly
 - **ClaudeCode**: Claude Code SDK session management using ClaudeAgentSdk NuGet package - supports Plan (read-only) and Build (full access) modes
 - **Commands**: Shell command execution abstraction
 - **Git**: Git worktree creation, management, and rebase operations
@@ -102,11 +100,9 @@ dotnet test
 
 ## Key Services
 
-### Beads (Features/Beads/)
-- **BeadsDatabaseService**: Direct SQLite access for fast issue reads and writes
-- **BeadsQueueService**: Queued async database operations
-- **BeadsService**: CLI-based beads integration (fallback)
-- **BeadsIssueTransitionService**: Issue status transitions
+### Fleece (Features/Fleece/)
+- **FleeceService**: Project-aware wrapper around Fleece.Core IIssueService for CRUD operations on issues
+- **FleeceIssueTransitionService**: Issue status workflow transitions
 
 ### ClaudeCode (Features/ClaudeCode/)
 - **ClaudeSessionService**: Session lifecycle management using ClaudeAgentSdk
@@ -124,7 +120,7 @@ dotnet test
 ### GitHub (Features/GitHub/)
 - **GitHubService**: GitHub PR synchronization using Octokit
 - **GitHubClientWrapper**: Octokit abstraction for testability
-- **IssuePrLinkingService**: Links beads issues to GitHub PRs
+- **IssuePrLinkingService**: Links Fleece issues to GitHub PRs
 
 ### Notifications (Features/Notifications/)
 - **NotificationService**: Toast notification management
