@@ -1,6 +1,6 @@
 # Homespun Dockerfile
 # Multi-stage build for .NET 10 Blazor Server application
-# Includes: git, gh CLI, and beads (bd) tools
+# Includes: git, gh CLI, and Fleece issue tracking tools
 #
 # Environment Variables (passed at runtime via scripts/run.sh):
 #   GITHUB_TOKEN              - GitHub personal access token for PR operations
@@ -45,7 +45,7 @@ RUN dotnet publish src/Homespun/Homespun.csproj \
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS runtime
 WORKDIR /app
 
-# Install dependencies: git, gh CLI, Node.js (for beads)
+# Install dependencies: git, gh CLI, Node.js (for npm packages)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     curl \
@@ -61,7 +61,7 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | d
     && apt-get install -y gh \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Node.js (LTS) for beads
+# Install Node.js (LTS) for npm packages
 RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
@@ -72,8 +72,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-setuptools \
     && rm -rf /var/lib/apt/lists/*
 
-# Install beads (bd), OpenCode, Claude Code, and Claude Code UI (cloudcli) globally
-RUN npm install -g @beads/bd opencode-ai@latest @anthropic-ai/claude-code @siteboon/claude-code-ui
+# Install OpenCode, Claude Code, and Claude Code UI (cloudcli) globally
+RUN npm install -g opencode-ai@latest @anthropic-ai/claude-code @siteboon/claude-code-ui
+
+# Install Fleece CLI for issue tracking
+# Install as root, then make tools accessible to all users
+RUN dotnet tool install Fleece.Cli -g \
+    && chmod 755 /root \
+    && chmod -R 755 /root/.dotnet
 
 # Clean up build dependencies to reduce image size
 RUN apt-get update && apt-get remove -y build-essential && apt-get autoremove -y \
@@ -126,6 +132,7 @@ ENV ASPNETCORE_ENVIRONMENT=Production
 ENV ASPNETCORE_URLS=http://+:8080
 ENV HOMESPUN_DATA_PATH=/data/homespun-data.json
 ENV DOTNET_PRINT_TELEMETRY_MESSAGE=false
+ENV PATH="${PATH}:/root/.dotnet/tools"
 
 # Expose port
 EXPOSE 8080
