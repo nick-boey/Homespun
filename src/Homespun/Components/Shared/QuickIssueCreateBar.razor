@@ -15,6 +15,14 @@
         </select>
 
         <input type="text"
+               class="quick-input group-input"
+               placeholder="Group (optional)"
+               @bind="_group"
+               @bind:event="oninput"
+               @onkeydown="HandleKeyDown"
+               disabled="@_isSubmitting" />
+
+        <input type="text"
                class="quick-input title-input"
                placeholder="Add an issue..."
                @bind="_title"
@@ -97,6 +105,11 @@
         cursor: pointer;
     }
 
+    .group-input {
+        width: 120px;
+        flex-shrink: 0;
+    }
+
     .title-input {
         flex: 1;
         min-width: 200px;
@@ -144,7 +157,11 @@
         }
 
         .type-select {
-            width: 50%;
+            width: calc(50% - var(--spacing-sm) / 2);
+        }
+
+        .group-input {
+            width: calc(50% - var(--spacing-sm) / 2);
         }
 
         .title-input {
@@ -163,6 +180,7 @@
 
     private IssueType _type = IssueType.Feature;
     private string _title = "";
+    private string _group = "";
     private bool _isSubmitting;
     private string? _errorMessage;
     private ElementReference _titleInput;
@@ -186,15 +204,18 @@
         try
         {
             var title = _title.Trim();
+            var group = string.IsNullOrWhiteSpace(_group) ? null : _group.Trim();
 
             // Create issue via Fleece service
             await FleeceService.CreateIssueAsync(
                 LocalPath,
                 title,
-                _type);
+                _type,
+                group: group);
 
             // Clear inputs for next entry
             _title = "";
+            _group = "";
             _type = IssueType.Feature;
 
             // Notify parent to refresh

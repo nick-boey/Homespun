@@ -111,6 +111,7 @@ public sealed class FleeceService : IFleeceService, IDisposable
         IssueType type,
         string? description = null,
         int? priority = null,
+        string? group = null,
         CancellationToken ct = default)
     {
         var service = GetOrCreateIssueService(projectPath);
@@ -120,6 +121,7 @@ public sealed class FleeceService : IFleeceService, IDisposable
             type: type,
             description: description,
             priority: priority,
+            group: group,
             cancellationToken: ct);
     }
 
