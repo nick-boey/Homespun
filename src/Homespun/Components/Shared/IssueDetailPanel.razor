@@ -322,6 +322,11 @@
 
             StartupTracker.MarkAsStarted(Issue.Id);
 
+            // Send an initial message to start the agent working
+            // This way the prompt is visible in the chat and triggers the agent
+            var initialMessage = GenerateInitialMessage(mode);
+            await SessionService.SendMessageAsync(_session.Id, initialMessage);
+
             // Navigate to the session chat page
             NavigationManager.NavigateTo($"/session/{_session.Id}");
         }
@@ -349,6 +354,42 @@
 
         sb.AppendLine();
         sb.AppendLine($"Branch: {GetBranchPreview()}");
+
+        return sb.ToString();
+    }
+
+    private string GenerateInitialMessage(SessionMode mode)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"## Issue: {Issue.Title}");
+        sb.AppendLine();
+        sb.AppendLine($"**ID:** {Issue.Id}");
+        sb.AppendLine($"**Type:** {Issue.Type}");
+        sb.AppendLine($"**Branch:** {GetBranchPreview()}");
+
+        if (!string.IsNullOrEmpty(Issue.Description))
+        {
+            sb.AppendLine();
+            sb.AppendLine("### Description");
+            sb.AppendLine(Issue.Description);
+        }
+
+        sb.AppendLine();
+        sb.AppendLine("---");
+        sb.AppendLine();
+
+        if (mode == SessionMode.Plan)
+        {
+            sb.AppendLine("Please analyze this issue and create a detailed implementation plan. Consider:");
+            sb.AppendLine("- What files need to be modified or created");
+            sb.AppendLine("- The approach and architecture");
+            sb.AppendLine("- Any potential challenges or risks");
+            sb.AppendLine("- Test requirements");
+        }
+        else
+        {
+            sb.AppendLine("Please implement this issue. Start by understanding the requirements and exploring the codebase, then proceed with the implementation.");
+        }
 
         return sb.ToString();
     }
