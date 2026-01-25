@@ -78,10 +78,7 @@ public class GraphService(
             // Check if there's an active session for this issue
             if (commit.IssueId != null && sessionsByEntityId.TryGetValue(commit.IssueId, out var session))
             {
-                var isActive = session.Status is ClaudeSessionStatus.Starting
-                    or ClaudeSessionStatus.Running
-                    or ClaudeSessionStatus.Processing
-                    or ClaudeSessionStatus.WaitingForInput;
+                var isActive = session.Status.IsActive();
 
                 commit.AgentStatus = new AgentStatusData
                 {

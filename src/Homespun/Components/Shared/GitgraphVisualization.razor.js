@@ -28,7 +28,6 @@ function getAgentStatusLabel(status) {
     switch (status) {
         case 'Starting': return 'Starting';
         case 'Running': return 'Working';
-        case 'Processing': return 'Working';
         case 'WaitingForInput': return 'Waiting';
         case 'Stopped': return 'Stopped';
         case 'Error': return 'Error';
@@ -41,8 +40,7 @@ function getAgentStatusColor(status, isActive) {
     if (!isActive) return '#6b7280'; // Gray for inactive
     switch (status) {
         case 'Starting': return '#f59e0b'; // Amber
-        case 'Running':
-        case 'Processing': return '#10b981'; // Green
+        case 'Running': return '#10b981'; // Green
         case 'WaitingForInput': return '#3b82f6'; // Blue
         case 'Error': return '#ef4444'; // Red
         default: return '#6b7280'; // Gray

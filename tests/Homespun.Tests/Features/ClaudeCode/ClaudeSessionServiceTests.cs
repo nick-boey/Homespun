@@ -61,8 +61,8 @@ public class ClaudeSessionServiceTests
             Assert.That(session.WorkingDirectory, Is.EqualTo(workingDirectory));
             Assert.That(session.Mode, Is.EqualTo(SessionMode.Plan));
             Assert.That(session.Model, Is.EqualTo(model));
-            // Status will be Error if SDK can't connect, or Running if it can
-            Assert.That(session.Status, Is.AnyOf(ClaudeSessionStatus.Starting, ClaudeSessionStatus.Running, ClaudeSessionStatus.Error));
+            // Status will be Error if SDK can't connect, or WaitingForInput if it can
+            Assert.That(session.Status, Is.AnyOf(ClaudeSessionStatus.Starting, ClaudeSessionStatus.WaitingForInput, ClaudeSessionStatus.Error));
         });
     }
 

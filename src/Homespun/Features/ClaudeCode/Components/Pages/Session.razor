@@ -33,7 +33,7 @@
                 <h1>Claude Code Session</h1>
                 <div class="session-meta">
                     <span class="badge @GetModeBadgeClass(_session.Mode)">@_session.Mode</span>
-                    <span class="badge @GetStatusBadgeClass(_session.Status)">@_session.Status</span>
+                    <span class="badge @GetStatusBadgeClass(_session.Status)">@_session.Status.ToDisplayLabel()</span>
                     <code class="model-name">@_session.Model</code>
                 </div>
             </div>
@@ -47,7 +47,7 @@
 
         <div class="chat-container">
             <div class="messages-area" @ref="_messagesContainer">
-                @if (_session.Messages.Count == 0 && _session.Status != ClaudeSessionStatus.Processing)
+                @if (_session.Messages.Count == 0 && _session.Status != ClaudeSessionStatus.Running)
                 {
                     <div class="empty-state">
                         <p>Start the conversation by typing a message below.</p>
@@ -132,7 +132,7 @@
                         </div>
                     }
 
-                    @if (_session.Status == ClaudeSessionStatus.Processing)
+                    @if (_session.Status == ClaudeSessionStatus.Running)
                     {
                         <div class="processing-indicator">
                             <div class="spinner-border spinner-border-sm" role="status"></div>
@@ -145,7 +145,7 @@
             <div class="input-area">
                 <select class="permission-select"
                         @bind="_selectedPermissionMode"
-                        disabled="@(_session.Status == ClaudeSessionStatus.Processing || _session.Status == ClaudeSessionStatus.Stopped)">
+                        disabled="@(_session.Status == ClaudeSessionStatus.Running || _session.Status == ClaudeSessionStatus.Stopped)">
                     <option value="@PermissionMode.BypassPermissions">Bypass permissions</option>
                     <option value="@PermissionMode.AcceptEdits">Accept edits</option>
                     <option value="@PermissionMode.Plan">Plan</option>
@@ -156,11 +156,11 @@
                           @onkeydown="HandleKeyDown"
                           placeholder="Type a message..."
                           rows="3"
-                          disabled="@(_session.Status == ClaudeSessionStatus.Processing || _session.Status == ClaudeSessionStatus.Stopped)">
+                          disabled="@(_session.Status == ClaudeSessionStatus.Running || _session.Status == ClaudeSessionStatus.Stopped)">
                 </textarea>
                 <button class="btn btn-primary send-button"
                         @onclick="SendMessage"
-                        disabled="@(string.IsNullOrWhiteSpace(_inputMessage) || _session.Status == ClaudeSessionStatus.Processing || _session.Status == ClaudeSessionStatus.Stopped)">
+                        disabled="@(string.IsNullOrWhiteSpace(_inputMessage) || _session.Status == ClaudeSessionStatus.Running || _session.Status == ClaudeSessionStatus.Stopped)">
                     Send
                 </button>
             </div>
@@ -1086,16 +1086,7 @@
         _ => "bg-secondary"
     };
 
-    private static string GetStatusBadgeClass(ClaudeSessionStatus status) => status switch
-    {
-        ClaudeSessionStatus.Running => "bg-success",
-        ClaudeSessionStatus.Processing => "bg-primary",
-        ClaudeSessionStatus.WaitingForInput => "bg-warning",
-        ClaudeSessionStatus.Starting => "bg-info",
-        ClaudeSessionStatus.Stopped => "bg-secondary",
-        ClaudeSessionStatus.Error => "bg-danger",
-        _ => "bg-secondary"
-    };
+    private static string GetStatusBadgeClass(ClaudeSessionStatus status) => status.ToBadgeClass();
 
     private static string GetContentBlockClass(ClaudeContentType type) => type switch
     {

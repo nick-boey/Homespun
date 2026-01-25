@@ -144,7 +144,7 @@ public class AgentStatusData
     public bool IsActive { get; set; }
 
     /// <summary>
-    /// The session status (e.g., "Running", "WaitingForInput", "Processing").
+    /// The session status (e.g., "Running", "WaitingForInput", "Starting").
     /// </summary>
     public required string Status { get; set; }
 

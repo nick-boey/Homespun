@@ -440,16 +440,7 @@
         };
     }
 
-    private string GetSessionStatusBadgeClass() => _session?.Status switch
-    {
-        ClaudeSessionStatus.Running => "bg-success",
-        ClaudeSessionStatus.Processing => "bg-primary",
-        ClaudeSessionStatus.WaitingForInput => "bg-info",
-        ClaudeSessionStatus.Starting => "bg-warning text-dark",
-        ClaudeSessionStatus.Stopped => "bg-secondary",
-        ClaudeSessionStatus.Error => "bg-danger",
-        _ => "bg-secondary"
-    };
+    private string GetSessionStatusBadgeClass() => _session?.Status.ToBadgeClass() ?? "bg-secondary";
 
     private static string GetModelDisplayName(string model)
     {

@@ -69,7 +69,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         options.IncludePartialMessages = true; // Enable streaming with --print mode
         _sessionOptions[sessionId] = options;
 
-        session.Status = ClaudeSessionStatus.Running;
+        session.Status = ClaudeSessionStatus.WaitingForInput;
         _logger.LogInformation("Session {SessionId} initialized and ready", sessionId);
 
         // Notify clients about the new session
@@ -113,7 +113,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             Content = [new ClaudeMessageContent { Type = ClaudeContentType.Text, Text = message }]
         };
         session.Messages.Add(userMessage);
-        session.Status = ClaudeSessionStatus.Processing;
+        session.Status = ClaudeSessionStatus.Running;
 
         // Notify clients about the user message
         await _hubContext.BroadcastMessageReceived(sessionId, userMessage);
@@ -175,7 +175,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                 session.Messages.Add(assistantMessage);
             }
 
-            session.Status = ClaudeSessionStatus.Running;
+            session.Status = ClaudeSessionStatus.WaitingForInput;
             _logger.LogInformation("Message processing completed for session {SessionId}", sessionId);
         }
         catch (OperationCanceledException)
