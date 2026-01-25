@@ -69,7 +69,7 @@
 
                                     <div class="detail-row">
                                         <span class="detail-label">Status:</span>
-                                        <span class="detail-value">@session.Status</span>
+                                        <span class="detail-value">@session.Status.ToDisplayLabel()</span>
                                     </div>
 
                                     <div class="detail-row">
@@ -460,16 +460,7 @@
         _ => "pr"
     };
 
-    private static string GetStatusIndicatorClass(ClaudeSessionStatus status) => status switch
-    {
-        ClaudeSessionStatus.Running => "running",
-        ClaudeSessionStatus.Processing => "processing",
-        ClaudeSessionStatus.WaitingForInput => "waiting",
-        ClaudeSessionStatus.Starting => "processing",
-        ClaudeSessionStatus.Stopped => "stopped",
-        ClaudeSessionStatus.Error => "error",
-        _ => "stopped"
-    };
+    private static string GetStatusIndicatorClass(ClaudeSessionStatus status) => status.ToIndicatorClass();
 
     private static string GetModelDisplayName(string model)
     {

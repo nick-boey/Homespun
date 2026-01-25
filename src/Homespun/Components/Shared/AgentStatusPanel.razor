@@ -169,10 +169,7 @@
     private string? ErrorMessage { get; set; }
     private string _selectedModel = "sonnet";
 
-    private bool IsRunning => _session != null &&
-        (_session.Status == ClaudeSessionStatus.Running ||
-         _session.Status == ClaudeSessionStatus.Processing ||
-         _session.Status == ClaudeSessionStatus.WaitingForInput);
+    private bool IsRunning => _session != null && _session.Status.IsActive();
 
     protected override void OnParametersSet()
     {

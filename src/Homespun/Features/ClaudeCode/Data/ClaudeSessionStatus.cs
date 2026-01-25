@@ -11,7 +11,7 @@ public enum ClaudeSessionStatus
     Starting,
 
     /// <summary>
-    /// Session is active and running.
+    /// Agent is generating responses.
     /// </summary>
     Running,
 
@@ -19,11 +19,6 @@ public enum ClaudeSessionStatus
     /// Session is waiting for user input.
     /// </summary>
     WaitingForInput,
-
-    /// <summary>
-    /// Session is processing a request.
-    /// </summary>
-    Processing,
 
     /// <summary>
     /// Session has stopped normally.

@@ -24,6 +24,5 @@ public class WorkflowAgentStatus
     /// Whether the agent is currently running.
     /// </summary>
     public bool IsRunning => Session.Status == ClaudeSessionStatus.Running ||
-                             Session.Status == ClaudeSessionStatus.Processing ||
                              Session.Status == ClaudeSessionStatus.WaitingForInput;
 }

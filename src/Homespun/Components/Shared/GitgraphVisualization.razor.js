@@ -7,6 +7,92 @@ const graphs = new Map();
 // Tooltip element (shared across all graphs)
 let tooltip = null;
 
+// Inject CSS animation for agent pulse if not already present
+if (!document.getElementById('agent-pulse-style')) {
+    const style = document.createElement('style');
+    style.id = 'agent-pulse-style';
+    style.textContent = `
+        @keyframes agent-pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+        .agent-status-dot-active {
+            animation: agent-pulse 1.5s ease-in-out infinite;
+        }
+    `;
+    document.head.appendChild(style);
+}
+
+// Get human-readable label for agent status
+function getAgentStatusLabel(status) {
+    switch (status) {
+        case 'Starting': return 'Starting';
+        case 'Running': return 'Working';
+        case 'WaitingForInput': return 'Waiting';
+        case 'Stopped': return 'Stopped';
+        case 'Error': return 'Error';
+        default: return status;
+    }
+}
+
+// Get color for agent status
+function getAgentStatusColor(status, isActive) {
+    if (!isActive) return '#6b7280'; // Gray for inactive
+    switch (status) {
+        case 'Starting': return '#f59e0b'; // Amber
+        case 'Running': return '#10b981'; // Green
+        case 'WaitingForInput': return '#3b82f6'; // Blue
+        case 'Error': return '#ef4444'; // Red
+        default: return '#6b7280'; // Gray
+    }
+}
+
+// Create an SVG agent status indicator to append after the message
+function createAgentStatusIndicator(agentStatus, textLength) {
+    const g = document.createElementNS(SVG_NAMESPACE, 'g');
+    const color = getAgentStatusColor(agentStatus.status, agentStatus.isActive);
+    const label = getAgentStatusLabel(agentStatus.status);
+
+    // Approximate text offset (7px per character + some padding)
+    const xOffset = textLength * 7 + 12;
+
+    // Create background rect for the status badge
+    const rect = document.createElementNS(SVG_NAMESPACE, 'rect');
+    rect.setAttribute('x', xOffset.toString());
+    rect.setAttribute('y', '-8');
+    rect.setAttribute('width', (label.length * 6 + 20).toString());
+    rect.setAttribute('height', '16');
+    rect.setAttribute('rx', '8');
+    rect.setAttribute('ry', '8');
+    rect.setAttribute('fill', color + '20');
+    rect.setAttribute('stroke', color);
+    rect.setAttribute('stroke-width', '1');
+    g.appendChild(rect);
+
+    // Create pulsing dot
+    const dot = document.createElementNS(SVG_NAMESPACE, 'circle');
+    dot.setAttribute('cx', (xOffset + 8).toString());
+    dot.setAttribute('cy', '0');
+    dot.setAttribute('r', '3');
+    dot.setAttribute('fill', color);
+    if (agentStatus.isActive) {
+        dot.setAttribute('class', 'agent-status-dot-active');
+    }
+    g.appendChild(dot);
+
+    // Create status text
+    const text = document.createElementNS(SVG_NAMESPACE, 'text');
+    text.setAttribute('x', (xOffset + 14).toString());
+    text.setAttribute('y', '0');
+    text.setAttribute('dominant-baseline', 'middle');
+    text.setAttribute('font-size', '10');
+    text.setAttribute('fill', color);
+    text.textContent = label;
+    g.appendChild(text);
+
+    return g;
+}
+
 function createTooltip() {
     tooltip = document.createElement('div');
     tooltip.className = 'graph-tooltip';
@@ -47,6 +133,21 @@ function showTooltip(data, event) {
             <div style="color: var(--text-secondary, #a0a0a0);">${data.description || data.subject}</div>
         `;
     } else {
+        // Build agent status indicator if present
+        let agentStatusHtml = '';
+        if (data.agentStatus) {
+            const statusColor = data.agentStatus.isActive ? '#10b981' : '#6b7280';
+            const statusLabel = getAgentStatusLabel(data.agentStatus.status);
+            agentStatusHtml = `
+                <div style="color: var(--text-secondary, #a0a0a0); margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+                    <span style="display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 4px; background: ${statusColor}20; border: 1px solid ${statusColor}; color: ${statusColor}; font-size: 11px;">
+                        <span style="width: 6px; height: 6px; border-radius: 50%; background: ${statusColor};${data.agentStatus.isActive ? ' animation: agent-pulse 1.5s ease-in-out infinite;' : ''}"></span>
+                        Agent: ${statusLabel}
+                    </span>
+                </div>
+            `;
+        }
+
         content = `
             <div style="font-weight: 600; margin-bottom: 8px; color: var(--text-primary, #eaeaea);">
                 ${data.issueId}: ${data.subject.replace(/^\[.*?\]\s*/, '')}
@@ -56,6 +157,7 @@ function showTooltip(data, event) {
                     ${data.tag || 'issue'}
                 </span>
             </div>
+            ${agentStatusHtml}
             <div style="color: var(--text-secondary, #a0a0a0);">${data.description || data.subject}</div>
         `;
     }
@@ -346,6 +448,8 @@ export async function initializeGraph(containerId, graphData, dotNetRef) {
                     : (commit) => createPRRenderDot(commit, commitData, dotNetRef),
                 renderMessage: (commit) => {
                     // Custom message rendering with click handler and proper vertical alignment
+                    const g = document.createElementNS(SVG_NAMESPACE, 'g');
+
                     const text = document.createElementNS(SVG_NAMESPACE, 'text');
                     text.setAttribute('dominant-baseline', 'middle');
                     text.setAttribute('dy', '0.35em');  // Fine-tune vertical alignment
@@ -362,7 +466,15 @@ export async function initializeGraph(containerId, graphData, dotNetRef) {
                     text.addEventListener('mousemove', (e) => showTooltip(commitData, e));
                     text.addEventListener('mouseleave', hideTooltip);
 
-                    return text;
+                    g.appendChild(text);
+
+                    // Add agent status indicator for issues
+                    if (isIssue && commitData.agentStatus) {
+                        const statusIndicator = createAgentStatusIndicator(commitData.agentStatus, commit.subject.length);
+                        g.appendChild(statusIndicator);
+                    }
+
+                    return g;
                 }
             };
         }

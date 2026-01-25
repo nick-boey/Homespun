@@ -1,7 +1,10 @@
+@using Homespun.Features.ClaudeCode.Data
 @using Homespun.Features.Gitgraph.Services
+@using Microsoft.AspNetCore.SignalR.Client
 @using Microsoft.JSInterop
 @inject IGraphService GraphService
 @inject IJSRuntime JSRuntime
+@inject NavigationManager NavigationManager
 @implements IAsyncDisposable
 
 <div class="gitgraph-wrapper">
@@ -87,6 +90,7 @@
     private string _containerId = $"gitgraph-{Guid.NewGuid():N}";
     private IJSObjectReference? _jsModule;
     private DotNetObjectReference<GitgraphVisualization>? _dotNetRef;
+    private HubConnection? _hubConnection;
     private bool _isLoading = true;
     private string? _error;
     private GitgraphJsonData? _graphData;
@@ -103,6 +107,9 @@
                 _dotNetRef = DotNetObjectReference.Create(this);
 
                 await LoadAndRenderGraph();
+
+                // Set up SignalR connection for real-time agent status updates
+                await SetupSignalRConnectionAsync();
             }
             catch (Exception ex)
             {
@@ -110,6 +117,57 @@
                 _isLoading = false;
                 StateHasChanged();
             }
+        }
+    }
+
+    private async Task SetupSignalRConnectionAsync()
+    {
+        try
+        {
+            _hubConnection = new HubConnectionBuilder()
+                .WithUrl(NavigationManager.ToAbsoluteUri("/hubs/claudecode"))
+                .WithAutomaticReconnect()
+                .Build();
+
+            // Listen for session status changes to refresh the graph
+            _hubConnection.On<string, ClaudeSessionStatus>("SessionStatusChanged", async (sessionId, status) =>
+            {
+                // Refresh the graph when any session status changes
+                await InvokeAsync(async () =>
+                {
+                    await LoadAndRenderGraph();
+                });
+            });
+
+            // Listen for session started events
+            _hubConnection.On<ClaudeSession>("SessionStarted", async (session) =>
+            {
+                // Refresh graph when a new session starts for this project
+                if (session.ProjectId == ProjectId)
+                {
+                    await InvokeAsync(async () =>
+                    {
+                        await LoadAndRenderGraph();
+                    });
+                }
+            });
+
+            // Listen for session stopped events
+            _hubConnection.On<string>("SessionStopped", async (sessionId) =>
+            {
+                // Refresh graph when a session stops
+                await InvokeAsync(async () =>
+                {
+                    await LoadAndRenderGraph();
+                });
+            });
+
+            await _hubConnection.StartAsync();
+        }
+        catch (Exception ex)
+        {
+            // Log but don't fail - real-time updates are nice to have but not critical
+            Console.WriteLine($"Failed to set up SignalR connection for graph: {ex.Message}");
         }
     }
 
@@ -184,6 +242,20 @@
 
     public async ValueTask DisposeAsync()
     {
+        // Dispose SignalR connection
+        if (_hubConnection != null)
+        {
+            try
+            {
+                await _hubConnection.DisposeAsync();
+            }
+            catch
+            {
+                // Ignore disposal errors
+            }
+        }
+
+        // Dispose JS module
         if (_jsModule != null)
         {
             try

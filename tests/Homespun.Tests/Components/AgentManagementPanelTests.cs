@@ -114,16 +114,6 @@ public class AgentManagementPanelTests
     }
 
     [Test]
-    public void GetStatusIndicatorClass_Processing_ReturnsProcessingClass()
-    {
-        // Arrange & Act
-        var result = GetStatusIndicatorClass(ClaudeSessionStatus.Processing);
-
-        // Assert
-        Assert.That(result, Is.EqualTo("processing"));
-    }
-
-    [Test]
     public void GetStatusIndicatorClass_WaitingForInput_ReturnsWaitingClass()
     {
         // Arrange & Act
@@ -170,16 +160,7 @@ public class AgentManagementPanelTests
         _ => "pr"
     };
 
-    private static string GetStatusIndicatorClass(ClaudeSessionStatus status) => status switch
-    {
-        ClaudeSessionStatus.Running => "running",
-        ClaudeSessionStatus.Processing => "processing",
-        ClaudeSessionStatus.WaitingForInput => "waiting",
-        ClaudeSessionStatus.Starting => "processing",
-        ClaudeSessionStatus.Stopped => "stopped",
-        ClaudeSessionStatus.Error => "error",
-        _ => "stopped"
-    };
+    private static string GetStatusIndicatorClass(ClaudeSessionStatus status) => status.ToIndicatorClass();
 }
 
 /// <summary>
