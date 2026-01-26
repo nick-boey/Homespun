@@ -54,7 +54,7 @@ public class HomespunFixture
             StartInfo = new ProcessStartInfo
             {
                 FileName = "dotnet",
-                Arguments = "run --no-build",
+                Arguments = $"run --no-build --configuration {GetBuildConfiguration()}",
                 WorkingDirectory = projectDir,
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
@@ -100,6 +100,21 @@ public class HomespunFixture
             _appProcess.Dispose();
             _appProcess = null;
         }
+    }
+
+    private static string GetBuildConfiguration()
+    {
+        // Check environment variable first (CI can set this)
+        var envConfig = Environment.GetEnvironmentVariable("E2E_CONFIGURATION");
+        if (!string.IsNullOrEmpty(envConfig))
+            return envConfig;
+
+        // Check if we're running in Release mode based on assembly path
+        var assemblyPath = typeof(HomespunFixture).Assembly.Location;
+        if (assemblyPath.Contains("Release", StringComparison.OrdinalIgnoreCase))
+            return "Release";
+
+        return "Debug";
     }
 
     private static string? FindProjectDirectory()
