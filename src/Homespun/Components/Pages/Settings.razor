@@ -1,6 +1,8 @@
 @page "/settings"
 @using Homespun.Features.GitHub
+@using Homespun.Features.Navigation
 @inject IGitHubEnvironmentService GitHubEnvironmentService
+@inject IBreadcrumbService BreadcrumbService
 @rendermode InteractiveServer
 
 <PageTitle>Settings - Homespun</PageTitle>
@@ -204,6 +206,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        await BreadcrumbService.SetContextAsync(new BreadcrumbContext { PageName = "Settings" });
         await RefreshStatus();
     }
 

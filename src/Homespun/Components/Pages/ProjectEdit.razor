@@ -1,6 +1,8 @@
 @page "/projects/{Id}/edit"
+@using Homespun.Features.Navigation
 @using Homespun.Features.Projects
 @inject ProjectService ProjectService
+@inject IBreadcrumbService BreadcrumbService
 @inject NavigationManager Navigation
 @rendermode InteractiveServer
 
@@ -86,6 +88,9 @@ else
         }
         else
         {
+            // Set breadcrumb context with project and page info
+            await BreadcrumbService.SetContextAsync(new BreadcrumbContext { ProjectId = Id, PageName = "Edit" });
+
             _name = project.Name;
             _localPath = project.LocalPath;
             _gitHubOwner = project.GitHubOwner;

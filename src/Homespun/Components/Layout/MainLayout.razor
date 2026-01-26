@@ -1,7 +1,10 @@
 @inherits LayoutComponentBase
+@implements IDisposable
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JSRuntime
+@inject Homespun.Features.Navigation.IBreadcrumbService BreadcrumbService
 @using Homespun.Components.Shared
+@using Homespun.Features.Navigation
 @using System.Reflection
 
 <div class="page @(_sidebarOpen ? "sidebar-open" : "sidebar-closed")" @onkeydown="HandleKeyDown" tabindex="-1">
@@ -11,7 +14,7 @@
         </button>
         <nav class="breadcrumbs" aria-label="Breadcrumb">
             <a href="" class="brand">Homespun</a>
-            @foreach (var crumb in _breadcrumbs)
+            @foreach (var crumb in BreadcrumbService.Breadcrumbs)
             {
                 <span class="separator">/</span>
                 @if (crumb.Url != null)
@@ -56,7 +59,6 @@
 
 @code {
     private bool _sidebarOpen = false;
-    private List<Breadcrumb> _breadcrumbs = new();
     private string _currentTheme = "auto";
     private string _version = GetShortVersion();
 
@@ -73,7 +75,7 @@
     protected override void OnInitialized()
     {
         NavigationManager.LocationChanged += OnLocationChanged;
-        UpdateBreadcrumbs();
+        BreadcrumbService.OnBreadcrumbsChanged += OnBreadcrumbsChanged;
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -99,50 +101,12 @@
             _sidebarOpen = false;
         }
 
-        UpdateBreadcrumbs();
         StateHasChanged();
     }
 
-    private void UpdateBreadcrumbs()
+    private void OnBreadcrumbsChanged()
     {
-        _breadcrumbs.Clear();
-        var uri = new Uri(NavigationManager.Uri);
-        var path = uri.AbsolutePath.Trim('/');
-        
-        if (string.IsNullOrEmpty(path))
-        {
-            return;
-        }
-
-        var segments = path.Split('/');
-        var currentPath = "";
-
-        for (int i = 0; i < segments.Length; i++)
-        {
-            var segment = segments[i];
-            currentPath += "/" + segment;
-            var isLast = i == segments.Length - 1;
-            
-            var title = segment switch
-            {
-                "projects" => "Projects",
-                "create" => "Create",
-                "edit" => "Edit",
-                "pull-requests" => "Pull Requests",
-                "features" => "Features",
-                _ when Guid.TryParse(segment, out _) => null, // Skip GUIDs as titles
-                _ => segment
-            };
-
-            if (title != null)
-            {
-                _breadcrumbs.Add(new Breadcrumb
-                {
-                    Title = title,
-                    Url = isLast ? null : currentPath
-                });
-            }
-        }
+        InvokeAsync(StateHasChanged);
     }
 
     private void ToggleSidebar()
@@ -185,11 +149,6 @@
     public void Dispose()
     {
         NavigationManager.LocationChanged -= OnLocationChanged;
-    }
-
-    private class Breadcrumb
-    {
-        public string Title { get; set; } = "";
-        public string? Url { get; set; }
+        BreadcrumbService.OnBreadcrumbsChanged -= OnBreadcrumbsChanged;
     }
 }

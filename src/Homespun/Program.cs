@@ -6,6 +6,7 @@ using Homespun.Features.Fleece.Services;
 using Homespun.Features.Git;
 using Homespun.Features.GitHub;
 using Homespun.Features.Gitgraph.Services;
+using Homespun.Features.Navigation;
 using Homespun.Features.Notifications;
 using Homespun.Features.Projects;
 using Homespun.Features.PullRequests;
@@ -53,7 +54,8 @@ builder.Services.AddDataProtection()
     .SetApplicationName("Homespun");
 
 // Core services
-builder.Services.AddScoped<ProjectService>();
+builder.Services.AddScoped<IProjectService, ProjectService>();
+builder.Services.AddScoped<ProjectService>(); // Keep concrete registration for existing injection points
 builder.Services.AddSingleton<IGitHubEnvironmentService, GitHubEnvironmentService>();
 builder.Services.AddSingleton<ICommandRunner, CommandRunner>();
 builder.Services.AddSingleton<IGitWorktreeService, GitWorktreeService>();
@@ -77,6 +79,9 @@ builder.Services.AddScoped<IIssuePrLinkingService, IssuePrLinkingService>();
 
 // Notification services
 builder.Services.AddSingleton<INotificationService, NotificationService>();
+
+// Navigation services
+builder.Services.AddScoped<IBreadcrumbService, BreadcrumbService>();
 
 // Claude Code SDK services
 builder.Services.AddSingleton<IClaudeSessionStore, ClaudeSessionStore>();
