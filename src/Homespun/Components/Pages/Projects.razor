@@ -1,7 +1,9 @@
 @page "/projects"
+@using Homespun.Features.Navigation
 @using Homespun.Features.Projects
 @using Homespun.Features.PullRequests.Data.Entities
 @inject ProjectService ProjectService
+@inject IBreadcrumbService BreadcrumbService
 @rendermode InteractiveServer
 
 <PageTitle>Projects</PageTitle>
@@ -85,6 +87,7 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        await BreadcrumbService.SetContextAsync(new BreadcrumbContext { PageName = "Projects" });
         await LoadProjects();
     }
 

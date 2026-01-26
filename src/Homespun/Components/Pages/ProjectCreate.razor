@@ -1,6 +1,8 @@
 @page "/projects/create"
+@using Homespun.Features.Navigation
 @using Homespun.Features.Projects
 @inject ProjectService ProjectService
+@inject IBreadcrumbService BreadcrumbService
 @inject NavigationManager Navigation
 @inject ILogger<ProjectCreate> Logger
 @rendermode InteractiveServer
@@ -88,6 +90,11 @@
     private string _defaultBranch = "main";
     private string? _errorMessage;
     private bool _isSubmitting;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await BreadcrumbService.SetContextAsync(new BreadcrumbContext { PageName = "Create" });
+    }
 
     private async Task HandleSubmit()
     {

@@ -1,10 +1,12 @@
 @page "/projects/{ProjectId}/issues/{IssueId}/edit"
 @using Fleece.Core.Models
 @using Homespun.Features.Fleece.Services
+@using Homespun.Features.Navigation
 @using Homespun.Features.Projects
 @using Homespun.Features.PullRequests.Data.Entities
 @inject ProjectService ProjectService
 @inject IFleeceService FleeceService
+@inject IBreadcrumbService BreadcrumbService
 @inject NavigationManager Navigation
 @inject ILogger<IssueEdit> Logger
 @rendermode InteractiveServer
@@ -220,6 +222,14 @@ else
                 _loading = false;
                 return;
             }
+
+            // Set breadcrumb context with project, issue, and page info
+            await BreadcrumbService.SetContextAsync(new BreadcrumbContext
+            {
+                ProjectId = ProjectId,
+                IssueId = IssueId,
+                PageName = "Edit"
+            });
 
             // Initialize form fields
             InitializeFormFromIssue();

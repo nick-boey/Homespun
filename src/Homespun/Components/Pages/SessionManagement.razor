@@ -1,9 +1,11 @@
 @page "/sessions"
 @using Homespun.Features.ClaudeCode.Data
 @using Homespun.Features.ClaudeCode.Services
+@using Homespun.Features.Navigation
 @implements IAsyncDisposable
 @rendermode InteractiveServer
 @inject IClaudeSessionStore SessionStore
+@inject IBreadcrumbService BreadcrumbService
 
 <PageTitle>Sessions - Homespun</PageTitle>
 
@@ -34,8 +36,9 @@
     private bool _isLoading = true;
     private string? _errorMessage;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
+        await BreadcrumbService.SetContextAsync(new BreadcrumbContext { PageName = "Agents" });
         _isLoading = false;
     }
 

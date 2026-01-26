@@ -8,6 +8,7 @@
 @using Homespun.Features.Fleece.Services
 @using Homespun.Features.Git
 @using Homespun.Features.GitHub
+@using Homespun.Features.Navigation
 @using Homespun.Features.Projects
 @using Homespun.Features.PullRequests
 @using Homespun.Features.PullRequests.Data
@@ -24,6 +25,7 @@
 @inject IClaudeSessionService SessionService
 @inject IAgentStartupTracker StartupTracker
 @inject ISignalRUrlProvider SignalRUrlProvider
+@inject IBreadcrumbService BreadcrumbService
 @inject ILogger<ProjectDetail> Logger
 @inject NavigationManager NavigationManager
 @rendermode InteractiveServer
@@ -534,6 +536,9 @@ else
         _project = await ProjectService.GetByIdAsync(Id);
         if (_project != null)
         {
+            // Set breadcrumb context with project info
+            await BreadcrumbService.SetContextAsync(new BreadcrumbContext { ProjectId = Id });
+
             _rootPullRequests = await PullRequestDataService.GetTreeAsync(Id);
             _flattenedCurrentPRs = FlattenPRs(_rootPullRequests ?? []);
 
