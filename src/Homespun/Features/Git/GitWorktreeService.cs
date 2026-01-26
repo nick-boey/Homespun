@@ -355,10 +355,9 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
 
     public async Task<bool> CreateLocalBranchFromRemoteAsync(string repoPath, string remoteBranch)
     {
-        // Extract the local branch name from the remote branch (e.g., "origin/feature" -> "feature")
-        var localBranchName = remoteBranch.Contains('/')
-            ? remoteBranch.Substring(remoteBranch.IndexOf('/') + 1)
-            : remoteBranch;
+        // The remoteBranch parameter is expected to be the branch name without "origin/" prefix
+        // e.g., "feature/test" not "origin/feature/test"
+        var localBranchName = remoteBranch;
 
         // Create local branch tracking the remote
         var result = await commandRunner.RunAsync(
