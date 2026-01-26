@@ -152,6 +152,15 @@
                         </button>
                     </div>
                 </div>
+
+                @* Show previous sessions that can be resumed *@
+                @if (!string.IsNullOrEmpty(PullRequest.WorktreePath))
+                {
+                    <SessionHistoryList
+                        EntityId="@PullRequest.Id"
+                        ProjectId="@PullRequest.ProjectId"
+                        WorkingDirectory="@PullRequest.WorktreePath" />
+                }
             }
 
             @* Merge - only when Approved *@
