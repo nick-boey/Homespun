@@ -807,7 +807,6 @@
     private static string GetSessionStatusBadgeClass(ClaudeSessionStatus status) => status switch
     {
         ClaudeSessionStatus.Running => "bg-success",
-        ClaudeSessionStatus.Processing => "bg-primary",
         ClaudeSessionStatus.WaitingForInput => "bg-info",
         ClaudeSessionStatus.Starting => "bg-warning text-dark",
         ClaudeSessionStatus.Stopped => "bg-secondary",
