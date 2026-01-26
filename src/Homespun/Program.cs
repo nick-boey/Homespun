@@ -93,6 +93,11 @@ builder.Services.AddSingleton<ISignalRUrlProvider, SignalRUrlProvider>();
 builder.Services.AddSignalR();
 builder.Services.AddHealthChecks();
 builder.Services.AddControllers(); // Add API controller support
+
+// Add Swagger/OpenAPI
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
@@ -105,6 +110,13 @@ if (!app.Environment.IsDevelopment())
     // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
+
+// Enable Swagger in all environments for API testing
+app.UseSwagger();
+app.UseSwaggerUI(options =>
+{
+    options.SwaggerEndpoint("/swagger/v1/swagger.json", "Homespun API v1");
+});
 
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 
