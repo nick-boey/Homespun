@@ -1,13 +1,9 @@
 /* ==========================================================================
-   Navigation Menu Styles
+   Navigation Menu Styles - Scoped component styles
    ========================================================================== */
 
-.nav-container {
-    padding: 8px;
-}
-
 /* ==========================================================================
-   Navigation Icons
+   Navigation Icons (require data URI backgrounds)
    ========================================================================== */
 
 .bi {
@@ -45,12 +41,8 @@
 }
 
 /* ==========================================================================
-   Navigation Items
+   Navigation Items (require ::deep for NavLink styling)
    ========================================================================== */
-
-.nav-item {
-    font-size: 0.8125rem;
-}
 
 .nav-item ::deep .nav-link {
     color: var(--text-sidebar-muted);
