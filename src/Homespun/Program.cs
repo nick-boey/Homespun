@@ -67,6 +67,7 @@ builder.Services.AddScoped<PullRequestWorkflowService>();
 // Fleece services (file-based issue tracking)
 builder.Services.AddSingleton<IFleeceService, FleeceService>();
 builder.Services.AddScoped<IFleeceIssueTransitionService, FleeceIssueTransitionService>();
+builder.Services.AddSingleton<IFleeceIssuesSyncService, FleeceIssuesSyncService>();
 
 // Markdown rendering service
 builder.Services.AddSingleton<IMarkdownRenderingService, MarkdownRenderingService>();
@@ -86,6 +87,22 @@ builder.Services.AddScoped<IBreadcrumbService, BreadcrumbService>();
 // Claude Code SDK services
 builder.Services.AddSingleton<IClaudeSessionStore, ClaudeSessionStore>();
 builder.Services.AddSingleton<SessionOptionsFactory>();
+
+// Session discovery service - reads from Claude's native session storage at ~/.claude/projects/
+builder.Services.AddSingleton<IClaudeSessionDiscovery>(sp =>
+{
+    var claudeDir = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+        ".claude", "projects");
+    return new ClaudeSessionDiscovery(claudeDir, sp.GetRequiredService<ILogger<ClaudeSessionDiscovery>>());
+});
+
+// Session metadata store - maps Claude sessions to our entities (PR/issue)
+var metadataPath = Path.Combine(homespunDir, "session-metadata.json");
+builder.Services.AddSingleton<ISessionMetadataStore>(sp =>
+    new SessionMetadataStore(metadataPath, sp.GetRequiredService<ILogger<SessionMetadataStore>>()));
+
+builder.Services.AddSingleton<IToolResultParser, ToolResultParser>();
 builder.Services.AddSingleton<IClaudeSessionService, ClaudeSessionService>();
 builder.Services.AddSingleton<IAgentStartupTracker, AgentStartupTracker>();
 builder.Services.AddSingleton<IAgentPromptService, AgentPromptService>();

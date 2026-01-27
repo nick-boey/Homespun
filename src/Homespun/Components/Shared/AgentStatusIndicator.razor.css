@@ -1,0 +1,45 @@
+.agent-status-indicator {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-radius: var(--radius-md);
+    background-color: rgba(255, 255, 255, 0.1);
+    text-decoration: none;
+    color: var(--text-sidebar);
+    font-size: 0.8125rem;
+    transition: background-color var(--transition-fast);
+    margin-right: var(--spacing-sm);
+}
+
+.agent-status-indicator:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+    text-decoration: none;
+    color: var(--text-sidebar);
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.status-dot.working {
+    background: var(--status-success);
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+.status-dot.waiting {
+    background: var(--status-warning);
+}
+
+.count {
+    font-weight: var(--font-weight-medium);
+    color: var(--text-sidebar);
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}

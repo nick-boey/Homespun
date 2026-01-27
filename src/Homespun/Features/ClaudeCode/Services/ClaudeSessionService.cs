@@ -16,19 +16,33 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
     private readonly SessionOptionsFactory _optionsFactory;
     private readonly ILogger<ClaudeSessionService> _logger;
     private readonly IHubContext<ClaudeCodeHub> _hubContext;
+    private readonly IClaudeSessionDiscovery _sessionDiscovery;
+    private readonly ISessionMetadataStore _metadataStore;
+    private readonly IToolResultParser _toolResultParser;
     private readonly ConcurrentDictionary<string, ClaudeAgentOptions> _sessionOptions = new();
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _sessionCts = new();
+
+    /// <summary>
+    /// Maps session ID -> (tool use ID -> tool name) for linking tool results to their tool uses.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, string>> _sessionToolUses = new();
 
     public ClaudeSessionService(
         IClaudeSessionStore sessionStore,
         SessionOptionsFactory optionsFactory,
         ILogger<ClaudeSessionService> logger,
-        IHubContext<ClaudeCodeHub> hubContext)
+        IHubContext<ClaudeCodeHub> hubContext,
+        IClaudeSessionDiscovery sessionDiscovery,
+        ISessionMetadataStore metadataStore,
+        IToolResultParser toolResultParser)
     {
         _sessionStore = sessionStore;
         _optionsFactory = optionsFactory;
         _logger = logger;
         _hubContext = hubContext;
+        _sessionDiscovery = sessionDiscovery;
+        _metadataStore = metadataStore;
+        _toolResultParser = toolResultParser;
     }
 
     /// <inheritdoc />
@@ -72,10 +86,112 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         session.Status = ClaudeSessionStatus.WaitingForInput;
         _logger.LogInformation("Session {SessionId} initialized and ready", sessionId);
 
+        // Save metadata for future resumption
+        var metadata = new SessionMetadata(
+            SessionId: session.ConversationId ?? sessionId, // Will be updated when we get the real ConversationId
+            EntityId: entityId,
+            ProjectId: projectId,
+            WorkingDirectory: workingDirectory,
+            Mode: mode,
+            Model: model,
+            SystemPrompt: systemPrompt,
+            CreatedAt: session.CreatedAt
+        );
+        await _metadataStore.SaveAsync(metadata, cancellationToken);
+
         // Notify clients about the new session
         await _hubContext.BroadcastSessionStarted(session);
 
         return session;
+    }
+
+    /// <inheritdoc />
+    public async Task<ClaudeSession> ResumeSessionAsync(
+        string sessionId,
+        string entityId,
+        string projectId,
+        string workingDirectory,
+        CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Resuming session {ClaudeSessionId} for entity {EntityId}", sessionId, entityId);
+
+        // Try to get our saved metadata for this session
+        var metadata = await _metadataStore.GetBySessionIdAsync(sessionId, cancellationToken);
+
+        // Create a new ClaudeSession using the discovered session ID as ConversationId
+        var newSessionId = Guid.NewGuid().ToString();
+        var session = new ClaudeSession
+        {
+            Id = newSessionId,
+            EntityId = entityId,
+            ProjectId = projectId,
+            WorkingDirectory = workingDirectory,
+            ConversationId = sessionId, // The Claude CLI session ID for --resume
+            Model = metadata?.Model ?? "sonnet",
+            Mode = metadata?.Mode ?? SessionMode.Build,
+            SystemPrompt = metadata?.SystemPrompt,
+            Status = ClaudeSessionStatus.Running,
+            CreatedAt = DateTime.UtcNow,
+            LastActivityAt = DateTime.UtcNow,
+            Messages = []
+        };
+
+        // Create SDK options with Resume flag
+        var options = _optionsFactory.Create(
+            session.Mode,
+            workingDirectory,
+            session.Model,
+            session.SystemPrompt);
+        options.PermissionMode = PermissionMode.BypassPermissions;
+        options.IncludePartialMessages = true;
+        options.Resume = sessionId; // THIS IS THE KEY - tells Claude CLI to resume
+
+        _sessionOptions[newSessionId] = options;
+        _sessionCts[newSessionId] = new CancellationTokenSource();
+        _sessionStore.Add(session);
+
+        _logger.LogInformation("Resumed session {NewSessionId} with ConversationId {ConversationId}",
+            newSessionId, sessionId);
+
+        await _hubContext.BroadcastSessionStarted(session);
+        return session;
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<ResumableSession>> GetResumableSessionsAsync(
+        string entityId,
+        string workingDirectory,
+        CancellationToken cancellationToken = default)
+    {
+        _logger.LogDebug("Discovering resumable sessions for entity {EntityId} at {WorkingDirectory}",
+            entityId, workingDirectory);
+
+        // Discover sessions from Claude's storage
+        var discoveredSessions = await _sessionDiscovery.DiscoverSessionsAsync(workingDirectory, cancellationToken);
+
+        var resumableSessions = new List<ResumableSession>();
+        foreach (var discovered in discoveredSessions)
+        {
+            // Try to get our metadata for this session
+            var metadata = await _metadataStore.GetBySessionIdAsync(discovered.SessionId, cancellationToken);
+
+            // Get message count if possible
+            var messageCount = await _sessionDiscovery.GetMessageCountAsync(
+                discovered.SessionId, workingDirectory, cancellationToken);
+
+            resumableSessions.Add(new ResumableSession(
+                SessionId: discovered.SessionId,
+                LastActivityAt: discovered.LastModified,
+                Mode: metadata?.Mode,
+                Model: metadata?.Model,
+                MessageCount: messageCount
+            ));
+        }
+
+        _logger.LogDebug("Found {Count} resumable sessions for entity {EntityId}",
+            resumableSessions.Count, entityId);
+
+        return resumableSessions;
     }
 
     /// <inheritdoc />
@@ -219,8 +335,26 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                 session.TotalCostUsd = (decimal)(resultMsg.TotalCostUsd ?? 0);
                 session.TotalDurationMs = resultMsg.DurationMs;
                 // Store the Claude CLI session ID for use with --resume in subsequent messages
+                var previousConversationId = session.ConversationId;
                 session.ConversationId = resultMsg.SessionId;
                 _logger.LogDebug("Stored ConversationId {ConversationId} for session resumption", resultMsg.SessionId);
+
+                // Update metadata with the actual Claude session ID if it changed
+                if (resultMsg.SessionId != null && resultMsg.SessionId != previousConversationId)
+                {
+                    var metadata = new SessionMetadata(
+                        SessionId: resultMsg.SessionId,
+                        EntityId: session.EntityId,
+                        ProjectId: session.ProjectId,
+                        WorkingDirectory: session.WorkingDirectory,
+                        Mode: session.Mode,
+                        Model: session.Model,
+                        SystemPrompt: session.SystemPrompt,
+                        CreatedAt: session.CreatedAt
+                    );
+                    await _metadataStore.SaveAsync(metadata, cancellationToken);
+                }
+
                 await _hubContext.BroadcastSessionResultReceived(sessionId, session.TotalCostUsd, resultMsg.DurationMs);
                 break;
 
@@ -296,14 +430,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                 IsStreaming = true,
                 Index = index
             },
-            "tool_use" => new ClaudeMessageContent
-            {
-                Type = ClaudeContentType.ToolUse,
-                ToolName = GetStringValue(blockData, "name") ?? "unknown",
-                ToolInput = "",
-                IsStreaming = true,
-                Index = index
-            },
+            "tool_use" => CreateToolUseContent(sessionId, blockData, index),
             _ => null
         };
 
@@ -400,7 +527,47 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         return value is int intValue ? intValue : null;
     }
 
-    private static ClaudeMessageContent? ConvertContentBlock(object block)
+    /// <summary>
+    /// Creates a tool use content block and tracks the tool use ID -> name mapping.
+    /// </summary>
+    private ClaudeMessageContent CreateToolUseContent(string sessionId, Dictionary<string, object> blockData, int index)
+    {
+        var toolUseId = GetStringValue(blockData, "id") ?? "";
+        var toolName = GetStringValue(blockData, "name") ?? "unknown";
+
+        // Track the tool use ID -> name mapping for this session
+        if (!string.IsNullOrEmpty(toolUseId))
+        {
+            var sessionToolUses = _sessionToolUses.GetOrAdd(sessionId, _ => new ConcurrentDictionary<string, string>());
+            sessionToolUses[toolUseId] = toolName;
+            _logger.LogDebug("Tracked tool use: {ToolUseId} -> {ToolName}", toolUseId, toolName);
+        }
+
+        return new ClaudeMessageContent
+        {
+            Type = ClaudeContentType.ToolUse,
+            ToolName = toolName,
+            ToolUseId = toolUseId,
+            ToolInput = "",
+            IsStreaming = true,
+            Index = index
+        };
+    }
+
+    /// <summary>
+    /// Looks up the tool name for a given tool use ID.
+    /// </summary>
+    private string GetToolNameForUseId(string sessionId, string toolUseId)
+    {
+        if (_sessionToolUses.TryGetValue(sessionId, out var toolUses) &&
+            toolUses.TryGetValue(toolUseId, out var toolName))
+        {
+            return toolName;
+        }
+        return "unknown";
+    }
+
+    private ClaudeMessageContent? ConvertContentBlock(string sessionId, object block)
     {
         return block switch
         {
@@ -414,18 +581,48 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                 Type = ClaudeContentType.Thinking,
                 Text = thinkingBlock.Thinking
             },
-            ToolUseBlock toolUseBlock => new ClaudeMessageContent
-            {
-                Type = ClaudeContentType.ToolUse,
-                ToolName = toolUseBlock.Name,
-                ToolInput = toolUseBlock.Input?.ToString()
-            },
-            ToolResultBlock toolResultBlock => new ClaudeMessageContent
-            {
-                Type = ClaudeContentType.ToolResult,
-                Text = toolResultBlock.Content?.ToString()
-            },
+            ToolUseBlock toolUseBlock => ConvertToolUseBlock(sessionId, toolUseBlock),
+            ToolResultBlock toolResultBlock => ConvertToolResultBlock(sessionId, toolResultBlock),
             _ => null
+        };
+    }
+
+    private ClaudeMessageContent ConvertToolUseBlock(string sessionId, ToolUseBlock toolUseBlock)
+    {
+        // Track the tool use ID -> name mapping
+        if (!string.IsNullOrEmpty(toolUseBlock.Id))
+        {
+            var sessionToolUses = _sessionToolUses.GetOrAdd(sessionId, _ => new ConcurrentDictionary<string, string>());
+            sessionToolUses[toolUseBlock.Id] = toolUseBlock.Name;
+        }
+
+        return new ClaudeMessageContent
+        {
+            Type = ClaudeContentType.ToolUse,
+            ToolName = toolUseBlock.Name,
+            ToolUseId = toolUseBlock.Id,
+            ToolInput = toolUseBlock.Input != null ? JsonSerializer.Serialize(toolUseBlock.Input) : null
+        };
+    }
+
+    private ClaudeMessageContent ConvertToolResultBlock(string sessionId, ToolResultBlock toolResultBlock)
+    {
+        // Look up the tool name from the tool use ID
+        var toolName = GetToolNameForUseId(sessionId, toolResultBlock.ToolUseId);
+        var isError = toolResultBlock.IsError ?? false;
+        var contentString = toolResultBlock.Content?.ToString() ?? "";
+
+        // Parse the result for rich display
+        var parsedResult = _toolResultParser.Parse(toolName, toolResultBlock.Content, isError);
+
+        return new ClaudeMessageContent
+        {
+            Type = ClaudeContentType.ToolResult,
+            ToolName = toolName,
+            ToolUseId = toolResultBlock.ToolUseId,
+            ToolSuccess = !isError,
+            Text = contentString,
+            ParsedToolResult = parsedResult
         };
     }
 
@@ -448,8 +645,9 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             cts.Dispose();
         }
 
-        // Remove stored options
+        // Remove stored options and tool use tracking
         _sessionOptions.TryRemove(sessionId, out _);
+        _sessionToolUses.TryRemove(sessionId, out _);
 
         // Update session status and remove from store
         session.Status = ClaudeSessionStatus.Stopped;
@@ -502,7 +700,8 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         }
         _sessionCts.Clear();
 
-        // Clear stored options
+        // Clear stored options and tool use tracking
         _sessionOptions.Clear();
+        _sessionToolUses.Clear();
     }
 }
