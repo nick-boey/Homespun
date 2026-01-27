@@ -1,0 +1,106 @@
+@using Homespun.Features.ClaudeCode.Data
+@using Homespun.Features.ClaudeCode.Services
+@using Microsoft.AspNetCore.SignalR.Client
+@implements IAsyncDisposable
+@inject IClaudeSessionStore SessionStore
+@inject NavigationManager NavigationManager
+
+@if (_totalActive > 0)
+{
+    <a href="/agents" class="agent-status-indicator" title="@GetTooltipText()">
+        @if (_workingCount > 0)
+        {
+            <span class="status-dot working" aria-label="Working agents"></span>
+            <span class="count">@_workingCount</span>
+        }
+        @if (_waitingCount > 0)
+        {
+            <span class="status-dot waiting" aria-label="Agents waiting for input"></span>
+            <span class="count">@_waitingCount</span>
+        }
+    </a>
+}
+
+@code {
+    private int _workingCount;
+    private int _waitingCount;
+    private int _totalActive;
+    private HubConnection? _hubConnection;
+    private System.Threading.Timer? _refreshTimer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        UpdateCounts();
+        await SetupSignalRConnection();
+
+        // Periodic refresh as a fallback (every 5 seconds)
+        _refreshTimer = new System.Threading.Timer(
+            _ => InvokeAsync(() => { UpdateCounts(); StateHasChanged(); }),
+            null,
+            TimeSpan.FromSeconds(5),
+            TimeSpan.FromSeconds(5));
+    }
+
+    private void UpdateCounts()
+    {
+        var sessions = SessionStore.GetAll();
+
+        _workingCount = sessions.Count(s =>
+            s.Status == ClaudeSessionStatus.Running);
+
+        _waitingCount = sessions.Count(s =>
+            s.Status == ClaudeSessionStatus.WaitingForInput);
+
+        _totalActive = _workingCount + _waitingCount;
+    }
+
+    private async Task SetupSignalRConnection()
+    {
+        try
+        {
+            _hubConnection = new HubConnectionBuilder()
+                .WithUrl(NavigationManager.ToAbsoluteUri("/hubs/claudecode"))
+                .WithAutomaticReconnect()
+                .Build();
+
+            _hubConnection.On<string, ClaudeSessionStatus>("SessionStatusChanged",
+                (_, _) => InvokeAsync(() => { UpdateCounts(); StateHasChanged(); }));
+
+            _hubConnection.On<ClaudeSession>("SessionStarted",
+                _ => InvokeAsync(() => { UpdateCounts(); StateHasChanged(); }));
+
+            _hubConnection.On<string>("SessionStopped",
+                _ => InvokeAsync(() => { UpdateCounts(); StateHasChanged(); }));
+
+            await _hubConnection.StartAsync();
+        }
+        catch
+        {
+            // SignalR may fail - polling will still work as fallback
+        }
+    }
+
+    private string GetTooltipText()
+    {
+        var parts = new List<string>();
+        if (_workingCount > 0)
+            parts.Add($"{_workingCount} working");
+        if (_waitingCount > 0)
+            parts.Add($"{_waitingCount} waiting for input");
+
+        var status = parts.Count > 0 ? string.Join(", ", parts) + " - " : "";
+        return $"{status}Click to view";
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_refreshTimer != null)
+        {
+            await _refreshTimer.DisposeAsync();
+        }
+        if (_hubConnection != null)
+        {
+            await _hubConnection.DisposeAsync();
+        }
+    }
+}
