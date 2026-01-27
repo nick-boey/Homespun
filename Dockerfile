@@ -17,6 +17,8 @@ WORKDIR /src
 COPY Homespun.sln ./
 COPY src/Homespun/Homespun.csproj src/Homespun/
 COPY tests/Homespun.Tests/Homespun.Tests.csproj tests/Homespun.Tests/
+COPY tests/Homespun.Api.Tests/Homespun.Api.Tests.csproj tests/Homespun.Api.Tests/
+COPY tests/Homespun.E2E.Tests/Homespun.E2E.Tests.csproj tests/Homespun.E2E.Tests/
 
 # Restore dependencies
 RUN dotnet restore
@@ -103,13 +105,10 @@ RUN mkdir -p /data \
 # This is needed because docker-compose may override the runtime user (HOST_UID/HOST_GID)
 # for proper file ownership on mounted volumes, but HOME still points to /home/homespun
 # Also create .claude directory structure for Claude Code runtime data (todos, debug, sessions)
-# Create Tailscale state directory for userspace networking
 RUN chmod 777 /home/homespun \
     && mkdir -p /home/homespun/.local/share /home/homespun/.config /home/homespun/.cache \
     && mkdir -p /home/homespun/.claude/todos /home/homespun/.claude/debug /home/homespun/.claude/projects /home/homespun/.claude/statsig \
-    && mkdir -p /var/lib/tailscale \
-    && chmod -R 777 /home/homespun/.local /home/homespun/.config /home/homespun/.cache /home/homespun/.claude \
-    && chmod 777 /var/lib/tailscale
+    && chmod -R 777 /home/homespun/.local /home/homespun/.config /home/homespun/.cache /home/homespun/.claude
 
 # Configure git to trust mounted directories (avoids "dubious ownership" errors)
 RUN git config --global --add safe.directory '*'
@@ -133,6 +132,7 @@ ENV ASPNETCORE_URLS=http://+:8080
 ENV HOMESPUN_DATA_PATH=/data/homespun-data.json
 ENV DOTNET_PRINT_TELEMETRY_MESSAGE=false
 ENV PATH="${PATH}:/root/.dotnet/tools"
+ENV SignalR__InternalBaseUrl=http://localhost:8080
 
 # Expose port
 EXPOSE 8080

@@ -4,21 +4,27 @@
 @using Homespun.Features.Fleece.Services
 @using Homespun.Features.Git
 @using Homespun.Features.Projects
+@using Homespun.Features.PullRequests
 @using Homespun.Features.PullRequests.Data.Entities
+@using Homespun.Features.Shared.Services
 
 @inject IClaudeSessionStore SessionStore
 @inject IClaudeSessionService SessionService
 @inject IAgentStartupTracker StartupTracker
+@inject IAgentPromptService AgentPromptService
 @inject IFleeceService FleeceService
 @inject IGitWorktreeService GitWorktreeService
+@inject IRebaseAgentService RebaseAgentService
+@inject PullRequestWorkflowService PullRequestWorkflowService
 @inject ProjectService ProjectService
 @inject NavigationManager NavigationManager
 @inject ILogger<IssueDetailPanel> Logger
+@inject IMarkdownRenderingService MarkdownService
 
 <div class="card issue-detail-panel">
-    <div class="card-header d-flex justify-content-between align-items-center">
+    <div class="card-header flex justify-between items-center">
         <span>Issue Details</span>
-        <div class="d-flex gap-1">
+        <div class="flex gap-1">
             <a href="projects/@ProjectId/issues/@Issue.Id/edit" class="btn btn-sm btn-outline-secondary" title="Edit issue">
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
                     <path d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168l10-10zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207 11.207 2.5zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.293l6.5-6.5zm-9.761 5.175-.106.106-1.528 3.821 3.821-1.528.106-.106A.5.5 0 0 1 5 12.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.468-.325z"/>
@@ -37,43 +43,43 @@
 
             <div class="mb-3">
                 <span class="badge bg-secondary">@Issue.Id</span>
-                <span class="badge @GetTypeBadgeClass() ms-1">@Issue.Type</span>
-                <span class="badge @GetStatusBadgeClass() ms-1">@GetStatusDisplay()</span>
+                <span class="badge @GetTypeBadgeClass() ml-1">@Issue.Type</span>
+                <span class="badge @GetStatusBadgeClass() ml-1">@GetStatusDisplay()</span>
                 @if (Issue.Priority.HasValue)
                 {
-                    <span class="badge @GetPriorityBadgeClass() ms-1">P@Issue.Priority</span>
+                    <span class="badge @GetPriorityBadgeClass() ml-1">P@Issue.Priority</span>
                 }
                 @if (StartupTracker.IsStarting(Issue.Id))
                 {
-                    <span class="badge bg-warning text-dark ms-1">
-                        <span class="spinner-border spinner-border-sm me-1" role="status" style="width: 0.6rem; height: 0.6rem;"></span>
+                    <span class="badge bg-status-warning text-text-primary ml-1">
+                        <span class="spinner-border spinner-border-sm mr-1" role="status" style="width: 0.6rem; height: 0.6rem;"></span>
                         Starting...
                     </span>
                 }
                 else if (_session != null)
                 {
-                    <span class="badge bg-success ms-1">Session Active</span>
+                    <span class="badge bg-status-success ml-1">Session Active</span>
                 }
             </div>
 
             @if (!string.IsNullOrEmpty(Issue.Description))
             {
-                <div class="description-content mb-3">
-                    <pre class="mb-0">@Issue.Description</pre>
+                <div class="description-content markdown-content mb-3">
+                    @((MarkupString)MarkdownService.RenderToHtml(Issue.Description))
                 </div>
             }
 
-            <dl class="row small">
-                <dt class="col-4">Branch Preview</dt>
-                <dd class="col-8"><code>@GetBranchPreview()</code></dd>
+            <dl class="grid grid-cols-12 text-sm">
+                <dt class="col-span-4">Branch Preview</dt>
+                <dd class="col-span-8"><code>@GetBranchPreview()</code></dd>
 
                 @if (Issue.ParentIssues.Count > 0)
                 {
-                    <dt class="col-4">Parent Issues</dt>
-                    <dd class="col-8">
+                    <dt class="col-span-4">Parent Issues</dt>
+                    <dd class="col-span-8">
                         @foreach (var parentId in Issue.ParentIssues)
                         {
-                            <code class="me-1">@parentId</code>
+                            <code class="mr-1">@parentId</code>
                         }
                     </dd>
                 }
@@ -86,16 +92,16 @@
                     <h6>Claude Code Session</h6>
                     <div class="mb-2">
                         <span class="badge @GetSessionStatusBadgeClass()">@_session.Status</span>
-                        <a href="/session/@_session.Id" class="btn btn-sm btn-outline-primary ms-2">
+                        <a href="/session/@_session.Id" class="btn btn-sm btn-outline-primary ml-2">
                             Open Chat
                         </a>
                     </div>
                     <div class="mb-2">
-                        <small class="text-muted">
+                        <small class="text-text-muted">
                             Mode: <code>@_session.Mode</code>
                         </small>
                         <br/>
-                        <small class="text-muted">
+                        <small class="text-text-muted">
                             Model: <code>@_session.Model</code>
                         </small>
                     </div>
@@ -106,18 +112,18 @@
             @if (_session == null && !StartupTracker.IsStarting(Issue.Id))
             {
                 <div class="mb-2">
-                    <label class="form-label small mb-1">Model</label>
+                    <label class="form-label text-sm mb-1">Model</label>
                     <ModelSelector Id="@($"issue-model-{Issue.Id}")"
                                    SelectedModel="@_selectedModel"
                                    SelectedModelChanged="@(m => _selectedModel = m)" />
                 </div>
             }
 
-            <div class="d-flex flex-wrap gap-2">
+            <div class="flex flex-wrap gap-2">
                 @if (StartupTracker.IsStarting(Issue.Id))
                 {
                     <button class="btn btn-sm btn-secondary" disabled>
-                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                        <span class="spinner-border spinner-border-sm mr-1" role="status"></span>
                         Starting Session...
                     </button>
                 }
@@ -129,21 +135,36 @@
                     <button class="btn btn-sm btn-outline-danger" @onclick="StopSession" disabled="@_isLoading">
                         @if (_isLoading)
                         {
-                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                            <span class="spinner-border spinner-border-sm mr-1" role="status"></span>
                         }
                         Stop Session
                     </button>
                 }
                 else if (Issue.Status is IssueStatus.Idea or IssueStatus.Spec or IssueStatus.Next or IssueStatus.Progress or IssueStatus.Review)
                 {
-                    <button class="btn btn-sm btn-outline-primary" @onclick="StartPlanning" title="Start a read-only planning session">
-                        Start Planning
-                    </button>
-                    <button class="btn btn-sm btn-success" @onclick="StartBuilding" title="Start a session with full code editing">
-                        Start Building
-                    </button>
-                }
+                    <div class="mb-2 w-full">
+                        <AgentSelector
+                            Disabled="@(_session != null)"
+                            IsStarting="@StartupTracker.IsStarting(Issue.Id)"
+                            OnStart="HandleAgentStart" />
+                    </div>
 
+                    @if (_worktreeInfo != null && _branchInfo?.BehindCount > 0)
+                    {
+                        <button class="btn btn-sm btn-outline-warning w-full mb-2"
+                                @onclick="StartRebaseAsync"
+                                disabled="@(_isRebasing || StartupTracker.IsStarting(Issue.Id))">
+                            @if (_isRebasing)
+                            {
+                                <span class="spinner-border spinner-border-sm mr-1" role="status"></span>
+                            }
+                            Rebase onto @_project?.DefaultBranch (@_branchInfo.BehindCount behind)
+                        </button>
+                    }
+                }
+            </div>
+
+            <div class="flex flex-wrap gap-2">
                 @if (Issue.Status is IssueStatus.Idea or IssueStatus.Spec or IssueStatus.Next or IssueStatus.Progress or IssueStatus.Review)
                 {
                     <button class="btn btn-sm btn-outline-primary" @onclick="CloseIssue" disabled="@_isLoading" title="Mark issue as completed">
@@ -158,14 +179,14 @@
 
             @if (!string.IsNullOrEmpty(_errorMessage))
             {
-                <div class="alert alert-danger mt-2 mb-0 py-1 px-2 small">@_errorMessage</div>
+                <div class="alert alert-danger mt-2 mb-0 py-1 px-2 text-sm">@_errorMessage</div>
             }
         </div>
 
         @if (_showDeleteConfirmation)
         {
             <div class="modal-backdrop fade show" style="background-color: rgba(0,0,0,0.5);"></div>
-            <div class="modal fade show d-block" tabindex="-1">
+            <div class="modal fade show block" tabindex="-1">
                 <div class="modal-dialog modal-dialog-centered">
                     <div class="modal-content">
                         <div class="modal-header">
@@ -181,7 +202,7 @@
                             <button type="button" class="btn btn-danger" @onclick="DeleteIssue" disabled="@_isLoading">
                                 @if (_isLoading)
                                 {
-                                    <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                    <span class="spinner-border spinner-border-sm mr-1" role="status"></span>
                                 }
                                 Delete Issue
                             </button>
@@ -192,18 +213,6 @@
         }
 </div>
 
-<style>
-    .description-content pre {
-        background-color: var(--bg-secondary);
-        padding: var(--spacing-sm);
-        border-radius: var(--radius-sm);
-        white-space: pre-wrap;
-        word-wrap: break-word;
-        font-size: 0.85rem;
-        max-height: 200px;
-        overflow-y: auto;
-    }
-</style>
 
 @code {
     [Parameter] public required string ProjectId { get; set; }
@@ -219,7 +228,10 @@
     private string? _errorMessage;
     private ClaudeSession? _session;
     private Project? _project;
-    private string _selectedModel = "sonnet";
+    private string _selectedModel = "opus";
+    private WorktreeInfo? _worktreeInfo;
+    private BranchInfo? _branchInfo;
+    private bool _isRebasing;
 
     protected override async Task OnInitializedAsync()
     {
@@ -233,13 +245,44 @@
         }
     }
 
-    protected override void OnParametersSet()
+    protected override async Task OnParametersSetAsync()
     {
         _session = null;
         _errorMessage = null;
+        _worktreeInfo = null;
+        _branchInfo = null;
 
         // Check for existing session
         _session = SessionStore.GetByEntityId(Issue.Id);
+
+        // Load worktree and branch info if project is available
+        if (_project != null)
+        {
+            await LoadWorktreeInfoAsync();
+        }
+    }
+
+    private async Task LoadWorktreeInfoAsync()
+    {
+        if (_project == null) return;
+
+        try
+        {
+            var branchName = GetBranchPreview();
+            var worktrees = await GitWorktreeService.ListWorktreesAsync(_project.LocalPath);
+            _worktreeInfo = worktrees.FirstOrDefault(w =>
+                w.Branch?.Replace("refs/heads/", "") == branchName);
+
+            if (_worktreeInfo != null)
+            {
+                var branches = await GitWorktreeService.ListLocalBranchesAsync(_project.LocalPath);
+                _branchInfo = branches.FirstOrDefault(b => b.ShortName == branchName);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to load worktree info for issue {IssueId}", Issue.Id);
+        }
     }
 
     private void HandleClose()
@@ -269,17 +312,12 @@
         return sanitized.Trim('-');
     }
 
-    private async Task StartPlanning()
+    private async Task HandleAgentStart(AgentPrompt? selectedPrompt)
     {
-        await StartSession(SessionMode.Plan);
+        await StartSession(selectedPrompt);
     }
 
-    private async Task StartBuilding()
-    {
-        await StartSession(SessionMode.Build);
-    }
-
-    private async Task StartSession(SessionMode mode)
+    private async Task StartSession(AgentPrompt? prompt)
     {
         if (_project == null)
         {
@@ -311,6 +349,9 @@
 
             Logger.LogInformation("Created worktree at {WorktreePath} for issue {IssueId}", worktreePath, Issue.Id);
 
+            // Use the prompt's mode, or default to Build if no prompt selected
+            var mode = prompt?.Mode ?? SessionMode.Build;
+
             var systemPrompt = GenerateSystemPrompt();
             _session = await SessionService.StartSessionAsync(
                 Issue.Id,
@@ -322,13 +363,25 @@
 
             StartupTracker.MarkAsStarted(Issue.Id);
 
-            // Send an initial message to start the agent working
-            // This way the prompt is visible in the chat and triggers the agent
-            var initialMessage = GenerateInitialMessage(mode);
-            await SessionService.SendMessageAsync(_session.Id, initialMessage);
+            // Send an initial message to start the agent working (if a prompt is selected)
+            if (prompt != null && !string.IsNullOrEmpty(prompt.InitialMessage))
+            {
+                var context = new PromptContext
+                {
+                    Title = Issue.Title,
+                    Id = Issue.Id,
+                    Description = Issue.Description,
+                    Branch = branchName,
+                    Type = Issue.Type.ToString()
+                };
+                var initialMessage = AgentPromptService.RenderTemplate(prompt.InitialMessage, context);
+                if (!string.IsNullOrEmpty(initialMessage))
+                {
+                    await SessionService.SendMessageAsync(_session.Id, initialMessage);
+                }
+            }
 
-            // Navigate to the session chat page
-            NavigationManager.NavigateTo($"/session/{_session.Id}");
+            // Agent started - user stays on current page and can monitor via status indicator
         }
         catch (Exception ex)
         {
@@ -358,42 +411,6 @@
         return sb.ToString();
     }
 
-    private string GenerateInitialMessage(SessionMode mode)
-    {
-        var sb = new System.Text.StringBuilder();
-        sb.AppendLine($"## Issue: {Issue.Title}");
-        sb.AppendLine();
-        sb.AppendLine($"**ID:** {Issue.Id}");
-        sb.AppendLine($"**Type:** {Issue.Type}");
-        sb.AppendLine($"**Branch:** {GetBranchPreview()}");
-
-        if (!string.IsNullOrEmpty(Issue.Description))
-        {
-            sb.AppendLine();
-            sb.AppendLine("### Description");
-            sb.AppendLine(Issue.Description);
-        }
-
-        sb.AppendLine();
-        sb.AppendLine("---");
-        sb.AppendLine();
-
-        if (mode == SessionMode.Plan)
-        {
-            sb.AppendLine("Please analyze this issue and create a detailed implementation plan. Consider:");
-            sb.AppendLine("- What files need to be modified or created");
-            sb.AppendLine("- The approach and architecture");
-            sb.AppendLine("- Any potential challenges or risks");
-            sb.AppendLine("- Test requirements");
-        }
-        else
-        {
-            sb.AppendLine("Please implement this issue. Start by understanding the requirements and exploring the codebase, then proceed with the implementation.");
-        }
-
-        return sb.ToString();
-    }
-
     private async Task StopSession()
     {
         if (_session == null) return;
@@ -413,6 +430,57 @@
         finally
         {
             _isLoading = false;
+        }
+    }
+
+    private async Task StartRebaseAsync()
+    {
+        if (_project == null || _worktreeInfo == null)
+        {
+            _errorMessage = "Project or worktree not available.";
+            return;
+        }
+
+        var branchName = GetBranchPreview();
+        var entityId = $"rebase-{branchName}";
+
+        StartupTracker.MarkAsStarting(entityId);
+        _isRebasing = true;
+        _errorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            // Get recently merged PRs for context
+            var recentMergedPRs = await PullRequestWorkflowService.GetMergedPullRequestsWithTimeAsync(_project.Id);
+            var recentPRInfos = recentMergedPRs
+                .Take(10)
+                .Select(pr => pr.PullRequest)
+                .ToList();
+
+            var session = await RebaseAgentService.StartRebaseAgentAsync(
+                _project.Id,
+                _worktreeInfo.Path,
+                branchName,
+                _project.DefaultBranch,
+                _selectedModel,
+                recentPRInfos);
+
+            StartupTracker.MarkAsStarted(entityId);
+
+            // Navigate to the session
+            NavigationManager.NavigateTo($"/session/{session.Id}");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to start rebase agent for issue {IssueId}", Issue.Id);
+            StartupTracker.MarkAsFailed(entityId, ex.Message);
+            _errorMessage = $"Failed to start rebase agent: {ex.Message}";
+        }
+        finally
+        {
+            _isRebasing = false;
+            StateHasChanged();
         }
     }
 
@@ -529,14 +597,5 @@
         _ => "bg-secondary"
     };
 
-    private string GetSessionStatusBadgeClass() => _session?.Status switch
-    {
-        ClaudeSessionStatus.Running => "bg-success",
-        ClaudeSessionStatus.Processing => "bg-primary",
-        ClaudeSessionStatus.WaitingForInput => "bg-info",
-        ClaudeSessionStatus.Starting => "bg-warning text-dark",
-        ClaudeSessionStatus.Stopped => "bg-secondary",
-        ClaudeSessionStatus.Error => "bg-danger",
-        _ => "bg-secondary"
-    };
+    private string GetSessionStatusBadgeClass() => _session?.Status.ToBadgeClass() ?? "bg-secondary";
 }

@@ -1,84 +1,17 @@
-@using Homespun.Features.ClaudeCode.Data
-@using Homespun.Features.PullRequests.Data
-
-@inject IDataStore DataStore
-
-<div class="model-selector">
-    <div class="dropdown">
-        <button class="btn btn-sm dropdown-toggle form-control d-flex align-items-center justify-content-between"
-                type="button"
-                id="@($"model-selector-{Id}")"
-                data-bs-toggle="dropdown"
-                aria-expanded="false">
-            <span class="selected-model">@GetModelDisplayName(SelectedModel)</span>
-        </button>
-        <ul class="dropdown-menu model-dropdown-menu" aria-labelledby="@($"model-selector-{Id}")">
-            @if (_favoriteModels.Count > 0)
-            {
-                <li class="dropdown-header">
-                    <span class="star-icon">★</span> Favorites
-                </li>
-                @foreach (var model in _favoriteModels)
-                {
-                    <li>
-                        <a class="dropdown-item d-flex align-items-center justify-content-between @(model.FullId == SelectedModel ? "active" : "")"
-                           href="#"
-                           @onclick="() => SelectModel(model)"
-                           @onclick:preventDefault>
-                            <span>@model.Name</span>
-                            <span class="model-capabilities">
-                                @if (model.SupportsThinking)
-                                {
-                                    <span class="badge bg-info me-1" title="Extended Thinking">T</span>
-                                }
-                                @if (model.SupportsToolUse)
-                                {
-                                    <span class="badge bg-primary me-1" title="Tool Use">🔧</span>
-                                }
-                                @if (model.SupportsVision)
-                                {
-                                    <span class="badge bg-success" title="Vision">👁</span>
-                                }
-                            </span>
-                        </a>
-                    </li>
-                }
-                <li><hr class="dropdown-divider" /></li>
-            }
-
-            <li class="dropdown-header">Anthropic Models</li>
-            @foreach (var model in _otherModels)
-            {
-                <li>
-                    <a class="dropdown-item d-flex align-items-center justify-content-between @(model.FullId == SelectedModel ? "active" : "")"
-                       href="#"
-                       @onclick="() => SelectModel(model)"
-                       @onclick:preventDefault>
-                        <span>@model.Name</span>
-                        <span class="model-capabilities">
-                            @if (model.SupportsThinking)
-                            {
-                                <span class="badge bg-info me-1" title="Extended Thinking">T</span>
-                            }
-                            @if (model.SupportsToolUse)
-                            {
-                                <span class="badge bg-primary me-1" title="Tool Use">🔧</span>
-                            }
-                            @if (model.SupportsVision)
-                            {
-                                <span class="badge bg-success" title="Vision">👁</span>
-                            }
-                        </span>
-                    </a>
-                </li>
-            }
-        </ul>
-    </div>
+<div class="relative">
+    <select class="form-select form-select-sm"
+            id="@($"model-selector-{Id}")"
+            value="@SelectedModel"
+            @onchange="OnModelChanged">
+        <option value="opus">Opus</option>
+        <option value="sonnet">Sonnet</option>
+        <option value="haiku">Haiku</option>
+    </select>
 </div>
 
 @code {
     [Parameter]
-    public string SelectedModel { get; set; } = "sonnet";
+    public string SelectedModel { get; set; } = "opus";
 
     [Parameter]
     public EventCallback<string> SelectedModelChanged { get; set; }
@@ -86,41 +19,10 @@
     [Parameter]
     public string Id { get; set; } = "default";
 
-    private List<ClaudeModelInfo> _favoriteModels = [];
-    private List<ClaudeModelInfo> _otherModels = [];
-
-    protected override void OnInitialized()
+    private async Task OnModelChanged(ChangeEventArgs e)
     {
-        var favoriteModelIds = DataStore.FavoriteModels;
-        var allModels = ClaudeModelInfo.AvailableModels;
-
-        _favoriteModels = allModels
-            .Where(m => favoriteModelIds.Contains(m.FullId))
-            .ToList();
-
-        _otherModels = allModels
-            .Where(m => !favoriteModelIds.Contains(m.FullId))
-            .ToList();
-    }
-
-    private async Task SelectModel(ClaudeModelInfo model)
-    {
-        SelectedModel = model.FullId;
-        await SelectedModelChanged.InvokeAsync(model.FullId);
-    }
-
-    private static string GetModelDisplayName(string modelId)
-    {
-        if (string.IsNullOrEmpty(modelId))
-            return "Select model";
-
-        // Find the model by full ID
-        var model = ClaudeModelInfo.AvailableModels.FirstOrDefault(m => m.FullId == modelId);
-        if (model != null)
-            return model.Name;
-
-        // Fall back to extracting from the ID
-        var parts = modelId.Split('/');
-        return parts.Length > 1 ? parts[1] : modelId;
+        var newModel = e.Value?.ToString() ?? "opus";
+        SelectedModel = newModel;
+        await SelectedModelChanged.InvokeAsync(newModel);
     }
 }

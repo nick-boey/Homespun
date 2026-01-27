@@ -6,10 +6,13 @@ using Homespun.Features.Fleece.Services;
 using Homespun.Features.Git;
 using Homespun.Features.GitHub;
 using Homespun.Features.Gitgraph.Services;
+using Homespun.Features.Navigation;
 using Homespun.Features.Notifications;
 using Homespun.Features.Projects;
 using Homespun.Features.PullRequests;
 using Homespun.Features.PullRequests.Data;
+using Homespun.Features.Shared.Services;
+using Homespun.Features.SignalR;
 using Homespun.Components;
 using Microsoft.AspNetCore.DataProtection;
 
@@ -51,7 +54,8 @@ builder.Services.AddDataProtection()
     .SetApplicationName("Homespun");
 
 // Core services
-builder.Services.AddScoped<ProjectService>();
+builder.Services.AddScoped<IProjectService, ProjectService>();
+builder.Services.AddScoped<ProjectService>(); // Keep concrete registration for existing injection points
 builder.Services.AddSingleton<IGitHubEnvironmentService, GitHubEnvironmentService>();
 builder.Services.AddSingleton<ICommandRunner, CommandRunner>();
 builder.Services.AddSingleton<IGitWorktreeService, GitWorktreeService>();
@@ -63,6 +67,10 @@ builder.Services.AddScoped<PullRequestWorkflowService>();
 // Fleece services (file-based issue tracking)
 builder.Services.AddSingleton<IFleeceService, FleeceService>();
 builder.Services.AddScoped<IFleeceIssueTransitionService, FleeceIssueTransitionService>();
+builder.Services.AddSingleton<IFleeceIssuesSyncService, FleeceIssuesSyncService>();
+
+// Markdown rendering service
+builder.Services.AddSingleton<IMarkdownRenderingService, MarkdownRenderingService>();
 
 // Gitgraph services
 builder.Services.AddScoped<IGraphService, GraphService>();
@@ -72,6 +80,9 @@ builder.Services.AddScoped<IIssuePrLinkingService, IssuePrLinkingService>();
 
 // Notification services
 builder.Services.AddSingleton<INotificationService, NotificationService>();
+
+// Navigation services
+builder.Services.AddScoped<IBreadcrumbService, BreadcrumbService>();
 
 // Claude Code SDK services
 builder.Services.AddSingleton<IClaudeSessionStore, ClaudeSessionStore>();
@@ -91,17 +102,30 @@ var metadataPath = Path.Combine(homespunDir, "session-metadata.json");
 builder.Services.AddSingleton<ISessionMetadataStore>(sp =>
     new SessionMetadataStore(metadataPath, sp.GetRequiredService<ILogger<SessionMetadataStore>>()));
 
+builder.Services.AddSingleton<IToolResultParser, ToolResultParser>();
 builder.Services.AddSingleton<IClaudeSessionService, ClaudeSessionService>();
 builder.Services.AddSingleton<IAgentStartupTracker, AgentStartupTracker>();
+builder.Services.AddSingleton<IAgentPromptService, AgentPromptService>();
+builder.Services.AddSingleton<IRebaseAgentService, RebaseAgentService>();
 
 // GitHub sync polling service (PR sync, review polling, issue linking)
 builder.Services.Configure<GitHubSyncPollingOptions>(
     builder.Configuration.GetSection(GitHubSyncPollingOptions.SectionName));
 builder.Services.AddHostedService<GitHubSyncPollingService>();
 
+// SignalR URL provider (uses internal URL in Docker, localhost in development)
+builder.Services.Configure<SignalROptions>(
+    builder.Configuration.GetSection(SignalROptions.SectionName));
+builder.Services.AddSingleton<ISignalRUrlProvider, SignalRUrlProvider>();
+
 builder.Services.AddSignalR();
 builder.Services.AddHealthChecks();
 builder.Services.AddControllers(); // Add API controller support
+
+// Add Swagger/OpenAPI
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
@@ -114,6 +138,13 @@ if (!app.Environment.IsDevelopment())
     // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
+
+// Enable Swagger in all environments for API testing
+app.UseSwagger();
+app.UseSwaggerUI(options =>
+{
+    options.SwaggerEndpoint("/swagger/v1/swagger.json", "Homespun API v1");
+});
 
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 

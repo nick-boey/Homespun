@@ -1,26 +1,33 @@
 @page "/projects/{Id}"
+@page "/projects/{Id}/branches"
 @implements IDisposable
 @using Fleece.Core.Models
 @using Homespun.Features.ClaudeCode.Data
 @using Homespun.Features.ClaudeCode.Services
 @using Homespun.Features.Commands
 @using Homespun.Features.Fleece.Services
+@using Homespun.Features.Fleece.Models
 @using Homespun.Features.Git
 @using Homespun.Features.GitHub
+@using Homespun.Features.Navigation
 @using Homespun.Features.Projects
 @using Homespun.Features.PullRequests
 @using Homespun.Features.PullRequests.Data
 @using Homespun.Features.PullRequests.Data.Entities
+@using Homespun.Features.SignalR
 @using Microsoft.AspNetCore.SignalR.Client
 @inject ProjectService ProjectService
 @inject PullRequestDataService PullRequestDataService
 @inject PullRequestWorkflowService PullRequestWorkflowService
 @inject IFleeceService FleeceService
+@inject IFleeceIssuesSyncService FleeceIssuesSyncService
 @inject IGitHubService GitHubService
 @inject IGitWorktreeService GitWorktreeService
 @inject ICommandRunner CommandRunner
 @inject IClaudeSessionService SessionService
 @inject IAgentStartupTracker StartupTracker
+@inject ISignalRUrlProvider SignalRUrlProvider
+@inject IBreadcrumbService BreadcrumbService
 @inject ILogger<ProjectDetail> Logger
 @inject NavigationManager NavigationManager
 @rendermode InteractiveServer
@@ -33,29 +40,51 @@
 }
 else
 {
-    <div class="project-layout">
-        <div class="timeline-column">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h1>@_project.Name</h1>
-                <div class="btn-group">
-                    <button class="btn btn-outline-secondary btn-sm" @onclick="RefreshData" disabled="@_isRefreshing">
-                        @if (_isRefreshing)
-                        {
-                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                        }
-                        <i class="bi bi-arrow-clockwise"></i> Refresh
-                    </button>
-                    <a href="projects/@Id/edit" class="btn btn-outline-secondary btn-sm">Edit Project</a>
-                </div>
-            </div>
-
-            <GitgraphVisualization
-                @ref="_graphVisualization"
-                ProjectId="@Id"
-                OnPullRequestClick="@SelectPullRequestByNumber"
-                OnIssueClick="@SelectIssue"
-                SelectedNodeId="@GetSelectedNodeId()" />
+    <div class="flex justify-between items-center mb-3">
+        <h1>@_project.Name</h1>
+        <div class="btn-group">
+            <button class="btn btn-outline-secondary btn-sm" @onclick="RefreshData" disabled="@_isRefreshing">
+                @if (_isRefreshing)
+                {
+                    <span class="spinner-border spinner-border-sm mr-1" role="status"></span>
+                }
+                <i class="bi bi-arrow-clockwise"></i> Refresh
+            </button>
+            <a href="projects/@Id/edit" class="btn btn-outline-secondary btn-sm">Edit Project</a>
         </div>
+    </div>
+
+    @* Tab Navigation *@
+    <ul class="nav nav-tabs mb-3">
+        <li class="nav-item">
+            <a class="nav-link @(_activeTab == "issues" ? "active" : "")"
+               href="/projects/@Id"
+               @onclick="SwitchToIssuesTab"
+               @onclick:preventDefault>
+                <i class="bi bi-kanban me-1"></i>Issues
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link @(_activeTab == "branches" ? "active" : "")"
+               href="/projects/@Id/branches"
+               @onclick="SwitchToBranchesTab"
+               @onclick:preventDefault>
+                <i class="bi bi-diagram-2 me-1"></i>Branches
+            </a>
+        </li>
+    </ul>
+
+    @if (_activeTab == "issues")
+    {
+        <div class="project-layout">
+            <div class="timeline-column">
+                <GitgraphVisualization
+                    @ref="_graphVisualization"
+                    ProjectId="@Id"
+                    OnPullRequestClick="@SelectPullRequestByNumber"
+                    OnIssueClick="@SelectIssue"
+                    SelectedNodeId="@GetSelectedNodeId()" />
+            </div>
 
         <div class="detail-column">
             @if (_selectedPullRequest != null)
@@ -81,6 +110,38 @@ else
                             <dd><code>@_project.LocalPath</code></dd>
                             <dt>Default Branch</dt>
                             <dd>@_project.DefaultBranch</dd>
+                            <dt>Fleece Issues</dt>
+                            <dd>
+                                <button class="btn btn-sm btn-outline-secondary"
+                                        @onclick="SyncFleeceIssuesAsync"
+                                        disabled="@_isSyncingFleece">
+                                    @if (_isSyncingFleece)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                        <span>Syncing...</span>
+                                    }
+                                    else
+                                    {
+                                        <i class="bi bi-cloud-upload me-1"></i>
+                                        <span>Sync Issues</span>
+                                    }
+                                </button>
+                                @if (_fleeceSyncError != null)
+                                {
+                                    <span class="badge bg-danger ms-2" title="@_fleeceSyncError">Sync failed</span>
+                                    <button class="btn btn-sm btn-link p-0 ms-1" @onclick="SyncFleeceIssuesAsync">
+                                        Retry
+                                    </button>
+                                }
+                                else if (_lastFleeceSyncResult != null)
+                                {
+                                    <span class="badge bg-success ms-2">
+                                        @(_lastFleeceSyncResult.FilesCommitted > 0
+                                            ? $"Synced {_lastFleeceSyncResult.FilesCommitted} files"
+                                            : "Up to date")
+                                    </span>
+                                }
+                            </dd>
                             @if (!string.IsNullOrEmpty(_project.GitHubOwner) && !string.IsNullOrEmpty(_project.GitHubRepo))
                             {
                                 <dt>GitHub</dt>
@@ -91,33 +152,33 @@ else
                                     </a>
                                     @if (_isSyncingPRs)
                                     {
-                                        <span class="badge bg-info ms-2">
-                                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                        <span class="badge bg-status-info ml-2">
+                                            <span class="spinner-border spinner-border-sm mr-1" role="status"></span>
                                             Syncing...
                                         </span>
                                     }
                                     else if (_tokenMissing)
                                     {
-                                        <span class="badge bg-warning text-dark ms-2"
+                                        <span class="badge bg-status-warning text-text-primary ml-2"
                                               title="Set GITHUB_TOKEN environment variable">Token missing</span>
-                                        <button class="btn btn-sm btn-link p-0 ms-1" @onclick="SyncPullRequestsAsync">
+                                        <button class="btn btn-sm btn-link p-0 ml-1" @onclick="SyncPullRequestsAsync">
                                             Retry
                                         </button>
                                     }
                                     else if (_syncError != null)
                                     {
-                                        <span class="badge bg-danger ms-2" title="@_syncError">Sync failed</span>
-                                        <button class="btn btn-sm btn-link p-0 ms-1" @onclick="SyncPullRequestsAsync">
+                                        <span class="badge bg-status-error ml-2" title="@_syncError">Sync failed</span>
+                                        <button class="btn btn-sm btn-link p-0 ml-1" @onclick="SyncPullRequestsAsync">
                                             Retry
                                         </button>
                                     }
                                     else if (_lastSyncResult != null)
                                     {
-                                        <span class="badge bg-success ms-2"
+                                        <span class="badge bg-status-success ml-2"
                                               title="Imported: @_lastSyncResult.Imported, Updated: @_lastSyncResult.Updated, Removed: @_lastSyncResult.Removed">
                                             Synced
                                         </span>
-                                        <button class="btn btn-sm btn-link p-0 ms-1" @onclick="SyncPullRequestsAsync">
+                                        <button class="btn btn-sm btn-link p-0 ml-1" @onclick="SyncPullRequestsAsync">
                                             Refresh
                                         </button>
                                     }
@@ -127,13 +188,13 @@ else
 
                         <hr class="my-3" />
 
-                        <div class="d-flex flex-column gap-2">
+                        <div class="flex flex-col gap-2">
                             <button class="btn btn-outline-primary btn-sm"
                                     @onclick="StartTestAgentAsync"
                                     disabled="@_isStartingTestAgent">
                                 @if (_isStartingTestAgent)
                                 {
-                                    <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                    <span class="spinner-border spinner-border-sm mr-1" role="status"></span>
                                     <span>Starting...</span>
                                 }
                                 else
@@ -143,7 +204,7 @@ else
                             </button>
                             @if (!string.IsNullOrEmpty(_testAgentError))
                             {
-                                <div class="alert alert-danger py-1 px-2 mb-0 small">
+                                <div class="alert alert-danger py-1 px-2 mb-0 text-sm">
                                     @_testAgentError
                                 </div>
                             }
@@ -154,13 +215,66 @@ else
         </div>
     </div>
 
-    <QuickIssueCreateBar ProjectId="@Id"
-                         LocalPath="@_project.LocalPath"
-                         OnIssueCreated="RefreshData"
-                         OnIssueCreatedForEdit="NavigateToIssueEdit"/>
+        <QuickIssueCreateBar ProjectId="@Id"
+                             LocalPath="@_project.LocalPath"
+                             OnIssueCreated="RefreshData"
+                             OnIssueCreatedForEdit="NavigateToIssueEdit"/>
+    }
+    else if (_activeTab == "branches")
+    {
+        <WorktreeManagementPanel Project="@_project"
+                                 OnDataChanged="RefreshData" />
+    }
+
+    @* Fleece Sync Conflict Modal *@
+    @if (_showFleeceConflictModal)
+    {
+        <div class="modal-backdrop fade show" style="background-color: rgba(0,0,0,0.5);"></div>
+        <div class="modal fade show d-block" tabindex="-1">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Sync Conflict</h5>
+                        <button type="button" class="btn-close" @onclick="HideFleeceConflictModal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="alert alert-warning">
+                            <strong>Unable to pull changes from @_project?.DefaultBranch</strong>
+                        </div>
+                        <p class="small text-muted">@_fleecePullConflict?.ErrorMessage</p>
+                        <p>Choose how to resolve this conflict:</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="HideFleeceConflictModal">Cancel</button>
+                        <button type="button" class="btn btn-warning"
+                                @onclick="HandleFleeceConflictStash"
+                                disabled="@_isSyncingFleece">
+                            @if (_isSyncingFleece)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                            }
+                            Stash Changes
+                        </button>
+                        <button type="button" class="btn btn-danger"
+                                @onclick="HandleFleeceConflictDiscard"
+                                disabled="@_isSyncingFleece">
+                            @if (_isSyncingFleece)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                            }
+                            Discard All Changes
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
 }
 
 <style>
+    /* ==========================================================================
+       Project Layout Grid
+       ========================================================================== */
     .project-layout {
         display: grid;
         grid-template-columns: 1fr 300px;
@@ -187,192 +301,6 @@ else
         position: sticky;
         top: var(--spacing-md);
     }
-
-    .timeline-list {
-        display: flex;
-        flex-direction: column;
-    }
-
-    .timeline-section-header {
-        display: flex;
-        align-items: center;
-        gap: var(--spacing-sm);
-        padding: var(--spacing-sm) 0;
-        font-size: 0.75rem;
-        font-weight: var(--font-weight-semibold);
-        color: var(--text-secondary);
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-    }
-
-    .section-count {
-        background: var(--bg-tertiary);
-        padding: 0.125rem 0.375rem;
-        border-radius: var(--radius-full);
-        font-size: 0.6875rem;
-    }
-
-    /* Inline section label with continuous graph line */
-    .timeline-section-label {
-        display: flex;
-        align-items: stretch;
-        gap: var(--spacing-sm);
-        padding: 0 var(--spacing-sm);
-        min-height: 1.25rem;
-    }
-
-    .timeline-section-label .label-graph {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        width: 16px;
-        flex-shrink: 0;
-    }
-
-    .timeline-section-label .graph-line {
-        width: 2px;
-        flex: 1;
-        background-color: var(--border-color);
-    }
-
-    .timeline-section-label .label-text {
-        display: flex;
-        align-items: center;
-        font-size: 0.6875rem;
-        color: var(--text-muted);
-        text-transform: uppercase;
-        letter-spacing: 0.03em;
-    }
-
-    .timeline-section-label .section-count {
-        margin-left: var(--spacing-xs);
-    }
-
-    /* Timeline action buttons (load more, add item) */
-    .timeline-action-btn,
-    .add-item {
-        display: flex;
-        align-items: stretch;
-        gap: var(--spacing-sm);
-        padding: 0 var(--spacing-sm);
-        border-radius: var(--radius-sm);
-        transition: background-color var(--transition-fast);
-        min-height: 2.25rem;
-        text-decoration: none;
-        cursor: pointer;
-        background: transparent;
-        border: none;
-        width: 100%;
-        text-align: left;
-    }
-
-    .timeline-action-btn:hover,
-    .add-item:hover {
-        background-color: var(--bg-hover);
-    }
-
-    .timeline-action-btn .item-graph,
-    .add-item .item-graph {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        width: 16px;
-        flex-shrink: 0;
-    }
-
-    .timeline-action-btn .graph-line,
-    .add-item .graph-line {
-        width: 2px;
-        flex: 1;
-        background-color: var(--border-color);
-    }
-
-    .timeline-action-btn .graph-line.hidden,
-    .add-item .graph-line.hidden {
-        visibility: hidden;
-    }
-
-    .timeline-action-btn .graph-line-top,
-    .add-item .graph-line-top {
-        min-height: 4px;
-    }
-
-    .timeline-action-btn .graph-line-bottom,
-    .add-item .graph-line-bottom {
-        min-height: 4px;
-    }
-
-    .timeline-action-btn .graph-node,
-    .add-item .graph-node {
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        flex-shrink: 0;
-        border: 2px solid var(--bg-primary);
-        box-sizing: content-box;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 0.5rem;
-        font-weight: bold;
-        color: white;
-    }
-
-    .timeline-action-btn .graph-node.status-load-more {
-        background-color: var(--text-muted);
-        font-size: 0.625rem;
-        letter-spacing: -0.5px;
-    }
-
-    .add-item .graph-node.status-add {
-        background-color: var(--color-ocean);
-    }
-
-    .timeline-action-btn .item-body,
-    .add-item .item-body {
-        flex: 1;
-        min-width: 0;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        padding: var(--spacing-xs) 0;
-    }
-
-    .timeline-action-btn .action-title,
-    .add-item .add-title {
-        font-size: 0.8125rem;
-        color: var(--text-muted);
-        font-style: italic;
-    }
-
-    .timeline-action-btn:hover .action-title {
-        color: var(--text-primary);
-    }
-
-    .add-item:hover .add-title {
-        color: var(--color-ocean);
-    }
-
-    .info-list {
-        margin: 0;
-        font-size: 0.8125rem;
-    }
-
-    .info-list dt {
-        font-weight: var(--font-weight-medium);
-        color: var(--text-secondary);
-        margin-top: var(--spacing-sm);
-    }
-
-    .info-list dt:first-child {
-        margin-top: 0;
-    }
-
-    .info-list dd {
-        margin: 0;
-        margin-top: 0.125rem;
-    }
-
 </style>
 
 @code {
@@ -396,16 +324,30 @@ else
     private HubConnection? _hubConnection;
     private bool _isRefreshing;
 
+    // Tab navigation state
+    private string _activeTab = "issues";
+
     // Test agent state
     private bool _isStartingTestAgent;
     private string? _testAgentError;
     private const string TestAgentEntityId = "test-agent";
     private const string TestBranchName = "hsp/test";
 
+    // Fleece sync state
+    private bool _isSyncingFleece;
+    private string? _fleeceSyncError;
+    private FleeceIssueSyncResult? _lastFleeceSyncResult;
+    private bool _showFleeceConflictModal;
+    private PullResult? _fleecePullConflict;
+
     private record FlattenedPR(PullRequest PullRequest, int Level);
 
     protected override async Task OnInitializedAsync()
     {
+        // Determine active tab from URL
+        var uri = NavigationManager.Uri;
+        _activeTab = uri.Contains("/branches") ? "branches" : "issues";
+
         // Subscribe to agent startup state changes to update UI
         StartupTracker.OnStateChanged += OnStartupStateChanged;
 
@@ -427,6 +369,23 @@ else
         }
     }
 
+    private void SwitchTab(string tab)
+    {
+        if (_activeTab == tab) return;
+
+        _activeTab = tab;
+        ClearSelection();
+
+        // Update the URL without causing a full navigation
+        var newUrl = tab == "branches"
+            ? $"/projects/{Id}/branches"
+            : $"/projects/{Id}";
+        NavigationManager.NavigateTo(newUrl, forceLoad: false, replace: true);
+    }
+
+    private void SwitchToIssuesTab() => SwitchTab("issues");
+    private void SwitchToBranchesTab() => SwitchTab("branches");
+
     public void Dispose()
     {
         StartupTracker.OnStateChanged -= OnStartupStateChanged;
@@ -444,7 +403,7 @@ else
         try
         {
             _hubConnection = new HubConnectionBuilder()
-                .WithUrl(NavigationManager.ToAbsoluteUri("/hubs/agent"))
+                .WithUrl(SignalRUrlProvider.GetHubUrl("/hubs/agent"))
                 .Build();
 
             // Listen for pull request sync events
@@ -479,6 +438,9 @@ else
         _project = await ProjectService.GetByIdAsync(Id);
         if (_project != null)
         {
+            // Set breadcrumb context with project info
+            await BreadcrumbService.SetContextAsync(new BreadcrumbContext { ProjectId = Id });
+
             _rootPullRequests = await PullRequestDataService.GetTreeAsync(Id);
             _flattenedCurrentPRs = FlattenPRs(_rootPullRequests ?? []);
 
@@ -869,8 +831,7 @@ else
                 """;
             await SessionService.SendMessageAsync(session.Id, taskMessage);
 
-            // Navigate to the session chat page
-            NavigationManager.NavigateTo($"/session/{session.Id}");
+            // Agent started - user stays on current page and can monitor via status indicator
         }
         catch (Exception ex)
         {
@@ -881,6 +842,131 @@ else
         finally
         {
             _isStartingTestAgent = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SyncFleeceIssuesAsync()
+    {
+        if (_project == null || _isSyncingFleece)
+            return;
+
+        _isSyncingFleece = true;
+        _fleeceSyncError = null;
+        StateHasChanged();
+
+        try
+        {
+            // Step 1: Commit and push .fleece/ changes
+            _lastFleeceSyncResult = await FleeceIssuesSyncService.SyncAsync(
+                _project.LocalPath,
+                _project.DefaultBranch);
+
+            if (!_lastFleeceSyncResult.Success)
+            {
+                _fleeceSyncError = _lastFleeceSyncResult.ErrorMessage;
+                return;
+            }
+
+            // Step 2: Pull changes back
+            var pullResult = await FleeceIssuesSyncService.PullChangesAsync(
+                _project.LocalPath,
+                _project.DefaultBranch);
+
+            if (!pullResult.Success && pullResult.HasConflicts)
+            {
+                _fleecePullConflict = pullResult;
+                _showFleeceConflictModal = true;
+                return;
+            }
+
+            // Step 3: Refresh the graph
+            await RefreshData();
+        }
+        catch (Exception ex)
+        {
+            _fleeceSyncError = ex.Message;
+            Logger.LogError(ex, "Failed to sync fleece issues for project {ProjectId}", _project.Id);
+        }
+        finally
+        {
+            _isSyncingFleece = false;
+            StateHasChanged();
+        }
+    }
+
+    private void HideFleeceConflictModal()
+    {
+        _showFleeceConflictModal = false;
+        _fleecePullConflict = null;
+    }
+
+    private async Task HandleFleeceConflictStash()
+    {
+        if (_project == null) return;
+
+        _isSyncingFleece = true;
+        StateHasChanged();
+
+        try
+        {
+            var stashSuccess = await FleeceIssuesSyncService.StashChangesAsync(_project.LocalPath);
+            if (!stashSuccess)
+            {
+                _fleeceSyncError = "Failed to stash changes";
+                return;
+            }
+
+            var pullResult = await FleeceIssuesSyncService.PullChangesAsync(
+                _project.LocalPath,
+                _project.DefaultBranch);
+            if (!pullResult.Success)
+            {
+                _fleeceSyncError = pullResult.ErrorMessage;
+                return;
+            }
+
+            HideFleeceConflictModal();
+            await RefreshData();
+        }
+        finally
+        {
+            _isSyncingFleece = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleFleeceConflictDiscard()
+    {
+        if (_project == null) return;
+
+        _isSyncingFleece = true;
+        StateHasChanged();
+
+        try
+        {
+            var discardSuccess = await FleeceIssuesSyncService.DiscardChangesAsync(_project.LocalPath);
+            if (!discardSuccess)
+            {
+                _fleeceSyncError = "Failed to discard changes";
+                return;
+            }
+
+            var pullResult = await FleeceIssuesSyncService.PullChangesAsync(
+                _project.LocalPath,
+                _project.DefaultBranch);
+            if (!pullResult.Success)
+            {
+                _fleeceSyncError = pullResult.ErrorMessage;
+                return;
+            }
+
+            HideFleeceConflictModal();
+            await RefreshData();
+        }
+        finally
+        {
+            _isSyncingFleece = false;
             StateHasChanged();
         }
     }

@@ -10,13 +10,16 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Homespun.Tests" />
+    <InternalsVisibleTo Include="Homespun.Api.Tests" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Fleece.Core" Version="0.6.0" />
+    <PackageReference Include="Markdig" Version="0.44.0" />
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.1" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.1" />
     <PackageReference Include="Octokit" Version="14.0.0" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.0" />
   </ItemGroup>
 
   <ItemGroup>
@@ -27,5 +30,16 @@
     <_ContentIncludedByDefault Remove="Features\Agents\Components\Pages\AgentDetail.razor" />
     <_ContentIncludedByDefault Remove="Features\Agents\Components\Pages\Agents.razor" />
   </ItemGroup>
+
+  <!-- Tailwind CSS Build -->
+  <Target Name="CheckNodeModules" BeforeTargets="BuildTailwindCSS">
+    <Message Importance="high" Text="Checking for node_modules..." />
+    <Exec Command="npm install" WorkingDirectory="$(ProjectDir)" Condition="!Exists('$(ProjectDir)node_modules')" />
+  </Target>
+
+  <Target Name="BuildTailwindCSS" BeforeTargets="Compile">
+    <Message Importance="high" Text="Building Tailwind CSS..." />
+    <Exec Command="npx tailwindcss -i ./wwwroot/css/tailwind.css -o ./wwwroot/css/tailwind.min.css --minify" WorkingDirectory="$(ProjectDir)" />
+  </Target>
 
 </Project>

@@ -10,6 +10,9 @@
 # Claude Code temp files
 tmpclaude-*
 
+# Serena cache files
+.serena/cache/
+
 # Test agent artifacts (HTTP header files from curl testing)
 Accept:
 GET
@@ -301,6 +304,9 @@ FakesAssemblies/
 # Node.js Tools for Visual Studio
 .ntvs_analysis.dat
 node_modules/
+
+# Tailwind CSS generated output (regenerated during build)
+**/wwwroot/css/tailwind.min.css
 
 # Visual Studio 6 build log
 *.plg

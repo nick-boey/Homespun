@@ -1,6 +1,8 @@
 @page "/projects/create"
+@using Homespun.Features.Navigation
 @using Homespun.Features.Projects
 @inject ProjectService ProjectService
+@inject IBreadcrumbService BreadcrumbService
 @inject NavigationManager Navigation
 @inject ILogger<ProjectCreate> Logger
 @rendermode InteractiveServer
@@ -70,7 +72,7 @@
     <button type="submit" class="btn btn-primary" disabled="@_isSubmitting">
         @if (_isSubmitting)
         {
-            <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+            <span class="spinner-border spinner-border-sm mr-2" role="status" aria-hidden="true"></span>
             <span>Creating...</span>
         }
         else
@@ -88,6 +90,11 @@
     private string _defaultBranch = "main";
     private string? _errorMessage;
     private bool _isSubmitting;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await BreadcrumbService.SetContextAsync(new BreadcrumbContext { PageName = "Create" });
+    }
 
     private async Task HandleSubmit()
     {

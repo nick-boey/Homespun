@@ -1,9 +1,12 @@
 using Fleece.Core.Models;
+using Homespun.Features.ClaudeCode.Data;
+using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Fleece.Services;
 using Homespun.Features.Gitgraph.Data;
 using Homespun.Features.GitHub;
 using Homespun.Features.Projects;
 using Homespun.Features.PullRequests;
+using Homespun.Features.PullRequests.Data;
 
 namespace Homespun.Features.Gitgraph.Services;
 
@@ -12,9 +15,11 @@ namespace Homespun.Features.Gitgraph.Services;
 /// Uses IFleeceService for fast issue access.
 /// </summary>
 public class GraphService(
-    ProjectService projectService,
+    IProjectService projectService,
     IGitHubService gitHubService,
     IFleeceService fleeceService,
+    IClaudeSessionStore sessionStore,
+    IDataStore dataStore,
     ILogger<GraphService> logger) : IGraphService
 {
     private readonly GraphBuilder _graphBuilder = new();
@@ -38,18 +43,57 @@ public class GraphService(
         // Fetch issues from Fleece
         var issues = await GetIssuesAsync(project.LocalPath);
 
-        logger.LogDebug(
-            "Building graph for project {ProjectId}: {OpenPrCount} open PRs, {ClosedPrCount} closed PRs, {IssueCount} issues, maxPastPRs: {MaxPastPRs}",
-            projectId, openPrs.Count, closedPrs.Count, issues.Count, maxPastPRs);
+        // Filter out issues that are linked to PRs (they will be shown with the PR instead)
+        var linkedIssueIds = GetLinkedIssueIds(projectId);
+        var filteredIssues = issues.Where(i => !linkedIssueIds.Contains(i.Id)).ToList();
 
-        return _graphBuilder.Build(allPrs, issues, maxPastPRs);
+        logger.LogDebug(
+            "Building graph for project {ProjectId}: {OpenPrCount} open PRs, {ClosedPrCount} closed PRs, {IssueCount} issues ({FilteredCount} after filtering linked), maxPastPRs: {MaxPastPRs}",
+            projectId, openPrs.Count, closedPrs.Count, issues.Count, filteredIssues.Count, maxPastPRs);
+
+        return _graphBuilder.Build(allPrs, filteredIssues, maxPastPRs);
     }
 
     /// <inheritdoc />
     public async Task<GitgraphJsonData> BuildGraphJsonAsync(string projectId, int? maxPastPRs = 5)
     {
         var graph = await BuildGraphAsync(projectId, maxPastPRs);
-        return _mapper.ToJson(graph);
+        var jsonData = _mapper.ToJson(graph);
+
+        // Enrich nodes with agent status data
+        EnrichWithAgentStatuses(jsonData, projectId);
+
+        return jsonData;
+    }
+
+    /// <summary>
+    /// Enriches graph commit data with agent session statuses.
+    /// </summary>
+    private void EnrichWithAgentStatuses(GitgraphJsonData jsonData, string projectId)
+    {
+        // Get all sessions for this project
+        var sessions = sessionStore.GetByProjectId(projectId);
+        if (sessions.Count == 0) return;
+
+        // Build lookup by entity ID
+        var sessionsByEntityId = sessions.ToDictionary(s => s.EntityId, StringComparer.OrdinalIgnoreCase);
+
+        // Enrich commits with agent status
+        foreach (var commit in jsonData.Commits)
+        {
+            // Check if there's an active session for this issue
+            if (commit.IssueId != null && sessionsByEntityId.TryGetValue(commit.IssueId, out var session))
+            {
+                var isActive = session.Status.IsActive();
+
+                commit.AgentStatus = new AgentStatusData
+                {
+                    IsActive = isActive,
+                    Status = session.Status.ToString(),
+                    SessionId = session.Id
+                };
+            }
+        }
     }
 
     private async Task<List<PullRequestInfo>> GetOpenPullRequestsSafe(string projectId)
@@ -76,6 +120,19 @@ public class GraphService(
             logger.LogWarning(ex, "Failed to fetch closed PRs for project {ProjectId}", projectId);
             return [];
         }
+    }
+
+    /// <summary>
+    /// Gets the set of issue IDs that are linked to PRs.
+    /// Issues linked to PRs should not be shown in the graph (their info is shown with the PR instead).
+    /// </summary>
+    private HashSet<string> GetLinkedIssueIds(string projectId)
+    {
+        var prs = dataStore.GetPullRequestsByProject(projectId);
+        return prs
+            .Where(pr => !string.IsNullOrEmpty(pr.BeadsIssueId))
+            .Select(pr => pr.BeadsIssueId!)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
 
     /// <summary>

@@ -23,7 +23,7 @@ public class ProjectService(
     IGitHubService gitHubService,
     ICommandRunner commandRunner,
     IConfiguration configuration,
-    ILogger<ProjectService> logger)
+    ILogger<ProjectService> logger) : IProjectService
 {
     /// <summary>
     /// Base path for all project worktrees.
