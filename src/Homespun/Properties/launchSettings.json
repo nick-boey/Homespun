@@ -25,7 +25,8 @@
         "launchBrowser": true,
         "applicationUrl": "https://localhost:5094",
         "environmentVariables": {
-          "ASPNETCORE_ENVIRONMENT": "Mock"
+          "ASPNETCORE_ENVIRONMENT": "Development",
+          "HOMESPUN_MOCK_MODE": "true"
         }
       }
     }
