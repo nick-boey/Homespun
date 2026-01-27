@@ -16,6 +16,8 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
     private readonly SessionOptionsFactory _optionsFactory;
     private readonly ILogger<ClaudeSessionService> _logger;
     private readonly IHubContext<ClaudeCodeHub> _hubContext;
+    private readonly IClaudeSessionDiscovery _sessionDiscovery;
+    private readonly ISessionMetadataStore _metadataStore;
     private readonly IToolResultParser _toolResultParser;
     private readonly ConcurrentDictionary<string, ClaudeAgentOptions> _sessionOptions = new();
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _sessionCts = new();
@@ -30,12 +32,16 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         SessionOptionsFactory optionsFactory,
         ILogger<ClaudeSessionService> logger,
         IHubContext<ClaudeCodeHub> hubContext,
+        IClaudeSessionDiscovery sessionDiscovery,
+        ISessionMetadataStore metadataStore,
         IToolResultParser toolResultParser)
     {
         _sessionStore = sessionStore;
         _optionsFactory = optionsFactory;
         _logger = logger;
         _hubContext = hubContext;
+        _sessionDiscovery = sessionDiscovery;
+        _metadataStore = metadataStore;
         _toolResultParser = toolResultParser;
     }
 
@@ -80,10 +86,112 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         session.Status = ClaudeSessionStatus.WaitingForInput;
         _logger.LogInformation("Session {SessionId} initialized and ready", sessionId);
 
+        // Save metadata for future resumption
+        var metadata = new SessionMetadata(
+            SessionId: session.ConversationId ?? sessionId, // Will be updated when we get the real ConversationId
+            EntityId: entityId,
+            ProjectId: projectId,
+            WorkingDirectory: workingDirectory,
+            Mode: mode,
+            Model: model,
+            SystemPrompt: systemPrompt,
+            CreatedAt: session.CreatedAt
+        );
+        await _metadataStore.SaveAsync(metadata, cancellationToken);
+
         // Notify clients about the new session
         await _hubContext.BroadcastSessionStarted(session);
 
         return session;
+    }
+
+    /// <inheritdoc />
+    public async Task<ClaudeSession> ResumeSessionAsync(
+        string sessionId,
+        string entityId,
+        string projectId,
+        string workingDirectory,
+        CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Resuming session {ClaudeSessionId} for entity {EntityId}", sessionId, entityId);
+
+        // Try to get our saved metadata for this session
+        var metadata = await _metadataStore.GetBySessionIdAsync(sessionId, cancellationToken);
+
+        // Create a new ClaudeSession using the discovered session ID as ConversationId
+        var newSessionId = Guid.NewGuid().ToString();
+        var session = new ClaudeSession
+        {
+            Id = newSessionId,
+            EntityId = entityId,
+            ProjectId = projectId,
+            WorkingDirectory = workingDirectory,
+            ConversationId = sessionId, // The Claude CLI session ID for --resume
+            Model = metadata?.Model ?? "sonnet",
+            Mode = metadata?.Mode ?? SessionMode.Build,
+            SystemPrompt = metadata?.SystemPrompt,
+            Status = ClaudeSessionStatus.Running,
+            CreatedAt = DateTime.UtcNow,
+            LastActivityAt = DateTime.UtcNow,
+            Messages = []
+        };
+
+        // Create SDK options with Resume flag
+        var options = _optionsFactory.Create(
+            session.Mode,
+            workingDirectory,
+            session.Model,
+            session.SystemPrompt);
+        options.PermissionMode = PermissionMode.BypassPermissions;
+        options.IncludePartialMessages = true;
+        options.Resume = sessionId; // THIS IS THE KEY - tells Claude CLI to resume
+
+        _sessionOptions[newSessionId] = options;
+        _sessionCts[newSessionId] = new CancellationTokenSource();
+        _sessionStore.Add(session);
+
+        _logger.LogInformation("Resumed session {NewSessionId} with ConversationId {ConversationId}",
+            newSessionId, sessionId);
+
+        await _hubContext.BroadcastSessionStarted(session);
+        return session;
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<ResumableSession>> GetResumableSessionsAsync(
+        string entityId,
+        string workingDirectory,
+        CancellationToken cancellationToken = default)
+    {
+        _logger.LogDebug("Discovering resumable sessions for entity {EntityId} at {WorkingDirectory}",
+            entityId, workingDirectory);
+
+        // Discover sessions from Claude's storage
+        var discoveredSessions = await _sessionDiscovery.DiscoverSessionsAsync(workingDirectory, cancellationToken);
+
+        var resumableSessions = new List<ResumableSession>();
+        foreach (var discovered in discoveredSessions)
+        {
+            // Try to get our metadata for this session
+            var metadata = await _metadataStore.GetBySessionIdAsync(discovered.SessionId, cancellationToken);
+
+            // Get message count if possible
+            var messageCount = await _sessionDiscovery.GetMessageCountAsync(
+                discovered.SessionId, workingDirectory, cancellationToken);
+
+            resumableSessions.Add(new ResumableSession(
+                SessionId: discovered.SessionId,
+                LastActivityAt: discovered.LastModified,
+                Mode: metadata?.Mode,
+                Model: metadata?.Model,
+                MessageCount: messageCount
+            ));
+        }
+
+        _logger.LogDebug("Found {Count} resumable sessions for entity {EntityId}",
+            resumableSessions.Count, entityId);
+
+        return resumableSessions;
     }
 
     /// <inheritdoc />
@@ -227,8 +335,26 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                 session.TotalCostUsd = (decimal)(resultMsg.TotalCostUsd ?? 0);
                 session.TotalDurationMs = resultMsg.DurationMs;
                 // Store the Claude CLI session ID for use with --resume in subsequent messages
+                var previousConversationId = session.ConversationId;
                 session.ConversationId = resultMsg.SessionId;
                 _logger.LogDebug("Stored ConversationId {ConversationId} for session resumption", resultMsg.SessionId);
+
+                // Update metadata with the actual Claude session ID if it changed
+                if (resultMsg.SessionId != null && resultMsg.SessionId != previousConversationId)
+                {
+                    var metadata = new SessionMetadata(
+                        SessionId: resultMsg.SessionId,
+                        EntityId: session.EntityId,
+                        ProjectId: session.ProjectId,
+                        WorkingDirectory: session.WorkingDirectory,
+                        Mode: session.Mode,
+                        Model: session.Model,
+                        SystemPrompt: session.SystemPrompt,
+                        CreatedAt: session.CreatedAt
+                    );
+                    await _metadataStore.SaveAsync(metadata, cancellationToken);
+                }
+
                 await _hubContext.BroadcastSessionResultReceived(sessionId, session.TotalCostUsd, resultMsg.DurationMs);
                 break;
 

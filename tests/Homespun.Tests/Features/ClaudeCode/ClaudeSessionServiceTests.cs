@@ -16,6 +16,8 @@ public class ClaudeSessionServiceTests
     private SessionOptionsFactory _optionsFactory = null!;
     private Mock<ILogger<ClaudeSessionService>> _loggerMock = null!;
     private Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>> _hubContextMock = null!;
+    private Mock<IClaudeSessionDiscovery> _discoveryMock = null!;
+    private Mock<ISessionMetadataStore> _metadataStoreMock = null!;
     private IToolResultParser _toolResultParser = null!;
 
     [SetUp]
@@ -25,6 +27,8 @@ public class ClaudeSessionServiceTests
         _optionsFactory = new SessionOptionsFactory();
         _loggerMock = new Mock<ILogger<ClaudeSessionService>>();
         _hubContextMock = new Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>>();
+        _discoveryMock = new Mock<IClaudeSessionDiscovery>();
+        _metadataStoreMock = new Mock<ISessionMetadataStore>();
         _toolResultParser = new ToolResultParser();
 
         // Setup mock hub clients
@@ -34,7 +38,14 @@ public class ClaudeSessionServiceTests
         clientsMock.Setup(c => c.Group(It.IsAny<string>())).Returns(clientProxyMock.Object);
         _hubContextMock.Setup(h => h.Clients).Returns(clientsMock.Object);
 
-        _service = new ClaudeSessionService(_sessionStore, _optionsFactory, _loggerMock.Object, _hubContextMock.Object, _toolResultParser);
+        _service = new ClaudeSessionService(
+            _sessionStore,
+            _optionsFactory,
+            _loggerMock.Object,
+            _hubContextMock.Object,
+            _discoveryMock.Object,
+            _metadataStoreMock.Object,
+            _toolResultParser);
     }
 
     [Test]
@@ -296,6 +307,8 @@ public class ClaudeSessionServiceMessageTests
     private SessionOptionsFactory _optionsFactory = null!;
     private Mock<ILogger<ClaudeSessionService>> _loggerMock = null!;
     private Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>> _hubContextMock = null!;
+    private Mock<IClaudeSessionDiscovery> _discoveryMock = null!;
+    private Mock<ISessionMetadataStore> _metadataStoreMock = null!;
     private IToolResultParser _toolResultParser = null!;
 
     [SetUp]
@@ -305,6 +318,8 @@ public class ClaudeSessionServiceMessageTests
         _optionsFactory = new SessionOptionsFactory();
         _loggerMock = new Mock<ILogger<ClaudeSessionService>>();
         _hubContextMock = new Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>>();
+        _discoveryMock = new Mock<IClaudeSessionDiscovery>();
+        _metadataStoreMock = new Mock<ISessionMetadataStore>();
         _toolResultParser = new ToolResultParser();
 
         var clientsMock = new Mock<IHubClients>();
@@ -313,7 +328,14 @@ public class ClaudeSessionServiceMessageTests
         clientsMock.Setup(c => c.Group(It.IsAny<string>())).Returns(clientProxyMock.Object);
         _hubContextMock.Setup(h => h.Clients).Returns(clientsMock.Object);
 
-        _service = new ClaudeSessionService(_sessionStore, _optionsFactory, _loggerMock.Object, _hubContextMock.Object, _toolResultParser);
+        _service = new ClaudeSessionService(
+            _sessionStore,
+            _optionsFactory,
+            _loggerMock.Object,
+            _hubContextMock.Object,
+            _discoveryMock.Object,
+            _metadataStoreMock.Object,
+            _toolResultParser);
     }
 
     [Test]
@@ -388,6 +410,8 @@ public class ClaudeSessionServicePermissionModeTests
     private SessionOptionsFactory _optionsFactory = null!;
     private Mock<ILogger<ClaudeSessionService>> _loggerMock = null!;
     private Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>> _hubContextMock = null!;
+    private Mock<IClaudeSessionDiscovery> _discoveryMock = null!;
+    private Mock<ISessionMetadataStore> _metadataStoreMock = null!;
     private IToolResultParser _toolResultParser = null!;
 
     [SetUp]
@@ -397,6 +421,8 @@ public class ClaudeSessionServicePermissionModeTests
         _optionsFactory = new SessionOptionsFactory();
         _loggerMock = new Mock<ILogger<ClaudeSessionService>>();
         _hubContextMock = new Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>>();
+        _discoveryMock = new Mock<IClaudeSessionDiscovery>();
+        _metadataStoreMock = new Mock<ISessionMetadataStore>();
         _toolResultParser = new ToolResultParser();
 
         var clientsMock = new Mock<IHubClients>();
@@ -405,7 +431,14 @@ public class ClaudeSessionServicePermissionModeTests
         clientsMock.Setup(c => c.Group(It.IsAny<string>())).Returns(clientProxyMock.Object);
         _hubContextMock.Setup(h => h.Clients).Returns(clientsMock.Object);
 
-        _service = new ClaudeSessionService(_sessionStore, _optionsFactory, _loggerMock.Object, _hubContextMock.Object, _toolResultParser);
+        _service = new ClaudeSessionService(
+            _sessionStore,
+            _optionsFactory,
+            _loggerMock.Object,
+            _hubContextMock.Object,
+            _discoveryMock.Object,
+            _metadataStoreMock.Object,
+            _toolResultParser);
     }
 
     [TestCase(PermissionMode.Default)]
@@ -459,5 +492,255 @@ public class ClaudeSessionServicePermissionModeTests
 
         // Verify it throws for missing options (getting past all validations)
         Assert.That(ex!.Message, Does.Contain("No options found"));
+    }
+}
+
+/// <summary>
+/// Tests for session resumption functionality.
+/// </summary>
+[TestFixture]
+public class ClaudeSessionServiceResumeTests
+{
+    private ClaudeSessionService _service = null!;
+    private IClaudeSessionStore _sessionStore = null!;
+    private SessionOptionsFactory _optionsFactory = null!;
+    private Mock<ILogger<ClaudeSessionService>> _loggerMock = null!;
+    private Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>> _hubContextMock = null!;
+    private Mock<IClaudeSessionDiscovery> _discoveryMock = null!;
+    private Mock<ISessionMetadataStore> _metadataStoreMock = null!;
+    private IToolResultParser _toolResultParser = null!;
+    private string _testClaudeDir = null!;
+
+    [SetUp]
+    public void SetUp()
+    {
+        _testClaudeDir = Path.Combine(Path.GetTempPath(), $"claude-test-{Guid.NewGuid()}");
+        Directory.CreateDirectory(_testClaudeDir);
+
+        _sessionStore = new ClaudeSessionStore();
+        _optionsFactory = new SessionOptionsFactory();
+        _loggerMock = new Mock<ILogger<ClaudeSessionService>>();
+        _hubContextMock = new Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>>();
+        _discoveryMock = new Mock<IClaudeSessionDiscovery>();
+        _metadataStoreMock = new Mock<ISessionMetadataStore>();
+        _toolResultParser = new ToolResultParser();
+
+        var clientsMock = new Mock<IHubClients>();
+        var clientProxyMock = new Mock<IClientProxy>();
+        clientsMock.Setup(c => c.All).Returns(clientProxyMock.Object);
+        clientsMock.Setup(c => c.Group(It.IsAny<string>())).Returns(clientProxyMock.Object);
+        _hubContextMock.Setup(h => h.Clients).Returns(clientsMock.Object);
+
+        _service = new ClaudeSessionService(
+            _sessionStore,
+            _optionsFactory,
+            _loggerMock.Object,
+            _hubContextMock.Object,
+            _discoveryMock.Object,
+            _metadataStoreMock.Object,
+            _toolResultParser);
+    }
+
+    [TearDown]
+    public void TearDown()
+    {
+        if (Directory.Exists(_testClaudeDir))
+        {
+            Directory.Delete(_testClaudeDir, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task ResumeSessionAsync_WithMetadata_UsesStoredMetadata()
+    {
+        // Arrange
+        var claudeSessionId = Guid.NewGuid().ToString();
+        var metadata = new SessionMetadata(
+            SessionId: claudeSessionId,
+            EntityId: "entity-123",
+            ProjectId: "project-456",
+            WorkingDirectory: "/test/path",
+            Mode: SessionMode.Build,
+            Model: "claude-opus-4",
+            SystemPrompt: "Test prompt",
+            CreatedAt: DateTime.UtcNow.AddHours(-1)
+        );
+        _metadataStoreMock.Setup(m => m.GetBySessionIdAsync(claudeSessionId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(metadata);
+
+        // Act
+        var session = await _service.ResumeSessionAsync(
+            claudeSessionId,
+            "entity-123",
+            "project-456",
+            "/test/path");
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(session.ConversationId, Is.EqualTo(claudeSessionId));
+            Assert.That(session.Mode, Is.EqualTo(SessionMode.Build));
+            Assert.That(session.Model, Is.EqualTo("claude-opus-4"));
+            Assert.That(session.SystemPrompt, Is.EqualTo("Test prompt"));
+            Assert.That(session.Status, Is.EqualTo(ClaudeSessionStatus.Running));
+        });
+    }
+
+    [Test]
+    public async Task ResumeSessionAsync_WithoutMetadata_UsesDefaults()
+    {
+        // Arrange
+        var claudeSessionId = Guid.NewGuid().ToString();
+        _metadataStoreMock.Setup(m => m.GetBySessionIdAsync(claudeSessionId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((SessionMetadata?)null);
+
+        // Act
+        var session = await _service.ResumeSessionAsync(
+            claudeSessionId,
+            "entity-123",
+            "project-456",
+            "/test/path");
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(session.ConversationId, Is.EqualTo(claudeSessionId));
+            Assert.That(session.Mode, Is.EqualTo(SessionMode.Build)); // Default
+            Assert.That(session.Model, Is.EqualTo("sonnet")); // Default
+            Assert.That(session.SystemPrompt, Is.Null);
+            Assert.That(session.Status, Is.EqualTo(ClaudeSessionStatus.Running));
+        });
+    }
+
+    [Test]
+    public async Task ResumeSessionAsync_AddsSessionToStore()
+    {
+        // Arrange
+        var claudeSessionId = Guid.NewGuid().ToString();
+        _metadataStoreMock.Setup(m => m.GetBySessionIdAsync(claudeSessionId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((SessionMetadata?)null);
+
+        // Act
+        var session = await _service.ResumeSessionAsync(
+            claudeSessionId,
+            "entity-123",
+            "project-456",
+            "/test/path");
+
+        // Assert
+        var retrieved = _sessionStore.GetById(session.Id);
+        Assert.That(retrieved, Is.Not.Null);
+        Assert.That(retrieved!.ConversationId, Is.EqualTo(claudeSessionId));
+    }
+
+    [Test]
+    public async Task ResumeSessionAsync_GeneratesNewHomespunSessionId()
+    {
+        // Arrange
+        var claudeSessionId = Guid.NewGuid().ToString();
+        _metadataStoreMock.Setup(m => m.GetBySessionIdAsync(claudeSessionId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((SessionMetadata?)null);
+
+        // Act
+        var session = await _service.ResumeSessionAsync(
+            claudeSessionId,
+            "entity-123",
+            "project-456",
+            "/test/path");
+
+        // Assert - Homespun session ID should be different from Claude's session ID
+        Assert.That(session.Id, Is.Not.EqualTo(claudeSessionId));
+        Assert.That(Guid.TryParse(session.Id, out _), Is.True);
+    }
+
+    [Test]
+    public async Task GetResumableSessionsAsync_DiscoversSessions()
+    {
+        // Arrange
+        var workingDirectory = "/test/path";
+        var session1 = new DiscoveredSession(
+            SessionId: Guid.NewGuid().ToString(),
+            FilePath: "/path/to/session1.jsonl",
+            LastModified: DateTime.UtcNow.AddHours(-1),
+            FileSize: 1000
+        );
+        var session2 = new DiscoveredSession(
+            SessionId: Guid.NewGuid().ToString(),
+            FilePath: "/path/to/session2.jsonl",
+            LastModified: DateTime.UtcNow,
+            FileSize: 2000
+        );
+        _discoveryMock.Setup(d => d.DiscoverSessionsAsync(workingDirectory, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<DiscoveredSession> { session2, session1 }); // Ordered by newest first
+
+        _metadataStoreMock.Setup(m => m.GetBySessionIdAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((SessionMetadata?)null);
+
+        // Act
+        var result = await _service.GetResumableSessionsAsync("entity-123", workingDirectory);
+
+        // Assert
+        Assert.That(result, Has.Count.EqualTo(2));
+        Assert.That(result[0].SessionId, Is.EqualTo(session2.SessionId)); // Newest first
+        Assert.That(result[1].SessionId, Is.EqualTo(session1.SessionId));
+    }
+
+    [Test]
+    public async Task GetResumableSessionsAsync_EnrichesWithMetadata()
+    {
+        // Arrange
+        var workingDirectory = "/test/path";
+        var sessionId = Guid.NewGuid().ToString();
+        var discoveredSession = new DiscoveredSession(
+            SessionId: sessionId,
+            FilePath: "/path/to/session.jsonl",
+            LastModified: DateTime.UtcNow,
+            FileSize: 1000
+        );
+        var metadata = new SessionMetadata(
+            SessionId: sessionId,
+            EntityId: "entity-123",
+            ProjectId: "project-456",
+            WorkingDirectory: workingDirectory,
+            Mode: SessionMode.Plan,
+            Model: "claude-opus-4",
+            SystemPrompt: null,
+            CreatedAt: DateTime.UtcNow.AddHours(-1)
+        );
+
+        _discoveryMock.Setup(d => d.DiscoverSessionsAsync(workingDirectory, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<DiscoveredSession> { discoveredSession });
+        _metadataStoreMock.Setup(m => m.GetBySessionIdAsync(sessionId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(metadata);
+        _discoveryMock.Setup(d => d.GetMessageCountAsync(sessionId, workingDirectory, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(42);
+
+        // Act
+        var result = await _service.GetResumableSessionsAsync("entity-123", workingDirectory);
+
+        // Assert
+        Assert.That(result, Has.Count.EqualTo(1));
+        var resumable = result[0];
+        Assert.Multiple(() =>
+        {
+            Assert.That(resumable.SessionId, Is.EqualTo(sessionId));
+            Assert.That(resumable.Mode, Is.EqualTo(SessionMode.Plan));
+            Assert.That(resumable.Model, Is.EqualTo("claude-opus-4"));
+            Assert.That(resumable.MessageCount, Is.EqualTo(42));
+        });
+    }
+
+    [Test]
+    public async Task GetResumableSessionsAsync_NoSessions_ReturnsEmptyList()
+    {
+        // Arrange
+        _discoveryMock.Setup(d => d.DiscoverSessionsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<DiscoveredSession>());
+
+        // Act
+        var result = await _service.GetResumableSessionsAsync("entity-123", "/test/path");
+
+        // Assert
+        Assert.That(result, Is.Empty);
     }
 }
