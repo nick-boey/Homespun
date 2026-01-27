@@ -22,11 +22,11 @@ else
     <table class="table">
         <thead>
             <tr>
-                <th class="no-select">Name</th>
-                <th class="no-select">Local Path</th>
-                <th class="no-select">GitHub</th>
-                <th class="no-select">Default Branch</th>
-                <th class="no-select">Actions</th>
+                <th class="select-none">Name</th>
+                <th class="select-none">Local Path</th>
+                <th class="select-none">GitHub</th>
+                <th class="select-none">Default Branch</th>
+                <th class="select-none">Actions</th>
             </tr>
         </thead>
         <tbody>
@@ -48,8 +48,8 @@ else
                         }
                     </td>
                     <td>@project.DefaultBranch</td>
-                    <td class="actions-cell">
-                        <a href="projects/@project.Id/edit" class="btn btn-sm btn-outline-secondary">Edit</a>
+                    <td class="whitespace-nowrap">
+                        <a href="projects/@project.Id/edit" class="btn btn-sm btn-outline mr-1">Edit</a>
                         <button class="btn btn-sm btn-danger" @onclick="() => DeleteProject(project.Id)">Delete</button>
                     </td>
                 </tr>
@@ -58,27 +58,6 @@ else
     </table>
     <p><a href="projects/create" class="btn btn-primary btn-sm">New Project</a></p>
 }
-
-<style>
-    .no-select {
-        user-select: none;
-        -webkit-user-select: none;
-        -moz-user-select: none;
-        -ms-user-select: none;
-    }
-    
-    .actions-cell {
-        white-space: nowrap;
-    }
-    
-    .actions-cell .btn {
-        margin-right: 0.25rem;
-    }
-    
-    .btn-outline-secondary {
-        border: 1px solid var(--border-color);
-    }
-</style>
 
 @code {
     private List<Project>? _projects;

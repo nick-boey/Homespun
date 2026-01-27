@@ -1,14 +1,6 @@
 /* ==========================================================================
-   Notification Banner Styles
-   Similar to GitHub's "new commits" banner at the top of the page
+   Notification Banner Styles - Type-specific colors
    ========================================================================== */
-
-.notification-banner-container {
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-sm);
-    margin-bottom: var(--spacing-md);
-}
 
 .notification-banner {
     display: flex;
@@ -87,93 +79,11 @@
     border-color: #e06d12;
 }
 
-/* Content layout */
-.notification-content {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-sm);
-    flex: 1;
-    min-width: 0;
-}
-
-.notification-icon {
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.notification-text {
-    display: flex;
-    align-items: baseline;
-    gap: var(--spacing-sm);
-    flex-wrap: wrap;
-    min-width: 0;
-}
-
-.notification-title {
-    font-weight: var(--font-weight-semibold);
-    white-space: nowrap;
-}
-
-.notification-message {
-    color: var(--text-secondary);
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-/* Actions */
-.notification-actions {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-sm);
-    flex-shrink: 0;
-}
-
-.notification-action-btn {
-    white-space: nowrap;
-}
-
-.notification-dismiss {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 1.5rem;
-    height: 1.5rem;
-    padding: 0;
-    background: transparent;
-    border: none;
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    color: var(--text-muted);
-    transition: all var(--transition-fast);
-}
-
-.notification-dismiss:hover {
-    background-color: var(--bg-hover);
-    color: var(--text-primary);
-}
-
-.notification-dismiss:focus {
-    outline: none;
-    box-shadow: 0 0 0 2px var(--focus-ring);
-}
-
 /* Responsive */
 @media (max-width: 768px) {
     .notification-banner {
         flex-direction: column;
         align-items: flex-start;
         gap: var(--spacing-sm);
-    }
-
-    .notification-actions {
-        width: 100%;
-        justify-content: flex-end;
-    }
-
-    .notification-text {
-        flex-direction: column;
-        gap: var(--spacing-xs);
     }
 }

@@ -4,29 +4,29 @@
 
 @if (_notifications.Count > 0)
 {
-    <div class="notification-banner-container">
+    <div class="flex flex-col gap-sm mb-md">
         @foreach (var notification in _notifications)
         {
             <div class="notification-banner notification-@notification.Type.ToString().ToLower()">
-                <div class="notification-content">
-                    <div class="notification-icon">
+                <div class="notification-content flex items-center gap-sm flex-1 min-w-0">
+                    <div class="notification-icon flex-shrink-0 flex items-center justify-center">
                         @GetIcon(notification.Type)
                     </div>
-                    <div class="notification-text">
-                        <span class="notification-title">@notification.Title</span>
-                        <span class="notification-message">@notification.Message</span>
+                    <div class="notification-text flex items-baseline gap-sm flex-wrap min-w-0">
+                        <span class="notification-title font-semibold whitespace-nowrap">@notification.Title</span>
+                        <span class="notification-message text-text-secondary overflow-hidden text-ellipsis">@notification.Message</span>
                     </div>
                 </div>
-                <div class="notification-actions">
+                <div class="notification-actions flex items-center gap-sm flex-shrink-0">
                     @if (!string.IsNullOrEmpty(notification.ActionLabel) && notification.Action != null)
                     {
-                        <button class="btn btn-sm notification-action-btn" @onclick="() => HandleAction(notification)">
+                        <button class="btn btn-sm notification-action-btn whitespace-nowrap" @onclick="() => HandleAction(notification)">
                             @notification.ActionLabel
                         </button>
                     }
                     @if (notification.IsDismissible)
                     {
-                        <button class="notification-dismiss" @onclick="() => Dismiss(notification.Id)" title="Dismiss">
+                        <button class="notification-dismiss flex items-center justify-center w-6 h-6 p-0 bg-transparent border-none rounded-sm cursor-pointer text-text-muted hover:bg-bg-hover hover:text-text-primary transition-fast focus:outline-none focus:ring-2 focus:ring-ocean/30" @onclick="() => Dismiss(notification.Id)" title="Dismiss">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <line x1="18" y1="6" x2="6" y2="18"></line>
                                 <line x1="6" y1="6" x2="18" y2="18"></line>
