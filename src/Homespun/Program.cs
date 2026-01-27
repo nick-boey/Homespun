@@ -67,6 +67,7 @@ builder.Services.AddScoped<PullRequestWorkflowService>();
 // Fleece services (file-based issue tracking)
 builder.Services.AddSingleton<IFleeceService, FleeceService>();
 builder.Services.AddScoped<IFleeceIssueTransitionService, FleeceIssueTransitionService>();
+builder.Services.AddSingleton<IFleeceIssuesSyncService, FleeceIssuesSyncService>();
 
 // Markdown rendering service
 builder.Services.AddSingleton<IMarkdownRenderingService, MarkdownRenderingService>();
