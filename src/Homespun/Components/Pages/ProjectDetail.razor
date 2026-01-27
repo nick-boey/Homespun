@@ -6,6 +6,7 @@
 @using Homespun.Features.ClaudeCode.Services
 @using Homespun.Features.Commands
 @using Homespun.Features.Fleece.Services
+@using Homespun.Features.Fleece.Models
 @using Homespun.Features.Git
 @using Homespun.Features.GitHub
 @using Homespun.Features.Navigation
@@ -19,6 +20,7 @@
 @inject PullRequestDataService PullRequestDataService
 @inject PullRequestWorkflowService PullRequestWorkflowService
 @inject IFleeceService FleeceService
+@inject IFleeceIssuesSyncService FleeceIssuesSyncService
 @inject IGitHubService GitHubService
 @inject IGitWorktreeService GitWorktreeService
 @inject ICommandRunner CommandRunner
@@ -108,6 +110,38 @@ else
                             <dd><code>@_project.LocalPath</code></dd>
                             <dt>Default Branch</dt>
                             <dd>@_project.DefaultBranch</dd>
+                            <dt>Fleece Issues</dt>
+                            <dd>
+                                <button class="btn btn-sm btn-outline-secondary"
+                                        @onclick="SyncFleeceIssuesAsync"
+                                        disabled="@_isSyncingFleece">
+                                    @if (_isSyncingFleece)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                        <span>Syncing...</span>
+                                    }
+                                    else
+                                    {
+                                        <i class="bi bi-cloud-upload me-1"></i>
+                                        <span>Sync Issues</span>
+                                    }
+                                </button>
+                                @if (_fleeceSyncError != null)
+                                {
+                                    <span class="badge bg-danger ms-2" title="@_fleeceSyncError">Sync failed</span>
+                                    <button class="btn btn-sm btn-link p-0 ms-1" @onclick="SyncFleeceIssuesAsync">
+                                        Retry
+                                    </button>
+                                }
+                                else if (_lastFleeceSyncResult != null)
+                                {
+                                    <span class="badge bg-success ms-2">
+                                        @(_lastFleeceSyncResult.FilesCommitted > 0
+                                            ? $"Synced {_lastFleeceSyncResult.FilesCommitted} files"
+                                            : "Up to date")
+                                    </span>
+                                }
+                            </dd>
                             @if (!string.IsNullOrEmpty(_project.GitHubOwner) && !string.IsNullOrEmpty(_project.GitHubRepo))
                             {
                                 <dt>GitHub</dt>
@@ -190,6 +224,50 @@ else
     {
         <WorktreeManagementPanel Project="@_project"
                                  OnDataChanged="RefreshData" />
+    }
+
+    @* Fleece Sync Conflict Modal *@
+    @if (_showFleeceConflictModal)
+    {
+        <div class="modal-backdrop fade show" style="background-color: rgba(0,0,0,0.5);"></div>
+        <div class="modal fade show d-block" tabindex="-1">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Sync Conflict</h5>
+                        <button type="button" class="btn-close" @onclick="HideFleeceConflictModal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="alert alert-warning">
+                            <strong>Unable to pull changes from @_project?.DefaultBranch</strong>
+                        </div>
+                        <p class="small text-muted">@_fleecePullConflict?.ErrorMessage</p>
+                        <p>Choose how to resolve this conflict:</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="HideFleeceConflictModal">Cancel</button>
+                        <button type="button" class="btn btn-warning"
+                                @onclick="HandleFleeceConflictStash"
+                                disabled="@_isSyncingFleece">
+                            @if (_isSyncingFleece)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                            }
+                            Stash Changes
+                        </button>
+                        <button type="button" class="btn btn-danger"
+                                @onclick="HandleFleeceConflictDiscard"
+                                disabled="@_isSyncingFleece">
+                            @if (_isSyncingFleece)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                            }
+                            Discard All Changes
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
     }
 }
 
@@ -437,6 +515,13 @@ else
     private string? _testAgentError;
     private const string TestAgentEntityId = "test-agent";
     private const string TestBranchName = "hsp/test";
+
+    // Fleece sync state
+    private bool _isSyncingFleece;
+    private string? _fleeceSyncError;
+    private FleeceIssueSyncResult? _lastFleeceSyncResult;
+    private bool _showFleeceConflictModal;
+    private PullResult? _fleecePullConflict;
 
     private record FlattenedPR(PullRequest PullRequest, int Level);
 
@@ -941,6 +1026,131 @@ else
         finally
         {
             _isStartingTestAgent = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SyncFleeceIssuesAsync()
+    {
+        if (_project == null || _isSyncingFleece)
+            return;
+
+        _isSyncingFleece = true;
+        _fleeceSyncError = null;
+        StateHasChanged();
+
+        try
+        {
+            // Step 1: Commit and push .fleece/ changes
+            _lastFleeceSyncResult = await FleeceIssuesSyncService.SyncAsync(
+                _project.LocalPath,
+                _project.DefaultBranch);
+
+            if (!_lastFleeceSyncResult.Success)
+            {
+                _fleeceSyncError = _lastFleeceSyncResult.ErrorMessage;
+                return;
+            }
+
+            // Step 2: Pull changes back
+            var pullResult = await FleeceIssuesSyncService.PullChangesAsync(
+                _project.LocalPath,
+                _project.DefaultBranch);
+
+            if (!pullResult.Success && pullResult.HasConflicts)
+            {
+                _fleecePullConflict = pullResult;
+                _showFleeceConflictModal = true;
+                return;
+            }
+
+            // Step 3: Refresh the graph
+            await RefreshData();
+        }
+        catch (Exception ex)
+        {
+            _fleeceSyncError = ex.Message;
+            Logger.LogError(ex, "Failed to sync fleece issues for project {ProjectId}", _project.Id);
+        }
+        finally
+        {
+            _isSyncingFleece = false;
+            StateHasChanged();
+        }
+    }
+
+    private void HideFleeceConflictModal()
+    {
+        _showFleeceConflictModal = false;
+        _fleecePullConflict = null;
+    }
+
+    private async Task HandleFleeceConflictStash()
+    {
+        if (_project == null) return;
+
+        _isSyncingFleece = true;
+        StateHasChanged();
+
+        try
+        {
+            var stashSuccess = await FleeceIssuesSyncService.StashChangesAsync(_project.LocalPath);
+            if (!stashSuccess)
+            {
+                _fleeceSyncError = "Failed to stash changes";
+                return;
+            }
+
+            var pullResult = await FleeceIssuesSyncService.PullChangesAsync(
+                _project.LocalPath,
+                _project.DefaultBranch);
+            if (!pullResult.Success)
+            {
+                _fleeceSyncError = pullResult.ErrorMessage;
+                return;
+            }
+
+            HideFleeceConflictModal();
+            await RefreshData();
+        }
+        finally
+        {
+            _isSyncingFleece = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleFleeceConflictDiscard()
+    {
+        if (_project == null) return;
+
+        _isSyncingFleece = true;
+        StateHasChanged();
+
+        try
+        {
+            var discardSuccess = await FleeceIssuesSyncService.DiscardChangesAsync(_project.LocalPath);
+            if (!discardSuccess)
+            {
+                _fleeceSyncError = "Failed to discard changes";
+                return;
+            }
+
+            var pullResult = await FleeceIssuesSyncService.PullChangesAsync(
+                _project.LocalPath,
+                _project.DefaultBranch);
+            if (!pullResult.Success)
+            {
+                _fleeceSyncError = pullResult.ErrorMessage;
+                return;
+            }
+
+            HideFleeceConflictModal();
+            await RefreshData();
+        }
+        finally
+        {
+            _isSyncingFleece = false;
             StateHasChanged();
         }
     }
