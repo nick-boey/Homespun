@@ -8,6 +8,7 @@
 @using Homespun.Features.PullRequests
 @using Homespun.Features.PullRequests.Data
 @using Homespun.Features.PullRequests.Data.Entities
+@using Homespun.Features.Shared.Services
 
 @inject IFleeceService FleeceService
 @inject IClaudeSessionStore SessionStore
@@ -22,6 +23,7 @@
 @inject IGitWorktreeService GitWorktreeService
 @inject NavigationManager NavigationManager
 @inject ILogger<CurrentPullRequestDetailPanel> Logger
+@inject IMarkdownRenderingService MarkdownService
 
 <div class="card pull-request-detail-panel">
     <div class="card-header flex justify-between items-center">
@@ -56,7 +58,9 @@
 
         @if (!string.IsNullOrEmpty(PullRequest.Description))
         {
-            <p class="card-text">@PullRequest.Description</p>
+            <div class="description-content markdown-content mb-3">
+                @((MarkupString)MarkdownService.RenderToHtml(PullRequest.Description))
+            </div>
         }
 
         @* Linked Issue Details Section *@
