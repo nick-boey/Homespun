@@ -13,6 +13,15 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
+# Install Node.js (required for Tailwind CSS build during dotnet publish)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    ca-certificates \
+    gnupg \
+    && curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
 # Copy solution and project files first for better layer caching
 COPY Homespun.sln ./
 COPY src/Homespun/Homespun.csproj src/Homespun/
@@ -30,6 +39,11 @@ ARG BUILD_CONFIGURATION=Release
 
 # Copy everything else
 COPY . .
+
+# Install npm dependencies for Tailwind CSS build
+# (node_modules is excluded by .dockerignore, so we must install here)
+# Use npm ci for clean, reproducible installs from package-lock.json
+RUN cd src/Homespun && rm -rf node_modules && npm ci
 
 # Build and publish
 # Note: Cannot use --no-restore here because Blazor framework files
