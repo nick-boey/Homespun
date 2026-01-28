@@ -40,13 +40,22 @@ public class SessionOptionsFactory
             SettingSources = [SettingSource.User],  // Enable loading user-level plugins
             // Configure Playwright MCP server for browser automation
             // Use dictionary with lowercase keys to match Claude CLI's expected JSON format
+            // Container-specific flags:
+            // - --browser chromium: Use installed Chromium (Chrome not available)
+            // - --no-sandbox: Required for container environments without sandbox permissions
+            // - --isolated: Use temp directory for browser profile (avoids permission issues)
+            // - PLAYWRIGHT_BROWSERS_PATH: Point to root's cache where browsers are installed
             McpServers = new Dictionary<string, object>
             {
                 ["playwright"] = new Dictionary<string, object>
                 {
                     ["type"] = "stdio",
                     ["command"] = "npx",
-                    ["args"] = new[] { "@playwright/mcp@latest", "--headless" }
+                    ["args"] = new[] { "@playwright/mcp@latest", "--headless", "--browser", "chromium", "--no-sandbox", "--isolated" },
+                    ["env"] = new Dictionary<string, string>
+                    {
+                        ["PLAYWRIGHT_BROWSERS_PATH"] = "/root/.cache/ms-playwright"
+                    }
                 }
             }
         };
