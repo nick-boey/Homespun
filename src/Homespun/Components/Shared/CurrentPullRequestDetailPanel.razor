@@ -349,12 +349,10 @@
 
                 if (worktreeExists)
                 {
-                    // Get the worktree path from existing worktrees
-                    var worktrees = await GitWorktreeService.ListWorktreesAsync(PullRequest.Project.LocalPath);
-                    var existingWorktree = worktrees.FirstOrDefault(w => w.Branch == PullRequest.BranchName);
-                    if (existingWorktree != null)
+                    // Get the worktree path using the service method (handles branch name format differences)
+                    worktreePath = await GitWorktreeService.GetWorktreePathForBranchAsync(PullRequest.Project.LocalPath, PullRequest.BranchName);
+                    if (!string.IsNullOrEmpty(worktreePath))
                     {
-                        worktreePath = existingWorktree.Path;
                         Logger.LogInformation("Found existing worktree at {WorktreePath}", worktreePath);
 
                         // Check if there's already a session running in this worktree
