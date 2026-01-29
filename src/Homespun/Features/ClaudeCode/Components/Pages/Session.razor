@@ -60,11 +60,18 @@
                 {
                     @foreach (var message in _session.Messages)
                     {
-                        <div class="message @(message.Role == ClaudeMessageRole.User ? "user-message" : "assistant-message")">
-                            <div class="message-header">
-                                <span class="message-role">@(message.Role == ClaudeMessageRole.User ? "You" : "Claude")</span>
-                                <span class="message-time">@message.CreatedAt.ToLocalTime().ToString("HH:mm:ss")</span>
-                            </div>
+                        @* Tool result messages (role=user but only ToolResult content) should be styled as tool output, not user messages *@
+                        var isToolResultMessage = message.Role == ClaudeMessageRole.User && !IsRealUserMessage(message);
+                        var messageClass = isToolResultMessage ? "tool-result-message" :
+                                          (message.Role == ClaudeMessageRole.User ? "user-message" : "assistant-message");
+                        <div class="message @messageClass">
+                            @if (!isToolResultMessage)
+                            {
+                                <div class="message-header">
+                                    <span class="message-role">@(message.Role == ClaudeMessageRole.User ? "You" : "Claude")</span>
+                                    <span class="message-time">@message.CreatedAt.ToLocalTime().ToString("HH:mm:ss")</span>
+                                </div>
+                            }
                             <div class="message-content">
                                 @foreach (var content in message.Content)
                                 {
@@ -293,6 +300,23 @@
         background: var(--bg-primary);
         margin-right: 10%;
         border: 1px solid var(--border-color);
+    }
+
+    /* Tool result messages are styled as part of the assistant's tool flow */
+    .tool-result-message {
+        background: var(--bg-primary);
+        margin-right: 10%;
+        margin-top: calc(-1 * var(--spacing-md)); /* Visually connect to previous message */
+        border: 1px solid var(--border-color);
+        border-top: none;
+        border-radius: 0 0 var(--radius-md) var(--radius-md);
+        padding-top: 0;
+    }
+
+    /* When tool result follows assistant message, round the assistant's bottom corners */
+    .assistant-message:has(+ .tool-result-message) {
+        border-radius: var(--radius-md) var(--radius-md) 0 0;
+        margin-bottom: 0;
     }
 
     .message-header {
