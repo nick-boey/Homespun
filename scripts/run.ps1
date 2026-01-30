@@ -90,6 +90,9 @@ param(
     [switch]$Pull,
 
     [Parameter(ParameterSetName = 'Run')]
+    [switch]$NoTailscale,
+
+    [Parameter(ParameterSetName = 'Run')]
     [string]$TailscaleAuthKey,
 
     [Parameter(ParameterSetName = 'Run')]
@@ -352,11 +355,17 @@ try {
         Write-Host "      GitHub token found: $maskedToken" -ForegroundColor Green
     }
 
-    # Read Tailscale auth key
-    $tailscaleKey = Get-TailscaleAuthKey -ParamValue $TailscaleAuthKey -EnvFilePath $EnvFilePath
-    if (-not [string]::IsNullOrWhiteSpace($tailscaleKey)) {
-        $maskedTsKey = $tailscaleKey.Substring(0, [Math]::Min(15, $tailscaleKey.Length)) + "..."
-        Write-Host "      Tailscale auth key found: $maskedTsKey" -ForegroundColor Green
+    # Read Tailscale auth key (unless -NoTailscale)
+    $tailscaleKey = $null
+    if ($NoTailscale) {
+        Write-Host "      Tailscale disabled (-NoTailscale flag)" -ForegroundColor Cyan
+    }
+    else {
+        $tailscaleKey = Get-TailscaleAuthKey -ParamValue $TailscaleAuthKey -EnvFilePath $EnvFilePath
+        if (-not [string]::IsNullOrWhiteSpace($tailscaleKey)) {
+            $maskedTsKey = $tailscaleKey.Substring(0, [Math]::Min(15, $tailscaleKey.Length)) + "..."
+            Write-Host "      Tailscale auth key found: $maskedTsKey" -ForegroundColor Green
+        }
     }
 
     # Read external hostname

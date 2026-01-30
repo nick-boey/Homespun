@@ -201,10 +201,11 @@ echo "  Port:        $HOST_PORT"
 echo "  Data dir:    $DATA_DIR"
 echo
 
-# Call run.sh with --local --mock flags and pass through additional args
+# Call run.sh with --local --mock --no-tailscale flags and pass through additional args
 exec "$SCRIPT_DIR/run.sh" \
     --local \
     --mock \
+    --no-tailscale \
     --port "$HOST_PORT" \
     --container-name "$CONTAINER_NAME" \
     --data-dir "$DATA_DIR" \

@@ -28,6 +28,7 @@ set -e
 #   --external-hostname HOST    Set external hostname for agent URLs
 #   --data-dir DIR              Override data directory (default: ~/.homespun-container/data)
 #   --container-name NAME       Override container name (default: homespun)
+#   --no-tailscale              Disable Tailscale (do not load auth key)
 #
 # Environment Variables:
 #   HSP_GITHUB_TOKEN            GitHub token (preferred for VM secrets)
@@ -56,6 +57,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 USE_LOCAL=false
 USE_DEBUG=false
 USE_MOCK=false
+NO_TAILSCALE=false
 DETACHED=true
 ACTION="start"
 PULL_FIRST=false
@@ -89,6 +91,7 @@ while [[ "$#" -gt 0 ]]; do
         --local) USE_LOCAL=true ;;
         --debug) USE_DEBUG=true ;;
         --mock) USE_MOCK=true ;;
+        --no-tailscale) NO_TAILSCALE=true ;;
         --port) HOST_PORT="$2"; shift ;;
         -it|--interactive) DETACHED=false ;;
         -d|--detach) DETACHED=true ;;
@@ -218,22 +221,27 @@ else
     log_success "      Claude Code OAuth token found: $MASKED_CC_TOKEN"
 fi
 
-# Tailscale Auth Key: Check environment variables
-# 1. HSP_TAILSCALE_AUTH_KEY (for VM secrets)
-# 2. TAILSCALE_AUTH_KEY (standard)
-TAILSCALE_AUTH_KEY="${HSP_TAILSCALE_AUTH_KEY:-${TAILSCALE_AUTH_KEY:-}}"
-
-# Try reading from .env file
-if [ -z "$TAILSCALE_AUTH_KEY" ] && [ -f "$REPO_ROOT/.env" ]; then
-    TAILSCALE_AUTH_KEY=$(grep -E "^TAILSCALE_AUTH_KEY=" "$REPO_ROOT/.env" 2>/dev/null | cut -d'=' -f2- | tr -d '"' | tr -d "'" || true)
-fi
-
-if [ -z "$TAILSCALE_AUTH_KEY" ]; then
-    log_warn "      Tailscale auth key not found (Tailscale will be disabled)."
-    log_warn "      Set TAILSCALE_AUTH_KEY in ~/.homespun/env for VPN access."
+# Tailscale Auth Key: Check environment variables (unless --no-tailscale)
+if [ "$NO_TAILSCALE" = true ]; then
+    TAILSCALE_AUTH_KEY=""
+    log_info "      Tailscale disabled (--no-tailscale flag)"
 else
-    MASKED_TS_KEY="${TAILSCALE_AUTH_KEY:0:15}..."
-    log_success "      Tailscale auth key found: $MASKED_TS_KEY"
+    # 1. HSP_TAILSCALE_AUTH_KEY (for VM secrets)
+    # 2. TAILSCALE_AUTH_KEY (standard)
+    TAILSCALE_AUTH_KEY="${HSP_TAILSCALE_AUTH_KEY:-${TAILSCALE_AUTH_KEY:-}}"
+
+    # Try reading from .env file
+    if [ -z "$TAILSCALE_AUTH_KEY" ] && [ -f "$REPO_ROOT/.env" ]; then
+        TAILSCALE_AUTH_KEY=$(grep -E "^TAILSCALE_AUTH_KEY=" "$REPO_ROOT/.env" 2>/dev/null | cut -d'=' -f2- | tr -d '"' | tr -d "'" || true)
+    fi
+
+    if [ -z "$TAILSCALE_AUTH_KEY" ]; then
+        log_warn "      Tailscale auth key not found (Tailscale will be disabled)."
+        log_warn "      Set TAILSCALE_AUTH_KEY in ~/.homespun/env for VPN access."
+    else
+        MASKED_TS_KEY="${TAILSCALE_AUTH_KEY:0:15}..."
+        log_success "      Tailscale auth key found: $MASKED_TS_KEY"
+    fi
 fi
 
 # Step 4: Set up directories

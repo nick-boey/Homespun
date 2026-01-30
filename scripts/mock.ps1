@@ -211,6 +211,7 @@ Write-Host ""
 $runArgs = @{
     Local = $true
     MockMode = $true
+    NoTailscale = $true
     Port = $effectivePort
     ContainerName = $effectiveContainerName
     DataDir = $effectiveDataDir
