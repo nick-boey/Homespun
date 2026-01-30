@@ -256,6 +256,18 @@ fi
 
 chmod 777 "$DATA_DIR" 2>/dev/null || true
 
+# Create DataProtection-Keys directory if it doesn't exist
+DATA_PROTECTION_DIR="$DATA_DIR/DataProtection-Keys"
+if [ ! -d "$DATA_PROTECTION_DIR" ]; then
+    mkdir -p "$DATA_PROTECTION_DIR"
+    log_success "      Created DataProtection-Keys directory"
+fi
+
+# Fix permissions on data directory (needed when files were created by different user)
+# Run a quick docker command to chown the data directory to the homespun user (uid 1655)
+docker run --rm -v "$DATA_DIR:/fixdata" alpine chown -R 1655:1655 /fixdata 2>/dev/null && \
+    log_success "      Fixed data directory permissions" || true
+
 # Check SSH directory
 SSH_MOUNT=""
 if [ -d "$SSH_DIR" ]; then

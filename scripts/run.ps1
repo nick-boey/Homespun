@@ -393,6 +393,21 @@ try {
         Write-Host "      Created Tailscale state directory: $tailscaleStateDir" -ForegroundColor Green
     }
 
+    # Create DataProtection-Keys directory if it doesn't exist
+    $dataProtectionDir = Join-Path $dataDir "DataProtection-Keys"
+    if (-not (Test-Path $dataProtectionDir)) {
+        New-Item -ItemType Directory -Path $dataProtectionDir -Force | Out-Null
+        Write-Host "      Created DataProtection-Keys directory" -ForegroundColor Green
+    }
+
+    # Fix permissions on data directory (needed when files were created by different user)
+    # Run a quick docker command to chown the data directory to the homespun user (uid 1655)
+    $dataDirUnixTemp = $dataDir -replace '\\', '/'
+    docker run --rm -v "${dataDirUnixTemp}:/fixdata" alpine chown -R 1655:1655 /fixdata 2>$null
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "      Fixed data directory permissions" -ForegroundColor Green
+    }
+
     if (-not (Test-Path $sshDir)) {
         Write-Warning "      SSH directory not found: $sshDir"
         $sshDir = ""
