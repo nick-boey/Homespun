@@ -18,6 +18,8 @@ set -e
 # Options:
 #   --local                     Use locally built image (homespun:local)
 #   --debug                     Build in Debug configuration (use with --local)
+#   --mock                      Run in mock mode with seeded demo data
+#   --port PORT                 Override host port (default: 8080)
 #   -it, --interactive          Run in interactive mode (foreground)
 #   -d, --detach                Run in detached mode (background) [default]
 #   --stop                      Stop running containers
@@ -53,12 +55,14 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # Default values
 USE_LOCAL=false
 USE_DEBUG=false
+USE_MOCK=false
 DETACHED=true
 ACTION="start"
 PULL_FIRST=false
 EXTERNAL_HOSTNAME=""
 DATA_DIR_PARAM=""
 CONTAINER_NAME="homespun"
+HOST_PORT="8080"
 USER_SECRETS_ID="2cfc6c57-72da-4b56-944b-08f2c1df76f6"
 
 # Colors
@@ -84,6 +88,8 @@ while [[ "$#" -gt 0 ]]; do
     case $1 in
         --local) USE_LOCAL=true ;;
         --debug) USE_DEBUG=true ;;
+        --mock) USE_MOCK=true ;;
+        --port) HOST_PORT="$2"; shift ;;
         -it|--interactive) DETACHED=false ;;
         -d|--detach) DETACHED=true ;;
         --stop) ACTION="stop" ;;
@@ -259,6 +265,15 @@ else
     log_warn "      SSH directory not found: $SSH_DIR"
 fi
 
+# Check Docker socket for DooD (Docker outside of Docker)
+DOCKER_SOCKET_MOUNT=""
+if [ -S "/var/run/docker.sock" ]; then
+    DOCKER_SOCKET_MOUNT="-v /var/run/docker.sock:/var/run/docker.sock"
+    log_success "      Docker socket found: /var/run/docker.sock (DooD enabled)"
+else
+    log_warn "      Docker socket not found: /var/run/docker.sock (DooD disabled)"
+fi
+
 # Note: We intentionally do NOT mount the host's ~/.claude directory.
 # Reason: The container has its own settings.json with MCP server config (created in Dockerfile).
 # Mounting the host's ~/.claude would overwrite this config and cause plugin path issues
@@ -290,17 +305,23 @@ log_info "======================================"
 echo "  Container:   $CONTAINER_NAME"
 echo "  Image:       $IMAGE_NAME"
 echo "  User:        $HOST_UID:$HOST_GID (host user)"
-echo "  Port:        8080"
-echo "  URL:         http://localhost:8080"
+echo "  Port:        $HOST_PORT"
+echo "  URL:         http://localhost:$HOST_PORT"
 echo "  Data mount:  $DATA_DIR"
 if [ -n "$SSH_MOUNT" ]; then
     echo "  SSH mount:   $SSH_DIR (read-only)"
+fi
+if [ -n "$DOCKER_SOCKET_MOUNT" ]; then
+    echo "  Docker:      DooD enabled (host socket mounted)"
 fi
 if [ -n "$TAILSCALE_AUTH_KEY" ]; then
     echo "  Tailscale:   Enabled (will connect on startup)"
 fi
 if [ -n "$EXTERNAL_HOSTNAME" ]; then
     echo "  Agent URLs:  https://$EXTERNAL_HOSTNAME:<port>"
+fi
+if [ "$USE_MOCK" = true ]; then
+    echo "  Mock mode:   Enabled (seeded demo data)"
 fi
 if [ "$USE_LOCAL" = false ]; then
     echo "  Watchtower:  Enabled (auto-updates every 5 min)"
@@ -321,12 +342,17 @@ if [ "$DETACHED" = true ]; then
 fi
 DOCKER_CMD="$DOCKER_CMD --name $CONTAINER_NAME"
 DOCKER_CMD="$DOCKER_CMD --user $HOST_UID:$HOST_GID"
-DOCKER_CMD="$DOCKER_CMD -p 8080:8080"
+DOCKER_CMD="$DOCKER_CMD -p $HOST_PORT:8080"
 DOCKER_CMD="$DOCKER_CMD -v $DATA_DIR:/data"
 DOCKER_CMD="$DOCKER_CMD $SSH_MOUNT"
+DOCKER_CMD="$DOCKER_CMD $DOCKER_SOCKET_MOUNT"
 DOCKER_CMD="$DOCKER_CMD -e HOME=/home/homespun"
 DOCKER_CMD="$DOCKER_CMD -e ASPNETCORE_ENVIRONMENT=Production"
 DOCKER_CMD="$DOCKER_CMD -e HSP_HOST_DATA_PATH=$DATA_DIR"
+
+if [ "$USE_MOCK" = true ]; then
+    DOCKER_CMD="$DOCKER_CMD -e HOMESPUN_MOCK_MODE=true"
+fi
 
 if [ -n "$GITHUB_TOKEN" ]; then
     DOCKER_CMD="$DOCKER_CMD -e GITHUB_TOKEN=$GITHUB_TOKEN"
@@ -374,12 +400,12 @@ if [ "$DETACHED" = true ]; then
     echo
     log_success "Container started successfully!"
     echo
-    echo "Access URL: http://localhost:8080"
+    echo "Access URL: http://localhost:$HOST_PORT"
     echo
     echo "Useful commands:"
     echo "  View logs:     $0 --logs"
     echo "  Stop:          $0 --stop"
-    echo "  Health check:  curl http://localhost:8080/health"
+    echo "  Health check:  curl http://localhost:$HOST_PORT/health"
     echo
 else
     log_warn "Starting container in interactive mode..."

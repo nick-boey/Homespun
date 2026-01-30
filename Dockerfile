@@ -113,6 +113,15 @@ RUN curl -fsSL https://pkgs.tailscale.com/stable/debian/bookworm.noarmor.gpg | t
     && apt-get install -y tailscale \
     && rm -rf /var/lib/apt/lists/*
 
+# Install Docker CLI for DooD (Docker outside of Docker)
+# This allows the container to communicate with the host's Docker daemon
+# via a mounted /var/run/docker.sock socket
+RUN curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian bookworm stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null \
+    && apt-get update \
+    && apt-get install -y docker-ce-cli \
+    && rm -rf /var/lib/apt/lists/*
+
 # Create non-root user for security
 RUN useradd --create-home --shell /bin/bash homespun
 
