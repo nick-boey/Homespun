@@ -27,6 +27,7 @@ public class GraphServiceLinkedIssueFilterTests
     private Mock<IFleeceService> _mockFleeceService = null!;
     private Mock<IClaudeSessionStore> _mockSessionStore = null!;
     private Mock<PullRequestWorkflowService> _mockWorkflowService = null!;
+    private Mock<IGraphCacheService> _mockCacheService = null!;
     private Mock<ILogger<GraphService>> _mockLogger = null!;
     private GraphService _service = null!;
     private Project _testProject = null!;
@@ -78,6 +79,13 @@ public class GraphServiceLinkedIssueFilterTests
             null!,
             null!);
 
+        // Cache service returns null (no cache) so tests fetch fresh data
+        _mockCacheService = new Mock<IGraphCacheService>();
+        _mockCacheService.Setup(s => s.GetCachedPRData(It.IsAny<string>()))
+            .Returns((CachedPRData?)null);
+        _mockCacheService.Setup(s => s.CachePRDataAsync(It.IsAny<string>(), It.IsAny<List<PullRequestInfo>>(), It.IsAny<List<PullRequestInfo>>()))
+            .Returns(Task.CompletedTask);
+
         _mockLogger = new Mock<ILogger<GraphService>>();
 
         _service = new GraphService(
@@ -87,6 +95,7 @@ public class GraphServiceLinkedIssueFilterTests
             _mockSessionStore.Object,
             _dataStore,
             _mockWorkflowService.Object,
+            _mockCacheService.Object,
             _mockLogger.Object);
     }
 
