@@ -285,13 +285,14 @@ else
     log_warn "      SSH directory not found: $SSH_DIR"
 fi
 
-# Check Docker socket for DooD (Docker outside of Docker)
-DOCKER_SOCKET_MOUNT=""
+# Mount Docker socket for DooD (Docker outside of Docker)
+# This enables containers to spawn sibling containers using the host's Docker daemon
+DOCKER_SOCKET_MOUNT="-v /var/run/docker.sock:/var/run/docker.sock"
 if [ -S "/var/run/docker.sock" ]; then
-    DOCKER_SOCKET_MOUNT="-v /var/run/docker.sock:/var/run/docker.sock"
     log_success "      Docker socket found: /var/run/docker.sock (DooD enabled)"
 else
-    log_warn "      Docker socket not found: /var/run/docker.sock (DooD disabled)"
+    log_info "      Docker socket will be mounted: /var/run/docker.sock (DooD)"
+    log_info "      Note: Socket must exist on host for container Docker access"
 fi
 
 # Note: We intentionally do NOT mount the host's ~/.claude directory.
