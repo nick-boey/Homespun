@@ -292,8 +292,12 @@ fi
 # Mount Docker socket for DooD (Docker outside of Docker)
 # This enables containers to spawn sibling containers using the host's Docker daemon
 DOCKER_SOCKET_MOUNT="-v /var/run/docker.sock:/var/run/docker.sock"
+DOCKER_GROUP_ADD=""
 if [ -S "/var/run/docker.sock" ]; then
-    log_success "      Docker socket found: /var/run/docker.sock (DooD enabled)"
+    # Get the GID of the docker socket to add to container user for DooD access
+    DOCKER_SOCKET_GID="$(stat -c '%g' /var/run/docker.sock)"
+    DOCKER_GROUP_ADD="--group-add $DOCKER_SOCKET_GID"
+    log_success "      Docker socket found: /var/run/docker.sock (DooD enabled, GID: $DOCKER_SOCKET_GID)"
 else
     log_info "      Docker socket will be mounted: /var/run/docker.sock (DooD)"
     log_info "      Note: Socket must exist on host for container Docker access"
@@ -363,6 +367,7 @@ if [ "$DETACHED" = true ]; then
 fi
 DOCKER_CMD="$DOCKER_CMD --name $CONTAINER_NAME"
 DOCKER_CMD="$DOCKER_CMD --user $HOST_UID:$HOST_GID"
+DOCKER_CMD="$DOCKER_CMD $DOCKER_GROUP_ADD"
 DOCKER_CMD="$DOCKER_CMD -p $HOST_PORT:8080"
 DOCKER_CMD="$DOCKER_CMD -v $DATA_DIR:/data"
 DOCKER_CMD="$DOCKER_CMD $SSH_MOUNT"
