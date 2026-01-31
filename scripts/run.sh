@@ -247,6 +247,10 @@ fi
 # Step 4: Set up directories
 log_info "[4/5] Setting up directories..."
 
+# Get host user UID/GID early - needed for permission fix and container user
+HOST_UID="$(id -u)"
+HOST_GID="$(id -g)"
+
 # Use DATA_DIR_PARAM if provided, otherwise default
 if [ -n "$DATA_DIR_PARAM" ]; then
     DATA_DIR="$DATA_DIR_PARAM"
@@ -271,9 +275,9 @@ if [ ! -d "$DATA_PROTECTION_DIR" ]; then
     log_success "      Created DataProtection-Keys directory"
 fi
 
-# Fix permissions on data directory (needed when files were created by different user)
-# Run a quick docker command to chown the data directory to the homespun user (uid 1655)
-docker run --rm -v "$DATA_DIR:/fixdata" alpine chown -R 1655:1655 /fixdata 2>/dev/null && \
+# Fix permissions on data directory to match the user the container will run as
+# This ensures both container and host user can access the files
+docker run --rm -v "$DATA_DIR:/fixdata" alpine chown -R $HOST_UID:$HOST_GID /fixdata 2>/dev/null && \
     log_success "      Fixed data directory permissions" || true
 
 # Check SSH directory
@@ -315,10 +319,6 @@ fi
 # Step 5: Start containers
 log_info "[5/5] Starting containers..."
 echo
-
-# Export host user UID/GID so container runs as the same user
-HOST_UID="$(id -u)"
-HOST_GID="$(id -g)"
 
 log_info "======================================"
 log_info "  Container Configuration"
