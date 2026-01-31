@@ -1,0 +1,79 @@
+@using Homespun.Components.Shared.Chat
+
+<div class="showcase-section">
+    <h3>Read Tool</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Reading a file</div>
+        <div class="showcase-preview">
+            <ToolUseBlock
+                ToolName="Read"
+                ToolInput="@_readInput" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Edit Tool</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Editing a file</div>
+        <div class="showcase-preview">
+            <ToolUseBlock
+                ToolName="Edit"
+                ToolInput="@_editInput" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Bash Tool</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Running a command</div>
+        <div class="showcase-preview">
+            <ToolUseBlock
+                ToolName="Bash"
+                ToolInput="@_bashInput" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Streaming Tool Use</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Tool currently executing (shows spinner)</div>
+        <div class="showcase-preview">
+            <ToolUseBlock
+                ToolName="Glob"
+                ToolInput="@_globInput"
+                IsStreaming="true" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Complex Tool Input</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Tool with longer input</div>
+        <div class="showcase-preview">
+            <ToolUseBlock
+                ToolName="Write"
+                ToolInput="@_complexInput" />
+        </div>
+    </div>
+</div>
+
+@code {
+    private string _readInput = """{"file_path": "/src/services/auth.ts"}""";
+
+    private string _editInput = """{"file_path": "/src/components/Button.tsx", "old_string": "onClick={() => {}", "new_string": "onClick={handleClick}"}""";
+
+    private string _bashInput = """{"command": "npm run test -- --coverage"}""";
+
+    private string _globInput = """{"pattern": "**/*.tsx"}""";
+
+    private string _complexInput = """
+        {
+          "file_path": "/src/components/UserProfile.tsx",
+          "content": "import React from 'react';\n\nexport const UserProfile = ({ name, email }) => (\n  <div className=\"user-profile\">\n    <h2>{name}</h2>\n    <p>{email}</p>\n  </div>\n);"
+        }
+        """;
+}

@@ -1,0 +1,118 @@
+@using Homespun.Components.Shared.Chat
+
+<div class="showcase-section">
+    <h3>Default State</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Empty input ready for typing</div>
+        <div class="showcase-preview">
+            <ChatInput
+                Value="@_value1"
+                ValueChanged="@(v => _value1 = v)"
+                OnSend="@(msg => _lastSent1 = msg)" />
+            @if (!string.IsNullOrEmpty(_lastSent1))
+            {
+                <p class="text-text-muted text-sm mt-2">Last sent: "@_lastSent1"</p>
+            }
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>With Content</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Input with pre-filled text</div>
+        <div class="showcase-preview">
+            <ChatInput
+                Value="@_value2"
+                ValueChanged="@(v => _value2 = v)"
+                OnSend="@(msg => _lastSent2 = msg)" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Custom Placeholder</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Input with custom placeholder text</div>
+        <div class="showcase-preview">
+            <ChatInput
+                Value="@_value3"
+                ValueChanged="@(v => _value3 = v)"
+                Placeholder="Describe the feature you want to implement..."
+                OnSend="@(msg => _lastSent3 = msg)" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Disabled State</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Input disabled while processing</div>
+        <div class="showcase-preview">
+            <ChatInput
+                Value="@_value4"
+                ValueChanged="@(v => _value4 = v)"
+                Disabled="true"
+                Placeholder="Waiting for response..."
+                OnSend="@(msg => { })" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>In Context</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Input within a chat interface context</div>
+        <div class="showcase-preview">
+            <div class="chat-context-preview">
+                <div class="chat-messages-area">
+                    <div class="text-text-muted text-sm text-center py-4">
+                        Chat messages would appear here...
+                    </div>
+                </div>
+                <div class="chat-input-wrapper">
+                    <ChatInput
+                        Value="@_value5"
+                        ValueChanged="@(v => _value5 = v)"
+                        OnSend="@(msg => _lastSent5 = msg)" />
+                </div>
+            </div>
+            @if (!string.IsNullOrEmpty(_lastSent5))
+            {
+                <p class="text-text-muted text-sm mt-2">Last sent: "@_lastSent5"</p>
+            }
+        </div>
+    </div>
+</div>
+
+<style>
+    .chat-context-preview {
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        overflow: hidden;
+    }
+
+    .chat-messages-area {
+        background: var(--bg-secondary);
+        min-height: 150px;
+        padding: var(--spacing-md);
+    }
+
+    .chat-input-wrapper {
+        border-top: 1px solid var(--border-color);
+        background: var(--bg-primary);
+    }
+</style>
+
+@code {
+    private string _value1 = "";
+    private string _value2 = "Can you help me fix the failing tests?";
+    private string _value3 = "";
+    private string _value4 = "Processing your request...";
+    private string _value5 = "";
+
+    private string _lastSent1 = "";
+    private string _lastSent2 = "";
+    private string _lastSent3 = "";
+    private string _lastSent5 = "";
+}

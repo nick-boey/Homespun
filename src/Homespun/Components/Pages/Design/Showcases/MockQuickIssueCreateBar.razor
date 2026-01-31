@@ -1,0 +1,175 @@
+@using Fleece.Core.Models
+
+@* Mock version of QuickIssueCreateBar that doesn't depend on services *@
+
+<div class="quick-issue-bar" style="position: absolute; bottom: 0; left: 0; right: 0;">
+    <div class="quick-issue-container">
+        <input type="text"
+               class="quick-input group-input"
+               placeholder="Group"
+               value="@Group"
+               disabled="@IsSubmitting" />
+
+        <select class="quick-input type-select"
+                disabled="@IsSubmitting">
+            <option value="Feature" selected="@(Type == "Feature")">Feature</option>
+            <option value="Bug" selected="@(Type == "Bug")">Bug</option>
+            <option value="Task" selected="@(Type == "Task")">Task</option>
+            <option value="Chore" selected="@(Type == "Chore")">Chore</option>
+        </select>
+
+        <input type="text"
+               class="quick-input title-input"
+               placeholder="Add an issue..."
+               value="@Title"
+               disabled="@IsSubmitting" />
+
+        <button class="quick-submit-btn"
+                disabled="@(IsSubmitting || string.IsNullOrWhiteSpace(Title))"
+                title="Create issue (Enter)">
+            @if (IsSubmitting)
+            {
+                <span class="spinner-border spinner-border-sm"></span>
+            }
+            else
+            {
+                <span class="btn-content">
+                    <span class="btn-icon">+</span>
+                    <kbd class="shortcut-hint">Enter</kbd>
+                </span>
+            }
+        </button>
+
+        <button class="quick-submit-btn quick-edit-btn"
+                disabled="@(IsSubmitting || string.IsNullOrWhiteSpace(Title))"
+                title="Create and open for editing (Shift+Enter)">
+            @if (IsSubmitting)
+            {
+                <span class="spinner-border spinner-border-sm"></span>
+            }
+            else
+            {
+                <span class="btn-content">
+                    <span class="edit-icon">&#9998;</span>
+                    <kbd class="shortcut-hint">Shift</kbd>
+                </span>
+            }
+        </button>
+    </div>
+</div>
+
+<style>
+    .quick-issue-bar {
+        background: var(--bg-primary);
+        border-top: 1px solid var(--border-color);
+        padding: var(--spacing-sm) var(--spacing-md);
+        box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.1);
+        z-index: 100;
+    }
+
+    .quick-issue-container {
+        display: flex;
+        gap: var(--spacing-sm);
+        max-width: 1200px;
+        margin: 0 auto;
+        align-items: center;
+    }
+
+    .quick-input {
+        height: 36px;
+        padding: 0 var(--spacing-sm);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-sm);
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        font-size: 0.875rem;
+    }
+
+    .quick-input:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+    .type-select {
+        width: 100px;
+        flex-shrink: 0;
+    }
+
+    .group-input {
+        width: 120px;
+        flex-shrink: 0;
+    }
+
+    .title-input {
+        flex: 1;
+        min-width: 200px;
+    }
+
+    .quick-submit-btn {
+        width: 36px;
+        height: 44px;
+        padding: 4px 0;
+        border: none;
+        border-radius: var(--radius-sm);
+        background: var(--color-ocean);
+        color: white;
+        font-size: 1.25rem;
+        font-weight: bold;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .quick-submit-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .quick-edit-btn {
+        background: var(--color-forest, #10b981);
+    }
+
+    .btn-content {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1px;
+    }
+
+    .btn-icon {
+        font-size: 1.25rem;
+        font-weight: bold;
+        line-height: 1;
+    }
+
+    .edit-icon {
+        font-size: 1rem;
+    }
+
+    .shortcut-hint {
+        font-size: 0.5rem;
+        opacity: 0.85;
+        line-height: 1;
+        padding: 1px 3px;
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 2px;
+        font-family: inherit;
+        border: none;
+    }
+</style>
+
+@code {
+    [Parameter]
+    public string Group { get; set; } = "";
+
+    [Parameter]
+    public string Type { get; set; } = "Feature";
+
+    [Parameter]
+    public string Title { get; set; } = "";
+
+    [Parameter]
+    public bool IsSubmitting { get; set; }
+}

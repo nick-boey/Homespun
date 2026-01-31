@@ -1,0 +1,37 @@
+@* Mock version of AgentStatusIndicator that doesn't depend on services *@
+
+@if (WorkingCount + WaitingCount > 0)
+{
+    <a href="/sessions" class="agent-status-indicator" title="@GetTooltipText()">
+        @if (WorkingCount > 0)
+        {
+            <span class="status-dot working" aria-label="Working agents"></span>
+            <span class="count">@WorkingCount</span>
+        }
+        @if (WaitingCount > 0)
+        {
+            <span class="status-dot waiting" aria-label="Agents waiting for input"></span>
+            <span class="count">@WaitingCount</span>
+        }
+    </a>
+}
+
+@code {
+    [Parameter]
+    public int WorkingCount { get; set; }
+
+    [Parameter]
+    public int WaitingCount { get; set; }
+
+    private string GetTooltipText()
+    {
+        var parts = new List<string>();
+        if (WorkingCount > 0)
+            parts.Add($"{WorkingCount} working");
+        if (WaitingCount > 0)
+            parts.Add($"{WaitingCount} waiting for input");
+
+        var status = parts.Count > 0 ? string.Join(", ", parts) + " - " : "";
+        return $"{status}Click to view";
+    }
+}
