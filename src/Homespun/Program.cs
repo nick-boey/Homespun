@@ -88,7 +88,6 @@ else
     builder.Services.AddSingleton<IGitHubEnvironmentService, GitHubEnvironmentService>();
     builder.Services.AddSingleton<ICommandRunner, CommandRunner>();
     builder.Services.AddSingleton<IGitWorktreeService, GitWorktreeService>();
-    builder.Services.AddSingleton<IMergeStatusCacheService, MergeStatusCacheService>();
     builder.Services.AddScoped<PullRequestDataService>();
     builder.Services.AddSingleton<IGitHubClientWrapper, GitHubClientWrapper>();
     builder.Services.AddScoped<IGitHubService, GitHubService>();
