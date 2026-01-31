@@ -567,6 +567,8 @@ try {
         if (-not $Local) {
             docker stop watchtower 2>$null
             docker rm watchtower 2>$null
+            Write-Host "      Pulling latest Watchtower image..." -ForegroundColor Cyan
+            docker pull nickfedor/watchtower:latest
             docker run -d `
                 --name watchtower `
                 -v /var/run/docker.sock:/var/run/docker.sock `
@@ -575,7 +577,7 @@ try {
                 -e WATCHTOWER_INCLUDE_STOPPED=false `
                 -e WATCHTOWER_ROLLING_RESTART=true `
                 --restart unless-stopped `
-                containrrr/watchtower $ContainerName
+                nickfedor/watchtower $ContainerName
         }
 
         Write-Host ""
