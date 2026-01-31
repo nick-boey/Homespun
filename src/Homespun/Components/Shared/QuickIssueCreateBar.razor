@@ -6,6 +6,14 @@
 <div class="quick-issue-bar">
     <div class="quick-issue-container">
         <div class="quick-issue-top-row">
+            <input type="text"
+                   class="quick-input group-input"
+                   placeholder="group"
+                   @bind="_group"
+                   @bind:event="oninput"
+                   @onkeydown="HandleKeyDown"
+                   disabled="@_isSubmitting" />
+
             <select class="quick-input type-select"
                     @bind="_type"
                     disabled="@_isSubmitting">
@@ -14,14 +22,6 @@
                     <option value="@type">@type.ToString()</option>
                 }
             </select>
-
-            <input type="text"
-                   class="quick-input group-input"
-                   placeholder="group"
-                   @bind="_group"
-                   @bind:event="oninput"
-                   @onkeydown="HandleKeyDown"
-                   disabled="@_isSubmitting" />
 
             <select class="quick-input status-select"
                     @bind="_status"
@@ -53,10 +53,7 @@
                     }
                     else
                     {
-                        <span class="btn-content">
-                            <span class="btn-icon">+</span>
-                            <kbd class="shortcut-hint">Enter</kbd>
-                        </span>
+                        <span class="btn-icon">+</span>
                     }
                 </button>
 
@@ -70,10 +67,7 @@
                     }
                     else
                     {
-                        <span class="btn-content">
-                            <span class="edit-icon">&#9998;</span>
-                            <kbd class="shortcut-hint">Shift</kbd>
-                        </span>
+                        <span class="edit-icon">&#9998;</span>
                     }
                 </button>
             </div>
@@ -175,8 +169,8 @@
 
     .quick-submit-btn {
         width: 36px;
-        height: 44px;
-        padding: 4px 0;
+        height: 36px;
+        padding: 0;
         border: none;
         border-radius: var(--radius-sm);
         background: var(--color-ocean);
@@ -214,28 +208,10 @@
         font-size: 1rem;
     }
 
-    .btn-content {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 1px;
-    }
-
     .btn-icon {
         font-size: 1.25rem;
         font-weight: bold;
         line-height: 1;
-    }
-
-    .shortcut-hint {
-        font-size: 0.5rem;
-        opacity: 0.85;
-        line-height: 1;
-        padding: 1px 3px;
-        background: rgba(255, 255, 255, 0.2);
-        border-radius: 2px;
-        font-family: inherit;
-        border: none;
     }
 
     .quick-issue-error {
