@@ -1,0 +1,97 @@
+@*
+    AgentManagementPanel depends on SignalR and ClaudeCode services.
+    This showcase provides a description of its features.
+*@
+
+<div class="showcase-section">
+    <h3>Component Overview</h3>
+    <div class="showcase-item">
+        <div class="showcase-preview">
+            <div class="alert alert-info mb-0">
+                <strong>AgentManagementPanel</strong> provides controls for managing Claude Code agent sessions.
+                It allows starting, stopping, and monitoring agent sessions in real-time via SignalR.
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Key Features</h3>
+    <div class="showcase-item">
+        <div class="showcase-preview">
+            <ul class="list-unstyled mb-0">
+                <li class="mb-2">
+                    <span class="badge bg-success me-2">Start</span>
+                    Launch new Claude Code sessions with model and prompt selection
+                </li>
+                <li class="mb-2">
+                    <span class="badge bg-danger me-2">Stop</span>
+                    Terminate running sessions gracefully
+                </li>
+                <li class="mb-2">
+                    <span class="badge bg-info me-2">Monitor</span>
+                    Real-time status updates via SignalR
+                </li>
+                <li class="mb-2">
+                    <span class="badge bg-primary me-2">Navigate</span>
+                    Quick access to session chat interface
+                </li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Panel States</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Ready to start a session</div>
+        <div class="showcase-preview">
+            <div class="card" style="max-width: 350px;">
+                <div class="card-header">Agent Management</div>
+                <div class="card-body">
+                    <p class="text-text-muted text-sm mb-3">No active session. Select a model and agent to start working.</p>
+                    <div class="mb-3">
+                        <label class="form-label text-sm">Model</label>
+                        <select class="form-select form-select-sm">
+                            <option>opus</option>
+                            <option>sonnet</option>
+                            <option>haiku</option>
+                        </select>
+                    </div>
+                    <MockAgentSelector />
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Active Session State</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Session is running</div>
+        <div class="showcase-preview">
+            <div class="card" style="max-width: 350px;">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span>Agent Management</span>
+                    <span class="badge bg-success">Active</span>
+                </div>
+                <div class="card-body">
+                    <div class="mb-2">
+                        <span class="badge bg-success">Running</span>
+                        <small class="text-text-muted ms-2">Mode: Build</small>
+                    </div>
+                    <div class="mb-3">
+                        <small class="text-text-muted">Model: <code>claude-3-opus</code></small>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <a href="#" class="btn btn-sm btn-primary">Open Chat</a>
+                        <button class="btn btn-sm btn-outline-danger">Stop Session</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+}

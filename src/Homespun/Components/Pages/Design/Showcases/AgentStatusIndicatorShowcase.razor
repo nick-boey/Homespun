@@ -1,0 +1,72 @@
+@*
+    AgentStatusIndicator depends on SignalR and IClaudeSessionStore.
+    This showcase renders a static mock version of the component.
+*@
+
+<div class="showcase-section">
+    <h3>Working Agents Only</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Shows active working agents</div>
+        <div class="showcase-preview showcase-preview-dark">
+            <MockAgentStatusIndicator WorkingCount="2" WaitingCount="0" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Waiting Agents Only</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Shows agents waiting for input</div>
+        <div class="showcase-preview showcase-preview-dark">
+            <MockAgentStatusIndicator WorkingCount="0" WaitingCount="3" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Mixed Status</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Both working and waiting agents</div>
+        <div class="showcase-preview showcase-preview-dark">
+            <MockAgentStatusIndicator WorkingCount="1" WaitingCount="2" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>No Active Agents</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Nothing shown when no agents are active</div>
+        <div class="showcase-preview showcase-preview-dark">
+            <MockAgentStatusIndicator WorkingCount="0" WaitingCount="0" />
+            <span class="text-text-muted text-sm">(indicator is hidden when no agents are active)</span>
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>In Nav Context</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">How it appears in the navigation header</div>
+        <div class="showcase-preview showcase-preview-dark">
+            <div class="d-flex align-items-center gap-3 p-2 bg-bg-secondary rounded">
+                <span class="text-text-primary font-semibold">Homespun</span>
+                <div class="ms-auto d-flex align-items-center gap-2">
+                    <MockAgentStatusIndicator WorkingCount="2" WaitingCount="1" />
+                    <span class="text-text-muted">|</span>
+                    <span class="text-text-secondary text-sm">Settings</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .showcase-preview-dark {
+        background: var(--bg-tertiary);
+        padding: var(--spacing-md);
+    }
+</style>
+
+@code {
+}

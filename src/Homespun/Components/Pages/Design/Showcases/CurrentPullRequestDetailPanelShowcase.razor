@@ -1,0 +1,115 @@
+@using Homespun.Features.PullRequests
+
+@*
+    CurrentPullRequestDetailPanel is a complex component with many service dependencies.
+    This showcase provides a description and static examples of its key features.
+*@
+
+<div class="showcase-section">
+    <h3>Component Overview</h3>
+    <div class="showcase-item">
+        <div class="showcase-preview">
+            <div class="alert alert-info mb-0">
+                <strong>CurrentPullRequestDetailPanel</strong> displays detailed information about a pull request
+                and provides actions to manage it. This component has extensive service dependencies and is best
+                viewed in the full application context.
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Key Features</h3>
+    <div class="showcase-item">
+        <div class="showcase-preview">
+            <ul class="list-unstyled mb-0">
+                <li class="mb-2">
+                    <span class="badge bg-primary me-2">Display</span>
+                    PR title, description, branch, worktree path, and timestamps
+                </li>
+                <li class="mb-2">
+                    <span class="badge bg-success me-2">Session</span>
+                    Start, stop, and resume Claude Code sessions
+                </li>
+                <li class="mb-2">
+                    <span class="badge bg-info me-2">Linked Issue</span>
+                    Show linked Beads issue details when available
+                </li>
+                <li class="mb-2">
+                    <span class="badge bg-warning text-dark me-2">Rebase</span>
+                    Start rebase agent when branch is behind
+                </li>
+                <li class="mb-2">
+                    <span class="badge bg-danger me-2">Actions</span>
+                    Skip review, merge PR, view on GitHub
+                </li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Status Badges</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Pull request status indicators</div>
+        <div class="showcase-preview">
+            <div class="d-flex gap-2 flex-wrap">
+                <span class="badge bg-primary">InDevelopment</span>
+                <span class="badge bg-warning text-dark">ReadyForReview</span>
+                <span class="badge bg-danger">HasReviewComments</span>
+                <span class="badge bg-success">Approved</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Static Preview</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Simplified panel layout</div>
+        <div class="showcase-preview">
+            <div class="card" style="max-width: 450px;">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span>Pull Request Details</span>
+                    <button type="button" class="btn-close btn-sm"></button>
+                </div>
+                <div class="card-body">
+                    <h5 class="card-title">Add user authentication</h5>
+                    <div class="mb-3">
+                        <span class="badge bg-primary">InDevelopment</span>
+                        <a href="#" class="badge bg-secondary text-decoration-none ms-1">PR #42</a>
+                    </div>
+                    <p class="text-text-secondary text-sm">Implements login and registration with JWT tokens.</p>
+
+                    <div class="border rounded p-2 mb-3 bg-surface-secondary">
+                        <h6 class="mb-2">
+                            <span class="badge bg-status-info text-text-primary me-1">auth/login</span>
+                            Linked Issue
+                        </h6>
+                        <p class="mb-1 font-bold">Implement user authentication</p>
+                        <div class="mb-1">
+                            <span class="badge bg-primary">Feature</span>
+                            <span class="badge bg-primary ms-1">Progress</span>
+                        </div>
+                    </div>
+
+                    <dl class="grid grid-cols-12 text-sm">
+                        <dt class="col-span-4">Branch</dt>
+                        <dd class="col-span-8"><code>feature/auth/login</code></dd>
+                        <dt class="col-span-4">Created</dt>
+                        <dd class="col-span-8">Jan 15, 2024 10:30 AM</dd>
+                    </dl>
+                </div>
+                <div class="card-footer">
+                    <div class="d-flex gap-2 flex-wrap">
+                        <button class="btn btn-sm btn-outline-warning">Skip Review</button>
+                        <MockAgentSelector />
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+}

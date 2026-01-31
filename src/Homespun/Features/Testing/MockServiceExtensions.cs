@@ -1,5 +1,6 @@
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Commands;
+using Homespun.Features.Design;
 using Homespun.Features.Fleece.Services;
 using Homespun.Features.Git;
 using Homespun.Features.Gitgraph.Services;
@@ -63,6 +64,9 @@ public static class MockServiceExtensions
 
         // Graph service
         services.AddScoped<IGraphService, MockGraphService>();
+
+        // Design system services (only available in mock mode)
+        services.AddSingleton<IComponentRegistryService, ComponentRegistryService>();
 
         // Seed data service (if enabled)
         if (options.SeedData)
