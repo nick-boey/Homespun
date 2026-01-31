@@ -1288,6 +1288,20 @@
 
         if (_session != null)
         {
+            // Initialize pending question from session if present
+            _pendingQuestion = _session.PendingQuestion;
+            if (_pendingQuestion != null)
+            {
+                // Initialize answers with first option for non-multiselect questions
+                foreach (var q in _pendingQuestion.Questions)
+                {
+                    if (q.Options.Count > 0 && !q.MultiSelect)
+                    {
+                        _questionAnswers[q.Question] = q.Options[0].Label;
+                    }
+                }
+            }
+
             try
             {
                 await SetupSignalR();

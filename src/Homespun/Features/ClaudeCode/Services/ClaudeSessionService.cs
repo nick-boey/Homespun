@@ -303,9 +303,16 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             }
 
             // Only set to WaitingForInput if we're not waiting for a question answer
+            _logger.LogDebug("Checking session {SessionId} status before finalizing: {Status}, PendingQuestion: {HasQuestion}",
+                sessionId, session.Status, session.PendingQuestion != null);
             if (session.Status != ClaudeSessionStatus.WaitingForQuestionAnswer)
             {
                 session.Status = ClaudeSessionStatus.WaitingForInput;
+                _logger.LogDebug("Set session {SessionId} status to WaitingForInput", sessionId);
+            }
+            else
+            {
+                _logger.LogDebug("Session {SessionId} is waiting for question answer, NOT changing status", sessionId);
             }
             _logger.LogInformation("Message processing completed for session {SessionId}, status: {Status}", sessionId, session.Status);
         }
@@ -343,6 +350,46 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                 foreach (var block in assistantMessage.Content)
                 {
                     block.IsStreaming = false;
+                }
+
+                // Also check for AskUserQuestion in the AssistantMessage content itself
+                // This handles cases where streaming events don't include all blocks or
+                // where the AssistantMessage arrives before all content_block_stop events
+                if (assistantMsg.Content != null)
+                {
+                    foreach (var block in assistantMsg.Content)
+                    {
+                        if (block is ToolUseBlock toolUse && toolUse.Name == "AskUserQuestion")
+                        {
+                            // Check if we already processed this (PendingQuestion would be set)
+                            if (session.PendingQuestion == null)
+                            {
+                                _logger.LogDebug("Processing AskUserQuestion from AssistantMessage: Id={Id}", toolUse.Id);
+
+                                // Find or create the corresponding block in our assistant message
+                                var existingBlock = assistantMessage.Content.FirstOrDefault(c =>
+                                    c.Type == ClaudeContentType.ToolUse && c.ToolUseId == toolUse.Id);
+
+                                if (existingBlock != null && !string.IsNullOrEmpty(existingBlock.ToolInput))
+                                {
+                                    await HandleAskUserQuestionTool(sessionId, session, existingBlock, cancellationToken);
+                                }
+                                else
+                                {
+                                    // Create a temporary block from SDK data to process
+                                    var toolInput = JsonSerializer.Serialize(toolUse.Input);
+                                    var tempBlock = new ClaudeMessageContent
+                                    {
+                                        Type = ClaudeContentType.ToolUse,
+                                        ToolName = toolUse.Name,
+                                        ToolUseId = toolUse.Id,
+                                        ToolInput = toolInput
+                                    };
+                                    await HandleAskUserQuestionTool(sessionId, session, tempBlock, cancellationToken);
+                                }
+                            }
+                        }
+                    }
                 }
                 break;
 
@@ -475,10 +522,12 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
 
         var deltaType = GetStringValue(deltaData, "type");
 
-        // Find the streaming content block by index, or fall back to last streaming block
+        // Find the content block by index. We don't filter on IsStreaming here because
+        // the AssistantMessage event may arrive before content_block_delta events,
+        // setting IsStreaming = false on all blocks before we can process them.
         var streamingBlock = index >= 0
-            ? assistantMessage.Content.FirstOrDefault(c => c.IsStreaming && c.Index == index)
-            : assistantMessage.Content.LastOrDefault(c => c.IsStreaming);
+            ? assistantMessage.Content.FirstOrDefault(c => c.Index == index)
+            : assistantMessage.Content.LastOrDefault();
 
         if (streamingBlock == null) return;
 
@@ -514,15 +563,18 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         // Extract the index from the event data
         var index = GetIntValue(eventData, "index") ?? -1;
 
-        // Find the streaming content block by index, or fall back to last streaming block
+        // Find the content block by index. We don't filter on IsStreaming here because
+        // the AssistantMessage event may arrive before content_block_stop events,
+        // setting IsStreaming = false on all blocks before we can process them.
         var streamingBlock = index >= 0
-            ? assistantMessage.Content.FirstOrDefault(c => c.IsStreaming && c.Index == index)
-            : assistantMessage.Content.LastOrDefault(c => c.IsStreaming);
+            ? assistantMessage.Content.FirstOrDefault(c => c.Index == index)
+            : assistantMessage.Content.LastOrDefault();
 
         if (streamingBlock != null)
         {
             streamingBlock.IsStreaming = false;
-            _logger.LogDebug("Broadcasting content_block_stop for index {Index}", index);
+            _logger.LogDebug("Broadcasting content_block_stop for index {Index}, Type: {Type}, ToolName: {ToolName}",
+                index, streamingBlock.Type, streamingBlock.ToolName ?? "(null)");
             await _hubContext.BroadcastStreamingContentStopped(sessionId, streamingBlock, index);
 
             // Check if this is an AskUserQuestion tool - if so, parse it and wait for user input
