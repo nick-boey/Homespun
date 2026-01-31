@@ -1,5 +1,6 @@
 @page "/projects/{Id}"
 @page "/projects/{Id}/branches"
+@page "/projects/{Id}/settings"
 @implements IDisposable
 @using Fleece.Core.Models
 @using Homespun.Features.ClaudeCode.Data
@@ -72,6 +73,14 @@ else
                 <i class="bi bi-diagram-2 me-1"></i>Branches
             </a>
         </li>
+        <li class="nav-item">
+            <a class="nav-link @(_activeTab == "settings" ? "active" : "")"
+               href="/projects/@Id/settings"
+               @onclick="SwitchToSettingsTab"
+               @onclick:preventDefault>
+                <i class="bi bi-gear me-1"></i>Settings
+            </a>
+        </li>
     </ul>
 
     @if (_activeTab == "issues")
@@ -103,115 +112,86 @@ else
             else
             {
                 <div class="card">
-                    <div class="card-header">Project Info</div>
+                    <div class="card-header">Sync</div>
                     <div class="card-body">
-                        <dl class="info-list">
-                            <dt>Local Path</dt>
-                            <dd><code>@_project.LocalPath</code></dd>
-                            <dt>Default Branch</dt>
-                            <dd>@_project.DefaultBranch</dd>
-                            <dt>Fleece Issues</dt>
-                            <dd>
-                                <button class="btn btn-sm btn-outline-secondary"
-                                        @onclick="SyncFleeceIssuesAsync"
-                                        disabled="@_isSyncingFleece">
-                                    @if (_isSyncingFleece)
-                                    {
-                                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                                        <span>Syncing...</span>
-                                    }
-                                    else
-                                    {
-                                        <i class="bi bi-cloud-upload me-1"></i>
-                                        <span>Sync Issues</span>
-                                    }
-                                </button>
-                                @if (_fleeceSyncError != null)
-                                {
-                                    <span class="badge bg-danger ms-2" title="@_fleeceSyncError">Sync failed</span>
-                                    <button class="btn btn-sm btn-link p-0 ms-1" @onclick="SyncFleeceIssuesAsync">
-                                        Retry
+                        <div class="sync-actions">
+                            <div class="sync-item">
+                                <span class="sync-label">Fleece Issues</span>
+                                <div class="sync-controls">
+                                    <button class="btn btn-sm btn-outline-secondary"
+                                            @onclick="SyncFleeceIssuesAsync"
+                                            disabled="@_isSyncingFleece">
+                                        @if (_isSyncingFleece)
+                                        {
+                                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                            <span>Syncing...</span>
+                                        }
+                                        else
+                                        {
+                                            <i class="bi bi-cloud-upload me-1"></i>
+                                            <span>Sync</span>
+                                        }
                                     </button>
-                                }
-                                else if (_lastFleeceSyncResult != null)
-                                {
-                                    <span class="badge bg-success ms-2">
-                                        @(_lastFleeceSyncResult.FilesCommitted > 0
-                                            ? $"Synced {_lastFleeceSyncResult.FilesCommitted} files"
-                                            : "Up to date")
-                                    </span>
-                                }
-                            </dd>
+                                    @if (_fleeceSyncError != null)
+                                    {
+                                        <span class="badge bg-danger ms-2" title="@_fleeceSyncError">Failed</span>
+                                    }
+                                    else if (_lastFleeceSyncResult != null)
+                                    {
+                                        <span class="badge bg-success ms-2">
+                                            @(_lastFleeceSyncResult.FilesCommitted > 0
+                                                ? $"{_lastFleeceSyncResult.FilesCommitted} files"
+                                                : "Up to date")
+                                        </span>
+                                    }
+                                </div>
+                            </div>
                             @if (!string.IsNullOrEmpty(_project.GitHubOwner) && !string.IsNullOrEmpty(_project.GitHubRepo))
                             {
-                                <dt>GitHub</dt>
-                                <dd>
-                                    <a href="https://github.com/@_project.GitHubOwner/@_project.GitHubRepo"
-                                       target="_blank">
-                                        @_project.GitHubOwner/@_project.GitHubRepo
-                                    </a>
-                                    @if (_isSyncingPRs)
-                                    {
-                                        <span class="badge bg-status-info ml-2">
-                                            <span class="spinner-border spinner-border-sm mr-1" role="status"></span>
-                                            Syncing...
-                                        </span>
-                                    }
-                                    else if (_tokenMissing)
-                                    {
-                                        <span class="badge bg-status-warning text-text-primary ml-2"
-                                              title="Set GITHUB_TOKEN environment variable">Token missing</span>
-                                        <button class="btn btn-sm btn-link p-0 ml-1" @onclick="SyncPullRequestsAsync">
-                                            Retry
-                                        </button>
-                                    }
-                                    else if (_syncError != null)
-                                    {
-                                        <span class="badge bg-status-error ml-2" title="@_syncError">Sync failed</span>
-                                        <button class="btn btn-sm btn-link p-0 ml-1" @onclick="SyncPullRequestsAsync">
-                                            Retry
-                                        </button>
-                                    }
-                                    else if (_lastSyncResult != null)
-                                    {
-                                        <span class="badge bg-status-success ml-2"
-                                              title="Imported: @_lastSyncResult.Imported, Updated: @_lastSyncResult.Updated, Removed: @_lastSyncResult.Removed">
-                                            Synced
-                                        </span>
-                                        <button class="btn btn-sm btn-link p-0 ml-1" @onclick="SyncPullRequestsAsync">
-                                            Refresh
-                                        </button>
-                                    }
-                                </dd>
-                            }
-                        </dl>
-
-                        @if (IsDebugBuild)
-                        {
-                            <hr class="my-3" />
-
-                            <div class="flex flex-col gap-2">
-                                <button class="btn btn-outline-primary btn-sm"
-                                        @onclick="StartTestAgentAsync"
-                                        disabled="@_isStartingTestAgent">
-                                    @if (_isStartingTestAgent)
-                                    {
-                                        <span class="spinner-border spinner-border-sm mr-1" role="status"></span>
-                                        <span>Starting...</span>
-                                    }
-                                    else
-                                    {
-                                        <span>Start Test Agent</span>
-                                    }
-                                </button>
-                                @if (!string.IsNullOrEmpty(_testAgentError))
-                                {
-                                    <div class="alert alert-danger py-1 px-2 mb-0 text-sm">
-                                        @_testAgentError
+                                <div class="sync-item">
+                                    <span class="sync-label">GitHub PRs</span>
+                                    <div class="sync-controls">
+                                        @if (_isSyncingPRs)
+                                        {
+                                            <span class="badge bg-status-info">
+                                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                                Syncing...
+                                            </span>
+                                        }
+                                        else if (_tokenMissing)
+                                        {
+                                            <span class="badge bg-status-warning text-text-primary"
+                                                  title="Set GITHUB_TOKEN environment variable">Token missing</span>
+                                            <button class="btn btn-sm btn-link p-0 ms-1" @onclick="SyncPullRequestsAsync">
+                                                Retry
+                                            </button>
+                                        }
+                                        else if (_syncError != null)
+                                        {
+                                            <span class="badge bg-status-error" title="@_syncError">Failed</span>
+                                            <button class="btn btn-sm btn-link p-0 ms-1" @onclick="SyncPullRequestsAsync">
+                                                Retry
+                                            </button>
+                                        }
+                                        else
+                                        {
+                                            <button class="btn btn-sm btn-outline-secondary"
+                                                    @onclick="SyncPullRequestsAsync">
+                                                <i class="bi bi-arrow-repeat me-1"></i>
+                                                <span>Sync</span>
+                                            </button>
+                                            @if (_lastSyncResult != null)
+                                            {
+                                                <span class="badge bg-status-success ms-2"
+                                                      title="Imported: @_lastSyncResult.Imported, Updated: @_lastSyncResult.Updated, Removed: @_lastSyncResult.Removed">
+                                                    Synced
+                                                </span>
+                                            }
+                                        }
                                     </div>
-                                }
-                            </div>
-                        }
+                                </div>
+                            }
+                        </div>
                     </div>
                 </div>
             }
@@ -227,6 +207,62 @@ else
     {
         <WorktreeManagementPanel Project="@_project"
                                  OnDataChanged="RefreshData" />
+    }
+    else if (_activeTab == "settings")
+    {
+        <div class="settings-tab-content">
+            <div class="card mb-3">
+                <div class="card-header">Project Information</div>
+                <div class="card-body">
+                    <dl class="info-list">
+                        <dt>Local Path</dt>
+                        <dd><code>@_project.LocalPath</code></dd>
+                        <dt>Default Branch</dt>
+                        <dd>@_project.DefaultBranch</dd>
+                        @if (!string.IsNullOrEmpty(_project.GitHubOwner) && !string.IsNullOrEmpty(_project.GitHubRepo))
+                        {
+                            <dt>GitHub Repository</dt>
+                            <dd>
+                                <a href="https://github.com/@_project.GitHubOwner/@_project.GitHubRepo"
+                                   target="_blank">
+                                    @_project.GitHubOwner/@_project.GitHubRepo
+                                </a>
+                            </dd>
+                        }
+                    </dl>
+                </div>
+            </div>
+
+            @if (IsDebugBuild)
+            {
+                <div class="card">
+                    <div class="card-header">Debug Tools</div>
+                    <div class="card-body">
+                        <div class="flex flex-col gap-2">
+                            <button class="btn btn-outline-primary btn-sm"
+                                    @onclick="StartTestAgentAsync"
+                                    disabled="@_isStartingTestAgent">
+                                @if (_isStartingTestAgent)
+                                {
+                                    <span class="spinner-border spinner-border-sm mr-1" role="status"></span>
+                                    <span>Starting...</span>
+                                }
+                                else
+                                {
+                                    <span>Start Test Agent</span>
+                                }
+                            </button>
+                            @if (!string.IsNullOrEmpty(_testAgentError))
+                            {
+                                <div class="alert alert-danger py-1 px-2 mb-0 text-sm">
+                                    @_testAgentError
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
     }
 
     @* Fleece Sync Conflict Modal *@
@@ -357,6 +393,45 @@ else
         position: sticky;
         top: var(--spacing-md);
     }
+
+    /* ==========================================================================
+       Sync Panel
+       ========================================================================== */
+    .sync-actions {
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-sm);
+    }
+
+    .sync-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: var(--spacing-xs) 0;
+    }
+
+    .sync-item:not(:last-child) {
+        border-bottom: 1px solid var(--border-color);
+        padding-bottom: var(--spacing-sm);
+    }
+
+    .sync-label {
+        font-weight: 500;
+        color: var(--text-secondary);
+    }
+
+    .sync-controls {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-xs);
+    }
+
+    /* ==========================================================================
+       Settings Tab
+       ========================================================================== */
+    .settings-tab-content {
+        max-width: 800px;
+    }
 </style>
 
 @code {
@@ -414,7 +489,12 @@ else
     {
         // Determine active tab from URL
         var uri = NavigationManager.Uri;
-        _activeTab = uri.Contains("/branches") ? "branches" : "issues";
+        if (uri.Contains("/settings"))
+            _activeTab = "settings";
+        else if (uri.Contains("/branches"))
+            _activeTab = "branches";
+        else
+            _activeTab = "issues";
 
         // Subscribe to agent startup state changes to update UI
         StartupTracker.OnStateChanged += OnStartupStateChanged;
@@ -445,14 +525,18 @@ else
         ClearSelection();
 
         // Update the URL without causing a full navigation
-        var newUrl = tab == "branches"
-            ? $"/projects/{Id}/branches"
-            : $"/projects/{Id}";
+        var newUrl = tab switch
+        {
+            "branches" => $"/projects/{Id}/branches",
+            "settings" => $"/projects/{Id}/settings",
+            _ => $"/projects/{Id}"
+        };
         NavigationManager.NavigateTo(newUrl, forceLoad: false, replace: true);
     }
 
     private void SwitchToIssuesTab() => SwitchTab("issues");
     private void SwitchToBranchesTab() => SwitchTab("branches");
+    private void SwitchToSettingsTab() => SwitchTab("settings");
 
     public void Dispose()
     {
