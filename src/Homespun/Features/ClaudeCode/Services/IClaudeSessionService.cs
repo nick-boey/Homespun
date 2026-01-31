@@ -60,6 +60,17 @@ public interface IClaudeSessionService
     Task SendMessageAsync(string sessionId, string message, PermissionMode permissionMode, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Sends a message to an existing session with a specific permission mode and model.
+    /// </summary>
+    Task SendMessageAsync(string sessionId, string message, PermissionMode permissionMode, string? model, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Clears the conversation context for a session.
+    /// Messages are kept visible but the AI will start fresh.
+    /// </summary>
+    Task ClearContextAsync(string sessionId, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Stops an existing session.
     /// </summary>
     Task StopSessionAsync(string sessionId, CancellationToken cancellationToken = default);

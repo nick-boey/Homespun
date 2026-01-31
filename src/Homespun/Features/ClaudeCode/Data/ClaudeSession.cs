@@ -89,4 +89,10 @@ public class ClaudeSession
     /// The path to the plan file created when ExitPlanMode was called.
     /// </summary>
     public string? PlanFilePath { get; set; }
+
+    /// <summary>
+    /// Timestamps when context was cleared during the session.
+    /// Used to display separators between conversation segments.
+    /// </summary>
+    public List<DateTime> ContextClearMarkers { get; init; } = [];
 }

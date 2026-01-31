@@ -83,13 +83,23 @@ public class MockClaudeSessionService : IClaudeSessionService
         await SendMessageAsync(sessionId, message, PermissionMode.Default, cancellationToken);
     }
 
-    public async Task SendMessageAsync(
+    public Task SendMessageAsync(
         string sessionId,
         string message,
         PermissionMode permissionMode,
         CancellationToken cancellationToken = default)
     {
-        _logger.LogDebug("[Mock] SendMessage to session {SessionId}: {Message}", sessionId, message);
+        return SendMessageAsync(sessionId, message, permissionMode, null, cancellationToken);
+    }
+
+    public async Task SendMessageAsync(
+        string sessionId,
+        string message,
+        PermissionMode permissionMode,
+        string? model,
+        CancellationToken cancellationToken = default)
+    {
+        _logger.LogDebug("[Mock] SendMessage to session {SessionId} with model {Model}: {Message}", sessionId, model ?? "default", message);
 
         var session = _sessionStore.GetById(sessionId);
         if (session == null)
@@ -143,6 +153,22 @@ public class MockClaudeSessionService : IClaudeSessionService
         session.TotalCostUsd += 0.01m; // Mock cost
         session.TotalDurationMs += 500;
         _sessionStore.Update(session);
+    }
+
+    public Task ClearContextAsync(string sessionId, CancellationToken cancellationToken = default)
+    {
+        _logger.LogDebug("[Mock] ClearContext for session {SessionId}", sessionId);
+
+        var session = _sessionStore.GetById(sessionId);
+        if (session != null)
+        {
+            // Add a context clear marker
+            session.ContextClearMarkers.Add(DateTime.UtcNow);
+            session.LastActivityAt = DateTime.UtcNow;
+            _sessionStore.Update(session);
+        }
+
+        return Task.CompletedTask;
     }
 
     public Task StopSessionAsync(string sessionId, CancellationToken cancellationToken = default)
