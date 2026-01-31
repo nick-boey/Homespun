@@ -432,24 +432,24 @@ try {
         Write-Host "      Claude credentials found: $claudeCredentialsFile" -ForegroundColor Green
     }
 
-    # Check Docker socket for DooD (Docker outside of Docker)
+    # Mount Docker socket for DooD (Docker outside of Docker)
+    # This enables containers to spawn sibling containers using the host's Docker daemon
     # On Windows, Docker uses a named pipe; on Linux/WSL, it uses a socket
     $dockerSocket = ""
     if ($IsWindows) {
-        # Windows Docker uses named pipe - check if Docker is running
-        if (Test-DockerRunning) {
-            $dockerSocket = "//./pipe/docker_engine:/var/run/docker.sock"
-            Write-Host "      Docker socket: DooD enabled (Windows named pipe)" -ForegroundColor Green
-        }
+        # Windows Docker uses named pipe
+        $dockerSocket = "//./pipe/docker_engine:/var/run/docker.sock"
+        Write-Host "      Docker socket: DooD enabled (Windows named pipe)" -ForegroundColor Green
     }
     else {
-        # Linux/WSL uses Unix socket
+        # Linux/WSL uses Unix socket - always mount it for DooD support
+        $dockerSocket = "/var/run/docker.sock:/var/run/docker.sock"
         if (Test-Path "/var/run/docker.sock") {
-            $dockerSocket = "/var/run/docker.sock:/var/run/docker.sock"
             Write-Host "      Docker socket: DooD enabled (/var/run/docker.sock)" -ForegroundColor Green
         }
         else {
-            Write-Warning "      Docker socket not found (DooD disabled)"
+            Write-Host "      Docker socket will be mounted: /var/run/docker.sock (DooD)" -ForegroundColor Cyan
+            Write-Host "      Note: Socket must exist on host for container Docker access" -ForegroundColor Cyan
         }
     }
 
