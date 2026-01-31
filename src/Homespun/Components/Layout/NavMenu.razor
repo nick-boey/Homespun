@@ -1,3 +1,6 @@
+@using Homespun.Features.Design
+@inject IServiceProvider ServiceProvider
+
 <div class="p-2">
     <nav class="flex flex-col">
         <div class="nav-item text-sm">
@@ -20,5 +23,23 @@
                 <span class="bi bi-gear-nav-menu" aria-hidden="true"></span> Settings
             </NavLink>
         </div>
+        @if (_isMockMode)
+        {
+            <div class="nav-item text-sm mt-2 pt-2" style="border-top: 1px solid var(--border-color);">
+                <NavLink class="nav-link" href="design">
+                    <span class="bi bi-palette-nav-menu" aria-hidden="true"></span> Design
+                </NavLink>
+            </div>
+        }
     </nav>
 </div>
+
+@code {
+    private bool _isMockMode;
+
+    protected override void OnInitialized()
+    {
+        // Check if IComponentRegistryService is registered (only in mock mode)
+        _isMockMode = ServiceProvider.GetService<IComponentRegistryService>() != null;
+    }
+}
