@@ -136,7 +136,32 @@
                                     }
                                 </div>
                                 <div class="worktree-actions">
-                                    @if (!IsDefaultBranch(branchName))
+                                    @if (IsDefaultBranch(branchName))
+                                    {
+                                        @* Main branch: show Run Agent button for starting a new blank session *@
+                                        @if (session != null)
+                                        {
+                                            <a href="/session/@session.Id" class="btn btn-sm btn-primary me-1" title="Open chat">
+                                                Chat
+                                            </a>
+                                            <button class="btn btn-sm btn-outline-danger me-1"
+                                                    @onclick="() => StopSessionAsync(session)"
+                                                    disabled="@_operationInProgress"
+                                                    title="Stop session">
+                                                Stop
+                                            </button>
+                                        }
+                                        else if (!StartupTracker.IsStarting(GetWorktreeEntityId(worktree)))
+                                        {
+                                            <button class="btn btn-sm btn-success"
+                                                    @onclick="() => StartMainBranchSessionAsync(worktree)"
+                                                    disabled="@_operationInProgress"
+                                                    title="Start a new agent session on the main branch">
+                                                <i class="bi bi-robot me-1"></i>Run Agent
+                                            </button>
+                                        }
+                                    }
+                                    else
                                     {
                                         @if (session != null)
                                         {
@@ -632,6 +657,38 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Failed to start session for worktree {WorktreePath}", worktree.Path);
+            StartupTracker.MarkAsFailed(entityId, ex.Message);
+            _errorMessage = $"Failed to start session: {ex.Message}";
+            StateHasChanged();
+        }
+    }
+
+    private async Task StartMainBranchSessionAsync(WorktreeInfo worktree)
+    {
+        var entityId = GetWorktreeEntityId(worktree);
+
+        StartupTracker.MarkAsStarting(entityId);
+        StateHasChanged();
+
+        try
+        {
+            // Start a new blank session on the main branch without a system prompt
+            var session = await SessionService.StartSessionAsync(
+                entityId,
+                Project.Id,
+                worktree.Path,
+                SessionMode.Build,
+                Project.DefaultModel ?? "sonnet",
+                systemPrompt: null);
+
+            StartupTracker.MarkAsStarted(entityId);
+
+            // Navigate to the session
+            NavigationManager.NavigateTo($"/session/{session.Id}");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to start main branch session for worktree {WorktreePath}", worktree.Path);
             StartupTracker.MarkAsFailed(entityId, ex.Message);
             _errorMessage = $"Failed to start session: {ex.Message}";
             StateHasChanged();
