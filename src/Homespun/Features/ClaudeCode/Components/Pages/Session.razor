@@ -1405,7 +1405,22 @@
                             // No existing assistant message for this turn, add the new one
                             _session.Messages.Add(message);
                         }
-                        // If existingAssistant exists, we keep it (it has streaming content) and ignore this duplicate
+                        else
+                        {
+                            // Assistant message exists from streaming - merge the final content
+                            // This ensures any content that wasn't fully streamed gets updated
+                            foreach (var content in existingAssistant.Content)
+                            {
+                                content.IsStreaming = false; // Mark all as not streaming
+                            }
+                            // Update the message with final content from server
+                            // The server message has the authoritative content blocks
+                            existingAssistant.Content.Clear();
+                            foreach (var content in message.Content)
+                            {
+                                existingAssistant.Content.Add(content);
+                            }
+                        }
                     }
                     StateHasChanged();
                     await ScrollToBottom();

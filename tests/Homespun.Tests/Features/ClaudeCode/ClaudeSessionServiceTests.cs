@@ -18,6 +18,7 @@ public class ClaudeSessionServiceTests
     private Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>> _hubContextMock = null!;
     private Mock<IClaudeSessionDiscovery> _discoveryMock = null!;
     private Mock<ISessionMetadataStore> _metadataStoreMock = null!;
+    private Mock<IMessageCacheStore> _messageCacheMock = null!;
     private IToolResultParser _toolResultParser = null!;
     private Mock<IHooksService> _hooksServiceMock = null!;
 
@@ -30,6 +31,7 @@ public class ClaudeSessionServiceTests
         _hubContextMock = new Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>>();
         _discoveryMock = new Mock<IClaudeSessionDiscovery>();
         _metadataStoreMock = new Mock<ISessionMetadataStore>();
+        _messageCacheMock = new Mock<IMessageCacheStore>();
         _toolResultParser = new ToolResultParser();
         _hooksServiceMock = new Mock<IHooksService>();
 
@@ -48,7 +50,8 @@ public class ClaudeSessionServiceTests
             _discoveryMock.Object,
             _metadataStoreMock.Object,
             _toolResultParser,
-            _hooksServiceMock.Object);
+            _hooksServiceMock.Object,
+            _messageCacheMock.Object);
     }
 
     [Test]
@@ -312,6 +315,7 @@ public class ClaudeSessionServiceMessageTests
     private Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>> _hubContextMock = null!;
     private Mock<IClaudeSessionDiscovery> _discoveryMock = null!;
     private Mock<ISessionMetadataStore> _metadataStoreMock = null!;
+    private Mock<IMessageCacheStore> _messageCacheMock = null!;
     private IToolResultParser _toolResultParser = null!;
     private Mock<IHooksService> _hooksServiceMock = null!;
 
@@ -324,6 +328,7 @@ public class ClaudeSessionServiceMessageTests
         _hubContextMock = new Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>>();
         _discoveryMock = new Mock<IClaudeSessionDiscovery>();
         _metadataStoreMock = new Mock<ISessionMetadataStore>();
+        _messageCacheMock = new Mock<IMessageCacheStore>();
         _toolResultParser = new ToolResultParser();
         _hooksServiceMock = new Mock<IHooksService>();
 
@@ -341,7 +346,8 @@ public class ClaudeSessionServiceMessageTests
             _discoveryMock.Object,
             _metadataStoreMock.Object,
             _toolResultParser,
-            _hooksServiceMock.Object);
+            _hooksServiceMock.Object,
+            _messageCacheMock.Object);
     }
 
     [Test]
@@ -418,6 +424,7 @@ public class ClaudeSessionServicePermissionModeTests
     private Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>> _hubContextMock = null!;
     private Mock<IClaudeSessionDiscovery> _discoveryMock = null!;
     private Mock<ISessionMetadataStore> _metadataStoreMock = null!;
+    private Mock<IMessageCacheStore> _messageCacheMock = null!;
     private IToolResultParser _toolResultParser = null!;
     private Mock<IHooksService> _hooksServiceMock = null!;
 
@@ -430,6 +437,7 @@ public class ClaudeSessionServicePermissionModeTests
         _hubContextMock = new Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>>();
         _discoveryMock = new Mock<IClaudeSessionDiscovery>();
         _metadataStoreMock = new Mock<ISessionMetadataStore>();
+        _messageCacheMock = new Mock<IMessageCacheStore>();
         _toolResultParser = new ToolResultParser();
         _hooksServiceMock = new Mock<IHooksService>();
 
@@ -447,7 +455,8 @@ public class ClaudeSessionServicePermissionModeTests
             _discoveryMock.Object,
             _metadataStoreMock.Object,
             _toolResultParser,
-            _hooksServiceMock.Object);
+            _hooksServiceMock.Object,
+            _messageCacheMock.Object);
     }
 
     [TestCase(PermissionMode.Default)]
@@ -517,6 +526,7 @@ public class ClaudeSessionServiceResumeTests
     private Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>> _hubContextMock = null!;
     private Mock<IClaudeSessionDiscovery> _discoveryMock = null!;
     private Mock<ISessionMetadataStore> _metadataStoreMock = null!;
+    private Mock<IMessageCacheStore> _messageCacheMock = null!;
     private IToolResultParser _toolResultParser = null!;
     private Mock<IHooksService> _hooksServiceMock = null!;
     private string _testClaudeDir = null!;
@@ -533,6 +543,7 @@ public class ClaudeSessionServiceResumeTests
         _hubContextMock = new Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>>();
         _discoveryMock = new Mock<IClaudeSessionDiscovery>();
         _metadataStoreMock = new Mock<ISessionMetadataStore>();
+        _messageCacheMock = new Mock<IMessageCacheStore>();
         _toolResultParser = new ToolResultParser();
         _hooksServiceMock = new Mock<IHooksService>();
 
@@ -550,7 +561,8 @@ public class ClaudeSessionServiceResumeTests
             _discoveryMock.Object,
             _metadataStoreMock.Object,
             _toolResultParser,
-            _hooksServiceMock.Object);
+            _hooksServiceMock.Object,
+            _messageCacheMock.Object);
     }
 
     [TearDown]

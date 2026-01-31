@@ -20,6 +20,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
     private readonly ISessionMetadataStore _metadataStore;
     private readonly IToolResultParser _toolResultParser;
     private readonly IHooksService _hooksService;
+    private readonly IMessageCacheStore _messageCache;
     private readonly ConcurrentDictionary<string, ClaudeAgentOptions> _sessionOptions = new();
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _sessionCts = new();
 
@@ -47,7 +48,8 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         IClaudeSessionDiscovery sessionDiscovery,
         ISessionMetadataStore metadataStore,
         IToolResultParser toolResultParser,
-        IHooksService hooksService)
+        IHooksService hooksService,
+        IMessageCacheStore messageCache)
     {
         _sessionStore = sessionStore;
         _optionsFactory = optionsFactory;
@@ -57,6 +59,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         _metadataStore = metadataStore;
         _toolResultParser = toolResultParser;
         _hooksService = hooksService;
+        _messageCache = messageCache;
     }
 
     /// <inheritdoc />
@@ -136,6 +139,15 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             CreatedAt: session.CreatedAt
         );
         await _metadataStore.SaveAsync(metadata, cancellationToken);
+
+        // Initialize message cache for this session
+        await _messageCache.InitializeSessionAsync(
+            sessionId,
+            entityId,
+            projectId,
+            mode,
+            model,
+            cancellationToken);
 
         // Notify clients about the new session
         await _hubContext.BroadcastSessionStarted(session);
@@ -269,6 +281,9 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         session.Messages.Add(userMessage);
         session.Status = ClaudeSessionStatus.Running;
 
+        // Cache the user message
+        await _messageCache.AppendMessageAsync(sessionId, userMessage, cancellationToken);
+
         // Notify clients about the user message
         await _hubContext.BroadcastMessageReceived(sessionId, userMessage);
 
@@ -327,6 +342,8 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             if (assistantMessage.Content.Count > 0)
             {
                 session.Messages.Add(assistantMessage);
+                // Cache the assistant message
+                await _messageCache.AppendMessageAsync(sessionId, assistantMessage, linkedCts.Token);
             }
 
             // Only set to WaitingForInput if we're not waiting for a question answer
@@ -497,6 +514,9 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                 Content = toolResultContents
             };
             session.Messages.Add(toolResultMessage);
+
+            // Cache the tool result message
+            await _messageCache.AppendMessageAsync(sessionId, toolResultMessage, cancellationToken);
 
             // Broadcast to clients for real-time UI updates
             await _hubContext.BroadcastMessageReceived(sessionId, toolResultMessage);
@@ -987,6 +1007,35 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
     public IReadOnlyList<ClaudeSession> GetAllSessions()
     {
         return _sessionStore.GetAll().ToList();
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<ClaudeMessage>> GetCachedMessagesAsync(
+        string sessionId,
+        CancellationToken cancellationToken = default)
+    {
+        return await _messageCache.GetMessagesAsync(sessionId, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<SessionCacheSummary>> GetSessionHistoryAsync(
+        string projectId,
+        string entityId,
+        CancellationToken cancellationToken = default)
+    {
+        var sessionIds = await _messageCache.GetSessionIdsForEntityAsync(projectId, entityId, cancellationToken);
+        var summaries = new List<SessionCacheSummary>();
+
+        foreach (var sessionId in sessionIds)
+        {
+            var summary = await _messageCache.GetSessionSummaryAsync(sessionId, cancellationToken);
+            if (summary != null)
+            {
+                summaries.Add(summary);
+            }
+        }
+
+        return summaries.OrderByDescending(s => s.LastMessageAt).ToList();
     }
 
     /// <inheritdoc />

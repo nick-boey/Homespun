@@ -300,6 +300,57 @@ public class MockClaudeSessionService : IClaudeSessionService
         _sessionStore.Update(session);
     }
 
+    public Task<IReadOnlyList<ClaudeMessage>> GetCachedMessagesAsync(
+        string sessionId,
+        CancellationToken cancellationToken = default)
+    {
+        _logger.LogDebug("[Mock] GetCachedMessages for session {SessionId}", sessionId);
+
+        // Return the in-memory messages for the session as "cached" messages
+        var session = _sessionStore.GetById(sessionId);
+        if (session == null)
+        {
+            return Task.FromResult<IReadOnlyList<ClaudeMessage>>(Array.Empty<ClaudeMessage>());
+        }
+
+        return Task.FromResult<IReadOnlyList<ClaudeMessage>>(session.Messages.ToList());
+    }
+
+    public Task<IReadOnlyList<SessionCacheSummary>> GetSessionHistoryAsync(
+        string projectId,
+        string entityId,
+        CancellationToken cancellationToken = default)
+    {
+        _logger.LogDebug("[Mock] GetSessionHistory for project {ProjectId}, entity {EntityId}", projectId, entityId);
+
+        // Return mock session history
+        var history = new List<SessionCacheSummary>
+        {
+            new SessionCacheSummary(
+                SessionId: Guid.NewGuid().ToString(),
+                EntityId: entityId,
+                ProjectId: projectId,
+                MessageCount: 10,
+                CreatedAt: DateTime.UtcNow.AddHours(-2),
+                LastMessageAt: DateTime.UtcNow.AddHours(-1),
+                Mode: SessionMode.Build,
+                Model: "opus"
+            ),
+            new SessionCacheSummary(
+                SessionId: Guid.NewGuid().ToString(),
+                EntityId: entityId,
+                ProjectId: projectId,
+                MessageCount: 5,
+                CreatedAt: DateTime.UtcNow.AddDays(-1),
+                LastMessageAt: DateTime.UtcNow.AddDays(-1).AddHours(1),
+                Mode: SessionMode.Plan,
+                Model: "sonnet"
+            )
+        };
+
+        return Task.FromResult<IReadOnlyList<SessionCacheSummary>>(history);
+    }
+
     /// <summary>
     /// Generates a mock response with tool use and tool result blocks.
     /// Returns the assistant message content and any tool result messages.

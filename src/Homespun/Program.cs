@@ -137,6 +137,11 @@ else
     builder.Services.AddSingleton<ISessionMetadataStore>(sp =>
         new SessionMetadataStore(metadataPath, sp.GetRequiredService<ILogger<SessionMetadataStore>>()));
 
+    // Message cache store - persists session messages to JSONL files
+    var messageCacheDir = Path.Combine(homespunDir, "sessions");
+    builder.Services.AddSingleton<IMessageCacheStore>(sp =>
+        new MessageCacheStore(messageCacheDir, sp.GetRequiredService<ILogger<MessageCacheStore>>()));
+
     builder.Services.AddSingleton<IToolResultParser, ToolResultParser>();
     builder.Services.AddSingleton<IHooksService, HooksService>();
     builder.Services.AddSingleton<IClaudeSessionService, ClaudeSessionService>();
