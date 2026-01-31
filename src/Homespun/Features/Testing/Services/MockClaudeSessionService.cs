@@ -244,6 +244,60 @@ public class MockClaudeSessionService : IClaudeSessionService
         return Task.FromResult<IReadOnlyList<ResumableSession>>(sessions);
     }
 
+    public async Task AnswerQuestionAsync(
+        string sessionId,
+        Dictionary<string, string> answers,
+        CancellationToken cancellationToken = default)
+    {
+        _logger.LogDebug("[Mock] AnswerQuestion for session {SessionId} with {AnswerCount} answers",
+            sessionId, answers.Count);
+
+        var session = _sessionStore.GetById(sessionId);
+        if (session == null)
+        {
+            throw new InvalidOperationException($"Session {sessionId} not found");
+        }
+
+        // Clear pending question
+        session.PendingQuestion = null;
+        session.Status = ClaudeSessionStatus.Running;
+        _sessionStore.Update(session);
+
+        // Simulate processing the answer
+        await Task.Delay(300, cancellationToken);
+
+        // Format the answers
+        var formattedAnswers = string.Join("\n", answers.Select(a => $"- {a.Key}: {a.Value}"));
+
+        // Add mock response acknowledging the answers
+        session.Messages.Add(new ClaudeMessage
+        {
+            SessionId = session.Id,
+            Role = ClaudeMessageRole.Assistant,
+            Content =
+            [
+                new ClaudeMessageContent
+                {
+                    Type = ClaudeContentType.Text,
+                    Text = $"""
+                        [Mock Response]
+
+                        Thank you for answering my questions. Here's what you said:
+
+                        {formattedAnswers}
+
+                        I'll proceed with these preferences in mind. (This is a mock session - no actual processing will occur.)
+                        """
+                }
+            ],
+            CreatedAt = DateTime.UtcNow
+        });
+
+        session.Status = ClaudeSessionStatus.WaitingForInput;
+        session.LastActivityAt = DateTime.UtcNow;
+        _sessionStore.Update(session);
+    }
+
     private static string GenerateMockResponse(string userMessage, SessionMode mode)
     {
         var truncatedMessage = userMessage.Length > 50

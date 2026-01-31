@@ -23,9 +23,20 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _sessionCts = new();
 
     /// <summary>
+    /// Maps session ID -> persistent SDK client for streaming mode interactions.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, ClaudeSdkClient> _sessionClients = new();
+
+    /// <summary>
+    /// Maps session ID -> task source for signaling when question answers are received.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, TaskCompletionSource<Dictionary<string, string>>> _questionAnswerSources = new();
+
+    /// <summary>
     /// Maps session ID -> (tool use ID -> tool name) for linking tool results to their tool uses.
     /// </summary>
     private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, string>> _sessionToolUses = new();
+
 
     public ClaudeSessionService(
         IClaudeSessionStore sessionStore,
@@ -291,8 +302,12 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                 session.Messages.Add(assistantMessage);
             }
 
-            session.Status = ClaudeSessionStatus.WaitingForInput;
-            _logger.LogInformation("Message processing completed for session {SessionId}", sessionId);
+            // Only set to WaitingForInput if we're not waiting for a question answer
+            if (session.Status != ClaudeSessionStatus.WaitingForQuestionAnswer)
+            {
+                session.Status = ClaudeSessionStatus.WaitingForInput;
+            }
+            _logger.LogInformation("Message processing completed for session {SessionId}, status: {Status}", sessionId, session.Status);
         }
         catch (OperationCanceledException)
         {
@@ -388,7 +403,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                 break;
 
             case "content_block_stop":
-                await HandleContentBlockStop(sessionId, assistantMessage, streamEvent.Event, cancellationToken);
+                await HandleContentBlockStop(sessionId, session, assistantMessage, streamEvent.Event, cancellationToken);
                 break;
 
             default:
@@ -491,6 +506,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
 
     private async Task HandleContentBlockStop(
         string sessionId,
+        ClaudeSession session,
         ClaudeMessage assistantMessage,
         Dictionary<string, object> eventData,
         CancellationToken cancellationToken)
@@ -508,6 +524,91 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             streamingBlock.IsStreaming = false;
             _logger.LogDebug("Broadcasting content_block_stop for index {Index}", index);
             await _hubContext.BroadcastStreamingContentStopped(sessionId, streamingBlock, index);
+
+            // Check if this is an AskUserQuestion tool - if so, parse it and wait for user input
+            if (streamingBlock.Type == ClaudeContentType.ToolUse &&
+                streamingBlock.ToolName == "AskUserQuestion" &&
+                !string.IsNullOrEmpty(streamingBlock.ToolInput))
+            {
+                await HandleAskUserQuestionTool(sessionId, session, streamingBlock, cancellationToken);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Handles the AskUserQuestion tool by parsing the input and setting up for user response.
+    /// </summary>
+    private async Task HandleAskUserQuestionTool(
+        string sessionId,
+        ClaudeSession session,
+        ClaudeMessageContent toolUseContent,
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("AskUserQuestion tool detected in session {SessionId}, parsing questions", sessionId);
+
+        try
+        {
+            // Parse the tool input JSON to extract questions
+            var toolInput = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(toolUseContent.ToolInput!);
+            if (toolInput == null || !toolInput.TryGetValue("questions", out var questionsElement))
+            {
+                _logger.LogWarning("AskUserQuestion tool input missing 'questions' array");
+                return;
+            }
+
+            var questions = new List<Data.UserQuestion>();
+            foreach (var questionElement in questionsElement.EnumerateArray())
+            {
+                var options = new List<Data.QuestionOption>();
+                if (questionElement.TryGetProperty("options", out var optionsElement))
+                {
+                    foreach (var optionElement in optionsElement.EnumerateArray())
+                    {
+                        options.Add(new Data.QuestionOption
+                        {
+                            Label = optionElement.GetProperty("label").GetString() ?? "",
+                            Description = optionElement.GetProperty("description").GetString() ?? ""
+                        });
+                    }
+                }
+
+                questions.Add(new Data.UserQuestion
+                {
+                    Question = questionElement.GetProperty("question").GetString() ?? "",
+                    Header = questionElement.TryGetProperty("header", out var headerElement) ? headerElement.GetString() ?? "" : "",
+                    Options = options,
+                    MultiSelect = questionElement.TryGetProperty("multiSelect", out var multiSelectElement) && multiSelectElement.GetBoolean()
+                });
+            }
+
+            if (questions.Count == 0)
+            {
+                _logger.LogWarning("AskUserQuestion tool had no questions to parse");
+                return;
+            }
+
+            // Create the pending question
+            var pendingQuestion = new Data.PendingQuestion
+            {
+                Id = Guid.NewGuid().ToString(),
+                ToolUseId = toolUseContent.ToolUseId ?? "",
+                Questions = questions
+            };
+
+            // Store the pending question in the session
+            session.PendingQuestion = pendingQuestion;
+            session.Status = ClaudeSessionStatus.WaitingForQuestionAnswer;
+
+            // Broadcast the question to clients
+            await _hubContext.BroadcastQuestionReceived(sessionId, pendingQuestion);
+            await _hubContext.BroadcastSessionStatusChanged(sessionId, ClaudeSessionStatus.WaitingForQuestionAnswer);
+
+            _logger.LogInformation("Session {SessionId} is now waiting for user to answer {QuestionCount} questions",
+                sessionId, questions.Count);
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogError(ex, "Failed to parse AskUserQuestion tool input in session {SessionId}", sessionId);
         }
     }
 
@@ -627,6 +728,64 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
     }
 
     /// <inheritdoc />
+    public async Task AnswerQuestionAsync(string sessionId, Dictionary<string, string> answers, CancellationToken cancellationToken = default)
+    {
+        var session = _sessionStore.GetById(sessionId);
+        if (session == null)
+        {
+            throw new InvalidOperationException($"Session {sessionId} not found");
+        }
+
+        if (session.Status != ClaudeSessionStatus.WaitingForQuestionAnswer || session.PendingQuestion == null)
+        {
+            throw new InvalidOperationException($"Session {sessionId} is not waiting for a question answer");
+        }
+
+        _logger.LogInformation("Answering question in session {SessionId} with {AnswerCount} answers",
+            sessionId, answers.Count);
+
+        // Format the answers in a clear, structured way that Claude can understand
+        // Since we're resuming with --resume, Claude will see this as a continuation
+        var formattedAnswers = new System.Text.StringBuilder();
+        formattedAnswers.AppendLine("I've answered your questions:");
+        formattedAnswers.AppendLine();
+
+        // Include the original questions and user's selections for context
+        foreach (var question in session.PendingQuestion.Questions)
+        {
+            formattedAnswers.AppendLine($"**{question.Header}**: {question.Question}");
+            if (answers.TryGetValue(question.Question, out var answer))
+            {
+                formattedAnswers.AppendLine($"My answer: {answer}");
+            }
+            else
+            {
+                formattedAnswers.AppendLine("My answer: (no answer provided)");
+            }
+            formattedAnswers.AppendLine();
+        }
+
+        formattedAnswers.AppendLine("Please continue with the task based on my answers above.");
+
+        // Store the questions for reference before clearing
+        var pendingQuestion = session.PendingQuestion;
+
+        // Clear the pending question
+        session.PendingQuestion = null;
+
+        // Update session status before sending
+        session.Status = ClaudeSessionStatus.Running;
+
+        // Broadcast that the question was answered
+        await _hubContext.BroadcastQuestionAnswered(sessionId);
+        await _hubContext.BroadcastSessionStatusChanged(sessionId, ClaudeSessionStatus.Running);
+
+        // Send the answer as a regular message - this will resume the conversation
+        // The --resume flag ensures Claude has context from the previous turn
+        await SendMessageAsync(sessionId, formattedAnswers.ToString().Trim(), PermissionMode.BypassPermissions, cancellationToken);
+    }
+
+    /// <inheritdoc />
     public async Task StopSessionAsync(string sessionId, CancellationToken cancellationToken = default)
     {
         var session = _sessionStore.GetById(sessionId);
@@ -644,6 +803,22 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             await cts.CancelAsync();
             cts.Dispose();
         }
+
+        // Dispose any active client
+        if (_sessionClients.TryRemove(sessionId, out var client))
+        {
+            try
+            {
+                await client.DisposeAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error disposing client for session {SessionId}", sessionId);
+            }
+        }
+
+        // Remove any pending question answer sources
+        _questionAnswerSources.TryRemove(sessionId, out _);
 
         // Remove stored options and tool use tracking
         _sessionOptions.TryRemove(sessionId, out _);
@@ -699,6 +874,20 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             catch { }
         }
         _sessionCts.Clear();
+
+        // Dispose all active clients
+        foreach (var client in _sessionClients.Values)
+        {
+            try
+            {
+                await client.DisposeAsync();
+            }
+            catch { }
+        }
+        _sessionClients.Clear();
+
+        // Clear pending question answer sources
+        _questionAnswerSources.Clear();
 
         // Clear stored options and tool use tracking
         _sessionOptions.Clear();

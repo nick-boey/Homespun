@@ -79,4 +79,9 @@ public class ClaudeSession
     /// Total duration in milliseconds for this session.
     /// </summary>
     public long TotalDurationMs { get; set; }
+
+    /// <summary>
+    /// The pending question that needs a user answer (only set when Status is WaitingForQuestionAnswer).
+    /// </summary>
+    public PendingQuestion? PendingQuestion { get; set; }
 }
