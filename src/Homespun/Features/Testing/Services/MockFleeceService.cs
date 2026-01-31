@@ -92,6 +92,7 @@ public class MockFleeceService : IFleeceService
         string? description = null,
         int? priority = null,
         string? group = null,
+        IssueStatus? status = null,
         CancellationToken ct = default)
     {
         _logger.LogDebug("[Mock] CreateIssue '{Title}' in {ProjectPath}", title, projectPath);
@@ -103,7 +104,7 @@ public class MockFleeceService : IFleeceService
             Title = title,
             Description = description ?? string.Empty,
             Type = type,
-            Status = IssueStatus.Idea,
+            Status = status ?? IssueStatus.Idea,
             Priority = priority ?? 3,
             Group = group ?? string.Empty,
             CreatedAt = now,
