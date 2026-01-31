@@ -8,7 +8,24 @@ namespace Homespun.Features.Testing.Services;
 /// </summary>
 public class MockFleeceIssuesSyncService : IFleeceIssuesSyncService
 {
+    public Task<BranchStatusResult> CheckBranchStatusAsync(string projectPath, string defaultBranch, CancellationToken ct = default)
+    {
+        return Task.FromResult(new BranchStatusResult(
+            Success: true,
+            IsOnCorrectBranch: true,
+            CurrentBranch: defaultBranch,
+            ErrorMessage: null,
+            IsBehindRemote: false,
+            CommitsBehind: 0,
+            CommitsAhead: 0));
+    }
+
     public Task<bool> DiscardChangesAsync(string projectPath, CancellationToken ct = default)
+    {
+        return Task.FromResult(true);
+    }
+
+    public Task<bool> DiscardNonFleeceChangesAsync(string projectPath, CancellationToken ct = default)
     {
         return Task.FromResult(true);
     }
