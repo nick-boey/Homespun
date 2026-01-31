@@ -425,3 +425,50 @@ Key tools for UI inspection:
 
 - `HOMESPUN_MOCK_MODE=true`: Activates mock services
 - `ASPNETCORE_ENVIRONMENT=Development`: Enables dev tooling
+
+## Container Playwright MCP Usage
+
+When using Playwright MCP tools from within the Homespun Docker container, there are important networking considerations.
+
+### Browser Installation
+
+Playwright browsers are pre-installed at `/opt/playwright-browsers`. The `PLAYWRIGHT_BROWSERS_PATH` environment variable is automatically configured. No additional setup is required.
+
+### Container Networking
+
+**Important:** From inside a Docker container, `localhost` refers to the container itself, not the host machine or sibling containers.
+
+#### Accessing Sibling Containers (DooD)
+
+When using Docker-outside-of-Docker to spawn mock containers:
+
+1. **Start a mock container:**
+   ```bash
+   ./scripts/mock.sh
+   ```
+   Note the container name and port from the output (e.g., `homespun-mock-ba1185a8` on port `15633`).
+
+2. **Find the container's Docker network IP:**
+   ```bash
+   docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' homespun-mock-ba1185a8
+   # Returns: 172.17.0.3 (example)
+   ```
+
+3. **Use the IP address with Playwright MCP tools:**
+   - Navigate: `browser_navigate` to `http://172.17.0.3:8080/projects`
+   - Screenshot: `browser_take_screenshot`
+
+**Note:** The port inside the container is always `8080`, regardless of the host-mapped port.
+
+#### Accessing the Host Machine
+
+- **Linux hosts**: Use the Docker bridge IP, typically `172.17.0.1`
+- **Docker Desktop (Mac/Windows)**: Use `host.docker.internal`
+
+### Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| "Browser not installed" error | Verify: `ls /opt/playwright-browsers/` |
+| Connection refused to localhost | Use Docker network IP instead of localhost |
+| Permission denied on browser | Check `PLAYWRIGHT_BROWSERS_PATH` is set to `/opt/playwright-browsers` |

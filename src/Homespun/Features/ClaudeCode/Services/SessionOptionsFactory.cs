@@ -44,7 +44,7 @@ public class SessionOptionsFactory
             // - --browser chromium: Use installed Chromium (Chrome not available)
             // - --no-sandbox: Required for container environments without sandbox permissions
             // - --isolated: Use temp directory for browser profile (avoids permission issues)
-            // - PLAYWRIGHT_BROWSERS_PATH: Point to root's cache where browsers are installed
+            // - PLAYWRIGHT_BROWSERS_PATH: Point to shared location accessible by non-root users
             McpServers = new Dictionary<string, object>
             {
                 ["playwright"] = new Dictionary<string, object>
@@ -54,7 +54,7 @@ public class SessionOptionsFactory
                     ["args"] = new[] { "@playwright/mcp@latest", "--headless", "--browser", "chromium", "--no-sandbox", "--isolated" },
                     ["env"] = new Dictionary<string, string>
                     {
-                        ["PLAYWRIGHT_BROWSERS_PATH"] = "/root/.cache/ms-playwright"
+                        ["PLAYWRIGHT_BROWSERS_PATH"] = "/opt/playwright-browsers"
                     }
                 }
             }

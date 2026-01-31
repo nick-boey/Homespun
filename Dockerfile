@@ -92,9 +92,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN npm install -g opencode-ai@latest @anthropic-ai/claude-code @siteboon/claude-code-ui
 
 # Install Playwright MCP and Chromium browser with all dependencies
-# --with-deps automatically installs system libraries (libatk, libcups, libdrm, etc.)
+# Install browsers to /opt/playwright-browsers with world-writable permissions
+# This is required because the container runs with --user $HOST_UID:$HOST_GID
+# and the default location (/root/.cache/ms-playwright) is not accessible to non-root users
+# Permissions must be 777 to allow Playwright to create lock files and temp directories
+# IMPORTANT: Use the playwright CLI bundled with @playwright/mcp to ensure browser version matches
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers
 RUN npm install -g @playwright/mcp@latest \
-    && npx playwright install chromium --with-deps
+    && /usr/lib/node_modules/@playwright/mcp/node_modules/.bin/playwright install chromium --with-deps \
+    && chmod -R 777 /opt/playwright-browsers
 
 # Install Fleece CLI for issue tracking
 # Install as root, then make tools accessible to all users
