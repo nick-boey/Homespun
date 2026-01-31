@@ -5,65 +5,79 @@
 
 <div class="quick-issue-bar">
     <div class="quick-issue-container">
-        <input type="text"
-               class="quick-input group-input"
-               placeholder="Group"
-               @bind="_group"
-               @bind:event="oninput"
-               @onkeydown="HandleKeyDown"
-               disabled="@_isSubmitting" />
+        <div class="quick-issue-top-row">
+            <select class="quick-input type-select"
+                    @bind="_type"
+                    disabled="@_isSubmitting">
+                @foreach (var type in Enum.GetValues<IssueType>())
+                {
+                    <option value="@type">@type.ToString()</option>
+                }
+            </select>
 
-        <select class="quick-input type-select"
-                @bind="_type"
-                disabled="@_isSubmitting">
-            @foreach (var type in Enum.GetValues<IssueType>())
-            {
-                <option value="@type">@type.ToString()</option>
-            }
-        </select>
+            <input type="text"
+                   class="quick-input group-input"
+                   placeholder="group"
+                   @bind="_group"
+                   @bind:event="oninput"
+                   @onkeydown="HandleKeyDown"
+                   disabled="@_isSubmitting" />
 
-        <input type="text"
-               class="quick-input title-input"
-               placeholder="Add an issue..."
-               @bind="_title"
-               @bind:event="oninput"
-               @onkeydown="HandleKeyDown"
-               @ref="_titleInput"
-               disabled="@_isSubmitting" />
+            <select class="quick-input status-select"
+                    @bind="_status"
+                    disabled="@_isSubmitting">
+                <option value="@IssueStatus.Idea">idea</option>
+                <option value="@IssueStatus.Spec">spec</option>
+                <option value="@IssueStatus.Next">next</option>
+            </select>
+        </div>
 
-        <button class="quick-submit-btn"
-                @onclick="HandleSubmit"
-                disabled="@(_isSubmitting || string.IsNullOrWhiteSpace(_title))"
-                title="Create issue (Enter)">
-            @if (_isSubmitting)
-            {
-                <span class="spinner-border spinner-border-sm"></span>
-            }
-            else
-            {
-                <span class="btn-content">
-                    <span class="btn-icon">+</span>
-                    <kbd class="shortcut-hint">Enter</kbd>
-                </span>
-            }
-        </button>
+        <div class="quick-issue-bottom-row">
+            <input type="text"
+                   class="quick-input title-input"
+                   placeholder="Add an issue..."
+                   @bind="_title"
+                   @bind:event="oninput"
+                   @onkeydown="HandleKeyDown"
+                   @ref="_titleInput"
+                   disabled="@_isSubmitting" />
 
-        <button class="quick-submit-btn quick-edit-btn"
-                @onclick="HandleSubmitAndEdit"
-                disabled="@(_isSubmitting || string.IsNullOrWhiteSpace(_title))"
-                title="Create and open for editing (Shift+Enter)">
-            @if (_isSubmitting)
-            {
-                <span class="spinner-border spinner-border-sm"></span>
-            }
-            else
-            {
-                <span class="btn-content">
-                    <span class="edit-icon">&#9998;</span>
-                    <kbd class="shortcut-hint">Shift</kbd>
-                </span>
-            }
-        </button>
+            <div class="quick-issue-buttons">
+                <button class="quick-submit-btn"
+                        @onclick="HandleSubmit"
+                        disabled="@(_isSubmitting || string.IsNullOrWhiteSpace(_title))"
+                        title="Create issue (Enter)">
+                    @if (_isSubmitting)
+                    {
+                        <span class="spinner-border spinner-border-sm"></span>
+                    }
+                    else
+                    {
+                        <span class="btn-content">
+                            <span class="btn-icon">+</span>
+                            <kbd class="shortcut-hint">Enter</kbd>
+                        </span>
+                    }
+                </button>
+
+                <button class="quick-submit-btn quick-edit-btn"
+                        @onclick="HandleSubmitAndEdit"
+                        disabled="@(_isSubmitting || string.IsNullOrWhiteSpace(_title))"
+                        title="Create and open for editing (Shift+Enter)">
+                    @if (_isSubmitting)
+                    {
+                        <span class="spinner-border spinner-border-sm"></span>
+                    }
+                    else
+                    {
+                        <span class="btn-content">
+                            <span class="edit-icon">&#9998;</span>
+                            <kbd class="shortcut-hint">Shift</kbd>
+                        </span>
+                    }
+                </button>
+            </div>
+        </div>
     </div>
 
     @if (!string.IsNullOrEmpty(_errorMessage))
@@ -87,10 +101,28 @@
 
     .quick-issue-container {
         display: flex;
+        flex-direction: column;
         gap: var(--spacing-sm);
         max-width: 1200px;
         margin: 0 auto;
+    }
+
+    .quick-issue-top-row {
+        display: flex;
+        gap: var(--spacing-sm);
         align-items: center;
+    }
+
+    .quick-issue-bottom-row {
+        display: flex;
+        gap: var(--spacing-sm);
+        align-items: center;
+    }
+
+    .quick-issue-buttons {
+        display: flex;
+        gap: var(--spacing-sm);
+        flex-shrink: 0;
     }
 
     .quick-input {
@@ -128,6 +160,12 @@
     .group-input {
         width: 120px;
         flex-shrink: 0;
+    }
+
+    .status-select {
+        width: 80px;
+        flex-shrink: 0;
+        cursor: pointer;
     }
 
     .title-input {
@@ -207,22 +245,53 @@
         text-align: center;
     }
 
-    @@media (max-width: 600px) {
+    /* Desktop: single row layout */
+    @@media (min-width: 601px) {
         .quick-issue-container {
-            flex-wrap: wrap;
+            flex-direction: row;
+            align-items: center;
+        }
+
+        .quick-issue-top-row {
+            flex-shrink: 0;
+        }
+
+        .quick-issue-bottom-row {
+            flex: 1;
+        }
+    }
+
+    /* Mobile: two row layout */
+    @@media (max-width: 600px) {
+        .quick-issue-top-row {
+            justify-content: flex-start;
         }
 
         .type-select {
-            width: calc(50% - var(--spacing-sm) / 2);
+            width: auto;
+            min-width: 80px;
+            flex: 1;
         }
 
         .group-input {
-            width: calc(50% - var(--spacing-sm) / 2);
+            width: auto;
+            min-width: 80px;
+            flex: 1;
+        }
+
+        .status-select {
+            width: auto;
+            min-width: 70px;
+            flex: 1;
+        }
+
+        .quick-issue-bottom-row {
+            width: 100%;
         }
 
         .title-input {
-            width: 100%;
-            order: -1;
+            min-width: 0;
+            flex: 1;
         }
     }
 </style>
@@ -237,6 +306,7 @@
     [Parameter] public EventCallback<string> OnIssueCreatedForEdit { get; set; }
 
     private IssueType _type = IssueType.Feature;
+    private IssueStatus _status = IssueStatus.Idea;
     private string _title = "";
     private string _group = "";
     private bool _isSubmitting;
@@ -279,19 +349,22 @@
         try
         {
             var title = _title.Trim();
-            var group = string.IsNullOrWhiteSpace(_group) ? null : _group.Trim();
+            // Convert group to lowercase by default
+            var group = string.IsNullOrWhiteSpace(_group) ? null : _group.Trim().ToLowerInvariant();
 
             // Create issue via Fleece service
             var issue = await FleeceService.CreateIssueAsync(
                 LocalPath,
                 title,
                 _type,
-                group: group);
+                group: group,
+                status: _status);
 
             // Clear inputs for next entry
             _title = "";
             _group = "";
             _type = IssueType.Feature;
+            _status = IssueStatus.Idea;
 
             // Notify parent to refresh or open for editing
             if (openForEdit)

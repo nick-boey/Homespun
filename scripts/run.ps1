@@ -23,6 +23,14 @@
     Runs with locally built image in Debug configuration.
 
 .EXAMPLE
+    .\run.ps1 -Local -MockMode
+    Runs with locally built image in mock mode with seeded demo data.
+
+.EXAMPLE
+    .\run.ps1 -Local -MockMode -Port 5095
+    Runs in mock mode on a custom port.
+
+.EXAMPLE
     .\run.ps1 -TailscaleAuthKey "tskey-auth-..."
     Runs with Tailscale enabled for HTTPS access.
 
@@ -67,6 +75,12 @@ param(
     [switch]$DebugBuild,
 
     [Parameter(ParameterSetName = 'Run')]
+    [switch]$MockMode,
+
+    [Parameter(ParameterSetName = 'Run')]
+    [int]$Port = 8080,
+
+    [Parameter(ParameterSetName = 'Run')]
     [switch]$Interactive,
 
     [Parameter(ParameterSetName = 'Run')]
@@ -74,6 +88,9 @@ param(
 
     [Parameter(ParameterSetName = 'Run')]
     [switch]$Pull,
+
+    [Parameter(ParameterSetName = 'Run')]
+    [switch]$NoTailscale,
 
     [Parameter(ParameterSetName = 'Run')]
     [string]$TailscaleAuthKey,
@@ -338,11 +355,17 @@ try {
         Write-Host "      GitHub token found: $maskedToken" -ForegroundColor Green
     }
 
-    # Read Tailscale auth key
-    $tailscaleKey = Get-TailscaleAuthKey -ParamValue $TailscaleAuthKey -EnvFilePath $EnvFilePath
-    if (-not [string]::IsNullOrWhiteSpace($tailscaleKey)) {
-        $maskedTsKey = $tailscaleKey.Substring(0, [Math]::Min(15, $tailscaleKey.Length)) + "..."
-        Write-Host "      Tailscale auth key found: $maskedTsKey" -ForegroundColor Green
+    # Read Tailscale auth key (unless -NoTailscale)
+    $tailscaleKey = $null
+    if ($NoTailscale) {
+        Write-Host "      Tailscale disabled (-NoTailscale flag)" -ForegroundColor Cyan
+    }
+    else {
+        $tailscaleKey = Get-TailscaleAuthKey -ParamValue $TailscaleAuthKey -EnvFilePath $EnvFilePath
+        if (-not [string]::IsNullOrWhiteSpace($tailscaleKey)) {
+            $maskedTsKey = $tailscaleKey.Substring(0, [Math]::Min(15, $tailscaleKey.Length)) + "..."
+            Write-Host "      Tailscale auth key found: $maskedTsKey" -ForegroundColor Green
+        }
     }
 
     # Read external hostname
@@ -379,6 +402,21 @@ try {
         Write-Host "      Created Tailscale state directory: $tailscaleStateDir" -ForegroundColor Green
     }
 
+    # Create DataProtection-Keys directory if it doesn't exist
+    $dataProtectionDir = Join-Path $dataDir "DataProtection-Keys"
+    if (-not (Test-Path $dataProtectionDir)) {
+        New-Item -ItemType Directory -Path $dataProtectionDir -Force | Out-Null
+        Write-Host "      Created DataProtection-Keys directory" -ForegroundColor Green
+    }
+
+    # Fix permissions on data directory (needed when files were created by different user)
+    # Run a quick docker command to chown the data directory to the homespun user (uid 1655)
+    $dataDirUnixTemp = $dataDir -replace '\\', '/'
+    docker run --rm -v "${dataDirUnixTemp}:/fixdata" alpine chown -R 1655:1655 /fixdata 2>$null
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "      Fixed data directory permissions" -ForegroundColor Green
+    }
+
     if (-not (Test-Path $sshDir)) {
         Write-Warning "      SSH directory not found: $sshDir"
         $sshDir = ""
@@ -392,6 +430,27 @@ try {
     }
     else {
         Write-Host "      Claude credentials found: $claudeCredentialsFile" -ForegroundColor Green
+    }
+
+    # Mount Docker socket for DooD (Docker outside of Docker)
+    # This enables containers to spawn sibling containers using the host's Docker daemon
+    # On Windows, Docker uses a named pipe; on Linux/WSL, it uses a socket
+    $dockerSocket = ""
+    if ($IsWindows) {
+        # Windows Docker uses named pipe
+        $dockerSocket = "//./pipe/docker_engine:/var/run/docker.sock"
+        Write-Host "      Docker socket: DooD enabled (Windows named pipe)" -ForegroundColor Green
+    }
+    else {
+        # Linux/WSL uses Unix socket - always mount it for DooD support
+        $dockerSocket = "/var/run/docker.sock:/var/run/docker.sock"
+        if (Test-Path "/var/run/docker.sock") {
+            Write-Host "      Docker socket: DooD enabled (/var/run/docker.sock)" -ForegroundColor Green
+        }
+        else {
+            Write-Host "      Docker socket will be mounted: /var/run/docker.sock (DooD)" -ForegroundColor Cyan
+            Write-Host "      Note: Socket must exist on host for container Docker access" -ForegroundColor Cyan
+        }
     }
 
     # Step 5: Start containers
@@ -409,14 +468,17 @@ try {
     Write-Host "======================================" -ForegroundColor Cyan
     Write-Host "  Container:   $ContainerName"
     Write-Host "  Image:       $ImageName"
-    Write-Host "  Port:        8080"
-    Write-Host "  URL:         http://localhost:8080"
+    Write-Host "  Port:        $Port"
+    Write-Host "  URL:         http://localhost:$Port"
     Write-Host "  Data mount:  $dataDir"
     if ($sshDir) {
         Write-Host "  SSH mount:   $sshDir (read-only)"
     }
     if ($claudeCredentialsFile) {
         Write-Host "  Claude auth: $claudeCredentialsFile (read-only)"
+    }
+    if (-not [string]::IsNullOrWhiteSpace($dockerSocket)) {
+        Write-Host "  Docker:      DooD enabled (host socket mounted)"
     }
     if (-not [string]::IsNullOrWhiteSpace($tailscaleKey)) {
         Write-Host "  Tailscale:   Enabled ($TailscaleHostname)"
@@ -426,6 +488,9 @@ try {
     }
     if (-not [string]::IsNullOrWhiteSpace($externalHostnameValue)) {
         Write-Host "  Agent URLs:  https://$($externalHostnameValue):<port>"
+    }
+    if ($MockMode) {
+        Write-Host "  Mock mode:   Enabled (seeded demo data)"
     }
     if (-not $Local) {
         Write-Host "  Watchtower:  Enabled (auto-updates every 5 min)"
@@ -451,7 +516,7 @@ try {
     }
 
     $dockerArgs += "--name", $ContainerName
-    $dockerArgs += "-p", "8080:8080"
+    $dockerArgs += "-p", "${Port}:8080"
     $dockerArgs += "-v", "${dataDirUnix}:/data"
 
     if ($sshDir) {
@@ -462,9 +527,17 @@ try {
         $dockerArgs += "-v", "${claudeCredentialsFileUnix}:/home/homespun/.claude/.credentials.json:ro"
     }
 
+    if (-not [string]::IsNullOrWhiteSpace($dockerSocket)) {
+        $dockerArgs += "-v", $dockerSocket
+    }
+
     $dockerArgs += "-e", "HOME=/home/homespun"
     $dockerArgs += "-e", "ASPNETCORE_ENVIRONMENT=Production"
     $dockerArgs += "-e", "HSP_HOST_DATA_PATH=$dataDirUnix"
+
+    if ($MockMode) {
+        $dockerArgs += "-e", "HOMESPUN_MOCK_MODE=true"
+    }
 
     if (-not [string]::IsNullOrWhiteSpace($githubToken)) {
         $dockerArgs += "-e", "GITHUB_TOKEN=$githubToken"
@@ -509,7 +582,7 @@ try {
         Write-Host "Container started successfully!" -ForegroundColor Green
         Write-Host ""
         Write-Host "Access URLs:"
-        Write-Host "  Local:       http://localhost:8080"
+        Write-Host "  Local:       http://localhost:$Port"
         if (-not [string]::IsNullOrWhiteSpace($tailscaleKey)) {
             Write-Host "  Tailnet:     https://$TailscaleHostname.<your-tailnet>.ts.net"
         }
@@ -517,7 +590,7 @@ try {
         Write-Host "Useful commands:"
         Write-Host "  View logs:     .\run.ps1 -Logs"
         Write-Host "  Stop:          .\run.ps1 -Stop"
-        Write-Host "  Health check:  curl http://localhost:8080/health"
+        Write-Host "  Health check:  curl http://localhost:$Port/health"
         Write-Host ""
     }
     else {

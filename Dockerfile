@@ -92,9 +92,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN npm install -g opencode-ai@latest @anthropic-ai/claude-code @siteboon/claude-code-ui
 
 # Install Playwright MCP and Chromium browser with all dependencies
-# --with-deps automatically installs system libraries (libatk, libcups, libdrm, etc.)
+# Install browsers to /opt/playwright-browsers with world-writable permissions
+# This is required because the container runs with --user $HOST_UID:$HOST_GID
+# and the default location (/root/.cache/ms-playwright) is not accessible to non-root users
+# Permissions must be 777 to allow Playwright to create lock files and temp directories
+# IMPORTANT: Use the playwright CLI bundled with @playwright/mcp to ensure browser version matches
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers
 RUN npm install -g @playwright/mcp@latest \
-    && npx playwright install chromium --with-deps
+    && /usr/lib/node_modules/@playwright/mcp/node_modules/.bin/playwright install chromium --with-deps \
+    && chmod -R 777 /opt/playwright-browsers
 
 # Install Fleece CLI for issue tracking
 # Install as root, then make tools accessible to all users
@@ -111,6 +117,15 @@ RUN curl -fsSL https://pkgs.tailscale.com/stable/debian/bookworm.noarmor.gpg | t
     && curl -fsSL https://pkgs.tailscale.com/stable/debian/bookworm.tailscale-keyring.list | tee /etc/apt/sources.list.d/tailscale.list \
     && apt-get update \
     && apt-get install -y tailscale \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Docker CLI for DooD (Docker outside of Docker)
+# This allows the container to communicate with the host's Docker daemon
+# via a mounted /var/run/docker.sock socket
+RUN curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian bookworm stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null \
+    && apt-get update \
+    && apt-get install -y docker-ce-cli \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user for security

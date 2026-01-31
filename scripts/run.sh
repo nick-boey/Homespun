@@ -18,6 +18,8 @@ set -e
 # Options:
 #   --local                     Use locally built image (homespun:local)
 #   --debug                     Build in Debug configuration (use with --local)
+#   --mock                      Run in mock mode with seeded demo data
+#   --port PORT                 Override host port (default: 8080)
 #   -it, --interactive          Run in interactive mode (foreground)
 #   -d, --detach                Run in detached mode (background) [default]
 #   --stop                      Stop running containers
@@ -26,6 +28,7 @@ set -e
 #   --external-hostname HOST    Set external hostname for agent URLs
 #   --data-dir DIR              Override data directory (default: ~/.homespun-container/data)
 #   --container-name NAME       Override container name (default: homespun)
+#   --no-tailscale              Disable Tailscale (do not load auth key)
 #
 # Environment Variables:
 #   HSP_GITHUB_TOKEN            GitHub token (preferred for VM secrets)
@@ -53,12 +56,15 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # Default values
 USE_LOCAL=false
 USE_DEBUG=false
+USE_MOCK=false
+NO_TAILSCALE=false
 DETACHED=true
 ACTION="start"
 PULL_FIRST=false
 EXTERNAL_HOSTNAME=""
 DATA_DIR_PARAM=""
 CONTAINER_NAME="homespun"
+HOST_PORT="8080"
 USER_SECRETS_ID="2cfc6c57-72da-4b56-944b-08f2c1df76f6"
 
 # Colors
@@ -84,6 +90,9 @@ while [[ "$#" -gt 0 ]]; do
     case $1 in
         --local) USE_LOCAL=true ;;
         --debug) USE_DEBUG=true ;;
+        --mock) USE_MOCK=true ;;
+        --no-tailscale) NO_TAILSCALE=true ;;
+        --port) HOST_PORT="$2"; shift ;;
         -it|--interactive) DETACHED=false ;;
         -d|--detach) DETACHED=true ;;
         --stop) ACTION="stop" ;;
@@ -212,26 +221,35 @@ else
     log_success "      Claude Code OAuth token found: $MASKED_CC_TOKEN"
 fi
 
-# Tailscale Auth Key: Check environment variables
-# 1. HSP_TAILSCALE_AUTH_KEY (for VM secrets)
-# 2. TAILSCALE_AUTH_KEY (standard)
-TAILSCALE_AUTH_KEY="${HSP_TAILSCALE_AUTH_KEY:-${TAILSCALE_AUTH_KEY:-}}"
-
-# Try reading from .env file
-if [ -z "$TAILSCALE_AUTH_KEY" ] && [ -f "$REPO_ROOT/.env" ]; then
-    TAILSCALE_AUTH_KEY=$(grep -E "^TAILSCALE_AUTH_KEY=" "$REPO_ROOT/.env" 2>/dev/null | cut -d'=' -f2- | tr -d '"' | tr -d "'" || true)
-fi
-
-if [ -z "$TAILSCALE_AUTH_KEY" ]; then
-    log_warn "      Tailscale auth key not found (Tailscale will be disabled)."
-    log_warn "      Set TAILSCALE_AUTH_KEY in ~/.homespun/env for VPN access."
+# Tailscale Auth Key: Check environment variables (unless --no-tailscale)
+if [ "$NO_TAILSCALE" = true ]; then
+    TAILSCALE_AUTH_KEY=""
+    log_info "      Tailscale disabled (--no-tailscale flag)"
 else
-    MASKED_TS_KEY="${TAILSCALE_AUTH_KEY:0:15}..."
-    log_success "      Tailscale auth key found: $MASKED_TS_KEY"
+    # 1. HSP_TAILSCALE_AUTH_KEY (for VM secrets)
+    # 2. TAILSCALE_AUTH_KEY (standard)
+    TAILSCALE_AUTH_KEY="${HSP_TAILSCALE_AUTH_KEY:-${TAILSCALE_AUTH_KEY:-}}"
+
+    # Try reading from .env file
+    if [ -z "$TAILSCALE_AUTH_KEY" ] && [ -f "$REPO_ROOT/.env" ]; then
+        TAILSCALE_AUTH_KEY=$(grep -E "^TAILSCALE_AUTH_KEY=" "$REPO_ROOT/.env" 2>/dev/null | cut -d'=' -f2- | tr -d '"' | tr -d "'" || true)
+    fi
+
+    if [ -z "$TAILSCALE_AUTH_KEY" ]; then
+        log_warn "      Tailscale auth key not found (Tailscale will be disabled)."
+        log_warn "      Set TAILSCALE_AUTH_KEY in ~/.homespun/env for VPN access."
+    else
+        MASKED_TS_KEY="${TAILSCALE_AUTH_KEY:0:15}..."
+        log_success "      Tailscale auth key found: $MASKED_TS_KEY"
+    fi
 fi
 
 # Step 4: Set up directories
 log_info "[4/5] Setting up directories..."
+
+# Get host user UID/GID early - needed for permission fix and container user
+HOST_UID="$(id -u)"
+HOST_GID="$(id -g)"
 
 # Use DATA_DIR_PARAM if provided, otherwise default
 if [ -n "$DATA_DIR_PARAM" ]; then
@@ -250,6 +268,18 @@ fi
 
 chmod 777 "$DATA_DIR" 2>/dev/null || true
 
+# Create DataProtection-Keys directory if it doesn't exist
+DATA_PROTECTION_DIR="$DATA_DIR/DataProtection-Keys"
+if [ ! -d "$DATA_PROTECTION_DIR" ]; then
+    mkdir -p "$DATA_PROTECTION_DIR"
+    log_success "      Created DataProtection-Keys directory"
+fi
+
+# Fix permissions on data directory to match the user the container will run as
+# This ensures both container and host user can access the files
+docker run --rm -v "$DATA_DIR:/fixdata" alpine chown -R $HOST_UID:$HOST_GID /fixdata 2>/dev/null && \
+    log_success "      Fixed data directory permissions" || true
+
 # Check SSH directory
 SSH_MOUNT=""
 if [ -d "$SSH_DIR" ]; then
@@ -257,6 +287,20 @@ if [ -d "$SSH_DIR" ]; then
     log_success "      SSH directory found: $SSH_DIR"
 else
     log_warn "      SSH directory not found: $SSH_DIR"
+fi
+
+# Mount Docker socket for DooD (Docker outside of Docker)
+# This enables containers to spawn sibling containers using the host's Docker daemon
+DOCKER_SOCKET_MOUNT="-v /var/run/docker.sock:/var/run/docker.sock"
+DOCKER_GROUP_ADD=""
+if [ -S "/var/run/docker.sock" ]; then
+    # Get the GID of the docker socket to add to container user for DooD access
+    DOCKER_SOCKET_GID="$(stat -c '%g' /var/run/docker.sock)"
+    DOCKER_GROUP_ADD="--group-add $DOCKER_SOCKET_GID"
+    log_success "      Docker socket found: /var/run/docker.sock (DooD enabled, GID: $DOCKER_SOCKET_GID)"
+else
+    log_info "      Docker socket will be mounted: /var/run/docker.sock (DooD)"
+    log_info "      Note: Socket must exist on host for container Docker access"
 fi
 
 # Note: We intentionally do NOT mount the host's ~/.claude directory.
@@ -280,27 +324,29 @@ fi
 log_info "[5/5] Starting containers..."
 echo
 
-# Export host user UID/GID so container runs as the same user
-HOST_UID="$(id -u)"
-HOST_GID="$(id -g)"
-
 log_info "======================================"
 log_info "  Container Configuration"
 log_info "======================================"
 echo "  Container:   $CONTAINER_NAME"
 echo "  Image:       $IMAGE_NAME"
 echo "  User:        $HOST_UID:$HOST_GID (host user)"
-echo "  Port:        8080"
-echo "  URL:         http://localhost:8080"
+echo "  Port:        $HOST_PORT"
+echo "  URL:         http://localhost:$HOST_PORT"
 echo "  Data mount:  $DATA_DIR"
 if [ -n "$SSH_MOUNT" ]; then
     echo "  SSH mount:   $SSH_DIR (read-only)"
+fi
+if [ -n "$DOCKER_SOCKET_MOUNT" ]; then
+    echo "  Docker:      DooD enabled (host socket mounted)"
 fi
 if [ -n "$TAILSCALE_AUTH_KEY" ]; then
     echo "  Tailscale:   Enabled (will connect on startup)"
 fi
 if [ -n "$EXTERNAL_HOSTNAME" ]; then
     echo "  Agent URLs:  https://$EXTERNAL_HOSTNAME:<port>"
+fi
+if [ "$USE_MOCK" = true ]; then
+    echo "  Mock mode:   Enabled (seeded demo data)"
 fi
 if [ "$USE_LOCAL" = false ]; then
     echo "  Watchtower:  Enabled (auto-updates every 5 min)"
@@ -321,12 +367,18 @@ if [ "$DETACHED" = true ]; then
 fi
 DOCKER_CMD="$DOCKER_CMD --name $CONTAINER_NAME"
 DOCKER_CMD="$DOCKER_CMD --user $HOST_UID:$HOST_GID"
-DOCKER_CMD="$DOCKER_CMD -p 8080:8080"
+DOCKER_CMD="$DOCKER_CMD $DOCKER_GROUP_ADD"
+DOCKER_CMD="$DOCKER_CMD -p $HOST_PORT:8080"
 DOCKER_CMD="$DOCKER_CMD -v $DATA_DIR:/data"
 DOCKER_CMD="$DOCKER_CMD $SSH_MOUNT"
+DOCKER_CMD="$DOCKER_CMD $DOCKER_SOCKET_MOUNT"
 DOCKER_CMD="$DOCKER_CMD -e HOME=/home/homespun"
 DOCKER_CMD="$DOCKER_CMD -e ASPNETCORE_ENVIRONMENT=Production"
 DOCKER_CMD="$DOCKER_CMD -e HSP_HOST_DATA_PATH=$DATA_DIR"
+
+if [ "$USE_MOCK" = true ]; then
+    DOCKER_CMD="$DOCKER_CMD -e HOMESPUN_MOCK_MODE=true"
+fi
 
 if [ -n "$GITHUB_TOKEN" ]; then
     DOCKER_CMD="$DOCKER_CMD -e GITHUB_TOKEN=$GITHUB_TOKEN"
@@ -374,12 +426,12 @@ if [ "$DETACHED" = true ]; then
     echo
     log_success "Container started successfully!"
     echo
-    echo "Access URL: http://localhost:8080"
+    echo "Access URL: http://localhost:$HOST_PORT"
     echo
     echo "Useful commands:"
     echo "  View logs:     $0 --logs"
     echo "  Stop:          $0 --stop"
-    echo "  Health check:  curl http://localhost:8080/health"
+    echo "  Health check:  curl http://localhost:$HOST_PORT/health"
     echo
 else
     log_warn "Starting container in interactive mode..."
