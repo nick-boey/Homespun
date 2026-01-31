@@ -36,6 +36,13 @@
                 }
                 <i class="bi bi-cloud-download"></i> Fetch
             </button>
+            <button class="btn btn-outline-secondary btn-sm" @onclick="PruneWorktreesAsync" disabled="@_isPruning" title="Clean up stale worktree references">
+                @if (_isPruning)
+                {
+                    <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                }
+                <i class="bi bi-trash"></i> Prune
+            </button>
         </div>
     </div>
 
@@ -59,7 +66,7 @@
     <div class="card mb-3">
         <div class="card-header d-flex justify-content-between align-items-center">
             <span>Active Worktrees</span>
-            <span class="badge bg-secondary">@_worktrees.Count</span>
+            <span class="badge bg-secondary">@_worktrees.Count(w => !w.IsBare)</span>
         </div>
         <div class="card-body p-0">
             @if (_worktrees.Count == 0)
@@ -75,11 +82,12 @@
                         var branchInfo = _branches.FirstOrDefault(b => b.ShortName == branchName);
                         var session = GetSessionForWorktree(worktree);
                         var prInfo = GetPullRequestForBranch(branchName);
+                        var status = GetWorktreeStatus(worktree.Path);
 
                         <div class="list-group-item worktree-item">
                             <div class="d-flex justify-content-between align-items-start">
                                 <div class="worktree-info flex-grow-1">
-                                    <div class="d-flex align-items-center gap-2 mb-1">
+                                    <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
                                         <strong class="branch-name">@branchName</strong>
                                         @if (IsDefaultBranch(branchName))
                                         {
@@ -97,18 +105,28 @@
                                                 PR #@prInfo.GitHubPRNumber
                                             </a>
                                         }
-                                        @if (session != null)
+                                        @* Branch mismatch tag *@
+                                        @if (!worktree.IsOnCorrectBranch)
                                         {
-                                            <span class="badge @GetSessionStatusBadgeClass(session.Status)">
-                                                @session.Status
+                                            <span class="badge bg-danger" title="Expected branch: @worktree.ExpectedBranch">
+                                                Wrong Branch
                                             </span>
                                         }
-                                        @if (StartupTracker.IsStarting(GetWorktreeEntityId(worktree)))
+                                        @* Git status badges *@
+                                        @if (status != null && status.HasChanges)
                                         {
-                                            <span class="badge bg-warning text-dark">
-                                                <span class="spinner-border spinner-border-sm me-1" role="status" style="width: 0.6rem; height: 0.6rem;"></span>
-                                                Starting...
-                                            </span>
+                                            @if (status.ModifiedCount > 0)
+                                            {
+                                                <span class="badge bg-warning text-dark" title="Modified files">M: @status.ModifiedCount</span>
+                                            }
+                                            @if (status.StagedCount > 0)
+                                            {
+                                                <span class="badge bg-success" title="Staged files">S: @status.StagedCount</span>
+                                            }
+                                            @if (status.UntrackedCount > 0)
+                                            {
+                                                <span class="badge bg-secondary" title="Untracked files">U: @status.UntrackedCount</span>
+                                            }
                                         }
                                     </div>
                                     <div class="text-muted small">
@@ -135,46 +153,37 @@
                                         </div>
                                     }
                                 </div>
-                                <div class="worktree-actions">
+                                <div class="worktree-actions d-flex align-items-center gap-1">
                                     @if (!IsDefaultBranch(branchName))
                                     {
-                                        @if (session != null)
+                                        @if (!worktree.IsOnCorrectBranch)
                                         {
-                                            <a href="/session/@session.Id" class="btn btn-sm btn-primary me-1" title="Open chat">
-                                                Chat
-                                            </a>
-                                            <button class="btn btn-sm btn-outline-danger me-1"
-                                                    @onclick="() => StopSessionAsync(session)"
+                                            <button class="btn btn-sm btn-warning"
+                                                    @onclick="() => FixBranchAsync(worktree)"
                                                     disabled="@_operationInProgress"
-                                                    title="Stop session">
-                                                Stop
-                                            </button>
-                                        }
-                                        else if (!StartupTracker.IsStarting(GetWorktreeEntityId(worktree)))
-                                        {
-                                            <button class="btn btn-sm btn-outline-primary me-1"
-                                                    @onclick="() => StartSessionAsync(worktree, SessionMode.Plan)"
-                                                    disabled="@_operationInProgress"
-                                                    title="Start planning session">
-                                                Plan
-                                            </button>
-                                            <button class="btn btn-sm btn-success me-1"
-                                                    @onclick="() => StartSessionAsync(worktree, SessionMode.Build)"
-                                                    disabled="@_operationInProgress"
-                                                    title="Start building session">
-                                                Build
+                                                    title="Checkout the correct branch: @worktree.ExpectedBranch">
+                                                Fix Branch
                                             </button>
                                         }
 
+                                        <AgentControlPanel
+                                            EntityId="@GetWorktreeEntityId(worktree)"
+                                            WorktreePath="@worktree.Path"
+                                            ProjectId="@Project.Id"
+                                            Model="@(Project.DefaultModel ?? "sonnet")"
+                                            SystemPrompt="@($"You are working on branch: {branchName}")"
+                                            Compact="true"
+                                            Disabled="@_operationInProgress" />
+
                                         @if (branchInfo?.BehindCount > 0)
                                         {
-                                            <button class="btn btn-sm btn-outline-secondary me-1"
+                                            <button class="btn btn-sm btn-outline-secondary"
                                                     @onclick="() => PullLatestAsync(worktree)"
                                                     disabled="@_operationInProgress"
                                                     title="Pull latest changes">
                                                 Pull
                                             </button>
-                                            <button class="btn btn-sm btn-outline-warning me-1"
+                                            <button class="btn btn-sm btn-outline-warning"
                                                     @onclick="() => StartRebaseAgentAsync(worktree)"
                                                     disabled="@(_operationInProgress || session != null || StartupTracker.IsStarting(GetWorktreeEntityId(worktree)))"
                                                     title="Start rebase agent to rebase onto @Project.DefaultBranch">
@@ -198,20 +207,93 @@
         </div>
     </div>
 
-    @* Local Branches Without Worktrees *@
-    @{
-        var branchesWithoutWorktrees = _branches.Where(b => !b.HasWorktree && !IsDefaultBranch(b.ShortName)).ToList();
-    }
-    @if (branchesWithoutWorktrees.Any())
+    @* Lost Worktrees Section *@
+    @if (_lostWorktrees.Any())
     {
-        <div class="card mb-3">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <span>Local Branches (No Worktree)</span>
-                <span class="badge bg-secondary">@branchesWithoutWorktrees.Count</span>
+        <div class="card mb-3 border-warning">
+            <div class="card-header d-flex justify-content-between align-items-center bg-warning bg-opacity-25">
+                <span><i class="bi bi-exclamation-triangle me-1"></i> Lost Worktrees</span>
+                <span class="badge bg-warning text-dark">@_lostWorktrees.Count</span>
             </div>
             <div class="card-body p-0">
                 <div class="list-group list-group-flush">
-                    @foreach (var branch in branchesWithoutWorktrees)
+                    @foreach (var lost in _lostWorktrees)
+                    {
+                        <div class="list-group-item worktree-item">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="worktree-info flex-grow-1">
+                                    <div class="d-flex align-items-center gap-2 mb-1">
+                                        <strong class="branch-name">@lost.FolderName</strong>
+                                        <span class="badge bg-warning text-dark">Lost</span>
+                                        @if (lost.CanRepair)
+                                        {
+                                            <span class="badge bg-info" title="Can be repaired to branch: @lost.MatchingBranchName">
+                                                <i class="bi bi-arrow-right"></i> @lost.MatchingBranchName
+                                            </span>
+                                        }
+                                        @if (lost.Status != null && lost.Status.HasChanges)
+                                        {
+                                            @if (lost.Status.ModifiedCount > 0)
+                                            {
+                                                <span class="badge bg-danger" title="Modified files - may lose work!">M: @lost.Status.ModifiedCount</span>
+                                            }
+                                            @if (lost.Status.StagedCount > 0)
+                                            {
+                                                <span class="badge bg-success" title="Staged files">S: @lost.Status.StagedCount</span>
+                                            }
+                                            @if (lost.Status.UntrackedCount > 0)
+                                            {
+                                                <span class="badge bg-secondary" title="Untracked files">U: @lost.Status.UntrackedCount</span>
+                                            }
+                                        }
+                                    </div>
+                                    <div class="text-muted small">
+                                        <code class="worktree-path">@lost.Path</code>
+                                    </div>
+                                </div>
+                                <div class="worktree-actions">
+                                    @if (lost.CanRepair)
+                                    {
+                                        <button class="btn btn-sm btn-outline-success me-1"
+                                                @onclick="() => RepairLostWorktreeAsync(lost)"
+                                                disabled="@_operationInProgress"
+                                                title="Reattach to branch @lost.MatchingBranchName">
+                                            Repair
+                                        </button>
+                                    }
+                                    <button class="btn btn-sm btn-outline-danger"
+                                            @onclick="() => ShowDeleteLostWorktreeConfirmation(lost)"
+                                            disabled="@_operationInProgress"
+                                            title="Delete folder permanently">
+                                        Delete
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+
+    @* Local Branches Without Worktrees - Split into Open PRs and others *@
+    @{
+        var branchesWithoutWorktrees = _branches.Where(b => !b.HasWorktree && !IsDefaultBranch(b.ShortName)).ToList();
+        var branchesWithPRs = branchesWithoutWorktrees.Where(b => GetPullRequestForBranch(b.ShortName) != null).ToList();
+        var branchesWithoutPRs = branchesWithoutWorktrees.Where(b => GetPullRequestForBranch(b.ShortName) == null).ToList();
+    }
+
+    @* Open PRs Panel *@
+    @if (branchesWithPRs.Any())
+    {
+        <div class="card mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>Open PRs</span>
+                <span class="badge bg-info">@branchesWithPRs.Count</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="list-group list-group-flush">
+                    @foreach (var branch in branchesWithPRs)
                     {
                         var prInfo = GetPullRequestForBranch(branch.ShortName);
 
@@ -224,6 +306,10 @@
                                         {
                                             <span class="badge bg-success">merged</span>
                                         }
+                                        @if (!branch.HasRemote)
+                                        {
+                                            <span class="badge bg-secondary" title="No remote tracking branch">local only</span>
+                                        }
                                         @if (prInfo != null)
                                         {
                                             <a href="https://github.com/@Project.GitHubOwner/@Project.GitHubRepo/pull/@prInfo.GitHubPRNumber"
@@ -231,6 +317,59 @@
                                                class="badge bg-info text-decoration-none">
                                                 PR #@prInfo.GitHubPRNumber
                                             </a>
+                                        }
+                                    </div>
+                                    @if (!string.IsNullOrEmpty(branch.LastCommitMessage))
+                                    {
+                                        <div class="text-muted small">@TruncateMessage(branch.LastCommitMessage)</div>
+                                    }
+                                </div>
+                                <div class="branch-actions">
+                                    <button class="btn btn-sm btn-outline-primary me-1"
+                                            @onclick="() => CreateWorktreeForBranchAsync(branch.ShortName)"
+                                            disabled="@_operationInProgress"
+                                            title="Create worktree for this branch">
+                                        Start
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger"
+                                            @onclick="() => ShowDeleteBranchConfirmation(branch)"
+                                            disabled="@_operationInProgress"
+                                            title="Delete branch">
+                                        Delete
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+
+    @* Local Branches Without PRs *@
+    @if (branchesWithoutPRs.Any())
+    {
+        <div class="card mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>Local Branches (No Worktree)</span>
+                <span class="badge bg-secondary">@branchesWithoutPRs.Count</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="list-group list-group-flush">
+                    @foreach (var branch in branchesWithoutPRs)
+                    {
+                        <div class="list-group-item branch-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div class="branch-info">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <strong>@branch.ShortName</strong>
+                                        @if (branch.IsMerged)
+                                        {
+                                            <span class="badge bg-success">merged</span>
+                                        }
+                                        @if (!branch.HasRemote)
+                                        {
+                                            <span class="badge bg-secondary" title="No remote tracking branch">local only</span>
                                         }
                                     </div>
                                     @if (!string.IsNullOrEmpty(branch.LastCommitMessage))
@@ -278,11 +417,17 @@
                                     <strong>origin/@remoteBranch</strong>
                                 </div>
                                 <div class="branch-actions">
-                                    <button class="btn btn-sm btn-outline-primary"
+                                    <button class="btn btn-sm btn-outline-primary me-1"
                                             @onclick="() => CreateWorktreeFromRemoteAsync(remoteBranch)"
                                             disabled="@_operationInProgress"
                                             title="Create local worktree from remote branch">
                                         Checkout
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger"
+                                            @onclick="() => DeleteRemoteBranchAsync(remoteBranch)"
+                                            disabled="@_operationInProgress"
+                                            title="Delete remote branch">
+                                        Delete
                                     </button>
                                 </div>
                             </div>
@@ -306,7 +451,18 @@
                     <button type="button" class="btn-close" @onclick="HideDeleteConfirmation"></button>
                 </div>
                 <div class="modal-body">
-                    @if (_deleteTargetIsMerged)
+                    @if (_deleteTargetLostWorktree != null)
+                    {
+                        <p>Are you sure you want to delete the folder <strong>@_deleteTargetName</strong>?</p>
+                        @if (_deleteLostWorktreeHasChanges)
+                        {
+                            <div class="alert alert-danger">
+                                <strong>Warning:</strong> This folder contains <strong>uncommitted changes</strong>. Deleting it will permanently lose these changes.
+                            </div>
+                        }
+                        <p class="text-muted mb-0">This will permanently delete the folder and all its contents.</p>
+                    }
+                    else if (_deleteTargetIsMerged)
                     {
                         <p>Are you sure you want to delete <strong>@_deleteTargetName</strong>?</p>
                         <p class="text-muted mb-0">This branch has been merged and is safe to delete.</p>
@@ -400,8 +556,11 @@
     private List<BranchInfo> _branches = [];
     private List<string> _remoteBranches = [];
     private List<PullRequest> _pullRequests = [];
+    private List<LostWorktreeInfo> _lostWorktrees = [];
+    private Dictionary<string, WorktreeStatus> _worktreeStatuses = new();
     private bool _isLoading;
     private bool _isFetching;
+    private bool _isPruning;
     private bool _operationInProgress;
     private string? _errorMessage;
     private string? _successMessage;
@@ -415,8 +574,10 @@
     private bool _deleteWorktreeOnly;
     private bool _deleteRemoteBranch;
     private bool _hasRemoteBranch;
+    private bool _deleteLostWorktreeHasChanges;
     private WorktreeInfo? _deleteTargetWorktree;
     private BranchInfo? _deleteTargetBranch;
+    private LostWorktreeInfo? _deleteTargetLostWorktree;
 
     protected override async Task OnInitializedAsync()
     {
@@ -451,6 +612,30 @@
 
             // Load pull requests for this project
             _pullRequests = await PullRequestDataService.GetByProjectIdAsync(Project.Id);
+
+            // Load lost worktrees
+            _lostWorktrees = await GitWorktreeService.FindLostWorktreeFoldersAsync(Project.LocalPath);
+
+            // Load git status for all worktrees (in parallel for performance)
+            _worktreeStatuses.Clear();
+            var statusTasks = _worktrees.Where(w => !w.IsBare).Select(async w =>
+            {
+                try
+                {
+                    var status = await GitWorktreeService.GetWorktreeStatusAsync(w.Path);
+                    return (w.Path, status);
+                }
+                catch
+                {
+                    return (w.Path, new WorktreeStatus());
+                }
+            });
+
+            var statuses = await Task.WhenAll(statusTasks);
+            foreach (var (path, status) in statuses)
+            {
+                _worktreeStatuses[path] = status;
+            }
         }
         catch (Exception ex)
         {
@@ -490,6 +675,70 @@
         finally
         {
             _isFetching = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task PruneWorktreesAsync()
+    {
+        _isPruning = true;
+        _errorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            await GitWorktreeService.PruneWorktreesAsync(Project.LocalPath);
+            _successMessage = "Pruned stale worktree references";
+            await RefreshDataAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to prune: {ex.Message}";
+        }
+        finally
+        {
+            _isPruning = false;
+            StateHasChanged();
+        }
+    }
+
+    private WorktreeStatus? GetWorktreeStatus(string worktreePath)
+    {
+        return _worktreeStatuses.GetValueOrDefault(worktreePath);
+    }
+
+    private async Task FixBranchAsync(WorktreeInfo worktree)
+    {
+        if (string.IsNullOrEmpty(worktree.ExpectedBranch))
+        {
+            _errorMessage = "No expected branch to fix";
+            return;
+        }
+
+        _operationInProgress = true;
+        _errorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            var success = await GitWorktreeService.CheckoutBranchAsync(worktree.Path, worktree.ExpectedBranch);
+            if (success)
+            {
+                _successMessage = $"Checked out branch {worktree.ExpectedBranch}";
+                await RefreshDataAsync();
+            }
+            else
+            {
+                _errorMessage = $"Failed to checkout branch {worktree.ExpectedBranch}";
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to fix branch: {ex.Message}";
+        }
+        finally
+        {
+            _operationInProgress = false;
             StateHasChanged();
         }
     }
@@ -567,22 +816,10 @@
 
         try
         {
-            // First create the local branch from remote
-            var branchCreated = await GitWorktreeService.CreateLocalBranchFromRemoteAsync(
+            // Use the dedicated method that creates the worktree without checking out in main
+            var worktreePath = await GitWorktreeService.CreateWorktreeFromRemoteBranchAsync(
                 Project.LocalPath,
                 remoteBranch);
-
-            if (!branchCreated)
-            {
-                _errorMessage = $"Failed to create local branch from origin/{remoteBranch}";
-                return;
-            }
-
-            // Then create the worktree
-            var worktreePath = await GitWorktreeService.CreateWorktreeAsync(
-                Project.LocalPath,
-                remoteBranch,
-                createBranch: false);
 
             if (!string.IsNullOrEmpty(worktreePath))
             {
@@ -598,6 +835,124 @@
         catch (Exception ex)
         {
             _errorMessage = $"Failed to checkout remote branch: {ex.Message}";
+        }
+        finally
+        {
+            _operationInProgress = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task DeleteRemoteBranchAsync(string remoteBranch)
+    {
+        _operationInProgress = true;
+        _errorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            var success = await GitWorktreeService.DeleteRemoteBranchAsync(Project.LocalPath, remoteBranch);
+            if (success)
+            {
+                _successMessage = $"Deleted remote branch origin/{remoteBranch}";
+                await RefreshDataAsync();
+            }
+            else
+            {
+                _errorMessage = $"Failed to delete remote branch {remoteBranch}";
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to delete remote branch: {ex.Message}";
+        }
+        finally
+        {
+            _operationInProgress = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task RepairLostWorktreeAsync(LostWorktreeInfo lost)
+    {
+        if (!lost.CanRepair || string.IsNullOrEmpty(lost.MatchingBranchName))
+        {
+            _errorMessage = "Cannot repair: no matching branch found";
+            return;
+        }
+
+        _operationInProgress = true;
+        _errorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            var success = await GitWorktreeService.RepairWorktreeAsync(
+                Project.LocalPath,
+                lost.Path,
+                lost.MatchingBranchName);
+
+            if (success)
+            {
+                _successMessage = $"Repaired worktree for branch {lost.MatchingBranchName}";
+                await RefreshDataAsync();
+                await OnDataChanged.InvokeAsync();
+            }
+            else
+            {
+                _errorMessage = $"Failed to repair worktree for {lost.FolderName}";
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to repair worktree: {ex.Message}";
+        }
+        finally
+        {
+            _operationInProgress = false;
+            StateHasChanged();
+        }
+    }
+
+    private void ShowDeleteLostWorktreeConfirmation(LostWorktreeInfo lost)
+    {
+        _deleteModalTitle = "Delete Lost Worktree";
+        _deleteTargetName = lost.FolderName;
+        _deleteTargetIsMerged = false;
+        _deleteIncludesWorktree = false;
+        _deleteWorktreeOnly = false;
+        _deleteRemoteBranch = false;
+        _hasRemoteBranch = false;
+        _deleteLostWorktreeHasChanges = lost.Status?.HasChanges ?? false;
+        _deleteTargetWorktree = null;
+        _deleteTargetBranch = null;
+        _deleteTargetLostWorktree = lost;
+        _showDeleteConfirmation = true;
+    }
+
+    private async Task DeleteLostWorktreeAsync(LostWorktreeInfo lost)
+    {
+        _operationInProgress = true;
+        _errorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            var success = await GitWorktreeService.DeleteWorktreeFolderAsync(lost.Path);
+            if (success)
+            {
+                _successMessage = $"Deleted folder {lost.FolderName}";
+                HideDeleteConfirmation();
+                await RefreshDataAsync();
+            }
+            else
+            {
+                _errorMessage = $"Failed to delete folder {lost.FolderName}";
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to delete folder: {ex.Message}";
         }
         finally
         {
@@ -738,6 +1093,8 @@
         _showDeleteConfirmation = false;
         _deleteTargetWorktree = null;
         _deleteTargetBranch = null;
+        _deleteTargetLostWorktree = null;
+        _deleteLostWorktreeHasChanges = false;
     }
 
     private async Task ExecuteDeleteAsync()
@@ -747,6 +1104,13 @@
 
         try
         {
+            // Handle lost worktree deletion
+            if (_deleteTargetLostWorktree != null)
+            {
+                await DeleteLostWorktreeAsync(_deleteTargetLostWorktree);
+                return;
+            }
+
             var branchName = _deleteTargetBranch?.ShortName ?? GetShortBranchName(_deleteTargetWorktree?.Branch);
 
             // Stop any active session first
