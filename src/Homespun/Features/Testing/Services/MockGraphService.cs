@@ -266,6 +266,104 @@ public class MockGraphService : IGraphService
                 ParentIssues = ["ISSUE-005"], // Depends on ISSUE-005
                 CreatedAt = now.AddDays(-8),
                 LastUpdate = now.AddDays(-1)
+            },
+
+            // Extended dependency tree branching from ISSUE-005
+            // ISSUE-005 -> ISSUE-007 -> ISSUE-008 -> ISSUE-009 -> ISSUE-010
+            //                                     -> ISSUE-011
+            //                        -> ISSUE-012
+            // ISSUE-005 -> ISSUE-013
+
+            new Issue
+            {
+                Id = "ISSUE-007",
+                Title = "Implement GET endpoints",
+                Description = "Build GET endpoints for retrieving resources from the API",
+                Type = IssueType.Task,
+                Status = IssueStatus.Next,
+                Priority = 2,
+                Group = "API",
+                ParentIssues = ["ISSUE-005"],
+                CreatedAt = now.AddDays(-7),
+                LastUpdate = now.AddDays(-1)
+            },
+            new Issue
+            {
+                Id = "ISSUE-008",
+                Title = "Implement POST endpoints",
+                Description = "Build POST endpoints for creating new resources",
+                Type = IssueType.Task,
+                Status = IssueStatus.Next,
+                Priority = 2,
+                Group = "API",
+                ParentIssues = ["ISSUE-007"],
+                CreatedAt = now.AddDays(-6),
+                LastUpdate = now.AddDays(-1)
+            },
+            new Issue
+            {
+                Id = "ISSUE-009",
+                Title = "Implement PUT/PATCH endpoints",
+                Description = "Build PUT/PATCH endpoints for updating existing resources",
+                Type = IssueType.Task,
+                Status = IssueStatus.Next,
+                Priority = 2,
+                Group = "API",
+                ParentIssues = ["ISSUE-008"],
+                CreatedAt = now.AddDays(-5),
+                LastUpdate = now.AddDays(-1)
+            },
+            new Issue
+            {
+                Id = "ISSUE-010",
+                Title = "Implement DELETE endpoints",
+                Description = "Build DELETE endpoints for removing resources",
+                Type = IssueType.Task,
+                Status = IssueStatus.Next,
+                Priority = 2,
+                Group = "API",
+                ParentIssues = ["ISSUE-009"],
+                CreatedAt = now.AddDays(-4),
+                LastUpdate = now.AddDays(-1)
+            },
+            new Issue
+            {
+                Id = "ISSUE-011",
+                Title = "Add request validation",
+                Description = "Implement request validation middleware for all API endpoints",
+                Type = IssueType.Task,
+                Status = IssueStatus.Spec,
+                Priority = 3,
+                Group = "API",
+                ParentIssues = ["ISSUE-008"],
+                CreatedAt = now.AddDays(-5),
+                LastUpdate = now.AddDays(-2)
+            },
+            new Issue
+            {
+                Id = "ISSUE-012",
+                Title = "Add rate limiting",
+                Description = "Implement rate limiting to prevent API abuse",
+                Type = IssueType.Task,
+                Status = IssueStatus.Idea,
+                Priority = 3,
+                Group = "API",
+                ParentIssues = ["ISSUE-007"],
+                CreatedAt = now.AddDays(-6),
+                LastUpdate = now.AddDays(-3)
+            },
+            new Issue
+            {
+                Id = "ISSUE-013",
+                Title = "Set up API monitoring",
+                Description = "Configure monitoring and alerting for API health and performance",
+                Type = IssueType.Chore,
+                Status = IssueStatus.Spec,
+                Priority = 4,
+                Group = "API",
+                ParentIssues = ["ISSUE-005"],
+                CreatedAt = now.AddDays(-7),
+                LastUpdate = now.AddDays(-2)
             }
         ];
     }
