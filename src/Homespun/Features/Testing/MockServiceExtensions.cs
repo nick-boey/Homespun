@@ -75,8 +75,20 @@ public static class MockServiceExtensions
         services.AddSingleton<IRebaseAgentService, MockRebaseAgentService>();
         services.AddSingleton<IAgentPromptService, MockAgentPromptService>();
 
-        // Message cache store - use real implementation (stores to temp directory)
-        var messageCacheDir = Path.Combine(Path.GetTempPath(), "homespun-mock", "sessions");
+        // Message cache store - use real implementation
+        // In container: /data/sessions, locally: ~/.homespun/sessions (consistent with Program.cs)
+        var dataPath = Environment.GetEnvironmentVariable("HOMESPUN_DATA_PATH");
+        string messageCacheDir;
+        if (!string.IsNullOrEmpty(dataPath))
+        {
+            var dataDirectory = Path.GetDirectoryName(dataPath);
+            messageCacheDir = Path.Combine(dataDirectory!, "sessions");
+        }
+        else
+        {
+            var homespunDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".homespun");
+            messageCacheDir = Path.Combine(homespunDir, "sessions");
+        }
         services.AddSingleton<IMessageCacheStore>(sp =>
             new MessageCacheStore(messageCacheDir, sp.GetRequiredService<ILogger<MessageCacheStore>>()));
 
@@ -103,8 +115,19 @@ public static class MockServiceExtensions
         MockModeOptions options)
     {
         // Determine working directory for live sessions
-        var workingDirectory = options.LiveClaudeSessionsWorkingDirectory
-            ?? Path.Combine(Directory.GetCurrentDirectory(), "test-workspace");
+        // Use /data/test-workspace in container (via HOMESPUN_DATA_PATH), otherwise current directory
+        var dataPath = Environment.GetEnvironmentVariable("HOMESPUN_DATA_PATH");
+        string defaultWorkspace;
+        if (!string.IsNullOrEmpty(dataPath))
+        {
+            var dataDirectory = Path.GetDirectoryName(dataPath);
+            defaultWorkspace = Path.Combine(dataDirectory!, "test-workspace");
+        }
+        else
+        {
+            defaultWorkspace = Path.Combine(Directory.GetCurrentDirectory(), "test-workspace");
+        }
+        var workingDirectory = options.LiveClaudeSessionsWorkingDirectory ?? defaultWorkspace;
 
         // Ensure the test workspace directory exists
         if (!Directory.Exists(workingDirectory))
