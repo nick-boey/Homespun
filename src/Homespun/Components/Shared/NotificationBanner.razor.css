@@ -31,30 +31,30 @@
 }
 
 .notification-banner.notification-info .notification-action-btn:hover {
-    background-color: #4594ab;
-    border-color: #4594ab;
+    background-color: var(--notification-info-hover);
+    border-color: var(--notification-info-hover);
 }
 
 /* Warning notification - yellow/wattle */
 .notification-banner.notification-warning {
     background-color: rgba(255, 234, 118, 0.2);
-    border-color: #d4a800;
+    border-color: var(--notification-warning);
     color: var(--text-primary);
 }
 
 .notification-banner.notification-warning .notification-icon {
-    color: #d4a800;
+    color: var(--notification-warning);
 }
 
 .notification-banner.notification-warning .notification-action-btn {
-    background-color: #d4a800;
+    background-color: var(--notification-warning);
     color: var(--color-black);
-    border-color: #d4a800;
+    border-color: var(--notification-warning);
 }
 
 .notification-banner.notification-warning .notification-action-btn:hover {
-    background-color: #b89300;
-    border-color: #b89300;
+    background-color: var(--notification-warning-hover);
+    border-color: var(--notification-warning-hover);
 }
 
 /* ActionRequired notification - orange/red */
@@ -75,8 +75,8 @@
 }
 
 .notification-banner.notification-actionrequired .notification-action-btn:hover {
-    background-color: #e06d12;
-    border-color: #e06d12;
+    background-color: var(--notification-action-hover);
+    border-color: var(--notification-action-hover);
 }
 
 /* Responsive */
