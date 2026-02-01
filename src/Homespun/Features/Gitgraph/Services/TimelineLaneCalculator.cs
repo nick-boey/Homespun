@@ -284,9 +284,11 @@ public class TimelineLaneCalculator
     }
 
     /// <summary>
-    /// Propagate lane release up the ancestor chain.
-    /// When a node is processed, check if any of its ancestors can now release their lanes
-    /// (i.e., all of their children have been processed).
+    /// Release lanes when nodes complete their direct children.
+    /// - First, release the just-processed node's own lane if it has no children
+    /// - Then, release direct parent lanes when all their direct children have been processed
+    /// Does NOT propagate up to grandparents - each node's lane only extends down to its
+    /// direct children, not through its entire subtree.
     /// </summary>
     private void PropagateAncestorRelease(
         string nodeId,
@@ -296,51 +298,46 @@ public class TimelineLaneCalculator
         Dictionary<string, int> laneAssignments,
         HashSet<int> activeLanes)
     {
-        var nodesToCheck = new Queue<string>();
-        nodesToCheck.Enqueue(nodeId);
-        var checkedNodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        while (nodesToCheck.Count > 0)
+        // First, check if the just-processed node's lane should be released
+        // (node has no children, or all children are processed)
+        if (laneAssignments.TryGetValue(nodeId, out var nodeLane) && nodeLane != 0)
         {
-            var currentId = nodesToCheck.Dequeue();
+            var nodeHasUnprocessedChildren = nodeChildren.TryGetValue(nodeId, out var children) &&
+                                              children.Any(childId => !processedNodes.Contains(childId));
 
-            // Avoid re-checking the same node
-            if (!checkedNodes.Add(currentId))
+            if (!nodeHasUnprocessedChildren && activeLanes.Contains(nodeLane))
             {
-                continue;
+                activeLanes.Remove(nodeLane);
             }
+        }
 
+        // Then, check the direct parents of the just-processed node
+        if (!nodeToParents.TryGetValue(nodeId, out var parents))
+        {
+            return;
+        }
+
+        foreach (var parentId in parents)
+        {
             // Skip if no lane assigned or if it's lane 0 (main branch - never released)
-            if (!laneAssignments.TryGetValue(currentId, out var lane) || lane == 0)
+            if (!laneAssignments.TryGetValue(parentId, out var lane) || lane == 0)
             {
-                // Still check ancestors even if this node is on main
-                if (nodeToParents.TryGetValue(currentId, out var parents))
-                {
-                    foreach (var parentId in parents)
-                    {
-                        nodesToCheck.Enqueue(parentId);
-                    }
-                }
                 continue;
             }
 
-            // Check if all children are processed
-            var hasUnprocessedChildren = nodeChildren.TryGetValue(currentId, out var children) &&
-                                          children.Any(childId => !processedNodes.Contains(childId));
-
-            if (!hasUnprocessedChildren && activeLanes.Contains(lane))
+            // Check if all of this parent's direct children are now processed
+            if (!nodeChildren.TryGetValue(parentId, out var parentChildren))
             {
-                // All children processed - release this lane
-                activeLanes.Remove(lane);
+                continue;
+            }
 
-                // Now check this node's parents (ancestors) - they might also be releasable
-                if (nodeToParents.TryGetValue(currentId, out var ancestorParents))
-                {
-                    foreach (var parentId in ancestorParents)
-                    {
-                        nodesToCheck.Enqueue(parentId);
-                    }
-                }
+            var allChildrenProcessed = parentChildren.All(childId => processedNodes.Contains(childId));
+
+            if (allChildrenProcessed && activeLanes.Contains(lane))
+            {
+                // All direct children processed - release this parent's lane
+                // Do NOT propagate to grandparents
+                activeLanes.Remove(lane);
             }
         }
     }

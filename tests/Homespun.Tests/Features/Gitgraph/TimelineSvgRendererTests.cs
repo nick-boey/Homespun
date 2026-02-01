@@ -31,6 +31,12 @@ public class TimelineSvgRendererTests
         Assert.That(TimelineSvgRenderer.DiamondSize, Is.EqualTo(7));
     }
 
+    [Test]
+    public void ConnectorArcRadius_Is10()
+    {
+        Assert.That(TimelineSvgRenderer.ConnectorArcRadius, Is.EqualTo(10));
+    }
+
     #endregion
 
     #region GetLaneCenterX Tests
@@ -222,27 +228,30 @@ public class TimelineSvgRendererTests
     #region GenerateConnector Tests
 
     [Test]
-    public void GenerateConnector_Lane0ToLane1_GeneratesLShapedPath()
+    public void GenerateConnector_Lane0ToLane1_GeneratesLShapedPathWithArc()
     {
         var path = TimelineSvgRenderer.GenerateConnector(0, 1);
 
-        // L-shaped path from lane 0 to lane 1, connecting to node side at mid-height
-        // From: (12, 0) down to centerY (20)
-        // Then horizontal to node edge (36 - DiamondSize - 2 = 36 - 7 - 2 = 27)
+        // L-shaped path with rounded corner from lane 0 to lane 1
+        // From: (12, 0) down to (12, 10) [centerY - arcRadius = 20 - 10]
+        // Arc to (22, 20) [fromX + arcRadius, centerY]
+        // Horizontal to node edge (27) [36 - 7 - 2]
         Assert.That(path, Does.Contain("M 12 0"));     // Start at lane 0, top
-        Assert.That(path, Does.Contain("L 12 20"));    // Down to mid-height
+        Assert.That(path, Does.Contain("L 12 10"));    // Down to arc start
+        Assert.That(path, Does.Contain("A 10 10 0 0 1 22 20")); // Quarter-circle arc
         Assert.That(path, Does.Contain("L 27 20"));    // Horizontal to node side
     }
 
     [Test]
-    public void GenerateConnector_Lane1ToLane2_GeneratesLShapedPath()
+    public void GenerateConnector_Lane1ToLane2_GeneratesLShapedPathWithArc()
     {
         var path = TimelineSvgRenderer.GenerateConnector(1, 2);
 
-        // L-shaped path from lane 1 to lane 2, connecting to node side at mid-height
-        // nodeEdgeX = 60 - 7 - 2 = 51
+        // L-shaped path with rounded corner from lane 1 to lane 2
+        // arcEndX = 36 + 10 = 46, nodeEdgeX = 60 - 7 - 2 = 51
         Assert.That(path, Does.Contain("M 36 0"));     // Start at lane 1
-        Assert.That(path, Does.Contain("L 36 20"));    // Down to mid-height
+        Assert.That(path, Does.Contain("L 36 10"));    // Down to arc start
+        Assert.That(path, Does.Contain("A 10 10 0 0 1 46 20")); // Quarter-circle arc
         Assert.That(path, Does.Contain("L 51 20"));    // Horizontal to node side
     }
 

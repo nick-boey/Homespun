@@ -97,8 +97,14 @@ public static class TimelineSvgRenderer
     }
 
     /// <summary>
+    /// Radius of the arc at the connector elbow.
+    /// About half the vertical leg length for a subtle curve.
+    /// </summary>
+    public const int ConnectorArcRadius = 10;
+
+    /// <summary>
     /// Generate an SVG path for a connector from one lane to another.
-    /// Creates an L-shaped bend connecting to the side of the node at mid-height.
+    /// Creates an L-shaped bend with a rounded corner connecting to the side of the node at mid-height.
     /// </summary>
     /// <param name="fromLane">Source lane index.</param>
     /// <param name="toLane">Target lane index.</param>
@@ -112,8 +118,17 @@ public static class TimelineSvgRenderer
         // Connect to the left side of the node (diamond or circle) at mid-height
         var nodeEdgeX = toX - DiamondSize - 2; // Small gap from the node edge
 
-        // L-shaped connector: vertical from top to middle, then horizontal to node side
-        return $"M {fromX} 0 L {fromX} {centerY} L {nodeEdgeX} {centerY}";
+        // L-shaped connector with rounded corner:
+        // - Vertical from top to (centerY - arcRadius)
+        // - Quarter-circle arc turning from down to right
+        // - Horizontal to the node edge
+        var arcRadius = ConnectorArcRadius;
+        var arcStartY = centerY - arcRadius;
+        var arcEndX = fromX + arcRadius;
+
+        // SVG arc: A rx ry x-rotation large-arc-flag sweep-flag x y
+        // sweep-flag=1 for clockwise (turning right from going down)
+        return $"M {fromX} 0 L {fromX} {arcStartY} A {arcRadius} {arcRadius} 0 0 1 {arcEndX} {centerY} L {nodeEdgeX} {centerY}";
     }
 
     /// <summary>
@@ -193,7 +208,14 @@ public static class TimelineSvgRenderer
 
         sb.Append($"<svg width=\"{width}\" height=\"{RowHeight}\" xmlns=\"http://www.w3.org/2000/svg\">");
 
-        // Draw vertical lane lines for all active lanes
+        // Draw connector FIRST (behind vertical lines) if coming from a different lane
+        if (connectorFromLane.HasValue && connectorFromLane.Value != nodeLane)
+        {
+            var connectorPath = GenerateConnector(connectorFromLane.Value, nodeLane);
+            sb.Append($"<path d=\"{connectorPath}\" stroke=\"{EscapeAttribute(nodeColor)}\" stroke-width=\"{LineStrokeWidth.ToString(CultureInfo.InvariantCulture)}\" fill=\"none\" />");
+        }
+
+        // Draw vertical lane lines for all active lanes (on top of connector)
         foreach (var lane in activeLanes.OrderBy(l => l))
         {
             var hasNode = lane == nodeLane;
@@ -228,13 +250,6 @@ public static class TimelineSvgRenderer
             {
                 sb.Append($"<path d=\"{linePath}\" stroke=\"{EscapeAttribute(lineColor)}\" stroke-width=\"{LineStrokeWidth.ToString(CultureInfo.InvariantCulture)}\" fill=\"none\" />");
             }
-        }
-
-        // Draw connector if coming from a different lane
-        if (connectorFromLane.HasValue && connectorFromLane.Value != nodeLane)
-        {
-            var connectorPath = GenerateConnector(connectorFromLane.Value, nodeLane);
-            sb.Append($"<path d=\"{connectorPath}\" stroke=\"{EscapeAttribute(nodeColor)}\" stroke-width=\"{LineStrokeWidth.ToString(CultureInfo.InvariantCulture)}\" fill=\"none\" />");
         }
 
         // Draw the node

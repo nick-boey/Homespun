@@ -303,7 +303,8 @@ public class TimelineLaneCalculatorTests
     {
         // Arrange - Issue chain where each is a separate branch
         // bd-001 -> bd-002 -> bd-003 (each on different branch)
-        // Children branch to new lanes to visualize the dependency tree depth
+        // With the new lane release behavior, parent lanes are released when their
+        // direct children are processed, allowing lane reuse in deep chains.
         var nodes = new List<IGraphNode>
         {
             CreateNode("pr-1", "main"),
@@ -315,12 +316,12 @@ public class TimelineLaneCalculatorTests
         // Act
         var layout = _calculator.Calculate(nodes);
 
-        // Assert - Each child issue gets a new lane to show dependency depth
+        // Assert - Lanes are reused as parent lanes are released
         Assert.That(layout.LaneAssignments["issue-bd-001"], Is.EqualTo(1));
-        // bd-002 gets lane 2 because it's a child of bd-001
+        // bd-002 gets lane 2 because bd-001's lane is still active (bd-002 is its child)
         Assert.That(layout.LaneAssignments["issue-bd-002"], Is.EqualTo(2));
-        // bd-003 gets lane 3 because it's a child of bd-002
-        Assert.That(layout.LaneAssignments["issue-bd-003"], Is.EqualTo(3));
+        // bd-003 reuses lane 1 because bd-001's lane was released after bd-002 was processed
+        Assert.That(layout.LaneAssignments["issue-bd-003"], Is.EqualTo(1));
 
         // Verify connectors come from parent lanes
         Assert.That(layout.RowInfos[1].ConnectorFromLane, Is.EqualTo(0)); // From main
@@ -387,9 +388,10 @@ public class TimelineLaneCalculatorTests
     [Test]
     public void Calculate_DeepHierarchy_ReleasesLanesAfterCompletion()
     {
-        // Arrange - Deep hierarchy where lanes should be released progressively
+        // Arrange - Deep hierarchy where lanes are released after direct children complete
         // main -> A -> B -> C (each on different branches)
-        // Then D branches from main - should be able to reuse lane 1
+        // With new behavior, A's lane is released when B (A's direct child) is processed,
+        // allowing C to reuse lane 1. Then D also reuses lane 1.
         var nodes = new List<IGraphNode>
         {
             CreateNode("main-1", "main"),
@@ -403,11 +405,13 @@ public class TimelineLaneCalculatorTests
         // Act
         var layout = _calculator.Calculate(nodes);
 
-        // Assert - D should reuse lane 1 since A (and its descendants) are complete
+        // Assert - Lanes are reused earlier due to direct-child-only release
         Assert.That(layout.LaneAssignments["A"], Is.EqualTo(1));
         Assert.That(layout.LaneAssignments["B"], Is.EqualTo(2));
-        Assert.That(layout.LaneAssignments["C"], Is.EqualTo(3));
-        Assert.That(layout.LaneAssignments["D"], Is.EqualTo(1), "D should reuse lane 1 after A's subtree is complete");
+        // C reuses lane 1 because A's lane was released after B was processed
+        Assert.That(layout.LaneAssignments["C"], Is.EqualTo(1));
+        // D also reuses lane 1 since C is done
+        Assert.That(layout.LaneAssignments["D"], Is.EqualTo(1), "D should reuse lane 1");
     }
 
     [Test]
@@ -735,7 +739,9 @@ public class TimelineLaneCalculatorTests
     public void Calculate_LanesEndingAtThisRow_DeepHierarchy()
     {
         // Arrange - Deep hierarchy: main -> A -> B -> C
-        // Each lane should end at the deepest node in that subtree
+        // With direct-child-only release, lanes end earlier:
+        // - A's lane 1 ends when B is processed (A's direct child)
+        // - C reuses lane 1, then both lane 1 and lane 2 end at C's row
         var nodes = new List<IGraphNode>
         {
             CreateNode("main-1", "main"),
@@ -748,13 +754,21 @@ public class TimelineLaneCalculatorTests
         // Act
         var layout = _calculator.Calculate(nodes);
 
-        // Assert - At C's row, lanes 1, 2, 3 should all be ending
-        var cRow = layout.RowInfos[3]; // C is at index 3
-        Assert.That(cRow.LanesEndingAtThisRow, Does.Contain(1), "Lane 1 (A) should end at C's row");
-        Assert.That(cRow.LanesEndingAtThisRow, Does.Contain(2), "Lane 2 (B) should end at C's row");
-        Assert.That(cRow.LanesEndingAtThisRow, Does.Contain(3), "Lane 3 (C) should end at C's row");
+        // Assert - Lane assignments with early release
+        Assert.That(layout.LaneAssignments["A"], Is.EqualTo(1));
+        Assert.That(layout.LaneAssignments["B"], Is.EqualTo(2));
+        Assert.That(layout.LaneAssignments["C"], Is.EqualTo(1), "C reuses lane 1");
 
-        // main-2 row should not have these lanes ending (they're already gone)
+        // At B's row, A's lane 1 should be ending (A's direct child B was processed)
+        var bRow = layout.RowInfos[2]; // B is at index 2
+        Assert.That(bRow.LanesEndingAtThisRow, Does.Contain(1), "Lane 1 (A) should end at B's row");
+
+        // At C's row, lanes 1 (C) and 2 (B) should be ending
+        var cRow = layout.RowInfos[3]; // C is at index 3
+        Assert.That(cRow.LanesEndingAtThisRow, Does.Contain(1), "Lane 1 (C) should end at C's row");
+        Assert.That(cRow.LanesEndingAtThisRow, Does.Contain(2), "Lane 2 (B) should end at C's row");
+
+        // main-2 row should not have any lanes ending
         var main2Row = layout.RowInfos[4];
         Assert.That(main2Row.LanesEndingAtThisRow, Is.Empty, "No lanes should end at main-2 row");
     }
