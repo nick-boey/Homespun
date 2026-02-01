@@ -13,6 +13,7 @@ namespace Homespun.Features.Gitgraph.Services;
 /// <summary>
 /// Service for building graph data from Fleece Issues and PullRequests.
 /// Uses IFleeceService for fast issue access.
+/// Supports caching of PR data to improve page load times.
 /// </summary>
 public class GraphService(
     IProjectService projectService,
@@ -21,6 +22,7 @@ public class GraphService(
     IClaudeSessionStore sessionStore,
     IDataStore dataStore,
     PullRequestWorkflowService workflowService,
+    IGraphCacheService cacheService,
     ILogger<GraphService> logger) : IGraphService
 {
     private readonly GraphBuilder _graphBuilder = new();
@@ -29,6 +31,50 @@ public class GraphService(
     /// <inheritdoc />
     public async Task<Graph> BuildGraphAsync(string projectId, int? maxPastPRs = 5)
     {
+        return await BuildGraphInternalAsync(projectId, maxPastPRs, useCache: false);
+    }
+
+    /// <inheritdoc />
+    public async Task<GitgraphJsonData> BuildGraphJsonAsync(string projectId, int? maxPastPRs = 5, bool useCache = true)
+    {
+        var graph = await BuildGraphInternalAsync(projectId, maxPastPRs, useCache);
+        var jsonData = _mapper.ToJson(graph);
+
+        // Enrich nodes with agent status data
+        EnrichWithAgentStatuses(jsonData, projectId);
+
+        return jsonData;
+    }
+
+    /// <inheritdoc />
+    public async Task<GitgraphJsonData> BuildGraphJsonWithFreshDataAsync(string projectId, int? maxPastPRs = 5)
+    {
+        var graph = await BuildGraphInternalAsync(projectId, maxPastPRs, useCache: false);
+        var jsonData = _mapper.ToJson(graph);
+
+        // Enrich nodes with agent status data
+        EnrichWithAgentStatuses(jsonData, projectId);
+
+        return jsonData;
+    }
+
+    /// <inheritdoc />
+    public DateTime? GetCacheTimestamp(string projectId)
+    {
+        return cacheService.GetCacheTimestamp(projectId);
+    }
+
+    /// <inheritdoc />
+    public bool HasCachedData(string projectId)
+    {
+        return cacheService.GetCachedPRData(projectId) != null;
+    }
+
+    /// <summary>
+    /// Internal method to build graph with optional caching support.
+    /// </summary>
+    private async Task<Graph> BuildGraphInternalAsync(string projectId, int? maxPastPRs, bool useCache)
+    {
         var project = await projectService.GetByIdAsync(projectId);
         if (project == null)
         {
@@ -36,12 +82,33 @@ public class GraphService(
             return new Graph([], new Dictionary<string, GraphBranch>());
         }
 
-        // Fetch PRs from GitHub
-        var openPrs = await GetOpenPullRequestsSafe(projectId);
-        var closedPrs = await GetClosedPullRequestsSafe(projectId);
+        List<PullRequestInfo> openPrs;
+        List<PullRequestInfo> closedPrs;
+
+        // Try to use cached PR data if requested
+        var cachedData = useCache ? cacheService.GetCachedPRData(projectId) : null;
+
+        if (cachedData != null)
+        {
+            logger.LogDebug("Using cached PR data for project {ProjectId}, cached at {CachedAt}",
+                projectId, cachedData.CachedAt);
+            openPrs = cachedData.OpenPrs;
+            closedPrs = cachedData.ClosedPrs;
+        }
+        else
+        {
+            // Fetch PRs from GitHub (expensive operation)
+            logger.LogDebug("Fetching fresh PR data from GitHub for project {ProjectId}", projectId);
+            openPrs = await GetOpenPullRequestsSafe(projectId);
+            closedPrs = await GetClosedPullRequestsSafe(projectId);
+
+            // Cache the fresh data for future use
+            await cacheService.CachePRDataAsync(projectId, openPrs, closedPrs);
+        }
+
         var allPrs = closedPrs.Concat(openPrs).ToList();
 
-        // Fetch issues from Fleece
+        // Fetch issues from Fleece (fast operation, always fresh)
         var issues = await GetIssuesAsync(project.LocalPath);
 
         // Filter out issues that are linked to PRs (they will be shown with the PR instead)
@@ -52,22 +119,10 @@ public class GraphService(
         var issuePrStatuses = await GetIssuePrStatusesAsync(projectId, filteredIssues);
 
         logger.LogDebug(
-            "Building graph for project {ProjectId}: {OpenPrCount} open PRs, {ClosedPrCount} closed PRs, {IssueCount} issues ({FilteredCount} after filtering linked), {LinkedPrCount} with PR status, maxPastPRs: {MaxPastPRs}",
-            projectId, openPrs.Count, closedPrs.Count, issues.Count, filteredIssues.Count, issuePrStatuses.Count, maxPastPRs);
+            "Building graph for project {ProjectId}: {OpenPrCount} open PRs, {ClosedPrCount} closed PRs, {IssueCount} issues ({FilteredCount} after filtering linked), {LinkedPrCount} with PR status, maxPastPRs: {MaxPastPRs}, fromCache: {FromCache}",
+            projectId, openPrs.Count, closedPrs.Count, issues.Count, filteredIssues.Count, issuePrStatuses.Count, maxPastPRs, cachedData != null);
 
         return _graphBuilder.Build(allPrs, filteredIssues, maxPastPRs, issuePrStatuses);
-    }
-
-    /// <inheritdoc />
-    public async Task<GitgraphJsonData> BuildGraphJsonAsync(string projectId, int? maxPastPRs = 5)
-    {
-        var graph = await BuildGraphAsync(projectId, maxPastPRs);
-        var jsonData = _mapper.ToJson(graph);
-
-        // Enrich nodes with agent status data
-        EnrichWithAgentStatuses(jsonData, projectId);
-
-        return jsonData;
     }
 
     /// <summary>

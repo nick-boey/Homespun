@@ -1,22 +1,33 @@
 using System.Collections.Concurrent;
 using Homespun.Features.Git;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Homespun.Features.Testing.Services;
 
 /// <summary>
 /// Mock implementation of IGitWorktreeService with in-memory worktree tracking.
+/// Optionally uses a real test working directory when live Claude sessions are enabled.
 /// </summary>
 public class MockGitWorktreeService : IGitWorktreeService
 {
     private readonly ConcurrentDictionary<string, List<WorktreeInfo>> _worktreesByRepo = new();
     private readonly ConcurrentDictionary<string, List<BranchInfo>> _branchesByRepo = new();
     private readonly ILogger<MockGitWorktreeService> _logger;
+    private readonly LiveClaudeTestOptions? _liveTestOptions;
 
-    public MockGitWorktreeService(ILogger<MockGitWorktreeService> logger)
+    public MockGitWorktreeService(
+        ILogger<MockGitWorktreeService> logger,
+        IOptions<LiveClaudeTestOptions>? liveTestOptions = null)
     {
         _logger = logger;
+        _liveTestOptions = liveTestOptions?.Value;
     }
+
+    /// <summary>
+    /// Gets the test working directory if live Claude sessions are enabled.
+    /// </summary>
+    public string? TestWorkingDirectory => _liveTestOptions?.TestWorkingDirectory;
 
     public Task<string?> CreateWorktreeAsync(
         string repoPath,
@@ -26,7 +37,10 @@ public class MockGitWorktreeService : IGitWorktreeService
     {
         _logger.LogDebug("[Mock] CreateWorktree {BranchName} in {RepoPath}", branchName, repoPath);
 
-        var worktreePath = $"{repoPath}-worktrees/{branchName.Replace("/", "-")}";
+        // If live Claude testing is enabled, use the real test directory
+        var worktreePath = !string.IsNullOrEmpty(_liveTestOptions?.TestWorkingDirectory)
+            ? _liveTestOptions.TestWorkingDirectory
+            : $"{repoPath}-worktrees/{branchName.Replace("/", "-")}";
 
         var worktrees = _worktreesByRepo.GetOrAdd(repoPath, _ => []);
         lock (worktrees)
@@ -127,6 +141,12 @@ public class MockGitWorktreeService : IGitWorktreeService
     public Task<string?> GetWorktreePathForBranchAsync(string repoPath, string branchName)
     {
         _logger.LogDebug("[Mock] GetWorktreePathForBranch {BranchName} in {RepoPath}", branchName, repoPath);
+
+        // If live Claude testing is enabled, always return the real test directory
+        if (!string.IsNullOrEmpty(_liveTestOptions?.TestWorkingDirectory))
+        {
+            return Task.FromResult<string?>(_liveTestOptions.TestWorkingDirectory);
+        }
 
         if (_worktreesByRepo.TryGetValue(repoPath, out var worktrees))
         {

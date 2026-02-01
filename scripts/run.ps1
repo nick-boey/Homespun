@@ -532,11 +532,15 @@ try {
     }
 
     $dockerArgs += "-e", "HOME=/home/homespun"
-    $dockerArgs += "-e", "ASPNETCORE_ENVIRONMENT=Production"
     $dockerArgs += "-e", "HSP_HOST_DATA_PATH=$dataDirUnix"
 
     if ($MockMode) {
         $dockerArgs += "-e", "HOMESPUN_MOCK_MODE=true"
+        $dockerArgs += "-e", "MockMode__UseLiveClaudeSessions=true"
+        $dockerArgs += "-e", "ASPNETCORE_ENVIRONMENT=MockLive"
+    }
+    else {
+        $dockerArgs += "-e", "ASPNETCORE_ENVIRONMENT=Production"
     }
 
     if (-not [string]::IsNullOrWhiteSpace($githubToken)) {
@@ -567,6 +571,8 @@ try {
         if (-not $Local) {
             docker stop watchtower 2>$null
             docker rm watchtower 2>$null
+            Write-Host "      Pulling latest Watchtower image..." -ForegroundColor Cyan
+            docker pull nickfedor/watchtower:latest
             docker run -d `
                 --name watchtower `
                 -v /var/run/docker.sock:/var/run/docker.sock `
@@ -575,7 +581,7 @@ try {
                 -e WATCHTOWER_INCLUDE_STOPPED=false `
                 -e WATCHTOWER_ROLLING_RESTART=true `
                 --restart unless-stopped `
-                containrrr/watchtower $ContainerName
+                nickfedor/watchtower $ContainerName
         }
 
         Write-Host ""

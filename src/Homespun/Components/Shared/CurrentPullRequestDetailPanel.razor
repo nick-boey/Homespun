@@ -140,6 +140,14 @@
                 }
             </div>
         }
+
+        @* Session History *@
+        <SessionCacheHistory
+            EntityId="@PullRequest.Id"
+            ProjectId="@PullRequest.ProjectId"
+            WorkingDirectory="@PullRequest.WorktreePath"
+            ShowBorder="true"
+            ShowEmptyState="false" />
     </div>
     <div class="card-footer">
         <div class="flex flex-wrap gap-2">

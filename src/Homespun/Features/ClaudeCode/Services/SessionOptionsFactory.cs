@@ -19,7 +19,8 @@ public class SessionOptionsFactory
         "WebFetch",
         "WebSearch",
         "Task",
-        "AskUserQuestion"
+        "AskUserQuestion",
+        "ExitPlanMode"
     ];
 
     /// <summary>

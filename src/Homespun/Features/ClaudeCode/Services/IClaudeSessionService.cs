@@ -60,6 +60,17 @@ public interface IClaudeSessionService
     Task SendMessageAsync(string sessionId, string message, PermissionMode permissionMode, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Sends a message to an existing session with a specific permission mode and model.
+    /// </summary>
+    Task SendMessageAsync(string sessionId, string message, PermissionMode permissionMode, string? model, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Clears the conversation context for a session.
+    /// Messages are kept visible but the AI will start fresh.
+    /// </summary>
+    Task ClearContextAsync(string sessionId, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Stops an existing session.
     /// </summary>
     Task StopSessionAsync(string sessionId, CancellationToken cancellationToken = default);
@@ -83,4 +94,36 @@ public interface IClaudeSessionService
     /// Gets all active sessions.
     /// </summary>
     IReadOnlyList<ClaudeSession> GetAllSessions();
+
+    /// <summary>
+    /// Answers a pending question from Claude.
+    /// This will resume the session by providing the answers to the AskUserQuestion tool.
+    /// </summary>
+    /// <param name="sessionId">The session ID</param>
+    /// <param name="answers">Dictionary mapping question text to selected answer text</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    Task AnswerQuestionAsync(string sessionId, Dictionary<string, string> answers, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets cached messages for a session from the message cache store.
+    /// Returns messages from the persistent JSONL cache, not the in-memory store.
+    /// </summary>
+    /// <param name="sessionId">The session ID</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>List of cached messages in chronological order</returns>
+    Task<IReadOnlyList<ClaudeMessage>> GetCachedMessagesAsync(
+        string sessionId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets session cache summaries for an entity (issue/PR).
+    /// </summary>
+    /// <param name="projectId">The project ID</param>
+    /// <param name="entityId">The entity ID</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>List of session summaries</returns>
+    Task<IReadOnlyList<SessionCacheSummary>> GetSessionHistoryAsync(
+        string projectId,
+        string entityId,
+        CancellationToken cancellationToken = default);
 }

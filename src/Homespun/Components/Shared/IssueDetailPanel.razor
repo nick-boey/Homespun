@@ -120,6 +120,14 @@
                     </div>
                 </div>
             }
+
+            @* Session History *@
+            <SessionCacheHistory
+                EntityId="@Issue.Id"
+                ProjectId="@ProjectId"
+                WorkingDirectory="@_worktreeInfo?.Path"
+                ShowBorder="true"
+                ShowEmptyState="false" />
         </div>
         <div class="card-footer">
             @if (_session == null && !StartupTracker.IsStarting(Issue.Id))

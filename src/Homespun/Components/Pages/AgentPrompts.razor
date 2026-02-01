@@ -64,82 +64,58 @@ else
     </div>
 }
 
-@if (_showModal)
-{
-    <div class="modal-backdrop fade show"></div>
-    <div class="modal fade show d-block" tabindex="-1">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">@(_editingPrompt == null ? "Add Agent Prompt" : "Edit Agent Prompt")</h5>
-                    <button type="button" class="btn-close" @onclick="HideModal"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label">Name</label>
-                        <input type="text" class="form-control" @bind="_modalName" placeholder="e.g., Plan, Build, Review" />
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Mode</label>
-                        <select class="form-select" @bind="_modalMode">
-                            <option value="@SessionMode.Plan">Plan (Read-only tools)</option>
-                            <option value="@SessionMode.Build">Build (Full access)</option>
-                        </select>
-                        <div class="form-text">
-                            Plan mode restricts the agent to read-only tools. Build mode allows code editing.
-                        </div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Initial Message Template</label>
-                        <textarea class="form-control font-monospace" rows="12" @bind="_modalMessage"
-                            placeholder="Enter the initial message to send to the agent..."></textarea>
-                        <div class="form-text">
-                            Available placeholders: <code>@("{{title}}")</code>, <code>@("{{id}}")</code>,
-                            <code>@("{{type}}")</code>, <code>@("{{branch}}")</code>, <code>@("{{description}}")</code>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    @if (!string.IsNullOrEmpty(_modalError))
-                    {
-                        <div class="text-danger me-auto">@_modalError</div>
-                    }
-                    <button type="button" class="btn btn-secondary" @onclick="HideModal">Cancel</button>
-                    <AsyncActionButton OnClick="SavePrompt"
-                                       IsLoadingExternal="_isSaving"
-                                       CssClass="btn-primary"
-                                       Text="Save" />
-                </div>
+<Modal IsOpen="@_showModal"
+       OnClose="@HideModal"
+       Title="@(_editingPrompt == null ? "Add Agent Prompt" : "Edit Agent Prompt")"
+       Size="ModalSize.Lg">
+    <Body>
+        <div class="mb-3">
+            <label class="form-label">Name</label>
+            <input type="text" class="form-control" @bind="_modalName" placeholder="e.g., Plan, Build, Review" />
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Mode</label>
+            <select class="form-select" @bind="_modalMode">
+                <option value="@SessionMode.Plan">Plan (Read-only tools)</option>
+                <option value="@SessionMode.Build">Build (Full access)</option>
+            </select>
+            <div class="form-text">
+                Plan mode restricts the agent to read-only tools. Build mode allows code editing.
             </div>
         </div>
-    </div>
-}
+        <div class="mb-3">
+            <label class="form-label">Initial Message Template</label>
+            <textarea class="form-control font-monospace" rows="12" @bind="_modalMessage"
+                placeholder="Enter the initial message to send to the agent..."></textarea>
+            <div class="form-text">
+                Available placeholders: <code>@("{{title}}")</code>, <code>@("{{id}}")</code>,
+                <code>@("{{type}}")</code>, <code>@("{{branch}}")</code>, <code>@("{{description}}")</code>
+            </div>
+        </div>
+    </Body>
+    <Footer>
+        @if (!string.IsNullOrEmpty(_modalError))
+        {
+            <div class="text-danger me-auto">@_modalError</div>
+        }
+        <button type="button" class="btn btn-secondary" @onclick="HideModal">Cancel</button>
+        <AsyncActionButton OnClick="SavePrompt"
+                           IsLoadingExternal="_isSaving"
+                           CssClass="btn-primary"
+                           Text="Save" />
+    </Footer>
+</Modal>
 
-@if (_showDeleteConfirmation && _promptToDelete != null)
-{
-    <div class="modal-backdrop fade show"></div>
-    <div class="modal fade show d-block" tabindex="-1">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Delete Agent Prompt</h5>
-                    <button type="button" class="btn-close" @onclick="HideDeleteConfirmation"></button>
-                </div>
-                <div class="modal-body">
-                    <p>Are you sure you want to delete the agent prompt <strong>"@_promptToDelete.Name"</strong>?</p>
-                    <p class="text-muted mb-0">This action cannot be undone.</p>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" @onclick="HideDeleteConfirmation">Cancel</button>
-                    <AsyncActionButton OnClick="DeletePrompt"
-                                       IsLoadingExternal="_isDeleting"
-                                       CssClass="btn-danger"
-                                       Text="Delete" />
-                </div>
-            </div>
-        </div>
-    </div>
-}
+<ConfirmModal IsOpen="@(_showDeleteConfirmation && _promptToDelete != null)"
+              OnCancel="@HideDeleteConfirmation"
+              OnConfirm="@DeletePrompt"
+              Title="Delete Agent Prompt"
+              ConfirmText="Delete"
+              ConfirmVariant="ConfirmButtonVariant.Danger"
+              IsProcessing="@_isDeleting">
+    <p>Are you sure you want to delete the agent prompt <strong>"@_promptToDelete?.Name"</strong>?</p>
+    <p class="text-muted mb-0">This action cannot be undone.</p>
+</ConfirmModal>
 
 <style>
     .prompt-preview {
