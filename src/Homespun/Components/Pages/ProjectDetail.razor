@@ -3,6 +3,7 @@
 @page "/projects/{Id}/settings"
 @implements IDisposable
 @using Fleece.Core.Models
+@using Homespun.Components.Shared
 @using Homespun.Features.ClaudeCode.Data
 @using Homespun.Features.ClaudeCode.Services
 @using Homespun.Features.Commands
@@ -150,8 +151,7 @@ else
                                         @if (_isSyncingPRs)
                                         {
                                             <span class="badge bg-status-info">
-                                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                                                Syncing...
+                                                <LoadingSpinner Size="SpinnerSize.Sm" Label="Syncing..." Inline="true" />
                                             </span>
                                         }
                                         else if (_tokenMissing)

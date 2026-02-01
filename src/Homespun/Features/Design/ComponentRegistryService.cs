@@ -227,6 +227,15 @@ public class ComponentRegistryService : IComponentRegistryService
             Category = "Chat",
             ComponentPath = "Shared/Chat/ProcessingIndicator.razor",
             Tags = new() { "chat", "loading", "processing" }
+        },
+        new ComponentMetadata
+        {
+            Id = "loading-spinner",
+            Name = "LoadingSpinner",
+            Description = "Reusable loading spinner with sm/md/lg size variants and optional label text.",
+            Category = "Core",
+            ComponentPath = "Shared/LoadingSpinner.razor",
+            Tags = new() { "loading", "spinner", "status", "feedback" }
         }
     };
 
