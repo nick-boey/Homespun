@@ -404,6 +404,11 @@ a:hover {
     box-shadow: 0 0 0 3px rgba(81, 165, 193, 0.3);
 }
 
+.btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--focus-ring);
+}
+
 .btn-primary {
     background-color: var(--btn-primary-bg);
     color: var(--btn-primary-text);
@@ -504,6 +509,13 @@ a:hover {
     outline: none;
     border-color: var(--border-color-light);
     box-shadow: none;
+}
+
+.form-control:focus-visible,
+.form-select:focus-visible {
+    outline: none;
+    border-color: var(--input-focus-border);
+    box-shadow: 0 0 0 2px var(--focus-ring);
 }
 
 .form-select {
