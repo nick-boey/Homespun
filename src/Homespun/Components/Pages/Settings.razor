@@ -1,4 +1,5 @@
 @page "/settings"
+@using Homespun.Components.Shared
 @using Homespun.Features.GitHub
 @using Homespun.Features.Navigation
 @inject IGitHubEnvironmentService GitHubEnvironmentService
@@ -17,12 +18,7 @@
         <div class="auth-status-card">
             @if (_isLoading)
             {
-                <div class="flex items-center gap-2">
-                    <div class="spinner-border spinner-border-sm" role="status">
-                        <span class="sr-only">Checking...</span>
-                    </div>
-                    <span>Checking authentication status...</span>
-                </div>
+                <LoadingSpinner Size="SpinnerSize.Sm" Label="Checking authentication status..." ScreenReaderText="Checking" />
             }
             else
             {
@@ -85,9 +81,10 @@
                     }
                 </dl>
 
-                <button class="btn btn-sm btn-outline-secondary mt-3" @onclick="RefreshStatus" disabled="@_isLoading">
-                    Refresh Status
-                </button>
+                <AsyncActionButton OnClick="RefreshStatus"
+                                   IsLoadingExternal="_isLoading"
+                                   CssClass="btn-sm btn-outline-secondary mt-3"
+                                   Text="Refresh Status" />
             }
         </div>
 

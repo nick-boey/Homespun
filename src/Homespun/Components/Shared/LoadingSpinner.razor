@@ -1,0 +1,100 @@
+@*
+    LoadingSpinner Component
+
+    A reusable loading spinner with size variants and optional label.
+
+    Usage:
+        <LoadingSpinner />                              - Medium spinner, no label
+        <LoadingSpinner Size="SpinnerSize.Sm" />        - Small spinner
+        <LoadingSpinner Size="SpinnerSize.Lg" />        - Large spinner
+        <LoadingSpinner Label="Loading..." />           - With label text
+        <LoadingSpinner Label="Loading" Inline="true"/> - Inline with button text
+*@
+
+<div class="@GetContainerClass()" role="status">
+    <div class="@GetSpinnerClass()"></div>
+    @if (!string.IsNullOrEmpty(Label))
+    {
+        <span class="@GetLabelClass()">@Label</span>
+    }
+    @if (!string.IsNullOrEmpty(ScreenReaderText))
+    {
+        <span class="sr-only">@ScreenReaderText</span>
+    }
+</div>
+
+@code {
+    /// <summary>
+    /// Size of the spinner: Sm (small), Md (medium/default), Lg (large)
+    /// </summary>
+    [Parameter]
+    public SpinnerSize Size { get; set; } = SpinnerSize.Md;
+
+    /// <summary>
+    /// Optional label text displayed next to the spinner
+    /// </summary>
+    [Parameter]
+    public string? Label { get; set; }
+
+    /// <summary>
+    /// Text for screen readers (defaults to Label or "Loading...")
+    /// </summary>
+    [Parameter]
+    public string? ScreenReaderText { get; set; }
+
+    /// <summary>
+    /// When true, uses inline-flex for use within buttons or inline contexts
+    /// </summary>
+    [Parameter]
+    public bool Inline { get; set; }
+
+    /// <summary>
+    /// When true, centers the spinner in its container
+    /// </summary>
+    [Parameter]
+    public bool Centered { get; set; }
+
+    /// <summary>
+    /// Additional CSS classes to apply to the container
+    /// </summary>
+    [Parameter]
+    public string? Class { get; set; }
+
+    private string GetContainerClass()
+    {
+        var classes = new List<string> { "loading-spinner" };
+
+        if (Inline)
+            classes.Add("loading-spinner-inline");
+        else
+            classes.Add("loading-spinner-block");
+
+        if (Centered)
+            classes.Add("loading-spinner-centered");
+
+        if (!string.IsNullOrEmpty(Class))
+            classes.Add(Class);
+
+        return string.Join(" ", classes);
+    }
+
+    private string GetSpinnerClass()
+    {
+        return Size switch
+        {
+            SpinnerSize.Sm => "spinner-border spinner-border-sm",
+            SpinnerSize.Lg => "spinner-border spinner-border-lg",
+            _ => "spinner-border"
+        };
+    }
+
+    private string GetLabelClass()
+    {
+        return Size switch
+        {
+            SpinnerSize.Sm => "loading-spinner-label loading-spinner-label-sm",
+            SpinnerSize.Lg => "loading-spinner-label loading-spinner-label-lg",
+            _ => "loading-spinner-label"
+        };
+    }
+}

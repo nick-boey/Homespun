@@ -8,8 +8,7 @@ Homespun is a Blazor web application for managing development features and AI ag
 - Project and feature management with hierarchical tree visualization
 - Git worktree integration for isolated feature development
 - GitHub PR synchronization
-- Claude Code agent orchestration with real-time message streaming
-- Customizable system prompts with template variables
+- Claude Code agent orchestration
 
 ## Development Practices
 
@@ -34,19 +33,12 @@ The project follows Vertical Slice Architecture, organizing code by feature rath
 src/Homespun/
 ├── Features/                    # Feature slices (all business logic)
 │   ├── Fleece/                  # Fleece issue tracking integration
-│   │   └── Services/            # FleeceService, FleeceIssueTransitionService
 │   ├── ClaudeCode/              # Claude Code SDK session management
-│   │   ├── Components/Pages/    # Session.razor chat UI
-│   │   ├── Data/                # ClaudeSession, ClaudeMessage, SessionMode
-│   │   ├── Hubs/                # ClaudeCodeHub for real-time streaming
-│   │   └── Services/            # ClaudeSessionService, SessionOptionsFactory
 │   ├── Commands/                # Shell command execution
 │   ├── Git/                     # Git worktree operations
 │   ├── GitHub/                  # GitHub API integration (Octokit)
 │   ├── Projects/                # Project management
 │   ├── PullRequests/            # PR workflow and data entities
-│   │   └── Data/                # Feature, Project, HomespunDbContext
-│   │       └── Entities/        # EF Core entities
 │   └── Notifications/           # Toast notifications via SignalR
 ├── Components/                  # Shared Blazor components
 │   ├── Layout/                  # Layout components
@@ -70,23 +62,30 @@ tests/
 
 ### Feature Slices
 
-- **Fleece**: Integration with Fleece issue tracking - JSONL-based storage in `.fleece/` directory, uses Fleece.Core types directly
+- **Fleece**: Integration with Fleece issue tracking - JSONL-based storage in `.fleece/` directory, uses Fleece.Core types directly.
 - **ClaudeCode**: Claude Code SDK session management using ClaudeAgentSdk NuGet package - supports Plan (read-only) and Build (full access) modes
 - **Commands**: Shell command execution abstraction
 - **Git**: Git worktree creation, management, and rebase operations
 - **GitHub**: GitHub PR synchronization and API operations using Octokit
-- **Notifications**: Real-time toast notifications via SignalR
 - **Projects**: Project CRUD operations
 - **PullRequests**: PR workflow, feature management, and core data entities (Feature, Project, PullRequest)
 
 ### Running the Application
 
+The application is containerised and should always be run in a container. Helper Bash and PowerShell scripts are provided to build and run containers.
+
 ```bash
-cd src/Homespun
-dotnet run
+# Linux
+./scripts/run.sh                # Production: Runs Watchtower and the latest container on GHCR
+./scripts/run.sh --local        # Development: Builds a container from source and runs it
+./scripts/mock.sh               # Testing: Builds a container from source using mock services for local UI testing
+
+# Similar PowerShell scripts exist for windows
 ```
 
-The application will be available at `https://localhost:5001` (or the configured port).
+There are other various configuration variables that can be passed into the scripts as required. Environment variables are used for auth tokens, review the scripts if required to understand these.
+
+**Do not under any circumstances stop a container called `homespun` or `homespun-prod`.** You may only stop containers named `homespun-mock-{hash}`.
 
 ### Running Tests
 
@@ -113,138 +112,20 @@ The project uses a comprehensive three-tier testing strategy:
 
 Unit tests cover service logic and Blazor components in isolation.
 
-**Service tests** use Moq for dependency mocking:
-```csharp
-[TestFixture]
-public class GitHubServiceTests
-{
-    private Mock<IGitHubClientWrapper> _mockClient = null!;
-    private GitHubService _sut = null!;
-
-    [SetUp]
-    public void SetUp()
-    {
-        _mockClient = new Mock<IGitHubClientWrapper>();
-        _sut = new GitHubService(_mockClient.Object);
-    }
-
-    [Test]
-    public async Task GetPullRequests_ReturnsEmpty_WhenNoPullRequests()
-    {
-        // Arrange
-        _mockClient.Setup(x => x.GetPullRequestsAsync(It.IsAny<string>(), It.IsAny<string>()))
-            .ReturnsAsync(new List<PullRequest>());
-
-        // Act
-        var result = await _sut.GetPullRequestsAsync("owner", "repo");
-
-        // Assert
-        Assert.That(result, Is.Empty);
-    }
-}
-```
-
-**Component tests** use bUnit with a shared `BunitTestContext` base class:
-```csharp
-[TestFixture]
-public class ModelSelectorTests : BunitTestContext
-{
-    [Test]
-    public void ModelSelector_DefaultsToOpus()
-    {
-        var cut = Render<ModelSelector>();
-        var select = cut.Find("select");
-        Assert.That(select.GetAttribute("value"), Is.EqualTo("opus"));
-    }
-
-    [Test]
-    public void ModelSelector_InvokesCallbackOnChange()
-    {
-        string? selectedModel = null;
-        var cut = Render<ModelSelector>(parameters =>
-            parameters.Add(p => p.SelectedModelChanged,
-                EventCallback.Factory.Create<string>(this, value => selectedModel = value)));
-
-        cut.Find("select").Change("haiku");
-
-        Assert.That(selectedModel, Is.EqualTo("haiku"));
-    }
-}
-```
+**Service tests** use Moq for dependency mocking.
+**Component tests** use bUnit with a shared `BunitTestContext` base class.
 
 ### API Integration Tests (Homespun.Api.Tests)
 
 **Framework:** NUnit + WebApplicationFactory
 
-API tests verify HTTP endpoints using an in-memory test server with `HomespunWebApplicationFactory`:
-
-```csharp
-[TestFixture]
-public class ProjectsApiTests
-{
-    private HomespunWebApplicationFactory _factory = null!;
-    private HttpClient _client = null!;
-
-    [SetUp]
-    public void SetUp()
-    {
-        _factory = new HomespunWebApplicationFactory();
-        _client = _factory.CreateClient();
-    }
-
-    [Test]
-    public async Task GetProjects_ReturnsEmptyList_WhenNoProjects()
-    {
-        var response = await _client.GetAsync("/api/projects");
-
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        var projects = await response.Content.ReadFromJsonAsync<List<Project>>();
-        Assert.That(projects, Is.Empty);
-    }
-
-    [Test]
-    public async Task GetProjectById_ReturnsProject_WhenExists()
-    {
-        // Seed test data
-        _factory.TestDataStore.SeedProject(new Project { Id = "test-id", Name = "Test" });
-
-        var response = await _client.GetAsync("/api/projects/test-id");
-
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-    }
-}
-```
+API tests verify HTTP endpoints using an in-memory test server with `HomespunWebApplicationFactory`.
 
 ### End-to-End Tests (Homespun.E2E.Tests)
 
 **Framework:** NUnit + Playwright
 
 E2E tests run against the full application stack using Playwright for browser automation:
-
-```csharp
-[TestFixture]
-public class CriticalJourneysTests : PageTest
-{
-    private string BaseUrl => HomespunFixture.BaseUrl;
-
-    [Test]
-    public async Task HomePage_LoadsSuccessfully()
-    {
-        await Page.GotoAsync(BaseUrl);
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        await Expect(Page).ToHaveTitleAsync(new Regex("Homespun"));
-    }
-
-    [Test]
-    public async Task Navigation_WorksBetweenPages()
-    {
-        await Page.GotoAsync(BaseUrl);
-        var projectsLink = Page.Locator("a[href*='projects']").First;
-        await projectsLink.ClickAsync();
-        Assert.That(Page.Url, Does.Contain("projects"));
-    }
-}
-```
 
 **E2E Configuration:**
 - `HomespunFixture` automatically starts the application for tests
@@ -253,86 +134,8 @@ public class CriticalJourneysTests : PageTest
 
 ### Data Storage
 
-- JSON file storage
+- JSON and JSONL file storage
 - Data file: `homespun-data.json` (stored in `.homespun` directory)
-
-### Creating Migrations
-
-*Not applicable for JSON storage.*
-
-## Key Services
-
-### Fleece (Features/Fleece/)
-- **FleeceService**: Project-aware wrapper around Fleece.Core IIssueService for CRUD operations on issues
-- **FleeceIssueTransitionService**: Issue status workflow transitions
-
-### ClaudeCode (Features/ClaudeCode/)
-- **ClaudeSessionService**: Session lifecycle management using ClaudeAgentSdk
-- **ClaudeSessionStore**: In-memory storage for active sessions
-- **SessionOptionsFactory**: Creates ClaudeAgentOptions based on session mode (Plan/Build)
-- **AgentStartupTracker**: Tracks session startup state for UI feedback
-- **ClaudeCodeHub**: SignalR hub for real-time message streaming
-
-### Commands (Features/Commands/)
-- **CommandRunner**: Shell command execution with output capture
-
-### Git (Features/Git/)
-- **GitWorktreeService**: Git worktree creation, deletion, and rebase operations
-
-### GitHub (Features/GitHub/)
-- **GitHubService**: GitHub PR synchronization using Octokit
-- **GitHubClientWrapper**: Octokit abstraction for testability
-- **IssuePrLinkingService**: Links Fleece issues to GitHub PRs
-
-### Notifications (Features/Notifications/)
-- **NotificationService**: Toast notification management
-- **NotificationHub**: SignalR hub for notification delivery
-
-### Projects (Features/Projects/)
-- **ProjectService**: CRUD operations for projects
-
-### PullRequests (Features/PullRequests/)
-- **PullRequestDataService**: PR CRUD operations
-- **PullRequestWorkflowService**: PR creation and management workflow
-
-## Configuration
-
-### Environment Variables
-
-- `HOMESPUN_DATA_PATH`: Path to data file (default: `~/.homespun/homespun-data.json`)
-- `GITHUB_TOKEN`: GitHub personal access token for PR operations
-- `CLAUDE_CODE_OAUTH_TOKEN`: Claude Code OAuth token for API authentication
-- `TAILSCALE_AUTH_KEY`: Tailscale auth key for VPN access (optional)
-
-### Docker Deployment
-
-The recommended way to provide credentials for Docker deployment is to create a credentials file at `~/.homespun/env`:
-
-```bash
-export GITHUB_TOKEN=ghp_your_token_here
-export CLAUDE_CODE_OAUTH_TOKEN=your_oauth_token_here
-export TAILSCALE_AUTH_KEY=tskey-auth-your_key_here  # Optional, for VPN access
-```
-
-The `scripts/run.sh` script will automatically source this file when starting the container.
-
-Alternative methods (checked in order):
-1. `~/.homespun/env` file (recommended)
-2. `HSP_*` prefixed environment variables (for VM secrets)
-3. Standard environment variables (`GITHUB_TOKEN`, `CLAUDE_CODE_OAUTH_TOKEN`, `TAILSCALE_AUTH_KEY`)
-4. `.env` file in the repository root
-
-## Health Checks
-
-The application exposes a health check endpoint at `/health` that monitors:
-- Data store accessibility
-- Process manager status
-
-## Real-time Updates
-
-SignalR is used for real-time updates:
-- `/hubs/claudecode` - Claude Code session message streaming, content blocks, session status
-- `/hubs/notifications` - Toast notifications for system events
 
 ## UI Development with Mock Mode
 
@@ -346,37 +149,14 @@ The mock mode provides a development environment with:
 ### Starting Mock Mode
 
 ```bash
-# Using script
 ./scripts/mock.sh       # Linux/Mac
 ./scripts/mock.ps1      # Windows
-
-# Or directly
-dotnet run --project src/Homespun --launch-profile mock
 ```
 
-**Default URLs (from launchSettings.json):**
-- HTTPS: https://localhost:5094
-- HTTP: http://localhost:5095
-
-**Important:** In containerized or CI environments, the `HTTP_PORTS`/`HTTPS_PORTS` environment variables may override the launch profile URLs. Check the console output for the actual listening URL:
-```
-Now listening on: http://localhost:5093
-```
+The scripts find an available port between 15000 and 16000 when running in this mode. Review the script output to find the URL to access.
+Use the HTTP URL when accessing the mock container with Playwright.
 
 When using Playwright MCP tools in such environments, use the HTTP URL shown in the console output rather than the HTTPS URL from the launch profile.
-
-### Visual UI Development with Playwright
-
-Use the `/ui-dev` skill for browser-assisted UI development:
-
-```
-/ui-dev
-```
-
-This provides:
-- Playwright MCP tools for screenshots and interaction
-- Guidance for the visual iteration workflow
-- Mock server management
 
 ### Playwright MCP Tools
 
@@ -387,48 +167,9 @@ Key tools for UI inspection:
 - `browser_click` / `browser_type` - Interact with elements
 - `browser_console_messages` - Check for JS errors
 
-### Workflow Example: Visual UI Iteration
-
-1. **Start the mock server:**
-   ```bash
-   cd src/Homespun
-   dotnet build
-   HOMESPUN_MOCK_MODE=true dotnet run --no-build &
-   ```
-
-2. **Wait for server startup and verify:**
-   ```bash
-   sleep 10
-   curl -s http://localhost:5093/health  # Check if server is healthy
-   ```
-
-3. **Navigate using Playwright MCP:**
-   ```
-   browser_navigate to http://localhost:5093/projects/demo-project
-   ```
-
-   **Note:** Use `http://` not `https://` when running in environments where HTTPS is not available or certificates are not set up.
-
-4. **Take screenshots to verify visual changes:**
-   ```
-   browser_take_screenshot with filename "my-feature.png"
-   ```
-
-5. **Make CSS/component changes, then refresh the page to see updates**
-
-6. **Stop the server when done:**
-   ```bash
-   pkill -f "dotnet run"
-   ```
-
-### Environment Variables
-
-- `HOMESPUN_MOCK_MODE=true`: Activates mock services
-- `ASPNETCORE_ENVIRONMENT=Development`: Enables dev tooling
-
 ## Container Playwright MCP Usage
 
-When using Playwright MCP tools from within the Homespun Docker container, there are important networking considerations.
+Most of the development of Homespun comes from agents running within the application container itself. Consider this when testing a mock container using the Playwright MCP tools. There are important networking considerations when starting and accessing mock containers within the application container.
 
 ### Browser Installation
 
@@ -440,7 +181,7 @@ Playwright browsers are pre-installed at `/opt/playwright-browsers`. The `PLAYWR
 
 #### Accessing Sibling Containers (DooD)
 
-When using Docker-outside-of-Docker to spawn mock containers:
+Docker-outside-of-Docker is used to spawn mock containers:
 
 1. **Start a mock container:**
    ```bash
@@ -465,6 +206,8 @@ When using Docker-outside-of-Docker to spawn mock containers:
 - **Linux hosts**: Use the Docker bridge IP, typically `172.17.0.1`
 - **Docker Desktop (Mac/Windows)**: Use `host.docker.internal`
 
+**Note: Do not edit any files on the host machine or stop/modify any containers that are not a mock container that you created.**
+
 ### Troubleshooting
 
 | Issue | Solution |
@@ -477,73 +220,4 @@ When using Docker-outside-of-Docker to spawn mock containers:
 
 The design system at `/design` provides a catalog of all UI components with mock data for visual testing. This is only available in mock mode.
 
-### Browsing Components
-
-Navigate to `http://localhost:5093/design` (in mock mode) to see all registered components organized by category:
-- **Core**: WorkItem, PrStatusBadges, NotificationBanner, etc.
-- **Forms**: ModelSelector, AgentSelector, QuickIssueCreateBar
-- **Chat**: ChatMessage, ChatInput, ToolUseBlock, ThinkingBlock, etc.
-- **Panels**: IssueDetailPanel, CurrentPullRequestDetailPanel, etc.
-
-Click any component card to view its showcase with multiple variations and states.
-
-### Adding a New Component to the Design System
-
-When creating a new shared component, add it to the design system for visual testing:
-
-1. **Register the component** in `Features/Design/ComponentRegistryService.cs`:
-   ```csharp
-   new ComponentMetadata
-   {
-       Id = "my-component",           // URL slug (kebab-case)
-       Name = "MyComponent",          // Display name
-       Description = "Brief description of what it does.",
-       Category = "Core",             // Core, Forms, Chat, or Panels
-       ComponentPath = "Components/Shared/MyComponent.razor",
-       Tags = ["tag1", "tag2"]        // For search/filtering
-   }
-   ```
-
-2. **Create a showcase file** at `Components/Pages/Design/Showcases/MyComponentShowcase.razor`:
-   ```razor
-   <div class="showcase-section">
-       <h3>Default State</h3>
-       <div class="showcase-item">
-           <div class="showcase-label">Description of this variant</div>
-           <div class="showcase-preview">
-               <MyComponent Prop1="value1" />
-           </div>
-       </div>
-   </div>
-
-   <div class="showcase-section">
-       <h3>Loading State</h3>
-       <div class="showcase-item">
-           <div class="showcase-label">When loading data</div>
-           <div class="showcase-preview">
-               <MyComponent IsLoading="true" />
-           </div>
-       </div>
-   </div>
-
-   @code {
-       // Add any mock data needed for the showcase
-   }
-   ```
-
-3. **Add the showcase case** to `Components/Pages/Design/ComponentShowcase.razor`:
-   ```csharp
-   case "my-component":
-       <MyComponentShowcase />
-       break;
-   ```
-
-4. **For components with service dependencies**, create a mock wrapper component (e.g., `MockMyComponent.razor`) that accepts parameters instead of injecting services, then use that in the showcase.
-
-### Showcase Best Practices
-
-- Show multiple states: default, loading, error, empty, disabled
-- Use realistic mock data that demonstrates the component's purpose
-- Include edge cases: long text, missing data, extreme values
-- For interactive components, show both enabled and disabled states
-- Group related variations under descriptive `<h3>` headings
+A further description on how to use the design system is at `./src/Homespun/Components/CLAUDE.md`. Always create and update the showcase when creating and modifying components.

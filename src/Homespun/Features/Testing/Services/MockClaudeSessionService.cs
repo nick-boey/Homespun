@@ -83,13 +83,23 @@ public class MockClaudeSessionService : IClaudeSessionService
         await SendMessageAsync(sessionId, message, PermissionMode.Default, cancellationToken);
     }
 
-    public async Task SendMessageAsync(
+    public Task SendMessageAsync(
         string sessionId,
         string message,
         PermissionMode permissionMode,
         CancellationToken cancellationToken = default)
     {
-        _logger.LogDebug("[Mock] SendMessage to session {SessionId}: {Message}", sessionId, message);
+        return SendMessageAsync(sessionId, message, permissionMode, null, cancellationToken);
+    }
+
+    public async Task SendMessageAsync(
+        string sessionId,
+        string message,
+        PermissionMode permissionMode,
+        string? model,
+        CancellationToken cancellationToken = default)
+    {
+        _logger.LogDebug("[Mock] SendMessage to session {SessionId} with model {Model}: {Message}", sessionId, model ?? "default", message);
 
         var session = _sessionStore.GetById(sessionId);
         if (session == null)
@@ -143,6 +153,22 @@ public class MockClaudeSessionService : IClaudeSessionService
         session.TotalCostUsd += 0.01m; // Mock cost
         session.TotalDurationMs += 500;
         _sessionStore.Update(session);
+    }
+
+    public Task ClearContextAsync(string sessionId, CancellationToken cancellationToken = default)
+    {
+        _logger.LogDebug("[Mock] ClearContext for session {SessionId}", sessionId);
+
+        var session = _sessionStore.GetById(sessionId);
+        if (session != null)
+        {
+            // Add a context clear marker
+            session.ContextClearMarkers.Add(DateTime.UtcNow);
+            session.LastActivityAt = DateTime.UtcNow;
+            _sessionStore.Update(session);
+        }
+
+        return Task.CompletedTask;
     }
 
     public Task StopSessionAsync(string sessionId, CancellationToken cancellationToken = default)
@@ -244,6 +270,111 @@ public class MockClaudeSessionService : IClaudeSessionService
         };
 
         return Task.FromResult<IReadOnlyList<ResumableSession>>(sessions);
+    }
+
+    public async Task AnswerQuestionAsync(
+        string sessionId,
+        Dictionary<string, string> answers,
+        CancellationToken cancellationToken = default)
+    {
+        _logger.LogDebug("[Mock] AnswerQuestion for session {SessionId} with {AnswerCount} answers",
+            sessionId, answers.Count);
+
+        var session = _sessionStore.GetById(sessionId);
+        if (session == null)
+        {
+            throw new InvalidOperationException($"Session {sessionId} not found");
+        }
+
+        // Clear pending question
+        session.PendingQuestion = null;
+        session.Status = ClaudeSessionStatus.Running;
+        _sessionStore.Update(session);
+
+        // Simulate processing the answer
+        await Task.Delay(300, cancellationToken);
+
+        // Format the answers
+        var formattedAnswers = string.Join("\n", answers.Select(a => $"- {a.Key}: {a.Value}"));
+
+        // Add mock response acknowledging the answers
+        session.Messages.Add(new ClaudeMessage
+        {
+            SessionId = session.Id,
+            Role = ClaudeMessageRole.Assistant,
+            Content =
+            [
+                new ClaudeMessageContent
+                {
+                    Type = ClaudeContentType.Text,
+                    Text = $"""
+                        [Mock Response]
+
+                        Thank you for answering my questions. Here's what you said:
+
+                        {formattedAnswers}
+
+                        I'll proceed with these preferences in mind. (This is a mock session - no actual processing will occur.)
+                        """
+                }
+            ],
+            CreatedAt = DateTime.UtcNow
+        });
+
+        session.Status = ClaudeSessionStatus.WaitingForInput;
+        session.LastActivityAt = DateTime.UtcNow;
+        _sessionStore.Update(session);
+    }
+
+    public Task<IReadOnlyList<ClaudeMessage>> GetCachedMessagesAsync(
+        string sessionId,
+        CancellationToken cancellationToken = default)
+    {
+        _logger.LogDebug("[Mock] GetCachedMessages for session {SessionId}", sessionId);
+
+        // Return the in-memory messages for the session as "cached" messages
+        var session = _sessionStore.GetById(sessionId);
+        if (session == null)
+        {
+            return Task.FromResult<IReadOnlyList<ClaudeMessage>>(Array.Empty<ClaudeMessage>());
+        }
+
+        return Task.FromResult<IReadOnlyList<ClaudeMessage>>(session.Messages.ToList());
+    }
+
+    public Task<IReadOnlyList<SessionCacheSummary>> GetSessionHistoryAsync(
+        string projectId,
+        string entityId,
+        CancellationToken cancellationToken = default)
+    {
+        _logger.LogDebug("[Mock] GetSessionHistory for project {ProjectId}, entity {EntityId}", projectId, entityId);
+
+        // Return mock session history
+        var history = new List<SessionCacheSummary>
+        {
+            new SessionCacheSummary(
+                SessionId: Guid.NewGuid().ToString(),
+                EntityId: entityId,
+                ProjectId: projectId,
+                MessageCount: 10,
+                CreatedAt: DateTime.UtcNow.AddHours(-2),
+                LastMessageAt: DateTime.UtcNow.AddHours(-1),
+                Mode: SessionMode.Build,
+                Model: "opus"
+            ),
+            new SessionCacheSummary(
+                SessionId: Guid.NewGuid().ToString(),
+                EntityId: entityId,
+                ProjectId: projectId,
+                MessageCount: 5,
+                CreatedAt: DateTime.UtcNow.AddDays(-1),
+                LastMessageAt: DateTime.UtcNow.AddDays(-1).AddHours(1),
+                Mode: SessionMode.Plan,
+                Model: "sonnet"
+            )
+        };
+
+        return Task.FromResult<IReadOnlyList<SessionCacheSummary>>(history);
     }
 
     /// <summary>

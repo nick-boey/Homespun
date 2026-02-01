@@ -271,6 +271,11 @@
     @apply w-3 h-3 border;
   }
 
+  .spinner-border-lg {
+    @apply w-6 h-6;
+    border-width: 0.2rem;
+  }
+
   /* Button Group */
   .btn-group {
     @apply inline-flex;

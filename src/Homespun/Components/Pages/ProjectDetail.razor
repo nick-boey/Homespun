@@ -3,6 +3,7 @@
 @page "/projects/{Id}/settings"
 @implements IDisposable
 @using Fleece.Core.Models
+@using Homespun.Components.Shared
 @using Homespun.Features.ClaudeCode.Data
 @using Homespun.Features.ClaudeCode.Services
 @using Homespun.Features.Commands
@@ -44,13 +45,14 @@ else
     <div class="flex justify-between items-center mb-3">
         <h1>@_project.Name</h1>
         <div class="btn-group">
-            <button class="btn btn-outline-secondary btn-sm" @onclick="RefreshData" disabled="@_isRefreshing">
-                @if (_isRefreshing)
-                {
-                    <span class="spinner-border spinner-border-sm mr-1" role="status"></span>
-                }
-                <i class="bi bi-arrow-clockwise"></i> Refresh
-            </button>
+            <AsyncActionButton OnClick="RefreshData"
+                               IsLoadingExternal="_isRefreshing"
+                               CssClass="btn-outline-secondary btn-sm"
+                               Text="Refresh">
+                <IconContent>
+                    <i class="bi bi-arrow-clockwise"></i>
+                </IconContent>
+            </AsyncActionButton>
             <a href="projects/@Id/edit" class="btn btn-outline-secondary btn-sm">Edit Project</a>
         </div>
     </div>
@@ -118,20 +120,15 @@ else
                             <div class="sync-item">
                                 <span class="sync-label">Fleece Issues</span>
                                 <div class="sync-controls">
-                                    <button class="btn btn-sm btn-outline-secondary"
-                                            @onclick="SyncFleeceIssuesAsync"
-                                            disabled="@_isSyncingFleece">
-                                        @if (_isSyncingFleece)
-                                        {
-                                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                                            <span>Syncing...</span>
-                                        }
-                                        else
-                                        {
+                                    <AsyncActionButton OnClick="SyncFleeceIssuesAsync"
+                                                       IsLoadingExternal="_isSyncingFleece"
+                                                       CssClass="btn-sm btn-outline-secondary"
+                                                       Text="Sync"
+                                                       LoadingText="Syncing...">
+                                        <IconContent>
                                             <i class="bi bi-cloud-upload me-1"></i>
-                                            <span>Sync</span>
-                                        }
-                                    </button>
+                                        </IconContent>
+                                    </AsyncActionButton>
                                     @if (_fleeceSyncError != null)
                                     {
                                         <span class="badge bg-danger ms-2" title="@_fleeceSyncError">Failed</span>
@@ -154,8 +151,7 @@ else
                                         @if (_isSyncingPRs)
                                         {
                                             <span class="badge bg-status-info">
-                                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                                                Syncing...
+                                                <LoadingSpinner Size="SpinnerSize.Sm" Label="Syncing..." Inline="true" />
                                             </span>
                                         }
                                         else if (_tokenMissing)
@@ -239,19 +235,11 @@ else
                     <div class="card-header">Debug Tools</div>
                     <div class="card-body">
                         <div class="flex flex-col gap-2">
-                            <button class="btn btn-outline-primary btn-sm"
-                                    @onclick="StartTestAgentAsync"
-                                    disabled="@_isStartingTestAgent">
-                                @if (_isStartingTestAgent)
-                                {
-                                    <span class="spinner-border spinner-border-sm mr-1" role="status"></span>
-                                    <span>Starting...</span>
-                                }
-                                else
-                                {
-                                    <span>Start Test Agent</span>
-                                }
-                            </button>
+                            <AsyncActionButton OnClick="StartTestAgentAsync"
+                                               IsLoadingExternal="_isStartingTestAgent"
+                                               CssClass="btn-outline-primary btn-sm"
+                                               Text="Start Test Agent"
+                                               LoadingText="Starting..." />
                             @if (!string.IsNullOrEmpty(_testAgentError))
                             {
                                 <div class="alert alert-danger py-1 px-2 mb-0 text-sm">
@@ -266,101 +254,69 @@ else
     }
 
     @* Fleece Sync Conflict Modal *@
-    @if (_showFleeceConflictModal)
-    {
-        <div class="modal-backdrop fade show" style="background-color: rgba(0,0,0,0.5);"></div>
-        <div class="modal fade show d-block" tabindex="-1">
-            <div class="modal-dialog modal-dialog-centered">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">Sync Conflict</h5>
-                        <button type="button" class="btn-close" @onclick="HideFleeceConflictModal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <div class="alert alert-warning">
-                            <strong>Unable to pull changes from @_project?.DefaultBranch</strong>
-                        </div>
-                        <p class="small text-muted">@_fleecePullConflict?.ErrorMessage</p>
-                        <p>Choose how to resolve this conflict:</p>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" @onclick="HideFleeceConflictModal">Cancel</button>
-                        <button type="button" class="btn btn-warning"
-                                @onclick="HandleFleeceConflictStash"
-                                disabled="@_isSyncingFleece">
-                            @if (_isSyncingFleece)
-                            {
-                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                            }
-                            Stash Changes
-                        </button>
-                        <button type="button" class="btn btn-danger"
-                                @onclick="HandleFleeceConflictDiscard"
-                                disabled="@_isSyncingFleece">
-                            @if (_isSyncingFleece)
-                            {
-                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                            }
-                            Discard All Changes
-                        </button>
-                    </div>
-                </div>
+    <Modal IsOpen="@_showFleeceConflictModal"
+           OnClose="@HideFleeceConflictModal"
+           Title="Sync Conflict"
+           Centered="true">
+        <Body>
+            <div class="alert alert-warning">
+                <strong>Unable to pull changes from @_project?.DefaultBranch</strong>
             </div>
-        </div>
-    }
+            <p class="small text-muted">@_fleecePullConflict?.ErrorMessage</p>
+            <p>Choose how to resolve this conflict:</p>
+        </Body>
+        <Footer>
+            <button type="button" class="btn btn-secondary" @onclick="HideFleeceConflictModal">Cancel</button>
+            <AsyncActionButton OnClick="HandleFleeceConflictStash"
+                               IsLoadingExternal="_isSyncingFleece"
+                               CssClass="btn-warning"
+                               Text="Stash Changes" />
+            <AsyncActionButton OnClick="HandleFleeceConflictDiscard"
+                               IsLoadingExternal="_isSyncingFleece"
+                               CssClass="btn-danger"
+                               Text="Discard All Changes" />
+        </Footer>
+    </Modal>
 
     @* Non-Fleece Changes Modal *@
-    @if (_showNonFleeceChangesModal)
-    {
-        <div class="modal-backdrop fade show" style="background-color: rgba(0,0,0,0.5);"></div>
-        <div class="modal fade show d-block" tabindex="-1">
-            <div class="modal-dialog modal-dialog-centered modal-lg">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">Non-Fleece Changes Detected</h5>
-                        <button type="button" class="btn-close" @onclick="HideNonFleeceChangesModal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <div class="alert alert-warning">
-                            <strong>Your local branch is behind the remote</strong>
-                        </div>
-                        <p>
-                            The sync cannot complete because your local branch needs to pull changes from the remote,
-                            but you have uncommitted changes outside the <code>.fleece/</code> folder that may cause conflicts.
-                        </p>
-                        @if (_nonFleeceChangedFiles != null && _nonFleeceChangedFiles.Count > 0)
-                        {
-                            <p><strong>Changed files outside .fleece/:</strong></p>
-                            <div class="border rounded p-2" style="max-height: 200px; overflow-y: auto;">
-                                <ul class="mb-0 small">
-                                    @foreach (var file in _nonFleeceChangedFiles)
-                                    {
-                                        <li><code>@file</code></li>
-                                    }
-                                </ul>
-                            </div>
-                        }
-                        <p class="mt-3 text-muted small">
-                            You can discard these non-fleece changes to allow the sync to complete.
-                            Your <code>.fleece/</code> changes will be preserved.
-                        </p>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" @onclick="HideNonFleeceChangesModal">Cancel</button>
-                        <button type="button" class="btn btn-danger"
-                                @onclick="HandleDiscardNonFleeceChanges"
-                                disabled="@_isSyncingFleece">
-                            @if (_isSyncingFleece)
-                            {
-                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                            }
-                            Discard Non-Fleece Changes
-                        </button>
-                    </div>
-                </div>
+    <Modal IsOpen="@_showNonFleeceChangesModal"
+           OnClose="@HideNonFleeceChangesModal"
+           Title="Non-Fleece Changes Detected"
+           Size="ModalSize.Lg"
+           Centered="true">
+        <Body>
+            <div class="alert alert-warning">
+                <strong>Your local branch is behind the remote</strong>
             </div>
-        </div>
-    }
+            <p>
+                The sync cannot complete because your local branch needs to pull changes from the remote,
+                but you have uncommitted changes outside the <code>.fleece/</code> folder that may cause conflicts.
+            </p>
+            @if (_nonFleeceChangedFiles != null && _nonFleeceChangedFiles.Count > 0)
+            {
+                <p><strong>Changed files outside .fleece/:</strong></p>
+                <div class="border rounded p-2" style="max-height: 200px; overflow-y: auto;">
+                    <ul class="mb-0 small">
+                        @foreach (var file in _nonFleeceChangedFiles)
+                        {
+                            <li><code>@file</code></li>
+                        }
+                    </ul>
+                </div>
+            }
+            <p class="mt-3 text-muted small">
+                You can discard these non-fleece changes to allow the sync to complete.
+                Your <code>.fleece/</code> changes will be preserved.
+            </p>
+        </Body>
+        <Footer>
+            <button type="button" class="btn btn-secondary" @onclick="HideNonFleeceChangesModal">Cancel</button>
+            <AsyncActionButton OnClick="HandleDiscardNonFleeceChanges"
+                               IsLoadingExternal="_isSyncingFleece"
+                               CssClass="btn-danger"
+                               Text="Discard Non-Fleece Changes" />
+        </Footer>
+    </Modal>
 }
 
 <style>

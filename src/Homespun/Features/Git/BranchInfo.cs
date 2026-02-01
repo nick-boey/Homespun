@@ -31,11 +31,6 @@ public class BranchInfo
     public string? Upstream { get; set; }
 
     /// <summary>
-    /// Whether the branch has a remote tracking branch.
-    /// </summary>
-    public bool HasRemote => !string.IsNullOrEmpty(Upstream);
-
-    /// <summary>
     /// Number of commits ahead of upstream.
     /// </summary>
     public int AheadCount { get; set; }

@@ -510,6 +510,58 @@ public class ToolResultParserTests
 
     #endregion
 
+    #region ExitPlanMode Tool Tests
+
+    [Test]
+    public void Parse_ExitPlanModeTool_Success_ReturnsExitPlanModeToolData()
+    {
+        // Arrange
+        var content = "Plan mode exited successfully";
+
+        // Act
+        var result = _parser.Parse("ExitPlanMode", content, isError: false);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.ToolName, Is.EqualTo("ExitPlanMode"));
+        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(result.TypedData, Is.TypeOf<ExitPlanModeToolData>());
+        Assert.That(result.Summary, Is.EqualTo("Plan completed - ready to build"));
+
+        var exitPlanModeData = (ExitPlanModeToolData)result.TypedData!;
+        Assert.That(exitPlanModeData.PlanContent, Is.EqualTo(content));
+    }
+
+    [Test]
+    public void Parse_ExitPlanModeTool_Error_SetsIsSuccessFalse()
+    {
+        // Arrange
+        var content = "Failed to exit plan mode";
+
+        // Act
+        var result = _parser.Parse("ExitPlanMode", content, isError: true);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.IsSuccess, Is.False);
+        Assert.That(result.Summary, Is.EqualTo("Plan mode exit failed"));
+    }
+
+    [Test]
+    public void Parse_ExitPlanModeTool_CaseInsensitive_ParsesCorrectly()
+    {
+        // Arrange
+        var content = "Plan content";
+
+        // Act
+        var result = _parser.Parse("exitplanmode", content, isError: false);
+
+        // Assert
+        Assert.That(result?.TypedData, Is.TypeOf<ExitPlanModeToolData>());
+    }
+
+    #endregion
+
     #region Summary Truncation Tests
 
     [Test]

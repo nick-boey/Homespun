@@ -103,10 +103,11 @@ RUN npm install -g @playwright/mcp@latest \
     && chmod -R 777 /opt/playwright-browsers
 
 # Install Fleece CLI for issue tracking
-# Install as root, then make tools accessible to all users
+# Install as root, then copy to /usr/local/bin for universal access
+# Note: Symlinks don't work because /root/.dotnet/tools/ is inaccessible to non-root users
 RUN dotnet tool install Fleece.Cli -g \
-    && chmod 755 /root \
-    && chmod -R 755 /root/.dotnet
+    && cp /root/.dotnet/tools/fleece /usr/local/bin/fleece \
+    && chmod 755 /usr/local/bin/fleece
 
 # Clean up build dependencies to reduce image size
 RUN apt-get update && apt-get remove -y build-essential && apt-get autoremove -y \
@@ -149,6 +150,11 @@ RUN git config --global --add safe.directory '*'
 
 # Copy published application
 COPY --from=build /app/publish .
+
+# Copy test session data for mock mode
+# MockDataSeederService loads these from /data/sessions when HOMESPUN_MOCK_MODE=true
+COPY --from=build /src/tests/data/sessions /data/sessions
+RUN chown -R homespun:homespun /data/sessions
 
 # Copy start script
 COPY src/Homespun/start.sh .

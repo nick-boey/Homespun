@@ -57,13 +57,10 @@ else
                 </div>
 
                 <div class="flex gap-2">
-                    <button type="submit" class="btn btn-primary" disabled="@_isSubmitting">
-                        @if (_isSubmitting)
-                        {
-                            <span class="spinner-border spinner-border-sm mr-1"></span>
-                        }
-                        Create Pull Request
-                    </button>
+                    <AsyncActionButton ButtonType="submit"
+                                       IsLoadingExternal="_isSubmitting"
+                                       CssClass="btn-primary"
+                                       Text="Create Pull Request" />
                     <a href="projects/@ProjectId" class="btn btn-secondary">Cancel</a>
                 </div>
             </EditForm>

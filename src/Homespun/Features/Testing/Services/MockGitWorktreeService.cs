@@ -1,22 +1,33 @@
 using System.Collections.Concurrent;
 using Homespun.Features.Git;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Homespun.Features.Testing.Services;
 
 /// <summary>
 /// Mock implementation of IGitWorktreeService with in-memory worktree tracking.
+/// Optionally uses a real test working directory when live Claude sessions are enabled.
 /// </summary>
 public class MockGitWorktreeService : IGitWorktreeService
 {
     private readonly ConcurrentDictionary<string, List<WorktreeInfo>> _worktreesByRepo = new();
     private readonly ConcurrentDictionary<string, List<BranchInfo>> _branchesByRepo = new();
     private readonly ILogger<MockGitWorktreeService> _logger;
+    private readonly LiveClaudeTestOptions? _liveTestOptions;
 
-    public MockGitWorktreeService(ILogger<MockGitWorktreeService> logger)
+    public MockGitWorktreeService(
+        ILogger<MockGitWorktreeService> logger,
+        IOptions<LiveClaudeTestOptions>? liveTestOptions = null)
     {
         _logger = logger;
+        _liveTestOptions = liveTestOptions?.Value;
     }
+
+    /// <summary>
+    /// Gets the test working directory if live Claude sessions are enabled.
+    /// </summary>
+    public string? TestWorkingDirectory => _liveTestOptions?.TestWorkingDirectory;
 
     public Task<string?> CreateWorktreeAsync(
         string repoPath,
@@ -26,7 +37,10 @@ public class MockGitWorktreeService : IGitWorktreeService
     {
         _logger.LogDebug("[Mock] CreateWorktree {BranchName} in {RepoPath}", branchName, repoPath);
 
-        var worktreePath = $"{repoPath}-worktrees/{branchName.Replace("/", "-")}";
+        // If live Claude testing is enabled, use the real test directory
+        var worktreePath = !string.IsNullOrEmpty(_liveTestOptions?.TestWorkingDirectory)
+            ? _liveTestOptions.TestWorkingDirectory
+            : $"{repoPath}-worktrees/{branchName.Replace("/", "-")}";
 
         var worktrees = _worktreesByRepo.GetOrAdd(repoPath, _ => []);
         lock (worktrees)
@@ -127,6 +141,12 @@ public class MockGitWorktreeService : IGitWorktreeService
     public Task<string?> GetWorktreePathForBranchAsync(string repoPath, string branchName)
     {
         _logger.LogDebug("[Mock] GetWorktreePathForBranch {BranchName} in {RepoPath}", branchName, repoPath);
+
+        // If live Claude testing is enabled, always return the real test directory
+        if (!string.IsNullOrEmpty(_liveTestOptions?.TestWorkingDirectory))
+        {
+            return Task.FromResult<string?>(_liveTestOptions.TestWorkingDirectory);
+        }
 
         if (_worktreesByRepo.TryGetValue(repoPath, out var worktrees))
         {
@@ -245,141 +265,6 @@ public class MockGitWorktreeService : IGitWorktreeService
     public Task<bool> FetchAllAsync(string repoPath)
     {
         _logger.LogDebug("[Mock] FetchAll in {RepoPath}", repoPath);
-        return Task.FromResult(true);
-    }
-
-    public Task<WorktreeStatus> GetWorktreeStatusAsync(string worktreePath)
-    {
-        _logger.LogDebug("[Mock] GetWorktreeStatus in {WorktreePath}", worktreePath);
-        return Task.FromResult(new WorktreeStatus
-        {
-            ModifiedCount = 0,
-            StagedCount = 0,
-            UntrackedCount = 0
-        });
-    }
-
-    public Task<List<LostWorktreeInfo>> FindLostWorktreeFoldersAsync(string repoPath)
-    {
-        _logger.LogDebug("[Mock] FindLostWorktreeFolders in {RepoPath}", repoPath);
-        return Task.FromResult(new List<LostWorktreeInfo>());
-    }
-
-    public Task<bool> DeleteWorktreeFolderAsync(string folderPath)
-    {
-        _logger.LogDebug("[Mock] DeleteWorktreeFolder {FolderPath}", folderPath);
-        return Task.FromResult(true);
-    }
-
-    public Task<string?> GetCurrentBranchAsync(string worktreePath)
-    {
-        _logger.LogDebug("[Mock] GetCurrentBranch in {WorktreePath}", worktreePath);
-
-        // Try to find the worktree and return its branch
-        foreach (var worktrees in _worktreesByRepo.Values)
-        {
-            lock (worktrees)
-            {
-                var worktree = worktrees.FirstOrDefault(w => w.Path == worktreePath);
-                if (worktree != null)
-                {
-                    return Task.FromResult<string?>(worktree.Branch?.Replace("refs/heads/", ""));
-                }
-            }
-        }
-
-        return Task.FromResult<string?>("main");
-    }
-
-    public Task<bool> CheckoutBranchAsync(string worktreePath, string branchName)
-    {
-        _logger.LogDebug("[Mock] CheckoutBranch {BranchName} in {WorktreePath}", branchName, worktreePath);
-
-        // Update the worktree's branch
-        foreach (var worktrees in _worktreesByRepo.Values)
-        {
-            lock (worktrees)
-            {
-                var worktree = worktrees.FirstOrDefault(w => w.Path == worktreePath);
-                if (worktree != null)
-                {
-                    worktree.Branch = branchName;
-                    return Task.FromResult(true);
-                }
-            }
-        }
-
-        return Task.FromResult(true);
-    }
-
-    public Task<bool> IsSquashMergedAsync(string repoPath, string branchName, string targetBranch)
-    {
-        _logger.LogDebug("[Mock] IsSquashMerged {BranchName} into {TargetBranch} in {RepoPath}",
-            branchName, targetBranch, repoPath);
-        return Task.FromResult(false);
-    }
-
-    public Task<string?> CreateWorktreeFromRemoteBranchAsync(string repoPath, string remoteBranch)
-    {
-        _logger.LogDebug("[Mock] CreateWorktreeFromRemoteBranch {RemoteBranch} in {RepoPath}",
-            remoteBranch, repoPath);
-
-        // Create the worktree without checking out in main
-        var worktreePath = $"{repoPath}-worktrees/{remoteBranch.Replace("/", "-")}";
-
-        var worktrees = _worktreesByRepo.GetOrAdd(repoPath, _ => []);
-        lock (worktrees)
-        {
-            worktrees.Add(new WorktreeInfo
-            {
-                Path = worktreePath,
-                Branch = remoteBranch,
-                HeadCommit = Guid.NewGuid().ToString("N")[..7],
-                IsBare = false,
-                IsDetached = false
-            });
-        }
-
-        // Track the branch
-        var branches = _branchesByRepo.GetOrAdd(repoPath, _ => []);
-        lock (branches)
-        {
-            if (!branches.Any(b => b.ShortName == remoteBranch))
-            {
-                branches.Add(new BranchInfo
-                {
-                    Name = remoteBranch,
-                    ShortName = remoteBranch,
-                    IsCurrent = false,
-                    HasWorktree = true,
-                    WorktreePath = worktreePath,
-                    Upstream = $"origin/{remoteBranch}"
-                });
-            }
-        }
-
-        return Task.FromResult<string?>(worktreePath);
-    }
-
-    public Task<bool> RepairWorktreeAsync(string repoPath, string folderPath, string branchName)
-    {
-        _logger.LogDebug("[Mock] RepairWorktree {FolderPath} for branch {BranchName} in {RepoPath}",
-            folderPath, branchName, repoPath);
-
-        // Add the folder as a worktree
-        var worktrees = _worktreesByRepo.GetOrAdd(repoPath, _ => []);
-        lock (worktrees)
-        {
-            worktrees.Add(new WorktreeInfo
-            {
-                Path = folderPath,
-                Branch = branchName,
-                HeadCommit = Guid.NewGuid().ToString("N")[..7],
-                IsBare = false,
-                IsDetached = false
-            });
-        }
-
         return Task.FromResult(true);
     }
 
