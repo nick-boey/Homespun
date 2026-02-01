@@ -130,6 +130,9 @@ public static class MockServiceExtensions
         // Tool result parser for rich display
         services.AddSingleton<IToolResultParser, ToolResultParser>();
 
+        // Hooks service for session startup hooks
+        services.AddSingleton<IHooksService, HooksService>();
+
         // Use the real ClaudeSessionService
         services.AddSingleton<IClaudeSessionService, ClaudeSessionService>();
 

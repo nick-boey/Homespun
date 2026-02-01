@@ -652,6 +652,13 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         if (streamingBlock != null)
         {
             streamingBlock.IsStreaming = false;
+
+            // Check if this is ExitPlanMode completing - if so, read and display the plan
+            if (streamingBlock.ToolName?.Equals("ExitPlanMode", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                await HandleExitPlanModeCompletedAsync(sessionId, session, streamingBlock, cancellationToken);
+            }
+
             _logger.LogDebug("Broadcasting content_block_stop for index {Index}, Type: {Type}, ToolName: {ToolName}",
                 index, streamingBlock.Type, streamingBlock.ToolName ?? "(null)");
             await _hubContext.BroadcastStreamingContentStopped(sessionId, streamingBlock, index);
@@ -741,6 +748,131 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         {
             _logger.LogError(ex, "Failed to parse AskUserQuestion tool input in session {SessionId}", sessionId);
         }
+    }
+
+    /// <summary>
+    /// Handles ExitPlanMode tool completion - reads the plan file and displays it as a chat message.
+    /// </summary>
+    private async Task HandleExitPlanModeCompletedAsync(
+        string sessionId,
+        ClaudeSession session,
+        ClaudeMessageContent toolUseBlock,
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("ExitPlanMode detected for session {SessionId}", sessionId);
+
+        // Try to extract plan file path from tool input
+        string? planFilePath = null;
+        if (!string.IsNullOrEmpty(toolUseBlock.ToolInput))
+        {
+            try
+            {
+                var inputParams = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(toolUseBlock.ToolInput);
+                planFilePath = TryGetPlanFilePath(inputParams, session.WorkingDirectory);
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogWarning(ex, "Failed to parse ExitPlanMode input JSON");
+            }
+        }
+
+        // Try to find and read the plan file
+        var (foundPath, planContent) = await TryReadPlanFileAsync(session.WorkingDirectory, planFilePath);
+
+        if (!string.IsNullOrEmpty(planContent))
+        {
+            session.PlanFilePath = foundPath;
+
+            // Create a plan message to display in chat
+            var planMessage = new ClaudeMessage
+            {
+                SessionId = sessionId,
+                Role = ClaudeMessageRole.Assistant,
+                Content =
+                [
+                    new ClaudeMessageContent
+                    {
+                        Type = ClaudeContentType.Text,
+                        Text = $"## 📋 Implementation Plan\n\n{planContent}"
+                    }
+                ]
+            };
+
+            session.Messages.Add(planMessage);
+            await _hubContext.BroadcastMessageReceived(sessionId, planMessage);
+
+            _logger.LogInformation("ExitPlanMode: Displayed plan from {FilePath} for session {SessionId} ({Length} chars)",
+                foundPath ?? "detected file", sessionId, planContent.Length);
+        }
+        else
+        {
+            _logger.LogWarning("ExitPlanMode: No plan file found for session {SessionId}", sessionId);
+        }
+    }
+
+    /// <summary>
+    /// Attempts to extract the plan file path from ExitPlanMode tool input parameters.
+    /// </summary>
+    private string? TryGetPlanFilePath(Dictionary<string, JsonElement>? inputParams, string workingDirectory)
+    {
+        if (inputParams == null) return null;
+
+        // Check for common parameter names that might contain the plan file path
+        string[] possibleKeys = ["planFile", "planFilePath", "file", "path"];
+        foreach (var key in possibleKeys)
+        {
+            if (inputParams.TryGetValue(key, out var value) && value.ValueKind == JsonValueKind.String)
+            {
+                var path = value.GetString();
+                if (!string.IsNullOrEmpty(path))
+                {
+                    // Handle relative paths
+                    return Path.IsPathRooted(path) ? path : Path.Combine(workingDirectory, path);
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Attempts to read the plan file from various possible locations.
+    /// Returns the path where the file was found and its content.
+    /// </summary>
+    private async Task<(string? foundPath, string? content)> TryReadPlanFileAsync(string workingDirectory, string? specifiedPath)
+    {
+        // Priority order:
+        // 1. Specified path from tool input
+        // 2. PLAN.md in working directory (Claude CLI fallback location)
+        // 3. .claude/plan.md or .claude/PLAN.md in working directory
+
+        var pathsToTry = new List<string>();
+
+        if (!string.IsNullOrEmpty(specifiedPath))
+            pathsToTry.Add(specifiedPath);
+
+        pathsToTry.Add(Path.Combine(workingDirectory, "PLAN.md"));
+        pathsToTry.Add(Path.Combine(workingDirectory, ".claude", "plan.md"));
+        pathsToTry.Add(Path.Combine(workingDirectory, ".claude", "PLAN.md"));
+
+        foreach (var path in pathsToTry)
+        {
+            if (File.Exists(path))
+            {
+                try
+                {
+                    var content = await File.ReadAllTextAsync(path);
+                    _logger.LogDebug("Successfully read plan file from {Path}", path);
+                    return (path, content);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Could not read plan file at {Path}", path);
+                }
+            }
+        }
+
+        return (null, null);
     }
 
     private static string? GetStringValue(Dictionary<string, object> data, string key)

@@ -35,6 +35,7 @@ public class SessionOptionsFactoryTests
             Assert.That(options.AllowedTools, Does.Contain("Grep"));
             Assert.That(options.AllowedTools, Does.Contain("WebFetch"));
             Assert.That(options.AllowedTools, Does.Contain("WebSearch"));
+            Assert.That(options.AllowedTools, Does.Contain("ExitPlanMode"));
             Assert.That(options.AllowedTools, Does.Not.Contain("Write"));
             Assert.That(options.AllowedTools, Does.Not.Contain("Edit"));
             Assert.That(options.AllowedTools, Does.Not.Contain("Bash"));

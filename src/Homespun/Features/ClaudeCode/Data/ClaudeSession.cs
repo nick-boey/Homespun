@@ -84,4 +84,9 @@ public class ClaudeSession
     /// The pending question that needs a user answer (only set when Status is WaitingForQuestionAnswer).
     /// </summary>
     public PendingQuestion? PendingQuestion { get; set; }
+
+    /// <summary>
+    /// The path to the plan file created when ExitPlanMode was called.
+    /// </summary>
+    public string? PlanFilePath { get; set; }
 }
