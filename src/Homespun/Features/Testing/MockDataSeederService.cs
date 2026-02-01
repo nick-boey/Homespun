@@ -18,7 +18,14 @@ public class MockDataSeederService : IHostedService
     private readonly IAgentPromptService _agentPromptService;
     private readonly IClaudeSessionStore _sessionStore;
     private readonly IToolResultParser _toolResultParser;
+    private readonly IJsonlSessionLoader _jsonlSessionLoader;
     private readonly ILogger<MockDataSeederService> _logger;
+
+    /// <summary>
+    /// Default path to look for JSONL session files.
+    /// Can be overridden via configuration if needed.
+    /// </summary>
+    private const string DefaultSessionDataPath = "/data/sessions";
 
     public MockDataSeederService(
         MockDataStore dataStore,
@@ -26,6 +33,7 @@ public class MockDataSeederService : IHostedService
         IAgentPromptService agentPromptService,
         IClaudeSessionStore sessionStore,
         IToolResultParser toolResultParser,
+        IJsonlSessionLoader jsonlSessionLoader,
         ILogger<MockDataSeederService> logger)
     {
         _dataStore = dataStore;
@@ -33,6 +41,7 @@ public class MockDataSeederService : IHostedService
         _agentPromptService = agentPromptService;
         _sessionStore = sessionStore;
         _toolResultParser = toolResultParser;
+        _jsonlSessionLoader = jsonlSessionLoader;
         _logger = logger;
     }
 
@@ -46,7 +55,7 @@ public class MockDataSeederService : IHostedService
             await SeedPullRequestsAsync();
             await SeedIssuesAsync();
             await SeedAgentPromptsAsync();
-            SeedDemoSessions();
+            await SeedSessionsAsync(cancellationToken);
 
             _logger.LogInformation("Mock data seeding completed successfully");
         }
@@ -54,6 +63,34 @@ public class MockDataSeederService : IHostedService
         {
             _logger.LogError(ex, "Failed to seed mock data");
         }
+    }
+
+    /// <summary>
+    /// Seeds sessions from JSONL files if available, otherwise falls back to hardcoded demo data.
+    /// </summary>
+    private async Task SeedSessionsAsync(CancellationToken cancellationToken)
+    {
+        // Try loading from JSONL files first
+        if (Directory.Exists(DefaultSessionDataPath))
+        {
+            var sessions = await _jsonlSessionLoader.LoadAllSessionsAsync(DefaultSessionDataPath, cancellationToken);
+            if (sessions.Count > 0)
+            {
+                foreach (var session in sessions)
+                {
+                    _sessionStore.Add(session);
+                    _logger.LogDebug("Loaded session {SessionId} from JSONL with {MessageCount} messages",
+                        session.Id, session.Messages.Count);
+                }
+                _logger.LogInformation("Loaded {Count} sessions from JSONL files at {Path}",
+                    sessions.Count, DefaultSessionDataPath);
+                return;
+            }
+        }
+
+        // Fall back to hardcoded demo data
+        _logger.LogDebug("No JSONL sessions found at {Path}, using hardcoded demo data", DefaultSessionDataPath);
+        SeedDemoSessions();
     }
 
     public Task StopAsync(CancellationToken cancellationToken)
