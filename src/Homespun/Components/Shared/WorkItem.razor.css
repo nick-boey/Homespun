@@ -130,25 +130,7 @@
     background-color: var(--status-error);
 }
 
-@keyframes spin {
-    0% {
-        transform: rotate(0deg);
-    }
-    100% {
-        transform: rotate(360deg);
-    }
-}
-
-@keyframes pulse {
-    0%, 100% {
-        opacity: 1;
-        transform: scale(1);
-    }
-    50% {
-        opacity: 0.6;
-        transform: scale(0.85);
-    }
-}
+/* Note: @keyframes spin and pulse are defined globally in app.css */
 
 /* ==========================================================================
    Item Content
