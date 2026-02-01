@@ -284,11 +284,10 @@ public class TimelineLaneCalculator
     }
 
     /// <summary>
-    /// Release lanes when nodes complete their direct children.
-    /// - First, release the just-processed node's own lane if it has no children
-    /// - Then, release direct parent lanes when all their direct children have been processed
-    /// Does NOT propagate up to grandparents - each node's lane only extends down to its
-    /// direct children, not through its entire subtree.
+    /// Release lanes when ALL descendants (any generation) are processed.
+    /// Uses a queue-based approach to propagate releases up the ancestor chain.
+    /// A lane is only released when all of its descendants have been processed,
+    /// ensuring vertical lines remain active through entire subtrees.
     /// </summary>
     private void PropagateAncestorRelease(
         string nodeId,
@@ -298,46 +297,38 @@ public class TimelineLaneCalculator
         Dictionary<string, int> laneAssignments,
         HashSet<int> activeLanes)
     {
-        // First, check if the just-processed node's lane should be released
-        // (node has no children, or all children are processed)
-        if (laneAssignments.TryGetValue(nodeId, out var nodeLane) && nodeLane != 0)
-        {
-            var nodeHasUnprocessedChildren = nodeChildren.TryGetValue(nodeId, out var children) &&
-                                              children.Any(childId => !processedNodes.Contains(childId));
+        var nodesToCheck = new Queue<string>();
+        nodesToCheck.Enqueue(nodeId);
+        var checkedNodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-            if (!nodeHasUnprocessedChildren && activeLanes.Contains(nodeLane))
+        while (nodesToCheck.Count > 0)
+        {
+            var currentId = nodesToCheck.Dequeue();
+            if (!checkedNodes.Add(currentId)) continue;
+
+            if (!laneAssignments.TryGetValue(currentId, out var lane) || lane == 0)
             {
-                activeLanes.Remove(nodeLane);
-            }
-        }
-
-        // Then, check the direct parents of the just-processed node
-        if (!nodeToParents.TryGetValue(nodeId, out var parents))
-        {
-            return;
-        }
-
-        foreach (var parentId in parents)
-        {
-            // Skip if no lane assigned or if it's lane 0 (main branch - never released)
-            if (!laneAssignments.TryGetValue(parentId, out var lane) || lane == 0)
-            {
+                // Still check ancestors even if this node is on main
+                if (nodeToParents.TryGetValue(currentId, out var parents))
+                {
+                    foreach (var parentId in parents)
+                        nodesToCheck.Enqueue(parentId);
+                }
                 continue;
             }
 
-            // Check if all of this parent's direct children are now processed
-            if (!nodeChildren.TryGetValue(parentId, out var parentChildren))
-            {
-                continue;
-            }
+            var hasUnprocessedChildren = nodeChildren.TryGetValue(currentId, out var children) &&
+                                          children.Any(childId => !processedNodes.Contains(childId));
 
-            var allChildrenProcessed = parentChildren.All(childId => processedNodes.Contains(childId));
-
-            if (allChildrenProcessed && activeLanes.Contains(lane))
+            if (!hasUnprocessedChildren && activeLanes.Contains(lane))
             {
-                // All direct children processed - release this parent's lane
-                // Do NOT propagate to grandparents
                 activeLanes.Remove(lane);
+                // Propagate to ancestors
+                if (nodeToParents.TryGetValue(currentId, out var ancestorParents))
+                {
+                    foreach (var parentId in ancestorParents)
+                        nodesToCheck.Enqueue(parentId);
+                }
             }
         }
     }

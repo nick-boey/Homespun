@@ -88,8 +88,9 @@ public static class TimelineSvgRenderer
         // Pass-through lane - check if it's ending at this row
         if (isPassThroughEnding)
         {
-            // Only draw to the center, not the full height
-            return $"M {x} 0 L {x} {centerY}";
+            // Stop at top of arc for clean connection with connector
+            var arcTopY = centerY - ConnectorArcRadius;
+            return $"M {x} 0 L {x} {arcTopY}";
         }
 
         // Full vertical line through the row (pass-through lane continues)
@@ -127,8 +128,8 @@ public static class TimelineSvgRenderer
         var arcEndX = fromX + arcRadius;
 
         // SVG arc: A rx ry x-rotation large-arc-flag sweep-flag x y
-        // sweep-flag=1 for clockwise (turning right from going down)
-        return $"M {fromX} 0 L {fromX} {arcStartY} A {arcRadius} {arcRadius} 0 0 1 {arcEndX} {centerY} L {nodeEdgeX} {centerY}";
+        // sweep-flag=0 for counter-clockwise (arc bulges inward, down and to the right)
+        return $"M {fromX} 0 L {fromX} {arcStartY} A {arcRadius} {arcRadius} 0 0 0 {arcEndX} {centerY} L {nodeEdgeX} {centerY}";
     }
 
     /// <summary>

@@ -238,7 +238,7 @@ public class TimelineSvgRendererTests
         // Horizontal to node edge (27) [36 - 7 - 2]
         Assert.That(path, Does.Contain("M 12 0"));     // Start at lane 0, top
         Assert.That(path, Does.Contain("L 12 10"));    // Down to arc start
-        Assert.That(path, Does.Contain("A 10 10 0 0 1 22 20")); // Quarter-circle arc
+        Assert.That(path, Does.Contain("A 10 10 0 0 0 22 20")); // Quarter-circle arc (counter-clockwise)
         Assert.That(path, Does.Contain("L 27 20"));    // Horizontal to node side
     }
 
@@ -251,7 +251,7 @@ public class TimelineSvgRendererTests
         // arcEndX = 36 + 10 = 46, nodeEdgeX = 60 - 7 - 2 = 51
         Assert.That(path, Does.Contain("M 36 0"));     // Start at lane 1
         Assert.That(path, Does.Contain("L 36 10"));    // Down to arc start
-        Assert.That(path, Does.Contain("A 10 10 0 0 1 46 20")); // Quarter-circle arc
+        Assert.That(path, Does.Contain("A 10 10 0 0 0 46 20")); // Quarter-circle arc (counter-clockwise)
         Assert.That(path, Does.Contain("L 51 20"));    // Horizontal to node side
     }
 
@@ -461,7 +461,7 @@ public class TimelineSvgRendererTests
     public void GenerateRowSvg_PassThroughLane_NoBottomWhenEnding()
     {
         // Arrange - Pass-through lane (1) that is ending at this row
-        // Node is in lane 2, lane 1 passes through but should stop at center
+        // Node is in lane 2, lane 1 passes through but should stop at top of arc
         var svg = TimelineSvgRenderer.GenerateRowSvg(
             nodeLane: 2,
             activeLanes: new HashSet<int> { 0, 1, 2 },
@@ -474,9 +474,10 @@ public class TimelineSvgRendererTests
             isLastRowInLane: false,
             lanesEndingThisRow: new HashSet<int> { 1 });
 
-        // Assert - Lane 1's path should stop at center (y=20), not extend to bottom (y=40)
+        // Assert - Lane 1's path should stop at top of arc (y=10), not extend to bottom (y=40)
+        // centerY=20, arcRadius=10, so top of arc = 10
         // Lane 1 is at x=36
-        Assert.That(svg, Does.Contain("M 36 0 L 36 20"), "Lane 1 should stop at center y=20");
+        Assert.That(svg, Does.Contain("M 36 0 L 36 10"), "Lane 1 should stop at arc top y=10");
         Assert.That(svg, Does.Not.Contain("M 36 0 L 36 40"), "Lane 1 should NOT extend to full height");
     }
 
@@ -537,8 +538,8 @@ public class TimelineSvgRendererTests
             isLastRowInLane: false,
             lanesEndingThisRow: new HashSet<int> { 1 }); // Only lane 1 is ending
 
-        // Assert - Lane 1 (x=36) should stop at center
-        Assert.That(svg, Does.Contain("M 36 0 L 36 20"), "Lane 1 should stop at center");
+        // Assert - Lane 1 (x=36) should stop at top of arc (y=10)
+        Assert.That(svg, Does.Contain("M 36 0 L 36 10"), "Lane 1 should stop at arc top");
 
         // Lane 2 (x=60) should extend full height
         Assert.That(svg, Does.Contain("M 60 0 L 60 40"), "Lane 2 should extend full height");
