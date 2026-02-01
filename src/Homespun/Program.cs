@@ -88,6 +88,7 @@ else
     builder.Services.AddSingleton<IGitHubEnvironmentService, GitHubEnvironmentService>();
     builder.Services.AddSingleton<ICommandRunner, CommandRunner>();
     builder.Services.AddSingleton<IGitWorktreeService, GitWorktreeService>();
+    builder.Services.AddSingleton<IMergeStatusCacheService, MergeStatusCacheService>();
     builder.Services.AddScoped<PullRequestDataService>();
     builder.Services.AddSingleton<IGitHubClientWrapper, GitHubClientWrapper>();
     builder.Services.AddScoped<IGitHubService, GitHubService>();
@@ -100,6 +101,9 @@ else
 
     // Markdown rendering service
     builder.Services.AddSingleton<IMarkdownRenderingService, MarkdownRenderingService>();
+
+    // Issue PR status service (for getting PR status linked to issues)
+    builder.Services.AddScoped<IIssuePrStatusService, IssuePrStatusService>();
 
     // Gitgraph services
     builder.Services.AddScoped<IGraphService, GraphService>();

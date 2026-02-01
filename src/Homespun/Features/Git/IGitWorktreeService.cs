@@ -101,4 +101,72 @@ public interface IGitWorktreeService
     /// <param name="repoPath">Path to the repository</param>
     /// <returns>True if successful</returns>
     Task<bool> FetchAllAsync(string repoPath);
+
+    /// <summary>
+    /// Gets the git status of a worktree (modified, staged, and untracked file counts).
+    /// </summary>
+    /// <param name="worktreePath">Path to the worktree</param>
+    /// <returns>WorktreeStatus with file counts</returns>
+    Task<WorktreeStatus> GetWorktreeStatusAsync(string worktreePath);
+
+    /// <summary>
+    /// Finds lost worktree folders - directories that look like worktrees but are not
+    /// tracked by git worktree. These are sibling folders of the main repo that have
+    /// a .git file or folder but are not in the worktree list.
+    /// </summary>
+    /// <param name="repoPath">Path to the main repository</param>
+    /// <returns>List of lost worktree folder information</returns>
+    Task<List<LostWorktreeInfo>> FindLostWorktreeFoldersAsync(string repoPath);
+
+    /// <summary>
+    /// Deletes a worktree folder completely from disk.
+    /// Use with caution - this permanently deletes the folder and all its contents.
+    /// </summary>
+    /// <param name="folderPath">Path to the folder to delete</param>
+    /// <returns>True if deletion was successful</returns>
+    Task<bool> DeleteWorktreeFolderAsync(string folderPath);
+
+    /// <summary>
+    /// Gets the current branch checked out in a worktree.
+    /// </summary>
+    /// <param name="worktreePath">Path to the worktree</param>
+    /// <returns>Branch name or null if error/detached HEAD</returns>
+    Task<string?> GetCurrentBranchAsync(string worktreePath);
+
+    /// <summary>
+    /// Checks out a specific branch in a worktree.
+    /// </summary>
+    /// <param name="worktreePath">Path to the worktree</param>
+    /// <param name="branchName">Name of the branch to checkout</param>
+    /// <returns>True if successful</returns>
+    Task<bool> CheckoutBranchAsync(string worktreePath, string branchName);
+
+    /// <summary>
+    /// Checks if a branch has been squash-merged into the target branch.
+    /// This detects when a PR was squash-merged rather than regular merged.
+    /// </summary>
+    /// <param name="repoPath">Path to the repository</param>
+    /// <param name="branchName">Name of the branch to check</param>
+    /// <param name="targetBranch">Target branch to check against (usually the default branch)</param>
+    /// <returns>True if the branch appears to be squash-merged</returns>
+    Task<bool> IsSquashMergedAsync(string repoPath, string branchName, string targetBranch);
+
+    /// <summary>
+    /// Creates a worktree from a remote branch without checking out the branch in the main worktree.
+    /// This avoids the issue where two worktrees cannot share the same branch.
+    /// </summary>
+    /// <param name="repoPath">Path to the main repository</param>
+    /// <param name="remoteBranch">Name of the remote branch (without origin/ prefix)</param>
+    /// <returns>Path to the created worktree, or null if failed</returns>
+    Task<string?> CreateWorktreeFromRemoteBranchAsync(string repoPath, string remoteBranch);
+
+    /// <summary>
+    /// Repairs a lost worktree by reattaching it to a branch.
+    /// Uses `git worktree repair` to fix the worktree references.
+    /// </summary>
+    /// <param name="repoPath">Path to the main repository</param>
+    /// <param name="folderPath">Path to the lost worktree folder</param>
+    /// <param name="branchName">Name of the branch to attach</param>
+    /// <returns>True if repair was successful</returns>
+    Task<bool> RepairWorktreeAsync(string repoPath, string folderPath, string branchName);
 }

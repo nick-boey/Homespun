@@ -8,6 +8,7 @@
 @using Homespun.Features.PullRequests
 @using Homespun.Features.PullRequests.Data
 @using Homespun.Features.PullRequests.Data.Entities
+@using Homespun.Features.Shared.Services
 
 @inject IFleeceService FleeceService
 @inject IClaudeSessionStore SessionStore
@@ -22,6 +23,7 @@
 @inject IGitWorktreeService GitWorktreeService
 @inject NavigationManager NavigationManager
 @inject ILogger<CurrentPullRequestDetailPanel> Logger
+@inject IMarkdownRenderingService MarkdownService
 
 <div class="card pull-request-detail-panel">
     <div class="card-header flex justify-between items-center">
@@ -56,7 +58,9 @@
 
         @if (!string.IsNullOrEmpty(PullRequest.Description))
         {
-            <p class="card-text">@PullRequest.Description</p>
+            <div class="description-content markdown-content mb-3">
+                @((MarkupString)MarkdownService.RenderToHtml(PullRequest.Description))
+            </div>
         }
 
         @* Linked Issue Details Section *@
@@ -349,12 +353,10 @@
 
                 if (worktreeExists)
                 {
-                    // Get the worktree path from existing worktrees
-                    var worktrees = await GitWorktreeService.ListWorktreesAsync(PullRequest.Project.LocalPath);
-                    var existingWorktree = worktrees.FirstOrDefault(w => w.Branch == PullRequest.BranchName);
-                    if (existingWorktree != null)
+                    // Get the worktree path using the service method (handles branch name format differences)
+                    worktreePath = await GitWorktreeService.GetWorktreePathForBranchAsync(PullRequest.Project.LocalPath, PullRequest.BranchName);
+                    if (!string.IsNullOrEmpty(worktreePath))
                     {
-                        worktreePath = existingWorktree.Path;
                         Logger.LogInformation("Found existing worktree at {WorktreePath}", worktreePath);
 
                         // Check if there's already a session running in this worktree

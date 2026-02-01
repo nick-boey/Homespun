@@ -113,6 +113,7 @@ public sealed class FleeceService : IFleeceService, IDisposable
         string? description = null,
         int? priority = null,
         string? group = null,
+        IssueStatus? status = null,
         CancellationToken ct = default)
     {
         var service = GetOrCreateIssueService(projectPath);
@@ -125,12 +126,19 @@ public sealed class FleeceService : IFleeceService, IDisposable
             group: group,
             cancellationToken: ct);
 
+        // If a specific status was requested (other than the default Idea), update the issue
+        if (status.HasValue && status.Value != IssueStatus.Idea)
+        {
+            issue = await service.UpdateAsync(issue.Id, status: status.Value, cancellationToken: ct);
+        }
+
         _logger.LogInformation(
-            "Created issue '{IssueId}' ({Type}): {Title}{Group}",
+            "Created issue '{IssueId}' ({Type}): {Title}{Group}{Status}",
             issue.Id,
             type,
             title,
-            group != null ? $" [Group: {group}]" : "");
+            group != null ? $" [Group: {group}]" : "",
+            status.HasValue && status.Value != IssueStatus.Idea ? $" [Status: {status}]" : "");
 
         return issue;
     }

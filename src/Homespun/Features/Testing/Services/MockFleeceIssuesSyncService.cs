@@ -17,6 +17,19 @@ public class MockFleeceIssuesSyncService : IFleeceIssuesSyncService
         _logger = logger;
     }
 
+    public Task<BranchStatusResult> CheckBranchStatusAsync(string projectPath, string defaultBranch, CancellationToken ct = default)
+    {
+        _logger.LogDebug("[Mock] CheckBranchStatusAsync for project at {ProjectPath}, branch {DefaultBranch}", projectPath, defaultBranch);
+        return Task.FromResult(new BranchStatusResult(
+            Success: true,
+            IsOnCorrectBranch: true,
+            CurrentBranch: defaultBranch,
+            ErrorMessage: null,
+            IsBehindRemote: false,
+            CommitsBehind: 0,
+            CommitsAhead: 0));
+    }
+
     public Task<FleeceIssueSyncResult> SyncAsync(string projectPath, string defaultBranch, CancellationToken ct = default)
     {
         _logger.LogDebug("[Mock] SyncAsync for project at {ProjectPath}, branch {DefaultBranch}", projectPath, defaultBranch);
@@ -45,6 +58,12 @@ public class MockFleeceIssuesSyncService : IFleeceIssuesSyncService
     public Task<bool> DiscardChangesAsync(string projectPath, CancellationToken ct = default)
     {
         _logger.LogDebug("[Mock] DiscardChangesAsync for project at {ProjectPath}", projectPath);
+        return Task.FromResult(true);
+    }
+
+    public Task<bool> DiscardNonFleeceChangesAsync(string projectPath, CancellationToken ct = default)
+    {
+        _logger.LogDebug("[Mock] DiscardNonFleeceChangesAsync for project at {ProjectPath}", projectPath);
         return Task.FromResult(true);
     }
 }

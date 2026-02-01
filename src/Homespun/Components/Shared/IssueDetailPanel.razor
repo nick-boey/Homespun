@@ -3,10 +3,12 @@
 @using Homespun.Features.ClaudeCode.Services
 @using Homespun.Features.Fleece.Services
 @using Homespun.Features.Git
+@using Homespun.Features.GitHub
 @using Homespun.Features.Projects
 @using Homespun.Features.PullRequests
 @using Homespun.Features.PullRequests.Data.Entities
 @using Homespun.Features.Shared.Services
+@using static Homespun.Features.PullRequests.BranchNameGenerator
 
 @inject IClaudeSessionStore SessionStore
 @inject IClaudeSessionService SessionService
@@ -15,6 +17,7 @@
 @inject IFleeceService FleeceService
 @inject IGitWorktreeService GitWorktreeService
 @inject IRebaseAgentService RebaseAgentService
+@inject IIssuePrStatusService IssuePrStatusService
 @inject PullRequestWorkflowService PullRequestWorkflowService
 @inject IProjectService ProjectService
 @inject NavigationManager NavigationManager
@@ -66,6 +69,16 @@
             {
                 <div class="description-content markdown-content mb-3">
                     @((MarkupString)MarkdownService.RenderToHtml(Issue.Description))
+                </div>
+            }
+
+            @* Pull Request Status Section *@
+            <PrStatusBadges Status="_prStatus" CssClass="mb-3" />
+            @if (_isLoadingPrStatus)
+            {
+                <div class="text-text-muted text-sm mb-3">
+                    <span class="spinner-border spinner-border-sm mr-1" role="status" style="width: 0.6rem; height: 0.6rem;"></span>
+                    Loading PR status...
                 </div>
             }
 
@@ -232,6 +245,8 @@
     private WorktreeInfo? _worktreeInfo;
     private BranchInfo? _branchInfo;
     private bool _isRebasing;
+    private IssuePullRequestStatus? _prStatus;
+    private bool _isLoadingPrStatus;
 
     protected override async Task OnInitializedAsync()
     {
@@ -251,6 +266,7 @@
         _errorMessage = null;
         _worktreeInfo = null;
         _branchInfo = null;
+        _prStatus = null;
 
         // Check for existing session
         _session = SessionStore.GetByEntityId(Issue.Id);
@@ -259,6 +275,28 @@
         if (_project != null)
         {
             await LoadWorktreeInfoAsync();
+            // Load PR status in background to not block UI
+            _ = LoadPrStatusAsync();
+        }
+    }
+
+    private async Task LoadPrStatusAsync()
+    {
+        _isLoadingPrStatus = true;
+        StateHasChanged();
+
+        try
+        {
+            _prStatus = await IssuePrStatusService.GetPullRequestStatusForIssueAsync(ProjectId, Issue.Id);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to load PR status for issue {IssueId}", Issue.Id);
+        }
+        finally
+        {
+            _isLoadingPrStatus = false;
+            StateHasChanged();
         }
     }
 
@@ -290,26 +328,16 @@
         OnClose.InvokeAsync();
     }
 
+    /// <summary>
+    /// Gets the branch name for this issue by recalculating from current issue properties.
+    /// This ensures the branch name always reflects the current state of the issue,
+    /// including any changes to type, group, title, or working branch ID.
+    /// </summary>
     private string GetBranchPreview()
     {
-        return $"issues/{Issue.Type.ToString().ToLowerInvariant()}/{SanitizeForBranch(Issue.Title)}+{Issue.Id}";
-    }
-
-    private static string SanitizeForBranch(string input)
-    {
-        // Convert to lowercase, replace spaces with hyphens, remove special chars
-        var sanitized = input.ToLowerInvariant()
-            .Replace(" ", "-")
-            .Replace("_", "-");
-
-        // Remove any character that isn't alphanumeric or hyphen
-        sanitized = System.Text.RegularExpressions.Regex.Replace(sanitized, "[^a-z0-9-]", "");
-
-        // Remove consecutive hyphens
-        sanitized = System.Text.RegularExpressions.Regex.Replace(sanitized, "-+", "-");
-
-        // Trim hyphens from start and end
-        return sanitized.Trim('-');
+        // Always recalculate from current issue data to ensure consistency
+        // This fixes the bug where branch names were cached/stale after issue edits
+        return GenerateBranchName(Issue);
     }
 
     private async Task HandleAgentStart(AgentPrompt? selectedPrompt)
@@ -330,24 +358,36 @@
 
         try
         {
-            // Create worktree for the issue's branch
+            // Get or create worktree for the issue's branch
             var branchName = GetBranchPreview();
-            Logger.LogInformation("Creating worktree for branch {BranchName} from {ProjectPath}", branchName, _project.LocalPath);
 
-            var worktreePath = await GitWorktreeService.CreateWorktreeAsync(
-                _project.LocalPath,
-                branchName,
-                createBranch: true,
-                baseBranch: _project.DefaultBranch);
+            // Check if worktree already exists for this branch
+            var worktreePath = await GitWorktreeService.GetWorktreePathForBranchAsync(_project.LocalPath, branchName);
 
-            if (string.IsNullOrEmpty(worktreePath))
+            if (!string.IsNullOrEmpty(worktreePath))
             {
-                _errorMessage = "Failed to create worktree for issue branch.";
-                StartupTracker.MarkAsFailed(Issue.Id, _errorMessage);
-                return;
+                Logger.LogInformation("Found existing worktree at {WorktreePath} for branch {BranchName}", worktreePath, branchName);
             }
+            else
+            {
+                // Create new worktree for the issue's branch
+                Logger.LogInformation("Creating worktree for branch {BranchName} from {ProjectPath}", branchName, _project.LocalPath);
 
-            Logger.LogInformation("Created worktree at {WorktreePath} for issue {IssueId}", worktreePath, Issue.Id);
+                worktreePath = await GitWorktreeService.CreateWorktreeAsync(
+                    _project.LocalPath,
+                    branchName,
+                    createBranch: true,
+                    baseBranch: _project.DefaultBranch);
+
+                if (string.IsNullOrEmpty(worktreePath))
+                {
+                    _errorMessage = "Failed to create worktree for issue branch.";
+                    StartupTracker.MarkAsFailed(Issue.Id, _errorMessage);
+                    return;
+                }
+
+                Logger.LogInformation("Created worktree at {WorktreePath} for issue {IssueId}", worktreePath, Issue.Id);
+            }
 
             // Use the prompt's mode, or default to Build if no prompt selected
             var mode = prompt?.Mode ?? SessionMode.Build;
