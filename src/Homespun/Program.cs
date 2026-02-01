@@ -138,7 +138,8 @@ else
         new SessionMetadataStore(metadataPath, sp.GetRequiredService<ILogger<SessionMetadataStore>>()));
 
     // Message cache store - persists session messages to JSONL files
-    var messageCacheDir = Path.Combine(homespunDir, "sessions");
+    // Use /data/sessions when running in container (via HOMESPUN_DATA_PATH), otherwise ~/.homespun/sessions
+    var messageCacheDir = Path.Combine(dataDirectory!, "sessions");
     builder.Services.AddSingleton<IMessageCacheStore>(sp =>
         new MessageCacheStore(messageCacheDir, sp.GetRequiredService<ILogger<MessageCacheStore>>()));
 
