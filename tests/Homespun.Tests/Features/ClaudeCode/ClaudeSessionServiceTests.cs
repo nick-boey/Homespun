@@ -19,6 +19,7 @@ public class ClaudeSessionServiceTests
     private Mock<IClaudeSessionDiscovery> _discoveryMock = null!;
     private Mock<ISessionMetadataStore> _metadataStoreMock = null!;
     private IToolResultParser _toolResultParser = null!;
+    private Mock<IHooksService> _hooksServiceMock = null!;
 
     [SetUp]
     public void SetUp()
@@ -30,6 +31,7 @@ public class ClaudeSessionServiceTests
         _discoveryMock = new Mock<IClaudeSessionDiscovery>();
         _metadataStoreMock = new Mock<ISessionMetadataStore>();
         _toolResultParser = new ToolResultParser();
+        _hooksServiceMock = new Mock<IHooksService>();
 
         // Setup mock hub clients
         var clientsMock = new Mock<IHubClients>();
@@ -45,7 +47,8 @@ public class ClaudeSessionServiceTests
             _hubContextMock.Object,
             _discoveryMock.Object,
             _metadataStoreMock.Object,
-            _toolResultParser);
+            _toolResultParser,
+            _hooksServiceMock.Object);
     }
 
     [Test]
@@ -310,6 +313,7 @@ public class ClaudeSessionServiceMessageTests
     private Mock<IClaudeSessionDiscovery> _discoveryMock = null!;
     private Mock<ISessionMetadataStore> _metadataStoreMock = null!;
     private IToolResultParser _toolResultParser = null!;
+    private Mock<IHooksService> _hooksServiceMock = null!;
 
     [SetUp]
     public void SetUp()
@@ -321,6 +325,7 @@ public class ClaudeSessionServiceMessageTests
         _discoveryMock = new Mock<IClaudeSessionDiscovery>();
         _metadataStoreMock = new Mock<ISessionMetadataStore>();
         _toolResultParser = new ToolResultParser();
+        _hooksServiceMock = new Mock<IHooksService>();
 
         var clientsMock = new Mock<IHubClients>();
         var clientProxyMock = new Mock<IClientProxy>();
@@ -335,7 +340,8 @@ public class ClaudeSessionServiceMessageTests
             _hubContextMock.Object,
             _discoveryMock.Object,
             _metadataStoreMock.Object,
-            _toolResultParser);
+            _toolResultParser,
+            _hooksServiceMock.Object);
     }
 
     [Test]
@@ -413,6 +419,7 @@ public class ClaudeSessionServicePermissionModeTests
     private Mock<IClaudeSessionDiscovery> _discoveryMock = null!;
     private Mock<ISessionMetadataStore> _metadataStoreMock = null!;
     private IToolResultParser _toolResultParser = null!;
+    private Mock<IHooksService> _hooksServiceMock = null!;
 
     [SetUp]
     public void SetUp()
@@ -424,6 +431,7 @@ public class ClaudeSessionServicePermissionModeTests
         _discoveryMock = new Mock<IClaudeSessionDiscovery>();
         _metadataStoreMock = new Mock<ISessionMetadataStore>();
         _toolResultParser = new ToolResultParser();
+        _hooksServiceMock = new Mock<IHooksService>();
 
         var clientsMock = new Mock<IHubClients>();
         var clientProxyMock = new Mock<IClientProxy>();
@@ -438,7 +446,8 @@ public class ClaudeSessionServicePermissionModeTests
             _hubContextMock.Object,
             _discoveryMock.Object,
             _metadataStoreMock.Object,
-            _toolResultParser);
+            _toolResultParser,
+            _hooksServiceMock.Object);
     }
 
     [TestCase(PermissionMode.Default)]
@@ -509,6 +518,7 @@ public class ClaudeSessionServiceResumeTests
     private Mock<IClaudeSessionDiscovery> _discoveryMock = null!;
     private Mock<ISessionMetadataStore> _metadataStoreMock = null!;
     private IToolResultParser _toolResultParser = null!;
+    private Mock<IHooksService> _hooksServiceMock = null!;
     private string _testClaudeDir = null!;
 
     [SetUp]
@@ -524,6 +534,7 @@ public class ClaudeSessionServiceResumeTests
         _discoveryMock = new Mock<IClaudeSessionDiscovery>();
         _metadataStoreMock = new Mock<ISessionMetadataStore>();
         _toolResultParser = new ToolResultParser();
+        _hooksServiceMock = new Mock<IHooksService>();
 
         var clientsMock = new Mock<IHubClients>();
         var clientProxyMock = new Mock<IClientProxy>();
@@ -538,7 +549,8 @@ public class ClaudeSessionServiceResumeTests
             _hubContextMock.Object,
             _discoveryMock.Object,
             _metadataStoreMock.Object,
-            _toolResultParser);
+            _toolResultParser,
+            _hooksServiceMock.Object);
     }
 
     [TearDown]
