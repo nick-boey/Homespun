@@ -30,6 +30,7 @@ public partial class ToolResultParser : IToolResultParser
             "glob" => ParseGlobResult(contentString, isError),
             "webfetch" => ParseWebResult("WebFetch", contentString, isError),
             "websearch" => ParseWebResult("WebSearch", contentString, isError),
+            "exitplanmode" => ParseExitPlanModeResult(contentString, isError),
             _ => CreateGenericResult(toolName, contentString, isError)
         };
     }
@@ -222,6 +223,20 @@ public partial class ToolResultParser : IToolResultParser
             {
                 Content = content,
                 IsError = isError
+            }
+        };
+    }
+
+    private ToolResultData ParseExitPlanModeResult(string content, bool isError)
+    {
+        return new ToolResultData
+        {
+            ToolName = "ExitPlanMode",
+            Summary = isError ? "Plan mode exit failed" : "Plan completed - ready to build",
+            IsSuccess = !isError,
+            TypedData = new ExitPlanModeToolData
+            {
+                PlanContent = content
             }
         };
     }
