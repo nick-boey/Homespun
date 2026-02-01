@@ -92,4 +92,27 @@ public interface IClaudeSessionService
     /// <param name="answers">Dictionary mapping question text to selected answer text</param>
     /// <param name="cancellationToken">Cancellation token</param>
     Task AnswerQuestionAsync(string sessionId, Dictionary<string, string> answers, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets cached messages for a session from the message cache store.
+    /// Returns messages from the persistent JSONL cache, not the in-memory store.
+    /// </summary>
+    /// <param name="sessionId">The session ID</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>List of cached messages in chronological order</returns>
+    Task<IReadOnlyList<ClaudeMessage>> GetCachedMessagesAsync(
+        string sessionId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets session cache summaries for an entity (issue/PR).
+    /// </summary>
+    /// <param name="projectId">The project ID</param>
+    /// <param name="entityId">The entity ID</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>List of session summaries</returns>
+    Task<IReadOnlyList<SessionCacheSummary>> GetSessionHistoryAsync(
+        string projectId,
+        string entityId,
+        CancellationToken cancellationToken = default);
 }

@@ -75,6 +75,11 @@ public static class MockServiceExtensions
         services.AddSingleton<IRebaseAgentService, MockRebaseAgentService>();
         services.AddSingleton<IAgentPromptService, MockAgentPromptService>();
 
+        // Message cache store - use real implementation (stores to temp directory)
+        var messageCacheDir = Path.Combine(Path.GetTempPath(), "homespun-mock", "sessions");
+        services.AddSingleton<IMessageCacheStore>(sp =>
+            new MessageCacheStore(messageCacheDir, sp.GetRequiredService<ILogger<MessageCacheStore>>()));
+
         // Graph service
         services.AddScoped<IGraphService, MockGraphService>();
 
