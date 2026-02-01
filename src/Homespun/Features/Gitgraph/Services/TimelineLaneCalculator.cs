@@ -35,7 +35,8 @@ public class TimelineLaneCalculator
 
         var laneAssignments = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         var branchToLane = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        var activeLanes = new HashSet<int> { 0 }; // Lane 0 is always active for main
+        var activeLanes = new HashSet<int> { 0 }; // Lane 0 is always active for main (for allocation)
+        var renderingLanes = new HashSet<int> { 0 }; // Lanes that should render vertical lines (direct children pending)
         var rowInfos = new List<RowLaneInfo>();
         var lanesReleasedAfterRow = new List<HashSet<int>>(); // Track lanes released after each row
         var maxLaneUsed = 0;
@@ -112,6 +113,7 @@ public class TimelineLaneCalculator
 
                 branchToLane[node.BranchName] = nodeLane;
                 activeLanes.Add(nodeLane);
+                renderingLanes.Add(nodeLane);
                 maxLaneUsed = Math.Max(maxLaneUsed, nodeLane);
 
                 // Mark parent as having had a child processed
@@ -140,6 +142,11 @@ public class TimelineLaneCalculator
             // Build the set of active lanes for this row BEFORE releases
             // This ensures the current node's lane is included for vertical line rendering
             var currentActiveLanes = new HashSet<int>(activeLanes);
+            var currentRenderingLanes = new HashSet<int>(renderingLanes);
+
+            // Reserved lanes are allocated but shouldn't render vertical lines
+            // (lanes where direct children are all processed but descendants remain)
+            var reservedLanes = new HashSet<int>(currentActiveLanes.Except(currentRenderingLanes));
 
             rowInfos.Add(new RowLaneInfo
             {
@@ -149,15 +156,17 @@ public class TimelineLaneCalculator
                 ConnectorFromLane = connectorFromLane,
                 // Set IsFirstRowInLane now; IsLastRowInLane will be computed in post-processing
                 IsFirstRowInLane = isFirstInSegment,
-                IsLastRowInLane = false
+                IsLastRowInLane = false,
+                ReservedLanes = reservedLanes
             });
 
             // Capture active lanes before release to track which lanes are released
             var lanesBeforeRelease = new HashSet<int>(activeLanes);
 
-            // Propagate lane release up ancestor chain AFTER capturing activeLanes
-            // This releases lanes for ancestors whose children are all now processed
-            // so that subsequent rows don't show vertical lines for completed branches
+            // Release from renderingLanes when direct children are processed (for vertical line rendering)
+            ReleaseDirectChildLanes(node.Id, nodeChildren, nodeToParents, processedNodes, laneAssignments, renderingLanes);
+
+            // Release from activeLanes when ALL descendants are processed (for lane allocation)
             PropagateAncestorRelease(node.Id, nodeChildren, nodeToParents, processedNodes, laneAssignments, activeLanes);
 
             // Track which lanes were released after this row
@@ -329,6 +338,63 @@ public class TimelineLaneCalculator
                     foreach (var parentId in ancestorParents)
                         nodesToCheck.Enqueue(parentId);
                 }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Release lanes from rendering when direct children are processed.
+    /// Unlike PropagateAncestorRelease, this only checks direct parents (not the full ancestor chain).
+    /// This determines which lanes should render vertical lines - only lanes with unprocessed direct children.
+    /// </summary>
+    private void ReleaseDirectChildLanes(
+        string nodeId,
+        Dictionary<string, HashSet<string>> nodeChildren,
+        Dictionary<string, List<string>> nodeToParents,
+        HashSet<string> processedNodes,
+        Dictionary<string, int> laneAssignments,
+        HashSet<int> renderingLanes)
+    {
+        // First, check if the just-processed node's lane should stop rendering
+        // (node has no children, or all direct children are processed)
+        if (laneAssignments.TryGetValue(nodeId, out var nodeLane) && nodeLane != 0)
+        {
+            var nodeHasUnprocessedChildren = nodeChildren.TryGetValue(nodeId, out var children) &&
+                                              children.Any(childId => !processedNodes.Contains(childId));
+
+            if (!nodeHasUnprocessedChildren && renderingLanes.Contains(nodeLane))
+            {
+                renderingLanes.Remove(nodeLane);
+            }
+        }
+
+        // Then, check the direct parents of the just-processed node
+        if (!nodeToParents.TryGetValue(nodeId, out var parents))
+        {
+            return;
+        }
+
+        foreach (var parentId in parents)
+        {
+            // Skip if no lane assigned or if it's lane 0 (main branch - always renders)
+            if (!laneAssignments.TryGetValue(parentId, out var lane) || lane == 0)
+            {
+                continue;
+            }
+
+            // Check if all of this parent's direct children are now processed
+            if (!nodeChildren.TryGetValue(parentId, out var parentChildren))
+            {
+                continue;
+            }
+
+            var allDirectChildrenProcessed = parentChildren.All(childId => processedNodes.Contains(childId));
+
+            if (allDirectChildrenProcessed && renderingLanes.Contains(lane))
+            {
+                // All direct children processed - stop rendering this parent's lane
+                // Do NOT propagate to grandparents
+                renderingLanes.Remove(lane);
             }
         }
     }

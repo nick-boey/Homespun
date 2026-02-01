@@ -545,6 +545,78 @@ public class TimelineSvgRendererTests
         Assert.That(svg, Does.Contain("M 60 0 L 60 40"), "Lane 2 should extend full height");
     }
 
+    [Test]
+    public void GenerateRowSvg_ReservedLane_SkipsVerticalLine()
+    {
+        // Arrange - Lane 1 is active but reserved (shouldn't render vertical line)
+        var svg = TimelineSvgRenderer.GenerateRowSvg(
+            nodeLane: 2,
+            activeLanes: new HashSet<int> { 0, 1, 2 },
+            connectorFromLane: null,
+            maxLanes: 3,
+            nodeColor: "#3b82f6",
+            isIssue: false,
+            isLoadMore: false,
+            isFirstRowInLane: false,
+            isLastRowInLane: false,
+            lanesEndingThisRow: null,
+            reservedLanes: new HashSet<int> { 1 }); // Lane 1 is reserved
+
+        // Assert - Lane 1 (x=36) should NOT have a vertical line
+        Assert.That(svg, Does.Not.Contain("M 36 0"), "Reserved lane 1 should not render vertical line");
+
+        // Lane 0 (x=12) and Lane 2 (x=60) should still render
+        Assert.That(svg, Does.Contain("M 12 0"), "Lane 0 should render vertical line");
+        Assert.That(svg, Does.Contain("M 60 0"), "Lane 2 should render vertical line");
+    }
+
+    [Test]
+    public void GenerateRowSvg_ReservedLane_StillRendersIfNodeInLane()
+    {
+        // Arrange - Lane 1 is reserved but contains the node (should still render)
+        var svg = TimelineSvgRenderer.GenerateRowSvg(
+            nodeLane: 1,
+            activeLanes: new HashSet<int> { 0, 1 },
+            connectorFromLane: null,
+            maxLanes: 2,
+            nodeColor: "#3b82f6",
+            isIssue: false,
+            isLoadMore: false,
+            isFirstRowInLane: false,
+            isLastRowInLane: false,
+            lanesEndingThisRow: null,
+            reservedLanes: new HashSet<int> { 1 }); // Lane 1 is reserved but has node
+
+        // Assert - Lane 1 should still render because it contains the node
+        Assert.That(svg, Does.Contain("M 36 0 L 36 12"), "Node lane should render even if reserved");
+    }
+
+    [Test]
+    public void GenerateRowSvg_MultipleReservedLanes_SkipsAll()
+    {
+        // Arrange - Lanes 1 and 2 are reserved
+        var svg = TimelineSvgRenderer.GenerateRowSvg(
+            nodeLane: 3,
+            activeLanes: new HashSet<int> { 0, 1, 2, 3 },
+            connectorFromLane: null,
+            maxLanes: 4,
+            nodeColor: "#3b82f6",
+            isIssue: false,
+            isLoadMore: false,
+            isFirstRowInLane: false,
+            isLastRowInLane: false,
+            lanesEndingThisRow: null,
+            reservedLanes: new HashSet<int> { 1, 2 }); // Lanes 1 and 2 are reserved
+
+        // Assert - Lanes 1 (x=36) and 2 (x=60) should NOT render
+        Assert.That(svg, Does.Not.Contain("M 36 0"), "Reserved lane 1 should not render");
+        Assert.That(svg, Does.Not.Contain("M 60 0"), "Reserved lane 2 should not render");
+
+        // Lane 0 (x=12) and Lane 3 (x=84) should render
+        Assert.That(svg, Does.Contain("M 12 0"), "Lane 0 should render");
+        Assert.That(svg, Does.Contain("M 84 0"), "Lane 3 should render");
+    }
+
     #endregion
 
     #region EscapeAttribute Tests (via public methods)

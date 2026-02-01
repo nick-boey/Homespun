@@ -191,6 +191,7 @@ public static class TimelineSvgRenderer
     /// <param name="isFirstRowInLane">True if this is the first row where nodeLane appears.</param>
     /// <param name="isLastRowInLane">True if this is the last row where nodeLane is active.</param>
     /// <param name="lanesEndingThisRow">Set of lane indices that should not draw a bottom segment (pass-through lanes ending at this row).</param>
+    /// <param name="reservedLanes">Set of lane indices that are allocated but should not render vertical lines.</param>
     public static string GenerateRowSvg(
         int nodeLane,
         IReadOnlySet<int> activeLanes,
@@ -202,7 +203,8 @@ public static class TimelineSvgRenderer
         IReadOnlyDictionary<int, string>? laneColors = null,
         bool isFirstRowInLane = false,
         bool isLastRowInLane = false,
-        IReadOnlySet<int>? lanesEndingThisRow = null)
+        IReadOnlySet<int>? lanesEndingThisRow = null,
+        IReadOnlySet<int>? reservedLanes = null)
     {
         var width = CalculateSvgWidth(maxLanes);
         var sb = new StringBuilder();
@@ -220,6 +222,14 @@ public static class TimelineSvgRenderer
         foreach (var lane in activeLanes.OrderBy(l => l))
         {
             var hasNode = lane == nodeLane;
+
+            // Skip reserved lanes (allocated but not rendering) unless this lane has the node
+            // Reserved lanes don't render vertical lines because their direct children are all processed
+            if (!hasNode && (reservedLanes?.Contains(lane) ?? false))
+            {
+                continue;
+            }
+
             var lineColor = laneColors?.GetValueOrDefault(lane) ?? "#6b7280";
 
             // For the node's lane, determine which segments to draw

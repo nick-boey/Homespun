@@ -43,6 +43,13 @@ public record RowLaneInfo
     /// This includes pass-through lanes where a subtree has completed and the lane is being released.
     /// </summary>
     public IReadOnlySet<int> LanesEndingAtThisRow { get; init; } = new HashSet<int>();
+
+    /// <summary>
+    /// Set of lane indices that are reserved (allocated for layout) but should NOT render vertical lines.
+    /// These are lanes where the node's direct children have all been processed, but descendants remain.
+    /// The lane stays allocated to prevent reuse, but no visual line should be drawn.
+    /// </summary>
+    public IReadOnlySet<int> ReservedLanes { get; init; } = new HashSet<int>();
 }
 
 /// <summary>

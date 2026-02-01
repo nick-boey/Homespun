@@ -772,6 +772,113 @@ public class TimelineLaneCalculatorTests
 
     #endregion
 
+    #region Reserved Lanes Tests
+
+    [Test]
+    public void Calculate_ReservedLanes_EmptyWhenDirectChildrenPending()
+    {
+        // Arrange - Parent with children still pending
+        var nodes = new List<IGraphNode>
+        {
+            CreateNode("main-1", "main"),
+            CreateNode("parent", "parent-branch", parentIds: ["main-1"]),
+            CreateNode("child", "child-branch", parentIds: ["parent"])
+        };
+
+        // Act
+        var layout = _calculator.Calculate(nodes);
+
+        // Assert - At parent row, no reserved lanes (parent just started, has children pending)
+        var parentRow = layout.RowInfos[1];
+        Assert.That(parentRow.ReservedLanes, Does.Not.Contain(1), "Parent's lane should not be reserved while child is pending");
+    }
+
+    [Test]
+    public void Calculate_ReservedLanes_SetWhenOnlyDescendantsRemain()
+    {
+        // Arrange - Parent -> Child -> Grandchild
+        // At grandchild row, parent's lane should be reserved (child processed, but subtree continues)
+        var nodes = new List<IGraphNode>
+        {
+            CreateNode("main-1", "main"),
+            CreateNode("parent", "parent-branch", parentIds: ["main-1"]),
+            CreateNode("child", "child-branch", parentIds: ["parent"]),
+            CreateNode("grandchild", "grandchild-branch", parentIds: ["child"])
+        };
+
+        // Act
+        var layout = _calculator.Calculate(nodes);
+
+        // Assert - At grandchild row, parent's lane (1) should be reserved
+        // because parent's direct child (child) is processed, but subtree continues
+        var grandchildRow = layout.RowInfos[3];
+        Assert.That(grandchildRow.ReservedLanes, Does.Contain(1), "Parent's lane should be reserved when only grandchildren remain");
+
+        // Child's lane (2) should also be reserved at grandchild row
+        // because child's direct child (grandchild) is being processed now
+        // Actually, at the moment grandchild is captured, child still has unprocessed children
+        // So child's lane should NOT be reserved
+        Assert.That(grandchildRow.ReservedLanes, Does.Not.Contain(2), "Child's lane should not be reserved while grandchild is processing");
+    }
+
+    [Test]
+    public void Calculate_ReservedLanes_NotSetForMainBranch()
+    {
+        // Arrange - Main branch should never be reserved
+        var nodes = new List<IGraphNode>
+        {
+            CreateNode("main-1", "main"),
+            CreateNode("parent", "parent-branch", parentIds: ["main-1"]),
+            CreateNode("child", "child-branch", parentIds: ["parent"])
+        };
+
+        // Act
+        var layout = _calculator.Calculate(nodes);
+
+        // Assert - Main branch (lane 0) is never reserved
+        foreach (var row in layout.RowInfos)
+        {
+            Assert.That(row.ReservedLanes, Does.Not.Contain(0), "Main branch should never be reserved");
+        }
+    }
+
+    [Test]
+    public void Calculate_ReservedLanes_DeepHierarchy()
+    {
+        // Arrange - main -> A -> B -> C -> D
+        // At D's row, A and B should be reserved, C should not be
+        var nodes = new List<IGraphNode>
+        {
+            CreateNode("main-1", "main"),
+            CreateNode("A", "branch-A", parentIds: ["main-1"]),
+            CreateNode("B", "branch-B", parentIds: ["A"]),
+            CreateNode("C", "branch-C", parentIds: ["B"]),
+            CreateNode("D", "branch-D", parentIds: ["C"])
+        };
+
+        // Act
+        var layout = _calculator.Calculate(nodes);
+
+        // Assert lane assignments
+        Assert.That(layout.LaneAssignments["A"], Is.EqualTo(1));
+        Assert.That(layout.LaneAssignments["B"], Is.EqualTo(2));
+        Assert.That(layout.LaneAssignments["C"], Is.EqualTo(3));
+        Assert.That(layout.LaneAssignments["D"], Is.EqualTo(4));
+
+        // At C's row, A's lane should be reserved (only has grandchildren now)
+        var cRow = layout.RowInfos[3];
+        Assert.That(cRow.ReservedLanes, Does.Contain(1), "A's lane should be reserved at C's row");
+        Assert.That(cRow.ReservedLanes, Does.Not.Contain(2), "B's lane should not be reserved at C's row");
+
+        // At D's row, A's and B's lanes should be reserved
+        var dRow = layout.RowInfos[4];
+        Assert.That(dRow.ReservedLanes, Does.Contain(1), "A's lane should be reserved at D's row");
+        Assert.That(dRow.ReservedLanes, Does.Contain(2), "B's lane should be reserved at D's row");
+        Assert.That(dRow.ReservedLanes, Does.Not.Contain(3), "C's lane should not be reserved at D's row");
+    }
+
+    #endregion
+
     #region Helper Methods
 
     private static TestGraphNode CreateNode(
