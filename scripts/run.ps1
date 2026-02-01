@@ -532,11 +532,15 @@ try {
     }
 
     $dockerArgs += "-e", "HOME=/home/homespun"
-    $dockerArgs += "-e", "ASPNETCORE_ENVIRONMENT=Production"
     $dockerArgs += "-e", "HSP_HOST_DATA_PATH=$dataDirUnix"
 
     if ($MockMode) {
         $dockerArgs += "-e", "HOMESPUN_MOCK_MODE=true"
+        $dockerArgs += "-e", "MockMode__UseLiveClaudeSessions=true"
+        $dockerArgs += "-e", "ASPNETCORE_ENVIRONMENT=MockLive"
+    }
+    else {
+        $dockerArgs += "-e", "ASPNETCORE_ENVIRONMENT=Production"
     }
 
     if (-not [string]::IsNullOrWhiteSpace($githubToken)) {

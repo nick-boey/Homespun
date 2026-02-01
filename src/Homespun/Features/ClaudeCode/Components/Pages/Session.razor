@@ -17,6 +17,7 @@
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JSRuntime
 @inject IMarkdownRenderingService MarkdownService
+@inject IAgentPromptService AgentPromptService
 
 <PageTitle>Session - Homespun</PageTitle>
 
@@ -49,7 +50,7 @@
         </div>
 
         <div class="chat-container">
-            <div class="messages-area" @ref="_messagesContainer">
+            <div class="messages-area" @ref="_messagesContainer" @onscroll="HandleScroll">
                 @if (_session.Messages.Count == 0 && _session.Status != ClaudeSessionStatus.Running)
                 {
                     <div class="empty-state">
@@ -60,6 +61,16 @@
                 {
                     @foreach (var message in _session.Messages)
                     {
+                        @* Check if context was cleared before this message *@
+                        @if (ShouldShowContextSeparator(message))
+                        {
+                            var separatorTime = GetContextSeparatorTime(message);
+                            <div class="context-separator">
+                                <span class="separator-text">Context Cleared</span>
+                                <span class="separator-time">@separatorTime.ToLocalTime().ToString("HH:mm:ss")</span>
+                            </div>
+                        }
+
                         @* Tool result messages (role=user but only ToolResult content) should be styled as tool output, not user messages *@
                         var isToolResultMessage = message.Role == ClaudeMessageRole.User && !IsRealUserMessage(message);
                         var messageClass = isToolResultMessage ? "tool-result-message" :
@@ -203,29 +214,64 @@
                         </div>
                     }
                 }
+
+                @* Scroll to bottom button *@
+                @if (_showScrollToBottomButton)
+                {
+                    <button class="scroll-to-bottom-btn" @onclick="ScrollToBottomClick" title="Scroll to bottom">
+                        <span class="scroll-arrow">↓</span>
+                    </button>
+                }
             </div>
 
             <div class="input-area">
-                <select class="permission-select"
-                        @bind="_selectedPermissionMode"
-                        disabled="@(_session.Status == ClaudeSessionStatus.Running || _session.Status == ClaudeSessionStatus.Stopped)">
-                    <option value="@PermissionMode.BypassPermissions">Bypass permissions</option>
-                    <option value="@PermissionMode.AcceptEdits">Accept edits</option>
-                    <option value="@PermissionMode.Plan">Plan</option>
-                    <option value="@PermissionMode.Default">Default</option>
-                </select>
-                <textarea @bind="_inputMessage"
-                          @bind:event="oninput"
-                          @onkeydown="HandleKeyDown"
-                          placeholder="Type a message..."
-                          rows="3"
-                          disabled="@(_session.Status == ClaudeSessionStatus.Running || _session.Status == ClaudeSessionStatus.Stopped)">
-                </textarea>
-                <button class="btn btn-primary send-button"
-                        @onclick="SendMessage"
-                        disabled="@(string.IsNullOrWhiteSpace(_inputMessage) || _session.Status == ClaudeSessionStatus.Running || _session.Status == ClaudeSessionStatus.Stopped)">
-                    Send
-                </button>
+                <div class="input-controls">
+                    <select class="permission-select"
+                            @bind="_selectedPermissionMode"
+                            disabled="@(_session.Status == ClaudeSessionStatus.Running || _session.Status == ClaudeSessionStatus.Stopped)">
+                        <option value="@PermissionMode.BypassPermissions">Bypass permissions</option>
+                        <option value="@PermissionMode.AcceptEdits">Accept edits</option>
+                        <option value="@PermissionMode.Plan">Plan</option>
+                        <option value="@PermissionMode.Default">Default</option>
+                    </select>
+                    <select class="model-select"
+                            @bind="_selectedModel"
+                            disabled="@(_session.Status == ClaudeSessionStatus.Running || _session.Status == ClaudeSessionStatus.Stopped)">
+                        <option value="opus">Opus</option>
+                        <option value="sonnet">Sonnet</option>
+                        <option value="haiku">Haiku</option>
+                    </select>
+                    <select class="prompt-select"
+                            value="@_selectedPromptId"
+                            @onchange="OnPromptSelected"
+                            disabled="@(_session.Status == ClaudeSessionStatus.Running || _session.Status == ClaudeSessionStatus.Stopped)">
+                        <option value="">(Select a prompt...)</option>
+                        @foreach (var prompt in _availablePrompts)
+                        {
+                            <option value="@prompt.Id">@prompt.Name</option>
+                        }
+                    </select>
+                    <button class="btn btn-outline-secondary btn-sm clear-context-btn"
+                            @onclick="ClearContext"
+                            disabled="@(_session.Status == ClaudeSessionStatus.Running || _session.Status == ClaudeSessionStatus.Stopped || _session.Messages.Count == 0)"
+                            title="Clear context and start fresh (keeps message history)">
+                        Clear Context
+                    </button>
+                </div>
+                <div class="input-row">
+                    <textarea @bind="_inputMessage"
+                              @bind:event="oninput"
+                              @onkeydown="HandleKeyDown"
+                              placeholder="Type a message... (Ctrl+Enter to send)"
+                              rows="3"
+                              disabled="@(_session.Status == ClaudeSessionStatus.Running || _session.Status == ClaudeSessionStatus.Stopped)">
+                    </textarea>
+                    <button class="btn btn-primary send-button"
+                            @onclick="SendMessage"
+                            disabled="@(string.IsNullOrWhiteSpace(_inputMessage) || _session.Status == ClaudeSessionStatus.Running || _session.Status == ClaudeSessionStatus.Stopped)">
+                        Send
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -889,14 +935,29 @@
 
     .input-area {
         display: flex;
+        flex-direction: column;
         gap: var(--spacing-sm);
         padding: var(--spacing-md);
         border-top: 1px solid var(--border-color);
         background: var(--bg-primary);
+    }
+
+    .input-controls {
+        display: flex;
+        gap: var(--spacing-sm);
+        flex-wrap: wrap;
+        align-items: center;
+    }
+
+    .input-row {
+        display: flex;
+        gap: var(--spacing-sm);
         align-items: flex-start;
     }
 
-    .permission-select {
+    .permission-select,
+    .model-select,
+    .prompt-select {
         flex-shrink: 0;
         padding: var(--spacing-sm);
         border: 1px solid var(--border-color);
@@ -906,20 +967,39 @@
         font-family: inherit;
         font-size: 0.875rem;
         cursor: pointer;
+    }
+
+    .permission-select {
         min-width: 140px;
     }
 
-    .permission-select:focus {
+    .model-select {
+        min-width: 100px;
+    }
+
+    .prompt-select {
+        min-width: 160px;
+    }
+
+    .permission-select:focus,
+    .model-select:focus,
+    .prompt-select:focus {
         outline: none;
         border-color: var(--primary);
     }
 
-    .permission-select:disabled {
+    .permission-select:disabled,
+    .model-select:disabled,
+    .prompt-select:disabled {
         opacity: 0.5;
         cursor: not-allowed;
     }
 
-    .input-area textarea {
+    .clear-context-btn {
+        margin-left: auto;
+    }
+
+    .input-row textarea {
         flex: 1;
         resize: none;
         border: 1px solid var(--border-color);
@@ -930,13 +1010,77 @@
         color: var(--text-primary);
     }
 
-    .input-area textarea:focus {
+    .input-row textarea:focus {
         outline: none;
         border-color: var(--color-lagoon);
     }
 
     .send-button {
         align-self: flex-end;
+    }
+
+    /* Context separator styles */
+    .context-separator {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-md);
+        padding: var(--spacing-md);
+        margin: var(--spacing-md) 0;
+        color: var(--text-muted);
+        font-size: 0.875rem;
+    }
+
+    .context-separator::before,
+    .context-separator::after {
+        content: '';
+        flex: 1;
+        height: 1px;
+        background: var(--border-color);
+    }
+
+    .context-separator .separator-text {
+        font-weight: 500;
+        color: var(--text-secondary);
+    }
+
+    .context-separator .separator-time {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+    }
+
+    /* Scroll to bottom button */
+    .messages-area {
+        position: relative;
+    }
+
+    .scroll-to-bottom-btn {
+        position: sticky;
+        bottom: var(--spacing-md);
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 10;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        border: 1px solid var(--border-color);
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        transition: all 0.2s ease;
+    }
+
+    .scroll-to-bottom-btn:hover {
+        background: var(--bg-tertiary);
+        border-color: var(--color-lagoon);
+    }
+
+    .scroll-to-bottom-btn .scroll-arrow {
+        font-size: 1.25rem;
+        line-height: 1;
     }
 
     .session-stats {
@@ -1154,6 +1298,11 @@
     private ClaudeSession? _session;
     private string _inputMessage = string.Empty;
     private PermissionMode _selectedPermissionMode = PermissionMode.BypassPermissions;
+    private string _selectedModel = "sonnet";
+    private string _selectedPromptId = string.Empty;
+    private IReadOnlyList<AgentPrompt> _availablePrompts = [];
+    private bool _showScrollToBottomButton = false;
+    private bool _isNearBottom = true;
     private ElementReference _messagesContainer;
     private HubConnection? _hubConnection;
     private string? _signalRError;
@@ -1302,8 +1451,9 @@
     {
         try
         {
+            // Fixed: Use correct CSS selector (.messages-area instead of .messages-container)
             await JSRuntime.InvokeVoidAsync("eval",
-                $"document.querySelector('.messages-container')?.scrollTo(0, document.querySelector('.messages-container')?.scrollHeight || 0)");
+                $"document.querySelector('.messages-area')?.scrollTo({{ top: document.querySelector('.messages-area')?.scrollHeight || 0, behavior: 'smooth' }})");
         }
         catch
         {
@@ -1311,9 +1461,53 @@
         }
     }
 
+    /// <summary>
+    /// Scrolls to bottom when button is clicked.
+    /// </summary>
+    private async Task ScrollToBottomClick()
+    {
+        await ScrollToBottom();
+        _showScrollToBottomButton = false;
+        _isNearBottom = true;
+    }
+
+    /// <summary>
+    /// Handles scroll events to show/hide the scroll-to-bottom button.
+    /// </summary>
+    private async Task HandleScroll()
+    {
+        try
+        {
+            // Check if user is near the bottom (within 100px threshold)
+            var isNear = await JSRuntime.InvokeAsync<bool>("eval",
+                "(function() { var el = document.querySelector('.messages-area'); return el ? (el.scrollHeight - el.scrollTop - el.clientHeight < 100) : true; })()");
+
+            _isNearBottom = isNear;
+            _showScrollToBottomButton = !isNear;
+        }
+        catch
+        {
+            // Ignore scroll tracking errors
+        }
+    }
+
+    /// <summary>
+    /// Scrolls to bottom only if user is near the bottom (auto-scroll behavior).
+    /// </summary>
+    private async Task AutoScrollToBottomIfNearEnd()
+    {
+        if (_isNearBottom)
+        {
+            await ScrollToBottom();
+        }
+    }
+
     protected override async Task OnInitializedAsync()
     {
         _session = SessionService.GetSession(SessionId);
+
+        // Load available prompts
+        _availablePrompts = AgentPromptService.GetAllPrompts();
 
         if (_session != null)
         {
@@ -1330,6 +1524,9 @@
                     }
                 }
             }
+
+            // Set initial model from session
+            _selectedModel = _session.Model;
 
             try
             {
@@ -1768,7 +1965,8 @@
 
         try
         {
-            await SessionService.SendMessageAsync(SessionId, message, _selectedPermissionMode);
+            // Pass the selected model to the service
+            await SessionService.SendMessageAsync(SessionId, message, _selectedPermissionMode, _selectedModel);
         }
         catch (Exception ex)
         {
@@ -1776,9 +1974,15 @@
         }
     }
 
+    /// <summary>
+    /// Handles keyboard events in the textarea.
+    /// Enter creates a newline (default behavior).
+    /// Ctrl+Enter or Meta+Enter (Cmd on Mac) submits the message.
+    /// </summary>
     private async Task HandleKeyDown(KeyboardEventArgs e)
     {
-        if (e.Key == "Enter" && !e.ShiftKey)
+        // Only submit on Ctrl+Enter or Meta+Enter (Cmd+Enter on Mac)
+        if (e.Key == "Enter" && (e.CtrlKey || e.MetaKey))
         {
             await SendMessage();
         }
@@ -1797,6 +2001,103 @@
         {
             Console.WriteLine($"Error stopping session: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// Handles prompt selection from the dropdown.
+    /// Clears the current input and populates with the rendered prompt template.
+    /// </summary>
+    private void OnPromptSelected(ChangeEventArgs e)
+    {
+        if (_session == null) return;
+
+        var promptId = e.Value?.ToString();
+        if (string.IsNullOrEmpty(promptId))
+        {
+            _selectedPromptId = string.Empty;
+            return;
+        }
+
+        var prompt = _availablePrompts.FirstOrDefault(p => p.Id == promptId);
+        if (prompt == null) return;
+
+        // Build context for template rendering from session metadata
+        // In a real scenario, this would come from the session's associated entity
+        var context = new PromptContext
+        {
+            Title = "Session Task",
+            Id = _session.EntityId,
+            Description = "",
+            Branch = "",
+            Type = _session.Mode.ToString()
+        };
+
+        // Render the template with placeholders replaced
+        var renderedPrompt = AgentPromptService.RenderTemplate(prompt.InitialMessage, context);
+
+        // Clear and populate the input
+        _inputMessage = renderedPrompt ?? string.Empty;
+
+        // Reset the dropdown to the default option
+        _selectedPromptId = string.Empty;
+    }
+
+    /// <summary>
+    /// Clears the conversation context and adds a separator.
+    /// Old messages remain visible but the AI will start fresh.
+    /// </summary>
+    private async Task ClearContext()
+    {
+        if (_session == null || _session.Messages.Count == 0) return;
+
+        // Add a context clear marker
+        _session.ContextClearMarkers.Add(DateTime.UtcNow);
+
+        // Optionally notify the backend to clear context
+        try
+        {
+            await SessionService.ClearContextAsync(SessionId);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error clearing context: {ex.Message}");
+            // Continue anyway - the UI will show the separator
+        }
+
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Determines if a context separator should be shown before a message.
+    /// </summary>
+    private bool ShouldShowContextSeparator(ClaudeMessage message)
+    {
+        if (_session == null || _session.ContextClearMarkers.Count == 0) return false;
+
+        // Get the message index
+        var messageIndex = _session.Messages.IndexOf(message);
+        if (messageIndex <= 0) return false;
+
+        // Check if any context clear marker falls between the previous message and this one
+        var prevMessage = _session.Messages[messageIndex - 1];
+        return _session.ContextClearMarkers.Any(marker =>
+            marker > prevMessage.CreatedAt && marker <= message.CreatedAt);
+    }
+
+    /// <summary>
+    /// Gets the context separator timestamp for display.
+    /// </summary>
+    private DateTime GetContextSeparatorTime(ClaudeMessage message)
+    {
+        if (_session == null) return DateTime.UtcNow;
+
+        var messageIndex = _session.Messages.IndexOf(message);
+        if (messageIndex <= 0) return DateTime.UtcNow;
+
+        var prevMessage = _session.Messages[messageIndex - 1];
+        return _session.ContextClearMarkers
+            .Where(marker => marker > prevMessage.CreatedAt && marker <= message.CreatedAt)
+            .FirstOrDefault();
     }
 
     private static string GetModeBadgeClass(SessionMode mode) => mode switch

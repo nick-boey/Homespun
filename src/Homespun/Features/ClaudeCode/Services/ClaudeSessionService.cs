@@ -247,11 +247,17 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
     /// <inheritdoc />
     public Task SendMessageAsync(string sessionId, string message, CancellationToken cancellationToken = default)
     {
-        return SendMessageAsync(sessionId, message, PermissionMode.BypassPermissions, cancellationToken);
+        return SendMessageAsync(sessionId, message, PermissionMode.BypassPermissions, null, cancellationToken);
     }
 
     /// <inheritdoc />
-    public async Task SendMessageAsync(string sessionId, string message, PermissionMode permissionMode, CancellationToken cancellationToken = default)
+    public Task SendMessageAsync(string sessionId, string message, PermissionMode permissionMode, CancellationToken cancellationToken = default)
+    {
+        return SendMessageAsync(sessionId, message, permissionMode, null, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task SendMessageAsync(string sessionId, string message, PermissionMode permissionMode, string? model, CancellationToken cancellationToken = default)
     {
         var session = _sessionStore.GetById(sessionId);
         if (session == null)
@@ -296,6 +302,8 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                 : CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
             // Create options for this query, using Resume if we have a conversation ID from previous query
+            // Use specified model if provided, otherwise fall back to base options
+            var effectiveModel = !string.IsNullOrEmpty(model) ? model : baseOptions.Model;
             var queryOptions = new ClaudeAgentOptions
             {
                 AllowedTools = baseOptions.AllowedTools,
@@ -304,7 +312,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                 PermissionMode = permissionMode,
                 MaxTurns = baseOptions.MaxTurns,
                 DisallowedTools = baseOptions.DisallowedTools,
-                Model = baseOptions.Model,
+                Model = effectiveModel,
                 Cwd = baseOptions.Cwd,
                 Settings = baseOptions.Settings,
                 AddDirs = baseOptions.AddDirs,
@@ -1066,6 +1074,28 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         // Send the answer as a regular message - this will resume the conversation
         // The --resume flag ensures Claude has context from the previous turn
         await SendMessageAsync(sessionId, formattedAnswers.ToString().Trim(), PermissionMode.BypassPermissions, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public Task ClearContextAsync(string sessionId, CancellationToken cancellationToken = default)
+    {
+        var session = _sessionStore.GetById(sessionId);
+        if (session == null)
+        {
+            _logger.LogWarning("Attempted to clear context for non-existent session {SessionId}", sessionId);
+            return Task.CompletedTask;
+        }
+
+        _logger.LogInformation("Clearing context for session {SessionId}", sessionId);
+
+        // Clear the conversation ID so the next message starts fresh
+        // The UI tracks context clear markers separately for display purposes
+        session.ConversationId = null;
+
+        // Add a context clear marker
+        session.ContextClearMarkers.Add(DateTime.UtcNow);
+
+        return Task.CompletedTask;
     }
 
     /// <inheritdoc />
