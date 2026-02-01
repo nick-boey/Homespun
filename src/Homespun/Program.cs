@@ -105,6 +105,9 @@ else
     builder.Services.AddScoped<IIssuePrStatusService, IssuePrStatusService>();
 
     // Gitgraph services
+    var graphCachePath = Path.Combine(homespunDir, "graph-cache");
+    builder.Services.AddSingleton<IGraphCacheService>(sp =>
+        new GraphCacheService(graphCachePath, sp.GetRequiredService<ILogger<GraphCacheService>>()));
     builder.Services.AddScoped<IGraphService, GraphService>();
 
     // Issue-PR linking service (must be registered before GitHubService as it depends on it)
@@ -134,7 +137,13 @@ else
     builder.Services.AddSingleton<ISessionMetadataStore>(sp =>
         new SessionMetadataStore(metadataPath, sp.GetRequiredService<ILogger<SessionMetadataStore>>()));
 
+    // Message cache store - persists session messages to JSONL files
+    var messageCacheDir = Path.Combine(homespunDir, "sessions");
+    builder.Services.AddSingleton<IMessageCacheStore>(sp =>
+        new MessageCacheStore(messageCacheDir, sp.GetRequiredService<ILogger<MessageCacheStore>>()));
+
     builder.Services.AddSingleton<IToolResultParser, ToolResultParser>();
+    builder.Services.AddSingleton<IHooksService, HooksService>();
     builder.Services.AddSingleton<IClaudeSessionService, ClaudeSessionService>();
     builder.Services.AddSingleton<IAgentStartupTracker, AgentStartupTracker>();
     builder.Services.AddSingleton<IAgentPromptService, AgentPromptService>();

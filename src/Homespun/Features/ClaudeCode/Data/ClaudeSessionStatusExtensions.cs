@@ -13,6 +13,7 @@ public static class ClaudeSessionStatusExtensions
         ClaudeSessionStatus.Starting => "Starting",
         ClaudeSessionStatus.Running => "Working",
         ClaudeSessionStatus.WaitingForInput => "Waiting",
+        ClaudeSessionStatus.WaitingForQuestionAnswer => "Question",
         ClaudeSessionStatus.Stopped => "Stopped",
         ClaudeSessionStatus.Error => "Error",
         _ => status.ToString()
@@ -26,6 +27,7 @@ public static class ClaudeSessionStatusExtensions
         ClaudeSessionStatus.Starting => "bg-warning text-dark",
         ClaudeSessionStatus.Running => "bg-success",
         ClaudeSessionStatus.WaitingForInput => "bg-info",
+        ClaudeSessionStatus.WaitingForQuestionAnswer => "bg-warning",
         ClaudeSessionStatus.Stopped => "bg-secondary",
         ClaudeSessionStatus.Error => "bg-danger",
         _ => "bg-secondary"
@@ -39,6 +41,7 @@ public static class ClaudeSessionStatusExtensions
         ClaudeSessionStatus.Starting => "starting",
         ClaudeSessionStatus.Running => "running",
         ClaudeSessionStatus.WaitingForInput => "waiting",
+        ClaudeSessionStatus.WaitingForQuestionAnswer => "question",
         ClaudeSessionStatus.Stopped => "stopped",
         ClaudeSessionStatus.Error => "error",
         _ => "stopped"
@@ -50,5 +53,6 @@ public static class ClaudeSessionStatusExtensions
     public static bool IsActive(this ClaudeSessionStatus status) => status is
         ClaudeSessionStatus.Starting or
         ClaudeSessionStatus.Running or
-        ClaudeSessionStatus.WaitingForInput;
+        ClaudeSessionStatus.WaitingForInput or
+        ClaudeSessionStatus.WaitingForQuestionAnswer;
 }

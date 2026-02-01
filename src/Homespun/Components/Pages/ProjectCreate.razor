@@ -69,17 +69,11 @@
         </div>
     }
 
-    <button type="submit" class="btn btn-primary" disabled="@_isSubmitting">
-        @if (_isSubmitting)
-        {
-            <span class="spinner-border spinner-border-sm mr-2" role="status" aria-hidden="true"></span>
-            <span>Creating...</span>
-        }
-        else
-        {
-            <span>Create</span>
-        }
-    </button>
+    <AsyncActionButton ButtonType="submit"
+                       IsLoadingExternal="_isSubmitting"
+                       CssClass="btn-primary"
+                       Text="Create"
+                       LoadingText="Creating..." />
     <a href="projects" class="btn btn-secondary">Cancel</a>
 </form>
 

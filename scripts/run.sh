@@ -373,11 +373,14 @@ DOCKER_CMD="$DOCKER_CMD -v $DATA_DIR:/data"
 DOCKER_CMD="$DOCKER_CMD $SSH_MOUNT"
 DOCKER_CMD="$DOCKER_CMD $DOCKER_SOCKET_MOUNT"
 DOCKER_CMD="$DOCKER_CMD -e HOME=/home/homespun"
-DOCKER_CMD="$DOCKER_CMD -e ASPNETCORE_ENVIRONMENT=Production"
 DOCKER_CMD="$DOCKER_CMD -e HSP_HOST_DATA_PATH=$DATA_DIR"
 
 if [ "$USE_MOCK" = true ]; then
     DOCKER_CMD="$DOCKER_CMD -e HOMESPUN_MOCK_MODE=true"
+    DOCKER_CMD="$DOCKER_CMD -e MockMode__UseLiveClaudeSessions=true"
+    DOCKER_CMD="$DOCKER_CMD -e ASPNETCORE_ENVIRONMENT=MockLive"
+else
+    DOCKER_CMD="$DOCKER_CMD -e ASPNETCORE_ENVIRONMENT=Production"
 fi
 
 if [ -n "$GITHUB_TOKEN" ]; then
@@ -412,6 +415,8 @@ if [ "$DETACHED" = true ]; then
     if [ "$USE_LOCAL" = false ]; then
         docker stop watchtower 2>/dev/null || true
         docker rm watchtower 2>/dev/null || true
+        log_info "      Pulling latest Watchtower image..."
+        docker pull nickfedor/watchtower:latest
         docker run -d \
             --name watchtower \
             -v /var/run/docker.sock:/var/run/docker.sock \
@@ -420,7 +425,7 @@ if [ "$DETACHED" = true ]; then
             -e WATCHTOWER_INCLUDE_STOPPED=false \
             -e WATCHTOWER_ROLLING_RESTART=true \
             --restart unless-stopped \
-            containrrr/watchtower "$CONTAINER_NAME"
+            nickfedor/watchtower "$CONTAINER_NAME"
     fi
 
     echo

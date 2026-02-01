@@ -117,3 +117,19 @@ public class GenericToolData
 {
     public required string Content { get; init; }
 }
+
+/// <summary>
+/// Typed data for ExitPlanMode tool results.
+/// </summary>
+public class ExitPlanModeToolData
+{
+    /// <summary>
+    /// The path to the plan file.
+    /// </summary>
+    public string? PlanFilePath { get; init; }
+
+    /// <summary>
+    /// The full plan content read from the file.
+    /// </summary>
+    public string? PlanContent { get; init; }
+}

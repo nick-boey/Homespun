@@ -39,7 +39,4 @@
     color: var(--text-sidebar);
 }
 
-@keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
-}
+/* Note: @keyframes pulse is defined globally in app.css */

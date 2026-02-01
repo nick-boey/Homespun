@@ -46,6 +46,15 @@ public class ComponentRegistryService : IComponentRegistryService
         },
         new ComponentMetadata
         {
+            Id = "form-message",
+            Name = "FormMessage",
+            Description = "Inline alert component for displaying error, success, warning, and info messages in forms.",
+            Category = "Forms",
+            ComponentPath = "Shared/FormMessage.razor",
+            Tags = new() { "form", "alert", "message", "error", "success", "warning", "info" }
+        },
+        new ComponentMetadata
+        {
             Id = "model-selector",
             Name = "ModelSelector",
             Description = "Dropdown selector for choosing AI model (Opus, Sonnet, Haiku).",

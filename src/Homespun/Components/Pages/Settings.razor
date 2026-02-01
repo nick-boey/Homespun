@@ -81,9 +81,10 @@
                     }
                 </dl>
 
-                <button class="btn btn-sm btn-outline-secondary mt-3" @onclick="RefreshStatus" disabled="@_isLoading">
-                    Refresh Status
-                </button>
+                <AsyncActionButton OnClick="RefreshStatus"
+                                   IsLoadingExternal="_isLoading"
+                                   CssClass="btn-sm btn-outline-secondary mt-3"
+                                   Text="Refresh Status" />
             }
         </div>
 
