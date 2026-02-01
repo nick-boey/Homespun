@@ -86,6 +86,9 @@ public static class MockServiceExtensions
         // Design system services (only available in mock mode)
         services.AddSingleton<IComponentRegistryService, ComponentRegistryService>();
 
+        // JSONL session loader for loading real session data
+        services.AddSingleton<IJsonlSessionLoader, JsonlSessionLoader>();
+
         // Seed data service (if enabled)
         if (options.SeedData)
         {

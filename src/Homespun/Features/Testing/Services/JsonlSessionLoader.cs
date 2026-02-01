@@ -1,0 +1,216 @@
+using System.Text.Json;
+using Homespun.Features.ClaudeCode.Data;
+using Microsoft.Extensions.Logging;
+
+namespace Homespun.Features.Testing.Services;
+
+/// <summary>
+/// Loads Claude Code sessions from JSONL files for use in mock/demo mode.
+/// </summary>
+public class JsonlSessionLoader : IJsonlSessionLoader
+{
+    private readonly ILogger<JsonlSessionLoader> _logger;
+
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    };
+
+    public JsonlSessionLoader(ILogger<JsonlSessionLoader> logger)
+    {
+        _logger = logger;
+    }
+
+    /// <inheritdoc />
+    public async Task<List<ClaudeMessage>> LoadMessagesAsync(string jsonlPath, CancellationToken cancellationToken = default)
+    {
+        var messages = new List<ClaudeMessage>();
+
+        if (!File.Exists(jsonlPath))
+        {
+            _logger.LogWarning("JSONL file not found: {Path}", jsonlPath);
+            return messages;
+        }
+
+        var lines = await File.ReadAllLinesAsync(jsonlPath, cancellationToken);
+        foreach (var line in lines)
+        {
+            if (string.IsNullOrWhiteSpace(line))
+                continue;
+
+            try
+            {
+                var message = JsonSerializer.Deserialize<ClaudeMessage>(line, JsonOptions);
+                if (message != null)
+                {
+                    messages.Add(message);
+                }
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogWarning(ex, "Failed to parse message line in {Path}", jsonlPath);
+            }
+        }
+
+        _logger.LogDebug("Loaded {Count} messages from {Path}", messages.Count, jsonlPath);
+        return messages;
+    }
+
+    /// <inheritdoc />
+    public async Task<ClaudeSession?> LoadSessionFromDirectoryAsync(string directoryPath, CancellationToken cancellationToken = default)
+    {
+        if (!Directory.Exists(directoryPath))
+        {
+            _logger.LogWarning("Directory not found: {Path}", directoryPath);
+            return null;
+        }
+
+        // Find the first JSONL file in the directory
+        var jsonlFiles = Directory.GetFiles(directoryPath, "*.jsonl");
+        if (jsonlFiles.Length == 0)
+        {
+            _logger.LogDebug("No JSONL files found in {Path}", directoryPath);
+            return null;
+        }
+
+        // Use the first JSONL file
+        var jsonlPath = jsonlFiles[0];
+        var sessionId = Path.GetFileNameWithoutExtension(jsonlPath);
+
+        // Load messages
+        var messages = await LoadMessagesAsync(jsonlPath, cancellationToken);
+        if (messages.Count == 0)
+        {
+            _logger.LogDebug("No messages found in {Path}", jsonlPath);
+            return null;
+        }
+
+        // Try to load metadata
+        var metaPath = Path.Combine(directoryPath, $"{sessionId}.meta.json");
+        var metadata = await LoadMetadataAsync(metaPath, cancellationToken);
+
+        // Create the session
+        var projectId = metadata?.ProjectId ?? Path.GetFileName(directoryPath);
+        var session = new ClaudeSession
+        {
+            Id = sessionId,
+            EntityId = metadata?.EntityId ?? string.Empty,
+            ProjectId = projectId,
+            WorkingDirectory = directoryPath,
+            Mode = metadata?.Mode ?? SessionMode.Build,
+            Model = metadata?.Model ?? "sonnet",
+            Status = ClaudeSessionStatus.WaitingForInput,
+            CreatedAt = metadata?.CreatedAt ?? messages.First().CreatedAt,
+            LastActivityAt = metadata?.LastMessageAt ?? messages.Last().CreatedAt
+        };
+
+        // Add messages to session
+        foreach (var message in messages)
+        {
+            session.Messages.Add(message);
+        }
+
+        _logger.LogInformation("Loaded session {SessionId} with {MessageCount} messages from {Path}",
+            sessionId, messages.Count, directoryPath);
+
+        return session;
+    }
+
+    /// <inheritdoc />
+    public async Task<List<ClaudeSession>> LoadAllSessionsAsync(string baseDirectory, CancellationToken cancellationToken = default)
+    {
+        var sessions = new List<ClaudeSession>();
+
+        if (!Directory.Exists(baseDirectory))
+        {
+            _logger.LogWarning("Base directory not found: {Path}", baseDirectory);
+            return sessions;
+        }
+
+        // Iterate through project subdirectories
+        foreach (var projectDir in Directory.GetDirectories(baseDirectory))
+        {
+            // Find all JSONL files in this project directory
+            var jsonlFiles = Directory.GetFiles(projectDir, "*.jsonl");
+            foreach (var jsonlFile in jsonlFiles)
+            {
+                var sessionId = Path.GetFileNameWithoutExtension(jsonlFile);
+
+                try
+                {
+                    // Load messages
+                    var messages = await LoadMessagesAsync(jsonlFile, cancellationToken);
+                    if (messages.Count == 0)
+                        continue;
+
+                    // Try to load metadata
+                    var metaPath = Path.Combine(projectDir, $"{sessionId}.meta.json");
+                    var metadata = await LoadMetadataAsync(metaPath, cancellationToken);
+
+                    // Create session
+                    var projectId = metadata?.ProjectId ?? Path.GetFileName(projectDir);
+                    var session = new ClaudeSession
+                    {
+                        Id = sessionId,
+                        EntityId = metadata?.EntityId ?? string.Empty,
+                        ProjectId = projectId,
+                        WorkingDirectory = projectDir,
+                        Mode = metadata?.Mode ?? SessionMode.Build,
+                        Model = metadata?.Model ?? "sonnet",
+                        Status = ClaudeSessionStatus.WaitingForInput,
+                        CreatedAt = metadata?.CreatedAt ?? messages.First().CreatedAt,
+                        LastActivityAt = metadata?.LastMessageAt ?? messages.Last().CreatedAt
+                    };
+
+                    foreach (var message in messages)
+                    {
+                        session.Messages.Add(message);
+                    }
+
+                    sessions.Add(session);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to load session from {Path}", jsonlFile);
+                }
+            }
+        }
+
+        _logger.LogInformation("Loaded {Count} sessions from {Path}", sessions.Count, baseDirectory);
+        return sessions;
+    }
+
+    private async Task<SessionMetadata?> LoadMetadataAsync(string metaPath, CancellationToken cancellationToken)
+    {
+        if (!File.Exists(metaPath))
+        {
+            return null;
+        }
+
+        try
+        {
+            var json = await File.ReadAllTextAsync(metaPath, cancellationToken);
+            return JsonSerializer.Deserialize<SessionMetadata>(json, JsonOptions);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to load metadata from {Path}", metaPath);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Internal class for deserializing session metadata files.
+    /// </summary>
+    private class SessionMetadata
+    {
+        public string SessionId { get; set; } = string.Empty;
+        public string EntityId { get; set; } = string.Empty;
+        public string ProjectId { get; set; } = string.Empty;
+        public int MessageCount { get; set; }
+        public DateTime CreatedAt { get; set; }
+        public DateTime LastMessageAt { get; set; }
+        public SessionMode? Mode { get; set; }
+        public string? Model { get; set; }
+    }
+}
