@@ -15,6 +15,13 @@
             <span>Loading graph...</span>
         </div>
     }
+    else if (_isRefreshing)
+    {
+        <div class="gitgraph-refreshing">
+            <span class="spinner-border spinner-border-sm" role="status"></span>
+            <span>Updating...</span>
+        </div>
+    }
     @if (_error != null)
     {
         <div class="gitgraph-error">
@@ -37,12 +44,27 @@
     }
 
     .gitgraph-loading,
+    .gitgraph-refreshing,
     .gitgraph-error {
         display: flex;
         align-items: center;
         gap: 0.5rem;
-        padding: 1rem;
+        padding: 0.5rem 1rem;
         color: var(--text-secondary);
+        font-size: 0.85rem;
+    }
+
+    .gitgraph-refreshing {
+        position: absolute;
+        top: 0;
+        right: 0;
+        background: var(--bg-secondary);
+        border-radius: 0 0 0 4px;
+        opacity: 0.9;
+    }
+
+    .gitgraph-wrapper {
+        position: relative;
     }
 
     .gitgraph-error {
@@ -92,9 +114,11 @@
     private DotNetObjectReference<GitgraphVisualization>? _dotNetRef;
     private HubConnection? _hubConnection;
     private bool _isLoading = true;
+    private bool _isRefreshing = false;
     private string? _error;
     private GitgraphJsonData? _graphData;
     private int _currentMaxPastPRs = 5;
+    private DateTime? _cacheTimestamp;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -106,10 +130,14 @@
                     "import", "./Components/Shared/GitgraphVisualization.razor.js");
                 _dotNetRef = DotNetObjectReference.Create(this);
 
-                await LoadAndRenderGraph();
+                // First, load and render with cached data (fast)
+                await LoadAndRenderGraph(useCache: true);
 
                 // Set up SignalR connection for real-time agent status updates
                 await SetupSignalRConnectionAsync();
+
+                // Then, refresh with fresh data asynchronously in the background
+                _ = RefreshWithFreshDataAsync();
             }
             catch (Exception ex)
             {
@@ -180,11 +208,12 @@
         }
     }
 
-    private async Task LoadAndRenderGraph()
+    private async Task LoadAndRenderGraph(bool useCache = true)
     {
         try
         {
-            _graphData = await GraphService.BuildGraphJsonAsync(ProjectId, _currentMaxPastPRs);
+            _graphData = await GraphService.BuildGraphJsonAsync(ProjectId, _currentMaxPastPRs, useCache);
+            _cacheTimestamp = GraphService.GetCacheTimestamp(ProjectId);
 
             if (_jsModule != null)
             {
@@ -211,12 +240,81 @@
         StateHasChanged();
     }
 
+    /// <summary>
+    /// Refreshes the graph with fresh data from GitHub in the background.
+    /// This is called after the initial cached render to update the graph with latest PR data.
+    /// </summary>
+    private async Task RefreshWithFreshDataAsync()
+    {
+        if (_isRefreshing) return;
+
+        try
+        {
+            _isRefreshing = true;
+            await InvokeAsync(StateHasChanged);
+
+            // Get fresh data from GitHub (bypasses cache)
+            var freshData = await GraphService.BuildGraphJsonWithFreshDataAsync(ProjectId, _currentMaxPastPRs);
+
+            // Only re-render if the data has changed
+            if (!IsGraphDataEqual(_graphData, freshData))
+            {
+                _graphData = freshData;
+                _cacheTimestamp = GraphService.GetCacheTimestamp(ProjectId);
+
+                if (_jsModule != null)
+                {
+                    await _jsModule.InvokeVoidAsync("initializeGraph",
+                        _containerId,
+                        _graphData,
+                        _dotNetRef);
+
+                    if (SelectedNodeId != null)
+                    {
+                        await _jsModule.InvokeVoidAsync("highlightNode", _containerId, SelectedNodeId);
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            // Log but don't show error - we already have cached data displayed
+            Console.WriteLine($"Failed to refresh graph with fresh data: {ex.Message}");
+        }
+        finally
+        {
+            _isRefreshing = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    /// <summary>
+    /// Compares two graph data objects to check if they are equal.
+    /// Used to avoid unnecessary re-renders when the data hasn't changed.
+    /// </summary>
+    private static bool IsGraphDataEqual(GitgraphJsonData? a, GitgraphJsonData? b)
+    {
+        if (a == null && b == null) return true;
+        if (a == null || b == null) return false;
+
+        // Compare commit counts first (quick check)
+        if (a.Commits.Count != b.Commits.Count) return false;
+        if (a.Branches.Count != b.Branches.Count) return false;
+
+        // Compare commit hashes (more thorough check)
+        var aHashes = a.Commits.Select(c => c.Hash).OrderBy(h => h).ToList();
+        var bHashes = b.Commits.Select(c => c.Hash).OrderBy(h => h).ToList();
+
+        return aHashes.SequenceEqual(bHashes);
+    }
+
     [JSInvokable]
     public async Task LoadMorePastPRs()
     {
         // Increase the limit by 5
         _currentMaxPastPRs += 5;
-        await LoadAndRenderGraph();
+        // Use cache when loading more past PRs for faster response
+        await LoadAndRenderGraph(useCache: true);
     }
 
     [JSInvokable]
@@ -236,7 +334,8 @@
     {
         if (_jsModule != null)
         {
-            await LoadAndRenderGraph();
+            // When explicitly refreshing, get fresh data from GitHub
+            await RefreshWithFreshDataAsync();
         }
     }
 

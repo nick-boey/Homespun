@@ -19,6 +19,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
     private readonly IClaudeSessionDiscovery _sessionDiscovery;
     private readonly ISessionMetadataStore _metadataStore;
     private readonly IToolResultParser _toolResultParser;
+    private readonly IHooksService _hooksService;
     private readonly ConcurrentDictionary<string, ClaudeAgentOptions> _sessionOptions = new();
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _sessionCts = new();
 
@@ -45,7 +46,8 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         IHubContext<ClaudeCodeHub> hubContext,
         IClaudeSessionDiscovery sessionDiscovery,
         ISessionMetadataStore metadataStore,
-        IToolResultParser toolResultParser)
+        IToolResultParser toolResultParser,
+        IHooksService hooksService)
     {
         _sessionStore = sessionStore;
         _optionsFactory = optionsFactory;
@@ -54,6 +56,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         _sessionDiscovery = sessionDiscovery;
         _metadataStore = metadataStore;
         _toolResultParser = toolResultParser;
+        _hooksService = hooksService;
     }
 
     /// <inheritdoc />
@@ -93,6 +96,30 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         options.PermissionMode = PermissionMode.BypassPermissions; // Allow all tools without prompting
         options.IncludePartialMessages = true; // Enable streaming with --print mode
         _sessionOptions[sessionId] = options;
+
+        // Execute SessionStart hooks
+        session.Status = ClaudeSessionStatus.RunningHooks;
+        await _hubContext.BroadcastSessionStatusChanged(sessionId, session.Status);
+
+        try
+        {
+            var hookResults = await _hooksService.ExecuteSessionStartHooksAsync(
+                sessionId, workingDirectory, cancellationToken);
+
+            foreach (var result in hookResults)
+            {
+                await _hubContext.BroadcastHookExecuted(sessionId, result);
+            }
+
+            _logger.LogInformation(
+                "Session {SessionId} executed {Count} startup hook(s)",
+                sessionId, hookResults.Count);
+        }
+        catch (Exception ex)
+        {
+            // Log but don't fail session start - hooks are auxiliary
+            _logger.LogWarning(ex, "Error executing startup hooks for session {SessionId}", sessionId);
+        }
 
         session.Status = ClaudeSessionStatus.WaitingForInput;
         _logger.LogInformation("Session {SessionId} initialized and ready", sessionId);

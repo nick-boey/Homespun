@@ -2,6 +2,7 @@ using System.Text.Json;
 using Homespun.ClaudeAgentSdk;
 using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.ClaudeCode.Services;
+using Homespun.Features.ClaudeCode.Settings;
 using Microsoft.AspNetCore.SignalR;
 
 namespace Homespun.Features.ClaudeCode.Hubs;
@@ -228,5 +229,17 @@ public static class ClaudeCodeHubExtensions
     {
         await hubContext.Clients.Group($"session-{sessionId}")
             .SendAsync("QuestionAnswered");
+    }
+
+    /// <summary>
+    /// Broadcasts when a hook has been executed.
+    /// </summary>
+    public static async Task BroadcastHookExecuted(
+        this IHubContext<ClaudeCodeHub> hubContext,
+        string sessionId,
+        HookExecutionResult result)
+    {
+        await hubContext.Clients.Group($"session-{sessionId}")
+            .SendAsync("HookExecuted", result);
     }
 }

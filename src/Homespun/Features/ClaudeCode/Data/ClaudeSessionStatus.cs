@@ -11,6 +11,11 @@ public enum ClaudeSessionStatus
     Starting,
 
     /// <summary>
+    /// Session is executing startup hooks.
+    /// </summary>
+    RunningHooks,
+
+    /// <summary>
     /// Agent is generating responses.
     /// </summary>
     Running,

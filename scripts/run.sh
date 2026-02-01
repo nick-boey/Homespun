@@ -412,6 +412,8 @@ if [ "$DETACHED" = true ]; then
     if [ "$USE_LOCAL" = false ]; then
         docker stop watchtower 2>/dev/null || true
         docker rm watchtower 2>/dev/null || true
+        log_info "      Pulling latest Watchtower image..."
+        docker pull nickfedor/watchtower:latest
         docker run -d \
             --name watchtower \
             -v /var/run/docker.sock:/var/run/docker.sock \
@@ -420,7 +422,7 @@ if [ "$DETACHED" = true ]; then
             -e WATCHTOWER_INCLUDE_STOPPED=false \
             -e WATCHTOWER_ROLLING_RESTART=true \
             --restart unless-stopped \
-            containrrr/watchtower "$CONTAINER_NAME"
+            nickfedor/watchtower "$CONTAINER_NAME"
     fi
 
     echo

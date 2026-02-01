@@ -47,12 +47,33 @@ public class MockGraphService : IGraphService
         return Task.FromResult(graph);
     }
 
-    public async Task<GitgraphJsonData> BuildGraphJsonAsync(string projectId, int? maxPastPRs = 5)
+    public async Task<GitgraphJsonData> BuildGraphJsonAsync(string projectId, int? maxPastPRs = 5, bool useCache = true)
     {
-        _logger.LogDebug("[Mock] BuildGraphJson for project {ProjectId}", projectId);
+        _logger.LogDebug("[Mock] BuildGraphJson for project {ProjectId} (useCache: {UseCache})", projectId, useCache);
 
         var graph = await BuildGraphAsync(projectId, maxPastPRs);
         return _mapper.ToJson(graph);
+    }
+
+    public async Task<GitgraphJsonData> BuildGraphJsonWithFreshDataAsync(string projectId, int? maxPastPRs = 5)
+    {
+        _logger.LogDebug("[Mock] BuildGraphJsonWithFreshData for project {ProjectId}", projectId);
+
+        // In mock mode, just build the graph normally
+        var graph = await BuildGraphAsync(projectId, maxPastPRs);
+        return _mapper.ToJson(graph);
+    }
+
+    public DateTime? GetCacheTimestamp(string projectId)
+    {
+        // Mock mode doesn't have real caching, return current time
+        return DateTime.UtcNow;
+    }
+
+    public bool HasCachedData(string projectId)
+    {
+        // Mock mode always has "cached" data available
+        return true;
     }
 
     private static PullRequestInfo ConvertToPullRequestInfo(PullRequest pr)
