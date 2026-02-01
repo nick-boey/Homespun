@@ -137,13 +137,10 @@ else
 
         <div class="flex justify-between items-center">
             <div>
-                <button type="submit" class="btn btn-primary" disabled="@_isSaving">
-                    @if (_isSaving)
-                    {
-                        <span class="spinner-border spinner-border-sm mr-1" role="status"></span>
-                    }
-                    Save Changes
-                </button>
+                <AsyncActionButton ButtonType="submit"
+                                   IsLoadingExternal="_isSaving"
+                                   CssClass="btn-primary"
+                                   Text="Save Changes" />
                 <a href="projects/@ProjectId" class="btn btn-secondary">Cancel</a>
             </div>
             <div class="text-text-muted text-sm">

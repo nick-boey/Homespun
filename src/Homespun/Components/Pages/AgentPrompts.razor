@@ -105,13 +105,10 @@ else
                         <div class="text-danger me-auto">@_modalError</div>
                     }
                     <button type="button" class="btn btn-secondary" @onclick="HideModal">Cancel</button>
-                    <button type="button" class="btn btn-primary" @onclick="SavePrompt" disabled="@_isSaving">
-                        @if (_isSaving)
-                        {
-                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                        }
-                        Save
-                    </button>
+                    <AsyncActionButton OnClick="SavePrompt"
+                                       IsLoadingExternal="_isSaving"
+                                       CssClass="btn-primary"
+                                       Text="Save" />
                 </div>
             </div>
         </div>
@@ -134,13 +131,10 @@ else
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" @onclick="HideDeleteConfirmation">Cancel</button>
-                    <button type="button" class="btn btn-danger" @onclick="DeletePrompt" disabled="@_isDeleting">
-                        @if (_isDeleting)
-                        {
-                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                        }
-                        Delete
-                    </button>
+                    <AsyncActionButton OnClick="DeletePrompt"
+                                       IsLoadingExternal="_isDeleting"
+                                       CssClass="btn-danger"
+                                       Text="Delete" />
                 </div>
             </div>
         </div>
