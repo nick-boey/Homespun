@@ -37,6 +37,12 @@ public record RowLaneInfo
     /// Always false for lane 0 (main branch).
     /// </summary>
     public bool IsLastRowInLane { get; init; }
+
+    /// <summary>
+    /// Set of lane indices that should NOT draw a bottom segment in this row.
+    /// This includes pass-through lanes where a subtree has completed and the lane is being released.
+    /// </summary>
+    public IReadOnlySet<int> LanesEndingAtThisRow { get; init; } = new HashSet<int>();
 }
 
 /// <summary>

@@ -661,6 +661,106 @@ public class TimelineLaneCalculatorTests
 
     #endregion
 
+    #region Pass-Through Lane Ending Tests
+
+    [Test]
+    public void Calculate_PassThroughLanes_EndAtCorrectRow()
+    {
+        // Arrange - Parent with child where parent's lane passes through child row
+        // After child is processed, parent's lane should end
+        // main -> parent -> child -> orphan (after subtree)
+        var nodes = new List<IGraphNode>
+        {
+            CreateNode("main-1", "main"),
+            CreateNode("parent", "parent-branch", parentIds: ["main-1"]),
+            CreateNode("child", "child-branch", parentIds: ["parent"]),
+            CreateNode("orphan", "orphan-branch", parentIds: ["main-1"])  // After subtree
+        };
+
+        // Act
+        var layout = _calculator.Calculate(nodes);
+
+        // Assert - At child row, parent's lane (1) should be in LanesEndingAtThisRow
+        // because the parent's subtree completes at this row
+        var childRow = layout.RowInfos[2]; // child is at index 2
+        Assert.That(childRow.LanesEndingAtThisRow, Does.Contain(1), "Parent's lane 1 should end at child row");
+        Assert.That(childRow.LanesEndingAtThisRow, Does.Contain(2), "Child's lane 2 should also end at this row");
+
+        // Orphan row should not have any pass-through lanes ending (only lane 0 is active)
+        var orphanRow = layout.RowInfos[3];
+        Assert.That(orphanRow.LanesEndingAtThisRow, Is.Empty.Or.EqualTo(new HashSet<int> { 1 }), "Orphan row should not have pass-through lanes ending");
+    }
+
+    [Test]
+    public void Calculate_LanesEndingAtThisRow_EmptyForMainBranch()
+    {
+        // Arrange - Main branch only
+        var nodes = new List<IGraphNode>
+        {
+            CreateNode("main-1", "main"),
+            CreateNode("main-2", "main", parentIds: ["main-1"]),
+            CreateNode("main-3", "main", parentIds: ["main-2"])
+        };
+
+        // Act
+        var layout = _calculator.Calculate(nodes);
+
+        // Assert - Main branch (lane 0) never ends
+        foreach (var row in layout.RowInfos)
+        {
+            Assert.That(row.LanesEndingAtThisRow, Does.Not.Contain(0), "Lane 0 (main) should never be in LanesEndingAtThisRow");
+        }
+    }
+
+    [Test]
+    public void Calculate_LanesEndingAtThisRow_SingleNodeBranch()
+    {
+        // Arrange - Single node branch ends at its own row
+        var nodes = new List<IGraphNode>
+        {
+            CreateNode("main-1", "main"),
+            CreateNode("branch-1", "feature-branch", parentIds: ["main-1"]),
+            CreateNode("main-2", "main", parentIds: ["main-1"])
+        };
+
+        // Act
+        var layout = _calculator.Calculate(nodes);
+
+        // Assert - The single branch node's lane should end at its row
+        var branchRow = layout.RowInfos[1];
+        Assert.That(branchRow.LanesEndingAtThisRow, Does.Contain(1), "Single node branch lane should end at its row");
+    }
+
+    [Test]
+    public void Calculate_LanesEndingAtThisRow_DeepHierarchy()
+    {
+        // Arrange - Deep hierarchy: main -> A -> B -> C
+        // Each lane should end at the deepest node in that subtree
+        var nodes = new List<IGraphNode>
+        {
+            CreateNode("main-1", "main"),
+            CreateNode("A", "branch-A", parentIds: ["main-1"]),
+            CreateNode("B", "branch-B", parentIds: ["A"]),
+            CreateNode("C", "branch-C", parentIds: ["B"]),
+            CreateNode("main-2", "main", parentIds: ["main-1"])  // After subtree
+        };
+
+        // Act
+        var layout = _calculator.Calculate(nodes);
+
+        // Assert - At C's row, lanes 1, 2, 3 should all be ending
+        var cRow = layout.RowInfos[3]; // C is at index 3
+        Assert.That(cRow.LanesEndingAtThisRow, Does.Contain(1), "Lane 1 (A) should end at C's row");
+        Assert.That(cRow.LanesEndingAtThisRow, Does.Contain(2), "Lane 2 (B) should end at C's row");
+        Assert.That(cRow.LanesEndingAtThisRow, Does.Contain(3), "Lane 3 (C) should end at C's row");
+
+        // main-2 row should not have these lanes ending (they're already gone)
+        var main2Row = layout.RowInfos[4];
+        Assert.That(main2Row.LanesEndingAtThisRow, Is.Empty, "No lanes should end at main-2 row");
+    }
+
+    #endregion
+
     #region Helper Methods
 
     private static TestGraphNode CreateNode(

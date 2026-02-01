@@ -64,7 +64,8 @@ public static class TimelineSvgRenderer
     /// <param name="hasNodeInLane">True if this lane has a node in this row.</param>
     /// <param name="drawTop">True to draw the top segment (above the node). Default true.</param>
     /// <param name="drawBottom">True to draw the bottom segment (below the node). Default true.</param>
-    public static string GenerateVerticalLine(int laneIndex, bool hasNodeInLane, bool drawTop = true, bool drawBottom = true)
+    /// <param name="isPassThroughEnding">True if this is a pass-through lane that is ending at this row.</param>
+    public static string GenerateVerticalLine(int laneIndex, bool hasNodeInLane, bool drawTop = true, bool drawBottom = true, bool isPassThroughEnding = false)
     {
         var x = GetLaneCenterX(laneIndex);
         var centerY = GetRowCenterY();
@@ -84,7 +85,14 @@ public static class TimelineSvgRenderer
             return string.Join(" ", segments);
         }
 
-        // Full vertical line through the row (pass-through lane)
+        // Pass-through lane - check if it's ending at this row
+        if (isPassThroughEnding)
+        {
+            // Only draw to the center, not the full height
+            return $"M {x} 0 L {x} {centerY}";
+        }
+
+        // Full vertical line through the row (pass-through lane continues)
         return $"M {x} 0 L {x} {RowHeight}";
     }
 
@@ -164,6 +172,7 @@ public static class TimelineSvgRenderer
     /// <param name="laneColors">Colors for each lane line.</param>
     /// <param name="isFirstRowInLane">True if this is the first row where nodeLane appears.</param>
     /// <param name="isLastRowInLane">True if this is the last row where nodeLane is active.</param>
+    /// <param name="lanesEndingThisRow">Set of lane indices that should not draw a bottom segment (pass-through lanes ending at this row).</param>
     public static string GenerateRowSvg(
         int nodeLane,
         IReadOnlySet<int> activeLanes,
@@ -174,7 +183,8 @@ public static class TimelineSvgRenderer
         bool isLoadMore,
         IReadOnlyDictionary<int, string>? laneColors = null,
         bool isFirstRowInLane = false,
-        bool isLastRowInLane = false)
+        bool isLastRowInLane = false,
+        IReadOnlySet<int>? lanesEndingThisRow = null)
     {
         var width = CalculateSvgWidth(maxLanes);
         var sb = new StringBuilder();
@@ -190,6 +200,8 @@ public static class TimelineSvgRenderer
             // For the node's lane, determine which segments to draw
             bool drawTop = true;
             bool drawBottom = true;
+            bool isPassThroughEnding = false;
+
             if (hasNode)
             {
                 // Check if there's a valid connector from a different lane
@@ -203,8 +215,13 @@ public static class TimelineSvgRenderer
                 // Don't draw bottom segment if this is the last row in the lane
                 drawBottom = !isLastRowInLane;
             }
+            else
+            {
+                // Pass-through lane: check if it's ending at this row
+                isPassThroughEnding = lanesEndingThisRow?.Contains(lane) ?? false;
+            }
 
-            var linePath = GenerateVerticalLine(lane, hasNode, drawTop, drawBottom);
+            var linePath = GenerateVerticalLine(lane, hasNode, drawTop, drawBottom, isPassThroughEnding);
             if (!string.IsNullOrEmpty(linePath))
             {
                 sb.Append($"<path d=\"{linePath}\" stroke=\"{EscapeAttribute(lineColor)}\" stroke-width=\"{LineStrokeWidth.ToString(CultureInfo.InvariantCulture)}\" fill=\"none\" />");

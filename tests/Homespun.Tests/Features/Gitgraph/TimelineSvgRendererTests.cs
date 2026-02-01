@@ -447,6 +447,93 @@ public class TimelineSvgRendererTests
         return count;
     }
 
+    [Test]
+    public void GenerateRowSvg_PassThroughLane_NoBottomWhenEnding()
+    {
+        // Arrange - Pass-through lane (1) that is ending at this row
+        // Node is in lane 2, lane 1 passes through but should stop at center
+        var svg = TimelineSvgRenderer.GenerateRowSvg(
+            nodeLane: 2,
+            activeLanes: new HashSet<int> { 0, 1, 2 },
+            connectorFromLane: null,
+            maxLanes: 3,
+            nodeColor: "#3b82f6",
+            isIssue: false,
+            isLoadMore: false,
+            isFirstRowInLane: false,
+            isLastRowInLane: false,
+            lanesEndingThisRow: new HashSet<int> { 1 });
+
+        // Assert - Lane 1's path should stop at center (y=20), not extend to bottom (y=40)
+        // Lane 1 is at x=36
+        Assert.That(svg, Does.Contain("M 36 0 L 36 20"), "Lane 1 should stop at center y=20");
+        Assert.That(svg, Does.Not.Contain("M 36 0 L 36 40"), "Lane 1 should NOT extend to full height");
+    }
+
+    [Test]
+    public void GenerateRowSvg_PassThroughLane_FullHeightWhenNotEnding()
+    {
+        // Arrange - Pass-through lane (1) that is NOT ending
+        var svg = TimelineSvgRenderer.GenerateRowSvg(
+            nodeLane: 2,
+            activeLanes: new HashSet<int> { 0, 1, 2 },
+            connectorFromLane: null,
+            maxLanes: 3,
+            nodeColor: "#3b82f6",
+            isIssue: false,
+            isLoadMore: false,
+            isFirstRowInLane: false,
+            isLastRowInLane: false,
+            lanesEndingThisRow: new HashSet<int>()); // Lane 1 is NOT ending
+
+        // Assert - Lane 1's path should extend full height
+        Assert.That(svg, Does.Contain("M 36 0 L 36 40"), "Lane 1 should extend full height when not ending");
+    }
+
+    [Test]
+    public void GenerateRowSvg_PassThroughLane_NullLanesEnding_FullHeight()
+    {
+        // Arrange - Backward compatibility: null lanesEndingThisRow should render full height
+        var svg = TimelineSvgRenderer.GenerateRowSvg(
+            nodeLane: 2,
+            activeLanes: new HashSet<int> { 0, 1, 2 },
+            connectorFromLane: null,
+            maxLanes: 3,
+            nodeColor: "#3b82f6",
+            isIssue: false,
+            isLoadMore: false,
+            isFirstRowInLane: false,
+            isLastRowInLane: false,
+            lanesEndingThisRow: null);
+
+        // Assert - Lane 1's path should extend full height when lanesEndingThisRow is null
+        Assert.That(svg, Does.Contain("M 36 0 L 36 40"), "Lane 1 should extend full height when lanesEndingThisRow is null");
+    }
+
+    [Test]
+    public void GenerateRowSvg_MultiplePassThroughLanes_SomeEnding()
+    {
+        // Arrange - Multiple pass-through lanes, only some ending
+        // Node is in lane 3, lanes 1 and 2 pass through, but only lane 1 is ending
+        var svg = TimelineSvgRenderer.GenerateRowSvg(
+            nodeLane: 3,
+            activeLanes: new HashSet<int> { 0, 1, 2, 3 },
+            connectorFromLane: null,
+            maxLanes: 4,
+            nodeColor: "#3b82f6",
+            isIssue: false,
+            isLoadMore: false,
+            isFirstRowInLane: false,
+            isLastRowInLane: false,
+            lanesEndingThisRow: new HashSet<int> { 1 }); // Only lane 1 is ending
+
+        // Assert - Lane 1 (x=36) should stop at center
+        Assert.That(svg, Does.Contain("M 36 0 L 36 20"), "Lane 1 should stop at center");
+
+        // Lane 2 (x=60) should extend full height
+        Assert.That(svg, Does.Contain("M 60 0 L 60 40"), "Lane 2 should extend full height");
+    }
+
     #endregion
 
     #region EscapeAttribute Tests (via public methods)
