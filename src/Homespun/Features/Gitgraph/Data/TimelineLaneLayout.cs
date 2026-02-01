@@ -25,6 +25,18 @@ public record RowLaneInfo
     /// The node ID for this row.
     /// </summary>
     public required string NodeId { get; init; }
+
+    /// <summary>
+    /// True if this is the first row where NodeLane appears (no line above).
+    /// Always false for lane 0 (main branch).
+    /// </summary>
+    public bool IsFirstRowInLane { get; init; }
+
+    /// <summary>
+    /// True if this is the last row where NodeLane is active (no line below).
+    /// Always false for lane 0 (main branch).
+    /// </summary>
+    public bool IsLastRowInLane { get; init; }
 }
 
 /// <summary>

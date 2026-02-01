@@ -39,6 +39,11 @@ public class TimelineLaneCalculator
         var rowInfos = new List<RowLaneInfo>();
         var maxLaneUsed = 0;
 
+        // Track lane segments (first/last row indices for each continuous usage of a lane)
+        // Key: row index, Value: whether this row is the first in its lane segment
+        var isFirstInLaneSegment = new HashSet<int>();
+        // We'll compute IsLastRowInLane in a post-processing pass
+
         // Build lookups for parent-child relationships
         var nodeChildren = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
         var nodeToParents = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
@@ -121,6 +126,16 @@ public class TimelineLaneCalculator
             laneAssignments[node.Id] = nodeLane;
             processedNodes.Add(node.Id);
 
+            // Track if this is the first row in a new lane segment (non-main lanes only)
+            // A node is first in its lane segment if:
+            // 1. The lane wasn't in activeLanes before we added it (new or reused lane)
+            var rowIndex = rowInfos.Count;
+            var isFirstInSegment = nodeLane != 0 && connectorFromLane.HasValue;
+            if (isFirstInSegment)
+            {
+                isFirstInLaneSegment.Add(rowIndex);
+            }
+
             // Build the set of active lanes for this row BEFORE releases
             // This ensures the current node's lane is included for vertical line rendering
             var currentActiveLanes = new HashSet<int>(activeLanes);
@@ -130,7 +145,10 @@ public class TimelineLaneCalculator
                 NodeId = node.Id,
                 NodeLane = nodeLane,
                 ActiveLanes = currentActiveLanes,
-                ConnectorFromLane = connectorFromLane
+                ConnectorFromLane = connectorFromLane,
+                // Set IsFirstRowInLane now; IsLastRowInLane will be computed in post-processing
+                IsFirstRowInLane = isFirstInSegment,
+                IsLastRowInLane = false
             });
 
             // Propagate lane release up ancestor chain AFTER capturing activeLanes
@@ -139,12 +157,78 @@ public class TimelineLaneCalculator
             PropagateAncestorRelease(node.Id, nodeChildren, nodeToParents, processedNodes, laneAssignments, activeLanes);
         }
 
+        // Post-process: compute IsLastRowInLane for each row
+        // A row is last in its lane segment if:
+        // - It's the last row in the list for that lane, OR
+        // - The next row with the same lane has IsFirstRowInLane=true (meaning it's a new segment)
+        var finalRowInfos = ComputeIsLastRowInLane(rowInfos);
+
         return new TimelineLaneLayout
         {
             LaneAssignments = laneAssignments,
             MaxLanes = maxLaneUsed + 1,
-            RowInfos = rowInfos
+            RowInfos = finalRowInfos
         };
+    }
+
+    /// <summary>
+    /// Compute IsLastRowInLane for each row by scanning forward.
+    /// A row is last in its lane segment if:
+    /// - Its lane doesn't appear in any subsequent row's ActiveLanes, OR
+    /// - The next occurrence of the lane in a node has IsFirstRowInLane=true (new segment)
+    /// Lane 0 (main) never has IsLastRowInLane set.
+    /// </summary>
+    private static List<RowLaneInfo> ComputeIsLastRowInLane(List<RowLaneInfo> rowInfos)
+    {
+        var result = new List<RowLaneInfo>(rowInfos.Count);
+
+        for (var i = 0; i < rowInfos.Count; i++)
+        {
+            var row = rowInfos[i];
+            var nodeLane = row.NodeLane;
+
+            // Lane 0 (main) never has last flag
+            if (nodeLane == 0)
+            {
+                result.Add(row);
+                continue;
+            }
+
+            // Check if this lane appears in any subsequent row's ActiveLanes
+            var isLastInSegment = true;
+            for (var j = i + 1; j < rowInfos.Count; j++)
+            {
+                var futureRow = rowInfos[j];
+
+                // If a future row has the same node lane and it's the start of a new segment,
+                // then the current row is the end of its segment
+                if (futureRow.NodeLane == nodeLane)
+                {
+                    if (futureRow.IsFirstRowInLane)
+                    {
+                        // Current row is last in its segment, new segment starts at futureRow
+                        isLastInSegment = true;
+                    }
+                    else
+                    {
+                        // Same lane continues, so current row is not last
+                        isLastInSegment = false;
+                    }
+                    break;
+                }
+
+                // If the lane is still active in a future row, it's not last yet
+                if (futureRow.ActiveLanes.Contains(nodeLane))
+                {
+                    isLastInSegment = false;
+                    break;
+                }
+            }
+
+            result.Add(row with { IsLastRowInLane = isLastInSegment });
+        }
+
+        return result;
     }
 
     /// <summary>

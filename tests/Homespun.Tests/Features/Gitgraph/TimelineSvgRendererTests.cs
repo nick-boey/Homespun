@@ -188,6 +188,35 @@ public class TimelineSvgRendererTests
         Assert.That(path, Does.Contain("L 36 40"));
     }
 
+    [Test]
+    public void GenerateVerticalLine_FirstInLane_NoTopSegment()
+    {
+        var path = TimelineSvgRenderer.GenerateVerticalLine(1, hasNodeInLane: true, drawTop: false, drawBottom: true);
+
+        // Should only have bottom segment, no top segment
+        Assert.That(path, Does.Not.Contain("M 36 0 L 36 12"), "Should not have top segment");
+        Assert.That(path, Does.Contain("M 36 28 L 36 40"), "Should have bottom segment");
+    }
+
+    [Test]
+    public void GenerateVerticalLine_LastInLane_NoBottomSegment()
+    {
+        var path = TimelineSvgRenderer.GenerateVerticalLine(1, hasNodeInLane: true, drawTop: true, drawBottom: false);
+
+        // Should only have top segment, no bottom segment
+        Assert.That(path, Does.Contain("M 36 0 L 36 12"), "Should have top segment");
+        Assert.That(path, Does.Not.Contain("M 36 28 L 36 40"), "Should not have bottom segment");
+    }
+
+    [Test]
+    public void GenerateVerticalLine_FirstAndLastInLane_NoSegments()
+    {
+        var path = TimelineSvgRenderer.GenerateVerticalLine(1, hasNodeInLane: true, drawTop: false, drawBottom: false);
+
+        // Single node in lane - no vertical segments at all
+        Assert.That(path, Is.Empty, "Single node in lane should have no vertical segments");
+    }
+
     #endregion
 
     #region GenerateConnector Tests
@@ -344,6 +373,78 @@ public class TimelineSvgRendererTests
 
         Assert.That(svg, Does.Contain("stroke=\"#ff0000\""));  // Lane 0 color
         Assert.That(svg, Does.Contain("stroke=\"#00ff00\""));  // Lane 1 color
+    }
+
+    [Test]
+    public void GenerateRowSvg_WithConnector_NoTopSegment()
+    {
+        // When a node has a connector coming in, we don't need a top segment
+        // because the connector provides the visual connection
+        var svg = TimelineSvgRenderer.GenerateRowSvg(
+            nodeLane: 1,
+            activeLanes: new HashSet<int> { 0, 1 },
+            connectorFromLane: 0,
+            maxLanes: 2,
+            nodeColor: "#3b82f6",
+            isIssue: false,
+            isLoadMore: false,
+            isFirstRowInLane: true,
+            isLastRowInLane: true);
+
+        // The node lane (1) should not have a top segment since it has a connector
+        // and is first in lane
+        // Count M 36 0 occurrences - should only be from connector, not vertical line
+        var verticalTopOccurrences = CountOccurrences(svg, "M 36 0 L 36 12");
+        Assert.That(verticalTopOccurrences, Is.EqualTo(0), "Should not have vertical top segment for node lane with connector");
+    }
+
+    [Test]
+    public void GenerateRowSvg_FirstRowInLane_NoTopSegment()
+    {
+        var svg = TimelineSvgRenderer.GenerateRowSvg(
+            nodeLane: 1,
+            activeLanes: new HashSet<int> { 0, 1 },
+            connectorFromLane: 0,
+            maxLanes: 2,
+            nodeColor: "#3b82f6",
+            isIssue: false,
+            isLoadMore: false,
+            isFirstRowInLane: true,
+            isLastRowInLane: false);
+
+        // Should have bottom segment but not top segment for node lane
+        Assert.That(svg, Does.Contain("M 36 28 L 36 40"), "Should have bottom segment for first row");
+    }
+
+    [Test]
+    public void GenerateRowSvg_LastRowInLane_NoBottomSegment()
+    {
+        var svg = TimelineSvgRenderer.GenerateRowSvg(
+            nodeLane: 1,
+            activeLanes: new HashSet<int> { 0, 1 },
+            connectorFromLane: null,
+            maxLanes: 2,
+            nodeColor: "#3b82f6",
+            isIssue: false,
+            isLoadMore: false,
+            isFirstRowInLane: false,
+            isLastRowInLane: true);
+
+        // Should have top segment but not bottom segment
+        Assert.That(svg, Does.Contain("M 36 0 L 36 12"), "Should have top segment");
+        Assert.That(svg, Does.Not.Contain("M 36 28 L 36 40"), "Should not have bottom segment for last row");
+    }
+
+    private static int CountOccurrences(string source, string pattern)
+    {
+        var count = 0;
+        var index = 0;
+        while ((index = source.IndexOf(pattern, index, StringComparison.Ordinal)) != -1)
+        {
+            count++;
+            index += pattern.Length;
+        }
+        return count;
     }
 
     #endregion

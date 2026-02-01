@@ -61,22 +61,30 @@ public static class TimelineSvgRenderer
     /// Generate an SVG path for a vertical lane line segment.
     /// </summary>
     /// <param name="laneIndex">The lane index.</param>
-    /// <param name="skipMiddle">If true, skip the middle section where a node would be.</param>
     /// <param name="hasNodeInLane">True if this lane has a node in this row.</param>
-    public static string GenerateVerticalLine(int laneIndex, bool hasNodeInLane)
+    /// <param name="drawTop">True to draw the top segment (above the node). Default true.</param>
+    /// <param name="drawBottom">True to draw the bottom segment (below the node). Default true.</param>
+    public static string GenerateVerticalLine(int laneIndex, bool hasNodeInLane, bool drawTop = true, bool drawBottom = true)
     {
         var x = GetLaneCenterX(laneIndex);
         var centerY = GetRowCenterY();
 
         if (hasNodeInLane)
         {
-            // Draw line segments above and below the node
-            var topSegment = $"M {x} 0 L {x} {centerY - NodeRadius - 2}";
-            var bottomSegment = $"M {x} {centerY + NodeRadius + 2} L {x} {RowHeight}";
-            return $"{topSegment} {bottomSegment}";
+            // Draw line segments above and/or below the node based on flags
+            var segments = new List<string>();
+            if (drawTop)
+            {
+                segments.Add($"M {x} 0 L {x} {centerY - NodeRadius - 2}");
+            }
+            if (drawBottom)
+            {
+                segments.Add($"M {x} {centerY + NodeRadius + 2} L {x} {RowHeight}");
+            }
+            return string.Join(" ", segments);
         }
 
-        // Full vertical line through the row
+        // Full vertical line through the row (pass-through lane)
         return $"M {x} 0 L {x} {RowHeight}";
     }
 
@@ -154,6 +162,8 @@ public static class TimelineSvgRenderer
     /// <param name="isIssue">True for diamond shape, false for circle.</param>
     /// <param name="isLoadMore">True for load more button style.</param>
     /// <param name="laneColors">Colors for each lane line.</param>
+    /// <param name="isFirstRowInLane">True if this is the first row where nodeLane appears.</param>
+    /// <param name="isLastRowInLane">True if this is the last row where nodeLane is active.</param>
     public static string GenerateRowSvg(
         int nodeLane,
         IReadOnlySet<int> activeLanes,
@@ -162,7 +172,9 @@ public static class TimelineSvgRenderer
         string nodeColor,
         bool isIssue,
         bool isLoadMore,
-        IReadOnlyDictionary<int, string>? laneColors = null)
+        IReadOnlyDictionary<int, string>? laneColors = null,
+        bool isFirstRowInLane = false,
+        bool isLastRowInLane = false)
     {
         var width = CalculateSvgWidth(maxLanes);
         var sb = new StringBuilder();
@@ -174,8 +186,29 @@ public static class TimelineSvgRenderer
         {
             var hasNode = lane == nodeLane;
             var lineColor = laneColors?.GetValueOrDefault(lane) ?? "#6b7280";
-            var linePath = GenerateVerticalLine(lane, hasNode);
-            sb.Append($"<path d=\"{linePath}\" stroke=\"{EscapeAttribute(lineColor)}\" stroke-width=\"{LineStrokeWidth.ToString(CultureInfo.InvariantCulture)}\" fill=\"none\" />");
+
+            // For the node's lane, determine which segments to draw
+            bool drawTop = true;
+            bool drawBottom = true;
+            if (hasNode)
+            {
+                // Check if there's a valid connector from a different lane
+                var hasValidConnector = connectorFromLane.HasValue && connectorFromLane.Value != lane;
+
+                // Don't draw top segment if:
+                // - This is the first row in the lane (nothing to connect to above), OR
+                // - There's a valid connector coming in from another lane (connector provides the visual connection)
+                drawTop = !isFirstRowInLane && !hasValidConnector;
+
+                // Don't draw bottom segment if this is the last row in the lane
+                drawBottom = !isLastRowInLane;
+            }
+
+            var linePath = GenerateVerticalLine(lane, hasNode, drawTop, drawBottom);
+            if (!string.IsNullOrEmpty(linePath))
+            {
+                sb.Append($"<path d=\"{linePath}\" stroke=\"{EscapeAttribute(lineColor)}\" stroke-width=\"{LineStrokeWidth.ToString(CultureInfo.InvariantCulture)}\" fill=\"none\" />");
+            }
         }
 
         // Draw connector if coming from a different lane

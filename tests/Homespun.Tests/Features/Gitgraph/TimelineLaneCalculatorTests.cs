@@ -548,6 +548,119 @@ public class TimelineLaneCalculatorTests
 
     #endregion
 
+    #region Lane Endpoint Tracking Tests
+
+    [Test]
+    public void Calculate_SingleNodeBranch_IsFirstAndLastInLane()
+    {
+        // Arrange - Single node on a side branch (one node, should be both first and last)
+        var nodes = new List<IGraphNode>
+        {
+            CreateNode("main-1", "main"),
+            CreateNode("branch-1", "feature-branch", parentIds: ["main-1"])
+        };
+
+        // Act
+        var layout = _calculator.Calculate(nodes);
+
+        // Assert - The branch node should be both first and last in its lane
+        var branchRow = layout.RowInfos[1];
+        Assert.That(branchRow.IsFirstRowInLane, Is.True, "Single node should be first in lane");
+        Assert.That(branchRow.IsLastRowInLane, Is.True, "Single node should be last in lane");
+    }
+
+    [Test]
+    public void Calculate_MultinodeHierarchy_FirstAndLastFlagsCorrect()
+    {
+        // Arrange - Branch with multiple nodes
+        var nodes = new List<IGraphNode>
+        {
+            CreateNode("main-1", "main"),
+            CreateNode("branch-1", "feature-branch", parentIds: ["main-1"]),
+            CreateNode("branch-2", "feature-branch", parentIds: ["branch-1"]),
+            CreateNode("branch-3", "feature-branch", parentIds: ["branch-2"])
+        };
+
+        // Act
+        var layout = _calculator.Calculate(nodes);
+
+        // Assert - First node should have IsFirstRowInLane=true, last should have IsLastRowInLane=true
+        Assert.That(layout.RowInfos[1].IsFirstRowInLane, Is.True, "First branch node should be first in lane");
+        Assert.That(layout.RowInfos[1].IsLastRowInLane, Is.False, "First branch node should not be last in lane");
+
+        Assert.That(layout.RowInfos[2].IsFirstRowInLane, Is.False, "Middle node should not be first in lane");
+        Assert.That(layout.RowInfos[2].IsLastRowInLane, Is.False, "Middle node should not be last in lane");
+
+        Assert.That(layout.RowInfos[3].IsFirstRowInLane, Is.False, "Last branch node should not be first in lane");
+        Assert.That(layout.RowInfos[3].IsLastRowInLane, Is.True, "Last branch node should be last in lane");
+    }
+
+    [Test]
+    public void Calculate_MainBranch_NeverFirstOrLast()
+    {
+        // Arrange - Main branch continues forever conceptually
+        var nodes = new List<IGraphNode>
+        {
+            CreateNode("main-1", "main"),
+            CreateNode("main-2", "main", parentIds: ["main-1"]),
+            CreateNode("main-3", "main", parentIds: ["main-2"])
+        };
+
+        // Act
+        var layout = _calculator.Calculate(nodes);
+
+        // Assert - Main branch (lane 0) should never have first/last flags
+        // because it conceptually continues forever
+        Assert.That(layout.RowInfos[0].IsFirstRowInLane, Is.False, "Main lane should never be first");
+        Assert.That(layout.RowInfos[0].IsLastRowInLane, Is.False, "Main lane should never be last");
+        Assert.That(layout.RowInfos[1].IsFirstRowInLane, Is.False, "Main lane should never be first");
+        Assert.That(layout.RowInfos[1].IsLastRowInLane, Is.False, "Main lane should never be last");
+        Assert.That(layout.RowInfos[2].IsFirstRowInLane, Is.False, "Main lane should never be first");
+        Assert.That(layout.RowInfos[2].IsLastRowInLane, Is.False, "Main lane should never be last");
+    }
+
+    [Test]
+    public void Calculate_BranchWithConnector_HasIsFirstRowInLane()
+    {
+        // Arrange - Branch node with connector from main
+        var nodes = new List<IGraphNode>
+        {
+            CreateNode("main-1", "main"),
+            CreateNode("branch-1", "feature-branch", parentIds: ["main-1"])
+        };
+
+        // Act
+        var layout = _calculator.Calculate(nodes);
+
+        // Assert - Branch node has both connector AND is first in lane
+        var branchRow = layout.RowInfos[1];
+        Assert.That(branchRow.ConnectorFromLane, Is.EqualTo(0), "Should have connector from main");
+        Assert.That(branchRow.IsFirstRowInLane, Is.True, "Should be first in lane");
+    }
+
+    [Test]
+    public void Calculate_LaneReuse_NewBranchIsFirstInLane()
+    {
+        // Arrange - First branch completes, second branch reuses the lane
+        var nodes = new List<IGraphNode>
+        {
+            CreateNode("main-1", "main"),
+            CreateNode("branch-a", "branch-a", parentIds: ["main-1"]),  // Uses lane 1, completes
+            CreateNode("branch-b", "branch-b", parentIds: ["main-1"])   // Reuses lane 1
+        };
+
+        // Act
+        var layout = _calculator.Calculate(nodes);
+
+        // Assert - Both branches should be first in their lane (even though same lane number)
+        Assert.That(layout.RowInfos[1].IsFirstRowInLane, Is.True, "branch-a should be first in lane 1");
+        Assert.That(layout.RowInfos[1].IsLastRowInLane, Is.True, "branch-a should be last in lane 1");
+        Assert.That(layout.RowInfos[2].IsFirstRowInLane, Is.True, "branch-b should be first in lane 1 after reuse");
+        Assert.That(layout.RowInfos[2].IsLastRowInLane, Is.True, "branch-b should be last in lane 1");
+    }
+
+    #endregion
+
     #region Helper Methods
 
     private static TestGraphNode CreateNode(
