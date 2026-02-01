@@ -101,9 +101,11 @@ public class SubprocessCliTransportTests
     }
 
     [Test]
+    [Platform("Unix,Linux,MacOsX")]
     public void HomeEnvironmentVariable_InSubprocess_ShouldBeAccessible()
     {
         // This integration test verifies that HOME is properly passed to a subprocess
+        // Note: This test only runs on Unix-like systems as it uses /bin/sh
         // Arrange
         var expectedHome = Environment.GetEnvironmentVariable("HOME")
             ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
@@ -112,6 +114,48 @@ public class SubprocessCliTransportTests
         {
             FileName = "/bin/sh",
             Arguments = "-c \"echo $HOME\"",
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        // Replicate the HOME-setting logic from SubprocessCliTransport
+        var home = Environment.GetEnvironmentVariable("HOME");
+        if (string.IsNullOrEmpty(home))
+        {
+            home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        }
+        if (!string.IsNullOrEmpty(home))
+        {
+            startInfo.Environment["HOME"] = home;
+        }
+
+        // Act
+        using var process = Process.Start(startInfo);
+        Assert.That(process, Is.Not.Null, "Process should start successfully");
+
+        var output = process!.StandardOutput.ReadToEnd().Trim();
+        process.WaitForExit();
+
+        // Assert
+        Assert.That(process.ExitCode, Is.EqualTo(0), "Process should exit successfully");
+        Assert.That(output, Is.EqualTo(expectedHome),
+            "Subprocess should receive the HOME environment variable");
+    }
+
+    [Test]
+    [Platform("Win")]
+    public void HomeEnvironmentVariable_InSubprocess_ShouldBeAccessible_Windows()
+    {
+        // Windows version of the test using cmd.exe
+        // Arrange
+        var expectedHome = Environment.GetEnvironmentVariable("HOME")
+            ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = "cmd.exe",
+            Arguments = "/c echo %HOME%",
             RedirectStandardOutput = true,
             UseShellExecute = false,
             CreateNoWindow = true

@@ -6,17 +6,35 @@ namespace Homespun.Tests.Helpers;
 /// Fixture that creates a temporary git repository for integration testing.
 /// Automatically cleans up the repository when disposed.
 /// </summary>
+/// <remarks>
+/// Each fixture creates a unique parent directory to avoid worktree path collisions
+/// between test runs. The repository is created inside a "main" subdirectory,
+/// and worktrees are created as siblings (following GitWorktreeService convention).
+/// This ensures each test run is fully isolated.
+/// </remarks>
 public class TempGitRepositoryFixture : IDisposable
 {
+    /// <summary>
+    /// The path to the git repository (inside the unique parent directory).
+    /// </summary>
     public string RepositoryPath { get; }
+
+    /// <summary>
+    /// The unique parent directory containing the repository and its worktrees.
+    /// </summary>
+    public string ParentPath { get; }
+
     public string InitialCommitHash { get; private set; } = "";
 
     private bool _disposed;
 
     public TempGitRepositoryFixture()
     {
-        // Create a unique temp directory
-        RepositoryPath = Path.Combine(Path.GetTempPath(), "Homespun_IntegrationTests", Guid.NewGuid().ToString("N"));
+        // Create a unique parent directory per fixture to isolate worktrees
+        // The repo is created as "main" subdirectory, and worktrees will be siblings
+        // This prevents path collisions between different test runs
+        ParentPath = Path.Combine(Path.GetTempPath(), "Homespun_IntegrationTests", Guid.NewGuid().ToString("N"));
+        RepositoryPath = Path.Combine(ParentPath, "main");
         Directory.CreateDirectory(RepositoryPath);
 
         InitializeRepository();
@@ -114,9 +132,12 @@ public class TempGitRepositoryFixture : IDisposable
             {
                 // First, get list of worktrees and clean them up
                 CleanupWorktrees();
+            }
 
-                // Force delete all files (handle read-only files in .git)
-                ForceDeleteDirectory(RepositoryPath);
+            // Delete the entire parent directory (includes repo and all worktrees)
+            if (Directory.Exists(ParentPath))
+            {
+                ForceDeleteDirectory(ParentPath);
             }
         }
         catch
