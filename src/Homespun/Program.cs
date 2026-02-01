@@ -135,6 +135,7 @@ else
         new SessionMetadataStore(metadataPath, sp.GetRequiredService<ILogger<SessionMetadataStore>>()));
 
     builder.Services.AddSingleton<IToolResultParser, ToolResultParser>();
+    builder.Services.AddSingleton<IHooksService, HooksService>();
     builder.Services.AddSingleton<IClaudeSessionService, ClaudeSessionService>();
     builder.Services.AddSingleton<IAgentStartupTracker, AgentStartupTracker>();
     builder.Services.AddSingleton<IAgentPromptService, AgentPromptService>();
