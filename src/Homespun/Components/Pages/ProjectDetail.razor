@@ -3,6 +3,7 @@
 @page "/projects/{Id}/settings"
 @implements IDisposable
 @using Fleece.Core.Models
+@using Homespun.Components.Shared
 @using Homespun.Features.ClaudeCode.Data
 @using Homespun.Features.ClaudeCode.Services
 @using Homespun.Features.Commands
@@ -47,7 +48,7 @@ else
             <button class="btn btn-outline-secondary btn-sm" @onclick="RefreshData" disabled="@_isRefreshing">
                 @if (_isRefreshing)
                 {
-                    <span class="spinner-border spinner-border-sm mr-1" role="status"></span>
+                    <LoadingSpinner Size="SpinnerSize.Sm" Inline="true" Class="mr-1" ScreenReaderText="Refreshing" />
                 }
                 <i class="bi bi-arrow-clockwise"></i> Refresh
             </button>
@@ -123,8 +124,7 @@ else
                                             disabled="@_isSyncingFleece">
                                         @if (_isSyncingFleece)
                                         {
-                                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                                            <span>Syncing...</span>
+                                            <LoadingSpinner Size="SpinnerSize.Sm" Label="Syncing..." Inline="true" />
                                         }
                                         else
                                         {
@@ -154,8 +154,7 @@ else
                                         @if (_isSyncingPRs)
                                         {
                                             <span class="badge bg-status-info">
-                                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                                                Syncing...
+                                                <LoadingSpinner Size="SpinnerSize.Sm" Label="Syncing..." Inline="true" />
                                             </span>
                                         }
                                         else if (_tokenMissing)
@@ -244,8 +243,7 @@ else
                                     disabled="@_isStartingTestAgent">
                                 @if (_isStartingTestAgent)
                                 {
-                                    <span class="spinner-border spinner-border-sm mr-1" role="status"></span>
-                                    <span>Starting...</span>
+                                    <LoadingSpinner Size="SpinnerSize.Sm" Label="Starting..." Inline="true" />
                                 }
                                 else
                                 {
@@ -290,7 +288,7 @@ else
                                 disabled="@_isSyncingFleece">
                             @if (_isSyncingFleece)
                             {
-                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                <LoadingSpinner Size="SpinnerSize.Sm" Inline="true" Class="me-1" ScreenReaderText="Stashing" />
                             }
                             Stash Changes
                         </button>
@@ -299,7 +297,7 @@ else
                                 disabled="@_isSyncingFleece">
                             @if (_isSyncingFleece)
                             {
-                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                <LoadingSpinner Size="SpinnerSize.Sm" Inline="true" Class="me-1" ScreenReaderText="Discarding" />
                             }
                             Discard All Changes
                         </button>
@@ -352,7 +350,7 @@ else
                                 disabled="@_isSyncingFleece">
                             @if (_isSyncingFleece)
                             {
-                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                <LoadingSpinner Size="SpinnerSize.Sm" Inline="true" Class="me-1" ScreenReaderText="Discarding" />
                             }
                             Discard Non-Fleece Changes
                         </button>
