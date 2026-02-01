@@ -81,7 +81,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             WorkingDirectory = workingDirectory,
             Model = model,
             Mode = mode,
-            Status = ClaudeSessionStatus.Starting,
+            Status = ClaudeSessionStatus.RunningHooks,
             CreatedAt = DateTime.UtcNow,
             SystemPrompt = systemPrompt
         };
@@ -94,16 +94,10 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         var cts = new CancellationTokenSource();
         _sessionCts[sessionId] = cts;
 
-        // Create and store the SDK options (we'll create clients per-query for streaming support)
-        var options = _optionsFactory.Create(mode, workingDirectory, model, systemPrompt);
-        options.PermissionMode = PermissionMode.BypassPermissions; // Allow all tools without prompting
-        options.IncludePartialMessages = true; // Enable streaming with --print mode
-        _sessionOptions[sessionId] = options;
-
-        // Execute SessionStart hooks
-        session.Status = ClaudeSessionStatus.RunningHooks;
+        // Execute SessionStart hooks FIRST to collect output for system prompt
         await _hubContext.BroadcastSessionStatusChanged(sessionId, session.Status);
 
+        var hookOutputs = new List<string>();
         try
         {
             var hookResults = await _hooksService.ExecuteSessionStartHooksAsync(
@@ -112,11 +106,17 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             foreach (var result in hookResults)
             {
                 await _hubContext.BroadcastHookExecuted(sessionId, result);
+
+                // Collect output from successful hooks
+                if (result.Success && !string.IsNullOrWhiteSpace(result.Output))
+                {
+                    hookOutputs.Add(result.Output.Trim());
+                }
             }
 
             _logger.LogInformation(
-                "Session {SessionId} executed {Count} startup hook(s)",
-                sessionId, hookResults.Count);
+                "Session {SessionId} executed {Count} startup hook(s), {OutputCount} produced output",
+                sessionId, hookResults.Count, hookOutputs.Count);
         }
         catch (Exception ex)
         {
@@ -124,10 +124,27 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             _logger.LogWarning(ex, "Error executing startup hooks for session {SessionId}", sessionId);
         }
 
+        // Build combined system prompt from hook outputs and original system prompt
+        var combinedSystemPrompt = BuildSystemPrompt(systemPrompt, hookOutputs);
+        session.SystemPrompt = combinedSystemPrompt;
+
+        if (hookOutputs.Count > 0)
+        {
+            _logger.LogInformation(
+                "Session {SessionId} system prompt includes {Count} hook output(s) ({Length} chars total)",
+                sessionId, hookOutputs.Count, combinedSystemPrompt?.Length ?? 0);
+        }
+
+        // Create and store the SDK options with combined system prompt
+        var options = _optionsFactory.Create(mode, workingDirectory, model, combinedSystemPrompt);
+        options.PermissionMode = PermissionMode.BypassPermissions; // Allow all tools without prompting
+        options.IncludePartialMessages = true; // Enable streaming with --print mode
+        _sessionOptions[sessionId] = options;
+
         session.Status = ClaudeSessionStatus.WaitingForInput;
         _logger.LogInformation("Session {SessionId} initialized and ready", sessionId);
 
-        // Save metadata for future resumption
+        // Save metadata for future resumption (use combined system prompt)
         var metadata = new SessionMetadata(
             SessionId: session.ConversationId ?? sessionId, // Will be updated when we get the real ConversationId
             EntityId: entityId,
@@ -135,7 +152,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             WorkingDirectory: workingDirectory,
             Mode: mode,
             Model: model,
-            SystemPrompt: systemPrompt,
+            SystemPrompt: combinedSystemPrompt,
             CreatedAt: session.CreatedAt
         );
         await _metadataStore.SaveAsync(metadata, cancellationToken);
@@ -901,6 +918,27 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         }
 
         return (null, null);
+    }
+
+    /// <summary>
+    /// Builds a combined system prompt from hook outputs and an optional base prompt.
+    /// Hook outputs are placed first to provide context, followed by the original prompt.
+    /// </summary>
+    private static string? BuildSystemPrompt(string? basePrompt, IReadOnlyList<string> hookOutputs)
+    {
+        if (hookOutputs.Count == 0)
+            return basePrompt;
+
+        var parts = new List<string>();
+
+        // Add hook outputs first (context from fleece prime, etc.)
+        parts.AddRange(hookOutputs);
+
+        // Add original system prompt if present
+        if (!string.IsNullOrWhiteSpace(basePrompt))
+            parts.Add(basePrompt);
+
+        return string.Join("\n\n", parts);
     }
 
     private static string? GetStringValue(Dictionary<string, object> data, string key)

@@ -81,11 +81,15 @@ public class CommandRunner(
         catch (Exception ex)
         {
             stopwatch.Stop();
-            
+
+            var path = Environment.GetEnvironmentVariable("PATH");
+            var user = Environment.UserName;
             logger.LogError(
                 ex,
-                "Command exception: {Command} {Arguments} in {WorkingDirectory} | Duration={Duration}ms",
-                command, arguments, workingDirectory, stopwatch.ElapsedMilliseconds);
+                "Command exception: {Command} {Arguments} in {WorkingDirectory} | " +
+                "Duration={Duration}ms | User={User} | PATH={Path}",
+                command, arguments, workingDirectory, stopwatch.ElapsedMilliseconds,
+                user, path);
 
             return new CommandResult
             {
