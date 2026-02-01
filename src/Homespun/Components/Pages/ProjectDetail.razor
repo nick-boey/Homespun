@@ -44,13 +44,14 @@ else
     <div class="flex justify-between items-center mb-3">
         <h1>@_project.Name</h1>
         <div class="btn-group">
-            <button class="btn btn-outline-secondary btn-sm" @onclick="RefreshData" disabled="@_isRefreshing">
-                @if (_isRefreshing)
-                {
-                    <span class="spinner-border spinner-border-sm mr-1" role="status"></span>
-                }
-                <i class="bi bi-arrow-clockwise"></i> Refresh
-            </button>
+            <AsyncActionButton OnClick="RefreshData"
+                               IsLoadingExternal="_isRefreshing"
+                               CssClass="btn-outline-secondary btn-sm"
+                               Text="Refresh">
+                <IconContent>
+                    <i class="bi bi-arrow-clockwise"></i>
+                </IconContent>
+            </AsyncActionButton>
             <a href="projects/@Id/edit" class="btn btn-outline-secondary btn-sm">Edit Project</a>
         </div>
     </div>
@@ -118,20 +119,15 @@ else
                             <div class="sync-item">
                                 <span class="sync-label">Fleece Issues</span>
                                 <div class="sync-controls">
-                                    <button class="btn btn-sm btn-outline-secondary"
-                                            @onclick="SyncFleeceIssuesAsync"
-                                            disabled="@_isSyncingFleece">
-                                        @if (_isSyncingFleece)
-                                        {
-                                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                                            <span>Syncing...</span>
-                                        }
-                                        else
-                                        {
+                                    <AsyncActionButton OnClick="SyncFleeceIssuesAsync"
+                                                       IsLoadingExternal="_isSyncingFleece"
+                                                       CssClass="btn-sm btn-outline-secondary"
+                                                       Text="Sync"
+                                                       LoadingText="Syncing...">
+                                        <IconContent>
                                             <i class="bi bi-cloud-upload me-1"></i>
-                                            <span>Sync</span>
-                                        }
-                                    </button>
+                                        </IconContent>
+                                    </AsyncActionButton>
                                     @if (_fleeceSyncError != null)
                                     {
                                         <span class="badge bg-danger ms-2" title="@_fleeceSyncError">Failed</span>
@@ -239,19 +235,11 @@ else
                     <div class="card-header">Debug Tools</div>
                     <div class="card-body">
                         <div class="flex flex-col gap-2">
-                            <button class="btn btn-outline-primary btn-sm"
-                                    @onclick="StartTestAgentAsync"
-                                    disabled="@_isStartingTestAgent">
-                                @if (_isStartingTestAgent)
-                                {
-                                    <span class="spinner-border spinner-border-sm mr-1" role="status"></span>
-                                    <span>Starting...</span>
-                                }
-                                else
-                                {
-                                    <span>Start Test Agent</span>
-                                }
-                            </button>
+                            <AsyncActionButton OnClick="StartTestAgentAsync"
+                                               IsLoadingExternal="_isStartingTestAgent"
+                                               CssClass="btn-outline-primary btn-sm"
+                                               Text="Start Test Agent"
+                                               LoadingText="Starting..." />
                             @if (!string.IsNullOrEmpty(_testAgentError))
                             {
                                 <div class="alert alert-danger py-1 px-2 mb-0 text-sm">
@@ -279,24 +267,14 @@ else
         </Body>
         <Footer>
             <button type="button" class="btn btn-secondary" @onclick="HideFleeceConflictModal">Cancel</button>
-            <button type="button" class="btn btn-warning"
-                    @onclick="HandleFleeceConflictStash"
-                    disabled="@_isSyncingFleece">
-                @if (_isSyncingFleece)
-                {
-                    <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                }
-                Stash Changes
-            </button>
-            <button type="button" class="btn btn-danger"
-                    @onclick="HandleFleeceConflictDiscard"
-                    disabled="@_isSyncingFleece">
-                @if (_isSyncingFleece)
-                {
-                    <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                }
-                Discard All Changes
-            </button>
+            <AsyncActionButton OnClick="HandleFleeceConflictStash"
+                               IsLoadingExternal="_isSyncingFleece"
+                               CssClass="btn-warning"
+                               Text="Stash Changes" />
+            <AsyncActionButton OnClick="HandleFleeceConflictDiscard"
+                               IsLoadingExternal="_isSyncingFleece"
+                               CssClass="btn-danger"
+                               Text="Discard All Changes" />
         </Footer>
     </Modal>
 
@@ -333,15 +311,10 @@ else
         </Body>
         <Footer>
             <button type="button" class="btn btn-secondary" @onclick="HideNonFleeceChangesModal">Cancel</button>
-            <button type="button" class="btn btn-danger"
-                    @onclick="HandleDiscardNonFleeceChanges"
-                    disabled="@_isSyncingFleece">
-                @if (_isSyncingFleece)
-                {
-                    <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                }
-                Discard Non-Fleece Changes
-            </button>
+            <AsyncActionButton OnClick="HandleDiscardNonFleeceChanges"
+                               IsLoadingExternal="_isSyncingFleece"
+                               CssClass="btn-danger"
+                               Text="Discard Non-Fleece Changes" />
         </Footer>
     </Modal>
 }
