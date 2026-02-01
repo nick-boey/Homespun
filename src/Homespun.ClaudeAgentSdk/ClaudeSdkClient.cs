@@ -138,6 +138,49 @@ public class ClaudeSdkClient : IAsyncDisposable
     }
 
     /// <summary>
+    /// Send a tool result in streaming mode. This is used to respond to permission prompts
+    /// or answer questions from tools like AskUserQuestion.
+    /// </summary>
+    /// <param name="toolUseId">The ID of the tool use being responded to</param>
+    /// <param name="content">The content of the tool result (can be a string or structured content)</param>
+    /// <param name="isError">Whether this is an error result</param>
+    /// <param name="sessionId">The session ID (default: "default")</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    public async Task SendToolResultAsync(
+        string toolUseId,
+        object content,
+        bool isError = false,
+        string sessionId = "default",
+        CancellationToken cancellationToken = default)
+    {
+        if (!_connected || _transport == null)
+            throw new CliConnectionException("Not connected. Call ConnectAsync() first.");
+
+        var message = new
+        {
+            type = "user",
+            message = new
+            {
+                role = "user",
+                content = new object[]
+                {
+                    new
+                    {
+                        type = "tool_result",
+                        tool_use_id = toolUseId,
+                        content = content,
+                        is_error = isError
+                    }
+                }
+            },
+            session_id = sessionId
+        };
+
+        var json = JsonSerializer.Serialize(message) + "\n";
+        await _transport.WriteAsync(json, cancellationToken);
+    }
+
+    /// <summary>
     /// Disconnect from Claude.
     /// </summary>
     public async Task DisconnectAsync()

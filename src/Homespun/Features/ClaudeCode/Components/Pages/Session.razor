@@ -145,6 +145,63 @@
                             <span>Processing...</span>
                         </div>
                     }
+
+                    @if (_pendingQuestion != null)
+                    {
+                        <div class="question-container">
+                            <div class="question-header">
+                                <span class="question-icon">❓</span>
+                                <span class="question-title">Claude has a question for you</span>
+                            </div>
+                            @foreach (var question in _pendingQuestion.Questions)
+                            {
+                                <div class="question-item">
+                                    <div class="question-text">
+                                        <span class="question-header-tag">@question.Header</span>
+                                        @question.Question
+                                    </div>
+                                    <div class="question-options">
+                                        @foreach (var option in question.Options)
+                                        {
+                                            var isSelected = _questionAnswers.TryGetValue(question.Question, out var answer) &&
+                                                (question.MultiSelect
+                                                    ? answer.Split(", ").Contains(option.Label)
+                                                    : answer == option.Label);
+                                            <button class="question-option @(isSelected ? "selected" : "")"
+                                                    @onclick="() => SelectOption(question, option)"
+                                                    title="@option.Description">
+                                                @if (question.MultiSelect)
+                                                {
+                                                    <span class="option-checkbox">@(isSelected ? "☑" : "☐")</span>
+                                                }
+                                                @option.Label
+                                            </button>
+                                        }
+                                        @* Other option for custom input *@
+                                        <button class="question-option other-option @(IsOtherSelected(question.Question) ? "selected" : "")"
+                                                @onclick="() => SelectOther(question)">
+                                            Other...
+                                        </button>
+                                    </div>
+                                    @if (IsOtherSelected(question.Question))
+                                    {
+                                        var questionKey = question.Question;
+                                        <div class="custom-answer-input">
+                                            <input type="text"
+                                                   placeholder="Enter your custom answer..."
+                                                   value="@GetCustomAnswer(questionKey)"
+                                                   @oninput="@(e => UpdateCustomAnswer(questionKey, e.Value?.ToString() ?? string.Empty))" />
+                                        </div>
+                                    }
+                                </div>
+                            }
+                            <div class="question-actions">
+                                <button class="btn btn-primary" @onclick="SubmitAnswers" disabled="@(!CanSubmitAnswers())">
+                                    Submit Answers
+                                </button>
+                            </div>
+                        </div>
+                    }
                 }
             </div>
 
@@ -890,6 +947,125 @@
         color: var(--text-muted);
     }
 
+    /* Question Container Styles */
+    .question-container {
+        background: var(--bg-tertiary);
+        border: 2px solid var(--color-lagoon);
+        border-radius: var(--radius-lg);
+        padding: var(--spacing-lg);
+        margin: var(--spacing-md) 0;
+    }
+
+    .question-header {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+        margin-bottom: var(--spacing-md);
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    .question-icon {
+        font-size: 1.25rem;
+    }
+
+    .question-title {
+        color: var(--color-lagoon);
+    }
+
+    .question-item {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-md);
+        padding: var(--spacing-md);
+        margin-bottom: var(--spacing-md);
+    }
+
+    .question-item:last-child {
+        margin-bottom: 0;
+    }
+
+    .question-text {
+        font-size: 0.9375rem;
+        margin-bottom: var(--spacing-sm);
+        color: var(--text-primary);
+    }
+
+    .question-header-tag {
+        display: inline-block;
+        background: var(--color-lagoon);
+        color: white;
+        padding: 0.125rem 0.5rem;
+        border-radius: var(--radius-sm);
+        font-size: 0.75rem;
+        font-weight: 600;
+        margin-right: var(--spacing-xs);
+        text-transform: uppercase;
+    }
+
+    .question-options {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--spacing-sm);
+        margin-top: var(--spacing-sm);
+    }
+
+    .question-option {
+        padding: var(--spacing-sm) var(--spacing-md);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        cursor: pointer;
+        font-size: 0.875rem;
+        transition: all 0.15s ease;
+    }
+
+    .question-option:hover {
+        border-color: var(--color-lagoon);
+        background: var(--bg-tertiary);
+    }
+
+    .question-option.selected {
+        border-color: var(--color-lagoon);
+        background: var(--color-lagoon);
+        color: white;
+    }
+
+    .question-option.other-option {
+        border-style: dashed;
+        font-style: italic;
+    }
+
+    .option-checkbox {
+        margin-right: var(--spacing-xs);
+    }
+
+    .custom-answer-input {
+        margin-top: var(--spacing-sm);
+    }
+
+    .custom-answer-input input {
+        width: 100%;
+        padding: var(--spacing-sm);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        font-size: 0.875rem;
+    }
+
+    .custom-answer-input input:focus {
+        outline: none;
+        border-color: var(--color-lagoon);
+    }
+
+    .question-actions {
+        margin-top: var(--spacing-md);
+        display: flex;
+        justify-content: flex-end;
+    }
+
     /* Debug Panel Styles */
     .debug-panel {
         margin-top: var(--spacing-md);
@@ -981,6 +1157,11 @@
     private ElementReference _messagesContainer;
     private HubConnection? _hubConnection;
     private string? _signalRError;
+
+    // Question handling
+    private PendingQuestion? _pendingQuestion;
+    private Dictionary<string, string> _questionAnswers = new();
+    private Dictionary<string, string> _customAnswers = new();  // For "Other" text input
 
     // Debug log entry class (needs to be accessible in both Debug and Release for Razor compilation)
     private class DebugLogEntry
@@ -1136,6 +1317,20 @@
 
         if (_session != null)
         {
+            // Initialize pending question from session if present
+            _pendingQuestion = _session.PendingQuestion;
+            if (_pendingQuestion != null)
+            {
+                // Initialize answers with first option for non-multiselect questions
+                foreach (var q in _pendingQuestion.Questions)
+                {
+                    if (q.Options.Count > 0 && !q.MultiSelect)
+                    {
+                        _questionAnswers[q.Question] = q.Options[0].Label;
+                    }
+                }
+            }
+
             try
             {
                 await SetupSignalR();
@@ -1462,6 +1657,7 @@
                         _session.Status = session.Status;
                         _session.TotalCostUsd = session.TotalCostUsd;
                         _session.TotalDurationMs = session.TotalDurationMs;
+                        _pendingQuestion = session.PendingQuestion;
                         Console.WriteLine($"[SignalR] SessionState received: {session.Messages.Count} messages, status: {session.Status}");
                     }
                     StateHasChanged();
@@ -1471,6 +1667,74 @@
                     LogDebug("ERROR", $"SessionState: {ex.Message}");
                     Console.WriteLine($"[SignalR] Error in SessionState: {ex.Message}");
                 }
+            });
+        });
+
+        // Handle question received from Claude
+        _hubConnection.On<PendingQuestion>("QuestionReceived", (question) =>
+        {
+            _ = InvokeAsync(async () =>
+            {
+                try
+                {
+                    LogDebug("QuestionReceived", $"Questions: {question.Questions.Count}");
+                    Console.WriteLine($"[SignalR] QuestionReceived: {question.Questions.Count} questions");
+
+                    _pendingQuestion = question;
+                    _questionAnswers.Clear();
+                    _customAnswers.Clear();
+
+                    // Initialize answers with first option for non-multiselect questions
+                    foreach (var q in question.Questions)
+                    {
+                        if (q.Options.Count > 0 && !q.MultiSelect)
+                        {
+                            _questionAnswers[q.Question] = q.Options[0].Label;
+                        }
+                    }
+
+                    if (_session != null)
+                    {
+                        _session.Status = ClaudeSessionStatus.WaitingForQuestionAnswer;
+                        _session.PendingQuestion = question;
+                    }
+
+                    StateHasChanged();
+                    await ScrollToBottom();
+                }
+                catch (Exception ex)
+                {
+                    LogDebug("ERROR", $"QuestionReceived: {ex.Message}");
+                    Console.WriteLine($"[SignalR] Error in QuestionReceived: {ex.Message}");
+                }
+            });
+        });
+
+        // Handle question answered confirmation
+        _hubConnection.On("QuestionAnswered", () =>
+        {
+            _ = InvokeAsync(() =>
+            {
+                try
+                {
+                    LogDebug("QuestionAnswered", "Question was answered");
+                    _pendingQuestion = null;
+                    _questionAnswers.Clear();
+                    _customAnswers.Clear();
+
+                    if (_session != null)
+                    {
+                        _session.PendingQuestion = null;
+                    }
+
+                    StateHasChanged();
+                }
+                catch (Exception ex)
+                {
+                    LogDebug("ERROR", $"QuestionAnswered: {ex.Message}");
+                    Console.WriteLine($"[SignalR] Error in QuestionAnswered: {ex.Message}");
+                }
+                return Task.CompletedTask;
             });
         });
 
@@ -1558,6 +1822,94 @@
         if (ms < 1000) return $"{ms}ms";
         if (ms < 60000) return $"{ms / 1000.0:F1}s";
         return $"{ms / 60000.0:F1}m";
+    }
+
+    // Question handling methods
+    private void SelectOption(UserQuestion question, QuestionOption option)
+    {
+        // Clear custom answer if selecting a regular option
+        _customAnswers.Remove(question.Question);
+
+        if (question.MultiSelect)
+        {
+            // Toggle selection for multi-select
+            var current = _questionAnswers.GetValueOrDefault(question.Question, "");
+            var selected = current.Split(", ", StringSplitOptions.RemoveEmptyEntries).ToList();
+
+            if (selected.Contains(option.Label))
+            {
+                selected.Remove(option.Label);
+            }
+            else
+            {
+                selected.Add(option.Label);
+            }
+
+            _questionAnswers[question.Question] = string.Join(", ", selected);
+        }
+        else
+        {
+            // Single select - replace
+            _questionAnswers[question.Question] = option.Label;
+        }
+    }
+
+    private void SelectOther(UserQuestion question)
+    {
+        // Mark this question as using "Other"
+        _customAnswers[question.Question] = _customAnswers.GetValueOrDefault(question.Question, "");
+        // Clear regular selection for single-select
+        if (!question.MultiSelect)
+        {
+            _questionAnswers.Remove(question.Question);
+        }
+    }
+
+    private bool IsOtherSelected(string question)
+    {
+        return _customAnswers.ContainsKey(question);
+    }
+
+    private string GetCustomAnswer(string question)
+    {
+        return _customAnswers.GetValueOrDefault(question, "");
+    }
+
+    private void UpdateCustomAnswer(string question, string value)
+    {
+        _customAnswers[question] = value;
+        // Update the actual answer
+        _questionAnswers[question] = value;
+    }
+
+    private bool CanSubmitAnswers()
+    {
+        if (_pendingQuestion == null) return false;
+
+        foreach (var question in _pendingQuestion.Questions)
+        {
+            if (!_questionAnswers.TryGetValue(question.Question, out var answer) || string.IsNullOrWhiteSpace(answer))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private async Task SubmitAnswers()
+    {
+        if (_pendingQuestion == null || _hubConnection == null || !CanSubmitAnswers())
+            return;
+
+        try
+        {
+            var answersJson = System.Text.Json.JsonSerializer.Serialize(_questionAnswers);
+            await _hubConnection.SendAsync("AnswerQuestion", SessionId, answersJson);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error submitting answers: {ex.Message}");
+        }
     }
 
     public async ValueTask DisposeAsync()

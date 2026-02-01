@@ -26,6 +26,11 @@ public enum ClaudeSessionStatus
     WaitingForInput,
 
     /// <summary>
+    /// Session is waiting for the user to answer a question from Claude.
+    /// </summary>
+    WaitingForQuestionAnswer,
+
+    /// <summary>
     /// Session has stopped normally.
     /// </summary>
     Stopped,

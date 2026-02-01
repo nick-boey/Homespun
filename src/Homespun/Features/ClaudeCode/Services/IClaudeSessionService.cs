@@ -83,4 +83,13 @@ public interface IClaudeSessionService
     /// Gets all active sessions.
     /// </summary>
     IReadOnlyList<ClaudeSession> GetAllSessions();
+
+    /// <summary>
+    /// Answers a pending question from Claude.
+    /// This will resume the session by providing the answers to the AskUserQuestion tool.
+    /// </summary>
+    /// <param name="sessionId">The session ID</param>
+    /// <param name="answers">Dictionary mapping question text to selected answer text</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    Task AnswerQuestionAsync(string sessionId, Dictionary<string, string> answers, CancellationToken cancellationToken = default);
 }

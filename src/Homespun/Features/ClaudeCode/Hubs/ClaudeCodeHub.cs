@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Homespun.ClaudeAgentSdk;
 using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.ClaudeCode.Services;
@@ -72,6 +73,25 @@ public class ClaudeCodeHub(IClaudeSessionService sessionService) : Hub
     public ClaudeSession? GetSession(string sessionId)
     {
         return sessionService.GetSession(sessionId);
+    }
+
+    /// <summary>
+    /// Answer a pending question in a session.
+    /// </summary>
+    /// <param name="sessionId">The session ID</param>
+    /// <param name="answersJson">JSON string of dictionary mapping question text to answer text</param>
+    public async Task AnswerQuestion(string sessionId, string answersJson)
+    {
+        try
+        {
+            var answers = JsonSerializer.Deserialize<Dictionary<string, string>>(answersJson)
+                ?? throw new ArgumentException("Invalid answers JSON");
+            await sessionService.AnswerQuestionAsync(sessionId, answers);
+        }
+        catch (Exception ex)
+        {
+            throw new HubException($"Failed to answer question: {ex.Message}");
+        }
     }
 }
 
@@ -186,6 +206,29 @@ public static class ClaudeCodeHubExtensions
     {
         await hubContext.Clients.Group($"session-{sessionId}")
             .SendAsync("StreamingContentStopped", content, index);
+    }
+
+    /// <summary>
+    /// Broadcasts when Claude asks a question that needs user input.
+    /// </summary>
+    public static async Task BroadcastQuestionReceived(
+        this IHubContext<ClaudeCodeHub> hubContext,
+        string sessionId,
+        PendingQuestion question)
+    {
+        await hubContext.Clients.Group($"session-{sessionId}")
+            .SendAsync("QuestionReceived", question);
+    }
+
+    /// <summary>
+    /// Broadcasts when a question has been answered.
+    /// </summary>
+    public static async Task BroadcastQuestionAnswered(
+        this IHubContext<ClaudeCodeHub> hubContext,
+        string sessionId)
+    {
+        await hubContext.Clients.Group($"session-{sessionId}")
+            .SendAsync("QuestionAnswered");
     }
 
     /// <summary>

@@ -9,6 +9,7 @@ using Homespun.Features.Projects;
 using Homespun.Features.PullRequests.Data;
 using Homespun.Features.Testing.Services;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Homespun.Features.Testing;
 
@@ -58,7 +59,19 @@ public static class MockServiceExtensions
         // Claude Code services - use the real session store (already in-memory)
         services.AddSingleton<IClaudeSessionStore, ClaudeSessionStore>();
         services.AddSingleton<IToolResultParser, ToolResultParser>();
-        services.AddSingleton<IClaudeSessionService, MockClaudeSessionService>();
+
+        // Choose between live Claude sessions or mock based on configuration
+        if (options.UseLiveClaudeSessions)
+        {
+            // Use real ClaudeSessionService with test working directory
+            services.AddLiveClaudeSessionServices(options);
+        }
+        else
+        {
+            // Use mock service for simulated responses
+            services.AddSingleton<IClaudeSessionService, MockClaudeSessionService>();
+        }
+
         services.AddSingleton<IRebaseAgentService, MockRebaseAgentService>();
         services.AddSingleton<IAgentPromptService, MockAgentPromptService>();
 
@@ -76,4 +89,67 @@ public static class MockServiceExtensions
 
         return services;
     }
+
+    /// <summary>
+    /// Adds live Claude session services for testing with a real Claude Code agent.
+    /// </summary>
+    private static IServiceCollection AddLiveClaudeSessionServices(
+        this IServiceCollection services,
+        MockModeOptions options)
+    {
+        // Determine working directory for live sessions
+        var workingDirectory = options.LiveClaudeSessionsWorkingDirectory
+            ?? Path.Combine(Directory.GetCurrentDirectory(), "test-workspace");
+
+        // Ensure the test workspace directory exists
+        if (!Directory.Exists(workingDirectory))
+        {
+            Directory.CreateDirectory(workingDirectory);
+        }
+
+        // Session discovery service - reads from Claude's native session storage
+        var homespunDir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            ".homespun");
+        var claudeDir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            ".claude", "projects");
+
+        services.AddSingleton<IClaudeSessionDiscovery>(sp =>
+            new ClaudeSessionDiscovery(claudeDir, sp.GetRequiredService<ILogger<ClaudeSessionDiscovery>>()));
+
+        // Session metadata store - maps Claude sessions to our entities
+        if (!Directory.Exists(homespunDir))
+        {
+            Directory.CreateDirectory(homespunDir);
+        }
+        var metadataPath = Path.Combine(homespunDir, "session-metadata-test.json");
+        services.AddSingleton<ISessionMetadataStore>(sp =>
+            new SessionMetadataStore(metadataPath, sp.GetRequiredService<ILogger<SessionMetadataStore>>()));
+
+        // Tool result parser for rich display
+        services.AddSingleton<IToolResultParser, ToolResultParser>();
+
+        // Use the real ClaudeSessionService
+        services.AddSingleton<IClaudeSessionService, ClaudeSessionService>();
+
+        // Store the test working directory in configuration for the MockGitWorktreeService
+        services.Configure<LiveClaudeTestOptions>(opts =>
+        {
+            opts.TestWorkingDirectory = workingDirectory;
+        });
+
+        return services;
+    }
+}
+
+/// <summary>
+/// Options for live Claude testing in mock mode.
+/// </summary>
+public class LiveClaudeTestOptions
+{
+    /// <summary>
+    /// The working directory used for live Claude test sessions.
+    /// </summary>
+    public string TestWorkingDirectory { get; set; } = "";
 }
