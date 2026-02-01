@@ -924,4 +924,395 @@ public class GitWorktreeServiceTests
     }
 
     #endregion
+
+    #region GetWorktreeStatusAsync Tests
+
+    [Test]
+    public async Task GetWorktreeStatusAsync_CleanWorktree_ReturnsZeroCounts()
+    {
+        // Arrange
+        var worktreePath = Path.Combine(_tempDir, "worktree");
+
+        _mockRunner.Setup(r => r.RunAsync("git", "status --porcelain", worktreePath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "" });
+
+        // Act
+        var result = await _service.GetWorktreeStatusAsync(worktreePath);
+
+        // Assert
+        Assert.That(result.ModifiedCount, Is.EqualTo(0));
+        Assert.That(result.StagedCount, Is.EqualTo(0));
+        Assert.That(result.UntrackedCount, Is.EqualTo(0));
+    }
+
+    [Test]
+    public async Task GetWorktreeStatusAsync_ModifiedFiles_ReturnsCorrectCount()
+    {
+        // Arrange
+        var worktreePath = Path.Combine(_tempDir, "worktree");
+
+        _mockRunner.Setup(r => r.RunAsync("git", "status --porcelain", worktreePath))
+            .ReturnsAsync(new CommandResult
+            {
+                Success = true,
+                Output = " M src/file1.cs\n M src/file2.cs\n M src/file3.cs"
+            });
+
+        // Act
+        var result = await _service.GetWorktreeStatusAsync(worktreePath);
+
+        // Assert
+        Assert.That(result.ModifiedCount, Is.EqualTo(3));
+    }
+
+    [Test]
+    public async Task GetWorktreeStatusAsync_MixedStatus_ReturnsCorrectCounts()
+    {
+        // Arrange
+        var worktreePath = Path.Combine(_tempDir, "worktree");
+
+        _mockRunner.Setup(r => r.RunAsync("git", "status --porcelain", worktreePath))
+            .ReturnsAsync(new CommandResult
+            {
+                Success = true,
+                Output = "M  src/staged.cs\n M src/modified.cs\nMM src/both.cs\n?? src/untracked.cs\nA  src/added.cs"
+            });
+
+        // Act
+        var result = await _service.GetWorktreeStatusAsync(worktreePath);
+
+        // Assert
+        Assert.That(result.StagedCount, Is.EqualTo(3)); // M, MM, A in first position
+        Assert.That(result.ModifiedCount, Is.EqualTo(2)); // M, MM in second position
+        Assert.That(result.UntrackedCount, Is.EqualTo(1)); // ??
+    }
+
+    [Test]
+    public async Task GetWorktreeStatusAsync_GitError_ReturnsEmptyStatus()
+    {
+        // Arrange
+        var worktreePath = Path.Combine(_tempDir, "worktree");
+
+        _mockRunner.Setup(r => r.RunAsync("git", "status --porcelain", worktreePath))
+            .ReturnsAsync(new CommandResult { Success = false, Error = "not a git repository" });
+
+        // Act
+        var result = await _service.GetWorktreeStatusAsync(worktreePath);
+
+        // Assert
+        Assert.That(result.ModifiedCount, Is.EqualTo(0));
+        Assert.That(result.StagedCount, Is.EqualTo(0));
+        Assert.That(result.UntrackedCount, Is.EqualTo(0));
+    }
+
+    #endregion
+
+    #region FindLostWorktreeFoldersAsync Tests
+
+    [Test]
+    public async Task FindLostWorktreeFoldersAsync_NoLostFolders_ReturnsEmptyList()
+    {
+        // Arrange
+        var repoPath = Path.Combine(_tempDir, "main");
+        Directory.CreateDirectory(repoPath);
+
+        // Only the main folder exists
+        _mockRunner.Setup(r => r.RunAsync("git", "worktree list --porcelain", repoPath))
+            .ReturnsAsync(new CommandResult
+            {
+                Success = true,
+                Output = $"worktree {repoPath}\nbranch refs/heads/main"
+            });
+
+        // Act
+        var result = await _service.FindLostWorktreeFoldersAsync(repoPath);
+
+        // Assert
+        Assert.That(result, Is.Empty);
+    }
+
+    [Test]
+    public async Task FindLostWorktreeFoldersAsync_WithLostFolders_ReturnsLostPaths()
+    {
+        // Arrange
+        var repoPath = Path.Combine(_tempDir, "main");
+        Directory.CreateDirectory(repoPath);
+
+        // Create a sibling folder that's not tracked by git worktree
+        var lostFolder = Path.Combine(_tempDir, "feature-abandoned");
+        Directory.CreateDirectory(lostFolder);
+
+        // Only the main worktree is tracked
+        _mockRunner.Setup(r => r.RunAsync("git", "worktree list --porcelain", repoPath))
+            .ReturnsAsync(new CommandResult
+            {
+                Success = true,
+                Output = $"worktree {repoPath}\nbranch refs/heads/main"
+            });
+
+        // Act
+        var result = await _service.FindLostWorktreeFoldersAsync(repoPath);
+
+        // Assert
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].Path, Is.EqualTo(lostFolder));
+    }
+
+    [Test]
+    public async Task FindLostWorktreeFoldersAsync_IgnoresNonGitFolders_ReturnsOnlyGitFolders()
+    {
+        // Arrange
+        var repoPath = Path.Combine(_tempDir, "main");
+        Directory.CreateDirectory(repoPath);
+
+        // Create a sibling folder that looks like a worktree (has .git)
+        var lostFolder = Path.Combine(_tempDir, "feature-lost");
+        Directory.CreateDirectory(lostFolder);
+        File.WriteAllText(Path.Combine(lostFolder, ".git"), "gitdir: /some/path");
+
+        // Create a non-git folder
+        var regularFolder = Path.Combine(_tempDir, "regular-folder");
+        Directory.CreateDirectory(regularFolder);
+
+        _mockRunner.Setup(r => r.RunAsync("git", "worktree list --porcelain", repoPath))
+            .ReturnsAsync(new CommandResult
+            {
+                Success = true,
+                Output = $"worktree {repoPath}\nbranch refs/heads/main"
+            });
+
+        // Act
+        var result = await _service.FindLostWorktreeFoldersAsync(repoPath);
+
+        // Assert
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].Path, Is.EqualTo(lostFolder));
+    }
+
+    #endregion
+
+    #region DeleteWorktreeFolderAsync Tests
+
+    [Test]
+    public async Task DeleteWorktreeFolderAsync_FolderExists_DeletesFolder()
+    {
+        // Arrange
+        var folderPath = Path.Combine(_tempDir, "folder-to-delete");
+        Directory.CreateDirectory(folderPath);
+        File.WriteAllText(Path.Combine(folderPath, "file.txt"), "content");
+
+        // Act
+        var result = await _service.DeleteWorktreeFolderAsync(folderPath);
+
+        // Assert
+        Assert.That(result, Is.True);
+        Assert.That(Directory.Exists(folderPath), Is.False);
+    }
+
+    [Test]
+    public async Task DeleteWorktreeFolderAsync_FolderDoesNotExist_ReturnsFalse()
+    {
+        // Arrange
+        var folderPath = Path.Combine(_tempDir, "nonexistent-folder");
+
+        // Act
+        var result = await _service.DeleteWorktreeFolderAsync(folderPath);
+
+        // Assert
+        Assert.That(result, Is.False);
+    }
+
+    #endregion
+
+    #region GetCurrentBranchAsync Tests
+
+    [Test]
+    public async Task GetCurrentBranchAsync_Success_ReturnsBranchName()
+    {
+        // Arrange
+        var worktreePath = Path.Combine(_tempDir, "worktree");
+
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", worktreePath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "feature/test-branch" });
+
+        // Act
+        var result = await _service.GetCurrentBranchAsync(worktreePath);
+
+        // Assert
+        Assert.That(result, Is.EqualTo("feature/test-branch"));
+    }
+
+    [Test]
+    public async Task GetCurrentBranchAsync_DetachedHead_ReturnsHEAD()
+    {
+        // Arrange
+        var worktreePath = Path.Combine(_tempDir, "worktree");
+
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", worktreePath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "HEAD" });
+
+        // Act
+        var result = await _service.GetCurrentBranchAsync(worktreePath);
+
+        // Assert
+        Assert.That(result, Is.EqualTo("HEAD"));
+    }
+
+    [Test]
+    public async Task GetCurrentBranchAsync_GitError_ReturnsNull()
+    {
+        // Arrange
+        var worktreePath = Path.Combine(_tempDir, "worktree");
+
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", worktreePath))
+            .ReturnsAsync(new CommandResult { Success = false, Error = "not a git repository" });
+
+        // Act
+        var result = await _service.GetCurrentBranchAsync(worktreePath);
+
+        // Assert
+        Assert.That(result, Is.Null);
+    }
+
+    #endregion
+
+    #region CheckoutBranchAsync Tests
+
+    [Test]
+    public async Task CheckoutBranchAsync_Success_ReturnsTrue()
+    {
+        // Arrange
+        var worktreePath = Path.Combine(_tempDir, "worktree");
+        var branchName = "feature/test";
+
+        _mockRunner.Setup(r => r.RunAsync("git", $"checkout \"{branchName}\"", worktreePath))
+            .ReturnsAsync(new CommandResult { Success = true });
+
+        // Act
+        var result = await _service.CheckoutBranchAsync(worktreePath, branchName);
+
+        // Assert
+        Assert.That(result, Is.True);
+    }
+
+    [Test]
+    public async Task CheckoutBranchAsync_BranchDoesNotExist_ReturnsFalse()
+    {
+        // Arrange
+        var worktreePath = Path.Combine(_tempDir, "worktree");
+        var branchName = "nonexistent-branch";
+
+        _mockRunner.Setup(r => r.RunAsync("git", $"checkout \"{branchName}\"", worktreePath))
+            .ReturnsAsync(new CommandResult { Success = false, Error = "error: pathspec 'nonexistent-branch' did not match any file(s) known to git" });
+
+        // Act
+        var result = await _service.CheckoutBranchAsync(worktreePath, branchName);
+
+        // Assert
+        Assert.That(result, Is.False);
+    }
+
+    #endregion
+
+    #region IsSquashMergedAsync Tests
+
+    [Test]
+    public async Task IsSquashMergedAsync_BranchIsSquashMerged_ReturnsTrue()
+    {
+        // Arrange
+        var repoPath = Path.Combine(_tempDir, "repo");
+        var branchName = "feature/squashed";
+        var targetBranch = "main";
+
+        // Simulate: cherry-pick --no-commit finds no diff (all commits already in main)
+        _mockRunner.Setup(r => r.RunAsync("git", $"log \"{targetBranch}..{branchName}\" --format=%H", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "abc123\ndef456" });
+
+        // Check if tree is equivalent after squash
+        _mockRunner.Setup(r => r.RunAsync("git", $"cherry \"{targetBranch}\" \"{branchName}\"", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "" }); // Empty means all commits are equivalent
+
+        // Act
+        var result = await _service.IsSquashMergedAsync(repoPath, branchName, targetBranch);
+
+        // Assert
+        Assert.That(result, Is.True);
+    }
+
+    [Test]
+    public async Task IsSquashMergedAsync_BranchNotSquashMerged_ReturnsFalse()
+    {
+        // Arrange
+        var repoPath = Path.Combine(_tempDir, "repo");
+        var branchName = "feature/not-merged";
+        var targetBranch = "main";
+
+        _mockRunner.Setup(r => r.RunAsync("git", $"log \"{targetBranch}..{branchName}\" --format=%H", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "abc123" });
+
+        // Cherry shows commits that are not yet in target
+        _mockRunner.Setup(r => r.RunAsync("git", $"cherry \"{targetBranch}\" \"{branchName}\"", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "+ abc123" }); // + means not in target
+
+        // Act
+        var result = await _service.IsSquashMergedAsync(repoPath, branchName, targetBranch);
+
+        // Assert
+        Assert.That(result, Is.False);
+    }
+
+    #endregion
+
+    #region CreateWorktreeFromRemoteBranchAsync Tests
+
+    [Test]
+    public async Task CreateWorktreeFromRemoteBranchAsync_Success_CreatesWorktreeWithoutCheckingOut()
+    {
+        // Arrange
+        var repoPath = Path.Combine(_tempDir, "main");
+        Directory.CreateDirectory(repoPath);
+        var remoteBranch = "feature/remote-only";
+        var expectedWorktreePath = Path.Combine(_tempDir, "feature/remote-only");
+
+        // First, create the local branch without checkout (using git branch instead of checkout)
+        _mockRunner.Setup(r => r.RunAsync("git", $"branch \"{remoteBranch}\" \"origin/{remoteBranch}\"", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true });
+
+        // Then create the worktree
+        _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.StartsWith("worktree add")), repoPath))
+            .ReturnsAsync(new CommandResult { Success = true });
+
+        // Act
+        var result = await _service.CreateWorktreeFromRemoteBranchAsync(repoPath, remoteBranch);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        // Verify git branch was called (not checkout which would change the main worktree)
+        _mockRunner.Verify(r => r.RunAsync("git", $"branch \"{remoteBranch}\" \"origin/{remoteBranch}\"", repoPath), Times.Once);
+    }
+
+    [Test]
+    public async Task CreateWorktreeFromRemoteBranchAsync_BranchAlreadyExists_UsesExistingBranch()
+    {
+        // Arrange
+        var repoPath = Path.Combine(_tempDir, "main");
+        Directory.CreateDirectory(repoPath);
+        var remoteBranch = "feature/existing";
+
+        // Branch creation fails because it already exists
+        _mockRunner.Setup(r => r.RunAsync("git", $"branch \"{remoteBranch}\" \"origin/{remoteBranch}\"", repoPath))
+            .ReturnsAsync(new CommandResult { Success = false, Error = "fatal: a branch named 'feature/existing' already exists" });
+
+        // Worktree creation succeeds
+        _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.StartsWith("worktree add")), repoPath))
+            .ReturnsAsync(new CommandResult { Success = true });
+
+        // Act
+        var result = await _service.CreateWorktreeFromRemoteBranchAsync(repoPath, remoteBranch);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+    }
+
+    #endregion
 }

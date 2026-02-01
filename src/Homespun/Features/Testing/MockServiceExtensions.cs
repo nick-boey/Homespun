@@ -103,8 +103,9 @@ public static class MockServiceExtensions
         MockModeOptions options)
     {
         // Determine working directory for live sessions
+        // Use home directory to ensure write permissions in container environments
         var workingDirectory = options.LiveClaudeSessionsWorkingDirectory
-            ?? Path.Combine(Directory.GetCurrentDirectory(), "test-workspace");
+            ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "test-workspace");
 
         // Ensure the test workspace directory exists
         if (!Directory.Exists(workingDirectory))
