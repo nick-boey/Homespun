@@ -153,8 +153,8 @@ public class HooksService : IHooksService
             else
             {
                 _logger.LogWarning(
-                    "Hook failed: {Command} (exit code {ExitCode}): {Error}",
-                    command, result.ExitCode, TruncateForLog(result.Error));
+                    "Hook failed: {Command} (exit code {ExitCode}) in {WorkingDirectory}: {Error}",
+                    command, result.ExitCode, workingDirectory, TruncateForLog(result.Error));
             }
 
             return result;
