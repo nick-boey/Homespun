@@ -98,7 +98,7 @@ public static class TimelineSvgRenderer
 
     /// <summary>
     /// Generate an SVG path for a connector from one lane to another.
-    /// Creates an L-shaped bend for lane switching.
+    /// Creates an L-shaped bend connecting to the side of the node at mid-height.
     /// </summary>
     /// <param name="fromLane">Source lane index.</param>
     /// <param name="toLane">Target lane index.</param>
@@ -108,10 +108,12 @@ public static class TimelineSvgRenderer
         var toX = GetLaneCenterX(toLane);
         var centerY = GetRowCenterY();
 
-        // L-shaped connector: vertical from top to middle, horizontal to target, vertical to node
-        var bendY = centerY - NodeRadius - 4;
+        // Determine the horizontal endpoint based on node shape
+        // Connect to the left side of the node (diamond or circle) at mid-height
+        var nodeEdgeX = toX - DiamondSize - 2; // Small gap from the node edge
 
-        return $"M {fromX} 0 L {fromX} {bendY} L {toX} {bendY} L {toX} {centerY - NodeRadius - 2}";
+        // L-shaped connector: vertical from top to middle, then horizontal to node side
+        return $"M {fromX} 0 L {fromX} {centerY} L {nodeEdgeX} {centerY}";
     }
 
     /// <summary>

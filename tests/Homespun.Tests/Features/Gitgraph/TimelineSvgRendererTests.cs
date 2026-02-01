@@ -226,14 +226,12 @@ public class TimelineSvgRendererTests
     {
         var path = TimelineSvgRenderer.GenerateConnector(0, 1);
 
-        // L-shaped path from lane 0 to lane 1
-        // From: (12, 0) down to bendY (centerY - radius - 4 = 20 - 6 - 4 = 10)
-        // Then horizontal to lane 1 (36)
-        // Then down to just above node (centerY - radius - 2 = 12)
+        // L-shaped path from lane 0 to lane 1, connecting to node side at mid-height
+        // From: (12, 0) down to centerY (20)
+        // Then horizontal to node edge (36 - DiamondSize - 2 = 36 - 7 - 2 = 27)
         Assert.That(path, Does.Contain("M 12 0"));     // Start at lane 0, top
-        Assert.That(path, Does.Contain("L 12 10"));    // Down to bend
-        Assert.That(path, Does.Contain("L 36 10"));    // Horizontal to lane 1
-        Assert.That(path, Does.Contain("L 36 12"));    // Down to node
+        Assert.That(path, Does.Contain("L 12 20"));    // Down to mid-height
+        Assert.That(path, Does.Contain("L 27 20"));    // Horizontal to node side
     }
 
     [Test]
@@ -241,8 +239,11 @@ public class TimelineSvgRendererTests
     {
         var path = TimelineSvgRenderer.GenerateConnector(1, 2);
 
+        // L-shaped path from lane 1 to lane 2, connecting to node side at mid-height
+        // nodeEdgeX = 60 - 7 - 2 = 51
         Assert.That(path, Does.Contain("M 36 0"));     // Start at lane 1
-        Assert.That(path, Does.Contain("L 60 10"));    // Horizontal bend to lane 2
+        Assert.That(path, Does.Contain("L 36 20"));    // Down to mid-height
+        Assert.That(path, Does.Contain("L 51 20"));    // Horizontal to node side
     }
 
     #endregion
