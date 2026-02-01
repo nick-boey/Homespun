@@ -39,12 +39,28 @@ public class TimelineLaneCalculator
         var rowInfos = new List<RowLaneInfo>();
         var maxLaneUsed = 0;
 
-        // Track which nodes belong to which branch for lane release logic
-        var branchLastNode = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        // Build a lookup of node ID -> list of child node IDs (nodes that have this node as a parent)
+        var nodeChildren = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
         foreach (var node in nodes)
         {
-            branchLastNode[node.BranchName] = node.Id;
+            foreach (var parentId in node.ParentIds)
+            {
+                if (!nodeChildren.TryGetValue(parentId, out var children))
+                {
+                    children = [];
+                    nodeChildren[parentId] = children;
+                }
+                children.Add(node.Id);
+            }
         }
+
+        // Track which nodes have been processed for lane release calculation
+        var processedNodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        // Track which child of a multi-child parent has already been processed
+        // When the first child is processed, it can reuse the parent's lane
+        // Subsequent siblings need new lanes
+        var firstChildProcessed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         // Main branch always uses lane 0
         branchToLane[_mainBranchName] = 0;
@@ -66,17 +82,42 @@ public class TimelineLaneCalculator
             }
             else
             {
-                // New branch: find next available lane
-                nodeLane = GetNextAvailableLane(activeLanes);
+                // New branch: determine lane based on parent's children count
+                // If parent has multiple children and we're not the first one, we need a new lane
+                var parentId = node.ParentIds.FirstOrDefault();
+                var parentHasMultipleChildren = parentId != null &&
+                                                 nodeChildren.TryGetValue(parentId, out var siblings) &&
+                                                 siblings.Count > 1;
+
+                var isFirstSibling = parentId != null && !firstChildProcessed.Contains(parentId);
+
+                if (parentHasMultipleChildren && !isFirstSibling)
+                {
+                    // Sibling of already-processed child: force a new lane
+                    nodeLane = GetNextAvailableLane(activeLanes);
+                }
+                else
+                {
+                    // First child or single child: can reuse released lanes
+                    nodeLane = GetNextAvailableLane(activeLanes);
+                }
+
                 branchToLane[node.BranchName] = nodeLane;
                 activeLanes.Add(nodeLane);
                 maxLaneUsed = Math.Max(maxLaneUsed, nodeLane);
+
+                // Mark parent as having had a child processed
+                if (parentId != null)
+                {
+                    firstChildProcessed.Add(parentId);
+                }
 
                 // Determine connector from parent
                 connectorFromLane = GetParentLane(node, laneAssignments);
             }
 
             laneAssignments[node.Id] = nodeLane;
+            processedNodes.Add(node.Id);
 
             // Build the set of active lanes for this row
             // Include all lanes that have nodes below (not yet ended)
@@ -90,13 +131,16 @@ public class TimelineLaneCalculator
                 ConnectorFromLane = connectorFromLane
             });
 
-            // Check if this is the last node on this branch - if so, release the lane
-            // (but don't release lane 0 for main branch)
-            if (branchLastNode.TryGetValue(node.BranchName, out var lastNodeId) &&
-                lastNodeId == node.Id &&
-                node.BranchName != _mainBranchName)
+            // Release lane if this node has no unprocessed children
+            // and the parent doesn't have unprocessed siblings
+            if (node.BranchName != _mainBranchName)
             {
-                activeLanes.Remove(nodeLane);
+                var hasUnprocessedChildren = nodeChildren.TryGetValue(node.Id, out var children) &&
+                                              children.Any(childId => !processedNodes.Contains(childId));
+                if (!hasUnprocessedChildren)
+                {
+                    activeLanes.Remove(nodeLane);
+                }
             }
         }
 

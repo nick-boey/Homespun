@@ -299,11 +299,11 @@ public class TimelineLaneCalculatorTests
     #region Issue Dependency Tests
 
     [Test]
-    public void Calculate_IssueDependencyChain_FollowsParentLane()
+    public void Calculate_IssueDependencyChain_ChildrenGetNewLanes()
     {
         // Arrange - Issue chain where each is a separate branch
         // bd-001 -> bd-002 -> bd-003 (each on different branch)
-        // Since branches end after single node, lanes get reused
+        // Children branch to new lanes to visualize the dependency tree depth
         var nodes = new List<IGraphNode>
         {
             CreateNode("pr-1", "main"),
@@ -315,17 +315,17 @@ public class TimelineLaneCalculatorTests
         // Act
         var layout = _calculator.Calculate(nodes);
 
-        // Assert - First issue gets lane 1, subsequent issues reuse lane 1 (since previous branch ends)
+        // Assert - Each child issue gets a new lane to show dependency depth
         Assert.That(layout.LaneAssignments["issue-bd-001"], Is.EqualTo(1));
-        // bd-002 reuses lane 1 because bd-001's branch ended
-        Assert.That(layout.LaneAssignments["issue-bd-002"], Is.EqualTo(1));
-        // bd-003 also reuses lane 1
-        Assert.That(layout.LaneAssignments["issue-bd-003"], Is.EqualTo(1));
+        // bd-002 gets lane 2 because it's a child of bd-001
+        Assert.That(layout.LaneAssignments["issue-bd-002"], Is.EqualTo(2));
+        // bd-003 gets lane 3 because it's a child of bd-002
+        Assert.That(layout.LaneAssignments["issue-bd-003"], Is.EqualTo(3));
 
         // Verify connectors come from parent lanes
         Assert.That(layout.RowInfos[1].ConnectorFromLane, Is.EqualTo(0)); // From main
-        Assert.That(layout.RowInfos[2].ConnectorFromLane, Is.EqualTo(1)); // From bd-001 (same lane, so connector from previous lane)
-        Assert.That(layout.RowInfos[3].ConnectorFromLane, Is.EqualTo(1)); // From bd-002 (same lane)
+        Assert.That(layout.RowInfos[2].ConnectorFromLane, Is.EqualTo(1)); // From bd-001
+        Assert.That(layout.RowInfos[3].ConnectorFromLane, Is.EqualTo(2)); // From bd-002
     }
 
     [Test]
