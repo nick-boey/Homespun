@@ -380,8 +380,6 @@ public class GitHubService(
             }
         }
 
-        logger.LogInformation("PR sync completed: {Imported} imported, {Updated} updated, {Removed} removed, {Errors} errors",
-            result.Imported, result.Updated, result.Removed, result.Errors.Count);
         return result;
     }
 
@@ -415,8 +413,6 @@ public class GitHubService(
 
         try
         {
-            logger.LogInformation("Fetching reviews for PR #{PrNumber} from {Owner}/{Repo}", prNumber, project.GitHubOwner, project.GitHubRepo);
-            
             var reviews = await githubClient.GetPullRequestReviewsAsync(project.GitHubOwner, project.GitHubRepo, prNumber);
             var reviewComments = await githubClient.GetPullRequestReviewCommentsAsync(project.GitHubOwner, project.GitHubRepo, prNumber);
             
@@ -437,10 +433,6 @@ public class GitHubService(
             summary.ChangesRequested = summary.Reviews.Count(r => r.IsChangesRequested);
             summary.Comments = reviewComments.Count;
             summary.LastReviewAt = summary.Reviews.MaxBy(r => r.SubmittedAt)?.SubmittedAt;
-
-            logger.LogInformation(
-                "PR #{PrNumber} has {TotalReviews} reviews: {Approvals} approvals, {ChangesRequested} changes requested, {Comments} comments",
-                prNumber, summary.TotalReviews, summary.Approvals, summary.ChangesRequested, summary.Comments);
 
             return summary;
         }
