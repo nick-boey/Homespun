@@ -152,9 +152,11 @@ RUN git config --global --add safe.directory '*'
 COPY --from=build /app/publish .
 
 # Copy test session data for mock mode
-# MockDataSeederService loads these from /data/sessions when HOMESPUN_MOCK_MODE=true
-COPY --from=build /src/tests/data/sessions /data/sessions
-RUN chown -R homespun:homespun /data/sessions
+# MockDataSeederService loads these from /app/test-sessions when HOMESPUN_MOCK_MODE=true
+# Note: We use /app/test-sessions instead of /data/sessions because /data is mounted
+# as a volume at runtime, which would hide any files copied during build
+COPY --from=build /src/tests/data/sessions /app/test-sessions
+RUN chown -R homespun:homespun /app/test-sessions
 
 # Copy start script
 COPY src/Homespun/start.sh .

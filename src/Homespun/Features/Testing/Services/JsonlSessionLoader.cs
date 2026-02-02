@@ -43,6 +43,17 @@ public class JsonlSessionLoader : IJsonlSessionLoader
                 var message = JsonSerializer.Deserialize<ClaudeMessage>(line, JsonOptions);
                 if (message != null)
                 {
+                    // Mark as not streaming (critical for loaded sessions)
+                    message.IsStreaming = false;
+                    foreach (var content in message.Content)
+                    {
+                        content.IsStreaming = false;
+                    }
+
+                    // Filter streaming artifacts (duplicate/empty blocks)
+                    FilterDuplicateToolUseBlocks(message);
+                    FilterEmptyContentBlocks(message);
+
                     messages.Add(message);
                 }
             }
@@ -196,6 +207,53 @@ public class JsonlSessionLoader : IJsonlSessionLoader
         {
             _logger.LogWarning(ex, "Failed to load metadata from {Path}", metaPath);
             return null;
+        }
+    }
+
+    /// <summary>
+    /// Removes duplicate ToolUse blocks that are streaming artifacts.
+    /// When streaming, Claude creates blocks with empty input first, then fills them.
+    /// The JSONL may contain both the empty placeholders and the filled versions.
+    /// Only removes empty blocks when there's a duplicate with the same toolUseId that has content.
+    /// </summary>
+    private static void FilterDuplicateToolUseBlocks(ClaudeMessage message)
+    {
+        if (message.Content.Count <= 1) return;
+
+        // Group by toolUseId to find duplicates
+        var toolUseGroups = message.Content
+            .Where(c => c.Type == ClaudeContentType.ToolUse && !string.IsNullOrEmpty(c.ToolUseId))
+            .GroupBy(c => c.ToolUseId)
+            .Where(g => g.Count() > 1)
+            .ToList();
+
+        // For each group with duplicates, keep only the one with content
+        foreach (var group in toolUseGroups)
+        {
+            var withContent = group.FirstOrDefault(c => !string.IsNullOrEmpty(c.ToolInput));
+            if (withContent != null)
+            {
+                // Remove the empty duplicates, keep the one with content
+                foreach (var block in group.Where(c => c != withContent))
+                {
+                    message.Content.Remove(block);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Removes empty text blocks (streaming artifacts).
+    /// </summary>
+    private static void FilterEmptyContentBlocks(ClaudeMessage message)
+    {
+        var emptyBlocks = message.Content
+            .Where(c => c.Type == ClaudeContentType.Text && string.IsNullOrWhiteSpace(c.Text))
+            .ToList();
+
+        foreach (var block in emptyBlocks)
+        {
+            message.Content.Remove(block);
         }
     }
 

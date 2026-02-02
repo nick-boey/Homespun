@@ -623,8 +623,9 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         if (content != null)
         {
             assistantMessage.Content.Add(content);
-            _logger.LogDebug("Broadcasting content_block_start for index {Index}, type {Type}", index, blockType);
-            await _hubContext.BroadcastStreamingContentStarted(sessionId, content, index);
+            _logger.LogDebug("Content block started for index {Index}, type {Type} (streaming disabled, waiting for completion)", index, blockType);
+            // NOTE: Streaming is disabled - don't broadcast start events
+            // Content will be broadcast when the block completes (content_block_stop)
         }
     }
 
@@ -655,24 +656,26 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
 
         if (streamingBlock == null) return;
 
+        // NOTE: Streaming is disabled - accumulate content but don't broadcast deltas
+        // Content will be broadcast when the block completes (content_block_stop)
         switch (deltaType)
         {
             case "text_delta":
                 var textDelta = GetStringValue(deltaData, "text") ?? "";
                 streamingBlock.Text = (streamingBlock.Text ?? "") + textDelta;
-                await _hubContext.BroadcastStreamingContentDelta(sessionId, streamingBlock, textDelta, index);
+                // Streaming disabled: no delta broadcast
                 break;
 
             case "thinking_delta":
                 var thinkingDelta = GetStringValue(deltaData, "thinking") ?? "";
                 streamingBlock.Text = (streamingBlock.Text ?? "") + thinkingDelta;
-                await _hubContext.BroadcastStreamingContentDelta(sessionId, streamingBlock, thinkingDelta, index);
+                // Streaming disabled: no delta broadcast
                 break;
 
             case "input_json_delta":
                 var inputDelta = GetStringValue(deltaData, "partial_json") ?? "";
                 streamingBlock.ToolInput = (streamingBlock.ToolInput ?? "") + inputDelta;
-                await _hubContext.BroadcastStreamingContentDelta(sessionId, streamingBlock, inputDelta, index);
+                // Streaming disabled: no delta broadcast
                 break;
         }
     }
@@ -704,9 +707,12 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                 await HandleExitPlanModeCompletedAsync(sessionId, session, streamingBlock, cancellationToken);
             }
 
-            _logger.LogDebug("Broadcasting content_block_stop for index {Index}, Type: {Type}, ToolName: {ToolName}",
+            _logger.LogDebug("Content block completed for index {Index}, Type: {Type}, ToolName: {ToolName}",
                 index, streamingBlock.Type, streamingBlock.ToolName ?? "(null)");
-            await _hubContext.BroadcastStreamingContentStopped(sessionId, streamingBlock, index);
+
+            // NOTE: Streaming is disabled - broadcast the complete content block now
+            // instead of streaming deltas. This provides immediate full content to clients.
+            await _hubContext.BroadcastContentBlockReceived(sessionId, streamingBlock);
 
             // Check if this is an AskUserQuestion tool - if so, parse it and wait for user input
             if (streamingBlock.Type == ClaudeContentType.ToolUse &&
@@ -824,6 +830,13 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         // Try to find and read the plan file
         var (foundPath, planContent) = await TryReadPlanFileAsync(session.WorkingDirectory, planFilePath);
 
+        // If no file found but session has stored plan content (from JSONL), use that
+        if (string.IsNullOrEmpty(planContent) && !string.IsNullOrEmpty(session.PlanContent))
+        {
+            planContent = session.PlanContent;
+            _logger.LogInformation("ExitPlanMode: Using stored plan content for session {SessionId}", sessionId);
+        }
+
         if (!string.IsNullOrEmpty(planContent))
         {
             session.PlanFilePath = foundPath;
@@ -847,7 +860,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             await _hubContext.BroadcastMessageReceived(sessionId, planMessage);
 
             _logger.LogInformation("ExitPlanMode: Displayed plan from {FilePath} for session {SessionId} ({Length} chars)",
-                foundPath ?? "detected file", sessionId, planContent.Length);
+                foundPath ?? "stored content", sessionId, planContent.Length);
         }
         else
         {

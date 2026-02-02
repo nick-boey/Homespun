@@ -22,10 +22,17 @@ public class MockDataSeederService : IHostedService
     private readonly ILogger<MockDataSeederService> _logger;
 
     /// <summary>
-    /// Default path to look for JSONL session files.
-    /// Can be overridden via configuration if needed.
+    /// Default path to look for JSONL session files when running in container.
+    /// The Dockerfile copies tests/data/sessions to /app/test-sessions during build.
+    /// Note: We use /app/test-sessions instead of /data/sessions because /data is
+    /// mounted as a volume at runtime, which would hide files copied during build.
     /// </summary>
-    private const string DefaultSessionDataPath = "/data/sessions";
+    private const string ContainerSessionDataPath = "/app/test-sessions";
+
+    /// <summary>
+    /// Fallback path for local development - looks for test data relative to working directory.
+    /// </summary>
+    private const string LocalTestSessionDataPath = "tests/data/sessions";
 
     public MockDataSeederService(
         MockDataStore dataStore,
@@ -67,13 +74,16 @@ public class MockDataSeederService : IHostedService
 
     /// <summary>
     /// Seeds sessions from JSONL files if available, otherwise falls back to hardcoded demo data.
+    /// Checks both container path (/app/test-sessions) and local dev path (tests/data/sessions).
     /// </summary>
     private async Task SeedSessionsAsync(CancellationToken cancellationToken)
     {
-        // Try loading from JSONL files first
-        if (Directory.Exists(DefaultSessionDataPath))
+        // Determine which path to use for session data
+        var sessionDataPath = GetSessionDataPath();
+
+        if (sessionDataPath != null)
         {
-            var sessions = await _jsonlSessionLoader.LoadAllSessionsAsync(DefaultSessionDataPath, cancellationToken);
+            var sessions = await _jsonlSessionLoader.LoadAllSessionsAsync(sessionDataPath, cancellationToken);
             if (sessions.Count > 0)
             {
                 foreach (var session in sessions)
@@ -83,14 +93,52 @@ public class MockDataSeederService : IHostedService
                         session.Id, session.Messages.Count);
                 }
                 _logger.LogInformation("Loaded {Count} sessions from JSONL files at {Path}",
-                    sessions.Count, DefaultSessionDataPath);
+                    sessions.Count, sessionDataPath);
                 return;
             }
         }
 
         // Fall back to hardcoded demo data
-        _logger.LogDebug("No JSONL sessions found at {Path}, using hardcoded demo data", DefaultSessionDataPath);
+        _logger.LogDebug("No JSONL sessions found, using hardcoded demo data");
         SeedDemoSessions();
+    }
+
+    /// <summary>
+    /// Determines the correct path for session data based on environment:
+    /// - Container: /app/test-sessions (test data copied during Docker build)
+    /// - Local dev: tests/data/sessions (source test data)
+    /// Returns null if no valid session data path is found.
+    /// </summary>
+    private string? GetSessionDataPath()
+    {
+        // First, try the local development path (tests/data/sessions)
+        // This takes precedence because it contains the known test data
+        if (Directory.Exists(LocalTestSessionDataPath))
+        {
+            // Verify it has the expected structure (subdirectories with .jsonl files)
+            var projectDirs = Directory.GetDirectories(LocalTestSessionDataPath);
+            if (projectDirs.Any(dir => Directory.GetFiles(dir, "*.jsonl").Length > 0))
+            {
+                _logger.LogDebug("Using local test session data path: {Path}", LocalTestSessionDataPath);
+                return LocalTestSessionDataPath;
+            }
+        }
+
+        // Try the container path (/data/sessions) - used when running in Docker
+        if (Directory.Exists(ContainerSessionDataPath))
+        {
+            // Verify it has the expected structure (subdirectories with .jsonl files)
+            var projectDirs = Directory.GetDirectories(ContainerSessionDataPath);
+            if (projectDirs.Any(dir => Directory.GetFiles(dir, "*.jsonl").Length > 0))
+            {
+                _logger.LogDebug("Using container session data path: {Path}", ContainerSessionDataPath);
+                return ContainerSessionDataPath;
+            }
+        }
+
+        _logger.LogWarning("No session data path found. Checked: {LocalPath}, {ContainerPath}",
+            LocalTestSessionDataPath, ContainerSessionDataPath);
+        return null;
     }
 
     public Task StopAsync(CancellationToken cancellationToken)
