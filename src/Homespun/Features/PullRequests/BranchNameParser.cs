@@ -16,8 +16,8 @@ public static partial class BranchNameParser
 
     /// <summary>
     /// Extracts the beads issue ID from a branch name.
-    /// Branch format: {group}/{type}/{branch-id}+{beads-id}
-    /// Example: "issues/feature/link-issues+hsp-kca" -> "hsp-kca"
+    /// Branch format: {type}/{branch-id}+{beads-id}
+    /// Example: "feature/link-issues+hsp-kca" -> "hsp-kca"
     /// </summary>
     /// <param name="branchName">The branch name to parse.</param>
     /// <returns>The extracted issue ID, or null if no issue ID is found.</returns>

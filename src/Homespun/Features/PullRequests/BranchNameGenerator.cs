@@ -5,19 +5,13 @@ namespace Homespun.Features.PullRequests;
 
 /// <summary>
 /// Utility class for generating branch names from issue data.
-/// Branch format: {group}/{type}/{branch-id}+{issue-id}
-/// If no group is specified, "issues" is used as the default group.
+/// Branch format: {type}/{branch-id}+{issue-id}
 ///
-/// Example: "issues/feature/improve-tool-output+aLP3LH"
-/// Example with group: "core/bug/fix-authentication+xyz123"
+/// Example: "feature/improve-tool-output+aLP3LH"
+/// Example: "bug/fix-authentication+xyz123"
 /// </summary>
 public static partial class BranchNameGenerator
 {
-    /// <summary>
-    /// Default group prefix used when no group is specified for an issue.
-    /// </summary>
-    public const string DefaultGroup = "issues";
-
     /// <summary>
     /// Generates a branch name for an issue, recalculating from the current issue properties.
     /// This should always be called just before creating a branch/worktree to ensure
@@ -36,12 +30,7 @@ public static partial class BranchNameGenerator
             ? issue.WorkingBranchId.Trim()
             : SanitizeForBranch(issue.Title);
 
-        // If group is set, use group-based format; otherwise use default "issues" prefix
-        var group = !string.IsNullOrWhiteSpace(issue.Group)
-            ? issue.Group.Trim()
-            : DefaultGroup;
-
-        return $"{group}/{type}/{branchId}+{issue.Id}";
+        return $"{type}/{branchId}+{issue.Id}";
     }
 
     /// <summary>
@@ -51,7 +40,7 @@ public static partial class BranchNameGenerator
     /// <param name="issueId">The issue ID.</param>
     /// <param name="type">The issue type.</param>
     /// <param name="title">The issue title (used if workingBranchId is empty).</param>
-    /// <param name="group">Optional group for the issue.</param>
+    /// <param name="group">Optional group for the issue (no longer used in branch name generation).</param>
     /// <param name="workingBranchId">Optional custom branch ID.</param>
     /// <returns>The generated branch name preview.</returns>
     public static string GenerateBranchNamePreview(
@@ -68,12 +57,7 @@ public static partial class BranchNameGenerator
             ? workingBranchId.Trim()
             : SanitizeForBranch(title);
 
-        // If group is set, use group-based format; otherwise use default "issues" prefix
-        var groupStr = !string.IsNullOrWhiteSpace(group)
-            ? group.Trim()
-            : DefaultGroup;
-
-        return $"{groupStr}/{typeStr}/{branchId}+{issueId}";
+        return $"{typeStr}/{branchId}+{issueId}";
     }
 
     /// <summary>

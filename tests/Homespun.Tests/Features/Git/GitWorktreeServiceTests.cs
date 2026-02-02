@@ -46,9 +46,9 @@ public class GitWorktreeServiceTests
 
         // Assert
         Assert.That(result, Is.Not.Null);
-        // Path is normalized to platform-native separators, so check for the folder structure
-        // On Windows: feature\test, on Unix: feature/test
-        Assert.That(result, Does.Contain("feature").And.Contain("test"));
+        // Worktree should be in .worktrees directory with flattened name (/ becomes +)
+        Assert.That(result, Does.Contain(".worktrees"));
+        Assert.That(result, Does.Contain("feature+test"));
     }
 
     [Test]
@@ -161,12 +161,12 @@ public class GitWorktreeServiceTests
         // Act
         var result = GitWorktreeService.SanitizeBranchName("feature/new-thing");
 
-        // Assert - slashes are preserved for folder structure
+        // Assert - slashes are preserved for git branch names
         Assert.That(result, Is.EqualTo("feature/new-thing"));
     }
 
     [Test]
-    public void SanitizeBranchName_RemovesSpecialCharactersButPreservesSlashes()
+    public void SanitizeBranchName_RemovesSpecialCharactersButPreservesSlashesAndPlus()
     {
         // Act
         var result = GitWorktreeService.SanitizeBranchName("feature/test@branch#1");
@@ -196,14 +196,78 @@ public class GitWorktreeServiceTests
     }
 
     [Test]
-    public void SanitizeBranchName_WithPlusCharacter_ReplacesWithDash()
+    public void SanitizeBranchName_WithPlusCharacter_PreservesPlus()
     {
         // Act - Plus character is used to separate branch name from issue ID
-        var result = GitWorktreeService.SanitizeBranchName("issues/feature/improve-tool-output+aLP3LH");
+        var result = GitWorktreeService.SanitizeBranchName("feature/improve-tool-output+aLP3LH");
 
-        // Assert - Plus should be replaced with dash for filesystem compatibility
-        Assert.That(result, Is.EqualTo("issues/feature/improve-tool-output-aLP3LH"));
+        // Assert - Plus should be preserved for branch name matching
+        Assert.That(result, Is.EqualTo("feature/improve-tool-output+aLP3LH"));
     }
+
+    #region SanitizeBranchNameForWorktree Tests
+
+    [Test]
+    public void SanitizeBranchNameForWorktree_ConvertsSlashesToPlus()
+    {
+        // Act
+        var result = GitWorktreeService.SanitizeBranchNameForWorktree("feature/new-thing");
+
+        // Assert - slashes converted to plus for flat folder structure
+        Assert.That(result, Is.EqualTo("feature+new-thing"));
+    }
+
+    [Test]
+    public void SanitizeBranchNameForWorktree_PreservesPlus()
+    {
+        // Act - Full branch name with issue ID
+        var result = GitWorktreeService.SanitizeBranchNameForWorktree("feature/improve-tool-output+aLP3LH");
+
+        // Assert - Slashes become plus, existing plus is preserved
+        Assert.That(result, Is.EqualTo("feature+improve-tool-output+aLP3LH"));
+    }
+
+    [Test]
+    public void SanitizeBranchNameForWorktree_RemovesSpecialCharacters()
+    {
+        // Act
+        var result = GitWorktreeService.SanitizeBranchNameForWorktree("feature/test@branch#1");
+
+        // Assert - slashes become plus, special chars replaced with dashes
+        Assert.That(result, Is.EqualTo("feature+test-branch-1"));
+    }
+
+    [Test]
+    public void SanitizeBranchNameForWorktree_NormalizesBackslashesToPlus()
+    {
+        // Act
+        var result = GitWorktreeService.SanitizeBranchNameForWorktree("app\\feature\\test");
+
+        // Assert - backslashes converted to plus
+        Assert.That(result, Is.EqualTo("app+feature+test"));
+    }
+
+    [Test]
+    public void SanitizeBranchNameForWorktree_RemovesConsecutivePlus()
+    {
+        // Act
+        var result = GitWorktreeService.SanitizeBranchNameForWorktree("feature//test");
+
+        // Assert - consecutive slashes (now plus) are collapsed
+        Assert.That(result, Is.EqualTo("feature+test"));
+    }
+
+    [Test]
+    public void SanitizeBranchNameForWorktree_TrimsFromEnds()
+    {
+        // Act
+        var result = GitWorktreeService.SanitizeBranchNameForWorktree("/feature/test/");
+
+        // Assert - leading/trailing slashes (now plus) are trimmed
+        Assert.That(result, Is.EqualTo("feature+test"));
+    }
+
+    #endregion
 
     [Test]
     public async Task CreateWorktree_WithNewBranch_CreatesBranchFirst()
@@ -296,7 +360,7 @@ public class GitWorktreeServiceTests
         var repoPath = Path.Combine(_tempDir, "main");
         Directory.CreateDirectory(repoPath);
         var shortBranchName = "feature/my-pr-branch";
-        var expectedPath = Path.Combine(_tempDir, "feature/my-pr-branch");
+        var expectedPath = Path.Combine(_tempDir, ".worktrees", "feature+my-pr-branch");
 
         // Mock git worktree list returning the full refs/heads/ format
         _mockRunner.Setup(r => r.RunAsync("git", "worktree list --porcelain", repoPath))
@@ -321,7 +385,7 @@ public class GitWorktreeServiceTests
         var repoPath = Path.Combine(_tempDir, "main");
         Directory.CreateDirectory(repoPath);
         var shortBranchName = "feature/my-pr-branch";
-        var worktreePath = Path.Combine(_tempDir, "feature/my-pr-branch");
+        var worktreePath = Path.Combine(_tempDir, ".worktrees", "feature+my-pr-branch");
 
         // Mock git worktree list returning the full refs/heads/ format
         _mockRunner.Setup(r => r.RunAsync("git", "worktree list --porcelain", repoPath))
@@ -345,7 +409,7 @@ public class GitWorktreeServiceTests
         var repoPath = Path.Combine(_tempDir, "main");
         Directory.CreateDirectory(repoPath);
         var branchName = "feature/test";
-        var expectedPath = Path.Combine(_tempDir, "feature/test");
+        var expectedPath = Path.Combine(_tempDir, ".worktrees", "feature+test");
 
         // Mock git worktree list to return a worktree with matching branch
         _mockRunner.Setup(r => r.RunAsync("git", "worktree list --porcelain", repoPath))
@@ -363,62 +427,61 @@ public class GitWorktreeServiceTests
     }
 
     [Test]
-    public async Task GetWorktreePathForBranchAsync_WithSanitizedBranchName_MatchesByPath()
+    public async Task GetWorktreePathForBranchAsync_WithBranchNameContainingPlus_MatchesByBranch()
     {
-        // Arrange - This is the scenario from the bug report
-        // Branch name has + but worktree folder has - (due to sanitization)
+        // Arrange - Branch name has + which is preserved in both branch name and worktree path
         var repoPath = Path.Combine(_tempDir, "main");
         Directory.CreateDirectory(repoPath);
 
-        // Original branch name from GitHub PR (with + character)
-        var branchName = "issues/feature/improve-tool-output+aLP3LH";
+        // Branch name with + character (new flat format)
+        var branchName = "feature/improve-tool-output+aLP3LH";
 
-        // The worktree was created with sanitized path (+ became -)
-        var sanitizedPath = Path.Combine(_tempDir, "issues/feature/improve-tool-output-aLP3LH");
+        // The worktree is created with flattened path (slashes become +, existing + is preserved)
+        var worktreePath = Path.Combine(_tempDir, ".worktrees", "feature+improve-tool-output+aLP3LH");
 
-        // Mock git worktree list - branch name is still the original, but path is sanitized
+        // Mock git worktree list - branch name is preserved with +
         _mockRunner.Setup(r => r.RunAsync("git", "worktree list --porcelain", repoPath))
             .ReturnsAsync(new CommandResult
             {
                 Success = true,
-                Output = $"worktree {sanitizedPath}\nbranch refs/heads/{branchName}"
+                Output = $"worktree {worktreePath}\nbranch refs/heads/{branchName}"
             });
 
         // Act
         var result = await _service.GetWorktreePathForBranchAsync(repoPath, branchName);
 
-        // Assert - Should find by direct branch match first (since branch name in git is preserved)
-        Assert.That(result, Is.EqualTo(sanitizedPath));
+        // Assert - Should find by direct branch match
+        Assert.That(result, Is.EqualTo(worktreePath));
     }
 
     [Test]
-    public async Task GetWorktreePathForBranchAsync_WithSanitizedPath_FallsBackToPathMatch()
+    public async Task GetWorktreePathForBranchAsync_WithFlattenedPath_FallsBackToPathMatch()
     {
         // Arrange - Test the path-based fallback when branch doesn't match directly
         var repoPath = Path.Combine(_tempDir, "main");
         Directory.CreateDirectory(repoPath);
 
-        // Original branch name from GitHub PR (with + character)
-        var branchName = "issues/feature/improve-tool-output+aLP3LH";
+        // Branch name with + character
+        var branchName = "feature/improve-tool-output+aLP3LH";
 
-        // The worktree was created with sanitized path
-        var sanitizedPath = Path.GetFullPath(Path.Combine(_tempDir, "issues/feature/improve-tool-output-aLP3LH"));
+        // The worktree was created with flattened path in .worktrees directory
+        var flattenedPath = Path.GetFullPath(Path.Combine(_tempDir, ".worktrees", "feature+improve-tool-output+aLP3LH"));
 
-        // Mock git worktree list - worktree exists at sanitized path but with a different branch name
+        // Mock git worktree list - worktree exists at flattened path but with a different branch name
         // This simulates a case where git reports a slightly different branch name
         _mockRunner.Setup(r => r.RunAsync("git", "worktree list --porcelain", repoPath))
             .ReturnsAsync(new CommandResult
             {
                 Success = true,
-                Output = $"worktree {sanitizedPath}\nbranch refs/heads/some-other-branch"
+                Output = $"worktree {flattenedPath}\nbranch refs/heads/some-other-branch"
             });
 
         // Act
         var result = await _service.GetWorktreePathForBranchAsync(repoPath, branchName);
 
-        // Assert - Should find by sanitized path match
+        // Assert - Should find by flattened path match
         Assert.That(result, Is.Not.Null);
-        Assert.That(Path.GetFullPath(result!), Is.EqualTo(sanitizedPath).IgnoreCase);
+        Assert.That(Path.GetFullPath(result!), Is.EqualTo(flattenedPath).IgnoreCase);
     }
 
     [Test]
