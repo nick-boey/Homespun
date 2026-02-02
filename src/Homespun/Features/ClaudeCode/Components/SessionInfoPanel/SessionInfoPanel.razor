@@ -191,6 +191,7 @@
     private void SetActiveTab(Tab tab)
     {
         _activeTab = tab;
+        StateHasChanged();
     }
 
     private async Task TogglePanel()
