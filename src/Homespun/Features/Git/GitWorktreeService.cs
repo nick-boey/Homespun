@@ -379,6 +379,15 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
 
     public async Task<bool> DeleteRemoteBranchAsync(string repoPath, string branchName)
     {
+        // First check if the remote branch exists
+        var exists = await RemoteBranchExistsAsync(repoPath, branchName);
+
+        if (!exists)
+        {
+            logger.LogInformation("Remote branch {BranchName} does not exist, nothing to delete", branchName);
+            return true; // Return true since the end state (branch not on remote) is achieved
+        }
+
         var result = await commandRunner.RunAsync("git", $"push origin --delete \"{branchName}\"", repoPath);
 
         if (result.Success)
@@ -391,6 +400,25 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
         }
 
         return result.Success;
+    }
+
+    public async Task<bool> RemoteBranchExistsAsync(string repoPath, string branchName)
+    {
+        // Use git ls-remote to check if branch exists on remote
+        // This is more reliable than checking local refs
+        var result = await commandRunner.RunAsync(
+            "git",
+            $"ls-remote --heads origin \"{branchName}\"",
+            repoPath);
+
+        if (!result.Success)
+        {
+            logger.LogWarning("Failed to check remote branch existence for {BranchName}: {Error}", branchName, result.Error);
+            return false;
+        }
+
+        // If output contains the branch name, it exists
+        return !string.IsNullOrWhiteSpace(result.Output);
     }
 
     public async Task<bool> CreateLocalBranchFromRemoteAsync(string repoPath, string remoteBranch)
