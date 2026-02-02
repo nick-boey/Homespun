@@ -300,6 +300,7 @@
 
     private HubConnection? _hubConnection;
     private bool _isLoading = true;
+    private bool _isRefreshing = false;
     private string? _error;
     private Graph? _graph;
     private TimelineLaneLayout? _layout;
@@ -317,8 +318,39 @@
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadGraphAsync();
-        await SetupSignalRConnectionAsync();
+        // PHASE 1: Try immediate render from cache (NO GitHub API calls)
+        // This is the fast path - uses only locally cached data
+        var cachedGraph = await GraphService.BuildGraphFromCacheOnlyAsync(ProjectId, _currentMaxPastPRs);
+        if (cachedGraph != null)
+        {
+            _graph = cachedGraph;
+            _layout = _laneCalculator.Calculate(_graph.Nodes);
+
+            // Get agent statuses from cached JSON data
+            var cachedJsonData = await GraphService.BuildGraphJsonFromCacheOnlyAsync(ProjectId, _currentMaxPastPRs);
+            if (cachedJsonData != null)
+            {
+                _agentStatuses.Clear();
+                foreach (var commit in cachedJsonData.Commits)
+                {
+                    if (commit.IssueId != null && commit.AgentStatus != null)
+                    {
+                        _agentStatuses[commit.IssueId] = commit.AgentStatus;
+                    }
+                }
+            }
+
+            BuildLaneColors();
+            _isLoading = false;
+            StateHasChanged();
+        }
+
+        // Set up SignalR connection for real-time updates (non-blocking)
+        _ = SetupSignalRConnectionAsync();
+
+        // PHASE 2: Refresh with fresh data in background
+        // This fetches from GitHub and updates the cache for next time
+        _ = RefreshWithFreshDataAsync();
     }
 
     private async Task SetupSignalRConnectionAsync()
@@ -362,6 +394,71 @@
         catch (Exception ex)
         {
             Console.WriteLine($"Failed to set up SignalR connection for timeline: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Refreshes the timeline with fresh data from GitHub in the background.
+    /// This is called after the initial cached render to update the timeline with latest PR data.
+    /// If no cached data exists, this handles the initial load.
+    /// </summary>
+    private async Task RefreshWithFreshDataAsync()
+    {
+        if (_isRefreshing) return;
+
+        // Track whether we had cached data - affects error handling and UI indicators
+        bool hadCachedData = _graph != null;
+
+        try
+        {
+            // Only show refreshing indicator if we already have data displayed
+            // Otherwise the loading spinner is already showing
+            if (hadCachedData)
+            {
+                _isRefreshing = true;
+                await InvokeAsync(StateHasChanged);
+            }
+
+            // Get fresh data from GitHub (this also updates the cache with statuses)
+            var freshJsonData = await GraphService.BuildGraphJsonWithFreshDataAsync(ProjectId, _currentMaxPastPRs);
+            var freshGraph = await GraphService.BuildGraphAsync(ProjectId, _currentMaxPastPRs);
+
+            // Always update if this is initial load, or update the display
+            _graph = freshGraph;
+            _layout = _laneCalculator.Calculate(_graph.Nodes);
+
+            // Build agent status lookup
+            _agentStatuses.Clear();
+            foreach (var commit in freshJsonData.Commits)
+            {
+                if (commit.IssueId != null && commit.AgentStatus != null)
+                {
+                    _agentStatuses[commit.IssueId] = commit.AgentStatus;
+                }
+            }
+
+            BuildLaneColors();
+            _isLoading = false;
+            _error = null;
+        }
+        catch (Exception ex)
+        {
+            // Only show error to user if this was initial load (no cached data to fall back on)
+            if (!hadCachedData)
+            {
+                _error = ex.Message;
+                _isLoading = false;
+            }
+            else
+            {
+                // Log but don't show error - we already have cached data displayed
+                Console.WriteLine($"Failed to refresh timeline with fresh data: {ex.Message}");
+            }
+        }
+        finally
+        {
+            _isRefreshing = false;
+            await InvokeAsync(StateHasChanged);
         }
     }
 

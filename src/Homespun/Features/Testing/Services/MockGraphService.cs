@@ -73,6 +73,23 @@ public class MockGraphService : IGraphService
         return _mapper.ToJson(graph);
     }
 
+    public async Task<Graph?> BuildGraphFromCacheOnlyAsync(string projectId, int? maxPastPRs = 5)
+    {
+        _logger.LogDebug("[Mock] BuildGraphFromCacheOnly for project {ProjectId}", projectId);
+
+        // In mock mode, return the same data (simulates cache hit)
+        return await BuildGraphAsync(projectId, maxPastPRs);
+    }
+
+    public async Task<GitgraphJsonData?> BuildGraphJsonFromCacheOnlyAsync(string projectId, int? maxPastPRs = 5)
+    {
+        _logger.LogDebug("[Mock] BuildGraphJsonFromCacheOnly for project {ProjectId}", projectId);
+
+        // In mock mode, return the same data (simulates cache hit)
+        var graph = await BuildGraphAsync(projectId, maxPastPRs);
+        return _mapper.ToJson(graph);
+    }
+
     public DateTime? GetCacheTimestamp(string projectId)
     {
         // Mock mode doesn't have real caching, return current time
