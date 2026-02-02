@@ -41,7 +41,7 @@ public class GraphBuilder
         var issueList = issues.ToList();
         var prStatusLookup = issuePrStatuses ?? new Dictionary<string, PullRequestStatus>();
 
-        // Build dependency lookup from ParentIssues (issue -> list of issues that block it)
+        // Build dependency lookup from ParentIssues and PreviousIssues (issue -> list of issues that block it)
         var blockingDependencies = BuildDependencyLookup(issueList);
 
         // Add main branch
@@ -69,7 +69,7 @@ public class GraphBuilder
 
     /// <summary>
     /// Builds a lookup from issue ID to list of issue IDs that block it.
-    /// Uses Issue.ParentIssues property.
+    /// Uses both Issue.ParentIssues (hierarchy) and Issue.PreviousIssues (sequence) properties.
     /// </summary>
     private static Dictionary<string, List<string>> BuildDependencyLookup(List<Issue> issues)
     {
@@ -78,17 +78,16 @@ public class GraphBuilder
 
         foreach (var issue in issues)
         {
-            if (issue.ParentIssues.Count > 0)
-            {
-                // Filter to only parent issues that exist in our issue list
-                var validParents = issue.ParentIssues
-                    .Where(p => issueIds.Contains(p))
-                    .ToList();
+            // Include both ParentIssues (hierarchy) and PreviousIssues (sequence)
+            var allBlockers = issue.ParentIssues
+                .Concat(issue.PreviousIssues)
+                .Where(id => issueIds.Contains(id))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
 
-                if (validParents.Count > 0)
-                {
-                    lookup[issue.Id] = validParents;
-                }
+            if (allBlockers.Count > 0)
+            {
+                lookup[issue.Id] = allBlockers;
             }
         }
 
