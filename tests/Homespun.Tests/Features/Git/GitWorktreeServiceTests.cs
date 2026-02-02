@@ -738,14 +738,100 @@ public class GitWorktreeServiceTests
 
     #endregion
 
-    #region DeleteRemoteBranchAsync Tests
+    #region RemoteBranchExistsAsync Tests
 
     [Test]
-    public async Task DeleteRemoteBranchAsync_Success_ReturnsTrue()
+    public async Task RemoteBranchExistsAsync_BranchExists_ReturnsTrue()
     {
         // Arrange
         var repoPath = Path.Combine(_tempDir, "repo");
 
+        _mockRunner.Setup(r => r.RunAsync("git", "ls-remote --heads origin \"feature/exists\"", repoPath))
+            .ReturnsAsync(new CommandResult
+            {
+                Success = true,
+                Output = "abc123def456\trefs/heads/feature/exists"
+            });
+
+        // Act
+        var result = await _service.RemoteBranchExistsAsync(repoPath, "feature/exists");
+
+        // Assert
+        Assert.That(result, Is.True);
+    }
+
+    [Test]
+    public async Task RemoteBranchExistsAsync_BranchDoesNotExist_ReturnsFalse()
+    {
+        // Arrange
+        var repoPath = Path.Combine(_tempDir, "repo");
+
+        _mockRunner.Setup(r => r.RunAsync("git", "ls-remote --heads origin \"feature/nonexistent\"", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "" });
+
+        // Act
+        var result = await _service.RemoteBranchExistsAsync(repoPath, "feature/nonexistent");
+
+        // Assert
+        Assert.That(result, Is.False);
+    }
+
+    [Test]
+    public async Task RemoteBranchExistsAsync_GitError_ReturnsFalse()
+    {
+        // Arrange
+        var repoPath = Path.Combine(_tempDir, "repo");
+
+        _mockRunner.Setup(r => r.RunAsync("git", "ls-remote --heads origin \"feature/test\"", repoPath))
+            .ReturnsAsync(new CommandResult { Success = false, Error = "network error" });
+
+        // Act
+        var result = await _service.RemoteBranchExistsAsync(repoPath, "feature/test");
+
+        // Assert
+        Assert.That(result, Is.False);
+    }
+
+    #endregion
+
+    #region DeleteRemoteBranchAsync Tests
+
+    [Test]
+    public async Task DeleteRemoteBranchAsync_RemoteBranchDoesNotExist_ReturnsTrueWithoutDeleting()
+    {
+        // Arrange
+        var repoPath = Path.Combine(_tempDir, "repo");
+
+        // Remote branch doesn't exist
+        _mockRunner.Setup(r => r.RunAsync("git", "ls-remote --heads origin \"feature/not-pushed\"", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "" });
+
+        // Act
+        var result = await _service.DeleteRemoteBranchAsync(repoPath, "feature/not-pushed");
+
+        // Assert
+        Assert.That(result, Is.True);
+        // Verify that push --delete was NOT called
+        _mockRunner.Verify(
+            r => r.RunAsync("git", It.Is<string>(s => s.Contains("push origin --delete")), repoPath),
+            Times.Never);
+    }
+
+    [Test]
+    public async Task DeleteRemoteBranchAsync_RemoteBranchExists_DeletesAndReturnsTrue()
+    {
+        // Arrange
+        var repoPath = Path.Combine(_tempDir, "repo");
+
+        // Remote branch exists
+        _mockRunner.Setup(r => r.RunAsync("git", "ls-remote --heads origin \"feature/remote\"", repoPath))
+            .ReturnsAsync(new CommandResult
+            {
+                Success = true,
+                Output = "abc123\trefs/heads/feature/remote"
+            });
+
+        // Delete succeeds
         _mockRunner.Setup(r => r.RunAsync("git", "push origin --delete \"feature/remote\"", repoPath))
             .ReturnsAsync(new CommandResult { Success = true });
 
@@ -754,19 +840,31 @@ public class GitWorktreeServiceTests
 
         // Assert
         Assert.That(result, Is.True);
+        _mockRunner.Verify(
+            r => r.RunAsync("git", "push origin --delete \"feature/remote\"", repoPath),
+            Times.Once);
     }
 
     [Test]
-    public async Task DeleteRemoteBranchAsync_GitError_ReturnsFalse()
+    public async Task DeleteRemoteBranchAsync_DeleteFails_ReturnsFalse()
     {
         // Arrange
         var repoPath = Path.Combine(_tempDir, "repo");
 
-        _mockRunner.Setup(r => r.RunAsync("git", It.IsAny<string>(), repoPath))
-            .ReturnsAsync(new CommandResult { Success = false, Error = "remote rejected" });
+        // Remote branch exists
+        _mockRunner.Setup(r => r.RunAsync("git", "ls-remote --heads origin \"protected\"", repoPath))
+            .ReturnsAsync(new CommandResult
+            {
+                Success = true,
+                Output = "abc123\trefs/heads/protected"
+            });
+
+        // Delete fails (e.g., protected branch)
+        _mockRunner.Setup(r => r.RunAsync("git", "push origin --delete \"protected\"", repoPath))
+            .ReturnsAsync(new CommandResult { Success = false, Error = "remote rejected (protected branch)" });
 
         // Act
-        var result = await _service.DeleteRemoteBranchAsync(repoPath, "protected-branch");
+        var result = await _service.DeleteRemoteBranchAsync(repoPath, "protected");
 
         // Assert
         Assert.That(result, Is.False);

@@ -79,6 +79,14 @@ public interface IGitWorktreeService
     Task<bool> DeleteRemoteBranchAsync(string repoPath, string branchName);
 
     /// <summary>
+    /// Check if a remote branch exists on the origin.
+    /// </summary>
+    /// <param name="repoPath">Path to the repository</param>
+    /// <param name="branchName">Name of the branch to check</param>
+    /// <returns>True if the remote branch exists</returns>
+    Task<bool> RemoteBranchExistsAsync(string repoPath, string branchName);
+
+    /// <summary>
     /// Create a local branch from a remote branch.
     /// </summary>
     /// <param name="repoPath">Path to the repository</param>

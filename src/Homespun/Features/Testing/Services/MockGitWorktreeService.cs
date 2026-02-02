@@ -232,6 +232,13 @@ public class MockGitWorktreeService : IGitWorktreeService
         return Task.FromResult(true);
     }
 
+    public Task<bool> RemoteBranchExistsAsync(string repoPath, string branchName)
+    {
+        _logger.LogDebug("[Mock] RemoteBranchExists {BranchName} in {RepoPath}", branchName, repoPath);
+        // In mock, always return true (assume remote exists) for testing scenarios
+        return Task.FromResult(true);
+    }
+
     public Task<bool> CreateLocalBranchFromRemoteAsync(string repoPath, string remoteBranch)
     {
         _logger.LogDebug("[Mock] CreateLocalBranchFromRemote {RemoteBranch} in {RepoPath}", remoteBranch, repoPath);
