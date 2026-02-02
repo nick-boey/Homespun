@@ -1,3 +1,4 @@
+using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.Commands;
 using Homespun.Features.Git;
 using Microsoft.Extensions.Logging;
@@ -1082,6 +1083,222 @@ public class GitWorktreeServiceTests
 
         // Assert
         Assert.That(result, Is.False);
+    }
+
+    #endregion
+
+    #region GetChangedFilesAsync Tests
+
+    [Test]
+    public async Task GetChangedFilesAsync_WithChanges_ReturnsFileList()
+    {
+        // Arrange
+        var worktreePath = Path.Combine(_tempDir, "worktree");
+        Directory.CreateDirectory(worktreePath);
+
+        // git diff --numstat output format: additions<tab>deletions<tab>filename
+        _mockRunner.Setup(r => r.RunAsync("git", "diff --numstat main...HEAD", worktreePath))
+            .ReturnsAsync(new CommandResult
+            {
+                Success = true,
+                Output = "10\t5\tsrc/Components/Button.cs\n3\t0\tsrc/Services/MyService.cs\n0\t15\tsrc/Old/Deprecated.cs"
+            });
+
+        // Act
+        var result = await _service.GetChangedFilesAsync(worktreePath, "main");
+
+        // Assert
+        Assert.That(result, Has.Count.EqualTo(3));
+        Assert.That(result[0].FilePath, Is.EqualTo("src/Components/Button.cs"));
+        Assert.That(result[0].Additions, Is.EqualTo(10));
+        Assert.That(result[0].Deletions, Is.EqualTo(5));
+    }
+
+    [Test]
+    public async Task GetChangedFilesAsync_NoChanges_ReturnsEmptyList()
+    {
+        // Arrange
+        var worktreePath = Path.Combine(_tempDir, "worktree");
+        Directory.CreateDirectory(worktreePath);
+
+        _mockRunner.Setup(r => r.RunAsync("git", "diff --numstat main...HEAD", worktreePath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "" });
+
+        // Act
+        var result = await _service.GetChangedFilesAsync(worktreePath, "main");
+
+        // Assert
+        Assert.That(result, Is.Empty);
+    }
+
+    [Test]
+    public async Task GetChangedFilesAsync_ParsesAdditions_Correctly()
+    {
+        // Arrange
+        var worktreePath = Path.Combine(_tempDir, "worktree");
+        Directory.CreateDirectory(worktreePath);
+
+        _mockRunner.Setup(r => r.RunAsync("git", "diff --numstat main...HEAD", worktreePath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "100\t0\tnew-file.cs" });
+
+        // Act
+        var result = await _service.GetChangedFilesAsync(worktreePath, "main");
+
+        // Assert
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].Additions, Is.EqualTo(100));
+        Assert.That(result[0].Deletions, Is.EqualTo(0));
+        Assert.That(result[0].Status, Is.EqualTo(FileChangeStatus.Added));
+    }
+
+    [Test]
+    public async Task GetChangedFilesAsync_ParsesDeletions_Correctly()
+    {
+        // Arrange
+        var worktreePath = Path.Combine(_tempDir, "worktree");
+        Directory.CreateDirectory(worktreePath);
+
+        _mockRunner.Setup(r => r.RunAsync("git", "diff --numstat main...HEAD", worktreePath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "0\t50\tdeleted-file.cs" });
+
+        // Act
+        var result = await _service.GetChangedFilesAsync(worktreePath, "main");
+
+        // Assert
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].Additions, Is.EqualTo(0));
+        Assert.That(result[0].Deletions, Is.EqualTo(50));
+        Assert.That(result[0].Status, Is.EqualTo(FileChangeStatus.Deleted));
+    }
+
+    [Test]
+    public async Task GetChangedFilesAsync_DetectsAddedFiles()
+    {
+        // Arrange
+        var worktreePath = Path.Combine(_tempDir, "worktree");
+        Directory.CreateDirectory(worktreePath);
+
+        // A file with only additions and no deletions is a new file
+        _mockRunner.Setup(r => r.RunAsync("git", "diff --numstat main...HEAD", worktreePath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "25\t0\tnew-feature.cs" });
+
+        // Act
+        var result = await _service.GetChangedFilesAsync(worktreePath, "main");
+
+        // Assert
+        Assert.That(result[0].Status, Is.EqualTo(FileChangeStatus.Added));
+    }
+
+    [Test]
+    public async Task GetChangedFilesAsync_DetectsDeletedFiles()
+    {
+        // Arrange
+        var worktreePath = Path.Combine(_tempDir, "worktree");
+        Directory.CreateDirectory(worktreePath);
+
+        // A file with only deletions and no additions is a deleted file
+        _mockRunner.Setup(r => r.RunAsync("git", "diff --numstat main...HEAD", worktreePath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "0\t30\told-file.cs" });
+
+        // Act
+        var result = await _service.GetChangedFilesAsync(worktreePath, "main");
+
+        // Assert
+        Assert.That(result[0].Status, Is.EqualTo(FileChangeStatus.Deleted));
+    }
+
+    [Test]
+    public async Task GetChangedFilesAsync_DetectsModifiedFiles()
+    {
+        // Arrange
+        var worktreePath = Path.Combine(_tempDir, "worktree");
+        Directory.CreateDirectory(worktreePath);
+
+        // A file with both additions and deletions is a modified file
+        _mockRunner.Setup(r => r.RunAsync("git", "diff --numstat main...HEAD", worktreePath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "10\t5\tmodified-file.cs" });
+
+        // Act
+        var result = await _service.GetChangedFilesAsync(worktreePath, "main");
+
+        // Assert
+        Assert.That(result[0].Status, Is.EqualTo(FileChangeStatus.Modified));
+    }
+
+    [Test]
+    public async Task GetChangedFilesAsync_DetectsRenamedFiles()
+    {
+        // Arrange
+        var worktreePath = Path.Combine(_tempDir, "worktree");
+        Directory.CreateDirectory(worktreePath);
+
+        // Renamed files show as "old-name => new-name" in the path
+        _mockRunner.Setup(r => r.RunAsync("git", "diff --numstat main...HEAD", worktreePath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "0\t0\told-name.cs => new-name.cs" });
+
+        // Act
+        var result = await _service.GetChangedFilesAsync(worktreePath, "main");
+
+        // Assert
+        Assert.That(result[0].Status, Is.EqualTo(FileChangeStatus.Renamed));
+        Assert.That(result[0].FilePath, Does.Contain("=>"));
+    }
+
+    [Test]
+    public async Task GetChangedFilesAsync_GitError_ReturnsEmptyList()
+    {
+        // Arrange
+        var worktreePath = Path.Combine(_tempDir, "worktree");
+        Directory.CreateDirectory(worktreePath);
+
+        _mockRunner.Setup(r => r.RunAsync("git", "diff --numstat main...HEAD", worktreePath))
+            .ReturnsAsync(new CommandResult { Success = false, Error = "fatal: not a git repository" });
+
+        // Act
+        var result = await _service.GetChangedFilesAsync(worktreePath, "main");
+
+        // Assert
+        Assert.That(result, Is.Empty);
+    }
+
+    [Test]
+    public async Task GetChangedFilesAsync_BinaryFiles_HandlesCorrectly()
+    {
+        // Arrange
+        var worktreePath = Path.Combine(_tempDir, "worktree");
+        Directory.CreateDirectory(worktreePath);
+
+        // Binary files show "-" for additions and deletions
+        _mockRunner.Setup(r => r.RunAsync("git", "diff --numstat main...HEAD", worktreePath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "-\t-\timage.png" });
+
+        // Act
+        var result = await _service.GetChangedFilesAsync(worktreePath, "main");
+
+        // Assert
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].FilePath, Is.EqualTo("image.png"));
+        Assert.That(result[0].Additions, Is.EqualTo(0)); // Binary files have 0 for line counts
+        Assert.That(result[0].Deletions, Is.EqualTo(0));
+        Assert.That(result[0].Status, Is.EqualTo(FileChangeStatus.Modified));
+    }
+
+    [Test]
+    public async Task GetChangedFilesAsync_PathsWithSpaces_HandlesCorrectly()
+    {
+        // Arrange
+        var worktreePath = Path.Combine(_tempDir, "worktree");
+        Directory.CreateDirectory(worktreePath);
+
+        _mockRunner.Setup(r => r.RunAsync("git", "diff --numstat main...HEAD", worktreePath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "5\t3\tsrc/My Components/Button Component.cs" });
+
+        // Act
+        var result = await _service.GetChangedFilesAsync(worktreePath, "main");
+
+        // Assert
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].FilePath, Is.EqualTo("src/My Components/Button Component.cs"));
     }
 
     #endregion

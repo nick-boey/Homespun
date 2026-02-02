@@ -4,6 +4,7 @@
 @using Homespun.Features.ClaudeCode.Services
 @using Homespun.Features.ClaudeCode.Hubs
 @using Homespun.Features.ClaudeCode.Components.ToolResults
+@using Homespun.Features.ClaudeCode.Components.SessionInfoPanel
 @using Homespun.Features.Shared.Services
 @using Homespun.Features.SignalR
 @using Microsoft.AspNetCore.Components.Web
@@ -49,7 +50,8 @@
             </div>
         </div>
 
-        <div class="chat-container">
+        <div class="session-content">
+        <div class="chat-container @(_sidePanelOpen ? "" : "expanded")">
             <div class="messages-area" @ref="_messagesContainer" @onscroll="HandleScroll">
                 @if (_session.Messages.Count == 0 && _session.Status != ClaudeSessionStatus.Running)
                 {
@@ -313,6 +315,9 @@
             </div>
         </div>
 
+        <SessionInfoPanel Session="_session" @bind-IsOpen="_sidePanelOpen" />
+        </div>
+
         @if (_session.TotalCostUsd > 0)
         {
             <div class="session-stats">
@@ -365,7 +370,7 @@
         display: flex;
         flex-direction: column;
         height: calc(100vh - 100px);
-        max-width: 1200px;
+        max-width: 1600px;
         margin: 0 auto;
         padding: var(--spacing-lg);
     }
@@ -402,6 +407,14 @@
         border-radius: var(--radius-sm);
     }
 
+    .session-content {
+        display: flex;
+        flex: 1;
+        gap: var(--spacing-md);
+        overflow: hidden;
+        position: relative;
+    }
+
     .chat-container {
         flex: 1;
         display: flex;
@@ -410,6 +423,11 @@
         border-radius: var(--radius-lg);
         border: 1px solid var(--border-color);
         overflow: hidden;
+        min-width: 0;
+    }
+
+    .chat-container.expanded {
+        max-width: 100%;
     }
 
     .messages-area {
@@ -1391,6 +1409,9 @@
     private ElementReference _messagesContainer;
     private HubConnection? _hubConnection;
     private string? _signalRError;
+
+    // Side panel state
+    private bool _sidePanelOpen = true;
 
     // Question handling
     private PendingQuestion? _pendingQuestion;
