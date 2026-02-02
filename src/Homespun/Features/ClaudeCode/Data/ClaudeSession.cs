@@ -91,6 +91,12 @@ public class ClaudeSession
     public string? PlanFilePath { get; set; }
 
     /// <summary>
+    /// Plan content extracted from ExitPlanMode for mock/archived sessions
+    /// where the plan file doesn't exist on disk.
+    /// </summary>
+    public string? PlanContent { get; set; }
+
+    /// <summary>
     /// Timestamps when context was cleared during the session.
     /// Used to display separators between conversation segments.
     /// </summary>
