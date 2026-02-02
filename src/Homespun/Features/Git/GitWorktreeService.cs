@@ -31,26 +31,26 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
 
     public async Task<string?> CreateWorktreeAsync(string repoPath, string branchName, bool createBranch = false, string? baseBranch = null)
     {
-        var sanitizedName = SanitizeBranchName(branchName);
-        // Create worktree as sibling of the main repo, not inside it
-        // e.g., ~/.homespun/src/repo/main -> ~/.homespun/src/repo/<branch-name>
+        var flattenedName = SanitizeBranchNameForWorktree(branchName);
+        // Create worktree inside .worktrees directory as sibling of the main repo
+        // e.g., ~/.homespun/src/repo/main -> ~/.homespun/src/repo/.worktrees/<flattened-branch-name>
         var parentDir = Path.GetDirectoryName(repoPath);
         if (string.IsNullOrEmpty(parentDir))
         {
             logger.LogError("Cannot determine parent directory of {RepoPath}", repoPath);
             throw new InvalidOperationException($"Cannot determine parent directory of {repoPath}");
         }
-        
+
+        // Create .worktrees directory if it doesn't exist
+        var worktreesDir = Path.Combine(parentDir, ".worktrees");
+        if (!Directory.Exists(worktreesDir))
+        {
+            Directory.CreateDirectory(worktreesDir);
+        }
+
         // Normalize the path to use platform-native separators
         // This fixes issues on Windows where mixed forward/back slashes cause problems
-        var worktreePath = Path.GetFullPath(Path.Combine(parentDir, sanitizedName));
-
-        // Ensure parent directories exist for nested branch names (e.g., app/feature/id)
-        var worktreeParentDir = Path.GetDirectoryName(worktreePath);
-        if (!string.IsNullOrEmpty(worktreeParentDir) && !Directory.Exists(worktreeParentDir))
-        {
-            Directory.CreateDirectory(worktreeParentDir);
-        }
+        var worktreePath = Path.GetFullPath(Path.Combine(worktreesDir, flattenedName));
 
         if (createBranch)
         {
@@ -161,10 +161,9 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
             return directMatch.Path;
         }
 
-        // Fall back to path-based matching using sanitized name
-        // This handles cases where the branch name contains special characters like +
-        // that were sanitized when the worktree folder was created
-        var sanitizedName = SanitizeBranchName(branchName);
+        // Fall back to path-based matching using flattened name in .worktrees directory
+        // This handles cases where the branch name contains special characters
+        var flattenedName = SanitizeBranchNameForWorktree(branchName);
         var parentDir = Path.GetDirectoryName(repoPath);
 
         if (string.IsNullOrEmpty(parentDir))
@@ -172,13 +171,13 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
             return null;
         }
 
-        var expectedPath = Path.GetFullPath(Path.Combine(parentDir, sanitizedName));
+        var expectedPath = Path.GetFullPath(Path.Combine(parentDir, ".worktrees", flattenedName));
         var pathMatch = worktrees.FirstOrDefault(w =>
             Path.GetFullPath(w.Path).Equals(expectedPath, StringComparison.OrdinalIgnoreCase));
 
         if (pathMatch != null)
         {
-            logger.LogDebug("Found worktree for branch {BranchName} via sanitized path match at {Path}", branchName, pathMatch.Path);
+            logger.LogDebug("Found worktree for branch {BranchName} via flattened path match at {Path}", branchName, pathMatch.Path);
         }
 
         return pathMatch?.Path;
@@ -217,20 +216,44 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
         return true;
     }
 
+    /// <summary>
+    /// Sanitizes a branch name for use in git commands while preserving slashes.
+    /// </summary>
     public static string SanitizeBranchName(string branchName)
     {
         // Normalize path separators to forward slashes
         var sanitized = branchName.Replace('\\', '/');
-        // Replace special characters (except forward slash) with dashes
+        // Replace special characters (except forward slash and plus) with dashes
         sanitized = Regex.Replace(sanitized, @"[@#\s]+", "-");
-        // Remove any remaining invalid characters (keep forward slashes for folder structure)
-        sanitized = Regex.Replace(sanitized, @"[^a-zA-Z0-9\-_./]", "-");
+        // Remove any remaining invalid characters (keep forward slashes and plus)
+        sanitized = Regex.Replace(sanitized, @"[^a-zA-Z0-9\-_./+]", "-");
         // Remove consecutive dashes
         sanitized = Regex.Replace(sanitized, @"-+", "-");
         // Remove consecutive slashes
         sanitized = Regex.Replace(sanitized, @"/+", "/");
         // Trim dashes and slashes from ends
         return sanitized.Trim('-', '/');
+    }
+
+    /// <summary>
+    /// Sanitizes a branch name for use as a worktree folder name.
+    /// Converts slashes to plus signs to create a flat folder structure.
+    /// Example: "feature/my-branch+abc123" -> "feature+my-branch+abc123"
+    /// </summary>
+    public static string SanitizeBranchNameForWorktree(string branchName)
+    {
+        // Normalize path separators and convert to plus for flat structure
+        var sanitized = branchName.Replace('\\', '+').Replace('/', '+');
+        // Replace special characters (except plus) with dashes
+        sanitized = Regex.Replace(sanitized, @"[@#\s]+", "-");
+        // Remove any remaining invalid characters (keep plus for the flattened structure)
+        sanitized = Regex.Replace(sanitized, @"[^a-zA-Z0-9\-_+.]", "-");
+        // Remove consecutive dashes
+        sanitized = Regex.Replace(sanitized, @"-+", "-");
+        // Remove consecutive plus signs
+        sanitized = Regex.Replace(sanitized, @"\++", "+");
+        // Trim dashes and plus from ends
+        return sanitized.Trim('-', '+');
     }
 
     public async Task<List<BranchInfo>> ListLocalBranchesAsync(string repoPath)
