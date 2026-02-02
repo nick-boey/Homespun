@@ -36,6 +36,15 @@ public interface IGraphCacheService
     /// <param name="projectId">The project ID.</param>
     /// <returns>The cache timestamp, or null if not cached.</returns>
     DateTime? GetCacheTimestamp(string projectId);
+
+    /// <summary>
+    /// Caches PR data including PR statuses for a project.
+    /// </summary>
+    /// <param name="projectId">The project ID.</param>
+    /// <param name="openPrs">The open PRs from GitHub.</param>
+    /// <param name="closedPrs">The closed PRs from GitHub.</param>
+    /// <param name="issuePrStatuses">PR status for issues with linked PRs.</param>
+    Task CachePRDataWithStatusesAsync(string projectId, List<PullRequestInfo> openPrs, List<PullRequestInfo> closedPrs, Dictionary<string, PullRequestStatus> issuePrStatuses);
 }
 
 /// <summary>
@@ -52,6 +61,12 @@ public class CachedPRData
     /// Closed/merged PRs from GitHub.
     /// </summary>
     public List<PullRequestInfo> ClosedPrs { get; set; } = [];
+
+    /// <summary>
+    /// PR status for issues that have linked PRs.
+    /// Key is the issue ID, value is the PR status.
+    /// </summary>
+    public Dictionary<string, PullRequestStatus> IssuePrStatuses { get; set; } = new();
 
     /// <summary>
     /// When the cache was last updated.

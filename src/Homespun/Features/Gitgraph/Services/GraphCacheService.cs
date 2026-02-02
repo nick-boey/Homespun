@@ -142,6 +142,31 @@ public class GraphCacheService : IGraphCacheService
         }
     }
 
+    /// <inheritdoc />
+    public async Task CachePRDataWithStatusesAsync(
+        string projectId,
+        List<PullRequestInfo> openPrs,
+        List<PullRequestInfo> closedPrs,
+        Dictionary<string, PullRequestStatus> issuePrStatuses)
+    {
+        var cachedData = new CachedPRData
+        {
+            OpenPrs = openPrs,
+            ClosedPrs = closedPrs,
+            IssuePrStatuses = issuePrStatuses,
+            CachedAt = DateTime.UtcNow
+        };
+
+        _memoryCache[projectId] = cachedData;
+
+        // Persist to disk asynchronously
+        await PersistToDiskAsync(projectId, cachedData);
+
+        _logger.LogInformation(
+            "Cached PR data with statuses for project {ProjectId}: {OpenCount} open, {ClosedCount} closed, {StatusCount} statuses",
+            projectId, openPrs.Count, closedPrs.Count, issuePrStatuses.Count);
+    }
+
     private async Task PersistToDiskAsync(string projectId, CachedPRData data)
     {
         await _lock.WaitAsync();

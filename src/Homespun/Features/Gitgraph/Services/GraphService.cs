@@ -49,7 +49,61 @@ public class GraphService(
     /// <inheritdoc />
     public async Task<GitgraphJsonData> BuildGraphJsonWithFreshDataAsync(string projectId, int? maxPastPRs = 5)
     {
-        var graph = await BuildGraphInternalAsync(projectId, maxPastPRs, useCache: false);
+        var graph = await BuildGraphInternalWithStatusCachingAsync(projectId, maxPastPRs);
+        var jsonData = _mapper.ToJson(graph);
+
+        // Enrich nodes with agent status data
+        EnrichWithAgentStatuses(jsonData, projectId);
+
+        return jsonData;
+    }
+
+    /// <inheritdoc />
+    public async Task<Graph?> BuildGraphFromCacheOnlyAsync(string projectId, int? maxPastPRs = 5)
+    {
+        var cachedData = cacheService.GetCachedPRData(projectId);
+        if (cachedData == null)
+        {
+            logger.LogDebug("No cached data available for project {ProjectId}", projectId);
+            return null;
+        }
+
+        var project = await projectService.GetByIdAsync(projectId);
+        if (project == null)
+        {
+            logger.LogWarning("Project not found: {ProjectId}", projectId);
+            return null;
+        }
+
+        logger.LogDebug("Building graph from cache only for project {ProjectId}, cached at {CachedAt}",
+            projectId, cachedData.CachedAt);
+
+        var allPrs = cachedData.ClosedPrs.Concat(cachedData.OpenPrs).ToList();
+
+        // Fetch issues from Fleece (fast local operation)
+        var issues = await GetIssuesAsync(project.LocalPath);
+
+        // Filter out issues that are linked to PRs
+        var linkedIssueIds = GetLinkedIssueIds(projectId);
+        var filteredIssues = issues.Where(i => !linkedIssueIds.Contains(i.Id)).ToList();
+
+        // Use cached PR statuses (no GitHub API calls)
+        var issuePrStatuses = cachedData.IssuePrStatuses;
+
+        logger.LogDebug(
+            "Building graph from cache for project {ProjectId}: {OpenPrCount} open PRs, {ClosedPrCount} closed PRs, {IssueCount} issues, {StatusCount} cached statuses",
+            projectId, cachedData.OpenPrs.Count, cachedData.ClosedPrs.Count, filteredIssues.Count, issuePrStatuses.Count);
+
+        return _graphBuilder.Build(allPrs, filteredIssues, maxPastPRs, issuePrStatuses);
+    }
+
+    /// <inheritdoc />
+    public async Task<GitgraphJsonData?> BuildGraphJsonFromCacheOnlyAsync(string projectId, int? maxPastPRs = 5)
+    {
+        var graph = await BuildGraphFromCacheOnlyAsync(projectId, maxPastPRs);
+        if (graph == null)
+            return null;
+
         var jsonData = _mapper.ToJson(graph);
 
         // Enrich nodes with agent status data
@@ -121,6 +175,46 @@ public class GraphService(
         logger.LogDebug(
             "Building graph for project {ProjectId}: {OpenPrCount} open PRs, {ClosedPrCount} closed PRs, {IssueCount} issues ({FilteredCount} after filtering linked), {LinkedPrCount} with PR status, maxPastPRs: {MaxPastPRs}, fromCache: {FromCache}",
             projectId, openPrs.Count, closedPrs.Count, issues.Count, filteredIssues.Count, issuePrStatuses.Count, maxPastPRs, cachedData != null);
+
+        return _graphBuilder.Build(allPrs, filteredIssues, maxPastPRs, issuePrStatuses);
+    }
+
+    /// <summary>
+    /// Internal method to build graph with fresh data and cache including PR statuses.
+    /// Used by BuildGraphJsonWithFreshDataAsync to ensure statuses are cached for future cache-only loads.
+    /// </summary>
+    private async Task<Graph> BuildGraphInternalWithStatusCachingAsync(string projectId, int? maxPastPRs)
+    {
+        var project = await projectService.GetByIdAsync(projectId);
+        if (project == null)
+        {
+            logger.LogWarning("Project not found: {ProjectId}", projectId);
+            return new Graph([], new Dictionary<string, GraphBranch>());
+        }
+
+        // Fetch PRs from GitHub (expensive operation)
+        logger.LogDebug("Fetching fresh PR data from GitHub for project {ProjectId}", projectId);
+        var openPrs = await GetOpenPullRequestsSafe(projectId);
+        var closedPrs = await GetClosedPullRequestsSafe(projectId);
+
+        var allPrs = closedPrs.Concat(openPrs).ToList();
+
+        // Fetch issues from Fleece (fast operation, always fresh)
+        var issues = await GetIssuesAsync(project.LocalPath);
+
+        // Filter out issues that are linked to PRs (they will be shown with the PR instead)
+        var linkedIssueIds = GetLinkedIssueIds(projectId);
+        var filteredIssues = issues.Where(i => !linkedIssueIds.Contains(i.Id)).ToList();
+
+        // Build lookup of issue ID to PR status for remaining issues with linked PRs
+        var issuePrStatuses = await GetIssuePrStatusesAsync(projectId, filteredIssues);
+
+        // Cache the fresh data INCLUDING statuses for future cache-only loads
+        await cacheService.CachePRDataWithStatusesAsync(projectId, openPrs, closedPrs, issuePrStatuses);
+
+        logger.LogDebug(
+            "Building graph with fresh data for project {ProjectId}: {OpenPrCount} open PRs, {ClosedPrCount} closed PRs, {IssueCount} issues, {StatusCount} PR statuses cached",
+            projectId, openPrs.Count, closedPrs.Count, filteredIssues.Count, issuePrStatuses.Count);
 
         return _graphBuilder.Build(allPrs, filteredIssues, maxPastPRs, issuePrStatuses);
     }
