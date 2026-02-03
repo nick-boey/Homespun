@@ -2030,6 +2030,8 @@
                         _session.Status = session.Status;
                         _session.TotalCostUsd = session.TotalCostUsd;
                         _session.TotalDurationMs = session.TotalDurationMs;
+                        _session.PlanContent = session.PlanContent;
+                        _session.PlanFilePath = session.PlanFilePath;
                         _pendingQuestion = session.PendingQuestion;
                         Console.WriteLine($"[SignalR] SessionState received: {session.Messages.Count} messages, status: {session.Status}");
                     }
