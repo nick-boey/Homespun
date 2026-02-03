@@ -208,8 +208,8 @@ Write-Host "  Data dir:    $effectiveDataDir"
 Write-Host ""
 
 # Build arguments for run.ps1
+# Note: Local build is now the default, so -Local is not needed
 $runArgs = @{
-    Local = $true
     MockMode = $true
     NoTailscale = $true
     Port = $effectivePort
@@ -226,7 +226,6 @@ if ($Detach) {
 }
 
 if ($Stop) {
-    $runArgs.Remove('Local')
     $runArgs.Remove('MockMode')
     $runArgs.Remove('Port')
     $runArgs.Remove('DataDir')
@@ -234,7 +233,6 @@ if ($Stop) {
 }
 
 if ($Logs) {
-    $runArgs.Remove('Local')
     $runArgs.Remove('MockMode')
     $runArgs.Remove('Port')
     $runArgs.Remove('DataDir')

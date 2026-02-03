@@ -201,9 +201,9 @@ echo "  Port:        $HOST_PORT"
 echo "  Data dir:    $DATA_DIR"
 echo
 
-# Call run.sh with --local --mock --no-tailscale flags and pass through additional args
+# Call run.sh with --mock --no-tailscale flags and pass through additional args
+# Note: Local build is now the default, so --local is not needed
 exec "$SCRIPT_DIR/run.sh" \
-    --local \
     --mock \
     --no-tailscale \
     --port "$HOST_PORT" \
