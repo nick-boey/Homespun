@@ -62,7 +62,7 @@ builder.Services.AddDataProtection()
 if (mockModeOptions.Enabled)
 {
     // Mock mode - use in-memory mock services
-    builder.Services.AddMockServices(mockModeOptions);
+    builder.Services.AddMockServices(mockModeOptions, builder.Configuration);
 
     // Services that are shared between mock and production mode
     builder.Services.AddSingleton<IMarkdownRenderingService, MarkdownRenderingService>();
