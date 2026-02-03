@@ -2,6 +2,7 @@
 @using Homespun.Features.ClaudeCode.Data
 @using Homespun.Features.ClaudeCode.Services
 @using Homespun.Features.ClaudeCode.Components.ToolResults
+@using Homespun.Features.Navigation
 @using Homespun.Features.Shared.Services
 @using Microsoft.AspNetCore.Components.Web
 @using static Microsoft.AspNetCore.Components.Web.RenderMode
@@ -10,6 +11,7 @@
 @inject IMessageCacheStore MessageCache
 @inject NavigationManager NavigationManager
 @inject IMarkdownRenderingService MarkdownService
+@inject IBreadcrumbService BreadcrumbService
 
 <PageTitle>Archived Session - Homespun</PageTitle>
 
@@ -216,6 +218,11 @@
 
     protected override async Task OnParametersSetAsync()
     {
+        await BreadcrumbService.SetContextAsync(new BreadcrumbContext
+        {
+            SessionId = SessionId,
+            PageName = "Archived"
+        });
         await LoadSessionAsync();
     }
 

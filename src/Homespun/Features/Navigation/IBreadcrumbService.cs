@@ -52,6 +52,11 @@ public record BreadcrumbContext
     public string? IssueId { get; init; }
 
     /// <summary>
+    /// The session ID, if on a session-related page.
+    /// </summary>
+    public string? SessionId { get; init; }
+
+    /// <summary>
     /// The page name (e.g., "Edit", "Create", "Settings").
     /// For standalone pages, this is the only breadcrumb shown.
     /// For nested pages, this appears as the last item.
