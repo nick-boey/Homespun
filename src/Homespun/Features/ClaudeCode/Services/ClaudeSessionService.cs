@@ -361,7 +361,6 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
 
             await foreach (var msg in client.ReceiveMessagesAsync().WithCancellation(linkedCts.Token))
             {
-                _logger.LogDebug("Received SDK message type: {MessageType}", msg.GetType().Name);
                 await ProcessSdkMessageAsync(sessionId, session, messageContext, msg, linkedCts.Token);
 
                 // Stop processing after receiving the result message
@@ -378,16 +377,9 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             }
 
             // Only set to WaitingForInput if we're not waiting for a question answer
-            _logger.LogDebug("Checking session {SessionId} status before finalizing: {Status}, PendingQuestion: {HasQuestion}",
-                sessionId, session.Status, session.PendingQuestion != null);
             if (session.Status != ClaudeSessionStatus.WaitingForQuestionAnswer)
             {
                 session.Status = ClaudeSessionStatus.WaitingForInput;
-                _logger.LogDebug("Set session {SessionId} status to WaitingForInput", sessionId);
-            }
-            else
-            {
-                _logger.LogDebug("Session {SessionId} is waiting for question answer, NOT changing status", sessionId);
             }
             _logger.LogInformation("Message processing completed for session {SessionId}, status: {Status}", sessionId, session.Status);
         }
@@ -619,7 +611,6 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             return;
 
         var eventType = typeObj is JsonElement typeElement ? typeElement.GetString() : typeObj?.ToString();
-        _logger.LogDebug("Processing stream event type: {EventType} for session {SessionId}", eventType, sessionId);
 
         switch (eventType)
         {
