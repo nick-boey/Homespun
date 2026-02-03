@@ -756,6 +756,12 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                 await HandleExitPlanModeCompletedAsync(sessionId, session, streamingBlock, cancellationToken);
             }
 
+            // Check if this is a Write tool completing with a plan file - capture the content
+            if (streamingBlock.ToolName?.Equals("Write", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                TryCaptureWrittenPlanContent(session, streamingBlock);
+            }
+
             _logger.LogDebug("Content block completed for index {Index}, Type: {Type}, ToolName: {ToolName}",
                 index, streamingBlock.Type, streamingBlock.ToolName ?? "(null)");
 
@@ -914,6 +920,61 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         else
         {
             _logger.LogWarning("ExitPlanMode: No plan file found for session {SessionId}", sessionId);
+        }
+    }
+
+    /// <summary>
+    /// Checks if a Write tool result is writing to a plan file and captures the content.
+    /// This allows ExitPlanMode to display the plan even when the file is in a non-standard location.
+    /// </summary>
+    private void TryCaptureWrittenPlanContent(ClaudeSession session, ClaudeMessageContent toolUseBlock)
+    {
+        if (string.IsNullOrEmpty(toolUseBlock.ToolInput))
+            return;
+
+        try
+        {
+            var inputParams = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(toolUseBlock.ToolInput);
+            if (inputParams == null)
+                return;
+
+            // Extract file_path from tool input
+            if (!inputParams.TryGetValue("file_path", out var filePathElement) ||
+                filePathElement.ValueKind != JsonValueKind.String)
+                return;
+
+            var filePath = filePathElement.GetString();
+            if (string.IsNullOrEmpty(filePath))
+                return;
+
+            // Check if this looks like a plan file
+            // Claude Code writes plans to ~/.claude/plans/ directory with random names like fluffy-aurora.md
+            // We also capture files in .claude/ directory ending with plan.md
+            var normalizedPath = filePath.Replace('\\', '/').ToLowerInvariant();
+            var isPlanFile = normalizedPath.Contains("/plans/") ||
+                             (normalizedPath.Contains("/.claude/") && normalizedPath.EndsWith("plan.md"));
+
+            if (!isPlanFile)
+                return;
+
+            // Extract content from tool input
+            if (!inputParams.TryGetValue("content", out var contentElement) ||
+                contentElement.ValueKind != JsonValueKind.String)
+                return;
+
+            var content = contentElement.GetString();
+            if (string.IsNullOrEmpty(content))
+                return;
+
+            // Store the plan content for ExitPlanMode to use
+            session.PlanContent = content;
+            session.PlanFilePath = filePath;
+            _logger.LogInformation("Captured plan content from Write tool: {FilePath} ({Length} chars)",
+                filePath, content.Length);
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogWarning(ex, "Failed to parse Write tool input for plan content capture");
         }
     }
 
