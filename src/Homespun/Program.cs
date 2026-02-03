@@ -124,6 +124,31 @@ else
     builder.Services.AddSingleton<IClaudeSessionStore, ClaudeSessionStore>();
     builder.Services.AddSingleton<SessionOptionsFactory>();
 
+    // Agent Execution service - register based on configuration
+    builder.Services.Configure<AgentExecutionOptions>(
+        builder.Configuration.GetSection(AgentExecutionOptions.SectionName));
+    builder.Services.Configure<DockerAgentExecutionOptions>(
+        builder.Configuration.GetSection(DockerAgentExecutionOptions.SectionName));
+    builder.Services.Configure<AzureContainerAppsAgentExecutionOptions>(
+        builder.Configuration.GetSection(AzureContainerAppsAgentExecutionOptions.SectionName));
+
+    var agentExecutionMode = builder.Configuration
+        .GetSection(AgentExecutionOptions.SectionName)
+        .GetValue<AgentExecutionMode>("Mode");
+
+    switch (agentExecutionMode)
+    {
+        case AgentExecutionMode.Docker:
+            builder.Services.AddSingleton<IAgentExecutionService, DockerAgentExecutionService>();
+            break;
+        case AgentExecutionMode.AzureContainerApps:
+            builder.Services.AddSingleton<IAgentExecutionService, AzureContainerAppsAgentExecutionService>();
+            break;
+        default:
+            builder.Services.AddSingleton<IAgentExecutionService, LocalAgentExecutionService>();
+            break;
+    }
+
     // Session discovery service - reads from Claude's native session storage at ~/.claude/projects/
     builder.Services.AddSingleton<IClaudeSessionDiscovery>(sp =>
     {
