@@ -1,5 +1,8 @@
+using Homespun.ClaudeAgentSdk;
 using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.ClaudeCode.Services;
+using Microsoft.Extensions.Logging;
+using Moq;
 
 namespace Homespun.Tests.Features.ClaudeCode;
 
@@ -7,11 +10,13 @@ namespace Homespun.Tests.Features.ClaudeCode;
 public class SessionOptionsFactoryTests
 {
     private SessionOptionsFactory _factory = null!;
+    private Mock<ILogger<SessionOptionsFactory>> _loggerMock = null!;
 
     [SetUp]
     public void SetUp()
     {
-        _factory = new SessionOptionsFactory();
+        _loggerMock = new Mock<ILogger<SessionOptionsFactory>>();
+        _factory = new SessionOptionsFactory(_loggerMock.Object);
     }
 
     [Test]
@@ -135,5 +140,72 @@ public class SessionOptionsFactoryTests
         Assert.That(args, Is.Not.Null);
         Assert.That(args, Does.Contain("@playwright/mcp@latest"));
         Assert.That(args, Does.Contain("--headless"));
+    }
+
+    [Test]
+    public void Create_ConfiguresLargeBufferSize()
+    {
+        // Arrange
+        var workingDirectory = "/test/path";
+        var model = "claude-sonnet-4-20250514";
+
+        // Act
+        var options = _factory.Create(SessionMode.Build, workingDirectory, model);
+
+        // Assert - Buffer size should be 10MB (10 * 1024 * 1024 = 10485760)
+        Assert.That(options.MaxBufferSize, Is.EqualTo(10 * 1024 * 1024),
+            "Buffer size should be 10MB to accommodate large Playwright MCP responses");
+    }
+
+    [Test]
+    public void Create_ConfiguresSkipMessageBehavior()
+    {
+        // Arrange
+        var workingDirectory = "/test/path";
+        var model = "claude-sonnet-4-20250514";
+
+        // Act
+        var options = _factory.Create(SessionMode.Build, workingDirectory, model);
+
+        // Assert - Should use SkipMessage behavior for graceful degradation
+        Assert.That(options.BufferOverflowBehavior, Is.EqualTo(BufferOverflowBehavior.SkipMessage),
+            "Should use SkipMessage behavior to gracefully handle large messages");
+    }
+
+    [Test]
+    public void Create_ConfiguresBufferOverflowCallback()
+    {
+        // Arrange
+        var workingDirectory = "/test/path";
+        var model = "claude-sonnet-4-20250514";
+
+        // Act
+        var options = _factory.Create(SessionMode.Build, workingDirectory, model);
+
+        // Assert - Callback should be configured for logging
+        Assert.That(options.OnBufferOverflow, Is.Not.Null,
+            "Buffer overflow callback should be configured for logging");
+    }
+
+    [Test]
+    public void Create_BufferOverflowCallback_LogsWarning()
+    {
+        // Arrange
+        var workingDirectory = "/test/path";
+        var model = "claude-sonnet-4-20250514";
+        var options = _factory.Create(SessionMode.Build, workingDirectory, model);
+
+        // Act - Simulate buffer overflow by invoking the callback
+        options.OnBufferOverflow?.Invoke("playwright_mcp_result", 15_000_000, 10_485_760);
+
+        // Assert - Verify logger was called with warning
+        _loggerMock.Verify(
+            x => x.Log(
+                LogLevel.Warning,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Buffer overflow detected")),
+                It.IsAny<Exception?>(),
+                It.Is<Func<It.IsAnyType, Exception?, string>>((v, t) => true)),
+            Times.Once);
     }
 }
