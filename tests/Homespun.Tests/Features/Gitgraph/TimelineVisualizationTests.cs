@@ -64,12 +64,13 @@ public class TimelineVisualizationTests
         // Act
         var graph = _graphBuilder.Build(prs, []);
 
-        // Assert - Open PRs come after merged PRs
+        // Assert - Open PRs come after merged PRs (with divider between them)
         var nodes = graph.Nodes.ToList();
-        Assert.That(nodes, Has.Count.EqualTo(3));
+        Assert.That(nodes, Has.Count.EqualTo(4)); // 1 merged + 1 divider + 2 open
         Assert.That(((PullRequestNode)nodes[0]).NodeType, Is.EqualTo(GraphNodeType.MergedPullRequest));
-        Assert.That(((PullRequestNode)nodes[1]).NodeType, Is.EqualTo(GraphNodeType.OpenPullRequest));
+        Assert.That(nodes[1].NodeType, Is.EqualTo(GraphNodeType.SectionDivider)); // "CURRENT PRs" divider
         Assert.That(((PullRequestNode)nodes[2]).NodeType, Is.EqualTo(GraphNodeType.OpenPullRequest));
+        Assert.That(((PullRequestNode)nodes[3]).NodeType, Is.EqualTo(GraphNodeType.OpenPullRequest));
     }
 
     [Test]
@@ -95,14 +96,14 @@ public class TimelineVisualizationTests
     }
 
     [Test]
-    public void RendersOrphanIssues_GroupedTogether()
+    public void RendersOrphanIssues_AsFlatListAfterDependentIssues()
     {
         // Arrange - Issues with and without dependencies
         var issues = new List<Issue>
         {
-            CreateIssue("ISSUE-001", group: "UI"),       // Orphan
-            CreateIssue("ISSUE-002", group: "UI"),       // Orphan
-            CreateIssue("ISSUE-003"),                     // Orphan (no group)
+            CreateIssue("ISSUE-001", group: "UI", createdAt: DateTime.UtcNow.AddDays(-5)),       // Orphan (oldest)
+            CreateIssue("ISSUE-002", group: "UI", createdAt: DateTime.UtcNow.AddDays(-4)),       // Orphan
+            CreateIssue("ISSUE-003", createdAt: DateTime.UtcNow.AddDays(-3)),                     // Orphan
             CreateIssue("ISSUE-004"),                     // Root with child
             CreateIssueWithParent("ISSUE-005", "ISSUE-004") // Child
         };
@@ -110,7 +111,7 @@ public class TimelineVisualizationTests
         // Act
         var graph = _graphBuilder.Build([], issues);
 
-        // Assert - Orphan issues grouped by group
+        // Assert - Dependency issues come before orphans (now has ISSUES divider)
         var issueNodes = graph.Nodes.OfType<IssueNode>().ToList();
 
         // Dependency issues (ISSUE-004, ISSUE-005) come before orphans
@@ -121,9 +122,11 @@ public class TimelineVisualizationTests
         Assert.That(depIssueIds, Does.Contain("ISSUE-004"));
         Assert.That(depIssueIds, Does.Contain("ISSUE-005"));
 
-        // Orphan issues at the end
+        // Orphan issues at the end as a flat list
         var orphanNodes = issueNodes.Where(n => n.IsOrphan).ToList();
         Assert.That(orphanNodes, Has.Count.EqualTo(3));
+        // Orphan issues should have NO parent connections (flat list)
+        Assert.That(orphanNodes.All(n => n.ParentIds.Count == 0), Is.True);
     }
 
     #endregion
@@ -380,26 +383,28 @@ public class TimelineVisualizationTests
         var graph = _graphBuilder.Build(prs, issues);
         var layout = _laneCalculator.Calculate(graph.Nodes);
 
-        // Assert - Basic structure
-        Assert.That(graph.Nodes.Count, Is.EqualTo(11)); // 5 PRs + 6 issues
+        // Assert - Basic structure (5 PRs + 2 dividers + 6 issues)
+        Assert.That(graph.Nodes.Count, Is.EqualTo(13)); // 3 merged + 1 "CURRENT PRs" divider + 2 open + 1 "ISSUES" divider + 6 issues
 
-        // Assert - Time dimension progression
-        var mergedPRs = graph.Nodes.Where(n => n.TimeDimension <= 0).ToList();
-        var openPRs = graph.Nodes.Where(n => n.TimeDimension == 1).ToList();
-        var issueNodes = graph.Nodes.Where(n => n.TimeDimension >= 2).ToList();
+        // Assert - Dividers are present
+        var dividers = graph.Nodes.Where(n => n.NodeType == GraphNodeType.SectionDivider).ToList();
+        Assert.That(dividers.Count, Is.EqualTo(2), "Should have 2 dividers (CURRENT PRs and ISSUES)");
+        Assert.That(dividers[0].Title, Is.EqualTo("CURRENT PRs"));
+        Assert.That(dividers[1].Title, Is.EqualTo("ISSUES"));
 
-        Assert.That(mergedPRs.Count, Is.EqualTo(3), "Should have 3 merged PRs");
-        Assert.That(openPRs.Count, Is.EqualTo(2), "Should have 2 open PRs");
+        // Assert - PRs and issues
+        var prNodes = graph.Nodes.OfType<PullRequestNode>().ToList();
+        var issueNodes = graph.Nodes.OfType<IssueNode>().ToList();
+
+        Assert.That(prNodes.Count, Is.EqualTo(5), "Should have 5 PRs");
         Assert.That(issueNodes.Count, Is.EqualTo(6), "Should have 6 issues");
 
-        // Assert - Order is correct (merged PRs, then open PRs, then issues)
+        // Assert - Order is correct (merged PRs, then divider, then open PRs, then divider, then issues)
         var nodeList = graph.Nodes.ToList();
-        var lastMergedIndex = nodeList.FindLastIndex(n => n.TimeDimension <= 0);
-        var firstOpenIndex = nodeList.FindIndex(n => n.TimeDimension == 1);
-        var firstIssueIndex = nodeList.FindIndex(n => n.TimeDimension >= 2);
+        var currentPrsDividerIndex = nodeList.FindIndex(n => n.NodeType == GraphNodeType.SectionDivider && n.Title == "CURRENT PRs");
+        var issuesDividerIndex = nodeList.FindIndex(n => n.NodeType == GraphNodeType.SectionDivider && n.Title == "ISSUES");
 
-        Assert.That(lastMergedIndex, Is.LessThan(firstOpenIndex), "Merged PRs should come before open PRs");
-        Assert.That(firstOpenIndex, Is.LessThan(firstIssueIndex), "Open PRs should come before issues");
+        Assert.That(currentPrsDividerIndex, Is.LessThan(issuesDividerIndex), "CURRENT PRs divider should come before ISSUES divider");
     }
 
     [Test]
@@ -597,16 +602,18 @@ public class TimelineVisualizationTests
         string id,
         IssueType type = IssueType.Task,
         string? group = null,
-        int? priority = null) => new()
+        int? priority = null,
+        DateTime? createdAt = null,
+        IssueStatus status = IssueStatus.Idea) => new() // Use Idea status (not Next) so issues are true orphans
     {
         Id = id,
         Title = $"Issue {id}",
-        Status = IssueStatus.Next,
+        Status = status,
         Type = type,
         Priority = priority,
         Group = group ?? "",
-        CreatedAt = DateTimeOffset.UtcNow,
-        LastUpdate = DateTimeOffset.UtcNow
+        CreatedAt = createdAt ?? DateTimeOffset.UtcNow,
+        LastUpdate = createdAt ?? DateTimeOffset.UtcNow
     };
 
     private static Issue CreateIssueWithParent(

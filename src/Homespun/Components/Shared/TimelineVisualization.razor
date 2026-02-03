@@ -162,6 +162,38 @@
         border: 1px solid;
     }
 
+    /* Section divider styles */
+    .timeline-divider-row {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        align-items: center;
+        min-height: 40px;
+    }
+
+    .timeline-divider-content {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.5rem 1rem 0.5rem 0.5rem;
+    }
+
+    .timeline-divider-line {
+        flex: 1;
+        border: none;
+        border-top: 1px solid var(--text-muted, #6c757d);
+        margin: 0;
+    }
+
+    .timeline-divider-label {
+        flex-shrink: 0;
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--text-muted, #6c757d);
+        white-space: nowrap;
+    }
+
     /* Agent status badge */
     .agent-status-badge {
         display: inline-flex;

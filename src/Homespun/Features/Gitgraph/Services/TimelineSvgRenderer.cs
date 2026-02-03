@@ -282,6 +282,51 @@ public static class TimelineSvgRenderer
     }
 
     /// <summary>
+    /// Generate the SVG element for a divider row (just a vertical line in lane 0).
+    /// </summary>
+    /// <param name="maxLanes">Maximum number of lanes (determines width).</param>
+    /// <param name="laneColors">Colors for each lane line.</param>
+    public static string GenerateDividerRowSvg(
+        int maxLanes,
+        IReadOnlyDictionary<int, string>? laneColors = null)
+    {
+        var width = CalculateSvgWidth(maxLanes);
+        var sb = new StringBuilder();
+
+        sb.Append($"<svg width=\"{width}\" height=\"{RowHeight}\" xmlns=\"http://www.w3.org/2000/svg\">");
+
+        // Draw vertical line in lane 0 only
+        var lineColor = laneColors?.GetValueOrDefault(0) ?? "#6b7280";
+        var x = GetLaneCenterX(0);
+        var linePath = $"M {x} 0 L {x} {RowHeight}";
+        sb.Append($"<path d=\"{linePath}\" stroke=\"{EscapeAttribute(lineColor)}\" stroke-width=\"{LineStrokeWidth.ToString(CultureInfo.InvariantCulture)}\" fill=\"none\" />");
+
+        sb.Append("</svg>");
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Generate SVG for a flat orphan issue row (diamond node in lane 0 with no connecting lines).
+    /// </summary>
+    /// <param name="maxLanes">Maximum number of lanes (determines width).</param>
+    /// <param name="nodeColor">Color for the diamond node.</param>
+    public static string GenerateFlatOrphanRowSvg(
+        int maxLanes,
+        string nodeColor)
+    {
+        var width = CalculateSvgWidth(maxLanes);
+        var sb = new StringBuilder();
+
+        sb.Append($"<svg width=\"{width}\" height=\"{RowHeight}\" xmlns=\"http://www.w3.org/2000/svg\">");
+
+        // Draw diamond node in lane 0 only - no vertical lines
+        sb.Append(GenerateDiamondNode(0, nodeColor));
+
+        sb.Append("</svg>");
+        return sb.ToString();
+    }
+
+    /// <summary>
     /// Escape a string for use in an XML/SVG attribute.
     /// </summary>
     private static string EscapeAttribute(string value)
