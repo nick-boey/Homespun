@@ -276,26 +276,31 @@ public class TimelineVisualizationTests
     }
 
     [Test]
-    public void IssueColors_MatchType()
+    public void IssueColors_MatchStatusWithBugOverride()
     {
-        // Arrange - Different issue types
+        // Arrange - Different issue statuses and types
+        // Colors are now based on status, except Bug type which always shows red
         var issues = new List<Issue>
         {
-            CreateIssue("ISSUE-001", type: IssueType.Feature),
-            CreateIssue("ISSUE-002", type: IssueType.Bug),
-            CreateIssue("ISSUE-003", type: IssueType.Task),
-            CreateIssue("ISSUE-004", type: IssueType.Chore)
+            CreateIssue("ISSUE-001", type: IssueType.Feature, status: IssueStatus.Idea),    // Blue (Idea status)
+            CreateIssue("ISSUE-002", type: IssueType.Bug, status: IssueStatus.Idea),        // Red (Bug overrides status)
+            CreateIssue("ISSUE-003", type: IssueType.Task, status: IssueStatus.Spec),       // Yellow (Spec status)
+            CreateIssue("ISSUE-004", type: IssueType.Chore, status: IssueStatus.Next),      // Green (Next status)
+            CreateIssue("ISSUE-005", type: IssueType.Feature, status: IssueStatus.Progress),// Purple (Progress status)
+            CreateIssue("ISSUE-006", type: IssueType.Task, status: IssueStatus.Review)      // Cyan (Review status)
         };
 
         // Act
         var graph = _graphBuilder.Build([], issues);
         var issueNodes = graph.Nodes.OfType<IssueNode>().ToDictionary(n => n.Issue.Id);
 
-        // Assert - Colors match expected values
-        Assert.That(issueNodes["ISSUE-001"].Color, Is.EqualTo("#a855f7")); // Purple (Feature)
-        Assert.That(issueNodes["ISSUE-002"].Color, Is.EqualTo("#ef4444")); // Red (Bug)
-        Assert.That(issueNodes["ISSUE-003"].Color, Is.EqualTo("#3b82f6")); // Blue (Task)
-        Assert.That(issueNodes["ISSUE-004"].Color, Is.EqualTo("#6b7280")); // Gray (Chore)
+        // Assert - Colors match expected values based on status (with bug override)
+        Assert.That(issueNodes["ISSUE-001"].Color, Is.EqualTo("#3b82f6")); // Blue (Idea status)
+        Assert.That(issueNodes["ISSUE-002"].Color, Is.EqualTo("#ef4444")); // Red (Bug type overrides status)
+        Assert.That(issueNodes["ISSUE-003"].Color, Is.EqualTo("#eab308")); // Yellow (Spec status)
+        Assert.That(issueNodes["ISSUE-004"].Color, Is.EqualTo("#22c55e")); // Green (Next status)
+        Assert.That(issueNodes["ISSUE-005"].Color, Is.EqualTo("#a855f7")); // Purple (Progress status)
+        Assert.That(issueNodes["ISSUE-006"].Color, Is.EqualTo("#06b6d4")); // Cyan (Review status)
     }
 
     #endregion
