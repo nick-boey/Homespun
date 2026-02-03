@@ -228,8 +228,14 @@ public class GraphService(
         var sessions = sessionStore.GetByProjectId(projectId);
         if (sessions.Count == 0) return;
 
-        // Build lookup by entity ID
+        // Build lookup by entity ID (works for issues directly, and for PRs via their internal ID)
         var sessionsByEntityId = sessions.ToDictionary(s => s.EntityId, StringComparer.OrdinalIgnoreCase);
+
+        // Build lookup from GitHub PR number to internal PR ID for matching PR sessions
+        var trackedPrs = dataStore.GetPullRequestsByProject(projectId);
+        var prIdByGitHubNumber = trackedPrs
+            .Where(pr => pr.GitHubPRNumber.HasValue)
+            .ToDictionary(pr => pr.GitHubPRNumber!.Value, pr => pr.Id);
 
         // Enrich commits with agent status
         foreach (var commit in jsonData.Commits)
@@ -237,16 +243,29 @@ public class GraphService(
             // Check if there's an active session for this issue
             if (commit.IssueId != null && sessionsByEntityId.TryGetValue(commit.IssueId, out var session))
             {
-                var isActive = session.Status.IsActive();
-
-                commit.AgentStatus = new AgentStatusData
-                {
-                    IsActive = isActive,
-                    Status = session.Status.ToString(),
-                    SessionId = session.Id
-                };
+                commit.AgentStatus = CreateAgentStatusData(session);
+            }
+            // Check if there's an active session for this PR
+            else if (commit.PullRequestNumber.HasValue &&
+                     prIdByGitHubNumber.TryGetValue(commit.PullRequestNumber.Value, out var prEntityId) &&
+                     sessionsByEntityId.TryGetValue(prEntityId, out var prSession))
+            {
+                commit.AgentStatus = CreateAgentStatusData(prSession);
             }
         }
+    }
+
+    /// <summary>
+    /// Creates AgentStatusData from a ClaudeSession.
+    /// </summary>
+    private static AgentStatusData CreateAgentStatusData(ClaudeSession session)
+    {
+        return new AgentStatusData
+        {
+            IsActive = session.Status.IsActive(),
+            Status = session.Status.ToString(),
+            SessionId = session.Id
+        };
     }
 
     /// <summary>
