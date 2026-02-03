@@ -5,7 +5,7 @@ namespace Homespun.Tests.Components;
 
 /// <summary>
 /// Unit tests for AgentStatusIndicator component logic.
-/// Tests the counting logic for working and waiting agents.
+/// Tests the counting logic for working, question, and waiting agents.
 /// </summary>
 [TestFixture]
 public class AgentStatusIndicatorTests
@@ -17,13 +17,14 @@ public class AgentStatusIndicatorTests
         var sessions = new List<ClaudeSession>();
 
         // Act
-        var (working, waiting, total) = CalculateCounts(sessions);
+        var (working, question, waiting, total) = CalculateCounts(sessions);
 
         // Assert
         Assert.Multiple(() =>
         {
             Assert.That(total, Is.EqualTo(0));
             Assert.That(working, Is.EqualTo(0));
+            Assert.That(question, Is.EqualTo(0));
             Assert.That(waiting, Is.EqualTo(0));
         });
     }
@@ -38,12 +39,13 @@ public class AgentStatusIndicatorTests
         };
 
         // Act
-        var (working, waiting, total) = CalculateCounts(sessions);
+        var (working, question, waiting, total) = CalculateCounts(sessions);
 
         // Assert
         Assert.Multiple(() =>
         {
             Assert.That(working, Is.EqualTo(1));
+            Assert.That(question, Is.EqualTo(0));
             Assert.That(waiting, Is.EqualTo(0));
             Assert.That(total, Is.EqualTo(1));
         });
@@ -61,14 +63,60 @@ public class AgentStatusIndicatorTests
         };
 
         // Act
-        var (working, waiting, total) = CalculateCounts(sessions);
+        var (working, question, waiting, total) = CalculateCounts(sessions);
 
         // Assert
         Assert.Multiple(() =>
         {
             Assert.That(working, Is.EqualTo(3));
+            Assert.That(question, Is.EqualTo(0));
             Assert.That(waiting, Is.EqualTo(0));
             Assert.That(total, Is.EqualTo(3));
+        });
+    }
+
+    [Test]
+    public void CalculateCounts_WaitingForQuestionAnswerSessions_CountsAsQuestion()
+    {
+        // Arrange
+        var sessions = new List<ClaudeSession>
+        {
+            CreateSession(ClaudeSessionStatus.WaitingForQuestionAnswer)
+        };
+
+        // Act
+        var (working, question, waiting, total) = CalculateCounts(sessions);
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(working, Is.EqualTo(0));
+            Assert.That(question, Is.EqualTo(1));
+            Assert.That(waiting, Is.EqualTo(0));
+            Assert.That(total, Is.EqualTo(1));
+        });
+    }
+
+    [Test]
+    public void CalculateCounts_MultipleQuestionSessions_CountsAll()
+    {
+        // Arrange
+        var sessions = new List<ClaudeSession>
+        {
+            CreateSession(ClaudeSessionStatus.WaitingForQuestionAnswer),
+            CreateSession(ClaudeSessionStatus.WaitingForQuestionAnswer)
+        };
+
+        // Act
+        var (working, question, waiting, total) = CalculateCounts(sessions);
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(working, Is.EqualTo(0));
+            Assert.That(question, Is.EqualTo(2));
+            Assert.That(waiting, Is.EqualTo(0));
+            Assert.That(total, Is.EqualTo(2));
         });
     }
 
@@ -82,12 +130,13 @@ public class AgentStatusIndicatorTests
         };
 
         // Act
-        var (working, waiting, total) = CalculateCounts(sessions);
+        var (working, question, waiting, total) = CalculateCounts(sessions);
 
         // Assert
         Assert.Multiple(() =>
         {
             Assert.That(working, Is.EqualTo(0));
+            Assert.That(question, Is.EqualTo(0));
             Assert.That(waiting, Is.EqualTo(1));
             Assert.That(total, Is.EqualTo(1));
         });
@@ -104,12 +153,13 @@ public class AgentStatusIndicatorTests
         };
 
         // Act
-        var (working, waiting, total) = CalculateCounts(sessions);
+        var (working, question, waiting, total) = CalculateCounts(sessions);
 
         // Assert
         Assert.Multiple(() =>
         {
             Assert.That(working, Is.EqualTo(0));
+            Assert.That(question, Is.EqualTo(0));
             Assert.That(waiting, Is.EqualTo(2));
             Assert.That(total, Is.EqualTo(2));
         });
@@ -125,13 +175,14 @@ public class AgentStatusIndicatorTests
         };
 
         // Act
-        var (working, waiting, total) = CalculateCounts(sessions);
+        var (working, question, waiting, total) = CalculateCounts(sessions);
 
         // Assert
         Assert.Multiple(() =>
         {
             Assert.That(total, Is.EqualTo(0));
             Assert.That(working, Is.EqualTo(0));
+            Assert.That(question, Is.EqualTo(0));
             Assert.That(waiting, Is.EqualTo(0));
         });
     }
@@ -146,13 +197,14 @@ public class AgentStatusIndicatorTests
         };
 
         // Act
-        var (working, waiting, total) = CalculateCounts(sessions);
+        var (working, question, waiting, total) = CalculateCounts(sessions);
 
         // Assert
         Assert.Multiple(() =>
         {
             Assert.That(total, Is.EqualTo(0));
             Assert.That(working, Is.EqualTo(0));
+            Assert.That(question, Is.EqualTo(0));
             Assert.That(waiting, Is.EqualTo(0));
         });
     }
@@ -167,13 +219,14 @@ public class AgentStatusIndicatorTests
         };
 
         // Act
-        var (working, waiting, total) = CalculateCounts(sessions);
+        var (working, question, waiting, total) = CalculateCounts(sessions);
 
         // Assert
         Assert.Multiple(() =>
         {
             Assert.That(total, Is.EqualTo(0));
             Assert.That(working, Is.EqualTo(0));
+            Assert.That(question, Is.EqualTo(0));
             Assert.That(waiting, Is.EqualTo(0));
         });
     }
@@ -184,24 +237,26 @@ public class AgentStatusIndicatorTests
         // Arrange
         var sessions = new List<ClaudeSession>
         {
-            CreateSession(ClaudeSessionStatus.Running),      // working
-            CreateSession(ClaudeSessionStatus.Running),      // working
-            CreateSession(ClaudeSessionStatus.WaitingForInput), // waiting
-            CreateSession(ClaudeSessionStatus.WaitingForInput), // waiting
-            CreateSession(ClaudeSessionStatus.Stopped),      // not counted
-            CreateSession(ClaudeSessionStatus.Error),        // not counted
-            CreateSession(ClaudeSessionStatus.Starting)      // not counted
+            CreateSession(ClaudeSessionStatus.Running),                 // working
+            CreateSession(ClaudeSessionStatus.Running),                 // working
+            CreateSession(ClaudeSessionStatus.WaitingForQuestionAnswer), // question
+            CreateSession(ClaudeSessionStatus.WaitingForInput),         // waiting
+            CreateSession(ClaudeSessionStatus.WaitingForInput),         // waiting
+            CreateSession(ClaudeSessionStatus.Stopped),                 // not counted
+            CreateSession(ClaudeSessionStatus.Error),                   // not counted
+            CreateSession(ClaudeSessionStatus.Starting)                 // not counted
         };
 
         // Act
-        var (working, waiting, total) = CalculateCounts(sessions);
+        var (working, question, waiting, total) = CalculateCounts(sessions);
 
         // Assert
         Assert.Multiple(() =>
         {
             Assert.That(working, Is.EqualTo(2));
+            Assert.That(question, Is.EqualTo(1));
             Assert.That(waiting, Is.EqualTo(2));
-            Assert.That(total, Is.EqualTo(4));
+            Assert.That(total, Is.EqualTo(5));
         });
     }
 
@@ -217,13 +272,14 @@ public class AgentStatusIndicatorTests
         };
 
         // Act
-        var (working, waiting, total) = CalculateCounts(sessions);
+        var (working, question, waiting, total) = CalculateCounts(sessions);
 
         // Assert
         Assert.Multiple(() =>
         {
             Assert.That(total, Is.EqualTo(0));
             Assert.That(working, Is.EqualTo(0));
+            Assert.That(question, Is.EqualTo(0));
             Assert.That(waiting, Is.EqualTo(0));
         });
     }
@@ -232,17 +288,27 @@ public class AgentStatusIndicatorTests
     public void GetTooltipText_OnlyWorking_ShowsWorkingCount()
     {
         // Arrange & Act
-        var result = GetTooltipText(3, 0);
+        var result = GetTooltipText(3, 0, 0);
 
         // Assert
         Assert.That(result, Is.EqualTo("3 working - Click to view"));
     }
 
     [Test]
+    public void GetTooltipText_OnlyQuestion_ShowsQuestionCount()
+    {
+        // Arrange & Act
+        var result = GetTooltipText(0, 2, 0);
+
+        // Assert
+        Assert.That(result, Is.EqualTo("2 awaiting response - Click to view"));
+    }
+
+    [Test]
     public void GetTooltipText_OnlyWaiting_ShowsWaitingCount()
     {
         // Arrange & Act
-        var result = GetTooltipText(0, 2);
+        var result = GetTooltipText(0, 0, 2);
 
         // Assert
         Assert.That(result, Is.EqualTo("2 waiting for input - Click to view"));
@@ -252,17 +318,27 @@ public class AgentStatusIndicatorTests
     public void GetTooltipText_WorkingAndWaiting_ShowsBoth()
     {
         // Arrange & Act
-        var result = GetTooltipText(2, 1);
+        var result = GetTooltipText(2, 0, 1);
 
         // Assert
         Assert.That(result, Is.EqualTo("2 working, 1 waiting for input - Click to view"));
     }
 
     [Test]
+    public void GetTooltipText_WorkingQuestionAndWaiting_ShowsAll()
+    {
+        // Arrange & Act
+        var result = GetTooltipText(2, 1, 3);
+
+        // Assert
+        Assert.That(result, Is.EqualTo("2 working, 1 awaiting response, 3 waiting for input - Click to view"));
+    }
+
+    [Test]
     public void GetTooltipText_NoneActive_ReturnsEmptyMessage()
     {
         // Arrange & Act
-        var result = GetTooltipText(0, 0);
+        var result = GetTooltipText(0, 0, 0);
 
         // Assert
         Assert.That(result, Is.EqualTo("Click to view"));
@@ -272,7 +348,7 @@ public class AgentStatusIndicatorTests
     /// Helper method that mirrors the component's counting logic.
     /// This is the logic that will be implemented in AgentStatusIndicator.razor.
     /// </summary>
-    private static (int working, int waiting, int total) CalculateCounts(
+    private static (int working, int question, int waiting, int total) CalculateCounts(
         IEnumerable<ClaudeSession> sessions)
     {
         var sessionList = sessions.ToList();
@@ -280,20 +356,25 @@ public class AgentStatusIndicatorTests
         var working = sessionList.Count(s =>
             s.Status == ClaudeSessionStatus.Running);
 
+        var question = sessionList.Count(s =>
+            s.Status == ClaudeSessionStatus.WaitingForQuestionAnswer);
+
         var waiting = sessionList.Count(s =>
             s.Status == ClaudeSessionStatus.WaitingForInput);
 
-        return (working, waiting, working + waiting);
+        return (working, question, waiting, working + question + waiting);
     }
 
     /// <summary>
     /// Helper method that mirrors the component's tooltip generation logic.
     /// </summary>
-    private static string GetTooltipText(int workingCount, int waitingCount)
+    private static string GetTooltipText(int workingCount, int questionCount, int waitingCount)
     {
         var parts = new List<string>();
         if (workingCount > 0)
             parts.Add($"{workingCount} working");
+        if (questionCount > 0)
+            parts.Add($"{questionCount} awaiting response");
         if (waitingCount > 0)
             parts.Add($"{waitingCount} waiting for input");
 

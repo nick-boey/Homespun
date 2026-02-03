@@ -13,6 +13,11 @@
             <span class="status-dot working" aria-label="Working agents"></span>
             <span class="count">@_workingCount</span>
         }
+        @if (_questionCount > 0)
+        {
+            <span class="status-dot question" aria-label="Agents awaiting response"></span>
+            <span class="count">@_questionCount</span>
+        }
         @if (_waitingCount > 0)
         {
             <span class="status-dot waiting" aria-label="Agents waiting for input"></span>
@@ -23,6 +28,7 @@
 
 @code {
     private int _workingCount;
+    private int _questionCount;
     private int _waitingCount;
     private int _totalActive;
     private HubConnection? _hubConnection;
@@ -48,10 +54,13 @@
         _workingCount = sessions.Count(s =>
             s.Status == ClaudeSessionStatus.Running);
 
+        _questionCount = sessions.Count(s =>
+            s.Status == ClaudeSessionStatus.WaitingForQuestionAnswer);
+
         _waitingCount = sessions.Count(s =>
             s.Status == ClaudeSessionStatus.WaitingForInput);
 
-        _totalActive = _workingCount + _waitingCount;
+        _totalActive = _workingCount + _questionCount + _waitingCount;
     }
 
     private async Task SetupSignalRConnection()
@@ -85,6 +94,8 @@
         var parts = new List<string>();
         if (_workingCount > 0)
             parts.Add($"{_workingCount} working");
+        if (_questionCount > 0)
+            parts.Add($"{_questionCount} awaiting response");
         if (_waitingCount > 0)
             parts.Add($"{_waitingCount} waiting for input");
 
