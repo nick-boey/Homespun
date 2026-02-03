@@ -323,7 +323,7 @@ public class GraphBuilder
             var branchName = $"issue-{issue.Id}";
             // Check if this issue has a linked PR status
             prStatusLookup.TryGetValue(issue.Id, out var issuePrStatus);
-            var branchColor = issuePrStatus != default ? GetPrStatusColor(issuePrStatus) : GetIssueTypeColor(issue.Type);
+            var branchColor = issuePrStatus != default ? GetPrStatusColor(issuePrStatus) : GetIssueColor(issue.Type, issue.Status);
 
             branches[branchName] = new GraphBranch
             {
@@ -406,7 +406,7 @@ public class GraphBuilder
         {
             var branchName = $"issue-{issue.Id}";
             prStatusLookup.TryGetValue(issue.Id, out var issuePrStatus);
-            var branchColor = issuePrStatus != default ? GetPrStatusColor(issuePrStatus) : GetIssueTypeColor(issue.Type);
+            var branchColor = issuePrStatus != default ? GetPrStatusColor(issuePrStatus) : GetIssueColor(issue.Type, issue.Status);
 
             branches[branchName] = new GraphBranch
             {
@@ -477,12 +477,25 @@ public class GraphBuilder
         _ => "#6b7280"                                 // Gray
     };
 
-    private static string GetIssueTypeColor(IssueType type) => type switch
+    /// <summary>
+    /// Gets the color for an issue based on its type and status.
+    /// Bug type always shows as red (overrides status color).
+    /// Otherwise, color is based on status.
+    /// </summary>
+    private static string GetIssueColor(IssueType type, IssueStatus status)
     {
-        IssueType.Bug => "#ef4444",      // Red
-        IssueType.Feature => "#a855f7",  // Purple
-        IssueType.Task => "#3b82f6",     // Blue
-        IssueType.Chore => "#6b7280",    // Gray
-        _ => "#6b7280"                   // Gray
-    };
+        // Bug type always shows as red (overrides status color)
+        if (type == IssueType.Bug) return "#ef4444"; // Red
+
+        // Otherwise color by status
+        return status switch
+        {
+            IssueStatus.Idea => "#3b82f6",     // Blue
+            IssueStatus.Spec => "#eab308",     // Yellow
+            IssueStatus.Next => "#22c55e",     // Green
+            IssueStatus.Progress => "#a855f7", // Purple
+            IssueStatus.Review => "#06b6d4",   // Cyan
+            _ => "#6b7280"                     // Grey
+        };
+    }
 }

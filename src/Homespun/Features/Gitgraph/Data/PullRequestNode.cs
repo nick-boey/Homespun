@@ -73,7 +73,7 @@ public class PullRequestNode : IGraphNode
 
     private static string GetStatusColor(PullRequestStatus status) => status switch
     {
-        PullRequestStatus.Merged => "#a855f7",       // Purple
+        PullRequestStatus.Merged => "#9ca3af",       // Light gray (Tailwind gray-400)
         PullRequestStatus.Closed => "#6b7280",       // Gray
         PullRequestStatus.InProgress => "#3b82f6",   // Blue
         PullRequestStatus.ReadyForReview => "#eab308", // Yellow
