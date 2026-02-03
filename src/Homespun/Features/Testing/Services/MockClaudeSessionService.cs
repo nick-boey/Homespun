@@ -171,6 +171,49 @@ public class MockClaudeSessionService : IClaudeSessionService
         return Task.CompletedTask;
     }
 
+    public async Task ExecutePlanAsync(string sessionId, bool clearContext = true, CancellationToken cancellationToken = default)
+    {
+        _logger.LogDebug("[Mock] ExecutePlan for session {SessionId}, clearContext={ClearContext}", sessionId, clearContext);
+
+        var session = _sessionStore.GetById(sessionId);
+        if (session == null || string.IsNullOrEmpty(session.PlanContent))
+        {
+            _logger.LogWarning("[Mock] Cannot execute plan: session {SessionId} not found or no plan content", sessionId);
+            return;
+        }
+
+        if (clearContext)
+        {
+            await ClearContextAsync(sessionId, cancellationToken);
+        }
+
+        session.Status = ClaudeSessionStatus.Running;
+        _sessionStore.Update(session);
+
+        // Simulate sending the plan as a message
+        await Task.Delay(300, cancellationToken);
+
+        // Add mock response
+        session.Messages.Add(new ClaudeMessage
+        {
+            SessionId = session.Id,
+            Role = ClaudeMessageRole.Assistant,
+            Content =
+            [
+                new ClaudeMessageContent
+                {
+                    Type = ClaudeContentType.Text,
+                    Text = "[Mock Response] Plan execution initiated. In a real session, I would now implement the plan."
+                }
+            ],
+            CreatedAt = DateTime.UtcNow
+        });
+
+        session.Status = ClaudeSessionStatus.WaitingForInput;
+        session.LastActivityAt = DateTime.UtcNow;
+        _sessionStore.Update(session);
+    }
+
     public Task StopSessionAsync(string sessionId, CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("[Mock] StopSession {SessionId}", sessionId);

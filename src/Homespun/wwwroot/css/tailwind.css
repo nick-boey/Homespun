@@ -296,6 +296,55 @@
   .btn-group > .btn:not(:last-child) {
     @apply border-r-0;
   }
+
+  /* Action Panel - reusable container for user action prompts (plan execution, questions, etc.) */
+  .action-panel {
+    @apply bg-bg-tertiary border-2 border-lagoon rounded-lg p-lg my-md;
+  }
+
+  .action-panel-header {
+    @apply flex items-center gap-sm mb-sm text-base font-semibold text-text-primary;
+  }
+
+  .action-panel-header-icon {
+    @apply text-xl;
+  }
+
+  .action-panel-header-title {
+    @apply text-lagoon;
+  }
+
+  .action-panel-description {
+    @apply text-sm text-text-secondary mb-md;
+  }
+
+  .action-panel-options {
+    @apply flex flex-wrap gap-sm;
+  }
+
+  .action-panel-btn {
+    @apply flex items-center gap-sm px-md py-sm;
+    @apply border border-border rounded-md;
+    @apply bg-bg-primary text-text-primary;
+    @apply cursor-pointer text-sm;
+    @apply transition-all duration-fast;
+  }
+
+  .action-panel-btn:hover {
+    @apply border-lagoon bg-bg-tertiary;
+  }
+
+  .action-panel-btn-primary {
+    @apply border-lagoon bg-lagoon text-white;
+  }
+
+  .action-panel-btn-primary:hover {
+    @apply bg-btn-primary-hover border-btn-primary-hover;
+  }
+
+  .action-panel-btn-icon {
+    @apply text-base;
+  }
 }
 
 /* ==========================================================================

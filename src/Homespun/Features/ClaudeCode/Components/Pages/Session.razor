@@ -213,6 +213,33 @@
                             </div>
                         </div>
                     }
+
+                    @if (_session.Status == ClaudeSessionStatus.WaitingForPlanExecution && !string.IsNullOrEmpty(_session.PlanContent))
+                    {
+                        <div class="action-panel">
+                            <div class="action-panel-header">
+                                <span class="action-panel-header-icon">📋</span>
+                                <span class="action-panel-header-title">Plan Ready for Implementation</span>
+                            </div>
+                            <div class="action-panel-description">
+                                Choose how to proceed with the implementation:
+                            </div>
+                            <div class="action-panel-options">
+                                <button class="action-panel-btn action-panel-btn-primary"
+                                        @onclick="ExecutePlanWithClearContext"
+                                        title="Clear conversation context and start fresh implementation">
+                                    <span class="action-panel-btn-icon">🔄</span>
+                                    Clear Context & Start Implementation
+                                </button>
+                                <button class="action-panel-btn"
+                                        @onclick="ExecutePlanKeepContext"
+                                        title="Continue with existing conversation context">
+                                    <span class="action-panel-btn-icon">▶️</span>
+                                    Continue with Context
+                                </button>
+                            </div>
+                        </div>
+                    }
                 }
 
                 @* Scroll to bottom button *@
@@ -2084,6 +2111,33 @@
             });
         });
 
+        // Handle context cleared event
+        _hubConnection.On<string>("ContextCleared", (sessionId) =>
+        {
+            _ = InvokeAsync(async () =>
+            {
+                try
+                {
+                    LogDebug("ContextCleared", $"Context cleared for session {sessionId}");
+                    Console.WriteLine($"[SignalR] ContextCleared for session {sessionId}");
+
+                    if (_session != null)
+                    {
+                        // Add a context clear marker to the session
+                        _session.ContextClearMarkers.Add(DateTime.UtcNow);
+                    }
+
+                    StateHasChanged();
+                    await AutoScrollToBottomIfNearEnd();
+                }
+                catch (Exception ex)
+                {
+                    LogDebug("ERROR", $"ContextCleared: {ex.Message}");
+                    Console.WriteLine($"[SignalR] Error in ContextCleared: {ex.Message}");
+                }
+            });
+        });
+
         await _hubConnection.StartAsync();
         await _hubConnection.SendAsync("JoinSession", SessionId);
         // Server sends SessionState after JoinSession, which we now handle above
@@ -2419,6 +2473,34 @@
         catch (Exception ex)
         {
             Console.WriteLine($"Error submitting answers: {ex.Message}");
+        }
+    }
+
+    private async Task ExecutePlanWithClearContext()
+    {
+        if (_session == null || _hubConnection == null) return;
+
+        try
+        {
+            await _hubConnection.SendAsync("ExecutePlan", SessionId, true);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error executing plan: {ex.Message}");
+        }
+    }
+
+    private async Task ExecutePlanKeepContext()
+    {
+        if (_session == null || _hubConnection == null) return;
+
+        try
+        {
+            await _hubConnection.SendAsync("ExecutePlan", SessionId, false);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error executing plan: {ex.Message}");
         }
     }
 

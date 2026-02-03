@@ -71,6 +71,14 @@ public interface IClaudeSessionService
     Task ClearContextAsync(string sessionId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Executes a pending plan by optionally clearing context and sending the plan content as a message.
+    /// </summary>
+    /// <param name="sessionId">The session ID</param>
+    /// <param name="clearContext">Whether to clear conversation context before execution</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    Task ExecutePlanAsync(string sessionId, bool clearContext = true, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Stops an existing session.
     /// </summary>
     Task StopSessionAsync(string sessionId, CancellationToken cancellationToken = default);
