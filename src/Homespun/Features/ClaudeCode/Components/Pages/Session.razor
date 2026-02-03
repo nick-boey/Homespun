@@ -262,16 +262,54 @@
                     <textarea @bind="_inputMessage"
                               @bind:event="oninput"
                               @onkeydown="HandleKeyDown"
-                              placeholder="Type a message... (Ctrl+Enter to send)"
+                              placeholder="@GetInputPlaceholder()"
                               rows="3"
-                              disabled="@(_session.Status == ClaudeSessionStatus.Running || _session.Status == ClaudeSessionStatus.Stopped)">
+                              disabled="@(_session.Status == ClaudeSessionStatus.Stopped)">
                     </textarea>
-                    <button class="btn btn-primary send-button"
-                            @onclick="SendMessage"
-                            disabled="@(string.IsNullOrWhiteSpace(_inputMessage) || _session.Status == ClaudeSessionStatus.Running || _session.Status == ClaudeSessionStatus.Stopped)">
-                        Send
-                    </button>
+                    <div class="button-group">
+                        @if (_session.Status == ClaudeSessionStatus.Running)
+                        {
+                            <button class="btn btn-danger stop-button"
+                                    @onclick="StopSession"
+                                    disabled="@_isStopping"
+                                    title="Stop the current execution (Escape)">
+                                @if (_isStopping)
+                                {
+                                    <span class="spinner-border spinner-border-sm" role="status"></span>
+                                }
+                                else
+                                {
+                                    <span class="stop-icon">&#9632;</span>
+                                }
+                                Stop
+                            </button>
+                            @if (!string.IsNullOrWhiteSpace(_inputMessage))
+                            {
+                                <button class="btn btn-secondary queue-button"
+                                        @onclick="QueueMessage"
+                                        disabled="@(_pendingMessages.Count >= MaxQueuedMessages)"
+                                        title="Queue this message to send after current processing completes">
+                                    Queue @(_pendingMessages.Count > 0 ? $"({_pendingMessages.Count + 1})" : "")
+                                </button>
+                            }
+                        }
+                        else
+                        {
+                            <button class="btn btn-primary send-button"
+                                    @onclick="SendMessage"
+                                    disabled="@(string.IsNullOrWhiteSpace(_inputMessage) || _session.Status == ClaudeSessionStatus.Stopped)">
+                                Send
+                            </button>
+                        }
+                    </div>
                 </div>
+                @if (_pendingMessages.Count > 0)
+                {
+                    <div class="queued-messages-indicator">
+                        <span class="badge bg-secondary">@_pendingMessages.Count message@(_pendingMessages.Count > 1 ? "s" : "") queued</span>
+                        <button class="btn btn-link btn-sm" @onclick="ClearQueue">Clear queue</button>
+                    </div>
+                }
             </div>
         </div>
 
@@ -1015,8 +1053,55 @@
         border-color: var(--color-lagoon);
     }
 
-    .send-button {
+    .button-group {
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-xs);
         align-self: flex-end;
+    }
+
+    .send-button,
+    .stop-button,
+    .queue-button {
+        min-width: 80px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: var(--spacing-xs);
+    }
+
+    .stop-button {
+        animation: pulse-glow 1.5s ease-in-out infinite;
+    }
+
+    .stop-button .stop-icon {
+        font-size: 0.75rem;
+    }
+
+    .stop-button:disabled {
+        animation: none;
+    }
+
+    @@keyframes pulse-glow {
+        0%, 100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.4); }
+        50% { box-shadow: 0 0 0 4px rgba(220, 53, 69, 0); }
+    }
+
+    .queue-button {
+        font-size: 0.8125rem;
+    }
+
+    .queued-messages-indicator {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+        padding: var(--spacing-xs) 0;
+        font-size: 0.875rem;
+    }
+
+    .queued-messages-indicator .btn-link {
+        padding: 0;
+        font-size: 0.8125rem;
     }
 
     /* Context separator styles */
@@ -1311,6 +1396,13 @@
     private PendingQuestion? _pendingQuestion;
     private Dictionary<string, string> _questionAnswers = new();
     private Dictionary<string, string> _customAnswers = new();  // For "Other" text input
+
+    // Stop button state
+    private bool _isStopping = false;
+
+    // Message queue for mid-execution prompts
+    private Queue<string> _pendingMessages = new();
+    private const int MaxQueuedMessages = 5;
 
     // Debug log entry class (needs to be accessible in both Debug and Release for Razor compilation)
     private class DebugLogEntry
@@ -1811,7 +1903,21 @@
                     if (_session != null && _session.Id == sessionId)
                     {
                         _session.Status = status;
-                        StateHasChanged();
+
+                        // When execution completes and we have queued messages, send the next one
+                        if (status == ClaudeSessionStatus.WaitingForInput && _pendingMessages.Count > 0)
+                        {
+                            var nextMessage = _pendingMessages.Dequeue();
+                            _inputMessage = nextMessage;
+                            StateHasChanged();
+                            // Small delay to ensure UI updates, then send
+                            await Task.Delay(100);
+                            await SendMessage();
+                        }
+                        else
+                        {
+                            StateHasChanged();
+                        }
                     }
                 }
                 catch (Exception ex)
@@ -2005,20 +2111,41 @@
     /// <summary>
     /// Handles keyboard events in the textarea.
     /// Enter creates a newline (default behavior).
-    /// Ctrl+Enter or Meta+Enter (Cmd on Mac) submits the message.
+    /// Ctrl+Enter or Meta+Enter (Cmd on Mac) submits the message or queues it when running.
+    /// Escape stops the current execution when running.
     /// </summary>
     private async Task HandleKeyDown(KeyboardEventArgs e)
     {
-        // Only submit on Ctrl+Enter or Meta+Enter (Cmd+Enter on Mac)
+        if (_session == null) return;
+
+        // Escape key stops the current execution
+        if (e.Key == "Escape" && _session.Status == ClaudeSessionStatus.Running)
+        {
+            await StopSession();
+            return;
+        }
+
+        // Ctrl+Enter or Meta+Enter (Cmd+Enter on Mac)
         if (e.Key == "Enter" && (e.CtrlKey || e.MetaKey))
         {
-            await SendMessage();
+            if (_session.Status == ClaudeSessionStatus.Running)
+            {
+                // When running, queue the message instead of sending
+                QueueMessage();
+            }
+            else
+            {
+                await SendMessage();
+            }
         }
     }
 
     private async Task StopSession()
     {
-        if (_session == null) return;
+        if (_session == null || _isStopping) return;
+
+        _isStopping = true;
+        StateHasChanged();
 
         try
         {
@@ -2029,6 +2156,45 @@
         {
             Console.WriteLine($"Error stopping session: {ex.Message}");
         }
+        finally
+        {
+            _isStopping = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Queues a message to be sent after the current execution completes.
+    /// </summary>
+    private void QueueMessage()
+    {
+        if (string.IsNullOrWhiteSpace(_inputMessage) || _pendingMessages.Count >= MaxQueuedMessages)
+            return;
+
+        _pendingMessages.Enqueue(_inputMessage);
+        _inputMessage = string.Empty;
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Clears all queued messages.
+    /// </summary>
+    private void ClearQueue()
+    {
+        _pendingMessages.Clear();
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Gets the appropriate placeholder text based on session state.
+    /// </summary>
+    private string GetInputPlaceholder()
+    {
+        if (_session?.Status == ClaudeSessionStatus.Running)
+        {
+            return "Type a message to queue... (Ctrl+Enter to queue, Escape to stop)";
+        }
+        return "Type a message... (Ctrl+Enter to send)";
     }
 
     /// <summary>
