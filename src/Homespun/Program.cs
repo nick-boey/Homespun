@@ -1,3 +1,4 @@
+using Homespun.Features.AgentOrchestration.Services;
 using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.ClaudeCode.Hubs;
 using Homespun.Features.ClaudeCode.Services;
@@ -149,6 +150,10 @@ else
     builder.Services.AddSingleton<IAgentStartupTracker, AgentStartupTracker>();
     builder.Services.AddSingleton<IAgentPromptService, AgentPromptService>();
     builder.Services.AddSingleton<IRebaseAgentService, RebaseAgentService>();
+
+    // Agent Orchestration services (mini-prompts, branch ID generation)
+    builder.Services.AddSingleton<IMiniPromptService, MiniPromptService>();
+    builder.Services.AddSingleton<IBranchIdGeneratorService, BranchIdGeneratorService>();
 
     // GitHub sync polling service (PR sync, review polling, issue linking)
     builder.Services.Configure<GitHubSyncPollingOptions>(

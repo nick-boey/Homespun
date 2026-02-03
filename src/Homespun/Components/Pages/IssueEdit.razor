@@ -1,5 +1,6 @@
 @page "/projects/{ProjectId}/issues/{IssueId}/edit"
 @using Fleece.Core.Models
+@using Homespun.Features.AgentOrchestration.Services
 @using Homespun.Features.Fleece.Services
 @using Homespun.Features.Navigation
 @using Homespun.Features.Projects
@@ -8,6 +9,7 @@
 @using static Homespun.Features.PullRequests.BranchNameGenerator
 @inject IProjectService ProjectService
 @inject IFleeceService FleeceService
+@inject IBranchIdGeneratorService BranchIdGeneratorService
 @inject IBreadcrumbService BreadcrumbService
 @inject NavigationManager Navigation
 @inject ILogger<IssueEdit> Logger
@@ -109,10 +111,25 @@ else
                     <div class="card-body">
                         <div class="mb-3">
                             <label for="workingBranchId" class="form-label">Working Branch ID</label>
-                            <input type="text" class="form-control" id="workingBranchId"
-                                   @bind="_workingBranchId"
-                                   placeholder="Custom branch identifier" />
-                            <div class="form-text">Leave empty to auto-generate from title</div>
+                            <div class="input-group">
+                                <input type="text" class="form-control" id="workingBranchId"
+                                       @bind="_workingBranchId"
+                                       placeholder="Custom branch identifier" />
+                                <button type="button" class="btn btn-outline-secondary"
+                                        @onclick="SuggestBranchId"
+                                        disabled="@_isSuggestingBranchId"
+                                        title="Suggest branch ID using AI">
+                                    @if (_isSuggestingBranchId)
+                                    {
+                                        <span class="spinner-border spinner-border-sm" role="status"></span>
+                                    }
+                                    else
+                                    {
+                                        <span>Suggest</span>
+                                    }
+                                </button>
+                            </div>
+                            <div class="form-text">AI-suggested or auto-generated from title</div>
                         </div>
                         <div class="p-2 bg-bg-tertiary rounded text-sm">
                             <strong>Branch Preview:</strong><br/>
@@ -177,6 +194,7 @@ else
     private bool _loading = true;
     private bool _notFound;
     private bool _isSaving;
+    private bool _isSuggestingBranchId;
     private string? _errorMessage;
     private string? _successMessage;
 
@@ -344,5 +362,47 @@ else
         // Use the shared generator to ensure branch name calculation is consistent
         // across the application (edit form preview matches what will be created)
         return GenerateBranchNamePreview(IssueId, _type, _title, _group, _workingBranchId);
+    }
+
+    /// <summary>
+    /// Suggests a branch ID using AI based on the current title.
+    /// </summary>
+    private async Task SuggestBranchId()
+    {
+        if (string.IsNullOrWhiteSpace(_title))
+        {
+            _errorMessage = "Please enter a title first to generate a branch ID suggestion.";
+            return;
+        }
+
+        _isSuggestingBranchId = true;
+        _errorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            var result = await BranchIdGeneratorService.GenerateAsync(_title);
+            if (result.Success && !string.IsNullOrWhiteSpace(result.BranchId))
+            {
+                _workingBranchId = result.BranchId;
+                Logger.LogInformation(
+                    "Suggested branch ID '{BranchId}' for title '{Title}' (AI: {WasAiGenerated})",
+                    result.BranchId, _title, result.WasAiGenerated);
+            }
+            else
+            {
+                _errorMessage = result.Error ?? "Failed to generate branch ID suggestion.";
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to suggest branch ID for title '{Title}'", _title);
+            _errorMessage = $"Failed to suggest branch ID: {ex.Message}";
+        }
+        finally
+        {
+            _isSuggestingBranchId = false;
+            StateHasChanged();
+        }
     }
 }
