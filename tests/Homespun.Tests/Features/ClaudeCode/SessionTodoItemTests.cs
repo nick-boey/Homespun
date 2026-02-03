@@ -71,11 +71,14 @@ public class SessionTodoItemTests
     }
 
     [Test]
-    public void TodoStatus_FromString_ParsesCorrectly()
+    public void TodoStatus_FromString_ParsesEnumNames()
     {
+        // Note: Enum.Parse works with actual enum names, not JSON snake_case values.
+        // Snake_case parsing (e.g., "in_progress" -> InProgress) is handled by TodoParser.
+
         // Act
         var pending = Enum.Parse<TodoStatus>("pending", ignoreCase: true);
-        var inProgress = Enum.Parse<TodoStatus>("in_progress", ignoreCase: true);
+        var inProgress = Enum.Parse<TodoStatus>("InProgress", ignoreCase: true);
         var completed = Enum.Parse<TodoStatus>("completed", ignoreCase: true);
 
         // Assert
