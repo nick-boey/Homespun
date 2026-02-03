@@ -1,4 +1,6 @@
 using Fleece.Core.Models;
+using Homespun.Features.ClaudeCode.Data;
+using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Gitgraph.Data;
 using Homespun.Features.Gitgraph.Services;
 using Homespun.Features.PullRequests;
@@ -14,15 +16,18 @@ namespace Homespun.Features.Testing.Services;
 public class MockGraphService : IGraphService
 {
     private readonly IDataStore _dataStore;
+    private readonly IClaudeSessionStore _sessionStore;
     private readonly ILogger<MockGraphService> _logger;
     private readonly GraphBuilder _graphBuilder = new();
     private readonly GitgraphApiMapper _mapper = new();
 
     public MockGraphService(
         IDataStore dataStore,
+        IClaudeSessionStore sessionStore,
         ILogger<MockGraphService> logger)
     {
         _dataStore = dataStore;
+        _sessionStore = sessionStore;
         _logger = logger;
     }
 
@@ -61,7 +66,12 @@ public class MockGraphService : IGraphService
         _logger.LogDebug("[Mock] BuildGraphJson for project {ProjectId} (useCache: {UseCache})", projectId, useCache);
 
         var graph = await BuildGraphAsync(projectId, maxPastPRs);
-        return _mapper.ToJson(graph);
+        var jsonData = _mapper.ToJson(graph);
+
+        // Enrich nodes with agent status data
+        EnrichWithAgentStatuses(jsonData, projectId);
+
+        return jsonData;
     }
 
     public async Task<GitgraphJsonData> BuildGraphJsonWithFreshDataAsync(string projectId, int? maxPastPRs = 5)
@@ -70,7 +80,12 @@ public class MockGraphService : IGraphService
 
         // In mock mode, just build the graph normally
         var graph = await BuildGraphAsync(projectId, maxPastPRs);
-        return _mapper.ToJson(graph);
+        var jsonData = _mapper.ToJson(graph);
+
+        // Enrich nodes with agent status data
+        EnrichWithAgentStatuses(jsonData, projectId);
+
+        return jsonData;
     }
 
     public async Task<Graph?> BuildGraphFromCacheOnlyAsync(string projectId, int? maxPastPRs = 5)
@@ -87,7 +102,12 @@ public class MockGraphService : IGraphService
 
         // In mock mode, return the same data (simulates cache hit)
         var graph = await BuildGraphAsync(projectId, maxPastPRs);
-        return _mapper.ToJson(graph);
+        var jsonData = _mapper.ToJson(graph);
+
+        // Enrich nodes with agent status data
+        EnrichWithAgentStatuses(jsonData, projectId);
+
+        return jsonData;
     }
 
     public DateTime? GetCacheTimestamp(string projectId)
@@ -404,5 +424,60 @@ public class MockGraphService : IGraphService
                 LastUpdate = now.AddDays(-2)
             }
         ];
+    }
+
+    /// <summary>
+    /// Enriches graph commit data with agent session statuses.
+    /// </summary>
+    private void EnrichWithAgentStatuses(GitgraphJsonData jsonData, string projectId)
+    {
+        // Get all sessions for this project
+        var sessions = _sessionStore.GetByProjectId(projectId);
+        if (sessions.Count == 0) return;
+
+        // Build lookup by entity ID (works for issues directly, and for PRs via their internal ID)
+        var sessionsByEntityId = sessions.ToDictionary(s => s.EntityId, StringComparer.OrdinalIgnoreCase);
+
+        // Build lookup from GitHub PR number to internal PR ID for matching PR sessions
+        var trackedPrs = _dataStore.GetPullRequestsByProject(projectId);
+        var prIdByGitHubNumber = trackedPrs
+            .Where(pr => pr.GitHubPRNumber.HasValue)
+            .ToDictionary(pr => pr.GitHubPRNumber!.Value, pr => pr.Id);
+
+        _logger.LogDebug("[Mock] EnrichWithAgentStatuses: {SessionCount} sessions, {PrCount} tracked PRs for project {ProjectId}",
+            sessions.Count, trackedPrs.Count(), projectId);
+
+        // Enrich commits with agent status
+        foreach (var commit in jsonData.Commits)
+        {
+            // Check if there's an active session for this issue
+            if (commit.IssueId != null && sessionsByEntityId.TryGetValue(commit.IssueId, out var session))
+            {
+                commit.AgentStatus = CreateAgentStatusData(session);
+                _logger.LogDebug("[Mock] Added agent status to issue {IssueId}: {Status}", commit.IssueId, session.Status);
+            }
+            // Check if there's an active session for this PR
+            else if (commit.PullRequestNumber.HasValue &&
+                     prIdByGitHubNumber.TryGetValue(commit.PullRequestNumber.Value, out var prEntityId) &&
+                     sessionsByEntityId.TryGetValue(prEntityId, out var prSession))
+            {
+                commit.AgentStatus = CreateAgentStatusData(prSession);
+                _logger.LogDebug("[Mock] Added agent status to PR #{PrNumber} (entity {EntityId}): {Status}",
+                    commit.PullRequestNumber, prEntityId, prSession.Status);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Creates AgentStatusData from a ClaudeSession.
+    /// </summary>
+    private static AgentStatusData CreateAgentStatusData(ClaudeSession session)
+    {
+        return new AgentStatusData
+        {
+            IsActive = session.Status.IsActive(),
+            Status = session.Status.ToString(),
+            SessionId = session.Id
+        };
     }
 }
