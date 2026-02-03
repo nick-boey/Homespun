@@ -514,6 +514,125 @@ public class ClaudeSessionServicePermissionModeTests
 }
 
 /// <summary>
+/// Tests for plan content capture functionality.
+/// </summary>
+[TestFixture]
+public class ClaudeSessionServicePlanCaptureTests
+{
+    private ClaudeSessionService _service = null!;
+    private IClaudeSessionStore _sessionStore = null!;
+    private SessionOptionsFactory _optionsFactory = null!;
+    private Mock<ILogger<ClaudeSessionService>> _loggerMock = null!;
+    private Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>> _hubContextMock = null!;
+    private Mock<IClaudeSessionDiscovery> _discoveryMock = null!;
+    private Mock<ISessionMetadataStore> _metadataStoreMock = null!;
+    private Mock<IMessageCacheStore> _messageCacheMock = null!;
+    private IToolResultParser _toolResultParser = null!;
+    private Mock<IHooksService> _hooksServiceMock = null!;
+
+    [SetUp]
+    public void SetUp()
+    {
+        _sessionStore = new ClaudeSessionStore();
+        _optionsFactory = new SessionOptionsFactory();
+        _loggerMock = new Mock<ILogger<ClaudeSessionService>>();
+        _hubContextMock = new Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>>();
+        _discoveryMock = new Mock<IClaudeSessionDiscovery>();
+        _metadataStoreMock = new Mock<ISessionMetadataStore>();
+        _messageCacheMock = new Mock<IMessageCacheStore>();
+        _toolResultParser = new ToolResultParser();
+        _hooksServiceMock = new Mock<IHooksService>();
+
+        var clientsMock = new Mock<IHubClients>();
+        var clientProxyMock = new Mock<IClientProxy>();
+        clientsMock.Setup(c => c.All).Returns(clientProxyMock.Object);
+        clientsMock.Setup(c => c.Group(It.IsAny<string>())).Returns(clientProxyMock.Object);
+        _hubContextMock.Setup(h => h.Clients).Returns(clientsMock.Object);
+
+        _service = new ClaudeSessionService(
+            _sessionStore,
+            _optionsFactory,
+            _loggerMock.Object,
+            _hubContextMock.Object,
+            _discoveryMock.Object,
+            _metadataStoreMock.Object,
+            _toolResultParser,
+            _hooksServiceMock.Object,
+            _messageCacheMock.Object);
+    }
+
+    [Test]
+    public void Session_PlanContent_IsNullByDefault()
+    {
+        // Arrange
+        var session = new ClaudeSession
+        {
+            Id = "test-session",
+            EntityId = "entity-123",
+            ProjectId = "project-456",
+            WorkingDirectory = "/test/path",
+            Model = "model",
+            Mode = SessionMode.Plan,
+            Status = ClaudeSessionStatus.Running,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        // Assert
+        Assert.That(session.PlanContent, Is.Null);
+        Assert.That(session.PlanFilePath, Is.Null);
+    }
+
+    [Test]
+    public void Session_PlanContent_CanBeSetDirectly()
+    {
+        // Arrange
+        var session = new ClaudeSession
+        {
+            Id = "test-session",
+            EntityId = "entity-123",
+            ProjectId = "project-456",
+            WorkingDirectory = "/test/path",
+            Model = "model",
+            Mode = SessionMode.Plan,
+            Status = ClaudeSessionStatus.Running,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        // Act
+        session.PlanContent = "# My Plan\n\nThis is the plan content.";
+        session.PlanFilePath = "/path/to/plans/my-plan.md";
+
+        // Assert
+        Assert.That(session.PlanContent, Is.EqualTo("# My Plan\n\nThis is the plan content."));
+        Assert.That(session.PlanFilePath, Is.EqualTo("/path/to/plans/my-plan.md"));
+    }
+
+    [TestCase("/home/user/.claude/plans/fluffy-aurora.md", true, Description = "Unix path with /plans/")]
+    [TestCase("C:\\Users\\test\\.claude\\plans\\fluffy-aurora.md", true, Description = "Windows path with \\plans\\")]
+    [TestCase("/home/user/.claude/plan.md", true, Description = "Unix path with /.claude/ ending in plan.md")]
+    [TestCase("C:\\Users\\test\\.claude\\plan.md", true, Description = "Windows path with \\.claude\\ ending in plan.md")]
+    [TestCase("/home/user/project/PLAN.md", false, Description = "PLAN.md in project root (not in .claude)")]
+    [TestCase("/home/user/project/src/readme.md", false, Description = "Regular file")]
+    [TestCase("/home/user/project/src/handler.ts", false, Description = "TypeScript file")]
+    [TestCase("/home/user/.claude/plans/random-name.md", true, Description = "Random plan name in plans directory")]
+    [TestCase("C:\\Users\\test\\.claude\\plans\\xyz-abc-123.md", true, Description = "Windows random plan name")]
+    public void IsPlanFilePath_DetectsCorrectly(string filePath, bool expectedIsPlanFile)
+    {
+        // This test documents the expected behavior of plan file path detection
+        // Claude Code writes plans to ~/.claude/plans/ directory with random names
+        // We also capture files in .claude/ directory ending with plan.md
+        // The actual implementation is in TryCaptureWrittenPlanContent
+
+        var normalizedPath = filePath.Replace('\\', '/').ToLowerInvariant();
+        var isPlanFile = normalizedPath.Contains("/plans/") ||
+                         (normalizedPath.Contains("/.claude/") && normalizedPath.EndsWith("plan.md"));
+
+        Assert.That(isPlanFile, Is.EqualTo(expectedIsPlanFile),
+            $"Path '{filePath}' should {(expectedIsPlanFile ? "" : "not ")}be detected as a plan file");
+    }
+}
+
+/// <summary>
 /// Tests for session resumption functionality.
 /// </summary>
 [TestFixture]

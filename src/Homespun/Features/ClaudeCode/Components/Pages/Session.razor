@@ -59,7 +59,7 @@
                 }
                 else
                 {
-                    @foreach (var message in _session.Messages)
+                    @foreach (var message in _session.Messages.ToList())
                     {
                         @* Check if context was cleared before this message *@
                         @if (ShouldShowContextSeparator(message))
@@ -84,7 +84,7 @@
                                 </div>
                             }
                             <div class="message-content">
-                                @foreach (var content in message.Content)
+                                @foreach (var content in message.Content.ToList())
                                 {
                                     <div class="content-block @GetContentBlockClass(content.Type) @(content.IsStreaming ? "streaming" : "")">
                                         @switch (content.Type)
@@ -344,7 +344,7 @@
                         }
                         else
                         {
-                            @foreach (var entry in _debugLog.AsEnumerable().Reverse().Take(50))
+                            @foreach (var entry in _debugLog.ToList().AsEnumerable().Reverse().Take(50))
                             {
                                 <div class="debug-entry @(entry.EventType == "ERROR" ? "error" : "")">
                                     <span class="debug-time">@entry.Timestamp.ToString("HH:mm:ss.fff")</span>
