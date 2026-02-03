@@ -336,7 +336,8 @@
     private string? _error;
     private Graph? _graph;
     private TimelineLaneLayout? _layout;
-    private Dictionary<string, AgentStatusData> _agentStatuses = new(StringComparer.OrdinalIgnoreCase);
+    private Dictionary<string, AgentStatusData> _agentStatusesByIssueId = new(StringComparer.OrdinalIgnoreCase);
+    private Dictionary<int, AgentStatusData> _agentStatusesByPrNumber = [];
     private Dictionary<int, string> _laneColors = [];
     private int _currentMaxPastPRs = 5;
 
@@ -362,12 +363,20 @@
             var cachedJsonData = await GraphService.BuildGraphJsonFromCacheOnlyAsync(ProjectId, _currentMaxPastPRs);
             if (cachedJsonData != null)
             {
-                _agentStatuses.Clear();
+                _agentStatusesByIssueId.Clear();
+                _agentStatusesByPrNumber.Clear();
                 foreach (var commit in cachedJsonData.Commits)
                 {
-                    if (commit.IssueId != null && commit.AgentStatus != null)
+                    if (commit.AgentStatus != null)
                     {
-                        _agentStatuses[commit.IssueId] = commit.AgentStatus;
+                        if (commit.IssueId != null)
+                        {
+                            _agentStatusesByIssueId[commit.IssueId] = commit.AgentStatus;
+                        }
+                        if (commit.PullRequestNumber.HasValue)
+                        {
+                            _agentStatusesByPrNumber[commit.PullRequestNumber.Value] = commit.AgentStatus;
+                        }
                     }
                 }
             }
@@ -460,12 +469,20 @@
             _layout = _laneCalculator.Calculate(_graph.Nodes);
 
             // Build agent status lookup
-            _agentStatuses.Clear();
+            _agentStatusesByIssueId.Clear();
+            _agentStatusesByPrNumber.Clear();
             foreach (var commit in freshJsonData.Commits)
             {
-                if (commit.IssueId != null && commit.AgentStatus != null)
+                if (commit.AgentStatus != null)
                 {
-                    _agentStatuses[commit.IssueId] = commit.AgentStatus;
+                    if (commit.IssueId != null)
+                    {
+                        _agentStatusesByIssueId[commit.IssueId] = commit.AgentStatus;
+                    }
+                    if (commit.PullRequestNumber.HasValue)
+                    {
+                        _agentStatusesByPrNumber[commit.PullRequestNumber.Value] = commit.AgentStatus;
+                    }
                 }
             }
 
@@ -505,12 +522,20 @@
             _layout = _laneCalculator.Calculate(_graph.Nodes);
 
             // Build agent status lookup
-            _agentStatuses.Clear();
+            _agentStatusesByIssueId.Clear();
+            _agentStatusesByPrNumber.Clear();
             foreach (var commit in jsonData.Commits)
             {
-                if (commit.IssueId != null && commit.AgentStatus != null)
+                if (commit.AgentStatus != null)
                 {
-                    _agentStatuses[commit.IssueId] = commit.AgentStatus;
+                    if (commit.IssueId != null)
+                    {
+                        _agentStatusesByIssueId[commit.IssueId] = commit.AgentStatus;
+                    }
+                    if (commit.PullRequestNumber.HasValue)
+                    {
+                        _agentStatusesByPrNumber[commit.PullRequestNumber.Value] = commit.AgentStatus;
+                    }
                 }
             }
 
@@ -556,9 +581,15 @@
 
     private AgentStatusData? GetAgentStatus(IGraphNode node)
     {
-        if (node.IssueId != null && _agentStatuses.TryGetValue(node.IssueId, out var status))
+        // Check for issue-based agent status
+        if (node.IssueId != null && _agentStatusesByIssueId.TryGetValue(node.IssueId, out var issueStatus))
         {
-            return status;
+            return issueStatus;
+        }
+        // Check for PR-based agent status
+        if (node.PullRequestNumber.HasValue && _agentStatusesByPrNumber.TryGetValue(node.PullRequestNumber.Value, out var prStatus))
+        {
+            return prStatus;
         }
         return null;
     }
