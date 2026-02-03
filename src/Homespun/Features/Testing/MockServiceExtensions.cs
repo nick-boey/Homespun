@@ -1,3 +1,4 @@
+using Homespun.Features.AgentOrchestration.Services;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Commands;
 using Homespun.Features.Design;
@@ -74,6 +75,11 @@ public static class MockServiceExtensions
 
         services.AddSingleton<IRebaseAgentService, MockRebaseAgentService>();
         services.AddSingleton<IAgentPromptService, MockAgentPromptService>();
+
+        // Agent Orchestration services - use real implementations
+        // These are lightweight services that work with the Claude SDK
+        services.AddSingleton<IMiniPromptService, MiniPromptService>();
+        services.AddSingleton<IBranchIdGeneratorService, BranchIdGeneratorService>();
 
         // Message cache store - use real implementation
         // In container: /data/sessions, locally: ~/.homespun/sessions (consistent with Program.cs)
