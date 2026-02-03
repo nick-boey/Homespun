@@ -34,6 +34,11 @@
     background: var(--status-warning);
 }
 
+.status-dot.question {
+    background: var(--status-danger);
+    animation: pulse 1s ease-in-out infinite;
+}
+
 .count {
     font-weight: var(--font-weight-medium);
     color: var(--text-sidebar);
