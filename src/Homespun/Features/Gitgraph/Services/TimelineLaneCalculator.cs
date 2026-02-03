@@ -79,6 +79,55 @@ public class TimelineLaneCalculator
             int nodeLane;
             int? connectorFromLane = null;
 
+            // Handle section dividers - they just pass through in lane 0
+            if (node.NodeType == GraphNodeType.SectionDivider)
+            {
+                nodeLane = 0;
+                laneAssignments[node.Id] = nodeLane;
+
+                // Build the set of active lanes for this row BEFORE releases
+                var dividerActiveLanes = new HashSet<int>(activeLanes);
+                var dividerRenderingLanes = new HashSet<int>(renderingLanes);
+                var dividerReservedLanes = new HashSet<int>(dividerActiveLanes.Except(dividerRenderingLanes));
+
+                rowInfos.Add(new RowLaneInfo
+                {
+                    NodeId = node.Id,
+                    NodeLane = nodeLane,
+                    ActiveLanes = dividerActiveLanes,
+                    ConnectorFromLane = null,
+                    IsFirstRowInLane = false,
+                    IsLastRowInLane = false,
+                    ReservedLanes = dividerReservedLanes,
+                    IsDivider = true
+                });
+
+                lanesReleasedAfterRow.Add(new HashSet<int>());
+                continue;
+            }
+
+            // Handle flat orphan issues (empty ParentIds) - they display in lane 0 with no connections
+            if (node.NodeType == GraphNodeType.OrphanIssue && node.ParentIds.Count == 0)
+            {
+                nodeLane = 0;
+                laneAssignments[node.Id] = nodeLane;
+
+                rowInfos.Add(new RowLaneInfo
+                {
+                    NodeId = node.Id,
+                    NodeLane = nodeLane,
+                    ActiveLanes = new HashSet<int> { 0 },
+                    ConnectorFromLane = null,
+                    IsFirstRowInLane = false,
+                    IsLastRowInLane = true, // Each flat orphan is isolated
+                    ReservedLanes = new HashSet<int>(),
+                    IsFlatOrphan = true
+                });
+
+                lanesReleasedAfterRow.Add(new HashSet<int>());
+                continue;
+            }
+
             if (node.BranchName == _mainBranchName)
             {
                 // Main branch nodes are always in lane 0

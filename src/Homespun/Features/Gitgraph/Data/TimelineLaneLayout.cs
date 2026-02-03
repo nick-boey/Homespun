@@ -50,6 +50,17 @@ public record RowLaneInfo
     /// The lane stays allocated to prevent reuse, but no visual line should be drawn.
     /// </summary>
     public IReadOnlySet<int> ReservedLanes { get; init; } = new HashSet<int>();
+
+    /// <summary>
+    /// True if this row is a section divider (e.g., "CURRENT PRs" or "ISSUES").
+    /// Dividers only render a vertical line in lane 0 with no node.
+    /// </summary>
+    public bool IsDivider { get; init; }
+
+    /// <summary>
+    /// True if this row is a flat orphan issue (displays diamond in lane 0 with no connecting lines).
+    /// </summary>
+    public bool IsFlatOrphan { get; init; }
 }
 
 /// <summary>

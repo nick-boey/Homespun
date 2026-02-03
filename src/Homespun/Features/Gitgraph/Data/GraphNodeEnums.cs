@@ -18,7 +18,10 @@ public enum GraphNodeType
     Issue,
 
     /// <summary>An orphan issue with no dependencies.</summary>
-    OrphanIssue
+    OrphanIssue,
+
+    /// <summary>A section divider (e.g., "CURRENT PRs" or "ISSUES").</summary>
+    SectionDivider
 }
 
 /// <summary>
