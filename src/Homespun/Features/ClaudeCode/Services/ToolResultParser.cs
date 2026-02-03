@@ -31,6 +31,19 @@ public partial class ToolResultParser : IToolResultParser
             "webfetch" => ParseWebResult("WebFetch", contentString, isError),
             "websearch" => ParseWebResult("WebSearch", contentString, isError),
             "exitplanmode" => ParseExitPlanModeResult(contentString, isError),
+            "askuserquestion" => ParseAskUserQuestionResult(contentString, isError),
+            "todowrite" => ParseTodoWriteResult(contentString, isError),
+            "enterplanmode" => ParseEnterPlanModeResult(contentString, isError),
+            "notebookedit" => ParseNotebookEditResult(contentString, isError),
+            "skill" => ParseSkillResult(contentString, isError),
+            // MCP Playwright tools
+            "mcp__playwright__browser_snapshot" => ParseBrowserSnapshotResult(contentString, isError),
+            "mcp__playwright__browser_click" => ParseBrowserActionResult("Click", contentString, isError),
+            "mcp__playwright__browser_type" => ParseBrowserActionResult("Type", contentString, isError),
+            "mcp__playwright__browser_navigate" => ParseBrowserActionResult("Navigate", contentString, isError),
+            "mcp__playwright__browser_take_screenshot" => ParseBrowserActionResult("Screenshot", contentString, isError),
+            _ when normalizedName.StartsWith("mcp__playwright__") => ParseBrowserActionResult(
+                ExtractPlaywrightAction(normalizedName), contentString, isError),
             _ => CreateGenericResult(toolName, contentString, isError)
         };
     }
@@ -239,6 +252,143 @@ public partial class ToolResultParser : IToolResultParser
                 PlanContent = content
             }
         };
+    }
+
+    private ToolResultData ParseAskUserQuestionResult(string content, bool isError)
+    {
+        // AskUserQuestion results contain the user's answers
+        // The content is typically empty or contains confirmation of the answer
+        var summary = isError ? "Question failed" : "Question answered";
+
+        if (!isError && !string.IsNullOrWhiteSpace(content))
+        {
+            // Try to extract a meaningful summary from the answer
+            summary = TruncateForSummary(content, 50);
+        }
+
+        return new ToolResultData
+        {
+            ToolName = "AskUserQuestion",
+            Summary = summary,
+            IsSuccess = !isError,
+            TypedData = new GenericToolData
+            {
+                Content = content
+            }
+        };
+    }
+
+    private ToolResultData ParseTodoWriteResult(string content, bool isError)
+    {
+        return new ToolResultData
+        {
+            ToolName = "TodoWrite",
+            Summary = isError ? "Failed to update todo list" : "Todo list updated",
+            IsSuccess = !isError,
+            TypedData = new GenericToolData
+            {
+                Content = content
+            }
+        };
+    }
+
+    private ToolResultData ParseEnterPlanModeResult(string content, bool isError)
+    {
+        return new ToolResultData
+        {
+            ToolName = "EnterPlanMode",
+            Summary = isError ? "Failed to enter plan mode" : "Entered plan mode",
+            IsSuccess = !isError,
+            TypedData = new GenericToolData
+            {
+                Content = content
+            }
+        };
+    }
+
+    private ToolResultData ParseNotebookEditResult(string content, bool isError)
+    {
+        return new ToolResultData
+        {
+            ToolName = "NotebookEdit",
+            Summary = isError ? "Failed to edit notebook" : "Notebook cell updated",
+            IsSuccess = !isError,
+            TypedData = new GenericToolData
+            {
+                Content = content
+            }
+        };
+    }
+
+    private ToolResultData ParseSkillResult(string content, bool isError)
+    {
+        return new ToolResultData
+        {
+            ToolName = "Skill",
+            Summary = isError ? "Skill execution failed" : "Skill executed",
+            IsSuccess = !isError,
+            TypedData = new GenericToolData
+            {
+                Content = content
+            }
+        };
+    }
+
+    private ToolResultData ParseBrowserSnapshotResult(string content, bool isError)
+    {
+        var summary = isError ? "Snapshot failed" : "Browser snapshot captured";
+        if (!isError && !string.IsNullOrWhiteSpace(content))
+        {
+            // Content often includes page title or URL
+            summary = TruncateForSummary(content, 50);
+        }
+
+        return new ToolResultData
+        {
+            ToolName = "Browser Snapshot",
+            Summary = summary,
+            IsSuccess = !isError,
+            TypedData = new WebToolData
+            {
+                Content = content,
+                IsError = isError
+            }
+        };
+    }
+
+    private ToolResultData ParseBrowserActionResult(string action, string content, bool isError)
+    {
+        var summary = isError ? $"{action} failed" : $"{action} completed";
+        if (!isError && !string.IsNullOrWhiteSpace(content))
+        {
+            summary = TruncateForSummary(content, 50);
+        }
+
+        return new ToolResultData
+        {
+            ToolName = $"Browser {action}",
+            Summary = summary,
+            IsSuccess = !isError,
+            TypedData = new GenericToolData
+            {
+                Content = content
+            }
+        };
+    }
+
+    private static string ExtractPlaywrightAction(string toolName)
+    {
+        // Convert "mcp__playwright__browser_take_screenshot" to "Take Screenshot"
+        var parts = toolName.Split("__");
+        if (parts.Length >= 3)
+        {
+            var action = parts[2].Replace("browser_", "");
+            // Convert snake_case to Title Case
+            var words = action.Split('_');
+            return string.Join(" ", words.Select(w =>
+                string.IsNullOrEmpty(w) ? w : char.ToUpperInvariant(w[0]) + w[1..]));
+        }
+        return "Action";
     }
 
     private ToolResultData CreateGenericResult(string toolName, string content, bool isError)
