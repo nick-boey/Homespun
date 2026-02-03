@@ -15,6 +15,7 @@ public class ClaudeSessionServiceTests
     private IClaudeSessionStore _sessionStore = null!;
     private SessionOptionsFactory _optionsFactory = null!;
     private Mock<ILogger<ClaudeSessionService>> _loggerMock = null!;
+    private Mock<ILogger<SessionOptionsFactory>> _factoryLoggerMock = null!;
     private Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>> _hubContextMock = null!;
     private Mock<IClaudeSessionDiscovery> _discoveryMock = null!;
     private Mock<ISessionMetadataStore> _metadataStoreMock = null!;
@@ -26,7 +27,8 @@ public class ClaudeSessionServiceTests
     public void SetUp()
     {
         _sessionStore = new ClaudeSessionStore();
-        _optionsFactory = new SessionOptionsFactory();
+        _factoryLoggerMock = new Mock<ILogger<SessionOptionsFactory>>();
+        _optionsFactory = new SessionOptionsFactory(_factoryLoggerMock.Object);
         _loggerMock = new Mock<ILogger<ClaudeSessionService>>();
         _hubContextMock = new Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>>();
         _discoveryMock = new Mock<IClaudeSessionDiscovery>();
@@ -312,6 +314,7 @@ public class ClaudeSessionServiceMessageTests
     private IClaudeSessionStore _sessionStore = null!;
     private SessionOptionsFactory _optionsFactory = null!;
     private Mock<ILogger<ClaudeSessionService>> _loggerMock = null!;
+    private Mock<ILogger<SessionOptionsFactory>> _factoryLoggerMock = null!;
     private Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>> _hubContextMock = null!;
     private Mock<IClaudeSessionDiscovery> _discoveryMock = null!;
     private Mock<ISessionMetadataStore> _metadataStoreMock = null!;
@@ -323,7 +326,8 @@ public class ClaudeSessionServiceMessageTests
     public void SetUp()
     {
         _sessionStore = new ClaudeSessionStore();
-        _optionsFactory = new SessionOptionsFactory();
+        _factoryLoggerMock = new Mock<ILogger<SessionOptionsFactory>>();
+        _optionsFactory = new SessionOptionsFactory(_factoryLoggerMock.Object);
         _loggerMock = new Mock<ILogger<ClaudeSessionService>>();
         _hubContextMock = new Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>>();
         _discoveryMock = new Mock<IClaudeSessionDiscovery>();
@@ -421,6 +425,7 @@ public class ClaudeSessionServicePermissionModeTests
     private IClaudeSessionStore _sessionStore = null!;
     private SessionOptionsFactory _optionsFactory = null!;
     private Mock<ILogger<ClaudeSessionService>> _loggerMock = null!;
+    private Mock<ILogger<SessionOptionsFactory>> _factoryLoggerMock = null!;
     private Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>> _hubContextMock = null!;
     private Mock<IClaudeSessionDiscovery> _discoveryMock = null!;
     private Mock<ISessionMetadataStore> _metadataStoreMock = null!;
@@ -432,7 +437,8 @@ public class ClaudeSessionServicePermissionModeTests
     public void SetUp()
     {
         _sessionStore = new ClaudeSessionStore();
-        _optionsFactory = new SessionOptionsFactory();
+        _factoryLoggerMock = new Mock<ILogger<SessionOptionsFactory>>();
+        _optionsFactory = new SessionOptionsFactory(_factoryLoggerMock.Object);
         _loggerMock = new Mock<ILogger<ClaudeSessionService>>();
         _hubContextMock = new Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>>();
         _discoveryMock = new Mock<IClaudeSessionDiscovery>();
@@ -523,6 +529,7 @@ public class ClaudeSessionServicePlanCaptureTests
     private IClaudeSessionStore _sessionStore = null!;
     private SessionOptionsFactory _optionsFactory = null!;
     private Mock<ILogger<ClaudeSessionService>> _loggerMock = null!;
+    private Mock<ILogger<SessionOptionsFactory>> _factoryLoggerMock = null!;
     private Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>> _hubContextMock = null!;
     private Mock<IClaudeSessionDiscovery> _discoveryMock = null!;
     private Mock<ISessionMetadataStore> _metadataStoreMock = null!;
@@ -534,7 +541,8 @@ public class ClaudeSessionServicePlanCaptureTests
     public void SetUp()
     {
         _sessionStore = new ClaudeSessionStore();
-        _optionsFactory = new SessionOptionsFactory();
+        _factoryLoggerMock = new Mock<ILogger<SessionOptionsFactory>>();
+        _optionsFactory = new SessionOptionsFactory(_factoryLoggerMock.Object);
         _loggerMock = new Mock<ILogger<ClaudeSessionService>>();
         _hubContextMock = new Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>>();
         _discoveryMock = new Mock<IClaudeSessionDiscovery>();
@@ -642,6 +650,7 @@ public class ClaudeSessionServiceResumeTests
     private IClaudeSessionStore _sessionStore = null!;
     private SessionOptionsFactory _optionsFactory = null!;
     private Mock<ILogger<ClaudeSessionService>> _loggerMock = null!;
+    private Mock<ILogger<SessionOptionsFactory>> _factoryLoggerMock = null!;
     private Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>> _hubContextMock = null!;
     private Mock<IClaudeSessionDiscovery> _discoveryMock = null!;
     private Mock<ISessionMetadataStore> _metadataStoreMock = null!;
@@ -657,7 +666,8 @@ public class ClaudeSessionServiceResumeTests
         Directory.CreateDirectory(_testClaudeDir);
 
         _sessionStore = new ClaudeSessionStore();
-        _optionsFactory = new SessionOptionsFactory();
+        _factoryLoggerMock = new Mock<ILogger<SessionOptionsFactory>>();
+        _optionsFactory = new SessionOptionsFactory(_factoryLoggerMock.Object);
         _loggerMock = new Mock<ILogger<ClaudeSessionService>>();
         _hubContextMock = new Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>>();
         _discoveryMock = new Mock<IClaudeSessionDiscovery>();
