@@ -1727,7 +1727,7 @@
                         }
                     }
                     StateHasChanged();
-                    await ScrollToBottom();
+                    await AutoScrollToBottomIfNearEnd();
                 }
                 catch (Exception ex)
                 {
@@ -1809,7 +1809,7 @@
                         }
                     }
                     StateHasChanged();
-                    await ScrollToBottom();
+                    await AutoScrollToBottomIfNearEnd();
                 }
                 catch (Exception ex)
                 {
@@ -1850,7 +1850,7 @@
                         }
                     }
                     StateHasChanged();
-                    await ScrollToBottom();
+                    await AutoScrollToBottomIfNearEnd();
                 }
                 catch (Exception ex)
                 {
@@ -1882,7 +1882,7 @@
                         streamingBlock.IsStreaming = false;
                     }
                     StateHasChanged();
-                    await ScrollToBottom();
+                    await AutoScrollToBottomIfNearEnd();
                 }
                 catch (Exception ex)
                 {
@@ -2046,7 +2046,7 @@
                     }
 
                     StateHasChanged();
-                    await ScrollToBottom();
+                    await AutoScrollToBottomIfNearEnd();
                 }
                 catch (Exception ex)
                 {
