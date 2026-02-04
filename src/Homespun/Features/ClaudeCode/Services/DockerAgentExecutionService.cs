@@ -101,8 +101,8 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         var sessionId = Guid.NewGuid().ToString();
         var containerName = $"homespun-agent-{sessionId[..8]}";
 
-        _logger.LogInformation("Starting Docker session {SessionId} with container {ContainerName}",
-            sessionId, containerName);
+        _logger.LogInformation("DockerAgentExecutionService: Starting session {SessionId} with worker image {Image}, container {ContainerName}",
+            sessionId, _options.WorkerImage, containerName);
 
         var channel = System.Threading.Channels.Channel.CreateUnbounded<AgentEvent>();
 

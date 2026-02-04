@@ -22,6 +22,7 @@ public class ClaudeSessionServiceTests
     private Mock<IMessageCacheStore> _messageCacheMock = null!;
     private IToolResultParser _toolResultParser = null!;
     private Mock<IHooksService> _hooksServiceMock = null!;
+    private Mock<IAgentExecutionService> _agentExecutionServiceMock = null!;
 
     [SetUp]
     public void SetUp()
@@ -36,6 +37,7 @@ public class ClaudeSessionServiceTests
         _messageCacheMock = new Mock<IMessageCacheStore>();
         _toolResultParser = new ToolResultParser();
         _hooksServiceMock = new Mock<IHooksService>();
+        _agentExecutionServiceMock = new Mock<IAgentExecutionService>();
 
         // Setup mock hub clients
         var clientsMock = new Mock<IHubClients>();
@@ -53,7 +55,8 @@ public class ClaudeSessionServiceTests
             _metadataStoreMock.Object,
             _toolResultParser,
             _hooksServiceMock.Object,
-            _messageCacheMock.Object);
+            _messageCacheMock.Object,
+            _agentExecutionServiceMock.Object);
     }
 
     [Test]
@@ -321,6 +324,7 @@ public class ClaudeSessionServiceMessageTests
     private Mock<IMessageCacheStore> _messageCacheMock = null!;
     private IToolResultParser _toolResultParser = null!;
     private Mock<IHooksService> _hooksServiceMock = null!;
+    private Mock<IAgentExecutionService> _agentExecutionServiceMock = null!;
 
     [SetUp]
     public void SetUp()
@@ -335,6 +339,7 @@ public class ClaudeSessionServiceMessageTests
         _messageCacheMock = new Mock<IMessageCacheStore>();
         _toolResultParser = new ToolResultParser();
         _hooksServiceMock = new Mock<IHooksService>();
+        _agentExecutionServiceMock = new Mock<IAgentExecutionService>();
 
         var clientsMock = new Mock<IHubClients>();
         var clientProxyMock = new Mock<IClientProxy>();
@@ -351,7 +356,8 @@ public class ClaudeSessionServiceMessageTests
             _metadataStoreMock.Object,
             _toolResultParser,
             _hooksServiceMock.Object,
-            _messageCacheMock.Object);
+            _messageCacheMock.Object,
+            _agentExecutionServiceMock.Object);
     }
 
     [Test]
@@ -432,6 +438,7 @@ public class ClaudeSessionServicePermissionModeTests
     private Mock<IMessageCacheStore> _messageCacheMock = null!;
     private IToolResultParser _toolResultParser = null!;
     private Mock<IHooksService> _hooksServiceMock = null!;
+    private Mock<IAgentExecutionService> _agentExecutionServiceMock = null!;
 
     [SetUp]
     public void SetUp()
@@ -446,6 +453,7 @@ public class ClaudeSessionServicePermissionModeTests
         _messageCacheMock = new Mock<IMessageCacheStore>();
         _toolResultParser = new ToolResultParser();
         _hooksServiceMock = new Mock<IHooksService>();
+        _agentExecutionServiceMock = new Mock<IAgentExecutionService>();
 
         var clientsMock = new Mock<IHubClients>();
         var clientProxyMock = new Mock<IClientProxy>();
@@ -462,7 +470,8 @@ public class ClaudeSessionServicePermissionModeTests
             _metadataStoreMock.Object,
             _toolResultParser,
             _hooksServiceMock.Object,
-            _messageCacheMock.Object);
+            _messageCacheMock.Object,
+            _agentExecutionServiceMock.Object);
     }
 
     [TestCase(PermissionMode.Default)]
@@ -536,6 +545,7 @@ public class ClaudeSessionServicePlanCaptureTests
     private Mock<IMessageCacheStore> _messageCacheMock = null!;
     private IToolResultParser _toolResultParser = null!;
     private Mock<IHooksService> _hooksServiceMock = null!;
+    private Mock<IAgentExecutionService> _agentExecutionServiceMock = null!;
 
     [SetUp]
     public void SetUp()
@@ -550,6 +560,7 @@ public class ClaudeSessionServicePlanCaptureTests
         _messageCacheMock = new Mock<IMessageCacheStore>();
         _toolResultParser = new ToolResultParser();
         _hooksServiceMock = new Mock<IHooksService>();
+        _agentExecutionServiceMock = new Mock<IAgentExecutionService>();
 
         var clientsMock = new Mock<IHubClients>();
         var clientProxyMock = new Mock<IClientProxy>();
@@ -566,7 +577,8 @@ public class ClaudeSessionServicePlanCaptureTests
             _metadataStoreMock.Object,
             _toolResultParser,
             _hooksServiceMock.Object,
-            _messageCacheMock.Object);
+            _messageCacheMock.Object,
+            _agentExecutionServiceMock.Object);
     }
 
     [Test]
@@ -657,6 +669,7 @@ public class ClaudeSessionServiceResumeTests
     private Mock<IMessageCacheStore> _messageCacheMock = null!;
     private IToolResultParser _toolResultParser = null!;
     private Mock<IHooksService> _hooksServiceMock = null!;
+    private Mock<IAgentExecutionService> _agentExecutionServiceMock = null!;
     private string _testClaudeDir = null!;
 
     [SetUp]
@@ -675,6 +688,7 @@ public class ClaudeSessionServiceResumeTests
         _messageCacheMock = new Mock<IMessageCacheStore>();
         _toolResultParser = new ToolResultParser();
         _hooksServiceMock = new Mock<IHooksService>();
+        _agentExecutionServiceMock = new Mock<IAgentExecutionService>();
 
         var clientsMock = new Mock<IHubClients>();
         var clientProxyMock = new Mock<IClientProxy>();
@@ -691,7 +705,8 @@ public class ClaudeSessionServiceResumeTests
             _metadataStoreMock.Object,
             _toolResultParser,
             _hooksServiceMock.Object,
-            _messageCacheMock.Object);
+            _messageCacheMock.Object,
+            _agentExecutionServiceMock.Object);
     }
 
     [TearDown]

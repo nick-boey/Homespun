@@ -134,19 +134,24 @@ public static class MockServiceExtensions
             .GetSection(AgentExecutionOptions.SectionName)
             .GetValue<AgentExecutionMode>("Mode");
 
+        Console.WriteLine($"[AgentExecution] MockLive mode: Configured mode = {agentExecutionMode}");
+
         switch (agentExecutionMode)
         {
             case AgentExecutionMode.Docker:
+                Console.WriteLine("[AgentExecution] Registering DockerAgentExecutionService");
                 services.Configure<DockerAgentExecutionOptions>(
                     configuration.GetSection(DockerAgentExecutionOptions.SectionName));
                 services.AddSingleton<IAgentExecutionService, DockerAgentExecutionService>();
                 break;
             case AgentExecutionMode.AzureContainerApps:
+                Console.WriteLine("[AgentExecution] Registering AzureContainerAppsAgentExecutionService");
                 services.Configure<AzureContainerAppsAgentExecutionOptions>(
                     configuration.GetSection(AzureContainerAppsAgentExecutionOptions.SectionName));
                 services.AddSingleton<IAgentExecutionService, AzureContainerAppsAgentExecutionService>();
                 break;
             default:
+                Console.WriteLine("[AgentExecution] Registering LocalAgentExecutionService (default)");
                 services.AddSingleton<IAgentExecutionService, LocalAgentExecutionService>();
                 break;
         }

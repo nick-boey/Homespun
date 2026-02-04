@@ -425,9 +425,12 @@ if [ "$USE_WATCHTOWER" = false ]; then
     DOCKER_CMD="$DOCKER_CMD -e AgentExecution__Docker__WorkerImage=$WORKER_IMAGE"
 fi
 
-# Override to Local mode if requested
+# Set agent execution mode explicitly
 if [ "$USE_LOCAL_AGENTS" = true ]; then
     DOCKER_CMD="$DOCKER_CMD -e AgentExecution__Mode=Local"
+else
+    # Explicitly set Docker mode to ensure config is not ambiguous
+    DOCKER_CMD="$DOCKER_CMD -e AgentExecution__Mode=Docker"
 fi
 
 DOCKER_CMD="$DOCKER_CMD --restart unless-stopped"
