@@ -556,6 +556,11 @@ try {
 
     if (-not [string]::IsNullOrWhiteSpace($dockerSocket)) {
         $dockerArgs += "-v", $dockerSocket
+        # On Windows, Docker Desktop mounts socket as root:root (since v4.27+)
+        # Add group 0 to allow container user access
+        if ($IsWindows) {
+            $dockerArgs += "--group-add", "0"
+        }
     }
 
     $dockerArgs += "-e", "HOME=/home/homespun"
@@ -587,9 +592,13 @@ try {
         $dockerArgs += "-e", "AgentExecution__Docker__WorkerImage=$WorkerImage"
     }
 
-    # Override to Local mode if requested
+    # Set agent execution mode explicitly
     if ($LocalAgents) {
         $dockerArgs += "-e", "AgentExecution__Mode=Local"
+    }
+    else {
+        # Explicitly set Docker mode to ensure config is not ambiguous
+        $dockerArgs += "-e", "AgentExecution__Mode=Docker"
     }
 
     $dockerArgs += "--restart", "unless-stopped"
