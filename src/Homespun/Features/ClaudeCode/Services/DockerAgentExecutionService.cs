@@ -142,11 +142,12 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
 
                 await foreach (var evt in SendSseRequestAsync($"{workerUrl}/api/sessions", startRequest, sessionId, cts.Token))
                 {
-                    // Update worker session ID if we receive it
-                    if (evt is AgentSessionStartedEvent startedEvt && !string.IsNullOrEmpty(startedEvt.ConversationId))
+                    // Update worker session ID if we receive it from the worker
+                    if (evt is AgentSessionStartedEvent startedEvt && !string.IsNullOrEmpty(startedEvt.SessionId))
                     {
                         session = session with { WorkerSessionId = startedEvt.SessionId };
                         _sessions[sessionId] = session;
+                        _logger.LogDebug("Updated WorkerSessionId to {WorkerSessionId} for session {SessionId}", startedEvt.SessionId, sessionId);
                     }
 
                     // Map worker session IDs to our session ID
