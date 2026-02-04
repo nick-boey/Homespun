@@ -27,6 +27,12 @@ public class DockerAgentExecutionOptions
     public string DataVolumePath { get; set; } = "/data";
 
     /// <summary>
+    /// Path on the host machine that corresponds to the container's data volume.
+    /// Used for path translation when spawning sibling containers.
+    /// </summary>
+    public string? HostDataPath { get; set; }
+
+    /// <summary>
     /// Memory limit in bytes for worker containers.
     /// </summary>
     public long MemoryLimitBytes { get; set; } = 4L * 1024 * 1024 * 1024; // 4GB
@@ -123,9 +129,10 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
                 await channel.Writer.WriteAsync(new AgentSessionStartedEvent(sessionId, null), cancellationToken);
 
                 // Start the agent session in the worker
+                // The workspace is mounted at /data in the agent container
                 var startRequest = new
                 {
-                    WorkingDirectory = request.WorkingDirectory,
+                    WorkingDirectory = "/data",
                     Mode = request.Mode.ToString(),
                     Model = request.Model,
                     Prompt = request.Prompt,
@@ -284,6 +291,29 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         return Task.FromResult<AgentSessionStatus?>(null);
     }
 
+    /// <summary>
+    /// Translates a container path to a host path for Docker mounts.
+    /// When running in a container, paths like /data/test-workspace need to be
+    /// translated to the corresponding host path for sibling container mounts.
+    /// </summary>
+    public string TranslateToHostPath(string containerPath)
+    {
+        // If no host path configured, assume we're running directly on host
+        if (string.IsNullOrEmpty(_options.HostDataPath))
+            return containerPath;
+
+        // Translate /data/xxx to {HostDataPath}/xxx
+        if (containerPath.StartsWith(_options.DataVolumePath, StringComparison.OrdinalIgnoreCase))
+        {
+            var relativePath = containerPath[_options.DataVolumePath.Length..].TrimStart('/');
+            return string.IsNullOrEmpty(relativePath)
+                ? _options.HostDataPath
+                : Path.Combine(_options.HostDataPath, relativePath);
+        }
+
+        return containerPath;
+    }
+
     private async Task<(string containerId, string workerUrl)> StartContainerAsync(
         string containerName,
         string workingDirectory,
@@ -296,7 +326,8 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         dockerArgs.Append($"--name {containerName} ");
         dockerArgs.Append($"--memory {_options.MemoryLimitBytes} ");
         dockerArgs.Append($"--cpus {_options.CpuLimit} ");
-        dockerArgs.Append($"-v \"{workingDirectory}:/data\" ");
+        var hostPath = TranslateToHostPath(workingDirectory);
+        dockerArgs.Append($"-v \"{hostPath}:/data\" ");
         dockerArgs.Append($"-e ASPNETCORE_URLS=http://+:8080 ");
         dockerArgs.Append($"--network {_options.NetworkName} ");
         dockerArgs.Append(_options.WorkerImage);

@@ -129,6 +129,12 @@ else
         builder.Configuration.GetSection(AgentExecutionOptions.SectionName));
     builder.Services.Configure<DockerAgentExecutionOptions>(
         builder.Configuration.GetSection(DockerAgentExecutionOptions.SectionName));
+    builder.Services.PostConfigure<DockerAgentExecutionOptions>(options =>
+    {
+        var hostPath = Environment.GetEnvironmentVariable("HSP_HOST_DATA_PATH");
+        if (!string.IsNullOrEmpty(hostPath))
+            options.HostDataPath = hostPath;
+    });
     builder.Services.Configure<AzureContainerAppsAgentExecutionOptions>(
         builder.Configuration.GetSection(AzureContainerAppsAgentExecutionOptions.SectionName));
 

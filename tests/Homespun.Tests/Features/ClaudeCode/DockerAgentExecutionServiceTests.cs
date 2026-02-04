@@ -63,6 +63,7 @@ public class DockerAgentExecutionServiceTests
             Assert.That(defaultOptions.RequestTimeout, Is.EqualTo(TimeSpan.FromMinutes(30)));
             Assert.That(defaultOptions.DockerSocketPath, Is.EqualTo("/var/run/docker.sock"));
             Assert.That(defaultOptions.NetworkName, Is.EqualTo("bridge"));
+            Assert.That(defaultOptions.HostDataPath, Is.Null);
         });
     }
 
@@ -70,6 +71,110 @@ public class DockerAgentExecutionServiceTests
     public void Options_SectionName_IsCorrect()
     {
         Assert.That(DockerAgentExecutionOptions.SectionName, Is.EqualTo("AgentExecution:Docker"));
+    }
+
+    #endregion
+
+    #region Path Translation Tests
+
+    [Test]
+    public void TranslateToHostPath_NoHostPath_ReturnsOriginal()
+    {
+        // Arrange - options without HostDataPath (default)
+        var options = new DockerAgentExecutionOptions
+        {
+            DataVolumePath = "/data",
+            HostDataPath = null
+        };
+        var service = new DockerAgentExecutionService(
+            Options.Create(options),
+            _loggerMock.Object);
+
+        // Act
+        var result = service.TranslateToHostPath("/data/test-workspace");
+
+        // Assert
+        Assert.That(result, Is.EqualTo("/data/test-workspace"));
+    }
+
+    [Test]
+    public void TranslateToHostPath_WithHostPath_TranslatesPath()
+    {
+        // Arrange
+        var options = new DockerAgentExecutionOptions
+        {
+            DataVolumePath = "/data",
+            HostDataPath = "/home/azureuser/.homespun-container/data"
+        };
+        var service = new DockerAgentExecutionService(
+            Options.Create(options),
+            _loggerMock.Object);
+
+        // Act
+        var result = service.TranslateToHostPath("/data/test-workspace");
+
+        // Assert
+        Assert.That(result, Is.EqualTo("/home/azureuser/.homespun-container/data/test-workspace"));
+    }
+
+    [Test]
+    public void TranslateToHostPath_PathNotUnderDataVolume_ReturnsOriginal()
+    {
+        // Arrange
+        var options = new DockerAgentExecutionOptions
+        {
+            DataVolumePath = "/data",
+            HostDataPath = "/home/azureuser/.homespun-container/data"
+        };
+        var service = new DockerAgentExecutionService(
+            Options.Create(options),
+            _loggerMock.Object);
+
+        // Act
+        var result = service.TranslateToHostPath("/some/other/path");
+
+        // Assert
+        Assert.That(result, Is.EqualTo("/some/other/path"));
+    }
+
+    [Test]
+    public void TranslateToHostPath_DataVolumePathItself_TranslatesCorrectly()
+    {
+        // Arrange
+        var options = new DockerAgentExecutionOptions
+        {
+            DataVolumePath = "/data",
+            HostDataPath = "/home/azureuser/.homespun-container/data"
+        };
+        var service = new DockerAgentExecutionService(
+            Options.Create(options),
+            _loggerMock.Object);
+
+        // Act
+        var result = service.TranslateToHostPath("/data");
+
+        // Assert
+        Assert.That(result, Is.EqualTo("/home/azureuser/.homespun-container/data"));
+    }
+
+    [Test]
+    public void TranslateToHostPath_NestedPath_TranslatesCorrectly()
+    {
+        // Arrange
+        var options = new DockerAgentExecutionOptions
+        {
+            DataVolumePath = "/data",
+            HostDataPath = "/home/azureuser/.homespun-container/data"
+        };
+        var service = new DockerAgentExecutionService(
+            Options.Create(options),
+            _loggerMock.Object);
+
+        // Act
+        var result = service.TranslateToHostPath("/data/projects/feature-123/src");
+
+        // Assert
+        Assert.That(result, Is.EqualTo("/home/azureuser/.homespun-container/data/projects/feature-123/src"));
     }
 
     #endregion
