@@ -95,7 +95,7 @@ public class GraphBuilder
 
     /// <summary>
     /// Builds a lookup from issue ID to list of issue IDs that block it.
-    /// Uses both Issue.ParentIssues (hierarchy) and Issue.PreviousIssues (sequence) properties.
+    /// Uses Issue.ParentIssues (hierarchy) properties.
     /// </summary>
     private static Dictionary<string, List<string>> BuildDependencyLookup(List<Issue> issues)
     {
@@ -104,9 +104,9 @@ public class GraphBuilder
 
         foreach (var issue in issues)
         {
-            // Include both ParentIssues (hierarchy) and PreviousIssues (sequence)
+            // Extract parent issue IDs from ParentIssueRef objects
             var allBlockers = issue.ParentIssues
-                .Concat(issue.PreviousIssues)
+                .Select(p => p.ParentIssue)
                 .Where(id => issueIds.Contains(id))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
@@ -240,17 +240,8 @@ public class GraphBuilder
 
             if (!blocksOthers && !hasParentsInSet)
             {
-                // No dependencies at all - check if it's a "next" status issue
-                if (issue.Status == IssueStatus.Next)
-                {
-                    // "next" status issues are treated as connected (attach to latest merged PR)
-                    nextStatus.Add(issue);
-                }
-                else
-                {
-                    // True orphan - no dependencies and not "next" status
-                    orphans.Add(issue);
-                }
+                // No dependencies at all - orphan
+                orphans.Add(issue);
             }
             else if (blocksOthers && !hasParentsInSet)
             {
@@ -323,7 +314,7 @@ public class GraphBuilder
             var branchName = $"issue-{issue.Id}";
             // Check if this issue has a linked PR status
             prStatusLookup.TryGetValue(issue.Id, out var issuePrStatus);
-            var branchColor = issuePrStatus != default ? GetPrStatusColor(issuePrStatus) : GetIssueTypeColor(issue.Type);
+            var branchColor = issuePrStatus != default ? GetPrStatusColor(issuePrStatus) : GetIssueColor(issue.Type, issue.Status);
 
             branches[branchName] = new GraphBranch
             {
@@ -406,7 +397,7 @@ public class GraphBuilder
         {
             var branchName = $"issue-{issue.Id}";
             prStatusLookup.TryGetValue(issue.Id, out var issuePrStatus);
-            var branchColor = issuePrStatus != default ? GetPrStatusColor(issuePrStatus) : GetIssueTypeColor(issue.Type);
+            var branchColor = issuePrStatus != default ? GetPrStatusColor(issuePrStatus) : GetIssueColor(issue.Type, issue.Status);
 
             branches[branchName] = new GraphBranch
             {
@@ -477,12 +468,23 @@ public class GraphBuilder
         _ => "#6b7280"                                 // Gray
     };
 
-    private static string GetIssueTypeColor(IssueType type) => type switch
+    /// <summary>
+    /// Gets the color for an issue based on its type and status.
+    /// Bug type always shows as red (overrides status color).
+    /// Otherwise, color is based on status.
+    /// </summary>
+    private static string GetIssueColor(IssueType type, IssueStatus status)
     {
-        IssueType.Bug => "#ef4444",      // Red
-        IssueType.Feature => "#a855f7",  // Purple
-        IssueType.Task => "#3b82f6",     // Blue
-        IssueType.Chore => "#6b7280",    // Gray
-        _ => "#6b7280"                   // Gray
-    };
+        // Bug type always shows as red (overrides status color)
+        if (type == IssueType.Bug) return "#ef4444"; // Red
+
+        // Otherwise color by status
+        return status switch
+        {
+            IssueStatus.Open => "#3b82f6",     // Blue
+            IssueStatus.Progress => "#a855f7", // Purple
+            IssueStatus.Review => "#06b6d4",   // Cyan
+            _ => "#6b7280"                     // Grey
+        };
+    }
 }

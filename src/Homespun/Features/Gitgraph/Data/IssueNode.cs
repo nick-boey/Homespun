@@ -45,9 +45,7 @@ public class IssueNode : IGraphNode
         IssueStatus.Complete => GraphNodeStatus.Completed,
         IssueStatus.Archived => GraphNodeStatus.Abandoned,
         IssueStatus.Deleted => GraphNodeStatus.Abandoned,
-        IssueStatus.Idea => GraphNodeStatus.Open,
-        IssueStatus.Spec => GraphNodeStatus.Open,
-        IssueStatus.Next => GraphNodeStatus.Open,
+        IssueStatus.Open => GraphNodeStatus.Open,
         IssueStatus.Progress => GraphNodeStatus.Open,
         IssueStatus.Review => GraphNodeStatus.Open,
         _ => GraphNodeStatus.Open
@@ -67,7 +65,7 @@ public class IssueNode : IGraphNode
 
     public string? Url => null;
 
-    public string? Color => _prStatus.HasValue ? GetPrStatusColor(_prStatus.Value) : GetTypeColor(_issue.Type);
+    public string? Color => _prStatus.HasValue ? GetPrStatusColor(_prStatus.Value) : GetIssueColor(_issue.Type, _issue.Status);
 
     public string? Tag => _prStatus.HasValue ? GetPrStatusTag(_prStatus.Value) : _issue.Type.ToString();
 
@@ -95,14 +93,25 @@ public class IssueNode : IGraphNode
     /// </summary>
     public bool IsOrphan => _isOrphan;
 
-    private static string GetTypeColor(IssueType type) => type switch
+    /// <summary>
+    /// Gets the color for an issue based on its type and status.
+    /// Bug type always shows as red (overrides status color).
+    /// Otherwise, color is based on status.
+    /// </summary>
+    private static string GetIssueColor(IssueType type, IssueStatus status)
     {
-        IssueType.Bug => "#ef4444",      // Red
-        IssueType.Feature => "#a855f7",  // Purple
-        IssueType.Task => "#3b82f6",     // Blue
-        IssueType.Chore => "#6b7280",    // Gray
-        _ => "#6b7280"                   // Gray
-    };
+        // Bug type always shows as red (overrides status color)
+        if (type == IssueType.Bug) return "#ef4444"; // Red
+
+        // Otherwise color by status
+        return status switch
+        {
+            IssueStatus.Open => "#3b82f6",     // Blue
+            IssueStatus.Progress => "#a855f7", // Purple
+            IssueStatus.Review => "#06b6d4",   // Cyan
+            _ => "#6b7280"                     // Grey
+        };
+    }
 
     private static string GetPrStatusColor(PullRequestStatus status) => status switch
     {
@@ -111,7 +120,7 @@ public class IssueNode : IGraphNode
         PullRequestStatus.InProgress => "#3b82f6",      // Blue - work in progress
         PullRequestStatus.ReadyForReview => "#eab308",  // Yellow - awaiting review
         PullRequestStatus.ReadyForMerging => "#22c55e", // Green - ready to merge
-        PullRequestStatus.Merged => "#a855f7",          // Purple - merged
+        PullRequestStatus.Merged => "#9ca3af",          // Light gray (Tailwind gray-400) - merged
         PullRequestStatus.Closed => "#6b7280",          // Gray - closed
         _ => "#6b7280"                                  // Gray
     };

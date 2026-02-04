@@ -103,7 +103,7 @@ public class IssuesController(
             request.Type,
             request.Description,
             request.Priority,
-            request.Group);
+            request.ExecutionMode);
 
         // Auto-generate working branch ID if not provided
         if (string.IsNullOrWhiteSpace(request.WorkingBranchId))
@@ -231,9 +231,9 @@ public class CreateIssueRequest
     public int? Priority { get; set; }
 
     /// <summary>
-    /// Issue group for categorization.
+    /// Execution mode for child issues (Series or Parallel).
     /// </summary>
-    public string? Group { get; set; }
+    public ExecutionMode? ExecutionMode { get; set; }
 
     /// <summary>
     /// Optional working branch ID. If not provided, one will be auto-generated using AI.

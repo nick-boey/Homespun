@@ -55,8 +55,8 @@ public interface IFleeceService
     /// <param name="type">Issue type.</param>
     /// <param name="description">Optional description.</param>
     /// <param name="priority">Optional priority (1-5).</param>
-    /// <param name="group">Optional group for categorization.</param>
-    /// <param name="status">Optional initial status (defaults to Idea).</param>
+    /// <param name="executionMode">Optional execution mode for child issues (defaults to Series).</param>
+    /// <param name="status">Optional initial status (defaults to Open).</param>
     /// <param name="ct">Cancellation token</param>
     /// <returns>The created issue.</returns>
     Task<Issue> CreateIssueAsync(
@@ -65,7 +65,7 @@ public interface IFleeceService
         IssueType type,
         string? description = null,
         int? priority = null,
-        string? group = null,
+        ExecutionMode? executionMode = null,
         IssueStatus? status = null,
         CancellationToken ct = default);
 
@@ -79,7 +79,7 @@ public interface IFleeceService
     /// <param name="type">Optional new type.</param>
     /// <param name="description">Optional new description.</param>
     /// <param name="priority">Optional new priority.</param>
-    /// <param name="group">Optional new group for categorization.</param>
+    /// <param name="executionMode">Optional execution mode for child issues.</param>
     /// <param name="workingBranchId">Optional working branch ID.</param>
     /// <param name="ct">Cancellation token</param>
     /// <returns>The updated issue, or null if not found.</returns>
@@ -91,7 +91,7 @@ public interface IFleeceService
         IssueType? type = null,
         string? description = null,
         int? priority = null,
-        string? group = null,
+        ExecutionMode? executionMode = null,
         string? workingBranchId = null,
         CancellationToken ct = default);
 

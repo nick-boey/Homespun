@@ -276,26 +276,31 @@ public class TimelineVisualizationTests
     }
 
     [Test]
-    public void IssueColors_MatchType()
+    public void IssueColors_MatchStatusWithBugOverride()
     {
-        // Arrange - Different issue types
+        // Arrange - Different issue statuses and types
+        // Colors are now based on status, except Bug type which always shows red
         var issues = new List<Issue>
         {
-            CreateIssue("ISSUE-001", type: IssueType.Feature),
-            CreateIssue("ISSUE-002", type: IssueType.Bug),
-            CreateIssue("ISSUE-003", type: IssueType.Task),
-            CreateIssue("ISSUE-004", type: IssueType.Chore)
+            CreateIssue("ISSUE-001", type: IssueType.Feature, status: IssueStatus.Open),    // Blue (Open status)
+            CreateIssue("ISSUE-002", type: IssueType.Bug, status: IssueStatus.Open),        // Red (Bug overrides status)
+            CreateIssue("ISSUE-003", type: IssueType.Task, status: IssueStatus.Open),       // Blue (Open status)
+            CreateIssue("ISSUE-004", type: IssueType.Chore, status: IssueStatus.Open),      // Blue (Open status)
+            CreateIssue("ISSUE-005", type: IssueType.Feature, status: IssueStatus.Progress),// Purple (Progress status)
+            CreateIssue("ISSUE-006", type: IssueType.Task, status: IssueStatus.Review)      // Cyan (Review status)
         };
 
         // Act
         var graph = _graphBuilder.Build([], issues);
         var issueNodes = graph.Nodes.OfType<IssueNode>().ToDictionary(n => n.Issue.Id);
 
-        // Assert - Colors match expected values
-        Assert.That(issueNodes["ISSUE-001"].Color, Is.EqualTo("#a855f7")); // Purple (Feature)
-        Assert.That(issueNodes["ISSUE-002"].Color, Is.EqualTo("#ef4444")); // Red (Bug)
-        Assert.That(issueNodes["ISSUE-003"].Color, Is.EqualTo("#3b82f6")); // Blue (Task)
-        Assert.That(issueNodes["ISSUE-004"].Color, Is.EqualTo("#6b7280")); // Gray (Chore)
+        // Assert - Colors match expected values based on status (with bug override)
+        Assert.That(issueNodes["ISSUE-001"].Color, Is.EqualTo("#3b82f6")); // Blue (Open status)
+        Assert.That(issueNodes["ISSUE-002"].Color, Is.EqualTo("#ef4444")); // Red (Bug type overrides status)
+        Assert.That(issueNodes["ISSUE-003"].Color, Is.EqualTo("#3b82f6")); // Blue (Open status)
+        Assert.That(issueNodes["ISSUE-004"].Color, Is.EqualTo("#3b82f6")); // Blue (Open status)
+        Assert.That(issueNodes["ISSUE-005"].Color, Is.EqualTo("#a855f7")); // Purple (Progress status)
+        Assert.That(issueNodes["ISSUE-006"].Color, Is.EqualTo("#06b6d4")); // Cyan (Review status)
     }
 
     #endregion
@@ -514,26 +519,26 @@ public class TimelineVisualizationTests
     [Test]
     public void PreviousIssues_CreateDependencyEdges()
     {
-        // Arrange - Issues connected via PreviousIssues (sequential ordering)
+        // Arrange - Issues without PreviousIssues (feature removed in v1.0.0)
         var issues = new List<Issue>
         {
             CreateIssue("ISSUE-001"),
-            CreateIssueWithPrevious("ISSUE-002", "ISSUE-001"),
-            CreateIssueWithPrevious("ISSUE-003", "ISSUE-002")
+            CreateIssue("ISSUE-002"),
+            CreateIssue("ISSUE-003")
         };
 
         // Act
         var graph = _graphBuilder.Build([], issues);
         var issueNodes = graph.Nodes.OfType<IssueNode>().ToList();
 
-        // Assert - Issues should have correct parent references from PreviousIssues
+        // Assert - All issues should be orphans (no parent references)
         var issue2 = issueNodes.First(n => n.Issue.Id == "ISSUE-002");
         var issue3 = issueNodes.First(n => n.Issue.Id == "ISSUE-003");
 
-        Assert.That(issue2.ParentIds, Does.Contain("issue-ISSUE-001"),
-            "ISSUE-002 should have ISSUE-001 as parent via PreviousIssues");
-        Assert.That(issue3.ParentIds, Does.Contain("issue-ISSUE-002"),
-            "ISSUE-003 should have ISSUE-002 as parent via PreviousIssues");
+        Assert.That(issue2.ParentIds, Is.Empty,
+            "ISSUE-002 should have no parent (orphan)");
+        Assert.That(issue3.ParentIds, Is.Empty,
+            "ISSUE-003 should have no parent (orphan)");
     }
 
     [Test]
@@ -604,14 +609,13 @@ public class TimelineVisualizationTests
         string? group = null,
         int? priority = null,
         DateTime? createdAt = null,
-        IssueStatus status = IssueStatus.Idea) => new() // Use Idea status (not Next) so issues are true orphans
+        IssueStatus status = IssueStatus.Open) => new() // Use Open status so issues are true orphans
     {
         Id = id,
         Title = $"Issue {id}",
         Status = status,
         Type = type,
         Priority = priority,
-        Group = group ?? "",
         CreatedAt = createdAt ?? DateTimeOffset.UtcNow,
         LastUpdate = createdAt ?? DateTimeOffset.UtcNow
     };
@@ -624,11 +628,10 @@ public class TimelineVisualizationTests
     {
         Id = id,
         Title = $"Issue {id}",
-        Status = IssueStatus.Next,
+        Status = IssueStatus.Open,
         Type = IssueType.Task,
         Priority = priority,
-        Group = group ?? "",
-        ParentIssues = [parentId],
+        ParentIssues = [new ParentIssueRef { ParentIssue = parentId, SortOrder = "0" }],
         CreatedAt = DateTimeOffset.UtcNow,
         LastUpdate = DateTimeOffset.UtcNow
     };
@@ -641,11 +644,9 @@ public class TimelineVisualizationTests
     {
         Id = id,
         Title = $"Issue {id}",
-        Status = IssueStatus.Next,
+        Status = IssueStatus.Open,
         Type = IssueType.Task,
         Priority = priority,
-        Group = group ?? "",
-        PreviousIssues = [previousId],
         CreatedAt = DateTimeOffset.UtcNow,
         LastUpdate = DateTimeOffset.UtcNow
     };

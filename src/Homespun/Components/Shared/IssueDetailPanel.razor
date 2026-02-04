@@ -90,9 +90,9 @@
                 {
                     <dt class="col-span-4">Parent Issues</dt>
                     <dd class="col-span-8">
-                        @foreach (var parentId in Issue.ParentIssues)
+                        @foreach (var parentRef in Issue.ParentIssues)
                         {
-                            <code class="mr-1">@parentId</code>
+                            <code class="mr-1">@parentRef.ParentIssue</code>
                         }
                     </dd>
                 }
@@ -161,7 +161,7 @@
                         Stop Session
                     </button>
                 }
-                else if (Issue.Status is IssueStatus.Idea or IssueStatus.Spec or IssueStatus.Next or IssueStatus.Progress or IssueStatus.Review)
+                else if (Issue.Status is IssueStatus.Open or IssueStatus.Progress or IssueStatus.Review)
                 {
                     <div class="mb-2 w-full">
                         <AgentSelector
@@ -186,7 +186,7 @@
             </div>
 
             <div class="flex flex-wrap gap-2">
-                @if (Issue.Status is IssueStatus.Idea or IssueStatus.Spec or IssueStatus.Next or IssueStatus.Progress or IssueStatus.Review)
+                @if (Issue.Status is IssueStatus.Open or IssueStatus.Progress or IssueStatus.Review)
                 {
                     <button class="btn btn-sm btn-outline-primary" @onclick="CloseIssue" disabled="@_isLoading" title="Mark issue as completed">
                         Close Issue
@@ -623,9 +623,7 @@
 
     private string GetStatusBadgeClass() => Issue.Status switch
     {
-        IssueStatus.Idea => "bg-purple",
-        IssueStatus.Spec => "bg-info",
-        IssueStatus.Next => "bg-warning text-dark",
+        IssueStatus.Open => "bg-info",
         IssueStatus.Progress => "bg-primary",
         IssueStatus.Review => "bg-info",
         IssueStatus.Complete => "bg-success",
