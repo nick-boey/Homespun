@@ -202,6 +202,12 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
+// Enable static web assets for Mock environment (normally only enabled in Development)
+if (builder.Environment.EnvironmentName == "Mock")
+{
+    builder.WebHost.UseStaticWebAssets();
+}
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
