@@ -145,11 +145,22 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
                 await foreach (var evt in SendSseRequestAsync($"{workerUrl}/api/sessions", startRequest, sessionId, cts.Token))
                 {
                     // Update worker session ID if we receive it from the worker
-                    if (evt is AgentSessionStartedEvent startedEvt && !string.IsNullOrEmpty(startedEvt.SessionId))
+                    if (evt is AgentSessionStartedEvent startedEvt)
                     {
-                        session = session with { WorkerSessionId = startedEvt.SessionId };
-                        _sessions[sessionId] = session;
-                        _logger.LogDebug("Updated WorkerSessionId to {WorkerSessionId} for session {SessionId}", startedEvt.SessionId, sessionId);
+                        _logger.LogInformation("Received AgentSessionStartedEvent: SessionId={SessionId}, ConversationId={ConversationId}",
+                            startedEvt.SessionId, startedEvt.ConversationId);
+
+                        if (!string.IsNullOrEmpty(startedEvt.SessionId))
+                        {
+                            session = session with { WorkerSessionId = startedEvt.SessionId };
+                            _sessions[sessionId] = session;
+                            _logger.LogInformation("✓ Stored WorkerSessionId={WorkerSessionId} for Docker session {SessionId}",
+                                startedEvt.SessionId, sessionId);
+                        }
+                        else
+                        {
+                            _logger.LogWarning("✗ AgentSessionStartedEvent has empty SessionId!");
+                        }
                     }
 
                     // Map worker session IDs to our session ID
@@ -159,6 +170,8 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
                     {
                         session.ConversationId = resultEvt.ConversationId;
                         _sessions[sessionId] = session;
+                        _logger.LogInformation("✓ Stored ConversationId={ConversationId} for session {SessionId}",
+                            resultEvt.ConversationId, sessionId);
                     }
                 }
                 channel.Writer.Complete();
@@ -193,19 +206,27 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         AgentMessageRequest request,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
+        _logger.LogInformation("SendMessageAsync called for session {SessionId}", request.SessionId);
+
         if (!_sessions.TryGetValue(request.SessionId, out var session))
         {
+            _logger.LogError("✗ Session {SessionId} not found in _sessions dictionary", request.SessionId);
             yield return new AgentErrorEvent(request.SessionId, $"Session {request.SessionId} not found", "SESSION_NOT_FOUND", false);
             yield break;
         }
 
+        _logger.LogInformation("✓ Found Docker session: WorkerSessionId={WorkerSessionId}, ConversationId={ConversationId}",
+            session.WorkerSessionId, session.ConversationId);
+
         if (string.IsNullOrEmpty(session.WorkerSessionId))
         {
+            _logger.LogError("✗ Worker session ID is empty - session was not properly initialized");
             yield return new AgentErrorEvent(request.SessionId, "Worker session not initialized", "WORKER_NOT_READY", false);
             yield break;
         }
 
         session.LastActivityAt = DateTime.UtcNow;
+        _logger.LogInformation("✓ Sending message to worker at {Url}", $"{session.WorkerUrl}/api/sessions/{session.WorkerSessionId}/message");
 
         var messageRequest = new
         {
