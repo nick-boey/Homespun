@@ -203,6 +203,25 @@ public class SubprocessCliTransportTests
             Cwd = Path.GetTempPath()
         };
 
+        // Check if Claude CLI is installed on this system
+        // If not, skip the test since we can't test auto-discovery without the CLI
+        var findCliMethod = typeof(SubprocessCliTransport).GetMethod(
+            "FindCli",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+
+        try
+        {
+            var cliPath = findCliMethod?.Invoke(null, null) as string;
+            if (string.IsNullOrEmpty(cliPath))
+            {
+                Assert.Ignore("Claude CLI is not installed on this system - skipping auto-discovery test");
+            }
+        }
+        catch (System.Reflection.TargetInvocationException ex) when (ex.InnerException is CliNotFoundException)
+        {
+            Assert.Ignore("Claude CLI is not installed on this system - skipping auto-discovery test");
+        }
+
         // Act - Create transport without custom CLI path
         // This will use auto-discovery
         var transport = new SubprocessCliTransport("test prompt", options);
