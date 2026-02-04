@@ -142,6 +142,12 @@ public static class MockServiceExtensions
                 Console.WriteLine("[AgentExecution] Registering DockerAgentExecutionService");
                 services.Configure<DockerAgentExecutionOptions>(
                     configuration.GetSection(DockerAgentExecutionOptions.SectionName));
+                services.PostConfigure<DockerAgentExecutionOptions>(opts =>
+                {
+                    var hostPath = Environment.GetEnvironmentVariable("HSP_HOST_DATA_PATH");
+                    if (!string.IsNullOrEmpty(hostPath))
+                        opts.HostDataPath = hostPath;
+                });
                 services.AddSingleton<IAgentExecutionService, DockerAgentExecutionService>();
                 break;
             case AgentExecutionMode.AzureContainerApps:

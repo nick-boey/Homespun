@@ -520,6 +520,16 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
         var type = Enum.TryParse<ClaudeContentType>(typeStr, true, out var parsed)
             ? parsed : ClaudeContentType.Text;
 
+        // Helper to safely get nullable boolean (handles JSON null values)
+        bool? GetNullableBool(JsonElement element, string propertyName)
+        {
+            if (!element.TryGetProperty(propertyName, out var prop))
+                return null;
+            if (prop.ValueKind == JsonValueKind.Null)
+                return null;
+            return prop.GetBoolean();
+        }
+
         return new AgentContentBlockEvent(
             root.TryGetProperty("sessionId", out var sid) ? sid.GetString() ?? sessionId : sessionId,
             type,
@@ -527,7 +537,7 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
             root.TryGetProperty("toolName", out var tn) ? tn.GetString() : null,
             root.TryGetProperty("toolInput", out var ti) ? ti.GetString() : null,
             root.TryGetProperty("toolUseId", out var tuid) ? tuid.GetString() : null,
-            root.TryGetProperty("toolSuccess", out var ts) ? ts.GetBoolean() : null,
+            GetNullableBool(root, "toolSuccess"),
             root.TryGetProperty("index", out var idx) ? idx.GetInt32() : 0
         );
     }
