@@ -476,6 +476,19 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             case AgentMessageEvent messageEvt:
                 if (messageEvt.Role == ClaudeMessageRole.Assistant)
                 {
+                    // If context doesn't have content but the message event does,
+                    // populate from the message event (Docker agent execution flow)
+                    if (context.CurrentAssistantMessage.Content.Count == 0 && messageEvt.Content.Count > 0)
+                    {
+                        foreach (var contentBlock in messageEvt.Content)
+                        {
+                            var msgContent = ConvertAgentContentBlock(sessionId, contentBlock);
+                            context.CurrentAssistantMessage.Content.Add(msgContent);
+                        }
+                        _logger.LogDebug("Populated assistant message from MessageReceived event ({Count} blocks)",
+                            messageEvt.Content.Count);
+                    }
+
                     // If we haven't cached yet and have content, cache the assistant message
                     if (context.CurrentAssistantMessage.Content.Count > 0 && !context.HasCachedCurrentMessage)
                     {
