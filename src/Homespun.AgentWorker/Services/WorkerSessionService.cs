@@ -348,22 +348,52 @@ public class WorkerSessionService : IAsyncDisposable
                 break;
 
             case AssistantMessage assistantMsg:
-                // Content already processed by streaming events
-                // Emit complete message if we have content
+                // Content may come from streaming events OR directly in the message
+                // (e.g., authentication errors return content directly without streaming)
+                List<ContentBlockReceivedData> contentToEmit;
+
                 if (currentContentBlocks.Count > 0)
+                {
+                    // Use content from streaming events
+                    contentToEmit = new List<ContentBlockReceivedData>(currentContentBlocks);
+                    currentContentBlocks.Clear();
+                }
+                else if (assistantMsg.Content.Count > 0)
+                {
+                    // Convert content blocks from the message directly
+                    contentToEmit = ConvertAssistantContent(session.Id, assistantMsg.Content);
+                }
+                else
+                {
+                    contentToEmit = new List<ContentBlockReceivedData>();
+                }
+
+                if (contentToEmit.Count > 0)
                 {
                     events.Add((SseEventTypes.MessageReceived, new MessageReceivedData
                     {
                         SessionId = session.Id,
                         Role = "Assistant",
-                        Content = new List<ContentBlockReceivedData>(currentContentBlocks)
+                        Content = contentToEmit
                     }));
-                    currentContentBlocks.Clear();
                 }
                 break;
 
             case ResultMessage resultMsg:
                 session.ConversationId = resultMsg.SessionId;
+
+                // Emit error event if the result indicates an error
+                if (resultMsg.IsError && !string.IsNullOrEmpty(resultMsg.Result))
+                {
+                    events.Add((SseEventTypes.Error, new ErrorData
+                    {
+                        SessionId = session.Id,
+                        Message = resultMsg.Result,
+                        Code = "AGENT_ERROR",
+                        IsRecoverable = false
+                    }));
+                }
+
                 events.Add((SseEventTypes.ResultReceived, new ResultReceivedData
                 {
                     SessionId = session.Id,
@@ -581,6 +611,64 @@ public class WorkerSessionService : IAsyncDisposable
         }
 
         return events;
+    }
+
+    /// <summary>
+    /// Converts AssistantMessage content blocks to ContentBlockReceivedData.
+    /// Used when content comes directly in the message (not via streaming events),
+    /// such as authentication errors.
+    /// </summary>
+    private List<ContentBlockReceivedData> ConvertAssistantContent(string sessionId, List<object> content)
+    {
+        var result = new List<ContentBlockReceivedData>();
+
+        for (var i = 0; i < content.Count; i++)
+        {
+            var block = content[i];
+            ContentBlockReceivedData? data = null;
+
+            switch (block)
+            {
+                case TextBlock textBlock:
+                    data = new ContentBlockReceivedData
+                    {
+                        SessionId = sessionId,
+                        Type = "Text",
+                        Text = textBlock.Text,
+                        Index = i
+                    };
+                    break;
+
+                case ThinkingBlock thinkingBlock:
+                    data = new ContentBlockReceivedData
+                    {
+                        SessionId = sessionId,
+                        Type = "Thinking",
+                        Text = thinkingBlock.Thinking,
+                        Index = i
+                    };
+                    break;
+
+                case ToolUseBlock toolUseBlock:
+                    data = new ContentBlockReceivedData
+                    {
+                        SessionId = sessionId,
+                        Type = "ToolUse",
+                        ToolName = toolUseBlock.Name,
+                        ToolUseId = toolUseBlock.Id,
+                        ToolInput = JsonSerializer.Serialize(toolUseBlock.Input),
+                        Index = i
+                    };
+                    break;
+            }
+
+            if (data != null)
+            {
+                result.Add(data);
+            }
+        }
+
+        return result;
     }
 
     private QuestionReceivedData? TryParseAskUserQuestion(WorkerSession session, ContentBlockReceivedData block)
