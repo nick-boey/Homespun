@@ -60,6 +60,7 @@ public class ClaudeSdkClient : IAsyncDisposable
                 Model = _options.Model,
                 PermissionPromptToolName = "stdio",
                 Cwd = _options.Cwd,
+                CliPath = _options.CliPath,
                 Settings = _options.Settings,
                 AddDirs = _options.AddDirs,
                 Env = _options.Env,
@@ -76,7 +77,7 @@ public class ClaudeSdkClient : IAsyncDisposable
             };
         }
 
-        _transport = _customTransport ?? new SubprocessCliTransport(actualPrompt, options);
+        _transport = _customTransport ?? new SubprocessCliTransport(actualPrompt, options, options.CliPath);
         await _transport.ConnectAsync(cancellationToken);
         _connected = true;
     }
