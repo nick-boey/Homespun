@@ -74,6 +74,7 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         string ContainerId,
         string ContainerName,
         string WorkerUrl,
+        string WorkingDirectory,
         string? WorkerSessionId,
         CancellationTokenSource Cts,
         DateTime CreatedAt)
@@ -122,17 +123,18 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
 
                 var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 var session = new DockerSession(
-                    sessionId, containerId, containerName, workerUrl, null, cts, DateTime.UtcNow);
+                    sessionId, containerId, containerName, workerUrl, request.WorkingDirectory, null, cts, DateTime.UtcNow);
 
                 _sessions[sessionId] = session;
 
                 await channel.Writer.WriteAsync(new AgentSessionStartedEvent(sessionId, null), cancellationToken);
 
                 // Start the agent session in the worker
-                // The workspace is mounted at /data in the agent container
+                // The entire /data volume is mounted, preserving the directory structure
+                // so we pass the original working directory path
                 var startRequest = new
                 {
-                    WorkingDirectory = "/data",
+                    WorkingDirectory = request.WorkingDirectory,
                     Mode = request.Mode.ToString(),
                     Model = request.Model,
                     Prompt = request.Prompt,
@@ -280,7 +282,7 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         {
             return Task.FromResult<AgentSessionStatus?>(new AgentSessionStatus(
                 session.SessionId,
-                "/data", // Container-relative path
+                session.WorkingDirectory,
                 SessionMode.Build, // TODO: Store actual mode
                 "sonnet", // TODO: Store actual model
                 session.ConversationId,
@@ -327,8 +329,11 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         dockerArgs.Append($"--name {containerName} ");
         dockerArgs.Append($"--memory {_options.MemoryLimitBytes} ");
         dockerArgs.Append($"--cpus {_options.CpuLimit} ");
-        var hostPath = TranslateToHostPath(workingDirectory);
-        dockerArgs.Append($"-v \"{hostPath}:/data\" ");
+
+        // Mount the entire /data volume to preserve directory structure
+        // This ensures the agent sees the same paths as the main container
+        var dataVolumeHostPath = TranslateToHostPath(_options.DataVolumePath);
+        dockerArgs.Append($"-v \"{dataVolumeHostPath}:{_options.DataVolumePath}\" ");
         dockerArgs.Append($"-e ASPNETCORE_URLS=http://+:8080 ");
 
         // Pass through authentication environment variables for Claude CLI
