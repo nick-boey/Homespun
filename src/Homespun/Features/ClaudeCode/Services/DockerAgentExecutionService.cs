@@ -348,6 +348,18 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
             }
         }
 
+        // Mount Claude credentials file if it exists (for OAuth authentication)
+        var homeDir = Environment.GetEnvironmentVariable("HOME");
+        if (!string.IsNullOrEmpty(homeDir))
+        {
+            var credentialsFile = Path.Combine(homeDir, ".claude", ".credentials.json");
+            if (File.Exists(credentialsFile))
+            {
+                dockerArgs.Append($"-v \"{credentialsFile}:/home/homespun/.claude/.credentials.json:ro\" ");
+                _logger.LogDebug("Mounting Claude credentials file for agent container");
+            }
+        }
+
         dockerArgs.Append($"--network {_options.NetworkName} ");
         dockerArgs.Append(_options.WorkerImage);
 
