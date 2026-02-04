@@ -352,7 +352,7 @@ public class GraphServiceAgentStatusTests
 
     #region Helper Methods
 
-    private static Issue CreateIssue(string id, IssueStatus status = IssueStatus.Next)
+    private static Issue CreateIssue(string id, IssueStatus status = IssueStatus.Open)
     {
         return new Issue
         {

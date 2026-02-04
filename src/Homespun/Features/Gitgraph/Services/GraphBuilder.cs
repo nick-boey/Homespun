@@ -95,7 +95,7 @@ public class GraphBuilder
 
     /// <summary>
     /// Builds a lookup from issue ID to list of issue IDs that block it.
-    /// Uses both Issue.ParentIssues (hierarchy) and Issue.PreviousIssues (sequence) properties.
+    /// Uses Issue.ParentIssues (hierarchy) properties.
     /// </summary>
     private static Dictionary<string, List<string>> BuildDependencyLookup(List<Issue> issues)
     {
@@ -104,9 +104,9 @@ public class GraphBuilder
 
         foreach (var issue in issues)
         {
-            // Include both ParentIssues (hierarchy) and PreviousIssues (sequence)
+            // Extract parent issue IDs from ParentIssueRef objects
             var allBlockers = issue.ParentIssues
-                .Concat(issue.PreviousIssues)
+                .Select(p => p.ParentIssue)
                 .Where(id => issueIds.Contains(id))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
@@ -240,17 +240,8 @@ public class GraphBuilder
 
             if (!blocksOthers && !hasParentsInSet)
             {
-                // No dependencies at all - check if it's a "next" status issue
-                if (issue.Status == IssueStatus.Next)
-                {
-                    // "next" status issues are treated as connected (attach to latest merged PR)
-                    nextStatus.Add(issue);
-                }
-                else
-                {
-                    // True orphan - no dependencies and not "next" status
-                    orphans.Add(issue);
-                }
+                // No dependencies at all - orphan
+                orphans.Add(issue);
             }
             else if (blocksOthers && !hasParentsInSet)
             {
@@ -490,9 +481,7 @@ public class GraphBuilder
         // Otherwise color by status
         return status switch
         {
-            IssueStatus.Idea => "#3b82f6",     // Blue
-            IssueStatus.Spec => "#eab308",     // Yellow
-            IssueStatus.Next => "#22c55e",     // Green
+            IssueStatus.Open => "#3b82f6",     // Blue
             IssueStatus.Progress => "#a855f7", // Purple
             IssueStatus.Review => "#06b6d4",   // Cyan
             _ => "#6b7280"                     // Grey
