@@ -9,6 +9,7 @@ using Homespun.Features.GitHub;
 using Homespun.Features.Projects;
 using Homespun.Features.PullRequests.Data;
 using Homespun.Features.Testing.Services;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -28,7 +29,8 @@ public static class MockServiceExtensions
     /// <returns>The service collection for chaining.</returns>
     public static IServiceCollection AddMockServices(
         this IServiceCollection services,
-        MockModeOptions options)
+        MockModeOptions options,
+        IConfiguration? configuration = null)
     {
         // Register the mock data store as both concrete and interface type
         services.AddSingleton<MockDataStore>();
@@ -62,10 +64,10 @@ public static class MockServiceExtensions
         services.AddSingleton<IToolResultParser, ToolResultParser>();
 
         // Choose between live Claude sessions or mock based on configuration
-        if (options.UseLiveClaudeSessions)
+        if (options.UseLiveClaudeSessions && configuration != null)
         {
             // Use real ClaudeSessionService with test working directory
-            services.AddLiveClaudeSessionServices(options);
+            services.AddLiveClaudeSessionServices(options, configuration);
         }
         else
         {
@@ -121,8 +123,45 @@ public static class MockServiceExtensions
     /// </summary>
     private static IServiceCollection AddLiveClaudeSessionServices(
         this IServiceCollection services,
-        MockModeOptions options)
+        MockModeOptions options,
+        IConfiguration configuration)
     {
+        // Register agent execution service based on configuration
+        services.Configure<AgentExecutionOptions>(
+            configuration.GetSection(AgentExecutionOptions.SectionName));
+
+        var agentExecutionMode = configuration
+            .GetSection(AgentExecutionOptions.SectionName)
+            .GetValue<AgentExecutionMode>("Mode");
+
+        Console.WriteLine($"[AgentExecution] MockLive mode: Configured mode = {agentExecutionMode}");
+
+        switch (agentExecutionMode)
+        {
+            case AgentExecutionMode.Docker:
+                Console.WriteLine("[AgentExecution] Registering DockerAgentExecutionService");
+                services.Configure<DockerAgentExecutionOptions>(
+                    configuration.GetSection(DockerAgentExecutionOptions.SectionName));
+                services.PostConfigure<DockerAgentExecutionOptions>(opts =>
+                {
+                    var hostPath = Environment.GetEnvironmentVariable("HSP_HOST_DATA_PATH");
+                    if (!string.IsNullOrEmpty(hostPath))
+                        opts.HostDataPath = hostPath;
+                });
+                services.AddSingleton<IAgentExecutionService, DockerAgentExecutionService>();
+                break;
+            case AgentExecutionMode.AzureContainerApps:
+                Console.WriteLine("[AgentExecution] Registering AzureContainerAppsAgentExecutionService");
+                services.Configure<AzureContainerAppsAgentExecutionOptions>(
+                    configuration.GetSection(AzureContainerAppsAgentExecutionOptions.SectionName));
+                services.AddSingleton<IAgentExecutionService, AzureContainerAppsAgentExecutionService>();
+                break;
+            default:
+                Console.WriteLine("[AgentExecution] Registering LocalAgentExecutionService (default)");
+                services.AddSingleton<IAgentExecutionService, LocalAgentExecutionService>();
+                break;
+        }
+
         // Determine working directory for live sessions
         // Use /data/test-workspace in container (via HOMESPUN_DATA_PATH), otherwise current directory
         var dataPath = Environment.GetEnvironmentVariable("HOMESPUN_DATA_PATH");

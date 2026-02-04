@@ -21,6 +21,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
     private readonly IToolResultParser _toolResultParser;
     private readonly IHooksService _hooksService;
     private readonly IMessageCacheStore _messageCache;
+    private readonly IAgentExecutionService _agentExecutionService;
     private readonly ConcurrentDictionary<string, ClaudeAgentOptions> _sessionOptions = new();
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _sessionCts = new();
 
@@ -39,6 +40,11 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
     /// </summary>
     private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, string>> _sessionToolUses = new();
 
+    /// <summary>
+    /// Maps our session ID -> agent execution service session ID.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, string> _agentSessionIds = new();
+
 
     public ClaudeSessionService(
         IClaudeSessionStore sessionStore,
@@ -49,7 +55,8 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         ISessionMetadataStore metadataStore,
         IToolResultParser toolResultParser,
         IHooksService hooksService,
-        IMessageCacheStore messageCache)
+        IMessageCacheStore messageCache,
+        IAgentExecutionService agentExecutionService)
     {
         _sessionStore = sessionStore;
         _optionsFactory = optionsFactory;
@@ -60,6 +67,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         _toolResultParser = toolResultParser;
         _hooksService = hooksService;
         _messageCache = messageCache;
+        _agentExecutionService = agentExecutionService;
     }
 
     /// <inheritdoc />
@@ -318,36 +326,9 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                 ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, cts.Token)
                 : CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
-            // Create options for this query, using Resume if we have a conversation ID from previous query
-            // Use specified model if provided, otherwise fall back to base options
-            var effectiveModel = !string.IsNullOrEmpty(model) ? model : baseOptions.Model;
-            var queryOptions = new ClaudeAgentOptions
-            {
-                AllowedTools = baseOptions.AllowedTools,
-                SystemPrompt = baseOptions.SystemPrompt,
-                McpServers = baseOptions.McpServers,
-                PermissionMode = permissionMode,
-                MaxTurns = baseOptions.MaxTurns,
-                DisallowedTools = baseOptions.DisallowedTools,
-                Model = effectiveModel,
-                Cwd = baseOptions.Cwd,
-                Settings = baseOptions.Settings,
-                AddDirs = baseOptions.AddDirs,
-                Env = baseOptions.Env,
-                ExtraArgs = baseOptions.ExtraArgs,
-                IncludePartialMessages = true, // Enable streaming
-                SettingSources = baseOptions.SettingSources,
-                // Resume from previous conversation if we have a ConversationId
-                Resume = session.ConversationId
-            };
-
-            // Create a new client for this query with the message as prompt
-            // This uses --print mode which supports --include-partial-messages for streaming
-            await using var client = new ClaudeSdkClient(queryOptions);
-            await client.ConnectAsync(message, linkedCts.Token);
+            var effectiveModel = !string.IsNullOrEmpty(model) ? model : (baseOptions.Model ?? "sonnet");
 
             // Track the current assistant message being built
-            // A new message is created for each turn (after tool results)
             var currentAssistantMessage = new ClaudeMessage
             {
                 SessionId = sessionId,
@@ -359,12 +340,48 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                 CurrentAssistantMessage = currentAssistantMessage
             };
 
-            await foreach (var msg in client.ReceiveMessagesAsync().WithCancellation(linkedCts.Token))
-            {
-                await ProcessSdkMessageAsync(sessionId, session, messageContext, msg, linkedCts.Token);
+            // Determine if we need to start a new agent session or send a message to existing one
+            IAsyncEnumerable<AgentEvent> eventStream;
 
-                // Stop processing after receiving the result message
-                if (msg is ResultMessage)
+            if (!_agentSessionIds.TryGetValue(sessionId, out var agentSessionId))
+            {
+                // First message - start a new agent session
+                var startRequest = new AgentStartRequest(
+                    WorkingDirectory: session.WorkingDirectory,
+                    Mode: session.Mode,
+                    Model: effectiveModel,
+                    Prompt: message,
+                    SystemPrompt: session.SystemPrompt,
+                    ResumeSessionId: session.ConversationId
+                );
+                eventStream = _agentExecutionService.StartSessionAsync(startRequest, linkedCts.Token);
+            }
+            else
+            {
+                // Subsequent message - send to existing session
+                var messageRequest = new AgentMessageRequest(
+                    SessionId: agentSessionId,
+                    Message: message,
+                    Model: effectiveModel
+                );
+                eventStream = _agentExecutionService.SendMessageAsync(messageRequest, linkedCts.Token);
+            }
+
+            // Process events from the agent execution service
+            await foreach (var evt in eventStream.WithCancellation(linkedCts.Token))
+            {
+                await ProcessAgentEventAsync(sessionId, session, messageContext, evt, linkedCts.Token);
+
+                // Store the agent session ID when we receive it
+                if (evt is AgentSessionStartedEvent startedEvt)
+                {
+                    _agentSessionIds[sessionId] = startedEvt.SessionId;
+                    _logger.LogDebug("Stored agent session ID {AgentSessionId} for session {SessionId}",
+                        startedEvt.SessionId, sessionId);
+                }
+
+                // Stop processing after session ends
+                if (evt is AgentSessionEndedEvent or AgentResultEvent)
                     break;
             }
 
@@ -404,6 +421,221 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
     {
         public ClaudeMessage CurrentAssistantMessage { get; set; } = null!;
         public bool HasCachedCurrentMessage { get; set; }
+    }
+
+    /// <summary>
+    /// Processes events from IAgentExecutionService and converts them to the internal format.
+    /// </summary>
+    private async Task ProcessAgentEventAsync(
+        string sessionId,
+        ClaudeSession session,
+        MessageProcessingContext context,
+        AgentEvent evt,
+        CancellationToken cancellationToken)
+    {
+        switch (evt)
+        {
+            case AgentSessionStartedEvent startedEvt:
+                _logger.LogDebug("Agent session started: {AgentSessionId}, ConversationId: {ConversationId}",
+                    startedEvt.SessionId, startedEvt.ConversationId);
+                if (!string.IsNullOrEmpty(startedEvt.ConversationId))
+                {
+                    session.ConversationId = startedEvt.ConversationId;
+                }
+                break;
+
+            case AgentContentBlockEvent contentEvt:
+                // Convert to ClaudeMessageContent and add to current assistant message
+                var content = ConvertAgentContentBlock(sessionId, contentEvt);
+                context.CurrentAssistantMessage.Content.Add(content);
+
+                // Broadcast the content block
+                await _hubContext.BroadcastContentBlockReceived(sessionId, content);
+
+                // Check for AskUserQuestion tool
+                if (contentEvt.Type == ClaudeContentType.ToolUse &&
+                    contentEvt.ToolName == "AskUserQuestion" &&
+                    !string.IsNullOrEmpty(contentEvt.ToolInput))
+                {
+                    await HandleAskUserQuestionTool(sessionId, session, content, cancellationToken);
+                }
+
+                // Check for ExitPlanMode
+                if (contentEvt.ToolName?.Equals("ExitPlanMode", StringComparison.OrdinalIgnoreCase) == true)
+                {
+                    await HandleExitPlanModeCompletedAsync(sessionId, session, content, cancellationToken);
+                }
+
+                // Capture plan content from Write tool
+                if (contentEvt.ToolName?.Equals("Write", StringComparison.OrdinalIgnoreCase) == true)
+                {
+                    TryCaptureWrittenPlanContent(session, content);
+                }
+                break;
+
+            case AgentMessageEvent messageEvt:
+                if (messageEvt.Role == ClaudeMessageRole.Assistant)
+                {
+                    // If context doesn't have content but the message event does,
+                    // populate from the message event (Docker agent execution flow)
+                    if (context.CurrentAssistantMessage.Content.Count == 0 && messageEvt.Content.Count > 0)
+                    {
+                        foreach (var contentBlock in messageEvt.Content)
+                        {
+                            var msgContent = ConvertAgentContentBlock(sessionId, contentBlock);
+                            context.CurrentAssistantMessage.Content.Add(msgContent);
+                        }
+                        _logger.LogDebug("Populated assistant message from MessageReceived event ({Count} blocks)",
+                            messageEvt.Content.Count);
+                    }
+
+                    // If we haven't cached yet and have content, cache the assistant message
+                    if (context.CurrentAssistantMessage.Content.Count > 0 && !context.HasCachedCurrentMessage)
+                    {
+                        session.Messages.Add(context.CurrentAssistantMessage);
+                        await _messageCache.AppendMessageAsync(sessionId, context.CurrentAssistantMessage, cancellationToken);
+                        context.HasCachedCurrentMessage = true;
+
+                        // Broadcast the complete message
+                        await _hubContext.BroadcastMessageReceived(sessionId, context.CurrentAssistantMessage);
+                    }
+                }
+                else if (messageEvt.Role == ClaudeMessageRole.User)
+                {
+                    // Tool results come as user messages
+                    var toolResultContents = messageEvt.Content
+                        .Where(c => c.Type == ClaudeContentType.ToolResult)
+                        .Select(c => ConvertAgentContentBlock(sessionId, c))
+                        .ToList();
+
+                    if (toolResultContents.Count > 0)
+                    {
+                        var toolResultMessage = new ClaudeMessage
+                        {
+                            SessionId = sessionId,
+                            Role = ClaudeMessageRole.User,
+                            Content = toolResultContents
+                        };
+                        session.Messages.Add(toolResultMessage);
+                        await _messageCache.AppendMessageAsync(sessionId, toolResultMessage, cancellationToken);
+                        await _hubContext.BroadcastMessageReceived(sessionId, toolResultMessage);
+
+                        // Start a new assistant message for the next turn
+                        context.CurrentAssistantMessage = new ClaudeMessage
+                        {
+                            SessionId = sessionId,
+                            Role = ClaudeMessageRole.Assistant,
+                            Content = []
+                        };
+                        context.HasCachedCurrentMessage = false;
+                    }
+                }
+                break;
+
+            case AgentResultEvent resultEvt:
+                session.TotalCostUsd = resultEvt.TotalCostUsd;
+                session.TotalDurationMs = resultEvt.DurationMs;
+
+                var previousConversationId = session.ConversationId;
+                session.ConversationId = resultEvt.ConversationId;
+                _logger.LogDebug("Stored ConversationId {ConversationId} for session resumption", resultEvt.ConversationId);
+
+                // Update metadata with the actual Claude session ID if it changed
+                if (resultEvt.ConversationId != null && resultEvt.ConversationId != previousConversationId)
+                {
+                    var metadata = new SessionMetadata(
+                        SessionId: resultEvt.ConversationId,
+                        EntityId: session.EntityId,
+                        ProjectId: session.ProjectId,
+                        WorkingDirectory: session.WorkingDirectory,
+                        Mode: session.Mode,
+                        Model: session.Model,
+                        SystemPrompt: session.SystemPrompt,
+                        CreatedAt: session.CreatedAt
+                    );
+                    await _metadataStore.SaveAsync(metadata, cancellationToken);
+                }
+
+                await _hubContext.BroadcastSessionResultReceived(sessionId, session.TotalCostUsd, resultEvt.DurationMs);
+                break;
+
+            case AgentQuestionEvent questionEvt:
+                // Create pending question from agent event
+                var questions = questionEvt.Questions.Select(q => new Data.UserQuestion
+                {
+                    Question = q.Question,
+                    Header = q.Header,
+                    Options = q.Options.Select(o => new Data.QuestionOption
+                    {
+                        Label = o.Label,
+                        Description = o.Description
+                    }).ToList(),
+                    MultiSelect = q.MultiSelect
+                }).ToList();
+
+                var pendingQuestion = new Data.PendingQuestion
+                {
+                    Id = questionEvt.QuestionId,
+                    ToolUseId = questionEvt.ToolUseId,
+                    Questions = questions
+                };
+
+                session.PendingQuestion = pendingQuestion;
+                session.Status = ClaudeSessionStatus.WaitingForQuestionAnswer;
+
+                await _hubContext.BroadcastQuestionReceived(sessionId, pendingQuestion);
+                await _hubContext.BroadcastSessionStatusChanged(sessionId, ClaudeSessionStatus.WaitingForQuestionAnswer);
+
+                _logger.LogInformation("Session {SessionId} is now waiting for user to answer {QuestionCount} questions",
+                    sessionId, questions.Count);
+                break;
+
+            case AgentErrorEvent errorEvt:
+                _logger.LogError("Agent error in session {SessionId}: {Message} (Code: {Code})",
+                    sessionId, errorEvt.Message, errorEvt.Code);
+                if (!errorEvt.IsRecoverable)
+                {
+                    session.Status = ClaudeSessionStatus.Error;
+                    session.ErrorMessage = errorEvt.Message;
+                }
+                break;
+
+            case AgentSessionEndedEvent endedEvt:
+                _logger.LogDebug("Agent session ended: {Reason}", endedEvt.Reason);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Converts an AgentContentBlockEvent to a ClaudeMessageContent.
+    /// </summary>
+    private ClaudeMessageContent ConvertAgentContentBlock(string sessionId, AgentContentBlockEvent evt)
+    {
+        var content = new ClaudeMessageContent
+        {
+            Type = evt.Type,
+            Text = evt.Text,
+            ToolName = evt.ToolName,
+            ToolInput = evt.ToolInput,
+            ToolUseId = evt.ToolUseId,
+            ToolSuccess = evt.ToolSuccess,
+            Index = evt.Index
+        };
+
+        // Track tool use ID -> name mapping
+        if (evt.Type == ClaudeContentType.ToolUse && !string.IsNullOrEmpty(evt.ToolUseId) && !string.IsNullOrEmpty(evt.ToolName))
+        {
+            var sessionToolUses = _sessionToolUses.GetOrAdd(sessionId, _ => new ConcurrentDictionary<string, string>());
+            sessionToolUses[evt.ToolUseId] = evt.ToolName;
+        }
+
+        // Parse tool results for rich display
+        if (evt.Type == ClaudeContentType.ToolResult && !string.IsNullOrEmpty(evt.ToolName))
+        {
+            content.ParsedToolResult = _toolResultParser.Parse(evt.ToolName, evt.Text, evt.ToolSuccess == false);
+        }
+
+        return content;
     }
 
     private async Task ProcessSdkMessageAsync(
@@ -1253,6 +1485,9 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         // The UI tracks context clear markers separately for display purposes
         session.ConversationId = null;
 
+        // Clear the agent session ID so a new agent session is started
+        _agentSessionIds.TryRemove(sessionId, out _);
+
         // Add a context clear marker
         session.ContextClearMarkers.Add(DateTime.UtcNow);
 
@@ -1276,6 +1511,20 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         {
             await cts.CancelAsync();
             cts.Dispose();
+        }
+
+        // Stop the agent execution service session
+        if (_agentSessionIds.TryRemove(sessionId, out var agentSessionId))
+        {
+            try
+            {
+                await _agentExecutionService.StopSessionAsync(agentSessionId, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error stopping agent session {AgentSessionId} for session {SessionId}",
+                    agentSessionId, sessionId);
+            }
         }
 
         // Dispose any active client
@@ -1395,5 +1644,8 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         // Clear stored options and tool use tracking
         _sessionOptions.Clear();
         _sessionToolUses.Clear();
+
+        // Clear agent session ID mappings
+        _agentSessionIds.Clear();
     }
 }

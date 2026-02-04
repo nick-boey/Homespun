@@ -326,6 +326,10 @@ public class ClaudeAgentOptions
     public string? Model { get; set; }
     public string? PermissionPromptToolName { get; set; }
     public string? Cwd { get; set; }
+    /// <summary>
+    /// Explicit path to the Claude CLI executable. If not specified, auto-discovery is used.
+    /// </summary>
+    public string? CliPath { get; set; }
     public string? Settings { get; set; }
     public List<string> AddDirs { get; set; } = new();
     public Dictionary<string, string> Env { get; set; } = new();

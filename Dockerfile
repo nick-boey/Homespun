@@ -25,6 +25,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy solution and project files first for better layer caching
 COPY Homespun.sln ./
 COPY src/Homespun/Homespun.csproj src/Homespun/
+COPY src/Homespun.AgentWorker/Homespun.AgentWorker.csproj src/Homespun.AgentWorker/
+COPY src/Homespun.ClaudeAgentSdk/Homespun.ClaudeAgentSdk.csproj src/Homespun.ClaudeAgentSdk/
 COPY tests/Homespun.Tests/Homespun.Tests.csproj tests/Homespun.Tests/
 COPY tests/Homespun.Api.Tests/Homespun.Api.Tests.csproj tests/Homespun.Api.Tests/
 COPY tests/Homespun.E2E.Tests/Homespun.E2E.Tests.csproj tests/Homespun.E2E.Tests/

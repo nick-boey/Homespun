@@ -78,36 +78,46 @@ public class SubprocessCliTransport : ITransport
 
     private static string FindCli()
     {
-        // Check PATH
-        var cliName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "claude.cmd" : "claude";
+        // Get list of possible CLI names for the platform
+        // On Windows, search for .cmd (npm global), .exe (standalone), and .bat (batch wrapper)
+        var cliNames = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+            ? new[] { "claude.cmd", "claude.exe", "claude.bat" }
+            : new[] { "claude" };
+
         var pathVar = Environment.GetEnvironmentVariable("PATH");
 
         if (pathVar != null)
         {
             var paths = pathVar.Split(Path.PathSeparator);
-            foreach (var path in paths)
+            foreach (var cliName in cliNames)
             {
-                var fullPath = Path.Combine(path, cliName);
-                if (File.Exists(fullPath))
-                    return fullPath;
+                foreach (var path in paths)
+                {
+                    var fullPath = Path.Combine(path, cliName);
+                    if (File.Exists(fullPath))
+                        return fullPath;
+                }
             }
         }
 
         // Check common locations
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        var locations = new[]
+        foreach (var cliName in cliNames)
         {
-            Path.Combine(home, ".npm-global", "bin", cliName),
-            Path.Combine("/usr", "local", "bin", cliName),
-            Path.Combine(home, ".local", "bin", cliName),
-            Path.Combine(home, "node_modules", ".bin", cliName),
-            Path.Combine(home, ".yarn", "bin", cliName)
-        };
+            var locations = new[]
+            {
+                Path.Combine(home, ".npm-global", "bin", cliName),
+                Path.Combine("/usr", "local", "bin", cliName),
+                Path.Combine(home, ".local", "bin", cliName),
+                Path.Combine(home, "node_modules", ".bin", cliName),
+                Path.Combine(home, ".yarn", "bin", cliName)
+            };
 
-        foreach (var location in locations)
-        {
-            if (File.Exists(location))
-                return location;
+            foreach (var location in locations)
+            {
+                if (File.Exists(location))
+                    return location;
+            }
         }
 
         throw new CliNotFoundException(

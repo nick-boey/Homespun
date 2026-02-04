@@ -5,26 +5,27 @@ set -e
 # Homespun Docker Runner
 # ============================================================================
 #
-# This script runs Homespun using Docker with optional Watchtower
-# for automatic updates from GHCR.
+# This script runs Homespun using Docker. By default, it builds images locally
+# for development. Use --watchtower for production deployments with auto-updates.
 #
 # Usage:
-#   ./run.sh                    # Production: GHCR image + Watchtower (detached)
-#   ./run.sh --local            # Development: local image, no Watchtower
-#   ./run.sh --local -it        # Development: interactive mode
+#   ./run.sh                    # Development: Build local images, Docker agents
+#   ./run.sh --watchtower       # Production: GHCR images + Watchtower auto-updates
+#   ./run.sh --local-agents     # Development: Build local, in-process agents
 #   ./run.sh --stop             # Stop all containers
 #   ./run.sh --logs             # View container logs
 #
 # Options:
-#   --local                     Use locally built image (homespun:local)
-#   --debug                     Build in Debug configuration (use with --local)
+#   --watchtower                Use GHCR images with Watchtower auto-updates
+#   --local-agents              Use in-process agent execution (no worker containers)
+#   --debug                     Build in Debug configuration
 #   --mock                      Run in mock mode with seeded demo data
 #   --port PORT                 Override host port (default: 8080)
 #   -it, --interactive          Run in interactive mode (foreground)
 #   -d, --detach                Run in detached mode (background) [default]
 #   --stop                      Stop running containers
 #   --logs                      Follow container logs
-#   --pull                      Pull latest image before starting
+#   --pull                      Pull latest image before starting (with --watchtower)
 #   --external-hostname HOST    Set external hostname for agent URLs
 #   --data-dir DIR              Override data directory (default: ~/.homespun-container/data)
 #   --container-name NAME       Override container name (default: homespun)
@@ -54,7 +55,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # Default values
-USE_LOCAL=false
+USE_WATCHTOWER=false
+USE_LOCAL_AGENTS=false
 USE_DEBUG=false
 USE_MOCK=false
 NO_TAILSCALE=false
@@ -81,14 +83,15 @@ log_warn() { echo -e "${YELLOW}$1${NC}"; }
 log_error() { echo -e "${RED}$1${NC}"; }
 
 show_help() {
-    head -37 "$0" | tail -32
+    head -40 "$0" | tail -35
     exit 0
 }
 
 # Parse arguments
 while [[ "$#" -gt 0 ]]; do
     case $1 in
-        --local) USE_LOCAL=true ;;
+        --watchtower) USE_WATCHTOWER=true ;;
+        --local-agents) USE_LOCAL_AGENTS=true ;;
         --debug) USE_DEBUG=true ;;
         --mock) USE_MOCK=true ;;
         --no-tailscale) NO_TAILSCALE=true ;;
@@ -141,26 +144,39 @@ fi
 log_success "      Docker is available."
 
 # Step 2: Check/build image
-log_info "[2/5] Checking container image..."
-if [ "$USE_LOCAL" = true ]; then
+log_info "[2/5] Checking container images..."
+if [ "$USE_WATCHTOWER" = true ]; then
+    # Production: Use GHCR images
+    IMAGE_NAME="ghcr.io/nick-boey/homespun:latest"
+    WORKER_IMAGE="ghcr.io/nick-boey/homespun-worker:latest"
+    if [ "$PULL_FIRST" = true ]; then
+        log_info "      Pulling latest images..."
+        docker pull "$IMAGE_NAME"
+        docker pull "$WORKER_IMAGE"
+    fi
+    log_success "      Using GHCR image: $IMAGE_NAME"
+    log_success "      Using GHCR worker: $WORKER_IMAGE"
+else
+    # Development: Build both images locally
     IMAGE_NAME="homespun:local"
+    WORKER_IMAGE="homespun-worker:local"
     BUILD_CONFIG="Release"
     if [ "$USE_DEBUG" = true ]; then
         BUILD_CONFIG="Debug"
     fi
-    log_info "      Building local image from $REPO_ROOT ($BUILD_CONFIG)..."
+    log_info "      Building main Homespun image ($BUILD_CONFIG)..."
     if ! docker build -t "$IMAGE_NAME" --build-arg BUILD_CONFIGURATION="$BUILD_CONFIG" "$REPO_ROOT"; then
-        log_error "Failed to build Docker image."
+        log_error "Failed to build main Docker image."
         exit 1
     fi
-    log_success "      Local image built: $IMAGE_NAME ($BUILD_CONFIG)"
-else
-    IMAGE_NAME="ghcr.io/nick-boey/homespun:latest"
-    if [ "$PULL_FIRST" = true ]; then
-        log_info "      Pulling latest image..."
-        docker pull "$IMAGE_NAME"
+    log_success "      Main image built: $IMAGE_NAME ($BUILD_CONFIG)"
+
+    log_info "      Building AgentWorker image..."
+    if ! docker build -t "$WORKER_IMAGE" -f "$REPO_ROOT/src/Homespun.AgentWorker/Dockerfile" "$REPO_ROOT"; then
+        log_error "Failed to build AgentWorker Docker image."
+        exit 1
     fi
-    log_success "      Using GHCR image: $IMAGE_NAME"
+    log_success "      Worker image built: $WORKER_IMAGE"
 fi
 
 # Step 3: Read credentials
@@ -348,10 +364,15 @@ fi
 if [ "$USE_MOCK" = true ]; then
     echo "  Mock mode:   Enabled (seeded demo data)"
 fi
-if [ "$USE_LOCAL" = false ]; then
+if [ "$USE_WATCHTOWER" = true ]; then
     echo "  Watchtower:  Enabled (auto-updates every 5 min)"
 else
     echo "  Watchtower:  Disabled (local development mode)"
+fi
+if [ "$USE_LOCAL_AGENTS" = true ]; then
+    echo "  Agents:      In-process (Local mode)"
+else
+    echo "  Agents:      Docker containers ($WORKER_IMAGE)"
 fi
 log_info "======================================"
 echo
@@ -399,6 +420,19 @@ if [ -n "$EXTERNAL_HOSTNAME" ]; then
     DOCKER_CMD="$DOCKER_CMD -e HSP_EXTERNAL_HOSTNAME=$EXTERNAL_HOSTNAME"
 fi
 
+# Set worker image for Docker agent execution (when not using GHCR)
+if [ "$USE_WATCHTOWER" = false ]; then
+    DOCKER_CMD="$DOCKER_CMD -e AgentExecution__Docker__WorkerImage=$WORKER_IMAGE"
+fi
+
+# Set agent execution mode explicitly
+if [ "$USE_LOCAL_AGENTS" = true ]; then
+    DOCKER_CMD="$DOCKER_CMD -e AgentExecution__Mode=Local"
+else
+    # Explicitly set Docker mode to ensure config is not ambiguous
+    DOCKER_CMD="$DOCKER_CMD -e AgentExecution__Mode=Docker"
+fi
+
 DOCKER_CMD="$DOCKER_CMD --restart unless-stopped"
 DOCKER_CMD="$DOCKER_CMD --health-cmd 'curl -f http://localhost:8080/health || exit 1'"
 DOCKER_CMD="$DOCKER_CMD --health-interval 30s"
@@ -411,8 +445,8 @@ if [ "$DETACHED" = true ]; then
     log_info "Starting container in detached mode..."
     eval $DOCKER_CMD
 
-    # Start Watchtower for production mode
-    if [ "$USE_LOCAL" = false ]; then
+    # Start Watchtower for production mode (only with --watchtower)
+    if [ "$USE_WATCHTOWER" = true ]; then
         docker stop watchtower 2>/dev/null || true
         docker rm watchtower 2>/dev/null || true
         log_info "      Pulling latest Watchtower image..."

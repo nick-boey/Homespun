@@ -6,15 +6,26 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   build-and-push-image:
-    name: Build and Push Docker Image
+    name: Build and Push ${{ matrix.name }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+
+    strategy:
+      matrix:
+        include:
+          - name: homespun
+            dockerfile: ./Dockerfile
+            context: .
+            image: ghcr.io/${{ github.repository }}
+          - name: homespun-worker
+            dockerfile: ./src/Homespun.AgentWorker/Dockerfile
+            context: .
+            image: ghcr.io/${{ github.repository }}-worker
 
     steps:
     - name: Checkout repository
@@ -31,7 +42,7 @@ jobs:
       id: meta
       uses: docker/metadata-action@v5
       with:
-        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        images: ${{ matrix.image }}
         tags: |
           type=semver,pattern={{version}}
           type=semver,pattern={{major}}.{{minor}}
@@ -44,7 +55,8 @@ jobs:
     - name: Build and push Docker image
       uses: docker/build-push-action@v5
       with:
-        context: .
+        context: ${{ matrix.context }}
+        file: ${{ matrix.dockerfile }}
         push: true
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
