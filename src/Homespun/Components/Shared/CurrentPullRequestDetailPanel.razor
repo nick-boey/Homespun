@@ -674,9 +674,7 @@
 
     private static string GetIssueStatusBadgeClass(IssueStatus status) => status switch
     {
-        IssueStatus.Idea => "bg-secondary",
-        IssueStatus.Spec => "bg-info text-dark",
-        IssueStatus.Next => "bg-warning text-dark",
+        IssueStatus.Open => "bg-info text-dark",
         IssueStatus.Progress => "bg-primary",
         IssueStatus.Review => "bg-info text-dark",
         IssueStatus.Complete => "bg-success",

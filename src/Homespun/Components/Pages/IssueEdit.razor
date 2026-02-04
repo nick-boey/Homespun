@@ -95,12 +95,6 @@ else
                             </div>
                         </div>
 
-                        <div class="mb-3">
-                            <label for="group" class="form-label">Group</label>
-                            <input type="text" class="form-control" id="group"
-                                   @bind="_group"
-                                   placeholder="Optional group for categorization (e.g., core, api, ui)" />
-                        </div>
                     </div>
                 </div>
             </div>
@@ -205,9 +199,8 @@ else
     private string _title = "";
     private string _description = "";
     private IssueType _type = IssueType.Feature;
-    private IssueStatus _status = IssueStatus.Idea;
+    private IssueStatus _status = IssueStatus.Open;
     private string _priority = "";
-    private string _group = "";
     private string _workingBranchId = "";
 
     protected override async Task OnInitializedAsync()
@@ -271,7 +264,6 @@ else
         _type = _issue.Type;
         _status = _issue.Status;
         _priority = _issue.Priority?.ToString() ?? "";
-        _group = _issue.Group ?? "";
         _workingBranchId = _issue.WorkingBranchId ?? "";
     }
 
@@ -308,7 +300,6 @@ else
             var typeToUpdate = _type != _issue.Type ? _type : (IssueType?)null;
             var statusToUpdate = _status != _issue.Status ? _status : (IssueStatus?)null;
             var priorityToUpdate = priority != _issue.Priority ? priority : null;
-            var groupToUpdate = _group.Trim() != (_issue.Group ?? "") ? _group.Trim() : null;
             var workingBranchIdToUpdate = _workingBranchId.Trim() != (_issue.WorkingBranchId ?? "") ? _workingBranchId.Trim() : null;
 
             // Perform update
@@ -320,7 +311,6 @@ else
                 type: typeToUpdate,
                 description: descToUpdate,
                 priority: priorityToUpdate,
-                group: groupToUpdate,
                 workingBranchId: workingBranchIdToUpdate);
 
             if (updated == null)
@@ -361,7 +351,7 @@ else
     {
         // Use the shared generator to ensure branch name calculation is consistent
         // across the application (edit form preview matches what will be created)
-        return GenerateBranchNamePreview(IssueId, _type, _title, _group, _workingBranchId);
+        return GenerateBranchNamePreview(IssueId, _type, _title, _workingBranchId);
     }
 
     /// <summary>

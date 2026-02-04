@@ -77,9 +77,9 @@ public class MockFleeceService : IFleeceService
             return Task.FromResult<IReadOnlyList<Issue>>(Array.Empty<Issue>());
         }
 
-        // Ready issues are those in Idea, Spec, Next, or Progress status
+        // Ready issues are those in Open or Progress status
         var readyIssues = issues
-            .Where(i => i.Status is IssueStatus.Idea or IssueStatus.Spec or IssueStatus.Next or IssueStatus.Progress)
+            .Where(i => i.Status is IssueStatus.Open or IssueStatus.Progress)
             .ToList();
 
         return Task.FromResult<IReadOnlyList<Issue>>(readyIssues);
@@ -91,7 +91,7 @@ public class MockFleeceService : IFleeceService
         IssueType type,
         string? description = null,
         int? priority = null,
-        string? group = null,
+        ExecutionMode? executionMode = null,
         IssueStatus? status = null,
         CancellationToken ct = default)
     {
@@ -104,9 +104,9 @@ public class MockFleeceService : IFleeceService
             Title = title,
             Description = description ?? string.Empty,
             Type = type,
-            Status = status ?? IssueStatus.Idea,
+            Status = status ?? IssueStatus.Open,
             Priority = priority ?? 3,
-            Group = group ?? string.Empty,
+            ExecutionMode = executionMode ?? ExecutionMode.Series,
             CreatedAt = now,
             LastUpdate = now
         };
@@ -128,7 +128,7 @@ public class MockFleeceService : IFleeceService
         IssueType? type = null,
         string? description = null,
         int? priority = null,
-        string? group = null,
+        ExecutionMode? executionMode = null,
         string? workingBranchId = null,
         CancellationToken ct = default)
     {
@@ -158,7 +158,7 @@ public class MockFleeceService : IFleeceService
                 Type = type ?? existing.Type,
                 Status = status ?? existing.Status,
                 Priority = priority ?? existing.Priority,
-                Group = group ?? existing.Group,
+                ExecutionMode = executionMode ?? existing.ExecutionMode,
                 WorkingBranchId = workingBranchId ?? existing.WorkingBranchId,
                 CreatedAt = existing.CreatedAt,
                 LastUpdate = DateTime.UtcNow
@@ -197,7 +197,7 @@ public class MockFleeceService : IFleeceService
                 Type = existing.Type,
                 Status = IssueStatus.Deleted,
                 Priority = existing.Priority,
-                Group = existing.Group,
+                ExecutionMode = existing.ExecutionMode,
                 WorkingBranchId = existing.WorkingBranchId,
                 CreatedAt = existing.CreatedAt,
                 LastUpdate = DateTime.UtcNow

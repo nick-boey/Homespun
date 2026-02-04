@@ -45,9 +45,7 @@ public class IssueNode : IGraphNode
         IssueStatus.Complete => GraphNodeStatus.Completed,
         IssueStatus.Archived => GraphNodeStatus.Abandoned,
         IssueStatus.Deleted => GraphNodeStatus.Abandoned,
-        IssueStatus.Idea => GraphNodeStatus.Open,
-        IssueStatus.Spec => GraphNodeStatus.Open,
-        IssueStatus.Next => GraphNodeStatus.Open,
+        IssueStatus.Open => GraphNodeStatus.Open,
         IssueStatus.Progress => GraphNodeStatus.Open,
         IssueStatus.Review => GraphNodeStatus.Open,
         _ => GraphNodeStatus.Open
@@ -108,9 +106,7 @@ public class IssueNode : IGraphNode
         // Otherwise color by status
         return status switch
         {
-            IssueStatus.Idea => "#3b82f6",     // Blue
-            IssueStatus.Spec => "#eab308",     // Yellow
-            IssueStatus.Next => "#22c55e",     // Green
+            IssueStatus.Open => "#3b82f6",     // Blue
             IssueStatus.Progress => "#a855f7", // Purple
             IssueStatus.Review => "#06b6d4",   // Cyan
             _ => "#6b7280"                     // Grey

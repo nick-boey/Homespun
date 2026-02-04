@@ -86,24 +86,24 @@ public class FleeceServiceTests
     }
 
     [Test]
-    public async Task CreateIssueAsync_WithGroup_SetsGroup()
+    public async Task CreateIssueAsync_WithExecutionMode_SetsExecutionMode()
     {
         // Arrange
-        var group = "backend";
+        var executionMode = ExecutionMode.Parallel;
 
         // Act
         var issue = await _service.CreateIssueAsync(
             _tempDir,
             "Test Issue",
             IssueType.Feature,
-            group: group);
+            executionMode: executionMode);
 
         // Assert
-        Assert.That(issue.Group, Is.EqualTo(group));
+        Assert.That(issue.ExecutionMode, Is.EqualTo(executionMode));
     }
 
     [Test]
-    public async Task CreateIssueAsync_WithNullGroup_GroupIsNull()
+    public async Task CreateIssueAsync_WithNullExecutionMode_DefaultsToSeries()
     {
         // Act
         var issue = await _service.CreateIssueAsync(
@@ -112,18 +112,18 @@ public class FleeceServiceTests
             IssueType.Feature);
 
         // Assert
-        Assert.That(issue.Group, Is.Null);
+        Assert.That(issue.ExecutionMode, Is.EqualTo(ExecutionMode.Series));
     }
 
     [Test]
-    public async Task CreateIssueAsync_WithGroupAndAllOtherParams_SetsAllCorrectly()
+    public async Task CreateIssueAsync_WithExecutionModeAndAllOtherParams_SetsAllCorrectly()
     {
         // Arrange
         var title = "Full Feature Issue";
         var type = IssueType.Feature;
         var description = "A complete issue";
         var priority = 2;
-        var group = "frontend";
+        var executionMode = ExecutionMode.Parallel;
 
         // Act
         var issue = await _service.CreateIssueAsync(
@@ -132,33 +132,33 @@ public class FleeceServiceTests
             type,
             description: description,
             priority: priority,
-            group: group);
+            executionMode: executionMode);
 
         // Assert
         Assert.That(issue.Title, Is.EqualTo(title));
         Assert.That(issue.Type, Is.EqualTo(type));
         Assert.That(issue.Description, Is.EqualTo(description));
         Assert.That(issue.Priority, Is.EqualTo(priority));
-        Assert.That(issue.Group, Is.EqualTo(group));
+        Assert.That(issue.ExecutionMode, Is.EqualTo(executionMode));
     }
 
     [Test]
     public async Task CreateIssueAsync_IssueCanBeRetrieved()
     {
         // Arrange
-        var group = "testing";
+        var executionMode = ExecutionMode.Parallel;
         var issue = await _service.CreateIssueAsync(
             _tempDir,
             "Retrievable Issue",
             IssueType.Task,
-            group: group);
+            executionMode: executionMode);
 
         // Act
         var retrieved = await _service.GetIssueAsync(_tempDir, issue.Id);
 
         // Assert
         Assert.That(retrieved, Is.Not.Null);
-        Assert.That(retrieved!.Group, Is.EqualTo(group));
+        Assert.That(retrieved!.ExecutionMode, Is.EqualTo(executionMode));
     }
 
     #endregion

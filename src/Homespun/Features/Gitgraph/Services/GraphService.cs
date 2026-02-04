@@ -366,7 +366,7 @@ public class GraphService(
             // Get open issues only (all non-completed statuses)
             var issues = await fleeceService.ListIssuesAsync(workingDirectory);
             return issues
-                .Where(i => i.Status is IssueStatus.Idea or IssueStatus.Spec or IssueStatus.Next or IssueStatus.Progress or IssueStatus.Review)
+                .Where(i => i.Status is IssueStatus.Open or IssueStatus.Progress or IssueStatus.Review)
                 .ToList();
         }
         catch (Exception ex)
