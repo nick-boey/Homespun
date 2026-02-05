@@ -1039,8 +1039,10 @@ public class GitWorktreeServiceTests
         Directory.CreateDirectory(repoPath);
 
         // Create a sibling folder that's not tracked by git worktree
+        // It must have a .git file or folder to be recognized as a potential worktree
         var lostFolder = Path.Combine(_tempDir, "feature-abandoned");
         Directory.CreateDirectory(lostFolder);
+        File.WriteAllText(Path.Combine(lostFolder, ".git"), "gitdir: /some/path");
 
         // Only the main worktree is tracked
         _mockRunner.Setup(r => r.RunAsync("git", "worktree list --porcelain", repoPath))

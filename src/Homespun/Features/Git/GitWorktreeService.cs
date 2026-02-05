@@ -92,9 +92,36 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
 
     public async Task<List<WorktreeInfo>> ListWorktreesAsync(string repoPath)
     {
+        var worktrees = await ListWorktreesRawAsync(repoPath);
+
+        // Populate ExpectedBranch for branch mismatch detection
+        var branches = await ListLocalBranchesAsync(repoPath);
+        foreach (var worktree in worktrees.Where(w => !w.IsBare))
+        {
+            var expectedBranch = DetermineExpectedBranch(worktree, branches);
+            if (expectedBranch != null)
+            {
+                var currentBranch = worktree.Branch?.Replace("refs/heads/", "") ?? "";
+                if (!string.Equals(currentBranch, expectedBranch, StringComparison.OrdinalIgnoreCase))
+                {
+                    worktree.ExpectedBranch = expectedBranch;
+                }
+            }
+        }
+
+        return worktrees;
+    }
+
+    /// <summary>
+    /// Lists worktrees by parsing `git worktree list --porcelain` output.
+    /// This is the raw version that does NOT enrich with branch mismatch detection,
+    /// avoiding mutual recursion with ListLocalBranchesAsync.
+    /// </summary>
+    private async Task<List<WorktreeInfo>> ListWorktreesRawAsync(string repoPath)
+    {
         var result = await commandRunner.RunAsync("git", "worktree list --porcelain", repoPath);
 
-        if (!result.Success)
+        if (result == null || !result.Success)
         {
             return [];
         }
@@ -131,21 +158,6 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
 
         if (current != null)
             worktrees.Add(current);
-
-        // Populate ExpectedBranch for branch mismatch detection
-        var branches = await ListLocalBranchesAsync(repoPath);
-        foreach (var worktree in worktrees.Where(w => !w.IsBare))
-        {
-            var expectedBranch = DetermineExpectedBranch(worktree, branches);
-            if (expectedBranch != null)
-            {
-                var currentBranch = worktree.Branch?.Replace("refs/heads/", "") ?? "";
-                if (!string.Equals(currentBranch, expectedBranch, StringComparison.OrdinalIgnoreCase))
-                {
-                    worktree.ExpectedBranch = expectedBranch;
-                }
-            }
-        }
 
         return worktrees;
     }
@@ -278,7 +290,8 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
     public async Task<List<BranchInfo>> ListLocalBranchesAsync(string repoPath)
     {
         // Get list of worktrees first to map branches to their worktree paths
-        var worktrees = await ListWorktreesAsync(repoPath);
+        // Use the raw version to avoid mutual recursion with ListWorktreesAsync
+        var worktrees = await ListWorktreesRawAsync(repoPath);
         var worktreeByBranch = worktrees
             .Where(w => !string.IsNullOrEmpty(w.Branch))
             .ToDictionary(
@@ -291,9 +304,9 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
             "for-each-ref --format='%(refname:short)|%(objectname:short)|%(upstream:short)|%(upstream:track)|%(committerdate:iso8601)|%(subject)' refs/heads/",
             repoPath);
 
-        if (!result.Success)
+        if (result == null || !result.Success)
         {
-            logger.LogWarning("Failed to list local branches: {Error}", result.Error);
+            logger.LogWarning("Failed to list local branches: {Error}", result?.Error);
             return [];
         }
 
@@ -302,7 +315,7 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
 
         // Get the current branch
         var currentBranchResult = await commandRunner.RunAsync("git", "rev-parse --abbrev-ref HEAD", repoPath);
-        var currentBranch = currentBranchResult.Success ? currentBranchResult.Output.Trim() : "";
+        var currentBranch = currentBranchResult is { Success: true } ? currentBranchResult.Output.Trim() : "";
 
         foreach (var line in lines)
         {
@@ -578,8 +591,8 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
             return lostWorktrees;
         }
 
-        // Get all tracked worktree paths
-        var worktrees = await ListWorktreesAsync(repoPath);
+        // Get all tracked worktree paths (use raw version to avoid unnecessary branch enrichment)
+        var worktrees = await ListWorktreesRawAsync(repoPath);
         var trackedPaths = worktrees.Select(w => Path.GetFullPath(w.Path)).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         // Get all local branches for matching
