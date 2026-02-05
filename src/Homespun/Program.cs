@@ -235,7 +235,7 @@ app.UseSwaggerUI(options =>
     options.SwaggerEndpoint("/swagger/v1/swagger.json", "Homespun API v1");
 });
 
-app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
+app.UseStatusCodePagesWithReExecute("/not-found");
 
 // Note: HTTPS redirection removed - container runs HTTP-only behind a reverse proxy
 
