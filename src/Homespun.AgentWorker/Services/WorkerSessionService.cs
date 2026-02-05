@@ -146,6 +146,8 @@ public class WorkerSessionService : IAsyncDisposable
             queryOptions.Model = request.Model;
         }
 
+        session.Options = queryOptions;
+
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, session.Cts?.Token ?? CancellationToken.None);
 
         await foreach (var evt in ProcessMessagesAsync(session, request.Message, linkedCts.Token))
