@@ -351,6 +351,15 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         dockerArgs.Append($"--memory {_options.MemoryLimitBytes} ");
         dockerArgs.Append($"--cpus {_options.CpuLimit} ");
 
+        // Run worker container with same UID/GID as main container
+        // This ensures the worker can edit files created by the main container
+        var userFlag = ProcessUserInfo.GetDockerUserFlag();
+        if (!string.IsNullOrEmpty(userFlag))
+        {
+            dockerArgs.Append($"--user {userFlag} ");
+            _logger.LogDebug("Running worker container as user {UserFlag}", userFlag);
+        }
+
         // Mount the entire /data volume to preserve directory structure
         // This ensures the agent sees the same paths as the main container
         var dataVolumeHostPath = TranslateToHostPath(_options.DataVolumePath);
