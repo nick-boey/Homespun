@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.Git;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -273,6 +274,13 @@ public class MockGitWorktreeService : IGitWorktreeService
     {
         _logger.LogDebug("[Mock] FetchAll in {RepoPath}", repoPath);
         return Task.FromResult(true);
+    }
+
+    public Task<List<FileChangeInfo>> GetChangedFilesAsync(string worktreePath, string targetBranch)
+    {
+        _logger.LogDebug("[Mock] GetChangedFilesAsync in {WorktreePath} against {TargetBranch}", worktreePath, targetBranch);
+        // Return empty list by default for mock
+        return Task.FromResult(new List<FileChangeInfo>());
     }
 
     /// <summary>

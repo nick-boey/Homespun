@@ -72,6 +72,7 @@ if (mockModeOptions.Enabled)
     builder.Services.AddSingleton<SessionOptionsFactory>();
     builder.Services.AddScoped<PullRequestDataService>();
     builder.Services.AddScoped<PullRequestWorkflowService>();
+    builder.Services.AddSingleton<ITodoParser, TodoParser>();
 }
 else
 {
@@ -183,6 +184,7 @@ else
     builder.Services.AddSingleton<IAgentStartupTracker, AgentStartupTracker>();
     builder.Services.AddSingleton<IAgentPromptService, AgentPromptService>();
     builder.Services.AddSingleton<IRebaseAgentService, RebaseAgentService>();
+    builder.Services.AddSingleton<ITodoParser, TodoParser>();
 
     // Agent Orchestration services (mini-prompts, branch ID generation)
     builder.Services.AddSingleton<IMiniPromptService, MiniPromptService>();
