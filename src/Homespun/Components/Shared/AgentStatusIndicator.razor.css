@@ -39,6 +39,10 @@
     animation: pulse 1s ease-in-out infinite;
 }
 
+.status-dot.error {
+    background: var(--status-error);
+}
+
 .count {
     font-weight: var(--font-weight-medium);
     color: var(--text-sidebar);
