@@ -36,20 +36,21 @@
             </div>
 
             <div class="panel-content">
-                @switch (_activeTab)
+                @if (_activeTab == Tab.Issue)
                 {
-                    case Tab.Issue:
-                        <SessionIssueTab EntityId="@Session.EntityId" ProjectId="@Session.ProjectId" />
-                        break;
-                    case Tab.PR:
-                        <SessionPrTab EntityId="@Session.EntityId" ProjectId="@Session.ProjectId" />
-                        break;
-                    case Tab.Todos:
-                        <SessionTodosTab Messages="@Session.Messages" />
-                        break;
-                    case Tab.Files:
-                        <SessionFilesTab WorkingDirectory="@Session.WorkingDirectory" TargetBranch="main" />
-                        break;
+                    <SessionIssueTab EntityId="@Session.EntityId" ProjectId="@Session.ProjectId" />
+                }
+                else if (_activeTab == Tab.PR)
+                {
+                    <SessionPrTab EntityId="@Session.EntityId" ProjectId="@Session.ProjectId" />
+                }
+                else if (_activeTab == Tab.Todos)
+                {
+                    <SessionTodosTab Messages="@Session.Messages" />
+                }
+                else if (_activeTab == Tab.Files)
+                {
+                    <SessionFilesTab WorkingDirectory="@Session.WorkingDirectory" TargetBranch="main" />
                 }
             </div>
         }

@@ -59,14 +59,6 @@
             </div>
         }
 
-        @if (!string.IsNullOrEmpty(_issue.Group))
-        {
-            <div class="issue-meta">
-                <span class="meta-label">Group:</span>
-                <span class="meta-value">@_issue.Group</span>
-            </div>
-        }
-
         @if (_issue.ParentIssues.Count > 0)
         {
             <div class="issue-meta">
@@ -157,9 +149,7 @@
     .badge.task { background: var(--status-info); color: white; }
     .badge.chore { background: var(--bg-tertiary); color: var(--text-secondary); }
 
-    .badge.idea { background: #9b59b6; color: white; }
-    .badge.spec { background: var(--status-info); color: white; }
-    .badge.next { background: var(--status-warning); color: #333; }
+    .badge.open { background: var(--status-info); color: white; }
     .badge.progress { background: var(--color-lagoon); color: white; }
     .badge.review { background: var(--status-info); color: white; }
     .badge.complete { background: var(--status-success); color: white; }
@@ -270,9 +260,7 @@
 
     private static string GetStatusBadgeClass(IssueStatus status) => status switch
     {
-        IssueStatus.Idea => "idea",
-        IssueStatus.Spec => "spec",
-        IssueStatus.Next => "next",
+        IssueStatus.Open => "open",
         IssueStatus.Progress => "progress",
         IssueStatus.Review => "review",
         IssueStatus.Complete => "complete",
