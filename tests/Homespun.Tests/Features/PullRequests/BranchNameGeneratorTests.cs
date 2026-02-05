@@ -149,7 +149,6 @@ public class BranchNameGeneratorTests
             issue.Id,
             issue.Type,
             issue.Title,
-            null,
             issue.WorkingBranchId);
 
         // Assert
@@ -164,7 +163,6 @@ public class BranchNameGeneratorTests
             "preview1",
             IssueType.Bug,
             "Fix something",
-            group: null,
             workingBranchId: null);
 
         // Assert

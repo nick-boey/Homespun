@@ -6,14 +6,6 @@
 <div class="quick-issue-bar">
     <div class="quick-issue-container">
         <div class="quick-issue-top-row">
-            <input type="text"
-                   class="quick-input group-input"
-                   placeholder="group"
-                   @bind="_group"
-                   @bind:event="oninput"
-                   @onkeydown="HandleKeyDown"
-                   disabled="@_isSubmitting" />
-
             <select class="quick-input type-select"
                     @bind="_type"
                     disabled="@_isSubmitting">
@@ -151,11 +143,6 @@
         cursor: pointer;
     }
 
-    .group-input {
-        width: 120px;
-        flex-shrink: 0;
-    }
-
     .status-select {
         width: 80px;
         flex-shrink: 0;
@@ -249,12 +236,6 @@
             flex: 1;
         }
 
-        .group-input {
-            width: auto;
-            min-width: 80px;
-            flex: 1;
-        }
-
         .status-select {
             width: auto;
             min-width: 70px;
@@ -284,7 +265,6 @@
     private IssueType _type = IssueType.Feature;
     private IssueStatus _status = IssueStatus.Open;
     private string _title = "";
-    private string _group = "";
     private bool _isSubmitting;
     private string? _errorMessage;
     private ElementReference _titleInput;
@@ -335,7 +315,6 @@
 
             // Clear inputs for next entry
             _title = "";
-            _group = "";
             _type = IssueType.Feature;
             _status = IssueStatus.Open;
 

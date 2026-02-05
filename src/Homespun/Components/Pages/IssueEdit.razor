@@ -53,7 +53,7 @@ else
                         <div class="mb-3">
                             <label for="title" class="form-label">Title <span class="text-danger">*</span></label>
                             <input type="text" class="form-control" id="title"
-                                   @bind="_title" required />
+                                   @bind="_title" @bind:event="oninput" required />
                         </div>
 
                         <div class="mb-3">
@@ -108,6 +108,7 @@ else
                             <div class="input-group">
                                 <input type="text" class="form-control" id="workingBranchId"
                                        @bind="_workingBranchId"
+                                       @bind:event="oninput"
                                        placeholder="Custom branch identifier" />
                                 <button type="button" class="btn btn-outline-secondary"
                                         @onclick="SuggestBranchId"
@@ -351,7 +352,7 @@ else
     {
         // Use the shared generator to ensure branch name calculation is consistent
         // across the application (edit form preview matches what will be created)
-        return GenerateBranchNamePreview(IssueId, _type, _title, _workingBranchId);
+        return GenerateBranchNamePreview(IssueId, _type, _title, workingBranchId: _workingBranchId);
     }
 
     /// <summary>

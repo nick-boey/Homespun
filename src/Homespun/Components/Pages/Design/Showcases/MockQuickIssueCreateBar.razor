@@ -4,12 +4,6 @@
 
 <div class="quick-issue-bar" style="position: absolute; bottom: 0; left: 0; right: 0;">
     <div class="quick-issue-container">
-        <input type="text"
-               class="quick-input group-input"
-               placeholder="Group"
-               value="@Group"
-               disabled="@IsSubmitting" />
-
         <select class="quick-input type-select"
                 disabled="@IsSubmitting">
             <option value="Feature" selected="@(Type == "Feature")">Feature</option>
@@ -95,11 +89,6 @@
         flex-shrink: 0;
     }
 
-    .group-input {
-        width: 120px;
-        flex-shrink: 0;
-    }
-
     .title-input {
         flex: 1;
         min-width: 200px;
@@ -161,9 +150,6 @@
 </style>
 
 @code {
-    [Parameter]
-    public string Group { get; set; } = "";
-
     [Parameter]
     public string Type { get; set; } = "Feature";
 
