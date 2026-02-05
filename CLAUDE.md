@@ -216,6 +216,18 @@ Docker-outside-of-Docker is used to spawn mock containers:
 | Connection refused to localhost | Use Docker network IP instead of localhost |
 | Permission denied on browser | Check `PLAYWRIGHT_BROWSERS_PATH` is set to `/opt/playwright-browsers` |
 
+## Styling with Tailwind CSS
+
+When styling components, always use Tailwind CSS utility classes. Avoid inline styles and prefer using:
+- Tailwind utility classes directly in markup
+- Component classes defined in `wwwroot/css/tailwind.css` under `@layer components`
+- CSS variables defined in `wwwroot/css/variables.css` when custom values are needed
+
+Build Tailwind CSS after making changes to the CSS files:
+```bash
+cd src/Homespun && npm run css:build
+```
+
 ## Design System and Component Showcases
 
 The design system at `/design` provides a catalog of all UI components with mock data for visual testing. This is only available in mock mode.

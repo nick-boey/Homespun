@@ -1127,6 +1127,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         if (!string.IsNullOrEmpty(planContent))
         {
             session.PlanFilePath = foundPath;
+            session.PlanContent = planContent;
 
             // Create a plan message to display in chat
             var planMessage = new ClaudeMessage
@@ -1146,7 +1147,11 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             session.Messages.Add(planMessage);
             await _hubContext.BroadcastMessageReceived(sessionId, planMessage);
 
-            _logger.LogInformation("ExitPlanMode: Displayed plan from {FilePath} for session {SessionId} ({Length} chars)",
+            // Set status to WaitingForPlanExecution so UI shows the action buttons
+            session.Status = ClaudeSessionStatus.WaitingForPlanExecution;
+            await _hubContext.BroadcastSessionStatusChanged(sessionId, session.Status);
+
+            _logger.LogInformation("ExitPlanMode: Displayed plan from {FilePath} for session {SessionId} ({Length} chars), awaiting execution",
                 foundPath ?? "stored content", sessionId, planContent.Length);
         }
         else
@@ -1492,6 +1497,33 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         session.ContextClearMarkers.Add(DateTime.UtcNow);
 
         return Task.CompletedTask;
+    }
+
+    /// <inheritdoc />
+    public async Task ExecutePlanAsync(string sessionId, bool clearContext = true, CancellationToken cancellationToken = default)
+    {
+        var session = _sessionStore.GetById(sessionId);
+        if (session == null || string.IsNullOrEmpty(session.PlanContent))
+        {
+            _logger.LogWarning("Cannot execute plan: session {SessionId} not found or no plan content", sessionId);
+            return;
+        }
+
+        _logger.LogInformation("Executing plan for session {SessionId}, clearContext={ClearContext}", sessionId, clearContext);
+
+        if (clearContext)
+        {
+            await ClearContextAsync(sessionId, cancellationToken);
+            await _hubContext.BroadcastContextCleared(sessionId);
+        }
+
+        // Clear the WaitingForPlanExecution status
+        session.Status = ClaudeSessionStatus.Running;
+        await _hubContext.BroadcastSessionStatusChanged(sessionId, session.Status);
+
+        // Send the plan as the next message
+        var executionMessage = $"Please proceed with the implementation of {session.PlanFilePath ?? "the plan"}.\n\n{session.PlanContent}";
+        await SendMessageAsync(sessionId, executionMessage, PermissionMode.BypassPermissions, cancellationToken);
     }
 
     /// <inheritdoc />

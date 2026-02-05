@@ -37,6 +37,9 @@
                     case WebToolData webData:
                         <WebToolResultDisplay Data="webData" />
                         break;
+                    case ExitPlanModeToolData:
+                        <div class="text-sm text-muted-foreground italic">Plan completed - ready to build</div>
+                        break;
                     default:
                         <GenericToolResultDisplay Content="@Result.Text" />
                         break;
@@ -78,6 +81,7 @@ else
         "glob" => "📁",
         "webfetch" => "🌐",
         "websearch" => "🔎",
+        "exitplanmode" => "📋",
         _ => "🔧"
     };
 
