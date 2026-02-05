@@ -1,7 +1,9 @@
 using System.Text.Json;
 using Homespun.ClaudeAgentSdk;
 using Homespun.Features.ClaudeCode.Data;
+using Homespun.Features.ClaudeCode.Hubs;
 using Homespun.Features.ClaudeCode.Services;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 
 namespace Homespun.Features.Testing.Services;
@@ -14,16 +16,19 @@ public class MockClaudeSessionService : IClaudeSessionService
 {
     private readonly IClaudeSessionStore _sessionStore;
     private readonly IToolResultParser _toolResultParser;
+    private readonly IHubContext<ClaudeCodeHub> _hubContext;
     private readonly ILogger<MockClaudeSessionService> _logger;
     private int _toolUseCounter = 0;
 
     public MockClaudeSessionService(
         IClaudeSessionStore sessionStore,
         IToolResultParser toolResultParser,
+        IHubContext<ClaudeCodeHub> hubContext,
         ILogger<MockClaudeSessionService> logger)
     {
         _sessionStore = sessionStore;
         _toolResultParser = toolResultParser;
+        _hubContext = hubContext;
         _logger = logger;
     }
 
@@ -162,8 +167,9 @@ public class MockClaudeSessionService : IClaudeSessionService
         var session = _sessionStore.GetById(sessionId);
         if (session != null)
         {
-            // Add a context clear marker
-            session.ContextClearMarkers.Add(DateTime.UtcNow);
+            // Don't add a context clear marker here - the ContextCleared broadcast
+            // will trigger the client-side handler to add it. In mock mode, the session
+            // object is shared between server and client, so adding here would cause duplicates.
             session.LastActivityAt = DateTime.UtcNow;
             _sessionStore.Update(session);
         }
@@ -185,16 +191,38 @@ public class MockClaudeSessionService : IClaudeSessionService
         if (clearContext)
         {
             await ClearContextAsync(sessionId, cancellationToken);
+            await _hubContext.BroadcastContextCleared(sessionId);
         }
 
+        // Update status to Running and broadcast
         session.Status = ClaudeSessionStatus.Running;
         _sessionStore.Update(session);
+        await _hubContext.BroadcastSessionStatusChanged(sessionId, session.Status);
 
-        // Simulate sending the plan as a message
+        // Add user message with the plan content
+        var executionMessage = $"Please proceed with the implementation of {session.PlanFilePath ?? "the plan"}.\n\n{session.PlanContent}";
+        var userMessage = new ClaudeMessage
+        {
+            SessionId = session.Id,
+            Role = ClaudeMessageRole.User,
+            Content =
+            [
+                new ClaudeMessageContent
+                {
+                    Type = ClaudeContentType.Text,
+                    Text = executionMessage
+                }
+            ],
+            CreatedAt = DateTime.UtcNow
+        };
+        session.Messages.Add(userMessage);
+        await _hubContext.BroadcastMessageReceived(sessionId, userMessage);
+
+        // Simulate processing delay
         await Task.Delay(300, cancellationToken);
 
         // Add mock response
-        session.Messages.Add(new ClaudeMessage
+        var assistantMessage = new ClaudeMessage
         {
             SessionId = session.Id,
             Role = ClaudeMessageRole.Assistant,
@@ -207,11 +235,14 @@ public class MockClaudeSessionService : IClaudeSessionService
                 }
             ],
             CreatedAt = DateTime.UtcNow
-        });
+        };
+        session.Messages.Add(assistantMessage);
+        await _hubContext.BroadcastMessageReceived(sessionId, assistantMessage);
 
         session.Status = ClaudeSessionStatus.WaitingForInput;
         session.LastActivityAt = DateTime.UtcNow;
         _sessionStore.Update(session);
+        await _hubContext.BroadcastSessionStatusChanged(sessionId, session.Status);
     }
 
     public Task StopSessionAsync(string sessionId, CancellationToken cancellationToken = default)

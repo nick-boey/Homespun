@@ -110,9 +110,11 @@ public class JsonlSessionLoader : IJsonlSessionLoader
             WorkingDirectory = directoryPath,
             Mode = metadata?.Mode ?? SessionMode.Build,
             Model = metadata?.Model ?? "sonnet",
-            Status = ClaudeSessionStatus.WaitingForInput,
+            Status = metadata?.Status ?? ClaudeSessionStatus.WaitingForInput,
             CreatedAt = metadata?.CreatedAt ?? messages.First().CreatedAt,
-            LastActivityAt = metadata?.LastMessageAt ?? messages.Last().CreatedAt
+            LastActivityAt = metadata?.LastMessageAt ?? messages.Last().CreatedAt,
+            PlanContent = metadata?.PlanContent,
+            PlanFilePath = metadata?.PlanFilePath
         };
 
         // Add messages to session
@@ -168,9 +170,11 @@ public class JsonlSessionLoader : IJsonlSessionLoader
                         WorkingDirectory = projectDir,
                         Mode = metadata?.Mode ?? SessionMode.Build,
                         Model = metadata?.Model ?? "sonnet",
-                        Status = ClaudeSessionStatus.WaitingForInput,
+                        Status = metadata?.Status ?? ClaudeSessionStatus.WaitingForInput,
                         CreatedAt = metadata?.CreatedAt ?? messages.First().CreatedAt,
-                        LastActivityAt = metadata?.LastMessageAt ?? messages.Last().CreatedAt
+                        LastActivityAt = metadata?.LastMessageAt ?? messages.Last().CreatedAt,
+                        PlanContent = metadata?.PlanContent,
+                        PlanFilePath = metadata?.PlanFilePath
                     };
 
                     foreach (var message in messages)
@@ -270,5 +274,8 @@ public class JsonlSessionLoader : IJsonlSessionLoader
         public DateTime LastMessageAt { get; set; }
         public SessionMode? Mode { get; set; }
         public string? Model { get; set; }
+        public ClaudeSessionStatus? Status { get; set; }
+        public string? PlanContent { get; set; }
+        public string? PlanFilePath { get; set; }
     }
 }

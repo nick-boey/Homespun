@@ -1,0 +1,13 @@
+{
+  "sessionId": "plan-ready-session",
+  "entityId": "pr-logging",
+  "projectId": "demo-project",
+  "messageCount": 5,
+  "createdAt": "2026-02-01T10:00:00.000000Z",
+  "lastMessageAt": "2026-02-01T10:05:00.000000Z",
+  "mode": 0,
+  "model": "opus",
+  "status": 5,
+  "planContent": "# Implementation Plan: Improve Logging Infrastructure\n\n## Overview\nThis plan outlines the steps to add structured logging with correlation IDs to the application.\n\n## Phase 1: Core Logging Infrastructure\n\n### Step 1.1: Create Logger Interface\n- Create `IStructuredLogger` interface with methods for info, warn, error, debug\n- Include correlation ID parameter in all methods\n- Support for structured metadata\n\n### Step 1.2: Implement Correlation ID Manager\n- Create `CorrelationIdManager` class to generate and manage correlation IDs\n- Use UUID v4 for ID generation\n- Implement async local storage for request-scoped IDs\n\n### Step 1.3: Create Logger Implementation\n- Implement `JsonStructuredLogger` class\n- Output logs in JSON format with timestamp, level, message, correlationId, and metadata\n- Support configurable log levels\n\n## Phase 2: Integration\n\n### Step 2.1: Create Middleware\n- Create `CorrelationIdMiddleware` to extract/generate correlation IDs from requests\n- Add correlation ID to response headers\n- Inject correlation ID into async local storage\n\n### Step 2.2: Update Existing Services\n- Replace existing console.log calls with structured logger\n- Add correlation IDs to all service methods\n- Ensure correlation IDs propagate across async boundaries\n\n## Phase 3: Testing\n\n### Step 3.1: Unit Tests\n- Test correlation ID generation uniqueness\n- Test logger output format\n- Test correlation ID propagation\n\n### Step 3.2: Integration Tests\n- Test end-to-end correlation ID flow\n- Test concurrent request isolation\n\n## Estimated Timeline\n- Phase 1: 8 hours\n- Phase 2: 6 hours\n- Phase 3: 4 hours\n- Total: ~18 hours\n\n## Files to Create/Modify\n- `src/logging/IStructuredLogger.ts` (new)\n- `src/logging/JsonStructuredLogger.ts` (new)\n- `src/logging/CorrelationIdManager.ts` (new)\n- `src/middleware/CorrelationIdMiddleware.ts` (new)\n- `src/services/*.ts` (modify existing)",
+  "planFilePath": "PLAN.md"
+}
