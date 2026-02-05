@@ -40,14 +40,12 @@ public static partial class BranchNameGenerator
     /// <param name="issueId">The issue ID.</param>
     /// <param name="type">The issue type.</param>
     /// <param name="title">The issue title (used if workingBranchId is empty).</param>
-    /// <param name="group">Optional group for the issue (no longer used in branch name generation).</param>
     /// <param name="workingBranchId">Optional custom branch ID.</param>
     /// <returns>The generated branch name preview.</returns>
     public static string GenerateBranchNamePreview(
         string issueId,
         IssueType type,
         string title,
-        string? group = null,
         string? workingBranchId = null)
     {
         var typeStr = type.ToString().ToLowerInvariant();
