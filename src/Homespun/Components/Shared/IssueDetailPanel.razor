@@ -138,6 +138,14 @@
                                    SelectedModel="@_selectedModel"
                                    SelectedModelChanged="@(m => _selectedModel = m)" />
                 </div>
+                <div class="mb-2">
+                    <label class="form-label text-sm mb-1">Base Branch</label>
+                    <BaseBranchSelector Id="@($"issue-base-branch-{Issue.Id}")"
+                                        SelectedBranch="@_selectedBaseBranch"
+                                        SelectedBranchChanged="@(b => _selectedBaseBranch = b)"
+                                        RepoPath="@_project?.LocalPath"
+                                        DefaultBranch="@_project?.DefaultBranch" />
+                </div>
             }
 
             <div class="flex flex-wrap gap-2">
@@ -179,7 +187,7 @@
                             {
                                 <span class="spinner-border spinner-border-sm mr-1" role="status"></span>
                             }
-                            Rebase onto @_project?.DefaultBranch (@_branchInfo.BehindCount behind)
+                            Rebase onto @(!string.IsNullOrEmpty(_selectedBaseBranch) ? _selectedBaseBranch : _project?.DefaultBranch) (@_branchInfo.BehindCount behind)
                         </button>
                     }
                 }
@@ -250,6 +258,7 @@
     private ClaudeSession? _session;
     private Project? _project;
     private string _selectedModel = "opus";
+    private string _selectedBaseBranch = "";
     private WorktreeInfo? _worktreeInfo;
     private BranchInfo? _branchInfo;
     private bool _isRebasing;
@@ -265,6 +274,12 @@
         if (_project?.DefaultModel != null)
         {
             _selectedModel = _project.DefaultModel;
+        }
+
+        // Default base branch to the project's default branch
+        if (_project?.DefaultBranch != null)
+        {
+            _selectedBaseBranch = _project.DefaultBranch;
         }
     }
 
@@ -378,14 +393,26 @@
             }
             else
             {
+                // Use selected base branch, falling back to project default
+                var baseBranch = !string.IsNullOrEmpty(_selectedBaseBranch)
+                    ? _selectedBaseBranch
+                    : _project.DefaultBranch;
+
+                // Fetch the latest changes for the selected base branch
+                var fetchSuccess = await GitWorktreeService.FetchAndUpdateBranchAsync(_project.LocalPath, baseBranch);
+                if (!fetchSuccess)
+                {
+                    Logger.LogWarning("Failed to fetch latest changes for base branch {BaseBranch}, continuing with local version", baseBranch);
+                }
+
                 // Create new worktree for the issue's branch
-                Logger.LogInformation("Creating worktree for branch {BranchName} from {ProjectPath}", branchName, _project.LocalPath);
+                Logger.LogInformation("Creating worktree for branch {BranchName} from base {BaseBranch} in {ProjectPath}", branchName, baseBranch, _project.LocalPath);
 
                 worktreePath = await GitWorktreeService.CreateWorktreeAsync(
                     _project.LocalPath,
                     branchName,
                     createBranch: true,
-                    baseBranch: _project.DefaultBranch);
+                    baseBranch: baseBranch);
 
                 if (string.IsNullOrEmpty(worktreePath))
                 {
@@ -506,11 +533,15 @@
                 .Select(pr => pr.PullRequest)
                 .ToList();
 
+            var rebaseBranch = !string.IsNullOrEmpty(_selectedBaseBranch)
+                ? _selectedBaseBranch
+                : _project.DefaultBranch;
+
             var session = await RebaseAgentService.StartRebaseAgentAsync(
                 _project.Id,
                 _worktreeInfo.Path,
                 branchName,
-                _project.DefaultBranch,
+                rebaseBranch,
                 _selectedModel,
                 recentPRInfos);
 

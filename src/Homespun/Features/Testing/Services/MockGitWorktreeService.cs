@@ -36,7 +36,7 @@ public class MockGitWorktreeService : IGitWorktreeService
         bool createBranch = false,
         string? baseBranch = null)
     {
-        _logger.LogDebug("[Mock] CreateWorktree {BranchName} in {RepoPath}", branchName, repoPath);
+        _logger.LogDebug("[Mock] CreateWorktree {BranchName} in {RepoPath} from base {BaseBranch}", branchName, repoPath, baseBranch ?? "HEAD");
 
         // If live Claude testing is enabled, use the real test directory
         var worktreePath = !string.IsNullOrEmpty(_liveTestOptions?.TestWorkingDirectory)
