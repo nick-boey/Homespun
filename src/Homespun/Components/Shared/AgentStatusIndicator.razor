@@ -5,7 +5,7 @@
 @inject IClaudeSessionStore SessionStore
 @inject NavigationManager NavigationManager
 
-@if (_totalActive > 0)
+@if (_totalActive > 0 || _errorCount > 0)
 {
     <a href="/sessions" class="agent-status-indicator" title="@GetTooltipText()">
         @if (_workingCount > 0)
@@ -23,6 +23,11 @@
             <span class="status-dot waiting" aria-label="Agents waiting for input"></span>
             <span class="count">@_waitingCount</span>
         }
+        @if (_errorCount > 0)
+        {
+            <span class="status-dot error" aria-label="Agents in error state"></span>
+            <span class="count">@_errorCount</span>
+        }
     </a>
 }
 
@@ -30,6 +35,7 @@
     private int _workingCount;
     private int _questionCount;
     private int _waitingCount;
+    private int _errorCount;
     private int _totalActive;
     private HubConnection? _hubConnection;
     private System.Threading.Timer? _refreshTimer;
@@ -59,6 +65,9 @@
 
         _waitingCount = sessions.Count(s =>
             s.Status == ClaudeSessionStatus.WaitingForInput);
+
+        _errorCount = sessions.Count(s =>
+            s.Status == ClaudeSessionStatus.Error);
 
         _totalActive = _workingCount + _questionCount + _waitingCount;
     }
@@ -98,6 +107,8 @@
             parts.Add($"{_questionCount} awaiting response");
         if (_waitingCount > 0)
             parts.Add($"{_waitingCount} waiting for input");
+        if (_errorCount > 0)
+            parts.Add($"{_errorCount} in error");
 
         var status = parts.Count > 0 ? string.Join(", ", parts) + " - " : "";
         return $"{status}Click to view";
