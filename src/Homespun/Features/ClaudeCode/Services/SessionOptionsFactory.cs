@@ -1,5 +1,6 @@
 using Homespun.ClaudeAgentSdk;
 using Homespun.Features.ClaudeCode.Data;
+using Microsoft.Extensions.Logging;
 
 namespace Homespun.Features.ClaudeCode.Services;
 
@@ -8,6 +9,19 @@ namespace Homespun.Features.ClaudeCode.Services;
 /// </summary>
 public class SessionOptionsFactory
 {
+    /// <summary>
+    /// Maximum buffer size for JSON message streaming.
+    /// Set to 10MB to accommodate large Playwright MCP responses (page snapshots, base64-encoded screenshots).
+    /// </summary>
+    private const int DefaultMaxBufferSize = 10 * 1024 * 1024; // 10MB
+
+    private readonly ILogger<SessionOptionsFactory> _logger;
+
+    public SessionOptionsFactory(ILogger<SessionOptionsFactory> logger)
+    {
+        _logger = logger;
+    }
+
     /// <summary>
     /// Read-only tools available in Plan mode.
     /// </summary>
@@ -38,6 +52,14 @@ public class SessionOptionsFactory
             Cwd = workingDirectory,
             Model = model,
             SystemPrompt = systemPrompt,
+            MaxBufferSize = DefaultMaxBufferSize,  // 10MB for Playwright MCP workloads
+            BufferOverflowBehavior = BufferOverflowBehavior.SkipMessage,  // Gracefully skip large messages
+            OnBufferOverflow = (messageType, actualSize, maxSize) =>
+            {
+                _logger.LogWarning(
+                    "Buffer overflow detected: message type={MessageType}, size={ActualSize} bytes exceeds max={MaxSize} bytes. Message was skipped.",
+                    messageType ?? "unknown", actualSize, maxSize);
+            },
             SettingSources = [SettingSource.User],  // Enable loading user-level plugins
             // Configure Playwright MCP server for browser automation
             // Use dictionary with lowercase keys to match Claude CLI's expected JSON format

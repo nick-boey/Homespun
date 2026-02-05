@@ -1,8 +1,10 @@
 @page "/agents"
 @using Homespun.Features.ClaudeCode.Data
 @using Homespun.Features.ClaudeCode.Services
+@using Homespun.Features.Navigation
 @rendermode InteractiveServer
 @inject IAgentPromptService AgentPromptService
+@inject IBreadcrumbService BreadcrumbService
 
 <PageTitle>Agents - Homespun</PageTitle>
 
@@ -22,10 +24,17 @@
 
 @if (!_prompts.Any())
 {
-    <div class="alert alert-info">
-        <h5 class="alert-heading">No Agent Prompts</h5>
-        <p class="mb-0">Click "Add Agent" to create your first agent prompt, or default prompts will be created automatically when you start a session.</p>
-    </div>
+    <EmptyState
+        Title="No Agent Prompts"
+        Description="Click 'Add Agent' to create your first agent prompt, or default prompts will be created automatically when you start a session."
+        ActionLabel="Add Agent"
+        ActionClick="ShowAddModal">
+        <Icon>
+            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" />
+            </svg>
+        </Icon>
+    </EmptyState>
 }
 else
 {
@@ -99,13 +108,10 @@ else
             <div class="text-danger me-auto">@_modalError</div>
         }
         <button type="button" class="btn btn-secondary" @onclick="HideModal">Cancel</button>
-        <button type="button" class="btn btn-primary" @onclick="SavePrompt" disabled="@_isSaving">
-            @if (_isSaving)
-            {
-                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-            }
-            Save
-        </button>
+        <AsyncActionButton OnClick="SavePrompt"
+                           IsLoadingExternal="_isSaving"
+                           CssClass="btn-primary"
+                           Text="Save" />
     </Footer>
 </Modal>
 
@@ -148,8 +154,9 @@ else
     private SessionMode _modalMode = SessionMode.Build;
     private string _modalMessage = string.Empty;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
+        await BreadcrumbService.SetContextAsync(new BreadcrumbContext { PageName = "Agents" });
         RefreshPrompts();
     }
 

@@ -31,6 +31,11 @@ public enum ClaudeSessionStatus
     WaitingForQuestionAnswer,
 
     /// <summary>
+    /// Session is waiting for the user to execute a plan.
+    /// </summary>
+    WaitingForPlanExecution,
+
+    /// <summary>
     /// Session has stopped normally.
     /// </summary>
     Stopped,

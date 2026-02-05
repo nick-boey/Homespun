@@ -14,6 +14,23 @@ public enum PermissionMode
 }
 
 /// <summary>
+/// Behavior when a JSON message exceeds the maximum buffer size.
+/// </summary>
+public enum BufferOverflowBehavior
+{
+    /// <summary>
+    /// Throw an exception and terminate the session (original behavior).
+    /// </summary>
+    ThrowException,
+
+    /// <summary>
+    /// Skip the oversized message and continue processing (default).
+    /// A warning will be logged via the Stderr callback.
+    /// </summary>
+    SkipMessage
+}
+
+/// <summary>
 /// Setting source types.
 /// </summary>
 public enum SettingSource
@@ -309,11 +326,25 @@ public class ClaudeAgentOptions
     public string? Model { get; set; }
     public string? PermissionPromptToolName { get; set; }
     public string? Cwd { get; set; }
+    /// <summary>
+    /// Explicit path to the Claude CLI executable. If not specified, auto-discovery is used.
+    /// </summary>
+    public string? CliPath { get; set; }
     public string? Settings { get; set; }
     public List<string> AddDirs { get; set; } = new();
     public Dictionary<string, string> Env { get; set; } = new();
     public Dictionary<string, string?> ExtraArgs { get; set; } = new();
     public int? MaxBufferSize { get; set; }
+    /// <summary>
+    /// Behavior when a JSON message exceeds the maximum buffer size.
+    /// Defaults to SkipMessage for graceful degradation.
+    /// </summary>
+    public BufferOverflowBehavior BufferOverflowBehavior { get; set; } = BufferOverflowBehavior.SkipMessage;
+    /// <summary>
+    /// Callback invoked when a buffer overflow occurs.
+    /// Parameters: (estimated message type, actual buffer size, max buffer size).
+    /// </summary>
+    public Action<string?, int, int>? OnBufferOverflow { get; set; }
     public Action<string>? Stderr { get; set; }
     public Func<string, Dictionary<string, object>, ToolPermissionContext, Task<object>>? CanUseTool { get; set; }
     public Dictionary<string, List<HookMatcher>>? Hooks { get; set; }

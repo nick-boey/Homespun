@@ -237,6 +237,11 @@
         background: var(--status-warning);
     }
 
+    .status-indicator.question {
+        background: var(--status-danger);
+        animation: pulse 1s ease-in-out infinite;
+    }
+
     .status-indicator.stopped {
         background: var(--text-muted);
     }
@@ -286,10 +291,7 @@
         border-top: 1px solid var(--border-color);
     }
 
-    @@keyframes pulse {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.5; }
-    }
+    /* Note: pulse keyframes animation is defined globally in app.css */
 </style>
 
 @code {
@@ -354,15 +356,15 @@
                         {
                             // Build branch name from issue properties
                             string? branchName = null;
-                            if (!string.IsNullOrEmpty(issue.Group))
-                            {
-                                var branchId = issue.Title.ToLowerInvariant()
+                            // Use WorkingBranchId or generate from title
+                            var branchId = !string.IsNullOrEmpty(issue.WorkingBranchId)
+                                ? issue.WorkingBranchId
+                                : issue.Title.ToLowerInvariant()
                                     .Replace(" ", "-")
                                     .Replace("_", "-");
-                                branchId = System.Text.RegularExpressions.Regex.Replace(branchId, "[^a-z0-9-]", "");
-                                branchId = System.Text.RegularExpressions.Regex.Replace(branchId, "-+", "-").Trim('-');
-                                branchName = $"{issue.Group}/{issue.Type.ToString().ToLowerInvariant()}/{branchId}+{issue.Id}";
-                            }
+                            branchId = System.Text.RegularExpressions.Regex.Replace(branchId, "[^a-z0-9-]", "");
+                            branchId = System.Text.RegularExpressions.Regex.Replace(branchId, "-+", "-").Trim('-');
+                            branchName = $"{issue.Type.ToString().ToLowerInvariant()}/{branchId}+{issue.Id}";
 
                             _entityInfoCache[session.EntityId] = new EntityInfo
                             {
@@ -426,12 +428,13 @@
 
     private static int GetStatusSortOrder(ClaudeSessionStatus status) => status switch
     {
-        ClaudeSessionStatus.WaitingForInput => 0,  // Waiting at top
-        ClaudeSessionStatus.Starting => 1,
-        ClaudeSessionStatus.Running => 2,          // Working at bottom
-        ClaudeSessionStatus.Stopped => 3,
-        ClaudeSessionStatus.Error => 4,
-        _ => 5
+        ClaudeSessionStatus.WaitingForQuestionAnswer => 0,  // Question at top (requires immediate user action)
+        ClaudeSessionStatus.WaitingForInput => 1,           // Waiting
+        ClaudeSessionStatus.Starting => 2,
+        ClaudeSessionStatus.Running => 3,
+        ClaudeSessionStatus.Stopped => 4,
+        ClaudeSessionStatus.Error => 5,
+        _ => 6
     };
 
     private async Task StopSession(string sessionId)

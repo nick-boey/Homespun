@@ -48,38 +48,76 @@ public class SubprocessCliTransport : ITransport
         _maxBufferSize = options.MaxBufferSize ?? DefaultMaxBufferSize;
     }
 
+    /// <summary>
+    /// Attempts to detect the message type from partial JSON content for diagnostic purposes.
+    /// </summary>
+    private static string? TryDetectMessageType(string partialJson)
+    {
+        // Look for common type patterns in Claude CLI JSON output
+        // The partial JSON may be incomplete, so we use simple string matching
+
+        if (partialJson.Contains("\"type\":\"assistant\"") || partialJson.Contains("\"type\": \"assistant\""))
+            return "assistant";
+        if (partialJson.Contains("\"type\":\"user\"") || partialJson.Contains("\"type\": \"user\""))
+            return "user";
+        if (partialJson.Contains("\"type\":\"result\"") || partialJson.Contains("\"type\": \"result\""))
+            return "result";
+        if (partialJson.Contains("\"type\":\"system\"") || partialJson.Contains("\"type\": \"system\""))
+            return "system";
+        if (partialJson.Contains("\"type\":\"stream_event\"") || partialJson.Contains("\"type\": \"stream_event\""))
+            return "stream_event";
+
+        // Check for tool-related content (common with Playwright MCP)
+        if (partialJson.Contains("browser_snapshot") || partialJson.Contains("browser_take_screenshot"))
+            return "playwright_mcp_result";
+        if (partialJson.Contains("\"tool_result\"") || partialJson.Contains("tool_use_id"))
+            return "tool_result";
+
+        return null;
+    }
+
     private static string FindCli()
     {
-        // Check PATH
-        var cliName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "claude.cmd" : "claude";
+        // Get list of possible CLI names for the platform
+        // On Windows, search for .cmd (npm global), .exe (standalone), and .bat (batch wrapper)
+        var cliNames = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+            ? new[] { "claude.cmd", "claude.exe", "claude.bat" }
+            : new[] { "claude" };
+
         var pathVar = Environment.GetEnvironmentVariable("PATH");
 
         if (pathVar != null)
         {
             var paths = pathVar.Split(Path.PathSeparator);
-            foreach (var path in paths)
+            foreach (var cliName in cliNames)
             {
-                var fullPath = Path.Combine(path, cliName);
-                if (File.Exists(fullPath))
-                    return fullPath;
+                foreach (var path in paths)
+                {
+                    var fullPath = Path.Combine(path, cliName);
+                    if (File.Exists(fullPath))
+                        return fullPath;
+                }
             }
         }
 
         // Check common locations
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        var locations = new[]
+        foreach (var cliName in cliNames)
         {
-            Path.Combine(home, ".npm-global", "bin", cliName),
-            Path.Combine("/usr", "local", "bin", cliName),
-            Path.Combine(home, ".local", "bin", cliName),
-            Path.Combine(home, "node_modules", ".bin", cliName),
-            Path.Combine(home, ".yarn", "bin", cliName)
-        };
+            var locations = new[]
+            {
+                Path.Combine(home, ".npm-global", "bin", cliName),
+                Path.Combine("/usr", "local", "bin", cliName),
+                Path.Combine(home, ".local", "bin", cliName),
+                Path.Combine(home, "node_modules", ".bin", cliName),
+                Path.Combine(home, ".yarn", "bin", cliName)
+            };
 
-        foreach (var location in locations)
-        {
-            if (File.Exists(location))
-                return location;
+            foreach (var location in locations)
+            {
+                if (File.Exists(location))
+                    return location;
+            }
         }
 
         throw new CliNotFoundException(
@@ -504,9 +542,25 @@ public class SubprocessCliTransport : ITransport
             if (jsonBuffer.Length > _maxBufferSize)
             {
                 var bufferLength = jsonBuffer.Length;
+
+                // Try to detect the message type from the partial buffer for diagnostics
+                var estimatedType = TryDetectMessageType(jsonBuffer.ToString());
+
+                // Handle based on configured behavior
+                if (_options.BufferOverflowBehavior == BufferOverflowBehavior.ThrowException)
+                {
+                    jsonBuffer.Clear();
+                    throw new CliJsonDecodeException(
+                        $"JSON message exceeded maximum buffer size of {_maxBufferSize} bytes (actual: {bufferLength}, type: {estimatedType ?? "unknown"})");
+                }
+
+                // SkipMessage behavior: log warning, invoke callback, and continue
+                var warningMessage = $"[WARNING] JSON message exceeded buffer limit ({bufferLength} > {_maxBufferSize} bytes, type: {estimatedType ?? "unknown"}), skipping";
+                _options.Stderr?.Invoke(warningMessage);
+                _options.OnBufferOverflow?.Invoke(estimatedType, bufferLength, _maxBufferSize);
+
                 jsonBuffer.Clear();
-                throw new CliJsonDecodeException(
-                    $"JSON message exceeded maximum buffer size of {_maxBufferSize} bytes");
+                continue;
             }
 
             Dictionary<string, object>? data = null;

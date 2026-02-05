@@ -90,9 +90,9 @@
                 {
                     <dt class="col-span-4">Parent Issues</dt>
                     <dd class="col-span-8">
-                        @foreach (var parentId in Issue.ParentIssues)
+                        @foreach (var parentRef in Issue.ParentIssues)
                         {
-                            <code class="mr-1">@parentId</code>
+                            <code class="mr-1">@parentRef.ParentIssue</code>
                         }
                     </dd>
                 }
@@ -138,6 +138,14 @@
                                    SelectedModel="@_selectedModel"
                                    SelectedModelChanged="@(m => _selectedModel = m)" />
                 </div>
+                <div class="mb-2">
+                    <label class="form-label text-sm mb-1">Base Branch</label>
+                    <BaseBranchSelector Id="@($"issue-base-branch-{Issue.Id}")"
+                                        SelectedBranch="@_selectedBaseBranch"
+                                        SelectedBranchChanged="@(b => _selectedBaseBranch = b)"
+                                        RepoPath="@_project?.LocalPath"
+                                        DefaultBranch="@_project?.DefaultBranch" />
+                </div>
             }
 
             <div class="flex flex-wrap gap-2">
@@ -161,7 +169,7 @@
                         Stop Session
                     </button>
                 }
-                else if (Issue.Status is IssueStatus.Idea or IssueStatus.Spec or IssueStatus.Next or IssueStatus.Progress or IssueStatus.Review)
+                else if (Issue.Status is IssueStatus.Open or IssueStatus.Progress or IssueStatus.Review)
                 {
                     <div class="mb-2 w-full">
                         <AgentSelector
@@ -179,14 +187,14 @@
                             {
                                 <span class="spinner-border spinner-border-sm mr-1" role="status"></span>
                             }
-                            Rebase onto @_project?.DefaultBranch (@_branchInfo.BehindCount behind)
+                            Rebase onto @(!string.IsNullOrEmpty(_selectedBaseBranch) ? _selectedBaseBranch : _project?.DefaultBranch) (@_branchInfo.BehindCount behind)
                         </button>
                     }
                 }
             </div>
 
             <div class="flex flex-wrap gap-2">
-                @if (Issue.Status is IssueStatus.Idea or IssueStatus.Spec or IssueStatus.Next or IssueStatus.Progress or IssueStatus.Review)
+                @if (Issue.Status is IssueStatus.Open or IssueStatus.Progress or IssueStatus.Review)
                 {
                     <button class="btn btn-sm btn-outline-primary" @onclick="CloseIssue" disabled="@_isLoading" title="Mark issue as completed">
                         Close Issue
@@ -250,6 +258,7 @@
     private ClaudeSession? _session;
     private Project? _project;
     private string _selectedModel = "opus";
+    private string _selectedBaseBranch = "";
     private WorktreeInfo? _worktreeInfo;
     private BranchInfo? _branchInfo;
     private bool _isRebasing;
@@ -265,6 +274,12 @@
         if (_project?.DefaultModel != null)
         {
             _selectedModel = _project.DefaultModel;
+        }
+
+        // Default base branch to the project's default branch
+        if (_project?.DefaultBranch != null)
+        {
+            _selectedBaseBranch = _project.DefaultBranch;
         }
     }
 
@@ -339,7 +354,7 @@
     /// <summary>
     /// Gets the branch name for this issue by recalculating from current issue properties.
     /// This ensures the branch name always reflects the current state of the issue,
-    /// including any changes to type, group, title, or working branch ID.
+    /// including any changes to type, title, or working branch ID.
     /// </summary>
     private string GetBranchPreview()
     {
@@ -378,14 +393,26 @@
             }
             else
             {
+                // Use selected base branch, falling back to project default
+                var baseBranch = !string.IsNullOrEmpty(_selectedBaseBranch)
+                    ? _selectedBaseBranch
+                    : _project.DefaultBranch;
+
+                // Fetch the latest changes for the selected base branch
+                var fetchSuccess = await GitWorktreeService.FetchAndUpdateBranchAsync(_project.LocalPath, baseBranch);
+                if (!fetchSuccess)
+                {
+                    Logger.LogWarning("Failed to fetch latest changes for base branch {BaseBranch}, continuing with local version", baseBranch);
+                }
+
                 // Create new worktree for the issue's branch
-                Logger.LogInformation("Creating worktree for branch {BranchName} from {ProjectPath}", branchName, _project.LocalPath);
+                Logger.LogInformation("Creating worktree for branch {BranchName} from base {BaseBranch} in {ProjectPath}", branchName, baseBranch, _project.LocalPath);
 
                 worktreePath = await GitWorktreeService.CreateWorktreeAsync(
                     _project.LocalPath,
                     branchName,
                     createBranch: true,
-                    baseBranch: _project.DefaultBranch);
+                    baseBranch: baseBranch);
 
                 if (string.IsNullOrEmpty(worktreePath))
                 {
@@ -506,11 +533,15 @@
                 .Select(pr => pr.PullRequest)
                 .ToList();
 
+            var rebaseBranch = !string.IsNullOrEmpty(_selectedBaseBranch)
+                ? _selectedBaseBranch
+                : _project.DefaultBranch;
+
             var session = await RebaseAgentService.StartRebaseAgentAsync(
                 _project.Id,
                 _worktreeInfo.Path,
                 branchName,
-                _project.DefaultBranch,
+                rebaseBranch,
                 _selectedModel,
                 recentPRInfos);
 
@@ -623,9 +654,7 @@
 
     private string GetStatusBadgeClass() => Issue.Status switch
     {
-        IssueStatus.Idea => "bg-purple",
-        IssueStatus.Spec => "bg-info",
-        IssueStatus.Next => "bg-warning text-dark",
+        IssueStatus.Open => "bg-info",
         IssueStatus.Progress => "bg-primary",
         IssueStatus.Review => "bg-info",
         IssueStatus.Complete => "bg-success",

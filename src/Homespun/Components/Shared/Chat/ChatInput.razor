@@ -6,11 +6,13 @@
               @onkeydown="HandleKeyDown"
               placeholder="@Placeholder"
               rows="3"
-              disabled="@Disabled">
+              disabled="@Disabled"
+              aria-label="Chat message input">
     </textarea>
     <button class="btn btn-primary chat-send-button"
             @onclick="HandleSend"
-            disabled="@(string.IsNullOrWhiteSpace(Value) || Disabled)">
+            disabled="@(string.IsNullOrWhiteSpace(Value) || Disabled)"
+            aria-label="Send message">
         Send
     </button>
 </div>

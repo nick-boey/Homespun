@@ -49,7 +49,61 @@ public class GraphService(
     /// <inheritdoc />
     public async Task<GitgraphJsonData> BuildGraphJsonWithFreshDataAsync(string projectId, int? maxPastPRs = 5)
     {
-        var graph = await BuildGraphInternalAsync(projectId, maxPastPRs, useCache: false);
+        var graph = await BuildGraphInternalWithStatusCachingAsync(projectId, maxPastPRs);
+        var jsonData = _mapper.ToJson(graph);
+
+        // Enrich nodes with agent status data
+        EnrichWithAgentStatuses(jsonData, projectId);
+
+        return jsonData;
+    }
+
+    /// <inheritdoc />
+    public async Task<Graph?> BuildGraphFromCacheOnlyAsync(string projectId, int? maxPastPRs = 5)
+    {
+        var cachedData = cacheService.GetCachedPRData(projectId);
+        if (cachedData == null)
+        {
+            logger.LogDebug("No cached data available for project {ProjectId}", projectId);
+            return null;
+        }
+
+        var project = await projectService.GetByIdAsync(projectId);
+        if (project == null)
+        {
+            logger.LogWarning("Project not found: {ProjectId}", projectId);
+            return null;
+        }
+
+        logger.LogDebug("Building graph from cache only for project {ProjectId}, cached at {CachedAt}",
+            projectId, cachedData.CachedAt);
+
+        var allPrs = cachedData.ClosedPrs.Concat(cachedData.OpenPrs).ToList();
+
+        // Fetch issues from Fleece (fast local operation)
+        var issues = await GetIssuesAsync(project.LocalPath);
+
+        // Filter out issues that are linked to PRs
+        var linkedIssueIds = GetLinkedIssueIds(projectId);
+        var filteredIssues = issues.Where(i => !linkedIssueIds.Contains(i.Id)).ToList();
+
+        // Use cached PR statuses (no GitHub API calls)
+        var issuePrStatuses = cachedData.IssuePrStatuses;
+
+        logger.LogDebug(
+            "Building graph from cache for project {ProjectId}: {OpenPrCount} open PRs, {ClosedPrCount} closed PRs, {IssueCount} issues, {StatusCount} cached statuses",
+            projectId, cachedData.OpenPrs.Count, cachedData.ClosedPrs.Count, filteredIssues.Count, issuePrStatuses.Count);
+
+        return _graphBuilder.Build(allPrs, filteredIssues, maxPastPRs, issuePrStatuses);
+    }
+
+    /// <inheritdoc />
+    public async Task<GitgraphJsonData?> BuildGraphJsonFromCacheOnlyAsync(string projectId, int? maxPastPRs = 5)
+    {
+        var graph = await BuildGraphFromCacheOnlyAsync(projectId, maxPastPRs);
+        if (graph == null)
+            return null;
+
         var jsonData = _mapper.ToJson(graph);
 
         // Enrich nodes with agent status data
@@ -126,6 +180,46 @@ public class GraphService(
     }
 
     /// <summary>
+    /// Internal method to build graph with fresh data and cache including PR statuses.
+    /// Used by BuildGraphJsonWithFreshDataAsync to ensure statuses are cached for future cache-only loads.
+    /// </summary>
+    private async Task<Graph> BuildGraphInternalWithStatusCachingAsync(string projectId, int? maxPastPRs)
+    {
+        var project = await projectService.GetByIdAsync(projectId);
+        if (project == null)
+        {
+            logger.LogWarning("Project not found: {ProjectId}", projectId);
+            return new Graph([], new Dictionary<string, GraphBranch>());
+        }
+
+        // Fetch PRs from GitHub (expensive operation)
+        logger.LogDebug("Fetching fresh PR data from GitHub for project {ProjectId}", projectId);
+        var openPrs = await GetOpenPullRequestsSafe(projectId);
+        var closedPrs = await GetClosedPullRequestsSafe(projectId);
+
+        var allPrs = closedPrs.Concat(openPrs).ToList();
+
+        // Fetch issues from Fleece (fast operation, always fresh)
+        var issues = await GetIssuesAsync(project.LocalPath);
+
+        // Filter out issues that are linked to PRs (they will be shown with the PR instead)
+        var linkedIssueIds = GetLinkedIssueIds(projectId);
+        var filteredIssues = issues.Where(i => !linkedIssueIds.Contains(i.Id)).ToList();
+
+        // Build lookup of issue ID to PR status for remaining issues with linked PRs
+        var issuePrStatuses = await GetIssuePrStatusesAsync(projectId, filteredIssues);
+
+        // Cache the fresh data INCLUDING statuses for future cache-only loads
+        await cacheService.CachePRDataWithStatusesAsync(projectId, openPrs, closedPrs, issuePrStatuses);
+
+        logger.LogDebug(
+            "Building graph with fresh data for project {ProjectId}: {OpenPrCount} open PRs, {ClosedPrCount} closed PRs, {IssueCount} issues, {StatusCount} PR statuses cached",
+            projectId, openPrs.Count, closedPrs.Count, filteredIssues.Count, issuePrStatuses.Count);
+
+        return _graphBuilder.Build(allPrs, filteredIssues, maxPastPRs, issuePrStatuses);
+    }
+
+    /// <summary>
     /// Enriches graph commit data with agent session statuses.
     /// </summary>
     private void EnrichWithAgentStatuses(GitgraphJsonData jsonData, string projectId)
@@ -134,8 +228,14 @@ public class GraphService(
         var sessions = sessionStore.GetByProjectId(projectId);
         if (sessions.Count == 0) return;
 
-        // Build lookup by entity ID
+        // Build lookup by entity ID (works for issues directly, and for PRs via their internal ID)
         var sessionsByEntityId = sessions.ToDictionary(s => s.EntityId, StringComparer.OrdinalIgnoreCase);
+
+        // Build lookup from GitHub PR number to internal PR ID for matching PR sessions
+        var trackedPrs = dataStore.GetPullRequestsByProject(projectId);
+        var prIdByGitHubNumber = trackedPrs
+            .Where(pr => pr.GitHubPRNumber.HasValue)
+            .ToDictionary(pr => pr.GitHubPRNumber!.Value, pr => pr.Id);
 
         // Enrich commits with agent status
         foreach (var commit in jsonData.Commits)
@@ -143,16 +243,29 @@ public class GraphService(
             // Check if there's an active session for this issue
             if (commit.IssueId != null && sessionsByEntityId.TryGetValue(commit.IssueId, out var session))
             {
-                var isActive = session.Status.IsActive();
-
-                commit.AgentStatus = new AgentStatusData
-                {
-                    IsActive = isActive,
-                    Status = session.Status.ToString(),
-                    SessionId = session.Id
-                };
+                commit.AgentStatus = CreateAgentStatusData(session);
+            }
+            // Check if there's an active session for this PR
+            else if (commit.PullRequestNumber.HasValue &&
+                     prIdByGitHubNumber.TryGetValue(commit.PullRequestNumber.Value, out var prEntityId) &&
+                     sessionsByEntityId.TryGetValue(prEntityId, out var prSession))
+            {
+                commit.AgentStatus = CreateAgentStatusData(prSession);
             }
         }
+    }
+
+    /// <summary>
+    /// Creates AgentStatusData from a ClaudeSession.
+    /// </summary>
+    private static AgentStatusData CreateAgentStatusData(ClaudeSession session)
+    {
+        return new AgentStatusData
+        {
+            IsActive = session.Status.IsActive(),
+            Status = session.Status.ToString(),
+            SessionId = session.Id
+        };
     }
 
     /// <summary>
@@ -253,7 +366,7 @@ public class GraphService(
             // Get open issues only (all non-completed statuses)
             var issues = await fleeceService.ListIssuesAsync(workingDirectory);
             return issues
-                .Where(i => i.Status is IssueStatus.Idea or IssueStatus.Spec or IssueStatus.Next or IssueStatus.Progress or IssueStatus.Review)
+                .Where(i => i.Status is IssueStatus.Open or IssueStatus.Progress or IssueStatus.Review)
                 .ToList();
         }
         catch (Exception ex)

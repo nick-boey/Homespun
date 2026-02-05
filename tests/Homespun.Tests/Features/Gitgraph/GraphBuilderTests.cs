@@ -212,7 +212,7 @@ public class GraphBuilderTests
     #region Phase 3: Issues with Dependencies
 
     [Test]
-    public void Build_Issues_BranchFromLatestMergedPR()
+    public void Build_Issues_OrphanHasNoParentConnections()
     {
         // Arrange
         var prs = new List<PullRequestInfo>
@@ -225,9 +225,41 @@ public class GraphBuilderTests
         // Act
         var graph = _builder.Build(prs, issues);
 
-        // Assert - Issue should have latest merged PR as parent
+        // Assert - Orphan issues have NO parent connections (flat list)
         var issueNode = graph.Nodes.OfType<IssueNode>().First();
-        Assert.That(issueNode.ParentIds, Contains.Item("pr-2"));
+        Assert.That(issueNode.ParentIds, Is.Empty);
+        Assert.That(issueNode.IsOrphan, Is.True);
+    }
+
+    [Test]
+    public void Build_Issues_NextStatusConnectsToLatestMergedPR()
+    {
+        // Arrange - "Open" status issues should be orphans (no connection to PRs)
+        var prs = new List<PullRequestInfo>
+        {
+            CreateMergedPR(1, DateTime.UtcNow.AddDays(-2)),
+            CreateMergedPR(2, DateTime.UtcNow)  // Latest merged
+        };
+        var issues = new List<Issue>
+        {
+            new()
+            {
+                Id = "bd-001",
+                Title = "Issue bd-001",
+                Status = IssueStatus.Open, // "Open" status
+                Type = IssueType.Task,
+                CreatedAt = DateTimeOffset.UtcNow,
+                LastUpdate = DateTimeOffset.UtcNow
+            }
+        };
+
+        // Act
+        var graph = _builder.Build(prs, issues);
+
+        // Assert - "Open" status issues are orphans (no parent connections)
+        var issueNode = graph.Nodes.OfType<IssueNode>().First();
+        Assert.That(issueNode.ParentIds, Is.Empty);
+        Assert.That(issueNode.IsOrphan, Is.True);
     }
 
     [Test]
@@ -335,7 +367,7 @@ public class GraphBuilderTests
     #region Phase 4: Orphan Issues
 
     [Test]
-    public void Build_OrphanIssues_ChainedOffMain()
+    public void Build_OrphanIssues_FlatListWithNoConnections()
     {
         // Arrange - Issues with no dependencies are orphans
         var issues = new List<Issue>
@@ -347,29 +379,29 @@ public class GraphBuilderTests
         // Act
         var graph = _builder.Build([], issues);
 
-        // Assert - Should be on orphan branch and chained together
+        // Assert - Orphan issues should be a flat list (no parent connections)
         var orphanNodes = graph.Nodes.OfType<IssueNode>().ToList();
         Assert.That(orphanNodes, Has.Count.EqualTo(2));
         Assert.That(orphanNodes.All(n => n.NodeType == GraphNodeType.OrphanIssue), Is.True);
-        // Second orphan should have first orphan as parent
-        Assert.That(orphanNodes[1].ParentIds, Contains.Item(orphanNodes[0].Id));
+        // Flat list means NO parent connections
+        Assert.That(orphanNodes.All(n => n.ParentIds.Count == 0), Is.True);
     }
 
     [Test]
-    public void Build_OrphanIssues_OrderedByPriorityThenAge()
+    public void Build_OrphanIssues_OrderedByCreatedAtAscending()
     {
-        // Arrange
+        // Arrange - Orphan issues are now sorted ONLY by CreatedAt (oldest first)
         var issues = new List<Issue>
         {
-            CreateIssue("bd-001", priority: 3, createdAt: DateTime.UtcNow.AddDays(-1)),  // Lower priority, newer
-            CreateIssue("bd-002", priority: 1, createdAt: DateTime.UtcNow.AddDays(-2)),  // Higher priority, older
-            CreateIssue("bd-003", priority: 1, createdAt: DateTime.UtcNow.AddDays(-3))   // Same high priority, oldest
+            CreateIssue("bd-001", priority: 3, createdAt: DateTime.UtcNow.AddDays(-1)),  // Newest
+            CreateIssue("bd-002", priority: 1, createdAt: DateTime.UtcNow.AddDays(-2)),  // Middle
+            CreateIssue("bd-003", priority: 1, createdAt: DateTime.UtcNow.AddDays(-3))   // Oldest
         };
 
         // Act
         var graph = _builder.Build([], issues);
 
-        // Assert - Order: bd-003 (P1, oldest), bd-002 (P1, older), bd-001 (P3, newer)
+        // Assert - Order by CreatedAt ascending (oldest to newest): bd-003, bd-002, bd-001
         var orphanNodes = graph.Nodes.OfType<IssueNode>().ToList();
         Assert.That(orphanNodes[0].Issue.Id, Is.EqualTo("bd-003"));
         Assert.That(orphanNodes[1].Issue.Id, Is.EqualTo("bd-002"));
@@ -401,77 +433,71 @@ public class GraphBuilderTests
     }
 
     [Test]
-    public void Build_OrphanIssues_GroupedByGroup()
+    public void Build_OrphanIssues_IgnoresGroupProperty()
     {
-        // Arrange - Orphan issues with different groups
+        // Arrange - Orphan issues with different groups (groups are now ignored)
         var issues = new List<Issue>
         {
-            CreateIssueWithGroup("bd-001", "frontend"),
-            CreateIssueWithGroup("bd-002", "backend"),
-            CreateIssueWithGroup("bd-003", "frontend"),
+            CreateIssueWithGroup("bd-001", "frontend", createdAt: DateTime.UtcNow.AddDays(-3)),
+            CreateIssueWithGroup("bd-002", "backend", createdAt: DateTime.UtcNow.AddDays(-2)),
+            CreateIssueWithGroup("bd-003", "frontend", createdAt: DateTime.UtcNow.AddDays(-1)),
         };
 
         // Act
         var graph = _builder.Build([], issues);
 
-        // Assert - Should have 2 orphan branches (backend and frontend)
-        Assert.That(graph.Branches.ContainsKey("orphan-issues-backend"), Is.True);
-        Assert.That(graph.Branches.ContainsKey("orphan-issues-frontend"), Is.True);
-
+        // Assert - Orphan issues are now a flat list with no grouping
         var orphanNodes = graph.Nodes.OfType<IssueNode>().ToList();
         Assert.That(orphanNodes, Has.Count.EqualTo(3));
 
-        // Frontend issues should be on frontend branch
-        var frontendNodes = orphanNodes.Where(n => n.Issue.Id == "bd-001" || n.Issue.Id == "bd-003").ToList();
-        Assert.That(frontendNodes.All(n => n.BranchName == "orphan-issues-frontend"), Is.True);
+        // All orphan issues should have no parent connections (flat list)
+        Assert.That(orphanNodes.All(n => n.ParentIds.Count == 0), Is.True);
 
-        // Backend issues should be on backend branch
-        var backendNodes = orphanNodes.Where(n => n.Issue.Id == "bd-002").ToList();
-        Assert.That(backendNodes.All(n => n.BranchName == "orphan-issues-backend"), Is.True);
+        // Order should be by CreatedAt ascending (oldest first)
+        Assert.That(orphanNodes[0].Issue.Id, Is.EqualTo("bd-001"));
+        Assert.That(orphanNodes[1].Issue.Id, Is.EqualTo("bd-002"));
+        Assert.That(orphanNodes[2].Issue.Id, Is.EqualTo("bd-003"));
     }
 
     [Test]
-    public void Build_OrphanIssues_GroupsSortedAlphabetically()
+    public void Build_OrphanIssues_AllHaveSameTimeDimension()
     {
-        // Arrange - Orphan issues with groups that need alphabetical sorting
+        // Arrange - Orphan issues all have the same time dimension (flat list)
         var issues = new List<Issue>
         {
-            CreateIssueWithGroup("bd-001", "zebra"),
-            CreateIssueWithGroup("bd-002", "alpha"),
-            CreateIssueWithGroup("bd-003", "middle"),
+            CreateIssueWithGroup("bd-001", "zebra", createdAt: DateTime.UtcNow.AddDays(-3)),
+            CreateIssueWithGroup("bd-002", "alpha", createdAt: DateTime.UtcNow.AddDays(-2)),
+            CreateIssueWithGroup("bd-003", "middle", createdAt: DateTime.UtcNow.AddDays(-1)),
         };
 
         // Act
         var graph = _builder.Build([], issues);
 
-        // Assert - Groups should be processed in alphabetical order
+        // Assert - All orphan issues should have the same TimeDimension (3 = after connected issues)
         var orphanNodes = graph.Nodes.OfType<IssueNode>().ToList();
 
-        // The order should be: alpha (td=2), middle (td=3), zebra (td=4)
-        var alphaNode = orphanNodes.First(n => n.Issue.Id == "bd-002");
-        var middleNode = orphanNodes.First(n => n.Issue.Id == "bd-003");
-        var zebraNode = orphanNodes.First(n => n.Issue.Id == "bd-001");
-
-        Assert.That(alphaNode.TimeDimension, Is.EqualTo(2));
-        Assert.That(middleNode.TimeDimension, Is.EqualTo(3));
-        Assert.That(zebraNode.TimeDimension, Is.EqualTo(4));
+        Assert.That(orphanNodes.All(n => n.TimeDimension == 3), Is.True);
+        // Order should be by CreatedAt ascending
+        Assert.That(orphanNodes[0].Issue.Id, Is.EqualTo("bd-001"));
+        Assert.That(orphanNodes[1].Issue.Id, Is.EqualTo("bd-002"));
+        Assert.That(orphanNodes[2].Issue.Id, Is.EqualTo("bd-003"));
     }
 
     [Test]
-    public void Build_OrphanIssues_WithinGroupOrderedByPriorityThenAge()
+    public void Build_OrphanIssues_IgnoresPriorityUseCreatedAtOnly()
     {
-        // Arrange - Multiple issues in same group with different priorities
+        // Arrange - Orphan issues are now ordered by CreatedAt only, priority is ignored
         var issues = new List<Issue>
         {
-            CreateIssueWithGroup("bd-001", "frontend", priority: 3, createdAt: DateTime.UtcNow.AddDays(-1)),
-            CreateIssueWithGroup("bd-002", "frontend", priority: 1, createdAt: DateTime.UtcNow.AddDays(-2)),
-            CreateIssueWithGroup("bd-003", "frontend", priority: 1, createdAt: DateTime.UtcNow.AddDays(-3)),
+            CreateIssueWithGroup("bd-001", "frontend", priority: 3, createdAt: DateTime.UtcNow.AddDays(-1)),  // Newest
+            CreateIssueWithGroup("bd-002", "frontend", priority: 1, createdAt: DateTime.UtcNow.AddDays(-2)),  // Middle
+            CreateIssueWithGroup("bd-003", "frontend", priority: 1, createdAt: DateTime.UtcNow.AddDays(-3)),  // Oldest
         };
 
         // Act
         var graph = _builder.Build([], issues);
 
-        // Assert - Within frontend group, order should be: bd-003 (P1, oldest), bd-002 (P1, older), bd-001 (P3, newer)
+        // Assert - Order by CreatedAt ascending (oldest to newest): bd-003, bd-002, bd-001
         var orphanNodes = graph.Nodes.OfType<IssueNode>().ToList();
         var nodeOrder = orphanNodes.Select(n => n.Issue.Id).ToList();
 
@@ -481,28 +507,28 @@ public class GraphBuilderTests
     }
 
     [Test]
-    public void Build_OrphanIssues_WithoutGroup_UsesDefaultBranch()
+    public void Build_OrphanIssues_AllTreatedAsFlatList()
     {
-        // Arrange - Mix of issues with and without groups
+        // Arrange - Mix of issues with and without groups (groups are now ignored)
         var issues = new List<Issue>
         {
-            CreateIssueWithGroup("bd-001", "frontend"),
-            CreateIssue("bd-002"),  // No group
+            CreateIssueWithGroup("bd-001", "frontend", createdAt: DateTime.UtcNow.AddDays(-2)),
+            CreateIssue("bd-002", createdAt: DateTime.UtcNow.AddDays(-1)),  // No group
         };
 
         // Act
         var graph = _builder.Build([], issues);
 
-        // Assert - Should have both orphan-issues-frontend and orphan-issues branches
-        Assert.That(graph.Branches.ContainsKey("orphan-issues-frontend"), Is.True);
-        Assert.That(graph.Branches.ContainsKey("orphan-issues"), Is.True);
-
+        // Assert - All orphan issues should be a flat list with no special branch grouping
         var orphanNodes = graph.Nodes.OfType<IssueNode>().ToList();
-        var frontendNode = orphanNodes.First(n => n.Issue.Id == "bd-001");
-        var defaultNode = orphanNodes.First(n => n.Issue.Id == "bd-002");
+        Assert.That(orphanNodes, Has.Count.EqualTo(2));
 
-        Assert.That(frontendNode.BranchName, Is.EqualTo("orphan-issues-frontend"));
-        Assert.That(defaultNode.BranchName, Is.EqualTo("orphan-issues"));
+        // All should have no parent connections (flat list)
+        Assert.That(orphanNodes.All(n => n.ParentIds.Count == 0), Is.True);
+
+        // Order should be by CreatedAt ascending (oldest first)
+        Assert.That(orphanNodes[0].Issue.Id, Is.EqualTo("bd-001"));
+        Assert.That(orphanNodes[1].Issue.Id, Is.EqualTo("bd-002"));
     }
 
     #endregion
@@ -695,7 +721,7 @@ public class GraphBuilderTests
     {
         Id = id,
         Title = $"Issue {id}",
-        Status = IssueStatus.Next,
+        Status = IssueStatus.Open, // Use Open status so issues are true orphans
         Type = IssueType.Task,
         Priority = priority,
         CreatedAt = createdAt ?? DateTimeOffset.UtcNow,
@@ -706,10 +732,9 @@ public class GraphBuilderTests
     {
         Id = id,
         Title = $"Issue {id}",
-        Status = IssueStatus.Next,
+        Status = IssueStatus.Open, // Use Open status so issues are true orphans
         Type = IssueType.Task,
         Priority = priority,
-        Group = group,
         CreatedAt = createdAt ?? DateTimeOffset.UtcNow,
         LastUpdate = createdAt ?? DateTimeOffset.UtcNow
     };
@@ -718,10 +743,10 @@ public class GraphBuilderTests
     {
         Id = id,
         Title = $"Issue {id}",
-        Status = IssueStatus.Next,
+        Status = IssueStatus.Open,
         Type = IssueType.Task,
         Priority = priority,
-        ParentIssues = [parentId],
+        ParentIssues = [new ParentIssueRef { ParentIssue = parentId, SortOrder = "0" }],
         CreatedAt = createdAt ?? DateTimeOffset.UtcNow,
         LastUpdate = createdAt ?? DateTimeOffset.UtcNow
     };
@@ -730,10 +755,10 @@ public class GraphBuilderTests
     {
         Id = id,
         Title = $"Issue {id}",
-        Status = IssueStatus.Next,
+        Status = IssueStatus.Open,
         Type = IssueType.Task,
         Priority = priority,
-        ParentIssues = parentIds,
+        ParentIssues = parentIds.Select((pid, idx) => new ParentIssueRef { ParentIssue = pid, SortOrder = idx.ToString() }).ToList(),
         CreatedAt = createdAt ?? DateTimeOffset.UtcNow,
         LastUpdate = createdAt ?? DateTimeOffset.UtcNow
     };

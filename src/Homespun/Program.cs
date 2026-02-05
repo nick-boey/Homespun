@@ -1,3 +1,4 @@
+using Homespun.Features.AgentOrchestration.Services;
 using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.ClaudeCode.Hubs;
 using Homespun.Features.ClaudeCode.Services;
@@ -61,7 +62,7 @@ builder.Services.AddDataProtection()
 if (mockModeOptions.Enabled)
 {
     // Mock mode - use in-memory mock services
-    builder.Services.AddMockServices(mockModeOptions);
+    builder.Services.AddMockServices(mockModeOptions, builder.Configuration);
 
     // Services that are shared between mock and production mode
     builder.Services.AddSingleton<IMarkdownRenderingService, MarkdownRenderingService>();
@@ -71,6 +72,7 @@ if (mockModeOptions.Enabled)
     builder.Services.AddSingleton<SessionOptionsFactory>();
     builder.Services.AddScoped<PullRequestDataService>();
     builder.Services.AddScoped<PullRequestWorkflowService>();
+    builder.Services.AddSingleton<ITodoParser, TodoParser>();
 }
 else
 {
@@ -124,6 +126,39 @@ else
     builder.Services.AddSingleton<IClaudeSessionStore, ClaudeSessionStore>();
     builder.Services.AddSingleton<SessionOptionsFactory>();
 
+    // Agent Execution service - register based on configuration
+    builder.Services.Configure<AgentExecutionOptions>(
+        builder.Configuration.GetSection(AgentExecutionOptions.SectionName));
+    builder.Services.Configure<DockerAgentExecutionOptions>(
+        builder.Configuration.GetSection(DockerAgentExecutionOptions.SectionName));
+    builder.Services.PostConfigure<DockerAgentExecutionOptions>(options =>
+    {
+        var hostPath = Environment.GetEnvironmentVariable("HSP_HOST_DATA_PATH");
+        if (!string.IsNullOrEmpty(hostPath))
+            options.HostDataPath = hostPath;
+    });
+    builder.Services.Configure<AzureContainerAppsAgentExecutionOptions>(
+        builder.Configuration.GetSection(AzureContainerAppsAgentExecutionOptions.SectionName));
+
+    var agentExecutionMode = builder.Configuration
+        .GetSection(AgentExecutionOptions.SectionName)
+        .GetValue<AgentExecutionMode>("Mode");
+
+    Console.WriteLine($"[AgentExecution] Production mode: Configured mode = {agentExecutionMode}");
+
+    switch (agentExecutionMode)
+    {
+        case AgentExecutionMode.Docker:
+            builder.Services.AddSingleton<IAgentExecutionService, DockerAgentExecutionService>();
+            break;
+        case AgentExecutionMode.AzureContainerApps:
+            builder.Services.AddSingleton<IAgentExecutionService, AzureContainerAppsAgentExecutionService>();
+            break;
+        default:
+            builder.Services.AddSingleton<IAgentExecutionService, LocalAgentExecutionService>();
+            break;
+    }
+
     // Session discovery service - reads from Claude's native session storage at ~/.claude/projects/
     builder.Services.AddSingleton<IClaudeSessionDiscovery>(sp =>
     {
@@ -139,7 +174,8 @@ else
         new SessionMetadataStore(metadataPath, sp.GetRequiredService<ILogger<SessionMetadataStore>>()));
 
     // Message cache store - persists session messages to JSONL files
-    var messageCacheDir = Path.Combine(homespunDir, "sessions");
+    // Use /data/sessions when running in container (via HOMESPUN_DATA_PATH), otherwise ~/.homespun/sessions
+    var messageCacheDir = Path.Combine(dataDirectory!, "sessions");
     builder.Services.AddSingleton<IMessageCacheStore>(sp =>
         new MessageCacheStore(messageCacheDir, sp.GetRequiredService<ILogger<MessageCacheStore>>()));
 
@@ -149,6 +185,11 @@ else
     builder.Services.AddSingleton<IAgentStartupTracker, AgentStartupTracker>();
     builder.Services.AddSingleton<IAgentPromptService, AgentPromptService>();
     builder.Services.AddSingleton<IRebaseAgentService, RebaseAgentService>();
+    builder.Services.AddSingleton<ITodoParser, TodoParser>();
+
+    // Agent Orchestration services (mini-prompts, branch ID generation)
+    builder.Services.AddSingleton<IMiniPromptService, MiniPromptService>();
+    builder.Services.AddSingleton<IBranchIdGeneratorService, BranchIdGeneratorService>();
 
     // GitHub sync polling service (PR sync, review polling, issue linking)
     builder.Services.Configure<GitHubSyncPollingOptions>(
@@ -171,6 +212,12 @@ builder.Services.AddSwaggerGen();
 
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
+
+// Enable static web assets for Mock environment (normally only enabled in Development)
+if (builder.Environment.EnvironmentName == "Mock")
+{
+    builder.WebHost.UseStaticWebAssets();
+}
 
 var app = builder.Build();
 

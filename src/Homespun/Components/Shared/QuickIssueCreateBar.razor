@@ -15,20 +15,12 @@
                 }
             </select>
 
-            <input type="text"
-                   class="quick-input group-input"
-                   placeholder="group"
-                   @bind="_group"
-                   @bind:event="oninput"
-                   @onkeydown="HandleKeyDown"
-                   disabled="@_isSubmitting" />
-
             <select class="quick-input status-select"
                     @bind="_status"
                     disabled="@_isSubmitting">
-                <option value="@IssueStatus.Idea">idea</option>
-                <option value="@IssueStatus.Spec">spec</option>
-                <option value="@IssueStatus.Next">next</option>
+                <option value="@IssueStatus.Open">open</option>
+                <option value="@IssueStatus.Progress">progress</option>
+                <option value="@IssueStatus.Review">review</option>
             </select>
         </div>
 
@@ -53,10 +45,7 @@
                     }
                     else
                     {
-                        <span class="btn-content">
-                            <span class="btn-icon">+</span>
-                            <kbd class="shortcut-hint">Enter</kbd>
-                        </span>
+                        <span class="btn-icon">+</span>
                     }
                 </button>
 
@@ -70,10 +59,7 @@
                     }
                     else
                     {
-                        <span class="btn-content">
-                            <span class="edit-icon">&#9998;</span>
-                            <kbd class="shortcut-hint">Shift</kbd>
-                        </span>
+                        <span class="edit-icon">&#9998;</span>
                     }
                 </button>
             </div>
@@ -157,11 +143,6 @@
         cursor: pointer;
     }
 
-    .group-input {
-        width: 120px;
-        flex-shrink: 0;
-    }
-
     .status-select {
         width: 80px;
         flex-shrink: 0;
@@ -175,8 +156,8 @@
 
     .quick-submit-btn {
         width: 36px;
-        height: 44px;
-        padding: 4px 0;
+        height: 36px;
+        padding: 0;
         border: none;
         border-radius: var(--radius-sm);
         background: var(--color-ocean);
@@ -214,28 +195,10 @@
         font-size: 1rem;
     }
 
-    .btn-content {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 1px;
-    }
-
     .btn-icon {
         font-size: 1.25rem;
         font-weight: bold;
         line-height: 1;
-    }
-
-    .shortcut-hint {
-        font-size: 0.5rem;
-        opacity: 0.85;
-        line-height: 1;
-        padding: 1px 3px;
-        background: rgba(255, 255, 255, 0.2);
-        border-radius: 2px;
-        font-family: inherit;
-        border: none;
     }
 
     .quick-issue-error {
@@ -273,12 +236,6 @@
             flex: 1;
         }
 
-        .group-input {
-            width: auto;
-            min-width: 80px;
-            flex: 1;
-        }
-
         .status-select {
             width: auto;
             min-width: 70px;
@@ -306,9 +263,8 @@
     [Parameter] public EventCallback<string> OnIssueCreatedForEdit { get; set; }
 
     private IssueType _type = IssueType.Feature;
-    private IssueStatus _status = IssueStatus.Idea;
+    private IssueStatus _status = IssueStatus.Open;
     private string _title = "";
-    private string _group = "";
     private bool _isSubmitting;
     private string? _errorMessage;
     private ElementReference _titleInput;
@@ -349,22 +305,18 @@
         try
         {
             var title = _title.Trim();
-            // Convert group to lowercase by default
-            var group = string.IsNullOrWhiteSpace(_group) ? null : _group.Trim().ToLowerInvariant();
 
             // Create issue via Fleece service
             var issue = await FleeceService.CreateIssueAsync(
                 LocalPath,
                 title,
                 _type,
-                group: group,
                 status: _status);
 
             // Clear inputs for next entry
             _title = "";
-            _group = "";
             _type = IssueType.Feature;
-            _status = IssueStatus.Idea;
+            _status = IssueStatus.Open;
 
             // Notify parent to refresh or open for editing
             if (openForEdit)

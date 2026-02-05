@@ -79,6 +79,14 @@ public interface IGitWorktreeService
     Task<bool> DeleteRemoteBranchAsync(string repoPath, string branchName);
 
     /// <summary>
+    /// Check if a remote branch exists on the origin.
+    /// </summary>
+    /// <param name="repoPath">Path to the repository</param>
+    /// <param name="branchName">Name of the branch to check</param>
+    /// <returns>True if the remote branch exists</returns>
+    Task<bool> RemoteBranchExistsAsync(string repoPath, string branchName);
+
+    /// <summary>
     /// Create a local branch from a remote branch.
     /// </summary>
     /// <param name="repoPath">Path to the repository</param>
@@ -169,4 +177,13 @@ public interface IGitWorktreeService
     /// <param name="branchName">Name of the branch to attach</param>
     /// <returns>True if repair was successful</returns>
     Task<bool> RepairWorktreeAsync(string repoPath, string folderPath, string branchName);
+
+    /// <summary>
+    /// Get the list of files that have changed between the current branch and the target branch.
+    /// Uses git diff --numstat to get file changes with addition/deletion counts.
+    /// </summary>
+    /// <param name="worktreePath">Path to the worktree directory</param>
+    /// <param name="targetBranch">Target branch to compare against (e.g., "main")</param>
+    /// <returns>List of changed files with their status and line counts</returns>
+    Task<List<ClaudeCode.Data.FileChangeInfo>> GetChangedFilesAsync(string worktreePath, string targetBranch);
 }

@@ -93,6 +93,16 @@ public class ClaudeCodeHub(IClaudeSessionService sessionService) : Hub
             throw new HubException($"Failed to answer question: {ex.Message}");
         }
     }
+
+    /// <summary>
+    /// Execute a plan by optionally clearing context and sending it as a message.
+    /// </summary>
+    /// <param name="sessionId">The session ID</param>
+    /// <param name="clearContext">Whether to clear context before execution</param>
+    public async Task ExecutePlan(string sessionId, bool clearContext = true)
+    {
+        await sessionService.ExecutePlanAsync(sessionId, clearContext);
+    }
 }
 
 /// <summary>
@@ -241,5 +251,16 @@ public static class ClaudeCodeHubExtensions
     {
         await hubContext.Clients.Group($"session-{sessionId}")
             .SendAsync("HookExecuted", result);
+    }
+
+    /// <summary>
+    /// Broadcasts when context has been cleared for a session.
+    /// </summary>
+    public static async Task BroadcastContextCleared(
+        this IHubContext<ClaudeCodeHub> hubContext,
+        string sessionId)
+    {
+        await hubContext.Clients.Group($"session-{sessionId}")
+            .SendAsync("ContextCleared", sessionId);
     }
 }

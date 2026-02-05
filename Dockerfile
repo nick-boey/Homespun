@@ -25,6 +25,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy solution and project files first for better layer caching
 COPY Homespun.sln ./
 COPY src/Homespun/Homespun.csproj src/Homespun/
+COPY src/Homespun.AgentWorker/Homespun.AgentWorker.csproj src/Homespun.AgentWorker/
+COPY src/Homespun.ClaudeAgentSdk/Homespun.ClaudeAgentSdk.csproj src/Homespun.ClaudeAgentSdk/
 COPY tests/Homespun.Tests/Homespun.Tests.csproj tests/Homespun.Tests/
 COPY tests/Homespun.Api.Tests/Homespun.Api.Tests.csproj tests/Homespun.Api.Tests/
 COPY tests/Homespun.E2E.Tests/Homespun.E2E.Tests.csproj tests/Homespun.E2E.Tests/
@@ -103,10 +105,11 @@ RUN npm install -g @playwright/mcp@latest \
     && chmod -R 777 /opt/playwright-browsers
 
 # Install Fleece CLI for issue tracking
-# Install as root, then make tools accessible to all users
+# Install as root, then copy to /usr/local/bin for universal access
+# Note: Symlinks don't work because /root/.dotnet/tools/ is inaccessible to non-root users
 RUN dotnet tool install Fleece.Cli -g \
-    && chmod 755 /root \
-    && chmod -R 755 /root/.dotnet
+    && cp /root/.dotnet/tools/fleece /usr/local/bin/fleece \
+    && chmod 755 /usr/local/bin/fleece
 
 # Clean up build dependencies to reduce image size
 RUN apt-get update && apt-get remove -y build-essential && apt-get autoremove -y \
@@ -149,6 +152,13 @@ RUN git config --global --add safe.directory '*'
 
 # Copy published application
 COPY --from=build /app/publish .
+
+# Copy test session data for mock mode
+# MockDataSeederService loads these from /app/test-sessions when HOMESPUN_MOCK_MODE=true
+# Note: We use /app/test-sessions instead of /data/sessions because /data is mounted
+# as a volume at runtime, which would hide any files copied during build
+COPY --from=build /src/tests/data/sessions /app/test-sessions
+RUN chown -R homespun:homespun /app/test-sessions
 
 # Copy start script
 COPY src/Homespun/start.sh .

@@ -1,3 +1,4 @@
+using Homespun.Features.AgentOrchestration.Services;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Commands;
 using Homespun.Features.Design;
@@ -8,6 +9,7 @@ using Homespun.Features.GitHub;
 using Homespun.Features.Projects;
 using Homespun.Features.PullRequests.Data;
 using Homespun.Features.Testing.Services;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -27,7 +29,8 @@ public static class MockServiceExtensions
     /// <returns>The service collection for chaining.</returns>
     public static IServiceCollection AddMockServices(
         this IServiceCollection services,
-        MockModeOptions options)
+        MockModeOptions options,
+        IConfiguration? configuration = null)
     {
         // Register the mock data store as both concrete and interface type
         services.AddSingleton<MockDataStore>();
@@ -61,10 +64,10 @@ public static class MockServiceExtensions
         services.AddSingleton<IToolResultParser, ToolResultParser>();
 
         // Choose between live Claude sessions or mock based on configuration
-        if (options.UseLiveClaudeSessions)
+        if (options.UseLiveClaudeSessions && configuration != null)
         {
             // Use real ClaudeSessionService with test working directory
-            services.AddLiveClaudeSessionServices(options);
+            services.AddLiveClaudeSessionServices(options, configuration);
         }
         else
         {
@@ -75,8 +78,25 @@ public static class MockServiceExtensions
         services.AddSingleton<IRebaseAgentService, MockRebaseAgentService>();
         services.AddSingleton<IAgentPromptService, MockAgentPromptService>();
 
-        // Message cache store - use real implementation (stores to temp directory)
-        var messageCacheDir = Path.Combine(Path.GetTempPath(), "homespun-mock", "sessions");
+        // Agent Orchestration services - use real implementations
+        // These are lightweight services that work with the Claude SDK
+        services.AddSingleton<IMiniPromptService, MiniPromptService>();
+        services.AddSingleton<IBranchIdGeneratorService, BranchIdGeneratorService>();
+
+        // Message cache store - use real implementation
+        // In container: /data/sessions, locally: ~/.homespun/sessions (consistent with Program.cs)
+        var dataPath = Environment.GetEnvironmentVariable("HOMESPUN_DATA_PATH");
+        string messageCacheDir;
+        if (!string.IsNullOrEmpty(dataPath))
+        {
+            var dataDirectory = Path.GetDirectoryName(dataPath);
+            messageCacheDir = Path.Combine(dataDirectory!, "sessions");
+        }
+        else
+        {
+            var homespunDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".homespun");
+            messageCacheDir = Path.Combine(homespunDir, "sessions");
+        }
         services.AddSingleton<IMessageCacheStore>(sp =>
             new MessageCacheStore(messageCacheDir, sp.GetRequiredService<ILogger<MessageCacheStore>>()));
 
@@ -85,6 +105,9 @@ public static class MockServiceExtensions
 
         // Design system services (only available in mock mode)
         services.AddSingleton<IComponentRegistryService, ComponentRegistryService>();
+
+        // JSONL session loader for loading real session data
+        services.AddSingleton<IJsonlSessionLoader, JsonlSessionLoader>();
 
         // Seed data service (if enabled)
         if (options.SeedData)
@@ -100,12 +123,59 @@ public static class MockServiceExtensions
     /// </summary>
     private static IServiceCollection AddLiveClaudeSessionServices(
         this IServiceCollection services,
-        MockModeOptions options)
+        MockModeOptions options,
+        IConfiguration configuration)
     {
+        // Register agent execution service based on configuration
+        services.Configure<AgentExecutionOptions>(
+            configuration.GetSection(AgentExecutionOptions.SectionName));
+
+        var agentExecutionMode = configuration
+            .GetSection(AgentExecutionOptions.SectionName)
+            .GetValue<AgentExecutionMode>("Mode");
+
+        Console.WriteLine($"[AgentExecution] MockLive mode: Configured mode = {agentExecutionMode}");
+
+        switch (agentExecutionMode)
+        {
+            case AgentExecutionMode.Docker:
+                Console.WriteLine("[AgentExecution] Registering DockerAgentExecutionService");
+                services.Configure<DockerAgentExecutionOptions>(
+                    configuration.GetSection(DockerAgentExecutionOptions.SectionName));
+                services.PostConfigure<DockerAgentExecutionOptions>(opts =>
+                {
+                    var hostPath = Environment.GetEnvironmentVariable("HSP_HOST_DATA_PATH");
+                    if (!string.IsNullOrEmpty(hostPath))
+                        opts.HostDataPath = hostPath;
+                });
+                services.AddSingleton<IAgentExecutionService, DockerAgentExecutionService>();
+                break;
+            case AgentExecutionMode.AzureContainerApps:
+                Console.WriteLine("[AgentExecution] Registering AzureContainerAppsAgentExecutionService");
+                services.Configure<AzureContainerAppsAgentExecutionOptions>(
+                    configuration.GetSection(AzureContainerAppsAgentExecutionOptions.SectionName));
+                services.AddSingleton<IAgentExecutionService, AzureContainerAppsAgentExecutionService>();
+                break;
+            default:
+                Console.WriteLine("[AgentExecution] Registering LocalAgentExecutionService (default)");
+                services.AddSingleton<IAgentExecutionService, LocalAgentExecutionService>();
+                break;
+        }
+
         // Determine working directory for live sessions
-        // Use home directory to ensure write permissions in container environments
-        var workingDirectory = options.LiveClaudeSessionsWorkingDirectory
-            ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "test-workspace");
+        // Use /data/test-workspace in container (via HOMESPUN_DATA_PATH), otherwise home directory
+        var dataPath2 = Environment.GetEnvironmentVariable("HOMESPUN_DATA_PATH");
+        string defaultWorkspace;
+        if (!string.IsNullOrEmpty(dataPath2))
+        {
+            var dataDirectory = Path.GetDirectoryName(dataPath2);
+            defaultWorkspace = Path.Combine(dataDirectory!, "test-workspace");
+        }
+        else
+        {
+            defaultWorkspace = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "test-workspace");
+        }
+        var workingDirectory = options.LiveClaudeSessionsWorkingDirectory ?? defaultWorkspace;
 
         // Ensure the test workspace directory exists
         if (!Directory.Exists(workingDirectory))

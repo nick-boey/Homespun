@@ -1,0 +1,27 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "baseName": {
+      "value": "homespun"
+    },
+    "environmentSuffix": {
+      "value": "prod"
+    },
+    "mainAppImage": {
+      "value": "ghcr.io/nick-boey/homespun:latest"
+    },
+    "workerImage": {
+      "value": "ghcr.io/nick-boey/homespun-worker:latest"
+    },
+    "agentExecutionMode": {
+      "value": "AzureContainerApps"
+    },
+    "maxConcurrentSessions": {
+      "value": 10
+    },
+    "readySessionInstances": {
+      "value": 2
+    }
+  }
+}

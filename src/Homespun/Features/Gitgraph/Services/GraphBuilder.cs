@@ -41,7 +41,7 @@ public class GraphBuilder
         var issueList = issues.ToList();
         var prStatusLookup = issuePrStatuses ?? new Dictionary<string, PullRequestStatus>();
 
-        // Build dependency lookup from ParentIssues (issue -> list of issues that block it)
+        // Build dependency lookup from ParentIssues and PreviousIssues (issue -> list of issues that block it)
         var blockingDependencies = BuildDependencyLookup(issueList);
 
         // Add main branch
@@ -54,22 +54,48 @@ public class GraphBuilder
         // Phase 1: Add closed/merged PRs (oldest first by merge/close date)
         var (closedPrNodes, totalPastPRs, hasMorePastPRs) = AddClosedPullRequests(prList, nodes, branches, maxPastPRs);
 
-        // Phase 2: Add open PRs (ordered by created date)
+        // Check for open PRs
+        var openPrs = prList
+            .Where(pr => pr.Status != PullRequestStatus.Merged && pr.Status != PullRequestStatus.Closed)
+            .ToList();
+
+        // Phase 2: Add "CURRENT PRs" divider if there are open PRs
+        if (openPrs.Count > 0)
+        {
+            nodes.Add(new SectionDividerNode("CURRENT PRs", 1));
+        }
+
+        // Phase 3: Add open PRs (ordered by created date)
         AddOpenPullRequests(prList, nodes, branches, closedPrNodes.LastOrDefault());
 
-        // Phase 3: Add issues with dependencies (depth-first from roots)
-        var (rootIssues, orphanIssues, dependentIssues) = ClassifyIssues(issueList, blockingDependencies);
+        // Phase 4: Classify issues
+        var (rootIssues, orphanIssues, dependentIssues, nextStatusIssues) = ClassifyIssues(issueList, blockingDependencies);
+
+        // Check if there are any issues to display
+        var hasConnectedIssues = rootIssues.Count > 0 || dependentIssues.Count > 0 || nextStatusIssues.Count > 0;
+        var hasOrphanIssues = orphanIssues.Count > 0;
+
+        // Phase 5: Add "ISSUES" divider if there are any issues
+        if (hasConnectedIssues || hasOrphanIssues)
+        {
+            nodes.Add(new SectionDividerNode("ISSUES", 2));
+        }
+
+        // Phase 6: Add issues with dependencies (depth-first from roots)
         AddIssuesDepthFirst(rootIssues, dependentIssues, blockingDependencies, nodes, branches, closedPrNodes.LastOrDefault(), prStatusLookup);
 
-        // Phase 4: Add orphan issues in a chain
-        AddOrphanIssues(orphanIssues, nodes, branches, closedPrNodes.LastOrDefault(), prStatusLookup);
+        // Phase 7: Add "next" status issues (attach to latest merged PR with tree structure)
+        AddNextStatusIssues(nextStatusIssues, nodes, branches, closedPrNodes.LastOrDefault(), prStatusLookup);
+
+        // Phase 8: Add orphan issues as a flat list (no connecting lines)
+        AddFlatOrphanIssues(orphanIssues, nodes, branches, prStatusLookup);
 
         return new Graph(nodes, branches, _mainBranchName, hasMorePastPRs, closedPrNodes.Count);
     }
 
     /// <summary>
     /// Builds a lookup from issue ID to list of issue IDs that block it.
-    /// Uses Issue.ParentIssues property.
+    /// Uses Issue.ParentIssues (hierarchy) properties.
     /// </summary>
     private static Dictionary<string, List<string>> BuildDependencyLookup(List<Issue> issues)
     {
@@ -78,17 +104,16 @@ public class GraphBuilder
 
         foreach (var issue in issues)
         {
-            if (issue.ParentIssues.Count > 0)
-            {
-                // Filter to only parent issues that exist in our issue list
-                var validParents = issue.ParentIssues
-                    .Where(p => issueIds.Contains(p))
-                    .ToList();
+            // Extract parent issue IDs from ParentIssueRef objects
+            var allBlockers = issue.ParentIssues
+                .Select(p => p.ParentIssue)
+                .Where(id => issueIds.Contains(id))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
 
-                if (validParents.Count > 0)
-                {
-                    lookup[issue.Id] = validParents;
-                }
+            if (allBlockers.Count > 0)
+            {
+                lookup[issue.Id] = allBlockers;
             }
         }
 
@@ -174,9 +199,10 @@ public class GraphBuilder
 
     /// <summary>
     /// Classifies issues into root issues (have children but no parents),
-    /// orphan issues (no dependencies), and dependent issues (have parents).
+    /// orphan issues (no dependencies), dependent issues (have parents),
+    /// and "next" status issues (treated as connected, attach to latest merged PR).
     /// </summary>
-    private static (List<Issue> roots, List<Issue> orphans, List<Issue> dependent) ClassifyIssues(
+    private static (List<Issue> roots, List<Issue> orphans, List<Issue> dependent, List<Issue> nextStatus) ClassifyIssues(
         List<Issue> issues,
         Dictionary<string, List<string>> blockingDependencies)
     {
@@ -204,6 +230,7 @@ public class GraphBuilder
         var roots = new List<Issue>();
         var dependent = new List<Issue>();
         var orphans = new List<Issue>();
+        var nextStatus = new List<Issue>();
 
         foreach (var issue in issues)
         {
@@ -228,7 +255,7 @@ public class GraphBuilder
             }
         }
 
-        return (roots, orphans, dependent);
+        return (roots, orphans, dependent, nextStatus);
     }
 
     /// <summary>
@@ -287,7 +314,7 @@ public class GraphBuilder
             var branchName = $"issue-{issue.Id}";
             // Check if this issue has a linked PR status
             prStatusLookup.TryGetValue(issue.Id, out var issuePrStatus);
-            var branchColor = issuePrStatus != default ? GetPrStatusColor(issuePrStatus) : GetIssueTypeColor(issue.Type);
+            var branchColor = issuePrStatus != default ? GetPrStatusColor(issuePrStatus) : GetIssueColor(issue.Type, issue.Status);
 
             branches[branchName] = new GraphBranch
             {
@@ -346,116 +373,81 @@ public class GraphBuilder
     }
 
     /// <summary>
-    /// Adds orphan issues (no dependencies) grouped by their group property.
-    /// Each group gets its own branch, and groups are sorted alphabetically.
+    /// Adds "next" status issues that attach to the latest merged PR with tree structure.
+    /// These issues are treated as connected issues (not orphans) but have no explicit parent dependencies.
     /// </summary>
-    private void AddOrphanIssues(
-        List<Issue> orphanIssues,
+    private void AddNextStatusIssues(
+        List<Issue> nextStatusIssues,
         List<IGraphNode> nodes,
         Dictionary<string, GraphBranch> branches,
         PullRequestNode? latestMergedPr,
         IReadOnlyDictionary<string, PullRequestStatus> prStatusLookup)
     {
-        if (orphanIssues.Count == 0) return;
+        if (nextStatusIssues.Count == 0) return;
 
-        // Group orphan issues by their Group property
-        var issuesByGroup = new Dictionary<string, List<Issue>>(StringComparer.OrdinalIgnoreCase);
-        var issuesWithoutGroup = new List<Issue>();
-
-        foreach (var issue in orphanIssues)
-        {
-            if (!string.IsNullOrWhiteSpace(issue.Group))
-            {
-                var group = issue.Group;
-                if (!issuesByGroup.TryGetValue(group, out var groupIssues))
-                {
-                    groupIssues = [];
-                    issuesByGroup[group] = groupIssues;
-                }
-                groupIssues.Add(issue);
-            }
-            else
-            {
-                issuesWithoutGroup.Add(issue);
-            }
-        }
-
-        // Sort groups alphabetically
-        var sortedGroups = issuesByGroup.Keys.OrderBy(g => g, StringComparer.OrdinalIgnoreCase).ToList();
+        // Sort by priority then creation date
+        var sortedIssues = nextStatusIssues
+            .OrderBy(i => i.Priority ?? int.MaxValue)
+            .ThenBy(i => i.CreatedAt)
+            .ToList();
 
         var timeDimension = 2;
 
-        // Process each group separately
-        foreach (var group in sortedGroups)
+        foreach (var issue in sortedIssues)
         {
-            var groupIssues = issuesByGroup[group];
+            var branchName = $"issue-{issue.Id}";
+            prStatusLookup.TryGetValue(issue.Id, out var issuePrStatus);
+            var branchColor = issuePrStatus != default ? GetPrStatusColor(issuePrStatus) : GetIssueColor(issue.Type, issue.Status);
 
-            // Create a branch for this group
-            var orphanBranchName = $"orphan-issues-{group}";
-            branches[orphanBranchName] = new GraphBranch
+            branches[branchName] = new GraphBranch
             {
-                Name = orphanBranchName,
-                Color = "#6b7280",  // Gray
+                Name = branchName,
+                Color = branchColor,
                 ParentBranch = _mainBranchName,
                 ParentCommitId = latestMergedPr?.Id
             };
 
-            // Sort issues within group by priority then creation date
-            var sortedGroupIssues = groupIssues
-                .OrderBy(i => i.Priority ?? int.MaxValue)
-                .ThenBy(i => i.CreatedAt)
-                .ToList();
+            // Attach to latest merged PR
+            var parentIds = latestMergedPr != null
+                ? new List<string> { latestMergedPr.Id }
+                : new List<string>();
 
-            string? previousId = latestMergedPr?.Id;
-
-            foreach (var issue in sortedGroupIssues)
-            {
-                var parentIds = previousId != null
-                    ? new List<string> { previousId }
-                    : new List<string>();
-
-                prStatusLookup.TryGetValue(issue.Id, out var issuePrStatus);
-                var node = new IssueNode(issue, parentIds, timeDimension, isOrphan: true, customBranchName: orphanBranchName, prStatus: issuePrStatus != default ? issuePrStatus : null);
-                nodes.Add(node);
-
-                previousId = node.Id;
-            }
-
-            timeDimension++;
+            var node = new IssueNode(issue, parentIds, timeDimension, isOrphan: false, prStatus: issuePrStatus != default ? issuePrStatus : null);
+            nodes.Add(node);
         }
+    }
 
-        // Handle issues without a group (fallback to original behavior)
-        if (issuesWithoutGroup.Count > 0)
+    /// <summary>
+    /// Adds orphan issues as a flat list with no connecting lines.
+    /// Issues are sorted by CreatedAt ascending (oldest to newest).
+    /// Each issue displays the issue symbol in lane 0 but has no parent connections.
+    /// </summary>
+    private void AddFlatOrphanIssues(
+        List<Issue> orphanIssues,
+        List<IGraphNode> nodes,
+        Dictionary<string, GraphBranch> branches,
+        IReadOnlyDictionary<string, PullRequestStatus> prStatusLookup)
+    {
+        if (orphanIssues.Count == 0) return;
+
+        // Sort by CreatedAt ascending (oldest to newest) - NO priority sorting, NO grouping
+        var sortedOrphans = orphanIssues
+            .OrderBy(i => i.CreatedAt)
+            .ToList();
+
+        var timeDimension = 3; // After connected issues
+
+        foreach (var issue in sortedOrphans)
         {
-            const string orphanBranchName = "orphan-issues";
-            branches[orphanBranchName] = new GraphBranch
-            {
-                Name = orphanBranchName,
-                Color = "#6b7280",  // Gray
-                ParentBranch = _mainBranchName,
-                ParentCommitId = latestMergedPr?.Id
-            };
-
-            // Sort by priority then creation date
-            var sortedOrphans = issuesWithoutGroup
-                .OrderBy(i => i.Priority ?? int.MaxValue)
-                .ThenBy(i => i.CreatedAt)
-                .ToList();
-
-            string? previousId = latestMergedPr?.Id;
-
-            foreach (var issue in sortedOrphans)
-            {
-                var parentIds = previousId != null
-                    ? new List<string> { previousId }
-                    : new List<string>();
-
-                prStatusLookup.TryGetValue(issue.Id, out var issuePrStatus);
-                var node = new IssueNode(issue, parentIds, timeDimension, isOrphan: true, prStatus: issuePrStatus != default ? issuePrStatus : null);
-                nodes.Add(node);
-
-                previousId = node.Id;
-            }
+            // Empty parentIds = no connecting lines
+            prStatusLookup.TryGetValue(issue.Id, out var issuePrStatus);
+            var node = new IssueNode(
+                issue,
+                parentIds: [], // NO PARENT - flat list
+                timeDimension: timeDimension,
+                isOrphan: true,
+                prStatus: issuePrStatus != default ? issuePrStatus : null);
+            nodes.Add(node);
         }
     }
 
@@ -476,12 +468,23 @@ public class GraphBuilder
         _ => "#6b7280"                                 // Gray
     };
 
-    private static string GetIssueTypeColor(IssueType type) => type switch
+    /// <summary>
+    /// Gets the color for an issue based on its type and status.
+    /// Bug type always shows as red (overrides status color).
+    /// Otherwise, color is based on status.
+    /// </summary>
+    private static string GetIssueColor(IssueType type, IssueStatus status)
     {
-        IssueType.Bug => "#ef4444",      // Red
-        IssueType.Feature => "#a855f7",  // Purple
-        IssueType.Task => "#3b82f6",     // Blue
-        IssueType.Chore => "#6b7280",    // Gray
-        _ => "#6b7280"                   // Gray
-    };
+        // Bug type always shows as red (overrides status color)
+        if (type == IssueType.Bug) return "#ef4444"; // Red
+
+        // Otherwise color by status
+        return status switch
+        {
+            IssueStatus.Open => "#3b82f6",     // Blue
+            IssueStatus.Progress => "#a855f7", // Purple
+            IssueStatus.Review => "#06b6d4",   // Cyan
+            _ => "#6b7280"                     // Grey
+        };
+    }
 }

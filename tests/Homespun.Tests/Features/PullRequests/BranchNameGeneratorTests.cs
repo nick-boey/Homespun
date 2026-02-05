@@ -5,7 +5,7 @@ namespace Homespun.Tests.Features.PullRequests;
 
 /// <summary>
 /// Unit tests for BranchNameGenerator to verify branch name calculation is correct
-/// and consistent with the expected format: {group}/{type}/{branch-id}+{issue-id}
+/// and consistent with the expected format: {type}/{branch-id}+{issue-id}
 /// </summary>
 [TestFixture]
 public class BranchNameGeneratorTests
@@ -13,7 +13,7 @@ public class BranchNameGeneratorTests
     #region GenerateBranchName Tests
 
     [Test]
-    public void GenerateBranchName_WithNoGroup_UsesDefaultIssuesPrefix()
+    public void GenerateBranchName_BasicIssue_GeneratesCorrectFormat()
     {
         // Arrange
         var issue = CreateIssue(
@@ -26,24 +26,24 @@ public class BranchNameGeneratorTests
         var branchName = BranchNameGenerator.GenerateBranchName(issue);
 
         // Assert
-        Assert.That(branchName, Is.EqualTo("issues/bug/fix-authentication-bug+abc123"));
+        Assert.That(branchName, Is.EqualTo("bug/fix-authentication-bug+abc123"));
     }
 
     [Test]
-    public void GenerateBranchName_WithGroup_UsesGroupAsPrefix()
+    public void GenerateBranchName_FeatureIssue_GeneratesCorrectFormat()
     {
         // Arrange
         var issue = CreateIssue(
             id: "xyz789",
             title: "Add user dashboard",
             type: IssueType.Feature,
-            group: "core");
+            group: "core"); // Group is now ignored in branch name generation
 
         // Act
         var branchName = BranchNameGenerator.GenerateBranchName(issue);
 
-        // Assert
-        Assert.That(branchName, Is.EqualTo("core/feature/add-user-dashboard+xyz789"));
+        // Assert - group is no longer part of branch name
+        Assert.That(branchName, Is.EqualTo("feature/add-user-dashboard+xyz789"));
     }
 
     [Test]
@@ -60,25 +60,25 @@ public class BranchNameGeneratorTests
         // Act
         var branchName = BranchNameGenerator.GenerateBranchName(issue);
 
-        // Assert
-        Assert.That(branchName, Is.EqualTo("api/task/custom-branch-id+def456"));
+        // Assert - group is no longer part of branch name
+        Assert.That(branchName, Is.EqualTo("task/custom-branch-id+def456"));
     }
 
     [Test]
-    public void GenerateBranchName_WithEmptyGroup_UsesDefaultPrefix()
+    public void GenerateBranchName_ChoreIssue_GeneratesCorrectFormat()
     {
         // Arrange
         var issue = CreateIssue(
             id: "test1",
             title: "Test issue",
             type: IssueType.Chore,
-            group: "  "); // Whitespace-only group
+            group: "  "); // Whitespace-only group (ignored anyway)
 
         // Act
         var branchName = BranchNameGenerator.GenerateBranchName(issue);
 
         // Assert
-        Assert.That(branchName, Is.EqualTo("issues/chore/test-issue+test1"));
+        Assert.That(branchName, Is.EqualTo("chore/test-issue+test1"));
     }
 
     [Test]
@@ -89,14 +89,14 @@ public class BranchNameGeneratorTests
             id: "trim1",
             title: "Trim test",
             type: IssueType.Feature,
-            group: "  api  ",
+            group: "  api  ", // Group is ignored
             workingBranchId: "  my-branch  ");
 
         // Act
         var branchName = BranchNameGenerator.GenerateBranchName(issue);
 
-        // Assert
-        Assert.That(branchName, Is.EqualTo("api/feature/my-branch+trim1"));
+        // Assert - only type, trimmed branch id, and issue id
+        Assert.That(branchName, Is.EqualTo("feature/my-branch+trim1"));
     }
 
     [Test]
@@ -120,8 +120,8 @@ public class BranchNameGeneratorTests
 
             var branchName = BranchNameGenerator.GenerateBranchName(issue);
 
-            Assert.That(branchName, Does.Contain($"/{expectedType}/"),
-                $"Issue type {issueType} should produce type segment '{expectedType}'");
+            Assert.That(branchName, Does.StartWith($"{expectedType}/"),
+                $"Issue type {issueType} should produce branch starting with '{expectedType}/'");
         }
     }
 
@@ -140,7 +140,7 @@ public class BranchNameGeneratorTests
             id: "match1",
             title: "Test consistency",
             type: IssueType.Feature,
-            group: "ui",
+            group: "ui", // Group is ignored in both methods
             workingBranchId: "custom-id");
 
         // Act
@@ -149,7 +149,6 @@ public class BranchNameGeneratorTests
             issue.Id,
             issue.Type,
             issue.Title,
-            issue.Group,
             issue.WorkingBranchId);
 
         // Assert
@@ -164,11 +163,10 @@ public class BranchNameGeneratorTests
             "preview1",
             IssueType.Bug,
             "Fix something",
-            group: null,
             workingBranchId: null);
 
         // Assert
-        Assert.That(branchName, Is.EqualTo("issues/bug/fix-something+preview1"));
+        Assert.That(branchName, Is.EqualTo("bug/fix-something+preview1"));
     }
 
     #endregion
@@ -247,10 +245,10 @@ public class BranchNameGeneratorTests
             id: "recalc1",
             title: "Improve tool output",
             type: IssueType.Feature,
-            group: "core");
+            group: "core"); // Group is ignored
 
         var originalBranchName = BranchNameGenerator.GenerateBranchName(originalIssue);
-        Assert.That(originalBranchName, Is.EqualTo("core/feature/improve-tool-output+recalc1"));
+        Assert.That(originalBranchName, Is.EqualTo("feature/improve-tool-output+recalc1"));
 
         // Act - Simulate issue type change (e.g., user changed from Feature to Bug)
         var modifiedIssue = CreateIssue(
@@ -262,37 +260,7 @@ public class BranchNameGeneratorTests
         var newBranchName = BranchNameGenerator.GenerateBranchName(modifiedIssue);
 
         // Assert - Branch name should reflect the new type
-        Assert.That(newBranchName, Is.EqualTo("core/bug/improve-tool-output+recalc1"));
-        Assert.That(newBranchName, Is.Not.EqualTo(originalBranchName));
-    }
-
-    /// <summary>
-    /// Verifies that changing the group results in a different branch name.
-    /// </summary>
-    [Test]
-    public void GenerateBranchName_AfterGroupChange_RecalculatesBranchName()
-    {
-        // Arrange - Original issue
-        var originalIssue = CreateIssue(
-            id: "grp1",
-            title: "Add feature",
-            type: IssueType.Feature,
-            group: "core");
-
-        var originalBranchName = BranchNameGenerator.GenerateBranchName(originalIssue);
-        Assert.That(originalBranchName, Is.EqualTo("core/feature/add-feature+grp1"));
-
-        // Act - Simulate group change
-        var modifiedIssue = CreateIssue(
-            id: "grp1",
-            title: "Add feature",
-            type: IssueType.Feature,
-            group: "api"); // Changed group!
-
-        var newBranchName = BranchNameGenerator.GenerateBranchName(modifiedIssue);
-
-        // Assert - Branch name should reflect the new group
-        Assert.That(newBranchName, Is.EqualTo("api/feature/add-feature+grp1"));
+        Assert.That(newBranchName, Is.EqualTo("bug/improve-tool-output+recalc1"));
         Assert.That(newBranchName, Is.Not.EqualTo(originalBranchName));
     }
 
@@ -311,7 +279,7 @@ public class BranchNameGeneratorTests
             group: null);
 
         var originalBranchName = BranchNameGenerator.GenerateBranchName(originalIssue);
-        Assert.That(originalBranchName, Is.EqualTo("issues/task/original-title+ttl1"));
+        Assert.That(originalBranchName, Is.EqualTo("task/original-title+ttl1"));
 
         // Act - Simulate title change
         var modifiedIssue = CreateIssue(
@@ -323,7 +291,7 @@ public class BranchNameGeneratorTests
         var newBranchName = BranchNameGenerator.GenerateBranchName(modifiedIssue);
 
         // Assert - Branch name should reflect the new title
-        Assert.That(newBranchName, Is.EqualTo("issues/task/updated-title+ttl1"));
+        Assert.That(newBranchName, Is.EqualTo("task/updated-title+ttl1"));
         Assert.That(newBranchName, Is.Not.EqualTo(originalBranchName));
     }
 
@@ -341,7 +309,7 @@ public class BranchNameGeneratorTests
             group: null);
 
         var originalBranchName = BranchNameGenerator.GenerateBranchName(originalIssue);
-        Assert.That(originalBranchName, Is.EqualTo("issues/task/some-task+wbid1"));
+        Assert.That(originalBranchName, Is.EqualTo("task/some-task+wbid1"));
 
         // Act - Add custom working branch ID
         var modifiedIssue = CreateIssue(
@@ -354,7 +322,7 @@ public class BranchNameGeneratorTests
         var newBranchName = BranchNameGenerator.GenerateBranchName(modifiedIssue);
 
         // Assert - Branch name should use custom ID
-        Assert.That(newBranchName, Is.EqualTo("issues/task/my-custom-id+wbid1"));
+        Assert.That(newBranchName, Is.EqualTo("task/my-custom-id+wbid1"));
         Assert.That(newBranchName, Is.Not.EqualTo(originalBranchName));
     }
 
@@ -374,8 +342,7 @@ public class BranchNameGeneratorTests
             Id = id,
             Title = title,
             Type = type,
-            Status = IssueStatus.Next,
-            Group = group,
+            Status = IssueStatus.Open,
             WorkingBranchId = workingBranchId,
             LastUpdate = DateTimeOffset.UtcNow,
             CreatedAt = DateTimeOffset.UtcNow

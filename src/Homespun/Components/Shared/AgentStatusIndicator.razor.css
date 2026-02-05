@@ -34,12 +34,14 @@
     background: var(--status-warning);
 }
 
+.status-dot.question {
+    background: var(--status-danger);
+    animation: pulse 1s ease-in-out infinite;
+}
+
 .count {
     font-weight: var(--font-weight-medium);
     color: var(--text-sidebar);
 }
 
-@keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
-}
+/* Note: @keyframes pulse is defined globally in app.css */

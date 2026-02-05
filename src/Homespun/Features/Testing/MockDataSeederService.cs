@@ -18,7 +18,21 @@ public class MockDataSeederService : IHostedService
     private readonly IAgentPromptService _agentPromptService;
     private readonly IClaudeSessionStore _sessionStore;
     private readonly IToolResultParser _toolResultParser;
+    private readonly IJsonlSessionLoader _jsonlSessionLoader;
     private readonly ILogger<MockDataSeederService> _logger;
+
+    /// <summary>
+    /// Default path to look for JSONL session files when running in container.
+    /// The Dockerfile copies tests/data/sessions to /app/test-sessions during build.
+    /// Note: We use /app/test-sessions instead of /data/sessions because /data is
+    /// mounted as a volume at runtime, which would hide files copied during build.
+    /// </summary>
+    private const string ContainerSessionDataPath = "/app/test-sessions";
+
+    /// <summary>
+    /// Fallback path for local development - looks for test data relative to working directory.
+    /// </summary>
+    private const string LocalTestSessionDataPath = "tests/data/sessions";
 
     public MockDataSeederService(
         MockDataStore dataStore,
@@ -26,6 +40,7 @@ public class MockDataSeederService : IHostedService
         IAgentPromptService agentPromptService,
         IClaudeSessionStore sessionStore,
         IToolResultParser toolResultParser,
+        IJsonlSessionLoader jsonlSessionLoader,
         ILogger<MockDataSeederService> logger)
     {
         _dataStore = dataStore;
@@ -33,6 +48,7 @@ public class MockDataSeederService : IHostedService
         _agentPromptService = agentPromptService;
         _sessionStore = sessionStore;
         _toolResultParser = toolResultParser;
+        _jsonlSessionLoader = jsonlSessionLoader;
         _logger = logger;
     }
 
@@ -46,7 +62,7 @@ public class MockDataSeederService : IHostedService
             await SeedPullRequestsAsync();
             await SeedIssuesAsync();
             await SeedAgentPromptsAsync();
-            SeedDemoSessions();
+            await SeedSessionsAsync(cancellationToken);
 
             _logger.LogInformation("Mock data seeding completed successfully");
         }
@@ -54,6 +70,75 @@ public class MockDataSeederService : IHostedService
         {
             _logger.LogError(ex, "Failed to seed mock data");
         }
+    }
+
+    /// <summary>
+    /// Seeds sessions from JSONL files if available, otherwise falls back to hardcoded demo data.
+    /// Checks both container path (/app/test-sessions) and local dev path (tests/data/sessions).
+    /// </summary>
+    private async Task SeedSessionsAsync(CancellationToken cancellationToken)
+    {
+        // Determine which path to use for session data
+        var sessionDataPath = GetSessionDataPath();
+
+        if (sessionDataPath != null)
+        {
+            var sessions = await _jsonlSessionLoader.LoadAllSessionsAsync(sessionDataPath, cancellationToken);
+            if (sessions.Count > 0)
+            {
+                foreach (var session in sessions)
+                {
+                    _sessionStore.Add(session);
+                    _logger.LogDebug("Loaded session {SessionId} from JSONL with {MessageCount} messages",
+                        session.Id, session.Messages.Count);
+                }
+                _logger.LogInformation("Loaded {Count} sessions from JSONL files at {Path}",
+                    sessions.Count, sessionDataPath);
+                return;
+            }
+        }
+
+        // Fall back to hardcoded demo data
+        _logger.LogDebug("No JSONL sessions found, using hardcoded demo data");
+        SeedDemoSessions();
+    }
+
+    /// <summary>
+    /// Determines the correct path for session data based on environment:
+    /// - Container: /app/test-sessions (test data copied during Docker build)
+    /// - Local dev: tests/data/sessions (source test data)
+    /// Returns null if no valid session data path is found.
+    /// </summary>
+    private string? GetSessionDataPath()
+    {
+        // First, try the local development path (tests/data/sessions)
+        // This takes precedence because it contains the known test data
+        if (Directory.Exists(LocalTestSessionDataPath))
+        {
+            // Verify it has the expected structure (subdirectories with .jsonl files)
+            var projectDirs = Directory.GetDirectories(LocalTestSessionDataPath);
+            if (projectDirs.Any(dir => Directory.GetFiles(dir, "*.jsonl").Length > 0))
+            {
+                _logger.LogDebug("Using local test session data path: {Path}", LocalTestSessionDataPath);
+                return LocalTestSessionDataPath;
+            }
+        }
+
+        // Try the container path (/data/sessions) - used when running in Docker
+        if (Directory.Exists(ContainerSessionDataPath))
+        {
+            // Verify it has the expected structure (subdirectories with .jsonl files)
+            var projectDirs = Directory.GetDirectories(ContainerSessionDataPath);
+            if (projectDirs.Any(dir => Directory.GetFiles(dir, "*.jsonl").Length > 0))
+            {
+                _logger.LogDebug("Using container session data path: {Path}", ContainerSessionDataPath);
+                return ContainerSessionDataPath;
+            }
+        }
+
+        _logger.LogWarning("No session data path found. Checked: {LocalPath}, {ContainerPath}",
+            LocalTestSessionDataPath, ContainerSessionDataPath);
+        return null;
     }
 
     public Task StopAsync(CancellationToken cancellationToken)
@@ -202,9 +287,8 @@ public class MockDataSeederService : IHostedService
                 Title = "Create service mocks",
                 Description = "Create mocks for all services with fake data sets to enable testing without production data.",
                 Type = IssueType.Task,
-                Status = IssueStatus.Next,
+                Status = IssueStatus.Open,
                 Priority = 2,
-                Group = "infrastructure",
                 CreatedAt = now.AddDays(-5),
                 LastUpdate = now.AddDays(-1)
             },
@@ -214,9 +298,8 @@ public class MockDataSeederService : IHostedService
                 Title = "Add dashboard analytics",
                 Description = "Implement analytics dashboard with charts showing project metrics.",
                 Type = IssueType.Feature,
-                Status = IssueStatus.Idea,
+                Status = IssueStatus.Open,
                 Priority = 3,
-                Group = "features",
                 CreatedAt = now.AddDays(-10),
                 LastUpdate = now.AddDays(-3)
             },
@@ -228,7 +311,6 @@ public class MockDataSeederService : IHostedService
                 Type = IssueType.Bug,
                 Status = IssueStatus.Progress,
                 Priority = 1,
-                Group = "ui",
                 CreatedAt = now.AddDays(-2),
                 LastUpdate = now.AddHours(-12)
             },
@@ -240,7 +322,6 @@ public class MockDataSeederService : IHostedService
                 Type = IssueType.Task,
                 Status = IssueStatus.Complete,
                 Priority = 4,
-                Group = "maintenance",
                 CreatedAt = now.AddDays(-15),
                 LastUpdate = now.AddDays(-8)
             },
@@ -250,9 +331,8 @@ public class MockDataSeederService : IHostedService
                 Title = "Simplify state management",
                 Description = "Refactor component state to use simpler patterns.",
                 Type = IssueType.Task,
-                Status = IssueStatus.Spec,
+                Status = IssueStatus.Open,
                 Priority = 3,
-                Group = "technical-debt",
                 CreatedAt = now.AddDays(-7),
                 LastUpdate = now.AddDays(-4)
             },
@@ -266,7 +346,6 @@ public class MockDataSeederService : IHostedService
                 Type = IssueType.Feature,
                 Status = IssueStatus.Progress,
                 Priority = 2,
-                Group = "core",
                 WorkingBranchId = "improve-tool-output",
                 CreatedAt = now.AddDays(-3),
                 LastUpdate = now.AddHours(-6)
@@ -284,7 +363,6 @@ Create an integration test to confirm that this does occur, then fix it - the br
                 Type = IssueType.Bug, // This was originally Feature, now Bug
                 Status = IssueStatus.Progress,
                 Priority = 1,
-                Group = "issues", // Using "issues" group
                 WorkingBranchId = "fix-issues-with-worktree-and-branch-naming",
                 CreatedAt = now.AddDays(-1),
                 LastUpdate = now

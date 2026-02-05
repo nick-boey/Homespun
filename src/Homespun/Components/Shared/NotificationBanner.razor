@@ -20,13 +20,13 @@
                 <div class="notification-actions flex items-center gap-sm flex-shrink-0">
                     @if (!string.IsNullOrEmpty(notification.ActionLabel) && notification.Action != null)
                     {
-                        <button class="btn btn-sm notification-action-btn whitespace-nowrap" @onclick="() => HandleAction(notification)">
+                        <button class="btn btn-sm notification-action-btn whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-ocean/30" @onclick="() => HandleAction(notification)">
                             @notification.ActionLabel
                         </button>
                     }
                     @if (notification.IsDismissible)
                     {
-                        <button class="notification-dismiss flex items-center justify-center w-6 h-6 p-0 bg-transparent border-none rounded-sm cursor-pointer text-text-muted hover:bg-bg-hover hover:text-text-primary transition-fast focus:outline-none focus:ring-2 focus:ring-ocean/30" @onclick="() => Dismiss(notification.Id)" title="Dismiss">
+                        <button class="notification-dismiss flex items-center justify-center w-6 h-6 p-0 bg-transparent border-none rounded-sm cursor-pointer text-text-muted hover:bg-bg-hover hover:text-text-primary transition-fast focus:outline-none focus-visible:ring-2 focus-visible:ring-ocean/30" @onclick="() => Dismiss(notification.Id)" title="Dismiss">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <line x1="18" y1="6" x2="6" y2="18"></line>
                                 <line x1="6" y1="6" x2="18" y2="18"></line>

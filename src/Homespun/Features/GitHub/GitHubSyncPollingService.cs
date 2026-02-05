@@ -100,10 +100,6 @@ public class GitHubSyncPollingService(
 
         if (syncResult.Imported > 0 || syncResult.Updated > 0 || syncResult.Removed > 0)
         {
-            logger.LogInformation(
-                "PR sync for {Owner}/{Repo}: {Imported} imported, {Updated} updated, {Removed} removed",
-                project.GitHubOwner, project.GitHubRepo, syncResult.Imported, syncResult.Updated, syncResult.Removed);
-
             // Close linked Fleece issues for removed (merged/closed) PRs
             using var closeScope = scopeFactory.CreateScope();
             var fleeceService = closeScope.ServiceProvider.GetRequiredService<IFleeceService>();

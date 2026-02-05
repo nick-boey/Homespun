@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.Commands;
 using Homespun.Features.GitHub;
 using Microsoft.Extensions.Logging;
@@ -31,26 +32,26 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
 
     public async Task<string?> CreateWorktreeAsync(string repoPath, string branchName, bool createBranch = false, string? baseBranch = null)
     {
-        var sanitizedName = SanitizeBranchName(branchName);
-        // Create worktree as sibling of the main repo, not inside it
-        // e.g., ~/.homespun/src/repo/main -> ~/.homespun/src/repo/<branch-name>
+        var flattenedName = SanitizeBranchNameForWorktree(branchName);
+        // Create worktree inside .worktrees directory as sibling of the main repo
+        // e.g., ~/.homespun/src/repo/main -> ~/.homespun/src/repo/.worktrees/<flattened-branch-name>
         var parentDir = Path.GetDirectoryName(repoPath);
         if (string.IsNullOrEmpty(parentDir))
         {
             logger.LogError("Cannot determine parent directory of {RepoPath}", repoPath);
             throw new InvalidOperationException($"Cannot determine parent directory of {repoPath}");
         }
-        
+
+        // Create .worktrees directory if it doesn't exist
+        var worktreesDir = Path.Combine(parentDir, ".worktrees");
+        if (!Directory.Exists(worktreesDir))
+        {
+            Directory.CreateDirectory(worktreesDir);
+        }
+
         // Normalize the path to use platform-native separators
         // This fixes issues on Windows where mixed forward/back slashes cause problems
-        var worktreePath = Path.GetFullPath(Path.Combine(parentDir, sanitizedName));
-
-        // Ensure parent directories exist for nested branch names (e.g., app/feature/id)
-        var worktreeParentDir = Path.GetDirectoryName(worktreePath);
-        if (!string.IsNullOrEmpty(worktreeParentDir) && !Directory.Exists(worktreeParentDir))
-        {
-            Directory.CreateDirectory(worktreeParentDir);
-        }
+        var worktreePath = Path.GetFullPath(Path.Combine(worktreesDir, flattenedName));
 
         if (createBranch)
         {
@@ -215,10 +216,9 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
             return directMatch.Path;
         }
 
-        // Fall back to path-based matching using sanitized name
-        // This handles cases where the branch name contains special characters like +
-        // that were sanitized when the worktree folder was created
-        var sanitizedName = SanitizeBranchName(branchName);
+        // Fall back to path-based matching using flattened name in .worktrees directory
+        // This handles cases where the branch name contains special characters
+        var flattenedName = SanitizeBranchNameForWorktree(branchName);
         var parentDir = Path.GetDirectoryName(repoPath);
 
         if (string.IsNullOrEmpty(parentDir))
@@ -226,13 +226,13 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
             return null;
         }
 
-        var expectedPath = Path.GetFullPath(Path.Combine(parentDir, sanitizedName));
+        var expectedPath = Path.GetFullPath(Path.Combine(parentDir, ".worktrees", flattenedName));
         var pathMatch = worktrees.FirstOrDefault(w =>
             Path.GetFullPath(w.Path).Equals(expectedPath, StringComparison.OrdinalIgnoreCase));
 
         if (pathMatch != null)
         {
-            logger.LogDebug("Found worktree for branch {BranchName} via sanitized path match at {Path}", branchName, pathMatch.Path);
+            logger.LogDebug("Found worktree for branch {BranchName} via flattened path match at {Path}", branchName, pathMatch.Path);
         }
 
         return pathMatch?.Path;
@@ -271,20 +271,44 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
         return true;
     }
 
+    /// <summary>
+    /// Sanitizes a branch name for use in git commands while preserving slashes.
+    /// </summary>
     public static string SanitizeBranchName(string branchName)
     {
         // Normalize path separators to forward slashes
         var sanitized = branchName.Replace('\\', '/');
-        // Replace special characters (except forward slash) with dashes
+        // Replace special characters (except forward slash and plus) with dashes
         sanitized = Regex.Replace(sanitized, @"[@#\s]+", "-");
-        // Remove any remaining invalid characters (keep forward slashes for folder structure)
-        sanitized = Regex.Replace(sanitized, @"[^a-zA-Z0-9\-_./]", "-");
+        // Remove any remaining invalid characters (keep forward slashes and plus)
+        sanitized = Regex.Replace(sanitized, @"[^a-zA-Z0-9\-_./+]", "-");
         // Remove consecutive dashes
         sanitized = Regex.Replace(sanitized, @"-+", "-");
         // Remove consecutive slashes
         sanitized = Regex.Replace(sanitized, @"/+", "/");
         // Trim dashes and slashes from ends
         return sanitized.Trim('-', '/');
+    }
+
+    /// <summary>
+    /// Sanitizes a branch name for use as a worktree folder name.
+    /// Converts slashes to plus signs to create a flat folder structure.
+    /// Example: "feature/my-branch+abc123" -> "feature+my-branch+abc123"
+    /// </summary>
+    public static string SanitizeBranchNameForWorktree(string branchName)
+    {
+        // Normalize path separators and convert to plus for flat structure
+        var sanitized = branchName.Replace('\\', '+').Replace('/', '+');
+        // Replace special characters (except plus) with dashes
+        sanitized = Regex.Replace(sanitized, @"[@#\s]+", "-");
+        // Remove any remaining invalid characters (keep plus for the flattened structure)
+        sanitized = Regex.Replace(sanitized, @"[^a-zA-Z0-9\-_+.]", "-");
+        // Remove consecutive dashes
+        sanitized = Regex.Replace(sanitized, @"-+", "-");
+        // Remove consecutive plus signs
+        sanitized = Regex.Replace(sanitized, @"\++", "+");
+        // Trim dashes and plus from ends
+        return sanitized.Trim('-', '+');
     }
 
     public async Task<List<BranchInfo>> ListLocalBranchesAsync(string repoPath)
@@ -434,6 +458,15 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
 
     public async Task<bool> DeleteRemoteBranchAsync(string repoPath, string branchName)
     {
+        // First check if the remote branch exists
+        var exists = await RemoteBranchExistsAsync(repoPath, branchName);
+
+        if (!exists)
+        {
+            logger.LogInformation("Remote branch {BranchName} does not exist, nothing to delete", branchName);
+            return true; // Return true since the end state (branch not on remote) is achieved
+        }
+
         var result = await commandRunner.RunAsync("git", $"push origin --delete \"{branchName}\"", repoPath);
 
         if (result.Success)
@@ -446,6 +479,25 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
         }
 
         return result.Success;
+    }
+
+    public async Task<bool> RemoteBranchExistsAsync(string repoPath, string branchName)
+    {
+        // Use git ls-remote to check if branch exists on remote
+        // This is more reliable than checking local refs
+        var result = await commandRunner.RunAsync(
+            "git",
+            $"ls-remote --heads origin \"{branchName}\"",
+            repoPath);
+
+        if (!result.Success)
+        {
+            logger.LogWarning("Failed to check remote branch existence for {BranchName}: {Error}", branchName, result.Error);
+            return false;
+        }
+
+        // If output contains the branch name, it exists
+        return !string.IsNullOrWhiteSpace(result.Output);
     }
 
     public async Task<bool> CreateLocalBranchFromRemoteAsync(string repoPath, string remoteBranch)
@@ -858,5 +910,76 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
 
         logger.LogError("Failed to repair worktree at {FolderPath}", folderPath);
         return false;
+    }
+
+    public async Task<List<FileChangeInfo>> GetChangedFilesAsync(string worktreePath, string targetBranch)
+    {
+        var result = await commandRunner.RunAsync("git", $"diff --numstat {targetBranch}...HEAD", worktreePath);
+
+        if (!result.Success)
+        {
+            logger.LogWarning("Failed to get changed files in {WorktreePath}: {Error}", worktreePath, result.Error);
+            return [];
+        }
+
+        var files = new List<FileChangeInfo>();
+        var lines = result.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+
+        foreach (var line in lines)
+        {
+            var parts = line.Split('\t', 3);
+            if (parts.Length < 3) continue;
+
+            // Parse additions and deletions (may be "-" for binary files)
+            var additionsStr = parts[0].Trim();
+            var deletionsStr = parts[1].Trim();
+            var filePath = parts[2].Trim();
+
+            var additions = additionsStr == "-" ? 0 : int.TryParse(additionsStr, out var a) ? a : 0;
+            var deletions = deletionsStr == "-" ? 0 : int.TryParse(deletionsStr, out var d) ? d : 0;
+
+            // Determine file status
+            var status = DetermineFileStatus(additions, deletions, filePath, additionsStr == "-");
+
+            files.Add(new FileChangeInfo
+            {
+                FilePath = filePath,
+                Additions = additions,
+                Deletions = deletions,
+                Status = status
+            });
+        }
+
+        return files;
+    }
+
+    private static FileChangeStatus DetermineFileStatus(int additions, int deletions, string filePath, bool isBinary)
+    {
+        // Check for renamed files (path contains "=>")
+        if (filePath.Contains("=>"))
+        {
+            return FileChangeStatus.Renamed;
+        }
+
+        // Binary files with no explicit line changes are considered modified
+        if (isBinary)
+        {
+            return FileChangeStatus.Modified;
+        }
+
+        // Only additions means new file
+        if (additions > 0 && deletions == 0)
+        {
+            return FileChangeStatus.Added;
+        }
+
+        // Only deletions means deleted file
+        if (additions == 0 && deletions > 0)
+        {
+            return FileChangeStatus.Deleted;
+        }
+
+        // Both additions and deletions means modified
+        return FileChangeStatus.Modified;
     }
 }

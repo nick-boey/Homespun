@@ -43,4 +43,22 @@ public interface IGraphService
     /// </summary>
     /// <param name="projectId">The project ID.</param>
     bool HasCachedData(string projectId);
+
+    /// <summary>
+    /// Builds graph using ONLY cached data. No GitHub API calls are made.
+    /// Used for immediate initial render before fresh data is fetched.
+    /// </summary>
+    /// <param name="projectId">The project ID.</param>
+    /// <param name="maxPastPRs">Maximum number of past (closed/merged) PRs to show. If null, shows all. Default is 5.</param>
+    /// <returns>Graph data from cache, or null if no cache exists.</returns>
+    Task<Graph?> BuildGraphFromCacheOnlyAsync(string projectId, int? maxPastPRs = 5);
+
+    /// <summary>
+    /// Builds graph JSON data using ONLY cached data. No GitHub API calls are made.
+    /// Used for immediate initial render before fresh data is fetched.
+    /// </summary>
+    /// <param name="projectId">The project ID.</param>
+    /// <param name="maxPastPRs">Maximum number of past (closed/merged) PRs to show. If null, shows all. Default is 5.</param>
+    /// <returns>Graph JSON data from cache, or null if no cache exists.</returns>
+    Task<GitgraphJsonData?> BuildGraphJsonFromCacheOnlyAsync(string projectId, int? maxPastPRs = 5);
 }

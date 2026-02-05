@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.Git;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -35,7 +36,7 @@ public class MockGitWorktreeService : IGitWorktreeService
         bool createBranch = false,
         string? baseBranch = null)
     {
-        _logger.LogDebug("[Mock] CreateWorktree {BranchName} in {RepoPath}", branchName, repoPath);
+        _logger.LogDebug("[Mock] CreateWorktree {BranchName} in {RepoPath} from base {BaseBranch}", branchName, repoPath, baseBranch ?? "HEAD");
 
         // If live Claude testing is enabled, use the real test directory
         var worktreePath = !string.IsNullOrEmpty(_liveTestOptions?.TestWorkingDirectory)
@@ -232,6 +233,13 @@ public class MockGitWorktreeService : IGitWorktreeService
         return Task.FromResult(true);
     }
 
+    public Task<bool> RemoteBranchExistsAsync(string repoPath, string branchName)
+    {
+        _logger.LogDebug("[Mock] RemoteBranchExists {BranchName} in {RepoPath}", branchName, repoPath);
+        // In mock, always return true (assume remote exists) for testing scenarios
+        return Task.FromResult(true);
+    }
+
     public Task<bool> CreateLocalBranchFromRemoteAsync(string repoPath, string remoteBranch)
     {
         _logger.LogDebug("[Mock] CreateLocalBranchFromRemote {RemoteBranch} in {RepoPath}", remoteBranch, repoPath);
@@ -401,6 +409,13 @@ public class MockGitWorktreeService : IGitWorktreeService
         }
 
         return Task.FromResult(true);
+    }
+
+    public Task<List<FileChangeInfo>> GetChangedFilesAsync(string worktreePath, string targetBranch)
+    {
+        _logger.LogDebug("[Mock] GetChangedFilesAsync in {WorktreePath} against {TargetBranch}", worktreePath, targetBranch);
+        // Return empty list by default for mock
+        return Task.FromResult(new List<FileChangeInfo>());
     }
 
     /// <summary>

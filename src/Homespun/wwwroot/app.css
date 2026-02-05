@@ -404,6 +404,11 @@ a:hover {
     box-shadow: 0 0 0 3px rgba(81, 165, 193, 0.3);
 }
 
+.btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--focus-ring);
+}
+
 .btn-primary {
     background-color: var(--btn-primary-bg);
     color: var(--btn-primary-text);
@@ -504,6 +509,13 @@ a:hover {
     outline: none;
     border-color: var(--border-color-light);
     box-shadow: none;
+}
+
+.form-control:focus-visible,
+.form-select:focus-visible {
+    outline: none;
+    border-color: var(--input-focus-border);
+    box-shadow: 0 0 0 2px var(--focus-ring);
 }
 
 .form-select {
@@ -879,6 +891,13 @@ h1:focus {
 .status-indicator.status-conflict { background-color: var(--status-conflict); }
 .status-indicator.status-ready-for-merging { background-color: var(--status-success); }
 
+/* ==========================================================================
+   Global Keyframes Animations
+
+   Consolidated animations for reuse across components.
+   Use utility classes .animate-pulse, .animate-spin for convenience.
+   ========================================================================== */
+
 @keyframes pulse {
     0%, 100% {
         opacity: 1;
@@ -888,6 +907,27 @@ h1:focus {
         opacity: 0.5;
         transform: scale(0.9);
     }
+}
+
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+/* ==========================================================================
+   Animation Utility Classes
+   ========================================================================== */
+
+.animate-pulse {
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+.animate-spin {
+    animation: spin 1s linear infinite;
 }
 
 /* ==========================================================================
