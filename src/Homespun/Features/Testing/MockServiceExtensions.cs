@@ -163,17 +163,17 @@ public static class MockServiceExtensions
         }
 
         // Determine working directory for live sessions
-        // Use /data/test-workspace in container (via HOMESPUN_DATA_PATH), otherwise current directory
-        var dataPath = Environment.GetEnvironmentVariable("HOMESPUN_DATA_PATH");
+        // Use /data/test-workspace in container (via HOMESPUN_DATA_PATH), otherwise home directory
+        var dataPath2 = Environment.GetEnvironmentVariable("HOMESPUN_DATA_PATH");
         string defaultWorkspace;
-        if (!string.IsNullOrEmpty(dataPath))
+        if (!string.IsNullOrEmpty(dataPath2))
         {
-            var dataDirectory = Path.GetDirectoryName(dataPath);
+            var dataDirectory = Path.GetDirectoryName(dataPath2);
             defaultWorkspace = Path.Combine(dataDirectory!, "test-workspace");
         }
         else
         {
-            defaultWorkspace = Path.Combine(Directory.GetCurrentDirectory(), "test-workspace");
+            defaultWorkspace = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "test-workspace");
         }
         var workingDirectory = options.LiveClaudeSessionsWorkingDirectory ?? defaultWorkspace;
 
