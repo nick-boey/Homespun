@@ -6,6 +6,7 @@
 @using Homespun.Features.ClaudeCode.Components.ToolResults
 @using Homespun.Features.ClaudeCode.Components.SessionInfoPanel
 @using Homespun.Features.Shared.Services
+@using Homespun.Features.Navigation
 @using Homespun.Features.SignalR
 @using Microsoft.AspNetCore.Components.Web
 @using Microsoft.AspNetCore.SignalR.Client
@@ -19,6 +20,7 @@
 @inject IJSRuntime JSRuntime
 @inject IMarkdownRenderingService MarkdownService
 @inject IAgentPromptService AgentPromptService
+@inject IBreadcrumbService BreadcrumbService
 
 <PageTitle>Session - Homespun</PageTitle>
 
@@ -1644,6 +1646,8 @@
 
     protected override async Task OnInitializedAsync()
     {
+        await BreadcrumbService.SetContextAsync(new BreadcrumbContext { SessionId = SessionId });
+
         _session = SessionService.GetSession(SessionId);
 
         // Load available prompts
