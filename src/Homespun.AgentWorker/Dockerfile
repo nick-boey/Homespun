@@ -22,7 +22,9 @@ FROM build AS publish
 RUN dotnet publish -c Release -o /app/publish /p:UseAppHost=false
 
 # Runtime stage
-FROM mcr.microsoft.com/dotnet/aspnet:10.0-preview AS runtime
+# Use SDK image instead of aspnet runtime to support building projects
+# that need to run dotnet build, test, and other SDK commands via Bash tool
+FROM mcr.microsoft.com/dotnet/sdk:10.0-preview AS runtime
 WORKDIR /app
 
 # Install dependencies: Node.js, git, and other tools for Claude CLI
