@@ -25,17 +25,7 @@
         "launchBrowser": true,
         "applicationUrl": "http://localhost:5095",
         "environmentVariables": {
-          "ASPNETCORE_ENVIRONMENT": "Development",
-          "HOMESPUN_MOCK_MODE": "true"
-        }
-      },
-      "mock-live": {
-        "commandName": "Project",
-        "dotnetRunMessages": true,
-        "launchBrowser": true,
-        "applicationUrl": "http://localhost:5095",
-        "environmentVariables": {
-          "ASPNETCORE_ENVIRONMENT": "MockLive",
+          "ASPNETCORE_ENVIRONMENT": "Mock",
           "HOMESPUN_MOCK_MODE": "true"
         }
       }

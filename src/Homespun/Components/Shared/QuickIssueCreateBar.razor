@@ -18,9 +18,9 @@
             <select class="quick-input status-select"
                     @bind="_status"
                     disabled="@_isSubmitting">
-                <option value="@IssueStatus.Idea">idea</option>
-                <option value="@IssueStatus.Spec">spec</option>
-                <option value="@IssueStatus.Next">next</option>
+                <option value="@IssueStatus.Open">open</option>
+                <option value="@IssueStatus.Progress">progress</option>
+                <option value="@IssueStatus.Review">review</option>
             </select>
         </div>
 
@@ -263,7 +263,7 @@
     [Parameter] public EventCallback<string> OnIssueCreatedForEdit { get; set; }
 
     private IssueType _type = IssueType.Feature;
-    private IssueStatus _status = IssueStatus.Idea;
+    private IssueStatus _status = IssueStatus.Open;
     private string _title = "";
     private bool _isSubmitting;
     private string? _errorMessage;
@@ -316,7 +316,7 @@
             // Clear inputs for next entry
             _title = "";
             _type = IssueType.Feature;
-            _status = IssueStatus.Idea;
+            _status = IssueStatus.Open;
 
             // Notify parent to refresh or open for editing
             if (openForEdit)

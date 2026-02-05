@@ -356,15 +356,15 @@
                         {
                             // Build branch name from issue properties
                             string? branchName = null;
-                            if (!string.IsNullOrEmpty(issue.Group))
-                            {
-                                var branchId = issue.Title.ToLowerInvariant()
+                            // Use WorkingBranchId or generate from title
+                            var branchId = !string.IsNullOrEmpty(issue.WorkingBranchId)
+                                ? issue.WorkingBranchId
+                                : issue.Title.ToLowerInvariant()
                                     .Replace(" ", "-")
                                     .Replace("_", "-");
-                                branchId = System.Text.RegularExpressions.Regex.Replace(branchId, "[^a-z0-9-]", "");
-                                branchId = System.Text.RegularExpressions.Regex.Replace(branchId, "-+", "-").Trim('-');
-                                branchName = $"{issue.Group}/{issue.Type.ToString().ToLowerInvariant()}/{branchId}+{issue.Id}";
-                            }
+                            branchId = System.Text.RegularExpressions.Regex.Replace(branchId, "[^a-z0-9-]", "");
+                            branchId = System.Text.RegularExpressions.Regex.Replace(branchId, "-+", "-").Trim('-');
+                            branchName = $"{issue.Type.ToString().ToLowerInvariant()}/{branchId}+{issue.Id}";
 
                             _entityInfoCache[session.EntityId] = new EntityInfo
                             {

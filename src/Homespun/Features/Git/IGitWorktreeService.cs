@@ -109,4 +109,13 @@ public interface IGitWorktreeService
     /// <param name="repoPath">Path to the repository</param>
     /// <returns>True if successful</returns>
     Task<bool> FetchAllAsync(string repoPath);
+
+    /// <summary>
+    /// Get the list of files that have changed between the current branch and the target branch.
+    /// Uses git diff --numstat to get file changes with addition/deletion counts.
+    /// </summary>
+    /// <param name="worktreePath">Path to the worktree directory</param>
+    /// <param name="targetBranch">Target branch to compare against (e.g., "main")</param>
+    /// <returns>List of changed files with their status and line counts</returns>
+    Task<List<ClaudeCode.Data.FileChangeInfo>> GetChangedFilesAsync(string worktreePath, string targetBranch);
 }

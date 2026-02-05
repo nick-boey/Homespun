@@ -245,16 +245,15 @@ public class MockGraphService : IGraphService
         var now = DateTimeOffset.UtcNow;
         return
         [
-            // Orphan issues - grouped under "UI"
+            // Orphan issues
             new Issue
             {
                 Id = "ISSUE-001",
                 Title = "Add dark mode support",
                 Description = "Implement a dark mode theme option for better accessibility and user preference",
                 Type = IssueType.Feature,
-                Status = IssueStatus.Next,
+                Status = IssueStatus.Open,
                 Priority = 2,
-                Group = "UI",
                 CreatedAt = now.AddDays(-14),
                 LastUpdate = now.AddDays(-2)
             },
@@ -264,14 +263,13 @@ public class MockGraphService : IGraphService
                 Title = "Improve mobile responsiveness",
                 Description = "Ensure all pages display correctly on mobile devices and tablets",
                 Type = IssueType.Task,
-                Status = IssueStatus.Next,
+                Status = IssueStatus.Open,
                 Priority = 3,
-                Group = "UI",
                 CreatedAt = now.AddDays(-12),
                 LastUpdate = now.AddDays(-1)
             },
 
-            // Orphan issue - ungrouped
+            // Orphan issue
             new Issue
             {
                 Id = "ISSUE-003",
@@ -280,7 +278,6 @@ public class MockGraphService : IGraphService
                 Type = IssueType.Bug,
                 Status = IssueStatus.Progress,
                 Priority = 1,
-                Group = "",
                 CreatedAt = now.AddDays(-7),
                 LastUpdate = now.AddHours(-6)
             },
@@ -292,9 +289,8 @@ public class MockGraphService : IGraphService
                 Title = "Design API schema",
                 Description = "Define the REST API schema for the new feature endpoints",
                 Type = IssueType.Task,
-                Status = IssueStatus.Spec,
+                Status = IssueStatus.Open,
                 Priority = 2,
-                Group = "API",
                 ParentIssues = [], // Root of the dependency chain
                 CreatedAt = now.AddDays(-10),
                 LastUpdate = now.AddDays(-3)
@@ -305,10 +301,9 @@ public class MockGraphService : IGraphService
                 Title = "Implement API endpoints",
                 Description = "Build the REST API endpoints based on the approved schema",
                 Type = IssueType.Task,
-                Status = IssueStatus.Next,
+                Status = IssueStatus.Open,
                 Priority = 2,
-                Group = "API",
-                ParentIssues = ["ISSUE-004"], // Depends on ISSUE-004
+                ParentIssues = [new ParentIssueRef { ParentIssue = "ISSUE-004", SortOrder = "0" }], // Depends on ISSUE-004
                 CreatedAt = now.AddDays(-9),
                 LastUpdate = now.AddDays(-2)
             },
@@ -318,10 +313,9 @@ public class MockGraphService : IGraphService
                 Title = "Write API documentation",
                 Description = "Document all new API endpoints with examples and usage guidelines",
                 Type = IssueType.Chore,
-                Status = IssueStatus.Idea,
+                Status = IssueStatus.Open,
                 Priority = 3,
-                Group = "API",
-                ParentIssues = ["ISSUE-005"], // Depends on ISSUE-005
+                ParentIssues = [new ParentIssueRef { ParentIssue = "ISSUE-005", SortOrder = "0" }], // Depends on ISSUE-005
                 CreatedAt = now.AddDays(-8),
                 LastUpdate = now.AddDays(-1)
             },
@@ -338,10 +332,9 @@ public class MockGraphService : IGraphService
                 Title = "Implement GET endpoints",
                 Description = "Build GET endpoints for retrieving resources from the API",
                 Type = IssueType.Task,
-                Status = IssueStatus.Next,
+                Status = IssueStatus.Open,
                 Priority = 2,
-                Group = "API",
-                ParentIssues = ["ISSUE-005"],
+                ParentIssues = [new ParentIssueRef { ParentIssue = "ISSUE-005", SortOrder = "0" }],
                 CreatedAt = now.AddDays(-7),
                 LastUpdate = now.AddDays(-1)
             },
@@ -351,10 +344,9 @@ public class MockGraphService : IGraphService
                 Title = "Implement POST endpoints",
                 Description = "Build POST endpoints for creating new resources",
                 Type = IssueType.Task,
-                Status = IssueStatus.Next,
+                Status = IssueStatus.Open,
                 Priority = 2,
-                Group = "API",
-                ParentIssues = ["ISSUE-007"],
+                ParentIssues = [new ParentIssueRef { ParentIssue = "ISSUE-007", SortOrder = "0" }],
                 CreatedAt = now.AddDays(-6),
                 LastUpdate = now.AddDays(-1)
             },
@@ -364,10 +356,9 @@ public class MockGraphService : IGraphService
                 Title = "Implement PUT/PATCH endpoints",
                 Description = "Build PUT/PATCH endpoints for updating existing resources",
                 Type = IssueType.Task,
-                Status = IssueStatus.Next,
+                Status = IssueStatus.Open,
                 Priority = 2,
-                Group = "API",
-                ParentIssues = ["ISSUE-008"],
+                ParentIssues = [new ParentIssueRef { ParentIssue = "ISSUE-008", SortOrder = "0" }],
                 CreatedAt = now.AddDays(-5),
                 LastUpdate = now.AddDays(-1)
             },
@@ -377,10 +368,9 @@ public class MockGraphService : IGraphService
                 Title = "Implement DELETE endpoints",
                 Description = "Build DELETE endpoints for removing resources",
                 Type = IssueType.Task,
-                Status = IssueStatus.Next,
+                Status = IssueStatus.Open,
                 Priority = 2,
-                Group = "API",
-                ParentIssues = ["ISSUE-009"],
+                ParentIssues = [new ParentIssueRef { ParentIssue = "ISSUE-009", SortOrder = "0" }],
                 CreatedAt = now.AddDays(-4),
                 LastUpdate = now.AddDays(-1)
             },
@@ -390,10 +380,9 @@ public class MockGraphService : IGraphService
                 Title = "Add request validation",
                 Description = "Implement request validation middleware for all API endpoints",
                 Type = IssueType.Task,
-                Status = IssueStatus.Spec,
+                Status = IssueStatus.Open,
                 Priority = 3,
-                Group = "API",
-                ParentIssues = ["ISSUE-008"],
+                ParentIssues = [new ParentIssueRef { ParentIssue = "ISSUE-008", SortOrder = "0" }],
                 CreatedAt = now.AddDays(-5),
                 LastUpdate = now.AddDays(-2)
             },
@@ -403,10 +392,9 @@ public class MockGraphService : IGraphService
                 Title = "Add rate limiting",
                 Description = "Implement rate limiting to prevent API abuse",
                 Type = IssueType.Task,
-                Status = IssueStatus.Idea,
+                Status = IssueStatus.Open,
                 Priority = 3,
-                Group = "API",
-                ParentIssues = ["ISSUE-007"],
+                ParentIssues = [new ParentIssueRef { ParentIssue = "ISSUE-007", SortOrder = "0" }],
                 CreatedAt = now.AddDays(-6),
                 LastUpdate = now.AddDays(-3)
             },
@@ -416,10 +404,9 @@ public class MockGraphService : IGraphService
                 Title = "Set up API monitoring",
                 Description = "Configure monitoring and alerting for API health and performance",
                 Type = IssueType.Chore,
-                Status = IssueStatus.Spec,
+                Status = IssueStatus.Open,
                 Priority = 4,
-                Group = "API",
-                ParentIssues = ["ISSUE-005"],
+                ParentIssues = [new ParentIssueRef { ParentIssue = "ISSUE-005", SortOrder = "0" }],
                 CreatedAt = now.AddDays(-7),
                 LastUpdate = now.AddDays(-2)
             }

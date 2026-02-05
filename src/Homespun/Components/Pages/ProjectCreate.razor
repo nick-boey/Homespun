@@ -87,7 +87,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        await BreadcrumbService.SetContextAsync(new BreadcrumbContext { PageName = "Create" });
+        await BreadcrumbService.SetContextAsync(new BreadcrumbContext { PageName = "New Project" });
     }
 
     private async Task HandleSubmit()

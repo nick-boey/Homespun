@@ -287,9 +287,8 @@ public class MockDataSeederService : IHostedService
                 Title = "Create service mocks",
                 Description = "Create mocks for all services with fake data sets to enable testing without production data.",
                 Type = IssueType.Task,
-                Status = IssueStatus.Next,
+                Status = IssueStatus.Open,
                 Priority = 2,
-                Group = "infrastructure",
                 CreatedAt = now.AddDays(-5),
                 LastUpdate = now.AddDays(-1)
             },
@@ -299,9 +298,8 @@ public class MockDataSeederService : IHostedService
                 Title = "Add dashboard analytics",
                 Description = "Implement analytics dashboard with charts showing project metrics.",
                 Type = IssueType.Feature,
-                Status = IssueStatus.Idea,
+                Status = IssueStatus.Open,
                 Priority = 3,
-                Group = "features",
                 CreatedAt = now.AddDays(-10),
                 LastUpdate = now.AddDays(-3)
             },
@@ -313,7 +311,6 @@ public class MockDataSeederService : IHostedService
                 Type = IssueType.Bug,
                 Status = IssueStatus.Progress,
                 Priority = 1,
-                Group = "ui",
                 CreatedAt = now.AddDays(-2),
                 LastUpdate = now.AddHours(-12)
             },
@@ -325,7 +322,6 @@ public class MockDataSeederService : IHostedService
                 Type = IssueType.Task,
                 Status = IssueStatus.Complete,
                 Priority = 4,
-                Group = "maintenance",
                 CreatedAt = now.AddDays(-15),
                 LastUpdate = now.AddDays(-8)
             },
@@ -335,9 +331,8 @@ public class MockDataSeederService : IHostedService
                 Title = "Simplify state management",
                 Description = "Refactor component state to use simpler patterns.",
                 Type = IssueType.Task,
-                Status = IssueStatus.Spec,
+                Status = IssueStatus.Open,
                 Priority = 3,
-                Group = "technical-debt",
                 CreatedAt = now.AddDays(-7),
                 LastUpdate = now.AddDays(-4)
             },
@@ -351,7 +346,6 @@ public class MockDataSeederService : IHostedService
                 Type = IssueType.Feature,
                 Status = IssueStatus.Progress,
                 Priority = 2,
-                Group = "core",
                 WorkingBranchId = "improve-tool-output",
                 CreatedAt = now.AddDays(-3),
                 LastUpdate = now.AddHours(-6)
@@ -369,7 +363,6 @@ Create an integration test to confirm that this does occur, then fix it - the br
                 Type = IssueType.Bug, // This was originally Feature, now Bug
                 Status = IssueStatus.Progress,
                 Priority = 1,
-                Group = "issues", // Using "issues" group
                 WorkingBranchId = "fix-issues-with-worktree-and-branch-naming",
                 CreatedAt = now.AddDays(-1),
                 LastUpdate = now

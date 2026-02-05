@@ -234,7 +234,7 @@ public class GraphBuilderTests
     [Test]
     public void Build_Issues_NextStatusConnectsToLatestMergedPR()
     {
-        // Arrange - "next" status issues should connect to latest merged PR
+        // Arrange - "Open" status issues should be orphans (no connection to PRs)
         var prs = new List<PullRequestInfo>
         {
             CreateMergedPR(1, DateTime.UtcNow.AddDays(-2)),
@@ -246,7 +246,7 @@ public class GraphBuilderTests
             {
                 Id = "bd-001",
                 Title = "Issue bd-001",
-                Status = IssueStatus.Next, // "next" status
+                Status = IssueStatus.Open, // "Open" status
                 Type = IssueType.Task,
                 CreatedAt = DateTimeOffset.UtcNow,
                 LastUpdate = DateTimeOffset.UtcNow
@@ -256,10 +256,10 @@ public class GraphBuilderTests
         // Act
         var graph = _builder.Build(prs, issues);
 
-        // Assert - "next" status issues have latest merged PR as parent
+        // Assert - "Open" status issues are orphans (no parent connections)
         var issueNode = graph.Nodes.OfType<IssueNode>().First();
-        Assert.That(issueNode.ParentIds, Contains.Item("pr-2"));
-        Assert.That(issueNode.IsOrphan, Is.False);
+        Assert.That(issueNode.ParentIds, Is.Empty);
+        Assert.That(issueNode.IsOrphan, Is.True);
     }
 
     [Test]
@@ -721,7 +721,7 @@ public class GraphBuilderTests
     {
         Id = id,
         Title = $"Issue {id}",
-        Status = IssueStatus.Idea, // Use Idea status (not Next) so issues are true orphans
+        Status = IssueStatus.Open, // Use Open status so issues are true orphans
         Type = IssueType.Task,
         Priority = priority,
         CreatedAt = createdAt ?? DateTimeOffset.UtcNow,
@@ -732,10 +732,9 @@ public class GraphBuilderTests
     {
         Id = id,
         Title = $"Issue {id}",
-        Status = IssueStatus.Idea, // Use Idea status (not Next) so issues are true orphans
+        Status = IssueStatus.Open, // Use Open status so issues are true orphans
         Type = IssueType.Task,
         Priority = priority,
-        Group = group,
         CreatedAt = createdAt ?? DateTimeOffset.UtcNow,
         LastUpdate = createdAt ?? DateTimeOffset.UtcNow
     };
@@ -744,10 +743,10 @@ public class GraphBuilderTests
     {
         Id = id,
         Title = $"Issue {id}",
-        Status = IssueStatus.Next,
+        Status = IssueStatus.Open,
         Type = IssueType.Task,
         Priority = priority,
-        ParentIssues = [parentId],
+        ParentIssues = [new ParentIssueRef { ParentIssue = parentId, SortOrder = "0" }],
         CreatedAt = createdAt ?? DateTimeOffset.UtcNow,
         LastUpdate = createdAt ?? DateTimeOffset.UtcNow
     };
@@ -756,10 +755,10 @@ public class GraphBuilderTests
     {
         Id = id,
         Title = $"Issue {id}",
-        Status = IssueStatus.Next,
+        Status = IssueStatus.Open,
         Type = IssueType.Task,
         Priority = priority,
-        ParentIssues = parentIds,
+        ParentIssues = parentIds.Select((pid, idx) => new ParentIssueRef { ParentIssue = pid, SortOrder = idx.ToString() }).ToList(),
         CreatedAt = createdAt ?? DateTimeOffset.UtcNow,
         LastUpdate = createdAt ?? DateTimeOffset.UtcNow
     };

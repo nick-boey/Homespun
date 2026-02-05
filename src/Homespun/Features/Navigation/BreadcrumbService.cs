@@ -20,7 +20,8 @@ public class BreadcrumbService : IBreadcrumbService
     {
         { "Projects", "/projects" },
         { "Settings", "/settings" },
-        { "Agents", "/agents" }
+        { "Agents", "/agents" },
+        { "Sessions", "/sessions" }
     };
 
     public BreadcrumbService(IProjectService projectService, IFleeceService fleeceService)
@@ -44,6 +45,11 @@ public class BreadcrumbService : IBreadcrumbService
         if (!string.IsNullOrEmpty(context.ProjectId))
         {
             await BuildProjectBreadcrumbsAsync(context);
+        }
+        // If we have a session ID, this is a session-related page
+        else if (!string.IsNullOrEmpty(context.SessionId))
+        {
+            BuildSessionBreadcrumbs(context);
         }
         // If we only have a page name, this is a standalone page
         else if (!string.IsNullOrEmpty(context.PageName))
@@ -127,5 +133,28 @@ public class BreadcrumbService : IBreadcrumbService
             : $"/{pageName.ToLowerInvariant()}";
 
         _breadcrumbs.Add(new BreadcrumbItem(pageName, url));
+    }
+
+    private void BuildSessionBreadcrumbs(BreadcrumbContext context)
+    {
+        // Always start with Sessions
+        _breadcrumbs.Add(new BreadcrumbItem("Sessions", "/sessions"));
+
+        // Add session ID (truncated for display)
+        var displayId = context.SessionId!.Length > 8
+            ? context.SessionId![..8] + "..."
+            : context.SessionId!;
+
+        if (!string.IsNullOrEmpty(context.PageName))
+        {
+            // Session becomes a link, PageName is the last item
+            _breadcrumbs.Add(new BreadcrumbItem(displayId, $"/session/{context.SessionId}"));
+            _breadcrumbs.Add(new BreadcrumbItem(context.PageName, null));
+        }
+        else
+        {
+            // Session is the last item
+            _breadcrumbs.Add(new BreadcrumbItem(displayId, null));
+        }
     }
 }

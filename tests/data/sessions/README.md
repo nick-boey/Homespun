@@ -43,12 +43,26 @@ Each line is a JSON object representing a `ClaudeMessage`:
   "createdAt": "2026-02-01T11:35:42.510258Z",
   "lastMessageAt": "2026-02-01T11:45:11.647477Z",
   "mode": 1,
-  "model": "opus"
+  "model": "opus",
+  "status": 3,
+  "planContent": "# Plan content here...",
+  "planFilePath": "PLAN.md"
 }
 ```
 
 - `mode`: 0 = Plan, 1 = Build
 - `entityId`: Links to mock PR/issue (e.g., `pr-logging` matches `MockDataSeederService` PR)
+- `status` (optional): Session status enum value:
+  - 0 = Starting
+  - 1 = RunningHooks
+  - 2 = Running
+  - 3 = WaitingForInput (default)
+  - 4 = WaitingForQuestionAnswer
+  - 5 = WaitingForPlanExecution
+  - 6 = Stopped
+  - 7 = Error
+- `planContent` (optional): The plan content to display when status is WaitingForPlanExecution
+- `planFilePath` (optional): Path to the plan file
 
 ## Adding New Sessions
 

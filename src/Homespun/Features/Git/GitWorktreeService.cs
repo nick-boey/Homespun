@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.Commands;
 using Homespun.Features.GitHub;
 using Microsoft.Extensions.Logging;
@@ -532,5 +533,76 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
             int.TryParse(behindMatch.Groups[1].Value, out behind);
 
         return (ahead, behind);
+    }
+
+    public async Task<List<FileChangeInfo>> GetChangedFilesAsync(string worktreePath, string targetBranch)
+    {
+        var result = await commandRunner.RunAsync("git", $"diff --numstat {targetBranch}...HEAD", worktreePath);
+
+        if (!result.Success)
+        {
+            logger.LogWarning("Failed to get changed files in {WorktreePath}: {Error}", worktreePath, result.Error);
+            return [];
+        }
+
+        var files = new List<FileChangeInfo>();
+        var lines = result.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+
+        foreach (var line in lines)
+        {
+            var parts = line.Split('\t', 3);
+            if (parts.Length < 3) continue;
+
+            // Parse additions and deletions (may be "-" for binary files)
+            var additionsStr = parts[0].Trim();
+            var deletionsStr = parts[1].Trim();
+            var filePath = parts[2].Trim();
+
+            var additions = additionsStr == "-" ? 0 : int.TryParse(additionsStr, out var a) ? a : 0;
+            var deletions = deletionsStr == "-" ? 0 : int.TryParse(deletionsStr, out var d) ? d : 0;
+
+            // Determine file status
+            var status = DetermineFileStatus(additions, deletions, filePath, additionsStr == "-");
+
+            files.Add(new FileChangeInfo
+            {
+                FilePath = filePath,
+                Additions = additions,
+                Deletions = deletions,
+                Status = status
+            });
+        }
+
+        return files;
+    }
+
+    private static FileChangeStatus DetermineFileStatus(int additions, int deletions, string filePath, bool isBinary)
+    {
+        // Check for renamed files (path contains "=>")
+        if (filePath.Contains("=>"))
+        {
+            return FileChangeStatus.Renamed;
+        }
+
+        // Binary files with no explicit line changes are considered modified
+        if (isBinary)
+        {
+            return FileChangeStatus.Modified;
+        }
+
+        // Only additions means new file
+        if (additions > 0 && deletions == 0)
+        {
+            return FileChangeStatus.Added;
+        }
+
+        // Only deletions means deleted file
+        if (additions == 0 && deletions > 0)
+        {
+            return FileChangeStatus.Deleted;
+        }
+
+        // Both additions and deletions means modified
+        return FileChangeStatus.Modified;
     }
 }

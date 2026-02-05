@@ -37,7 +37,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        await BreadcrumbService.SetContextAsync(new BreadcrumbContext { PageName = "Agents" });
+        await BreadcrumbService.SetContextAsync(new BreadcrumbContext { PageName = "Sessions" });
         _isLoading = false;
     }
 

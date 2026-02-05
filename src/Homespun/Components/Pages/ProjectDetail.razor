@@ -559,7 +559,7 @@ else
 
                 // Get open issues (all non-completed statuses)
                 _openIssues = allIssues
-                    .Where(i => i.Status is IssueStatus.Idea or IssueStatus.Spec or IssueStatus.Next or IssueStatus.Progress or IssueStatus.Review)
+                    .Where(i => i.Status is IssueStatus.Open or IssueStatus.Progress or IssueStatus.Review)
                     .ToList();
 
                 // In-progress issues could be tracked separately if needed

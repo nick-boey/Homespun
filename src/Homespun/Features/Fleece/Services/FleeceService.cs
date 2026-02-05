@@ -33,7 +33,8 @@ public sealed class FleeceService : IFleeceService, IDisposable
         {
             _logger.LogDebug("Creating new IIssueService for project: {ProjectPath}", path);
 
-            var storageService = new JsonlStorageService(path, _serializer);
+            var schemaValidator = new SchemaValidator();
+            var storageService = new JsonlStorageService(path, _serializer, schemaValidator);
             var changeService = new ChangeService(storageService);
             return new IssueService(storageService, _idGenerator, _gitConfigService, changeService);
         });
@@ -72,9 +73,9 @@ public sealed class FleeceService : IFleeceService, IDisposable
         var service = GetOrCreateIssueService(projectPath);
 
         // Get all open issues
-        // Get all issues in open statuses (Idea, Spec, Next, Progress, Review)
+        // Get all issues in open statuses (Open, Progress, Review)
         var allIssues = await service.GetAllAsync(ct);
-        var openIssues = allIssues.Where(i => i.Status is IssueStatus.Idea or IssueStatus.Spec or IssueStatus.Next or IssueStatus.Progress or IssueStatus.Review).ToList();
+        var openIssues = allIssues.Where(i => i.Status is IssueStatus.Open or IssueStatus.Progress or IssueStatus.Review).ToList();
 
         // Filter to issues that have no blocking parent issues (parents that are not Complete/Closed)
         var issueMap = allIssues.ToDictionary(i => i.Id, StringComparer.OrdinalIgnoreCase);
@@ -89,9 +90,9 @@ public sealed class FleeceService : IFleeceService, IDisposable
                 }
 
                 // Check all parent issues - if all are Complete or Closed, this issue is ready
-                return issue.ParentIssues.All(parentId =>
+                return issue.ParentIssues.All(parentRef =>
                 {
-                    if (issueMap.TryGetValue(parentId, out var parent))
+                    if (issueMap.TryGetValue(parentRef.ParentIssue, out var parent))
                     {
                         return parent.Status is IssueStatus.Complete or IssueStatus.Closed;
                     }
@@ -112,7 +113,7 @@ public sealed class FleeceService : IFleeceService, IDisposable
         IssueType type,
         string? description = null,
         int? priority = null,
-        string? group = null,
+        ExecutionMode? executionMode = null,
         IssueStatus? status = null,
         CancellationToken ct = default)
     {
@@ -123,22 +124,22 @@ public sealed class FleeceService : IFleeceService, IDisposable
             type: type,
             description: description,
             priority: priority,
-            group: group,
+            executionMode: executionMode,
             cancellationToken: ct);
 
-        // If a specific status was requested (other than the default Idea), update the issue
-        if (status.HasValue && status.Value != IssueStatus.Idea)
+        // If a specific status was requested (other than the default Open), update the issue
+        if (status.HasValue && status.Value != IssueStatus.Open)
         {
             issue = await service.UpdateAsync(issue.Id, status: status.Value, cancellationToken: ct);
         }
 
         _logger.LogInformation(
-            "Created issue '{IssueId}' ({Type}): {Title}{Group}{Status}",
+            "Created issue '{IssueId}' ({Type}): {Title}{ExecutionMode}{Status}",
             issue.Id,
             type,
             title,
-            group != null ? $" [Group: {group}]" : "",
-            status.HasValue && status.Value != IssueStatus.Idea ? $" [Status: {status}]" : "");
+            executionMode.HasValue ? $" [ExecutionMode: {executionMode}]" : "",
+            status.HasValue && status.Value != IssueStatus.Open ? $" [Status: {status}]" : "");
 
         return issue;
     }
@@ -151,7 +152,7 @@ public sealed class FleeceService : IFleeceService, IDisposable
         IssueType? type = null,
         string? description = null,
         int? priority = null,
-        string? group = null,
+        ExecutionMode? executionMode = null,
         string? workingBranchId = null,
         CancellationToken ct = default)
     {
@@ -166,7 +167,7 @@ public sealed class FleeceService : IFleeceService, IDisposable
                 type: type,
                 description: description,
                 priority: priority,
-                group: group,
+                executionMode: executionMode,
                 workingBranchId: workingBranchId,
                 cancellationToken: ct);
 
@@ -176,7 +177,7 @@ public sealed class FleeceService : IFleeceService, IDisposable
             if (type != null) changes.Add($"type={type}");
             if (description != null) changes.Add("description updated");
             if (priority != null) changes.Add($"priority={priority}");
-            if (group != null) changes.Add($"group='{group}'");
+            if (executionMode != null) changes.Add($"executionMode={executionMode}");
             if (workingBranchId != null) changes.Add($"workingBranchId='{workingBranchId}'");
 
             _logger.LogInformation(

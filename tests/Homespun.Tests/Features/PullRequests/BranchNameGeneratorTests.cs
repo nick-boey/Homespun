@@ -342,8 +342,7 @@ public class BranchNameGeneratorTests
             Id = id,
             Title = title,
             Type = type,
-            Status = IssueStatus.Next,
-            Group = group,
+            Status = IssueStatus.Open,
             WorkingBranchId = workingBranchId,
             LastUpdate = DateTimeOffset.UtcNow,
             CreatedAt = DateTimeOffset.UtcNow

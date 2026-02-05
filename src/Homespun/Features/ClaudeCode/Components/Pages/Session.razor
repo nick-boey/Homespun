@@ -4,7 +4,9 @@
 @using Homespun.Features.ClaudeCode.Services
 @using Homespun.Features.ClaudeCode.Hubs
 @using Homespun.Features.ClaudeCode.Components.ToolResults
+@using Homespun.Features.ClaudeCode.Components.SessionInfoPanel
 @using Homespun.Features.Shared.Services
+@using Homespun.Features.Navigation
 @using Homespun.Features.SignalR
 @using Microsoft.AspNetCore.Components.Web
 @using Microsoft.AspNetCore.SignalR.Client
@@ -18,6 +20,7 @@
 @inject IJSRuntime JSRuntime
 @inject IMarkdownRenderingService MarkdownService
 @inject IAgentPromptService AgentPromptService
+@inject IBreadcrumbService BreadcrumbService
 
 <PageTitle>Session - Homespun</PageTitle>
 
@@ -49,7 +52,8 @@
             </div>
         </div>
 
-        <div class="chat-container">
+        <div class="session-content">
+        <div class="chat-container @(_sidePanelOpen ? "" : "expanded")">
             <div class="messages-area" @ref="_messagesContainer" @onscroll="HandleScroll">
                 @if (_session.Messages.Count == 0 && _session.Status != ClaudeSessionStatus.Running)
                 {
@@ -213,6 +217,33 @@
                             </div>
                         </div>
                     }
+
+                    @if (_session.Status == ClaudeSessionStatus.WaitingForPlanExecution && !string.IsNullOrEmpty(_session.PlanContent))
+                    {
+                        <div class="action-panel">
+                            <div class="action-panel-header">
+                                <span class="action-panel-header-icon">📋</span>
+                                <span class="action-panel-header-title">Plan Ready for Implementation</span>
+                            </div>
+                            <div class="action-panel-description">
+                                Choose how to proceed with the implementation:
+                            </div>
+                            <div class="action-panel-options">
+                                <button class="action-panel-btn action-panel-btn-primary"
+                                        @onclick="ExecutePlanWithClearContext"
+                                        title="Clear conversation context and start fresh implementation">
+                                    <span class="action-panel-btn-icon">🔄</span>
+                                    Clear Context & Start Implementation
+                                </button>
+                                <button class="action-panel-btn"
+                                        @onclick="ExecutePlanKeepContext"
+                                        title="Continue with existing conversation context">
+                                    <span class="action-panel-btn-icon">▶️</span>
+                                    Continue with Context
+                                </button>
+                            </div>
+                        </div>
+                    }
                 }
 
                 @* Scroll to bottom button *@
@@ -313,6 +344,9 @@
             </div>
         </div>
 
+        <SessionInfoPanel Session="_session" @bind-IsOpen="_sidePanelOpen" />
+        </div>
+
         @if (_session.TotalCostUsd > 0)
         {
             <div class="session-stats">
@@ -365,7 +399,7 @@
         display: flex;
         flex-direction: column;
         height: calc(100vh - 100px);
-        max-width: 1200px;
+        max-width: 1600px;
         margin: 0 auto;
         padding: var(--spacing-lg);
     }
@@ -402,6 +436,14 @@
         border-radius: var(--radius-sm);
     }
 
+    .session-content {
+        display: flex;
+        flex: 1;
+        gap: var(--spacing-md);
+        overflow: hidden;
+        position: relative;
+    }
+
     .chat-container {
         flex: 1;
         display: flex;
@@ -410,6 +452,11 @@
         border-radius: var(--radius-lg);
         border: 1px solid var(--border-color);
         overflow: hidden;
+        min-width: 0;
+    }
+
+    .chat-container.expanded {
+        max-width: 100%;
     }
 
     .messages-area {
@@ -1392,6 +1439,9 @@
     private HubConnection? _hubConnection;
     private string? _signalRError;
 
+    // Side panel state
+    private bool _sidePanelOpen = true;
+
     // Question handling
     private PendingQuestion? _pendingQuestion;
     private Dictionary<string, string> _questionAnswers = new();
@@ -1596,6 +1646,8 @@
 
     protected override async Task OnInitializedAsync()
     {
+        await BreadcrumbService.SetContextAsync(new BreadcrumbContext { SessionId = SessionId });
+
         _session = SessionService.GetSession(SessionId);
 
         // Load available prompts
@@ -2003,6 +2055,8 @@
                         _session.Status = session.Status;
                         _session.TotalCostUsd = session.TotalCostUsd;
                         _session.TotalDurationMs = session.TotalDurationMs;
+                        _session.PlanContent = session.PlanContent;
+                        _session.PlanFilePath = session.PlanFilePath;
                         _pendingQuestion = session.PendingQuestion;
                         Console.WriteLine($"[SignalR] SessionState received: {session.Messages.Count} messages, status: {session.Status}");
                     }
@@ -2081,6 +2135,33 @@
                     Console.WriteLine($"[SignalR] Error in QuestionAnswered: {ex.Message}");
                 }
                 return Task.CompletedTask;
+            });
+        });
+
+        // Handle context cleared event
+        _hubConnection.On<string>("ContextCleared", (sessionId) =>
+        {
+            _ = InvokeAsync(async () =>
+            {
+                try
+                {
+                    LogDebug("ContextCleared", $"Context cleared for session {sessionId}");
+                    Console.WriteLine($"[SignalR] ContextCleared for session {sessionId}");
+
+                    if (_session != null)
+                    {
+                        // Add a context clear marker to the session
+                        _session.ContextClearMarkers.Add(DateTime.UtcNow);
+                    }
+
+                    StateHasChanged();
+                    await AutoScrollToBottomIfNearEnd();
+                }
+                catch (Exception ex)
+                {
+                    LogDebug("ERROR", $"ContextCleared: {ex.Message}");
+                    Console.WriteLine($"[SignalR] Error in ContextCleared: {ex.Message}");
+                }
             });
         });
 
@@ -2419,6 +2500,34 @@
         catch (Exception ex)
         {
             Console.WriteLine($"Error submitting answers: {ex.Message}");
+        }
+    }
+
+    private async Task ExecutePlanWithClearContext()
+    {
+        if (_session == null || _hubConnection == null) return;
+
+        try
+        {
+            await _hubConnection.SendAsync("ExecutePlan", SessionId, true);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error executing plan: {ex.Message}");
+        }
+    }
+
+    private async Task ExecutePlanKeepContext()
+    {
+        if (_session == null || _hubConnection == null) return;
+
+        try
+        {
+            await _hubConnection.SendAsync("ExecutePlan", SessionId, false);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error executing plan: {ex.Message}");
         }
     }
 

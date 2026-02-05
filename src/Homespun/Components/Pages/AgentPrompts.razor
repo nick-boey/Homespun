@@ -1,8 +1,10 @@
 @page "/agents"
 @using Homespun.Features.ClaudeCode.Data
 @using Homespun.Features.ClaudeCode.Services
+@using Homespun.Features.Navigation
 @rendermode InteractiveServer
 @inject IAgentPromptService AgentPromptService
+@inject IBreadcrumbService BreadcrumbService
 
 <PageTitle>Agents - Homespun</PageTitle>
 
@@ -152,8 +154,9 @@ else
     private SessionMode _modalMode = SessionMode.Build;
     private string _modalMessage = string.Empty;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
+        await BreadcrumbService.SetContextAsync(new BreadcrumbContext { PageName = "Agents" });
         RefreshPrompts();
     }
 
