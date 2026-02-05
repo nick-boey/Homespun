@@ -323,8 +323,16 @@ fi
 # Reason: The container has its own settings.json with MCP server config (created in Dockerfile).
 # Mounting the host's ~/.claude would overwrite this config and cause plugin path issues
 # since installed_plugins.json contains absolute host paths that don't exist in the container.
-# OAuth authentication is handled via CLAUDE_CODE_OAUTH_TOKEN environment variable.
-log_info "      Using container's Claude config (MCP servers enabled)"
+# We mount ONLY the credentials file for OAuth authentication.
+CLAUDE_CREDENTIALS_MOUNT=""
+CLAUDE_CREDENTIALS_FILE="$HOME/.claude/.credentials.json"
+if [ -f "$CLAUDE_CREDENTIALS_FILE" ]; then
+    CLAUDE_CREDENTIALS_MOUNT="-v $CLAUDE_CREDENTIALS_FILE:/home/homespun/.claude/.credentials.json:ro"
+    log_success "      Claude credentials found: $CLAUDE_CREDENTIALS_FILE"
+else
+    log_warn "      Claude credentials not found: $CLAUDE_CREDENTIALS_FILE"
+    log_warn "      Run 'claude login' to authenticate, or set CLAUDE_CODE_OAUTH_TOKEN"
+fi
 
 # Read external hostname
 if [ -z "$EXTERNAL_HOSTNAME" ]; then
@@ -354,6 +362,13 @@ if [ -n "$SSH_MOUNT" ]; then
 fi
 if [ -n "$DOCKER_SOCKET_MOUNT" ]; then
     echo "  Docker:      DooD enabled (host socket mounted)"
+fi
+if [ -n "$CLAUDE_CREDENTIALS_MOUNT" ]; then
+    echo "  Claude:      Credentials mounted (OAuth enabled)"
+elif [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
+    echo "  Claude:      OAuth token via environment variable"
+else
+    echo "  Claude:      No authentication (agents will fail)"
 fi
 if [ -n "$TAILSCALE_AUTH_KEY" ]; then
     echo "  Tailscale:   Enabled (will connect on startup)"
@@ -393,6 +408,7 @@ DOCKER_CMD="$DOCKER_CMD -p $HOST_PORT:8080"
 DOCKER_CMD="$DOCKER_CMD -v $DATA_DIR:/data"
 DOCKER_CMD="$DOCKER_CMD $SSH_MOUNT"
 DOCKER_CMD="$DOCKER_CMD $DOCKER_SOCKET_MOUNT"
+DOCKER_CMD="$DOCKER_CMD $CLAUDE_CREDENTIALS_MOUNT"
 DOCKER_CMD="$DOCKER_CMD -e HOME=/home/homespun"
 DOCKER_CMD="$DOCKER_CMD -e HSP_HOST_DATA_PATH=$DATA_DIR"
 

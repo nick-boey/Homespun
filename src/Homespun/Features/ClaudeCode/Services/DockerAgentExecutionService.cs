@@ -74,6 +74,7 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         string ContainerId,
         string ContainerName,
         string WorkerUrl,
+        string WorkingDirectory,
         string? WorkerSessionId,
         CancellationTokenSource Cts,
         DateTime CreatedAt)
@@ -122,17 +123,18 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
 
                 var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 var session = new DockerSession(
-                    sessionId, containerId, containerName, workerUrl, null, cts, DateTime.UtcNow);
+                    sessionId, containerId, containerName, workerUrl, request.WorkingDirectory, null, cts, DateTime.UtcNow);
 
                 _sessions[sessionId] = session;
 
                 await channel.Writer.WriteAsync(new AgentSessionStartedEvent(sessionId, null), cancellationToken);
 
                 // Start the agent session in the worker
-                // The workspace is mounted at /data in the agent container
+                // The entire /data volume is mounted, preserving the directory structure
+                // so we pass the original working directory path
                 var startRequest = new
                 {
-                    WorkingDirectory = "/data",
+                    WorkingDirectory = request.WorkingDirectory,
                     Mode = request.Mode.ToString(),
                     Model = request.Model,
                     Prompt = request.Prompt,
@@ -143,11 +145,22 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
                 await foreach (var evt in SendSseRequestAsync($"{workerUrl}/api/sessions", startRequest, sessionId, cts.Token))
                 {
                     // Update worker session ID if we receive it from the worker
-                    if (evt is AgentSessionStartedEvent startedEvt && !string.IsNullOrEmpty(startedEvt.SessionId))
+                    if (evt is AgentSessionStartedEvent startedEvt)
                     {
-                        session = session with { WorkerSessionId = startedEvt.SessionId };
-                        _sessions[sessionId] = session;
-                        _logger.LogDebug("Updated WorkerSessionId to {WorkerSessionId} for session {SessionId}", startedEvt.SessionId, sessionId);
+                        _logger.LogInformation("Received AgentSessionStartedEvent: SessionId={SessionId}, ConversationId={ConversationId}",
+                            startedEvt.SessionId, startedEvt.ConversationId);
+
+                        if (!string.IsNullOrEmpty(startedEvt.SessionId))
+                        {
+                            session = session with { WorkerSessionId = startedEvt.SessionId };
+                            _sessions[sessionId] = session;
+                            _logger.LogInformation("✓ Stored WorkerSessionId={WorkerSessionId} for Docker session {SessionId}",
+                                startedEvt.SessionId, sessionId);
+                        }
+                        else
+                        {
+                            _logger.LogWarning("✗ AgentSessionStartedEvent has empty SessionId!");
+                        }
                     }
 
                     // Map worker session IDs to our session ID
@@ -157,6 +170,8 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
                     {
                         session.ConversationId = resultEvt.ConversationId;
                         _sessions[sessionId] = session;
+                        _logger.LogInformation("✓ Stored ConversationId={ConversationId} for session {SessionId}",
+                            resultEvt.ConversationId, sessionId);
                     }
                 }
                 channel.Writer.Complete();
@@ -191,19 +206,27 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         AgentMessageRequest request,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
+        _logger.LogInformation("SendMessageAsync called for session {SessionId}", request.SessionId);
+
         if (!_sessions.TryGetValue(request.SessionId, out var session))
         {
+            _logger.LogError("✗ Session {SessionId} not found in _sessions dictionary", request.SessionId);
             yield return new AgentErrorEvent(request.SessionId, $"Session {request.SessionId} not found", "SESSION_NOT_FOUND", false);
             yield break;
         }
 
+        _logger.LogInformation("✓ Found Docker session: WorkerSessionId={WorkerSessionId}, ConversationId={ConversationId}",
+            session.WorkerSessionId, session.ConversationId);
+
         if (string.IsNullOrEmpty(session.WorkerSessionId))
         {
+            _logger.LogError("✗ Worker session ID is empty - session was not properly initialized");
             yield return new AgentErrorEvent(request.SessionId, "Worker session not initialized", "WORKER_NOT_READY", false);
             yield break;
         }
 
         session.LastActivityAt = DateTime.UtcNow;
+        _logger.LogInformation("✓ Sending message to worker at {Url}", $"{session.WorkerUrl}/api/sessions/{session.WorkerSessionId}/message");
 
         var messageRequest = new
         {
@@ -280,7 +303,7 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         {
             return Task.FromResult<AgentSessionStatus?>(new AgentSessionStatus(
                 session.SessionId,
-                "/data", // Container-relative path
+                session.WorkingDirectory,
                 SessionMode.Build, // TODO: Store actual mode
                 "sonnet", // TODO: Store actual model
                 session.ConversationId,
@@ -327,8 +350,20 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         dockerArgs.Append($"--name {containerName} ");
         dockerArgs.Append($"--memory {_options.MemoryLimitBytes} ");
         dockerArgs.Append($"--cpus {_options.CpuLimit} ");
-        var hostPath = TranslateToHostPath(workingDirectory);
-        dockerArgs.Append($"-v \"{hostPath}:/data\" ");
+
+        // Run worker container with same UID/GID as main container
+        // This ensures the worker can edit files created by the main container
+        var userFlag = ProcessUserInfo.GetDockerUserFlag();
+        if (!string.IsNullOrEmpty(userFlag))
+        {
+            dockerArgs.Append($"--user {userFlag} ");
+            _logger.LogDebug("Running worker container as user {UserFlag}", userFlag);
+        }
+
+        // Mount the entire /data volume to preserve directory structure
+        // This ensures the agent sees the same paths as the main container
+        var dataVolumeHostPath = TranslateToHostPath(_options.DataVolumePath);
+        dockerArgs.Append($"-v \"{dataVolumeHostPath}:{_options.DataVolumePath}\" ");
         dockerArgs.Append($"-e ASPNETCORE_URLS=http://+:8080 ");
 
         // Pass through authentication environment variables for Claude CLI
@@ -340,6 +375,18 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
             {
                 dockerArgs.Append($"-e {envVar}=\"{value}\" ");
                 _logger.LogDebug("Passing environment variable {EnvVar} to agent container", envVar);
+            }
+        }
+
+        // Mount Claude credentials file if it exists (for OAuth authentication)
+        var homeDir = Environment.GetEnvironmentVariable("HOME");
+        if (!string.IsNullOrEmpty(homeDir))
+        {
+            var credentialsFile = Path.Combine(homeDir, ".claude", ".credentials.json");
+            if (File.Exists(credentialsFile))
+            {
+                dockerArgs.Append($"-v \"{credentialsFile}:/home/homespun/.claude/.credentials.json:ro\" ");
+                _logger.LogDebug("Mounting Claude credentials file for agent container");
             }
         }
 
