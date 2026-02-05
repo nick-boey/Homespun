@@ -106,10 +106,9 @@ else
     // Issue PR status service (for getting PR status linked to issues)
     builder.Services.AddScoped<IIssuePrStatusService, IssuePrStatusService>();
 
-    // Gitgraph services
-    var graphCachePath = Path.Combine(homespunDir, "graph-cache");
+    // Gitgraph services - cache stored as JSONL files alongside project data
     builder.Services.AddSingleton<IGraphCacheService>(sp =>
-        new GraphCacheService(graphCachePath, sp.GetRequiredService<ILogger<GraphCacheService>>()));
+        new GraphCacheService(sp.GetRequiredService<ILogger<GraphCacheService>>()));
     builder.Services.AddScoped<IGraphService, GraphService>();
 
     // Issue-PR linking service (must be registered before GitHubService as it depends on it)

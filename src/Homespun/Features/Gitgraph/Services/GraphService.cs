@@ -14,6 +14,7 @@ namespace Homespun.Features.Gitgraph.Services;
 /// Service for building graph data from Fleece Issues and PullRequests.
 /// Uses IFleeceService for fast issue access.
 /// Supports caching of PR data to improve page load times.
+/// Cache is stored in JSONL files alongside the project data for fast startup.
 /// </summary>
 public class GraphService(
     IProjectService projectService,
@@ -61,17 +62,20 @@ public class GraphService(
     /// <inheritdoc />
     public async Task<Graph?> BuildGraphFromCacheOnlyAsync(string projectId, int? maxPastPRs = 5)
     {
-        var cachedData = cacheService.GetCachedPRData(projectId);
-        if (cachedData == null)
-        {
-            logger.LogDebug("No cached data available for project {ProjectId}", projectId);
-            return null;
-        }
-
         var project = await projectService.GetByIdAsync(projectId);
         if (project == null)
         {
             logger.LogWarning("Project not found: {ProjectId}", projectId);
+            return null;
+        }
+
+        // Ensure cache is loaded from disk for this project
+        cacheService.LoadCacheForProject(projectId, project.LocalPath);
+
+        var cachedData = cacheService.GetCachedPRData(projectId);
+        if (cachedData == null)
+        {
+            logger.LogDebug("No cached data available for project {ProjectId}", projectId);
             return null;
         }
 
@@ -139,6 +143,12 @@ public class GraphService(
         List<PullRequestInfo> openPrs;
         List<PullRequestInfo> closedPrs;
 
+        // Ensure cache is loaded from disk for this project
+        if (useCache)
+        {
+            cacheService.LoadCacheForProject(projectId, project.LocalPath);
+        }
+
         // Try to use cached PR data if requested
         var cachedData = useCache ? cacheService.GetCachedPRData(projectId) : null;
 
@@ -157,7 +167,7 @@ public class GraphService(
             closedPrs = await GetClosedPullRequestsSafe(projectId);
 
             // Cache the fresh data for future use
-            await cacheService.CachePRDataAsync(projectId, openPrs, closedPrs);
+            await cacheService.CachePRDataAsync(projectId, project.LocalPath, openPrs, closedPrs);
         }
 
         var allPrs = closedPrs.Concat(openPrs).ToList();
@@ -210,7 +220,7 @@ public class GraphService(
         var issuePrStatuses = await GetIssuePrStatusesAsync(projectId, filteredIssues);
 
         // Cache the fresh data INCLUDING statuses for future cache-only loads
-        await cacheService.CachePRDataWithStatusesAsync(projectId, openPrs, closedPrs, issuePrStatuses);
+        await cacheService.CachePRDataWithStatusesAsync(projectId, project.LocalPath, openPrs, closedPrs, issuePrStatuses);
 
         logger.LogDebug(
             "Building graph with fresh data for project {ProjectId}: {OpenPrCount} open PRs, {ClosedPrCount} closed PRs, {IssueCount} issues, {StatusCount} PR statuses cached",
