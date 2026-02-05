@@ -82,7 +82,7 @@ public class GraphServiceAgentStatusTests
         _mockCacheService = new Mock<IGraphCacheService>();
         _mockCacheService.Setup(s => s.GetCachedPRData(It.IsAny<string>()))
             .Returns((CachedPRData?)null);
-        _mockCacheService.Setup(s => s.CachePRDataAsync(It.IsAny<string>(), It.IsAny<List<PullRequestInfo>>(), It.IsAny<List<PullRequestInfo>>()))
+        _mockCacheService.Setup(s => s.CachePRDataAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<List<PullRequestInfo>>(), It.IsAny<List<PullRequestInfo>>()))
             .Returns(Task.CompletedTask);
 
         _mockLogger = new Mock<ILogger<GraphService>>();
