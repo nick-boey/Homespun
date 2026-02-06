@@ -28,7 +28,7 @@ public static class ClaudeSessionStatusExtensions
         ClaudeSessionStatus.Starting => "bg-warning text-dark",
         ClaudeSessionStatus.Running => "bg-success",
         ClaudeSessionStatus.WaitingForInput => "bg-info",
-        ClaudeSessionStatus.WaitingForQuestionAnswer => "bg-warning",
+        ClaudeSessionStatus.WaitingForQuestionAnswer => "bg-status-question text-white",
         ClaudeSessionStatus.WaitingForPlanExecution => "bg-info",
         ClaudeSessionStatus.Stopped => "bg-secondary",
         ClaudeSessionStatus.Error => "bg-danger",

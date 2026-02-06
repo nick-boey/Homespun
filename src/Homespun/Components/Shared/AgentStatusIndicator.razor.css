@@ -35,7 +35,7 @@
 }
 
 .status-dot.question {
-    background: var(--status-danger);
+    background: var(--status-question);
     animation: pulse 1s ease-in-out infinite;
 }
 

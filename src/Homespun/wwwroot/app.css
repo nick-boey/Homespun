@@ -116,6 +116,7 @@
     --status-success: var(--color-lagoon);
     --status-warning: var(--color-wattle);
     --status-error: var(--color-red);
+    --status-question: #fd7e14;
     --status-info: var(--color-ocean);
     --status-muted: var(--color-basalt-light);
     --status-merged: #6f42c1;
@@ -195,6 +196,7 @@
         --status-success: var(--color-lagoon);
         --status-warning: var(--color-wattle);
         --status-error: var(--color-red);
+        --status-question: #ff9f43;
         --status-info: var(--color-ocean);
         --status-muted: var(--color-basalt-light);
         --status-merged: #9d7ce0;
@@ -210,18 +212,18 @@
         --section-past-bg: var(--color-basalt);
         --section-current-bg: rgba(255, 234, 118, 0.15);
         --section-future-bg: rgba(194, 255, 239, 0.1);
-        
+
         /* Form Colors */
         --input-bg: var(--color-basalt);
         --input-border: var(--border-color-light);
         --input-focus-border: var(--color-ocean);
         --input-placeholder: var(--color-basalt-light);
-        
+
         /* Misc */
         --scrollbar-thumb: var(--color-basalt-light);
         --scrollbar-track: var(--color-dark-background);
         --code-bg: var(--color-basalt);
-        
+
         /* Shadow adjustments for dark mode */
         --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
         --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.3);
@@ -275,6 +277,7 @@
     --status-success: var(--color-lagoon);
     --status-warning: var(--color-wattle);
     --status-error: var(--color-red);
+    --status-question: #ff9f43;
     --status-info: var(--color-ocean);
     --status-muted: var(--color-basalt-light);
     --status-merged: #9d7ce0;
@@ -940,7 +943,7 @@ code {
     padding: 0.125rem 0.25rem;
     background-color: var(--code-bg);
     border-radius: var(--radius-sm);
-    color: var(--color-red);
+    color: var(--text-primary);
 }
 
 pre {
@@ -1065,7 +1068,7 @@ pre code {
     padding: 0.125rem 0.375rem;
     background-color: var(--code-bg);
     border-radius: var(--radius-sm);
-    color: var(--color-red);
+    color: var(--text-primary);
 }
 
 .markdown-content pre {
