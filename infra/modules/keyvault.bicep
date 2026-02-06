@@ -46,8 +46,9 @@ resource keyVaultSecretsUser 'Microsoft.Authorization/roleAssignments@2022-04-01
   }
 }
 
-// Store GitHub token if provided
-resource githubTokenSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (!empty(githubToken)) {
+// Always create secrets so Key Vault references in the container app resolve.
+// When no value is provided, an empty-string placeholder is stored.
+resource githubTokenSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
   parent: keyVault
   name: 'github-token'
   properties: {
@@ -55,8 +56,7 @@ resource githubTokenSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (
   }
 }
 
-// Store Claude OAuth token if provided
-resource claudeTokenSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (!empty(claudeOAuthToken)) {
+resource claudeTokenSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
   parent: keyVault
   name: 'claude-oauth-token'
   properties: {
@@ -64,8 +64,7 @@ resource claudeTokenSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (
   }
 }
 
-// Store Tailscale auth key if provided
-resource tailscaleSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (!empty(tailscaleAuthKey)) {
+resource tailscaleSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
   parent: keyVault
   name: 'tailscale-auth-key'
   properties: {
