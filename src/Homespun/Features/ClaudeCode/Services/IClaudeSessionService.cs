@@ -84,6 +84,12 @@ public interface IClaudeSessionService
     Task StopSessionAsync(string sessionId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Interrupts the current execution of a session without fully stopping it.
+    /// The session remains alive in WaitingForInput state so the user can send another message to resume.
+    /// </summary>
+    Task InterruptSessionAsync(string sessionId, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Gets a session by ID.
     /// </summary>
     ClaudeSession? GetSession(string sessionId);

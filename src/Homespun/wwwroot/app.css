@@ -143,6 +143,7 @@
     --scrollbar-thumb: var(--color-basalt-light);
     --scrollbar-track: var(--bg-tertiary);
     --code-bg: #f8f9fa;
+    --bg-tool-group: var(--color-white);
 }
 
 /* ==========================================================================
@@ -223,6 +224,7 @@
         --scrollbar-thumb: var(--color-basalt-light);
         --scrollbar-track: var(--color-dark-background);
         --code-bg: var(--color-basalt);
+        --bg-tool-group: #2a2a2a;
 
         /* Shadow adjustments for dark mode */
         --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
@@ -304,6 +306,7 @@
     --scrollbar-thumb: var(--color-basalt-light);
     --scrollbar-track: var(--color-dark-background);
     --code-bg: var(--color-basalt);
+    --bg-tool-group: #2a2a2a;
 
     /* Shadow adjustments for dark mode */
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);

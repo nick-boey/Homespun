@@ -10,6 +10,10 @@ param fileShareName string = 'homespun-data'
 @description('Share size in GiB')
 param shareQuotaGiB int = 100
 
+@description('Default network ACL action. Use Deny only with VNet integration or private endpoints.')
+@allowed(['Allow', 'Deny'])
+param networkDefaultAction string = 'Allow'
+
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
   name: storageAccountName
   location: location
@@ -23,7 +27,7 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
     allowBlobPublicAccess: false
     allowSharedKeyAccess: true
     networkAcls: {
-      defaultAction: 'Allow' // Restrict in production
+      defaultAction: networkDefaultAction
       bypass: 'AzureServices'
     }
   }

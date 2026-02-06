@@ -25,11 +25,19 @@ param githubToken string = ''
 @secure()
 param claudeOAuthToken string = ''
 
+@description('Tailscale auth key for VPN access')
+@secure()
+param tailscaleAuthKey string = ''
+
 @description('Maximum concurrent agent sessions')
 param maxConcurrentSessions int = 10
 
 @description('Number of warm agent instances')
 param readySessionInstances int = 2
+
+@description('Storage network ACL default action. Use Deny only with VNet/private endpoint.')
+@allowed(['Allow', 'Deny'])
+param storageNetworkDefaultAction string = 'Allow'
 
 // Resource naming
 var resourceSuffix = '${baseName}-${environmentSuffix}'
@@ -59,6 +67,7 @@ module keyVault 'modules/keyvault.bicep' = {
     identityPrincipalId: identity.outputs.identityPrincipalId
     githubToken: githubToken
     claudeOAuthToken: claudeOAuthToken
+    tailscaleAuthKey: tailscaleAuthKey
   }
 }
 
@@ -68,6 +77,7 @@ module storage 'modules/storage.bicep' = {
   params: {
     location: location
     storageAccountName: storageAccountName
+    networkDefaultAction: storageNetworkDefaultAction
   }
 }
 
@@ -93,7 +103,9 @@ module sessionPool 'modules/sessionpool.bicep' = if (agentExecutionMode == 'Azur
     environmentId: environment.outputs.environmentId
     workerImage: workerImage
     identityId: identity.outputs.identityId
-    storageMountName: environment.outputs.storageMountName
+    identityPrincipalId: identity.outputs.identityPrincipalId
+    githubToken: githubToken
+    claudeOAuthToken: claudeOAuthToken
     maxConcurrentSessions: maxConcurrentSessions
     readySessionInstances: readySessionInstances
   }

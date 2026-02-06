@@ -300,10 +300,10 @@
                         @if (_session.Status == ClaudeSessionStatus.Running)
                         {
                             <button class="btn btn-danger stop-button"
-                                    @onclick="StopSession"
-                                    disabled="@_isStopping"
-                                    title="Stop the current execution (Escape)">
-                                @if (_isStopping)
+                                    @onclick="InterruptSession"
+                                    disabled="@_isInterrupting"
+                                    title="Interrupt the current execution (Escape)">
+                                @if (_isInterrupting)
                                 {
                                     <span class="spinner-border spinner-border-sm" role="status"></span>
                                 }
@@ -311,7 +311,7 @@
                                 {
                                     <span class="stop-icon">&#9632;</span>
                                 }
-                                Stop
+                                Interrupt
                             </button>
                             @if (!string.IsNullOrWhiteSpace(_inputMessage))
                             {
@@ -482,18 +482,18 @@
     }
 
     .assistant-message {
-        background: var(--bg-primary);
+        background: var(--bg-tool-group);
         margin-right: 10%;
         border: 1px solid var(--border-color);
     }
 
     /* Tool execution group - consolidated bubble for grouped tool calls */
     .tool-group {
-        background: var(--bg-primary);
+        background: var(--bg-tool-group);
         margin-right: 10%;
         margin-bottom: var(--spacing-md);
         border: 1px solid var(--border-color);
-        border-radius: var(--radius-md);
+        border-radius: var(--radius-lg);
         overflow: hidden;
     }
 
@@ -695,7 +695,7 @@
 
     .tool-result-details {
         border-top: 1px solid var(--border-color);
-        background: var(--bg-primary);
+        background: var(--bg-tool-group);
         max-height: 400px;
         overflow-y: auto;
     }
@@ -1523,8 +1523,9 @@
     private Dictionary<string, string> _questionAnswers = new();
     private Dictionary<string, string> _customAnswers = new();  // For "Other" text input
 
-    // Stop button state
+    // Stop/interrupt button state
     private bool _isStopping = false;
+    private bool _isInterrupting = false;
 
     // Message queue for mid-execution prompts
     private Queue<string> _pendingMessages = new();
@@ -2437,16 +2438,16 @@
     /// Handles keyboard events in the textarea.
     /// Enter creates a newline (default behavior).
     /// Ctrl+Enter or Meta+Enter (Cmd on Mac) submits the message or queues it when running.
-    /// Escape stops the current execution when running.
+    /// Escape interrupts the current execution when running.
     /// </summary>
     private async Task HandleKeyDown(KeyboardEventArgs e)
     {
         if (_session == null) return;
 
-        // Escape key stops the current execution
+        // Escape key interrupts the current execution (session stays alive for resume)
         if (e.Key == "Escape" && _session.Status == ClaudeSessionStatus.Running)
         {
-            await StopSession();
+            await InterruptSession();
             return;
         }
 
@@ -2489,6 +2490,33 @@
     }
 
     /// <summary>
+    /// Interrupts the current execution without stopping the session.
+    /// The session remains alive in WaitingForInput state so the user can send another message to resume.
+    /// </summary>
+    private async Task InterruptSession()
+    {
+        if (_session == null || _isInterrupting) return;
+
+        _isInterrupting = true;
+        StateHasChanged();
+
+        try
+        {
+            await SessionService.InterruptSessionAsync(SessionId);
+            // Status will be updated via SessionStatusChanged SignalR event to WaitingForInput
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error interrupting session: {ex.Message}");
+        }
+        finally
+        {
+            _isInterrupting = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
     /// Queues a message to be sent after the current execution completes.
     /// </summary>
     private void QueueMessage()
@@ -2517,7 +2545,7 @@
     {
         if (_session?.Status == ClaudeSessionStatus.Running)
         {
-            return "Type a message to queue... (Ctrl+Enter to queue, Escape to stop)";
+            return "Type a message to queue... (Ctrl+Enter to queue, Escape to interrupt)";
         }
         return "Type a message... (Ctrl+Enter to send)";
     }

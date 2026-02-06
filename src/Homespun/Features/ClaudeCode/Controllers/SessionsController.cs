@@ -141,6 +141,32 @@ public class SessionsController(
         }
     }
 
+    /// <summary>
+    /// Interrupt an existing session's current execution without fully stopping it.
+    /// The session remains alive so the user can send another message to resume.
+    /// </summary>
+    [HttpPost("{id}/interrupt")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Interrupt(string id)
+    {
+        var session = sessionService.GetSession(id);
+        if (session == null)
+        {
+            return NotFound();
+        }
+
+        try
+        {
+            await sessionService.InterruptSessionAsync(id);
+            return NoContent();
+        }
+        catch (Exception ex)
+        {
+            return BadRequest($"Failed to interrupt session: {ex.Message}");
+        }
+    }
+
     private static SessionSummary MapToSummary(ClaudeSession session) => new()
     {
         Id = session.Id,

@@ -581,6 +581,7 @@ try {
 
     if (-not [string]::IsNullOrWhiteSpace($tailscaleKey)) {
         $dockerArgs += "-e", "TAILSCALE_AUTH_KEY=$tailscaleKey"
+        $dockerArgs += "-e", "TS_HOSTNAME=homespun-dev"
     }
 
     if (-not [string]::IsNullOrWhiteSpace($externalHostnameValue)) {
