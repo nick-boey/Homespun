@@ -68,29 +68,33 @@ else
         else if (LaneInfo.IsFlatOrphan)
         {
             // Flat orphan issues show diamond in lane 0 with no connecting lines
-            var nodeColor = Node.Color ?? "#6b7280";
+            var (effectiveColor, isOutlineOnly, showErrorCross) = ComputeEffectiveNodeStyle();
             SvgContent = TimelineSvgRenderer.GenerateFlatOrphanRowSvg(
                 maxLanes: MaxLanes,
-                nodeColor: nodeColor
+                nodeColor: effectiveColor,
+                isOutlineOnly: isOutlineOnly,
+                showErrorCross: showErrorCross
             );
         }
         else
         {
             var isIssue = Node.NodeType == GraphNodeType.Issue || Node.NodeType == GraphNodeType.OrphanIssue;
-            var nodeColor = Node.Color ?? "#6b7280";
+            var (effectiveColor, isOutlineOnly, showErrorCross) = ComputeEffectiveNodeStyle();
 
             SvgContent = TimelineSvgRenderer.GenerateRowSvg(
                 nodeLane: LaneInfo.NodeLane,
                 activeLanes: LaneInfo.ActiveLanes,
                 connectorFromLane: LaneInfo.ConnectorFromLane,
                 maxLanes: MaxLanes,
-                nodeColor: nodeColor,
+                nodeColor: effectiveColor,
                 isIssue: isIssue,
                 isLoadMore: IsLoadMore,
                 laneColors: LaneColors,
                 isFirstRowInLane: LaneInfo.IsFirstRowInLane,
                 isLastRowInLane: LaneInfo.IsLastRowInLane,
-                lanesEndingThisRow: LaneInfo.LanesEndingAtThisRow
+                lanesEndingThisRow: LaneInfo.LanesEndingAtThisRow,
+                isOutlineOnly: isIssue && isOutlineOnly,
+                showErrorCross: isIssue && showErrorCross
             );
         }
     }
@@ -108,6 +112,38 @@ else
     private async Task HandleMouseLeave()
     {
         await OnNodeLeave.InvokeAsync();
+    }
+
+    /// <summary>
+    /// Computes the effective node color, fill style, and error cross based on agent status and description presence.
+    /// Agent status overrides the base issue color. When an agent is active, the diamond is always filled.
+    /// When no agent is active, fill depends on whether the issue has a description.
+    /// </summary>
+    private (string Color, bool IsOutlineOnly, bool ShowErrorCross) ComputeEffectiveNodeStyle()
+    {
+        var baseColor = Node.Color ?? "#6b7280";
+
+        // Check if agent status should override the color
+        if (AgentStatus != null && AgentStatus.IsActive)
+        {
+            var agentColor = AgentStatus.Status switch
+            {
+                "Running" or "Starting" or "RunningHooks" => "#22c55e",       // Green - working
+                "WaitingForInput" or "WaitingForPlanExecution" => "#eab308",   // Yellow - waiting
+                "WaitingForQuestionAnswer" => "#f97316",                       // Orange - question
+                "Error" => "#ef4444",                                          // Red - error
+                _ => baseColor                                                 // Use base color for unknown statuses
+            };
+
+            var isError = AgentStatus.Status == "Error";
+
+            // Agent active → always filled, with error cross if error state
+            return (agentColor, false, isError);
+        }
+
+        // No active agent: color from base, fill based on description
+        var isOutlineOnly = Node.HasDescription == false; // false when HasDescription is explicitly false, not when null
+        return (baseColor, isOutlineOnly, false);
     }
 
     private string GetAgentStatusClass()

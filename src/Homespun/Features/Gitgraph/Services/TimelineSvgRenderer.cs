@@ -161,6 +161,42 @@ public static class TimelineSvgRenderer
     }
 
     /// <summary>
+    /// Generate SVG for an outline-only diamond node (used for issues without description).
+    /// </summary>
+    /// <param name="laneIndex">Lane where the node is positioned.</param>
+    /// <param name="color">Stroke color for the outline.</param>
+    public static string GenerateDiamondNodeOutline(int laneIndex, string color)
+    {
+        var cx = GetLaneCenterX(laneIndex);
+        var cy = GetRowCenterY();
+        var s = DiamondSize;
+
+        // Diamond path: top, right, bottom, left
+        var path = $"M {cx} {cy - s} L {cx + s} {cy} L {cx} {cy + s} L {cx - s} {cy} Z";
+        return $"<path d=\"{path}\" fill=\"none\" stroke=\"{EscapeAttribute(color)}\" stroke-width=\"2\" />";
+    }
+
+    /// <summary>
+    /// Generate SVG for an error cross overlay inside a diamond node.
+    /// Renders a small X/cross at the center of the diamond.
+    /// </summary>
+    /// <param name="laneIndex">Lane where the node is positioned.</param>
+    /// <param name="color">Color for the cross lines.</param>
+    public static string GenerateErrorCross(int laneIndex, string color)
+    {
+        var cx = GetLaneCenterX(laneIndex);
+        var cy = GetRowCenterY();
+        var crossSize = 3; // Half-size of the cross
+
+        var sb = new StringBuilder();
+        // Diagonal line from top-left to bottom-right
+        sb.Append($"<line x1=\"{cx - crossSize}\" y1=\"{cy - crossSize}\" x2=\"{cx + crossSize}\" y2=\"{cy + crossSize}\" stroke=\"{EscapeAttribute(color)}\" stroke-width=\"2\" />");
+        // Diagonal line from top-right to bottom-left
+        sb.Append($"<line x1=\"{cx + crossSize}\" y1=\"{cy - crossSize}\" x2=\"{cx - crossSize}\" y2=\"{cy + crossSize}\" stroke=\"{EscapeAttribute(color)}\" stroke-width=\"2\" />");
+        return sb.ToString();
+    }
+
+    /// <summary>
     /// Generate SVG for a "load more" button node.
     /// </summary>
     /// <param name="laneIndex">Lane where the node is positioned.</param>
@@ -192,6 +228,8 @@ public static class TimelineSvgRenderer
     /// <param name="isLastRowInLane">True if this is the last row where nodeLane is active.</param>
     /// <param name="lanesEndingThisRow">Set of lane indices that should not draw a bottom segment (pass-through lanes ending at this row).</param>
     /// <param name="reservedLanes">Set of lane indices that are allocated but should not render vertical lines.</param>
+    /// <param name="isOutlineOnly">True to render outline-only diamond (no description), false for filled. Only applies when isIssue is true.</param>
+    /// <param name="showErrorCross">True to render an error cross overlay inside the diamond. Only applies when isIssue is true.</param>
     public static string GenerateRowSvg(
         int nodeLane,
         IReadOnlySet<int> activeLanes,
@@ -204,7 +242,9 @@ public static class TimelineSvgRenderer
         bool isFirstRowInLane = false,
         bool isLastRowInLane = false,
         IReadOnlySet<int>? lanesEndingThisRow = null,
-        IReadOnlySet<int>? reservedLanes = null)
+        IReadOnlySet<int>? reservedLanes = null,
+        bool isOutlineOnly = false,
+        bool showErrorCross = false)
     {
         var width = CalculateSvgWidth(maxLanes);
         var sb = new StringBuilder();
@@ -270,7 +310,15 @@ public static class TimelineSvgRenderer
         }
         else if (isIssue)
         {
-            sb.Append(GenerateDiamondNode(nodeLane, nodeColor));
+            sb.Append(isOutlineOnly
+                ? GenerateDiamondNodeOutline(nodeLane, nodeColor)
+                : GenerateDiamondNode(nodeLane, nodeColor));
+
+            if (showErrorCross)
+            {
+                // White cross on filled diamond for visibility
+                sb.Append(GenerateErrorCross(nodeLane, "white"));
+            }
         }
         else
         {
@@ -310,9 +358,13 @@ public static class TimelineSvgRenderer
     /// </summary>
     /// <param name="maxLanes">Maximum number of lanes (determines width).</param>
     /// <param name="nodeColor">Color for the diamond node.</param>
+    /// <param name="isOutlineOnly">True to render outline-only diamond (no description), false for filled.</param>
+    /// <param name="showErrorCross">True to render an error cross overlay inside the diamond.</param>
     public static string GenerateFlatOrphanRowSvg(
         int maxLanes,
-        string nodeColor)
+        string nodeColor,
+        bool isOutlineOnly = false,
+        bool showErrorCross = false)
     {
         var width = CalculateSvgWidth(maxLanes);
         var sb = new StringBuilder();
@@ -320,7 +372,14 @@ public static class TimelineSvgRenderer
         sb.Append($"<svg width=\"{width}\" height=\"{RowHeight}\" xmlns=\"http://www.w3.org/2000/svg\">");
 
         // Draw diamond node in lane 0 only - no vertical lines
-        sb.Append(GenerateDiamondNode(0, nodeColor));
+        sb.Append(isOutlineOnly
+            ? GenerateDiamondNodeOutline(0, nodeColor)
+            : GenerateDiamondNode(0, nodeColor));
+
+        if (showErrorCross)
+        {
+            sb.Append(GenerateErrorCross(0, "white"));
+        }
 
         sb.Append("</svg>");
         return sb.ToString();

@@ -912,6 +912,7 @@ public class TimelineLaneCalculatorTests
         public string? Tag => null;
         public int? PullRequestNumber => Id.StartsWith("pr-") ? int.Parse(Id.Replace("pr-", "")) : null;
         public string? IssueId => Id.StartsWith("issue-") ? Id.Replace("issue-", "") : null;
+        public bool? HasDescription => null;
     }
 
     #endregion

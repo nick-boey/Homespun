@@ -619,6 +619,190 @@ public class TimelineSvgRendererTests
 
     #endregion
 
+    #region GenerateDiamondNodeOutline Tests
+
+    [Test]
+    public void GenerateDiamondNodeOutline_Lane0_GeneratesOutlineWithNoFill()
+    {
+        var svg = TimelineSvgRenderer.GenerateDiamondNodeOutline(0, "#3b82f6");
+
+        Assert.That(svg, Does.Contain("<path"));
+        Assert.That(svg, Does.Contain("fill=\"none\""));
+        Assert.That(svg, Does.Contain("stroke=\"#3b82f6\""));
+        Assert.That(svg, Does.Contain("stroke-width=\"2\""));
+        // Diamond path should form a diamond shape around center (12, 20)
+        Assert.That(svg, Does.Contain("M 12 13"));     // Start at top
+        Assert.That(svg, Does.Contain("L 19 20"));     // Line to right
+        Assert.That(svg, Does.Contain("L 12 27"));     // Line to bottom
+        Assert.That(svg, Does.Contain("L 5 20"));      // Line to left
+        Assert.That(svg, Does.Contain("Z"));           // Close path
+    }
+
+    [Test]
+    public void GenerateDiamondNodeOutline_Lane2_PositionsCorrectly()
+    {
+        var svg = TimelineSvgRenderer.GenerateDiamondNodeOutline(2, "#ef4444");
+
+        // Lane 2 center = 60
+        Assert.That(svg, Does.Contain("M 60 13"));
+        Assert.That(svg, Does.Contain("stroke=\"#ef4444\""));
+    }
+
+    #endregion
+
+    #region GenerateErrorCross Tests
+
+    [Test]
+    public void GenerateErrorCross_Lane0_GeneratesCrossLines()
+    {
+        var svg = TimelineSvgRenderer.GenerateErrorCross(0, "white");
+
+        // Cross at center (12, 20) with crossSize=3
+        Assert.That(svg, Does.Contain("<line"));
+        // Diagonal 1: (9, 17) to (15, 23)
+        Assert.That(svg, Does.Contain("x1=\"9\""));
+        Assert.That(svg, Does.Contain("y1=\"17\""));
+        Assert.That(svg, Does.Contain("x2=\"15\""));
+        Assert.That(svg, Does.Contain("y2=\"23\""));
+        // Diagonal 2: (15, 17) to (9, 23)
+        Assert.That(svg, Does.Contain("stroke=\"white\""));
+        Assert.That(svg, Does.Contain("stroke-width=\"2\""));
+    }
+
+    [Test]
+    public void GenerateErrorCross_Lane1_PositionsCorrectly()
+    {
+        var svg = TimelineSvgRenderer.GenerateErrorCross(1, "#ef4444");
+
+        // Lane 1 center = 36, row center = 20, crossSize = 3
+        // Diagonal: (33, 17) to (39, 23)
+        Assert.That(svg, Does.Contain("x1=\"33\""));
+        Assert.That(svg, Does.Contain("y1=\"17\""));
+        Assert.That(svg, Does.Contain("x2=\"39\""));
+        Assert.That(svg, Does.Contain("y2=\"23\""));
+    }
+
+    #endregion
+
+    #region GenerateRowSvg Outline and Error Cross Tests
+
+    [Test]
+    public void GenerateRowSvg_IssueOutlineOnly_GeneratesOutlineDiamond()
+    {
+        var svg = TimelineSvgRenderer.GenerateRowSvg(
+            nodeLane: 0,
+            activeLanes: new HashSet<int> { 0 },
+            connectorFromLane: null,
+            maxLanes: 1,
+            nodeColor: "#3b82f6",
+            isIssue: true,
+            isLoadMore: false,
+            isOutlineOnly: true);
+
+        Assert.That(svg, Does.Contain("fill=\"none\""));
+        Assert.That(svg, Does.Contain("stroke=\"#3b82f6\""));
+        Assert.That(svg, Does.Contain("stroke-width=\"2\""));
+    }
+
+    [Test]
+    public void GenerateRowSvg_IssueNotOutline_GeneratesFilledDiamond()
+    {
+        var svg = TimelineSvgRenderer.GenerateRowSvg(
+            nodeLane: 0,
+            activeLanes: new HashSet<int> { 0 },
+            connectorFromLane: null,
+            maxLanes: 1,
+            nodeColor: "#3b82f6",
+            isIssue: true,
+            isLoadMore: false,
+            isOutlineOnly: false);
+
+        // Diamond path should have fill color (not outline style)
+        Assert.That(svg, Does.Contain("fill=\"#3b82f6\""));
+        // Should NOT have a diamond path with outline-only style (stroke on diamond)
+        Assert.That(svg, Does.Not.Contain("stroke=\"#3b82f6\" stroke-width=\"2\""),
+            "Filled diamond should not have outline stroke on diamond path");
+    }
+
+    [Test]
+    public void GenerateRowSvg_WithErrorCross_IncludesCrossLines()
+    {
+        var svg = TimelineSvgRenderer.GenerateRowSvg(
+            nodeLane: 0,
+            activeLanes: new HashSet<int> { 0 },
+            connectorFromLane: null,
+            maxLanes: 1,
+            nodeColor: "#ef4444",
+            isIssue: true,
+            isLoadMore: false,
+            showErrorCross: true);
+
+        Assert.That(svg, Does.Contain("<line"));
+        Assert.That(svg, Does.Contain("stroke=\"white\""));
+    }
+
+    [Test]
+    public void GenerateRowSvg_NonIssue_OutlineAndErrorCrossIgnored()
+    {
+        // Outline and error cross only apply to issues, not PRs
+        var svg = TimelineSvgRenderer.GenerateRowSvg(
+            nodeLane: 0,
+            activeLanes: new HashSet<int> { 0 },
+            connectorFromLane: null,
+            maxLanes: 1,
+            nodeColor: "#10b981",
+            isIssue: false,
+            isLoadMore: false,
+            isOutlineOnly: true,
+            showErrorCross: true);
+
+        // Should render as a circle, not diamond, and no cross
+        Assert.That(svg, Does.Contain("<circle"));
+        Assert.That(svg, Does.Not.Contain("<line"));
+    }
+
+    #endregion
+
+    #region GenerateFlatOrphanRowSvg Outline and Error Cross Tests
+
+    [Test]
+    public void GenerateFlatOrphanRowSvg_OutlineOnly_GeneratesOutlineDiamond()
+    {
+        var svg = TimelineSvgRenderer.GenerateFlatOrphanRowSvg(
+            maxLanes: 1,
+            nodeColor: "#3b82f6",
+            isOutlineOnly: true);
+
+        Assert.That(svg, Does.Contain("fill=\"none\""));
+        Assert.That(svg, Does.Contain("stroke=\"#3b82f6\""));
+    }
+
+    [Test]
+    public void GenerateFlatOrphanRowSvg_Filled_GeneratesFilledDiamond()
+    {
+        var svg = TimelineSvgRenderer.GenerateFlatOrphanRowSvg(
+            maxLanes: 1,
+            nodeColor: "#ef4444",
+            isOutlineOnly: false);
+
+        Assert.That(svg, Does.Contain("fill=\"#ef4444\""));
+        Assert.That(svg, Does.Not.Contain("fill=\"none\""));
+    }
+
+    [Test]
+    public void GenerateFlatOrphanRowSvg_WithErrorCross_IncludesCrossLines()
+    {
+        var svg = TimelineSvgRenderer.GenerateFlatOrphanRowSvg(
+            maxLanes: 1,
+            nodeColor: "#ef4444",
+            showErrorCross: true);
+
+        Assert.That(svg, Does.Contain("<line"));
+        Assert.That(svg, Does.Contain("stroke=\"white\""));
+    }
+
+    #endregion
+
     #region EscapeAttribute Tests (via public methods)
 
     [Test]
