@@ -1,6 +1,7 @@
 @using Homespun.Features.ClaudeCode.Data
 
-<div class="session-info-panel @(IsOpen ? "" : "collapsed")">
+<!-- Desktop: side panel (hidden on mobile) -->
+<div class="session-info-panel desktop-panel @(IsOpen ? "" : "collapsed")">
     <button class="toggle-button" @onclick="TogglePanel" title="@(IsOpen ? "Collapse panel" : "Expand panel")">
         @(IsOpen ? "→" : "←")
     </button>
@@ -57,8 +58,64 @@
     }
 </div>
 
+<!-- Mobile: collapsible top section (hidden on desktop) -->
+<div class="session-info-panel mobile-panel">
+    @if (Session != null)
+    {
+        <details class="mobile-details" @ref="_detailsElement">
+            <summary class="mobile-summary" @onclick="HandleMobileToggle" @onclick:preventDefault>
+                <span class="mobile-summary-title">@(IssueTitle ?? "Session Details")</span>
+                <span class="mobile-chevron @(_mobileExpanded ? "expanded" : "")">▾</span>
+            </summary>
+            @if (_mobileExpanded)
+            {
+                <div class="mobile-panel-body">
+                    <div class="panel-tabs">
+                        <button class="tab-button @(_activeTab == Tab.Issue ? "active" : "")"
+                                @onclick="() => SetActiveTab(Tab.Issue)">
+                            Issue
+                        </button>
+                        <button class="tab-button @(_activeTab == Tab.PR ? "active" : "")"
+                                @onclick="() => SetActiveTab(Tab.PR)">
+                            PR
+                        </button>
+                        <button class="tab-button @(_activeTab == Tab.Todos ? "active" : "")"
+                                @onclick="() => SetActiveTab(Tab.Todos)">
+                            To-do's
+                        </button>
+                        <button class="tab-button @(_activeTab == Tab.Files ? "active" : "")"
+                                @onclick="() => SetActiveTab(Tab.Files)">
+                            Files
+                        </button>
+                    </div>
+
+                    <div class="panel-content">
+                        @if (_activeTab == Tab.Issue)
+                        {
+                            <SessionIssueTab EntityId="@Session.EntityId" ProjectId="@Session.ProjectId" />
+                        }
+                        else if (_activeTab == Tab.PR)
+                        {
+                            <SessionPrTab EntityId="@Session.EntityId" ProjectId="@Session.ProjectId" />
+                        }
+                        else if (_activeTab == Tab.Todos)
+                        {
+                            <SessionTodosTab Messages="@Session.Messages" />
+                        }
+                        else if (_activeTab == Tab.Files)
+                        {
+                            <SessionFilesTab WorkingDirectory="@Session.WorkingDirectory" TargetBranch="main" />
+                        }
+                    </div>
+                </div>
+            }
+        </details>
+    }
+</div>
+
 <style>
-    .session-info-panel {
+    /* ===== Desktop Panel (side panel) ===== */
+    .desktop-panel {
         display: flex;
         flex-direction: column;
         width: 320px;
@@ -71,7 +128,7 @@
         transition: width 0.2s ease, min-width 0.2s ease;
     }
 
-    .session-info-panel.collapsed {
+    .desktop-panel.collapsed {
         width: 40px;
         min-width: 40px;
     }
@@ -106,6 +163,68 @@
         margin: var(--spacing-sm) auto;
     }
 
+    /* ===== Mobile Panel (collapsible top section) ===== */
+    .mobile-panel {
+        display: none;
+    }
+
+    .mobile-details {
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        background: var(--bg-secondary);
+        overflow: hidden;
+    }
+
+    .mobile-summary {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: var(--spacing-sm) var(--spacing-md);
+        cursor: pointer;
+        user-select: none;
+        list-style: none;
+        background: var(--bg-tertiary);
+        font-weight: 500;
+        font-size: 0.875rem;
+        color: var(--text-primary);
+    }
+
+    .mobile-summary::-webkit-details-marker {
+        display: none;
+    }
+
+    .mobile-summary:hover {
+        background: var(--bg-secondary);
+    }
+
+    .mobile-summary-title {
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        margin-right: var(--spacing-sm);
+    }
+
+    .mobile-chevron {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        transition: transform 0.2s ease;
+        flex-shrink: 0;
+    }
+
+    .mobile-chevron.expanded {
+        transform: rotate(180deg);
+    }
+
+    .mobile-panel-body {
+        max-height: 50vh;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        border-top: 1px solid var(--border-color);
+    }
+
+    /* ===== Shared styles ===== */
     .panel-empty-state {
         display: flex;
         flex-direction: column;
@@ -134,6 +253,7 @@
         background: var(--bg-tertiary);
         padding: 0 var(--spacing-sm);
         padding-top: var(--spacing-sm);
+        flex-shrink: 0;
     }
 
     .tab-button {
@@ -172,14 +292,28 @@
         flex: 1;
         overflow-y: auto;
     }
+
+    /* ===== Responsive: show/hide desktop vs mobile ===== */
+    @@media (max-width: 768px) {
+        .desktop-panel {
+            display: none !important;
+        }
+
+        .mobile-panel {
+            display: block;
+        }
+    }
 </style>
 
 @code {
     [Parameter] public ClaudeSession? Session { get; set; }
     [Parameter] public bool IsOpen { get; set; } = true;
     [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
+    [Parameter] public string? IssueTitle { get; set; }
 
     private Tab _activeTab = Tab.Issue;
+    private bool _mobileExpanded = false;
+    private ElementReference _detailsElement;
 
     private enum Tab
     {
@@ -199,5 +333,11 @@
     {
         IsOpen = !IsOpen;
         await IsOpenChanged.InvokeAsync(IsOpen);
+    }
+
+    private void HandleMobileToggle()
+    {
+        _mobileExpanded = !_mobileExpanded;
+        StateHasChanged();
     }
 }

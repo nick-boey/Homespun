@@ -8,6 +8,9 @@
 @using Homespun.Features.Shared.Services
 @using Homespun.Features.Navigation
 @using Homespun.Features.SignalR
+@using Homespun.Features.Fleece.Services
+@using Homespun.Features.Projects
+@using global::Fleece.Core.Models
 @using Microsoft.AspNetCore.Components.Web
 @using Microsoft.AspNetCore.SignalR.Client
 @using Microsoft.JSInterop
@@ -21,6 +24,8 @@
 @inject IMarkdownRenderingService MarkdownService
 @inject IAgentPromptService AgentPromptService
 @inject IBreadcrumbService BreadcrumbService
+@inject IFleeceService FleeceService
+@inject IProjectService ProjectService
 
 <PageTitle>Session - Homespun</PageTitle>
 
@@ -37,7 +42,7 @@
     {
         <div class="session-header">
             <div class="session-info">
-                <h1>Claude Code Session</h1>
+                <h1>@(_issueTitle ?? "Claude Code Session")</h1>
                 <div class="session-meta">
                     <span class="badge @GetModeBadgeClass(_session.Mode)">@_session.Mode</span>
                     <span class="badge @GetStatusBadgeClass(_session.Status)">@_session.Status.ToDisplayLabel()</span>
@@ -344,7 +349,7 @@
             </div>
         </div>
 
-        <SessionInfoPanel Session="_session" @bind-IsOpen="_sidePanelOpen" />
+        <SessionInfoPanel Session="_session" @bind-IsOpen="_sidePanelOpen" IssueTitle="@_issueTitle" />
         </div>
 
         @if (_session.TotalCostUsd > 0)
@@ -1422,6 +1427,38 @@
         flex: 1;
         word-break: break-word;
     }
+
+    /* ===== Mobile responsive styles ===== */
+    @@media (max-width: 768px) {
+        .session-page {
+            padding: var(--spacing-sm);
+            height: calc(100vh - 80px);
+        }
+
+        .session-header {
+            margin-bottom: var(--spacing-sm);
+            padding-bottom: var(--spacing-sm);
+        }
+
+        .session-info h1 {
+            font-size: 1.125rem;
+            line-height: 1.3;
+        }
+
+        .session-content {
+            flex-direction: column;
+            gap: var(--spacing-sm);
+        }
+
+        .user-message {
+            margin-left: 5%;
+        }
+
+        .assistant-message,
+        .tool-result-message {
+            margin-right: 2%;
+        }
+    }
 </style>
 
 @code {
@@ -1441,6 +1478,9 @@
 
     // Side panel state
     private bool _sidePanelOpen = true;
+
+    // Issue title for header display
+    private string? _issueTitle;
 
     // Question handling
     private PendingQuestion? _pendingQuestion;
@@ -1644,6 +1684,31 @@
         }
     }
 
+    private async Task LoadIssueTitleAsync()
+    {
+        if (_session == null || string.IsNullOrEmpty(_session.EntityId) || string.IsNullOrEmpty(_session.ProjectId))
+            return;
+
+        // Don't try to load issue for worktree entities
+        if (_session.EntityId.StartsWith("worktree:"))
+            return;
+
+        try
+        {
+            var project = await ProjectService.GetByIdAsync(_session.ProjectId);
+            if (project != null)
+            {
+                var issue = await FleeceService.GetIssueAsync(project.LocalPath, _session.EntityId);
+                _issueTitle = issue?.Title;
+            }
+        }
+        catch
+        {
+            // Silently fail - we'll just show the default header
+            _issueTitle = null;
+        }
+    }
+
     protected override async Task OnInitializedAsync()
     {
         await BreadcrumbService.SetContextAsync(new BreadcrumbContext { SessionId = SessionId });
@@ -1683,6 +1748,9 @@
 
             // Set initial model from session
             _selectedModel = _session.Model;
+
+            // Load issue title for header display
+            await LoadIssueTitleAsync();
 
             // Trigger render BEFORE SignalR setup to show messages immediately
             StateHasChanged();
