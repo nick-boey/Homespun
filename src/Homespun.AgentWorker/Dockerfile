@@ -1,5 +1,5 @@
 # Build stage
-FROM mcr.microsoft.com/dotnet/sdk:10.0-preview AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
 # Copy project files
@@ -24,31 +24,66 @@ RUN dotnet publish -c Release -o /app/publish /p:UseAppHost=false
 # Runtime stage
 # Use SDK image instead of aspnet runtime to support building projects
 # that need to run dotnet build, test, and other SDK commands via Bash tool
-FROM mcr.microsoft.com/dotnet/sdk:10.0-preview AS runtime
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS runtime
 WORKDIR /app
 
-# Install dependencies: Node.js, git, and other tools for Claude CLI
-RUN apt-get update && apt-get install -y \
+# Install dependencies: Node.js, git, and other tools for Claude Code
+RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     gnupg \
     git \
     ca-certificates \
-    && mkdir -p /etc/apt/keyrings \
-    && curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg \
-    && echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_20.x nodistro main" > /etc/apt/sources.list.d/nodesource.list \
-    && apt-get update \
-    && apt-get install -y nodejs \
+    && curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Claude CLI globally
+# Install GitHub CLI
+RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
+    && chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
+    && apt-get update \
+    && apt-get install -y gh \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install build dependencies for native npm packages (node-pty requires compilation)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    python3-setuptools \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Claude Code globally
 RUN npm install -g @anthropic-ai/claude-code
 
-# Install Playwright browsers
+# Install Playwright MCP and Chromium browser with all dependencies
 # Install browsers to /opt/playwright-browsers with world-writable permissions
-# This allows any runtime user (matched to host UID/GID) to use the browsers
+# This is required because the container runs with --user $HOST_UID:$HOST_GID
+# and the default location (/root/.cache/ms-playwright) is not accessible to non-root users
+# Permissions must be 777 to allow Playwright to create lock files and temp directories
+# IMPORTANT: Use the playwright CLI bundled with @playwright/mcp to ensure browser version matches
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers
-RUN npx playwright install --with-deps chromium \
+RUN npm install -g @playwright/mcp@latest \
+    && /usr/lib/node_modules/@playwright/mcp/node_modules/.bin/playwright install chromium --with-deps \
     && chmod -R 777 /opt/playwright-browsers
+
+# Install Fleece CLI for issue tracking
+# Install as root, then copy to /usr/local/bin for universal access
+# Note: Symlinks don't work because /root/.dotnet/tools/ is inaccessible to non-root users
+RUN dotnet tool install Fleece.Cli -g \
+    && cp /root/.dotnet/tools/fleece /usr/local/bin/fleece \
+    && chmod 755 /usr/local/bin/fleece
+
+# Clean up build dependencies to reduce image size
+RUN apt-get update && apt-get remove -y build-essential && apt-get autoremove -y \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Docker CLI for DooD (Docker outside of Docker)
+# This allows the container to communicate with the host's Docker daemon
+# via a mounted /var/run/docker.sock socket
+RUN curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian bookworm stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null \
+    && apt-get update \
+    && apt-get install -y docker-ce-cli \
+    && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user matching main Homespun container
 RUN useradd --create-home --shell /bin/bash homespun
@@ -80,6 +115,7 @@ USER homespun
 ENV ASPNETCORE_URLS=http://+:8080
 ENV ASPNETCORE_ENVIRONMENT=Production
 ENV HOME=/home/homespun
+ENV DOTNET_PRINT_TELEMETRY_MESSAGE=false
 
 EXPOSE 8080
 
