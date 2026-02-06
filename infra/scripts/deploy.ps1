@@ -7,6 +7,14 @@
     This script deploys the Homespun application infrastructure using Azure Bicep templates.
     It supports both development and production deployments.
 
+    Credentials (GitHub token, Claude OAuth token, Tailscale auth key) are resolved
+    automatically from the same sources as run.ps1, in order:
+      1. Explicit parameter (if provided)
+      2. HSP_* environment variables (e.g. HSP_GITHUB_TOKEN)
+      3. Standard environment variables (e.g. GITHUB_TOKEN)
+      4. .NET user secrets (GitHub token only)
+      5. .env file in the repository root
+
 .PARAMETER Environment
     The target environment (dev or prod). Defaults to 'dev'.
 
@@ -17,10 +25,13 @@
     The Azure region for deployment. Defaults to 'australiaeast'.
 
 .PARAMETER GitHubToken
-    GitHub token for GHCR access. Optional.
+    GitHub token for GHCR access. Optional override; auto-discovered if not provided.
 
 .PARAMETER ClaudeOAuthToken
-    Claude OAuth token for Claude Code CLI. Optional.
+    Claude OAuth token for Claude Code CLI. Optional override; auto-discovered if not provided.
+
+.PARAMETER TailscaleAuthKey
+    Tailscale auth key for VPN access. Optional override; auto-discovered if not provided.
 
 .PARAMETER WhatIf
     Shows what would happen without making changes.
@@ -29,7 +40,10 @@
     ./deploy.ps1 -ResourceGroup "rg-homespun-dev" -Environment dev
 
 .EXAMPLE
-    ./deploy.ps1 -ResourceGroup "rg-homespun-prod" -Environment prod -GitHubToken $env:GITHUB_TOKEN -ClaudeOAuthToken $env:CLAUDE_OAUTH_TOKEN
+    ./deploy.ps1 -ResourceGroup "rg-homespun-prod" -Environment prod
+
+.EXAMPLE
+    ./deploy.ps1 -ResourceGroup "rg-homespun-dev" -Environment dev -GitHubToken "ghp_..." -WhatIf
 #>
 
 param(
@@ -44,21 +58,131 @@ param(
     [string]$Location = 'australiaeast',
 
     [Parameter(Mandatory = $false)]
-    [securestring]$GitHubToken,
+    [string]$GitHubToken,
 
     [Parameter(Mandatory = $false)]
-    [securestring]$ClaudeOAuthToken,
+    [string]$ClaudeOAuthToken,
+
+    [Parameter(Mandatory = $false)]
+    [string]$TailscaleAuthKey,
 
     [Parameter(Mandatory = $false)]
     [switch]$WhatIf
 )
 
 $ErrorActionPreference = 'Stop'
+$createdTempRg = $false
 
 # Determine the script directory and repo root
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $InfraDir = Split-Path -Parent $ScriptDir
 $RepoRoot = Split-Path -Parent $InfraDir
+
+# Constants
+$UserSecretsId = "2cfc6c57-72da-4b56-944b-08f2c1df76f6"
+$EnvFilePath = Join-Path $RepoRoot ".env"
+
+# ============================================================================
+# Functions
+# ============================================================================
+
+function Get-EnvFileValue {
+    param(
+        [string]$Key,
+        [string]$EnvFilePath
+    )
+
+    if (-not (Test-Path $EnvFilePath)) {
+        return $null
+    }
+
+    try {
+        $content = Get-Content $EnvFilePath -Raw
+        # Match KEY=value, handling optional quotes
+        if ($content -match "(?m)^$Key=([`"']?)(.+?)\1\s*$") {
+            return $Matches[2]
+        }
+        # Also try without quotes for simple values
+        if ($content -match "(?m)^$Key=(.+?)\s*$") {
+            $value = $Matches[1] -replace '^["'']|["'']$', ''
+            return $value
+        }
+        return $null
+    }
+    catch {
+        return $null
+    }
+}
+
+function Resolve-Credential {
+    param(
+        [string]$Name,
+        [string]$ParamValue,
+        [string[]]$EnvVarNames,
+        [string]$EnvFilePath,
+        [string]$UserSecretsKey
+    )
+
+    # 1. Explicit parameter
+    if (-not [string]::IsNullOrWhiteSpace($ParamValue)) {
+        Write-Host "      $Name : from parameter" -ForegroundColor Green
+        return $ParamValue
+    }
+
+    # 2-3. Environment variables (HSP_* first, then standard)
+    foreach ($varName in $EnvVarNames) {
+        $value = [System.Environment]::GetEnvironmentVariable($varName)
+        if (-not [string]::IsNullOrWhiteSpace($value)) {
+            Write-Host "      $Name : from `$$varName" -ForegroundColor Green
+            return $value
+        }
+    }
+
+    # 4. .NET user secrets (if a key is specified)
+    if (-not [string]::IsNullOrWhiteSpace($UserSecretsKey)) {
+        $secretsPath = if ($env:APPDATA) {
+            Join-Path $env:APPDATA "Microsoft\UserSecrets\$UserSecretsId\secrets.json"
+        } else {
+            Join-Path ([Environment]::GetFolderPath('UserProfile')) ".microsoft\usersecrets\$UserSecretsId\secrets.json"
+        }
+        if (Test-Path $secretsPath) {
+            try {
+                $secrets = Get-Content $secretsPath -Raw | ConvertFrom-Json
+                $value = $secrets.$UserSecretsKey
+                if (-not [string]::IsNullOrWhiteSpace($value)) {
+                    Write-Host "      $Name : from user secrets" -ForegroundColor Green
+                    return $value
+                }
+            }
+            catch {
+                # Continue to next fallback
+            }
+        }
+    }
+
+    # 5. .env file
+    foreach ($varName in $EnvVarNames) {
+        $value = Get-EnvFileValue -Key $varName -EnvFilePath $EnvFilePath
+        if (-not [string]::IsNullOrWhiteSpace($value)) {
+            Write-Host "      $Name : from .env ($varName)" -ForegroundColor Green
+            return $value
+        }
+    }
+
+    Write-Host "      $Name : not found" -ForegroundColor DarkGray
+    return ''
+}
+
+function Get-MaskedValue {
+    param([string]$Value, [int]$ShowChars = 10)
+    if ([string]::IsNullOrWhiteSpace($Value)) { return '(empty)' }
+    $show = [Math]::Min($ShowChars, $Value.Length)
+    return $Value.Substring(0, $show) + '...'
+}
+
+# ============================================================================
+# Main Script
+# ============================================================================
 
 Write-Host "===== Homespun Azure Deployment =====" -ForegroundColor Cyan
 Write-Host "Environment: $Environment"
@@ -78,17 +202,50 @@ catch {
     exit 1
 }
 
+# Resolve credentials
+Write-Host ""
+Write-Host "Resolving credentials..." -ForegroundColor Yellow
+
+$resolvedGitHubToken = Resolve-Credential `
+    -Name 'GitHub token' `
+    -ParamValue $GitHubToken `
+    -EnvVarNames @('HSP_GITHUB_TOKEN', 'GITHUB_TOKEN') `
+    -EnvFilePath $EnvFilePath `
+    -UserSecretsKey 'GitHub:Token'
+
+$resolvedClaudeOAuthToken = Resolve-Credential `
+    -Name 'Claude OAuth token' `
+    -ParamValue $ClaudeOAuthToken `
+    -EnvVarNames @('HSP_CLAUDE_OAUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN') `
+    -EnvFilePath $EnvFilePath
+
+$resolvedTailscaleAuthKey = Resolve-Credential `
+    -Name 'Tailscale auth key' `
+    -ParamValue $TailscaleAuthKey `
+    -EnvVarNames @('HSP_TAILSCALE_AUTH_KEY', 'TAILSCALE_AUTH_KEY') `
+    -EnvFilePath $EnvFilePath
+
+Write-Host ""
+if (-not [string]::IsNullOrWhiteSpace($resolvedGitHubToken)) {
+    Write-Host "  GitHub token:      $(Get-MaskedValue $resolvedGitHubToken)" -ForegroundColor Green
+}
+if (-not [string]::IsNullOrWhiteSpace($resolvedClaudeOAuthToken)) {
+    Write-Host "  Claude OAuth:      $(Get-MaskedValue $resolvedClaudeOAuthToken)" -ForegroundColor Green
+}
+if (-not [string]::IsNullOrWhiteSpace($resolvedTailscaleAuthKey)) {
+    Write-Host "  Tailscale key:     $(Get-MaskedValue $resolvedTailscaleAuthKey 15)" -ForegroundColor Green
+}
+
 # Check if resource group exists, create if not
 Write-Host ""
 Write-Host "Checking resource group..." -ForegroundColor Yellow
 $rgExists = az group exists --name $ResourceGroup | ConvertFrom-Json
 if (-not $rgExists) {
     Write-Host "Creating resource group '$ResourceGroup' in '$Location'..." -ForegroundColor Yellow
-    if (-not $WhatIf) {
-        az group create --name $ResourceGroup --location $Location
-    }
-    else {
-        Write-Host "[WhatIf] Would create resource group" -ForegroundColor Magenta
+    az group create --name $ResourceGroup --location $Location
+    if ($WhatIf) {
+        $createdTempRg = $true
+        Write-Host "[WhatIf] Resource group created temporarily for validation (will be cleaned up)" -ForegroundColor Magenta
     }
 }
 else {
@@ -117,13 +274,10 @@ $DeploymentParams = @(
     '--parameters', "@$ParameterFile"
 )
 
-# Add secrets if provided
-if ($GitHubToken) {
-    $DeploymentParams += '--parameters', "githubToken=$([System.Runtime.InteropServices.Marshal]::PtrToStringAuto([System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($GitHubToken)))"
-}
-if ($ClaudeOAuthToken) {
-    $DeploymentParams += '--parameters', "claudeOAuthToken=$([System.Runtime.InteropServices.Marshal]::PtrToStringAuto([System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($ClaudeOAuthToken)))"
-}
+# Add secrets to deployment parameters
+$DeploymentParams += '--parameters', "githubToken=$resolvedGitHubToken"
+$DeploymentParams += '--parameters', "claudeOAuthToken=$resolvedClaudeOAuthToken"
+$DeploymentParams += '--parameters', "tailscaleAuthKey=$resolvedTailscaleAuthKey"
 
 $DeploymentParams += '--name', $DeploymentName
 
@@ -165,6 +319,12 @@ if (-not $WhatIf) {
     }
 }
 else {
+    if ($createdTempRg) {
+        Write-Host ""
+        Write-Host "Cleaning up temporary resource group '$ResourceGroup'..." -ForegroundColor Yellow
+        az group delete --name $ResourceGroup --yes --no-wait
+        Write-Host "Resource group deletion initiated (--no-wait)" -ForegroundColor Green
+    }
     Write-Host ""
     Write-Host "===== What-If Complete =====" -ForegroundColor Green
 }

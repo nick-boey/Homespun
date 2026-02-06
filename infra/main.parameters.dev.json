@@ -15,7 +15,7 @@
       "value": "ghcr.io/nick-boey/homespun-worker:latest"
     },
     "agentExecutionMode": {
-      "value": "Local"
+      "value": "AzureContainerApps"
     },
     "maxConcurrentSessions": {
       "value": 5

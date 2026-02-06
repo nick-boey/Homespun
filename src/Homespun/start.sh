@@ -36,38 +36,50 @@ TS_AUTHKEY="${TAILSCALE_AUTH_KEY:-$TS_AUTHKEY}"
 if [ -n "$TS_AUTHKEY" ]; then
     echo "Starting Tailscale..."
 
-    # Set default state directory (use /data/tailscale for proper permissions with runtime user)
+    # Persistent state on Azure Files; socket on local filesystem
+    # Azure Files (SMB) does not support Unix domain sockets, so the socket
+    # must live on a local path while state is persisted across restarts.
     TS_STATE_DIR="${TS_STATE_DIR:-/data/tailscale}"
+    TS_SOCKET_DIR="/tmp/tailscale"
+    TS_SOCKET="$TS_SOCKET_DIR/tailscaled.sock"
 
-    # Create Tailscale state directory if it doesn't exist
-    mkdir -p "$TS_STATE_DIR"
+    mkdir -p "$TS_STATE_DIR" "$TS_SOCKET_DIR"
 
     # Start tailscaled daemon in userspace mode
     tailscaled --state="$TS_STATE_DIR/tailscaled.state" \
-               --socket="$TS_STATE_DIR/tailscaled.sock" \
+               --socket="$TS_SOCKET" \
                --tun=userspace-networking &
 
-    # Wait for tailscaled to be ready
-    sleep 2
+    # Wait for tailscaled socket to appear (up to 10 seconds)
+    for i in $(seq 1 10); do
+        if [ -S "$TS_SOCKET" ]; then
+            break
+        fi
+        sleep 1
+    done
 
-    # Connect to Tailscale (allow failure - non-critical for local dev)
-    if tailscale --socket="$TS_STATE_DIR/tailscaled.sock" up \
-              --authkey="$TS_AUTHKEY" \
-              --hostname="${TS_HOSTNAME:-homespun}" \
-              --accept-routes \
-              --reset 2>&1; then
-        echo "Tailscale connected as ${TS_HOSTNAME:-homespun}"
+    if [ ! -S "$TS_SOCKET" ]; then
+        echo "Warning: tailscaled socket not ready after 10s (non-fatal, continuing without Tailscale)"
     else
-        echo "Warning: Tailscale failed to connect (non-fatal, continuing without Tailscale)"
+        # Connect to Tailscale (allow failure - non-critical for local dev)
+        if tailscale --socket="$TS_SOCKET" up \
+                  --authkey="$TS_AUTHKEY" \
+                  --hostname="${TS_HOSTNAME:-homespun}" \
+                  --accept-routes \
+                  --reset 2>&1; then
+            echo "Tailscale connected as ${TS_HOSTNAME:-homespun}"
+        else
+            echo "Warning: Tailscale failed to connect (non-fatal, continuing without Tailscale)"
+        fi
+
+        # Enable HTTPS serving (proxies port 443 to the app on 8080)
+        echo "Enabling Tailscale HTTPS serve..."
+        tailscale --socket="$TS_SOCKET" serve --bg --https=443 http://127.0.0.1:8080 || true
+        echo "Tailscale HTTPS proxy enabled on port 443"
+
+        # Show Tailscale status
+        tailscale --socket="$TS_SOCKET" status || true
     fi
-
-    # Enable HTTPS serving (proxies port 443 to the app on 8080)
-    echo "Enabling Tailscale HTTPS serve..."
-    tailscale --socket="$TS_STATE_DIR/tailscaled.sock" serve --bg --https=443 http://127.0.0.1:8080 || true
-    echo "Tailscale HTTPS proxy enabled on port 443"
-
-    # Show Tailscale status
-    tailscale --socket="$TS_STATE_DIR/tailscaled.sock" status || true
 fi
 
 echo "Starting Homespun..."

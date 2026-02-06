@@ -63,7 +63,7 @@ RUN dotnet publish src/Homespun/Homespun.csproj \
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS runtime
 WORKDIR /app
 
-# Install dependencies: git, gh CLI, Node.js (for npm packages)
+# Install dependencies: git, Node.js (for npm packages)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     curl \
@@ -90,8 +90,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-setuptools \
     && rm -rf /var/lib/apt/lists/*
 
-# Install OpenCode, Claude Code, and Claude Code UI (cloudcli) globally
-RUN npm install -g opencode-ai@latest @anthropic-ai/claude-code @siteboon/claude-code-ui
+# Install Claude Code globally
+RUN npm install -g @anthropic-ai/claude-code 
 
 # Install Playwright MCP and Chromium browser with all dependencies
 # Install browsers to /opt/playwright-browsers with world-writable permissions

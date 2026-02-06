@@ -430,6 +430,7 @@ fi
 
 if [ -n "$TAILSCALE_AUTH_KEY" ]; then
     DOCKER_CMD="$DOCKER_CMD -e TAILSCALE_AUTH_KEY=$TAILSCALE_AUTH_KEY"
+    DOCKER_CMD="$DOCKER_CMD -e TS_HOSTNAME=homespun-dev"
 fi
 
 if [ -n "$EXTERNAL_HOSTNAME" ]; then

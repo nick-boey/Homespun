@@ -15,6 +15,10 @@ param githubToken string = ''
 @secure()
 param claudeOAuthToken string = ''
 
+@description('Tailscale auth key for VPN access (optional)')
+@secure()
+param tailscaleAuthKey string = ''
+
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
   name: keyVaultName
   location: location
@@ -27,7 +31,7 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
     enableRbacAuthorization: true
     enableSoftDelete: true
     softDeleteRetentionInDays: 7
-    enablePurgeProtection: false // Set to true for production
+    enablePurgeProtection: true
   }
 }
 
@@ -42,8 +46,9 @@ resource keyVaultSecretsUser 'Microsoft.Authorization/roleAssignments@2022-04-01
   }
 }
 
-// Store GitHub token if provided
-resource githubTokenSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (!empty(githubToken)) {
+// Always create secrets so Key Vault references in the container app resolve.
+// When no value is provided, an empty-string placeholder is stored.
+resource githubTokenSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
   parent: keyVault
   name: 'github-token'
   properties: {
@@ -51,12 +56,19 @@ resource githubTokenSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (
   }
 }
 
-// Store Claude OAuth token if provided
-resource claudeTokenSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (!empty(claudeOAuthToken)) {
+resource claudeTokenSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
   parent: keyVault
   name: 'claude-oauth-token'
   properties: {
     value: claudeOAuthToken
+  }
+}
+
+resource tailscaleSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+  parent: keyVault
+  name: 'tailscale-auth-key'
+  properties: {
+    value: tailscaleAuthKey
   }
 }
 
