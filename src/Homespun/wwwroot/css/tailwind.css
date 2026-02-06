@@ -251,7 +251,7 @@
 
   /* Code */
   .code-inline {
-    @apply font-mono text-sm px-1 py-0.5 bg-code-bg rounded-sm text-red;
+    @apply font-mono text-sm px-1 py-0.5 bg-code-bg rounded-sm text-text-primary;
   }
 
   .code-block {

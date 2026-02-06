@@ -59,6 +59,7 @@ module.exports = {
         'status-success': 'var(--status-success)',
         'status-warning': 'var(--status-warning)',
         'status-error': 'var(--status-error)',
+        'status-question': 'var(--status-question)',
         'status-info': 'var(--status-info)',
         'status-muted': 'var(--status-muted)',
         'status-merged': 'var(--status-merged)',
