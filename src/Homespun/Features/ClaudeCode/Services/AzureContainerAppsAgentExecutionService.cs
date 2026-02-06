@@ -261,6 +261,26 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
     }
 
     /// <inheritdoc />
+    public Task InterruptSessionAsync(string sessionId, CancellationToken cancellationToken = default)
+    {
+        if (_sessions.TryGetValue(sessionId, out var session))
+        {
+            _logger.LogInformation("Interrupting Azure Container Apps session {SessionId}", sessionId);
+
+            // Cancel current execution
+            session.Cts.Cancel();
+            session.Cts.Dispose();
+
+            // Replace with a fresh CTS - do NOT delete the dynamic session
+            var newCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            var updatedSession = session with { Cts = newCts };
+            _sessions[sessionId] = updatedSession;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc />
     public Task<AgentSessionStatus?> GetSessionStatusAsync(string sessionId, CancellationToken cancellationToken = default)
     {
         if (_sessions.TryGetValue(sessionId, out var session))

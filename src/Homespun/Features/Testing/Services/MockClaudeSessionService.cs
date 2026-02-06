@@ -260,6 +260,22 @@ public class MockClaudeSessionService : IClaudeSessionService
         return Task.CompletedTask;
     }
 
+    public Task InterruptSessionAsync(string sessionId, CancellationToken cancellationToken = default)
+    {
+        _logger.LogDebug("[Mock] InterruptSession {SessionId}", sessionId);
+
+        var session = _sessionStore.GetById(sessionId);
+        if (session != null)
+        {
+            session.Status = ClaudeSessionStatus.WaitingForInput;
+            session.PendingQuestion = null;
+            session.LastActivityAt = DateTime.UtcNow;
+            _sessionStore.Update(session);
+        }
+
+        return Task.CompletedTask;
+    }
+
     public ClaudeSession? GetSession(string sessionId)
     {
         return _sessionStore.GetById(sessionId);

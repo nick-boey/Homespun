@@ -403,7 +403,14 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         catch (OperationCanceledException)
         {
             _logger.LogInformation("Message processing cancelled for session {SessionId}", sessionId);
-            session.Status = ClaudeSessionStatus.Stopped;
+            // Don't unconditionally set Stopped here.
+            // If this was an interrupt, InterruptSessionAsync already set WaitingForInput.
+            // If this was a full stop, StopSessionAsync will set Stopped and remove from store.
+            // Only set WaitingForInput as a fallback if the session is still active.
+            if (_sessionStore.GetById(sessionId) != null && session.Status != ClaudeSessionStatus.Stopped)
+            {
+                session.Status = ClaudeSessionStatus.WaitingForInput;
+            }
         }
         catch (Exception ex)
         {
@@ -1585,6 +1592,58 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
 
         // Notify clients
         await _hubContext.BroadcastSessionStopped(sessionId);
+    }
+
+    /// <inheritdoc />
+    public async Task InterruptSessionAsync(string sessionId, CancellationToken cancellationToken = default)
+    {
+        var session = _sessionStore.GetById(sessionId);
+        if (session == null)
+        {
+            _logger.LogWarning("Attempted to interrupt non-existent session {SessionId}", sessionId);
+            return;
+        }
+
+        _logger.LogInformation("Interrupting session {SessionId}", sessionId);
+
+        // Cancel any ongoing operations and replace with a fresh CTS
+        if (_sessionCts.TryGetValue(sessionId, out var cts))
+        {
+            await cts.CancelAsync();
+            cts.Dispose();
+        }
+        _sessionCts[sessionId] = new CancellationTokenSource();
+
+        // Interrupt the agent execution service session (cancel but preserve session)
+        if (_agentSessionIds.TryGetValue(sessionId, out var agentSessionId))
+        {
+            try
+            {
+                await _agentExecutionService.InterruptSessionAsync(agentSessionId, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error interrupting agent session {AgentSessionId} for session {SessionId}",
+                    agentSessionId, sessionId);
+            }
+        }
+
+        // NOTE: We intentionally do NOT remove:
+        // - _agentSessionIds (needed for next SendMessageAsync to route correctly)
+        // - _sessionOptions (needed for next message)
+        // - _sessionToolUses (tool tracking continuity)
+        // - _sessionClients (if any)
+        // - _sessionStore entry (session stays alive)
+
+        // Clear any pending question answer sources (question is now moot)
+        _questionAnswerSources.TryRemove(sessionId, out _);
+
+        // Update session status to WaitingForInput
+        session.Status = ClaudeSessionStatus.WaitingForInput;
+        session.PendingQuestion = null;
+
+        // Broadcast status change (NOT SessionStopped)
+        await _hubContext.BroadcastSessionStatusChanged(sessionId, ClaudeSessionStatus.WaitingForInput);
     }
 
     /// <inheritdoc />
