@@ -99,7 +99,7 @@ resource sessionPool 'Microsoft.App/sessionPools@2025-07-01' = {
     managedIdentitySettings: [
       {
         identity: identityId
-        lifecycle: 'All'
+        lifecycle: 'Main'
       }
     ]
     sessionNetworkConfiguration: {

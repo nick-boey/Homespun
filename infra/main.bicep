@@ -35,6 +35,10 @@ param maxConcurrentSessions int = 10
 @description('Number of warm agent instances')
 param readySessionInstances int = 2
 
+@description('Storage network ACL default action. Use Deny only with VNet/private endpoint.')
+@allowed(['Allow', 'Deny'])
+param storageNetworkDefaultAction string = 'Allow'
+
 // Resource naming
 var resourceSuffix = '${baseName}-${environmentSuffix}'
 var identityName = 'id-${resourceSuffix}'
@@ -73,6 +77,7 @@ module storage 'modules/storage.bicep' = {
   params: {
     location: location
     storageAccountName: storageAccountName
+    networkDefaultAction: storageNetworkDefaultAction
   }
 }
 
