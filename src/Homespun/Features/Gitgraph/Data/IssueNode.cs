@@ -79,6 +79,11 @@ public class IssueNode : IGraphNode
     public string? IssueId => _issue.Id;
 
     /// <summary>
+    /// Whether the issue has a non-empty description.
+    /// </summary>
+    public bool? HasDescription => !string.IsNullOrWhiteSpace(_issue.Description);
+
+    /// <summary>
     /// Original Fleece Issue for access to additional properties.
     /// </summary>
     public Issue Issue => _issue;
@@ -94,23 +99,17 @@ public class IssueNode : IGraphNode
     public bool IsOrphan => _isOrphan;
 
     /// <summary>
-    /// Gets the color for an issue based on its type and status.
-    /// Bug type always shows as red (overrides status color).
-    /// Otherwise, color is based on status.
+    /// Gets the base color for an issue based on its type.
+    /// Bug type shows as red, all other types show as blue.
+    /// Agent status may override this color at render time.
     /// </summary>
     private static string GetIssueColor(IssueType type, IssueStatus status)
     {
-        // Bug type always shows as red (overrides status color)
+        // Bug type always shows as red
         if (type == IssueType.Bug) return "#ef4444"; // Red
 
-        // Otherwise color by status
-        return status switch
-        {
-            IssueStatus.Open => "#3b82f6",     // Blue
-            IssueStatus.Progress => "#a855f7", // Purple
-            IssueStatus.Review => "#06b6d4",   // Cyan
-            _ => "#6b7280"                     // Grey
-        };
+        // All other types (Task, Feature, Chore) show as blue
+        return "#3b82f6"; // Blue
     }
 
     private static string GetPrStatusColor(PullRequestStatus status) => status switch

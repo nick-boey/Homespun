@@ -66,6 +66,8 @@ public class PullRequestNode : IGraphNode
 
     public string? IssueId => null;
 
+    public bool? HasDescription => null;
+
     /// <summary>
     /// Original PullRequestInfo for access to additional properties.
     /// </summary>
