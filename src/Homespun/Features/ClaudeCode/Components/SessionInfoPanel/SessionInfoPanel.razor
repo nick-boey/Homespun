@@ -62,53 +62,50 @@
 <div class="session-info-panel mobile-panel">
     @if (Session != null)
     {
-        <details class="mobile-details" @ref="_detailsElement">
-            <summary class="mobile-summary" @onclick="HandleMobileToggle" @onclick:preventDefault>
+        <details class="mobile-details">
+            <summary class="mobile-summary">
                 <span class="mobile-summary-title">@(IssueTitle ?? "Session Details")</span>
-                <span class="mobile-chevron @(_mobileExpanded ? "expanded" : "")">▾</span>
+                <span class="mobile-chevron">▾</span>
             </summary>
-            @if (_mobileExpanded)
-            {
-                <div class="mobile-panel-body">
-                    <div class="panel-tabs">
-                        <button class="tab-button @(_activeTab == Tab.Issue ? "active" : "")"
-                                @onclick="() => SetActiveTab(Tab.Issue)">
-                            Issue
-                        </button>
-                        <button class="tab-button @(_activeTab == Tab.PR ? "active" : "")"
-                                @onclick="() => SetActiveTab(Tab.PR)">
-                            PR
-                        </button>
-                        <button class="tab-button @(_activeTab == Tab.Todos ? "active" : "")"
-                                @onclick="() => SetActiveTab(Tab.Todos)">
-                            To-do's
-                        </button>
-                        <button class="tab-button @(_activeTab == Tab.Files ? "active" : "")"
-                                @onclick="() => SetActiveTab(Tab.Files)">
-                            Files
-                        </button>
-                    </div>
-
-                    <div class="panel-content">
-                        @if (_activeTab == Tab.Issue)
-                        {
-                            <SessionIssueTab EntityId="@Session.EntityId" ProjectId="@Session.ProjectId" />
-                        }
-                        else if (_activeTab == Tab.PR)
-                        {
-                            <SessionPrTab EntityId="@Session.EntityId" ProjectId="@Session.ProjectId" />
-                        }
-                        else if (_activeTab == Tab.Todos)
-                        {
-                            <SessionTodosTab Messages="@Session.Messages" />
-                        }
-                        else if (_activeTab == Tab.Files)
-                        {
-                            <SessionFilesTab WorkingDirectory="@Session.WorkingDirectory" TargetBranch="main" />
-                        }
-                    </div>
+            <div class="mobile-panel-body">
+                <div class="panel-tabs">
+                    <button class="tab-button @(_activeTab == Tab.Issue ? "active" : "")"
+                            @onclick="() => SetActiveTab(Tab.Issue)">
+                        Issue
+                    </button>
+                    <button class="tab-button @(_activeTab == Tab.PR ? "active" : "")"
+                            @onclick="() => SetActiveTab(Tab.PR)">
+                        PR
+                    </button>
+                    <button class="tab-button @(_activeTab == Tab.Todos ? "active" : "")"
+                            @onclick="() => SetActiveTab(Tab.Todos)">
+                        To-do's
+                    </button>
+                    <button class="tab-button @(_activeTab == Tab.Files ? "active" : "")"
+                            @onclick="() => SetActiveTab(Tab.Files)">
+                        Files
+                    </button>
                 </div>
-            }
+
+                <div class="panel-content">
+                    @if (_activeTab == Tab.Issue)
+                    {
+                        <SessionIssueTab EntityId="@Session.EntityId" ProjectId="@Session.ProjectId" />
+                    }
+                    else if (_activeTab == Tab.PR)
+                    {
+                        <SessionPrTab EntityId="@Session.EntityId" ProjectId="@Session.ProjectId" />
+                    }
+                    else if (_activeTab == Tab.Todos)
+                    {
+                        <SessionTodosTab Messages="@Session.Messages" />
+                    }
+                    else if (_activeTab == Tab.Files)
+                    {
+                        <SessionFilesTab WorkingDirectory="@Session.WorkingDirectory" TargetBranch="main" />
+                    }
+                </div>
+            </div>
         </details>
     }
 </div>
@@ -212,7 +209,7 @@
         flex-shrink: 0;
     }
 
-    .mobile-chevron.expanded {
+    .mobile-details[open] .mobile-chevron {
         transform: rotate(180deg);
     }
 
@@ -312,8 +309,6 @@
     [Parameter] public string? IssueTitle { get; set; }
 
     private Tab _activeTab = Tab.Issue;
-    private bool _mobileExpanded = false;
-    private ElementReference _detailsElement;
 
     private enum Tab
     {
@@ -335,9 +330,4 @@
         await IsOpenChanged.InvokeAsync(IsOpen);
     }
 
-    private void HandleMobileToggle()
-    {
-        _mobileExpanded = !_mobileExpanded;
-        StateHasChanged();
-    }
 }
