@@ -25,6 +25,10 @@ param githubToken string = ''
 @secure()
 param claudeOAuthToken string = ''
 
+@description('Tailscale auth key for VPN access')
+@secure()
+param tailscaleAuthKey string = ''
+
 @description('Maximum concurrent agent sessions')
 param maxConcurrentSessions int = 10
 
@@ -59,6 +63,7 @@ module keyVault 'modules/keyvault.bicep' = {
     identityPrincipalId: identity.outputs.identityPrincipalId
     githubToken: githubToken
     claudeOAuthToken: claudeOAuthToken
+    tailscaleAuthKey: tailscaleAuthKey
   }
 }
 
@@ -93,7 +98,9 @@ module sessionPool 'modules/sessionpool.bicep' = if (agentExecutionMode == 'Azur
     environmentId: environment.outputs.environmentId
     workerImage: workerImage
     identityId: identity.outputs.identityId
-    storageMountName: environment.outputs.storageMountName
+    identityPrincipalId: identity.outputs.identityPrincipalId
+    githubToken: githubToken
+    claudeOAuthToken: claudeOAuthToken
     maxConcurrentSessions: maxConcurrentSessions
     readySessionInstances: readySessionInstances
   }

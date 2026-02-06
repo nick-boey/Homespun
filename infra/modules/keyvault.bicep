@@ -15,6 +15,10 @@ param githubToken string = ''
 @secure()
 param claudeOAuthToken string = ''
 
+@description('Tailscale auth key for VPN access (optional)')
+@secure()
+param tailscaleAuthKey string = ''
+
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
   name: keyVaultName
   location: location
@@ -27,7 +31,7 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
     enableRbacAuthorization: true
     enableSoftDelete: true
     softDeleteRetentionInDays: 7
-    enablePurgeProtection: false // Set to true for production
+    enablePurgeProtection: true
   }
 }
 
@@ -57,6 +61,15 @@ resource claudeTokenSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (
   name: 'claude-oauth-token'
   properties: {
     value: claudeOAuthToken
+  }
+}
+
+// Store Tailscale auth key if provided
+resource tailscaleSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (!empty(tailscaleAuthKey)) {
+  parent: keyVault
+  name: 'tailscale-auth-key'
+  properties: {
+    value: tailscaleAuthKey
   }
 }
 

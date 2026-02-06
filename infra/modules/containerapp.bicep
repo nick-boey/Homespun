@@ -50,7 +50,7 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
     configuration: {
       activeRevisionsMode: 'Single'
       ingress: {
-        external: true
+        external: false // Tailscale handles all inbound access
         targetPort: 8080
         transport: 'auto'
         allowInsecure: false
@@ -64,6 +64,11 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
         {
           name: 'claude-oauth-token'
           keyVaultUrl: '${keyVaultUri}secrets/claude-oauth-token'
+          identity: identityId
+        }
+        {
+          name: 'tailscale-auth-key'
+          keyVaultUrl: '${keyVaultUri}secrets/tailscale-auth-key'
           identity: identityId
         }
       ]
@@ -98,6 +103,14 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
             {
               name: 'CLAUDE_OAUTH_TOKEN'
               secretRef: 'claude-oauth-token'
+            }
+            {
+              name: 'TAILSCALE_AUTH_KEY'
+              secretRef: 'tailscale-auth-key'
+            }
+            {
+              name: 'TS_HOSTNAME'
+              value: 'homespun'
             }
             {
               name: 'AgentExecution__Mode'
