@@ -68,94 +68,88 @@
                 }
                 else
                 {
-                    @foreach (var message in _session.Messages.ToList())
+                    @foreach (var displayItem in GetDisplayItems())
                     {
-                        @* Check if context was cleared before this message *@
-                        @if (ShouldShowContextSeparator(message))
+                        @if (displayItem is ClaudeMessage message)
                         {
-                            var separatorTime = GetContextSeparatorTime(message);
-                            <div class="context-separator">
-                                <span class="separator-text">Context Cleared</span>
-                                <span class="separator-time">@separatorTime.ToLocalTime().ToString("HH:mm:ss")</span>
-                            </div>
-                        }
-
-                        @* Tool result messages (role=user but only ToolResult content) should be styled as tool output, not user messages *@
-                        var isToolResultMessage = message.Role == ClaudeMessageRole.User && !IsRealUserMessage(message);
-                        var messageClass = isToolResultMessage ? "tool-result-message" :
-                                          (message.Role == ClaudeMessageRole.User ? "user-message" : "assistant-message");
-                        <div class="message @messageClass">
-                            @if (!isToolResultMessage)
+                            @* Check if context was cleared before this message *@
+                            @if (ShouldShowContextSeparator(message))
                             {
+                                var separatorTime = GetContextSeparatorTime(message);
+                                <div class="context-separator">
+                                    <span class="separator-text">Context Cleared</span>
+                                    <span class="separator-time">@separatorTime.ToLocalTime().ToString("HH:mm:ss")</span>
+                                </div>
+                            }
+
+                            var messageClass = message.Role == ClaudeMessageRole.User ? "user-message" : "assistant-message";
+                            <div class="message @messageClass">
                                 <div class="message-header">
                                     <span class="message-role">@(message.Role == ClaudeMessageRole.User ? "You" : "Claude")</span>
                                     <span class="message-time">@message.CreatedAt.ToLocalTime().ToString("HH:mm:ss")</span>
                                 </div>
-                            }
-                            <div class="message-content">
-                                @foreach (var content in message.Content.ToList())
-                                {
-                                    <div class="content-block @GetContentBlockClass(content.Type) @(content.IsStreaming ? "streaming" : "")">
-                                        @switch (content.Type)
-                                        {
-                                            case ClaudeContentType.Text:
-                                                <div class="text-content markdown-content">
-                                                    @((MarkupString)MarkdownService.RenderToHtml(content.Text))
-                                                    @if (content.IsStreaming)
-                                                    {
-                                                        <span class="streaming-cursor">▌</span>
-                                                    }
-                                                </div>
-                                                break;
-
-                                            case ClaudeContentType.Thinking:
-                                                <details class="thinking-block" open="@content.IsStreaming">
-                                                    <summary>
-                                                        @if (content.IsStreaming)
-                                                        {
-                                                            <span>Thinking</span>
-                                                            <span class="streaming-dots">...</span>
-                                                        }
-                                                        else
-                                                        {
-                                                            <span>Thinking...</span>
-                                                        }
-                                                    </summary>
-                                                    <div class="thinking-content">
-                                                        @content.Text
+                                <div class="message-content">
+                                    @foreach (var content in message.Content.ToList())
+                                    {
+                                        <div class="content-block @GetContentBlockClass(content.Type) @(content.IsStreaming ? "streaming" : "")">
+                                            @switch (content.Type)
+                                            {
+                                                case ClaudeContentType.Text:
+                                                    <div class="text-content markdown-content">
+                                                        @((MarkupString)MarkdownService.RenderToHtml(content.Text))
                                                         @if (content.IsStreaming)
                                                         {
                                                             <span class="streaming-cursor">▌</span>
                                                         }
                                                     </div>
-                                                </details>
-                                                break;
+                                                    break;
 
-                                            case ClaudeContentType.ToolUse:
-                                                <div class="tool-use-block">
-                                                    <div class="tool-header">
-                                                        <span class="tool-icon">@GetToolIcon(content.ToolName ?? "Tool")</span>
-                                                        <span class="tool-name">@content.ToolName</span>
-                                                        @if (content.IsStreaming)
-                                                        {
-                                                            <span class="tool-streaming-indicator">
-                                                                <span class="spinner-border spinner-border-sm ml-2" role="status"></span>
-                                                                <span class="tool-status">Running...</span>
-                                                            </span>
-                                                        }
-                                                    </div>
-                                                    @* Hide raw JSON input - the ToolResult will show formatted output *@
-                                                </div>
-                                                break;
-
-                                            case ClaudeContentType.ToolResult:
-                                                <ToolResultRenderer Result="content" />
-                                                break;
-                                        }
-                                    </div>
-                                }
+                                                case ClaudeContentType.Thinking:
+                                                    <details class="thinking-block" open="@content.IsStreaming">
+                                                        <summary>
+                                                            @if (content.IsStreaming)
+                                                            {
+                                                                <span>Thinking</span>
+                                                                <span class="streaming-dots">...</span>
+                                                            }
+                                                            else
+                                                            {
+                                                                <span>Thinking...</span>
+                                                            }
+                                                        </summary>
+                                                        <div class="thinking-content">
+                                                            @content.Text
+                                                            @if (content.IsStreaming)
+                                                            {
+                                                                <span class="streaming-cursor">▌</span>
+                                                            }
+                                                        </div>
+                                                    </details>
+                                                    break;
+                                            }
+                                        </div>
+                                    }
+                                </div>
                             </div>
-                        </div>
+                        }
+                        else if (displayItem is ToolExecutionGroup toolGroup)
+                        {
+                            @* Check if context was cleared before any message in this group *@
+                            @foreach (var originalMsg in toolGroup.OriginalMessages)
+                            {
+                                @if (ShouldShowContextSeparator(originalMsg))
+                                {
+                                    var separatorTime = GetContextSeparatorTime(originalMsg);
+                                    <div class="context-separator">
+                                        <span class="separator-text">Context Cleared</span>
+                                        <span class="separator-time">@separatorTime.ToLocalTime().ToString("HH:mm:ss")</span>
+                                    </div>
+                                    break; @* Only show one separator per group *@
+                                }
+                            }
+
+                            <ToolExecutionGroupDisplay Group="toolGroup" />
+                        }
                     }
 
                     @if (_session.Status == ClaudeSessionStatus.Running)
@@ -493,21 +487,63 @@
         border: 1px solid var(--border-color);
     }
 
-    /* Tool result messages are styled as part of the assistant's tool flow */
-    .tool-result-message {
+    /* Tool execution group - consolidated bubble for grouped tool calls */
+    .tool-group {
         background: var(--bg-primary);
         margin-right: 10%;
-        margin-top: calc(-1 * var(--spacing-md)); /* Visually connect to previous message */
+        margin-bottom: var(--spacing-md);
         border: 1px solid var(--border-color);
-        border-top: none;
-        border-radius: 0 0 var(--radius-md) var(--radius-md);
-        padding-top: 0;
+        border-radius: var(--radius-md);
+        overflow: hidden;
     }
 
-    /* When tool result follows assistant message, round the assistant's bottom corners */
-    .assistant-message:has(+ .tool-result-message) {
-        border-radius: var(--radius-md) var(--radius-md) 0 0;
-        margin-bottom: 0;
+    .tool-group-header {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+        padding: var(--spacing-sm) var(--spacing-md);
+        background: var(--bg-secondary);
+        border-bottom: 1px solid var(--border-color);
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+    }
+
+    .tool-group-icon {
+        font-size: 1rem;
+    }
+
+    .tool-group-streaming {
+        margin-left: auto;
+    }
+
+    .tool-execution-list {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .tool-execution-row {
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .tool-execution-row:last-child {
+        border-bottom: none;
+    }
+
+    .tool-execution-row.error {
+        border-left: 3px solid var(--status-error);
+    }
+
+    .tool-execution-row .running-summary {
+        cursor: default;
+    }
+
+    .tool-execution-row .running-summary .tool-summary {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-xs);
+        color: var(--text-muted);
+        font-style: italic;
     }
 
     .message-header {
@@ -1624,6 +1660,146 @@
         // If all content blocks are ToolResult, this is NOT a real user message
         var hasOnlyToolResults = message.Content.All(c => c.Type == ClaudeContentType.ToolResult);
         return !hasOnlyToolResults;
+    }
+
+    /// <summary>
+    /// Transforms the flat message list into a list of display items (ClaudeMessage or ToolExecutionGroup).
+    /// Groups consecutive tool use/result message pairs into consolidated ToolExecutionGroup objects.
+    /// Non-tool content (text, thinking) from assistant messages with tools is split into a separate message.
+    /// </summary>
+    private List<object> GetDisplayItems()
+    {
+        if (_session == null) return [];
+
+        var messages = _session.Messages.ToList();
+        var displayItems = new List<object>();
+        var currentToolGroup = new List<ToolExecution>();
+        var currentGroupMessages = new List<ClaudeMessage>();
+        DateTime currentGroupTimestamp = DateTime.UtcNow;
+
+        void FlushToolGroup()
+        {
+            if (currentToolGroup.Count > 0)
+            {
+                displayItems.Add(new ToolExecutionGroup
+                {
+                    Executions = new List<ToolExecution>(currentToolGroup),
+                    Timestamp = currentGroupTimestamp,
+                    OriginalMessages = new List<ClaudeMessage>(currentGroupMessages)
+                });
+                currentToolGroup.Clear();
+                currentGroupMessages.Clear();
+            }
+        }
+
+        for (int i = 0; i < messages.Count; i++)
+        {
+            var msg = messages[i];
+
+            if (msg.Role == ClaudeMessageRole.Assistant)
+            {
+                // Check if this assistant message has any tool use blocks
+                var toolUseBlocks = msg.Content.Where(c => c.Type == ClaudeContentType.ToolUse).ToList();
+                var nonToolBlocks = msg.Content.Where(c => c.Type != ClaudeContentType.ToolUse).ToList();
+
+                if (toolUseBlocks.Count > 0)
+                {
+                    // If there are non-tool blocks (text/thinking), emit them as a regular message first
+                    if (nonToolBlocks.Any(c => c.Type == ClaudeContentType.Text || c.Type == ClaudeContentType.Thinking))
+                    {
+                        // Flush any existing tool group before the text
+                        FlushToolGroup();
+
+                        // Create a synthetic message with only the non-tool content
+                        var textMessage = new ClaudeMessage
+                        {
+                            Id = msg.Id,
+                            SessionId = msg.SessionId,
+                            Role = msg.Role,
+                            CreatedAt = msg.CreatedAt,
+                            IsStreaming = msg.IsStreaming
+                        };
+                        foreach (var block in nonToolBlocks)
+                        {
+                            textMessage.Content.Add(block);
+                        }
+                        displayItems.Add(textMessage);
+                    }
+
+                    // Track the timestamp for the group
+                    if (currentToolGroup.Count == 0)
+                    {
+                        currentGroupTimestamp = msg.CreatedAt;
+                    }
+                    currentGroupMessages.Add(msg);
+
+                    // Add all tool use blocks to the current group
+                    foreach (var toolUse in toolUseBlocks)
+                    {
+                        currentToolGroup.Add(new ToolExecution { ToolUse = toolUse });
+                    }
+                }
+                else
+                {
+                    // No tool use blocks - flush any pending tool group and emit as regular message
+                    FlushToolGroup();
+                    displayItems.Add(msg);
+                }
+            }
+            else if (msg.Role == ClaudeMessageRole.User)
+            {
+                if (!IsRealUserMessage(msg))
+                {
+                    // This is a tool result message - pair results with pending tool uses
+                    currentGroupMessages.Add(msg);
+                    foreach (var resultContent in msg.Content.Where(c => c.Type == ClaudeContentType.ToolResult))
+                    {
+                        // Find the matching tool use by ToolUseId
+                        var matchingExecution = currentToolGroup
+                            .FirstOrDefault(e => e.ToolResult == null && e.ToolUse.ToolUseId == resultContent.ToolUseId);
+
+                        if (matchingExecution != null)
+                        {
+                            matchingExecution.ToolResult = resultContent;
+                        }
+                        else
+                        {
+                            // Fallback: match by position (first unmatched tool use)
+                            var unmatchedExecution = currentToolGroup.FirstOrDefault(e => e.ToolResult == null);
+                            if (unmatchedExecution != null)
+                            {
+                                unmatchedExecution.ToolResult = resultContent;
+                            }
+                            else
+                            {
+                                // No matching tool use found - create a standalone execution
+                                currentToolGroup.Add(new ToolExecution
+                                {
+                                    ToolUse = new ClaudeMessageContent
+                                    {
+                                        Type = ClaudeContentType.ToolUse,
+                                        ToolName = resultContent.ParsedToolResult?.ToolName ?? resultContent.ToolName ?? "Tool",
+                                        ToolUseId = resultContent.ToolUseId
+                                    },
+                                    ToolResult = resultContent
+                                });
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    // Real user message - flush tool group and emit
+                    FlushToolGroup();
+                    displayItems.Add(msg);
+                }
+            }
+        }
+
+        // Flush any remaining tool group
+        FlushToolGroup();
+
+        return displayItems;
     }
 
     /// <summary>
