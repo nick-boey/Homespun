@@ -1,0 +1,69 @@
+@using Homespun.Features.ClaudeCode.Data
+
+<div class="tool-group">
+    <div class="tool-group-header">
+        <span class="tool-group-icon">🔧</span>
+        <span class="tool-group-title">
+            @if (Group.Executions.Count == 1)
+            {
+                @:1 tool call
+            }
+            else
+            {
+                @Group.Executions.Count @:tool calls
+            }
+        </span>
+        @if (Group.Executions.Any(e => e.IsRunning))
+        {
+            <span class="tool-group-streaming">
+                <span class="spinner-border spinner-border-sm" role="status"></span>
+            </span>
+        }
+    </div>
+    <div class="tool-execution-list">
+        @foreach (var execution in Group.Executions)
+        {
+            <div class="tool-execution-row @(execution.IsRunning ? "running" : "") @(execution.ToolResult?.ToolSuccess == false ? "error" : "")">
+                @if (execution.ToolResult != null)
+                {
+                    @* Has result - render using ToolResultRenderer which has its own details/summary *@
+                    <ToolResultRenderer Result="execution.ToolResult" />
+                }
+                else
+                {
+                    @* No result yet - show running indicator *@
+                    <div class="tool-result-block">
+                        <div class="tool-result-summary running-summary">
+                            <span class="tool-icon">@GetToolIcon(execution.ToolUse.ToolName ?? "Tool")</span>
+                            <span class="tool-name">@(execution.ToolUse.ToolName ?? "Tool")</span>
+                            <span class="tool-summary">
+                                <span class="spinner-border spinner-border-sm" role="status"></span>
+                                Running...
+                            </span>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public required ToolExecutionGroup Group { get; set; }
+
+    private static string GetToolIcon(string toolName) => toolName.ToLowerInvariant() switch
+    {
+        "read" => "📖",
+        "write" => "✏️",
+        "edit" => "📝",
+        "bash" => "💻",
+        "task" => "🤖",
+        "explore" => "🔭",
+        "grep" => "🔍",
+        "glob" => "📁",
+        "webfetch" => "🌐",
+        "websearch" => "🔎",
+        _ => "🔧"
+    };
+}
