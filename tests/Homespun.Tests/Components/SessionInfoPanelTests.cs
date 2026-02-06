@@ -88,8 +88,9 @@ public class SessionInfoPanelTests : BunitTestContext
             .Add(p => p.Session, session)
             .Add(p => p.IsOpen, true));
 
-        // Assert
-        var tabButtons = cut.FindAll(".tab-button");
+        // Assert - scope to desktop panel since mobile panel also renders tabs
+        var desktopPanel = cut.Find(".desktop-panel");
+        var tabButtons = desktopPanel.QuerySelectorAll(".tab-button");
         Assert.That(tabButtons, Has.Count.EqualTo(4));
     }
 
@@ -104,9 +105,11 @@ public class SessionInfoPanelTests : BunitTestContext
             .Add(p => p.Session, session)
             .Add(p => p.IsOpen, true));
 
-        // Assert
-        var activeTab = cut.Find(".tab-button.active");
-        Assert.That(activeTab.TextContent.Trim(), Does.Contain("Issue"));
+        // Assert - scope to desktop panel since mobile panel also renders tabs
+        var desktopPanel = cut.Find(".desktop-panel");
+        var activeTab = desktopPanel.QuerySelector(".tab-button.active");
+        Assert.That(activeTab, Is.Not.Null);
+        Assert.That(activeTab!.TextContent.Trim(), Does.Contain("Issue"));
     }
 
     [Test]
@@ -121,7 +124,7 @@ public class SessionInfoPanelTests : BunitTestContext
             .Add(p => p.IsOpen, false));
 
         // Assert
-        var panel = cut.Find(".session-info-panel");
+        var panel = cut.Find(".desktop-panel");
         Assert.That(panel.ClassList, Does.Contain("collapsed"));
     }
 
@@ -137,7 +140,7 @@ public class SessionInfoPanelTests : BunitTestContext
             .Add(p => p.IsOpen, true));
 
         // Assert
-        var panel = cut.Find(".session-info-panel");
+        var panel = cut.Find(".desktop-panel");
         Assert.That(panel.ClassList, Does.Not.Contain("collapsed"));
     }
 
