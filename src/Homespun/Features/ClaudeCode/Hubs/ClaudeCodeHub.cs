@@ -52,6 +52,15 @@ public class ClaudeCodeHub(IClaudeSessionService sessionService) : Hub
     }
 
     /// <summary>
+    /// Interrupt a session's current execution without fully stopping it.
+    /// The session remains alive so the user can send another message to resume.
+    /// </summary>
+    public async Task InterruptSession(string sessionId)
+    {
+        await sessionService.InterruptSessionAsync(sessionId);
+    }
+
+    /// <summary>
     /// Get all active sessions.
     /// </summary>
     public IReadOnlyList<ClaudeSession> GetAllSessions()

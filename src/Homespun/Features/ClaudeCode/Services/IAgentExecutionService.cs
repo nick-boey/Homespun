@@ -187,6 +187,14 @@ public interface IAgentExecutionService
     Task StopSessionAsync(string sessionId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Interrupts (cancels) an agent session's current execution without fully stopping it.
+    /// The session remains in a state where new messages can be sent.
+    /// </summary>
+    /// <param name="sessionId">The session ID to interrupt.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    Task InterruptSessionAsync(string sessionId, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Gets the status of an agent session.
     /// </summary>
     /// <param name="sessionId">The session ID to check.</param>

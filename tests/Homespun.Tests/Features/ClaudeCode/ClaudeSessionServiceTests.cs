@@ -304,6 +304,78 @@ public class ClaudeSessionServiceTests
         Assert.DoesNotThrowAsync(async () =>
             await _service.StopSessionAsync("non-existent-session"));
     }
+
+    [Test]
+    public async Task InterruptSessionAsync_SetsStatusToWaitingForInput()
+    {
+        // Arrange
+        var session = await _service.StartSessionAsync(
+            "entity-123",
+            "project-456",
+            "/test/path",
+            SessionMode.Build,
+            "claude-sonnet-4-20250514");
+
+        // Act
+        await _service.InterruptSessionAsync(session.Id);
+
+        // Assert - session should remain in the store with WaitingForInput status
+        var result = _sessionStore.GetById(session.Id);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.Status, Is.EqualTo(ClaudeSessionStatus.WaitingForInput));
+    }
+
+    [Test]
+    public async Task InterruptSessionAsync_KeepsSessionInStore()
+    {
+        // Arrange
+        var session = await _service.StartSessionAsync(
+            "entity-123",
+            "project-456",
+            "/test/path",
+            SessionMode.Build,
+            "claude-sonnet-4-20250514");
+
+        // Act
+        await _service.InterruptSessionAsync(session.Id);
+
+        // Assert - session should NOT be removed from store (unlike StopSession)
+        var result = _sessionStore.GetById(session.Id);
+        Assert.That(result, Is.Not.Null);
+    }
+
+    [Test]
+    public async Task InterruptSessionAsync_ClearsPendingQuestion()
+    {
+        // Arrange
+        var session = await _service.StartSessionAsync(
+            "entity-123",
+            "project-456",
+            "/test/path",
+            SessionMode.Build,
+            "claude-sonnet-4-20250514");
+        session.PendingQuestion = new PendingQuestion
+        {
+            Id = "q1",
+            ToolUseId = "tu1",
+            Questions = new List<UserQuestion>()
+        };
+
+        // Act
+        await _service.InterruptSessionAsync(session.Id);
+
+        // Assert
+        var result = _sessionStore.GetById(session.Id);
+        Assert.That(result!.PendingQuestion, Is.Null);
+    }
+
+    [Test]
+    public async Task InterruptSessionAsync_NonExistentSession_DoesNotThrow()
+    {
+        // Act & Assert
+        Assert.DoesNotThrowAsync(async () =>
+            await _service.InterruptSessionAsync("non-existent-session"));
+    }
 }
 
 /// <summary>

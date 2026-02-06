@@ -96,6 +96,16 @@ public class SessionsApiTests
     }
 
     [Test]
+    public async Task InterruptSession_ReturnsNotFound_WhenNotExists()
+    {
+        // Act
+        var response = await _client.PostAsync("/api/sessions/nonexistent/interrupt", null);
+
+        // Assert
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+    }
+
+    [Test]
     public async Task SendMessage_ReturnsNotFound_WhenSessionNotExists()
     {
         // Arrange
