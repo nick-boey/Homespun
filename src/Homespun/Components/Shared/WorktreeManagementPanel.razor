@@ -63,491 +63,536 @@
     }
 
     @* Active Worktrees Section *@
-    <div class="card mb-3">
-        <div class="card-header d-flex justify-content-between align-items-center">
-            <span>Active Worktrees</span>
-            <span class="badge bg-secondary">@_worktrees.Count(w => !w.IsBare)</span>
-        </div>
-        <div class="card-body p-0">
-            @if (_worktrees.Count == 0)
-            {
-                <div class="text-muted p-3">No active worktrees</div>
-            }
-            else
-            {
-                <div class="list-group list-group-flush">
-                    @foreach (var worktree in _worktrees.Where(w => !w.IsBare))
-                    {
-                        var branchName = GetShortBranchName(worktree.Branch);
-                        var branchInfo = _branches.FirstOrDefault(b => b.ShortName == branchName);
-                        var session = GetSessionForWorktree(worktree);
-                        var prInfo = GetPullRequestForBranch(branchName);
-                        var status = GetWorktreeStatus(worktree.Path);
+    <div class="section-header d-flex justify-content-between align-items-center">
+        <span>Active Worktrees</span>
+        <span class="badge bg-secondary">@_worktrees.Count(w => !w.IsBare)</span>
+    </div>
+    @if (_worktrees.Count(w => !w.IsBare) == 0)
+    {
+        <div class="text-muted p-3">No active worktrees</div>
+    }
+    else
+    {
+        <table class="table table-sm wt-table">
+            <thead>
+                <tr>
+                    <th>Branch</th>
+                    <th>Path</th>
+                    <th>Status</th>
+                    <th>Last Commit</th>
+                    <th class="actions-col">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var worktree in _worktrees.Where(w => !w.IsBare))
+                {
+                    var branchName = GetShortBranchName(worktree.Branch);
+                    var branchInfo = _branches.FirstOrDefault(b => b.ShortName == branchName);
+                    var session = GetSessionForWorktree(worktree);
+                    var prInfo = GetPullRequestForBranch(branchName);
+                    var status = GetWorktreeStatus(worktree.Path);
+                    var deleteKey = $"worktree:{branchName}";
 
-                        <div class="list-group-item worktree-item">
-                            <div class="d-flex justify-content-between align-items-start">
-                                <div class="worktree-info flex-grow-1">
-                                    <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
-                                        <strong class="branch-name">@branchName</strong>
-                                        @if (IsDefaultBranch(branchName))
-                                        {
-                                            <span class="badge bg-primary">default</span>
-                                        }
-                                        @if (branchInfo?.IsMerged == true)
-                                        {
-                                            <span class="badge bg-success">merged</span>
-                                        }
-                                        @if (prInfo != null)
-                                        {
-                                            <a href="https://github.com/@Project.GitHubOwner/@Project.GitHubRepo/pull/@prInfo.GitHubPRNumber"
-                                               target="_blank"
-                                               class="badge bg-info text-decoration-none">
-                                                PR #@prInfo.GitHubPRNumber
-                                            </a>
-                                        }
-                                        @* Branch mismatch tag *@
-                                        @if (!worktree.IsOnCorrectBranch)
-                                        {
-                                            <span class="badge bg-danger" title="Expected branch: @worktree.ExpectedBranch">
-                                                Wrong Branch
-                                            </span>
-                                        }
-                                        @* Git status badges *@
-                                        @if (status != null && status.HasChanges)
-                                        {
-                                            @if (status.ModifiedCount > 0)
-                                            {
-                                                <span class="badge bg-warning text-dark" title="Modified files">M: @status.ModifiedCount</span>
-                                            }
-                                            @if (status.StagedCount > 0)
-                                            {
-                                                <span class="badge bg-success" title="Staged files">S: @status.StagedCount</span>
-                                            }
-                                            @if (status.UntrackedCount > 0)
-                                            {
-                                                <span class="badge bg-secondary" title="Untracked files">U: @status.UntrackedCount</span>
-                                            }
-                                        }
-                                    </div>
-                                    <div class="text-muted small">
-                                        <code class="worktree-path">@worktree.Path</code>
-                                    </div>
-                                    @if (branchInfo != null)
+                    <tr class="@(IsDeleteTarget(deleteKey) ? "table-danger" : "")">
+                        <td>
+                            <strong class="branch-name">@branchName</strong>
+                            <span class="badges">
+                                @if (IsDefaultBranch(branchName))
+                                {
+                                    <span class="badge bg-primary">default</span>
+                                }
+                                @if (branchInfo?.IsMerged == true)
+                                {
+                                    <span class="badge bg-success">merged</span>
+                                }
+                                @if (prInfo != null)
+                                {
+                                    <a href="https://github.com/@Project.GitHubOwner/@Project.GitHubRepo/pull/@prInfo.GitHubPRNumber"
+                                       target="_blank"
+                                       class="badge bg-info text-decoration-none">
+                                        PR #@prInfo.GitHubPRNumber
+                                    </a>
+                                }
+                                @if (!worktree.IsOnCorrectBranch)
+                                {
+                                    <span class="badge bg-danger" title="Expected branch: @worktree.ExpectedBranch">
+                                        Wrong Branch
+                                    </span>
+                                }
+                                @if (status != null && status.HasChanges)
+                                {
+                                    @if (status.ModifiedCount > 0)
                                     {
-                                        <div class="text-muted small mt-1">
-                                            @if (branchInfo.AheadCount > 0 || branchInfo.BehindCount > 0)
-                                            {
-                                                @if (branchInfo.AheadCount > 0)
-                                                {
-                                                    <span class="text-success me-2">+@branchInfo.AheadCount ahead</span>
-                                                }
-                                                @if (branchInfo.BehindCount > 0)
-                                                {
-                                                    <span class="text-danger">-@branchInfo.BehindCount behind</span>
-                                                }
-                                            }
-                                            @if (!string.IsNullOrEmpty(branchInfo.LastCommitMessage))
-                                            {
-                                                <div class="commit-message mt-1">@TruncateMessage(branchInfo.LastCommitMessage)</div>
-                                            }
-                                        </div>
+                                        <span class="badge bg-warning text-dark" title="Modified files">M: @status.ModifiedCount</span>
                                     }
-                                </div>
-                                <div class="worktree-actions d-flex align-items-center gap-1">
-                                    @if (IsDefaultBranch(branchName))
+                                    @if (status.StagedCount > 0)
                                     {
-                                        @* Main branch: show Run Agent button for starting a new blank session *@
-                                        @if (session != null)
-                                        {
-                                            <a href="/session/@session.Id" class="btn btn-sm btn-primary me-1" title="Open chat">
-                                                Chat
-                                            </a>
-                                            <button class="btn btn-sm btn-outline-danger me-1"
-                                                    @onclick="() => StopSessionAsync(session)"
-                                                    disabled="@_operationInProgress"
-                                                    title="Stop session">
-                                                Stop
-                                            </button>
-                                        }
-                                        else if (!StartupTracker.IsStarting(GetWorktreeEntityId(worktree)))
-                                        {
-                                            <button class="btn btn-sm btn-success"
-                                                    @onclick="() => StartMainBranchSessionAsync(worktree)"
-                                                    disabled="@_operationInProgress"
-                                                    title="Start a new agent session on the main branch">
-                                                <i class="bi bi-robot me-1"></i>Run Agent
-                                            </button>
-                                        }
+                                        <span class="badge bg-success" title="Staged files">S: @status.StagedCount</span>
                                     }
-                                    else
+                                    @if (status.UntrackedCount > 0)
                                     {
-                                        @if (!worktree.IsOnCorrectBranch)
-                                        {
-                                            <button class="btn btn-sm btn-warning"
-                                                    @onclick="() => FixBranchAsync(worktree)"
-                                                    disabled="@_operationInProgress"
-                                                    title="Checkout the correct branch: @worktree.ExpectedBranch">
-                                                Fix Branch
-                                            </button>
-                                        }
-
-                                        <AgentControlPanel
-                                            EntityId="@GetWorktreeEntityId(worktree)"
-                                            WorktreePath="@worktree.Path"
-                                            ProjectId="@Project.Id"
-                                            Model="@(Project.DefaultModel ?? "sonnet")"
-                                            SystemPrompt="@($"You are working on branch: {branchName}")"
-                                            Compact="true"
-                                            Disabled="@_operationInProgress" />
-
-                                        @if (branchInfo?.BehindCount > 0)
-                                        {
-                                            <button class="btn btn-sm btn-outline-secondary"
-                                                    @onclick="() => PullLatestAsync(worktree)"
-                                                    disabled="@_operationInProgress"
-                                                    title="Pull latest changes">
-                                                Pull
-                                            </button>
-                                            <button class="btn btn-sm btn-outline-warning"
-                                                    @onclick="() => StartRebaseAgentAsync(worktree)"
-                                                    disabled="@(_operationInProgress || session != null || StartupTracker.IsStarting(GetWorktreeEntityId(worktree)))"
-                                                    title="Start rebase agent to rebase onto @Project.DefaultBranch">
-                                                <i class="bi bi-arrow-repeat"></i> Rebase
-                                            </button>
-                                        }
-
-                                        <button class="btn btn-sm btn-outline-danger"
-                                                @onclick="() => ShowDeleteWorktreeConfirmation(worktree, branchInfo)"
+                                        <span class="badge bg-secondary" title="Untracked files">U: @status.UntrackedCount</span>
+                                    }
+                                }
+                            </span>
+                        </td>
+                        <td><code class="worktree-path">@worktree.Path</code></td>
+                        <td class="status-col">
+                            @if (session != null)
+                            {
+                                <span class="badge @GetSessionStatusBadgeClass(session.Status)">
+                                    @session.Status
+                                </span>
+                            }
+                            @if (StartupTracker.IsStarting(GetWorktreeEntityId(worktree)))
+                            {
+                                <span class="badge bg-warning text-dark">
+                                    <span class="spinner-border spinner-border-sm me-1" role="status" style="width: 0.6rem; height: 0.6rem;"></span>
+                                    Starting...
+                                </span>
+                            }
+                            @if (branchInfo != null && (branchInfo.AheadCount > 0 || branchInfo.BehindCount > 0))
+                            {
+                                <span class="sync-info">
+                                    @if (branchInfo.AheadCount > 0)
+                                    {
+                                        <span class="text-success">+@branchInfo.AheadCount</span>
+                                    }
+                                    @if (branchInfo.BehindCount > 0)
+                                    {
+                                        <span class="text-danger">-@branchInfo.BehindCount</span>
+                                    }
+                                </span>
+                            }
+                        </td>
+                        <td class="commit-col">
+                            @if (!string.IsNullOrEmpty(branchInfo?.LastCommitMessage))
+                            {
+                                <span class="commit-message" title="@branchInfo.LastCommitMessage">@TruncateMessage(branchInfo.LastCommitMessage)</span>
+                            }
+                        </td>
+                        <td class="actions-col">
+                            @if (!IsDeleteTarget(deleteKey))
+                            {
+                                @if (IsDefaultBranch(branchName))
+                                {
+                                    @if (session != null)
+                                    {
+                                        <a href="/session/@session.Id" class="btn btn-sm btn-primary me-1" title="Open chat">
+                                            Chat
+                                        </a>
+                                        <button class="btn btn-sm btn-outline-danger me-1"
+                                                @onclick="() => StopSessionAsync(session)"
                                                 disabled="@_operationInProgress"
-                                                title="Delete worktree">
-                                            Delete
+                                                title="Stop session">
+                                            Stop
                                         </button>
                                     }
+                                    else if (!StartupTracker.IsStarting(GetWorktreeEntityId(worktree)))
+                                    {
+                                        <button class="btn btn-sm btn-success"
+                                                @onclick="() => StartMainBranchSessionAsync(worktree)"
+                                                disabled="@_operationInProgress"
+                                                title="Start a new agent session on the main branch">
+                                            <i class="bi bi-robot me-1"></i>Run Agent
+                                        </button>
+                                    }
+                                }
+                                else
+                                {
+                                    @if (!worktree.IsOnCorrectBranch)
+                                    {
+                                        <button class="btn btn-sm btn-warning me-1"
+                                                @onclick="() => FixBranchAsync(worktree)"
+                                                disabled="@_operationInProgress"
+                                                title="Checkout the correct branch: @worktree.ExpectedBranch">
+                                            Fix Branch
+                                        </button>
+                                    }
+
+                                    <AgentControlPanel
+                                        EntityId="@GetWorktreeEntityId(worktree)"
+                                        WorktreePath="@worktree.Path"
+                                        ProjectId="@Project.Id"
+                                        Model="@(Project.DefaultModel ?? "sonnet")"
+                                        SystemPrompt="@($"You are working on branch: {branchName}")"
+                                        Compact="true"
+                                        Disabled="@_operationInProgress" />
+
+                                    @if (branchInfo?.BehindCount > 0)
+                                    {
+                                        <button class="btn btn-sm btn-outline-secondary me-1"
+                                                @onclick="() => PullLatestAsync(worktree)"
+                                                disabled="@_operationInProgress"
+                                                title="Pull latest changes">
+                                            Pull
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-warning me-1"
+                                                @onclick="() => StartRebaseAgentAsync(worktree)"
+                                                disabled="@(_operationInProgress || session != null || StartupTracker.IsStarting(GetWorktreeEntityId(worktree)))"
+                                                title="Start rebase agent to rebase onto @Project.DefaultBranch">
+                                            <i class="bi bi-arrow-repeat"></i> Rebase
+                                        </button>
+                                    }
+
+                                    <button class="btn btn-sm btn-outline-danger"
+                                            @onclick="() => ShowDeleteWorktreeConfirmation(worktree, branchInfo)"
+                                            disabled="@_operationInProgress"
+                                            title="Delete worktree">
+                                        Delete
+                                    </button>
+                                }
+                            }
+                            else
+                            {
+                                @* Inline delete confirmation *@
+                                <div class="inline-confirm">
+                                    <div class="inline-confirm-options">
+                                        @if (_deleteIncludesWorktree)
+                                        {
+                                            <label class="form-check form-check-inline">
+                                                <input class="form-check-input" type="checkbox" @bind="_deleteWorktreeOnly">
+                                                <span class="form-check-label">Keep branch</span>
+                                            </label>
+                                        }
+                                        @if (_hasRemoteBranch && !_deleteWorktreeOnly)
+                                        {
+                                            <label class="form-check form-check-inline">
+                                                <input class="form-check-input" type="checkbox" @bind="_deleteRemoteBranch">
+                                                <span class="form-check-label">Delete remote</span>
+                                            </label>
+                                        }
+                                    </div>
+                                    <div class="inline-confirm-actions">
+                                        @if (!_deleteTargetIsMerged)
+                                        {
+                                            <span class="badge bg-warning text-dark me-1" title="This branch has not been merged">unmerged</span>
+                                        }
+                                        <button class="btn btn-sm btn-danger me-1"
+                                                @onclick="ExecuteDeleteAsync"
+                                                disabled="@_operationInProgress">
+                                            @if (_operationInProgress)
+                                            {
+                                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                            }
+                                            Confirm
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-secondary"
+                                                @onclick="HideDeleteConfirmation">
+                                            Cancel
+                                        </button>
+                                    </div>
                                 </div>
-                            </div>
-                        </div>
-                    }
-                </div>
-            }
-        </div>
-    </div>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
 
     @* Lost Worktrees Section *@
     @if (_lostWorktrees.Any())
     {
-        <div class="card mb-3 border-warning">
-            <div class="card-header d-flex justify-content-between align-items-center bg-warning bg-opacity-25">
-                <span><i class="bi bi-exclamation-triangle me-1"></i> Lost Worktrees</span>
-                <span class="badge bg-warning text-dark">@_lostWorktrees.Count</span>
-            </div>
-            <div class="card-body p-0">
-                <div class="list-group list-group-flush">
-                    @foreach (var lost in _lostWorktrees)
-                    {
-                        <div class="list-group-item worktree-item">
-                            <div class="d-flex justify-content-between align-items-start">
-                                <div class="worktree-info flex-grow-1">
-                                    <div class="d-flex align-items-center gap-2 mb-1">
-                                        <strong class="branch-name">@lost.FolderName</strong>
-                                        <span class="badge bg-warning text-dark">Lost</span>
-                                        @if (lost.CanRepair)
-                                        {
-                                            <span class="badge bg-info" title="Can be repaired to branch: @lost.MatchingBranchName">
-                                                <i class="bi bi-arrow-right"></i> @lost.MatchingBranchName
-                                            </span>
-                                        }
-                                        @if (lost.Status != null && lost.Status.HasChanges)
-                                        {
-                                            @if (lost.Status.ModifiedCount > 0)
-                                            {
-                                                <span class="badge bg-danger" title="Modified files - may lose work!">M: @lost.Status.ModifiedCount</span>
-                                            }
-                                            @if (lost.Status.StagedCount > 0)
-                                            {
-                                                <span class="badge bg-success" title="Staged files">S: @lost.Status.StagedCount</span>
-                                            }
-                                            @if (lost.Status.UntrackedCount > 0)
-                                            {
-                                                <span class="badge bg-secondary" title="Untracked files">U: @lost.Status.UntrackedCount</span>
-                                            }
-                                        }
-                                    </div>
-                                    <div class="text-muted small">
-                                        <code class="worktree-path">@lost.Path</code>
-                                    </div>
-                                </div>
-                                <div class="worktree-actions">
-                                    @if (lost.CanRepair)
-                                    {
-                                        <button class="btn btn-sm btn-outline-success me-1"
-                                                @onclick="() => RepairLostWorktreeAsync(lost)"
-                                                disabled="@_operationInProgress"
-                                                title="Reattach to branch @lost.MatchingBranchName">
-                                            Repair
-                                        </button>
-                                    }
-                                    <button class="btn btn-sm btn-outline-danger"
-                                            @onclick="() => ShowDeleteLostWorktreeConfirmation(lost)"
-                                            disabled="@_operationInProgress"
-                                            title="Delete folder permanently">
-                                        Delete
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    }
-                </div>
-            </div>
+        <div class="section-header d-flex justify-content-between align-items-center bg-warning bg-opacity-25">
+            <span><i class="bi bi-exclamation-triangle me-1"></i> Lost Worktrees</span>
+            <span class="badge bg-warning text-dark">@_lostWorktrees.Count</span>
         </div>
+        <table class="table table-sm wt-table">
+            <thead>
+                <tr>
+                    <th>Folder</th>
+                    <th>Path</th>
+                    <th>Status</th>
+                    <th class="actions-col">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var lost in _lostWorktrees)
+                {
+                    var deleteKey = $"lost:{lost.FolderName}";
+
+                    <tr class="@(IsDeleteTarget(deleteKey) ? "table-danger" : "")">
+                        <td>
+                            <strong class="branch-name">@lost.FolderName</strong>
+                            <span class="badges">
+                                <span class="badge bg-warning text-dark">Lost</span>
+                                @if (lost.CanRepair)
+                                {
+                                    <span class="badge bg-info" title="Can be repaired to branch: @lost.MatchingBranchName">
+                                        <i class="bi bi-arrow-right"></i> @lost.MatchingBranchName
+                                    </span>
+                                }
+                                @if (lost.Status != null && lost.Status.HasChanges)
+                                {
+                                    @if (lost.Status.ModifiedCount > 0)
+                                    {
+                                        <span class="badge bg-danger" title="Modified files - may lose work!">M: @lost.Status.ModifiedCount</span>
+                                    }
+                                    @if (lost.Status.StagedCount > 0)
+                                    {
+                                        <span class="badge bg-success" title="Staged files">S: @lost.Status.StagedCount</span>
+                                    }
+                                    @if (lost.Status.UntrackedCount > 0)
+                                    {
+                                        <span class="badge bg-secondary" title="Untracked files">U: @lost.Status.UntrackedCount</span>
+                                    }
+                                }
+                            </span>
+                        </td>
+                        <td><code class="worktree-path">@lost.Path</code></td>
+                        <td class="status-col">
+                            @if (lost.Status != null && lost.Status.HasChanges)
+                            {
+                                <span class="badge bg-danger">Has changes</span>
+                            }
+                        </td>
+                        <td class="actions-col">
+                            @if (!IsDeleteTarget(deleteKey))
+                            {
+                                @if (lost.CanRepair)
+                                {
+                                    <button class="btn btn-sm btn-outline-success me-1"
+                                            @onclick="() => RepairLostWorktreeAsync(lost)"
+                                            disabled="@_operationInProgress"
+                                            title="Reattach to branch @lost.MatchingBranchName">
+                                        Repair
+                                    </button>
+                                }
+                                <button class="btn btn-sm btn-outline-danger"
+                                        @onclick="() => ShowDeleteLostWorktreeConfirmation(lost)"
+                                        disabled="@_operationInProgress"
+                                        title="Delete folder permanently">
+                                    Delete
+                                </button>
+                            }
+                            else
+                            {
+                                @* Inline delete confirmation for lost worktrees *@
+                                <div class="inline-confirm">
+                                    <div class="inline-confirm-actions">
+                                        @if (_deleteLostWorktreeHasChanges)
+                                        {
+                                            <span class="badge bg-danger me-1" title="Has uncommitted changes">has changes</span>
+                                        }
+                                        <button class="btn btn-sm btn-danger me-1"
+                                                @onclick="ExecuteDeleteAsync"
+                                                disabled="@_operationInProgress">
+                                            @if (_operationInProgress)
+                                            {
+                                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                            }
+                                            Confirm
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-secondary"
+                                                @onclick="HideDeleteConfirmation">
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
     }
 
-    @* Local Branches Without Worktrees - Split into Open PRs and others *@
+    @* Local Branches Without Worktrees *@
     @{
         var branchesWithoutWorktrees = _branches.Where(b => !b.HasWorktree && !IsDefaultBranch(b.ShortName)).ToList();
-        var branchesWithPRs = branchesWithoutWorktrees.Where(b => GetPullRequestForBranch(b.ShortName) != null).ToList();
-        var branchesWithoutPRs = branchesWithoutWorktrees.Where(b => GetPullRequestForBranch(b.ShortName) == null).ToList();
     }
-
-    @* Open PRs Panel *@
-    @if (branchesWithPRs.Any())
+    @if (branchesWithoutWorktrees.Any())
     {
-        <div class="card mb-3">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <span>Open PRs</span>
-                <span class="badge bg-info">@branchesWithPRs.Count</span>
-            </div>
-            <div class="card-body p-0">
-                <div class="list-group list-group-flush">
-                    @foreach (var branch in branchesWithPRs)
-                    {
-                        var prInfo = GetPullRequestForBranch(branch.ShortName);
+        <div class="section-header d-flex justify-content-between align-items-center">
+            <span>Local Branches (No Worktree)</span>
+            <span class="badge bg-secondary">@branchesWithoutWorktrees.Count</span>
+        </div>
+        <table class="table table-sm wt-table">
+            <thead>
+                <tr>
+                    <th>Branch</th>
+                    <th>Last Commit</th>
+                    <th class="actions-col">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var branch in branchesWithoutWorktrees)
+                {
+                    var prInfo = GetPullRequestForBranch(branch.ShortName);
+                    var deleteKey = $"branch:{branch.ShortName}";
 
-                        <div class="list-group-item branch-item">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div class="branch-info">
-                                    <div class="d-flex align-items-center gap-2">
-                                        <strong>@branch.ShortName</strong>
-                                        @if (branch.IsMerged)
+                    <tr class="@(IsDeleteTarget(deleteKey) ? "table-danger" : "")">
+                        <td>
+                            <strong class="branch-name">@branch.ShortName</strong>
+                            <span class="badges">
+                                @if (branch.IsMerged)
+                                {
+                                    <span class="badge bg-success">merged</span>
+                                }
+                                @if (prInfo != null)
+                                {
+                                    <a href="https://github.com/@Project.GitHubOwner/@Project.GitHubRepo/pull/@prInfo.GitHubPRNumber"
+                                       target="_blank"
+                                       class="badge bg-info text-decoration-none">
+                                        PR #@prInfo.GitHubPRNumber
+                                    </a>
+                                }
+                            </span>
+                        </td>
+                        <td class="commit-col">
+                            @if (!string.IsNullOrEmpty(branch.LastCommitMessage))
+                            {
+                                <span class="commit-message" title="@branch.LastCommitMessage">@TruncateMessage(branch.LastCommitMessage)</span>
+                            }
+                        </td>
+                        <td class="actions-col">
+                            @if (!IsDeleteTarget(deleteKey))
+                            {
+                                <button class="btn btn-sm btn-outline-primary me-1"
+                                        @onclick="() => CreateWorktreeForBranchAsync(branch.ShortName)"
+                                        disabled="@_operationInProgress"
+                                        title="Create worktree for this branch">
+                                    Start
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger"
+                                        @onclick="() => ShowDeleteBranchConfirmation(branch)"
+                                        disabled="@_operationInProgress"
+                                        title="Delete branch">
+                                    Delete
+                                </button>
+                            }
+                            else
+                            {
+                                @* Inline delete confirmation *@
+                                <div class="inline-confirm">
+                                    <div class="inline-confirm-options">
+                                        @if (_hasRemoteBranch)
                                         {
-                                            <span class="badge bg-success">merged</span>
-                                        }
-                                        @if (!branch.HasRemote)
-                                        {
-                                            <span class="badge bg-secondary" title="No remote tracking branch">local only</span>
-                                        }
-                                        @if (prInfo != null)
-                                        {
-                                            <a href="https://github.com/@Project.GitHubOwner/@Project.GitHubRepo/pull/@prInfo.GitHubPRNumber"
-                                               target="_blank"
-                                               class="badge bg-info text-decoration-none">
-                                                PR #@prInfo.GitHubPRNumber
-                                            </a>
+                                            <label class="form-check form-check-inline">
+                                                <input class="form-check-input" type="checkbox" @bind="_deleteRemoteBranch">
+                                                <span class="form-check-label">Delete remote</span>
+                                            </label>
                                         }
                                     </div>
-                                    @if (!string.IsNullOrEmpty(branch.LastCommitMessage))
-                                    {
-                                        <div class="text-muted small">@TruncateMessage(branch.LastCommitMessage)</div>
-                                    }
-                                </div>
-                                <div class="branch-actions">
-                                    <button class="btn btn-sm btn-outline-primary me-1"
-                                            @onclick="() => CreateWorktreeForBranchAsync(branch.ShortName)"
-                                            disabled="@_operationInProgress"
-                                            title="Create worktree for this branch">
-                                        Start
-                                    </button>
-                                    <button class="btn btn-sm btn-outline-danger"
-                                            @onclick="() => ShowDeleteBranchConfirmation(branch)"
-                                            disabled="@_operationInProgress"
-                                            title="Delete branch">
-                                        Delete
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    }
-                </div>
-            </div>
-        </div>
-    }
-
-    @* Local Branches Without PRs *@
-    @if (branchesWithoutPRs.Any())
-    {
-        <div class="card mb-3">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <span>Local Branches (No Worktree)</span>
-                <span class="badge bg-secondary">@branchesWithoutPRs.Count</span>
-            </div>
-            <div class="card-body p-0">
-                <div class="list-group list-group-flush">
-                    @foreach (var branch in branchesWithoutPRs)
-                    {
-                        <div class="list-group-item branch-item">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div class="branch-info">
-                                    <div class="d-flex align-items-center gap-2">
-                                        <strong>@branch.ShortName</strong>
-                                        @if (branch.IsMerged)
+                                    <div class="inline-confirm-actions">
+                                        @if (!_deleteTargetIsMerged)
                                         {
-                                            <span class="badge bg-success">merged</span>
+                                            <span class="badge bg-warning text-dark me-1" title="This branch has not been merged">unmerged</span>
                                         }
-                                        @if (!branch.HasRemote)
-                                        {
-                                            <span class="badge bg-secondary" title="No remote tracking branch">local only</span>
-                                        }
+                                        <button class="btn btn-sm btn-danger me-1"
+                                                @onclick="ExecuteDeleteAsync"
+                                                disabled="@_operationInProgress">
+                                            @if (_operationInProgress)
+                                            {
+                                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                            }
+                                            Confirm
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-secondary"
+                                                @onclick="HideDeleteConfirmation">
+                                            Cancel
+                                        </button>
                                     </div>
-                                    @if (!string.IsNullOrEmpty(branch.LastCommitMessage))
-                                    {
-                                        <div class="text-muted small">@TruncateMessage(branch.LastCommitMessage)</div>
-                                    }
                                 </div>
-                                <div class="branch-actions">
-                                    <button class="btn btn-sm btn-outline-primary me-1"
-                                            @onclick="() => CreateWorktreeForBranchAsync(branch.ShortName)"
-                                            disabled="@_operationInProgress"
-                                            title="Create worktree for this branch">
-                                        Start
-                                    </button>
-                                    <button class="btn btn-sm btn-outline-danger"
-                                            @onclick="() => ShowDeleteBranchConfirmation(branch)"
-                                            disabled="@_operationInProgress"
-                                            title="Delete branch">
-                                        Delete
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    }
-                </div>
-            </div>
-        </div>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
     }
 
     @* Remote Branches Section *@
     @if (_remoteBranches.Any())
     {
-        <div class="card mb-3">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <span>Remote Branches (Not Local)</span>
-                <span class="badge bg-secondary">@_remoteBranches.Count</span>
-            </div>
-            <div class="card-body p-0">
-                <div class="list-group list-group-flush">
-                    @foreach (var remoteBranch in _remoteBranches)
-                    {
-                        <div class="list-group-item branch-item">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div class="branch-info">
-                                    <strong>origin/@remoteBranch</strong>
-                                </div>
-                                <div class="branch-actions">
-                                    <button class="btn btn-sm btn-outline-primary me-1"
-                                            @onclick="() => CreateWorktreeFromRemoteAsync(remoteBranch)"
-                                            disabled="@_operationInProgress"
-                                            title="Create local worktree from remote branch">
-                                        Checkout
-                                    </button>
-                                    <button class="btn btn-sm btn-outline-danger"
-                                            @onclick="() => DeleteRemoteBranchAsync(remoteBranch)"
-                                            disabled="@_operationInProgress"
-                                            title="Delete remote branch">
-                                        Delete
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    }
-                </div>
-            </div>
+        <div class="section-header d-flex justify-content-between align-items-center">
+            <span>Remote Branches (Not Local)</span>
+            <span class="badge bg-secondary">@_remoteBranches.Count</span>
         </div>
+        <table class="table table-sm wt-table">
+            <thead>
+                <tr>
+                    <th>Branch</th>
+                    <th class="actions-col">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var remoteBranch in _remoteBranches)
+                {
+                    <tr>
+                        <td><strong class="branch-name">origin/@remoteBranch</strong></td>
+                        <td class="actions-col">
+                            <button class="btn btn-sm btn-outline-primary me-1"
+                                    @onclick="() => CreateWorktreeFromRemoteAsync(remoteBranch)"
+                                    disabled="@_operationInProgress"
+                                    title="Create local worktree from remote branch">
+                                Checkout
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger"
+                                    @onclick="() => DeleteRemoteBranchAsync(remoteBranch)"
+                                    disabled="@_operationInProgress"
+                                    title="Delete remote branch">
+                                Delete
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
     }
 </div>
-
-@* Delete Confirmation Modal *@
-@if (_showDeleteConfirmation)
-{
-    <div class="modal-backdrop fade show" style="background-color: rgba(0,0,0,0.5);"></div>
-    <div class="modal fade show d-block" tabindex="-1">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">@_deleteModalTitle</h5>
-                    <button type="button" class="btn-close" @onclick="HideDeleteConfirmation"></button>
-                </div>
-                <div class="modal-body">
-                    @if (_deleteTargetLostWorktree != null)
-                    {
-                        <p>Are you sure you want to delete the folder <strong>@_deleteTargetName</strong>?</p>
-                        @if (_deleteLostWorktreeHasChanges)
-                        {
-                            <div class="alert alert-danger">
-                                <strong>Warning:</strong> This folder contains <strong>uncommitted changes</strong>. Deleting it will permanently lose these changes.
-                            </div>
-                        }
-                        <p class="text-muted mb-0">This will permanently delete the folder and all its contents.</p>
-                    }
-                    else if (_deleteTargetIsMerged)
-                    {
-                        <p>Are you sure you want to delete <strong>@_deleteTargetName</strong>?</p>
-                        <p class="text-muted mb-0">This branch has been merged and is safe to delete.</p>
-                    }
-                    else
-                    {
-                        <div class="alert alert-warning">
-                            <strong>Warning:</strong> This branch has <strong>not been merged</strong> into the default branch.
-                        </div>
-                        <p>Are you sure you want to delete <strong>@_deleteTargetName</strong>?</p>
-                        <p class="text-danger mb-0">You may lose uncommitted or unpushed changes.</p>
-                    }
-
-                    @if (_deleteIncludesWorktree)
-                    {
-                        <hr />
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="deleteWorktreeOnly" @bind="_deleteWorktreeOnly">
-                            <label class="form-check-label" for="deleteWorktreeOnly">
-                                Delete worktree only (keep branch)
-                            </label>
-                        </div>
-                    }
-
-                    @if (_hasRemoteBranch && !_deleteWorktreeOnly)
-                    {
-                        <div class="form-check mt-2">
-                            <input class="form-check-input" type="checkbox" id="deleteRemote" @bind="_deleteRemoteBranch">
-                            <label class="form-check-label" for="deleteRemote">
-                                Also delete remote branch
-                            </label>
-                        </div>
-                    }
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" @onclick="HideDeleteConfirmation">Cancel</button>
-                    <button type="button" class="btn btn-danger" @onclick="ExecuteDeleteAsync" disabled="@_operationInProgress">
-                        @if (_operationInProgress)
-                        {
-                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                        }
-                        Delete
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-}
 
 <style>
     .worktree-management-panel {
         font-size: 0.875rem;
     }
 
-    .worktree-item, .branch-item {
-        padding: var(--spacing-sm) var(--spacing-md);
+    .section-header {
+        padding: 0.5rem 0.75rem;
+        background-color: var(--bg-subtle, #f8f9fa);
+        border: 1px solid var(--border-color, #dee2e6);
+        border-bottom: none;
+        border-radius: var(--border-radius, 0.375rem) var(--border-radius, 0.375rem) 0 0;
+        font-weight: 600;
+        margin-top: 1rem;
+    }
+
+    .section-header:first-of-type {
+        margin-top: 0;
+    }
+
+    .wt-table {
+        margin-bottom: 1rem;
+        border: 1px solid var(--border-color, #dee2e6);
+        border-top: none;
+        border-radius: 0 0 var(--border-radius, 0.375rem) var(--border-radius, 0.375rem);
+        overflow: hidden;
+    }
+
+    .wt-table thead th {
+        user-select: none;
+        -webkit-user-select: none;
+        font-weight: 600;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.02em;
+        color: var(--text-muted, #6c757d);
+        border-bottom-width: 1px;
     }
 
     .branch-name {
         font-family: var(--font-family-mono, monospace);
+        font-size: 0.85rem;
+    }
+
+    .badges {
+        margin-left: 0.5rem;
+    }
+
+    .badges .badge {
+        font-size: 0.7rem;
+        margin-right: 0.25rem;
     }
 
     .worktree-path {
@@ -555,21 +600,64 @@
         word-break: break-all;
     }
 
+    .commit-col {
+        max-width: 300px;
+    }
+
     .commit-message {
         font-style: italic;
-        max-width: 400px;
+        color: var(--text-muted, #6c757d);
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+        display: inline-block;
+        max-width: 100%;
     }
 
-    .worktree-actions, .branch-actions {
-        flex-shrink: 0;
+    .status-col {
         white-space: nowrap;
     }
 
-    .list-group-item:hover {
+    .sync-info {
+        font-size: 0.8rem;
+        margin-left: 0.25rem;
+    }
+
+    .actions-col {
+        white-space: nowrap;
+        text-align: right;
+    }
+
+    .wt-table tbody tr:hover {
         background-color: var(--bg-hover, #f8f9fa);
+    }
+
+    .wt-table tbody tr.table-danger:hover {
+        background-color: var(--bs-table-danger-bg, #f8d7da);
+    }
+
+    .inline-confirm {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+
+    .inline-confirm-options {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+
+    .inline-confirm-options .form-check {
+        margin-bottom: 0;
+        font-size: 0.8rem;
+    }
+
+    .inline-confirm-actions {
+        display: flex;
+        align-items: center;
     }
 </style>
 
@@ -591,8 +679,7 @@
     private string? _successMessage;
 
     // Delete confirmation state
-    private bool _showDeleteConfirmation;
-    private string _deleteModalTitle = "Confirm Delete";
+    private string? _deleteTargetKey;
     private string _deleteTargetName = "";
     private bool _deleteTargetIsMerged;
     private bool _deleteIncludesWorktree;
@@ -603,6 +690,8 @@
     private WorktreeInfo? _deleteTargetWorktree;
     private BranchInfo? _deleteTargetBranch;
     private LostWorktreeInfo? _deleteTargetLostWorktree;
+
+    private bool IsDeleteTarget(string key) => _deleteTargetKey == key;
 
     protected override async Task OnInitializedAsync()
     {
@@ -941,7 +1030,7 @@
 
     private void ShowDeleteLostWorktreeConfirmation(LostWorktreeInfo lost)
     {
-        _deleteModalTitle = "Delete Lost Worktree";
+        _deleteTargetKey = $"lost:{lost.FolderName}";
         _deleteTargetName = lost.FolderName;
         _deleteTargetIsMerged = false;
         _deleteIncludesWorktree = false;
@@ -952,7 +1041,6 @@
         _deleteTargetWorktree = null;
         _deleteTargetBranch = null;
         _deleteTargetLostWorktree = lost;
-        _showDeleteConfirmation = true;
     }
 
     private async Task DeleteLostWorktreeAsync(LostWorktreeInfo lost)
@@ -1119,7 +1207,7 @@
     private void ShowDeleteWorktreeConfirmation(WorktreeInfo worktree, BranchInfo? branchInfo)
     {
         var branchName = GetShortBranchName(worktree.Branch);
-        _deleteModalTitle = "Delete Worktree";
+        _deleteTargetKey = $"worktree:{branchName}";
         _deleteTargetName = branchName;
         _deleteTargetIsMerged = branchInfo?.IsMerged ?? false;
         _deleteIncludesWorktree = true;
@@ -1128,12 +1216,11 @@
         _hasRemoteBranch = branchInfo?.Upstream != null;
         _deleteTargetWorktree = worktree;
         _deleteTargetBranch = branchInfo;
-        _showDeleteConfirmation = true;
     }
 
     private void ShowDeleteBranchConfirmation(BranchInfo branch)
     {
-        _deleteModalTitle = "Delete Branch";
+        _deleteTargetKey = $"branch:{branch.ShortName}";
         _deleteTargetName = branch.ShortName;
         _deleteTargetIsMerged = branch.IsMerged;
         _deleteIncludesWorktree = false;
@@ -1142,12 +1229,11 @@
         _hasRemoteBranch = branch.Upstream != null;
         _deleteTargetWorktree = null;
         _deleteTargetBranch = branch;
-        _showDeleteConfirmation = true;
     }
 
     private void HideDeleteConfirmation()
     {
-        _showDeleteConfirmation = false;
+        _deleteTargetKey = null;
         _deleteTargetWorktree = null;
         _deleteTargetBranch = null;
         _deleteTargetLostWorktree = null;
