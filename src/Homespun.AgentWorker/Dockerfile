@@ -24,6 +24,7 @@ RUN dotnet publish -c Release -o /app/publish /p:UseAppHost=false
 # Runtime stage
 # Use SDK image instead of aspnet runtime to support building projects
 # that need to run dotnet build, test, and other SDK commands via Bash tool
+# NOTE: Keep runtime dependencies in sync with root Dockerfile
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS runtime
 WORKDIR /app
 
