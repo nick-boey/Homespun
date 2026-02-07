@@ -345,6 +345,18 @@
   .action-panel-btn-icon {
     @apply text-base;
   }
+
+  /* Tool Group Toggle Button */
+  .tool-group-toggle {
+    @apply bg-transparent border-none text-text-muted cursor-pointer;
+    @apply text-lg font-semibold leading-none;
+    @apply px-xs py-0;
+    @apply opacity-60 transition-all duration-fast;
+  }
+
+  .tool-group-toggle:hover {
+    @apply opacity-100 text-text-primary;
+  }
 }
 
 /* ==========================================================================
