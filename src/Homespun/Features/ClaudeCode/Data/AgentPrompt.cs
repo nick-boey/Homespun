@@ -27,6 +27,12 @@ public class AgentPrompt
     public SessionMode Mode { get; set; } = SessionMode.Build;
 
     /// <summary>
+    /// Optional project ID. Null means this is a global prompt;
+    /// when set, the prompt is scoped to that specific project.
+    /// </summary>
+    public string? ProjectId { get; set; }
+
+    /// <summary>
     /// When the agent prompt was created.
     /// </summary>
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

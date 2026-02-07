@@ -24,8 +24,25 @@ public partial class MockAgentPromptService : IAgentPromptService
 
     public IReadOnlyList<AgentPrompt> GetAllPrompts()
     {
-        _logger.LogDebug("[Mock] GetAllPrompts");
-        return _dataStore.AgentPrompts;
+        _logger.LogDebug("[Mock] GetAllPrompts (global only)");
+        return _dataStore.AgentPrompts
+            .Where(p => p.ProjectId == null)
+            .ToList()
+            .AsReadOnly();
+    }
+
+    public IReadOnlyList<AgentPrompt> GetProjectPrompts(string projectId)
+    {
+        _logger.LogDebug("[Mock] GetProjectPrompts {ProjectId}", projectId);
+        return _dataStore.GetAgentPromptsByProject(projectId);
+    }
+
+    public IReadOnlyList<AgentPrompt> GetPromptsForProject(string projectId)
+    {
+        _logger.LogDebug("[Mock] GetPromptsForProject {ProjectId}", projectId);
+        var projectPrompts = GetProjectPrompts(projectId);
+        var globalPrompts = GetAllPrompts();
+        return projectPrompts.Concat(globalPrompts).ToList().AsReadOnly();
     }
 
     public AgentPrompt? GetPrompt(string id)
@@ -34,9 +51,14 @@ public partial class MockAgentPromptService : IAgentPromptService
         return _dataStore.GetAgentPrompt(id);
     }
 
-    public async Task<AgentPrompt> CreatePromptAsync(string name, string? initialMessage, SessionMode mode)
+    public Task<AgentPrompt> CreatePromptAsync(string name, string? initialMessage, SessionMode mode)
     {
-        _logger.LogDebug("[Mock] CreatePrompt {Name}", name);
+        return CreatePromptAsync(name, initialMessage, mode, projectId: null);
+    }
+
+    public async Task<AgentPrompt> CreatePromptAsync(string name, string? initialMessage, SessionMode mode, string? projectId)
+    {
+        _logger.LogDebug("[Mock] CreatePrompt {Name} (ProjectId: {ProjectId})", name, projectId ?? "global");
 
         var prompt = new AgentPrompt
         {
@@ -44,6 +66,7 @@ public partial class MockAgentPromptService : IAgentPromptService
             Name = name,
             InitialMessage = initialMessage,
             Mode = mode,
+            ProjectId = projectId,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };
@@ -106,7 +129,7 @@ public partial class MockAgentPromptService : IAgentPromptService
     {
         _logger.LogDebug("[Mock] EnsureDefaultPromptsAsync");
 
-        var existingPrompts = _dataStore.AgentPrompts;
+        var existingPrompts = GetAllPrompts();
 
         // Check if Plan prompt exists
         if (!existingPrompts.Any(p => p.Name == "Plan"))

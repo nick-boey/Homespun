@@ -96,8 +96,9 @@ public class MockDataStore : IDataStore
         lock (_lock)
         {
             _projects.RemoveAll(p => p.Id == projectId);
-            // Cascade delete pull requests for the project
+            // Cascade delete pull requests and project-specific prompts for the project
             _pullRequests.RemoveAll(pr => pr.ProjectId == projectId);
+            _agentPrompts.RemoveAll(ap => ap.ProjectId == projectId);
         }
         return Task.CompletedTask;
     }
@@ -183,6 +184,14 @@ public class MockDataStore : IDataStore
         lock (_lock)
         {
             return _agentPrompts.FirstOrDefault(p => p.Id == id);
+        }
+    }
+
+    public IReadOnlyList<AgentPrompt> GetAgentPromptsByProject(string projectId)
+    {
+        lock (_lock)
+        {
+            return _agentPrompts.Where(p => p.ProjectId == projectId).ToList().AsReadOnly();
         }
     }
 

@@ -53,6 +53,9 @@ public class JsonDataStore : IDataStore
 
     public AgentPrompt? GetAgentPrompt(string id) => _data.AgentPrompts.FirstOrDefault(p => p.Id == id);
 
+    public IReadOnlyList<AgentPrompt> GetAgentPromptsByProject(string projectId) =>
+        _data.AgentPrompts.Where(p => p.ProjectId == projectId).ToList().AsReadOnly();
+
     #endregion
 
     public async Task AddProjectAsync(Project project)
@@ -93,8 +96,9 @@ public class JsonDataStore : IDataStore
         try
         {
             _data.Projects.RemoveAll(p => p.Id == projectId);
-            // Also remove associated pull requests
+            // Also remove associated pull requests and project-specific prompts
             _data.PullRequests.RemoveAll(pr => pr.ProjectId == projectId);
+            _data.AgentPrompts.RemoveAll(ap => ap.ProjectId == projectId);
             await SaveInternalAsync();
         }
         finally

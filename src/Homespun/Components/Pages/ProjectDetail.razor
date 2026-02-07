@@ -1,5 +1,6 @@
 @page "/projects/{Id}"
 @page "/projects/{Id}/branches"
+@page "/projects/{Id}/prompts"
 @page "/projects/{Id}/settings"
 @implements IDisposable
 @using Fleece.Core.Models
@@ -73,6 +74,14 @@ else
                @onclick="SwitchToBranchesTab"
                @onclick:preventDefault>
                 <i class="bi bi-diagram-2 me-1"></i>Branches
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link @(_activeTab == "prompts" ? "active" : "")"
+               href="/projects/@Id/prompts"
+               @onclick="SwitchToPromptsTab"
+               @onclick:preventDefault>
+                <i class="bi bi-chat-square-text me-1"></i>Prompts
             </a>
         </li>
         <li class="nav-item">
@@ -203,6 +212,10 @@ else
     {
         <WorktreeManagementPanel Project="@_project"
                                  OnDataChanged="RefreshData" />
+    }
+    else if (_activeTab == "prompts")
+    {
+        <ProjectPromptsTab ProjectId="@Id" />
     }
     else if (_activeTab == "settings")
     {
@@ -447,6 +460,8 @@ else
         var uri = NavigationManager.Uri;
         if (uri.Contains("/settings"))
             _activeTab = "settings";
+        else if (uri.Contains("/prompts"))
+            _activeTab = "prompts";
         else if (uri.Contains("/branches"))
             _activeTab = "branches";
         else
@@ -484,6 +499,7 @@ else
         var newUrl = tab switch
         {
             "branches" => $"/projects/{Id}/branches",
+            "prompts" => $"/projects/{Id}/prompts",
             "settings" => $"/projects/{Id}/settings",
             _ => $"/projects/{Id}"
         };
@@ -492,6 +508,7 @@ else
 
     private void SwitchToIssuesTab() => SwitchTab("issues");
     private void SwitchToBranchesTab() => SwitchTab("branches");
+    private void SwitchToPromptsTab() => SwitchTab("prompts");
     private void SwitchToSettingsTab() => SwitchTab("settings");
 
     public void Dispose()

@@ -18,7 +18,22 @@ public partial class AgentPromptService : IAgentPromptService
 
     public IReadOnlyList<AgentPrompt> GetAllPrompts()
     {
-        return _dataStore.AgentPrompts;
+        return _dataStore.AgentPrompts
+            .Where(p => p.ProjectId == null)
+            .ToList()
+            .AsReadOnly();
+    }
+
+    public IReadOnlyList<AgentPrompt> GetProjectPrompts(string projectId)
+    {
+        return _dataStore.GetAgentPromptsByProject(projectId);
+    }
+
+    public IReadOnlyList<AgentPrompt> GetPromptsForProject(string projectId)
+    {
+        var projectPrompts = GetProjectPrompts(projectId);
+        var globalPrompts = GetAllPrompts();
+        return projectPrompts.Concat(globalPrompts).ToList().AsReadOnly();
     }
 
     public AgentPrompt? GetPrompt(string id)
@@ -26,13 +41,19 @@ public partial class AgentPromptService : IAgentPromptService
         return _dataStore.GetAgentPrompt(id);
     }
 
-    public async Task<AgentPrompt> CreatePromptAsync(string name, string? initialMessage, SessionMode mode)
+    public Task<AgentPrompt> CreatePromptAsync(string name, string? initialMessage, SessionMode mode)
+    {
+        return CreatePromptAsync(name, initialMessage, mode, projectId: null);
+    }
+
+    public async Task<AgentPrompt> CreatePromptAsync(string name, string? initialMessage, SessionMode mode, string? projectId)
     {
         var prompt = new AgentPrompt
         {
             Name = name,
             InitialMessage = initialMessage,
             Mode = mode,
+            ProjectId = projectId,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };

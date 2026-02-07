@@ -193,6 +193,7 @@
                                        SelectedModelChanged="OnModelChanged" />
                     </div>
                     <AgentSelector
+                        ProjectId="@PullRequest.ProjectId"
                         Disabled="@StartSessionDisabled"
                         IsStarting="@StartupTracker.IsStarting(PullRequest.Id)"
                         OnStart="HandleAgentStart" />

@@ -121,6 +121,11 @@ public interface IDataStore
     /// </summary>
     AgentPrompt? GetAgentPrompt(string id);
 
+    /// <summary>
+    /// Gets agent prompts scoped to a specific project (not global prompts).
+    /// </summary>
+    IReadOnlyList<AgentPrompt> GetAgentPromptsByProject(string projectId);
+
     #endregion
 
     /// <summary>
