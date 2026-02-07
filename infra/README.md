@@ -118,7 +118,7 @@ The managed identity is granted the Key Vault Secrets User role. Container apps 
 - Handles Claude Code agent sessions via HTTP/SSE
 - Internal-only ingress (accessible only within the ACA environment)
 - Mounts the same NFS volume at `/data` for shared filesystem access with the main app
-- Scales 1 to `maxConcurrentSessions` replicas based on HTTP concurrency
+- Scales 0 to `maxConcurrentSessions` replicas (scales to zero when idle)
 
 ### Monitoring
 

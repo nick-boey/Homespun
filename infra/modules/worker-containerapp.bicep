@@ -43,7 +43,7 @@ resource workerApp 'Microsoft.App/containerApps@2025-01-01' = {
         external: false // Only accessible within the ACA environment
         targetPort: 8080
         transport: 'auto'
-        allowInsecure: false
+        allowInsecure: true
       }
       secrets: [
         {
@@ -123,7 +123,7 @@ resource workerApp 'Microsoft.App/containerApps@2025-01-01' = {
         }
       ]
       scale: {
-        minReplicas: 1
+        minReplicas: 0
         maxReplicas: maxConcurrentSessions
         rules: [
           {
