@@ -1899,7 +1899,7 @@ public class GitWorktreeServiceTests
         Directory.CreateDirectory(repoPath);
 
         // Create a worktree path with flattened name (slashes become plus)
-        var worktreePath = Path.Combine(_tempDir, ".worktrees", "feature+my-branch+abc123");
+        var worktreePath = Path.Combine(_tempDir, ".clones", "feature+my-branch+abc123");
 
         // The actual branch name has slashes
         var actualBranchName = "feature/my-branch+abc123";
@@ -1944,7 +1944,7 @@ public class GitWorktreeServiceTests
         Directory.CreateDirectory(repoPath);
 
         // Create a worktree path with flattened name (slashes become plus)
-        var worktreePath = Path.Combine(_tempDir, ".worktrees", "feature+my-branch+xyz789");
+        var worktreePath = Path.Combine(_tempDir, ".clones", "feature+my-branch+xyz789");
 
         // The actual branch name has slashes
         var branchName = "feature/my-branch+xyz789";
@@ -1989,7 +1989,7 @@ public class GitWorktreeServiceTests
         Directory.CreateDirectory(repoPath);
 
         // Create a worktree path with multiple slashes flattened to plus signs
-        var worktreePath = Path.Combine(_tempDir, ".worktrees", "feature+area+subfeature+abc");
+        var worktreePath = Path.Combine(_tempDir, ".clones", "feature+area+subfeature+abc");
 
         // The actual branch name has multiple slashes
         var branchName = "feature/area/subfeature+abc";
