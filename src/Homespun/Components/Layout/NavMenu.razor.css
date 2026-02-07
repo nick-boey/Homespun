@@ -67,3 +67,21 @@
     background-color: rgba(255, 255, 255, 0.1);
     color: var(--text-sidebar);
 }
+
+/* ==========================================================================
+   Project Sub-Items (indented list below Projects link)
+   ========================================================================== */
+
+.project-list {
+    padding-left: 1rem;
+}
+
+.nav-item-sub ::deep .nav-link {
+    height: 1.75rem;
+    font-size: 0.8rem;
+    opacity: 0.85;
+}
+
+.nav-item-sub ::deep .nav-link:hover {
+    opacity: 1;
+}
