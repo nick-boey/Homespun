@@ -1183,3 +1183,322 @@ public class ClaudeSessionServicePlanExecutionTests
         });
     }
 }
+
+/// <summary>
+/// Tests for tool result detection in user messages (agent mode).
+/// In agent mode, tool_use blocks are not streamed — only tool results arrive as user messages.
+/// These tests verify that Write and ExitPlanMode are detected from tool results.
+/// </summary>
+[TestFixture]
+public class ClaudeSessionServiceToolResultDetectionTests
+{
+    private ClaudeSessionService _service = null!;
+    private IClaudeSessionStore _sessionStore = null!;
+    private SessionOptionsFactory _optionsFactory = null!;
+    private Mock<ILogger<ClaudeSessionService>> _loggerMock = null!;
+    private Mock<ILogger<SessionOptionsFactory>> _factoryLoggerMock = null!;
+    private Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>> _hubContextMock = null!;
+    private Mock<IClaudeSessionDiscovery> _discoveryMock = null!;
+    private Mock<ISessionMetadataStore> _metadataStoreMock = null!;
+    private Mock<IMessageCacheStore> _messageCacheMock = null!;
+    private IToolResultParser _toolResultParser = null!;
+    private Mock<IHooksService> _hooksServiceMock = null!;
+    private Mock<IAgentExecutionService> _agentExecutionServiceMock = null!;
+
+    [SetUp]
+    public void SetUp()
+    {
+        _sessionStore = new ClaudeSessionStore();
+        _factoryLoggerMock = new Mock<ILogger<SessionOptionsFactory>>();
+        _optionsFactory = new SessionOptionsFactory(_factoryLoggerMock.Object);
+        _loggerMock = new Mock<ILogger<ClaudeSessionService>>();
+        _hubContextMock = new Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>>();
+        _discoveryMock = new Mock<IClaudeSessionDiscovery>();
+        _metadataStoreMock = new Mock<ISessionMetadataStore>();
+        _messageCacheMock = new Mock<IMessageCacheStore>();
+        _toolResultParser = new ToolResultParser();
+        _hooksServiceMock = new Mock<IHooksService>();
+        _agentExecutionServiceMock = new Mock<IAgentExecutionService>();
+
+        var clientsMock = new Mock<IHubClients>();
+        var clientProxyMock = new Mock<IClientProxy>();
+        clientsMock.Setup(c => c.All).Returns(clientProxyMock.Object);
+        clientsMock.Setup(c => c.Group(It.IsAny<string>())).Returns(clientProxyMock.Object);
+        _hubContextMock.Setup(h => h.Clients).Returns(clientsMock.Object);
+
+        _service = new ClaudeSessionService(
+            _sessionStore,
+            _optionsFactory,
+            _loggerMock.Object,
+            _hubContextMock.Object,
+            _discoveryMock.Object,
+            _metadataStoreMock.Object,
+            _toolResultParser,
+            _hooksServiceMock.Object,
+            _messageCacheMock.Object,
+            _agentExecutionServiceMock.Object);
+    }
+
+    private static async IAsyncEnumerable<AgentEvent> CreateAgentEventStream(params AgentEvent[] events)
+    {
+        foreach (var evt in events)
+        {
+            yield return evt;
+        }
+        await Task.CompletedTask;
+    }
+
+    [Test]
+    public async Task WriteToolResult_WithPlanFilePath_CapturesPlanFilePath()
+    {
+        // Arrange
+        var session = await _service.StartSessionAsync(
+            "entity-1", "project-1", "/test/path", SessionMode.Plan, "sonnet");
+
+        var planFilePath = "/home/user/.claude/plans/fluffy-aurora.md";
+
+        // Simulate agent mode: Write tool result arrives as a user message
+        _agentExecutionServiceMock
+            .Setup(s => s.StartSessionAsync(It.IsAny<AgentStartRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(CreateAgentEventStream(
+                new AgentSessionStartedEvent("agent-1", null),
+                // Assistant message with text
+                new AgentMessageEvent("agent-1", ClaudeMessageRole.Assistant, new List<AgentContentBlockEvent>
+                {
+                    new("agent-1", ClaudeContentType.Text, "Writing plan file...", null, null, null, null, 0)
+                }),
+                // Write tool result as a user message
+                new AgentMessageEvent("agent-1", ClaudeMessageRole.User, new List<AgentContentBlockEvent>
+                {
+                    new("agent-1", ClaudeContentType.ToolResult, $"File created: {planFilePath}",
+                        "Write", null, "tool-use-1", true, 0)
+                }),
+                new AgentResultEvent("agent-1", 0, 0, null)));
+
+        // Act
+        await _service.SendMessageAsync(session.Id, "Create a plan");
+
+        // Assert
+        Assert.That(session.PlanFilePath, Is.EqualTo(planFilePath),
+            "PlanFilePath should be captured from Write tool result");
+    }
+
+    [Test]
+    public async Task WriteToolResult_WithNonPlanFilePath_DoesNotCapture()
+    {
+        // Arrange
+        var session = await _service.StartSessionAsync(
+            "entity-1", "project-1", "/test/path", SessionMode.Plan, "sonnet");
+
+        // Simulate agent mode: Write tool result for a non-plan file
+        _agentExecutionServiceMock
+            .Setup(s => s.StartSessionAsync(It.IsAny<AgentStartRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(CreateAgentEventStream(
+                new AgentSessionStartedEvent("agent-1", null),
+                new AgentMessageEvent("agent-1", ClaudeMessageRole.Assistant, new List<AgentContentBlockEvent>
+                {
+                    new("agent-1", ClaudeContentType.Text, "Writing file...", null, null, null, null, 0)
+                }),
+                new AgentMessageEvent("agent-1", ClaudeMessageRole.User, new List<AgentContentBlockEvent>
+                {
+                    new("agent-1", ClaudeContentType.ToolResult, "File created: /home/user/project/src/handler.ts",
+                        "Write", null, "tool-use-1", true, 0)
+                }),
+                new AgentResultEvent("agent-1", 0, 0, null)));
+
+        // Act
+        await _service.SendMessageAsync(session.Id, "Write a handler");
+
+        // Assert
+        Assert.That(session.PlanFilePath, Is.Null,
+            "PlanFilePath should not be captured for non-plan files");
+    }
+
+    [Test]
+    public async Task ExitPlanModeToolResult_TransitionsToWaitingForPlanExecution()
+    {
+        // Arrange
+        var session = await _service.StartSessionAsync(
+            "entity-1", "project-1", "/test/path", SessionMode.Plan, "sonnet");
+
+        // Pre-populate plan content as if Write tool had already captured it
+        session.PlanContent = "# Implementation Plan\n\n1. Step one\n2. Step two";
+        session.PlanFilePath = "/home/user/.claude/plans/fluffy-aurora.md";
+
+        // Simulate agent mode: ExitPlanMode tool result as a user message
+        _agentExecutionServiceMock
+            .Setup(s => s.StartSessionAsync(It.IsAny<AgentStartRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(CreateAgentEventStream(
+                new AgentSessionStartedEvent("agent-1", null),
+                new AgentMessageEvent("agent-1", ClaudeMessageRole.Assistant, new List<AgentContentBlockEvent>
+                {
+                    new("agent-1", ClaudeContentType.Text, "I've created a plan.", null, null, null, null, 0)
+                }),
+                new AgentMessageEvent("agent-1", ClaudeMessageRole.User, new List<AgentContentBlockEvent>
+                {
+                    new("agent-1", ClaudeContentType.ToolResult, "Plan mode exited successfully.",
+                        "ExitPlanMode", null, "tool-use-2", true, 0)
+                }),
+                new AgentResultEvent("agent-1", 0, 0, null)));
+
+        // Act
+        await _service.SendMessageAsync(session.Id, "Plan this feature");
+
+        // Assert
+        Assert.That(session.Status, Is.EqualTo(ClaudeSessionStatus.WaitingForPlanExecution),
+            "Session should transition to WaitingForPlanExecution when ExitPlanMode is detected from tool result");
+    }
+
+    [Test]
+    public async Task ExitPlanModeToolResult_UsesPreviouslyCapturedPlanContent()
+    {
+        // Arrange
+        var session = await _service.StartSessionAsync(
+            "entity-1", "project-1", "/test/path", SessionMode.Plan, "sonnet");
+
+        var planContent = "# My Plan\n\n## Steps\n1. Do this\n2. Do that";
+
+        // Pre-populate plan content (simulates Write tool having captured it earlier)
+        session.PlanContent = planContent;
+        session.PlanFilePath = "/home/user/.claude/plans/test-plan.md";
+
+        // Simulate agent mode: ExitPlanMode arrives
+        _agentExecutionServiceMock
+            .Setup(s => s.StartSessionAsync(It.IsAny<AgentStartRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(CreateAgentEventStream(
+                new AgentSessionStartedEvent("agent-1", null),
+                new AgentMessageEvent("agent-1", ClaudeMessageRole.Assistant, new List<AgentContentBlockEvent>
+                {
+                    new("agent-1", ClaudeContentType.Text, "Plan complete.", null, null, null, null, 0)
+                }),
+                new AgentMessageEvent("agent-1", ClaudeMessageRole.User, new List<AgentContentBlockEvent>
+                {
+                    new("agent-1", ClaudeContentType.ToolResult, "Plan mode exited.",
+                        "ExitPlanMode", null, "tool-use-2", true, 0)
+                }),
+                new AgentResultEvent("agent-1", 0, 0, null)));
+
+        // Act
+        await _service.SendMessageAsync(session.Id, "Plan this");
+
+        // Assert - plan message should be in session messages with the stored plan content
+        var planMessage = session.Messages.FirstOrDefault(m =>
+            m.Role == ClaudeMessageRole.Assistant &&
+            m.Content.Any(c => c.Text?.Contains("Implementation Plan") == true));
+
+        Assert.That(planMessage, Is.Not.Null, "Should have a plan display message");
+        Assert.That(planMessage!.Content[0].Text, Does.Contain(planContent),
+            "Plan display should contain the captured plan content");
+    }
+
+    [Test]
+    public async Task WriteFollowedByExitPlanMode_ProducesCorrectPlanFlow()
+    {
+        // Arrange
+        var session = await _service.StartSessionAsync(
+            "entity-1", "project-1", "/test/path", SessionMode.Plan, "sonnet");
+
+        var planFilePath = "/home/user/.claude/plans/fluffy-aurora.md";
+        var planContent = "# Plan\n\n1. Step one\n2. Step two";
+
+        // Mock agent container read - in real scenario, the file exists inside the agent container
+        _agentExecutionServiceMock
+            .Setup(s => s.ReadFileFromAgentAsync("agent-1", planFilePath, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(planContent);
+
+        // Simulate full agent mode flow: Write plan file, then ExitPlanMode
+        _agentExecutionServiceMock
+            .Setup(s => s.StartSessionAsync(It.IsAny<AgentStartRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(CreateAgentEventStream(
+                new AgentSessionStartedEvent("agent-1", null),
+                // Assistant writes plan
+                new AgentMessageEvent("agent-1", ClaudeMessageRole.Assistant, new List<AgentContentBlockEvent>
+                {
+                    new("agent-1", ClaudeContentType.Text, "Creating plan...", null, null, null, null, 0)
+                }),
+                // Write tool result
+                new AgentMessageEvent("agent-1", ClaudeMessageRole.User, new List<AgentContentBlockEvent>
+                {
+                    new("agent-1", ClaudeContentType.ToolResult, $"File created: {planFilePath}",
+                        "Write", null, "tool-use-1", true, 0)
+                }),
+                // Assistant announces plan mode exit
+                new AgentMessageEvent("agent-1", ClaudeMessageRole.Assistant, new List<AgentContentBlockEvent>
+                {
+                    new("agent-1", ClaudeContentType.Text, "Plan ready for review.", null, null, null, null, 0)
+                }),
+                // ExitPlanMode tool result
+                new AgentMessageEvent("agent-1", ClaudeMessageRole.User, new List<AgentContentBlockEvent>
+                {
+                    new("agent-1", ClaudeContentType.ToolResult, "Exited plan mode.",
+                        "ExitPlanMode", null, "tool-use-2", true, 0)
+                }),
+                new AgentResultEvent("agent-1", 0, 0, null)));
+
+        // Act
+        await _service.SendMessageAsync(session.Id, "Plan this feature");
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            // PlanFilePath should be captured from Write tool result
+            Assert.That(session.PlanFilePath, Is.EqualTo(planFilePath),
+                "PlanFilePath should be captured from Write tool result");
+
+            // Status should be WaitingForPlanExecution from ExitPlanMode
+            Assert.That(session.Status, Is.EqualTo(ClaudeSessionStatus.WaitingForPlanExecution),
+                "Session should be in WaitingForPlanExecution status");
+
+            // Plan content should be fetched from agent container
+            Assert.That(session.PlanContent, Is.EqualTo(planContent),
+                "PlanContent should be fetched from agent container");
+        });
+    }
+
+    [Test]
+    public async Task ExitPlanModeToolResult_WithoutPlanContent_UsesAgentContainerFallback()
+    {
+        // Arrange
+        var session = await _service.StartSessionAsync(
+            "entity-1", "project-1", "/test/path", SessionMode.Plan, "sonnet");
+
+        var planFilePath = "/home/user/.claude/plans/test-plan.md";
+        var planContent = "# Plan from container\n\nFetched remotely.";
+
+        // Set up the plan file path but no content (simulates Docker/Azure mode)
+        session.PlanFilePath = planFilePath;
+
+        // Mock ReadFileFromAgentAsync to return plan content
+        _agentExecutionServiceMock
+            .Setup(s => s.ReadFileFromAgentAsync("agent-1", planFilePath, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(planContent);
+
+        // Simulate ExitPlanMode arriving
+        _agentExecutionServiceMock
+            .Setup(s => s.StartSessionAsync(It.IsAny<AgentStartRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(CreateAgentEventStream(
+                new AgentSessionStartedEvent("agent-1", null),
+                new AgentMessageEvent("agent-1", ClaudeMessageRole.Assistant, new List<AgentContentBlockEvent>
+                {
+                    new("agent-1", ClaudeContentType.Text, "Plan ready.", null, null, null, null, 0)
+                }),
+                new AgentMessageEvent("agent-1", ClaudeMessageRole.User, new List<AgentContentBlockEvent>
+                {
+                    new("agent-1", ClaudeContentType.ToolResult, "Exited plan mode.",
+                        "ExitPlanMode", null, "tool-use-1", true, 0)
+                }),
+                new AgentResultEvent("agent-1", 0, 0, null)));
+
+        // Act
+        await _service.SendMessageAsync(session.Id, "Plan this");
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(session.Status, Is.EqualTo(ClaudeSessionStatus.WaitingForPlanExecution),
+                "Should transition to WaitingForPlanExecution");
+            Assert.That(session.PlanContent, Is.EqualTo(planContent),
+                "Should have fetched plan content from agent container");
+        });
+    }
+}
