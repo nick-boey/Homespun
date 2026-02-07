@@ -41,7 +41,7 @@ public class MockGitWorktreeService : IGitWorktreeService
         // If live Claude testing is enabled, use the real test directory
         var worktreePath = !string.IsNullOrEmpty(_liveTestOptions?.TestWorkingDirectory)
             ? _liveTestOptions.TestWorkingDirectory
-            : $"{repoPath}-worktrees/{branchName.Replace("/", "-")}";
+            : $"{repoPath}-clones/{branchName.Replace("/", "-")}";
 
         var worktrees = _worktreesByRepo.GetOrAdd(repoPath, _ => []);
         lock (worktrees)
@@ -353,7 +353,7 @@ public class MockGitWorktreeService : IGitWorktreeService
             remoteBranch, repoPath);
 
         // Create the worktree without checking out in main
-        var worktreePath = $"{repoPath}-worktrees/{remoteBranch.Replace("/", "-")}";
+        var worktreePath = $"{repoPath}-clones/{remoteBranch.Replace("/", "-")}";
 
         var worktrees = _worktreesByRepo.GetOrAdd(repoPath, _ => []);
         lock (worktrees)

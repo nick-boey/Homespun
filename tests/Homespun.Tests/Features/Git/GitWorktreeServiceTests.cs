@@ -39,7 +39,20 @@ public class GitWorktreeServiceTests
         Directory.CreateDirectory(repoPath);
         var branchName = "feature/test";
 
-        _mockRunner.Setup(r => r.RunAsync("git", It.IsAny<string>(), repoPath))
+        // Mock remote get-url (returns a remote URL)
+        _mockRunner.Setup(r => r.RunAsync("git", "remote get-url origin", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "https://github.com/user/repo.git" });
+
+        // Mock clone --local
+        _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.StartsWith("clone --local")), repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "" });
+
+        // Mock remote set-url in the clone directory
+        _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.StartsWith("remote set-url")), It.Is<string>(s => s.Contains(".clones"))))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "" });
+
+        // Mock checkout in the clone directory
+        _mockRunner.Setup(r => r.RunAsync("git", $"checkout \"{branchName}\"", It.Is<string>(s => s.Contains(".clones"))))
             .ReturnsAsync(new CommandResult { Success = true, Output = "" });
 
         // Act
@@ -47,21 +60,26 @@ public class GitWorktreeServiceTests
 
         // Assert
         Assert.That(result, Is.Not.Null);
-        // Worktree should be in .worktrees directory with flattened name (/ becomes +)
-        Assert.That(result, Does.Contain(".worktrees"));
+        // Clone should be in .clones directory with flattened name (/ becomes +)
+        Assert.That(result, Does.Contain(".clones"));
         Assert.That(result, Does.Contain("feature+test"));
     }
 
     [Test]
-    public async Task CreateWorktree_GitError_ReturnsNull()
+    public async Task CreateWorktree_CloneError_ReturnsNull()
     {
         // Arrange
         var repoPath = Path.Combine(_tempDir, "repo");
         Directory.CreateDirectory(repoPath);
         var branchName = "feature/test";
 
-        _mockRunner.Setup(r => r.RunAsync("git", It.IsAny<string>(), repoPath))
-            .ReturnsAsync(new CommandResult { Success = false, Error = "fatal: 'feature/test' is already checked out" });
+        // Mock remote get-url
+        _mockRunner.Setup(r => r.RunAsync("git", "remote get-url origin", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "https://github.com/user/repo.git" });
+
+        // Mock clone --local failure
+        _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.StartsWith("clone --local")), repoPath))
+            .ReturnsAsync(new CommandResult { Success = false, Error = "fatal: clone failed" });
 
         // Act
         var result = await _service.CreateWorktreeAsync(repoPath, branchName);
@@ -71,89 +89,130 @@ public class GitWorktreeServiceTests
     }
 
     [Test]
-    public async Task RemoveWorktree_Success_ReturnsTrue()
+    public async Task RemoveWorktree_DirectoryExists_DeletesAndReturnsTrue()
     {
         // Arrange
         var repoPath = Path.Combine(_tempDir, "repo");
-        var worktreePath = Path.Combine(repoPath, ".worktrees", "feature-test");
-
-        _mockRunner.Setup(r => r.RunAsync("git", $"worktree remove \"{worktreePath}\" --force", repoPath))
-            .ReturnsAsync(new CommandResult { Success = true });
+        var clonePath = Path.Combine(repoPath, ".clones", "feature-test");
+        Directory.CreateDirectory(clonePath);
 
         // Act
-        var result = await _service.RemoveWorktreeAsync(repoPath, worktreePath);
+        var result = await _service.RemoveWorktreeAsync(repoPath, clonePath);
 
         // Assert
         Assert.That(result, Is.True);
+        Assert.That(Directory.Exists(clonePath), Is.False);
     }
 
     [Test]
-    public async Task RemoveWorktree_GitError_ReturnsFalse()
+    public async Task RemoveWorktree_DirectoryDoesNotExist_ReturnsFalse()
     {
         // Arrange
         var repoPath = Path.Combine(_tempDir, "repo");
-        var worktreePath = Path.Combine(repoPath, ".worktrees", "feature-test");
-
-        _mockRunner.Setup(r => r.RunAsync("git", It.IsAny<string>(), repoPath))
-            .ReturnsAsync(new CommandResult { Success = false });
+        var clonePath = Path.Combine(repoPath, ".clones", "feature-test");
 
         // Act
-        var result = await _service.RemoveWorktreeAsync(repoPath, worktreePath);
+        var result = await _service.RemoveWorktreeAsync(repoPath, clonePath);
 
         // Assert
         Assert.That(result, Is.False);
     }
 
     [Test]
-    public async Task ListWorktrees_Success_ReturnsWorktrees()
+    public async Task ListWorktrees_WithClones_ReturnsWorktrees()
     {
         // Arrange
-        var repoPath = Path.Combine(_tempDir, "repo");
-        var worktree1 = Path.Combine(repoPath, ".worktrees", "feature-1");
-        var worktree2 = Path.Combine(repoPath, ".worktrees", "feature-2");
+        var repoPath = Path.Combine(_tempDir, "main");
+        Directory.CreateDirectory(repoPath);
 
-        _mockRunner.Setup(r => r.RunAsync("git", "worktree list --porcelain", repoPath))
-            .ReturnsAsync(new CommandResult { Success = true, Output = $"worktree {repoPath}\nworktree {worktree1}\nworktree {worktree2}" });
+        // Create .clones directory with two clone directories containing .git markers
+        var clonesDir = Path.Combine(_tempDir, ".clones");
+        var clone1 = Path.Combine(clonesDir, "feature-1");
+        var clone2 = Path.Combine(clonesDir, "feature-2");
+        Directory.CreateDirectory(clone1);
+        Directory.CreateDirectory(clone2);
+        Directory.CreateDirectory(Path.Combine(clone1, ".git"));
+        Directory.CreateDirectory(Path.Combine(clone2, ".git"));
+
+        // Mock main repo branch/commit
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "main" });
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse HEAD", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "abc123" });
+
+        // Mock clone 1
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", clone1))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "feature-1" });
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse HEAD", clone1))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "def456" });
+
+        // Mock clone 2
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", clone2))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "feature-2" });
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse HEAD", clone2))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "ghi789" });
+
+        // Mock for-each-ref (needed by ListWorktreesAsync -> ListLocalBranchesAsync)
+        _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.Contains("for-each-ref")), repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "" });
 
         // Act
         var result = await _service.ListWorktreesAsync(repoPath);
 
         // Assert
         Assert.That(result, Is.Not.Null);
-        Assert.That(result, Has.Count.EqualTo(3));
+        Assert.That(result, Has.Count.EqualTo(3)); // main + 2 clones
     }
 
     [Test]
-    public async Task ListWorktrees_GitError_ReturnsEmptyList()
+    public async Task ListWorktrees_NoClones_ReturnsOnlyMainRepo()
     {
         // Arrange
-        var repoPath = Path.Combine(_tempDir, "repo");
+        var repoPath = Path.Combine(_tempDir, "main");
+        Directory.CreateDirectory(repoPath);
 
-        _mockRunner.Setup(r => r.RunAsync("git", It.IsAny<string>(), repoPath))
-            .ReturnsAsync(new CommandResult { Success = false });
+        // Mock main repo
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "main" });
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse HEAD", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "abc123" });
+
+        // Mock for-each-ref (needed by ListWorktreesAsync -> ListLocalBranchesAsync)
+        _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.Contains("for-each-ref")), repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "" });
 
         // Act
         var result = await _service.ListWorktreesAsync(repoPath);
 
         // Assert
         Assert.That(result, Is.Not.Null);
-        Assert.That(result, Is.Empty);
+        Assert.That(result, Has.Count.EqualTo(1));
     }
 
     [Test]
-    public async Task PruneWorktrees_CallsGitPrune()
+    public async Task PruneWorktrees_RemovesBrokenClones()
     {
         // Arrange
-        var repoPath = Path.Combine(_tempDir, "repo");
+        var repoPath = Path.Combine(_tempDir, "main");
+        Directory.CreateDirectory(repoPath);
 
-        _mockRunner.Setup(r => r.RunAsync("git", "worktree prune", repoPath))
-            .ReturnsAsync(new CommandResult { Success = true });
+        // Create .clones directory with a broken clone (no .git)
+        var clonesDir = Path.Combine(_tempDir, ".clones");
+        var brokenClone = Path.Combine(clonesDir, "broken-clone");
+        Directory.CreateDirectory(brokenClone);
+        // No .git directory - this is a broken clone
+
+        // Create a valid clone (has .git)
+        var validClone = Path.Combine(clonesDir, "valid-clone");
+        Directory.CreateDirectory(validClone);
+        Directory.CreateDirectory(Path.Combine(validClone, ".git"));
 
         // Act
         await _service.PruneWorktreesAsync(repoPath);
 
         // Assert
-        _mockRunner.Verify(r => r.RunAsync("git", "worktree prune", repoPath), Times.Once);
+        Assert.That(Directory.Exists(brokenClone), Is.False); // Broken clone deleted
+        Assert.That(Directory.Exists(validClone), Is.True); // Valid clone preserved
     }
 
     [Test]
@@ -278,10 +337,25 @@ public class GitWorktreeServiceTests
         Directory.CreateDirectory(repoPath);
         var branchName = "feature/new-branch";
 
-        _mockRunner.SetupSequence(r => r.RunAsync("git", It.IsAny<string>(), repoPath))
-            .ReturnsAsync(new CommandResult { Success = true }) // branch check
-            .ReturnsAsync(new CommandResult { Success = true }) // create branch
-            .ReturnsAsync(new CommandResult { Success = true }); // create worktree
+        // Mock remote get-url
+        _mockRunner.Setup(r => r.RunAsync("git", "remote get-url origin", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "https://github.com/user/repo.git" });
+
+        // Mock branch creation
+        _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.StartsWith("branch ")), repoPath))
+            .ReturnsAsync(new CommandResult { Success = true });
+
+        // Mock clone --local
+        _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.StartsWith("clone --local")), repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "" });
+
+        // Mock remote set-url in clone
+        _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.StartsWith("remote set-url")), It.Is<string>(s => s.Contains(".clones"))))
+            .ReturnsAsync(new CommandResult { Success = true });
+
+        // Mock checkout in clone
+        _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.StartsWith("checkout")), It.Is<string>(s => s.Contains(".clones"))))
+            .ReturnsAsync(new CommandResult { Success = true });
 
         // Act
         var result = await _service.CreateWorktreeAsync(repoPath, branchName, createBranch: true);
@@ -353,53 +427,78 @@ public class GitWorktreeServiceTests
     #region GetWorktreePathForBranchAsync Tests
 
     [Test]
-    [Description("Regression test for bug MlB2lN: Worktree lookup should match branch when git returns refs/heads/ format but we search with short name")]
+    [Description("Clone path lookup should match branch via direct branch name")]
     public async Task GetWorktreePathForBranchAsync_WithRefsHeadsFormat_MatchesShortBranchName()
     {
-        // Arrange - This is the exact scenario from bug MlB2lN
-        // Git returns branch as "refs/heads/feature/my-pr" but we search with "feature/my-pr"
+        // Arrange
         var repoPath = Path.Combine(_tempDir, "main");
         Directory.CreateDirectory(repoPath);
         var shortBranchName = "feature/my-pr-branch";
-        var expectedPath = Path.Combine(_tempDir, ".worktrees", "feature+my-pr-branch");
 
-        // Mock git worktree list returning the full refs/heads/ format
-        _mockRunner.Setup(r => r.RunAsync("git", "worktree list --porcelain", repoPath))
-            .ReturnsAsync(new CommandResult
-            {
-                Success = true,
-                Output = $"worktree {expectedPath}\nbranch refs/heads/{shortBranchName}"
-            });
+        // Create clone directory with .git marker
+        var clonesDir = Path.Combine(_tempDir, ".clones");
+        var expectedPath = Path.GetFullPath(Path.Combine(clonesDir, "feature+my-pr-branch"));
+        Directory.CreateDirectory(expectedPath);
+        Directory.CreateDirectory(Path.Combine(expectedPath, ".git"));
 
-        // Act - Search using short branch name (as PullRequest.BranchName would be)
+        // Mock main repo rev-parse
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "main" });
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse HEAD", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "abc123" });
+
+        // Mock clone rev-parse
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", expectedPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = shortBranchName });
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse HEAD", expectedPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "def456" });
+
+        // Mock for-each-ref (needed by ListLocalBranchesAsync)
+        _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.Contains("for-each-ref")), repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "" });
+
+        // Act
         var result = await _service.GetWorktreePathForBranchAsync(repoPath, shortBranchName);
 
-        // Assert - Should find the worktree despite format difference
+        // Assert
         Assert.That(result, Is.EqualTo(expectedPath));
     }
 
     [Test]
-    [Description("Regression test for bug MlB2lN: WorktreeExists should work with refs/heads/ format")]
-    public async Task WorktreeExistsAsync_WithRefsHeadsFormat_ReturnsTrue()
+    [Description("WorktreeExists should find clones by branch name")]
+    public async Task WorktreeExistsAsync_WithClone_ReturnsTrue()
     {
-        // Arrange - Verifying WorktreeExistsAsync handles the format correctly (it did before the bug)
+        // Arrange
         var repoPath = Path.Combine(_tempDir, "main");
         Directory.CreateDirectory(repoPath);
         var shortBranchName = "feature/my-pr-branch";
-        var worktreePath = Path.Combine(_tempDir, ".worktrees", "feature+my-pr-branch");
 
-        // Mock git worktree list returning the full refs/heads/ format
-        _mockRunner.Setup(r => r.RunAsync("git", "worktree list --porcelain", repoPath))
-            .ReturnsAsync(new CommandResult
-            {
-                Success = true,
-                Output = $"worktree {worktreePath}\nbranch refs/heads/{shortBranchName}"
-            });
+        // Create clone directory with .git marker
+        var clonesDir = Path.Combine(_tempDir, ".clones");
+        var clonePath = Path.GetFullPath(Path.Combine(clonesDir, "feature+my-pr-branch"));
+        Directory.CreateDirectory(clonePath);
+        Directory.CreateDirectory(Path.Combine(clonePath, ".git"));
 
-        // Act - Check existence using short branch name
+        // Mock main repo
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "main" });
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse HEAD", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "abc123" });
+
+        // Mock clone rev-parse
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", clonePath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = shortBranchName });
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse HEAD", clonePath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "def456" });
+
+        // Mock for-each-ref
+        _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.Contains("for-each-ref")), repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "" });
+
+        // Act
         var result = await _service.WorktreeExistsAsync(repoPath, shortBranchName);
 
-        // Assert - Should find the worktree
+        // Assert
         Assert.That(result, Is.True);
     }
 
@@ -410,15 +509,27 @@ public class GitWorktreeServiceTests
         var repoPath = Path.Combine(_tempDir, "main");
         Directory.CreateDirectory(repoPath);
         var branchName = "feature/test";
-        var expectedPath = Path.Combine(_tempDir, ".worktrees", "feature+test");
 
-        // Mock git worktree list to return a worktree with matching branch
-        _mockRunner.Setup(r => r.RunAsync("git", "worktree list --porcelain", repoPath))
-            .ReturnsAsync(new CommandResult
-            {
-                Success = true,
-                Output = $"worktree {expectedPath}\nbranch refs/heads/{branchName}"
-            });
+        var clonesDir = Path.Combine(_tempDir, ".clones");
+        var expectedPath = Path.GetFullPath(Path.Combine(clonesDir, "feature+test"));
+        Directory.CreateDirectory(expectedPath);
+        Directory.CreateDirectory(Path.Combine(expectedPath, ".git"));
+
+        // Mock main repo
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "main" });
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse HEAD", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "abc123" });
+
+        // Mock clone
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", expectedPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = branchName });
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse HEAD", expectedPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "def456" });
+
+        // Mock for-each-ref
+        _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.Contains("for-each-ref")), repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "" });
 
         // Act
         var result = await _service.GetWorktreePathForBranchAsync(repoPath, branchName);
@@ -430,29 +541,37 @@ public class GitWorktreeServiceTests
     [Test]
     public async Task GetWorktreePathForBranchAsync_WithBranchNameContainingPlus_MatchesByBranch()
     {
-        // Arrange - Branch name has + which is preserved in both branch name and worktree path
+        // Arrange
         var repoPath = Path.Combine(_tempDir, "main");
         Directory.CreateDirectory(repoPath);
-
-        // Branch name with + character (new flat format)
         var branchName = "feature/improve-tool-output+aLP3LH";
 
-        // The worktree is created with flattened path (slashes become +, existing + is preserved)
-        var worktreePath = Path.Combine(_tempDir, ".worktrees", "feature+improve-tool-output+aLP3LH");
+        var clonesDir = Path.Combine(_tempDir, ".clones");
+        var clonePath = Path.GetFullPath(Path.Combine(clonesDir, "feature+improve-tool-output+aLP3LH"));
+        Directory.CreateDirectory(clonePath);
+        Directory.CreateDirectory(Path.Combine(clonePath, ".git"));
 
-        // Mock git worktree list - branch name is preserved with +
-        _mockRunner.Setup(r => r.RunAsync("git", "worktree list --porcelain", repoPath))
-            .ReturnsAsync(new CommandResult
-            {
-                Success = true,
-                Output = $"worktree {worktreePath}\nbranch refs/heads/{branchName}"
-            });
+        // Mock main repo
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "main" });
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse HEAD", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "abc123" });
+
+        // Mock clone
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", clonePath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = branchName });
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse HEAD", clonePath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "def456" });
+
+        // Mock for-each-ref
+        _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.Contains("for-each-ref")), repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "" });
 
         // Act
         var result = await _service.GetWorktreePathForBranchAsync(repoPath, branchName);
 
         // Assert - Should find by direct branch match
-        Assert.That(result, Is.EqualTo(worktreePath));
+        Assert.That(result, Is.EqualTo(clonePath));
     }
 
     [Test]
@@ -461,21 +580,28 @@ public class GitWorktreeServiceTests
         // Arrange - Test the path-based fallback when branch doesn't match directly
         var repoPath = Path.Combine(_tempDir, "main");
         Directory.CreateDirectory(repoPath);
-
-        // Branch name with + character
         var branchName = "feature/improve-tool-output+aLP3LH";
 
-        // The worktree was created with flattened path in .worktrees directory
-        var flattenedPath = Path.GetFullPath(Path.Combine(_tempDir, ".worktrees", "feature+improve-tool-output+aLP3LH"));
+        var clonesDir = Path.Combine(_tempDir, ".clones");
+        var flattenedPath = Path.GetFullPath(Path.Combine(clonesDir, "feature+improve-tool-output+aLP3LH"));
+        Directory.CreateDirectory(flattenedPath);
+        Directory.CreateDirectory(Path.Combine(flattenedPath, ".git"));
 
-        // Mock git worktree list - worktree exists at flattened path but with a different branch name
-        // This simulates a case where git reports a slightly different branch name
-        _mockRunner.Setup(r => r.RunAsync("git", "worktree list --porcelain", repoPath))
-            .ReturnsAsync(new CommandResult
-            {
-                Success = true,
-                Output = $"worktree {flattenedPath}\nbranch refs/heads/some-other-branch"
-            });
+        // Mock main repo
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "main" });
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse HEAD", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "abc123" });
+
+        // Mock clone - reports a different branch name (simulates a mismatch)
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", flattenedPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "some-other-branch" });
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse HEAD", flattenedPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "def456" });
+
+        // Mock for-each-ref
+        _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.Contains("for-each-ref")), repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "" });
 
         // Act
         var result = await _service.GetWorktreePathForBranchAsync(repoPath, branchName);
@@ -486,20 +612,22 @@ public class GitWorktreeServiceTests
     }
 
     [Test]
-    public async Task GetWorktreePathForBranchAsync_NoMatchingWorktree_ReturnsNull()
+    public async Task GetWorktreePathForBranchAsync_NoMatchingClone_ReturnsNull()
     {
         // Arrange
         var repoPath = Path.Combine(_tempDir, "main");
         Directory.CreateDirectory(repoPath);
         var branchName = "feature/nonexistent+test";
 
-        // Mock git worktree list - only main worktree exists
-        _mockRunner.Setup(r => r.RunAsync("git", "worktree list --porcelain", repoPath))
-            .ReturnsAsync(new CommandResult
-            {
-                Success = true,
-                Output = $"worktree {repoPath}\nbranch refs/heads/main"
-            });
+        // Mock main repo
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "main" });
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse HEAD", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "abc123" });
+
+        // Mock for-each-ref
+        _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.Contains("for-each-ref")), repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "" });
 
         // Act
         var result = await _service.GetWorktreePathForBranchAsync(repoPath, branchName);
@@ -516,7 +644,14 @@ public class GitWorktreeServiceTests
         Directory.CreateDirectory(repoPath);
         var branchName = "feature/test";
 
-        _mockRunner.Setup(r => r.RunAsync("git", "worktree list --porcelain", repoPath))
+        // Mock main repo rev-parse failures
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", repoPath))
+            .ReturnsAsync(new CommandResult { Success = false, Error = "git error" });
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse HEAD", repoPath))
+            .ReturnsAsync(new CommandResult { Success = false, Error = "git error" });
+
+        // Mock for-each-ref failure
+        _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.Contains("for-each-ref")), repoPath))
             .ReturnsAsync(new CommandResult { Success = false, Error = "git error" });
 
         // Act
@@ -536,9 +671,11 @@ public class GitWorktreeServiceTests
         // Arrange
         var repoPath = Path.Combine(_tempDir, "repo");
 
-        // Mock worktree list (empty)
-        _mockRunner.Setup(r => r.RunAsync("git", "worktree list --porcelain", repoPath))
-            .ReturnsAsync(new CommandResult { Success = true, Output = $"worktree {repoPath}\nHEAD abc123\nbranch refs/heads/main" });
+        // Mock main repo rev-parse (used by ListWorktreesRawAsync)
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "main" });
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse HEAD", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "abc123" });
 
         // Mock for-each-ref for branches
         _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.Contains("for-each-ref")), repoPath))
@@ -547,10 +684,6 @@ public class GitWorktreeServiceTests
                 Success = true,
                 Output = "'main|abc1234|origin/main|[ahead 1]|2024-01-15T10:30:00|Initial commit'\n'feature/test|def5678||[behind 2]|2024-01-16T11:00:00|Add feature'"
             });
-
-        // Mock current branch
-        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", repoPath))
-            .ReturnsAsync(new CommandResult { Success = true, Output = "main" });
 
         // Act
         var result = await _service.ListLocalBranchesAsync(repoPath);
@@ -577,8 +710,11 @@ public class GitWorktreeServiceTests
         // Arrange
         var repoPath = Path.Combine(_tempDir, "repo");
 
-        _mockRunner.Setup(r => r.RunAsync("git", "worktree list --porcelain", repoPath))
-            .ReturnsAsync(new CommandResult { Success = true, Output = "" });
+        // Mock main repo rev-parse
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "main" });
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse HEAD", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "abc123" });
 
         _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.Contains("for-each-ref")), repoPath))
             .ReturnsAsync(new CommandResult { Success = false, Error = "not a git repository" });
@@ -592,19 +728,29 @@ public class GitWorktreeServiceTests
     }
 
     [Test]
-    public async Task ListLocalBranchesAsync_WithWorktree_SetsHasWorktreeFlag()
+    public async Task ListLocalBranchesAsync_WithClone_SetsHasWorktreeFlag()
     {
         // Arrange
-        var repoPath = Path.Combine(_tempDir, "repo");
-        var worktreePath = Path.Combine(_tempDir, "feature-worktree");
+        var repoPath = Path.Combine(_tempDir, "main");
+        Directory.CreateDirectory(repoPath);
 
-        // Mock worktree list with a worktree for feature/test branch
-        _mockRunner.Setup(r => r.RunAsync("git", "worktree list --porcelain", repoPath))
-            .ReturnsAsync(new CommandResult
-            {
-                Success = true,
-                Output = $"worktree {repoPath}\nHEAD abc123\nbranch refs/heads/main\n\nworktree {worktreePath}\nHEAD def456\nbranch refs/heads/feature/test"
-            });
+        // Create a clone directory
+        var clonesDir = Path.Combine(_tempDir, ".clones");
+        var clonePath = Path.GetFullPath(Path.Combine(clonesDir, "feature+test"));
+        Directory.CreateDirectory(clonePath);
+        Directory.CreateDirectory(Path.Combine(clonePath, ".git"));
+
+        // Mock main repo rev-parse
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "main" });
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse HEAD", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "abc123" });
+
+        // Mock clone rev-parse
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", clonePath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "feature/test" });
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse HEAD", clonePath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "def456" });
 
         _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.Contains("for-each-ref")), repoPath))
             .ReturnsAsync(new CommandResult
@@ -613,9 +759,6 @@ public class GitWorktreeServiceTests
                 Output = "'main|abc123|||2024-01-15|Commit 1'\n'feature/test|def456|||2024-01-16|Commit 2'"
             });
 
-        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", repoPath))
-            .ReturnsAsync(new CommandResult { Success = true, Output = "main" });
-
         // Act
         var result = await _service.ListLocalBranchesAsync(repoPath);
 
@@ -623,7 +766,7 @@ public class GitWorktreeServiceTests
         var featureBranch = result.FirstOrDefault(b => b.ShortName == "feature/test");
         Assert.That(featureBranch, Is.Not.Null);
         Assert.That(featureBranch!.HasWorktree, Is.True);
-        Assert.That(featureBranch.WorktreePath, Is.EqualTo(worktreePath));
+        Assert.That(featureBranch.WorktreePath, Is.EqualTo(clonePath));
     }
 
     #endregion
@@ -943,7 +1086,6 @@ public class GitWorktreeServiceTests
     {
         // Arrange
         var repoPath = Path.Combine(_tempDir, "repo");
-        // The branch name is used as-is, without extracting parts
 
         _mockRunner.Setup(r => r.RunAsync("git", "checkout -b \"feature/from-remote\" \"origin/feature/from-remote\"", repoPath))
             .ReturnsAsync(new CommandResult { Success = true });
@@ -1178,13 +1320,13 @@ public class GitWorktreeServiceTests
         var repoPath = Path.Combine(_tempDir, "main");
         Directory.CreateDirectory(repoPath);
 
-        // Only the main folder exists
-        _mockRunner.Setup(r => r.RunAsync("git", "worktree list --porcelain", repoPath))
-            .ReturnsAsync(new CommandResult
-            {
-                Success = true,
-                Output = $"worktree {repoPath}\nbranch refs/heads/main"
-            });
+        // Mock main repo
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "main" });
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse HEAD", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "abc123" });
+        _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.Contains("for-each-ref")), repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "" });
 
         // Act
         var result = await _service.FindLostWorktreeFoldersAsync(repoPath);
@@ -1200,26 +1342,25 @@ public class GitWorktreeServiceTests
         var repoPath = Path.Combine(_tempDir, "main");
         Directory.CreateDirectory(repoPath);
 
-        // Create a sibling folder that's not tracked by git worktree
-        // It must have a .git file or folder to be recognized as a potential worktree
+        // Create a sibling folder that's not tracked (has .git file)
         var lostFolder = Path.Combine(_tempDir, "feature-abandoned");
         Directory.CreateDirectory(lostFolder);
         File.WriteAllText(Path.Combine(lostFolder, ".git"), "gitdir: /some/path");
 
-        // Only the main worktree is tracked
-        _mockRunner.Setup(r => r.RunAsync("git", "worktree list --porcelain", repoPath))
-            .ReturnsAsync(new CommandResult
-            {
-                Success = true,
-                Output = $"worktree {repoPath}\nbranch refs/heads/main"
-            });
+        // Mock main repo
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "main" });
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse HEAD", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "abc123" });
+        _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.Contains("for-each-ref")), repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "" });
 
         // Act
         var result = await _service.FindLostWorktreeFoldersAsync(repoPath);
 
         // Assert
         Assert.That(result, Has.Count.EqualTo(1));
-        Assert.That(result[0].Path, Is.EqualTo(lostFolder));
+        Assert.That(result[0].Path, Is.EqualTo(Path.GetFullPath(lostFolder)));
     }
 
     [Test]
@@ -1229,7 +1370,7 @@ public class GitWorktreeServiceTests
         var repoPath = Path.Combine(_tempDir, "main");
         Directory.CreateDirectory(repoPath);
 
-        // Create a sibling folder that looks like a worktree (has .git)
+        // Create a sibling folder that looks like a git repo (has .git)
         var lostFolder = Path.Combine(_tempDir, "feature-lost");
         Directory.CreateDirectory(lostFolder);
         File.WriteAllText(Path.Combine(lostFolder, ".git"), "gitdir: /some/path");
@@ -1238,19 +1379,48 @@ public class GitWorktreeServiceTests
         var regularFolder = Path.Combine(_tempDir, "regular-folder");
         Directory.CreateDirectory(regularFolder);
 
-        _mockRunner.Setup(r => r.RunAsync("git", "worktree list --porcelain", repoPath))
-            .ReturnsAsync(new CommandResult
-            {
-                Success = true,
-                Output = $"worktree {repoPath}\nbranch refs/heads/main"
-            });
+        // Mock main repo
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "main" });
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse HEAD", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "abc123" });
+        _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.Contains("for-each-ref")), repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "" });
 
         // Act
         var result = await _service.FindLostWorktreeFoldersAsync(repoPath);
 
         // Assert
         Assert.That(result, Has.Count.EqualTo(1));
-        Assert.That(result[0].Path, Is.EqualTo(lostFolder));
+        Assert.That(result[0].Path, Is.EqualTo(Path.GetFullPath(lostFolder)));
+    }
+
+    [Test]
+    public async Task FindLostWorktreeFoldersAsync_ScansLegacyWorktreesDir()
+    {
+        // Arrange
+        var repoPath = Path.Combine(_tempDir, "main");
+        Directory.CreateDirectory(repoPath);
+
+        // Create legacy .worktrees directory with a folder
+        var legacyDir = Path.Combine(_tempDir, ".worktrees", "legacy-clone");
+        Directory.CreateDirectory(legacyDir);
+        File.WriteAllText(Path.Combine(legacyDir, ".git"), "gitdir: /some/path");
+
+        // Mock main repo
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "main" });
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse HEAD", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "abc123" });
+        _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.Contains("for-each-ref")), repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "" });
+
+        // Act
+        var result = await _service.FindLostWorktreeFoldersAsync(repoPath);
+
+        // Assert - Should find the legacy worktree folder
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].Path, Is.EqualTo(Path.GetFullPath(legacyDir)));
     }
 
     #endregion
@@ -1388,13 +1558,11 @@ public class GitWorktreeServiceTests
         var branchName = "feature/squashed";
         var targetBranch = "main";
 
-        // Simulate: cherry-pick --no-commit finds no diff (all commits already in main)
         _mockRunner.Setup(r => r.RunAsync("git", $"log \"{targetBranch}..{branchName}\" --format=%H", repoPath))
             .ReturnsAsync(new CommandResult { Success = true, Output = "abc123\ndef456" });
 
-        // Check if tree is equivalent after squash
         _mockRunner.Setup(r => r.RunAsync("git", $"cherry \"{targetBranch}\" \"{branchName}\"", repoPath))
-            .ReturnsAsync(new CommandResult { Success = true, Output = "" }); // Empty means all commits are equivalent
+            .ReturnsAsync(new CommandResult { Success = true, Output = "" });
 
         // Act
         var result = await _service.IsSquashMergedAsync(repoPath, branchName, targetBranch);
@@ -1414,9 +1582,8 @@ public class GitWorktreeServiceTests
         _mockRunner.Setup(r => r.RunAsync("git", $"log \"{targetBranch}..{branchName}\" --format=%H", repoPath))
             .ReturnsAsync(new CommandResult { Success = true, Output = "abc123" });
 
-        // Cherry shows commits that are not yet in target
         _mockRunner.Setup(r => r.RunAsync("git", $"cherry \"{targetBranch}\" \"{branchName}\"", repoPath))
-            .ReturnsAsync(new CommandResult { Success = true, Output = "+ abc123" }); // + means not in target
+            .ReturnsAsync(new CommandResult { Success = true, Output = "+ abc123" });
 
         // Act
         var result = await _service.IsSquashMergedAsync(repoPath, branchName, targetBranch);
@@ -1430,20 +1597,35 @@ public class GitWorktreeServiceTests
     #region CreateWorktreeFromRemoteBranchAsync Tests
 
     [Test]
-    public async Task CreateWorktreeFromRemoteBranchAsync_Success_CreatesWorktreeWithoutCheckingOut()
+    public async Task CreateWorktreeFromRemoteBranchAsync_Success_CreatesCloneWithoutCheckingOutInMain()
     {
         // Arrange
         var repoPath = Path.Combine(_tempDir, "main");
         Directory.CreateDirectory(repoPath);
         var remoteBranch = "feature/remote-only";
-        var expectedWorktreePath = Path.Combine(_tempDir, "feature/remote-only");
 
-        // First, create the local branch without checkout (using git branch instead of checkout)
+        // Mock fetch origin
+        _mockRunner.Setup(r => r.RunAsync("git", "fetch origin", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true });
+
+        // Mock create local branch from remote
         _mockRunner.Setup(r => r.RunAsync("git", $"branch \"{remoteBranch}\" \"origin/{remoteBranch}\"", repoPath))
             .ReturnsAsync(new CommandResult { Success = true });
 
-        // Then create the worktree
-        _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.StartsWith("worktree add")), repoPath))
+        // Mock remote get-url
+        _mockRunner.Setup(r => r.RunAsync("git", "remote get-url origin", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "https://github.com/user/repo.git" });
+
+        // Mock clone --local
+        _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.StartsWith("clone --local")), repoPath))
+            .ReturnsAsync(new CommandResult { Success = true });
+
+        // Mock remote set-url in clone
+        _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.StartsWith("remote set-url")), It.Is<string>(s => s.Contains(".clones"))))
+            .ReturnsAsync(new CommandResult { Success = true });
+
+        // Mock checkout in clone
+        _mockRunner.Setup(r => r.RunAsync("git", $"checkout \"{remoteBranch}\"", It.Is<string>(s => s.Contains(".clones"))))
             .ReturnsAsync(new CommandResult { Success = true });
 
         // Act
@@ -1451,7 +1633,7 @@ public class GitWorktreeServiceTests
 
         // Assert
         Assert.That(result, Is.Not.Null);
-        // Verify git branch was called (not checkout which would change the main worktree)
+        // Verify git branch was called (not checkout which would change the main repo)
         _mockRunner.Verify(r => r.RunAsync("git", $"branch \"{remoteBranch}\" \"origin/{remoteBranch}\"", repoPath), Times.Once);
     }
 
@@ -1463,12 +1645,28 @@ public class GitWorktreeServiceTests
         Directory.CreateDirectory(repoPath);
         var remoteBranch = "feature/existing";
 
+        // Mock fetch origin
+        _mockRunner.Setup(r => r.RunAsync("git", "fetch origin", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true });
+
         // Branch creation fails because it already exists
         _mockRunner.Setup(r => r.RunAsync("git", $"branch \"{remoteBranch}\" \"origin/{remoteBranch}\"", repoPath))
             .ReturnsAsync(new CommandResult { Success = false, Error = "fatal: a branch named 'feature/existing' already exists" });
 
-        // Worktree creation succeeds
-        _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.StartsWith("worktree add")), repoPath))
+        // Mock remote get-url
+        _mockRunner.Setup(r => r.RunAsync("git", "remote get-url origin", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "https://github.com/user/repo.git" });
+
+        // Mock clone --local
+        _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.StartsWith("clone --local")), repoPath))
+            .ReturnsAsync(new CommandResult { Success = true });
+
+        // Mock remote set-url in clone
+        _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.StartsWith("remote set-url")), It.Is<string>(s => s.Contains(".clones"))))
+            .ReturnsAsync(new CommandResult { Success = true });
+
+        // Mock checkout in clone
+        _mockRunner.Setup(r => r.RunAsync("git", $"checkout \"{remoteBranch}\"", It.Is<string>(s => s.Contains(".clones"))))
             .ReturnsAsync(new CommandResult { Success = true });
 
         // Act
@@ -1489,7 +1687,6 @@ public class GitWorktreeServiceTests
         var worktreePath = Path.Combine(_tempDir, "worktree");
         Directory.CreateDirectory(worktreePath);
 
-        // git diff --numstat output format: additions<tab>deletions<tab>filename
         _mockRunner.Setup(r => r.RunAsync("git", "diff --numstat main...HEAD", worktreePath))
             .ReturnsAsync(new CommandResult
             {
@@ -1571,7 +1768,6 @@ public class GitWorktreeServiceTests
         var worktreePath = Path.Combine(_tempDir, "worktree");
         Directory.CreateDirectory(worktreePath);
 
-        // A file with only additions and no deletions is a new file
         _mockRunner.Setup(r => r.RunAsync("git", "diff --numstat main...HEAD", worktreePath))
             .ReturnsAsync(new CommandResult { Success = true, Output = "25\t0\tnew-feature.cs" });
 
@@ -1589,7 +1785,6 @@ public class GitWorktreeServiceTests
         var worktreePath = Path.Combine(_tempDir, "worktree");
         Directory.CreateDirectory(worktreePath);
 
-        // A file with only deletions and no additions is a deleted file
         _mockRunner.Setup(r => r.RunAsync("git", "diff --numstat main...HEAD", worktreePath))
             .ReturnsAsync(new CommandResult { Success = true, Output = "0\t30\told-file.cs" });
 
@@ -1607,7 +1802,6 @@ public class GitWorktreeServiceTests
         var worktreePath = Path.Combine(_tempDir, "worktree");
         Directory.CreateDirectory(worktreePath);
 
-        // A file with both additions and deletions is a modified file
         _mockRunner.Setup(r => r.RunAsync("git", "diff --numstat main...HEAD", worktreePath))
             .ReturnsAsync(new CommandResult { Success = true, Output = "10\t5\tmodified-file.cs" });
 
@@ -1625,7 +1819,6 @@ public class GitWorktreeServiceTests
         var worktreePath = Path.Combine(_tempDir, "worktree");
         Directory.CreateDirectory(worktreePath);
 
-        // Renamed files show as "old-name => new-name" in the path
         _mockRunner.Setup(r => r.RunAsync("git", "diff --numstat main...HEAD", worktreePath))
             .ReturnsAsync(new CommandResult { Success = true, Output = "0\t0\told-name.cs => new-name.cs" });
 
@@ -1661,7 +1854,6 @@ public class GitWorktreeServiceTests
         var worktreePath = Path.Combine(_tempDir, "worktree");
         Directory.CreateDirectory(worktreePath);
 
-        // Binary files show "-" for additions and deletions
         _mockRunner.Setup(r => r.RunAsync("git", "diff --numstat main...HEAD", worktreePath))
             .ReturnsAsync(new CommandResult { Success = true, Output = "-\t-\timage.png" });
 
@@ -1671,7 +1863,7 @@ public class GitWorktreeServiceTests
         // Assert
         Assert.That(result, Has.Count.EqualTo(1));
         Assert.That(result[0].FilePath, Is.EqualTo("image.png"));
-        Assert.That(result[0].Additions, Is.EqualTo(0)); // Binary files have 0 for line counts
+        Assert.That(result[0].Additions, Is.EqualTo(0));
         Assert.That(result[0].Deletions, Is.EqualTo(0));
         Assert.That(result[0].Status, Is.EqualTo(FileChangeStatus.Modified));
     }

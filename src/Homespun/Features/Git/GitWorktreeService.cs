@@ -33,8 +33,8 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
     public async Task<string?> CreateWorktreeAsync(string repoPath, string branchName, bool createBranch = false, string? baseBranch = null)
     {
         var flattenedName = SanitizeBranchNameForWorktree(branchName);
-        // Create worktree inside .worktrees directory as sibling of the main repo
-        // e.g., ~/.homespun/src/repo/main -> ~/.homespun/src/repo/.worktrees/<flattened-branch-name>
+        // Create clone inside .clones directory as sibling of the main repo
+        // e.g., ~/.homespun/src/repo/main -> ~/.homespun/src/repo/.clones/<flattened-branch-name>
         var parentDir = Path.GetDirectoryName(repoPath);
         if (string.IsNullOrEmpty(parentDir))
         {
@@ -42,21 +42,30 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
             throw new InvalidOperationException($"Cannot determine parent directory of {repoPath}");
         }
 
-        // Create .worktrees directory if it doesn't exist
-        var worktreesDir = Path.Combine(parentDir, ".worktrees");
-        if (!Directory.Exists(worktreesDir))
+        // Create .clones directory if it doesn't exist
+        var clonesDir = Path.Combine(parentDir, ".clones");
+        if (!Directory.Exists(clonesDir))
         {
-            Directory.CreateDirectory(worktreesDir);
+            Directory.CreateDirectory(clonesDir);
         }
 
         // Normalize the path to use platform-native separators
-        // This fixes issues on Windows where mixed forward/back slashes cause problems
-        var worktreePath = Path.GetFullPath(Path.Combine(worktreesDir, flattenedName));
+        var clonePath = Path.GetFullPath(Path.Combine(clonesDir, flattenedName));
+
+        // If clone directory already exists, remove it first
+        if (Directory.Exists(clonePath))
+        {
+            Directory.Delete(clonePath, recursive: true);
+        }
+
+        // Get the real remote URL from the main repo before cloning
+        var remoteUrlResult = await commandRunner.RunAsync("git", "remote get-url origin", repoPath);
+        var remoteUrl = remoteUrlResult is { Success: true } ? remoteUrlResult.Output.Trim() : null;
 
         if (createBranch)
         {
             var baseRef = baseBranch ?? "HEAD";
-            
+
             var branchResult = await commandRunner.RunAsync("git", $"branch \"{branchName}\" \"{baseRef}\"", repoPath);
             if (!branchResult.Success && !branchResult.Error.Contains("already exists"))
             {
@@ -64,31 +73,58 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
             }
         }
 
-        var args = $"worktree add \"{worktreePath}\" \"{branchName}\"";
-        var result = await commandRunner.RunAsync("git", args, repoPath);
+        // Clone the main repo locally (uses hardlinks for efficiency)
+        var cloneResult = await commandRunner.RunAsync("git", $"clone --local \"{repoPath}\" \"{clonePath}\"", repoPath);
 
-        if (!result.Success)
+        if (!cloneResult.Success)
         {
-            logger.LogWarning("Failed to create worktree at {WorktreePath} for branch {BranchName}: {Error}",
-                worktreePath, branchName, result.Error);
+            logger.LogWarning("Failed to create clone at {ClonePath} for branch {BranchName}: {Error}",
+                clonePath, branchName, cloneResult.Error);
             return null;
         }
-        
-        logger.LogInformation("Created worktree at {WorktreePath} for branch {BranchName}", worktreePath, branchName);
-        
-        return worktreePath;
+
+        // Fix remote URL - after clone --local, origin points to local path
+        if (!string.IsNullOrEmpty(remoteUrl))
+        {
+            await commandRunner.RunAsync("git", $"remote set-url origin \"{remoteUrl}\"", clonePath);
+        }
+
+        // Checkout the target branch in the clone
+        var checkoutResult = await commandRunner.RunAsync("git", $"checkout \"{branchName}\"", clonePath);
+
+        if (!checkoutResult.Success)
+        {
+            logger.LogWarning("Failed to checkout branch {BranchName} in clone at {ClonePath}: {Error}",
+                branchName, clonePath, checkoutResult.Error);
+            // Clean up the failed clone
+            Directory.Delete(clonePath, recursive: true);
+            return null;
+        }
+
+        logger.LogInformation("Created clone at {ClonePath} for branch {BranchName}", clonePath, branchName);
+
+        return clonePath;
     }
 
-    public async Task<bool> RemoveWorktreeAsync(string repoPath, string worktreePath)
+    public Task<bool> RemoveWorktreeAsync(string repoPath, string worktreePath)
     {
-        var result = await commandRunner.RunAsync("git", $"worktree remove \"{worktreePath}\" --force", repoPath);
-        
-        if (result.Success)
+        try
         {
-            logger.LogInformation("Removed worktree {WorktreePath}", worktreePath);
+            if (!Directory.Exists(worktreePath))
+            {
+                logger.LogWarning("Clone directory does not exist at {WorktreePath}", worktreePath);
+                return Task.FromResult(false);
+            }
+
+            Directory.Delete(worktreePath, recursive: true);
+            logger.LogInformation("Removed clone {WorktreePath}", worktreePath);
+            return Task.FromResult(true);
         }
-        
-        return result.Success;
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to remove clone at {WorktreePath}", worktreePath);
+            return Task.FromResult(false);
+        }
     }
 
     public async Task<List<WorktreeInfo>> ListWorktreesAsync(string repoPath)
@@ -114,51 +150,68 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
     }
 
     /// <summary>
-    /// Lists worktrees by parsing `git worktree list --porcelain` output.
+    /// Lists clones by scanning the .clones/ directory and querying each for branch/commit info.
     /// This is the raw version that does NOT enrich with branch mismatch detection,
     /// avoiding mutual recursion with ListLocalBranchesAsync.
     /// </summary>
     private async Task<List<WorktreeInfo>> ListWorktreesRawAsync(string repoPath)
     {
-        var result = await commandRunner.RunAsync("git", "worktree list --porcelain", repoPath);
-
-        if (result == null || !result.Success)
-        {
-            return [];
-        }
-
         var worktrees = new List<WorktreeInfo>();
-        var lines = result.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
 
-        WorktreeInfo? current = null;
-        foreach (var line in lines)
+        // Always include the main repo itself
+        var mainBranchResult = await commandRunner.RunAsync("git", "rev-parse --abbrev-ref HEAD", repoPath);
+        var mainCommitResult = await commandRunner.RunAsync("git", "rev-parse HEAD", repoPath);
+
+        worktrees.Add(new WorktreeInfo
         {
-            if (line.StartsWith("worktree "))
-            {
-                if (current != null)
-                    worktrees.Add(current);
-                current = new WorktreeInfo { Path = line[9..].Trim() };
-            }
-            else if (line.StartsWith("HEAD ") && current != null)
-            {
-                current.HeadCommit = line[5..].Trim();
-            }
-            else if (line.StartsWith("branch ") && current != null)
-            {
-                current.Branch = line[7..].Trim();
-            }
-            else if (line == "bare" && current != null)
-            {
-                current.IsBare = true;
-            }
-            else if (line == "detached" && current != null)
-            {
-                current.IsDetached = true;
-            }
+            Path = repoPath,
+            Branch = mainBranchResult is { Success: true }
+                ? $"refs/heads/{mainBranchResult.Output.Trim()}"
+                : null,
+            HeadCommit = mainCommitResult is { Success: true }
+                ? mainCommitResult.Output.Trim()
+                : null,
+            IsBare = false,
+            IsDetached = false
+        });
+
+        // Scan .clones directory for clone directories
+        var parentDir = Path.GetDirectoryName(repoPath);
+        if (string.IsNullOrEmpty(parentDir))
+        {
+            return worktrees;
         }
 
-        if (current != null)
-            worktrees.Add(current);
+        var clonesDir = Path.Combine(parentDir, ".clones");
+        if (!Directory.Exists(clonesDir))
+        {
+            return worktrees;
+        }
+
+        foreach (var dir in Directory.GetDirectories(clonesDir))
+        {
+            // Verify it's a valid git repo by checking for .git
+            var gitPath = Path.Combine(dir, ".git");
+            if (!File.Exists(gitPath) && !Directory.Exists(gitPath))
+            {
+                continue;
+            }
+
+            var branchResult = await commandRunner.RunAsync("git", "rev-parse --abbrev-ref HEAD", dir);
+            var commitResult = await commandRunner.RunAsync("git", "rev-parse HEAD", dir);
+
+            var branchName = branchResult is { Success: true } ? branchResult.Output.Trim() : null;
+            var commitHash = commitResult is { Success: true } ? commitResult.Output.Trim() : null;
+
+            worktrees.Add(new WorktreeInfo
+            {
+                Path = Path.GetFullPath(dir),
+                Branch = branchName != null ? $"refs/heads/{branchName}" : null,
+                HeadCommit = commitHash,
+                IsBare = false,
+                IsDetached = branchName == "HEAD"
+            });
+        }
 
         return worktrees;
     }
@@ -190,9 +243,39 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
         return null;
     }
 
-    public async Task PruneWorktreesAsync(string repoPath)
+    public Task PruneWorktreesAsync(string repoPath)
     {
-        await commandRunner.RunAsync("git", "worktree prune", repoPath);
+        // Scan .clones/ directory for broken clones (missing .git) and delete them
+        var parentDir = Path.GetDirectoryName(repoPath);
+        if (string.IsNullOrEmpty(parentDir))
+        {
+            return Task.CompletedTask;
+        }
+
+        var clonesDir = Path.Combine(parentDir, ".clones");
+        if (!Directory.Exists(clonesDir))
+        {
+            return Task.CompletedTask;
+        }
+
+        foreach (var dir in Directory.GetDirectories(clonesDir))
+        {
+            var gitPath = Path.Combine(dir, ".git");
+            if (!File.Exists(gitPath) && !Directory.Exists(gitPath))
+            {
+                try
+                {
+                    logger.LogInformation("Pruning broken clone at {Path}", dir);
+                    Directory.Delete(dir, recursive: true);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "Failed to prune broken clone at {Path}", dir);
+                }
+            }
+        }
+
+        return Task.CompletedTask;
     }
 
     public async Task<bool> WorktreeExistsAsync(string repoPath, string branchName)
@@ -212,11 +295,11 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
 
         if (directMatch != null)
         {
-            logger.LogDebug("Found worktree for branch {BranchName} via direct match at {Path}", branchName, directMatch.Path);
+            logger.LogDebug("Found clone for branch {BranchName} via direct match at {Path}", branchName, directMatch.Path);
             return directMatch.Path;
         }
 
-        // Fall back to path-based matching using flattened name in .worktrees directory
+        // Fall back to path-based matching using flattened name in .clones directory
         // This handles cases where the branch name contains special characters
         var flattenedName = SanitizeBranchNameForWorktree(branchName);
         var parentDir = Path.GetDirectoryName(repoPath);
@@ -226,13 +309,13 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
             return null;
         }
 
-        var expectedPath = Path.GetFullPath(Path.Combine(parentDir, ".worktrees", flattenedName));
+        var expectedPath = Path.GetFullPath(Path.Combine(parentDir, ".clones", flattenedName));
         var pathMatch = worktrees.FirstOrDefault(w =>
             Path.GetFullPath(w.Path).Equals(expectedPath, StringComparison.OrdinalIgnoreCase));
 
         if (pathMatch != null)
         {
-            logger.LogDebug("Found worktree for branch {BranchName} via flattened path match at {Path}", branchName, pathMatch.Path);
+            logger.LogDebug("Found clone for branch {BranchName} via flattened path match at {Path}", branchName, pathMatch.Path);
         }
 
         return pathMatch?.Path;
@@ -636,14 +719,14 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
     {
         var lostWorktrees = new List<LostWorktreeInfo>();
 
-        // Get the parent directory where worktrees are siblings
+        // Get the parent directory where clones are siblings
         var parentDir = Path.GetDirectoryName(repoPath);
         if (string.IsNullOrEmpty(parentDir) || !Directory.Exists(parentDir))
         {
             return lostWorktrees;
         }
 
-        // Get all tracked worktree paths (use raw version to avoid unnecessary branch enrichment)
+        // Get all tracked clone paths (use raw version to avoid unnecessary branch enrichment)
         var worktrees = await ListWorktreesRawAsync(repoPath);
         var trackedPaths = worktrees.Select(w => Path.GetFullPath(w.Path)).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
@@ -651,18 +734,44 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
         var branches = await ListLocalBranchesAsync(repoPath);
         var branchNames = branches.Select(b => b.ShortName).ToHashSet();
 
+        // Scan directories to check: .clones/ contents, .worktrees/ contents (legacy), and sibling directories
+        var dirsToScan = new List<string>();
+
+        // Scan .clones/ directory
+        var clonesDir = Path.Combine(parentDir, ".clones");
+        if (Directory.Exists(clonesDir))
+        {
+            dirsToScan.AddRange(Directory.GetDirectories(clonesDir));
+        }
+
+        // Scan legacy .worktrees/ directory (backward compatibility)
+        var legacyWorktreesDir = Path.Combine(parentDir, ".worktrees");
+        if (Directory.Exists(legacyWorktreesDir))
+        {
+            dirsToScan.AddRange(Directory.GetDirectories(legacyWorktreesDir));
+        }
+
         // Scan sibling directories
-        foreach (var dir in Directory.GetDirectories(parentDir))
+        dirsToScan.AddRange(Directory.GetDirectories(parentDir));
+
+        foreach (var dir in dirsToScan.Distinct(StringComparer.OrdinalIgnoreCase))
         {
             var fullPath = Path.GetFullPath(dir);
 
-            // Skip if it's a tracked worktree
+            // Skip if it's a tracked clone
             if (trackedPaths.Contains(fullPath))
             {
                 continue;
             }
 
-            // Check if it looks like a git worktree (has .git file or folder)
+            // Skip the .clones and .worktrees directories themselves
+            var dirName = Path.GetFileName(dir);
+            if (dirName == ".clones" || dirName == ".worktrees")
+            {
+                continue;
+            }
+
+            // Check if it looks like a git repo (has .git file or folder)
             var gitPath = Path.Combine(dir, ".git");
             if (!File.Exists(gitPath) && !Directory.Exists(gitPath))
             {
@@ -684,6 +793,7 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
             // The folder name might be a sanitized version of the branch name
             var matchingBranch = branchNames.FirstOrDefault(b =>
                 SanitizeBranchName(b).Equals(folderName, StringComparison.OrdinalIgnoreCase) ||
+                SanitizeBranchNameForWorktree(b).Equals(folderName, StringComparison.OrdinalIgnoreCase) ||
                 b.Equals(folderName, StringComparison.OrdinalIgnoreCase));
 
             if (matchingBranch != null)
@@ -791,26 +901,11 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
 
     public async Task<string?> CreateWorktreeFromRemoteBranchAsync(string repoPath, string remoteBranch)
     {
-        var sanitizedName = SanitizeBranchName(remoteBranch);
-        var parentDir = Path.GetDirectoryName(repoPath);
-
-        if (string.IsNullOrEmpty(parentDir))
-        {
-            logger.LogError("Cannot determine parent directory of {RepoPath}", repoPath);
-            return null;
-        }
-
-        var worktreePath = Path.GetFullPath(Path.Combine(parentDir, sanitizedName));
-
-        // Ensure parent directories exist for nested branch names
-        var worktreeParentDir = Path.GetDirectoryName(worktreePath);
-        if (!string.IsNullOrEmpty(worktreeParentDir) && !Directory.Exists(worktreeParentDir))
-        {
-            Directory.CreateDirectory(worktreeParentDir);
-        }
+        // First, fetch from remote to ensure we have the latest refs
+        await commandRunner.RunAsync("git", "fetch origin", repoPath);
 
         // Create local branch from remote WITHOUT checking it out (use git branch, not checkout)
-        // This avoids changing the main worktree's checked out branch
+        // This avoids changing the main repo's checked out branch
         var branchResult = await commandRunner.RunAsync(
             "git",
             $"branch \"{remoteBranch}\" \"origin/{remoteBranch}\"",
@@ -824,58 +919,19 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
             // Continue anyway - the branch might exist
         }
 
-        // Create the worktree
-        var worktreeResult = await commandRunner.RunAsync(
-            "git",
-            $"worktree add \"{worktreePath}\" \"{remoteBranch}\"",
-            repoPath);
-
-        if (!worktreeResult.Success)
-        {
-            logger.LogWarning("Failed to create worktree for remote branch {RemoteBranch}: {Error}",
-                remoteBranch, worktreeResult.Error);
-            return null;
-        }
-
-        logger.LogInformation("Created worktree at {WorktreePath} for remote branch {RemoteBranch}",
-            worktreePath, remoteBranch);
-        return worktreePath;
+        // Reuse the clone-based CreateWorktreeAsync
+        return await CreateWorktreeAsync(repoPath, remoteBranch);
     }
 
     /// <summary>
-    /// Repairs a lost worktree by using git worktree repair.
-    /// The repair command fixes worktree administrative files that may have become
-    /// corrupt or orphaned (e.g., if the worktree was moved without using git).
+    /// Repairs a lost clone by re-cloning if needed.
+    /// For valid clones, this is a no-op. For broken clones, it re-creates them.
     /// </summary>
     public async Task<bool> RepairWorktreeAsync(string repoPath, string folderPath, string branchName)
     {
         logger.LogInformation(
-            "Attempting to repair worktree at {FolderPath} for branch {BranchName}",
+            "Attempting to repair clone at {FolderPath} for branch {BranchName}",
             folderPath, branchName);
-
-        // First, try git worktree repair which fixes both main repo and worktree admin files
-        var repairResult = await commandRunner.RunAsync(
-            "git",
-            $"worktree repair \"{folderPath}\"",
-            repoPath);
-
-        if (repairResult.Success)
-        {
-            logger.LogInformation("Successfully repaired worktree at {FolderPath}", folderPath);
-            return true;
-        }
-
-        logger.LogWarning(
-            "git worktree repair failed for {FolderPath}: {Error}. Trying worktree add...",
-            folderPath, repairResult.Error);
-
-        // If repair fails, try to re-add the worktree
-        // First remove any stale reference
-        await commandRunner.RunAsync("git", "worktree prune", repoPath);
-
-        // Try to add the existing folder as a worktree
-        // Note: git worktree add will fail if the folder already exists with content
-        // In this case, we need to use a different approach
 
         // Check if the branch exists locally
         var branchCheck = await commandRunner.RunAsync(
@@ -889,26 +945,35 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
             return false;
         }
 
-        // Since the folder exists, we need to check it out there
-        // First, ensure the folder has a .git file pointing to the main repo
-        var gitFile = Path.Combine(folderPath, ".git");
-        if (File.Exists(gitFile) || Directory.Exists(gitFile))
+        // Check if the clone's git repo is still valid
+        var gitPath = Path.Combine(folderPath, ".git");
+        if (File.Exists(gitPath) || Directory.Exists(gitPath))
         {
-            // The worktree might just need its admin files fixed in the main repo
-            // Run repair from the worktree directory itself
-            var selfRepair = await commandRunner.RunAsync(
-                "git",
-                "worktree repair",
-                folderPath);
-
-            if (selfRepair.Success)
+            // Try a simple git status to verify the clone is valid
+            var statusResult = await commandRunner.RunAsync("git", "status", folderPath);
+            if (statusResult.Success)
             {
-                logger.LogInformation("Successfully self-repaired worktree at {FolderPath}", folderPath);
+                logger.LogInformation("Clone at {FolderPath} is valid, no repair needed", folderPath);
                 return true;
             }
         }
 
-        logger.LogError("Failed to repair worktree at {FolderPath}", folderPath);
+        // Clone is broken - remove and re-create
+        logger.LogInformation("Re-cloning broken clone at {FolderPath}", folderPath);
+
+        if (Directory.Exists(folderPath))
+        {
+            Directory.Delete(folderPath, recursive: true);
+        }
+
+        var newPath = await CreateWorktreeAsync(repoPath, branchName);
+        if (newPath != null)
+        {
+            logger.LogInformation("Successfully re-cloned at {FolderPath}", newPath);
+            return true;
+        }
+
+        logger.LogError("Failed to repair clone at {FolderPath}", folderPath);
         return false;
     }
 

@@ -147,59 +147,29 @@ public class TempGitRepositoryFixture : IDisposable
     }
 
     /// <summary>
-    /// Cleans up any worktrees created during testing.
+    /// Cleans up any clones created during testing.
     /// </summary>
     private void CleanupWorktrees()
     {
         try
         {
-            // Get list of worktrees
-            var output = RunGit("worktree list --porcelain");
-            var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-            var worktreePaths = new List<string>();
-
-            foreach (var line in lines)
+            // Clean up .clones directory
+            var clonesDir = Path.Combine(ParentPath, ".clones");
+            if (Directory.Exists(clonesDir))
             {
-                if (line.StartsWith("worktree "))
-                {
-                    var path = line.Substring(9).Trim();
-                    // Don't try to remove the main worktree (the repo itself)
-                    if (!path.Equals(RepositoryPath, StringComparison.OrdinalIgnoreCase))
-                    {
-                        worktreePaths.Add(path);
-                    }
-                }
+                ForceDeleteDirectory(clonesDir);
             }
 
-            // Remove each worktree
-            foreach (var path in worktreePaths)
+            // Also clean up legacy .worktrees directory
+            var worktreesDir = Path.Combine(ParentPath, ".worktrees");
+            if (Directory.Exists(worktreesDir))
             {
-                try
-                {
-                    RunGit($"worktree remove \"{path}\" --force");
-                }
-                catch
-                {
-                    // Best effort - if git remove fails, try to delete the directory manually
-                }
-
-                // Also try to delete the directory if it still exists
-                if (Directory.Exists(path))
-                {
-                    try
-                    {
-                        ForceDeleteDirectory(path);
-                    }
-                    catch
-                    {
-                        // Best effort cleanup
-                    }
-                }
+                ForceDeleteDirectory(worktreesDir);
             }
         }
         catch
         {
-            // Best effort - worktree cleanup is not critical
+            // Best effort - clone cleanup is not critical
         }
     }
 
