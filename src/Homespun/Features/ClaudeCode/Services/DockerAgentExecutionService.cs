@@ -435,8 +435,12 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         dockerArgs.Append($"-v \"{dataVolumeHostPath}:{_options.DataVolumePath}\" ");
         dockerArgs.Append($"-e ASPNETCORE_URLS=http://+:8080 ");
 
-        // Pass through authentication environment variables for Claude CLI
-        var envVarsToPassthrough = new[] { "CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY", "GITHUB_TOKEN" };
+        // Pass through authentication and git identity environment variables
+        var envVarsToPassthrough = new[]
+        {
+            "CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY", "GITHUB_TOKEN",
+            "GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL"
+        };
         foreach (var envVar in envVarsToPassthrough)
         {
             var value = Environment.GetEnvironmentVariable(envVar);
