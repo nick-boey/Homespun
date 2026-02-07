@@ -25,7 +25,7 @@ param maxConcurrentSessions int = 10
 @description('Deployment timestamp for revision suffix to force new revisions')
 param deploymentTimestamp string
 
-resource workerApp 'Microsoft.App/containerApps@2024-03-01' = {
+resource workerApp 'Microsoft.App/containerApps@2025-01-01' = {
   name: workerAppName
   location: location
   identity: {
@@ -119,7 +119,7 @@ resource workerApp 'Microsoft.App/containerApps@2024-03-01' = {
         {
           name: 'data-volume'
           storageName: storageMountName
-          storageType: 'AzureFile'
+          storageType: 'NfsAzureFile'
         }
       ]
       scale: {

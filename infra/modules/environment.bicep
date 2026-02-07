@@ -27,7 +27,7 @@ resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
   }
 }
 
-resource environment 'Microsoft.App/managedEnvironments@2024-03-01' = {
+resource environment 'Microsoft.App/managedEnvironments@2025-01-01' = {
   name: environmentName
   location: location
   properties: {
@@ -52,13 +52,13 @@ resource environment 'Microsoft.App/managedEnvironments@2024-03-01' = {
 }
 
 // NFS storage mount for the environment (no account key needed - NFS uses network auth)
-resource storageMount 'Microsoft.App/managedEnvironments/storages@2024-03-01' = {
+resource storageMount 'Microsoft.App/managedEnvironments/storages@2025-01-01' = {
   parent: environment
   name: 'homespun-storage'
   properties: {
     nfsAzureFile: {
       server: '${storageAccountName}.file.core.windows.net'
-      shareName: fileShareName
+      shareName: '/${storageAccountName}/${fileShareName}'
       accessMode: 'ReadWrite'
     }
   }

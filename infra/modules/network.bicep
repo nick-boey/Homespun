@@ -28,7 +28,14 @@ resource vnet 'Microsoft.Network/virtualNetworks@2024-01-01' = {
         properties: {
           addressPrefix: acaSubnetPrefix
           // ACA requires delegation for managed environments
-          delegations: []
+          delegations: [
+            {
+              name: 'Microsoft.App.environments'
+              properties: {
+                serviceName: 'Microsoft.App/environments'
+              }
+            }
+          ]
         }
       }
       {

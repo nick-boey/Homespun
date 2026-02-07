@@ -32,7 +32,7 @@ param workerAppFqdn string = ''
 @description('Deployment timestamp for revision suffix to force new revisions')
 param deploymentTimestamp string
 
-resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
+resource containerApp 'Microsoft.App/containerApps@2025-01-01' = {
   name: containerAppName
   location: location
   identity: {
@@ -151,7 +151,7 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
         {
           name: 'data-volume'
           storageName: storageMountName
-          storageType: 'AzureFile'
+          storageType: 'NfsAzureFile'
         }
       ]
       scale: {
