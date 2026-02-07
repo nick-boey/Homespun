@@ -39,4 +39,6 @@ public class SectionDividerNode : IGraphNode
     public int? PullRequestNumber => null;
 
     public string? IssueId => null;
+
+    public bool? HasDescription => null;
 }

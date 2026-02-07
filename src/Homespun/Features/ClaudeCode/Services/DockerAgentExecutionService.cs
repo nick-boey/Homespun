@@ -297,6 +297,29 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
     }
 
     /// <inheritdoc />
+    public Task InterruptSessionAsync(string sessionId, CancellationToken cancellationToken = default)
+    {
+        if (_sessions.TryGetValue(sessionId, out var session))
+        {
+            _logger.LogInformation("Interrupting Docker session {SessionId}, container {ContainerName}",
+                sessionId, session.ContainerName);
+
+            // Cancel current SSE request
+            session.Cts.Cancel();
+            session.Cts.Dispose();
+
+            // Replace with a fresh CTS - do NOT stop the container
+            var newCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            var updatedSession = session with { Cts = newCts };
+            _sessions[sessionId] = updatedSession;
+
+            // Do NOT remove from _sessions or stop container - session stays alive
+        }
+
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc />
     public Task<AgentSessionStatus?> GetSessionStatusAsync(string sessionId, CancellationToken cancellationToken = default)
     {
         if (_sessions.TryGetValue(sessionId, out var session))

@@ -276,31 +276,59 @@ public class TimelineVisualizationTests
     }
 
     [Test]
-    public void IssueColors_MatchStatusWithBugOverride()
+    public void IssueColors_BugIsRed_OthersAreBlue()
     {
-        // Arrange - Different issue statuses and types
-        // Colors are now based on status, except Bug type which always shows red
+        // Arrange - Different issue types and statuses
+        // Colors are now based on type only: Bug = red, everything else = blue
+        // Agent status overrides color at render time, not at the node level
         var issues = new List<Issue>
         {
-            CreateIssue("ISSUE-001", type: IssueType.Feature, status: IssueStatus.Open),    // Blue (Open status)
-            CreateIssue("ISSUE-002", type: IssueType.Bug, status: IssueStatus.Open),        // Red (Bug overrides status)
-            CreateIssue("ISSUE-003", type: IssueType.Task, status: IssueStatus.Open),       // Blue (Open status)
-            CreateIssue("ISSUE-004", type: IssueType.Chore, status: IssueStatus.Open),      // Blue (Open status)
-            CreateIssue("ISSUE-005", type: IssueType.Feature, status: IssueStatus.Progress),// Purple (Progress status)
-            CreateIssue("ISSUE-006", type: IssueType.Task, status: IssueStatus.Review)      // Cyan (Review status)
+            CreateIssue("ISSUE-001", type: IssueType.Feature, status: IssueStatus.Open),    // Blue
+            CreateIssue("ISSUE-002", type: IssueType.Bug, status: IssueStatus.Open),        // Red (Bug)
+            CreateIssue("ISSUE-003", type: IssueType.Task, status: IssueStatus.Open),       // Blue
+            CreateIssue("ISSUE-004", type: IssueType.Chore, status: IssueStatus.Open),      // Blue
+            CreateIssue("ISSUE-005", type: IssueType.Feature, status: IssueStatus.Progress),// Blue (status no longer affects color)
+            CreateIssue("ISSUE-006", type: IssueType.Task, status: IssueStatus.Review),     // Blue (status no longer affects color)
+            CreateIssue("ISSUE-007", type: IssueType.Bug, status: IssueStatus.Progress)     // Red (Bug, regardless of status)
         };
 
         // Act
         var graph = _graphBuilder.Build([], issues);
         var issueNodes = graph.Nodes.OfType<IssueNode>().ToDictionary(n => n.Issue.Id);
 
-        // Assert - Colors match expected values based on status (with bug override)
-        Assert.That(issueNodes["ISSUE-001"].Color, Is.EqualTo("#3b82f6")); // Blue (Open status)
-        Assert.That(issueNodes["ISSUE-002"].Color, Is.EqualTo("#ef4444")); // Red (Bug type overrides status)
-        Assert.That(issueNodes["ISSUE-003"].Color, Is.EqualTo("#3b82f6")); // Blue (Open status)
-        Assert.That(issueNodes["ISSUE-004"].Color, Is.EqualTo("#3b82f6")); // Blue (Open status)
-        Assert.That(issueNodes["ISSUE-005"].Color, Is.EqualTo("#a855f7")); // Purple (Progress status)
-        Assert.That(issueNodes["ISSUE-006"].Color, Is.EqualTo("#06b6d4")); // Cyan (Review status)
+        // Assert - Colors based on type only
+        Assert.That(issueNodes["ISSUE-001"].Color, Is.EqualTo("#3b82f6")); // Blue (Feature)
+        Assert.That(issueNodes["ISSUE-002"].Color, Is.EqualTo("#ef4444")); // Red (Bug)
+        Assert.That(issueNodes["ISSUE-003"].Color, Is.EqualTo("#3b82f6")); // Blue (Task)
+        Assert.That(issueNodes["ISSUE-004"].Color, Is.EqualTo("#3b82f6")); // Blue (Chore)
+        Assert.That(issueNodes["ISSUE-005"].Color, Is.EqualTo("#3b82f6")); // Blue (Feature, Progress status)
+        Assert.That(issueNodes["ISSUE-006"].Color, Is.EqualTo("#3b82f6")); // Blue (Task, Review status)
+        Assert.That(issueNodes["ISSUE-007"].Color, Is.EqualTo("#ef4444")); // Red (Bug, Progress status)
+    }
+
+    [Test]
+    public void IssueHasDescription_ReflectsIssueDescription()
+    {
+        // Arrange - Issues with and without descriptions
+        var issues = new List<Issue>
+        {
+            CreateIssue("ISSUE-001", description: "This is a description"),
+            CreateIssue("ISSUE-002", description: null),
+            CreateIssue("ISSUE-003", description: ""),
+            CreateIssue("ISSUE-004", description: "   "),
+            CreateIssue("ISSUE-005", description: "Some content")
+        };
+
+        // Act
+        var graph = _graphBuilder.Build([], issues);
+        var issueNodes = graph.Nodes.OfType<IssueNode>().ToDictionary(n => n.Issue.Id);
+
+        // Assert
+        Assert.That(issueNodes["ISSUE-001"].HasDescription, Is.True);  // Has description
+        Assert.That(issueNodes["ISSUE-002"].HasDescription, Is.False); // Null description
+        Assert.That(issueNodes["ISSUE-003"].HasDescription, Is.False); // Empty description
+        Assert.That(issueNodes["ISSUE-004"].HasDescription, Is.False); // Whitespace-only description
+        Assert.That(issueNodes["ISSUE-005"].HasDescription, Is.True);  // Has description
     }
 
     #endregion
@@ -609,13 +637,15 @@ public class TimelineVisualizationTests
         string? group = null,
         int? priority = null,
         DateTime? createdAt = null,
-        IssueStatus status = IssueStatus.Open) => new() // Use Open status so issues are true orphans
+        IssueStatus status = IssueStatus.Open,
+        string? description = null) => new() // Use Open status so issues are true orphans
     {
         Id = id,
         Title = $"Issue {id}",
         Status = status,
         Type = type,
         Priority = priority,
+        Description = description,
         CreatedAt = createdAt ?? DateTimeOffset.UtcNow,
         LastUpdate = createdAt ?? DateTimeOffset.UtcNow
     };

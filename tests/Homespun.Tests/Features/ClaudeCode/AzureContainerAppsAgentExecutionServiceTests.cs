@@ -97,6 +97,18 @@ public class AzureContainerAppsAgentExecutionServiceTests
 
     #endregion
 
+    #region InterruptSessionAsync Tests
+
+    [Test]
+    public async Task InterruptSessionAsync_NonExistentSession_DoesNotThrow()
+    {
+        // Act & Assert
+        Assert.DoesNotThrowAsync(async () =>
+            await _service.InterruptSessionAsync("non-existent-session"));
+    }
+
+    #endregion
+
     #region SendMessageAsync Tests
 
     [Test]
@@ -256,6 +268,14 @@ public class LocalAgentExecutionServiceTests
         // Act & Assert
         Assert.DoesNotThrowAsync(async () =>
             await _service.StopSessionAsync("non-existent-session"));
+    }
+
+    [Test]
+    public async Task InterruptSessionAsync_NonExistentSession_DoesNotThrow()
+    {
+        // Act & Assert
+        Assert.DoesNotThrowAsync(async () =>
+            await _service.InterruptSessionAsync("non-existent-session"));
     }
 
     [Test]

@@ -73,4 +73,10 @@ public interface IGraphNode
     /// The original issue ID (for issues) or null for PRs.
     /// </summary>
     string? IssueId { get; }
+
+    /// <summary>
+    /// Whether the issue has a non-empty description. Null for non-issue nodes (PRs, dividers).
+    /// Used to determine fill style: filled diamond (has description) vs outline-only diamond (no description).
+    /// </summary>
+    bool? HasDescription { get; }
 }

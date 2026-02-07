@@ -163,6 +163,28 @@ public class LocalAgentExecutionService : IAgentExecutionService, IAsyncDisposab
     }
 
     /// <inheritdoc />
+    public Task InterruptSessionAsync(string sessionId, CancellationToken cancellationToken = default)
+    {
+        if (_sessions.TryGetValue(sessionId, out var session))
+        {
+            _logger.LogInformation("Interrupting local session {SessionId}", sessionId);
+
+            // Cancel current execution
+            session.Cts.Cancel();
+            session.Cts.Dispose();
+
+            // Replace with a fresh CTS so the next message works
+            var newCts = new CancellationTokenSource();
+            var updatedSession = session with { Cts = newCts };
+            _sessions[sessionId] = updatedSession;
+
+            // Do NOT remove from _sessions or _sessionToolUses - session stays alive
+        }
+
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc />
     public Task<AgentSessionStatus?> GetSessionStatusAsync(string sessionId, CancellationToken cancellationToken = default)
     {
         if (_sessions.TryGetValue(sessionId, out var session))

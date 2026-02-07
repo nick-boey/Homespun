@@ -61,7 +61,8 @@ public class GitgraphApiMapper
                     Url = n.Url,
                     TimeDimension = n.TimeDimension,
                     PullRequestNumber = n.PullRequestNumber,
-                    IssueId = n.IssueId
+                    IssueId = n.IssueId,
+                    HasDescription = n.HasDescription
                 };
             })
             .ToList();
@@ -126,6 +127,11 @@ public class GitgraphCommitData
     public int TimeDimension { get; set; }
     public int? PullRequestNumber { get; set; }
     public string? IssueId { get; set; }
+
+    /// <summary>
+    /// Whether the issue has a non-empty description. Null for non-issue nodes.
+    /// </summary>
+    public bool? HasDescription { get; set; }
 
     /// <summary>
     /// Agent status for the linked entity. Null if no agent session is active.
