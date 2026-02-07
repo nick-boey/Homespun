@@ -13,7 +13,8 @@
       "mcp__plugin_sharpitect_Sharpitect__get_children",
       "mcp__plugin_sharpitect_Sharpitect__get_signature",
       "mcp__plugin_sharpitect_Sharpitect__get_callers",
-      "mcp__plugin_sharpitect_Sharpitect__get_usages"
+      "mcp__plugin_sharpitect_Sharpitect__get_usages",
+      "WebSearch"
     ]
   }
 }
