@@ -36,10 +36,11 @@ TS_AUTHKEY="${TAILSCALE_AUTH_KEY:-$TS_AUTHKEY}"
 if [ -n "$TS_AUTHKEY" ]; then
     echo "Starting Tailscale..."
 
-    # Persistent state on Azure Files; socket on local filesystem
-    # Azure Files (SMB) does not support Unix domain sockets, so the socket
-    # must live on a local path while state is persisted across restarts.
-    TS_STATE_DIR="${TS_STATE_DIR:-/data/tailscale}"
+    # Azure Files (SMB) does not support chmod or Unix domain sockets, so
+    # both the state directory and socket must live on the local filesystem.
+    # State is lost on container restart but the auth key re-authenticates
+    # automatically and TS_HOSTNAME keeps the same DNS name.
+    TS_STATE_DIR="${TS_STATE_DIR:-/tmp/tailscale-state}"
     TS_SOCKET_DIR="/tmp/tailscale"
     TS_SOCKET="$TS_SOCKET_DIR/tailscaled.sock"
 

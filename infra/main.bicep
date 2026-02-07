@@ -39,6 +39,9 @@ param readySessionInstances int = 2
 @allowed(['Allow', 'Deny'])
 param storageNetworkDefaultAction string = 'Allow'
 
+@description('Deployment timestamp used to force new container revisions')
+param deploymentTimestamp string = utcNow('yyyyMMddHHmmss')
+
 // Resource naming
 var resourceSuffix = '${baseName}-${environmentSuffix}'
 var identityName = 'id-${resourceSuffix}'
@@ -124,6 +127,7 @@ module containerApp 'modules/containerapp.bicep' = {
     storageMountName: environment.outputs.storageMountName
     agentExecutionMode: agentExecutionMode
     sessionPoolName: agentExecutionMode == 'AzureContainerApps' ? sessionPoolName : ''
+    deploymentTimestamp: deploymentTimestamp
   }
 }
 
