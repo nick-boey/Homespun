@@ -24,10 +24,7 @@ public class AzureContainerAppsAgentExecutionServiceTests
         _loggerMock = new Mock<ILogger<AzureContainerAppsAgentExecutionService>>();
         _options = new AzureContainerAppsAgentExecutionOptions
         {
-            SubscriptionId = "test-subscription-id",
-            ResourceGroup = "test-resource-group",
-            SessionPoolName = "test-session-pool",
-            WorkerImage = "ghcr.io/nick-boey/homespun-worker:test",
+            WorkerEndpoint = "http://test-worker.internal.azurecontainerapps.io",
             RequestTimeout = TimeSpan.FromSeconds(30),
             MaxSessionDuration = TimeSpan.FromMinutes(30)
         };
@@ -54,10 +51,7 @@ public class AzureContainerAppsAgentExecutionServiceTests
         // Assert
         Assert.Multiple(() =>
         {
-            Assert.That(defaultOptions.SubscriptionId, Is.Empty);
-            Assert.That(defaultOptions.ResourceGroup, Is.Empty);
-            Assert.That(defaultOptions.SessionPoolName, Is.EqualTo("homespun-agents"));
-            Assert.That(defaultOptions.WorkerImage, Is.EqualTo("ghcr.io/nick-boey/homespun-worker:latest"));
+            Assert.That(defaultOptions.WorkerEndpoint, Is.Empty);
             Assert.That(defaultOptions.RequestTimeout, Is.EqualTo(TimeSpan.FromMinutes(30)));
             Assert.That(defaultOptions.MaxSessionDuration, Is.EqualTo(TimeSpan.FromMinutes(30)));
         });
@@ -173,53 +167,66 @@ public class AzureContainerAppsAgentExecutionServiceTests
 }
 
 /// <summary>
-/// Tests for Azure Container Apps API URL construction.
+/// Tests for worker endpoint URL construction.
 /// </summary>
 [TestFixture]
-public class AzureContainerAppsApiUrlTests
+public class WorkerEndpointUrlTests
 {
     [Test]
-    public void ApiUrl_ForSessionCreation_IsConstructedCorrectly()
+    public void WorkerUrl_ForSessionStart_IsConstructedCorrectly()
     {
         // Arrange
-        var subscriptionId = "sub-123";
-        var resourceGroup = "rg-test";
-        var sessionPoolName = "pool-test";
-        var sessionId = "session-456";
+        var workerEndpoint = "http://ca-worker-homespun-dev.internal.australiaeast.azurecontainerapps.io";
 
         // Act
-        var expectedUrl = $"https://management.azure.com/subscriptions/{subscriptionId}" +
-                         $"/resourceGroups/{resourceGroup}" +
-                         $"/providers/Microsoft.App/sessionPools/{sessionPoolName}" +
-                         $"/sessions/{sessionId}?api-version=2024-02-02-preview";
+        var url = $"{workerEndpoint.TrimEnd('/')}/api/sessions";
 
         // Assert
-        Assert.That(expectedUrl, Does.Contain("management.azure.com"));
-        Assert.That(expectedUrl, Does.Contain(subscriptionId));
-        Assert.That(expectedUrl, Does.Contain(resourceGroup));
-        Assert.That(expectedUrl, Does.Contain(sessionPoolName));
-        Assert.That(expectedUrl, Does.Contain(sessionId));
-        Assert.That(expectedUrl, Does.Contain("api-version=2024-02-02-preview"));
+        Assert.That(url, Does.Contain("/api/sessions"));
+        Assert.That(url, Does.StartWith("http://"));
+        Assert.That(url, Does.Not.EndWith("//api/sessions"));
     }
 
     [Test]
-    public void ApiUrl_ForSessionDeletion_IsConstructedCorrectly()
+    public void WorkerUrl_ForSessionMessage_IsConstructedCorrectly()
     {
         // Arrange
-        var subscriptionId = "sub-123";
-        var resourceGroup = "rg-test";
-        var sessionPoolName = "pool-test";
-        var sessionId = "session-456";
+        var workerEndpoint = "http://ca-worker-homespun-dev.internal.australiaeast.azurecontainerapps.io";
+        var workerSessionId = "session-456";
 
         // Act
-        var expectedUrl = $"https://management.azure.com/subscriptions/{subscriptionId}" +
-                         $"/resourceGroups/{resourceGroup}" +
-                         $"/providers/Microsoft.App/sessionPools/{sessionPoolName}" +
-                         $"/sessions/{sessionId}?api-version=2024-02-02-preview";
+        var url = $"{workerEndpoint.TrimEnd('/')}/api/sessions/{workerSessionId}/message";
 
-        // Assert - URL should be identical for PUT (create) and DELETE operations
-        Assert.That(expectedUrl, Does.Contain("Microsoft.App/sessionPools"));
-        Assert.That(expectedUrl, Does.Contain("/sessions/"));
+        // Assert
+        Assert.That(url, Does.Contain($"/api/sessions/{workerSessionId}/message"));
+    }
+
+    [Test]
+    public void WorkerUrl_ForSessionDeletion_IsConstructedCorrectly()
+    {
+        // Arrange
+        var workerEndpoint = "http://ca-worker-homespun-dev.internal.australiaeast.azurecontainerapps.io";
+        var workerSessionId = "session-456";
+
+        // Act
+        var url = $"{workerEndpoint.TrimEnd('/')}/api/sessions/{workerSessionId}";
+
+        // Assert
+        Assert.That(url, Does.Contain($"/api/sessions/{workerSessionId}"));
+        Assert.That(url, Does.Not.EndWith("/"));
+    }
+
+    [Test]
+    public void WorkerUrl_WithTrailingSlash_IsHandledCorrectly()
+    {
+        // Arrange
+        var workerEndpoint = "http://worker.internal.azurecontainerapps.io/";
+
+        // Act
+        var url = $"{workerEndpoint.TrimEnd('/')}/api/sessions";
+
+        // Assert
+        Assert.That(url, Does.Not.Contain("//api"));
     }
 }
 

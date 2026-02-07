@@ -19,9 +19,6 @@
     },
     "maxConcurrentSessions": {
       "value": 5
-    },
-    "readySessionInstances": {
-      "value": 1
     }
   }
 }
