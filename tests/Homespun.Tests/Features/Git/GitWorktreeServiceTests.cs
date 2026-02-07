@@ -1891,26 +1891,33 @@ public class GitWorktreeServiceTests
     #region ListWorktreesAsync - ExpectedBranch Detection Tests
 
     [Test]
-    [Description("Regression test for issue 1JudQJ: Worktree folder names use flattened format (feature+test) but branch matching was using slash-preserving format")]
+    [Description("Regression test for issue 1JudQJ: Clone folder names use flattened format (feature+test) but branch matching was using slash-preserving format")]
     public async Task ListWorktreesAsync_WithSlashesInBranchName_DetectsBranchMismatchCorrectly()
     {
         // Arrange
         var repoPath = Path.Combine(_tempDir, "main");
         Directory.CreateDirectory(repoPath);
 
-        // Create a worktree path with flattened name (slashes become plus)
-        var worktreePath = Path.Combine(_tempDir, ".worktrees", "feature+my-branch+abc123");
+        // Create a clone path with flattened name (slashes become plus) in .clones directory
+        var clonesDir = Path.Combine(_tempDir, ".clones");
+        var clonePath = Path.GetFullPath(Path.Combine(clonesDir, "feature+my-branch+abc123"));
+        Directory.CreateDirectory(clonePath);
+        Directory.CreateDirectory(Path.Combine(clonePath, ".git"));
 
         // The actual branch name has slashes
         var actualBranchName = "feature/my-branch+abc123";
 
-        // Mock git worktree list showing worktree is on a different branch
-        _mockRunner.Setup(r => r.RunAsync("git", "worktree list --porcelain", repoPath))
-            .ReturnsAsync(new CommandResult
-            {
-                Success = true,
-                Output = $"worktree {repoPath}\nHEAD abc123\nbranch refs/heads/main\n\nworktree {worktreePath}\nHEAD def456\nbranch refs/heads/wrong-branch"
-            });
+        // Mock main repo rev-parse
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "main" });
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse HEAD", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "abc123" });
+
+        // Mock clone rev-parse - clone is on wrong branch
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", clonePath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "wrong-branch" });
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse HEAD", clonePath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "def456" });
 
         // Mock branch list showing the expected branch exists
         _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.Contains("for-each-ref")), repoPath))
@@ -1920,14 +1927,11 @@ public class GitWorktreeServiceTests
                 Output = $"'main|abc123|||2024-01-15|Main'\n'{actualBranchName}|def456|||2024-01-16|Feature'"
             });
 
-        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", repoPath))
-            .ReturnsAsync(new CommandResult { Success = true, Output = "main" });
-
         // Act
         var result = await _service.ListWorktreesAsync(repoPath);
 
         // Assert
-        var worktree = result.FirstOrDefault(w => w.Path == worktreePath);
+        var worktree = result.FirstOrDefault(w => w.Path == clonePath);
         Assert.That(worktree, Is.Not.Null, "Worktree should be found");
         Assert.That(worktree!.ExpectedBranch, Is.EqualTo(actualBranchName),
             "ExpectedBranch should be set to the branch matching the flattened folder name");
@@ -1936,26 +1940,33 @@ public class GitWorktreeServiceTests
     }
 
     [Test]
-    [Description("Test that worktree on correct branch is detected when branch name has slashes")]
+    [Description("Test that clone on correct branch is detected when branch name has slashes")]
     public async Task ListWorktreesAsync_WorktreeOnCorrectBranchWithSlashes_NoExpectedBranchSet()
     {
         // Arrange
         var repoPath = Path.Combine(_tempDir, "main");
         Directory.CreateDirectory(repoPath);
 
-        // Create a worktree path with flattened name (slashes become plus)
-        var worktreePath = Path.Combine(_tempDir, ".worktrees", "feature+my-branch+xyz789");
+        // Create a clone path with flattened name (slashes become plus) in .clones directory
+        var clonesDir = Path.Combine(_tempDir, ".clones");
+        var clonePath = Path.GetFullPath(Path.Combine(clonesDir, "feature+my-branch+xyz789"));
+        Directory.CreateDirectory(clonePath);
+        Directory.CreateDirectory(Path.Combine(clonePath, ".git"));
 
         // The actual branch name has slashes
         var branchName = "feature/my-branch+xyz789";
 
-        // Mock git worktree list showing worktree IS on the correct branch
-        _mockRunner.Setup(r => r.RunAsync("git", "worktree list --porcelain", repoPath))
-            .ReturnsAsync(new CommandResult
-            {
-                Success = true,
-                Output = $"worktree {repoPath}\nHEAD abc123\nbranch refs/heads/main\n\nworktree {worktreePath}\nHEAD def456\nbranch refs/heads/{branchName}"
-            });
+        // Mock main repo rev-parse
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "main" });
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse HEAD", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "abc123" });
+
+        // Mock clone rev-parse - clone IS on the correct branch
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", clonePath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = branchName });
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse HEAD", clonePath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "def456" });
 
         // Mock branch list showing the branch exists
         _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.Contains("for-each-ref")), repoPath))
@@ -1965,14 +1976,11 @@ public class GitWorktreeServiceTests
                 Output = $"'main|abc123|||2024-01-15|Main'\n'{branchName}|def456|||2024-01-16|Feature'"
             });
 
-        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", repoPath))
-            .ReturnsAsync(new CommandResult { Success = true, Output = "main" });
-
         // Act
         var result = await _service.ListWorktreesAsync(repoPath);
 
         // Assert
-        var worktree = result.FirstOrDefault(w => w.Path == worktreePath);
+        var worktree = result.FirstOrDefault(w => w.Path == clonePath);
         Assert.That(worktree, Is.Not.Null, "Worktree should be found");
         Assert.That(worktree!.ExpectedBranch, Is.Null,
             "ExpectedBranch should be null when worktree is on the correct branch");
@@ -1981,26 +1989,33 @@ public class GitWorktreeServiceTests
     }
 
     [Test]
-    [Description("Test that worktree folder name with multiple slashes is matched correctly")]
+    [Description("Test that clone folder name with multiple slashes is matched correctly")]
     public async Task ListWorktreesAsync_WithMultipleSlashesInBranchName_MatchesCorrectly()
     {
         // Arrange
         var repoPath = Path.Combine(_tempDir, "main");
         Directory.CreateDirectory(repoPath);
 
-        // Create a worktree path with multiple slashes flattened to plus signs
-        var worktreePath = Path.Combine(_tempDir, ".worktrees", "feature+area+subfeature+abc");
+        // Create a clone path with multiple slashes flattened to plus signs in .clones directory
+        var clonesDir = Path.Combine(_tempDir, ".clones");
+        var clonePath = Path.GetFullPath(Path.Combine(clonesDir, "feature+area+subfeature+abc"));
+        Directory.CreateDirectory(clonePath);
+        Directory.CreateDirectory(Path.Combine(clonePath, ".git"));
 
         // The actual branch name has multiple slashes
         var branchName = "feature/area/subfeature+abc";
 
-        // Mock git worktree list showing worktree is on wrong branch
-        _mockRunner.Setup(r => r.RunAsync("git", "worktree list --porcelain", repoPath))
-            .ReturnsAsync(new CommandResult
-            {
-                Success = true,
-                Output = $"worktree {repoPath}\nHEAD abc123\nbranch refs/heads/main\n\nworktree {worktreePath}\nHEAD def456\nbranch refs/heads/other"
-            });
+        // Mock main repo rev-parse
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "main" });
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse HEAD", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "abc123" });
+
+        // Mock clone rev-parse - clone is on wrong branch
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", clonePath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "other" });
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse HEAD", clonePath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "def456" });
 
         // Mock branch list showing the expected branch exists
         _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.Contains("for-each-ref")), repoPath))
@@ -2010,14 +2025,11 @@ public class GitWorktreeServiceTests
                 Output = $"'main|abc123|||2024-01-15|Main'\n'{branchName}|def456|||2024-01-16|Feature'\n'other|ghi789|||2024-01-17|Other'"
             });
 
-        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", repoPath))
-            .ReturnsAsync(new CommandResult { Success = true, Output = "main" });
-
         // Act
         var result = await _service.ListWorktreesAsync(repoPath);
 
         // Assert
-        var worktree = result.FirstOrDefault(w => w.Path == worktreePath);
+        var worktree = result.FirstOrDefault(w => w.Path == clonePath);
         Assert.That(worktree, Is.Not.Null, "Worktree should be found");
         Assert.That(worktree!.ExpectedBranch, Is.EqualTo(branchName),
             "ExpectedBranch should match the branch with slashes that corresponds to the flattened folder name");
