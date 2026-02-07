@@ -99,7 +99,7 @@ resource containerApp 'Microsoft.App/containerApps@2025-01-01' = {
               secretRef: 'github-token'
             }
             {
-              name: 'CLAUDE_OAUTH_TOKEN'
+              name: 'CLAUDE_CODE_OAUTH_TOKEN'
               secretRef: 'claude-oauth-token'
             }
             {
