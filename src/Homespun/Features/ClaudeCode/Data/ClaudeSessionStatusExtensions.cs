@@ -11,6 +11,7 @@ public static class ClaudeSessionStatusExtensions
     public static string ToDisplayLabel(this ClaudeSessionStatus status) => status switch
     {
         ClaudeSessionStatus.Starting => "Starting",
+        ClaudeSessionStatus.RunningHooks => "Running Hooks",
         ClaudeSessionStatus.Running => "Working",
         ClaudeSessionStatus.WaitingForInput => "Waiting",
         ClaudeSessionStatus.WaitingForQuestionAnswer => "Question",
@@ -26,6 +27,7 @@ public static class ClaudeSessionStatusExtensions
     public static string ToBadgeClass(this ClaudeSessionStatus status) => status switch
     {
         ClaudeSessionStatus.Starting => "bg-warning text-dark",
+        ClaudeSessionStatus.RunningHooks => "bg-warning text-dark",
         ClaudeSessionStatus.Running => "bg-success",
         ClaudeSessionStatus.WaitingForInput => "bg-info",
         ClaudeSessionStatus.WaitingForQuestionAnswer => "bg-status-question text-white",
@@ -41,6 +43,7 @@ public static class ClaudeSessionStatusExtensions
     public static string ToIndicatorClass(this ClaudeSessionStatus status) => status switch
     {
         ClaudeSessionStatus.Starting => "starting",
+        ClaudeSessionStatus.RunningHooks => "running-hooks",
         ClaudeSessionStatus.Running => "running",
         ClaudeSessionStatus.WaitingForInput => "waiting",
         ClaudeSessionStatus.WaitingForQuestionAnswer => "question",
