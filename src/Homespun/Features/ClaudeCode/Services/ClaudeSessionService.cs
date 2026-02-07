@@ -1121,14 +1121,45 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             }
         }
 
-        // Try to find and read the plan file
+        // Try to find and read the plan file from local filesystem
         var (foundPath, planContent) = await TryReadPlanFileAsync(session.WorkingDirectory, planFilePath);
 
-        // If no file found but session has stored plan content (from JSONL), use that
+        // If no file found locally, try the session's stored plan content (captured from Write tool events)
         if (string.IsNullOrEmpty(planContent) && !string.IsNullOrEmpty(session.PlanContent))
         {
             planContent = session.PlanContent;
+            foundPath = session.PlanFilePath;
             _logger.LogInformation("ExitPlanMode: Using stored plan content for session {SessionId}", sessionId);
+        }
+
+        // If still no plan content, try to fetch the file from the agent container's filesystem.
+        // This handles the case where the agent runs in a Docker/Azure container and the plan file
+        // exists only inside that container (e.g., ~/.claude/plans/), not on the parent's filesystem.
+        if (string.IsNullOrEmpty(planContent) && !string.IsNullOrEmpty(planFilePath) &&
+            _agentSessionIds.TryGetValue(sessionId, out var agentSessionId))
+        {
+            _logger.LogInformation("ExitPlanMode: Attempting to read plan from agent container at {Path} for session {SessionId}",
+                planFilePath, sessionId);
+
+            planContent = await _agentExecutionService.ReadFileFromAgentAsync(agentSessionId, planFilePath, cancellationToken);
+            if (!string.IsNullOrEmpty(planContent))
+            {
+                foundPath = planFilePath;
+                _logger.LogInformation("ExitPlanMode: Successfully read plan from agent container ({Length} chars)", planContent.Length);
+            }
+        }
+
+        // Last resort: if we have a known plan file path pattern but no content yet,
+        // try common ~/.claude/plans/ locations via the agent container
+        if (string.IsNullOrEmpty(planContent) &&
+            _agentSessionIds.TryGetValue(sessionId, out var agentSid))
+        {
+            planContent = await TryReadPlanFromAgentAsync(agentSid, session.WorkingDirectory, cancellationToken);
+            if (!string.IsNullOrEmpty(planContent))
+            {
+                foundPath = "agent:~/.claude/plans/";
+                _logger.LogInformation("ExitPlanMode: Found plan via agent container search ({Length} chars)", planContent.Length);
+            }
         }
 
         if (!string.IsNullOrEmpty(planContent))
@@ -1165,6 +1196,37 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         {
             _logger.LogWarning("ExitPlanMode: No plan file found for session {SessionId}", sessionId);
         }
+    }
+
+    /// <summary>
+    /// Attempts to read plan files from the agent container's filesystem.
+    /// Searches common plan file locations (e.g., ~/.claude/plans/) that are
+    /// only accessible inside the agent container, not on the parent's filesystem.
+    /// </summary>
+    private async Task<string?> TryReadPlanFromAgentAsync(
+        string agentSessionId,
+        string workingDirectory,
+        CancellationToken cancellationToken)
+    {
+        // Try common plan file locations that exist inside the agent container
+        var pathsToTry = new[]
+        {
+            Path.Combine(workingDirectory, "PLAN.md"),
+            Path.Combine(workingDirectory, ".claude", "plan.md"),
+            Path.Combine(workingDirectory, ".claude", "PLAN.md")
+        };
+
+        foreach (var path in pathsToTry)
+        {
+            var content = await _agentExecutionService.ReadFileFromAgentAsync(agentSessionId, path, cancellationToken);
+            if (!string.IsNullOrEmpty(content))
+            {
+                _logger.LogDebug("Found plan file via agent at {Path}", path);
+                return content;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -1528,8 +1590,11 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         session.Status = ClaudeSessionStatus.Running;
         await _hubContext.BroadcastSessionStatusChanged(sessionId, session.Status);
 
-        // Send the plan as the next message
-        var executionMessage = $"Please proceed with the implementation of {session.PlanFilePath ?? "the plan"}.\n\n{session.PlanContent}";
+        // Send the plan as the next message.
+        // Do NOT reference the plan file path - the plan content is provided inline below.
+        // Referencing the path causes the agent to try to read the file from disk,
+        // which fails when running in a new container after context clearing.
+        var executionMessage = $"Please proceed with the implementation of the plan below. The full plan is provided here — do NOT attempt to read or find a plan file on disk.\n\n{session.PlanContent}";
         await SendMessageAsync(sessionId, executionMessage, PermissionMode.BypassPermissions, cancellationToken);
     }
 

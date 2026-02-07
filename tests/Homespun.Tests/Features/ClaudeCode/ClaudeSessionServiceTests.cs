@@ -984,3 +984,202 @@ public class ClaudeSessionServiceResumeTests
         Assert.That(result, Is.Empty);
     }
 }
+
+/// <summary>
+/// Tests for plan execution and context clearing behavior (UUXI6e).
+/// </summary>
+[TestFixture]
+public class ClaudeSessionServicePlanExecutionTests
+{
+    private ClaudeSessionService _service = null!;
+    private IClaudeSessionStore _sessionStore = null!;
+    private SessionOptionsFactory _optionsFactory = null!;
+    private Mock<ILogger<ClaudeSessionService>> _loggerMock = null!;
+    private Mock<ILogger<SessionOptionsFactory>> _factoryLoggerMock = null!;
+    private Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>> _hubContextMock = null!;
+    private Mock<IClaudeSessionDiscovery> _discoveryMock = null!;
+    private Mock<ISessionMetadataStore> _metadataStoreMock = null!;
+    private Mock<IMessageCacheStore> _messageCacheMock = null!;
+    private IToolResultParser _toolResultParser = null!;
+    private Mock<IHooksService> _hooksServiceMock = null!;
+    private Mock<IAgentExecutionService> _agentExecutionServiceMock = null!;
+
+    [SetUp]
+    public void SetUp()
+    {
+        _sessionStore = new ClaudeSessionStore();
+        _factoryLoggerMock = new Mock<ILogger<SessionOptionsFactory>>();
+        _optionsFactory = new SessionOptionsFactory(_factoryLoggerMock.Object);
+        _loggerMock = new Mock<ILogger<ClaudeSessionService>>();
+        _hubContextMock = new Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>>();
+        _discoveryMock = new Mock<IClaudeSessionDiscovery>();
+        _metadataStoreMock = new Mock<ISessionMetadataStore>();
+        _messageCacheMock = new Mock<IMessageCacheStore>();
+        _toolResultParser = new ToolResultParser();
+        _hooksServiceMock = new Mock<IHooksService>();
+        _agentExecutionServiceMock = new Mock<IAgentExecutionService>();
+
+        var clientsMock = new Mock<IHubClients>();
+        var clientProxyMock = new Mock<IClientProxy>();
+        clientsMock.Setup(c => c.All).Returns(clientProxyMock.Object);
+        clientsMock.Setup(c => c.Group(It.IsAny<string>())).Returns(clientProxyMock.Object);
+        _hubContextMock.Setup(h => h.Clients).Returns(clientsMock.Object);
+
+        _service = new ClaudeSessionService(
+            _sessionStore,
+            _optionsFactory,
+            _loggerMock.Object,
+            _hubContextMock.Object,
+            _discoveryMock.Object,
+            _metadataStoreMock.Object,
+            _toolResultParser,
+            _hooksServiceMock.Object,
+            _messageCacheMock.Object,
+            _agentExecutionServiceMock.Object);
+    }
+
+    /// <summary>
+    /// Helper to create an async enumerable that yields the given events.
+    /// </summary>
+    private static async IAsyncEnumerable<AgentEvent> CreateAgentEventStream(params AgentEvent[] events)
+    {
+        foreach (var evt in events)
+        {
+            yield return evt;
+        }
+        await Task.CompletedTask; // Ensure the method is async
+    }
+
+    [Test]
+    public async Task ExecutePlanAsync_MessageDoesNotContainFilePath()
+    {
+        // Arrange - Create a session with plan content and a file path
+        var session = await _service.StartSessionAsync(
+            "entity-1", "project-1", "/test/path", SessionMode.Plan, "sonnet");
+
+        session.PlanContent = "# Test Plan\n\n1. Step one\n2. Step two";
+        session.PlanFilePath = "/home/homespun/.claude/plans/cheeky-stirring-stonebraker.md";
+
+        // Setup mock to return a valid event stream that completes immediately
+        _agentExecutionServiceMock
+            .Setup(s => s.StartSessionAsync(It.IsAny<AgentStartRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(CreateAgentEventStream(
+                new AgentSessionStartedEvent("agent-1", null),
+                new AgentResultEvent("agent-1", 0, 0, null)));
+
+        // Act
+        await _service.ExecutePlanAsync(session.Id, clearContext: false);
+
+        // Assert - verify the message sent does NOT contain the file path
+        // The last user message should be the execution message
+        var lastUserMessage = session.Messages.LastOrDefault(m => m.Role == ClaudeMessageRole.User);
+        Assert.That(lastUserMessage, Is.Not.Null, "Should have a user message");
+
+        var messageText = lastUserMessage!.Content.FirstOrDefault()?.Text ?? "";
+        Assert.Multiple(() =>
+        {
+            // Should NOT reference the file path (this was the bug)
+            Assert.That(messageText, Does.Not.Contain("cheeky-stirring-stonebraker"),
+                "Execution message should not reference the plan file name");
+            Assert.That(messageText, Does.Not.Contain(".claude/plans/"),
+                "Execution message should not reference the plans directory");
+
+            // Should contain the actual plan content
+            Assert.That(messageText, Does.Contain("# Test Plan"),
+                "Execution message should contain the plan content");
+            Assert.That(messageText, Does.Contain("Step one"),
+                "Execution message should contain plan steps");
+        });
+    }
+
+    [Test]
+    public async Task ExecutePlanAsync_WithClearContext_ClearsConversationId()
+    {
+        // Arrange
+        var session = await _service.StartSessionAsync(
+            "entity-1", "project-1", "/test/path", SessionMode.Plan, "sonnet");
+
+        session.ConversationId = "original-conversation-id";
+        session.PlanContent = "# Test Plan";
+
+        // Setup mock to return a valid event stream
+        _agentExecutionServiceMock
+            .Setup(s => s.StartSessionAsync(It.IsAny<AgentStartRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(CreateAgentEventStream(
+                new AgentSessionStartedEvent("agent-1", null),
+                new AgentResultEvent("agent-1", 0, 0, null)));
+
+        // Act
+        await _service.ExecutePlanAsync(session.Id, clearContext: true);
+
+        // Assert - ConversationId should be cleared after context clear
+        Assert.That(session.ConversationId, Is.Null,
+            "ConversationId should be null after context clearing");
+    }
+
+    [Test]
+    public async Task ExecutePlanAsync_WithClearContext_AddsContextClearMarker()
+    {
+        // Arrange
+        var session = await _service.StartSessionAsync(
+            "entity-1", "project-1", "/test/path", SessionMode.Plan, "sonnet");
+
+        session.PlanContent = "# Test Plan";
+
+        // Setup mock to return a valid event stream
+        _agentExecutionServiceMock
+            .Setup(s => s.StartSessionAsync(It.IsAny<AgentStartRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(CreateAgentEventStream(
+                new AgentSessionStartedEvent("agent-1", null),
+                new AgentResultEvent("agent-1", 0, 0, null)));
+
+        // Act
+        await _service.ExecutePlanAsync(session.Id, clearContext: true);
+
+        // Assert - Should have a context clear marker
+        Assert.That(session.ContextClearMarkers, Has.Count.EqualTo(1),
+            "Should have exactly one context clear marker");
+    }
+
+    [Test]
+    public async Task ExecutePlanAsync_WithoutPlanContent_DoesNotSendMessage()
+    {
+        // Arrange
+        var session = await _service.StartSessionAsync(
+            "entity-1", "project-1", "/test/path", SessionMode.Plan, "sonnet");
+
+        // PlanContent is null
+
+        var initialMessageCount = session.Messages.Count;
+
+        // Act
+        await _service.ExecutePlanAsync(session.Id, clearContext: true);
+
+        // Assert - no new messages should be added
+        Assert.That(session.Messages.Count, Is.EqualTo(initialMessageCount),
+            "Should not add messages when there's no plan content");
+    }
+
+    [Test]
+    public async Task ClearContextAsync_PreservesPlanContent()
+    {
+        // Arrange
+        var session = await _service.StartSessionAsync(
+            "entity-1", "project-1", "/test/path", SessionMode.Plan, "sonnet");
+
+        session.PlanContent = "# My Plan\n\nPlan details here.";
+        session.PlanFilePath = "/home/homespun/.claude/plans/test-plan.md";
+
+        // Act
+        await _service.ClearContextAsync(session.Id);
+
+        // Assert - Plan content should be preserved even after context clear
+        Assert.Multiple(() =>
+        {
+            Assert.That(session.PlanContent, Is.EqualTo("# My Plan\n\nPlan details here."),
+                "PlanContent should be preserved after context clear");
+            Assert.That(session.PlanFilePath, Is.EqualTo("/home/homespun/.claude/plans/test-plan.md"),
+                "PlanFilePath should be preserved after context clear");
+        });
+    }
+}

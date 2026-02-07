@@ -338,6 +338,52 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         return Task.FromResult<AgentSessionStatus?>(null);
     }
 
+    /// <inheritdoc />
+    public async Task<string?> ReadFileFromAgentAsync(string sessionId, string filePath, CancellationToken cancellationToken = default)
+    {
+        if (!_sessions.TryGetValue(sessionId, out var session))
+        {
+            _logger.LogDebug("ReadFileFromAgentAsync: Session {SessionId} not found", sessionId);
+            return null;
+        }
+
+        try
+        {
+            var requestBody = new { FilePath = filePath };
+            var json = System.Text.Json.JsonSerializer.Serialize(requestBody, JsonOptions);
+            using var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            var response = await _httpClient.PostAsync(
+                $"{session.WorkerUrl}/api/files/read", content, cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogDebug("ReadFileFromAgentAsync: Worker returned {StatusCode} for {Path} in session {SessionId}",
+                    response.StatusCode, filePath, sessionId);
+                return null;
+            }
+
+            var responseJson = await response.Content.ReadAsStringAsync(cancellationToken);
+            using var doc = System.Text.Json.JsonDocument.Parse(responseJson);
+
+            if (doc.RootElement.TryGetProperty("content", out var contentElement))
+            {
+                var fileContent = contentElement.GetString();
+                _logger.LogInformation("ReadFileFromAgentAsync: Successfully read {Path} from agent ({Length} chars)",
+                    filePath, fileContent?.Length ?? 0);
+                return fileContent;
+            }
+
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "ReadFileFromAgentAsync: Error reading {Path} from agent container for session {SessionId}",
+                filePath, sessionId);
+            return null;
+        }
+    }
+
     /// <summary>
     /// Translates a container path to a host path for Docker mounts.
     /// When running in a container, paths like /data/test-workspace need to be
