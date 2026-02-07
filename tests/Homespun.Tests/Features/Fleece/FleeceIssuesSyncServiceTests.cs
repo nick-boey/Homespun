@@ -516,6 +516,134 @@ public class FleeceIssuesSyncServiceTests
 
     #endregion
 
+    #region UpdateMainBranch Scenario Tests
+
+    [Test]
+    [Description("Scenario: Main branch is behind remote with no fleece changes. Sync should pull and succeed.")]
+    public async Task SyncAsync_MainBranchBehindRemoteNoFleeceChanges_PullsAndReturnsSuccess()
+    {
+        // Arrange - Behind remote, no fleece changes, no non-fleece changes
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "main\n" });
+
+        _mockRunner.Setup(r => r.RunAsync("git", "fetch origin", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true });
+
+        _mockRunner.SetupSequence(r => r.RunAsync("git", "rev-list --left-right --count origin/main...HEAD", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "3\t0" })   // First call: 3 behind, 0 ahead
+            .ReturnsAsync(new CommandResult { Success = true, Output = "0\t0" });  // After pull: up to date
+
+        _mockRunner.Setup(r => r.RunAsync("git", "status --porcelain .fleece/", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "" });
+
+        _mockRunner.Setup(r => r.RunAsync("git", "status --porcelain", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "" });
+
+        _mockRunner.Setup(r => r.RunAsync("git", "pull origin main --rebase", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true });
+
+        // Act
+        var result = await _service.SyncAsync(ProjectPath, DefaultBranch);
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Success, Is.True);
+            Assert.That(result.FilesCommitted, Is.EqualTo(0));
+            Assert.That(result.PushSucceeded, Is.True);
+        });
+
+        // Verify pull was called to bring main up to date
+        _mockRunner.Verify(r => r.RunAsync("git", "pull origin main --rebase", ProjectPath), Times.Once);
+    }
+
+    [Test]
+    [Description("Scenario: Main branch is behind remote with pending fleece changes. Sync should commit fleece, pull, and push.")]
+    public async Task SyncAsync_MainBranchBehindRemoteWithFleeceChanges_CommitsPullsAndPushes()
+    {
+        // Arrange - Behind remote with pending fleece changes
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "main\n" });
+
+        _mockRunner.Setup(r => r.RunAsync("git", "fetch origin", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true });
+
+        _mockRunner.SetupSequence(r => r.RunAsync("git", "rev-list --left-right --count origin/main...HEAD", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "5\t0" })   // First: 5 behind
+            .ReturnsAsync(new CommandResult { Success = true, Output = "0\t1" });  // After pull: 1 ahead (the fleece commit)
+
+        _mockRunner.Setup(r => r.RunAsync("git", "status --porcelain .fleece/", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = " M .fleece/issues_abc.jsonl\n M .fleece/changes_abc.jsonl" });
+
+        _mockRunner.Setup(r => r.RunAsync("git", "status --porcelain", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = " M .fleece/issues_abc.jsonl\n M .fleece/changes_abc.jsonl" });
+
+        _mockRunner.Setup(r => r.RunAsync("git", "add .fleece/", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true });
+
+        _mockRunner.Setup(r => r.RunAsync("git", "commit -m \"chore: sync fleece issues\"", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true });
+
+        _mockRunner.Setup(r => r.RunAsync("git", "pull origin main --rebase", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true });
+
+        _mockRunner.Setup(r => r.RunAsync("git", "push origin main", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true });
+
+        // Act
+        var result = await _service.SyncAsync(ProjectPath, DefaultBranch);
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Success, Is.True);
+            Assert.That(result.FilesCommitted, Is.EqualTo(2));
+            Assert.That(result.PushSucceeded, Is.True);
+        });
+
+        // Verify the full workflow: commit fleece, pull, push
+        _mockRunner.Verify(r => r.RunAsync("git", "add .fleece/", ProjectPath), Times.Once);
+        _mockRunner.Verify(r => r.RunAsync("git", "commit -m \"chore: sync fleece issues\"", ProjectPath), Times.Once);
+        _mockRunner.Verify(r => r.RunAsync("git", "pull origin main --rebase", ProjectPath), Times.Once);
+        _mockRunner.Verify(r => r.RunAsync("git", "push origin main", ProjectPath), Times.Once);
+    }
+
+    [Test]
+    [Description("Scenario: Main branch is behind remote but pull encounters a conflict. Sync should abort rebase and report error.")]
+    public async Task SyncAsync_MainBranchBehindRemotePullConflict_AbortsAndReturnsError()
+    {
+        // Arrange
+        SetupBranchCheck(isOnBranch: true, commitsBehind: 3, commitsAhead: 0);
+
+        _mockRunner.Setup(r => r.RunAsync("git", "status --porcelain .fleece/", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "" });
+
+        _mockRunner.Setup(r => r.RunAsync("git", "status --porcelain", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "" });
+
+        _mockRunner.Setup(r => r.RunAsync("git", "pull origin main --rebase", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = false, Error = "CONFLICT (content): Merge conflict in src/Program.cs" });
+
+        _mockRunner.Setup(r => r.RunAsync("git", "rebase --abort", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true });
+
+        // Act
+        var result = await _service.SyncAsync(ProjectPath, DefaultBranch);
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Success, Is.False);
+            Assert.That(result.RequiresPullFirst, Is.True);
+            Assert.That(result.ErrorMessage, Does.Contain("aborted"));
+        });
+
+        // Verify rebase was properly cleaned up
+        _mockRunner.Verify(r => r.RunAsync("git", "rebase --abort", ProjectPath), Times.Once);
+    }
+
+    #endregion
+
     #region Helper Methods
 
     private void SetupBranchCheck(bool isOnBranch, int commitsBehind, int commitsAhead)
