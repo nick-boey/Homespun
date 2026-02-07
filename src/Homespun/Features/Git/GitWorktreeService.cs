@@ -230,10 +230,10 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
             string.Equals(b.ShortName, folderName, StringComparison.OrdinalIgnoreCase));
         if (exactMatch != null) return exactMatch.ShortName;
 
-        // Then check for sanitized match
+        // Then check for sanitized match using worktree sanitization (flattened with + instead of /)
         foreach (var branch in branches)
         {
-            var sanitizedBranchName = SanitizeBranchName(branch.ShortName);
+            var sanitizedBranchName = SanitizeBranchNameForWorktree(branch.ShortName);
             if (string.Equals(sanitizedBranchName, folderName, StringComparison.OrdinalIgnoreCase))
             {
                 return branch.ShortName;
