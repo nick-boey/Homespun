@@ -1,5 +1,6 @@
 @using Homespun.Features.ClaudeCode.Data
 @using Homespun.Features.ClaudeCode.Services
+@using Homespun.Features.Fleece.Services
 @using Homespun.Features.Git
 @using Homespun.Features.GitHub
 @using Homespun.Features.Projects
@@ -13,6 +14,7 @@
 @inject IAgentStartupTracker StartupTracker
 @inject IGitHubService GitHubService
 @inject IRebaseAgentService RebaseAgentService
+@inject IFleeceIssuesSyncService FleeceIssuesSyncService
 @inject PullRequestDataService PullRequestDataService
 @inject PullRequestWorkflowService PullRequestWorkflowService
 @inject NavigationManager NavigationManager
@@ -190,11 +192,25 @@
                                     }
                                     else if (!StartupTracker.IsStarting(GetWorktreeEntityId(worktree)))
                                     {
-                                        <button class="btn btn-sm btn-success"
+                                        <button class="btn btn-sm btn-success me-1"
                                                 @onclick="() => StartMainBranchSessionAsync(worktree)"
                                                 disabled="@_operationInProgress"
                                                 title="Start a new agent session on the main branch">
                                             <i class="bi bi-robot me-1"></i>Run Agent
+                                        </button>
+                                    }
+
+                                    @if (branchInfo?.BehindCount > 0)
+                                    {
+                                        <button class="btn btn-sm btn-outline-info"
+                                                @onclick="() => UpdateMainBranchAsync(worktree)"
+                                                disabled="@(_operationInProgress || _isUpdatingMain)"
+                                                title="Pull latest changes and sync fleece issues (@branchInfo.BehindCount commits behind)">
+                                            @if (_isUpdatingMain)
+                                            {
+                                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                            }
+                                            <i class="bi bi-cloud-download me-1"></i>Update
                                         </button>
                                     }
                                 }
@@ -676,6 +692,7 @@
     private bool _isLoading;
     private bool _isFetching;
     private bool _isPruning;
+    private bool _isUpdatingMain;
     private bool _operationInProgress;
     private string? _errorMessage;
     private string? _successMessage;
@@ -1136,6 +1153,60 @@
             Logger.LogError(ex, "Failed to start main branch session for worktree {WorktreePath}", worktree.Path);
             StartupTracker.MarkAsFailed(entityId, ex.Message);
             _errorMessage = $"Failed to start session: {ex.Message}";
+            StateHasChanged();
+        }
+    }
+
+    private async Task UpdateMainBranchAsync(WorktreeInfo worktree)
+    {
+        _isUpdatingMain = true;
+        _operationInProgress = true;
+        _errorMessage = null;
+        _successMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            // Use fleece sync which handles: commit .fleece/ changes, pull from remote, push
+            var syncResult = await FleeceIssuesSyncService.SyncAsync(
+                worktree.Path,
+                Project.DefaultBranch);
+
+            if (syncResult.Success)
+            {
+                _successMessage = syncResult.FilesCommitted > 0
+                    ? $"Updated {Project.DefaultBranch} and synced {syncResult.FilesCommitted} fleece file(s)"
+                    : $"Updated {Project.DefaultBranch} to latest";
+            }
+            else if (syncResult.RequiresPullFirst && syncResult.HasNonFleeceChanges)
+            {
+                // Non-fleece changes are blocking the sync - try a plain pull instead
+                var pullSuccess = await GitWorktreeService.PullLatestAsync(worktree.Path);
+                if (pullSuccess)
+                {
+                    _successMessage = $"Updated {Project.DefaultBranch} to latest";
+                }
+                else
+                {
+                    _errorMessage = $"Failed to update: {syncResult.ErrorMessage}";
+                }
+            }
+            else
+            {
+                _errorMessage = $"Failed to update: {syncResult.ErrorMessage}";
+            }
+
+            await RefreshDataAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to update main branch");
+            _errorMessage = $"Failed to update: {ex.Message}";
+        }
+        finally
+        {
+            _isUpdatingMain = false;
+            _operationInProgress = false;
             StateHasChanged();
         }
     }
