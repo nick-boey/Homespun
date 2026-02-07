@@ -271,6 +271,52 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
         return Task.FromResult<AgentSessionStatus?>(null);
     }
 
+    /// <inheritdoc />
+    public async Task<string?> ReadFileFromAgentAsync(string sessionId, string filePath, CancellationToken cancellationToken = default)
+    {
+        if (!_sessions.TryGetValue(sessionId, out var session))
+        {
+            _logger.LogDebug("ReadFileFromAgentAsync: Session {SessionId} not found", sessionId);
+            return null;
+        }
+
+        try
+        {
+            var requestBody = new { FilePath = filePath };
+            var json = JsonSerializer.Serialize(requestBody, JsonOptions);
+            using var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            var workerUrl = $"{_options.WorkerEndpoint.TrimEnd('/')}/api/files/read";
+            var response = await _httpClient.PostAsync(workerUrl, content, cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogDebug("ReadFileFromAgentAsync: Worker returned {StatusCode} for {Path} in session {SessionId}",
+                    response.StatusCode, filePath, sessionId);
+                return null;
+            }
+
+            var responseJson = await response.Content.ReadAsStringAsync(cancellationToken);
+            using var doc = JsonDocument.Parse(responseJson);
+
+            if (doc.RootElement.TryGetProperty("content", out var contentElement))
+            {
+                var fileContent = contentElement.GetString();
+                _logger.LogInformation("ReadFileFromAgentAsync: Successfully read {Path} from agent ({Length} chars)",
+                    filePath, fileContent?.Length ?? 0);
+                return fileContent;
+            }
+
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "ReadFileFromAgentAsync: Error reading {Path} from Azure agent for session {SessionId}",
+                filePath, sessionId);
+            return null;
+        }
+    }
+
     private async Task DeleteWorkerSessionAsync(string workerSessionId)
     {
         try

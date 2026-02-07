@@ -201,4 +201,14 @@ public interface IAgentExecutionService
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Session status, or null if not found.</returns>
     Task<AgentSessionStatus?> GetSessionStatusAsync(string sessionId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Reads a file from the agent's filesystem. For local agents, reads directly from disk.
+    /// For container-based agents, fetches the file via the worker container's API.
+    /// </summary>
+    /// <param name="sessionId">The agent session ID.</param>
+    /// <param name="filePath">Absolute path to the file within the agent's filesystem.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The file content, or null if the file is not found or the session doesn't exist.</returns>
+    Task<string?> ReadFileFromAgentAsync(string sessionId, string filePath, CancellationToken cancellationToken = default);
 }

@@ -203,6 +203,28 @@ public class LocalAgentExecutionService : IAgentExecutionService, IAsyncDisposab
         return Task.FromResult<AgentSessionStatus?>(null);
     }
 
+    /// <inheritdoc />
+    public async Task<string?> ReadFileFromAgentAsync(string sessionId, string filePath, CancellationToken cancellationToken = default)
+    {
+        // Local agents run in the same filesystem as the parent application,
+        // so we can read files directly from disk.
+        if (!File.Exists(filePath))
+        {
+            _logger.LogDebug("ReadFileFromAgentAsync: File not found at {Path}", filePath);
+            return null;
+        }
+
+        try
+        {
+            return await File.ReadAllTextAsync(filePath, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "ReadFileFromAgentAsync: Error reading file at {Path}", filePath);
+            return null;
+        }
+    }
+
     private async IAsyncEnumerable<AgentEvent> ProcessMessagesAsync(
         LocalSession session,
         string prompt,
