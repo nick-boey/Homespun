@@ -1,7 +1,10 @@
 @page "/projects/{ProjectId}/issues/{IssueId}/edit"
 @using Fleece.Core.Models
 @using Homespun.Features.AgentOrchestration.Services
+@using Homespun.Features.ClaudeCode.Data
+@using Homespun.Features.ClaudeCode.Services
 @using Homespun.Features.Fleece.Services
+@using Homespun.Features.Git
 @using Homespun.Features.Navigation
 @using Homespun.Features.Projects
 @using Homespun.Features.PullRequests
@@ -11,6 +14,11 @@
 @inject IFleeceService FleeceService
 @inject IBranchIdGeneratorService BranchIdGeneratorService
 @inject IBreadcrumbService BreadcrumbService
+@inject IClaudeSessionStore SessionStore
+@inject IClaudeSessionService SessionService
+@inject IAgentStartupTracker StartupTracker
+@inject IAgentPromptService AgentPromptService
+@inject IGitWorktreeService GitWorktreeService
 @inject NavigationManager Navigation
 @inject ILogger<IssueEdit> Logger
 @rendermode InteractiveServer
@@ -142,6 +150,61 @@ else
                         </dl>
                     </div>
                 </div>
+
+                <div class="card mt-3">
+                    <div class="card-header">Run Agent</div>
+                    <div class="card-body">
+                        @if (_existingSession != null)
+                        {
+                            <div class="mb-2">
+                                <span class="badge bg-status-success">Session Active</span>
+                            </div>
+                            <a href="/session/@_existingSession.Id" class="btn btn-sm btn-primary w-full">
+                                Open Existing Session
+                            </a>
+                        }
+                        else if (StartupTracker.IsStarting(IssueId))
+                        {
+                            <button class="btn btn-sm btn-secondary w-full" disabled>
+                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                Starting Session...
+                            </button>
+                        }
+                        else
+                        {
+                            <div class="mb-2">
+                                <label class="form-label text-sm mb-1">Model</label>
+                                <ModelSelector Id="edit-model"
+                                               SelectedModel="@_selectedModel"
+                                               SelectedModelChanged="@(m => _selectedModel = m)" />
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label text-sm mb-1">Base Branch</label>
+                                <BaseBranchSelector Id="edit-base-branch"
+                                                    SelectedBranch="@_selectedBaseBranch"
+                                                    SelectedBranchChanged="@(b => _selectedBaseBranch = b)"
+                                                    RepoPath="@_project?.LocalPath"
+                                                    DefaultBranch="@_project?.DefaultBranch" />
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label text-sm mb-1">Agent</label>
+                                <select class="form-select form-select-sm" @bind="_selectedPromptId">
+                                    <option value="">None (no prompt)</option>
+                                    @foreach (var prompt in _prompts)
+                                    {
+                                        <option value="@prompt.Id">@prompt.Name (@prompt.Mode)</option>
+                                    }
+                                </select>
+                            </div>
+                            <AsyncActionButton OnClick="HandleSaveAndRunAgent"
+                                               IsLoadingExternal="_isSavingAndRunning"
+                                               CssClass="btn-success w-full"
+                                               Text="Save & Run Agent"
+                                               LoadingText="Saving & Starting..."
+                                               Disabled="@(_isSaving)" />
+                        }
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -204,6 +267,14 @@ else
     private string _priority = "";
     private string _workingBranchId = "";
 
+    // Agent run state
+    private string _selectedModel = "opus";
+    private string _selectedBaseBranch = "";
+    private string _selectedPromptId = "";
+    private IReadOnlyList<AgentPrompt> _prompts = [];
+    private bool _isSavingAndRunning;
+    private ClaudeSession? _existingSession;
+
     protected override async Task OnInitializedAsync()
     {
         await LoadDataAsync();
@@ -244,6 +315,29 @@ else
 
             // Initialize form fields
             InitializeFormFromIssue();
+
+            // Initialize agent run state
+            if (_project.DefaultModel != null)
+            {
+                _selectedModel = _project.DefaultModel;
+            }
+
+            if (_project.DefaultBranch != null)
+            {
+                _selectedBaseBranch = _project.DefaultBranch;
+            }
+
+            // Load agent prompts
+            await AgentPromptService.EnsureDefaultPromptsAsync();
+            _prompts = AgentPromptService.GetAllPrompts();
+            var buildPrompt = _prompts.FirstOrDefault(p => p.Name == "Build");
+            if (buildPrompt != null)
+            {
+                _selectedPromptId = buildPrompt.Id;
+            }
+
+            // Check for existing active session
+            _existingSession = SessionStore.GetByEntityId(IssueId);
         }
         catch (Exception ex)
         {
@@ -268,23 +362,23 @@ else
         _workingBranchId = _issue.WorkingBranchId ?? "";
     }
 
-    private async Task HandleSubmit()
+    /// <summary>
+    /// Saves issue changes and returns the updated issue, or null on failure.
+    /// Sets _errorMessage on validation or save failure.
+    /// </summary>
+    private async Task<Issue?> SaveChangesAsync()
     {
         if (string.IsNullOrWhiteSpace(_title))
         {
             _errorMessage = "Title is required.";
-            return;
+            return null;
         }
 
         if (_project?.LocalPath == null || _issue == null)
         {
             _errorMessage = "Project or issue not available.";
-            return;
+            return null;
         }
-
-        _isSaving = true;
-        _errorMessage = null;
-        _successMessage = null;
 
         try
         {
@@ -317,23 +411,201 @@ else
             if (updated == null)
             {
                 _errorMessage = "Failed to update issue.";
-                return;
+                return null;
             }
 
             Logger.LogInformation("Successfully updated issue {IssueId}", IssueId);
-
-            // Navigate back to project detail
-            Navigation.NavigateTo($"projects/{ProjectId}");
+            return updated;
         }
         catch (Exception ex)
         {
             Logger.LogError(ex, "Failed to save issue {IssueId}", IssueId);
             _errorMessage = $"Failed to save: {ex.Message}";
+            return null;
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        _isSaving = true;
+        _errorMessage = null;
+        _successMessage = null;
+
+        try
+        {
+            var updated = await SaveChangesAsync();
+            if (updated != null)
+            {
+                // Navigate back to project detail
+                Navigation.NavigateTo($"projects/{ProjectId}");
+            }
         }
         finally
         {
             _isSaving = false;
         }
+    }
+
+    /// <summary>
+    /// Saves changes and immediately starts an agent session on the issue.
+    /// </summary>
+    private async Task HandleSaveAndRunAgent()
+    {
+        _isSavingAndRunning = true;
+        _errorMessage = null;
+        _successMessage = null;
+
+        try
+        {
+            // 1. Save changes first - agent must work with latest data
+            var updated = await SaveChangesAsync();
+            if (updated == null) return; // Save failed, _errorMessage already set
+
+            // 2. Refresh _issue with saved data so agent sees latest state
+            _issue = updated;
+
+            // 3. Start agent session
+            await StartAgentSession();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to save and run agent for issue {IssueId}", IssueId);
+            _errorMessage = $"Failed to start agent: {ex.Message}";
+        }
+        finally
+        {
+            _isSavingAndRunning = false;
+        }
+    }
+
+    /// <summary>
+    /// Starts an agent session for the current issue.
+    /// Creates or finds a worktree, starts the Claude session, and navigates to the chat page.
+    /// </summary>
+    private async Task StartAgentSession()
+    {
+        if (_project == null)
+        {
+            _errorMessage = "Project not available.";
+            return;
+        }
+
+        StartupTracker.MarkAsStarting(IssueId);
+        StateHasChanged();
+
+        try
+        {
+            var branchName = GetBranchPreview();
+
+            // Get or create worktree for the issue's branch
+            var worktreePath = await GitWorktreeService.GetWorktreePathForBranchAsync(_project.LocalPath, branchName);
+
+            if (!string.IsNullOrEmpty(worktreePath))
+            {
+                Logger.LogInformation("Found existing worktree at {WorktreePath} for branch {BranchName}", worktreePath, branchName);
+            }
+            else
+            {
+                // Use selected base branch, falling back to project default
+                var baseBranch = !string.IsNullOrEmpty(_selectedBaseBranch)
+                    ? _selectedBaseBranch
+                    : _project.DefaultBranch;
+
+                // Fetch the latest changes for the selected base branch
+                var fetchSuccess = await GitWorktreeService.FetchAndUpdateBranchAsync(_project.LocalPath, baseBranch);
+                if (!fetchSuccess)
+                {
+                    Logger.LogWarning("Failed to fetch latest changes for base branch {BaseBranch}, continuing with local version", baseBranch);
+                }
+
+                // Create new worktree for the issue's branch
+                Logger.LogInformation("Creating worktree for branch {BranchName} from base {BaseBranch} in {ProjectPath}", branchName, baseBranch, _project.LocalPath);
+
+                worktreePath = await GitWorktreeService.CreateWorktreeAsync(
+                    _project.LocalPath,
+                    branchName,
+                    createBranch: true,
+                    baseBranch: baseBranch);
+
+                if (string.IsNullOrEmpty(worktreePath))
+                {
+                    _errorMessage = "Failed to create worktree for issue branch.";
+                    StartupTracker.MarkAsFailed(IssueId, _errorMessage);
+                    return;
+                }
+
+                Logger.LogInformation("Created worktree at {WorktreePath} for issue {IssueId}", worktreePath, IssueId);
+            }
+
+            // Resolve selected prompt
+            AgentPrompt? selectedPrompt = null;
+            if (!string.IsNullOrEmpty(_selectedPromptId))
+            {
+                selectedPrompt = AgentPromptService.GetPrompt(_selectedPromptId);
+            }
+
+            // Use the prompt's mode, or default to Build if no prompt selected
+            var mode = selectedPrompt?.Mode ?? SessionMode.Build;
+            var systemPrompt = GenerateSystemPrompt();
+
+            var session = await SessionService.StartSessionAsync(
+                IssueId,
+                ProjectId,
+                worktreePath,
+                mode,
+                _selectedModel,
+                systemPrompt);
+
+            StartupTracker.MarkAsStarted(IssueId);
+
+            // Send an initial message to start the agent working (if a prompt is selected)
+            if (selectedPrompt != null && !string.IsNullOrEmpty(selectedPrompt.InitialMessage))
+            {
+                var context = new PromptContext
+                {
+                    Title = _issue!.Title,
+                    Id = _issue.Id,
+                    Description = _issue.Description,
+                    Branch = branchName,
+                    Type = _issue.Type.ToString()
+                };
+                var initialMessage = AgentPromptService.RenderTemplate(selectedPrompt.InitialMessage, context);
+                if (!string.IsNullOrEmpty(initialMessage))
+                {
+                    await SessionService.SendMessageAsync(session.Id, initialMessage);
+                }
+            }
+
+            // Navigate to session chat page
+            Navigation.NavigateTo($"/session/{session.Id}");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to start session for issue {IssueId}", IssueId);
+            StartupTracker.MarkAsFailed(IssueId, ex.Message);
+            throw; // Re-throw to be caught by HandleSaveAndRunAgent
+        }
+    }
+
+    /// <summary>
+    /// Generates a context-aware system prompt for the agent session.
+    /// </summary>
+    private string? GenerateSystemPrompt()
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"You are working on issue {_issue!.Id}: {_title}");
+
+        if (!string.IsNullOrEmpty(_description))
+        {
+            sb.AppendLine();
+            sb.AppendLine("Issue Description:");
+            sb.AppendLine(_description);
+        }
+
+        sb.AppendLine();
+        sb.AppendLine($"Branch: {GetBranchPreview()}");
+
+        return sb.ToString();
     }
 
     private void HandleKeyDown(KeyboardEventArgs e)
