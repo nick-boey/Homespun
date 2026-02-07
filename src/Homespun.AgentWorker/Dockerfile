@@ -98,10 +98,11 @@ RUN chmod 777 /home/homespun \
     && mkdir -p /home/homespun/.claude/todos /home/homespun/.claude/debug /home/homespun/.claude/projects /home/homespun/.claude/statsig \
     && chmod -R 777 /home/homespun/.local /home/homespun/.config /home/homespun/.cache /home/homespun/.claude
 
-# Configure git to trust mounted directories
-RUN git config --global --add safe.directory '*'
-
 COPY --from=publish /app/publish .
+
+# Copy startup script
+COPY ["src/Homespun.AgentWorker/start.sh", "/app/start.sh"]
+RUN chmod +x /app/start.sh
 
 # Set ownership
 RUN chown -R homespun:homespun /app
@@ -117,4 +118,4 @@ ENV DOTNET_PRINT_TELEMETRY_MESSAGE=false
 
 EXPOSE 8080
 
-ENTRYPOINT ["dotnet", "Homespun.AgentWorker.dll"]
+ENTRYPOINT ["./start.sh"]

@@ -86,6 +86,22 @@ resource workerApp 'Microsoft.App/containerApps@2025-01-01' = {
               name: 'CLAUDE_CODE_OAUTH_TOKEN'
               secretRef: 'claude-oauth-token'
             }
+            {
+              name: 'GITHUB_TOKEN'
+              secretRef: 'github-token'
+            }
+            {
+              name: 'GH_TOKEN'
+              secretRef: 'github-token'
+            }
+            {
+              name: 'GIT_AUTHOR_NAME'
+              value: 'Homespun Bot'
+            }
+            {
+              name: 'GIT_AUTHOR_EMAIL'
+              value: 'homespun@localhost'
+            }
           ]
           volumeMounts: [
             {

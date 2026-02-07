@@ -260,12 +260,46 @@ public class WorkerSessionService : IAsyncDisposable
             }
         };
 
+        // Pass git identity and GitHub token to the Claude agent subprocess
+        // These ensure the agent can make git commits and authenticate with GitHub
+        options.Env = BuildAgentEnvironment();
+
         if (session.Mode == SessionMode.Plan)
         {
             options.AllowedTools = PlanModeTools.ToList();
         }
 
         return options;
+    }
+
+    /// <summary>
+    /// Builds the environment variables to pass to the Claude agent subprocess.
+    /// Includes git identity for commits and GitHub token for authentication.
+    /// </summary>
+    private static Dictionary<string, string> BuildAgentEnvironment()
+    {
+        var env = new Dictionary<string, string>();
+
+        // Git identity for commits
+        var gitAuthorName = Environment.GetEnvironmentVariable("GIT_AUTHOR_NAME") ?? "Homespun Bot";
+        var gitAuthorEmail = Environment.GetEnvironmentVariable("GIT_AUTHOR_EMAIL") ?? "homespun@localhost";
+        env["GIT_AUTHOR_NAME"] = gitAuthorName;
+        env["GIT_AUTHOR_EMAIL"] = gitAuthorEmail;
+        env["GIT_COMMITTER_NAME"] = gitAuthorName;
+        env["GIT_COMMITTER_EMAIL"] = gitAuthorEmail;
+
+        // GitHub token for gh CLI and git authentication
+        // Resolve from multiple sources: GITHUB_TOKEN (standard), or GitHub__Token (ASP.NET config style from Azure Container Apps)
+        var githubToken = Environment.GetEnvironmentVariable("GITHUB_TOKEN")
+            ?? Environment.GetEnvironmentVariable("GitHub__Token");
+
+        if (!string.IsNullOrEmpty(githubToken))
+        {
+            env["GITHUB_TOKEN"] = githubToken;
+            env["GH_TOKEN"] = githubToken;
+        }
+
+        return env;
     }
 
     private async IAsyncEnumerable<(string EventType, object Data)> ProcessMessagesAsync(
