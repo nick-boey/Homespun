@@ -20,7 +20,7 @@
 .chat-message-assistant {
     background: var(--bg-tool-group);
     margin-right: 10%;
-    border: 1px solid var(--border-color);
+    border: 1px solid var(--border-color-light);
 }
 
 .chat-message-header {
