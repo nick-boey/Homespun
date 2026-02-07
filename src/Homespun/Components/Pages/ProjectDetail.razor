@@ -427,6 +427,56 @@ else
     // Tab navigation state
     private string _activeTab = "issues";
 
+    // Track Id changes for same-component navigation
+    private string? _previousId;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_previousId != null && _previousId != Id)
+        {
+            // Id parameter changed — navigated to a different project
+            // Dispose old SignalR connection
+            if (_hubConnection != null)
+            {
+                await _hubConnection.DisposeAsync();
+                _hubConnection = null;
+            }
+
+            // Reset all state
+            _selectedPullRequest = null;
+            _selectedPullRequestId = null;
+            _selectedIssue = null;
+            _selectedIssueId = null;
+            _pastPRs = null;
+            _lastSyncResult = null;
+            _syncError = null;
+            _activeTab = "issues";
+
+            // Determine tab from URL
+            var uri = NavigationManager.Uri;
+            if (uri.Contains("/settings")) _activeTab = "settings";
+            else if (uri.Contains("/prompts")) _activeTab = "prompts";
+            else if (uri.Contains("/branches")) _activeTab = "branches";
+
+            // Reload data for the new project
+            await LoadData();
+            await SetupSignalRConnection();
+
+            if (_project != null)
+            {
+                _ = Task.Run(async () =>
+                {
+                    await InvokeAsync(async () =>
+                    {
+                        await SyncPullRequestsAsync();
+                        await LoadPastPRsAsync();
+                    });
+                });
+            }
+        }
+        _previousId = Id;
+    }
+
     // IsDebugBuild property for conditional rendering
 #if DEBUG
     private static bool IsDebugBuild => true;
