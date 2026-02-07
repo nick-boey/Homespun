@@ -257,7 +257,7 @@ $ParameterFile = if ($Environment -eq 'prod') {
     Join-Path $InfraDir 'main.parameters.prod.json'
 }
 else {
-    Join-Path $InfraDir 'main.parameters.json'
+    Join-Path $InfraDir 'main.parameters.dev.json'
 }
 
 Write-Host ""
