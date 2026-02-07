@@ -9,9 +9,27 @@
             <label class="form-label small mb-1">Agent</label>
             <select class="form-select form-select-sm" @bind="_selectedPromptId" disabled="@Disabled" aria-label="Select agent prompt">
                 <option value="">None (no prompt)</option>
-                @foreach (var prompt in _prompts)
+                @if (_projectPrompts.Any())
                 {
-                    <option value="@prompt.Id">@prompt.Name (@prompt.Mode)</option>
+                    <optgroup label="Project">
+                        @foreach (var prompt in _projectPrompts)
+                        {
+                            <option value="@prompt.Id">@prompt.Name (@prompt.Mode)</option>
+                        }
+                    </optgroup>
+                    <optgroup label="Global">
+                        @foreach (var prompt in _globalPrompts)
+                        {
+                            <option value="@prompt.Id">@prompt.Name (@prompt.Mode)</option>
+                        }
+                    </optgroup>
+                }
+                else
+                {
+                    @foreach (var prompt in _globalPrompts)
+                    {
+                        <option value="@prompt.Id">@prompt.Name (@prompt.Mode)</option>
+                    }
                 }
             </select>
         </div>
@@ -44,22 +62,40 @@
     [Parameter] public bool IsStarting { get; set; }
 
     /// <summary>
+    /// Optional project ID to scope prompt loading.
+    /// When set, project-specific prompts are shown alongside global prompts.
+    /// </summary>
+    [Parameter] public string? ProjectId { get; set; }
+
+    /// <summary>
     /// Callback when the Start button is clicked.
     /// Passes the selected AgentPrompt (null if "None" is selected).
     /// </summary>
     [Parameter] public EventCallback<AgentPrompt?> OnStart { get; set; }
 
-    private IReadOnlyList<AgentPrompt> _prompts = [];
+    private IReadOnlyList<AgentPrompt> _projectPrompts = [];
+    private IReadOnlyList<AgentPrompt> _globalPrompts = [];
     private string _selectedPromptId = string.Empty;
 
     protected override async Task OnInitializedAsync()
     {
         // Ensure default prompts exist
         await AgentPromptService.EnsureDefaultPromptsAsync();
-        _prompts = AgentPromptService.GetAllPrompts();
 
-        // Default to "Build" if available
-        var buildPrompt = _prompts.FirstOrDefault(p => p.Name == "Build");
+        if (!string.IsNullOrEmpty(ProjectId))
+        {
+            _projectPrompts = AgentPromptService.GetProjectPrompts(ProjectId);
+            _globalPrompts = AgentPromptService.GetAllPrompts();
+        }
+        else
+        {
+            _projectPrompts = [];
+            _globalPrompts = AgentPromptService.GetAllPrompts();
+        }
+
+        // Default to "Build" if available - prefer project-specific, then global
+        var allPrompts = _projectPrompts.Concat(_globalPrompts);
+        var buildPrompt = allPrompts.FirstOrDefault(p => p.Name == "Build");
         if (buildPrompt != null)
         {
             _selectedPromptId = buildPrompt.Id;

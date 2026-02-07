@@ -1892,8 +1892,10 @@
 
         _session = SessionService.GetSession(SessionId);
 
-        // Load available prompts
-        _availablePrompts = AgentPromptService.GetAllPrompts();
+        // Load available prompts (project-specific + global if session has a project)
+        _availablePrompts = _session != null
+            ? AgentPromptService.GetPromptsForProject(_session.ProjectId)
+            : AgentPromptService.GetAllPrompts();
 
         if (_session != null)
         {

@@ -173,6 +173,7 @@
                 {
                     <div class="mb-2 w-full">
                         <AgentSelector
+                            ProjectId="@ProjectId"
                             Disabled="@(_session != null)"
                             IsStarting="@StartupTracker.IsStarting(Issue.Id)"
                             OnStart="HandleAgentStart" />

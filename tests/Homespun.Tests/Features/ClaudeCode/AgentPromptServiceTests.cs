@@ -235,4 +235,114 @@ public class AgentPromptServiceTests
     }
 
     #endregion
+
+    #region Project-Specific Prompt Tests
+
+    [Test]
+    public async Task GetAllPrompts_ReturnsOnlyGlobalPrompts()
+    {
+        await _service.CreatePromptAsync("Global Prompt", "message", SessionMode.Build);
+        await _service.CreatePromptAsync("Project Prompt", "message", SessionMode.Build, "project-1");
+
+        var result = _service.GetAllPrompts();
+
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].Name, Is.EqualTo("Global Prompt"));
+    }
+
+    [Test]
+    public async Task GetProjectPrompts_ReturnsOnlyProjectPrompts()
+    {
+        await _service.CreatePromptAsync("Global Prompt", "message", SessionMode.Build);
+        await _service.CreatePromptAsync("Project Prompt", "message", SessionMode.Build, "project-1");
+        await _service.CreatePromptAsync("Other Project Prompt", "message", SessionMode.Plan, "project-2");
+
+        var result = _service.GetProjectPrompts("project-1");
+
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].Name, Is.EqualTo("Project Prompt"));
+    }
+
+    [Test]
+    public async Task GetPromptsForProject_ReturnsCombinedProjectAndGlobalPrompts()
+    {
+        await _service.CreatePromptAsync("Global Plan", "message", SessionMode.Plan);
+        await _service.CreatePromptAsync("Global Build", "message", SessionMode.Build);
+        await _service.CreatePromptAsync("Project Build", "message", SessionMode.Build, "project-1");
+
+        var result = _service.GetPromptsForProject("project-1");
+
+        Assert.That(result, Has.Count.EqualTo(3));
+    }
+
+    [Test]
+    public async Task GetPromptsForProject_ProjectPromptsAppearFirst()
+    {
+        await _service.CreatePromptAsync("Global Plan", "message", SessionMode.Plan);
+        await _service.CreatePromptAsync("Project Build", "message", SessionMode.Build, "project-1");
+
+        var result = _service.GetPromptsForProject("project-1");
+
+        Assert.That(result[0].Name, Is.EqualTo("Project Build"));
+        Assert.That(result[1].Name, Is.EqualTo("Global Plan"));
+    }
+
+    [Test]
+    public async Task CreatePromptAsync_WithProjectId_SetsProjectId()
+    {
+        var result = await _service.CreatePromptAsync("Project Prompt", "message", SessionMode.Build, "project-1");
+
+        Assert.That(result.ProjectId, Is.EqualTo("project-1"));
+    }
+
+    [Test]
+    public async Task CreatePromptAsync_WithoutProjectId_HasNullProjectId()
+    {
+        var result = await _service.CreatePromptAsync("Global Prompt", "message", SessionMode.Build);
+
+        Assert.That(result.ProjectId, Is.Null);
+    }
+
+    [Test]
+    public async Task EnsureDefaultPromptsAsync_DoesNotCreateProjectSpecificDefaults()
+    {
+        // Create a project-specific prompt named "Plan" - should not prevent global default creation
+        await _service.CreatePromptAsync("Plan", "project plan", SessionMode.Plan, "project-1");
+
+        await _service.EnsureDefaultPromptsAsync();
+
+        // Should still have created the global Plan default since the existing one is project-scoped
+        var globalPrompts = _service.GetAllPrompts();
+        Assert.That(globalPrompts.Any(p => p.Name == "Plan"), Is.True);
+    }
+
+    [Test]
+    public async Task GetPromptsForProject_ReturnsEmptyWhenNoPrompts()
+    {
+        var result = _service.GetPromptsForProject("nonexistent-project");
+
+        Assert.That(result, Is.Empty);
+    }
+
+    [Test]
+    public async Task RemoveProject_CascadeDeletesProjectPrompts()
+    {
+        await _dataStore.AddProjectAsync(new Homespun.Features.PullRequests.Data.Entities.Project
+        {
+            Id = "project-1",
+            Name = "Test Project",
+            LocalPath = "/tmp/test",
+            DefaultBranch = "main"
+        });
+        await _service.CreatePromptAsync("Project Prompt", "message", SessionMode.Build, "project-1");
+        await _service.CreatePromptAsync("Global Prompt", "message", SessionMode.Build);
+
+        await _dataStore.RemoveProjectAsync("project-1");
+
+        Assert.That(_service.GetProjectPrompts("project-1"), Is.Empty);
+        Assert.That(_service.GetAllPrompts(), Has.Count.EqualTo(1));
+        Assert.That(_service.GetAllPrompts()[0].Name, Is.EqualTo("Global Prompt"));
+    }
+
+    #endregion
 }

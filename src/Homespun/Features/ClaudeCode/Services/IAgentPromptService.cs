@@ -39,9 +39,19 @@ public class PromptContext
 public interface IAgentPromptService
 {
     /// <summary>
-    /// Gets all agent prompts.
+    /// Gets all global agent prompts (those with no ProjectId).
     /// </summary>
     IReadOnlyList<AgentPrompt> GetAllPrompts();
+
+    /// <summary>
+    /// Gets agent prompts scoped to a specific project (not including global prompts).
+    /// </summary>
+    IReadOnlyList<AgentPrompt> GetProjectPrompts(string projectId);
+
+    /// <summary>
+    /// Gets prompts available in a project context: project-specific prompts first, then global prompts.
+    /// </summary>
+    IReadOnlyList<AgentPrompt> GetPromptsForProject(string projectId);
 
     /// <summary>
     /// Gets an agent prompt by ID.
@@ -49,9 +59,14 @@ public interface IAgentPromptService
     AgentPrompt? GetPrompt(string id);
 
     /// <summary>
-    /// Creates a new agent prompt.
+    /// Creates a new global agent prompt.
     /// </summary>
     Task<AgentPrompt> CreatePromptAsync(string name, string? initialMessage, SessionMode mode);
+
+    /// <summary>
+    /// Creates a new agent prompt, optionally scoped to a project.
+    /// </summary>
+    Task<AgentPrompt> CreatePromptAsync(string name, string? initialMessage, SessionMode mode, string? projectId);
 
     /// <summary>
     /// Updates an existing agent prompt.
@@ -70,7 +85,7 @@ public interface IAgentPromptService
     string? RenderTemplate(string? template, PromptContext context);
 
     /// <summary>
-    /// Ensures default agent prompts (Plan, Build) exist.
+    /// Ensures default agent prompts (Plan, Build, Rebase) exist as global prompts.
     /// </summary>
     Task EnsureDefaultPromptsAsync();
 }
