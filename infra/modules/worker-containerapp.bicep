@@ -1,8 +1,8 @@
 @description('Location for all resources')
 param location string = resourceGroup().location
 
-@description('Name of the Container App')
-param containerAppName string
+@description('Name of the worker Container App')
+param workerAppName string
 
 @description('Container Apps environment ID')
 param environmentId string
@@ -10,8 +10,8 @@ param environmentId string
 @description('User-assigned managed identity ID')
 param identityId string
 
-@description('Container image to deploy')
-param containerImage string
+@description('Container image for the worker')
+param workerImage string
 
 @description('Key Vault URI for secrets')
 param keyVaultUri string
@@ -19,21 +19,14 @@ param keyVaultUri string
 @description('Storage mount name in the environment')
 param storageMountName string
 
-@description('GitHub token secret name in Key Vault')
-param githubTokenSecretName string = 'github-token'
-
-@description('Agent execution mode')
-@allowed(['Local', 'Docker', 'AzureContainerApps'])
-param agentExecutionMode string = 'Local'
-
-@description('Worker container app FQDN for Azure Container Apps mode')
-param workerAppFqdn string = ''
+@description('Maximum concurrent sessions (used for scaling)')
+param maxConcurrentSessions int = 10
 
 @description('Deployment timestamp for revision suffix to force new revisions')
 param deploymentTimestamp string
 
-resource containerApp 'Microsoft.App/containerApps@2025-01-01' = {
-  name: containerAppName
+resource workerApp 'Microsoft.App/containerApps@2025-01-01' = {
+  name: workerAppName
   location: location
   identity: {
     type: 'UserAssigned'
@@ -47,25 +40,20 @@ resource containerApp 'Microsoft.App/containerApps@2025-01-01' = {
     configuration: {
       activeRevisionsMode: 'Single'
       ingress: {
-        external: false // Tailscale handles all inbound access
+        external: false // Only accessible within the ACA environment
         targetPort: 8080
         transport: 'auto'
-        allowInsecure: false
+        allowInsecure: true
       }
       secrets: [
         {
           name: 'github-token'
-          keyVaultUrl: '${keyVaultUri}secrets/${githubTokenSecretName}'
+          keyVaultUrl: '${keyVaultUri}secrets/github-token'
           identity: identityId
         }
         {
           name: 'claude-oauth-token'
           keyVaultUrl: '${keyVaultUri}secrets/claude-oauth-token'
-          identity: identityId
-        }
-        {
-          name: 'tailscale-auth-key'
-          keyVaultUrl: '${keyVaultUri}secrets/tailscale-auth-key'
           identity: identityId
         }
       ]
@@ -75,8 +63,8 @@ resource containerApp 'Microsoft.App/containerApps@2025-01-01' = {
       revisionSuffix: deploymentTimestamp
       containers: [
         {
-          name: 'homespun'
-          image: containerImage
+          name: 'agent-worker'
+          image: workerImage
           resources: {
             cpu: json('2.0')
             memory: '4Gi'
@@ -91,32 +79,12 @@ resource containerApp 'Microsoft.App/containerApps@2025-01-01' = {
               value: 'http://+:8080'
             }
             {
-              name: 'HOMESPUN_DATA_PATH'
-              value: '/data/homespun-data.json'
-            }
-            {
               name: 'GitHub__Token'
               secretRef: 'github-token'
             }
             {
               name: 'CLAUDE_CODE_OAUTH_TOKEN'
               secretRef: 'claude-oauth-token'
-            }
-            {
-              name: 'TAILSCALE_AUTH_KEY'
-              secretRef: 'tailscale-auth-key'
-            }
-            {
-              name: 'TS_HOSTNAME'
-              value: 'homespun'
-            }
-            {
-              name: 'AgentExecution__Mode'
-              value: agentExecutionMode
-            }
-            {
-              name: 'AgentExecution__AzureContainerApps__WorkerEndpoint'
-              value: !empty(workerAppFqdn) ? 'http://${workerAppFqdn}' : ''
             }
           ]
           volumeMounts: [
@@ -129,7 +97,7 @@ resource containerApp 'Microsoft.App/containerApps@2025-01-01' = {
             {
               type: 'Liveness'
               httpGet: {
-                path: '/health'
+                path: '/api/health'
                 port: 8080
               }
               initialDelaySeconds: 10
@@ -138,7 +106,7 @@ resource containerApp 'Microsoft.App/containerApps@2025-01-01' = {
             {
               type: 'Readiness'
               httpGet: {
-                path: '/health'
+                path: '/api/health'
                 port: 8080
               }
               initialDelaySeconds: 5
@@ -155,14 +123,14 @@ resource containerApp 'Microsoft.App/containerApps@2025-01-01' = {
         }
       ]
       scale: {
-        minReplicas: 1
-        maxReplicas: 3
+        minReplicas: 0
+        maxReplicas: maxConcurrentSessions
         rules: [
           {
-            name: 'http-rule'
+            name: 'http-concurrency'
             http: {
               metadata: {
-                concurrentRequests: '100'
+                concurrentRequests: '5' // Scale up when sessions increase
               }
             }
           }
@@ -172,7 +140,7 @@ resource containerApp 'Microsoft.App/containerApps@2025-01-01' = {
   }
 }
 
-output containerAppId string = containerApp.id
-output containerAppName string = containerApp.name
-output containerAppFqdn string = containerApp.properties.configuration.ingress.fqdn
-output containerAppUrl string = 'https://${containerApp.properties.configuration.ingress.fqdn}'
+output workerAppId string = workerApp.id
+output workerAppName string = workerApp.name
+output workerAppFqdn string = workerApp.properties.configuration.ingress.fqdn
+output workerAppUrl string = 'http://${workerApp.properties.configuration.ingress.fqdn}'

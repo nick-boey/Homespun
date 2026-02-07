@@ -105,11 +105,9 @@ RUN npm install -g @playwright/mcp@latest \
     && chmod -R 777 /opt/playwright-browsers
 
 # Install Fleece CLI for issue tracking
-# Install as root, then copy to /usr/local/bin for universal access
-# Note: Symlinks don't work because /root/.dotnet/tools/ is inaccessible to non-root users
-RUN dotnet tool install Fleece.Cli -g \
-    && cp /root/.dotnet/tools/fleece /usr/local/bin/fleece \
-    && chmod 755 /usr/local/bin/fleece
+# Use --tool-path to install directly to /usr/local/bin so both the shim and .store
+# directory are in the same location, accessible to all users regardless of runtime UID
+RUN dotnet tool install Fleece.Cli --tool-path /usr/local/bin
 
 # Clean up build dependencies to reduce image size
 RUN apt-get update && apt-get remove -y build-essential && apt-get autoremove -y \

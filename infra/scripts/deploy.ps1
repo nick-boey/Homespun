@@ -314,8 +314,8 @@ if (-not $WhatIf) {
     Write-Host "Key Vault Name: $($outputs.keyVaultName.value)" -ForegroundColor Cyan
     Write-Host "Storage Account: $($outputs.storageAccountName.value)" -ForegroundColor Cyan
 
-    if ($outputs.sessionPoolName.value -ne 'N/A') {
-        Write-Host "Session Pool: $($outputs.sessionPoolName.value)" -ForegroundColor Cyan
+    if ($outputs.workerAppFqdn.value -ne 'N/A') {
+        Write-Host "Worker App FQDN: $($outputs.workerAppFqdn.value)" -ForegroundColor Cyan
     }
 }
 else {

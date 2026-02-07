@@ -9,19 +9,16 @@
       "value": "dev"
     },
     "mainAppImage": {
-      "value": "ghcr.io/nick-boey/homespun:latest"
+      "value": "ghcr.io/nick-boey/homespun:0.2.2"
     },
     "workerImage": {
-      "value": "ghcr.io/nick-boey/homespun-worker:latest"
+      "value": "ghcr.io/nick-boey/homespun-worker:0.2.2"
     },
     "agentExecutionMode": {
       "value": "AzureContainerApps"
     },
     "maxConcurrentSessions": {
       "value": 5
-    },
-    "readySessionInstances": {
-      "value": 1
     }
   }
 }

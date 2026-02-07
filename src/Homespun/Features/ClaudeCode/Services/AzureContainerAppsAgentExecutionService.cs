@@ -3,8 +3,6 @@ using System.Net.Http.Headers;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
-using Azure.Core;
-using Azure.Identity;
 using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.ClaudeCode.Exceptions;
 using Microsoft.Extensions.Options;
@@ -13,33 +11,19 @@ namespace Homespun.Features.ClaudeCode.Services;
 
 /// <summary>
 /// Configuration options for Azure Container Apps agent execution.
+/// Routes requests to a worker container app that manages sessions internally.
 /// </summary>
 public class AzureContainerAppsAgentExecutionOptions
 {
     public const string SectionName = "AgentExecution:AzureContainerApps";
 
     /// <summary>
-    /// Azure subscription ID.
+    /// Base URL of the worker container app (e.g., http://ca-worker-homespun-dev.internal.region.azurecontainerapps.io).
     /// </summary>
-    public string SubscriptionId { get; set; } = string.Empty;
+    public string WorkerEndpoint { get; set; } = string.Empty;
 
     /// <summary>
-    /// Resource group containing the session pool.
-    /// </summary>
-    public string ResourceGroup { get; set; } = string.Empty;
-
-    /// <summary>
-    /// Name of the session pool for dynamic sessions.
-    /// </summary>
-    public string SessionPoolName { get; set; } = "homespun-agents";
-
-    /// <summary>
-    /// The Docker image to use for agent workers.
-    /// </summary>
-    public string WorkerImage { get; set; } = "ghcr.io/nick-boey/homespun-worker:latest";
-
-    /// <summary>
-    /// Timeout for HTTP requests to sessions.
+    /// Timeout for HTTP requests to the worker.
     /// </summary>
     public TimeSpan RequestTimeout { get; set; } = TimeSpan.FromMinutes(30);
 
@@ -50,23 +34,19 @@ public class AzureContainerAppsAgentExecutionOptions
 }
 
 /// <summary>
-/// Azure Container Apps Dynamic Sessions implementation for agent execution.
-/// Uses Azure Container Apps Dynamic Sessions API to run agents in isolated containers.
+/// Azure Container Apps implementation for agent execution.
+/// Routes all requests directly to a worker container app via HTTP.
+/// The worker manages sessions internally via WorkerSessionService.
 /// </summary>
 public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, IAsyncDisposable
 {
     private readonly AzureContainerAppsAgentExecutionOptions _options;
     private readonly ILogger<AzureContainerAppsAgentExecutionService> _logger;
     private readonly HttpClient _httpClient;
-    private readonly TokenCredential _credential;
-    private readonly ConcurrentDictionary<string, AzureSession> _sessions = new();
+    private readonly ConcurrentDictionary<string, WorkerSession> _sessions = new();
 
-    private const string AzureManagementScope = "https://management.azure.com/.default";
-
-    private record AzureSession(
+    private record WorkerSession(
         string SessionId,
-        string PoolSessionId,
-        string SessionEndpoint,
         string? WorkerSessionId,
         CancellationTokenSource Cts,
         DateTime CreatedAt)
@@ -90,7 +70,6 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
         {
             Timeout = _options.RequestTimeout
         };
-        _credential = new DefaultAzureCredential();
     }
 
     /// <inheritdoc />
@@ -100,31 +79,23 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
     {
         var sessionId = Guid.NewGuid().ToString();
 
-        _logger.LogInformation("Starting Azure Container Apps session {SessionId}", sessionId);
+        _logger.LogInformation("Starting worker session {SessionId} via {WorkerEndpoint}",
+            sessionId, _options.WorkerEndpoint);
 
         var channel = System.Threading.Channels.Channel.CreateUnbounded<AgentEvent>();
 
         _ = Task.Run(async () =>
         {
-            string? poolSessionId = null;
             try
             {
-                // Create a dynamic session in the session pool
-                string sessionEndpoint;
-                (poolSessionId, sessionEndpoint) = await CreateDynamicSessionAsync(sessionId, cancellationToken);
-
                 var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                var session = new AzureSession(
-                    sessionId, poolSessionId, sessionEndpoint, null, cts, DateTime.UtcNow);
-
+                var session = new WorkerSession(sessionId, null, cts, DateTime.UtcNow);
                 _sessions[sessionId] = session;
-
-                await channel.Writer.WriteAsync(new AgentSessionStartedEvent(sessionId, null), cancellationToken);
 
                 // Start the agent session in the worker
                 var startRequest = new
                 {
-                    WorkingDirectory = "/data", // Azure Files mount point
+                    WorkingDirectory = request.WorkingDirectory,
                     Mode = request.Mode.ToString(),
                     Model = request.Model,
                     Prompt = request.Prompt,
@@ -132,7 +103,9 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
                     ResumeSessionId = request.ResumeSessionId
                 };
 
-                await foreach (var evt in SendSseRequestAsync($"{sessionEndpoint}/api/sessions", startRequest, sessionId, cts.Token))
+                var workerUrl = $"{_options.WorkerEndpoint.TrimEnd('/')}/api/sessions";
+
+                await foreach (var evt in SendSseRequestAsync(workerUrl, startRequest, sessionId, cts.Token))
                 {
                     if (evt is AgentSessionStartedEvent startedEvt)
                     {
@@ -152,15 +125,10 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                _logger.LogError(ex, "Error in Azure Container Apps session {SessionId}", sessionId);
+                _logger.LogError(ex, "Error in worker session {SessionId}", sessionId);
 
-                // Cleanup session on error
-                if (!string.IsNullOrEmpty(poolSessionId))
-                {
-                    await DeleteDynamicSessionAsync(poolSessionId);
-                }
-
-                await channel.Writer.WriteAsync(new AgentErrorEvent(sessionId, ex.Message, "AZURE_ERROR", ex is AgentStartupException));
+                await channel.Writer.WriteAsync(
+                    new AgentErrorEvent(sessionId, ex.Message, "WORKER_ERROR", ex is AgentStartupException));
                 channel.Writer.Complete(ex);
             }
             catch (OperationCanceledException)
@@ -200,11 +168,11 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
             Model = request.Model
         };
 
+        var workerUrl = $"{_options.WorkerEndpoint.TrimEnd('/')}/api/sessions/{session.WorkerSessionId}/message";
+
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, session.Cts.Token);
 
-        await foreach (var evt in SendSseRequestAsync(
-            $"{session.SessionEndpoint}/api/sessions/{session.WorkerSessionId}/message",
-            messageRequest, request.SessionId, linkedCts.Token))
+        await foreach (var evt in SendSseRequestAsync(workerUrl, messageRequest, request.SessionId, linkedCts.Token))
         {
             var mappedEvt = MapSessionId(evt, request.SessionId);
             yield return mappedEvt;
@@ -236,11 +204,11 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
 
         var answerRequest = new { Answers = request.Answers };
 
+        var workerUrl = $"{_options.WorkerEndpoint.TrimEnd('/')}/api/sessions/{session.WorkerSessionId}/answer";
+
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, session.Cts.Token);
 
-        await foreach (var evt in SendSseRequestAsync(
-            $"{session.SessionEndpoint}/api/sessions/{session.WorkerSessionId}/answer",
-            answerRequest, request.SessionId, linkedCts.Token))
+        await foreach (var evt in SendSseRequestAsync(workerUrl, answerRequest, request.SessionId, linkedCts.Token))
         {
             yield return MapSessionId(evt, request.SessionId);
         }
@@ -251,12 +219,16 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
     {
         if (_sessions.TryRemove(sessionId, out var session))
         {
-            _logger.LogInformation("Stopping Azure Container Apps session {SessionId}", sessionId);
+            _logger.LogInformation("Stopping worker session {SessionId}", sessionId);
 
             session.Cts.Cancel();
             session.Cts.Dispose();
 
-            await DeleteDynamicSessionAsync(session.PoolSessionId);
+            // Tell the worker to stop the session
+            if (!string.IsNullOrEmpty(session.WorkerSessionId))
+            {
+                await DeleteWorkerSessionAsync(session.WorkerSessionId);
+            }
         }
     }
 
@@ -265,13 +237,13 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
     {
         if (_sessions.TryGetValue(sessionId, out var session))
         {
-            _logger.LogInformation("Interrupting Azure Container Apps session {SessionId}", sessionId);
+            _logger.LogInformation("Interrupting worker session {SessionId}", sessionId);
 
             // Cancel current execution
             session.Cts.Cancel();
             session.Cts.Dispose();
 
-            // Replace with a fresh CTS - do NOT delete the dynamic session
+            // Replace with a fresh CTS
             var newCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             var updatedSession = session with { Cts = newCts };
             _sessions[sessionId] = updatedSession;
@@ -299,144 +271,18 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
         return Task.FromResult<AgentSessionStatus?>(null);
     }
 
-    private async Task<(string poolSessionId, string sessionEndpoint)> CreateDynamicSessionAsync(
-        string sessionId,
-        CancellationToken cancellationToken)
-    {
-        var token = await GetAccessTokenAsync(cancellationToken);
-
-        // Azure Container Apps Dynamic Sessions API endpoint
-        var apiUrl = $"https://management.azure.com/subscriptions/{_options.SubscriptionId}" +
-                     $"/resourceGroups/{_options.ResourceGroup}" +
-                     $"/providers/Microsoft.App/sessionPools/{_options.SessionPoolName}" +
-                     $"/sessions/{sessionId}?api-version=2024-02-02-preview";
-
-        var requestBody = new
-        {
-            properties = new
-            {
-                containerImage = _options.WorkerImage,
-                maxSessionIdleTimeoutInSeconds = (int)_options.MaxSessionDuration.TotalSeconds,
-                customContainerTemplate = new
-                {
-                    containers = new[]
-                    {
-                        new
-                        {
-                            name = "agent-worker",
-                            image = _options.WorkerImage,
-                            resources = new
-                            {
-                                cpu = 2.0,
-                                memory = "4Gi"
-                            },
-                            env = new[]
-                            {
-                                new { name = "ASPNETCORE_URLS", value = "http://+:8080" },
-                                new { name = "ASPNETCORE_ENVIRONMENT", value = "Production" }
-                            }
-                        }
-                    }
-                }
-            }
-        };
-
-        var json = JsonSerializer.Serialize(requestBody, JsonOptions);
-        using var content = new StringContent(json, Encoding.UTF8, "application/json");
-
-        using var request = new HttpRequestMessage(HttpMethod.Put, apiUrl)
-        {
-            Content = content
-        };
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-
-        var response = await _httpClient.SendAsync(request, cancellationToken);
-
-        if (!response.IsSuccessStatusCode)
-        {
-            var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
-            throw new AgentStartupException($"Failed to create dynamic session: {response.StatusCode} - {errorBody}");
-        }
-
-        var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
-        using var doc = JsonDocument.Parse(responseBody);
-
-        var poolSessionId = doc.RootElement.GetProperty("name").GetString()
-            ?? throw new AgentStartupException("Session ID not returned from Azure");
-
-        // Get the session endpoint from the response
-        var sessionEndpoint = doc.RootElement
-            .GetProperty("properties")
-            .GetProperty("sessionEndpoint")
-            .GetString()
-            ?? throw new AgentStartupException("Session endpoint not returned from Azure");
-
-        _logger.LogDebug("Created dynamic session {PoolSessionId} at {Endpoint}", poolSessionId, sessionEndpoint);
-
-        // Wait for the session to be ready
-        await WaitForSessionReadyAsync(poolSessionId, sessionEndpoint, cancellationToken);
-
-        return (poolSessionId, sessionEndpoint);
-    }
-
-    private async Task WaitForSessionReadyAsync(
-        string poolSessionId,
-        string sessionEndpoint,
-        CancellationToken cancellationToken)
-    {
-        var healthUrl = $"{sessionEndpoint}/api/health";
-        var maxAttempts = 60;
-        var delay = TimeSpan.FromSeconds(2);
-
-        for (var i = 0; i < maxAttempts; i++)
-        {
-            try
-            {
-                using var response = await _httpClient.GetAsync(healthUrl, cancellationToken);
-                if (response.IsSuccessStatusCode)
-                {
-                    _logger.LogDebug("Session {PoolSessionId} is ready", poolSessionId);
-                    return;
-                }
-            }
-            catch (HttpRequestException)
-            {
-                // Session not ready yet
-            }
-
-            await Task.Delay(delay, cancellationToken);
-        }
-
-        throw new AgentStartupException($"Session {poolSessionId} did not become ready in time");
-    }
-
-    private async Task DeleteDynamicSessionAsync(string poolSessionId)
+    private async Task DeleteWorkerSessionAsync(string workerSessionId)
     {
         try
         {
-            var token = await GetAccessTokenAsync(CancellationToken.None);
-
-            var apiUrl = $"https://management.azure.com/subscriptions/{_options.SubscriptionId}" +
-                         $"/resourceGroups/{_options.ResourceGroup}" +
-                         $"/providers/Microsoft.App/sessionPools/{_options.SessionPoolName}" +
-                         $"/sessions/{poolSessionId}?api-version=2024-02-02-preview";
-
-            using var request = new HttpRequestMessage(HttpMethod.Delete, apiUrl);
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-
+            var url = $"{_options.WorkerEndpoint.TrimEnd('/')}/api/sessions/{workerSessionId}";
+            using var request = new HttpRequestMessage(HttpMethod.Delete, url);
             await _httpClient.SendAsync(request);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Error deleting dynamic session {PoolSessionId}", poolSessionId);
+            _logger.LogWarning(ex, "Error deleting worker session {WorkerSessionId}", workerSessionId);
         }
-    }
-
-    private async Task<string> GetAccessTokenAsync(CancellationToken cancellationToken)
-    {
-        var tokenRequestContext = new TokenRequestContext(new[] { AzureManagementScope });
-        var accessToken = await _credential.GetTokenAsync(tokenRequestContext, cancellationToken);
-        return accessToken.Token;
     }
 
     private async IAsyncEnumerable<AgentEvent> SendSseRequestAsync(
@@ -652,7 +498,9 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
         {
             session.Cts.Cancel();
             session.Cts.Dispose();
-            return DeleteDynamicSessionAsync(session.PoolSessionId);
+            return !string.IsNullOrEmpty(session.WorkerSessionId)
+                ? DeleteWorkerSessionAsync(session.WorkerSessionId)
+                : Task.CompletedTask;
         });
 
         await Task.WhenAll(deleteTasks);

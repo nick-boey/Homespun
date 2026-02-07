@@ -10,12 +10,11 @@ param logAnalyticsName string
 @description('Storage account name for file share')
 param storageAccountName string
 
-@description('Storage account key')
-@secure()
-param storageAccountKey string
-
 @description('File share name')
 param fileShareName string
+
+@description('ACA infrastructure subnet ID for VNet integration')
+param infrastructureSubnetId string
 
 resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
   name: logAnalyticsName
@@ -28,7 +27,7 @@ resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
   }
 }
 
-resource environment 'Microsoft.App/managedEnvironments@2024-03-01' = {
+resource environment 'Microsoft.App/managedEnvironments@2025-01-01' = {
   name: environmentName
   location: location
   properties: {
@@ -39,6 +38,10 @@ resource environment 'Microsoft.App/managedEnvironments@2024-03-01' = {
         sharedKey: logAnalytics.listKeys().primarySharedKey
       }
     }
+    vnetConfiguration: {
+      infrastructureSubnetId: infrastructureSubnetId
+      internal: true // Internal-only environment; Tailscale handles external access
+    }
     workloadProfiles: [
       {
         name: 'Consumption'
@@ -48,15 +51,14 @@ resource environment 'Microsoft.App/managedEnvironments@2024-03-01' = {
   }
 }
 
-// Storage mount for the environment
-resource storageMount 'Microsoft.App/managedEnvironments/storages@2024-03-01' = {
+// NFS storage mount for the environment (no account key needed - NFS uses network auth)
+resource storageMount 'Microsoft.App/managedEnvironments/storages@2025-01-01' = {
   parent: environment
   name: 'homespun-storage'
   properties: {
-    azureFile: {
-      accountName: storageAccountName
-      accountKey: storageAccountKey
-      shareName: fileShareName
+    nfsAzureFile: {
+      server: '${storageAccountName}.file.core.windows.net'
+      shareName: '/${storageAccountName}/${fileShareName}'
       accessMode: 'ReadWrite'
     }
   }

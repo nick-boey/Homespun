@@ -23,7 +23,7 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
   kind: 'FileStorage'
   properties: {
     minimumTlsVersion: 'TLS1_2'
-    supportsHttpsTrafficOnly: true
+    supportsHttpsTrafficOnly: false // NFS requires this to be false
     allowBlobPublicAccess: false
     allowSharedKeyAccess: true
     networkAcls: {
@@ -43,7 +43,7 @@ resource fileShare 'Microsoft.Storage/storageAccounts/fileServices/shares@2023-0
   name: fileShareName
   properties: {
     shareQuota: shareQuotaGiB
-    enabledProtocols: 'SMB'
+    enabledProtocols: 'NFS'
     accessTier: 'Premium'
   }
 }
@@ -51,4 +51,4 @@ resource fileShare 'Microsoft.Storage/storageAccounts/fileServices/shares@2023-0
 output storageAccountId string = storageAccount.id
 output storageAccountName string = storageAccount.name
 output fileShareName string = fileShare.name
-output storageAccountKey string = storageAccount.listKeys().keys[0].value
+// NFS uses network-based auth, no account key needed

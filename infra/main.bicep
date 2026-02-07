@@ -29,15 +29,12 @@ param claudeOAuthToken string = ''
 @secure()
 param tailscaleAuthKey string = ''
 
-@description('Maximum concurrent agent sessions')
+@description('Maximum concurrent agent sessions (controls worker container app scaling)')
 param maxConcurrentSessions int = 10
 
-@description('Number of warm agent instances')
-param readySessionInstances int = 2
-
-@description('Storage network ACL default action. Use Deny only with VNet/private endpoint.')
+@description('Storage network ACL default action. Use Deny with VNet/private endpoint for NFS.')
 @allowed(['Allow', 'Deny'])
-param storageNetworkDefaultAction string = 'Allow'
+param storageNetworkDefaultAction string = 'Deny'
 
 @description('Deployment timestamp used to force new container revisions')
 param deploymentTimestamp string = utcNow('yyyyMMddHHmmss')
@@ -50,7 +47,9 @@ var storageAccountName = 'st${baseName}${environmentSuffix}' // Storage account 
 var logAnalyticsName = 'log-${resourceSuffix}'
 var environmentName = 'cae-${resourceSuffix}'
 var containerAppName = 'ca-${resourceSuffix}'
-var sessionPoolName = 'sp-${resourceSuffix}'
+var workerAppName = 'ca-worker-${resourceSuffix}'
+var vnetName = 'vnet-${resourceSuffix}'
+var storageEndpointName = 'pe-st-${resourceSuffix}'
 
 // Create managed identity
 module identity 'modules/identity.bicep' = {
@@ -74,7 +73,16 @@ module keyVault 'modules/keyvault.bicep' = {
   }
 }
 
-// Create storage account with file share
+// Create VNet with subnets for ACA and storage private endpoint
+module network 'modules/network.bicep' = {
+  name: 'network-deployment'
+  params: {
+    location: location
+    vnetName: vnetName
+  }
+}
+
+// Create storage account with NFS file share
 module storage 'modules/storage.bicep' = {
   name: 'storage-deployment'
   params: {
@@ -84,7 +92,19 @@ module storage 'modules/storage.bicep' = {
   }
 }
 
-// Create Container Apps environment
+// Create private endpoint for storage (NFS requires private endpoint access)
+module storageEndpoint 'modules/storage-endpoint.bicep' = {
+  name: 'storage-endpoint-deployment'
+  params: {
+    location: location
+    privateEndpointName: storageEndpointName
+    storageAccountId: storage.outputs.storageAccountId
+    subnetId: network.outputs.storageSubnetId
+    vnetId: network.outputs.vnetId
+  }
+}
+
+// Create Container Apps environment with VNet integration
 module environment 'modules/environment.bicep' = {
   name: 'environment-deployment'
   params: {
@@ -92,25 +112,24 @@ module environment 'modules/environment.bicep' = {
     environmentName: environmentName
     logAnalyticsName: logAnalyticsName
     storageAccountName: storage.outputs.storageAccountName
-    storageAccountKey: storage.outputs.storageAccountKey
     fileShareName: storage.outputs.fileShareName
+    infrastructureSubnetId: network.outputs.acaSubnetId
   }
 }
 
-// Create session pool for agent workers (only if using AzureContainerApps mode)
-module sessionPool 'modules/sessionpool.bicep' = if (agentExecutionMode == 'AzureContainerApps') {
-  name: 'sessionpool-deployment'
+// Create worker container app for agent sessions (only if using AzureContainerApps mode)
+module workerApp 'modules/worker-containerapp.bicep' = if (agentExecutionMode == 'AzureContainerApps') {
+  name: 'worker-containerapp-deployment'
   params: {
     location: location
-    sessionPoolName: sessionPoolName
+    workerAppName: workerAppName
     environmentId: environment.outputs.environmentId
-    workerImage: workerImage
     identityId: identity.outputs.identityId
-    identityPrincipalId: identity.outputs.identityPrincipalId
-    githubToken: githubToken
-    claudeOAuthToken: claudeOAuthToken
+    workerImage: workerImage
+    keyVaultUri: keyVault.outputs.keyVaultUri
+    storageMountName: environment.outputs.storageMountName
     maxConcurrentSessions: maxConcurrentSessions
-    readySessionInstances: readySessionInstances
+    deploymentTimestamp: deploymentTimestamp
   }
 }
 
@@ -126,7 +145,7 @@ module containerApp 'modules/containerapp.bicep' = {
     keyVaultUri: keyVault.outputs.keyVaultUri
     storageMountName: environment.outputs.storageMountName
     agentExecutionMode: agentExecutionMode
-    sessionPoolName: agentExecutionMode == 'AzureContainerApps' ? sessionPoolName : ''
+    workerAppFqdn: agentExecutionMode == 'AzureContainerApps' ? workerApp.outputs.workerAppFqdn : ''
     deploymentTimestamp: deploymentTimestamp
   }
 }
@@ -138,4 +157,4 @@ output containerAppFqdn string = containerApp.outputs.containerAppFqdn
 output identityClientId string = identity.outputs.identityClientId
 output keyVaultName string = keyVault.outputs.keyVaultName
 output storageAccountName string = storage.outputs.storageAccountName
-output sessionPoolName string = agentExecutionMode == 'AzureContainerApps' ? sessionPool.outputs.sessionPoolName : 'N/A'
+output workerAppFqdn string = agentExecutionMode == 'AzureContainerApps' ? workerApp.outputs.workerAppFqdn : 'N/A'
