@@ -29,6 +29,9 @@ param agentExecutionMode string = 'Local'
 @description('Session pool name for Azure Container Apps mode')
 param sessionPoolName string = ''
 
+@description('Deployment timestamp for revision suffix to force new revisions')
+param deploymentTimestamp string
+
 @description('Azure subscription ID')
 param subscriptionId string = subscription().subscriptionId
 
@@ -75,6 +78,7 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
       registries: [] // Public GHCR doesn't need auth
     }
     template: {
+      revisionSuffix: deploymentTimestamp
       containers: [
         {
           name: 'homespun'
