@@ -301,7 +301,7 @@ public class GitWorktreeServiceIntegrationTests
         Assert.That(worktreePath, Is.Not.Null);
 
         // Verify the worktree is in .worktrees directory with flat name
-        Assert.That(worktreePath, Does.Contain(".worktrees"));
+        Assert.That(worktreePath, Does.Contain(".clones"));
         // + is preserved, slashes become +
         Assert.That(worktreePath, Does.Contain("feature+improve-tool-output+aLP3LH"));
 
@@ -687,7 +687,7 @@ public class GitWorktreeServiceIntegrationTests
         Assert.That(Directory.Exists(worktreePath), Is.True);
 
         // Verify the worktree is in .worktrees directory with flat name
-        Assert.That(worktreePath, Does.Contain(".worktrees"));
+        Assert.That(worktreePath, Does.Contain(".clones"));
         Assert.That(worktreePath, Does.Contain("task+implement-feature+xyz789"));
 
         // Verify the branch was created correctly
@@ -715,7 +715,7 @@ public class GitWorktreeServiceIntegrationTests
         Assert.That(worktreePath, Is.Not.Null);
 
         // The worktree folder name should be flattened (/ -> +, existing + preserved)
-        Assert.That(worktreePath, Does.Contain(".worktrees"));
+        Assert.That(worktreePath, Does.Contain(".clones"));
         Assert.That(worktreePath, Does.Contain("feature+some-feature+def456"));
     }
 
