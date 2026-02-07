@@ -4,8 +4,9 @@
 @implements IAsyncDisposable
 @inject IClaudeSessionStore SessionStore
 @inject NavigationManager NavigationManager
+@inject ILogger<AgentStatusIndicator> Logger
 
-@if (_totalActive > 0 || _errorCount > 0)
+@if (_totalActive > 0 || _errorCount > 0 || _unknownCount > 0)
 {
     <a href="/sessions" class="agent-status-indicator" title="@GetTooltipText()">
         @if (_workingCount > 0)
@@ -18,6 +19,11 @@
             <span class="status-dot question" aria-label="Agents awaiting response"></span>
             <span class="count">@_questionCount</span>
         }
+        @if (_planReadyCount > 0)
+        {
+            <span class="status-dot plan-ready" aria-label="Agents with plan ready"></span>
+            <span class="count">@_planReadyCount</span>
+        }
         @if (_waitingCount > 0)
         {
             <span class="status-dot waiting" aria-label="Agents waiting for input"></span>
@@ -28,17 +34,36 @@
             <span class="status-dot error" aria-label="Agents in error state"></span>
             <span class="count">@_errorCount</span>
         }
+        @if (_unknownCount > 0)
+        {
+            <span class="status-dot unknown" aria-label="Agents in unknown state">?</span>
+            <span class="count">@_unknownCount</span>
+        }
     </a>
 }
 
 @code {
     private int _workingCount;
     private int _questionCount;
+    private int _planReadyCount;
     private int _waitingCount;
     private int _errorCount;
+    private int _unknownCount;
     private int _totalActive;
     private HubConnection? _hubConnection;
     private System.Threading.Timer? _refreshTimer;
+
+    private static readonly HashSet<ClaudeSessionStatus> KnownStatuses = new()
+    {
+        ClaudeSessionStatus.Starting,
+        ClaudeSessionStatus.RunningHooks,
+        ClaudeSessionStatus.Running,
+        ClaudeSessionStatus.WaitingForInput,
+        ClaudeSessionStatus.WaitingForQuestionAnswer,
+        ClaudeSessionStatus.WaitingForPlanExecution,
+        ClaudeSessionStatus.Stopped,
+        ClaudeSessionStatus.Error
+    };
 
     protected override async Task OnInitializedAsync()
     {
@@ -63,13 +88,29 @@
         _questionCount = sessions.Count(s =>
             s.Status == ClaudeSessionStatus.WaitingForQuestionAnswer);
 
+        _planReadyCount = sessions.Count(s =>
+            s.Status == ClaudeSessionStatus.WaitingForPlanExecution);
+
         _waitingCount = sessions.Count(s =>
             s.Status == ClaudeSessionStatus.WaitingForInput);
 
         _errorCount = sessions.Count(s =>
             s.Status == ClaudeSessionStatus.Error);
 
-        _totalActive = _workingCount + _questionCount + _waitingCount;
+        _unknownCount = sessions.Count(s =>
+            !KnownStatuses.Contains(s.Status));
+
+        if (_unknownCount > 0)
+        {
+            var unknownStatuses = sessions
+                .Where(s => !KnownStatuses.Contains(s.Status))
+                .Select(s => s.Status)
+                .Distinct();
+            Logger.LogError("AgentStatusIndicator encountered {Count} session(s) with unknown status: {Statuses}",
+                _unknownCount, string.Join(", ", unknownStatuses));
+        }
+
+        _totalActive = _workingCount + _questionCount + _planReadyCount + _waitingCount;
     }
 
     private async Task SetupSignalRConnection()
@@ -105,10 +146,14 @@
             parts.Add($"{_workingCount} working");
         if (_questionCount > 0)
             parts.Add($"{_questionCount} awaiting response");
+        if (_planReadyCount > 0)
+            parts.Add($"{_planReadyCount} plan ready");
         if (_waitingCount > 0)
             parts.Add($"{_waitingCount} waiting for input");
         if (_errorCount > 0)
             parts.Add($"{_errorCount} in error");
+        if (_unknownCount > 0)
+            parts.Add($"{_unknownCount} unknown status");
 
         var status = parts.Count > 0 ? string.Join(", ", parts) + " - " : "";
         return $"{status}Click to view";

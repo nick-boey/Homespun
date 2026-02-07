@@ -43,6 +43,21 @@
     background: var(--status-error);
 }
 
+.status-dot.plan-ready {
+    background: var(--status-question);
+    animation: pulse 1s ease-in-out infinite;
+}
+
+.status-dot.unknown {
+    background: var(--text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 6px;
+    font-weight: bold;
+    color: white;
+}
+
 .count {
     font-weight: var(--font-weight-medium);
     color: var(--text-sidebar);

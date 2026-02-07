@@ -24,11 +24,21 @@
 </div>
 
 <div class="showcase-section">
+    <h3>Question &amp; Plan Ready</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Shows agents awaiting response and with plan ready</div>
+        <div class="showcase-preview showcase-preview-dark">
+            <MockAgentStatusIndicator WorkingCount="0" QuestionCount="1" PlanReadyCount="2" WaitingCount="0" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
     <h3>Mixed Status</h3>
     <div class="showcase-item">
-        <div class="showcase-label">Both working and waiting agents</div>
+        <div class="showcase-label">Working, question, plan ready, and waiting agents</div>
         <div class="showcase-preview showcase-preview-dark">
-            <MockAgentStatusIndicator WorkingCount="1" WaitingCount="2" />
+            <MockAgentStatusIndicator WorkingCount="1" QuestionCount="1" PlanReadyCount="1" WaitingCount="2" />
         </div>
     </div>
 </div>
@@ -52,7 +62,7 @@
             <div class="d-flex align-items-center gap-3 p-2 bg-bg-secondary rounded">
                 <span class="text-text-primary font-semibold">Homespun</span>
                 <div class="ms-auto d-flex align-items-center gap-2">
-                    <MockAgentStatusIndicator WorkingCount="2" WaitingCount="1" />
+                    <MockAgentStatusIndicator WorkingCount="2" QuestionCount="1" PlanReadyCount="1" WaitingCount="1" />
                     <span class="text-text-muted">|</span>
                     <span class="text-text-secondary text-sm">Settings</span>
                 </div>
