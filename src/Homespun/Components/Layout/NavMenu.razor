@@ -1,5 +1,8 @@
 @using Homespun.Features.Design
+@using Homespun.Features.Projects
+@using Homespun.Features.PullRequests.Data.Entities
 @inject IServiceProvider ServiceProvider
+@inject IProjectService ProjectService
 
 <div class="p-2">
     <nav class="flex flex-col">
@@ -8,6 +11,19 @@
                 <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Projects
             </NavLink>
         </div>
+        @if (_projects.Any())
+        {
+            <div class="project-list">
+                @foreach (var project in _projects)
+                {
+                    <div class="nav-item nav-item-sub text-sm">
+                        <NavLink class="nav-link" href="@($"projects/{project.Id}")">
+                            @project.Name
+                        </NavLink>
+                    </div>
+                }
+            </div>
+        }
         <div class="nav-item text-sm">
             <NavLink class="nav-link" href="sessions">
                 <span class="bi bi-play-nav-menu" aria-hidden="true"></span> Sessions
@@ -36,10 +52,13 @@
 
 @code {
     private bool _isMockMode;
+    private List<Project> _projects = [];
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         // Check if IComponentRegistryService is registered (only in mock mode)
         _isMockMode = ServiceProvider.GetService<IComponentRegistryService>() != null;
+
+        _projects = await ProjectService.GetAllAsync();
     }
 }
