@@ -36,6 +36,7 @@ public record AgentMessageRequest(
 /// </summary>
 public record AgentAnswerRequest(
     string SessionId,
+    string ToolUseId,
     Dictionary<string, string> Answers
 );
 
@@ -170,12 +171,12 @@ public interface IAgentExecutionService
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Answers a pending question and streams events.
+    /// Answers a pending question by sending a tool result to the running CLI process.
+    /// Events continue flowing through the original StartSessionAsync/SendMessageAsync stream.
     /// </summary>
-    /// <param name="request">Request containing session ID and answers.</param>
+    /// <param name="request">Request containing session ID, tool use ID, and answers.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>Async enumerable of agent events.</returns>
-    IAsyncEnumerable<AgentEvent> AnswerQuestionAsync(
+    Task AnswerQuestionAsync(
         AgentAnswerRequest request,
         CancellationToken cancellationToken = default);
 

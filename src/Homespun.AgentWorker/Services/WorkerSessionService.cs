@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
+using System.Text;
 using System.Text.Json;
 using Homespun.AgentWorker.Models;
 using Homespun.ClaudeAgentSdk;
@@ -40,6 +41,8 @@ public class WorkerSessionService : IAsyncDisposable
     private readonly ILogger<WorkerSessionService> _logger;
     private readonly ConcurrentDictionary<string, WorkerSession> _sessions = new();
     private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, string>> _sessionToolUses = new();
+    private readonly ConcurrentDictionary<string, ClaudeSdkClient> _activeClients = new();
+    private readonly ConcurrentDictionary<string, TaskCompletionSource<AnswerQuestionRequest>> _pendingQuestions = new();
 
     /// <summary>
     /// Maximum buffer size for JSON message streaming (10MB).
@@ -157,48 +160,23 @@ public class WorkerSessionService : IAsyncDisposable
     }
 
     /// <summary>
-    /// Answers a pending question and streams events.
+    /// Answers a pending question by signaling the paused message loop.
+    /// Events continue flowing through the original StartSessionAsync/SendMessageAsync stream.
     /// </summary>
-    public async IAsyncEnumerable<(string EventType, object Data)> AnswerQuestionAsync(
+    public Task AnswerQuestionAsync(
         string sessionId,
         AnswerQuestionRequest request,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default)
     {
-        if (!_sessions.TryGetValue(sessionId, out var session))
+        if (!_pendingQuestions.TryGetValue(sessionId, out var tcs))
         {
-            yield return (SseEventTypes.Error, new ErrorData
-            {
-                SessionId = sessionId,
-                Message = $"Session {sessionId} not found",
-                Code = "SESSION_NOT_FOUND",
-                IsRecoverable = false
-            });
-            yield break;
+            _logger.LogWarning("No pending question for session {SessionId}", sessionId);
+            return Task.CompletedTask;
         }
 
-        // Format answers into a message
-        var formattedAnswers = new System.Text.StringBuilder();
-        formattedAnswers.AppendLine("I've answered your questions:");
-        formattedAnswers.AppendLine();
-
-        foreach (var (question, answer) in request.Answers)
-        {
-            formattedAnswers.AppendLine($"**{question}**");
-            formattedAnswers.AppendLine($"My answer: {answer}");
-            formattedAnswers.AppendLine();
-        }
-
-        formattedAnswers.AppendLine("Please continue with the task based on my answers above.");
-
-        var messageRequest = new SendMessageRequest
-        {
-            Message = formattedAnswers.ToString().Trim()
-        };
-
-        await foreach (var evt in SendMessageAsync(sessionId, messageRequest, cancellationToken))
-        {
-            yield return evt;
-        }
+        // Complete the TCS with the answer - this unblocks the message loop in ProcessMessagesAsync
+        tcs.TrySetResult(request);
+        return Task.CompletedTask;
     }
 
     /// <summary>
@@ -210,6 +188,12 @@ public class WorkerSessionService : IAsyncDisposable
         {
             _logger.LogInformation("Stopping session {SessionId}", sessionId);
 
+            // Cancel any pending question TCS
+            if (_pendingQuestions.TryRemove(sessionId, out var tcs))
+            {
+                tcs.TrySetCanceled();
+            }
+
             if (session.Cts != null)
             {
                 await session.Cts.CancelAsync();
@@ -217,6 +201,7 @@ public class WorkerSessionService : IAsyncDisposable
             }
 
             _sessionToolUses.TryRemove(sessionId, out _);
+            _activeClients.TryRemove(sessionId, out _);
         }
     }
 
@@ -312,10 +297,15 @@ public class WorkerSessionService : IAsyncDisposable
 
         _ = Task.Run(async () =>
         {
+            ClaudeSdkClient? client = null;
             try
             {
-                await using var client = new ClaudeSdkClient(session.Options!);
-                await client.ConnectAsync(prompt, cancellationToken);
+                client = new ClaudeSdkClient(session.Options!);
+                _activeClients[session.Id] = client;
+
+                // Connect in streaming mode (null prompt) then send query
+                await client.ConnectAsync(null, cancellationToken);
+                await client.QueryAsync(prompt, session.ConversationId ?? "default", cancellationToken);
 
                 await foreach (var msg in client.ReceiveMessagesAsync().WithCancellation(cancellationToken))
                 {
@@ -323,6 +313,21 @@ public class WorkerSessionService : IAsyncDisposable
                     foreach (var evt in events)
                     {
                         await channel.Writer.WriteAsync(evt, cancellationToken);
+
+                        // When a question is detected, pause and wait for the answer
+                        if (evt.EventType == SseEventTypes.QuestionReceived && evt.Data is QuestionReceivedData questionData)
+                        {
+                            var tcs = new TaskCompletionSource<AnswerQuestionRequest>(TaskCreationOptions.RunContinuationsAsynchronously);
+                            _pendingQuestions[session.Id] = tcs;
+
+                            // Wait for the answer from AnswerQuestionAsync
+                            var answer = await tcs.Task;
+                            _pendingQuestions.TryRemove(session.Id, out _);
+
+                            // Format answer and send tool result
+                            var formattedContent = FormatAnswerAsToolResult(answer.Answers);
+                            await client.SendToolResultAsync(answer.ToolUseId, formattedContent, cancellationToken: cancellationToken);
+                        }
 
                         // Stop after result message
                         if (evt.EventType == SseEventTypes.ResultReceived)
@@ -361,12 +366,27 @@ public class WorkerSessionService : IAsyncDisposable
                 }));
                 channel.Writer.Complete(ex);
             }
+            finally
+            {
+                _activeClients.TryRemove(session.Id, out _);
+                _pendingQuestions.TryRemove(session.Id, out _);
+                if (client != null)
+                {
+                    await client.DisposeAsync();
+                }
+            }
         }, cancellationToken);
 
         await foreach (var evt in channel.Reader.ReadAllAsync(cancellationToken))
         {
             yield return evt;
         }
+    }
+
+    private static string FormatAnswerAsToolResult(Dictionary<string, string> answers)
+    {
+        var json = JsonSerializer.Serialize(new { answers });
+        return json;
     }
 
     private List<(string EventType, object Data)> ProcessSdkMessage(
@@ -787,6 +807,13 @@ public class WorkerSessionService : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        // Cancel all pending questions
+        foreach (var tcs in _pendingQuestions.Values)
+        {
+            tcs.TrySetCanceled();
+        }
+        _pendingQuestions.Clear();
+
         foreach (var session in _sessions.Values)
         {
             if (session.Cts != null)
@@ -801,5 +828,6 @@ public class WorkerSessionService : IAsyncDisposable
         }
         _sessions.Clear();
         _sessionToolUses.Clear();
+        _activeClients.Clear();
     }
 }

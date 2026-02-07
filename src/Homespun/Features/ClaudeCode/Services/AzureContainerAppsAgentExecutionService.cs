@@ -186,31 +186,36 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
     }
 
     /// <inheritdoc />
-    public async IAsyncEnumerable<AgentEvent> AnswerQuestionAsync(
+    public async Task AnswerQuestionAsync(
         AgentAnswerRequest request,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default)
     {
         if (!_sessions.TryGetValue(request.SessionId, out var session))
         {
-            yield return new AgentErrorEvent(request.SessionId, $"Session {request.SessionId} not found", "SESSION_NOT_FOUND", false);
-            yield break;
+            _logger.LogWarning("AnswerQuestionAsync: Session {SessionId} not found", request.SessionId);
+            return;
         }
 
         if (string.IsNullOrEmpty(session.WorkerSessionId))
         {
-            yield return new AgentErrorEvent(request.SessionId, "Worker session not initialized", "WORKER_NOT_READY", false);
-            yield break;
+            _logger.LogWarning("AnswerQuestionAsync: Worker session not initialized for {SessionId}", request.SessionId);
+            return;
         }
 
-        var answerRequest = new { Answers = request.Answers };
+        var answerRequest = new { ToolUseId = request.ToolUseId, Answers = request.Answers };
+        var json = JsonSerializer.Serialize(answerRequest, JsonOptions);
+        using var content = new StringContent(json, Encoding.UTF8, "application/json");
 
         var workerUrl = $"{_options.WorkerEndpoint.TrimEnd('/')}/api/sessions/{session.WorkerSessionId}/answer";
 
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, session.Cts.Token);
 
-        await foreach (var evt in SendSseRequestAsync(workerUrl, answerRequest, request.SessionId, linkedCts.Token))
+        var response = await _httpClient.PostAsync(workerUrl, content, linkedCts.Token);
+
+        if (!response.IsSuccessStatusCode)
         {
-            yield return MapSessionId(evt, request.SessionId);
+            var errorBody = await response.Content.ReadAsStringAsync(linkedCts.Token);
+            _logger.LogWarning("AnswerQuestionAsync: Worker returned {StatusCode}: {Error}", response.StatusCode, errorBody);
         }
     }
 

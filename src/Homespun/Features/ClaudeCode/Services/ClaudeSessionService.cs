@@ -1080,45 +1080,28 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         _logger.LogInformation("Answering question in session {SessionId} with {AnswerCount} answers",
             sessionId, answers.Count);
 
-        // Format the answers in a clear, structured way that Claude can understand
-        // Since we're resuming with --resume, Claude will see this as a continuation
-        var formattedAnswers = new System.Text.StringBuilder();
-        formattedAnswers.AppendLine("I've answered your questions:");
-        formattedAnswers.AppendLine();
+        // Get the tool use ID from the pending question
+        var toolUseId = session.PendingQuestion.ToolUseId;
 
-        // Include the original questions and user's selections for context
-        foreach (var question in session.PendingQuestion.Questions)
+        // Look up the agent session ID
+        if (!_agentSessionIds.TryGetValue(sessionId, out var agentSessionId))
         {
-            formattedAnswers.AppendLine($"**{question.Header}**: {question.Question}");
-            if (answers.TryGetValue(question.Question, out var answer))
-            {
-                formattedAnswers.AppendLine($"My answer: {answer}");
-            }
-            else
-            {
-                formattedAnswers.AppendLine("My answer: (no answer provided)");
-            }
-            formattedAnswers.AppendLine();
+            throw new InvalidOperationException($"No agent session found for session {sessionId}");
         }
 
-        formattedAnswers.AppendLine("Please continue with the task based on my answers above.");
-
-        // Store the questions for reference before clearing
-        var pendingQuestion = session.PendingQuestion;
-
-        // Clear the pending question
+        // Clear the pending question and update status
         session.PendingQuestion = null;
-
-        // Update session status before sending
         session.Status = ClaudeSessionStatus.Running;
 
         // Broadcast that the question was answered
         await _hubContext.BroadcastQuestionAnswered(sessionId);
         await _hubContext.BroadcastSessionStatusChanged(sessionId, ClaudeSessionStatus.Running);
 
-        // Send the answer as a regular message - this will resume the conversation
-        // The --resume flag ensures Claude has context from the previous turn
-        await SendMessageAsync(sessionId, formattedAnswers.ToString().Trim(), PermissionMode.BypassPermissions, cancellationToken);
+        // Send the answer as a tool result to the running CLI process
+        // This unblocks the paused message loop, and events continue flowing
+        // through the original StartSessionAsync/SendMessageAsync stream
+        var request = new AgentAnswerRequest(agentSessionId, toolUseId, answers);
+        await _agentExecutionService.AnswerQuestionAsync(request, cancellationToken);
     }
 
     /// <inheritdoc />

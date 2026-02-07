@@ -60,6 +60,11 @@ public class SendMessageRequest
 public class AnswerQuestionRequest
 {
     /// <summary>
+    /// The tool use ID from the AskUserQuestion tool call.
+    /// </summary>
+    public required string ToolUseId { get; set; }
+
+    /// <summary>
     /// Dictionary mapping question text to answer text.
     /// </summary>
     public required Dictionary<string, string> Answers { get; set; }

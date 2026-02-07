@@ -244,25 +244,17 @@ public class DockerAgentExecutionServiceTests
     #region AnswerQuestionAsync Tests
 
     [Test]
-    public async Task AnswerQuestionAsync_NonExistentSession_ReturnsError()
+    public async Task AnswerQuestionAsync_NonExistentSession_DoesNotThrow()
     {
         // Arrange
         var request = new AgentAnswerRequest(
             "non-existent-session",
+            "tool-use-123",
             new Dictionary<string, string> { { "Q1", "A1" } });
 
-        // Act
-        var events = new List<AgentEvent>();
-        await foreach (var evt in _service.AnswerQuestionAsync(request))
-        {
-            events.Add(evt);
-        }
-
-        // Assert
-        Assert.That(events, Has.Count.EqualTo(1));
-        var errorEvent = events[0] as AgentErrorEvent;
-        Assert.That(errorEvent, Is.Not.Null);
-        Assert.That(errorEvent!.Code, Is.EqualTo("SESSION_NOT_FOUND"));
+        // Act & Assert - should log warning but not throw
+        Assert.DoesNotThrowAsync(async () =>
+            await _service.AnswerQuestionAsync(request));
     }
 
     #endregion
@@ -341,12 +333,14 @@ public class DockerSessionRecordTests
         // Act
         var request = new AgentAnswerRequest(
             SessionId: "session-123",
+            ToolUseId: "tool-use-456",
             Answers: answers);
 
         // Assert
         Assert.Multiple(() =>
         {
             Assert.That(request.SessionId, Is.EqualTo("session-123"));
+            Assert.That(request.ToolUseId, Is.EqualTo("tool-use-456"));
             Assert.That(request.Answers, Has.Count.EqualTo(2));
             Assert.That(request.Answers["Question 1"], Is.EqualTo("Answer 1"));
         });

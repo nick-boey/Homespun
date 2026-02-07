@@ -103,38 +103,23 @@ public class SessionsController : ControllerBase
     }
 
     /// <summary>
-    /// Answers a pending question and returns SSE stream.
+    /// Answers a pending question. The answer is sent as a tool result to the running CLI process.
+    /// Events continue flowing through the original SSE stream from StartSession or SendMessage.
     /// </summary>
     [HttpPost("{sessionId}/answer")]
-    public async Task AnswerQuestion(string sessionId, [FromBody] AnswerQuestionRequest request)
+    public async Task<IActionResult> AnswerQuestion(string sessionId, [FromBody] AnswerQuestionRequest request)
     {
-        Response.ContentType = "text/event-stream";
-        Response.Headers["Cache-Control"] = "no-cache";
-        Response.Headers["Connection"] = "keep-alive";
-
         _logger.LogInformation("Answering question in session {SessionId}", sessionId);
 
         try
         {
-            await foreach (var (eventType, data) in _sessionService.AnswerQuestionAsync(sessionId, request, HttpContext.RequestAborted))
-            {
-                await WriteEventAsync(eventType, data);
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            _logger.LogInformation("Answer cancelled by client for session {SessionId}", sessionId);
+            await _sessionService.AnswerQuestionAsync(sessionId, request, HttpContext.RequestAborted);
+            return Ok(new { message = "Answer accepted", sessionId });
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error answering question in session {SessionId}", sessionId);
-            await WriteEventAsync(SseEventTypes.Error, new ErrorData
-            {
-                SessionId = sessionId,
-                Message = ex.Message,
-                Code = "ANSWER_ERROR",
-                IsRecoverable = false
-            });
+            return StatusCode(500, new { message = ex.Message, code = "ANSWER_ERROR" });
         }
     }
 

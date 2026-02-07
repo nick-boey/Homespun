@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
+using System.Text;
 using System.Text.Json;
 using Homespun.ClaudeAgentSdk;
 using Homespun.Features.ClaudeCode.Data;
@@ -18,6 +19,8 @@ public class LocalAgentExecutionService : IAgentExecutionService, IAsyncDisposab
 
     private readonly ConcurrentDictionary<string, LocalSession> _sessions = new();
     private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, string>> _sessionToolUses = new();
+    private readonly ConcurrentDictionary<string, ClaudeSdkClient> _activeClients = new();
+    private readonly ConcurrentDictionary<string, TaskCompletionSource<AgentAnswerRequest>> _pendingQuestions = new();
 
     private record LocalSession(
         string Id,
@@ -122,30 +125,19 @@ public class LocalAgentExecutionService : IAgentExecutionService, IAsyncDisposab
     }
 
     /// <inheritdoc />
-    public async IAsyncEnumerable<AgentEvent> AnswerQuestionAsync(
+    public Task AnswerQuestionAsync(
         AgentAnswerRequest request,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default)
     {
-        // Format the answers as a message
-        var formattedAnswers = new System.Text.StringBuilder();
-        formattedAnswers.AppendLine("I've answered your questions:");
-        formattedAnswers.AppendLine();
-
-        foreach (var (question, answer) in request.Answers)
+        if (!_pendingQuestions.TryGetValue(request.SessionId, out var tcs))
         {
-            formattedAnswers.AppendLine($"**{question}**");
-            formattedAnswers.AppendLine($"My answer: {answer}");
-            formattedAnswers.AppendLine();
+            _logger.LogWarning("No pending question for session {SessionId}", request.SessionId);
+            return Task.CompletedTask;
         }
 
-        formattedAnswers.AppendLine("Please continue with the task based on my answers above.");
-
-        var messageRequest = new AgentMessageRequest(request.SessionId, formattedAnswers.ToString().Trim());
-
-        await foreach (var evt in SendMessageAsync(messageRequest, cancellationToken))
-        {
-            yield return evt;
-        }
+        // Complete the TCS with the answer - this unblocks the message loop in ProcessMessagesAsync
+        tcs.TrySetResult(request);
+        return Task.CompletedTask;
     }
 
     /// <inheritdoc />
@@ -154,9 +146,17 @@ public class LocalAgentExecutionService : IAgentExecutionService, IAsyncDisposab
         if (_sessions.TryRemove(sessionId, out var session))
         {
             _logger.LogInformation("Stopping local session {SessionId}", sessionId);
+
+            // Cancel any pending question TCS
+            if (_pendingQuestions.TryRemove(sessionId, out var tcs))
+            {
+                tcs.TrySetCanceled();
+            }
+
             session.Cts.Cancel();
             session.Cts.Dispose();
             _sessionToolUses.TryRemove(sessionId, out _);
+            _activeClients.TryRemove(sessionId, out _);
         }
 
         return Task.CompletedTask;
@@ -169,6 +169,12 @@ public class LocalAgentExecutionService : IAgentExecutionService, IAsyncDisposab
         {
             _logger.LogInformation("Interrupting local session {SessionId}", sessionId);
 
+            // Cancel any pending question TCS
+            if (_pendingQuestions.TryRemove(sessionId, out var tcs))
+            {
+                tcs.TrySetCanceled();
+            }
+
             // Cancel current execution
             session.Cts.Cancel();
             session.Cts.Dispose();
@@ -177,6 +183,8 @@ public class LocalAgentExecutionService : IAgentExecutionService, IAsyncDisposab
             var newCts = new CancellationTokenSource();
             var updatedSession = session with { Cts = newCts };
             _sessions[sessionId] = updatedSession;
+
+            _activeClients.TryRemove(sessionId, out _);
 
             // Do NOT remove from _sessions or _sessionToolUses - session stays alive
         }
@@ -236,10 +244,15 @@ public class LocalAgentExecutionService : IAgentExecutionService, IAsyncDisposab
         // Start processing in background task
         _ = Task.Run(async () =>
         {
+            ClaudeSdkClient? client = null;
             try
             {
-                await using var client = new ClaudeSdkClient(session.Options);
-                await client.ConnectAsync(prompt, cancellationToken);
+                client = new ClaudeSdkClient(session.Options);
+                _activeClients[session.Id] = client;
+
+                // Connect in streaming mode (null prompt) then send query
+                await client.ConnectAsync(null, cancellationToken);
+                await client.QueryAsync(prompt, session.ConversationId, cancellationToken);
 
                 await foreach (var msg in client.ReceiveMessagesAsync().WithCancellation(cancellationToken))
                 {
@@ -247,6 +260,21 @@ public class LocalAgentExecutionService : IAgentExecutionService, IAsyncDisposab
                     foreach (var evt in events)
                     {
                         await channel.Writer.WriteAsync(evt, cancellationToken);
+
+                        // When a question is detected, pause and wait for the answer
+                        if (evt is AgentQuestionEvent questionEvt)
+                        {
+                            var tcs = new TaskCompletionSource<AgentAnswerRequest>(TaskCreationOptions.RunContinuationsAsynchronously);
+                            _pendingQuestions[session.Id] = tcs;
+
+                            // Wait for the answer from AnswerQuestionAsync
+                            var answer = await tcs.Task;
+                            _pendingQuestions.TryRemove(session.Id, out _);
+
+                            // Format answer and send tool result
+                            var formattedContent = FormatAnswerAsToolResult(answer.Answers);
+                            await client.SendToolResultAsync(answer.ToolUseId, formattedContent, cancellationToken: cancellationToken);
+                        }
 
                         if (evt is AgentResultEvent resultEvt)
                         {
@@ -273,6 +301,15 @@ public class LocalAgentExecutionService : IAgentExecutionService, IAsyncDisposab
                 await channel.Writer.WriteAsync(new AgentErrorEvent(session.Id, ex.Message, "AGENT_ERROR", false));
                 channel.Writer.Complete(ex);
             }
+            finally
+            {
+                _activeClients.TryRemove(session.Id, out _);
+                _pendingQuestions.TryRemove(session.Id, out _);
+                if (client != null)
+                {
+                    await client.DisposeAsync();
+                }
+            }
         }, cancellationToken);
 
         // Yield events from channel
@@ -280,6 +317,12 @@ public class LocalAgentExecutionService : IAgentExecutionService, IAsyncDisposab
         {
             yield return evt;
         }
+    }
+
+    private static string FormatAnswerAsToolResult(Dictionary<string, string> answers)
+    {
+        var json = JsonSerializer.Serialize(new { answers });
+        return json;
     }
 
     private List<AgentEvent> ProcessSdkMessage(
@@ -573,6 +616,13 @@ public class LocalAgentExecutionService : IAgentExecutionService, IAsyncDisposab
 
     public async ValueTask DisposeAsync()
     {
+        // Cancel all pending questions
+        foreach (var tcs in _pendingQuestions.Values)
+        {
+            tcs.TrySetCanceled();
+        }
+        _pendingQuestions.Clear();
+
         foreach (var session in _sessions.Values)
         {
             try
@@ -584,5 +634,6 @@ public class LocalAgentExecutionService : IAgentExecutionService, IAsyncDisposab
         }
         _sessions.Clear();
         _sessionToolUses.Clear();
+        _activeClients.Clear();
     }
 }

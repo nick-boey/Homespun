@@ -130,25 +130,17 @@ public class AzureContainerAppsAgentExecutionServiceTests
     #region AnswerQuestionAsync Tests
 
     [Test]
-    public async Task AnswerQuestionAsync_NonExistentSession_ReturnsError()
+    public async Task AnswerQuestionAsync_NonExistentSession_DoesNotThrow()
     {
         // Arrange
         var request = new AgentAnswerRequest(
             "non-existent-session",
+            "tool-use-123",
             new Dictionary<string, string> { { "Q1", "A1" } });
 
-        // Act
-        var events = new List<AgentEvent>();
-        await foreach (var evt in _service.AnswerQuestionAsync(request))
-        {
-            events.Add(evt);
-        }
-
-        // Assert
-        Assert.That(events, Has.Count.EqualTo(1));
-        var errorEvent = events[0] as AgentErrorEvent;
-        Assert.That(errorEvent, Is.Not.Null);
-        Assert.That(errorEvent!.Code, Is.EqualTo("SESSION_NOT_FOUND"));
+        // Act & Assert - should log warning but not throw
+        Assert.DoesNotThrowAsync(async () =>
+            await _service.AnswerQuestionAsync(request));
     }
 
     #endregion
