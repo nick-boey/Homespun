@@ -1,11 +1,11 @@
 #!/bin/bash
 set -e
 
-# Homespun Agent Worker Container Startup Script
+# Homespun Worker Container Startup Script
 # This script handles:
 # 1. Git identity configuration
 # 2. GitHub token resolution and git credential setup
-# 3. Starting the Agent Worker application
+# 3. Starting the Node.js worker application
 
 # Ensure HOME is set correctly
 if [ "$(id -u)" = "0" ]; then
@@ -15,7 +15,6 @@ else
 fi
 
 # Configure git to trust mounted directories (avoids "dubious ownership" errors)
-# This needs to run at startup because the user context may differ from build time
 git config --global --add safe.directory '*' 2>/dev/null || true
 
 # Configure git identity for commits
@@ -36,7 +35,6 @@ fi
 
 # Configure git credentials using askpass if we have a GitHub token
 if [ -n "$GITHUB_TOKEN" ]; then
-    # Create a git-askpass script that echoes the token for credential prompts
     ASKPASS_SCRIPT="$HOME/git-askpass.sh"
     cat > "$ASKPASS_SCRIPT" << 'ASKPASS_EOF'
 #!/bin/sh
@@ -48,5 +46,5 @@ ASKPASS_EOF
     git config --global credential.helper '' 2>/dev/null || true
 fi
 
-echo "Starting Homespun Agent Worker..."
-exec dotnet Homespun.AgentWorker.dll
+echo "Starting Homespun Worker..."
+exec node dist/index.js

@@ -54,6 +54,12 @@ public class AzureContainerAppsAgentExecutionServiceTests
             Assert.That(defaultOptions.WorkerEndpoint, Is.Empty);
             Assert.That(defaultOptions.RequestTimeout, Is.EqualTo(TimeSpan.FromMinutes(30)));
             Assert.That(defaultOptions.MaxSessionDuration, Is.EqualTo(TimeSpan.FromMinutes(30)));
+            Assert.That(defaultOptions.WorkerImage, Is.EqualTo("ghcr.io/nick-boey/homespun-worker:latest"));
+            Assert.That(defaultOptions.ProjectsBasePath, Is.EqualTo("projects"));
+            Assert.That(defaultOptions.ProvisioningTimeout, Is.EqualTo(TimeSpan.FromMinutes(5)));
+            Assert.That(defaultOptions.EnvironmentId, Is.Null);
+            Assert.That(defaultOptions.ResourceGroupName, Is.Null);
+            Assert.That(defaultOptions.StorageMountName, Is.Null);
         });
     }
 
@@ -61,6 +67,86 @@ public class AzureContainerAppsAgentExecutionServiceTests
     public void Options_SectionName_IsCorrect()
     {
         Assert.That(AzureContainerAppsAgentExecutionOptions.SectionName, Is.EqualTo("AgentExecution:AzureContainerApps"));
+    }
+
+    [Test]
+    public void Options_IsDynamicMode_FalseWhenNotConfigured()
+    {
+        var options = new AzureContainerAppsAgentExecutionOptions();
+        Assert.That(options.IsDynamicMode, Is.False);
+    }
+
+    [Test]
+    public void Options_IsDynamicMode_FalseWhenOnlyEnvironmentIdSet()
+    {
+        var options = new AzureContainerAppsAgentExecutionOptions
+        {
+            EnvironmentId = "/subscriptions/sub-id/resourceGroups/rg/providers/Microsoft.App/managedEnvironments/env"
+        };
+        Assert.That(options.IsDynamicMode, Is.False);
+    }
+
+    [Test]
+    public void Options_IsDynamicMode_FalseWhenOnlyResourceGroupSet()
+    {
+        var options = new AzureContainerAppsAgentExecutionOptions
+        {
+            ResourceGroupName = "rg-homespun-dev"
+        };
+        Assert.That(options.IsDynamicMode, Is.False);
+    }
+
+    [Test]
+    public void Options_IsDynamicMode_TrueWhenBothSet()
+    {
+        var options = new AzureContainerAppsAgentExecutionOptions
+        {
+            EnvironmentId = "/subscriptions/sub-id/resourceGroups/rg/providers/Microsoft.App/managedEnvironments/env",
+            ResourceGroupName = "rg-homespun-dev"
+        };
+        Assert.That(options.IsDynamicMode, Is.True);
+    }
+
+    #endregion
+
+    #region Container App Naming Tests
+
+    [Test]
+    public void GetIssueContainerAppName_ReturnsCorrectFormat()
+    {
+        var name = AzureContainerAppsAgentExecutionService.GetIssueContainerAppName("abc123");
+        Assert.That(name, Is.EqualTo("ca-issue-abc123"));
+    }
+
+    [Test]
+    public void GetIssueContainerAppName_IsLowercase()
+    {
+        var name = AzureContainerAppsAgentExecutionService.GetIssueContainerAppName("ABC123");
+        Assert.That(name, Is.EqualTo("ca-issue-abc123"));
+    }
+
+    [Test]
+    public void GetIssueContainerAppName_TruncatesAt32Chars()
+    {
+        var longIssueId = "this-is-a-very-long-issue-id-that-exceeds-the-limit";
+        var name = AzureContainerAppsAgentExecutionService.GetIssueContainerAppName(longIssueId);
+        Assert.That(name.Length, Is.LessThanOrEqualTo(32));
+    }
+
+    [Test]
+    public void GetIssueContainerAppName_IsDeterministic()
+    {
+        var name1 = AzureContainerAppsAgentExecutionService.GetIssueContainerAppName("abc123");
+        var name2 = AzureContainerAppsAgentExecutionService.GetIssueContainerAppName("abc123");
+        Assert.That(name1, Is.EqualTo(name2));
+    }
+
+    [Test]
+    public void GetIssueContainerAppName_DifferentIssues_ReturnDifferentNames()
+    {
+        var name1 = AzureContainerAppsAgentExecutionService.GetIssueContainerAppName("issue-1");
+        var name2 = AzureContainerAppsAgentExecutionService.GetIssueContainerAppName("issue-2");
+        Assert.That(name1, Is.Not.EqualTo(name2));
     }
 
     #endregion
@@ -106,49 +192,20 @@ public class AzureContainerAppsAgentExecutionServiceTests
     #region SendMessageAsync Tests
 
     [Test]
-    public async Task SendMessageAsync_NonExistentSession_ReturnsError()
+    public async Task SendMessageAsync_NonExistentSession_YieldsNoMessages()
     {
         // Arrange
         var request = new AgentMessageRequest("non-existent-session", "Hello");
 
         // Act
-        var events = new List<AgentEvent>();
-        await foreach (var evt in _service.SendMessageAsync(request))
+        var messages = new List<SdkMessage>();
+        await foreach (var msg in _service.SendMessageAsync(request))
         {
-            events.Add(evt);
+            messages.Add(msg);
         }
 
-        // Assert
-        Assert.That(events, Has.Count.EqualTo(1));
-        var errorEvent = events[0] as AgentErrorEvent;
-        Assert.That(errorEvent, Is.Not.Null);
-        Assert.That(errorEvent!.Code, Is.EqualTo("SESSION_NOT_FOUND"));
-    }
-
-    #endregion
-
-    #region AnswerQuestionAsync Tests
-
-    [Test]
-    public async Task AnswerQuestionAsync_NonExistentSession_ReturnsError()
-    {
-        // Arrange
-        var request = new AgentAnswerRequest(
-            "non-existent-session",
-            new Dictionary<string, string> { { "Q1", "A1" } });
-
-        // Act
-        var events = new List<AgentEvent>();
-        await foreach (var evt in _service.AnswerQuestionAsync(request))
-        {
-            events.Add(evt);
-        }
-
-        // Assert
-        Assert.That(events, Has.Count.EqualTo(1));
-        var errorEvent = events[0] as AgentErrorEvent;
-        Assert.That(errorEvent, Is.Not.Null);
-        Assert.That(errorEvent!.Code, Is.EqualTo("SESSION_NOT_FOUND"));
+        // Assert - non-existent session yields no messages (yield break)
+        Assert.That(messages, Is.Empty);
     }
 
     #endregion
@@ -286,23 +343,20 @@ public class LocalAgentExecutionServiceTests
     }
 
     [Test]
-    public async Task SendMessageAsync_NonExistentSession_ReturnsError()
+    public async Task SendMessageAsync_NonExistentSession_YieldsNoMessages()
     {
         // Arrange
         var request = new AgentMessageRequest("non-existent-session", "Hello");
 
         // Act
-        var events = new List<AgentEvent>();
-        await foreach (var evt in _service.SendMessageAsync(request))
+        var messages = new List<SdkMessage>();
+        await foreach (var msg in _service.SendMessageAsync(request))
         {
-            events.Add(evt);
+            messages.Add(msg);
         }
 
-        // Assert
-        Assert.That(events, Has.Count.EqualTo(1));
-        var errorEvent = events[0] as AgentErrorEvent;
-        Assert.That(errorEvent, Is.Not.Null);
-        Assert.That(errorEvent!.Code, Is.EqualTo("SESSION_NOT_FOUND"));
+        // Assert - non-existent session yields no messages (yield break)
+        Assert.That(messages, Is.Empty);
     }
 
     [Test]

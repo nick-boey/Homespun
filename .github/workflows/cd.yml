@@ -68,8 +68,8 @@ jobs:
             context: .
             suffix: ""
           - name: homespun-worker
-            dockerfile: ./src/Homespun.AgentWorker/Dockerfile
-            context: .
+            dockerfile: ./src/Homespun.Worker/Dockerfile
+            context: ./src/Homespun.Worker
             suffix: "-worker"
 
     steps:

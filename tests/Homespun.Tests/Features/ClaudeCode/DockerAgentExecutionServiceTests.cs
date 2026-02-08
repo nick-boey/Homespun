@@ -64,6 +64,7 @@ public class DockerAgentExecutionServiceTests
             Assert.That(defaultOptions.DockerSocketPath, Is.EqualTo("/var/run/docker.sock"));
             Assert.That(defaultOptions.NetworkName, Is.EqualTo("bridge"));
             Assert.That(defaultOptions.HostDataPath, Is.Null);
+            Assert.That(defaultOptions.ProjectsBasePath, Is.EqualTo("projects"));
         });
     }
 
@@ -71,6 +72,33 @@ public class DockerAgentExecutionServiceTests
     public void Options_SectionName_IsCorrect()
     {
         Assert.That(DockerAgentExecutionOptions.SectionName, Is.EqualTo("AgentExecution:Docker"));
+    }
+
+    #endregion
+
+    #region Container Naming Tests
+
+    [Test]
+    public void GetIssueContainerName_ReturnsCorrectFormat()
+    {
+        var name = DockerAgentExecutionService.GetIssueContainerName("abc123");
+        Assert.That(name, Is.EqualTo("homespun-issue-abc123"));
+    }
+
+    [Test]
+    public void GetIssueContainerName_IsDeterministic()
+    {
+        var name1 = DockerAgentExecutionService.GetIssueContainerName("abc123");
+        var name2 = DockerAgentExecutionService.GetIssueContainerName("abc123");
+        Assert.That(name1, Is.EqualTo(name2));
+    }
+
+    [Test]
+    public void GetIssueContainerName_DifferentIssues_ReturnDifferentNames()
+    {
+        var name1 = DockerAgentExecutionService.GetIssueContainerName("issue-1");
+        var name2 = DockerAgentExecutionService.GetIssueContainerName("issue-2");
+        Assert.That(name1, Is.Not.EqualTo(name2));
     }
 
     #endregion
@@ -220,49 +248,20 @@ public class DockerAgentExecutionServiceTests
     #region SendMessageAsync Tests
 
     [Test]
-    public async Task SendMessageAsync_NonExistentSession_ReturnsError()
+    public async Task SendMessageAsync_NonExistentSession_YieldsNoMessages()
     {
         // Arrange
         var request = new AgentMessageRequest("non-existent-session", "Hello");
 
         // Act
-        var events = new List<AgentEvent>();
-        await foreach (var evt in _service.SendMessageAsync(request))
+        var messages = new List<SdkMessage>();
+        await foreach (var msg in _service.SendMessageAsync(request))
         {
-            events.Add(evt);
+            messages.Add(msg);
         }
 
-        // Assert
-        Assert.That(events, Has.Count.EqualTo(1));
-        var errorEvent = events[0] as AgentErrorEvent;
-        Assert.That(errorEvent, Is.Not.Null);
-        Assert.That(errorEvent!.Code, Is.EqualTo("SESSION_NOT_FOUND"));
-    }
-
-    #endregion
-
-    #region AnswerQuestionAsync Tests
-
-    [Test]
-    public async Task AnswerQuestionAsync_NonExistentSession_ReturnsError()
-    {
-        // Arrange
-        var request = new AgentAnswerRequest(
-            "non-existent-session",
-            new Dictionary<string, string> { { "Q1", "A1" } });
-
-        // Act
-        var events = new List<AgentEvent>();
-        await foreach (var evt in _service.AnswerQuestionAsync(request))
-        {
-            events.Add(evt);
-        }
-
-        // Assert
-        Assert.That(events, Has.Count.EqualTo(1));
-        var errorEvent = events[0] as AgentErrorEvent;
-        Assert.That(errorEvent, Is.Not.Null);
-        Assert.That(errorEvent!.Code, Is.EqualTo("SESSION_NOT_FOUND"));
+        // Assert - non-existent session yields no messages (yield break)
+        Assert.That(messages, Is.Empty);
     }
 
     #endregion
@@ -311,6 +310,47 @@ public class DockerSessionRecordTests
     }
 
     [Test]
+    public void AgentStartRequest_IssueFields_AreSetCorrectly()
+    {
+        // Arrange & Act
+        var request = new AgentStartRequest(
+            WorkingDirectory: "/workdir",
+            Mode: SessionMode.Build,
+            Model: "sonnet",
+            Prompt: "Test",
+            IssueId: "abc123",
+            ProjectId: "proj-1",
+            ProjectName: "my-project");
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(request.IssueId, Is.EqualTo("abc123"));
+            Assert.That(request.ProjectId, Is.EqualTo("proj-1"));
+            Assert.That(request.ProjectName, Is.EqualTo("my-project"));
+        });
+    }
+
+    [Test]
+    public void AgentStartRequest_IssueFields_DefaultToNull()
+    {
+        // Arrange & Act
+        var request = new AgentStartRequest(
+            WorkingDirectory: "/test/path",
+            Mode: SessionMode.Build,
+            Model: "sonnet",
+            Prompt: "Test");
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(request.IssueId, Is.Null);
+            Assert.That(request.ProjectId, Is.Null);
+            Assert.That(request.ProjectName, Is.Null);
+        });
+    }
+
+    [Test]
     public void AgentMessageRequest_Properties_AreSetCorrectly()
     {
         // Arrange & Act
@@ -328,217 +368,99 @@ public class DockerSessionRecordTests
         });
     }
 
-    [Test]
-    public void AgentAnswerRequest_Properties_AreSetCorrectly()
-    {
-        // Arrange
-        var answers = new Dictionary<string, string>
-        {
-            { "Question 1", "Answer 1" },
-            { "Question 2", "Answer 2" }
-        };
-
-        // Act
-        var request = new AgentAnswerRequest(
-            SessionId: "session-123",
-            Answers: answers);
-
-        // Assert
-        Assert.Multiple(() =>
-        {
-            Assert.That(request.SessionId, Is.EqualTo("session-123"));
-            Assert.That(request.Answers, Has.Count.EqualTo(2));
-            Assert.That(request.Answers["Question 1"], Is.EqualTo("Answer 1"));
-        });
-    }
 }
 
+
 /// <summary>
-/// Tests for agent event types.
+/// Tests for SdkMessage record types.
 /// </summary>
 [TestFixture]
-public class AgentEventTests
+public class SdkMessageRecordTests
 {
     [Test]
-    public void AgentSessionStartedEvent_Properties_AreSetCorrectly()
+    public void SdkSystemMessage_Properties_AreSetCorrectly()
     {
         // Arrange & Act
-        var evt = new AgentSessionStartedEvent("session-123", "conversation-456");
+        var msg = new SdkSystemMessage("session-123", null, "session_started", "sonnet", null);
 
         // Assert
         Assert.Multiple(() =>
         {
-            Assert.That(evt.SessionId, Is.EqualTo("session-123"));
-            Assert.That(evt.ConversationId, Is.EqualTo("conversation-456"));
+            Assert.That(msg.SessionId, Is.EqualTo("session-123"));
+            Assert.That(msg.Type, Is.EqualTo("system"));
+            Assert.That(msg.Subtype, Is.EqualTo("session_started"));
+            Assert.That(msg.Model, Is.EqualTo("sonnet"));
         });
     }
 
     [Test]
-    public void AgentContentBlockEvent_Properties_AreSetCorrectly()
+    public void SdkResultMessage_Properties_AreSetCorrectly()
     {
         // Arrange & Act
-        var evt = new AgentContentBlockEvent(
-            SessionId: "session-123",
-            Type: ClaudeContentType.Text,
-            Text: "Hello world",
-            ToolName: null,
-            ToolInput: null,
-            ToolUseId: null,
-            ToolSuccess: null,
-            Index: 0);
-
-        // Assert
-        Assert.Multiple(() =>
-        {
-            Assert.That(evt.SessionId, Is.EqualTo("session-123"));
-            Assert.That(evt.Type, Is.EqualTo(ClaudeContentType.Text));
-            Assert.That(evt.Text, Is.EqualTo("Hello world"));
-            Assert.That(evt.Index, Is.EqualTo(0));
-        });
-    }
-
-    [Test]
-    public void AgentContentBlockEvent_ToolUse_Properties_AreSetCorrectly()
-    {
-        // Arrange & Act
-        var evt = new AgentContentBlockEvent(
-            SessionId: "session-123",
-            Type: ClaudeContentType.ToolUse,
-            Text: null,
-            ToolName: "Read",
-            ToolInput: "{\"file_path\": \"/test.txt\"}",
-            ToolUseId: "tool-use-789",
-            ToolSuccess: null,
-            Index: 1);
-
-        // Assert
-        Assert.Multiple(() =>
-        {
-            Assert.That(evt.SessionId, Is.EqualTo("session-123"));
-            Assert.That(evt.Type, Is.EqualTo(ClaudeContentType.ToolUse));
-            Assert.That(evt.ToolName, Is.EqualTo("Read"));
-            Assert.That(evt.ToolInput, Is.EqualTo("{\"file_path\": \"/test.txt\"}"));
-            Assert.That(evt.ToolUseId, Is.EqualTo("tool-use-789"));
-        });
-    }
-
-    [Test]
-    public void AgentResultEvent_Properties_AreSetCorrectly()
-    {
-        // Arrange & Act
-        var evt = new AgentResultEvent(
-            SessionId: "session-123",
-            TotalCostUsd: 0.05m,
+        var msg = new SdkResultMessage(
+            SessionId: "conversation-456",
+            Uuid: null,
+            Subtype: null,
             DurationMs: 5000,
-            ConversationId: "conversation-456");
+            DurationApiMs: 3000,
+            IsError: false,
+            NumTurns: 3,
+            TotalCostUsd: 0.05m,
+            Result: null);
 
         // Assert
         Assert.Multiple(() =>
         {
-            Assert.That(evt.SessionId, Is.EqualTo("session-123"));
-            Assert.That(evt.TotalCostUsd, Is.EqualTo(0.05m));
-            Assert.That(evt.DurationMs, Is.EqualTo(5000));
-            Assert.That(evt.ConversationId, Is.EqualTo("conversation-456"));
+            Assert.That(msg.SessionId, Is.EqualTo("conversation-456"));
+            Assert.That(msg.Type, Is.EqualTo("result"));
+            Assert.That(msg.TotalCostUsd, Is.EqualTo(0.05m));
+            Assert.That(msg.DurationMs, Is.EqualTo(5000));
         });
     }
 
     [Test]
-    public void AgentQuestionEvent_Properties_AreSetCorrectly()
+    public void SdkAssistantMessage_Properties_AreSetCorrectly()
     {
         // Arrange
-        var questions = new List<AgentQuestion>
+        var content = new List<SdkContentBlock>
         {
-            new AgentQuestion(
-                Question: "Which option?",
-                Header: "Choice",
-                Options: new List<AgentQuestionOption>
-                {
-                    new AgentQuestionOption("Option A", "Description A"),
-                    new AgentQuestionOption("Option B", "Description B")
-                },
-                MultiSelect: false)
+            new SdkTextBlock("Hello world")
         };
+        var apiMessage = new SdkApiMessage("assistant", content);
 
         // Act
-        var evt = new AgentQuestionEvent(
-            SessionId: "session-123",
-            QuestionId: "question-456",
-            ToolUseId: "tool-789",
-            Questions: questions);
+        var msg = new SdkAssistantMessage("session-123", null, apiMessage, null);
 
         // Assert
         Assert.Multiple(() =>
         {
-            Assert.That(evt.SessionId, Is.EqualTo("session-123"));
-            Assert.That(evt.QuestionId, Is.EqualTo("question-456"));
-            Assert.That(evt.ToolUseId, Is.EqualTo("tool-789"));
-            Assert.That(evt.Questions, Has.Count.EqualTo(1));
-            Assert.That(evt.Questions[0].Question, Is.EqualTo("Which option?"));
-            Assert.That(evt.Questions[0].Options, Has.Count.EqualTo(2));
+            Assert.That(msg.SessionId, Is.EqualTo("session-123"));
+            Assert.That(msg.Type, Is.EqualTo("assistant"));
+            Assert.That(msg.Message.Role, Is.EqualTo("assistant"));
+            Assert.That(msg.Message.Content, Has.Count.EqualTo(1));
         });
     }
 
     [Test]
-    public void AgentSessionEndedEvent_Properties_AreSetCorrectly()
-    {
-        // Arrange & Act
-        var evt = new AgentSessionEndedEvent(
-            SessionId: "session-123",
-            Reason: "completed");
-
-        // Assert
-        Assert.Multiple(() =>
-        {
-            Assert.That(evt.SessionId, Is.EqualTo("session-123"));
-            Assert.That(evt.Reason, Is.EqualTo("completed"));
-        });
-    }
-
-    [Test]
-    public void AgentErrorEvent_Properties_AreSetCorrectly()
-    {
-        // Arrange & Act
-        var evt = new AgentErrorEvent(
-            SessionId: "session-123",
-            Message: "Something went wrong",
-            Code: "ERROR_CODE",
-            IsRecoverable: true);
-
-        // Assert
-        Assert.Multiple(() =>
-        {
-            Assert.That(evt.SessionId, Is.EqualTo("session-123"));
-            Assert.That(evt.Message, Is.EqualTo("Something went wrong"));
-            Assert.That(evt.Code, Is.EqualTo("ERROR_CODE"));
-            Assert.That(evt.IsRecoverable, Is.True);
-        });
-    }
-
-    [Test]
-    public void AgentMessageEvent_Properties_AreSetCorrectly()
+    public void SdkUserMessage_Properties_AreSetCorrectly()
     {
         // Arrange
-        var content = new List<AgentContentBlockEvent>
+        var content = new List<SdkContentBlock>
         {
-            new AgentContentBlockEvent(
-                "session-123",
-                ClaudeContentType.Text,
-                "Hello",
-                null, null, null, null, 0)
+            new SdkToolResultBlock("tool-use-1", default, null)
         };
+        var apiMessage = new SdkApiMessage("user", content);
 
         // Act
-        var evt = new AgentMessageEvent(
-            SessionId: "session-123",
-            Role: ClaudeMessageRole.Assistant,
-            Content: content);
+        var msg = new SdkUserMessage("session-123", null, apiMessage, null);
 
         // Assert
         Assert.Multiple(() =>
         {
-            Assert.That(evt.SessionId, Is.EqualTo("session-123"));
-            Assert.That(evt.Role, Is.EqualTo(ClaudeMessageRole.Assistant));
-            Assert.That(evt.Content, Has.Count.EqualTo(1));
+            Assert.That(msg.SessionId, Is.EqualTo("session-123"));
+            Assert.That(msg.Type, Is.EqualTo("user"));
+            Assert.That(msg.Message.Role, Is.EqualTo("user"));
+            Assert.That(msg.Message.Content, Has.Count.EqualTo(1));
         });
     }
 

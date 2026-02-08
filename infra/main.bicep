@@ -133,6 +133,17 @@ module workerApp 'modules/worker-containerapp.bicep' = if (agentExecutionMode ==
   }
 }
 
+// Role assignment: Contributor on resource group for dynamic Container App creation
+// The managed identity needs to create/delete Container Apps at runtime
+resource contributorRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (agentExecutionMode == 'AzureContainerApps') {
+  name: guid(resourceGroup().id, identity.outputs.identityPrincipalId, 'b24988ac-6180-42a0-ab88-20f7382dd24c')
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'b24988ac-6180-42a0-ab88-20f7382dd24c') // Contributor
+    principalId: identity.outputs.identityPrincipalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
 // Create main Container App
 module containerApp 'modules/containerapp.bicep' = {
   name: 'containerapp-deployment'
@@ -146,6 +157,8 @@ module containerApp 'modules/containerapp.bicep' = {
     storageMountName: environment.outputs.storageMountName
     agentExecutionMode: agentExecutionMode
     workerAppFqdn: agentExecutionMode == 'AzureContainerApps' ? workerApp.outputs.workerAppFqdn : ''
+    workerImage: workerImage
+    resourceGroupName: resourceGroup().name
     deploymentTimestamp: deploymentTimestamp
   }
 }

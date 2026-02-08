@@ -22,7 +22,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Homespun\Homespun.csproj" />
-    <ProjectReference Include="..\..\src\Homespun.AgentWorker\Homespun.AgentWorker.csproj" />
   </ItemGroup>
 
 </Project>

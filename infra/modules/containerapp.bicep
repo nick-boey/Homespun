@@ -26,8 +26,14 @@ param githubTokenSecretName string = 'github-token'
 @allowed(['Local', 'Docker', 'AzureContainerApps'])
 param agentExecutionMode string = 'Local'
 
-@description('Worker container app FQDN for Azure Container Apps mode')
+@description('Worker container app FQDN for Azure Container Apps legacy mode')
 param workerAppFqdn string = ''
+
+@description('Worker container image for dynamic Container App creation')
+param workerImage string = ''
+
+@description('Resource group name for dynamic Container App creation')
+param resourceGroupName string = ''
 
 @description('Deployment timestamp for revision suffix to force new revisions')
 param deploymentTimestamp string
@@ -117,6 +123,22 @@ resource containerApp 'Microsoft.App/containerApps@2025-01-01' = {
             {
               name: 'AgentExecution__AzureContainerApps__WorkerEndpoint'
               value: !empty(workerAppFqdn) ? 'http://${workerAppFqdn}' : ''
+            }
+            {
+              name: 'AgentExecution__AzureContainerApps__EnvironmentId'
+              value: environmentId
+            }
+            {
+              name: 'AgentExecution__AzureContainerApps__WorkerImage'
+              value: workerImage
+            }
+            {
+              name: 'AgentExecution__AzureContainerApps__ResourceGroupName'
+              value: resourceGroupName
+            }
+            {
+              name: 'AgentExecution__AzureContainerApps__StorageMountName'
+              value: storageMountName
             }
           ]
           volumeMounts: [

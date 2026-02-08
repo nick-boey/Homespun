@@ -180,9 +180,9 @@ else
     fi
     log_success "      Main image built: $IMAGE_NAME ($BUILD_CONFIG)"
 
-    log_info "      Building AgentWorker image..."
-    if ! docker build -t "$WORKER_IMAGE" -f "$REPO_ROOT/src/Homespun.AgentWorker/Dockerfile" "$REPO_ROOT"; then
-        log_error "Failed to build AgentWorker Docker image."
+    log_info "      Building Worker image..."
+    if ! docker build -t "$WORKER_IMAGE" -f "$REPO_ROOT/src/Homespun.Worker/Dockerfile" "$REPO_ROOT/src/Homespun.Worker"; then
+        log_error "Failed to build Worker Docker image."
         exit 1
     fi
     log_success "      Worker image built: $WORKER_IMAGE"
