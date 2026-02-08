@@ -114,7 +114,8 @@ public static class MessageParser
             Data = data.TryGetValue("data", out var dataObj) && dataObj is JsonElement dataElement
                 ? JsonSerializer.Deserialize<Dictionary<string, object>>(dataElement.GetRawText())
                 : null,
-            ParentToolUseId = GetStringOrNull(data, "parent_tool_use_id")
+            ParentToolUseId = GetStringOrNull(data, "parent_tool_use_id"),
+            RequestId = GetStringOrNull(data, "request_id")
         };
     }
 

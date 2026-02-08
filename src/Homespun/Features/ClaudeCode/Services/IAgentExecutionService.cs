@@ -1,3 +1,4 @@
+using Homespun.ClaudeAgentSdk;
 using Homespun.Features.ClaudeCode.Data;
 
 namespace Homespun.Features.ClaudeCode.Services;
@@ -19,7 +20,8 @@ public record AgentStartRequest(
     string Model,
     string Prompt,
     string? SystemPrompt = null,
-    string? ResumeSessionId = null
+    string? ResumeSessionId = null,
+    PermissionMode? PermissionMode = null
 );
 
 /// <summary>
@@ -28,7 +30,8 @@ public record AgentStartRequest(
 public record AgentMessageRequest(
     string SessionId,
     string Message,
-    string? Model = null
+    string? Model = null,
+    PermissionMode? PermissionMode = null
 );
 
 /// <summary>

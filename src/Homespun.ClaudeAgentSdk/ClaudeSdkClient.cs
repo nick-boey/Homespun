@@ -182,6 +182,55 @@ public class ClaudeSdkClient : IAsyncDisposable
     }
 
     /// <summary>
+    /// Send a control response to a permission prompt from the CLI.
+    /// This is used when the CLI delegates permission decisions via --permission-prompt-tool stdio.
+    /// </summary>
+    /// <param name="requestId">The request_id from the control_request message</param>
+    /// <param name="behavior">The behavior: "allow" or "deny"</param>
+    /// <param name="updatedInput">Optional updated tool input (for allow responses)</param>
+    /// <param name="denyMessage">Optional deny message (for deny responses)</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    public async Task SendControlResponseAsync(
+        string requestId,
+        string behavior,
+        Dictionary<string, object>? updatedInput = null,
+        string? denyMessage = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (!_connected || _transport == null)
+            throw new CliConnectionException("Not connected. Call ConnectAsync() first.");
+
+        var permissionResult = new Dictionary<string, object>
+        {
+            ["behavior"] = behavior
+        };
+
+        if (behavior == "allow")
+        {
+            permissionResult["updatedInput"] = updatedInput ?? new Dictionary<string, object>();
+        }
+
+        if (behavior == "deny" && denyMessage != null)
+        {
+            permissionResult["message"] = denyMessage;
+        }
+
+        var message = new
+        {
+            type = "control_response",
+            response = new
+            {
+                subtype = "success",
+                request_id = requestId,
+                response = permissionResult
+            }
+        };
+
+        var json = JsonSerializer.Serialize(message) + "\n";
+        await _transport.WriteAsync(json, cancellationToken);
+    }
+
+    /// <summary>
     /// Disconnect from Claude.
     /// </summary>
     public async Task DisconnectAsync()

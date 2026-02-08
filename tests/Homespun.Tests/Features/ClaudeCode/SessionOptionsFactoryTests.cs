@@ -1,6 +1,7 @@
 using Homespun.ClaudeAgentSdk;
 using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.ClaudeCode.Services;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Moq;
 
@@ -41,6 +42,9 @@ public class SessionOptionsFactoryTests
             Assert.That(options.AllowedTools, Does.Contain("WebFetch"));
             Assert.That(options.AllowedTools, Does.Contain("WebSearch"));
             Assert.That(options.AllowedTools, Does.Contain("ExitPlanMode"));
+            Assert.That(options.AllowedTools, Does.Contain("mcp__homespun__ask_user"));
+            Assert.That(options.AllowedTools, Does.Not.Contain("AskUserQuestion"),
+                "Plan mode should use mcp__homespun__ask_user instead of built-in AskUserQuestion");
             Assert.That(options.AllowedTools, Does.Not.Contain("Write"));
             Assert.That(options.AllowedTools, Does.Not.Contain("Edit"));
             Assert.That(options.AllowedTools, Does.Not.Contain("Bash"));
@@ -207,5 +211,93 @@ public class SessionOptionsFactoryTests
                 It.IsAny<Exception?>(),
                 It.Is<Func<It.IsAnyType, Exception?, string>>((v, t) => true)),
             Times.Once);
+    }
+
+    [Test]
+    public void Create_WithAskUserFunction_AddsHomespunMcpServer()
+    {
+        // Arrange
+        var askUserFunction = AskUserQuestionFunction.Create(
+            (questions, ct) => Task.FromResult(new Dictionary<string, string>()));
+
+        // Act
+        var options = _factory.Create(SessionMode.Build, "/test/path", "claude-sonnet-4-20250514",
+            askUserFunction: askUserFunction);
+
+        // Assert
+        Assert.That(options.McpServers, Is.InstanceOf<Dictionary<string, object>>());
+        var mcpServers = (Dictionary<string, object>)options.McpServers!;
+        Assert.That(mcpServers.ContainsKey("homespun"), Is.True,
+            "McpServers should contain 'homespun' key when askUserFunction is provided");
+
+        var homespunConfig = mcpServers["homespun"] as McpSdkServerConfig;
+        Assert.That(homespunConfig, Is.Not.Null);
+        Assert.That(homespunConfig!.Name, Is.EqualTo("homespun"));
+        Assert.That(homespunConfig.Instance, Is.InstanceOf<DynamicAIFunctionMcpServer>());
+    }
+
+    [Test]
+    public void Create_WithAskUserFunction_DisallowsBuiltInAskUserQuestion()
+    {
+        // Arrange
+        var askUserFunction = AskUserQuestionFunction.Create(
+            (questions, ct) => Task.FromResult(new Dictionary<string, string>()));
+
+        // Act
+        var options = _factory.Create(SessionMode.Build, "/test/path", "claude-sonnet-4-20250514",
+            askUserFunction: askUserFunction);
+
+        // Assert
+        Assert.That(options.DisallowedTools, Does.Contain("AskUserQuestion"),
+            "Built-in AskUserQuestion should be disallowed when using custom MCP tool");
+    }
+
+    [Test]
+    public void Create_PlanMode_WithAskUserFunction_AllowsMcpToolName()
+    {
+        // Arrange
+        var askUserFunction = AskUserQuestionFunction.Create(
+            (questions, ct) => Task.FromResult(new Dictionary<string, string>()));
+
+        // Act
+        var options = _factory.Create(SessionMode.Plan, "/test/path", "claude-sonnet-4-20250514",
+            askUserFunction: askUserFunction);
+
+        // Assert
+        Assert.That(options.AllowedTools, Does.Contain("mcp__homespun__ask_user"),
+            "Plan mode should allow the custom MCP tool name");
+        Assert.That(options.AllowedTools, Does.Not.Contain("AskUserQuestion"),
+            "Plan mode should not allow built-in AskUserQuestion");
+    }
+
+    [Test]
+    public void Create_WithoutAskUserFunction_NoHomespunMcpServer()
+    {
+        // Arrange & Act
+        var options = _factory.Create(SessionMode.Build, "/test/path", "claude-sonnet-4-20250514");
+
+        // Assert - backward compatibility: no homespun MCP server
+        var mcpServers = (Dictionary<string, object>)options.McpServers!;
+        Assert.That(mcpServers.ContainsKey("homespun"), Is.False,
+            "McpServers should not contain 'homespun' when no askUserFunction is provided");
+        Assert.That(options.DisallowedTools, Does.Not.Contain("AskUserQuestion"),
+            "Built-in AskUserQuestion should not be disallowed without custom MCP tool");
+    }
+
+    [Test]
+    public void Create_WithAskUserFunction_PlaywrightMcpServerStillPresent()
+    {
+        // Arrange
+        var askUserFunction = AskUserQuestionFunction.Create(
+            (questions, ct) => Task.FromResult(new Dictionary<string, string>()));
+
+        // Act
+        var options = _factory.Create(SessionMode.Build, "/test/path", "claude-sonnet-4-20250514",
+            askUserFunction: askUserFunction);
+
+        // Assert - Playwright should still be configured
+        var mcpServers = (Dictionary<string, object>)options.McpServers!;
+        Assert.That(mcpServers.ContainsKey("playwright"), Is.True,
+            "Playwright MCP server should still be present alongside homespun");
     }
 }

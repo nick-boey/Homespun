@@ -1,9 +1,9 @@
 using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
-using System.Text;
 using System.Text.Json;
 using Homespun.AgentWorker.Models;
 using Homespun.ClaudeAgentSdk;
+using Microsoft.Extensions.AI;
 
 namespace Homespun.AgentWorker.Services;
 
@@ -51,11 +51,12 @@ public class WorkerSessionService : IAsyncDisposable
 
     /// <summary>
     /// Read-only tools available in Plan mode.
+    /// Uses the custom MCP tool name instead of built-in AskUserQuestion.
     /// </summary>
     private static readonly string[] PlanModeTools =
     [
         "Read", "Glob", "Grep", "WebFetch", "WebSearch",
-        "Task", "AskUserQuestion", "ExitPlanMode"
+        "Task", "mcp__homespun__ask_user", "ExitPlanMode"
     ];
 
     public WorkerSessionService(ILogger<WorkerSessionService> logger)
@@ -83,7 +84,9 @@ public class WorkerSessionService : IAsyncDisposable
             SystemPrompt = request.SystemPrompt
         };
 
-        var options = CreateOptions(session);
+        var channel = System.Threading.Channels.Channel.CreateUnbounded<(string EventType, object Data)>();
+
+        var options = CreateOptions(session, channel);
         options.PermissionMode = PermissionMode.BypassPermissions;
         options.IncludePartialMessages = true;
 
@@ -110,7 +113,7 @@ public class WorkerSessionService : IAsyncDisposable
         });
 
         // Process messages from the SDK
-        await foreach (var evt in ProcessMessagesAsync(session, request.Prompt, session.Cts.Token))
+        await foreach (var evt in ProcessMessagesAsync(session, request.Prompt, channel, session.Cts.Token))
         {
             yield return evt;
         }
@@ -138,8 +141,10 @@ public class WorkerSessionService : IAsyncDisposable
 
         session.LastActivityAt = DateTime.UtcNow;
 
+        var channel = System.Threading.Channels.Channel.CreateUnbounded<(string EventType, object Data)>();
+
         // Create options for this query
-        var queryOptions = CreateOptions(session);
+        var queryOptions = CreateOptions(session, channel);
         queryOptions.PermissionMode = PermissionMode.BypassPermissions;
         queryOptions.IncludePartialMessages = true;
         queryOptions.Resume = session.ConversationId;
@@ -153,14 +158,14 @@ public class WorkerSessionService : IAsyncDisposable
 
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, session.Cts?.Token ?? CancellationToken.None);
 
-        await foreach (var evt in ProcessMessagesAsync(session, request.Message, linkedCts.Token))
+        await foreach (var evt in ProcessMessagesAsync(session, request.Message, channel, linkedCts.Token))
         {
             yield return evt;
         }
     }
 
     /// <summary>
-    /// Answers a pending question by signaling the paused message loop.
+    /// Answers a pending question by signaling the paused MCP tool handler.
     /// Events continue flowing through the original StartSessionAsync/SendMessageAsync stream.
     /// </summary>
     public Task AnswerQuestionAsync(
@@ -174,7 +179,7 @@ public class WorkerSessionService : IAsyncDisposable
             return Task.CompletedTask;
         }
 
-        // Complete the TCS with the answer - this unblocks the message loop in ProcessMessagesAsync
+        // Complete the TCS with the answer - this unblocks the MCP tool handler
         tcs.TrySetResult(request);
         return Task.CompletedTask;
     }
@@ -213,8 +218,79 @@ public class WorkerSessionService : IAsyncDisposable
         return _sessions.TryGetValue(sessionId, out var session) ? session : null;
     }
 
-    private ClaudeAgentOptions CreateOptions(WorkerSession session)
+    /// <summary>
+    /// Creates a per-session AIFunction for the ask_user MCP tool.
+    /// The handler emits a QuestionReceived SSE event and blocks until the user answers.
+    /// </summary>
+    private AIFunction CreateAskUserFunction(
+        string sessionId,
+        System.Threading.Channels.Channel<(string EventType, object Data)> channel)
     {
+        return AskUserQuestionFunction.Create(async (questions, cancellationToken) =>
+        {
+            _logger.LogInformation("ask_user MCP tool invoked for session {SessionId} with {Count} questions",
+                sessionId, questions.Count);
+
+            // Convert to QuestionReceivedData format
+            var questionsList = questions.Select(q => new UserQuestionData
+            {
+                Question = q.Question,
+                Header = q.Header,
+                Options = q.Options.Select(o => new QuestionOptionData
+                {
+                    Label = o.Label,
+                    Description = o.Description
+                }).ToList(),
+                MultiSelect = q.MultiSelect
+            }).ToList();
+
+            var toolUseId = Guid.NewGuid().ToString();
+            var questionEvent = new QuestionReceivedData
+            {
+                SessionId = sessionId,
+                QuestionId = Guid.NewGuid().ToString(),
+                ToolUseId = toolUseId,
+                Questions = questionsList
+            };
+
+            // Emit the question event via SSE
+            await channel.Writer.WriteAsync((SseEventTypes.QuestionReceived, (object)questionEvent), cancellationToken);
+
+            // Wait for the user to answer
+            var tcs = new TaskCompletionSource<AnswerQuestionRequest>(TaskCreationOptions.RunContinuationsAsynchronously);
+            _pendingQuestions[sessionId] = tcs;
+
+            var answer = await tcs.Task;
+            _pendingQuestions.TryRemove(sessionId, out _);
+
+            return answer.Answers;
+        });
+    }
+
+    private ClaudeAgentOptions CreateOptions(
+        WorkerSession session,
+        System.Threading.Channels.Channel<(string EventType, object Data)> channel)
+    {
+        var askUserFunction = CreateAskUserFunction(session.Id, channel);
+
+        var mcpServers = new Dictionary<string, object>
+        {
+            ["playwright"] = new Dictionary<string, object>
+            {
+                ["type"] = "stdio",
+                ["command"] = "npx",
+                ["args"] = new[] { "@playwright/mcp@latest", "--headless", "--browser", "chromium", "--no-sandbox", "--isolated" },
+                ["env"] = new Dictionary<string, string>
+                {
+                    ["PLAYWRIGHT_BROWSERS_PATH"] = "/opt/playwright-browsers"
+                }
+            }
+        };
+
+        // Add homespun MCP server with ask_user tool
+        var converter = new AIFunctionMcpConverter([askUserFunction], "homespun");
+        mcpServers["homespun"] = converter.CreateMcpServerConfig();
+
         var options = new ClaudeAgentOptions
         {
             Cwd = session.WorkingDirectory,
@@ -229,24 +305,11 @@ public class WorkerSessionService : IAsyncDisposable
                     messageType ?? "unknown", actualSize, maxSize);
             },
             SettingSources = [SettingSource.User],
-            // Configure Playwright MCP for container environment
-            McpServers = new Dictionary<string, object>
-            {
-                ["playwright"] = new Dictionary<string, object>
-                {
-                    ["type"] = "stdio",
-                    ["command"] = "npx",
-                    ["args"] = new[] { "@playwright/mcp@latest", "--headless", "--browser", "chromium", "--no-sandbox", "--isolated" },
-                    ["env"] = new Dictionary<string, string>
-                    {
-                        ["PLAYWRIGHT_BROWSERS_PATH"] = "/opt/playwright-browsers"
-                    }
-                }
-            }
+            McpServers = mcpServers,
+            DisallowedTools = ["AskUserQuestion"]
         };
 
         // Pass git identity and GitHub token to the Claude agent subprocess
-        // These ensure the agent can make git commits and authenticate with GitHub
         options.Env = BuildAgentEnvironment();
 
         if (session.Mode == SessionMode.Plan)
@@ -274,7 +337,6 @@ public class WorkerSessionService : IAsyncDisposable
         env["GIT_COMMITTER_EMAIL"] = gitAuthorEmail;
 
         // GitHub token for gh CLI and git authentication
-        // Resolve from multiple sources: GITHUB_TOKEN (standard), or GitHub__Token (ASP.NET config style from Azure Container Apps)
         var githubToken = Environment.GetEnvironmentVariable("GITHUB_TOKEN")
             ?? Environment.GetEnvironmentVariable("GitHub__Token");
 
@@ -290,10 +352,10 @@ public class WorkerSessionService : IAsyncDisposable
     private async IAsyncEnumerable<(string EventType, object Data)> ProcessMessagesAsync(
         WorkerSession session,
         string prompt,
+        System.Threading.Channels.Channel<(string EventType, object Data)> channel,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         var currentContentBlocks = new List<ContentBlockReceivedData>();
-        var channel = System.Threading.Channels.Channel.CreateUnbounded<(string EventType, object Data)>();
 
         _ = Task.Run(async () =>
         {
@@ -313,21 +375,6 @@ public class WorkerSessionService : IAsyncDisposable
                     foreach (var evt in events)
                     {
                         await channel.Writer.WriteAsync(evt, cancellationToken);
-
-                        // When a question is detected, pause and wait for the answer
-                        if (evt.EventType == SseEventTypes.QuestionReceived && evt.Data is QuestionReceivedData questionData)
-                        {
-                            var tcs = new TaskCompletionSource<AnswerQuestionRequest>(TaskCreationOptions.RunContinuationsAsynchronously);
-                            _pendingQuestions[session.Id] = tcs;
-
-                            // Wait for the answer from AnswerQuestionAsync
-                            var answer = await tcs.Task;
-                            _pendingQuestions.TryRemove(session.Id, out _);
-
-                            // Format answer and send tool result
-                            var formattedContent = FormatAnswerAsToolResult(answer.Answers);
-                            await client.SendToolResultAsync(answer.ToolUseId, formattedContent, cancellationToken: cancellationToken);
-                        }
 
                         // Stop after result message
                         if (evt.EventType == SseEventTypes.ResultReceived)
@@ -383,12 +430,6 @@ public class WorkerSessionService : IAsyncDisposable
         }
     }
 
-    private static string FormatAnswerAsToolResult(Dictionary<string, string> answers)
-    {
-        var json = JsonSerializer.Serialize(new { answers });
-        return json;
-    }
-
     private List<(string EventType, object Data)> ProcessSdkMessage(
         WorkerSession session,
         Message sdkMessage,
@@ -404,19 +445,15 @@ public class WorkerSessionService : IAsyncDisposable
                 break;
 
             case AssistantMessage assistantMsg:
-                // Content may come from streaming events OR directly in the message
-                // (e.g., authentication errors return content directly without streaming)
                 List<ContentBlockReceivedData> contentToEmit;
 
                 if (currentContentBlocks.Count > 0)
                 {
-                    // Use content from streaming events
                     contentToEmit = new List<ContentBlockReceivedData>(currentContentBlocks);
                     currentContentBlocks.Clear();
                 }
                 else if (assistantMsg.Content.Count > 0)
                 {
-                    // Convert content blocks from the message directly
                     contentToEmit = ConvertAssistantContent(session.Id, assistantMsg.Content);
                 }
                 else
@@ -438,7 +475,6 @@ public class WorkerSessionService : IAsyncDisposable
             case ResultMessage resultMsg:
                 session.ConversationId = resultMsg.SessionId;
 
-                // Emit error event if the result indicates an error
                 if (resultMsg.IsError && !string.IsNullOrEmpty(resultMsg.Result))
                 {
                     events.Add((SseEventTypes.Error, new ErrorData
@@ -460,7 +496,6 @@ public class WorkerSessionService : IAsyncDisposable
                 break;
 
             case UserMessage userMsg:
-                // Handle tool results from SDK
                 var toolEvents = ProcessUserMessage(session, userMsg);
                 events.AddRange(toolEvents);
                 break;
@@ -588,16 +623,6 @@ public class WorkerSessionService : IAsyncDisposable
         // Emit content block received
         events.Add((SseEventTypes.ContentBlockReceived, block));
 
-        // Check for AskUserQuestion
-        if (block.ToolName == "AskUserQuestion" && !string.IsNullOrEmpty(block.ToolInput))
-        {
-            var questionEvent = TryParseAskUserQuestion(session, block);
-            if (questionEvent != null)
-            {
-                events.Add((SseEventTypes.QuestionReceived, questionEvent));
-            }
-        }
-
         return events;
     }
 
@@ -609,7 +634,6 @@ public class WorkerSessionService : IAsyncDisposable
         var toolUseId = GetStringValue(blockData, "id") ?? "";
         var toolName = GetStringValue(blockData, "name") ?? "unknown";
 
-        // Track tool use ID -> name mapping
         if (!string.IsNullOrEmpty(toolUseId))
         {
             var sessionToolUses = _sessionToolUses.GetOrAdd(session.Id, _ => new ConcurrentDictionary<string, string>());
@@ -669,11 +693,6 @@ public class WorkerSessionService : IAsyncDisposable
         return events;
     }
 
-    /// <summary>
-    /// Converts AssistantMessage content blocks to ContentBlockReceivedData.
-    /// Used when content comes directly in the message (not via streaming events),
-    /// such as authentication errors.
-    /// </summary>
     private List<ContentBlockReceivedData> ConvertAssistantContent(string sessionId, List<object> content)
     {
         var result = new List<ContentBlockReceivedData>();
@@ -725,58 +744,6 @@ public class WorkerSessionService : IAsyncDisposable
         }
 
         return result;
-    }
-
-    private QuestionReceivedData? TryParseAskUserQuestion(WorkerSession session, ContentBlockReceivedData block)
-    {
-        try
-        {
-            var toolInput = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(block.ToolInput!);
-            if (toolInput == null || !toolInput.TryGetValue("questions", out var questionsElement))
-                return null;
-
-            var questions = new List<UserQuestionData>();
-            foreach (var questionElement in questionsElement.EnumerateArray())
-            {
-                var options = new List<QuestionOptionData>();
-                if (questionElement.TryGetProperty("options", out var optionsElement))
-                {
-                    foreach (var optionElement in optionsElement.EnumerateArray())
-                    {
-                        options.Add(new QuestionOptionData
-                        {
-                            Label = optionElement.GetProperty("label").GetString() ?? "",
-                            Description = optionElement.GetProperty("description").GetString() ?? ""
-                        });
-                    }
-                }
-
-                questions.Add(new UserQuestionData
-                {
-                    Question = questionElement.GetProperty("question").GetString() ?? "",
-                    Header = questionElement.TryGetProperty("header", out var headerElement)
-                        ? headerElement.GetString() ?? "" : "",
-                    Options = options,
-                    MultiSelect = questionElement.TryGetProperty("multiSelect", out var multiSelectElement)
-                        && multiSelectElement.GetBoolean()
-                });
-            }
-
-            if (questions.Count == 0)
-                return null;
-
-            return new QuestionReceivedData
-            {
-                SessionId = session.Id,
-                QuestionId = Guid.NewGuid().ToString(),
-                ToolUseId = block.ToolUseId ?? "",
-                Questions = questions
-            };
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
     }
 
     private string GetToolNameForUseId(string sessionId, string toolUseId)

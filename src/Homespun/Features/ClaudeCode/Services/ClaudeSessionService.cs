@@ -352,7 +352,8 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                     Model: effectiveModel,
                     Prompt: message,
                     SystemPrompt: session.SystemPrompt,
-                    ResumeSessionId: session.ConversationId
+                    ResumeSessionId: session.ConversationId,
+                    PermissionMode: permissionMode
                 );
                 eventStream = _agentExecutionService.StartSessionAsync(startRequest, linkedCts.Token);
             }
@@ -362,7 +363,8 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                 var messageRequest = new AgentMessageRequest(
                     SessionId: agentSessionId,
                     Message: message,
-                    Model: effectiveModel
+                    Model: effectiveModel,
+                    PermissionMode: permissionMode
                 );
                 eventStream = _agentExecutionService.SendMessageAsync(messageRequest, linkedCts.Token);
             }
@@ -460,9 +462,9 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                 // Broadcast the content block
                 await _hubContext.BroadcastContentBlockReceived(sessionId, content);
 
-                // Check for AskUserQuestion tool
+                // Check for AskUserQuestion tool (both built-in and custom MCP tool)
                 if (contentEvt.Type == ClaudeContentType.ToolUse &&
-                    contentEvt.ToolName == "AskUserQuestion" &&
+                    (contentEvt.ToolName == "AskUserQuestion" || contentEvt.ToolName == "mcp__homespun__ask_user") &&
                     !string.IsNullOrEmpty(contentEvt.ToolInput))
                 {
                     await HandleAskUserQuestionTool(sessionId, session, content, cancellationToken);

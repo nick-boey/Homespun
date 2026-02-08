@@ -308,6 +308,7 @@ public class ControlRequest : Message
     public required string ControlType { get; set; }
     public Dictionary<string, object>? Data { get; set; }
     public string? ParentToolUseId { get; set; }
+    public string? RequestId { get; set; }
 }
 
 /// <summary>

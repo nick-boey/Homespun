@@ -1,10 +1,10 @@
 using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
-using System.Text;
 using System.Text.Json;
 using Homespun.ClaudeAgentSdk;
 using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.ClaudeCode.Exceptions;
+using Microsoft.Extensions.AI;
 
 namespace Homespun.Features.ClaudeCode.Services;
 
@@ -50,9 +50,19 @@ public class LocalAgentExecutionService : IAgentExecutionService, IAsyncDisposab
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var sessionId = Guid.NewGuid().ToString();
+        var channel = System.Threading.Channels.Channel.CreateUnbounded<AgentEvent>();
 
-        var options = _optionsFactory.Create(request.Mode, request.WorkingDirectory, request.Model, request.SystemPrompt);
-        options.PermissionMode = PermissionMode.BypassPermissions;
+        // Create per-session AIFunction for ask_user MCP tool
+        var askUserFunction = CreateAskUserFunction(sessionId, channel);
+
+        var options = _optionsFactory.Create(request.Mode, request.WorkingDirectory, request.Model,
+            request.SystemPrompt, askUserFunction);
+        var effectivePermissionMode = request.PermissionMode ?? PermissionMode.BypassPermissions;
+        options.PermissionMode = effectivePermissionMode;
+        if (effectivePermissionMode != PermissionMode.BypassPermissions)
+        {
+            options.PermissionPromptToolName = "stdio";
+        }
         options.IncludePartialMessages = true;
 
         if (!string.IsNullOrEmpty(request.ResumeSessionId))
@@ -81,7 +91,7 @@ public class LocalAgentExecutionService : IAgentExecutionService, IAsyncDisposab
 
         yield return new AgentSessionStartedEvent(sessionId, session.ConversationId);
 
-        await foreach (var evt in ProcessMessagesAsync(session, request.Prompt, cts.Token))
+        await foreach (var evt in ProcessMessagesAsync(session, request.Prompt, channel, cts.Token))
         {
             yield return evt;
         }
@@ -100,10 +110,20 @@ public class LocalAgentExecutionService : IAgentExecutionService, IAsyncDisposab
 
         session.LastActivityAt = DateTime.UtcNow;
 
+        var channel = System.Threading.Channels.Channel.CreateUnbounded<AgentEvent>();
+
+        // Create per-query AIFunction for ask_user MCP tool
+        var askUserFunction = CreateAskUserFunction(request.SessionId, channel);
+
         // Create options for this query
         var queryOptions = _optionsFactory.Create(session.Mode, session.WorkingDirectory,
-            request.Model ?? session.Model, session.SystemPrompt);
-        queryOptions.PermissionMode = PermissionMode.BypassPermissions;
+            request.Model ?? session.Model, session.SystemPrompt, askUserFunction);
+        var effectivePermissionMode = request.PermissionMode ?? PermissionMode.BypassPermissions;
+        queryOptions.PermissionMode = effectivePermissionMode;
+        if (effectivePermissionMode != PermissionMode.BypassPermissions)
+        {
+            queryOptions.PermissionPromptToolName = "stdio";
+        }
         queryOptions.IncludePartialMessages = true;
         queryOptions.Resume = session.ConversationId;
 
@@ -114,7 +134,7 @@ public class LocalAgentExecutionService : IAgentExecutionService, IAsyncDisposab
         session = session with { Options = queryOptions };
         _sessions[request.SessionId] = session;
 
-        await foreach (var evt in ProcessMessagesAsync(session, request.Message, linkedCts.Token))
+        await foreach (var evt in ProcessMessagesAsync(session, request.Message, channel, linkedCts.Token))
         {
             yield return evt;
         }
@@ -135,7 +155,7 @@ public class LocalAgentExecutionService : IAgentExecutionService, IAsyncDisposab
             return Task.CompletedTask;
         }
 
-        // Complete the TCS with the answer - this unblocks the message loop in ProcessMessagesAsync
+        // Complete the TCS with the answer - this unblocks the MCP tool handler
         tcs.TrySetResult(request);
         return Task.CompletedTask;
     }
@@ -233,13 +253,56 @@ public class LocalAgentExecutionService : IAgentExecutionService, IAsyncDisposab
         }
     }
 
+    /// <summary>
+    /// Creates a per-session AIFunction for the ask_user MCP tool.
+    /// The handler emits an AgentQuestionEvent to the channel and blocks until the user answers.
+    /// </summary>
+    private AIFunction CreateAskUserFunction(
+        string sessionId,
+        System.Threading.Channels.Channel<AgentEvent> channel)
+    {
+        return AskUserQuestionFunction.Create(async (questions, cancellationToken) =>
+        {
+            _logger.LogInformation("ask_user MCP tool invoked for session {SessionId} with {Count} questions",
+                sessionId, questions.Count);
+
+            // Convert to AgentQuestion format
+            var agentQuestions = questions.Select(q => new AgentQuestion(
+                q.Question,
+                q.Header,
+                q.Options.Select(o => new AgentQuestionOption(o.Label, o.Description)).ToList(),
+                q.MultiSelect
+            )).ToList();
+
+            var toolUseId = Guid.NewGuid().ToString();
+            var questionEvent = new AgentQuestionEvent(
+                sessionId,
+                Guid.NewGuid().ToString(),
+                toolUseId,
+                agentQuestions
+            );
+
+            // Emit the question event to the UI
+            await channel.Writer.WriteAsync(questionEvent, cancellationToken);
+
+            // Wait for the user to answer
+            var tcs = new TaskCompletionSource<AgentAnswerRequest>(TaskCreationOptions.RunContinuationsAsynchronously);
+            _pendingQuestions[sessionId] = tcs;
+
+            var answer = await tcs.Task;
+            _pendingQuestions.TryRemove(sessionId, out _);
+
+            return answer.Answers;
+        });
+    }
+
     private async IAsyncEnumerable<AgentEvent> ProcessMessagesAsync(
         LocalSession session,
         string prompt,
+        System.Threading.Channels.Channel<AgentEvent> channel,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         var currentContentBlocks = new List<AgentContentBlockEvent>();
-        var channel = System.Threading.Channels.Channel.CreateUnbounded<AgentEvent>();
 
         // Start processing in background task
         _ = Task.Run(async () =>
@@ -256,25 +319,17 @@ public class LocalAgentExecutionService : IAgentExecutionService, IAsyncDisposab
 
                 await foreach (var msg in client.ReceiveMessagesAsync().WithCancellation(cancellationToken))
                 {
+                    // Handle control_request messages (permission prompts delegated via --permission-prompt-tool stdio)
+                    if (msg is ControlRequest controlRequest)
+                    {
+                        await HandleControlRequestAsync(controlRequest, client, cancellationToken);
+                        continue;
+                    }
+
                     var events = ProcessSdkMessage(session, msg, currentContentBlocks);
                     foreach (var evt in events)
                     {
                         await channel.Writer.WriteAsync(evt, cancellationToken);
-
-                        // When a question is detected, pause and wait for the answer
-                        if (evt is AgentQuestionEvent questionEvt)
-                        {
-                            var tcs = new TaskCompletionSource<AgentAnswerRequest>(TaskCreationOptions.RunContinuationsAsynchronously);
-                            _pendingQuestions[session.Id] = tcs;
-
-                            // Wait for the answer from AnswerQuestionAsync
-                            var answer = await tcs.Task;
-                            _pendingQuestions.TryRemove(session.Id, out _);
-
-                            // Format answer and send tool result
-                            var formattedContent = FormatAnswerAsToolResult(answer.Answers);
-                            await client.SendToolResultAsync(answer.ToolUseId, formattedContent, cancellationToken: cancellationToken);
-                        }
 
                         if (evt is AgentResultEvent resultEvt)
                         {
@@ -317,12 +372,6 @@ public class LocalAgentExecutionService : IAgentExecutionService, IAsyncDisposab
         {
             yield return evt;
         }
-    }
-
-    private static string FormatAnswerAsToolResult(Dictionary<string, string> answers)
-    {
-        var json = JsonSerializer.Serialize(new { answers });
-        return json;
     }
 
     private List<AgentEvent> ProcessSdkMessage(
@@ -472,16 +521,6 @@ public class LocalAgentExecutionService : IAgentExecutionService, IAsyncDisposab
         var block = currentContentBlocks[index];
         events.Add(block);
 
-        // Check for AskUserQuestion
-        if (block.ToolName == "AskUserQuestion" && !string.IsNullOrEmpty(block.ToolInput))
-        {
-            var questionEvent = TryParseAskUserQuestion(session, block);
-            if (questionEvent != null)
-            {
-                events.Add(questionEvent);
-            }
-        }
-
         return events;
     }
 
@@ -539,53 +578,57 @@ public class LocalAgentExecutionService : IAgentExecutionService, IAsyncDisposab
         return events;
     }
 
-    private AgentQuestionEvent? TryParseAskUserQuestion(LocalSession session, AgentContentBlockEvent block)
+    /// <summary>
+    /// Handles a control_request from the CLI (permission prompt delegated via --permission-prompt-tool stdio).
+    /// Auto-approves all tools. AskUserQuestion is handled via the custom MCP tool instead.
+    /// </summary>
+    private async Task HandleControlRequestAsync(
+        ControlRequest controlRequest,
+        ClaudeSdkClient client,
+        CancellationToken cancellationToken)
     {
-        try
+        var requestId = controlRequest.RequestId;
+        if (string.IsNullOrEmpty(requestId))
         {
-            var toolInput = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(block.ToolInput!);
-            if (toolInput == null || !toolInput.TryGetValue("questions", out var questionsElement))
-                return null;
-
-            var questions = new List<AgentQuestion>();
-            foreach (var questionElement in questionsElement.EnumerateArray())
-            {
-                var options = new List<AgentQuestionOption>();
-                if (questionElement.TryGetProperty("options", out var optionsElement))
-                {
-                    foreach (var optionElement in optionsElement.EnumerateArray())
-                    {
-                        options.Add(new AgentQuestionOption(
-                            optionElement.GetProperty("label").GetString() ?? "",
-                            optionElement.GetProperty("description").GetString() ?? ""
-                        ));
-                    }
-                }
-
-                questions.Add(new AgentQuestion(
-                    questionElement.GetProperty("question").GetString() ?? "",
-                    questionElement.TryGetProperty("header", out var headerElement)
-                        ? headerElement.GetString() ?? "" : "",
-                    options,
-                    questionElement.TryGetProperty("multiSelect", out var multiSelectElement)
-                        && multiSelectElement.GetBoolean()
-                ));
-            }
-
-            if (questions.Count == 0)
-                return null;
-
-            return new AgentQuestionEvent(
-                session.Id,
-                Guid.NewGuid().ToString(),
-                block.ToolUseId ?? "",
-                questions
-            );
+            _logger.LogWarning("ControlRequest missing request_id, cannot respond");
+            return;
         }
-        catch (JsonException)
-        {
+
+        var toolName = GetControlRequestToolName(controlRequest);
+        _logger.LogDebug("Auto-approving control request for tool {ToolName}", toolName);
+        var originalInput = ExtractOriginalInputAsObjectDictionary(controlRequest);
+        await client.SendControlResponseAsync(requestId, "allow", originalInput, cancellationToken: cancellationToken);
+    }
+
+    private static string? GetControlRequestToolName(ControlRequest controlRequest)
+    {
+        if (controlRequest.Data == null)
             return null;
+
+        if (controlRequest.Data.TryGetValue("tool_name", out var toolNameObj))
+        {
+            return toolNameObj is JsonElement element ? element.GetString() : toolNameObj?.ToString();
         }
+
+        return null;
+    }
+
+    private static Dictionary<string, object>? ExtractOriginalInputAsObjectDictionary(ControlRequest controlRequest)
+    {
+        if (controlRequest.Data == null)
+            return null;
+
+        if (controlRequest.Data.TryGetValue("input", out var inputObj) && inputObj is JsonElement inputElement)
+        {
+            var input = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(inputElement.GetRawText());
+            if (input == null) return null;
+            var result = new Dictionary<string, object>();
+            foreach (var kvp in input)
+                result[kvp.Key] = kvp.Value;
+            return result;
+        }
+
+        return null;
     }
 
     private string GetToolNameForUseId(string sessionId, string toolUseId)

@@ -1,3 +1,5 @@
+using System.Text.Json;
+using Homespun.ClaudeAgentSdk;
 using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.ClaudeCode.Services;
 using Microsoft.Extensions.Logging;
@@ -303,6 +305,247 @@ public class LocalAgentExecutionServiceTests
         // Act & Assert
         Assert.DoesNotThrowAsync(async () =>
             await _service.DisposeAsync());
+    }
+
+    [Test]
+    public void AgentStartRequest_DefaultsPermissionModeToNull()
+    {
+        // Arrange & Act
+        var request = new AgentStartRequest(
+            WorkingDirectory: "/test",
+            Mode: SessionMode.Build,
+            Model: "sonnet",
+            Prompt: "hello"
+        );
+
+        // Assert
+        Assert.That(request.PermissionMode, Is.Null);
+    }
+
+    [Test]
+    public void AgentStartRequest_AcceptsPermissionMode()
+    {
+        // Arrange & Act
+        var request = new AgentStartRequest(
+            WorkingDirectory: "/test",
+            Mode: SessionMode.Build,
+            Model: "sonnet",
+            Prompt: "hello",
+            PermissionMode: PermissionMode.Default
+        );
+
+        // Assert
+        Assert.That(request.PermissionMode, Is.EqualTo(PermissionMode.Default));
+    }
+
+    [Test]
+    public void AgentMessageRequest_DefaultsPermissionModeToNull()
+    {
+        // Arrange & Act
+        var request = new AgentMessageRequest(
+            SessionId: "session-1",
+            Message: "hello"
+        );
+
+        // Assert
+        Assert.That(request.PermissionMode, Is.Null);
+    }
+
+    [Test]
+    public void AgentMessageRequest_AcceptsPermissionMode()
+    {
+        // Arrange & Act
+        var request = new AgentMessageRequest(
+            SessionId: "session-1",
+            Message: "hello",
+            PermissionMode: PermissionMode.AcceptEdits
+        );
+
+        // Assert
+        Assert.That(request.PermissionMode, Is.EqualTo(PermissionMode.AcceptEdits));
+    }
+
+    [Test]
+    public void MessageParser_ParsesControlRequest_WithRequestId()
+    {
+        // Arrange
+        var json = """
+        {
+            "type": "control_request",
+            "control_type": "tool_permission",
+            "request_id": "req-123",
+            "data": {
+                "tool_name": "Bash",
+                "input": { "command": "ls" }
+            }
+        }
+        """;
+        var data = JsonSerializer.Deserialize<Dictionary<string, object>>(json)!;
+
+        // Act
+        var message = MessageParser.ParseMessage(data);
+
+        // Assert
+        Assert.That(message, Is.InstanceOf<ControlRequest>());
+        var controlRequest = (ControlRequest)message;
+        Assert.Multiple(() =>
+        {
+            Assert.That(controlRequest.ControlType, Is.EqualTo("tool_permission"));
+            Assert.That(controlRequest.RequestId, Is.EqualTo("req-123"));
+            Assert.That(controlRequest.Data, Is.Not.Null);
+        });
+    }
+
+    [Test]
+    public void MessageParser_ParsesControlRequest_WithoutRequestId()
+    {
+        // Arrange
+        var json = """
+        {
+            "type": "control_request",
+            "control_type": "tool_permission",
+            "data": {
+                "tool_name": "Read"
+            }
+        }
+        """;
+        var data = JsonSerializer.Deserialize<Dictionary<string, object>>(json)!;
+
+        // Act
+        var message = MessageParser.ParseMessage(data);
+
+        // Assert
+        Assert.That(message, Is.InstanceOf<ControlRequest>());
+        var controlRequest = (ControlRequest)message;
+        Assert.Multiple(() =>
+        {
+            Assert.That(controlRequest.ControlType, Is.EqualTo("tool_permission"));
+            Assert.That(controlRequest.RequestId, Is.Null);
+        });
+    }
+
+    [Test]
+    public void ControlResponse_AllowFormat_IsCorrectJson()
+    {
+        // Arrange - verify the JSON format matches the CLI's expected nested structure
+        // updatedInput must always be present for allow responses (even if empty)
+        var permissionResult = new Dictionary<string, object>
+        {
+            ["behavior"] = "allow",
+            ["updatedInput"] = new Dictionary<string, object>()
+        };
+
+        var message = new
+        {
+            type = "control_response",
+            response = new
+            {
+                subtype = "success",
+                request_id = "req-123",
+                response = permissionResult
+            }
+        };
+
+        // Act
+        var json = JsonSerializer.Serialize(message);
+        var parsed = JsonSerializer.Deserialize<JsonElement>(json);
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(parsed.GetProperty("type").GetString(), Is.EqualTo("control_response"));
+            var response = parsed.GetProperty("response");
+            Assert.That(response.GetProperty("subtype").GetString(), Is.EqualTo("success"));
+            Assert.That(response.GetProperty("request_id").GetString(), Is.EqualTo("req-123"));
+            var innerResponse = response.GetProperty("response");
+            Assert.That(innerResponse.GetProperty("behavior").GetString(), Is.EqualTo("allow"));
+            Assert.That(innerResponse.TryGetProperty("updatedInput", out _), Is.True,
+                "Allow responses must always include updatedInput");
+        });
+    }
+
+    [Test]
+    public void ControlResponse_AllowWithUpdatedInput_IncludesAnswers()
+    {
+        // Arrange
+        var updatedInput = new Dictionary<string, object>
+        {
+            ["answers"] = new Dictionary<string, string>
+            {
+                ["Which database?"] = "PostgreSQL"
+            }
+        };
+
+        var permissionResult = new Dictionary<string, object>
+        {
+            ["behavior"] = "allow",
+            ["updatedInput"] = updatedInput
+        };
+
+        var message = new
+        {
+            type = "control_response",
+            response = new
+            {
+                subtype = "success",
+                request_id = "req-456",
+                response = permissionResult
+            }
+        };
+
+        // Act
+        var json = JsonSerializer.Serialize(message);
+        var parsed = JsonSerializer.Deserialize<JsonElement>(json);
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(parsed.GetProperty("type").GetString(), Is.EqualTo("control_response"));
+            var response = parsed.GetProperty("response");
+            Assert.That(response.GetProperty("subtype").GetString(), Is.EqualTo("success"));
+            Assert.That(response.GetProperty("request_id").GetString(), Is.EqualTo("req-456"));
+            var innerResponse = response.GetProperty("response");
+            Assert.That(innerResponse.GetProperty("behavior").GetString(), Is.EqualTo("allow"));
+            Assert.That(innerResponse.TryGetProperty("updatedInput", out _), Is.True);
+        });
+    }
+
+    [Test]
+    public void ControlResponse_DenyFormat_IsCorrectJson()
+    {
+        // Arrange
+        var permissionResult = new Dictionary<string, object>
+        {
+            ["behavior"] = "deny",
+            ["message"] = "User denied this action"
+        };
+
+        var message = new
+        {
+            type = "control_response",
+            response = new
+            {
+                subtype = "success",
+                request_id = "req-789",
+                response = permissionResult
+            }
+        };
+
+        // Act
+        var json = JsonSerializer.Serialize(message);
+        var parsed = JsonSerializer.Deserialize<JsonElement>(json);
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(parsed.GetProperty("type").GetString(), Is.EqualTo("control_response"));
+            var response = parsed.GetProperty("response");
+            Assert.That(response.GetProperty("subtype").GetString(), Is.EqualTo("success"));
+            Assert.That(response.GetProperty("request_id").GetString(), Is.EqualTo("req-789"));
+            var innerResponse = response.GetProperty("response");
+            Assert.That(innerResponse.GetProperty("behavior").GetString(), Is.EqualTo("deny"));
+            Assert.That(innerResponse.GetProperty("message").GetString(), Is.EqualTo("User denied this action"));
+        });
     }
 }
 
