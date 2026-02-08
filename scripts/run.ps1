@@ -344,10 +344,20 @@ try {
         Write-Host "      Using GHCR worker: $WorkerImage" -ForegroundColor Green
     }
     else {
-        # Development: Build both images locally
+        # Development: Build base + both app images locally
         $ImageName = "homespun:local"
         $WorkerImage = "homespun-worker:local"
+        $BaseImage = "homespun-base:local"
         $BuildConfig = if ($DebugBuild) { "Debug" } else { "Release" }
+
+        Write-Host "      Building base tooling image..." -ForegroundColor Cyan
+        $env:DOCKER_BUILDKIT = "1"
+        docker build -t $BaseImage -f "$RepoRoot/Dockerfile.base" $RepoRoot
+        if ($LASTEXITCODE -ne 0) {
+            Write-Error "Failed to build base Docker image."
+        }
+        Write-Host "      Base image built: $BaseImage" -ForegroundColor Green
+
         Write-Host "      Building main Homespun image ($BuildConfig)..." -ForegroundColor Cyan
         docker build -t $ImageName --build-arg BUILD_CONFIGURATION=$BuildConfig $RepoRoot
         if ($LASTEXITCODE -ne 0) {
