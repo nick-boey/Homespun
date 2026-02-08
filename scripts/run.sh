@@ -157,13 +157,22 @@ if [ "$USE_WATCHTOWER" = true ]; then
     log_success "      Using GHCR image: $IMAGE_NAME"
     log_success "      Using GHCR worker: $WORKER_IMAGE"
 else
-    # Development: Build both images locally
+    # Development: Build base + both app images locally
     IMAGE_NAME="homespun:local"
     WORKER_IMAGE="homespun-worker:local"
+    BASE_IMAGE="homespun-base:local"
     BUILD_CONFIG="Release"
     if [ "$USE_DEBUG" = true ]; then
         BUILD_CONFIG="Debug"
     fi
+
+    log_info "      Building base tooling image..."
+    if ! DOCKER_BUILDKIT=1 docker build -t "$BASE_IMAGE" -f "$REPO_ROOT/Dockerfile.base" "$REPO_ROOT"; then
+        log_error "Failed to build base Docker image."
+        exit 1
+    fi
+    log_success "      Base image built: $BASE_IMAGE"
+
     log_info "      Building main Homespun image ($BUILD_CONFIG)..."
     if ! docker build -t "$IMAGE_NAME" --build-arg BUILD_CONFIGURATION="$BUILD_CONFIG" "$REPO_ROOT"; then
         log_error "Failed to build main Docker image."
