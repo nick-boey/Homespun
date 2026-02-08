@@ -1,3 +1,6 @@
+using Fleece.Core.Models;
+using Fleece.Core.Serialization;
+using Fleece.Core.Services;
 using Homespun.Features.Commands;
 using Homespun.Features.Fleece.Models;
 
@@ -10,6 +13,7 @@ public class FleeceIssuesSyncService(
     ICommandRunner commandRunner,
     ILogger<FleeceIssuesSyncService> logger) : IFleeceIssuesSyncService
 {
+    private readonly IssueMerger _issueMerger = new();
     public async Task<BranchStatusResult> CheckBranchStatusAsync(string projectPath, string defaultBranch, CancellationToken ct = default)
     {
         logger.LogInformation("Checking branch status for {ProjectPath}, expected branch: {Branch}", projectPath, defaultBranch);
@@ -164,56 +168,75 @@ public class FleeceIssuesSyncService(
             logger.LogInformation("No changes in .fleece/ folder to commit");
         }
 
-        // Step 4: If we're behind remote, we need to pull first before pushing
+        // Step 4: If we're behind remote, merge remote changes using field-level merging for .fleece/
         if (branchStatus.IsBehindRemote)
         {
-            logger.LogInformation("Local branch is {Count} commits behind remote, attempting to pull and rebase", branchStatus.CommitsBehind);
+            logger.LogInformation("Local branch is {Count} commits behind remote, merging remote changes", branchStatus.CommitsBehind);
 
-            // If there are non-fleece changes, we need to warn the user
-            if (nonFleeceChanges.Count > 0)
+            // Merge .fleece/ content using field-level merging (last-writer-wins per field)
+            var mergeResult = await MergeFleeceFromRemoteAsync(projectPath, defaultBranch, ct);
+            if (!mergeResult.Success)
             {
-                logger.LogWarning("Cannot automatically pull: there are uncommitted non-fleece changes that may cause conflicts");
                 return new FleeceIssueSyncResult(
                     Success: false,
-                    ErrorMessage: "Your local branch is behind the remote and you have uncommitted non-fleece changes. Please discard non-fleece changes or commit them first.",
+                    ErrorMessage: mergeResult.ErrorMessage,
                     FilesCommitted: filesCount,
                     PushSucceeded: false,
-                    RequiresPullFirst: true,
-                    HasNonFleeceChanges: true,
-                    NonFleeceChangedFiles: nonFleeceChanges);
+                    RequiresPullFirst: true);
             }
 
-            // Try to pull with rebase
-            var pullResult = await commandRunner.RunAsync("git", $"pull origin {defaultBranch} --rebase", projectPath);
-            if (!pullResult.Success)
+            if (mergeResult.HasChanges)
             {
-                var hasConflicts = DetectConflict(pullResult.Error, pullResult.Output);
-                logger.LogWarning("Pull failed (hasConflicts={HasConflicts}): {Error}", hasConflicts, pullResult.Error);
+                // Stage and commit the merged .fleece/ content
+                var addMergedResult = await commandRunner.RunAsync("git", "add .fleece/", projectPath);
+                if (!addMergedResult.Success)
+                {
+                    logger.LogWarning("Failed to stage merged .fleece/ files: {Error}", addMergedResult.Error);
+                    return new FleeceIssueSyncResult(false, $"Failed to stage merged files: {addMergedResult.Error}", filesCount, false);
+                }
 
-                // Check again for non-fleece changes that might have caused the conflict
-                var conflictFiles = await GetNonFleeceChangesAsync(projectPath);
-
-                // If pull failed, we need to abort the rebase
-                await commandRunner.RunAsync("git", "rebase --abort", projectPath);
-
-                return new FleeceIssueSyncResult(
-                    Success: false,
-                    ErrorMessage: $"Failed to pull from remote: {pullResult.Error}. The sync was aborted.",
-                    FilesCommitted: filesCount,
-                    PushSucceeded: false,
-                    RequiresPullFirst: true,
-                    HasNonFleeceChanges: conflictFiles.Count > 0,
-                    NonFleeceChangedFiles: conflictFiles.Count > 0 ? conflictFiles : null);
+                var commitMergedResult = await commandRunner.RunAsync("git", "commit -m \"chore: merge fleece issues from remote\"", projectPath);
+                if (!commitMergedResult.Success && !commitMergedResult.Output.Contains("nothing to commit") && !commitMergedResult.Error.Contains("nothing to commit"))
+                {
+                    logger.LogWarning("Failed to commit merged .fleece/ files: {Error}", commitMergedResult.Error);
+                    return new FleeceIssueSyncResult(false, $"Failed to commit merged files: {commitMergedResult.Error}", filesCount, false);
+                }
             }
 
-            logger.LogInformation("Successfully pulled and rebased from remote");
+            // Use git merge to integrate remote history (handles non-fleece files naturally)
+            var gitMergeResult = await commandRunner.RunAsync("git", $"merge origin/{defaultBranch} --no-edit", projectPath);
+            if (!gitMergeResult.Success)
+            {
+                var hasConflicts = DetectConflict(gitMergeResult.Error, gitMergeResult.Output);
+                logger.LogWarning("Git merge failed (hasConflicts={HasConflicts}): {Error}", hasConflicts, gitMergeResult.Error);
+
+                // Check if the conflicts are only in .fleece/ files - we can resolve those
+                var fleeceConflictResolved = await TryResolveFleeceConflictsAsync(projectPath, ct);
+                if (!fleeceConflictResolved)
+                {
+                    // Non-fleece conflicts - abort merge and report error
+                    await commandRunner.RunAsync("git", "merge --abort", projectPath);
+
+                    var conflictFiles = await GetNonFleeceChangesAsync(projectPath);
+                    return new FleeceIssueSyncResult(
+                        Success: false,
+                        ErrorMessage: $"Failed to merge from remote: {gitMergeResult.Error}. The sync was aborted.",
+                        FilesCommitted: filesCount,
+                        PushSucceeded: false,
+                        RequiresPullFirst: true,
+                        HasNonFleeceChanges: conflictFiles.Count > 0,
+                        NonFleeceChangedFiles: conflictFiles.Count > 0 ? conflictFiles : null);
+                }
+            }
+
+            logger.LogInformation("Successfully merged remote changes");
         }
 
         // Step 5: Push to default branch
         // Only push if we have commits to push (either we committed fleece changes or we're ahead)
         var needsToPush = hasFleeceChanges || branchStatus.CommitsAhead > 0;
 
-        // Re-check if we need to push after the rebase
+        // Re-check if we need to push after the merge
         if (!needsToPush)
         {
             var revListCheck = await commandRunner.RunAsync("git", $"rev-list --left-right --count origin/{defaultBranch}...HEAD", projectPath);
@@ -271,22 +294,51 @@ public class FleeceIssuesSyncService(
             return new PullResult(false, false, $"Failed to fetch: {fetchResult.Error}");
         }
 
-        // Pull with rebase
-        var pullResult = await commandRunner.RunAsync("git", $"pull origin {defaultBranch} --rebase", projectPath);
-        if (pullResult.Success)
+        // Merge .fleece/ content using field-level merging before git merge
+        var mergeFleeceResult = await MergeFleeceFromRemoteAsync(projectPath, defaultBranch, ct);
+        if (!mergeFleeceResult.Success)
+        {
+            logger.LogWarning("Failed to merge fleece content: {Error}", mergeFleeceResult.ErrorMessage);
+            return new PullResult(false, false, mergeFleeceResult.ErrorMessage);
+        }
+
+        if (mergeFleeceResult.HasChanges)
+        {
+            // Stage and commit the merged .fleece/ content
+            await commandRunner.RunAsync("git", "add .fleece/", projectPath);
+            var commitResult = await commandRunner.RunAsync("git", "commit -m \"chore: merge fleece issues from remote\"", projectPath);
+            if (!commitResult.Success && !commitResult.Output.Contains("nothing to commit") && !commitResult.Error.Contains("nothing to commit"))
+            {
+                logger.LogWarning("Failed to commit merged fleece: {Error}", commitResult.Error);
+            }
+        }
+
+        // Use git merge instead of pull --rebase
+        var gitMergeResult = await commandRunner.RunAsync("git", $"merge origin/{defaultBranch} --no-edit", projectPath);
+        if (gitMergeResult.Success)
         {
             logger.LogInformation("Successfully pulled changes from {Branch}", defaultBranch);
             return new PullResult(true, false, null);
         }
 
-        // Check if it's a conflict
-        var hasConflicts = DetectConflict(pullResult.Error, pullResult.Output);
-        logger.LogWarning("Pull failed (hasConflicts={HasConflicts}): {Error}", hasConflicts, pullResult.Error);
+        // Check if we can resolve .fleece/ conflicts (our merged version is correct)
+        var fleeceConflictResolved = await TryResolveFleeceConflictsAsync(projectPath, ct);
+        if (fleeceConflictResolved)
+        {
+            logger.LogInformation("Successfully pulled changes from {Branch} (resolved .fleece/ conflicts)", defaultBranch);
+            return new PullResult(true, false, null);
+        }
+
+        // Non-fleece conflicts - abort merge and report
+        var hasConflicts = DetectConflict(gitMergeResult.Error, gitMergeResult.Output);
+        logger.LogWarning("Pull failed (hasConflicts={HasConflicts}): {Error}", hasConflicts, gitMergeResult.Error);
+
+        await commandRunner.RunAsync("git", "merge --abort", projectPath);
 
         return new PullResult(
             Success: false,
             HasConflicts: hasConflicts,
-            ErrorMessage: pullResult.Error,
+            ErrorMessage: gitMergeResult.Error,
             HasNonFleeceChanges: nonFleeceChanges.Count > 0,
             NonFleeceChangedFiles: nonFleeceChanges.Count > 0 ? nonFleeceChanges : null);
     }
@@ -387,6 +439,149 @@ public class FleeceIssuesSyncService(
         }
 
         logger.LogInformation("Successfully discarded non-fleece changes");
+        return true;
+    }
+
+    /// <summary>
+    /// Merges .fleece/ content from remote using field-level (last-writer-wins) merging.
+    /// Loads local issues, restores remote .fleece/ via git, loads remote issues,
+    /// merges per-issue using IssueMerger, and writes the merged result.
+    /// </summary>
+    private async Task<(bool Success, string? ErrorMessage, bool HasChanges)> MergeFleeceFromRemoteAsync(
+        string projectPath, string defaultBranch, CancellationToken ct)
+    {
+        var serializer = new JsonlSerializer();
+        var schemaValidator = new SchemaValidator();
+
+        try
+        {
+            // 1. Load local .fleece/ issues and changes into memory
+            var localStorage = new JsonlStorageService(projectPath, serializer, schemaValidator);
+            var localIssues = await localStorage.LoadIssuesAsync(ct);
+            var localChanges = await localStorage.LoadChangesAsync(ct);
+
+            var localIssueMap = localIssues.ToDictionary(i => i.Id, StringComparer.OrdinalIgnoreCase);
+
+            // 2. Restore remote .fleece/ files using git restore
+            var restoreResult = await commandRunner.RunAsync("git", $"restore --source origin/{defaultBranch} -- .fleece/", projectPath);
+            if (!restoreResult.Success)
+            {
+                logger.LogWarning("Failed to restore .fleece/ from remote: {Error}", restoreResult.Error);
+                // If restore fails (e.g., no .fleece/ on remote), restore local files and continue
+                await commandRunner.RunAsync("git", "checkout -- .fleece/", projectPath);
+                return (true, null, false);
+            }
+
+            // 3. Load remote .fleece/ issues and changes
+            var remoteStorage = new JsonlStorageService(projectPath, serializer, schemaValidator);
+            var remoteIssues = await remoteStorage.LoadIssuesAsync(ct);
+            var remoteChanges = await remoteStorage.LoadChangesAsync(ct);
+
+            var remoteIssueMap = remoteIssues.ToDictionary(i => i.Id, StringComparer.OrdinalIgnoreCase);
+
+            // 4. Merge issues using field-level merging
+            var mergedIssues = new List<Issue>();
+            var allIssueIds = new HashSet<string>(localIssueMap.Keys, StringComparer.OrdinalIgnoreCase);
+            allIssueIds.UnionWith(remoteIssueMap.Keys);
+
+            foreach (var issueId in allIssueIds)
+            {
+                var hasLocal = localIssueMap.TryGetValue(issueId, out var localIssue);
+                var hasRemote = remoteIssueMap.TryGetValue(issueId, out var remoteIssue);
+
+                if (hasLocal && hasRemote)
+                {
+                    // Both sides have the issue - merge using IssueMerger (last-writer-wins per field)
+                    var mergeResult = _issueMerger.Merge(localIssue!, remoteIssue!);
+                    mergedIssues.Add(mergeResult.MergedIssue);
+                }
+                else if (hasLocal)
+                {
+                    // Only local has it - keep it
+                    mergedIssues.Add(localIssue!);
+                }
+                else
+                {
+                    // Only remote has it - keep it
+                    mergedIssues.Add(remoteIssue!);
+                }
+            }
+
+            // 5. Merge change records by deduplicating on ChangeId
+            var mergedChanges = localChanges
+                .Concat(remoteChanges)
+                .GroupBy(c => c.ChangeId)
+                .Select(g => g.First())
+                .OrderBy(c => c.ChangedAt)
+                .ToList();
+
+            // 6. Write merged result back to .fleece/
+            var mergedStorage = new JsonlStorageService(projectPath, serializer, schemaValidator);
+            await mergedStorage.SaveIssuesAsync(mergedIssues, ct);
+            await mergedStorage.SaveChangesAsync(mergedChanges, ct);
+
+            logger.LogInformation("Merged {IssueCount} issues and {ChangeCount} changes from remote",
+                mergedIssues.Count, mergedChanges.Count);
+
+            return (true, null, true);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to merge .fleece/ content from remote");
+
+            // Try to restore the working directory to a clean state
+            await commandRunner.RunAsync("git", "checkout -- .fleece/", projectPath);
+
+            return (false, $"Failed to merge fleece content: {ex.Message}", false);
+        }
+    }
+
+    /// <summary>
+    /// Attempts to resolve .fleece/ conflicts after a git merge by using our already-merged content.
+    /// Returns true if all conflicts were in .fleece/ and were resolved.
+    /// </summary>
+    private async Task<bool> TryResolveFleeceConflictsAsync(string projectPath, CancellationToken ct)
+    {
+        // Check what files are in conflict
+        var diffResult = await commandRunner.RunAsync("git", "diff --name-only --diff-filter=U", projectPath);
+        if (!diffResult.Success || string.IsNullOrWhiteSpace(diffResult.Output))
+        {
+            return false;
+        }
+
+        var conflictedFiles = diffResult.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+
+        // Check if ALL conflicts are in .fleece/
+        var hasNonFleeceConflicts = conflictedFiles.Any(f =>
+            !f.StartsWith(".fleece/", StringComparison.OrdinalIgnoreCase));
+
+        if (hasNonFleeceConflicts)
+        {
+            return false;
+        }
+
+        // All conflicts are in .fleece/ - resolve with our version (which is already merged)
+        var checkoutResult = await commandRunner.RunAsync("git", "checkout --ours -- .fleece/", projectPath);
+        if (!checkoutResult.Success)
+        {
+            return false;
+        }
+
+        var addResult = await commandRunner.RunAsync("git", "add .fleece/", projectPath);
+        if (!addResult.Success)
+        {
+            return false;
+        }
+
+        // Complete the merge with a commit
+        var commitResult = await commandRunner.RunAsync("git", "commit --no-edit", projectPath);
+        if (!commitResult.Success)
+        {
+            logger.LogWarning("Failed to complete merge commit after resolving .fleece/ conflicts: {Error}", commitResult.Error);
+            return false;
+        }
+
+        logger.LogInformation("Resolved .fleece/ conflicts using merged content");
         return true;
     }
 
