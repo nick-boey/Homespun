@@ -84,6 +84,16 @@ public interface IClaudeSessionService
     Task StopSessionAsync(string sessionId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Stops all sessions associated with an entity (issue/PR).
+    /// This finds all sessions with the given entity ID and stops each one,
+    /// then cleans up any orphaned containers.
+    /// </summary>
+    /// <param name="entityId">The entity ID (issue/PR) to stop all sessions for.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The number of sessions that were stopped.</returns>
+    Task<int> StopAllSessionsForEntityAsync(string entityId, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Interrupts the current execution of a session without fully stopping it.
     /// The session remains alive in WaitingForInput state so the user can send another message to resume.
     /// </summary>

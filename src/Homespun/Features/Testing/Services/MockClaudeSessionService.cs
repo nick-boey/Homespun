@@ -260,6 +260,22 @@ public class MockClaudeSessionService : IClaudeSessionService
         return Task.CompletedTask;
     }
 
+    public async Task<int> StopAllSessionsForEntityAsync(string entityId, CancellationToken cancellationToken = default)
+    {
+        _logger.LogDebug("[Mock] StopAllSessionsForEntity {EntityId}", entityId);
+
+        var sessions = _sessionStore.GetAllByEntityId(entityId);
+        var stoppedCount = 0;
+
+        foreach (var session in sessions)
+        {
+            await StopSessionAsync(session.Id, cancellationToken);
+            stoppedCount++;
+        }
+
+        return stoppedCount;
+    }
+
     public Task InterruptSessionAsync(string sessionId, CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("[Mock] InterruptSession {SessionId}", sessionId);

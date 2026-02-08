@@ -384,6 +384,90 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         }
     }
 
+    /// <inheritdoc />
+    public Task<IReadOnlyList<AgentSessionStatus>> ListSessionsAsync(CancellationToken cancellationToken = default)
+    {
+        var statuses = _sessions.Values.Select(session => new AgentSessionStatus(
+            session.SessionId,
+            session.WorkingDirectory,
+            SessionMode.Build, // TODO: Store actual mode
+            "sonnet", // TODO: Store actual model
+            session.ConversationId,
+            session.CreatedAt,
+            session.LastActivityAt
+        )).ToList().AsReadOnly();
+
+        return Task.FromResult<IReadOnlyList<AgentSessionStatus>>(statuses);
+    }
+
+    /// <inheritdoc />
+    public async Task<int> CleanupOrphanedContainersAsync(CancellationToken cancellationToken = default)
+    {
+        var cleanedUp = 0;
+
+        try
+        {
+            // List all running containers matching homespun-agent- prefix
+            var startInfo = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "docker",
+                Arguments = "ps --filter \"name=homespun-agent-\" --format \"{{.ID}}\t{{.Names}}\"",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using var process = System.Diagnostics.Process.Start(startInfo);
+            if (process == null)
+            {
+                _logger.LogWarning("Failed to start docker ps process for orphan detection");
+                return 0;
+            }
+
+            var stdout = await process.StandardOutput.ReadToEndAsync(cancellationToken);
+            await process.WaitForExitAsync(cancellationToken);
+
+            if (process.ExitCode != 0)
+            {
+                _logger.LogWarning("docker ps exited with code {ExitCode} during orphan detection", process.ExitCode);
+                return 0;
+            }
+
+            // Get set of tracked container IDs
+            var trackedContainerIds = _sessions.Values.Select(s => s.ContainerId).ToHashSet();
+
+            // Parse output and find orphaned containers
+            foreach (var line in stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var parts = line.Split('\t', 2);
+                if (parts.Length < 2) continue;
+
+                var containerId = parts[0].Trim();
+                var containerName = parts[1].Trim();
+
+                if (!trackedContainerIds.Contains(containerId))
+                {
+                    _logger.LogInformation("Found orphaned container {ContainerName} ({ContainerId}), stopping",
+                        containerName, containerId);
+                    await StopContainerAsync(containerId);
+                    cleanedUp++;
+                }
+            }
+
+            if (cleanedUp > 0)
+            {
+                _logger.LogInformation("Cleaned up {Count} orphaned agent container(s)", cleanedUp);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error during orphaned container cleanup");
+        }
+
+        return cleanedUp;
+    }
+
     /// <summary>
     /// Translates a container path to a host path for Docker mounts.
     /// When running in a container, paths like /data/test-workspace need to be

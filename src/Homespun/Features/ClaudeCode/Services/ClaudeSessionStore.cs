@@ -29,6 +29,15 @@ public class ClaudeSessionStore : IClaudeSessionStore
     }
 
     /// <inheritdoc />
+    public IReadOnlyList<ClaudeSession> GetAllByEntityId(string entityId)
+    {
+        return _sessions.Values
+            .Where(s => s.EntityId == entityId)
+            .ToList()
+            .AsReadOnly();
+    }
+
+    /// <inheritdoc />
     public IReadOnlyList<ClaudeSession> GetByProjectId(string projectId)
     {
         return _sessions.Values

@@ -317,6 +317,30 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
         }
     }
 
+    /// <inheritdoc />
+    public Task<IReadOnlyList<AgentSessionStatus>> ListSessionsAsync(CancellationToken cancellationToken = default)
+    {
+        var statuses = _sessions.Values.Select(session => new AgentSessionStatus(
+            session.SessionId,
+            "/data",
+            SessionMode.Build,
+            "sonnet",
+            session.ConversationId,
+            session.CreatedAt,
+            session.LastActivityAt
+        )).ToList().AsReadOnly();
+
+        return Task.FromResult<IReadOnlyList<AgentSessionStatus>>(statuses);
+    }
+
+    /// <inheritdoc />
+    public Task<int> CleanupOrphanedContainersAsync(CancellationToken cancellationToken = default)
+    {
+        // Azure Container Apps sessions are managed by the platform;
+        // orphaned sessions are handled via session deletion.
+        return Task.FromResult(0);
+    }
+
     private async Task DeleteWorkerSessionAsync(string workerSessionId)
     {
         try
