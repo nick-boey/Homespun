@@ -17,24 +17,40 @@
         }
         else
         {
-            <div class="panel-tabs">
-                <button class="tab-button @(_activeTab == Tab.Issue ? "active" : "")"
-                        @onclick="() => SetActiveTab(Tab.Issue)">
-                    Issue
-                </button>
-                <button class="tab-button @(_activeTab == Tab.PR ? "active" : "")"
-                        @onclick="() => SetActiveTab(Tab.PR)">
-                    PR
-                </button>
-                <button class="tab-button @(_activeTab == Tab.Todos ? "active" : "")"
-                        @onclick="() => SetActiveTab(Tab.Todos)">
-                    To-do's
-                </button>
-                <button class="tab-button @(_activeTab == Tab.Files ? "active" : "")"
-                        @onclick="() => SetActiveTab(Tab.Files)">
-                    Files
-                </button>
-            </div>
+            <ul class="nav nav-tabs panel-nav-tabs">
+                <li class="nav-item">
+                    <a class="nav-link @(_activeTab == Tab.Issue ? "active" : "")"
+                       href="#"
+                       @onclick="() => SetActiveTab(Tab.Issue)"
+                       @onclick:preventDefault>
+                        Issue
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link @(_activeTab == Tab.PR ? "active" : "")"
+                       href="#"
+                       @onclick="() => SetActiveTab(Tab.PR)"
+                       @onclick:preventDefault>
+                        PR
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link @(_activeTab == Tab.Todos ? "active" : "")"
+                       href="#"
+                       @onclick="() => SetActiveTab(Tab.Todos)"
+                       @onclick:preventDefault>
+                        To-do's
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link @(_activeTab == Tab.Files ? "active" : "")"
+                       href="#"
+                       @onclick="() => SetActiveTab(Tab.Files)"
+                       @onclick:preventDefault>
+                        Files
+                    </a>
+                </li>
+            </ul>
 
             <div class="panel-content">
                 @if (_activeTab == Tab.Issue)
@@ -68,24 +84,40 @@
                 <span class="mobile-chevron">▾</span>
             </summary>
             <div class="mobile-panel-body">
-                <div class="panel-tabs">
-                    <button class="tab-button @(_activeTab == Tab.Issue ? "active" : "")"
-                            @onclick="() => SetActiveTab(Tab.Issue)">
-                        Issue
-                    </button>
-                    <button class="tab-button @(_activeTab == Tab.PR ? "active" : "")"
-                            @onclick="() => SetActiveTab(Tab.PR)">
-                        PR
-                    </button>
-                    <button class="tab-button @(_activeTab == Tab.Todos ? "active" : "")"
-                            @onclick="() => SetActiveTab(Tab.Todos)">
-                        To-do's
-                    </button>
-                    <button class="tab-button @(_activeTab == Tab.Files ? "active" : "")"
-                            @onclick="() => SetActiveTab(Tab.Files)">
-                        Files
-                    </button>
-                </div>
+                <ul class="nav nav-tabs panel-nav-tabs">
+                    <li class="nav-item">
+                        <a class="nav-link @(_activeTab == Tab.Issue ? "active" : "")"
+                           href="#"
+                           @onclick="() => SetActiveTab(Tab.Issue)"
+                           @onclick:preventDefault>
+                            Issue
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link @(_activeTab == Tab.PR ? "active" : "")"
+                           href="#"
+                           @onclick="() => SetActiveTab(Tab.PR)"
+                           @onclick:preventDefault>
+                            PR
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link @(_activeTab == Tab.Todos ? "active" : "")"
+                           href="#"
+                           @onclick="() => SetActiveTab(Tab.Todos)"
+                           @onclick:preventDefault>
+                            To-do's
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link @(_activeTab == Tab.Files ? "active" : "")"
+                           href="#"
+                           @onclick="() => SetActiveTab(Tab.Files)"
+                           @onclick:preventDefault>
+                            Files
+                        </a>
+                    </li>
+                </ul>
 
                 <div class="panel-content">
                     @if (_activeTab == Tab.Issue)
@@ -244,37 +276,13 @@
         font-size: 0.875rem;
     }
 
-    .panel-tabs {
-        display: flex;
-        border-bottom: 1px solid var(--border-color);
-        background: var(--bg-tertiary);
-        padding: 0 var(--spacing-sm);
-        padding-top: var(--spacing-sm);
+    .panel-nav-tabs {
         flex-shrink: 0;
     }
 
-    .tab-button {
-        flex: 1;
-        padding: var(--spacing-sm) var(--spacing-xs);
-        border: none;
-        border-bottom: 2px solid transparent;
-        background: transparent;
-        color: var(--text-muted);
+    .panel-nav-tabs .nav-link {
         font-size: 0.75rem;
-        font-weight: 500;
-        cursor: pointer;
-        transition: all 0.15s ease;
-        white-space: nowrap;
-    }
-
-    .tab-button:hover {
-        color: var(--text-primary);
-        background: var(--bg-secondary);
-    }
-
-    .tab-button.active {
-        color: var(--color-lagoon);
-        border-bottom-color: var(--color-lagoon);
+        padding: var(--spacing-xs) var(--spacing-sm);
     }
 
     .panel-content {

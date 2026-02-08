@@ -90,7 +90,7 @@ public class SessionInfoPanelTests : BunitTestContext
 
         // Assert - scope to desktop panel since mobile panel also renders tabs
         var desktopPanel = cut.Find(".desktop-panel");
-        var tabButtons = desktopPanel.QuerySelectorAll(".tab-button");
+        var tabButtons = desktopPanel.QuerySelectorAll(".nav-link");
         Assert.That(tabButtons, Has.Count.EqualTo(4));
     }
 
@@ -107,7 +107,7 @@ public class SessionInfoPanelTests : BunitTestContext
 
         // Assert - scope to desktop panel since mobile panel also renders tabs
         var desktopPanel = cut.Find(".desktop-panel");
-        var activeTab = desktopPanel.QuerySelector(".tab-button.active");
+        var activeTab = desktopPanel.QuerySelector(".nav-link.active");
         Assert.That(activeTab, Is.Not.Null);
         Assert.That(activeTab!.TextContent.Trim(), Does.Contain("Issue"));
     }
