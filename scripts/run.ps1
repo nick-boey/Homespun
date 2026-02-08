@@ -365,10 +365,10 @@ try {
         }
         Write-Host "      Main image built: $ImageName ($BuildConfig)" -ForegroundColor Green
 
-        Write-Host "      Building AgentWorker image..." -ForegroundColor Cyan
-        docker build -t $WorkerImage -f "$RepoRoot/src/Homespun.AgentWorker/Dockerfile" $RepoRoot
+        Write-Host "      Building Worker image..." -ForegroundColor Cyan
+        docker build -t $WorkerImage -f "$RepoRoot/src/Homespun.Worker/Dockerfile" "$RepoRoot/src/Homespun.Worker"
         if ($LASTEXITCODE -ne 0) {
-            Write-Error "Failed to build AgentWorker Docker image."
+            Write-Error "Failed to build Worker Docker image."
         }
         Write-Host "      Worker image built: $WorkerImage" -ForegroundColor Green
     }
