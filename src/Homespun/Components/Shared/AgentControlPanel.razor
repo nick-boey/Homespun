@@ -157,8 +157,8 @@ else
     private async Task HandleAgentStart(AgentPrompt? selectedPrompt)
     {
         _errorMessage = null;
+        if (!StartupTracker.TryMarkAsStarting(EntityId)) return;
         _isStarting = true;
-        StartupTracker.MarkAsStarting(EntityId);
         StateHasChanged();
 
         try
@@ -199,6 +199,7 @@ else
         {
             Logger.LogError(ex, "Failed to start session for entity {EntityId}", EntityId);
             StartupTracker.MarkAsFailed(EntityId, ex.Message);
+            StartupTracker.Clear(EntityId);
             _errorMessage = $"Failed to start: {ex.Message}";
             _session = null;
         }

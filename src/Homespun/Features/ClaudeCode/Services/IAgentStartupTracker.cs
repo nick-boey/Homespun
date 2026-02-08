@@ -11,6 +11,13 @@ public interface IAgentStartupTracker
     void MarkAsStarting(string entityId);
 
     /// <summary>
+    /// Atomically attempts to mark an entity as starting up.
+    /// Returns true if the entity was not already tracked (i.e., first caller wins).
+    /// Returns false if the entity is already starting or started.
+    /// </summary>
+    bool TryMarkAsStarting(string entityId);
+
+    /// <summary>
     /// Marks an entity as successfully started.
     /// </summary>
     void MarkAsStarted(string entityId);
