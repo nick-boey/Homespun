@@ -1,4 +1,5 @@
 # Build stage
+ARG BASE_IMAGE=homespun-base:local
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
@@ -27,7 +28,6 @@ RUN dotnet publish -c Release -o /app/publish /p:UseAppHost=false
 #   Fleece CLI, Docker CLI
 # Local default: homespun-base:local (built by scripts/run.sh)
 # CI override: ghcr.io/<repo>-base:latest (passed via --build-arg)
-ARG BASE_IMAGE=homespun-base:local
 FROM ${BASE_IMAGE} AS runtime
 WORKDIR /app
 
