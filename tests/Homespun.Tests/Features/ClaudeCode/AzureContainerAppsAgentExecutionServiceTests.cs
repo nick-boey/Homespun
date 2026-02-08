@@ -54,6 +54,12 @@ public class AzureContainerAppsAgentExecutionServiceTests
             Assert.That(defaultOptions.WorkerEndpoint, Is.Empty);
             Assert.That(defaultOptions.RequestTimeout, Is.EqualTo(TimeSpan.FromMinutes(30)));
             Assert.That(defaultOptions.MaxSessionDuration, Is.EqualTo(TimeSpan.FromMinutes(30)));
+            Assert.That(defaultOptions.WorkerImage, Is.EqualTo("ghcr.io/nick-boey/homespun-worker:latest"));
+            Assert.That(defaultOptions.ProjectsBasePath, Is.EqualTo("projects"));
+            Assert.That(defaultOptions.ProvisioningTimeout, Is.EqualTo(TimeSpan.FromMinutes(5)));
+            Assert.That(defaultOptions.EnvironmentId, Is.Null);
+            Assert.That(defaultOptions.ResourceGroupName, Is.Null);
+            Assert.That(defaultOptions.StorageMountName, Is.Null);
         });
     }
 
@@ -61,6 +67,86 @@ public class AzureContainerAppsAgentExecutionServiceTests
     public void Options_SectionName_IsCorrect()
     {
         Assert.That(AzureContainerAppsAgentExecutionOptions.SectionName, Is.EqualTo("AgentExecution:AzureContainerApps"));
+    }
+
+    [Test]
+    public void Options_IsDynamicMode_FalseWhenNotConfigured()
+    {
+        var options = new AzureContainerAppsAgentExecutionOptions();
+        Assert.That(options.IsDynamicMode, Is.False);
+    }
+
+    [Test]
+    public void Options_IsDynamicMode_FalseWhenOnlyEnvironmentIdSet()
+    {
+        var options = new AzureContainerAppsAgentExecutionOptions
+        {
+            EnvironmentId = "/subscriptions/sub-id/resourceGroups/rg/providers/Microsoft.App/managedEnvironments/env"
+        };
+        Assert.That(options.IsDynamicMode, Is.False);
+    }
+
+    [Test]
+    public void Options_IsDynamicMode_FalseWhenOnlyResourceGroupSet()
+    {
+        var options = new AzureContainerAppsAgentExecutionOptions
+        {
+            ResourceGroupName = "rg-homespun-dev"
+        };
+        Assert.That(options.IsDynamicMode, Is.False);
+    }
+
+    [Test]
+    public void Options_IsDynamicMode_TrueWhenBothSet()
+    {
+        var options = new AzureContainerAppsAgentExecutionOptions
+        {
+            EnvironmentId = "/subscriptions/sub-id/resourceGroups/rg/providers/Microsoft.App/managedEnvironments/env",
+            ResourceGroupName = "rg-homespun-dev"
+        };
+        Assert.That(options.IsDynamicMode, Is.True);
+    }
+
+    #endregion
+
+    #region Container App Naming Tests
+
+    [Test]
+    public void GetIssueContainerAppName_ReturnsCorrectFormat()
+    {
+        var name = AzureContainerAppsAgentExecutionService.GetIssueContainerAppName("abc123");
+        Assert.That(name, Is.EqualTo("ca-issue-abc123"));
+    }
+
+    [Test]
+    public void GetIssueContainerAppName_IsLowercase()
+    {
+        var name = AzureContainerAppsAgentExecutionService.GetIssueContainerAppName("ABC123");
+        Assert.That(name, Is.EqualTo("ca-issue-abc123"));
+    }
+
+    [Test]
+    public void GetIssueContainerAppName_TruncatesAt32Chars()
+    {
+        var longIssueId = "this-is-a-very-long-issue-id-that-exceeds-the-limit";
+        var name = AzureContainerAppsAgentExecutionService.GetIssueContainerAppName(longIssueId);
+        Assert.That(name.Length, Is.LessThanOrEqualTo(32));
+    }
+
+    [Test]
+    public void GetIssueContainerAppName_IsDeterministic()
+    {
+        var name1 = AzureContainerAppsAgentExecutionService.GetIssueContainerAppName("abc123");
+        var name2 = AzureContainerAppsAgentExecutionService.GetIssueContainerAppName("abc123");
+        Assert.That(name1, Is.EqualTo(name2));
+    }
+
+    [Test]
+    public void GetIssueContainerAppName_DifferentIssues_ReturnDifferentNames()
+    {
+        var name1 = AzureContainerAppsAgentExecutionService.GetIssueContainerAppName("issue-1");
+        var name2 = AzureContainerAppsAgentExecutionService.GetIssueContainerAppName("issue-2");
+        Assert.That(name1, Is.Not.EqualTo(name2));
     }
 
     #endregion
