@@ -384,6 +384,84 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         }
     }
 
+    /// <inheritdoc />
+    public Task<IReadOnlyList<AgentSessionStatus>> GetAllSessionsAsync(CancellationToken cancellationToken = default)
+    {
+        var statuses = _sessions.Values.Select(session => new AgentSessionStatus(
+            session.SessionId,
+            session.WorkingDirectory,
+            SessionMode.Build, // TODO: Store actual mode
+            "sonnet", // TODO: Store actual model
+            session.ConversationId,
+            session.CreatedAt,
+            session.LastActivityAt
+        )).ToList();
+
+        return Task.FromResult<IReadOnlyList<AgentSessionStatus>>(statuses);
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<OrphanedContainer>> GetOrphanedContainersAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var startInfo = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "docker",
+                Arguments = "ps --filter \"name=homespun-agent-\" --format \"{{.ID}}\\t{{.Names}}\\t{{.CreatedAt}}\\t{{.Status}}\"",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using var process = System.Diagnostics.Process.Start(startInfo);
+            if (process == null)
+                return Array.Empty<OrphanedContainer>();
+
+            var output = await process.StandardOutput.ReadToEndAsync(cancellationToken);
+            await process.WaitForExitAsync(cancellationToken);
+
+            if (process.ExitCode != 0 || string.IsNullOrWhiteSpace(output))
+                return Array.Empty<OrphanedContainer>();
+
+            var trackedContainerIds = _sessions.Values.Select(s => s.ContainerId).ToHashSet();
+            var orphans = new List<OrphanedContainer>();
+
+            foreach (var line in output.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var parts = line.Split('\t');
+                if (parts.Length < 4) continue;
+
+                var containerId = parts[0];
+                var containerName = parts[1];
+                var createdAt = parts[2];
+                var status = parts[3];
+
+                // Check if this container is tracked (comparing with both full and truncated IDs)
+                if (!trackedContainerIds.Contains(containerId) &&
+                    !trackedContainerIds.Any(id => containerId.StartsWith(id) || id.StartsWith(containerId)))
+                {
+                    orphans.Add(new OrphanedContainer(containerId, containerName, createdAt, status));
+                }
+            }
+
+            return orphans;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to discover orphaned containers");
+            return Array.Empty<OrphanedContainer>();
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task StopContainerByIdAsync(string containerId, CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Stopping container by ID: {ContainerId}", containerId);
+        await StopContainerAsync(containerId);
+    }
+
     /// <summary>
     /// Translates a container path to a host path for Docker mounts.
     /// When running in a container, paths like /data/test-workspace need to be

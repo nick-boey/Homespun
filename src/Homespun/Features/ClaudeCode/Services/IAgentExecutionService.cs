@@ -211,4 +211,37 @@ public interface IAgentExecutionService
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The file content, or null if the file is not found or the session doesn't exist.</returns>
     Task<string?> ReadFileFromAgentAsync(string sessionId, string filePath, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets status information for all tracked sessions.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>List of all tracked session statuses.</returns>
+    Task<IReadOnlyList<AgentSessionStatus>> GetAllSessionsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Discovers orphaned containers that are running but not tracked by any active session.
+    /// Only applicable for container-based execution modes (Docker).
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>List of orphaned containers, or empty list for non-container modes.</returns>
+    Task<IReadOnlyList<OrphanedContainer>> GetOrphanedContainersAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Stops a container by its container ID. Used to clean up orphaned containers.
+    /// Only applicable for container-based execution modes (Docker).
+    /// </summary>
+    /// <param name="containerId">The container ID to stop.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    Task StopContainerByIdAsync(string containerId, CancellationToken cancellationToken = default);
 }
+
+/// <summary>
+/// Represents a running container that is not tracked by any active session.
+/// </summary>
+public record OrphanedContainer(
+    string ContainerId,
+    string ContainerName,
+    string CreatedAt,
+    string Status
+);

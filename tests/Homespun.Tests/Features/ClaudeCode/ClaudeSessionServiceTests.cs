@@ -306,6 +306,89 @@ public class ClaudeSessionServiceTests
     }
 
     [Test]
+    public async Task StopAllSessionsForEntityAsync_StopsAllSessionsForEntity()
+    {
+        // Arrange - create multiple sessions for the same entity
+        var entityId = "entity-123";
+        _sessionStore.Add(new ClaudeSession
+        {
+            Id = "session-1",
+            EntityId = entityId,
+            ProjectId = "project-456",
+            WorkingDirectory = "/path1",
+            Model = "model",
+            Mode = SessionMode.Plan,
+            Status = ClaudeSessionStatus.Running,
+            CreatedAt = DateTime.UtcNow
+        });
+        _sessionStore.Add(new ClaudeSession
+        {
+            Id = "session-2",
+            EntityId = entityId,
+            ProjectId = "project-456",
+            WorkingDirectory = "/path2",
+            Model = "model",
+            Mode = SessionMode.Build,
+            Status = ClaudeSessionStatus.Running,
+            CreatedAt = DateTime.UtcNow
+        });
+        _sessionStore.Add(new ClaudeSession
+        {
+            Id = "session-3",
+            EntityId = "other-entity",
+            ProjectId = "project-456",
+            WorkingDirectory = "/path3",
+            Model = "model",
+            Mode = SessionMode.Plan,
+            Status = ClaudeSessionStatus.Running,
+            CreatedAt = DateTime.UtcNow
+        });
+
+        // Act
+        await _service.StopAllSessionsForEntityAsync(entityId);
+
+        // Assert - sessions for the entity should be removed, other session preserved
+        Assert.Multiple(() =>
+        {
+            Assert.That(_sessionStore.GetById("session-1"), Is.Null, "Session 1 should be removed");
+            Assert.That(_sessionStore.GetById("session-2"), Is.Null, "Session 2 should be removed");
+            Assert.That(_sessionStore.GetById("session-3"), Is.Not.Null, "Session 3 should be preserved");
+        });
+    }
+
+    [Test]
+    public async Task StopAllSessionsForEntityAsync_NoSessions_DoesNotThrow()
+    {
+        // Act & Assert
+        Assert.DoesNotThrowAsync(async () =>
+            await _service.StopAllSessionsForEntityAsync("non-existent-entity"));
+    }
+
+    [Test]
+    public async Task StopAllSessionsForEntityAsync_SingleSession_StopsIt()
+    {
+        // Arrange
+        var entityId = "entity-123";
+        _sessionStore.Add(new ClaudeSession
+        {
+            Id = "session-1",
+            EntityId = entityId,
+            ProjectId = "project-456",
+            WorkingDirectory = "/path1",
+            Model = "model",
+            Mode = SessionMode.Build,
+            Status = ClaudeSessionStatus.Running,
+            CreatedAt = DateTime.UtcNow
+        });
+
+        // Act
+        await _service.StopAllSessionsForEntityAsync(entityId);
+
+        // Assert
+        Assert.That(_sessionStore.GetById("session-1"), Is.Null);
+    }
+
+    [Test]
     public async Task InterruptSessionAsync_SetsStatusToWaitingForInput()
     {
         // Arrange

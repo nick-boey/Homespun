@@ -225,6 +225,36 @@ public class LocalAgentExecutionService : IAgentExecutionService, IAsyncDisposab
         }
     }
 
+    /// <inheritdoc />
+    public Task<IReadOnlyList<AgentSessionStatus>> GetAllSessionsAsync(CancellationToken cancellationToken = default)
+    {
+        var statuses = _sessions.Values.Select(session => new AgentSessionStatus(
+            session.Id,
+            session.WorkingDirectory,
+            session.Mode,
+            session.Model,
+            session.ConversationId,
+            session.CreatedAt,
+            session.LastActivityAt
+        )).ToList();
+
+        return Task.FromResult<IReadOnlyList<AgentSessionStatus>>(statuses);
+    }
+
+    /// <inheritdoc />
+    public Task<IReadOnlyList<OrphanedContainer>> GetOrphanedContainersAsync(CancellationToken cancellationToken = default)
+    {
+        // Local execution has no containers to orphan
+        return Task.FromResult<IReadOnlyList<OrphanedContainer>>(Array.Empty<OrphanedContainer>());
+    }
+
+    /// <inheritdoc />
+    public Task StopContainerByIdAsync(string containerId, CancellationToken cancellationToken = default)
+    {
+        // No-op for local execution
+        return Task.CompletedTask;
+    }
+
     private async IAsyncEnumerable<AgentEvent> ProcessMessagesAsync(
         LocalSession session,
         string prompt,

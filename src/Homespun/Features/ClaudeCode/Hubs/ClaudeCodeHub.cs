@@ -61,6 +61,14 @@ public class ClaudeCodeHub(IClaudeSessionService sessionService) : Hub
     }
 
     /// <summary>
+    /// Stop all sessions for a given entity (issue or PR).
+    /// </summary>
+    public async Task StopAllSessionsForEntity(string entityId)
+    {
+        await sessionService.StopAllSessionsForEntityAsync(entityId);
+    }
+
+    /// <summary>
     /// Get all active sessions.
     /// </summary>
     public IReadOnlyList<ClaudeSession> GetAllSessions()

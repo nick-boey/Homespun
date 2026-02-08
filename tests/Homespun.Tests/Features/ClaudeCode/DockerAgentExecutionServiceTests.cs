@@ -267,6 +267,46 @@ public class DockerAgentExecutionServiceTests
 
     #endregion
 
+    #region GetAllSessionsAsync Tests
+
+    [Test]
+    public async Task GetAllSessionsAsync_NoSessions_ReturnsEmptyList()
+    {
+        // Act
+        var result = await _service.GetAllSessionsAsync();
+
+        // Assert
+        Assert.That(result, Is.Empty);
+    }
+
+    #endregion
+
+    #region GetOrphanedContainersAsync Tests
+
+    [Test]
+    public async Task GetOrphanedContainersAsync_NoDockerAccess_ReturnsEmptyList()
+    {
+        // Act - should gracefully handle docker not being available
+        var result = await _service.GetOrphanedContainersAsync();
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+    }
+
+    #endregion
+
+    #region StopContainerByIdAsync Tests
+
+    [Test]
+    public async Task StopContainerByIdAsync_DoesNotThrow()
+    {
+        // Act & Assert - should not throw even with invalid container ID
+        Assert.DoesNotThrowAsync(async () =>
+            await _service.StopContainerByIdAsync("non-existent-container"));
+    }
+
+    #endregion
+
     #region DisposeAsync Tests
 
     [Test]

@@ -1238,6 +1238,36 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
     }
 
     /// <inheritdoc />
+    public async Task StopAllSessionsForEntityAsync(string entityId, CancellationToken cancellationToken = default)
+    {
+        var sessions = _sessionStore.GetAll()
+            .Where(s => s.EntityId == entityId)
+            .ToList();
+
+        if (sessions.Count == 0)
+        {
+            _logger.LogDebug("No sessions found for entity {EntityId}", entityId);
+            return;
+        }
+
+        _logger.LogInformation("Stopping all {Count} sessions for entity {EntityId}",
+            sessions.Count, entityId);
+
+        foreach (var session in sessions)
+        {
+            try
+            {
+                await StopSessionAsync(session.Id, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error stopping session {SessionId} for entity {EntityId}",
+                    session.Id, entityId);
+            }
+        }
+    }
+
+    /// <inheritdoc />
     public async Task InterruptSessionAsync(string sessionId, CancellationToken cancellationToken = default)
     {
         var session = _sessionStore.GetById(sessionId);

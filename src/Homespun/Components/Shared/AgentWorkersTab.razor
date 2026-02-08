@@ -1,0 +1,614 @@
+@using Fleece.Core.Models
+@using Homespun.Features.ClaudeCode.Data
+@using Homespun.Features.ClaudeCode.Services
+@using Homespun.Features.Fleece.Services
+@using Homespun.Features.Projects
+@using Homespun.Features.PullRequests.Data
+
+@inject IClaudeSessionService ClaudeSessionService
+@inject IAgentExecutionService AgentExecutionService
+@inject IProjectService ProjectService
+@inject PullRequestDataService PullRequestDataService
+@inject IFleeceService FleeceService
+@inject ILogger<AgentWorkersTab> Logger
+
+<div class="agent-workers-tab">
+    <div class="flex justify-between items-center mb-3">
+        <h5 class="mb-0">Agent Workers</h5>
+        <AsyncActionButton OnClick="RefreshAsync"
+                           IsLoadingExternal="_isRefreshing"
+                           CssClass="btn-outline-secondary btn-sm"
+                           Text="Refresh">
+            <IconContent>
+                <i class="bi bi-arrow-clockwise"></i>
+            </IconContent>
+        </AsyncActionButton>
+    </div>
+
+    @if (_isLoading)
+    {
+        <LoadingSpinner Size="SpinnerSize.Lg" Label="Loading agent workers..." Centered="true" />
+    }
+    else if (_issueGroups.Count == 0 && _orphanedContainers.Count == 0)
+    {
+        <div class="empty-state">
+            <div class="empty-icon"><i class="bi bi-cpu"></i></div>
+            <h5>No Active Agent Workers</h5>
+            <p class="text-text-muted">Start a Claude Code session from an issue or pull request to see agent workers here.</p>
+        </div>
+    }
+    else
+    {
+        @foreach (var group in _issueGroups)
+        {
+            <div class="issue-group mb-3">
+                <div class="issue-group-header">
+                    <div class="issue-group-title">
+                        @if (group.EntityInfo != null)
+                        {
+                            <span class="entity-type-badge @GetEntityTypeBadgeClass(group.EntityInfo.EntityType)">
+                                @group.EntityInfo.EntityType
+                            </span>
+                            <span class="entity-title">@group.EntityInfo.Title</span>
+                        }
+                        else
+                        {
+                            <span class="text-text-muted">@group.EntityId</span>
+                        }
+                    </div>
+                    <div class="issue-group-actions">
+                        <span class="badge bg-secondary me-2">@group.Sessions.Count agent@(group.Sessions.Count != 1 ? "s" : "")</span>
+                        @if (group.Sessions.Count > 1)
+                        {
+                            <button class="btn btn-sm btn-outline-danger"
+                                    @onclick="() => StopAllForEntityAsync(group.EntityId)"
+                                    disabled="@(_stoppingEntities.Contains(group.EntityId))">
+                                @if (_stoppingEntities.Contains(group.EntityId))
+                                {
+                                    <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                }
+                                Stop All
+                            </button>
+                        }
+                    </div>
+                </div>
+
+                <div class="sessions-table-container">
+                    <table class="sessions-table">
+                        <thead>
+                            <tr>
+                                <th class="col-status"></th>
+                                <th>Mode</th>
+                                <th>Model</th>
+                                <th>Status</th>
+                                <th>Started</th>
+                                <th>Last Activity</th>
+                                <th>Messages</th>
+                                <th class="col-actions">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var session in group.Sessions)
+                            {
+                                var isSuperseded = group.Sessions.IndexOf(session) > 0;
+                                <tr class="@(isSuperseded ? "superseded" : "")">
+                                    <td class="col-status">
+                                        <span class="status-dot @session.Status.ToIndicatorClass()" title="@session.Status.ToDisplayLabel()"></span>
+                                    </td>
+                                    <td>
+                                        <span class="badge @(session.Mode == SessionMode.Plan ? "bg-status-info" : "bg-status-success")">
+                                            @session.Mode
+                                        </span>
+                                    </td>
+                                    <td><code class="model-name">@GetModelDisplayName(session.Model)</code></td>
+                                    <td>@session.Status.ToDisplayLabel()</td>
+                                    <td title="@session.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss UTC")">@FormatRelativeTime(session.CreatedAt)</td>
+                                    <td title="@session.LastActivityAt.ToString("yyyy-MM-dd HH:mm:ss UTC")">@FormatRelativeTime(session.LastActivityAt)</td>
+                                    <td>@session.Messages.Count</td>
+                                    <td class="col-actions">
+                                        <div class="action-buttons">
+                                            <a href="/session/@session.Id" class="btn btn-sm btn-outline-primary">
+                                                <i class="bi bi-chat-dots"></i>
+                                            </a>
+                                            <button class="btn btn-sm btn-outline-danger"
+                                                    @onclick="() => StopSessionAsync(session.Id)"
+                                                    disabled="@(_stoppingSessions.Contains(session.Id))"
+                                                    title="Stop this agent">
+                                                @if (_stoppingSessions.Contains(session.Id))
+                                                {
+                                                    <span class="spinner-border spinner-border-sm" role="status"></span>
+                                                }
+                                                else
+                                                {
+                                                    <i class="bi bi-stop-circle"></i>
+                                                }
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+
+        @if (_orphanedContainers.Count > 0)
+        {
+            <div class="orphaned-section mt-4">
+                <div class="orphaned-header">
+                    <h6 class="mb-0">
+                        <i class="bi bi-exclamation-triangle me-1 text-warning"></i>
+                        Orphaned Containers
+                    </h6>
+                    <span class="badge bg-warning text-dark">@_orphanedContainers.Count</span>
+                </div>
+                <p class="text-text-muted small mb-2">
+                    These containers are running but not tracked by any active session. They may have been left behind after a service restart.
+                </p>
+                <div class="sessions-table-container">
+                    <table class="sessions-table">
+                        <thead>
+                            <tr>
+                                <th>Container Name</th>
+                                <th>Container ID</th>
+                                <th>Created</th>
+                                <th>Status</th>
+                                <th class="col-actions">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var container in _orphanedContainers)
+                            {
+                                <tr>
+                                    <td><code>@container.ContainerName</code></td>
+                                    <td><code class="container-id">@container.ContainerId[..Math.Min(12, container.ContainerId.Length)]</code></td>
+                                    <td>@container.CreatedAt</td>
+                                    <td>@container.Status</td>
+                                    <td class="col-actions">
+                                        <button class="btn btn-sm btn-outline-danger"
+                                                @onclick="() => StopOrphanedContainerAsync(container.ContainerId)"
+                                                disabled="@(_stoppingContainers.Contains(container.ContainerId))"
+                                                title="Kill this container">
+                                            @if (_stoppingContainers.Contains(container.ContainerId))
+                                            {
+                                                <span class="spinner-border spinner-border-sm" role="status"></span>
+                                            }
+                                            else
+                                            {
+                                                <i class="bi bi-x-circle"></i> <text>Kill</text>
+                                            }
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+    }
+
+    @if (!string.IsNullOrEmpty(_errorMessage))
+    {
+        <div class="alert alert-danger mt-3">@_errorMessage</div>
+    }
+</div>
+
+<style>
+    .agent-workers-tab {
+        max-width: 1200px;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: var(--spacing-xl) var(--spacing-lg);
+        background: var(--bg-secondary);
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--border-color);
+    }
+
+    .empty-icon {
+        font-size: 3rem;
+        margin-bottom: var(--spacing-md);
+        color: var(--text-muted);
+    }
+
+    .empty-state h5 {
+        margin-bottom: var(--spacing-sm);
+        color: var(--text-primary);
+    }
+
+    /* Issue Group */
+    .issue-group {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--border-color);
+        overflow: hidden;
+    }
+
+    .issue-group-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: var(--spacing-sm) var(--spacing-md);
+        background: var(--bg-tertiary);
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .issue-group-title {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+        flex: 1;
+        min-width: 0;
+    }
+
+    .issue-group-actions {
+        display: flex;
+        align-items: center;
+        flex-shrink: 0;
+    }
+
+    .entity-type-badge {
+        padding: 0.125rem 0.5rem;
+        border-radius: var(--radius-sm);
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        flex-shrink: 0;
+    }
+
+    .entity-type-badge.pr {
+        background: var(--status-info);
+        color: white;
+    }
+
+    .entity-type-badge.issue {
+        background: var(--status-warning);
+        color: white;
+    }
+
+    .entity-title {
+        font-weight: 500;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    /* Sessions Table */
+    .sessions-table-container {
+        overflow-x: auto;
+    }
+
+    .sessions-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.875rem;
+    }
+
+    .sessions-table thead th {
+        padding: var(--spacing-xs) var(--spacing-sm);
+        text-align: left;
+        font-weight: 600;
+        color: var(--text-muted);
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        border-bottom: 1px solid var(--border-color);
+        white-space: nowrap;
+    }
+
+    .sessions-table tbody td {
+        padding: var(--spacing-xs) var(--spacing-sm);
+        border-bottom: 1px solid var(--border-color);
+        vertical-align: middle;
+        white-space: nowrap;
+    }
+
+    .sessions-table tbody tr:last-child td {
+        border-bottom: none;
+    }
+
+    .sessions-table tbody tr.superseded {
+        opacity: 0.6;
+    }
+
+    .sessions-table tbody tr:hover {
+        background: var(--bg-tertiary);
+    }
+
+    .col-status {
+        width: 24px;
+        text-align: center;
+    }
+
+    .col-actions {
+        width: 100px;
+        text-align: right;
+    }
+
+    .status-dot {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+    }
+
+    .status-dot.running {
+        background: var(--status-success);
+        animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    .status-dot.starting, .status-dot.running-hooks {
+        background: var(--status-warning);
+        animation: pulse 1s ease-in-out infinite;
+    }
+
+    .status-dot.waiting {
+        background: var(--status-warning);
+    }
+
+    .status-dot.question, .status-dot.plan-ready {
+        background: var(--status-question);
+        animation: pulse 1s ease-in-out infinite;
+    }
+
+    .status-dot.stopped {
+        background: var(--text-muted);
+    }
+
+    .status-dot.error {
+        background: var(--status-error);
+    }
+
+    .model-name {
+        font-size: 0.8125rem;
+    }
+
+    .container-id {
+        font-size: 0.8125rem;
+    }
+
+    .action-buttons {
+        display: flex;
+        gap: var(--spacing-xs);
+        justify-content: flex-end;
+    }
+
+    /* Orphaned Section */
+    .orphaned-section {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--status-warning);
+        overflow: hidden;
+        padding: var(--spacing-md);
+    }
+
+    .orphaned-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: var(--spacing-sm);
+    }
+</style>
+
+@code {
+    [Parameter] public required string ProjectId { get; set; }
+
+    private bool _isLoading = true;
+    private bool _isRefreshing;
+    private string? _errorMessage;
+    private List<IssueGroupInfo> _issueGroups = [];
+    private IReadOnlyList<OrphanedContainer> _orphanedContainers = [];
+    private Dictionary<string, EntityInfo> _entityInfoCache = new();
+    private HashSet<string> _stoppingSessions = new();
+    private HashSet<string> _stoppingEntities = new();
+    private HashSet<string> _stoppingContainers = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+        _isLoading = false;
+    }
+
+    private async Task RefreshAsync()
+    {
+        _isRefreshing = true;
+        StateHasChanged();
+
+        try
+        {
+            await LoadDataAsync();
+        }
+        finally
+        {
+            _isRefreshing = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadDataAsync()
+    {
+        try
+        {
+            var sessions = ClaudeSessionService.GetSessionsForProject(ProjectId);
+            await LoadEntityInformationAsync(sessions);
+
+            // Group sessions by entity ID, sorted by most recent first within each group
+            _issueGroups = sessions
+                .GroupBy(s => s.EntityId)
+                .Select(group => new IssueGroupInfo
+                {
+                    EntityId = group.Key,
+                    EntityInfo = _entityInfoCache.GetValueOrDefault(group.Key),
+                    Sessions = group
+                        .OrderByDescending(s => s.CreatedAt)
+                        .ToList()
+                })
+                .OrderBy(g => g.EntityInfo?.Title ?? g.EntityId)
+                .ToList();
+
+            // Discover orphaned containers
+            try
+            {
+                _orphanedContainers = await AgentExecutionService.GetOrphanedContainersAsync();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "Failed to check for orphaned containers");
+                _orphanedContainers = [];
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to load agent workers for project {ProjectId}", ProjectId);
+            _errorMessage = $"Failed to load agent workers: {ex.Message}";
+        }
+    }
+
+    private async Task LoadEntityInformationAsync(IReadOnlyList<ClaudeSession> sessions)
+    {
+        _entityInfoCache.Clear();
+        var project = await ProjectService.GetByIdAsync(ProjectId);
+
+        foreach (var session in sessions)
+        {
+            if (_entityInfoCache.ContainsKey(session.EntityId))
+                continue;
+
+            try
+            {
+                // Try as a PR first
+                var pr = await PullRequestDataService.GetByIdAsync(session.EntityId);
+                if (pr != null)
+                {
+                    _entityInfoCache[session.EntityId] = new EntityInfo("PR", pr.Title);
+                    continue;
+                }
+
+                // Try as a Fleece issue
+                if (project != null)
+                {
+                    try
+                    {
+                        var issue = await FleeceService.GetIssueAsync(project.LocalPath, session.EntityId);
+                        if (issue != null)
+                        {
+                            _entityInfoCache[session.EntityId] = new EntityInfo("Issue", issue.Title);
+                            continue;
+                        }
+                    }
+                    catch { }
+                }
+
+                // Fallback
+                _entityInfoCache[session.EntityId] = new EntityInfo("Unknown", session.EntityId);
+            }
+            catch
+            {
+                _entityInfoCache[session.EntityId] = new EntityInfo("Unknown", session.EntityId);
+            }
+        }
+    }
+
+    private async Task StopSessionAsync(string sessionId)
+    {
+        _stoppingSessions.Add(sessionId);
+        _errorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            await ClaudeSessionService.StopSessionAsync(sessionId);
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to stop session: {ex.Message}";
+        }
+        finally
+        {
+            _stoppingSessions.Remove(sessionId);
+            StateHasChanged();
+        }
+    }
+
+    private async Task StopAllForEntityAsync(string entityId)
+    {
+        _stoppingEntities.Add(entityId);
+        _errorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            await ClaudeSessionService.StopAllSessionsForEntityAsync(entityId);
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to stop sessions: {ex.Message}";
+        }
+        finally
+        {
+            _stoppingEntities.Remove(entityId);
+            StateHasChanged();
+        }
+    }
+
+    private async Task StopOrphanedContainerAsync(string containerId)
+    {
+        _stoppingContainers.Add(containerId);
+        _errorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            await AgentExecutionService.StopContainerByIdAsync(containerId);
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to stop container: {ex.Message}";
+        }
+        finally
+        {
+            _stoppingContainers.Remove(containerId);
+            StateHasChanged();
+        }
+    }
+
+    private static string FormatRelativeTime(DateTime utcTime)
+    {
+        var elapsed = DateTime.UtcNow - utcTime;
+        if (elapsed.TotalSeconds < 60)
+            return $"{(int)elapsed.TotalSeconds}s ago";
+        if (elapsed.TotalMinutes < 60)
+            return $"{(int)elapsed.TotalMinutes}m ago";
+        if (elapsed.TotalHours < 24)
+            return $"{(int)elapsed.TotalHours}h {elapsed.Minutes}m ago";
+        return $"{(int)elapsed.TotalDays}d ago";
+    }
+
+    private static string GetModelDisplayName(string model)
+    {
+        var parts = model.Split('/');
+        return parts.Length > 1 ? parts[1] : model;
+    }
+
+    private static string GetEntityTypeBadgeClass(string entityType) => entityType.ToLowerInvariant() switch
+    {
+        "pr" => "pr",
+        "issue" => "issue",
+        _ => ""
+    };
+
+    private record EntityInfo(string EntityType, string Title);
+
+    private class IssueGroupInfo
+    {
+        public required string EntityId { get; set; }
+        public EntityInfo? EntityInfo { get; set; }
+        public required List<ClaudeSession> Sessions { get; set; }
+    }
+}

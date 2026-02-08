@@ -142,6 +142,25 @@ public class SessionsController(
     }
 
     /// <summary>
+    /// Stop all sessions for a given entity (issue or PR).
+    /// This ensures all related agent worker containers are cleaned up.
+    /// </summary>
+    [HttpDelete("entity/{entityId}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> StopAllForEntity(string entityId)
+    {
+        try
+        {
+            await sessionService.StopAllSessionsForEntityAsync(entityId);
+            return NoContent();
+        }
+        catch (Exception ex)
+        {
+            return BadRequest($"Failed to stop sessions for entity: {ex.Message}");
+        }
+    }
+
+    /// <summary>
     /// Interrupt an existing session's current execution without fully stopping it.
     /// The session remains alive so the user can send another message to resume.
     /// </summary>

@@ -153,6 +153,47 @@ public class AzureContainerAppsAgentExecutionServiceTests
 
     #endregion
 
+    #region GetAllSessionsAsync Tests
+
+    [Test]
+    public async Task GetAllSessionsAsync_NoSessions_ReturnsEmptyList()
+    {
+        // Act
+        var result = await _service.GetAllSessionsAsync();
+
+        // Assert
+        Assert.That(result, Is.Empty);
+    }
+
+    #endregion
+
+    #region GetOrphanedContainersAsync Tests
+
+    [Test]
+    public async Task GetOrphanedContainersAsync_ReturnsEmptyList()
+    {
+        // Azure Container Apps manages its own lifecycle
+        // Act
+        var result = await _service.GetOrphanedContainersAsync();
+
+        // Assert
+        Assert.That(result, Is.Empty);
+    }
+
+    #endregion
+
+    #region StopContainerByIdAsync Tests
+
+    [Test]
+    public async Task StopContainerByIdAsync_IsNoOp()
+    {
+        // Act & Assert - should be a no-op for ACA
+        Assert.DoesNotThrowAsync(async () =>
+            await _service.StopContainerByIdAsync("some-container-id"));
+    }
+
+    #endregion
+
     #region DisposeAsync Tests
 
     [Test]
@@ -306,11 +347,67 @@ public class LocalAgentExecutionServiceTests
     }
 
     [Test]
+    public async Task GetAllSessionsAsync_NoSessions_ReturnsEmptyList()
+    {
+        // Act
+        var result = await _service.GetAllSessionsAsync();
+
+        // Assert
+        Assert.That(result, Is.Empty);
+    }
+
+    [Test]
+    public async Task GetOrphanedContainersAsync_ReturnsEmptyList()
+    {
+        // Local execution has no containers
+        // Act
+        var result = await _service.GetOrphanedContainersAsync();
+
+        // Assert
+        Assert.That(result, Is.Empty);
+    }
+
+    [Test]
+    public async Task StopContainerByIdAsync_IsNoOp()
+    {
+        // Act & Assert - should be a no-op for local execution
+        Assert.DoesNotThrowAsync(async () =>
+            await _service.StopContainerByIdAsync("some-container-id"));
+    }
+
+    [Test]
     public async Task DisposeAsync_NoSessions_DoesNotThrow()
     {
         // Act & Assert
         Assert.DoesNotThrowAsync(async () =>
             await _service.DisposeAsync());
+    }
+}
+
+/// <summary>
+/// Tests for OrphanedContainer record.
+/// </summary>
+[TestFixture]
+public class OrphanedContainerTests
+{
+    [Test]
+    public void OrphanedContainer_Properties_AreSetCorrectly()
+    {
+        // Arrange & Act
+        var container = new OrphanedContainer(
+            ContainerId: "abc123def456",
+            ContainerName: "homespun-agent-abc12345",
+            CreatedAt: "2025-01-15 10:30:00 +0000 UTC",
+            Status: "Up 2 hours");
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(container.ContainerId, Is.EqualTo("abc123def456"));
+            Assert.That(container.ContainerName, Is.EqualTo("homespun-agent-abc12345"));
+            Assert.That(container.CreatedAt, Is.EqualTo("2025-01-15 10:30:00 +0000 UTC"));
+            Assert.That(container.Status, Is.EqualTo("Up 2 hours"));
+        });
     }
 }
 
