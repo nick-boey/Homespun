@@ -7,6 +7,9 @@
 #   CLAUDE_CODE_OAUTH_TOKEN   - Claude Code OAuth token for authentication
 #   TAILSCALE_AUTH_KEY        - Tailscale auth key for VPN access (optional)
 
+# ARG before any FROM so it's available in the FROM instruction below
+ARG BASE_IMAGE=homespun-base:local
+
 # =============================================================================
 # Stage 1: Build
 # =============================================================================
@@ -63,7 +66,6 @@ RUN dotnet publish src/Homespun/Homespun.csproj \
 #   Fleece CLI, Docker CLI
 # Local default: homespun-base:local (built by scripts/run.sh)
 # CI override: ghcr.io/<repo>-base:latest (passed via --build-arg)
-ARG BASE_IMAGE=homespun-base:local
 FROM ${BASE_IMAGE} AS runtime
 WORKDIR /app
 
