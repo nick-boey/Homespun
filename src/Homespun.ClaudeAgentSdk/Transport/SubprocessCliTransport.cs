@@ -142,10 +142,10 @@ public class SubprocessCliTransport : ITransport
     {
         var cmd = new List<string> { "--output-format", "stream-json", "--verbose" };
 
-        // System prompt
+        // System prompt - always use --append-system-prompt to preserve default Claude Code prompts
         if (_options.SystemPrompt is string systemPromptStr)
         {
-            cmd.Add("--system-prompt");
+            cmd.Add("--append-system-prompt");
             cmd.Add(systemPromptStr);
         }
         else if (_options.SystemPrompt is SystemPromptPreset preset && preset.Append != null)
