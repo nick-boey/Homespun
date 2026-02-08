@@ -64,6 +64,7 @@ public class DockerAgentExecutionServiceTests
             Assert.That(defaultOptions.DockerSocketPath, Is.EqualTo("/var/run/docker.sock"));
             Assert.That(defaultOptions.NetworkName, Is.EqualTo("bridge"));
             Assert.That(defaultOptions.HostDataPath, Is.Null);
+            Assert.That(defaultOptions.ProjectsBasePath, Is.EqualTo("projects"));
         });
     }
 
@@ -71,6 +72,33 @@ public class DockerAgentExecutionServiceTests
     public void Options_SectionName_IsCorrect()
     {
         Assert.That(DockerAgentExecutionOptions.SectionName, Is.EqualTo("AgentExecution:Docker"));
+    }
+
+    #endregion
+
+    #region Container Naming Tests
+
+    [Test]
+    public void GetIssueContainerName_ReturnsCorrectFormat()
+    {
+        var name = DockerAgentExecutionService.GetIssueContainerName("abc123");
+        Assert.That(name, Is.EqualTo("homespun-issue-abc123"));
+    }
+
+    [Test]
+    public void GetIssueContainerName_IsDeterministic()
+    {
+        var name1 = DockerAgentExecutionService.GetIssueContainerName("abc123");
+        var name2 = DockerAgentExecutionService.GetIssueContainerName("abc123");
+        Assert.That(name1, Is.EqualTo(name2));
+    }
+
+    [Test]
+    public void GetIssueContainerName_DifferentIssues_ReturnDifferentNames()
+    {
+        var name1 = DockerAgentExecutionService.GetIssueContainerName("issue-1");
+        var name2 = DockerAgentExecutionService.GetIssueContainerName("issue-2");
+        Assert.That(name1, Is.Not.EqualTo(name2));
     }
 
     #endregion
@@ -278,6 +306,47 @@ public class DockerSessionRecordTests
             Assert.That(request.Prompt, Is.EqualTo("Test prompt"));
             Assert.That(request.SystemPrompt, Is.EqualTo("System prompt"));
             Assert.That(request.ResumeSessionId, Is.EqualTo("resume-123"));
+        });
+    }
+
+    [Test]
+    public void AgentStartRequest_IssueFields_AreSetCorrectly()
+    {
+        // Arrange & Act
+        var request = new AgentStartRequest(
+            WorkingDirectory: "/workdir",
+            Mode: SessionMode.Build,
+            Model: "sonnet",
+            Prompt: "Test",
+            IssueId: "abc123",
+            ProjectId: "proj-1",
+            ProjectName: "my-project");
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(request.IssueId, Is.EqualTo("abc123"));
+            Assert.That(request.ProjectId, Is.EqualTo("proj-1"));
+            Assert.That(request.ProjectName, Is.EqualTo("my-project"));
+        });
+    }
+
+    [Test]
+    public void AgentStartRequest_IssueFields_DefaultToNull()
+    {
+        // Arrange & Act
+        var request = new AgentStartRequest(
+            WorkingDirectory: "/test/path",
+            Mode: SessionMode.Build,
+            Model: "sonnet",
+            Prompt: "Test");
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(request.IssueId, Is.Null);
+            Assert.That(request.ProjectId, Is.Null);
+            Assert.That(request.ProjectName, Is.Null);
         });
     }
 

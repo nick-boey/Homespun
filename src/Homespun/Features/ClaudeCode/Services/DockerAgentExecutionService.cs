@@ -33,6 +33,12 @@ public class DockerAgentExecutionOptions
     public string? HostDataPath { get; set; }
 
     /// <summary>
+    /// Base path for per-issue project workspaces (relative to DataVolumePath).
+    /// Default: "projects" -> {DataVolumePath}/projects/{projectName}/issues/{issueId}/
+    /// </summary>
+    public string ProjectsBasePath { get; set; } = "projects";
+
+    /// <summary>
     /// Memory limit in bytes for worker containers.
     /// </summary>
     public long MemoryLimitBytes { get; set; } = 4L * 1024 * 1024 * 1024; // 4GB
@@ -60,7 +66,8 @@ public class DockerAgentExecutionOptions
 
 /// <summary>
 /// Docker-based agent execution using Docker-outside-of-Docker (DooD).
-/// Spawns worker containers and communicates via SSE over HTTP.
+/// Spawns worker containers per issue and communicates via SSE over HTTP.
+/// Containers are reused across sessions for the same issue.
 /// The worker streams raw SDK messages which are passed through to the consumer.
 /// </summary>
 public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposable
@@ -68,7 +75,13 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
     private readonly DockerAgentExecutionOptions _options;
     private readonly ILogger<DockerAgentExecutionService> _logger;
     private readonly HttpClient _httpClient;
+
+    // Session tracking: sessionId -> session info
     private readonly ConcurrentDictionary<string, DockerSession> _sessions = new();
+    // Issue container tracking: issueId -> container info (for reuse)
+    private readonly ConcurrentDictionary<string, IssueContainer> _issueContainers = new();
+    // Session-to-issue mapping for routing
+    private readonly ConcurrentDictionary<string, string> _sessionToIssue = new();
 
     private static readonly JsonSerializerOptions SdkJsonOptions = SdkMessageParser.CreateJsonOptions();
 
@@ -85,11 +98,19 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         string WorkingDirectory,
         string? WorkerSessionId,
         CancellationTokenSource Cts,
-        DateTime CreatedAt)
+        DateTime CreatedAt,
+        string? IssueId = null)
     {
         public string? ConversationId { get; set; }
         public DateTime LastActivityAt { get; set; } = CreatedAt;
     }
+
+    private record IssueContainer(
+        string IssueId,
+        string ContainerId,
+        string ContainerName,
+        string WorkerUrl,
+        DateTime CreatedAt);
 
     public DockerAgentExecutionService(
         IOptions<DockerAgentExecutionOptions> options,
@@ -103,16 +124,26 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         };
     }
 
+    /// <summary>
+    /// Gets the container name for an issue. Deterministic naming enables reuse detection.
+    /// </summary>
+    internal static string GetIssueContainerName(string issueId)
+        => $"homespun-issue-{issueId}";
+
     /// <inheritdoc />
     public async IAsyncEnumerable<SdkMessage> StartSessionAsync(
         AgentStartRequest request,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var sessionId = Guid.NewGuid().ToString();
-        var containerName = $"homespun-agent-{sessionId[..8]}";
+        var hasIssue = !string.IsNullOrEmpty(request.IssueId);
+        var containerName = hasIssue
+            ? GetIssueContainerName(request.IssueId!)
+            : $"homespun-agent-{sessionId[..8]}";
 
-        _logger.LogInformation("DockerAgentExecutionService: Starting session {SessionId} with worker image {Image}, container {ContainerName}",
-            sessionId, _options.WorkerImage, containerName);
+        _logger.LogInformation(
+            "DockerAgentExecutionService: Starting session {SessionId} with worker image {Image}, container {ContainerName}, issue {IssueId}",
+            sessionId, _options.WorkerImage, containerName, request.IssueId ?? "(none)");
 
         var channel = System.Threading.Channels.Channel.CreateUnbounded<SdkMessage>();
 
@@ -121,14 +152,32 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
             string? containerId = null;
             try
             {
-                // Start the worker container
-                (containerId, var workerUrl) = await StartContainerAsync(containerName, request.WorkingDirectory, cancellationToken);
+                string workerUrl;
+
+                if (hasIssue)
+                {
+                    // Per-issue container: reuse if healthy, otherwise start new
+                    (containerId, workerUrl) = await GetOrStartIssueContainerAsync(
+                        request.IssueId!, request.ProjectName, request.WorkingDirectory, cancellationToken);
+                }
+                else
+                {
+                    // Legacy per-session container
+                    (containerId, workerUrl) = await StartContainerAsync(
+                        containerName, request.WorkingDirectory, useRm: true, cancellationToken: cancellationToken);
+                }
 
                 var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 var session = new DockerSession(
-                    sessionId, containerId, containerName, workerUrl, request.WorkingDirectory, null, cts, DateTime.UtcNow);
+                    sessionId, containerId, containerName, workerUrl, request.WorkingDirectory,
+                    null, cts, DateTime.UtcNow, request.IssueId);
 
                 _sessions[sessionId] = session;
+
+                if (hasIssue)
+                {
+                    _sessionToIssue[sessionId] = request.IssueId!;
+                }
 
                 // Emit a synthetic system message to indicate session started
                 await channel.Writer.WriteAsync(
@@ -173,7 +222,8 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
             {
                 _logger.LogError(ex, "Error in Docker session {SessionId}", sessionId);
 
-                if (!string.IsNullOrEmpty(containerId))
+                // Only stop container for non-issue (ephemeral) containers
+                if (!hasIssue && !string.IsNullOrEmpty(containerId))
                 {
                     await StopContainerAsync(containerId);
                 }
@@ -247,7 +297,61 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
             session.Cts.Cancel();
             session.Cts.Dispose();
 
-            await StopContainerAsync(session.ContainerId);
+            // For issue containers, only stop the worker session (container stays running)
+            if (!string.IsNullOrEmpty(session.IssueId))
+            {
+                _sessionToIssue.TryRemove(sessionId, out _);
+                if (!string.IsNullOrEmpty(session.WorkerSessionId))
+                {
+                    try
+                    {
+                        var response = await _httpClient.DeleteAsync(
+                            $"{session.WorkerUrl}/api/sessions/{session.WorkerSessionId}", cancellationToken);
+                        _logger.LogDebug("Worker session {WorkerSessionId} stop response: {StatusCode}",
+                            session.WorkerSessionId, response.StatusCode);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Error stopping worker session {WorkerSessionId}", session.WorkerSessionId);
+                    }
+                }
+            }
+            else
+            {
+                // For legacy per-session containers, stop the entire container
+                await StopContainerAsync(session.ContainerId);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Stops and removes the container for a specific issue.
+    /// Called when an issue is completed or explicitly stopped.
+    /// </summary>
+    public async Task StopIssueContainerAsync(string issueId, CancellationToken cancellationToken = default)
+    {
+        if (_issueContainers.TryRemove(issueId, out var container))
+        {
+            _logger.LogInformation("Stopping issue container {ContainerName} for issue {IssueId}",
+                container.ContainerName, issueId);
+
+            // Remove all sessions for this issue
+            var sessionIds = _sessionToIssue
+                .Where(kvp => kvp.Value == issueId)
+                .Select(kvp => kvp.Key)
+                .ToList();
+
+            foreach (var sessionId in sessionIds)
+            {
+                if (_sessions.TryRemove(sessionId, out var session))
+                {
+                    session.Cts.Cancel();
+                    session.Cts.Dispose();
+                }
+                _sessionToIssue.TryRemove(sessionId, out _);
+            }
+
+            await StopContainerAsync(container.ContainerId);
         }
     }
 
@@ -438,13 +542,68 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         return containerPath;
     }
 
-    private async Task<(string containerId, string workerUrl)> StartContainerAsync(
+    /// <summary>
+    /// Gets an existing healthy issue container, or starts a new one.
+    /// </summary>
+    private async Task<(string containerId, string workerUrl)> GetOrStartIssueContainerAsync(
+        string issueId,
+        string? projectName,
+        string workingDirectory,
+        CancellationToken cancellationToken)
+    {
+        // Check for existing healthy container
+        if (_issueContainers.TryGetValue(issueId, out var existing))
+        {
+            if (await IsContainerHealthyAsync(existing.WorkerUrl, cancellationToken))
+            {
+                _logger.LogDebug("Reusing existing container {ContainerName} for issue {IssueId}",
+                    existing.ContainerName, issueId);
+                return (existing.ContainerId, existing.WorkerUrl);
+            }
+
+            _logger.LogWarning("Container {ContainerName} for issue {IssueId} is unhealthy, removing",
+                existing.ContainerName, issueId);
+            _issueContainers.TryRemove(issueId, out _);
+            await StopContainerAsync(existing.ContainerId);
+        }
+
+        // Start new container with per-issue mounts
+        var containerName = GetIssueContainerName(issueId);
+        var (containerId, workerUrl) = await StartIssueContainerAsync(
+            containerName, issueId, projectName, workingDirectory, cancellationToken);
+
+        _issueContainers[issueId] = new IssueContainer(issueId, containerId, containerName, workerUrl, DateTime.UtcNow);
+        return (containerId, workerUrl);
+    }
+
+    /// <summary>
+    /// Checks if a container's worker is healthy.
+    /// </summary>
+    private async Task<bool> IsContainerHealthyAsync(string workerUrl, CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var response = await _httpClient.GetAsync($"{workerUrl}/api/health", cancellationToken);
+            return response.IsSuccessStatusCode;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Starts a per-issue container with specific volume mounts for .claude and src directories.
+    /// </summary>
+    private async Task<(string containerId, string workerUrl)> StartIssueContainerAsync(
         string containerName,
+        string issueId,
+        string? projectName,
         string workingDirectory,
         CancellationToken cancellationToken)
     {
         var dockerArgs = new StringBuilder();
-        dockerArgs.Append("run -d --rm ");
+        dockerArgs.Append("run -d "); // No --rm: issue containers persist
         dockerArgs.Append($"--name {containerName} ");
         dockerArgs.Append($"--memory {_options.MemoryLimitBytes} ");
         dockerArgs.Append($"--cpus {_options.CpuLimit} ");
@@ -453,13 +612,66 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         if (!string.IsNullOrEmpty(userFlag))
         {
             dockerArgs.Append($"--user {userFlag} ");
-            _logger.LogDebug("Running worker container as user {UserFlag}", userFlag);
+        }
+
+        // Per-issue volume mounts
+        var issueBasePath = $"{_options.DataVolumePath}/{_options.ProjectsBasePath}/{projectName ?? "default"}/issues/{issueId}";
+        var hostIssueBasePath = TranslateToHostPath(issueBasePath);
+
+        dockerArgs.Append($"-v \"{hostIssueBasePath}/.claude:/home/homespun/.claude\" ");
+        dockerArgs.Append($"-v \"{hostIssueBasePath}/src:/workdir\" ");
+
+        // Issue/project environment variables
+        dockerArgs.Append($"-e ISSUE_ID={issueId} ");
+        if (!string.IsNullOrEmpty(projectName))
+            dockerArgs.Append($"-e PROJECT_NAME={projectName} ");
+        dockerArgs.Append("-e WORKING_DIRECTORY=/workdir ");
+
+        AppendAuthEnvironmentVars(dockerArgs);
+        AppendCredentialsMount(dockerArgs);
+
+        dockerArgs.Append($"--network {_options.NetworkName} ");
+        dockerArgs.Append(_options.WorkerImage);
+
+        return await RunDockerAndGetUrl(containerName, dockerArgs.ToString(), cancellationToken);
+    }
+
+    /// <summary>
+    /// Starts a legacy per-session container with a single data volume mount.
+    /// </summary>
+    private async Task<(string containerId, string workerUrl)> StartContainerAsync(
+        string containerName,
+        string workingDirectory,
+        bool useRm,
+        CancellationToken cancellationToken)
+    {
+        var dockerArgs = new StringBuilder();
+        dockerArgs.Append(useRm ? "run -d --rm " : "run -d ");
+        dockerArgs.Append($"--name {containerName} ");
+        dockerArgs.Append($"--memory {_options.MemoryLimitBytes} ");
+        dockerArgs.Append($"--cpus {_options.CpuLimit} ");
+
+        var userFlag = ProcessUserInfo.GetDockerUserFlag();
+        if (!string.IsNullOrEmpty(userFlag))
+        {
+            dockerArgs.Append($"--user {userFlag} ");
         }
 
         var dataVolumeHostPath = TranslateToHostPath(_options.DataVolumePath);
         dockerArgs.Append($"-v \"{dataVolumeHostPath}:{_options.DataVolumePath}\" ");
         dockerArgs.Append($"-e ASPNETCORE_URLS=http://+:8080 ");
 
+        AppendAuthEnvironmentVars(dockerArgs);
+        AppendCredentialsMount(dockerArgs);
+
+        dockerArgs.Append($"--network {_options.NetworkName} ");
+        dockerArgs.Append(_options.WorkerImage);
+
+        return await RunDockerAndGetUrl(containerName, dockerArgs.ToString(), cancellationToken);
+    }
+
+    private void AppendAuthEnvironmentVars(StringBuilder dockerArgs)
+    {
         var envVarsToPassthrough = new[]
         {
             "CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY", "GITHUB_TOKEN",
@@ -474,7 +686,10 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
                 _logger.LogDebug("Passing environment variable {EnvVar} to agent container", envVar);
             }
         }
+    }
 
+    private void AppendCredentialsMount(StringBuilder dockerArgs)
+    {
         var homeDir = Environment.GetEnvironmentVariable("HOME");
         if (!string.IsNullOrEmpty(homeDir))
         {
@@ -485,14 +700,17 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
                 _logger.LogDebug("Mounting Claude credentials file for agent container");
             }
         }
+    }
 
-        dockerArgs.Append($"--network {_options.NetworkName} ");
-        dockerArgs.Append(_options.WorkerImage);
-
+    private async Task<(string containerId, string workerUrl)> RunDockerAndGetUrl(
+        string containerName,
+        string dockerArgs,
+        CancellationToken cancellationToken)
+    {
         var startInfo = new System.Diagnostics.ProcessStartInfo
         {
             FileName = "docker",
-            Arguments = dockerArgs.ToString(),
+            Arguments = dockerArgs,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
@@ -671,8 +889,6 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
                 using var doc = JsonDocument.Parse(data);
                 var workerSessionId = doc.RootElement.TryGetProperty("sessionId", out var sid)
                     ? sid.GetString() : null;
-                var conversationId = doc.RootElement.TryGetProperty("conversationId", out var cid)
-                    ? cid.GetString() : null;
 
                 return new SdkSystemMessage(
                     workerSessionId ?? sessionId,
@@ -718,17 +934,40 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
 
     public async ValueTask DisposeAsync()
     {
+        // Stop all sessions
         foreach (var session in _sessions.Values)
         {
             try
             {
                 session.Cts.Cancel();
                 session.Cts.Dispose();
+            }
+            catch { }
+        }
+
+        // Stop all issue containers
+        foreach (var container in _issueContainers.Values)
+        {
+            try
+            {
+                await StopContainerAsync(container.ContainerId);
+            }
+            catch { }
+        }
+
+        // Stop any legacy session containers (those without IssueId)
+        foreach (var session in _sessions.Values.Where(s => string.IsNullOrEmpty(s.IssueId)))
+        {
+            try
+            {
                 await StopContainerAsync(session.ContainerId);
             }
             catch { }
         }
+
         _sessions.Clear();
+        _issueContainers.Clear();
+        _sessionToIssue.Clear();
         _httpClient.Dispose();
     }
 }
