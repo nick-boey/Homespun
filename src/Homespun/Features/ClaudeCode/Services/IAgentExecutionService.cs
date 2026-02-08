@@ -211,4 +211,20 @@ public interface IAgentExecutionService
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The file content, or null if the file is not found or the session doesn't exist.</returns>
     Task<string?> ReadFileFromAgentAsync(string sessionId, string filePath, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Lists all currently tracked sessions in the execution service.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>List of session statuses for all tracked sessions.</returns>
+    Task<IReadOnlyList<AgentSessionStatus>> ListSessionsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Discovers and stops containers/sessions not tracked in the session store.
+    /// For Docker mode: runs <c>docker ps</c> to find orphaned homespun-agent containers.
+    /// Returns count of orphaned items cleaned up.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Count of orphaned containers/sessions cleaned up.</returns>
+    Task<int> CleanupOrphanedContainersAsync(CancellationToken cancellationToken = default);
 }

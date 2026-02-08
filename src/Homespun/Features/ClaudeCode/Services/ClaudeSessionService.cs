@@ -1238,6 +1238,46 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
     }
 
     /// <inheritdoc />
+    public async Task<int> StopAllSessionsForEntityAsync(string entityId, CancellationToken cancellationToken = default)
+    {
+        var sessions = _sessionStore.GetAllByEntityId(entityId);
+        var stoppedCount = 0;
+
+        _logger.LogInformation("Stopping all {Count} session(s) for entity {EntityId}", sessions.Count, entityId);
+
+        foreach (var session in sessions)
+        {
+            try
+            {
+                await StopSessionAsync(session.Id, cancellationToken);
+                stoppedCount++;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error stopping session {SessionId} for entity {EntityId}",
+                    session.Id, entityId);
+            }
+        }
+
+        // Clean up any orphaned containers not tracked in memory
+        try
+        {
+            var orphansCleanedUp = await _agentExecutionService.CleanupOrphanedContainersAsync(cancellationToken);
+            if (orphansCleanedUp > 0)
+            {
+                _logger.LogInformation("Cleaned up {OrphanCount} orphaned container(s) after stopping sessions for entity {EntityId}",
+                    orphansCleanedUp, entityId);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error cleaning up orphaned containers for entity {EntityId}", entityId);
+        }
+
+        return stoppedCount;
+    }
+
+    /// <inheritdoc />
     public async Task InterruptSessionAsync(string sessionId, CancellationToken cancellationToken = default)
     {
         var session = _sessionStore.GetById(sessionId);

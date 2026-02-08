@@ -23,6 +23,13 @@ public interface IClaudeSessionStore
     ClaudeSession? GetByEntityId(string entityId);
 
     /// <summary>
+    /// Gets all sessions for a given entity ID (issue/PR).
+    /// Unlike <see cref="GetByEntityId"/> which returns only the first match,
+    /// this returns all sessions including superseded ones.
+    /// </summary>
+    IReadOnlyList<ClaudeSession> GetAllByEntityId(string entityId);
+
+    /// <summary>
     /// Gets all sessions for a project.
     /// </summary>
     IReadOnlyList<ClaudeSession> GetByProjectId(string projectId);

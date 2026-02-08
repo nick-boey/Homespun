@@ -6,6 +6,7 @@
 @using Homespun.Features.PullRequests.Data
 
 @inject IClaudeSessionStore SessionStore
+@inject IClaudeSessionService SessionService
 @inject IProjectService ProjectService
 @inject PullRequestDataService PullRequestDataService
 @inject IFleeceService FleeceService
@@ -444,8 +445,7 @@
 
         try
         {
-            // TODO: Integrate with ClaudeSessionService to properly stop the session
-            SessionStore.Remove(sessionId);
+            await SessionService.StopSessionAsync(sessionId);
             await RefreshSessions();
             await OnSessionStopped.InvokeAsync();
         }
