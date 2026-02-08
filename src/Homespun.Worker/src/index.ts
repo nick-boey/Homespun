@@ -9,11 +9,13 @@ import { SessionManager } from './services/session-manager.js';
 const app = new Hono();
 const sessionManager = new SessionManager();
 
-// Mount routes
-app.route('/health', health);
-app.route('/info', createInfoRoute(sessionManager));
-app.route('/sessions', createSessionsRoute(sessionManager));
-app.route('/files', files);
+// Mount all routes under /api
+const api = new Hono();
+api.route('/health', health);
+api.route('/info', createInfoRoute(sessionManager));
+api.route('/sessions', createSessionsRoute(sessionManager));
+api.route('/files', files);
+app.route('/api', api);
 
 const port = parseInt(process.env.PORT || '8080', 10);
 

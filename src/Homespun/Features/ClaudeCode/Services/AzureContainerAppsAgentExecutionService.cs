@@ -18,7 +18,7 @@ public class AzureContainerAppsAgentExecutionOptions
     public const string SectionName = "AgentExecution:AzureContainerApps";
 
     /// <summary>
-    /// Base URL of the worker container app (e.g., http://ca-worker-homespun-dev.internal.region.azurecontainerapps.io).
+    /// Base URL of the worker container app.
     /// </summary>
     public string WorkerEndpoint { get; set; } = string.Empty;
 
@@ -36,7 +36,7 @@ public class AzureContainerAppsAgentExecutionOptions
 /// <summary>
 /// Azure Container Apps implementation for agent execution.
 /// Routes all requests directly to a worker container app via HTTP.
-/// The worker manages sessions internally via WorkerSessionService.
+/// The worker streams raw SDK messages which are passed through to the consumer.
 /// </summary>
 public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, IAsyncDisposable
 {
@@ -44,6 +44,13 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
     private readonly ILogger<AzureContainerAppsAgentExecutionService> _logger;
     private readonly HttpClient _httpClient;
     private readonly ConcurrentDictionary<string, WorkerSession> _sessions = new();
+
+    private static readonly JsonSerializerOptions SdkJsonOptions = SdkMessageParser.CreateJsonOptions();
+
+    private static readonly JsonSerializerOptions CamelCaseJsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    };
 
     private record WorkerSession(
         string SessionId,
@@ -54,11 +61,6 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
         public string? ConversationId { get; set; }
         public DateTime LastActivityAt { get; set; } = CreatedAt;
     }
-
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-    };
 
     public AzureContainerAppsAgentExecutionService(
         IOptions<AzureContainerAppsAgentExecutionOptions> options,
@@ -73,7 +75,7 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
     }
 
     /// <inheritdoc />
-    public async IAsyncEnumerable<AgentEvent> StartSessionAsync(
+    public async IAsyncEnumerable<SdkMessage> StartSessionAsync(
         AgentStartRequest request,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
@@ -82,7 +84,7 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
         _logger.LogInformation("Starting worker session {SessionId} via {WorkerEndpoint}",
             sessionId, _options.WorkerEndpoint);
 
-        var channel = System.Threading.Channels.Channel.CreateUnbounded<AgentEvent>();
+        var channel = System.Threading.Channels.Channel.CreateUnbounded<SdkMessage>();
 
         _ = Task.Run(async () =>
         {
@@ -92,7 +94,6 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
                 var session = new WorkerSession(sessionId, null, cts, DateTime.UtcNow);
                 _sessions[sessionId] = session;
 
-                // Start the agent session in the worker
                 var startRequest = new
                 {
                     WorkingDirectory = request.WorkingDirectory,
@@ -105,19 +106,20 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
 
                 var workerUrl = $"{_options.WorkerEndpoint.TrimEnd('/')}/api/sessions";
 
-                await foreach (var evt in SendSseRequestAsync(workerUrl, startRequest, sessionId, cts.Token))
+                await foreach (var msg in SendSseRequestAsync(workerUrl, startRequest, sessionId, cts.Token))
                 {
-                    if (evt is AgentSessionStartedEvent startedEvt)
+                    if (msg is SdkSystemMessage sysMsg && sysMsg.Subtype == "session_started" &&
+                        !string.IsNullOrEmpty(sysMsg.SessionId) && sysMsg.SessionId != sessionId)
                     {
-                        session = session with { WorkerSessionId = startedEvt.SessionId };
+                        session = session with { WorkerSessionId = sysMsg.SessionId };
                         _sessions[sessionId] = session;
                     }
 
-                    await channel.Writer.WriteAsync(MapSessionId(evt, sessionId), cancellationToken);
+                    await channel.Writer.WriteAsync(RemapSessionId(msg, sessionId), cancellationToken);
 
-                    if (evt is AgentResultEvent resultEvt)
+                    if (msg is SdkResultMessage resultMsg)
                     {
-                        session.ConversationId = resultEvt.ConversationId;
+                        session.ConversationId = resultMsg.SessionId;
                         _sessions[sessionId] = session;
                     }
                 }
@@ -126,9 +128,6 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 _logger.LogError(ex, "Error in worker session {SessionId}", sessionId);
-
-                await channel.Writer.WriteAsync(
-                    new AgentErrorEvent(sessionId, ex.Message, "WORKER_ERROR", ex is AgentStartupException));
                 channel.Writer.Complete(ex);
             }
             catch (OperationCanceledException)
@@ -137,26 +136,26 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
             }
         }, cancellationToken);
 
-        await foreach (var evt in channel.Reader.ReadAllAsync(cancellationToken))
+        await foreach (var msg in channel.Reader.ReadAllAsync(cancellationToken))
         {
-            yield return evt;
+            yield return msg;
         }
     }
 
     /// <inheritdoc />
-    public async IAsyncEnumerable<AgentEvent> SendMessageAsync(
+    public async IAsyncEnumerable<SdkMessage> SendMessageAsync(
         AgentMessageRequest request,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         if (!_sessions.TryGetValue(request.SessionId, out var session))
         {
-            yield return new AgentErrorEvent(request.SessionId, $"Session {request.SessionId} not found", "SESSION_NOT_FOUND", false);
+            _logger.LogError("Session {SessionId} not found", request.SessionId);
             yield break;
         }
 
         if (string.IsNullOrEmpty(session.WorkerSessionId))
         {
-            yield return new AgentErrorEvent(request.SessionId, "Worker session not initialized", "WORKER_NOT_READY", false);
+            _logger.LogError("Worker session not initialized for session {SessionId}", request.SessionId);
             yield break;
         }
 
@@ -172,45 +171,15 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
 
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, session.Cts.Token);
 
-        await foreach (var evt in SendSseRequestAsync(workerUrl, messageRequest, request.SessionId, linkedCts.Token))
+        await foreach (var msg in SendSseRequestAsync(workerUrl, messageRequest, request.SessionId, linkedCts.Token))
         {
-            var mappedEvt = MapSessionId(evt, request.SessionId);
-            yield return mappedEvt;
+            yield return RemapSessionId(msg, request.SessionId);
 
-            if (evt is AgentResultEvent resultEvt)
+            if (msg is SdkResultMessage resultMsg)
             {
-                session.ConversationId = resultEvt.ConversationId;
+                session.ConversationId = resultMsg.SessionId;
                 _sessions[request.SessionId] = session;
             }
-        }
-    }
-
-    /// <inheritdoc />
-    public async IAsyncEnumerable<AgentEvent> AnswerQuestionAsync(
-        AgentAnswerRequest request,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default)
-    {
-        if (!_sessions.TryGetValue(request.SessionId, out var session))
-        {
-            yield return new AgentErrorEvent(request.SessionId, $"Session {request.SessionId} not found", "SESSION_NOT_FOUND", false);
-            yield break;
-        }
-
-        if (string.IsNullOrEmpty(session.WorkerSessionId))
-        {
-            yield return new AgentErrorEvent(request.SessionId, "Worker session not initialized", "WORKER_NOT_READY", false);
-            yield break;
-        }
-
-        var answerRequest = new { Answers = request.Answers };
-
-        var workerUrl = $"{_options.WorkerEndpoint.TrimEnd('/')}/api/sessions/{session.WorkerSessionId}/answer";
-
-        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, session.Cts.Token);
-
-        await foreach (var evt in SendSseRequestAsync(workerUrl, answerRequest, request.SessionId, linkedCts.Token))
-        {
-            yield return MapSessionId(evt, request.SessionId);
         }
     }
 
@@ -224,7 +193,6 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
             session.Cts.Cancel();
             session.Cts.Dispose();
 
-            // Tell the worker to stop the session
             if (!string.IsNullOrEmpty(session.WorkerSessionId))
             {
                 await DeleteWorkerSessionAsync(session.WorkerSessionId);
@@ -239,11 +207,9 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
         {
             _logger.LogInformation("Interrupting worker session {SessionId}", sessionId);
 
-            // Cancel current execution
             session.Cts.Cancel();
             session.Cts.Dispose();
 
-            // Replace with a fresh CTS
             var newCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             var updatedSession = session with { Cts = newCts };
             _sessions[sessionId] = updatedSession;
@@ -283,7 +249,7 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
         try
         {
             var requestBody = new { FilePath = filePath };
-            var json = JsonSerializer.Serialize(requestBody, JsonOptions);
+            var json = JsonSerializer.Serialize(requestBody, CamelCaseJsonOptions);
             using var content = new StringContent(json, Encoding.UTF8, "application/json");
 
             var workerUrl = $"{_options.WorkerEndpoint.TrimEnd('/')}/api/files/read";
@@ -355,13 +321,13 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
         }
     }
 
-    private async IAsyncEnumerable<AgentEvent> SendSseRequestAsync(
+    private async IAsyncEnumerable<SdkMessage> SendSseRequestAsync(
         string url,
         object requestBody,
         string sessionId,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        var json = JsonSerializer.Serialize(requestBody, JsonOptions);
+        var json = JsonSerializer.Serialize(requestBody, CamelCaseJsonOptions);
         using var content = new StringContent(json, Encoding.UTF8, "application/json");
 
         using var request = new HttpRequestMessage(HttpMethod.Post, url)
@@ -401,12 +367,12 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
             {
                 if (!string.IsNullOrEmpty(currentEventType) && dataBuffer.Length > 0)
                 {
-                    var evt = ParseSseEvent(currentEventType, dataBuffer.ToString(), sessionId);
-                    if (evt != null)
+                    var msg = ParseSseEvent(currentEventType, dataBuffer.ToString(), sessionId);
+                    if (msg != null)
                     {
-                        yield return evt;
+                        yield return msg;
 
-                        if (evt is AgentSessionEndedEvent)
+                        if (msg is SdkResultMessage)
                         {
                             yield break;
                         }
@@ -419,21 +385,32 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
         }
     }
 
-    private AgentEvent? ParseSseEvent(string eventType, string data, string sessionId)
+    private SdkMessage? ParseSseEvent(string eventType, string data, string sessionId)
     {
         try
         {
-            return eventType switch
+            if (eventType == "session_started")
             {
-                "SessionStarted" => ParseJson<AgentSessionStartedEvent>(data),
-                "ContentBlockReceived" => ParseContentBlockEvent(data, sessionId),
-                "MessageReceived" => ParseMessageEvent(data, sessionId),
-                "ResultReceived" => ParseJson<AgentResultEvent>(data),
-                "QuestionReceived" => ParseQuestionEvent(data, sessionId),
-                "SessionEnded" => ParseJson<AgentSessionEndedEvent>(data),
-                "Error" => ParseJson<AgentErrorEvent>(data),
-                _ => null
-            };
+                using var doc = JsonDocument.Parse(data);
+                var workerSessionId = doc.RootElement.TryGetProperty("sessionId", out var sid)
+                    ? sid.GetString() : null;
+
+                return new SdkSystemMessage(
+                    workerSessionId ?? sessionId,
+                    null,
+                    "session_started",
+                    null,
+                    null
+                );
+            }
+
+            if (eventType == "error")
+            {
+                _logger.LogWarning("Received error event from worker: {Data}", data);
+                return null;
+            }
+
+            return JsonSerializer.Deserialize<SdkMessage>(data, SdkJsonOptions);
         }
         catch (JsonException ex)
         {
@@ -442,123 +419,16 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
         }
     }
 
-    private T? ParseJson<T>(string json)
+    private static SdkMessage RemapSessionId(SdkMessage msg, string sessionId)
     {
-        return JsonSerializer.Deserialize<T>(json, JsonOptions);
-    }
-
-    private AgentContentBlockEvent? ParseContentBlockEvent(string json, string sessionId)
-    {
-        using var doc = JsonDocument.Parse(json);
-        var root = doc.RootElement;
-
-        var typeStr = root.GetProperty("type").GetString() ?? "Text";
-        var type = Enum.TryParse<ClaudeContentType>(typeStr, true, out var parsed)
-            ? parsed : ClaudeContentType.Text;
-
-        // Helper to safely get nullable boolean (handles JSON null values)
-        bool? GetNullableBool(JsonElement element, string propertyName)
+        return msg switch
         {
-            if (!element.TryGetProperty(propertyName, out var prop))
-                return null;
-            if (prop.ValueKind == JsonValueKind.Null)
-                return null;
-            return prop.GetBoolean();
-        }
-
-        return new AgentContentBlockEvent(
-            root.TryGetProperty("sessionId", out var sid) ? sid.GetString() ?? sessionId : sessionId,
-            type,
-            root.TryGetProperty("text", out var text) ? text.GetString() : null,
-            root.TryGetProperty("toolName", out var tn) ? tn.GetString() : null,
-            root.TryGetProperty("toolInput", out var ti) ? ti.GetString() : null,
-            root.TryGetProperty("toolUseId", out var tuid) ? tuid.GetString() : null,
-            GetNullableBool(root, "toolSuccess"),
-            root.TryGetProperty("index", out var idx) ? idx.GetInt32() : 0
-        );
-    }
-
-    private AgentMessageEvent? ParseMessageEvent(string json, string sessionId)
-    {
-        using var doc = JsonDocument.Parse(json);
-        var root = doc.RootElement;
-
-        var roleStr = root.GetProperty("role").GetString() ?? "Assistant";
-        var role = roleStr.Equals("User", StringComparison.OrdinalIgnoreCase)
-            ? ClaudeMessageRole.User : ClaudeMessageRole.Assistant;
-
-        var content = new List<AgentContentBlockEvent>();
-        if (root.TryGetProperty("content", out var contentArray))
-        {
-            foreach (var block in contentArray.EnumerateArray())
-            {
-                var blockJson = block.GetRawText();
-                var blockEvent = ParseContentBlockEvent(blockJson, sessionId);
-                if (blockEvent != null)
-                {
-                    content.Add(blockEvent);
-                }
-            }
-        }
-
-        return new AgentMessageEvent(
-            root.TryGetProperty("sessionId", out var sid) ? sid.GetString() ?? sessionId : sessionId,
-            role,
-            content
-        );
-    }
-
-    private AgentQuestionEvent? ParseQuestionEvent(string json, string sessionId)
-    {
-        using var doc = JsonDocument.Parse(json);
-        var root = doc.RootElement;
-
-        var questions = new List<AgentQuestion>();
-        if (root.TryGetProperty("questions", out var questionsArray))
-        {
-            foreach (var q in questionsArray.EnumerateArray())
-            {
-                var options = new List<AgentQuestionOption>();
-                if (q.TryGetProperty("options", out var optionsArray))
-                {
-                    foreach (var opt in optionsArray.EnumerateArray())
-                    {
-                        options.Add(new AgentQuestionOption(
-                            opt.GetProperty("label").GetString() ?? "",
-                            opt.GetProperty("description").GetString() ?? ""
-                        ));
-                    }
-                }
-
-                questions.Add(new AgentQuestion(
-                    q.GetProperty("question").GetString() ?? "",
-                    q.TryGetProperty("header", out var h) ? h.GetString() ?? "" : "",
-                    options,
-                    q.TryGetProperty("multiSelect", out var ms) && ms.GetBoolean()
-                ));
-            }
-        }
-
-        return new AgentQuestionEvent(
-            root.TryGetProperty("sessionId", out var sid) ? sid.GetString() ?? sessionId : sessionId,
-            root.TryGetProperty("questionId", out var qid) ? qid.GetString() ?? "" : "",
-            root.TryGetProperty("toolUseId", out var tuid) ? tuid.GetString() ?? "" : "",
-            questions
-        );
-    }
-
-    private static AgentEvent MapSessionId(AgentEvent evt, string sessionId)
-    {
-        return evt switch
-        {
-            AgentSessionStartedEvent e => e with { SessionId = sessionId },
-            AgentContentBlockEvent e => e with { SessionId = sessionId },
-            AgentMessageEvent e => e with { SessionId = sessionId, Content = e.Content.Select(c => c with { SessionId = sessionId }).ToList() },
-            AgentResultEvent e => e with { SessionId = sessionId },
-            AgentQuestionEvent e => e with { SessionId = sessionId },
-            AgentSessionEndedEvent e => e with { SessionId = sessionId },
-            AgentErrorEvent e => e with { SessionId = sessionId },
-            _ => evt
+            SdkAssistantMessage m => m with { SessionId = sessionId },
+            SdkUserMessage m => m with { SessionId = sessionId },
+            SdkResultMessage m => m with { SessionId = sessionId },
+            SdkSystemMessage m => m with { SessionId = sessionId },
+            SdkStreamEvent m => m with { SessionId = sessionId },
+            _ => msg
         };
     }
 

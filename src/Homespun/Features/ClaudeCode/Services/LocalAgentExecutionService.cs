@@ -9,7 +9,7 @@ namespace Homespun.Features.ClaudeCode.Services;
 
 /// <summary>
 /// Local in-process implementation of agent execution using the ClaudeAgentSdk.
-/// This is the default implementation that runs agents directly in the main process.
+/// Converts C# SDK Message types to SdkMessage records for the consumer.
 /// </summary>
 public class LocalAgentExecutionService : IAgentExecutionService, IAsyncDisposable
 {
@@ -17,7 +17,6 @@ public class LocalAgentExecutionService : IAgentExecutionService, IAsyncDisposab
     private readonly ILogger<LocalAgentExecutionService> _logger;
 
     private readonly ConcurrentDictionary<string, LocalSession> _sessions = new();
-    private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, string>> _sessionToolUses = new();
 
     private record LocalSession(
         string Id,
@@ -42,7 +41,7 @@ public class LocalAgentExecutionService : IAgentExecutionService, IAsyncDisposab
     }
 
     /// <inheritdoc />
-    public async IAsyncEnumerable<AgentEvent> StartSessionAsync(
+    public async IAsyncEnumerable<SdkMessage> StartSessionAsync(
         AgentStartRequest request,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
@@ -72,26 +71,26 @@ public class LocalAgentExecutionService : IAgentExecutionService, IAsyncDisposab
         };
 
         _sessions[sessionId] = session;
-        _sessionToolUses[sessionId] = new ConcurrentDictionary<string, string>();
 
         _logger.LogInformation("Starting local session {SessionId} in {Mode} mode", sessionId, request.Mode);
 
-        yield return new AgentSessionStartedEvent(sessionId, session.ConversationId);
+        // Emit a synthetic system message with the session ID
+        yield return new SdkSystemMessage(sessionId, null, "session_started", request.Model, null);
 
-        await foreach (var evt in ProcessMessagesAsync(session, request.Prompt, cts.Token))
+        await foreach (var msg in ProcessMessagesAsync(session, request.Prompt, cts.Token))
         {
-            yield return evt;
+            yield return msg;
         }
     }
 
     /// <inheritdoc />
-    public async IAsyncEnumerable<AgentEvent> SendMessageAsync(
+    public async IAsyncEnumerable<SdkMessage> SendMessageAsync(
         AgentMessageRequest request,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         if (!_sessions.TryGetValue(request.SessionId, out var session))
         {
-            yield return new AgentErrorEvent(request.SessionId, $"Session {request.SessionId} not found", "SESSION_NOT_FOUND", false);
+            _logger.LogError("Session {SessionId} not found", request.SessionId);
             yield break;
         }
 
@@ -111,41 +110,14 @@ public class LocalAgentExecutionService : IAgentExecutionService, IAsyncDisposab
         session = session with { Options = queryOptions };
         _sessions[request.SessionId] = session;
 
-        await foreach (var evt in ProcessMessagesAsync(session, request.Message, linkedCts.Token))
+        await foreach (var msg in ProcessMessagesAsync(session, request.Message, linkedCts.Token))
         {
-            yield return evt;
+            yield return msg;
         }
 
         // Restore original options
         session = session with { Options = originalOptions };
         _sessions[request.SessionId] = session;
-    }
-
-    /// <inheritdoc />
-    public async IAsyncEnumerable<AgentEvent> AnswerQuestionAsync(
-        AgentAnswerRequest request,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default)
-    {
-        // Format the answers as a message
-        var formattedAnswers = new System.Text.StringBuilder();
-        formattedAnswers.AppendLine("I've answered your questions:");
-        formattedAnswers.AppendLine();
-
-        foreach (var (question, answer) in request.Answers)
-        {
-            formattedAnswers.AppendLine($"**{question}**");
-            formattedAnswers.AppendLine($"My answer: {answer}");
-            formattedAnswers.AppendLine();
-        }
-
-        formattedAnswers.AppendLine("Please continue with the task based on my answers above.");
-
-        var messageRequest = new AgentMessageRequest(request.SessionId, formattedAnswers.ToString().Trim());
-
-        await foreach (var evt in SendMessageAsync(messageRequest, cancellationToken))
-        {
-            yield return evt;
-        }
     }
 
     /// <inheritdoc />
@@ -156,7 +128,6 @@ public class LocalAgentExecutionService : IAgentExecutionService, IAsyncDisposab
             _logger.LogInformation("Stopping local session {SessionId}", sessionId);
             session.Cts.Cancel();
             session.Cts.Dispose();
-            _sessionToolUses.TryRemove(sessionId, out _);
         }
 
         return Task.CompletedTask;
@@ -177,8 +148,6 @@ public class LocalAgentExecutionService : IAgentExecutionService, IAsyncDisposab
             var newCts = new CancellationTokenSource();
             var updatedSession = session with { Cts = newCts };
             _sessions[sessionId] = updatedSession;
-
-            // Do NOT remove from _sessions or _sessionToolUses - session stays alive
         }
 
         return Task.CompletedTask;
@@ -206,8 +175,6 @@ public class LocalAgentExecutionService : IAgentExecutionService, IAsyncDisposab
     /// <inheritdoc />
     public async Task<string?> ReadFileFromAgentAsync(string sessionId, string filePath, CancellationToken cancellationToken = default)
     {
-        // Local agents run in the same filesystem as the parent application,
-        // so we can read files directly from disk.
         if (!File.Exists(filePath))
         {
             _logger.LogDebug("ReadFileFromAgentAsync: File not found at {Path}", filePath);
@@ -248,13 +215,12 @@ public class LocalAgentExecutionService : IAgentExecutionService, IAsyncDisposab
         return Task.FromResult(0);
     }
 
-    private async IAsyncEnumerable<AgentEvent> ProcessMessagesAsync(
+    private async IAsyncEnumerable<SdkMessage> ProcessMessagesAsync(
         LocalSession session,
         string prompt,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        var currentContentBlocks = new List<AgentContentBlockEvent>();
-        var channel = System.Threading.Channels.Channel.CreateUnbounded<AgentEvent>();
+        var channel = System.Threading.Channels.Channel.CreateUnbounded<SdkMessage>();
 
         // Start processing in background task
         _ = Task.Run(async () =>
@@ -266,17 +232,15 @@ public class LocalAgentExecutionService : IAgentExecutionService, IAsyncDisposab
 
                 await foreach (var msg in client.ReceiveMessagesAsync().WithCancellation(cancellationToken))
                 {
-                    var events = ProcessSdkMessage(session, msg, currentContentBlocks);
-                    foreach (var evt in events)
+                    var sdkMsg = ConvertToSdkMessage(session, msg);
+                    if (sdkMsg != null)
                     {
-                        await channel.Writer.WriteAsync(evt, cancellationToken);
+                        await channel.Writer.WriteAsync(sdkMsg, cancellationToken);
 
-                        if (evt is AgentResultEvent resultEvt)
+                        if (sdkMsg is SdkResultMessage resultMsg)
                         {
-                            session.ConversationId = resultEvt.ConversationId;
+                            session.ConversationId = resultMsg.SessionId;
                             _sessions[session.Id] = session;
-
-                            await channel.Writer.WriteAsync(new AgentSessionEndedEvent(session.Id, "completed"), cancellationToken);
                             channel.Writer.Complete();
                             return;
                         }
@@ -287,311 +251,150 @@ public class LocalAgentExecutionService : IAgentExecutionService, IAsyncDisposab
             catch (OperationCanceledException)
             {
                 _logger.LogInformation("Local session {SessionId} cancelled", session.Id);
-                await channel.Writer.WriteAsync(new AgentSessionEndedEvent(session.Id, "cancelled"));
                 channel.Writer.Complete();
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error in local session {SessionId}", session.Id);
-                await channel.Writer.WriteAsync(new AgentErrorEvent(session.Id, ex.Message, "AGENT_ERROR", false));
                 channel.Writer.Complete(ex);
             }
         }, cancellationToken);
 
         // Yield events from channel
-        await foreach (var evt in channel.Reader.ReadAllAsync(cancellationToken))
+        await foreach (var msg in channel.Reader.ReadAllAsync(cancellationToken))
         {
-            yield return evt;
+            yield return msg;
         }
     }
 
-    private List<AgentEvent> ProcessSdkMessage(
-        LocalSession session,
-        Message sdkMessage,
-        List<AgentContentBlockEvent> currentContentBlocks)
+    /// <summary>
+    /// Converts a C# SDK Message to an SdkMessage record.
+    /// This is a simple mapping — all content block assembly and question parsing
+    /// happens in the consumer (ClaudeSessionService).
+    /// </summary>
+    private SdkMessage? ConvertToSdkMessage(LocalSession session, Message sdkMessage)
     {
-        var events = new List<AgentEvent>();
-
         switch (sdkMessage)
         {
             case StreamEvent streamEvent:
-                var streamEvents = ProcessStreamEvent(session, streamEvent, currentContentBlocks);
-                events.AddRange(streamEvents);
-                break;
+            {
+                // Convert the Event dictionary to a JsonElement
+                JsonElement? eventElement = null;
+                if (streamEvent.Event != null)
+                {
+                    var json = JsonSerializer.Serialize(streamEvent.Event);
+                    eventElement = JsonDocument.Parse(json).RootElement;
+                }
+
+                return new SdkStreamEvent(
+                    session.Id,
+                    null,
+                    eventElement,
+                    null
+                );
+            }
 
             case AssistantMessage assistantMsg:
-                // Content already processed via streaming
-                if (currentContentBlocks.Count > 0)
-                {
-                    events.Add(new AgentMessageEvent(session.Id, ClaudeMessageRole.Assistant,
-                        new List<AgentContentBlockEvent>(currentContentBlocks)));
-                    currentContentBlocks.Clear();
-                }
-                break;
+            {
+                var content = ConvertContentBlocks(assistantMsg.Content);
+                var apiMessage = new SdkApiMessage("assistant", content);
+                return new SdkAssistantMessage(session.Id, null, apiMessage, null);
+            }
 
             case ResultMessage resultMsg:
-                events.Add(new AgentResultEvent(
-                    session.Id,
-                    (decimal)(resultMsg.TotalCostUsd ?? 0),
-                    resultMsg.DurationMs,
-                    resultMsg.SessionId
-                ));
-                break;
+            {
+                return new SdkResultMessage(
+                    SessionId: resultMsg.SessionId ?? session.Id,
+                    Uuid: null,
+                    Subtype: null,
+                    DurationMs: resultMsg.DurationMs,
+                    DurationApiMs: 0,
+                    IsError: false,
+                    NumTurns: 0,
+                    TotalCostUsd: (decimal)(resultMsg.TotalCostUsd ?? 0),
+                    Result: null
+                );
+            }
 
             case UserMessage userMsg:
-                var toolEvents = ProcessUserMessage(session, userMsg);
-                events.AddRange(toolEvents);
-                break;
-        }
-
-        return events;
-    }
-
-    private List<AgentEvent> ProcessStreamEvent(
-        LocalSession session,
-        StreamEvent streamEvent,
-        List<AgentContentBlockEvent> currentContentBlocks)
-    {
-        var events = new List<AgentEvent>();
-
-        if (streamEvent.Event == null || !streamEvent.Event.TryGetValue("type", out var typeObj))
-            return events;
-
-        var eventType = typeObj is JsonElement typeElement ? typeElement.GetString() : typeObj?.ToString();
-
-        switch (eventType)
-        {
-            case "content_block_start":
-                ProcessContentBlockStart(session, streamEvent.Event, currentContentBlocks);
-                break;
-
-            case "content_block_delta":
-                ProcessContentBlockDelta(streamEvent.Event, currentContentBlocks);
-                break;
-
-            case "content_block_stop":
-                var stopEvents = ProcessContentBlockStop(session, streamEvent.Event, currentContentBlocks);
-                events.AddRange(stopEvents);
-                break;
-        }
-
-        return events;
-    }
-
-    private void ProcessContentBlockStart(
-        LocalSession session,
-        Dictionary<string, object> eventData,
-        List<AgentContentBlockEvent> currentContentBlocks)
-    {
-        if (!eventData.TryGetValue("content_block", out var blockObj))
-            return;
-
-        var index = GetIntValue(eventData, "index") ?? currentContentBlocks.Count;
-        var blockJson = blockObj is JsonElement element ? element.GetRawText() : JsonSerializer.Serialize(blockObj);
-        var blockData = JsonSerializer.Deserialize<Dictionary<string, object>>(blockJson);
-        if (blockData == null) return;
-
-        var blockType = GetStringValue(blockData, "type");
-        AgentContentBlockEvent? content = blockType switch
-        {
-            "text" => new AgentContentBlockEvent(session.Id, ClaudeContentType.Text, "", null, null, null, null, index),
-            "thinking" => new AgentContentBlockEvent(session.Id, ClaudeContentType.Thinking, "", null, null, null, null, index),
-            "tool_use" => CreateToolUseContent(session, blockData, index),
-            _ => null
-        };
-
-        if (content != null)
-        {
-            currentContentBlocks.Add(content);
-        }
-    }
-
-    private void ProcessContentBlockDelta(
-        Dictionary<string, object> eventData,
-        List<AgentContentBlockEvent> currentContentBlocks)
-    {
-        if (!eventData.TryGetValue("delta", out var deltaObj))
-            return;
-
-        var index = GetIntValue(eventData, "index") ?? currentContentBlocks.Count - 1;
-        if (index < 0 || index >= currentContentBlocks.Count)
-            return;
-
-        var block = currentContentBlocks[index];
-        var deltaJson = deltaObj is JsonElement element ? element.GetRawText() : JsonSerializer.Serialize(deltaObj);
-        var deltaData = JsonSerializer.Deserialize<Dictionary<string, object>>(deltaJson);
-        if (deltaData == null) return;
-
-        var deltaType = GetStringValue(deltaData, "type");
-
-        switch (deltaType)
-        {
-            case "text_delta":
-                currentContentBlocks[index] = block with { Text = (block.Text ?? "") + (GetStringValue(deltaData, "text") ?? "") };
-                break;
-            case "thinking_delta":
-                currentContentBlocks[index] = block with { Text = (block.Text ?? "") + (GetStringValue(deltaData, "thinking") ?? "") };
-                break;
-            case "input_json_delta":
-                currentContentBlocks[index] = block with { ToolInput = (block.ToolInput ?? "") + (GetStringValue(deltaData, "partial_json") ?? "") };
-                break;
-        }
-    }
-
-    private List<AgentEvent> ProcessContentBlockStop(
-        LocalSession session,
-        Dictionary<string, object> eventData,
-        List<AgentContentBlockEvent> currentContentBlocks)
-    {
-        var events = new List<AgentEvent>();
-        var index = GetIntValue(eventData, "index") ?? currentContentBlocks.Count - 1;
-
-        if (index < 0 || index >= currentContentBlocks.Count)
-            return events;
-
-        var block = currentContentBlocks[index];
-        events.Add(block);
-
-        // Check for AskUserQuestion
-        if (block.ToolName == "AskUserQuestion" && !string.IsNullOrEmpty(block.ToolInput))
-        {
-            var questionEvent = TryParseAskUserQuestion(session, block);
-            if (questionEvent != null)
             {
-                events.Add(questionEvent);
+                var content = ConvertUserContentBlocks(userMsg.Content);
+                var apiMessage = new SdkApiMessage("user", content);
+                return new SdkUserMessage(session.Id, null, apiMessage, null);
             }
-        }
 
-        return events;
+            default:
+                return null;
+        }
     }
 
-    private AgentContentBlockEvent CreateToolUseContent(
-        LocalSession session,
-        Dictionary<string, object> blockData,
-        int index)
+    private static List<SdkContentBlock> ConvertContentBlocks(object? content)
     {
-        var toolUseId = GetStringValue(blockData, "id") ?? "";
-        var toolName = GetStringValue(blockData, "name") ?? "unknown";
-
-        if (!string.IsNullOrEmpty(toolUseId))
-        {
-            var sessionToolUses = _sessionToolUses.GetOrAdd(session.Id, _ => new ConcurrentDictionary<string, string>());
-            sessionToolUses[toolUseId] = toolName;
-        }
-
-        return new AgentContentBlockEvent(session.Id, ClaudeContentType.ToolUse, null, toolName, "", toolUseId, null, index);
-    }
-
-    private List<AgentEvent> ProcessUserMessage(LocalSession session, UserMessage userMsg)
-    {
-        var events = new List<AgentEvent>();
-
-        if (userMsg.Content is not List<object> contentBlocks)
-            return events;
-
-        var toolResultContents = new List<AgentContentBlockEvent>();
+        var blocks = new List<SdkContentBlock>();
+        if (content is not List<object> contentBlocks) return blocks;
 
         foreach (var block in contentBlocks)
         {
-            if (block is ToolResultBlock toolResultBlock)
-            {
-                var toolName = GetToolNameForUseId(session.Id, toolResultBlock.ToolUseId);
-                var isError = toolResultBlock.IsError ?? false;
-
-                toolResultContents.Add(new AgentContentBlockEvent(
-                    session.Id,
-                    ClaudeContentType.ToolResult,
-                    toolResultBlock.Content?.ToString() ?? "",
-                    toolName,
-                    null,
-                    toolResultBlock.ToolUseId,
-                    !isError,
-                    toolResultContents.Count
-                ));
-            }
+            var sdkBlock = ConvertSingleContentBlock(block);
+            if (sdkBlock != null) blocks.Add(sdkBlock);
         }
 
-        if (toolResultContents.Count > 0)
-        {
-            events.Add(new AgentMessageEvent(session.Id, ClaudeMessageRole.User, toolResultContents));
-        }
-
-        return events;
+        return blocks;
     }
 
-    private AgentQuestionEvent? TryParseAskUserQuestion(LocalSession session, AgentContentBlockEvent block)
+    private static List<SdkContentBlock> ConvertUserContentBlocks(object? content)
     {
-        try
+        var blocks = new List<SdkContentBlock>();
+        if (content is not List<object> contentBlocks) return blocks;
+
+        foreach (var block in contentBlocks)
         {
-            var toolInput = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(block.ToolInput!);
-            if (toolInput == null || !toolInput.TryGetValue("questions", out var questionsElement))
-                return null;
-
-            var questions = new List<AgentQuestion>();
-            foreach (var questionElement in questionsElement.EnumerateArray())
+            if (block is ToolResultBlock toolResult)
             {
-                var options = new List<AgentQuestionOption>();
-                if (questionElement.TryGetProperty("options", out var optionsElement))
-                {
-                    foreach (var optionElement in optionsElement.EnumerateArray())
-                    {
-                        options.Add(new AgentQuestionOption(
-                            optionElement.GetProperty("label").GetString() ?? "",
-                            optionElement.GetProperty("description").GetString() ?? ""
-                        ));
-                    }
-                }
+                var contentJson = toolResult.Content != null
+                    ? JsonDocument.Parse(JsonSerializer.Serialize(toolResult.Content)).RootElement
+                    : default;
 
-                questions.Add(new AgentQuestion(
-                    questionElement.GetProperty("question").GetString() ?? "",
-                    questionElement.TryGetProperty("header", out var headerElement)
-                        ? headerElement.GetString() ?? "" : "",
-                    options,
-                    questionElement.TryGetProperty("multiSelect", out var multiSelectElement)
-                        && multiSelectElement.GetBoolean()
+                blocks.Add(new SdkToolResultBlock(
+                    toolResult.ToolUseId,
+                    contentJson,
+                    toolResult.IsError
                 ));
             }
-
-            if (questions.Count == 0)
-                return null;
-
-            return new AgentQuestionEvent(
-                session.Id,
-                Guid.NewGuid().ToString(),
-                block.ToolUseId ?? "",
-                questions
-            );
+            else
+            {
+                var sdkBlock = ConvertSingleContentBlock(block);
+                if (sdkBlock != null) blocks.Add(sdkBlock);
+            }
         }
-        catch (JsonException)
-        {
+
+        return blocks;
+    }
+
+    private static SdkContentBlock? ConvertSingleContentBlock(object block)
+    {
+        // The C# SDK uses dynamic types; serialize to JSON and extract fields
+        var json = JsonSerializer.Serialize(block);
+        using var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+
+        if (!root.TryGetProperty("type", out var typeElement))
             return null;
-        }
-    }
 
-    private string GetToolNameForUseId(string sessionId, string toolUseId)
-    {
-        if (_sessionToolUses.TryGetValue(sessionId, out var toolUses) &&
-            toolUses.TryGetValue(toolUseId, out var toolName))
+        var type = typeElement.GetString();
+
+        return type switch
         {
-            return toolName;
-        }
-        return "unknown";
-    }
-
-    private static string? GetStringValue(Dictionary<string, object> data, string key)
-    {
-        if (!data.TryGetValue(key, out var value)) return null;
-        return value is JsonElement element ? element.GetString() : value?.ToString();
-    }
-
-    private static int? GetIntValue(Dictionary<string, object> data, string key)
-    {
-        if (!data.TryGetValue(key, out var value)) return null;
-        if (value is JsonElement element)
-        {
-            return element.ValueKind == JsonValueKind.Number ? element.GetInt32() : null;
-        }
-        return value is int intValue ? intValue : null;
+            "text" => new SdkTextBlock(
+                root.TryGetProperty("text", out var text) ? text.GetString() : null),
+            "thinking" => new SdkThinkingBlock(
+                root.TryGetProperty("thinking", out var thinking) ? thinking.GetString() : null),
+            "tool_use" => new SdkToolUseBlock(
+                root.TryGetProperty("id", out var id) ? id.GetString() ?? "" : "",
+                root.TryGetProperty("name", out var name) ? name.GetString() ?? "" : "",
+                root.TryGetProperty("input", out var input) ? input.Clone() : default),
+            _ => null
+        };
     }
 
     public async ValueTask DisposeAsync()
@@ -606,6 +409,5 @@ public class LocalAgentExecutionService : IAgentExecutionService, IAsyncDisposab
             catch { }
         }
         _sessions.Clear();
-        _sessionToolUses.Clear();
     }
 }

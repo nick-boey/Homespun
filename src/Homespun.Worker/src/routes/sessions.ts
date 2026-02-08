@@ -3,12 +3,10 @@ import { stream } from 'hono/streaming';
 import type { SessionManager } from '../services/session-manager.js';
 import { streamSessionEvents, formatSSE } from '../services/sse-writer.js';
 import { discoverSessions } from '../services/session-discovery.js';
-import { SseEventTypes } from '../types/index.js';
 import type {
   StartSessionRequest,
   SendMessageRequest,
   AnswerQuestionRequest,
-  ErrorData,
 } from '../types/index.js';
 
 export function createSessionsRoute(sessionManager: SessionManager) {
@@ -49,12 +47,12 @@ export function createSessionsRoute(sessionManager: SessionManager) {
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        await s.write(formatSSE(SseEventTypes.Error, {
+        await s.write(formatSSE('error', {
           sessionId: 'unknown',
           message,
           code: 'STARTUP_ERROR',
           isRecoverable: false,
-        } satisfies ErrorData));
+        }));
       }
     });
   });
@@ -77,12 +75,12 @@ export function createSessionsRoute(sessionManager: SessionManager) {
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        await s.write(formatSSE(SseEventTypes.Error, {
+        await s.write(formatSSE('error', {
           sessionId,
           message,
           code: 'MESSAGE_ERROR',
           isRecoverable: false,
-        } satisfies ErrorData));
+        }));
       }
     });
   });
@@ -115,12 +113,12 @@ export function createSessionsRoute(sessionManager: SessionManager) {
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        await s.write(formatSSE(SseEventTypes.Error, {
+        await s.write(formatSSE('error', {
           sessionId,
           message,
           code: 'ANSWER_ERROR',
           isRecoverable: false,
-        } satisfies ErrorData));
+        }));
       }
     });
   });

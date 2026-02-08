@@ -106,49 +106,20 @@ public class AzureContainerAppsAgentExecutionServiceTests
     #region SendMessageAsync Tests
 
     [Test]
-    public async Task SendMessageAsync_NonExistentSession_ReturnsError()
+    public async Task SendMessageAsync_NonExistentSession_YieldsNoMessages()
     {
         // Arrange
         var request = new AgentMessageRequest("non-existent-session", "Hello");
 
         // Act
-        var events = new List<AgentEvent>();
-        await foreach (var evt in _service.SendMessageAsync(request))
+        var messages = new List<SdkMessage>();
+        await foreach (var msg in _service.SendMessageAsync(request))
         {
-            events.Add(evt);
+            messages.Add(msg);
         }
 
-        // Assert
-        Assert.That(events, Has.Count.EqualTo(1));
-        var errorEvent = events[0] as AgentErrorEvent;
-        Assert.That(errorEvent, Is.Not.Null);
-        Assert.That(errorEvent!.Code, Is.EqualTo("SESSION_NOT_FOUND"));
-    }
-
-    #endregion
-
-    #region AnswerQuestionAsync Tests
-
-    [Test]
-    public async Task AnswerQuestionAsync_NonExistentSession_ReturnsError()
-    {
-        // Arrange
-        var request = new AgentAnswerRequest(
-            "non-existent-session",
-            new Dictionary<string, string> { { "Q1", "A1" } });
-
-        // Act
-        var events = new List<AgentEvent>();
-        await foreach (var evt in _service.AnswerQuestionAsync(request))
-        {
-            events.Add(evt);
-        }
-
-        // Assert
-        Assert.That(events, Has.Count.EqualTo(1));
-        var errorEvent = events[0] as AgentErrorEvent;
-        Assert.That(errorEvent, Is.Not.Null);
-        Assert.That(errorEvent!.Code, Is.EqualTo("SESSION_NOT_FOUND"));
+        // Assert - non-existent session yields no messages (yield break)
+        Assert.That(messages, Is.Empty);
     }
 
     #endregion
@@ -286,23 +257,20 @@ public class LocalAgentExecutionServiceTests
     }
 
     [Test]
-    public async Task SendMessageAsync_NonExistentSession_ReturnsError()
+    public async Task SendMessageAsync_NonExistentSession_YieldsNoMessages()
     {
         // Arrange
         var request = new AgentMessageRequest("non-existent-session", "Hello");
 
         // Act
-        var events = new List<AgentEvent>();
-        await foreach (var evt in _service.SendMessageAsync(request))
+        var messages = new List<SdkMessage>();
+        await foreach (var msg in _service.SendMessageAsync(request))
         {
-            events.Add(evt);
+            messages.Add(msg);
         }
 
-        // Assert
-        Assert.That(events, Has.Count.EqualTo(1));
-        var errorEvent = events[0] as AgentErrorEvent;
-        Assert.That(errorEvent, Is.Not.Null);
-        Assert.That(errorEvent!.Code, Is.EqualTo("SESSION_NOT_FOUND"));
+        // Assert - non-existent session yields no messages (yield break)
+        Assert.That(messages, Is.Empty);
     }
 
     [Test]

@@ -8,6 +8,83 @@ using Microsoft.AspNetCore.SignalR;
 namespace Homespun.Features.ClaudeCode.Services;
 
 /// <summary>
+/// Tracks content blocks being assembled from stream events during a single message turn.
+/// </summary>
+internal class ContentBlockAssembler
+{
+    private readonly List<ContentBlockState> _blocks = new();
+    private readonly Dictionary<string, string> _toolUseNames = new();
+
+    public IReadOnlyList<ContentBlockState> Blocks => _blocks;
+
+    public void StartBlock(int index, JsonElement contentBlock)
+    {
+        var type = contentBlock.TryGetProperty("type", out var t) ? t.GetString() : null;
+        var state = new ContentBlockState { Index = index, Type = type };
+
+        if (type == "tool_use")
+        {
+            state.ToolUseId = contentBlock.TryGetProperty("id", out var id) ? id.GetString() : null;
+            state.ToolName = contentBlock.TryGetProperty("name", out var name) ? name.GetString() : null;
+            if (state.ToolUseId != null && state.ToolName != null)
+            {
+                _toolUseNames[state.ToolUseId] = state.ToolName;
+            }
+        }
+
+        // Ensure the list is large enough
+        while (_blocks.Count <= index) _blocks.Add(new ContentBlockState());
+        _blocks[index] = state;
+    }
+
+    public void ApplyDelta(int index, JsonElement delta)
+    {
+        if (index < 0 || index >= _blocks.Count) return;
+        var block = _blocks[index];
+        var deltaType = delta.TryGetProperty("type", out var t) ? t.GetString() : null;
+
+        switch (deltaType)
+        {
+            case "text_delta":
+                block.Text += delta.TryGetProperty("text", out var text) ? text.GetString() : null;
+                break;
+            case "thinking_delta":
+                block.Thinking += delta.TryGetProperty("thinking", out var thinking) ? thinking.GetString() : null;
+                break;
+            case "input_json_delta":
+                block.PartialJson += delta.TryGetProperty("partial_json", out var pj) ? pj.GetString() : null;
+                break;
+        }
+    }
+
+    public void StopBlock(int index)
+    {
+        if (index < 0 || index >= _blocks.Count) return;
+        _blocks[index].IsComplete = true;
+    }
+
+    public string? GetToolName(string toolUseId) =>
+        _toolUseNames.TryGetValue(toolUseId, out var name) ? name : null;
+
+    public void Clear()
+    {
+        _blocks.Clear();
+    }
+}
+
+internal class ContentBlockState
+{
+    public int Index { get; set; }
+    public string? Type { get; set; }
+    public string? Text { get; set; }
+    public string? Thinking { get; set; }
+    public string? ToolUseId { get; set; }
+    public string? ToolName { get; set; }
+    public string? PartialJson { get; set; }
+    public bool IsComplete { get; set; }
+}
+
+/// <summary>
 /// Service for managing Claude Code sessions using the ClaudeAgentSdk.
 /// </summary>
 public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
@@ -341,7 +418,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             };
 
             // Determine if we need to start a new agent session or send a message to existing one
-            IAsyncEnumerable<AgentEvent> eventStream;
+            IAsyncEnumerable<SdkMessage> messageStream;
 
             if (!_agentSessionIds.TryGetValue(sessionId, out var agentSessionId))
             {
@@ -354,7 +431,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                     SystemPrompt: session.SystemPrompt,
                     ResumeSessionId: session.ConversationId
                 );
-                eventStream = _agentExecutionService.StartSessionAsync(startRequest, linkedCts.Token);
+                messageStream = _agentExecutionService.StartSessionAsync(startRequest, linkedCts.Token);
             }
             else
             {
@@ -364,24 +441,24 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                     Message: message,
                     Model: effectiveModel
                 );
-                eventStream = _agentExecutionService.SendMessageAsync(messageRequest, linkedCts.Token);
+                messageStream = _agentExecutionService.SendMessageAsync(messageRequest, linkedCts.Token);
             }
 
-            // Process events from the agent execution service
-            await foreach (var evt in eventStream.WithCancellation(linkedCts.Token))
+            // Process SDK messages from the agent execution service
+            await foreach (var msg in messageStream.WithCancellation(linkedCts.Token))
             {
-                await ProcessAgentEventAsync(sessionId, session, messageContext, evt, linkedCts.Token);
+                await ProcessSdkMessageAsync(sessionId, session, messageContext, msg, linkedCts.Token);
 
-                // Store the agent session ID when we receive it
-                if (evt is AgentSessionStartedEvent startedEvt)
+                // Store the agent session ID when we receive it from system message
+                if (msg is SdkSystemMessage sysMsg && sysMsg.Subtype == "session_started")
                 {
-                    _agentSessionIds[sessionId] = startedEvt.SessionId;
+                    _agentSessionIds[sessionId] = sysMsg.SessionId;
                     _logger.LogDebug("Stored agent session ID {AgentSessionId} for session {SessionId}",
-                        startedEvt.SessionId, sessionId);
+                        sysMsg.SessionId, sessionId);
                 }
 
-                // Stop processing after session ends
-                if (evt is AgentSessionEndedEvent or AgentResultEvent)
+                // Stop processing after result received
+                if (msg is SdkResultMessage)
                     break;
             }
 
@@ -429,149 +506,52 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
     {
         public ClaudeMessage CurrentAssistantMessage { get; set; } = null!;
         public bool HasCachedCurrentMessage { get; set; }
+        public ContentBlockAssembler Assembler { get; } = new();
     }
 
     /// <summary>
-    /// Processes events from IAgentExecutionService and converts them to the internal format.
+    /// Processes SDK messages from IAgentExecutionService and converts them to the internal format.
+    /// Handles content block assembly from stream events and converts SdkMessage types to ClaudeMessage/ClaudeMessageContent.
     /// </summary>
-    private async Task ProcessAgentEventAsync(
+    private async Task ProcessSdkMessageAsync(
         string sessionId,
         ClaudeSession session,
         MessageProcessingContext context,
-        AgentEvent evt,
+        SdkMessage msg,
         CancellationToken cancellationToken)
     {
-        switch (evt)
+        switch (msg)
         {
-            case AgentSessionStartedEvent startedEvt:
-                _logger.LogDebug("Agent session started: {AgentSessionId}, ConversationId: {ConversationId}",
-                    startedEvt.SessionId, startedEvt.ConversationId);
-                if (!string.IsNullOrEmpty(startedEvt.ConversationId))
-                {
-                    session.ConversationId = startedEvt.ConversationId;
-                }
+            case SdkSystemMessage sysMsg:
+                _logger.LogDebug("System message: subtype={Subtype}, sessionId={SdkSessionId}",
+                    sysMsg.Subtype, sysMsg.SessionId);
                 break;
 
-            case AgentContentBlockEvent contentEvt:
-                // Convert to ClaudeMessageContent and add to current assistant message
-                var content = ConvertAgentContentBlock(sessionId, contentEvt);
-                context.CurrentAssistantMessage.Content.Add(content);
-
-                // Broadcast the content block
-                await _hubContext.BroadcastContentBlockReceived(sessionId, content);
-
-                // Check for AskUserQuestion tool
-                if (contentEvt.Type == ClaudeContentType.ToolUse &&
-                    contentEvt.ToolName == "AskUserQuestion" &&
-                    !string.IsNullOrEmpty(contentEvt.ToolInput))
-                {
-                    await HandleAskUserQuestionTool(sessionId, session, content, cancellationToken);
-                }
-
-                // Check for ExitPlanMode
-                if (contentEvt.ToolName?.Equals("ExitPlanMode", StringComparison.OrdinalIgnoreCase) == true)
-                {
-                    await HandleExitPlanModeCompletedAsync(sessionId, session, content, cancellationToken);
-                }
-
-                // Capture plan content from Write tool
-                if (contentEvt.ToolName?.Equals("Write", StringComparison.OrdinalIgnoreCase) == true)
-                {
-                    TryCaptureWrittenPlanContent(session, content);
-                }
+            case SdkStreamEvent streamEvt:
+                ProcessStreamEvent(sessionId, session, context, streamEvt);
                 break;
 
-            case AgentMessageEvent messageEvt:
-                if (messageEvt.Role == ClaudeMessageRole.Assistant)
-                {
-                    // If context doesn't have content but the message event does,
-                    // populate from the message event (Docker agent execution flow)
-                    if (context.CurrentAssistantMessage.Content.Count == 0 && messageEvt.Content.Count > 0)
-                    {
-                        foreach (var contentBlock in messageEvt.Content)
-                        {
-                            var msgContent = ConvertAgentContentBlock(sessionId, contentBlock);
-                            context.CurrentAssistantMessage.Content.Add(msgContent);
-                        }
-                        _logger.LogDebug("Populated assistant message from MessageReceived event ({Count} blocks)",
-                            messageEvt.Content.Count);
-                    }
-
-                    // If we haven't cached yet and have content, cache the assistant message
-                    if (context.CurrentAssistantMessage.Content.Count > 0 && !context.HasCachedCurrentMessage)
-                    {
-                        session.Messages.Add(context.CurrentAssistantMessage);
-                        await _messageCache.AppendMessageAsync(sessionId, context.CurrentAssistantMessage, cancellationToken);
-                        context.HasCachedCurrentMessage = true;
-
-                        // Broadcast the complete message
-                        await _hubContext.BroadcastMessageReceived(sessionId, context.CurrentAssistantMessage);
-                    }
-                }
-                else if (messageEvt.Role == ClaudeMessageRole.User)
-                {
-                    // Tool results come as user messages
-                    var toolResultContents = messageEvt.Content
-                        .Where(c => c.Type == ClaudeContentType.ToolResult)
-                        .Select(c => ConvertAgentContentBlock(sessionId, c))
-                        .ToList();
-
-                    if (toolResultContents.Count > 0)
-                    {
-                        var toolResultMessage = new ClaudeMessage
-                        {
-                            SessionId = sessionId,
-                            Role = ClaudeMessageRole.User,
-                            Content = toolResultContents
-                        };
-                        session.Messages.Add(toolResultMessage);
-                        await _messageCache.AppendMessageAsync(sessionId, toolResultMessage, cancellationToken);
-                        await _hubContext.BroadcastMessageReceived(sessionId, toolResultMessage);
-
-                        // Check tool results for Write (plan capture) and ExitPlanMode
-                        foreach (var toolResult in toolResultContents)
-                        {
-                            if (toolResult.ToolName?.Equals("Write", StringComparison.OrdinalIgnoreCase) == true)
-                            {
-                                TryCaptureWrittenPlanContentFromResult(session, toolResult);
-                            }
-
-                            if (toolResult.ToolName?.Equals("ExitPlanMode", StringComparison.OrdinalIgnoreCase) == true)
-                            {
-                                var exitPlanBlock = new ClaudeMessageContent
-                                {
-                                    Type = ClaudeContentType.ToolUse,
-                                    ToolName = "ExitPlanMode"
-                                };
-                                await HandleExitPlanModeCompletedAsync(sessionId, session, exitPlanBlock, cancellationToken);
-                            }
-                        }
-
-                        // Start a new assistant message for the next turn
-                        context.CurrentAssistantMessage = new ClaudeMessage
-                        {
-                            SessionId = sessionId,
-                            Role = ClaudeMessageRole.Assistant,
-                            Content = []
-                        };
-                        context.HasCachedCurrentMessage = false;
-                    }
-                }
+            case SdkAssistantMessage assistantMsg:
+                await ProcessAssistantMessageAsync(sessionId, session, context, assistantMsg, cancellationToken);
                 break;
 
-            case AgentResultEvent resultEvt:
-                session.TotalCostUsd = resultEvt.TotalCostUsd;
-                session.TotalDurationMs = resultEvt.DurationMs;
+            case SdkUserMessage userMsg:
+                await ProcessUserMessageAsync(sessionId, session, context, userMsg, cancellationToken);
+                break;
+
+            case SdkResultMessage resultMsg:
+                session.TotalCostUsd = resultMsg.TotalCostUsd;
+                session.TotalDurationMs = resultMsg.DurationMs;
 
                 var previousConversationId = session.ConversationId;
-                session.ConversationId = resultEvt.ConversationId;
-                _logger.LogDebug("Stored ConversationId {ConversationId} for session resumption", resultEvt.ConversationId);
+                session.ConversationId = resultMsg.SessionId;
+                _logger.LogDebug("Stored ConversationId {ConversationId} for session resumption", resultMsg.SessionId);
 
                 // Update metadata with the actual Claude session ID if it changed
-                if (resultEvt.ConversationId != null && resultEvt.ConversationId != previousConversationId)
+                if (resultMsg.SessionId != null && resultMsg.SessionId != previousConversationId)
                 {
                     var metadata = new SessionMetadata(
-                        SessionId: resultEvt.ConversationId,
+                        SessionId: resultMsg.SessionId,
                         EntityId: session.EntityId,
                         ProjectId: session.ProjectId,
                         WorkingDirectory: session.WorkingDirectory,
@@ -583,83 +563,334 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                     await _metadataStore.SaveAsync(metadata, cancellationToken);
                 }
 
-                await _hubContext.BroadcastSessionResultReceived(sessionId, session.TotalCostUsd, resultEvt.DurationMs);
-                break;
-
-            case AgentQuestionEvent questionEvt:
-                // Create pending question from agent event
-                var questions = questionEvt.Questions.Select(q => new Data.UserQuestion
-                {
-                    Question = q.Question,
-                    Header = q.Header,
-                    Options = q.Options.Select(o => new Data.QuestionOption
-                    {
-                        Label = o.Label,
-                        Description = o.Description
-                    }).ToList(),
-                    MultiSelect = q.MultiSelect
-                }).ToList();
-
-                var pendingQuestion = new Data.PendingQuestion
-                {
-                    Id = questionEvt.QuestionId,
-                    ToolUseId = questionEvt.ToolUseId,
-                    Questions = questions
-                };
-
-                session.PendingQuestion = pendingQuestion;
-                session.Status = ClaudeSessionStatus.WaitingForQuestionAnswer;
-
-                await _hubContext.BroadcastQuestionReceived(sessionId, pendingQuestion);
-                await _hubContext.BroadcastSessionStatusChanged(sessionId, ClaudeSessionStatus.WaitingForQuestionAnswer);
-
-                _logger.LogInformation("Session {SessionId} is now waiting for user to answer {QuestionCount} questions",
-                    sessionId, questions.Count);
-                break;
-
-            case AgentErrorEvent errorEvt:
-                _logger.LogError("Agent error in session {SessionId}: {Message} (Code: {Code})",
-                    sessionId, errorEvt.Message, errorEvt.Code);
-                if (!errorEvt.IsRecoverable)
-                {
-                    session.Status = ClaudeSessionStatus.Error;
-                    session.ErrorMessage = errorEvt.Message;
-                }
-                break;
-
-            case AgentSessionEndedEvent endedEvt:
-                _logger.LogDebug("Agent session ended: {Reason}", endedEvt.Reason);
+                await _hubContext.BroadcastSessionResultReceived(sessionId, session.TotalCostUsd, resultMsg.DurationMs);
                 break;
         }
     }
 
     /// <summary>
-    /// Converts an AgentContentBlockEvent to a ClaudeMessageContent.
+    /// Processes stream events (content_block_start/delta/stop) for real-time content assembly.
     /// </summary>
-    private ClaudeMessageContent ConvertAgentContentBlock(string sessionId, AgentContentBlockEvent evt)
+    private void ProcessStreamEvent(
+        string sessionId,
+        ClaudeSession session,
+        MessageProcessingContext context,
+        SdkStreamEvent streamEvt)
     {
-        var content = new ClaudeMessageContent
-        {
-            Type = evt.Type,
-            Text = evt.Text,
-            ToolName = evt.ToolName,
-            ToolInput = evt.ToolInput,
-            ToolUseId = evt.ToolUseId,
-            ToolSuccess = evt.ToolSuccess,
-            Index = evt.Index
-        };
+        if (streamEvt.Event == null || !streamEvt.Event.HasValue) return;
+        var evt = streamEvt.Event.Value;
 
-        // Track tool use ID -> name mapping
-        if (evt.Type == ClaudeContentType.ToolUse && !string.IsNullOrEmpty(evt.ToolUseId) && !string.IsNullOrEmpty(evt.ToolName))
+        var eventType = evt.TryGetProperty("type", out var t) ? t.GetString() : null;
+
+        switch (eventType)
         {
-            var sessionToolUses = _sessionToolUses.GetOrAdd(sessionId, _ => new ConcurrentDictionary<string, string>());
-            sessionToolUses[evt.ToolUseId] = evt.ToolName;
+            case "content_block_start":
+            {
+                var index = evt.TryGetProperty("index", out var idx) ? idx.GetInt32() : 0;
+                if (evt.TryGetProperty("content_block", out var contentBlock))
+                {
+                    context.Assembler.StartBlock(index, contentBlock);
+                }
+                break;
+            }
+
+            case "content_block_delta":
+            {
+                var index = evt.TryGetProperty("index", out var idx) ? idx.GetInt32() : 0;
+                if (evt.TryGetProperty("delta", out var delta))
+                {
+                    context.Assembler.ApplyDelta(index, delta);
+
+                    // Broadcast streaming content for real-time UI updates
+                    var block = index < context.Assembler.Blocks.Count ? context.Assembler.Blocks[index] : null;
+                    if (block != null)
+                    {
+                        var streamingContent = ConvertBlockStateToContent(sessionId, block);
+                        streamingContent.IsStreaming = true;
+                        _ = _hubContext.BroadcastContentBlockReceived(sessionId, streamingContent);
+                    }
+                }
+                break;
+            }
+
+            case "content_block_stop":
+            {
+                var index = evt.TryGetProperty("index", out var idx) ? idx.GetInt32() : 0;
+                context.Assembler.StopBlock(index);
+
+                // Emit a finalized content block
+                if (index < context.Assembler.Blocks.Count)
+                {
+                    var block = context.Assembler.Blocks[index];
+                    var content = ConvertBlockStateToContent(sessionId, block);
+                    content.IsStreaming = false;
+                    context.CurrentAssistantMessage.Content.Add(content);
+
+                    _ = _hubContext.BroadcastContentBlockReceived(sessionId, content);
+
+                    // Check for AskUserQuestion tool
+                    if (content.Type == ClaudeContentType.ToolUse &&
+                        content.ToolName == "AskUserQuestion" &&
+                        !string.IsNullOrEmpty(content.ToolInput))
+                    {
+                        _ = HandleAskUserQuestionTool(sessionId, session, content, CancellationToken.None);
+                    }
+
+                    // Check for ExitPlanMode
+                    if (content.ToolName?.Equals("ExitPlanMode", StringComparison.OrdinalIgnoreCase) == true)
+                    {
+                        _ = HandleExitPlanModeCompletedAsync(sessionId, session, content, CancellationToken.None);
+                    }
+
+                    // Capture plan content from Write tool
+                    if (content.ToolName?.Equals("Write", StringComparison.OrdinalIgnoreCase) == true)
+                    {
+                        TryCaptureWrittenPlanContent(session, content);
+                    }
+                }
+                break;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Processes an SdkAssistantMessage — flushes assembled content or converts content blocks directly.
+    /// </summary>
+    private async Task ProcessAssistantMessageAsync(
+        string sessionId,
+        ClaudeSession session,
+        MessageProcessingContext context,
+        SdkAssistantMessage assistantMsg,
+        CancellationToken cancellationToken)
+    {
+        // If we already have content from stream events, use that
+        // Otherwise populate from the message's content blocks (non-streaming flow)
+        if (context.CurrentAssistantMessage.Content.Count == 0 && assistantMsg.Message.Content.Count > 0)
+        {
+            foreach (var block in assistantMsg.Message.Content)
+            {
+                var content = ConvertSdkContentBlock(sessionId, block);
+                context.CurrentAssistantMessage.Content.Add(content);
+
+                // Check for AskUserQuestion tool
+                if (content.Type == ClaudeContentType.ToolUse &&
+                    content.ToolName == "AskUserQuestion" &&
+                    !string.IsNullOrEmpty(content.ToolInput))
+                {
+                    await HandleAskUserQuestionTool(sessionId, session, content, cancellationToken);
+                }
+
+                // Check for ExitPlanMode
+                if (content.ToolName?.Equals("ExitPlanMode", StringComparison.OrdinalIgnoreCase) == true)
+                {
+                    await HandleExitPlanModeCompletedAsync(sessionId, session, content, cancellationToken);
+                }
+
+                // Capture plan content from Write tool
+                if (content.ToolName?.Equals("Write", StringComparison.OrdinalIgnoreCase) == true)
+                {
+                    TryCaptureWrittenPlanContent(session, content);
+                }
+            }
+            _logger.LogDebug("Populated assistant message from SdkAssistantMessage ({Count} blocks)",
+                assistantMsg.Message.Content.Count);
         }
 
-        // Parse tool results for rich display
-        if (evt.Type == ClaudeContentType.ToolResult && !string.IsNullOrEmpty(evt.ToolName))
+        // Cache the assistant message if we have content
+        if (context.CurrentAssistantMessage.Content.Count > 0 && !context.HasCachedCurrentMessage)
         {
-            content.ParsedToolResult = _toolResultParser.Parse(evt.ToolName, evt.Text, evt.ToolSuccess == false);
+            session.Messages.Add(context.CurrentAssistantMessage);
+            await _messageCache.AppendMessageAsync(sessionId, context.CurrentAssistantMessage, cancellationToken);
+            context.HasCachedCurrentMessage = true;
+
+            await _hubContext.BroadcastMessageReceived(sessionId, context.CurrentAssistantMessage);
+        }
+
+        // Clear the assembler for the next assistant message
+        context.Assembler.Clear();
+    }
+
+    /// <summary>
+    /// Processes an SdkUserMessage — extracts tool results and handles Write/ExitPlanMode detection.
+    /// </summary>
+    private async Task ProcessUserMessageAsync(
+        string sessionId,
+        ClaudeSession session,
+        MessageProcessingContext context,
+        SdkUserMessage userMsg,
+        CancellationToken cancellationToken)
+    {
+        var toolResultContents = new List<ClaudeMessageContent>();
+
+        foreach (var block in userMsg.Message.Content)
+        {
+            if (block is SdkToolResultBlock toolResult)
+            {
+                var content = ConvertSdkToolResult(sessionId, toolResult);
+                toolResultContents.Add(content);
+            }
+        }
+
+        if (toolResultContents.Count > 0)
+        {
+            var toolResultMessage = new ClaudeMessage
+            {
+                SessionId = sessionId,
+                Role = ClaudeMessageRole.User,
+                Content = toolResultContents
+            };
+            session.Messages.Add(toolResultMessage);
+            await _messageCache.AppendMessageAsync(sessionId, toolResultMessage, cancellationToken);
+            await _hubContext.BroadcastMessageReceived(sessionId, toolResultMessage);
+
+            // Check tool results for Write (plan capture) and ExitPlanMode
+            foreach (var toolResult in toolResultContents)
+            {
+                if (toolResult.ToolName?.Equals("Write", StringComparison.OrdinalIgnoreCase) == true)
+                {
+                    TryCaptureWrittenPlanContentFromResult(session, toolResult);
+                }
+
+                if (toolResult.ToolName?.Equals("ExitPlanMode", StringComparison.OrdinalIgnoreCase) == true)
+                {
+                    var exitPlanBlock = new ClaudeMessageContent
+                    {
+                        Type = ClaudeContentType.ToolUse,
+                        ToolName = "ExitPlanMode"
+                    };
+                    await HandleExitPlanModeCompletedAsync(sessionId, session, exitPlanBlock, cancellationToken);
+                }
+            }
+
+            // Start a new assistant message for the next turn
+            context.CurrentAssistantMessage = new ClaudeMessage
+            {
+                SessionId = sessionId,
+                Role = ClaudeMessageRole.Assistant,
+                Content = []
+            };
+            context.HasCachedCurrentMessage = false;
+            context.Assembler.Clear();
+        }
+    }
+
+    /// <summary>
+    /// Converts a ContentBlockState (from stream event assembly) to ClaudeMessageContent.
+    /// </summary>
+    private ClaudeMessageContent ConvertBlockStateToContent(string sessionId, ContentBlockState block)
+    {
+        return block.Type switch
+        {
+            "text" => new ClaudeMessageContent
+            {
+                Type = ClaudeContentType.Text,
+                Text = block.Text,
+                Index = block.Index
+            },
+            "thinking" => new ClaudeMessageContent
+            {
+                Type = ClaudeContentType.Thinking,
+                Text = block.Thinking,
+                Index = block.Index
+            },
+            "tool_use" => new ClaudeMessageContent
+            {
+                Type = ClaudeContentType.ToolUse,
+                ToolUseId = block.ToolUseId,
+                ToolName = block.ToolName,
+                ToolInput = block.PartialJson,
+                Index = block.Index
+            },
+            _ => new ClaudeMessageContent
+            {
+                Type = ClaudeContentType.Text,
+                Text = block.Text,
+                Index = block.Index
+            }
+        };
+    }
+
+    /// <summary>
+    /// Converts an SdkContentBlock to a ClaudeMessageContent.
+    /// </summary>
+    private ClaudeMessageContent ConvertSdkContentBlock(string sessionId, SdkContentBlock block)
+    {
+        switch (block)
+        {
+            case SdkTextBlock textBlock:
+                return new ClaudeMessageContent
+                {
+                    Type = ClaudeContentType.Text,
+                    Text = textBlock.Text
+                };
+
+            case SdkThinkingBlock thinkingBlock:
+                return new ClaudeMessageContent
+                {
+                    Type = ClaudeContentType.Thinking,
+                    Text = thinkingBlock.Thinking
+                };
+
+            case SdkToolUseBlock toolUseBlock:
+            {
+                // Track tool use ID -> name mapping
+                var sessionToolUses = _sessionToolUses.GetOrAdd(sessionId, _ => new ConcurrentDictionary<string, string>());
+                sessionToolUses[toolUseBlock.Id] = toolUseBlock.Name;
+
+                return new ClaudeMessageContent
+                {
+                    Type = ClaudeContentType.ToolUse,
+                    ToolUseId = toolUseBlock.Id,
+                    ToolName = toolUseBlock.Name,
+                    ToolInput = toolUseBlock.Input.ValueKind != JsonValueKind.Undefined
+                        ? toolUseBlock.Input.GetRawText()
+                        : null
+                };
+            }
+
+            case SdkToolResultBlock toolResultBlock:
+                return ConvertSdkToolResult(sessionId, toolResultBlock);
+
+            default:
+                return new ClaudeMessageContent { Type = ClaudeContentType.Text };
+        }
+    }
+
+    /// <summary>
+    /// Converts an SdkToolResultBlock to a ClaudeMessageContent, resolving tool names from tracked tool uses.
+    /// </summary>
+    private ClaudeMessageContent ConvertSdkToolResult(string sessionId, SdkToolResultBlock toolResult)
+    {
+        // Resolve tool name from tool use ID tracking
+        string? toolName = null;
+        if (_sessionToolUses.TryGetValue(sessionId, out var toolUses))
+        {
+            toolUses.TryGetValue(toolResult.ToolUseId, out toolName);
+        }
+        // Also check the current assembler for this session
+        toolName ??= _sessionToolUses
+            .GetValueOrDefault(sessionId)?
+            .GetValueOrDefault(toolResult.ToolUseId);
+
+        var contentText = toolResult.Content.ValueKind == JsonValueKind.String
+            ? toolResult.Content.GetString()
+            : toolResult.Content.ValueKind != JsonValueKind.Undefined
+                ? toolResult.Content.GetRawText()
+                : null;
+
+        var content = new ClaudeMessageContent
+        {
+            Type = ClaudeContentType.ToolResult,
+            ToolUseId = toolResult.ToolUseId,
+            ToolName = toolName,
+            Text = contentText,
+            ToolSuccess = toolResult.IsError == true ? false : true
+        };
+
+        // Parse tool results for rich display
+        if (!string.IsNullOrEmpty(toolName))
+        {
+            content.ParsedToolResult = _toolResultParser.Parse(toolName, contentText, toolResult.IsError == true);
         }
 
         return content;

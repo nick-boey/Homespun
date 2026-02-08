@@ -61,6 +61,7 @@ public class DockerAgentExecutionOptions
 /// <summary>
 /// Docker-based agent execution using Docker-outside-of-Docker (DooD).
 /// Spawns worker containers and communicates via SSE over HTTP.
+/// The worker streams raw SDK messages which are passed through to the consumer.
 /// </summary>
 public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposable
 {
@@ -68,6 +69,13 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
     private readonly ILogger<DockerAgentExecutionService> _logger;
     private readonly HttpClient _httpClient;
     private readonly ConcurrentDictionary<string, DockerSession> _sessions = new();
+
+    private static readonly JsonSerializerOptions SdkJsonOptions = SdkMessageParser.CreateJsonOptions();
+
+    private static readonly JsonSerializerOptions CamelCaseJsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    };
 
     private record DockerSession(
         string SessionId,
@@ -83,11 +91,6 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         public DateTime LastActivityAt { get; set; } = CreatedAt;
     }
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-    };
-
     public DockerAgentExecutionService(
         IOptions<DockerAgentExecutionOptions> options,
         ILogger<DockerAgentExecutionService> logger)
@@ -101,7 +104,7 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
     }
 
     /// <inheritdoc />
-    public async IAsyncEnumerable<AgentEvent> StartSessionAsync(
+    public async IAsyncEnumerable<SdkMessage> StartSessionAsync(
         AgentStartRequest request,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
@@ -111,7 +114,7 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         _logger.LogInformation("DockerAgentExecutionService: Starting session {SessionId} with worker image {Image}, container {ContainerName}",
             sessionId, _options.WorkerImage, containerName);
 
-        var channel = System.Threading.Channels.Channel.CreateUnbounded<AgentEvent>();
+        var channel = System.Threading.Channels.Channel.CreateUnbounded<SdkMessage>();
 
         _ = Task.Run(async () =>
         {
@@ -127,11 +130,11 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
 
                 _sessions[sessionId] = session;
 
-                await channel.Writer.WriteAsync(new AgentSessionStartedEvent(sessionId, null), cancellationToken);
+                // Emit a synthetic system message to indicate session started
+                await channel.Writer.WriteAsync(
+                    new SdkSystemMessage(sessionId, null, "session_started", request.Model, null),
+                    cancellationToken);
 
-                // Start the agent session in the worker
-                // The entire /data volume is mounted, preserving the directory structure
-                // so we pass the original working directory path
                 var startRequest = new
                 {
                     WorkingDirectory = request.WorkingDirectory,
@@ -142,36 +145,26 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
                     ResumeSessionId = request.ResumeSessionId
                 };
 
-                await foreach (var evt in SendSseRequestAsync($"{workerUrl}/api/sessions", startRequest, sessionId, cts.Token))
+                await foreach (var msg in SendSseRequestAsync($"{workerUrl}/api/sessions", startRequest, sessionId, cts.Token))
                 {
-                    // Update worker session ID if we receive it from the worker
-                    if (evt is AgentSessionStartedEvent startedEvt)
+                    // Capture the worker session ID from session_started lifecycle event
+                    if (msg is SdkSystemMessage sysMsg && sysMsg.Subtype == "session_started" &&
+                        !string.IsNullOrEmpty(sysMsg.SessionId) && sysMsg.SessionId != sessionId)
                     {
-                        _logger.LogInformation("Received AgentSessionStartedEvent: SessionId={SessionId}, ConversationId={ConversationId}",
-                            startedEvt.SessionId, startedEvt.ConversationId);
-
-                        if (!string.IsNullOrEmpty(startedEvt.SessionId))
-                        {
-                            session = session with { WorkerSessionId = startedEvt.SessionId };
-                            _sessions[sessionId] = session;
-                            _logger.LogInformation("✓ Stored WorkerSessionId={WorkerSessionId} for Docker session {SessionId}",
-                                startedEvt.SessionId, sessionId);
-                        }
-                        else
-                        {
-                            _logger.LogWarning("✗ AgentSessionStartedEvent has empty SessionId!");
-                        }
+                        session = session with { WorkerSessionId = sysMsg.SessionId };
+                        _sessions[sessionId] = session;
+                        _logger.LogInformation("Stored WorkerSessionId={WorkerSessionId} for Docker session {SessionId}",
+                            sysMsg.SessionId, sessionId);
                     }
 
-                    // Map worker session IDs to our session ID
-                    await channel.Writer.WriteAsync(MapSessionId(evt, sessionId), cancellationToken);
+                    // Remap session IDs to our session ID
+                    var remapped = RemapSessionId(msg, sessionId);
+                    await channel.Writer.WriteAsync(remapped, cancellationToken);
 
-                    if (evt is AgentResultEvent resultEvt)
+                    if (msg is SdkResultMessage resultMsg)
                     {
-                        session.ConversationId = resultEvt.ConversationId;
+                        session.ConversationId = resultMsg.SessionId;
                         _sessions[sessionId] = session;
-                        _logger.LogInformation("✓ Stored ConversationId={ConversationId} for session {SessionId}",
-                            resultEvt.ConversationId, sessionId);
                     }
                 }
                 channel.Writer.Complete();
@@ -180,13 +173,11 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
             {
                 _logger.LogError(ex, "Error in Docker session {SessionId}", sessionId);
 
-                // Cleanup container on error
                 if (!string.IsNullOrEmpty(containerId))
                 {
                     await StopContainerAsync(containerId);
                 }
 
-                await channel.Writer.WriteAsync(new AgentErrorEvent(sessionId, ex.Message, "DOCKER_ERROR", ex is AgentStartupException));
                 channel.Writer.Complete(ex);
             }
             catch (OperationCanceledException)
@@ -195,14 +186,14 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
             }
         }, cancellationToken);
 
-        await foreach (var evt in channel.Reader.ReadAllAsync(cancellationToken))
+        await foreach (var msg in channel.Reader.ReadAllAsync(cancellationToken))
         {
-            yield return evt;
+            yield return msg;
         }
     }
 
     /// <inheritdoc />
-    public async IAsyncEnumerable<AgentEvent> SendMessageAsync(
+    public async IAsyncEnumerable<SdkMessage> SendMessageAsync(
         AgentMessageRequest request,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
@@ -210,23 +201,17 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
 
         if (!_sessions.TryGetValue(request.SessionId, out var session))
         {
-            _logger.LogError("✗ Session {SessionId} not found in _sessions dictionary", request.SessionId);
-            yield return new AgentErrorEvent(request.SessionId, $"Session {request.SessionId} not found", "SESSION_NOT_FOUND", false);
+            _logger.LogError("Session {SessionId} not found in _sessions dictionary", request.SessionId);
             yield break;
         }
 
-        _logger.LogInformation("✓ Found Docker session: WorkerSessionId={WorkerSessionId}, ConversationId={ConversationId}",
-            session.WorkerSessionId, session.ConversationId);
-
         if (string.IsNullOrEmpty(session.WorkerSessionId))
         {
-            _logger.LogError("✗ Worker session ID is empty - session was not properly initialized");
-            yield return new AgentErrorEvent(request.SessionId, "Worker session not initialized", "WORKER_NOT_READY", false);
+            _logger.LogError("Worker session ID is empty - session was not properly initialized");
             yield break;
         }
 
         session.LastActivityAt = DateTime.UtcNow;
-        _logger.LogInformation("✓ Sending message to worker at {Url}", $"{session.WorkerUrl}/api/sessions/{session.WorkerSessionId}/message");
 
         var messageRequest = new
         {
@@ -236,47 +221,18 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
 
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, session.Cts.Token);
 
-        await foreach (var evt in SendSseRequestAsync(
+        await foreach (var msg in SendSseRequestAsync(
             $"{session.WorkerUrl}/api/sessions/{session.WorkerSessionId}/message",
             messageRequest, request.SessionId, linkedCts.Token))
         {
-            var mappedEvt = MapSessionId(evt, request.SessionId);
-            yield return mappedEvt;
+            var remapped = RemapSessionId(msg, request.SessionId);
+            yield return remapped;
 
-            if (evt is AgentResultEvent resultEvt)
+            if (msg is SdkResultMessage resultMsg)
             {
-                session.ConversationId = resultEvt.ConversationId;
+                session.ConversationId = resultMsg.SessionId;
                 _sessions[request.SessionId] = session;
             }
-        }
-    }
-
-    /// <inheritdoc />
-    public async IAsyncEnumerable<AgentEvent> AnswerQuestionAsync(
-        AgentAnswerRequest request,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default)
-    {
-        if (!_sessions.TryGetValue(request.SessionId, out var session))
-        {
-            yield return new AgentErrorEvent(request.SessionId, $"Session {request.SessionId} not found", "SESSION_NOT_FOUND", false);
-            yield break;
-        }
-
-        if (string.IsNullOrEmpty(session.WorkerSessionId))
-        {
-            yield return new AgentErrorEvent(request.SessionId, "Worker session not initialized", "WORKER_NOT_READY", false);
-            yield break;
-        }
-
-        var answerRequest = new { Answers = request.Answers };
-
-        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, session.Cts.Token);
-
-        await foreach (var evt in SendSseRequestAsync(
-            $"{session.WorkerUrl}/api/sessions/{session.WorkerSessionId}/answer",
-            answerRequest, request.SessionId, linkedCts.Token))
-        {
-            yield return MapSessionId(evt, request.SessionId);
         }
     }
 
@@ -291,7 +247,6 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
             session.Cts.Cancel();
             session.Cts.Dispose();
 
-            // Stop the worker container
             await StopContainerAsync(session.ContainerId);
         }
     }
@@ -304,16 +259,12 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
             _logger.LogInformation("Interrupting Docker session {SessionId}, container {ContainerName}",
                 sessionId, session.ContainerName);
 
-            // Cancel current SSE request
             session.Cts.Cancel();
             session.Cts.Dispose();
 
-            // Replace with a fresh CTS - do NOT stop the container
             var newCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             var updatedSession = session with { Cts = newCts };
             _sessions[sessionId] = updatedSession;
-
-            // Do NOT remove from _sessions or stop container - session stays alive
         }
 
         return Task.CompletedTask;
@@ -350,7 +301,7 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         try
         {
             var requestBody = new { FilePath = filePath };
-            var json = System.Text.Json.JsonSerializer.Serialize(requestBody, JsonOptions);
+            var json = JsonSerializer.Serialize(requestBody, CamelCaseJsonOptions);
             using var content = new StringContent(json, Encoding.UTF8, "application/json");
 
             var response = await _httpClient.PostAsync(
@@ -364,7 +315,7 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
             }
 
             var responseJson = await response.Content.ReadAsStringAsync(cancellationToken);
-            using var doc = System.Text.Json.JsonDocument.Parse(responseJson);
+            using var doc = JsonDocument.Parse(responseJson);
 
             if (doc.RootElement.TryGetProperty("content", out var contentElement))
             {
@@ -470,16 +421,12 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
 
     /// <summary>
     /// Translates a container path to a host path for Docker mounts.
-    /// When running in a container, paths like /data/test-workspace need to be
-    /// translated to the corresponding host path for sibling container mounts.
     /// </summary>
     public string TranslateToHostPath(string containerPath)
     {
-        // If no host path configured, assume we're running directly on host
         if (string.IsNullOrEmpty(_options.HostDataPath))
             return containerPath;
 
-        // Translate /data/xxx to {HostDataPath}/xxx
         if (containerPath.StartsWith(_options.DataVolumePath, StringComparison.OrdinalIgnoreCase))
         {
             var relativePath = containerPath[_options.DataVolumePath.Length..].TrimStart('/');
@@ -496,16 +443,12 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         string workingDirectory,
         CancellationToken cancellationToken)
     {
-        // Use Docker CLI to create and start the container
-        // This is simpler than using Docker.DotNet SDK for now
         var dockerArgs = new StringBuilder();
         dockerArgs.Append("run -d --rm ");
         dockerArgs.Append($"--name {containerName} ");
         dockerArgs.Append($"--memory {_options.MemoryLimitBytes} ");
         dockerArgs.Append($"--cpus {_options.CpuLimit} ");
 
-        // Run worker container with same UID/GID as main container
-        // This ensures the worker can edit files created by the main container
         var userFlag = ProcessUserInfo.GetDockerUserFlag();
         if (!string.IsNullOrEmpty(userFlag))
         {
@@ -513,13 +456,10 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
             _logger.LogDebug("Running worker container as user {UserFlag}", userFlag);
         }
 
-        // Mount the entire /data volume to preserve directory structure
-        // This ensures the agent sees the same paths as the main container
         var dataVolumeHostPath = TranslateToHostPath(_options.DataVolumePath);
         dockerArgs.Append($"-v \"{dataVolumeHostPath}:{_options.DataVolumePath}\" ");
         dockerArgs.Append($"-e ASPNETCORE_URLS=http://+:8080 ");
 
-        // Pass through authentication and git identity environment variables
         var envVarsToPassthrough = new[]
         {
             "CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY", "GITHUB_TOKEN",
@@ -535,7 +475,6 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
             }
         }
 
-        // Mount Claude credentials file if it exists (for OAuth authentication)
         var homeDir = Environment.GetEnvironmentVariable("HOME");
         if (!string.IsNullOrEmpty(homeDir))
         {
@@ -575,7 +514,6 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         var containerId = stdout.Trim();
         _logger.LogDebug("Started container {ContainerId}", containerId);
 
-        // Get the container's IP address
         var inspectStartInfo = new System.Diagnostics.ProcessStartInfo
         {
             FileName = "docker",
@@ -599,7 +537,6 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
 
         var workerUrl = $"http://{ipAddress}:8080";
 
-        // Wait for the worker to be ready
         await WaitForWorkerReadyAsync(workerUrl, cancellationToken);
 
         return (containerId, workerUrl);
@@ -659,13 +596,13 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         }
     }
 
-    private async IAsyncEnumerable<AgentEvent> SendSseRequestAsync(
+    private async IAsyncEnumerable<SdkMessage> SendSseRequestAsync(
         string url,
         object requestBody,
         string sessionId,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        var json = JsonSerializer.Serialize(requestBody, JsonOptions);
+        var json = JsonSerializer.Serialize(requestBody, CamelCaseJsonOptions);
         using var content = new StringContent(json, Encoding.UTF8, "application/json");
 
         using var request = new HttpRequestMessage(HttpMethod.Post, url)
@@ -703,15 +640,14 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
             }
             else if (string.IsNullOrEmpty(line))
             {
-                // End of event
                 if (!string.IsNullOrEmpty(currentEventType) && dataBuffer.Length > 0)
                 {
-                    var evt = ParseSseEvent(currentEventType, dataBuffer.ToString(), sessionId);
-                    if (evt != null)
+                    var msg = ParseSseEvent(currentEventType, dataBuffer.ToString(), sessionId);
+                    if (msg != null)
                     {
-                        yield return evt;
+                        yield return msg;
 
-                        if (evt is AgentSessionEndedEvent)
+                        if (msg is SdkResultMessage)
                         {
                             yield break;
                         }
@@ -724,21 +660,38 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         }
     }
 
-    private AgentEvent? ParseSseEvent(string eventType, string data, string sessionId)
+    private SdkMessage? ParseSseEvent(string eventType, string data, string sessionId)
     {
         try
         {
-            return eventType switch
+            // "session_started" is a custom lifecycle event, not a raw SDK message
+            if (eventType == "session_started")
             {
-                "SessionStarted" => ParseJson<AgentSessionStartedEvent>(data),
-                "ContentBlockReceived" => ParseContentBlockEvent(data, sessionId),
-                "MessageReceived" => ParseMessageEvent(data, sessionId),
-                "ResultReceived" => ParseJson<AgentResultEvent>(data),
-                "QuestionReceived" => ParseQuestionEvent(data, sessionId),
-                "SessionEnded" => ParseJson<AgentSessionEndedEvent>(data),
-                "Error" => ParseJson<AgentErrorEvent>(data),
-                _ => null
-            };
+                // Parse to extract the worker session ID
+                using var doc = JsonDocument.Parse(data);
+                var workerSessionId = doc.RootElement.TryGetProperty("sessionId", out var sid)
+                    ? sid.GetString() : null;
+                var conversationId = doc.RootElement.TryGetProperty("conversationId", out var cid)
+                    ? cid.GetString() : null;
+
+                return new SdkSystemMessage(
+                    workerSessionId ?? sessionId,
+                    null,
+                    "session_started",
+                    null,
+                    null
+                );
+            }
+
+            // "error" is a custom lifecycle event
+            if (eventType == "error")
+            {
+                _logger.LogWarning("Received error event from worker: {Data}", data);
+                return null;
+            }
+
+            // All other events are raw SDK messages — deserialize using SdkMessage converters
+            return JsonSerializer.Deserialize<SdkMessage>(data, SdkJsonOptions);
         }
         catch (JsonException ex)
         {
@@ -747,124 +700,19 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         }
     }
 
-    private T? ParseJson<T>(string json)
+    /// <summary>
+    /// Creates a new SdkMessage with the session ID remapped to our session ID.
+    /// </summary>
+    private static SdkMessage RemapSessionId(SdkMessage msg, string sessionId)
     {
-        return JsonSerializer.Deserialize<T>(json, JsonOptions);
-    }
-
-    private AgentContentBlockEvent? ParseContentBlockEvent(string json, string sessionId)
-    {
-        using var doc = JsonDocument.Parse(json);
-        var root = doc.RootElement;
-
-        var typeStr = root.GetProperty("type").GetString() ?? "Text";
-        var type = Enum.TryParse<ClaudeContentType>(typeStr, true, out var parsed)
-            ? parsed : ClaudeContentType.Text;
-
-        // Helper to safely get nullable boolean (handles JSON null values)
-        bool? GetNullableBool(JsonElement element, string propertyName)
+        return msg switch
         {
-            if (!element.TryGetProperty(propertyName, out var prop))
-                return null;
-            if (prop.ValueKind == JsonValueKind.Null)
-                return null;
-            return prop.GetBoolean();
-        }
-
-        return new AgentContentBlockEvent(
-            root.TryGetProperty("sessionId", out var sid) ? sid.GetString() ?? sessionId : sessionId,
-            type,
-            root.TryGetProperty("text", out var text) ? text.GetString() : null,
-            root.TryGetProperty("toolName", out var tn) ? tn.GetString() : null,
-            root.TryGetProperty("toolInput", out var ti) ? ti.GetString() : null,
-            root.TryGetProperty("toolUseId", out var tuid) ? tuid.GetString() : null,
-            GetNullableBool(root, "toolSuccess"),
-            root.TryGetProperty("index", out var idx) ? idx.GetInt32() : 0
-        );
-    }
-
-    private AgentMessageEvent? ParseMessageEvent(string json, string sessionId)
-    {
-        using var doc = JsonDocument.Parse(json);
-        var root = doc.RootElement;
-
-        var roleStr = root.GetProperty("role").GetString() ?? "Assistant";
-        var role = roleStr.Equals("User", StringComparison.OrdinalIgnoreCase)
-            ? ClaudeMessageRole.User : ClaudeMessageRole.Assistant;
-
-        var content = new List<AgentContentBlockEvent>();
-        if (root.TryGetProperty("content", out var contentArray))
-        {
-            foreach (var block in contentArray.EnumerateArray())
-            {
-                var blockJson = block.GetRawText();
-                var blockEvent = ParseContentBlockEvent(blockJson, sessionId);
-                if (blockEvent != null)
-                {
-                    content.Add(blockEvent);
-                }
-            }
-        }
-
-        return new AgentMessageEvent(
-            root.TryGetProperty("sessionId", out var sid) ? sid.GetString() ?? sessionId : sessionId,
-            role,
-            content
-        );
-    }
-
-    private AgentQuestionEvent? ParseQuestionEvent(string json, string sessionId)
-    {
-        using var doc = JsonDocument.Parse(json);
-        var root = doc.RootElement;
-
-        var questions = new List<AgentQuestion>();
-        if (root.TryGetProperty("questions", out var questionsArray))
-        {
-            foreach (var q in questionsArray.EnumerateArray())
-            {
-                var options = new List<AgentQuestionOption>();
-                if (q.TryGetProperty("options", out var optionsArray))
-                {
-                    foreach (var opt in optionsArray.EnumerateArray())
-                    {
-                        options.Add(new AgentQuestionOption(
-                            opt.GetProperty("label").GetString() ?? "",
-                            opt.GetProperty("description").GetString() ?? ""
-                        ));
-                    }
-                }
-
-                questions.Add(new AgentQuestion(
-                    q.GetProperty("question").GetString() ?? "",
-                    q.TryGetProperty("header", out var h) ? h.GetString() ?? "" : "",
-                    options,
-                    q.TryGetProperty("multiSelect", out var ms) && ms.GetBoolean()
-                ));
-            }
-        }
-
-        return new AgentQuestionEvent(
-            root.TryGetProperty("sessionId", out var sid) ? sid.GetString() ?? sessionId : sessionId,
-            root.TryGetProperty("questionId", out var qid) ? qid.GetString() ?? "" : "",
-            root.TryGetProperty("toolUseId", out var tuid) ? tuid.GetString() ?? "" : "",
-            questions
-        );
-    }
-
-    private static AgentEvent MapSessionId(AgentEvent evt, string sessionId)
-    {
-        // Map worker session IDs to our session ID
-        return evt switch
-        {
-            AgentSessionStartedEvent e => e with { SessionId = sessionId },
-            AgentContentBlockEvent e => e with { SessionId = sessionId },
-            AgentMessageEvent e => e with { SessionId = sessionId, Content = e.Content.Select(c => c with { SessionId = sessionId }).ToList() },
-            AgentResultEvent e => e with { SessionId = sessionId },
-            AgentQuestionEvent e => e with { SessionId = sessionId },
-            AgentSessionEndedEvent e => e with { SessionId = sessionId },
-            AgentErrorEvent e => e with { SessionId = sessionId },
-            _ => evt
+            SdkAssistantMessage m => m with { SessionId = sessionId },
+            SdkUserMessage m => m with { SessionId = sessionId },
+            SdkResultMessage m => m with { SessionId = sessionId },
+            SdkSystemMessage m => m with { SessionId = sessionId },
+            SdkStreamEvent m => m with { SessionId = sessionId },
+            _ => msg
         };
     }
 
