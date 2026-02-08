@@ -85,6 +85,12 @@ public class MockFleeceService : IFleeceService
         return Task.FromResult<IReadOnlyList<Issue>>(readyIssues);
     }
 
+    public Task ReloadFromDiskAsync(string projectPath, CancellationToken ct = default)
+    {
+        _logger.LogDebug("[Mock] ReloadFromDisk for {ProjectPath} (no-op in mock)", projectPath);
+        return Task.CompletedTask;
+    }
+
     public Task<Issue> CreateIssueAsync(
         string projectPath,
         string title,

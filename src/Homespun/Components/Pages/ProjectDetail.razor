@@ -1074,7 +1074,8 @@ else
                 return;
             }
 
-            // Step 3: Refresh the graph
+            // Step 3: Reload issues from disk and refresh the graph
+            await FleeceService.ReloadFromDiskAsync(_project.LocalPath);
             await RefreshData();
         }
         catch (Exception ex)
@@ -1158,6 +1159,7 @@ else
                 return;
             }
 
+            await FleeceService.ReloadFromDiskAsync(_project.LocalPath);
             await RefreshData();
         }
         catch (Exception ex)
@@ -1193,6 +1195,7 @@ else
             }
 
             HideFleeceConflictModal();
+            await FleeceService.ReloadFromDiskAsync(_project.LocalPath);
             await RefreshData();
         }
         finally
@@ -1228,6 +1231,7 @@ else
             }
 
             HideFleeceConflictModal();
+            await FleeceService.ReloadFromDiskAsync(_project.LocalPath);
             await RefreshData();
         }
         finally

@@ -45,6 +45,18 @@ public interface IFleeceService
 
     #endregion
 
+    #region Cache Management
+
+    /// <summary>
+    /// Invalidates the in-memory cache and reloads all issues from disk for the specified project.
+    /// Call this after external changes to .fleece/ files (e.g., git sync operations).
+    /// </summary>
+    /// <param name="projectPath">Path to the project containing .fleece/ directory</param>
+    /// <param name="ct">Cancellation token</param>
+    Task ReloadFromDiskAsync(string projectPath, CancellationToken ct = default);
+
+    #endregion
+
     #region Write Operations
 
     /// <summary>

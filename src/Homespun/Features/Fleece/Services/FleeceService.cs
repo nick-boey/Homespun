@@ -70,6 +70,27 @@ public sealed class FleeceService : IFleeceService, IDisposable
         return cache;
     }
 
+    #region Cache Management
+
+    public async Task ReloadFromDiskAsync(string projectPath, CancellationToken ct = default)
+    {
+        _logger.LogDebug("Reloading issues from disk for project: {ProjectPath}", projectPath);
+
+        // Remove the cached IssueService so a fresh one reads current disk state
+        _issueServices.TryRemove(projectPath, out _);
+
+        // Clear the cache initialized flag and existing cache
+        _cacheInitialized.TryRemove(projectPath, out _);
+        _issueCache.TryRemove(projectPath, out _);
+
+        // Force re-read from disk
+        await EnsureCacheLoadedAsync(projectPath, ct);
+
+        _logger.LogInformation("Reloaded issues from disk for project: {ProjectPath}", projectPath);
+    }
+
+    #endregion
+
     #region Read Operations
 
     public async Task<Issue?> GetIssueAsync(string projectPath, string issueId, CancellationToken ct = default)
