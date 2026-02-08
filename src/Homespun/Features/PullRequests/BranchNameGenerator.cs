@@ -14,7 +14,7 @@ public static partial class BranchNameGenerator
 {
     /// <summary>
     /// Generates a branch name for an issue, recalculating from the current issue properties.
-    /// This should always be called just before creating a branch/worktree to ensure
+    /// This should always be called just before creating a branch/clone to ensure
     /// the branch name reflects the current issue state.
     /// </summary>
     /// <param name="issue">The issue to generate a branch name for.</param>

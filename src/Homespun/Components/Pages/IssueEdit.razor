@@ -18,7 +18,7 @@
 @inject IClaudeSessionService SessionService
 @inject IAgentStartupTracker StartupTracker
 @inject IAgentPromptService AgentPromptService
-@inject IGitWorktreeService GitWorktreeService
+@inject IGitCloneService GitCloneService
 @inject NavigationManager Navigation
 @inject ILogger<IssueEdit> Logger
 @rendermode InteractiveServer
@@ -480,7 +480,7 @@ else
 
     /// <summary>
     /// Starts an agent session for the current issue.
-    /// Creates or finds a worktree, starts the Claude session, and navigates to the chat page.
+    /// Creates or finds a clone, starts the Claude session, and navigates to the chat page.
     /// </summary>
     private async Task StartAgentSession()
     {
@@ -497,12 +497,12 @@ else
         {
             var branchName = GetBranchPreview();
 
-            // Get or create worktree for the issue's branch
-            var worktreePath = await GitWorktreeService.GetWorktreePathForBranchAsync(_project.LocalPath, branchName);
+            // Get or create clone for the issue's branch
+            var clonePath = await GitCloneService.GetClonePathForBranchAsync(_project.LocalPath, branchName);
 
-            if (!string.IsNullOrEmpty(worktreePath))
+            if (!string.IsNullOrEmpty(clonePath))
             {
-                Logger.LogInformation("Found existing worktree at {WorktreePath} for branch {BranchName}", worktreePath, branchName);
+                Logger.LogInformation("Found existing clone at {ClonePath} for branch {BranchName}", clonePath, branchName);
             }
             else
             {
@@ -512,29 +512,29 @@ else
                     : _project.DefaultBranch;
 
                 // Fetch the latest changes for the selected base branch
-                var fetchSuccess = await GitWorktreeService.FetchAndUpdateBranchAsync(_project.LocalPath, baseBranch);
+                var fetchSuccess = await GitCloneService.FetchAndUpdateBranchAsync(_project.LocalPath, baseBranch);
                 if (!fetchSuccess)
                 {
                     Logger.LogWarning("Failed to fetch latest changes for base branch {BaseBranch}, continuing with local version", baseBranch);
                 }
 
-                // Create new worktree for the issue's branch
-                Logger.LogInformation("Creating worktree for branch {BranchName} from base {BaseBranch} in {ProjectPath}", branchName, baseBranch, _project.LocalPath);
+                // Create new clone for the issue's branch
+                Logger.LogInformation("Creating clone for branch {BranchName} from base {BaseBranch} in {ProjectPath}", branchName, baseBranch, _project.LocalPath);
 
-                worktreePath = await GitWorktreeService.CreateWorktreeAsync(
+                clonePath = await GitCloneService.CreateCloneAsync(
                     _project.LocalPath,
                     branchName,
                     createBranch: true,
                     baseBranch: baseBranch);
 
-                if (string.IsNullOrEmpty(worktreePath))
+                if (string.IsNullOrEmpty(clonePath))
                 {
-                    _errorMessage = "Failed to create worktree for issue branch.";
+                    _errorMessage = "Failed to create clone for issue branch.";
                     StartupTracker.MarkAsFailed(IssueId, _errorMessage);
                     return;
                 }
 
-                Logger.LogInformation("Created worktree at {WorktreePath} for issue {IssueId}", worktreePath, IssueId);
+                Logger.LogInformation("Created clone at {ClonePath} for issue {IssueId}", clonePath, IssueId);
             }
 
             // Resolve selected prompt
@@ -551,7 +551,7 @@ else
             var session = await SessionService.StartSessionAsync(
                 IssueId,
                 ProjectId,
-                worktreePath,
+                clonePath,
                 mode,
                 _selectedModel,
                 systemPrompt);

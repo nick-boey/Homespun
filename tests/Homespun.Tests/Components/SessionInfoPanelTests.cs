@@ -19,7 +19,7 @@ public class SessionInfoPanelTests : BunitTestContext
 {
     private Mock<IFleeceService> _mockFleeceService = null!;
     private Mock<IProjectService> _mockProjectService = null!;
-    private Mock<IGitWorktreeService> _mockGitService = null!;
+    private Mock<IGitCloneService> _mockGitService = null!;
     private Mock<ITodoParser> _mockTodoParser = null!;
     private Mock<IIssuePrStatusService> _mockPrStatusService = null!;
     private Mock<IMarkdownRenderingService> _mockMarkdownService = null!;
@@ -31,7 +31,7 @@ public class SessionInfoPanelTests : BunitTestContext
 
         _mockFleeceService = new Mock<IFleeceService>();
         _mockProjectService = new Mock<IProjectService>();
-        _mockGitService = new Mock<IGitWorktreeService>();
+        _mockGitService = new Mock<IGitCloneService>();
         _mockTodoParser = new Mock<ITodoParser>();
         _mockPrStatusService = new Mock<IIssuePrStatusService>();
         _mockMarkdownService = new Mock<IMarkdownRenderingService>();
@@ -70,7 +70,7 @@ public class SessionInfoPanelTests : BunitTestContext
             Id = "session-1",
             EntityId = "ABC123",
             ProjectId = "proj-1",
-            WorkingDirectory = "/test/worktree",
+            WorkingDirectory = "/test/clone",
             Mode = SessionMode.Build,
             Model = "sonnet",
             Status = ClaudeSessionStatus.Running

@@ -14,7 +14,7 @@ public class GitHubService(
     IConfiguration configuration,
     IGitHubClientWrapper githubClient,
     IIssuePrLinkingService issuePrLinkingService,
-    IGitWorktreeService worktreeService,
+    IGitCloneService cloneService,
     ILogger<GitHubService> logger)
     : IGitHubService
 {
@@ -314,17 +314,17 @@ public class GitHubService(
                     pullRequest.Description = pr.Body;
                     pullRequest.UpdatedAt = DateTime.UtcNow;
 
-                    // Try to find existing worktree if WorktreePath is not set
-                    // This handles cases where the worktree was created with a sanitized path
-                    // (e.g., branch "foo+bar" creates worktree folder "foo-bar")
-                    if (string.IsNullOrEmpty(pullRequest.WorktreePath) && !string.IsNullOrEmpty(pr.BranchName))
+                    // Try to find existing clone if ClonePath is not set
+                    // This handles cases where the clone was created with a sanitized path
+                    // (e.g., branch "foo+bar" creates clone folder "foo-bar")
+                    if (string.IsNullOrEmpty(pullRequest.ClonePath) && !string.IsNullOrEmpty(pr.BranchName))
                     {
-                        pullRequest.WorktreePath = await worktreeService.GetWorktreePathForBranchAsync(
+                        pullRequest.ClonePath = await cloneService.GetClonePathForBranchAsync(
                             project.LocalPath, pr.BranchName);
-                        if (!string.IsNullOrEmpty(pullRequest.WorktreePath))
+                        if (!string.IsNullOrEmpty(pullRequest.ClonePath))
                         {
-                            logger.LogInformation("Found existing worktree for PR #{PrNumber} at {WorktreePath}",
-                                pr.Number, pullRequest.WorktreePath);
+                            logger.LogInformation("Found existing clone for PR #{PrNumber} at {ClonePath}",
+                                pr.Number, pullRequest.ClonePath);
                         }
                     }
 
@@ -352,16 +352,16 @@ public class GitHubService(
                         CreatedAt = pr.CreatedAt
                     };
 
-                    // Try to find existing worktree for this branch
-                    // This handles cases where a worktree was created before the PR was synced
+                    // Try to find existing clone for this branch
+                    // This handles cases where a clone was created before the PR was synced
                     if (!string.IsNullOrEmpty(pr.BranchName))
                     {
-                        pullRequest.WorktreePath = await worktreeService.GetWorktreePathForBranchAsync(
+                        pullRequest.ClonePath = await cloneService.GetClonePathForBranchAsync(
                             project.LocalPath, pr.BranchName);
-                        if (!string.IsNullOrEmpty(pullRequest.WorktreePath))
+                        if (!string.IsNullOrEmpty(pullRequest.ClonePath))
                         {
-                            logger.LogInformation("Found existing worktree for new PR #{PrNumber} at {WorktreePath}",
-                                pr.Number, pullRequest.WorktreePath);
+                            logger.LogInformation("Found existing clone for new PR #{PrNumber} at {ClonePath}",
+                                pr.Number, pullRequest.ClonePath);
                         }
                     }
 

@@ -80,16 +80,16 @@ else
 
 @code {
     /// <summary>
-    /// Unique identifier for session tracking (e.g., issue ID or worktree entity ID).
+    /// Unique identifier for session tracking (e.g., issue ID or clone entity ID).
     /// </summary>
     [Parameter, EditorRequired]
     public required string EntityId { get; set; }
 
     /// <summary>
-    /// Path to the worktree where the agent will operate.
+    /// Path to the clone where the agent will operate.
     /// </summary>
     [Parameter, EditorRequired]
-    public required string WorktreePath { get; set; }
+    public required string ClonePath { get; set; }
 
     /// <summary>
     /// Project identifier.
@@ -168,7 +168,7 @@ else
             _session = await SessionService.StartSessionAsync(
                 EntityId,
                 ProjectId,
-                WorktreePath,
+                ClonePath,
                 mode,
                 Model,
                 SystemPrompt);
@@ -181,7 +181,7 @@ else
                 var initialMessage = AgentPromptService.RenderTemplate(selectedPrompt.InitialMessage, new PromptContext
                 {
                     Id = EntityId,
-                    Branch = Path.GetFileName(WorktreePath) ?? ""
+                    Branch = Path.GetFileName(ClonePath) ?? ""
                 });
 
                 if (!string.IsNullOrEmpty(initialMessage))

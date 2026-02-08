@@ -1,33 +1,33 @@
 namespace Homespun.Features.Git;
 
 /// <summary>
-/// Interface for Git worktree operations.
+/// Interface for Git clone operations.
 /// </summary>
-public interface IGitWorktreeService
+public interface IGitCloneService
 {
-    Task<string?> CreateWorktreeAsync(string repoPath, string branchName, bool createBranch = false, string? baseBranch = null);
-    Task<bool> RemoveWorktreeAsync(string repoPath, string worktreePath);
-    Task<List<WorktreeInfo>> ListWorktreesAsync(string repoPath);
-    Task PruneWorktreesAsync(string repoPath);
-    Task<bool> WorktreeExistsAsync(string repoPath, string branchName);
+    Task<string?> CreateCloneAsync(string repoPath, string branchName, bool createBranch = false, string? baseBranch = null);
+    Task<bool> RemoveCloneAsync(string repoPath, string clonePath);
+    Task<List<CloneInfo>> ListClonesAsync(string repoPath);
+    Task PruneClonesAsync(string repoPath);
+    Task<bool> CloneExistsAsync(string repoPath, string branchName);
 
     /// <summary>
-    /// Gets the worktree path for a given branch name, accounting for branch name sanitization.
+    /// Gets the clone path for a given branch name, accounting for branch name sanitization.
     /// First checks for a direct branch name match, then falls back to matching the sanitized
-    /// branch name against worktree paths.
+    /// branch name against clone paths.
     /// </summary>
     /// <param name="repoPath">Path to the repository</param>
     /// <param name="branchName">The original branch name (may contain special characters like +)</param>
-    /// <returns>The worktree path if found, null otherwise</returns>
-    Task<string?> GetWorktreePathForBranchAsync(string repoPath, string branchName);
+    /// <returns>The clone path if found, null otherwise</returns>
+    Task<string?> GetClonePathForBranchAsync(string repoPath, string branchName);
 
 
     /// <summary>
-    /// Pull the latest changes from the remote for a worktree.
+    /// Pull the latest changes from the remote for a clone.
     /// </summary>
-    /// <param name="worktreePath">Path to the worktree directory</param>
+    /// <param name="clonePath">Path to the clone directory</param>
     /// <returns>True if successful, false otherwise</returns>
-    Task<bool> PullLatestAsync(string worktreePath);
+    Task<bool> PullLatestAsync(string clonePath);
 
     /// <summary>
     /// Fetch and update a specific branch from remote to ensure it's up to date.
@@ -111,43 +111,43 @@ public interface IGitWorktreeService
     Task<bool> FetchAllAsync(string repoPath);
 
     /// <summary>
-    /// Gets the git status of a worktree (modified, staged, and untracked file counts).
+    /// Gets the git status of a clone (modified, staged, and untracked file counts).
     /// </summary>
-    /// <param name="worktreePath">Path to the worktree</param>
-    /// <returns>WorktreeStatus with file counts</returns>
-    Task<WorktreeStatus> GetWorktreeStatusAsync(string worktreePath);
+    /// <param name="clonePath">Path to the clone</param>
+    /// <returns>CloneStatus with file counts</returns>
+    Task<CloneStatus> GetCloneStatusAsync(string clonePath);
 
     /// <summary>
-    /// Finds lost worktree folders - directories that look like worktrees but are not
-    /// tracked by git worktree. These are sibling folders of the main repo that have
-    /// a .git file or folder but are not in the worktree list.
+    /// Finds lost clone folders - directories that look like clones but are not
+    /// tracked. These are sibling folders of the main repo that have
+    /// a .git file or folder but are not in the clone list.
     /// </summary>
     /// <param name="repoPath">Path to the main repository</param>
-    /// <returns>List of lost worktree folder information</returns>
-    Task<List<LostWorktreeInfo>> FindLostWorktreeFoldersAsync(string repoPath);
+    /// <returns>List of lost clone folder information</returns>
+    Task<List<LostCloneInfo>> FindLostCloneFoldersAsync(string repoPath);
 
     /// <summary>
-    /// Deletes a worktree folder completely from disk.
+    /// Deletes a clone folder completely from disk.
     /// Use with caution - this permanently deletes the folder and all its contents.
     /// </summary>
     /// <param name="folderPath">Path to the folder to delete</param>
     /// <returns>True if deletion was successful</returns>
-    Task<bool> DeleteWorktreeFolderAsync(string folderPath);
+    Task<bool> DeleteCloneFolderAsync(string folderPath);
 
     /// <summary>
-    /// Gets the current branch checked out in a worktree.
+    /// Gets the current branch checked out in a clone.
     /// </summary>
-    /// <param name="worktreePath">Path to the worktree</param>
+    /// <param name="clonePath">Path to the clone</param>
     /// <returns>Branch name or null if error/detached HEAD</returns>
-    Task<string?> GetCurrentBranchAsync(string worktreePath);
+    Task<string?> GetCurrentBranchAsync(string clonePath);
 
     /// <summary>
-    /// Checks out a specific branch in a worktree.
+    /// Checks out a specific branch in a clone.
     /// </summary>
-    /// <param name="worktreePath">Path to the worktree</param>
+    /// <param name="clonePath">Path to the clone</param>
     /// <param name="branchName">Name of the branch to checkout</param>
     /// <returns>True if successful</returns>
-    Task<bool> CheckoutBranchAsync(string worktreePath, string branchName);
+    Task<bool> CheckoutBranchAsync(string clonePath, string branchName);
 
     /// <summary>
     /// Checks if a branch has been squash-merged into the target branch.
@@ -160,30 +160,28 @@ public interface IGitWorktreeService
     Task<bool> IsSquashMergedAsync(string repoPath, string branchName, string targetBranch);
 
     /// <summary>
-    /// Creates a worktree from a remote branch without checking out the branch in the main worktree.
-    /// This avoids the issue where two worktrees cannot share the same branch.
+    /// Creates a clone from a remote branch.
     /// </summary>
     /// <param name="repoPath">Path to the main repository</param>
     /// <param name="remoteBranch">Name of the remote branch (without origin/ prefix)</param>
-    /// <returns>Path to the created worktree, or null if failed</returns>
-    Task<string?> CreateWorktreeFromRemoteBranchAsync(string repoPath, string remoteBranch);
+    /// <returns>Path to the created clone, or null if failed</returns>
+    Task<string?> CreateCloneFromRemoteBranchAsync(string repoPath, string remoteBranch);
 
     /// <summary>
-    /// Repairs a lost worktree by reattaching it to a branch.
-    /// Uses `git worktree repair` to fix the worktree references.
+    /// Repairs a lost clone by re-cloning if needed.
     /// </summary>
     /// <param name="repoPath">Path to the main repository</param>
-    /// <param name="folderPath">Path to the lost worktree folder</param>
+    /// <param name="folderPath">Path to the lost clone folder</param>
     /// <param name="branchName">Name of the branch to attach</param>
     /// <returns>True if repair was successful</returns>
-    Task<bool> RepairWorktreeAsync(string repoPath, string folderPath, string branchName);
+    Task<bool> RepairCloneAsync(string repoPath, string folderPath, string branchName);
 
     /// <summary>
     /// Get the list of files that have changed between the current branch and the target branch.
     /// Uses git diff --numstat to get file changes with addition/deletion counts.
     /// </summary>
-    /// <param name="worktreePath">Path to the worktree directory</param>
+    /// <param name="clonePath">Path to the clone directory</param>
     /// <param name="targetBranch">Target branch to compare against (e.g., "main")</param>
     /// <returns>List of changed files with their status and line counts</returns>
-    Task<List<ClaudeCode.Data.FileChangeInfo>> GetChangedFilesAsync(string worktreePath, string targetBranch);
+    Task<List<ClaudeCode.Data.FileChangeInfo>> GetChangedFilesAsync(string clonePath, string targetBranch);
 }

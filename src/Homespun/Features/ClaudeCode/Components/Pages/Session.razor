@@ -1862,8 +1862,8 @@
         if (_session == null || string.IsNullOrEmpty(_session.EntityId) || string.IsNullOrEmpty(_session.ProjectId))
             return;
 
-        // Don't try to load issue for worktree entities
-        if (_session.EntityId.StartsWith("worktree:"))
+        // Don't try to load issue for clone entities
+        if (_session.EntityId.StartsWith("clone:"))
             return;
 
         try

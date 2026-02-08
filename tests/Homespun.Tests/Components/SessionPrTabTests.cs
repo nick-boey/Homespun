@@ -88,11 +88,11 @@ public class SessionPrTabTests : BunitTestContext
     }
 
     [Test]
-    public void SessionPrTab_WorktreeEntity_ShowsNoPrMessage()
+    public void SessionPrTab_CloneEntity_ShowsNoPrMessage()
     {
         // Act
         var cut = Render<SessionPrTab>(parameters => parameters
-            .Add(p => p.EntityId, "worktree:feature/test")
+            .Add(p => p.EntityId, "clone:feature/test")
             .Add(p => p.ProjectId, "proj-1"));
 
         // Assert

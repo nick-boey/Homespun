@@ -25,7 +25,7 @@
 @inject IFleeceService FleeceService
 @inject IFleeceIssuesSyncService FleeceIssuesSyncService
 @inject IGitHubService GitHubService
-@inject IGitWorktreeService GitWorktreeService
+@inject IGitCloneService GitCloneService
 @inject ICommandRunner CommandRunner
 @inject IClaudeSessionService SessionService
 @inject IAgentStartupTracker StartupTracker
@@ -210,7 +210,7 @@ else
     }
     else if (_activeTab == "branches")
     {
-        <WorktreeManagementPanel Project="@_project"
+        <CloneManagementPanel Project="@_project"
                                  OnDataChanged="RefreshData" />
     }
     else if (_activeTab == "prompts")
@@ -939,48 +939,48 @@ else
 
         try
         {
-            // Calculate the expected worktree path (same logic as GitWorktreeService)
+            // Calculate the expected clone path (same logic as GitCloneService)
             var parentDir = Path.GetDirectoryName(_project.LocalPath);
             if (string.IsNullOrEmpty(parentDir))
             {
                 _testAgentError = "Cannot determine parent directory of repository.";
                 return;
             }
-            var expectedWorktreePath = Path.GetFullPath(Path.Combine(parentDir, TestBranchName));
+            var expectedClonePath = Path.GetFullPath(Path.Combine(parentDir, TestBranchName));
 
-            // Clean up existing worktree and branch if they exist
-            Logger.LogInformation("Cleaning up existing test worktree at {WorktreePath}", expectedWorktreePath);
+            // Clean up existing clone and branch if they exist
+            Logger.LogInformation("Cleaning up existing test clone at {ClonePath}", expectedClonePath);
 
-            // Try to remove the worktree first (this handles the git worktree tracking)
-            await GitWorktreeService.RemoveWorktreeAsync(_project.LocalPath, expectedWorktreePath);
+            // Try to remove the clone first (this handles the git clone tracking)
+            await GitCloneService.RemoveCloneAsync(_project.LocalPath, expectedClonePath);
 
-            // If the directory still exists (e.g., worktree was already pruned), delete it manually
-            if (Directory.Exists(expectedWorktreePath))
+            // If the directory still exists (e.g., clone was already pruned), delete it manually
+            if (Directory.Exists(expectedClonePath))
             {
-                Logger.LogInformation("Deleting existing directory at {WorktreePath}", expectedWorktreePath);
-                Directory.Delete(expectedWorktreePath, recursive: true);
+                Logger.LogInformation("Deleting existing directory at {ClonePath}", expectedClonePath);
+                Directory.Delete(expectedClonePath, recursive: true);
             }
 
             // Delete the branch if it exists (force delete to handle unmerged changes)
             await CommandRunner.RunAsync("git", $"branch -D \"{TestBranchName}\"", _project.LocalPath);
 
-            // Prune any stale worktree references
-            await GitWorktreeService.PruneWorktreesAsync(_project.LocalPath);
+            // Prune any stale clone references
+            await GitCloneService.PruneClonesAsync(_project.LocalPath);
 
-            // Create worktree for hsp/test branch
-            var worktreePath = await GitWorktreeService.CreateWorktreeAsync(
+            // Create clone for hsp/test branch
+            var clonePath = await GitCloneService.CreateCloneAsync(
                 _project.LocalPath,
                 TestBranchName,
                 createBranch: true,
                 baseBranch: _project.DefaultBranch);
 
-            if (string.IsNullOrEmpty(worktreePath))
+            if (string.IsNullOrEmpty(clonePath))
             {
-                _testAgentError = "Failed to create worktree for test branch.";
+                _testAgentError = "Failed to create clone for test branch.";
                 return;
             }
 
-            Logger.LogInformation("Created test worktree at {WorktreePath}", worktreePath);
+            Logger.LogInformation("Created test clone at {ClonePath}", clonePath);
 
             // Start the agent session without a system prompt
             StartupTracker.MarkAsStarting(TestAgentEntityId);
@@ -988,7 +988,7 @@ else
             var session = await SessionService.StartSessionAsync(
                 TestAgentEntityId,
                 Id,
-                worktreePath,
+                clonePath,
                 SessionMode.Build,
                 "sonnet",
                 systemPrompt: null);

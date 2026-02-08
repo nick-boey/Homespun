@@ -120,12 +120,12 @@ public class ComponentRegistryService : IComponentRegistryService
         },
         new ComponentMetadata
         {
-            Id = "worktree-management-panel",
-            Name = "WorktreeManagementPanel",
-            Description = "Panel for managing git worktrees with create, delete, and switch actions.",
+            Id = "clone-management-panel",
+            Name = "CloneManagementPanel",
+            Description = "Panel for managing git clones with create, delete, and switch actions.",
             Category = "Panels",
-            ComponentPath = "Shared/WorktreeManagementPanel.razor",
-            Tags = new() { "panel", "git", "worktree" }
+            ComponentPath = "Shared/CloneManagementPanel.razor",
+            Tags = new() { "panel", "git", "clone" }
         },
         new ComponentMetadata
         {

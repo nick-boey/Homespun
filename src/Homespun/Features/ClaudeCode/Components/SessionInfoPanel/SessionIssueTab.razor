@@ -14,12 +14,12 @@
             <p>Session not loaded</p>
         </div>
     }
-    else if (IsWorktreeEntity())
+    else if (IsCloneEntity())
     {
         <div class="empty-state">
             <span class="empty-icon">🔗</span>
             <p>No issue linked to this session</p>
-            <span class="entity-info">Working on branch: @GetWorktreeBranch()</span>
+            <span class="entity-info">Working on branch: @GetCloneBranch()</span>
         </div>
     }
     else if (_isLoading)
@@ -211,7 +211,7 @@
 
     protected override async Task OnParametersSetAsync()
     {
-        if (!string.IsNullOrEmpty(EntityId) && !string.IsNullOrEmpty(ProjectId) && !IsWorktreeEntity())
+        if (!string.IsNullOrEmpty(EntityId) && !string.IsNullOrEmpty(ProjectId) && !IsCloneEntity())
         {
             await LoadIssueAsync();
         }
@@ -245,9 +245,9 @@
         }
     }
 
-    private bool IsWorktreeEntity() => EntityId?.StartsWith("worktree:") == true;
+    private bool IsCloneEntity() => EntityId?.StartsWith("clone:") == true;
 
-    private string GetWorktreeBranch() => EntityId?.Replace("worktree:", "") ?? "";
+    private string GetCloneBranch() => EntityId?.Replace("clone:", "") ?? "";
 
     private static string GetTypeBadgeClass(IssueType type) => type switch
     {

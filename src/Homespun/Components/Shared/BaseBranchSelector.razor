@@ -1,6 +1,6 @@
 @using Homespun.Features.Git
 
-@inject IGitWorktreeService GitWorktreeService
+@inject IGitCloneService GitCloneService
 
 <div class="relative">
     <select class="form-select form-select-sm"
@@ -55,7 +55,7 @@
 
     private async Task LoadBranchesAsync()
     {
-        var branchInfos = await GitWorktreeService.ListLocalBranchesAsync(RepoPath!);
+        var branchInfos = await GitCloneService.ListLocalBranchesAsync(RepoPath!);
         _branches = branchInfos.Select(b => b.ShortName).OrderBy(b => b).ToList();
 
         // Ensure the default branch is first in the list

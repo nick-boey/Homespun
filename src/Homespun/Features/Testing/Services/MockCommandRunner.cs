@@ -94,18 +94,8 @@ public class MockCommandRunner : ICommandRunner
             };
         }
 
-        if (args.StartsWith("worktree"))
+        if (args.StartsWith("clone"))
         {
-            if (args.Contains("list"))
-            {
-                return new CommandResult
-                {
-                    Success = true,
-                    Output = "/mock/repo  abc1234 [main]\n/mock/repo-feature  def5678 [feature/demo]",
-                    ExitCode = 0
-                };
-            }
-
             return new CommandResult
             {
                 Success = true,

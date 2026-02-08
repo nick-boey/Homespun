@@ -57,7 +57,7 @@ public static class MockServiceExtensions
         services.AddSingleton<IFleeceIssuesSyncService, MockFleeceIssuesSyncService>();
 
         // Git services
-        services.AddSingleton<IGitWorktreeService, MockGitWorktreeService>();
+        services.AddSingleton<IGitCloneService, MockGitCloneService>();
 
         // Claude Code services - use the real session store (already in-memory)
         services.AddSingleton<IClaudeSessionStore, ClaudeSessionStore>();
@@ -212,7 +212,7 @@ public static class MockServiceExtensions
         // Use the real ClaudeSessionService
         services.AddSingleton<IClaudeSessionService, ClaudeSessionService>();
 
-        // Store the test working directory in configuration for the MockGitWorktreeService
+        // Store the test working directory in configuration for the MockGitCloneService
         services.Configure<LiveClaudeTestOptions>(opts =>
         {
             opts.TestWorkingDirectory = workingDirectory;

@@ -21,7 +21,7 @@ public class GitHubServiceTests
     private Mock<IConfiguration> _mockConfig = null!;
     private Mock<IGitHubClientWrapper> _mockGitHubClient = null!;
     private Mock<IIssuePrLinkingService> _mockLinkingService = null!;
-    private Mock<IGitWorktreeService> _mockWorktreeService = null!;
+    private Mock<IGitCloneService> _mockCloneService = null!;
     private Mock<ILogger<GitHubService>> _mockLogger = null!;
     private GitHubService _service = null!;
 
@@ -33,12 +33,12 @@ public class GitHubServiceTests
         _mockConfig = new Mock<IConfiguration>();
         _mockGitHubClient = new Mock<IGitHubClientWrapper>();
         _mockLinkingService = new Mock<IIssuePrLinkingService>();
-        _mockWorktreeService = new Mock<IGitWorktreeService>();
+        _mockCloneService = new Mock<IGitCloneService>();
         _mockLogger = new Mock<ILogger<GitHubService>>();
 
         _mockConfig.Setup(c => c["GITHUB_TOKEN"]).Returns("test-token");
 
-        _service = new GitHubService(_dataStore, _mockRunner.Object, _mockConfig.Object, _mockGitHubClient.Object, _mockLinkingService.Object, _mockWorktreeService.Object, _mockLogger.Object);
+        _service = new GitHubService(_dataStore, _mockRunner.Object, _mockConfig.Object, _mockGitHubClient.Object, _mockLinkingService.Object, _mockCloneService.Object, _mockLogger.Object);
     }
 
     [TearDown]
@@ -102,7 +102,7 @@ public class GitHubServiceTests
         noTokenConfig.Setup(c => c["GITHUB_TOKEN"]).Returns((string?)null);
 
         // Create a new service with the no-token config
-        var service = new GitHubService(_dataStore, _mockRunner.Object, noTokenConfig.Object, _mockGitHubClient.Object, _mockLinkingService.Object, _mockWorktreeService.Object, _mockLogger.Object);
+        var service = new GitHubService(_dataStore, _mockRunner.Object, noTokenConfig.Object, _mockGitHubClient.Object, _mockLinkingService.Object, _mockCloneService.Object, _mockLogger.Object);
 
         // Clear environment variable for this test (save and restore)
         var originalToken = Environment.GetEnvironmentVariable("GITHUB_TOKEN");

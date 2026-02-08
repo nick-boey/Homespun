@@ -12,7 +12,7 @@ public class Project
     public required string Name { get; set; }
 
     /// <summary>
-    /// Path to the local Git repository worktree for the default branch.
+    /// Path to the local Git repository clone for the default branch.
     /// Format: ~/.homespun/src/{repository-name}/{branch-name}
     /// </summary>
     public required string LocalPath { get; set; }

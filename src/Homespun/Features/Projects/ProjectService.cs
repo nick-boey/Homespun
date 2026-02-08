@@ -26,7 +26,7 @@ public class ProjectService(
     ILogger<ProjectService> logger) : IProjectService
 {
     /// <summary>
-    /// Base path for all project worktrees.
+    /// Base path for all project clones.
     /// Uses HOMESPUN_BASE_PATH environment variable if set, otherwise defaults to ~/.homespun/src
     /// </summary>
     private string HomespunBasePath
@@ -125,7 +125,7 @@ public class ProjectService(
             // Set default branch name
             await commandRunner.RunAsync("git", $"branch -M {defaultBranch}", localPath);
 
-            // Create initial commit (required for beads and worktrees)
+            // Create initial commit (required for beads and clones)
             var commitResult = await commandRunner.RunAsync("git", "commit --allow-empty -m \"Initial commit\"", localPath);
             if (!commitResult.Success)
             {

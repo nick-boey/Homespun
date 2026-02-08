@@ -24,7 +24,7 @@ public class RebaseAgentService : IRebaseAgentService
     /// <inheritdoc />
     public async Task<ClaudeSession> StartRebaseAgentAsync(
         string projectId,
-        string worktreePath,
+        string clonePath,
         string branchName,
         string defaultBranch,
         string model,
@@ -32,8 +32,8 @@ public class RebaseAgentService : IRebaseAgentService
         CancellationToken cancellationToken = default)
     {
         _logger.LogInformation(
-            "Starting rebase agent for branch {BranchName} onto {DefaultBranch} in {WorktreePath}",
-            branchName, defaultBranch, worktreePath);
+            "Starting rebase agent for branch {BranchName} onto {DefaultBranch} in {ClonePath}",
+            branchName, defaultBranch, clonePath);
 
         var entityId = $"rebase-{branchName}";
         var systemPrompt = GenerateRebaseSystemPrompt(branchName, defaultBranch);
@@ -42,7 +42,7 @@ public class RebaseAgentService : IRebaseAgentService
         var session = await _sessionService.StartSessionAsync(
             entityId,
             projectId,
-            worktreePath,
+            clonePath,
             SessionMode.Build,
             model,
             systemPrompt,

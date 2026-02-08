@@ -26,7 +26,7 @@ public interface IClaudeSessionService
     /// <param name="sessionId">Claude's session UUID (from the .jsonl filename)</param>
     /// <param name="entityId">Our PR/issue ID</param>
     /// <param name="projectId">Our project ID</param>
-    /// <param name="workingDirectory">The worktree path</param>
+    /// <param name="workingDirectory">The clone path</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>A new active session that will resume the previous conversation</returns>
     Task<ClaudeSession> ResumeSessionAsync(
@@ -41,7 +41,7 @@ public interface IClaudeSessionService
     /// Discovers from Claude's storage and enriches with our metadata.
     /// </summary>
     /// <param name="entityId">Our PR/issue ID</param>
-    /// <param name="workingDirectory">The worktree path to scan for sessions</param>
+    /// <param name="workingDirectory">The clone path to scan for sessions</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>List of resumable sessions ordered by last activity (newest first)</returns>
     Task<IReadOnlyList<ResumableSession>> GetResumableSessionsAsync(

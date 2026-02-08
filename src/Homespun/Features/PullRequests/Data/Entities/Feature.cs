@@ -16,7 +16,8 @@ public class PullRequest
     public string? BranchName { get; set; }
     public OpenPullRequestStatus Status { get; set; } = OpenPullRequestStatus.InDevelopment;
     public int? GitHubPRNumber { get; set; }
-    public string? WorktreePath { get; set; }
+    [JsonPropertyName("WorktreePath")]
+    public string? ClonePath { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 

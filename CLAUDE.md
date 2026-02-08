@@ -6,7 +6,7 @@ This file contains instructions for Claude Code when working on this project.
 
 Homespun is a Blazor web application for managing development features and AI agents. It provides:
 - Project and feature management with hierarchical tree visualization
-- Git worktree integration for isolated feature development
+- Git clone integration for isolated feature development
 - GitHub PR synchronization
 - Claude Code agent orchestration
 
@@ -35,7 +35,7 @@ src/Homespun/
 │   ├── Fleece/                  # Fleece issue tracking integration
 │   ├── ClaudeCode/              # Claude Code SDK session management
 │   ├── Commands/                # Shell command execution
-│   ├── Git/                     # Git worktree operations
+│   ├── Git/                     # Git clone operations
 │   ├── GitHub/                  # GitHub API integration (Octokit)
 │   ├── Projects/                # Project management
 │   ├── PullRequests/            # PR workflow and data entities
@@ -51,7 +51,7 @@ tests/
 ├── Homespun.Tests/              # Unit tests (NUnit + bUnit + Moq)
 │   ├── Features/                # Tests organized by feature (mirrors src structure)
 │   │   ├── ClaudeCode/          # ClaudeCode service and hub tests
-│   │   ├── Git/                 # Git worktree tests
+│   │   ├── Git/                 # Git clone tests
 │   │   ├── GitHub/              # GitHub service tests
 │   │   └── PullRequests/        # PR model and workflow tests
 │   ├── Components/              # bUnit tests for Blazor components
@@ -65,7 +65,7 @@ tests/
 - **Fleece**: Integration with Fleece issue tracking - JSONL-based storage in `.fleece/` directory, uses Fleece.Core types directly.
 - **ClaudeCode**: Claude Code SDK session management using ClaudeAgentSdk NuGet package - supports Plan (read-only) and Build (full access) modes
 - **Commands**: Shell command execution abstraction
-- **Git**: Git worktree creation, management, and rebase operations
+- **Git**: Git clone creation, management, and rebase operations
 - **GitHub**: GitHub PR synchronization and API operations using Octokit
 - **Projects**: Project CRUD operations
 - **PullRequests**: PR workflow, feature management, and core data entities (Feature, Project, PullRequest)

@@ -7,9 +7,9 @@ namespace Homespun.Tests.Helpers;
 /// Automatically cleans up the repository when disposed.
 /// </summary>
 /// <remarks>
-/// Each fixture creates a unique parent directory to avoid worktree path collisions
+/// Each fixture creates a unique parent directory to avoid clone path collisions
 /// between test runs. The repository is created inside a "main" subdirectory,
-/// and worktrees are created as siblings (following GitWorktreeService convention).
+/// and clones are created as siblings (following GitCloneService convention).
 /// This ensures each test run is fully isolated.
 /// </remarks>
 public class TempGitRepositoryFixture : IDisposable
@@ -20,7 +20,7 @@ public class TempGitRepositoryFixture : IDisposable
     public string RepositoryPath { get; }
 
     /// <summary>
-    /// The unique parent directory containing the repository and its worktrees.
+    /// The unique parent directory containing the repository and its clones.
     /// </summary>
     public string ParentPath { get; }
 
@@ -30,8 +30,8 @@ public class TempGitRepositoryFixture : IDisposable
 
     public TempGitRepositoryFixture()
     {
-        // Create a unique parent directory per fixture to isolate worktrees
-        // The repo is created as "main" subdirectory, and worktrees will be siblings
+        // Create a unique parent directory per fixture to isolate clones
+        // The repo is created as "main" subdirectory, and clones will be siblings
         // This prevents path collisions between different test runs
         ParentPath = Path.Combine(Path.GetTempPath(), "Homespun_IntegrationTests", Guid.NewGuid().ToString("N"));
         RepositoryPath = Path.Combine(ParentPath, "main");
@@ -130,11 +130,11 @@ public class TempGitRepositoryFixture : IDisposable
         {
             if (Directory.Exists(RepositoryPath))
             {
-                // First, get list of worktrees and clean them up
-                CleanupWorktrees();
+                // First, get list of clones and clean them up
+                CleanupClones();
             }
 
-            // Delete the entire parent directory (includes repo and all worktrees)
+            // Delete the entire parent directory (includes repo and all clones)
             if (Directory.Exists(ParentPath))
             {
                 ForceDeleteDirectory(ParentPath);
@@ -149,7 +149,7 @@ public class TempGitRepositoryFixture : IDisposable
     /// <summary>
     /// Cleans up any clones created during testing.
     /// </summary>
-    private void CleanupWorktrees()
+    private void CleanupClones()
     {
         try
         {

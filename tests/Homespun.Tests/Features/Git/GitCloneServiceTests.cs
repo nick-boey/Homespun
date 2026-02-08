@@ -7,17 +7,17 @@ using Moq;
 namespace Homespun.Tests.Features.Git;
 
 [TestFixture]
-public class GitWorktreeServiceTests
+public class GitCloneServiceTests
 {
     private Mock<ICommandRunner> _mockRunner = null!;
-    private GitWorktreeService _service = null!;
+    private GitCloneService _service = null!;
     private string _tempDir = null!;
 
     [SetUp]
     public void SetUp()
     {
         _mockRunner = new Mock<ICommandRunner>();
-        _service = new GitWorktreeService(_mockRunner.Object, Mock.Of<ILogger<GitWorktreeService>>());
+        _service = new GitCloneService(_mockRunner.Object, Mock.Of<ILogger<GitCloneService>>());
         _tempDir = Path.Combine(Path.GetTempPath(), "homespun-test-" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(_tempDir);
     }
@@ -32,7 +32,7 @@ public class GitWorktreeServiceTests
     }
 
     [Test]
-    public async Task CreateWorktree_Success_ReturnsPath()
+    public async Task CreateClone_Success_ReturnsPath()
     {
         // Arrange
         var repoPath = Path.Combine(_tempDir, "repo");
@@ -56,7 +56,7 @@ public class GitWorktreeServiceTests
             .ReturnsAsync(new CommandResult { Success = true, Output = "" });
 
         // Act
-        var result = await _service.CreateWorktreeAsync(repoPath, branchName);
+        var result = await _service.CreateCloneAsync(repoPath, branchName);
 
         // Assert
         Assert.That(result, Is.Not.Null);
@@ -66,7 +66,7 @@ public class GitWorktreeServiceTests
     }
 
     [Test]
-    public async Task CreateWorktree_CloneError_ReturnsNull()
+    public async Task CreateClone_CloneError_ReturnsNull()
     {
         // Arrange
         var repoPath = Path.Combine(_tempDir, "repo");
@@ -82,14 +82,14 @@ public class GitWorktreeServiceTests
             .ReturnsAsync(new CommandResult { Success = false, Error = "fatal: clone failed" });
 
         // Act
-        var result = await _service.CreateWorktreeAsync(repoPath, branchName);
+        var result = await _service.CreateCloneAsync(repoPath, branchName);
 
         // Assert
         Assert.That(result, Is.Null);
     }
 
     [Test]
-    public async Task RemoveWorktree_DirectoryExists_DeletesAndReturnsTrue()
+    public async Task RemoveClone_DirectoryExists_DeletesAndReturnsTrue()
     {
         // Arrange
         var repoPath = Path.Combine(_tempDir, "repo");
@@ -97,7 +97,7 @@ public class GitWorktreeServiceTests
         Directory.CreateDirectory(clonePath);
 
         // Act
-        var result = await _service.RemoveWorktreeAsync(repoPath, clonePath);
+        var result = await _service.RemoveCloneAsync(repoPath, clonePath);
 
         // Assert
         Assert.That(result, Is.True);
@@ -105,21 +105,21 @@ public class GitWorktreeServiceTests
     }
 
     [Test]
-    public async Task RemoveWorktree_DirectoryDoesNotExist_ReturnsFalse()
+    public async Task RemoveClone_DirectoryDoesNotExist_ReturnsFalse()
     {
         // Arrange
         var repoPath = Path.Combine(_tempDir, "repo");
         var clonePath = Path.Combine(repoPath, ".clones", "feature-test");
 
         // Act
-        var result = await _service.RemoveWorktreeAsync(repoPath, clonePath);
+        var result = await _service.RemoveCloneAsync(repoPath, clonePath);
 
         // Assert
         Assert.That(result, Is.False);
     }
 
     [Test]
-    public async Task ListWorktrees_WithClones_ReturnsWorktrees()
+    public async Task ListClones_WithClones_ReturnsClones()
     {
         // Arrange
         var repoPath = Path.Combine(_tempDir, "main");
@@ -152,12 +152,12 @@ public class GitWorktreeServiceTests
         _mockRunner.Setup(r => r.RunAsync("git", "rev-parse HEAD", clone2))
             .ReturnsAsync(new CommandResult { Success = true, Output = "ghi789" });
 
-        // Mock for-each-ref (needed by ListWorktreesAsync -> ListLocalBranchesAsync)
+        // Mock for-each-ref (needed by ListClonesAsync -> ListLocalBranchesAsync)
         _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.Contains("for-each-ref")), repoPath))
             .ReturnsAsync(new CommandResult { Success = true, Output = "" });
 
         // Act
-        var result = await _service.ListWorktreesAsync(repoPath);
+        var result = await _service.ListClonesAsync(repoPath);
 
         // Assert
         Assert.That(result, Is.Not.Null);
@@ -165,7 +165,7 @@ public class GitWorktreeServiceTests
     }
 
     [Test]
-    public async Task ListWorktrees_NoClones_ReturnsOnlyMainRepo()
+    public async Task ListClones_NoClones_ReturnsOnlyMainRepo()
     {
         // Arrange
         var repoPath = Path.Combine(_tempDir, "main");
@@ -177,12 +177,12 @@ public class GitWorktreeServiceTests
         _mockRunner.Setup(r => r.RunAsync("git", "rev-parse HEAD", repoPath))
             .ReturnsAsync(new CommandResult { Success = true, Output = "abc123" });
 
-        // Mock for-each-ref (needed by ListWorktreesAsync -> ListLocalBranchesAsync)
+        // Mock for-each-ref (needed by ListClonesAsync -> ListLocalBranchesAsync)
         _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.Contains("for-each-ref")), repoPath))
             .ReturnsAsync(new CommandResult { Success = true, Output = "" });
 
         // Act
-        var result = await _service.ListWorktreesAsync(repoPath);
+        var result = await _service.ListClonesAsync(repoPath);
 
         // Assert
         Assert.That(result, Is.Not.Null);
@@ -190,7 +190,7 @@ public class GitWorktreeServiceTests
     }
 
     [Test]
-    public async Task PruneWorktrees_RemovesBrokenClones()
+    public async Task PruneClones_RemovesBrokenClones()
     {
         // Arrange
         var repoPath = Path.Combine(_tempDir, "main");
@@ -208,7 +208,7 @@ public class GitWorktreeServiceTests
         Directory.CreateDirectory(Path.Combine(validClone, ".git"));
 
         // Act
-        await _service.PruneWorktreesAsync(repoPath);
+        await _service.PruneClonesAsync(repoPath);
 
         // Assert
         Assert.That(Directory.Exists(brokenClone), Is.False); // Broken clone deleted
@@ -219,7 +219,7 @@ public class GitWorktreeServiceTests
     public void SanitizeBranchName_PreservesSlashes()
     {
         // Act
-        var result = GitWorktreeService.SanitizeBranchName("feature/new-thing");
+        var result = GitCloneService.SanitizeBranchName("feature/new-thing");
 
         // Assert - slashes are preserved for git branch names
         Assert.That(result, Is.EqualTo("feature/new-thing"));
@@ -229,7 +229,7 @@ public class GitWorktreeServiceTests
     public void SanitizeBranchName_RemovesSpecialCharactersButPreservesSlashesAndPlus()
     {
         // Act
-        var result = GitWorktreeService.SanitizeBranchName("feature/test@branch#1");
+        var result = GitCloneService.SanitizeBranchName("feature/test@branch#1");
 
         // Assert - slashes preserved, special chars replaced with dashes
         Assert.That(result, Is.EqualTo("feature/test-branch-1"));
@@ -239,7 +239,7 @@ public class GitWorktreeServiceTests
     public void SanitizeBranchName_NormalizesBackslashesToForwardSlashes()
     {
         // Act
-        var result = GitWorktreeService.SanitizeBranchName("app\\feature\\test");
+        var result = GitCloneService.SanitizeBranchName("app\\feature\\test");
 
         // Assert - backslashes converted to forward slashes
         Assert.That(result, Is.EqualTo("app/feature/test"));
@@ -249,7 +249,7 @@ public class GitWorktreeServiceTests
     public void SanitizeBranchName_TrimsSlashesFromEnds()
     {
         // Act
-        var result = GitWorktreeService.SanitizeBranchName("/feature/test/");
+        var result = GitCloneService.SanitizeBranchName("/feature/test/");
 
         // Assert - leading/trailing slashes removed
         Assert.That(result, Is.EqualTo("feature/test"));
@@ -259,69 +259,69 @@ public class GitWorktreeServiceTests
     public void SanitizeBranchName_WithPlusCharacter_PreservesPlus()
     {
         // Act - Plus character is used to separate branch name from issue ID
-        var result = GitWorktreeService.SanitizeBranchName("feature/improve-tool-output+aLP3LH");
+        var result = GitCloneService.SanitizeBranchName("feature/improve-tool-output+aLP3LH");
 
         // Assert - Plus should be preserved for branch name matching
         Assert.That(result, Is.EqualTo("feature/improve-tool-output+aLP3LH"));
     }
 
-    #region SanitizeBranchNameForWorktree Tests
+    #region SanitizeBranchNameForClone Tests
 
     [Test]
-    public void SanitizeBranchNameForWorktree_ConvertsSlashesToPlus()
+    public void SanitizeBranchNameForClone_ConvertsSlashesToPlus()
     {
         // Act
-        var result = GitWorktreeService.SanitizeBranchNameForWorktree("feature/new-thing");
+        var result = GitCloneService.SanitizeBranchNameForClone("feature/new-thing");
 
         // Assert - slashes converted to plus for flat folder structure
         Assert.That(result, Is.EqualTo("feature+new-thing"));
     }
 
     [Test]
-    public void SanitizeBranchNameForWorktree_PreservesPlus()
+    public void SanitizeBranchNameForClone_PreservesPlus()
     {
         // Act - Full branch name with issue ID
-        var result = GitWorktreeService.SanitizeBranchNameForWorktree("feature/improve-tool-output+aLP3LH");
+        var result = GitCloneService.SanitizeBranchNameForClone("feature/improve-tool-output+aLP3LH");
 
         // Assert - Slashes become plus, existing plus is preserved
         Assert.That(result, Is.EqualTo("feature+improve-tool-output+aLP3LH"));
     }
 
     [Test]
-    public void SanitizeBranchNameForWorktree_RemovesSpecialCharacters()
+    public void SanitizeBranchNameForClone_RemovesSpecialCharacters()
     {
         // Act
-        var result = GitWorktreeService.SanitizeBranchNameForWorktree("feature/test@branch#1");
+        var result = GitCloneService.SanitizeBranchNameForClone("feature/test@branch#1");
 
         // Assert - slashes become plus, special chars replaced with dashes
         Assert.That(result, Is.EqualTo("feature+test-branch-1"));
     }
 
     [Test]
-    public void SanitizeBranchNameForWorktree_NormalizesBackslashesToPlus()
+    public void SanitizeBranchNameForClone_NormalizesBackslashesToPlus()
     {
         // Act
-        var result = GitWorktreeService.SanitizeBranchNameForWorktree("app\\feature\\test");
+        var result = GitCloneService.SanitizeBranchNameForClone("app\\feature\\test");
 
         // Assert - backslashes converted to plus
         Assert.That(result, Is.EqualTo("app+feature+test"));
     }
 
     [Test]
-    public void SanitizeBranchNameForWorktree_RemovesConsecutivePlus()
+    public void SanitizeBranchNameForClone_RemovesConsecutivePlus()
     {
         // Act
-        var result = GitWorktreeService.SanitizeBranchNameForWorktree("feature//test");
+        var result = GitCloneService.SanitizeBranchNameForClone("feature//test");
 
         // Assert - consecutive slashes (now plus) are collapsed
         Assert.That(result, Is.EqualTo("feature+test"));
     }
 
     [Test]
-    public void SanitizeBranchNameForWorktree_TrimsFromEnds()
+    public void SanitizeBranchNameForClone_TrimsFromEnds()
     {
         // Act
-        var result = GitWorktreeService.SanitizeBranchNameForWorktree("/feature/test/");
+        var result = GitCloneService.SanitizeBranchNameForClone("/feature/test/");
 
         // Assert - leading/trailing slashes (now plus) are trimmed
         Assert.That(result, Is.EqualTo("feature+test"));
@@ -330,7 +330,7 @@ public class GitWorktreeServiceTests
     #endregion
 
     [Test]
-    public async Task CreateWorktree_WithNewBranch_CreatesBranchFirst()
+    public async Task CreateClone_WithNewBranch_CreatesBranchFirst()
     {
         // Arrange
         var repoPath = Path.Combine(_tempDir, "repo");
@@ -358,7 +358,7 @@ public class GitWorktreeServiceTests
             .ReturnsAsync(new CommandResult { Success = true });
 
         // Act
-        var result = await _service.CreateWorktreeAsync(repoPath, branchName, createBranch: true);
+        var result = await _service.CreateCloneAsync(repoPath, branchName, createBranch: true);
 
         // Assert
         Assert.That(result, Is.Not.Null);
@@ -424,11 +424,11 @@ public class GitWorktreeServiceTests
         Assert.That(result, Is.False);
     }
 
-    #region GetWorktreePathForBranchAsync Tests
+    #region GetClonePathForBranchAsync Tests
 
     [Test]
     [Description("Clone path lookup should match branch via direct branch name")]
-    public async Task GetWorktreePathForBranchAsync_WithRefsHeadsFormat_MatchesShortBranchName()
+    public async Task GetClonePathForBranchAsync_WithRefsHeadsFormat_MatchesShortBranchName()
     {
         // Arrange
         var repoPath = Path.Combine(_tempDir, "main");
@@ -458,15 +458,15 @@ public class GitWorktreeServiceTests
             .ReturnsAsync(new CommandResult { Success = true, Output = "" });
 
         // Act
-        var result = await _service.GetWorktreePathForBranchAsync(repoPath, shortBranchName);
+        var result = await _service.GetClonePathForBranchAsync(repoPath, shortBranchName);
 
         // Assert
         Assert.That(result, Is.EqualTo(expectedPath));
     }
 
     [Test]
-    [Description("WorktreeExists should find clones by branch name")]
-    public async Task WorktreeExistsAsync_WithClone_ReturnsTrue()
+    [Description("CloneExists should find clones by branch name")]
+    public async Task CloneExistsAsync_WithClone_ReturnsTrue()
     {
         // Arrange
         var repoPath = Path.Combine(_tempDir, "main");
@@ -496,14 +496,14 @@ public class GitWorktreeServiceTests
             .ReturnsAsync(new CommandResult { Success = true, Output = "" });
 
         // Act
-        var result = await _service.WorktreeExistsAsync(repoPath, shortBranchName);
+        var result = await _service.CloneExistsAsync(repoPath, shortBranchName);
 
         // Assert
         Assert.That(result, Is.True);
     }
 
     [Test]
-    public async Task GetWorktreePathForBranchAsync_WithDirectBranchMatch_ReturnsPath()
+    public async Task GetClonePathForBranchAsync_WithDirectBranchMatch_ReturnsPath()
     {
         // Arrange
         var repoPath = Path.Combine(_tempDir, "main");
@@ -532,14 +532,14 @@ public class GitWorktreeServiceTests
             .ReturnsAsync(new CommandResult { Success = true, Output = "" });
 
         // Act
-        var result = await _service.GetWorktreePathForBranchAsync(repoPath, branchName);
+        var result = await _service.GetClonePathForBranchAsync(repoPath, branchName);
 
         // Assert
         Assert.That(result, Is.EqualTo(expectedPath));
     }
 
     [Test]
-    public async Task GetWorktreePathForBranchAsync_WithBranchNameContainingPlus_MatchesByBranch()
+    public async Task GetClonePathForBranchAsync_WithBranchNameContainingPlus_MatchesByBranch()
     {
         // Arrange
         var repoPath = Path.Combine(_tempDir, "main");
@@ -568,14 +568,14 @@ public class GitWorktreeServiceTests
             .ReturnsAsync(new CommandResult { Success = true, Output = "" });
 
         // Act
-        var result = await _service.GetWorktreePathForBranchAsync(repoPath, branchName);
+        var result = await _service.GetClonePathForBranchAsync(repoPath, branchName);
 
         // Assert - Should find by direct branch match
         Assert.That(result, Is.EqualTo(clonePath));
     }
 
     [Test]
-    public async Task GetWorktreePathForBranchAsync_WithFlattenedPath_FallsBackToPathMatch()
+    public async Task GetClonePathForBranchAsync_WithFlattenedPath_FallsBackToPathMatch()
     {
         // Arrange - Test the path-based fallback when branch doesn't match directly
         var repoPath = Path.Combine(_tempDir, "main");
@@ -604,7 +604,7 @@ public class GitWorktreeServiceTests
             .ReturnsAsync(new CommandResult { Success = true, Output = "" });
 
         // Act
-        var result = await _service.GetWorktreePathForBranchAsync(repoPath, branchName);
+        var result = await _service.GetClonePathForBranchAsync(repoPath, branchName);
 
         // Assert - Should find by flattened path match
         Assert.That(result, Is.Not.Null);
@@ -612,7 +612,7 @@ public class GitWorktreeServiceTests
     }
 
     [Test]
-    public async Task GetWorktreePathForBranchAsync_NoMatchingClone_ReturnsNull()
+    public async Task GetClonePathForBranchAsync_NoMatchingClone_ReturnsNull()
     {
         // Arrange
         var repoPath = Path.Combine(_tempDir, "main");
@@ -630,14 +630,14 @@ public class GitWorktreeServiceTests
             .ReturnsAsync(new CommandResult { Success = true, Output = "" });
 
         // Act
-        var result = await _service.GetWorktreePathForBranchAsync(repoPath, branchName);
+        var result = await _service.GetClonePathForBranchAsync(repoPath, branchName);
 
         // Assert
         Assert.That(result, Is.Null);
     }
 
     [Test]
-    public async Task GetWorktreePathForBranchAsync_GitCommandFails_ReturnsNull()
+    public async Task GetClonePathForBranchAsync_GitCommandFails_ReturnsNull()
     {
         // Arrange
         var repoPath = Path.Combine(_tempDir, "main");
@@ -655,7 +655,7 @@ public class GitWorktreeServiceTests
             .ReturnsAsync(new CommandResult { Success = false, Error = "git error" });
 
         // Act
-        var result = await _service.GetWorktreePathForBranchAsync(repoPath, branchName);
+        var result = await _service.GetClonePathForBranchAsync(repoPath, branchName);
 
         // Assert
         Assert.That(result, Is.Null);
@@ -671,7 +671,7 @@ public class GitWorktreeServiceTests
         // Arrange
         var repoPath = Path.Combine(_tempDir, "repo");
 
-        // Mock main repo rev-parse (used by ListWorktreesRawAsync)
+        // Mock main repo rev-parse (used by ListClonesRawAsync)
         _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", repoPath))
             .ReturnsAsync(new CommandResult { Success = true, Output = "main" });
         _mockRunner.Setup(r => r.RunAsync("git", "rev-parse HEAD", repoPath))
@@ -728,7 +728,7 @@ public class GitWorktreeServiceTests
     }
 
     [Test]
-    public async Task ListLocalBranchesAsync_WithClone_SetsHasWorktreeFlag()
+    public async Task ListLocalBranchesAsync_WithClone_SetsHasCloneFlag()
     {
         // Arrange
         var repoPath = Path.Combine(_tempDir, "main");
@@ -765,8 +765,8 @@ public class GitWorktreeServiceTests
         // Assert
         var featureBranch = result.FirstOrDefault(b => b.ShortName == "feature/test");
         Assert.That(featureBranch, Is.Not.Null);
-        Assert.That(featureBranch!.HasWorktree, Is.True);
-        Assert.That(featureBranch.WorktreePath, Is.EqualTo(clonePath));
+        Assert.That(featureBranch!.HasClone, Is.True);
+        Assert.That(featureBranch.ClonePath, Is.EqualTo(clonePath));
     }
 
     #endregion
@@ -1229,19 +1229,19 @@ public class GitWorktreeServiceTests
 
     #endregion
 
-    #region GetWorktreeStatusAsync Tests
+    #region GetCloneStatusAsync Tests
 
     [Test]
-    public async Task GetWorktreeStatusAsync_CleanWorktree_ReturnsZeroCounts()
+    public async Task GetCloneStatusAsync_CleanClone_ReturnsZeroCounts()
     {
         // Arrange
-        var worktreePath = Path.Combine(_tempDir, "worktree");
+        var clonePath = Path.Combine(_tempDir, "clone");
 
-        _mockRunner.Setup(r => r.RunAsync("git", "status --porcelain", worktreePath))
+        _mockRunner.Setup(r => r.RunAsync("git", "status --porcelain", clonePath))
             .ReturnsAsync(new CommandResult { Success = true, Output = "" });
 
         // Act
-        var result = await _service.GetWorktreeStatusAsync(worktreePath);
+        var result = await _service.GetCloneStatusAsync(clonePath);
 
         // Assert
         Assert.That(result.ModifiedCount, Is.EqualTo(0));
@@ -1250,12 +1250,12 @@ public class GitWorktreeServiceTests
     }
 
     [Test]
-    public async Task GetWorktreeStatusAsync_ModifiedFiles_ReturnsCorrectCount()
+    public async Task GetCloneStatusAsync_ModifiedFiles_ReturnsCorrectCount()
     {
         // Arrange
-        var worktreePath = Path.Combine(_tempDir, "worktree");
+        var clonePath = Path.Combine(_tempDir, "clone");
 
-        _mockRunner.Setup(r => r.RunAsync("git", "status --porcelain", worktreePath))
+        _mockRunner.Setup(r => r.RunAsync("git", "status --porcelain", clonePath))
             .ReturnsAsync(new CommandResult
             {
                 Success = true,
@@ -1263,19 +1263,19 @@ public class GitWorktreeServiceTests
             });
 
         // Act
-        var result = await _service.GetWorktreeStatusAsync(worktreePath);
+        var result = await _service.GetCloneStatusAsync(clonePath);
 
         // Assert
         Assert.That(result.ModifiedCount, Is.EqualTo(3));
     }
 
     [Test]
-    public async Task GetWorktreeStatusAsync_MixedStatus_ReturnsCorrectCounts()
+    public async Task GetCloneStatusAsync_MixedStatus_ReturnsCorrectCounts()
     {
         // Arrange
-        var worktreePath = Path.Combine(_tempDir, "worktree");
+        var clonePath = Path.Combine(_tempDir, "clone");
 
-        _mockRunner.Setup(r => r.RunAsync("git", "status --porcelain", worktreePath))
+        _mockRunner.Setup(r => r.RunAsync("git", "status --porcelain", clonePath))
             .ReturnsAsync(new CommandResult
             {
                 Success = true,
@@ -1283,7 +1283,7 @@ public class GitWorktreeServiceTests
             });
 
         // Act
-        var result = await _service.GetWorktreeStatusAsync(worktreePath);
+        var result = await _service.GetCloneStatusAsync(clonePath);
 
         // Assert
         Assert.That(result.StagedCount, Is.EqualTo(3)); // M, MM, A in first position
@@ -1292,16 +1292,16 @@ public class GitWorktreeServiceTests
     }
 
     [Test]
-    public async Task GetWorktreeStatusAsync_GitError_ReturnsEmptyStatus()
+    public async Task GetCloneStatusAsync_GitError_ReturnsEmptyStatus()
     {
         // Arrange
-        var worktreePath = Path.Combine(_tempDir, "worktree");
+        var clonePath = Path.Combine(_tempDir, "clone");
 
-        _mockRunner.Setup(r => r.RunAsync("git", "status --porcelain", worktreePath))
+        _mockRunner.Setup(r => r.RunAsync("git", "status --porcelain", clonePath))
             .ReturnsAsync(new CommandResult { Success = false, Error = "not a git repository" });
 
         // Act
-        var result = await _service.GetWorktreeStatusAsync(worktreePath);
+        var result = await _service.GetCloneStatusAsync(clonePath);
 
         // Assert
         Assert.That(result.ModifiedCount, Is.EqualTo(0));
@@ -1311,10 +1311,10 @@ public class GitWorktreeServiceTests
 
     #endregion
 
-    #region FindLostWorktreeFoldersAsync Tests
+    #region FindLostCloneFoldersAsync Tests
 
     [Test]
-    public async Task FindLostWorktreeFoldersAsync_NoLostFolders_ReturnsEmptyList()
+    public async Task FindLostCloneFoldersAsync_NoLostFolders_ReturnsEmptyList()
     {
         // Arrange
         var repoPath = Path.Combine(_tempDir, "main");
@@ -1329,14 +1329,14 @@ public class GitWorktreeServiceTests
             .ReturnsAsync(new CommandResult { Success = true, Output = "" });
 
         // Act
-        var result = await _service.FindLostWorktreeFoldersAsync(repoPath);
+        var result = await _service.FindLostCloneFoldersAsync(repoPath);
 
         // Assert
         Assert.That(result, Is.Empty);
     }
 
     [Test]
-    public async Task FindLostWorktreeFoldersAsync_WithLostFolders_ReturnsLostPaths()
+    public async Task FindLostCloneFoldersAsync_WithLostFolders_ReturnsLostPaths()
     {
         // Arrange
         var repoPath = Path.Combine(_tempDir, "main");
@@ -1356,7 +1356,7 @@ public class GitWorktreeServiceTests
             .ReturnsAsync(new CommandResult { Success = true, Output = "" });
 
         // Act
-        var result = await _service.FindLostWorktreeFoldersAsync(repoPath);
+        var result = await _service.FindLostCloneFoldersAsync(repoPath);
 
         // Assert
         Assert.That(result, Has.Count.EqualTo(1));
@@ -1364,7 +1364,7 @@ public class GitWorktreeServiceTests
     }
 
     [Test]
-    public async Task FindLostWorktreeFoldersAsync_IgnoresNonGitFolders_ReturnsOnlyGitFolders()
+    public async Task FindLostCloneFoldersAsync_IgnoresNonGitFolders_ReturnsOnlyGitFolders()
     {
         // Arrange
         var repoPath = Path.Combine(_tempDir, "main");
@@ -1388,7 +1388,7 @@ public class GitWorktreeServiceTests
             .ReturnsAsync(new CommandResult { Success = true, Output = "" });
 
         // Act
-        var result = await _service.FindLostWorktreeFoldersAsync(repoPath);
+        var result = await _service.FindLostCloneFoldersAsync(repoPath);
 
         // Assert
         Assert.That(result, Has.Count.EqualTo(1));
@@ -1396,13 +1396,13 @@ public class GitWorktreeServiceTests
     }
 
     [Test]
-    public async Task FindLostWorktreeFoldersAsync_ScansLegacyWorktreesDir()
+    public async Task FindLostCloneFoldersAsync_ScansLegacyWorktreesDir()
     {
         // Arrange
         var repoPath = Path.Combine(_tempDir, "main");
         Directory.CreateDirectory(repoPath);
 
-        // Create legacy .worktrees directory with a folder
+        // Create legacy .worktrees directory with a folder (backward compatibility)
         var legacyDir = Path.Combine(_tempDir, ".worktrees", "legacy-clone");
         Directory.CreateDirectory(legacyDir);
         File.WriteAllText(Path.Combine(legacyDir, ".git"), "gitdir: /some/path");
@@ -1416,19 +1416,19 @@ public class GitWorktreeServiceTests
             .ReturnsAsync(new CommandResult { Success = true, Output = "" });
 
         // Act
-        var result = await _service.FindLostWorktreeFoldersAsync(repoPath);
+        var result = await _service.FindLostCloneFoldersAsync(repoPath);
 
-        // Assert - Should find the legacy worktree folder
+        // Assert - Should find the folder in legacy .worktrees directory
         Assert.That(result, Has.Count.EqualTo(1));
         Assert.That(result[0].Path, Is.EqualTo(Path.GetFullPath(legacyDir)));
     }
 
     #endregion
 
-    #region DeleteWorktreeFolderAsync Tests
+    #region DeleteCloneFolderAsync Tests
 
     [Test]
-    public async Task DeleteWorktreeFolderAsync_FolderExists_DeletesFolder()
+    public async Task DeleteCloneFolderAsync_FolderExists_DeletesFolder()
     {
         // Arrange
         var folderPath = Path.Combine(_tempDir, "folder-to-delete");
@@ -1436,7 +1436,7 @@ public class GitWorktreeServiceTests
         File.WriteAllText(Path.Combine(folderPath, "file.txt"), "content");
 
         // Act
-        var result = await _service.DeleteWorktreeFolderAsync(folderPath);
+        var result = await _service.DeleteCloneFolderAsync(folderPath);
 
         // Assert
         Assert.That(result, Is.True);
@@ -1444,13 +1444,13 @@ public class GitWorktreeServiceTests
     }
 
     [Test]
-    public async Task DeleteWorktreeFolderAsync_FolderDoesNotExist_ReturnsFalse()
+    public async Task DeleteCloneFolderAsync_FolderDoesNotExist_ReturnsFalse()
     {
         // Arrange
         var folderPath = Path.Combine(_tempDir, "nonexistent-folder");
 
         // Act
-        var result = await _service.DeleteWorktreeFolderAsync(folderPath);
+        var result = await _service.DeleteCloneFolderAsync(folderPath);
 
         // Assert
         Assert.That(result, Is.False);
@@ -1464,13 +1464,13 @@ public class GitWorktreeServiceTests
     public async Task GetCurrentBranchAsync_Success_ReturnsBranchName()
     {
         // Arrange
-        var worktreePath = Path.Combine(_tempDir, "worktree");
+        var clonePath = Path.Combine(_tempDir, "clone");
 
-        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", worktreePath))
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", clonePath))
             .ReturnsAsync(new CommandResult { Success = true, Output = "feature/test-branch" });
 
         // Act
-        var result = await _service.GetCurrentBranchAsync(worktreePath);
+        var result = await _service.GetCurrentBranchAsync(clonePath);
 
         // Assert
         Assert.That(result, Is.EqualTo("feature/test-branch"));
@@ -1480,13 +1480,13 @@ public class GitWorktreeServiceTests
     public async Task GetCurrentBranchAsync_DetachedHead_ReturnsHEAD()
     {
         // Arrange
-        var worktreePath = Path.Combine(_tempDir, "worktree");
+        var clonePath = Path.Combine(_tempDir, "clone");
 
-        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", worktreePath))
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", clonePath))
             .ReturnsAsync(new CommandResult { Success = true, Output = "HEAD" });
 
         // Act
-        var result = await _service.GetCurrentBranchAsync(worktreePath);
+        var result = await _service.GetCurrentBranchAsync(clonePath);
 
         // Assert
         Assert.That(result, Is.EqualTo("HEAD"));
@@ -1496,13 +1496,13 @@ public class GitWorktreeServiceTests
     public async Task GetCurrentBranchAsync_GitError_ReturnsNull()
     {
         // Arrange
-        var worktreePath = Path.Combine(_tempDir, "worktree");
+        var clonePath = Path.Combine(_tempDir, "clone");
 
-        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", worktreePath))
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", clonePath))
             .ReturnsAsync(new CommandResult { Success = false, Error = "not a git repository" });
 
         // Act
-        var result = await _service.GetCurrentBranchAsync(worktreePath);
+        var result = await _service.GetCurrentBranchAsync(clonePath);
 
         // Assert
         Assert.That(result, Is.Null);
@@ -1516,14 +1516,14 @@ public class GitWorktreeServiceTests
     public async Task CheckoutBranchAsync_Success_ReturnsTrue()
     {
         // Arrange
-        var worktreePath = Path.Combine(_tempDir, "worktree");
+        var clonePath = Path.Combine(_tempDir, "clone");
         var branchName = "feature/test";
 
-        _mockRunner.Setup(r => r.RunAsync("git", $"checkout \"{branchName}\"", worktreePath))
+        _mockRunner.Setup(r => r.RunAsync("git", $"checkout \"{branchName}\"", clonePath))
             .ReturnsAsync(new CommandResult { Success = true });
 
         // Act
-        var result = await _service.CheckoutBranchAsync(worktreePath, branchName);
+        var result = await _service.CheckoutBranchAsync(clonePath, branchName);
 
         // Assert
         Assert.That(result, Is.True);
@@ -1533,14 +1533,14 @@ public class GitWorktreeServiceTests
     public async Task CheckoutBranchAsync_BranchDoesNotExist_ReturnsFalse()
     {
         // Arrange
-        var worktreePath = Path.Combine(_tempDir, "worktree");
+        var clonePath = Path.Combine(_tempDir, "clone");
         var branchName = "nonexistent-branch";
 
-        _mockRunner.Setup(r => r.RunAsync("git", $"checkout \"{branchName}\"", worktreePath))
+        _mockRunner.Setup(r => r.RunAsync("git", $"checkout \"{branchName}\"", clonePath))
             .ReturnsAsync(new CommandResult { Success = false, Error = "error: pathspec 'nonexistent-branch' did not match any file(s) known to git" });
 
         // Act
-        var result = await _service.CheckoutBranchAsync(worktreePath, branchName);
+        var result = await _service.CheckoutBranchAsync(clonePath, branchName);
 
         // Assert
         Assert.That(result, Is.False);
@@ -1594,10 +1594,10 @@ public class GitWorktreeServiceTests
 
     #endregion
 
-    #region CreateWorktreeFromRemoteBranchAsync Tests
+    #region CreateCloneFromRemoteBranchAsync Tests
 
     [Test]
-    public async Task CreateWorktreeFromRemoteBranchAsync_Success_CreatesCloneWithoutCheckingOutInMain()
+    public async Task CreateCloneFromRemoteBranchAsync_Success_CreatesCloneWithoutCheckingOutInMain()
     {
         // Arrange
         var repoPath = Path.Combine(_tempDir, "main");
@@ -1629,7 +1629,7 @@ public class GitWorktreeServiceTests
             .ReturnsAsync(new CommandResult { Success = true });
 
         // Act
-        var result = await _service.CreateWorktreeFromRemoteBranchAsync(repoPath, remoteBranch);
+        var result = await _service.CreateCloneFromRemoteBranchAsync(repoPath, remoteBranch);
 
         // Assert
         Assert.That(result, Is.Not.Null);
@@ -1638,7 +1638,7 @@ public class GitWorktreeServiceTests
     }
 
     [Test]
-    public async Task CreateWorktreeFromRemoteBranchAsync_BranchAlreadyExists_UsesExistingBranch()
+    public async Task CreateCloneFromRemoteBranchAsync_BranchAlreadyExists_UsesExistingBranch()
     {
         // Arrange
         var repoPath = Path.Combine(_tempDir, "main");
@@ -1670,7 +1670,7 @@ public class GitWorktreeServiceTests
             .ReturnsAsync(new CommandResult { Success = true });
 
         // Act
-        var result = await _service.CreateWorktreeFromRemoteBranchAsync(repoPath, remoteBranch);
+        var result = await _service.CreateCloneFromRemoteBranchAsync(repoPath, remoteBranch);
 
         // Assert
         Assert.That(result, Is.Not.Null);
@@ -1684,10 +1684,10 @@ public class GitWorktreeServiceTests
     public async Task GetChangedFilesAsync_WithChanges_ReturnsFileList()
     {
         // Arrange
-        var worktreePath = Path.Combine(_tempDir, "worktree");
-        Directory.CreateDirectory(worktreePath);
+        var clonePath = Path.Combine(_tempDir, "clone");
+        Directory.CreateDirectory(clonePath);
 
-        _mockRunner.Setup(r => r.RunAsync("git", "diff --numstat main...HEAD", worktreePath))
+        _mockRunner.Setup(r => r.RunAsync("git", "diff --numstat main...HEAD", clonePath))
             .ReturnsAsync(new CommandResult
             {
                 Success = true,
@@ -1695,7 +1695,7 @@ public class GitWorktreeServiceTests
             });
 
         // Act
-        var result = await _service.GetChangedFilesAsync(worktreePath, "main");
+        var result = await _service.GetChangedFilesAsync(clonePath, "main");
 
         // Assert
         Assert.That(result, Has.Count.EqualTo(3));
@@ -1708,14 +1708,14 @@ public class GitWorktreeServiceTests
     public async Task GetChangedFilesAsync_NoChanges_ReturnsEmptyList()
     {
         // Arrange
-        var worktreePath = Path.Combine(_tempDir, "worktree");
-        Directory.CreateDirectory(worktreePath);
+        var clonePath = Path.Combine(_tempDir, "clone");
+        Directory.CreateDirectory(clonePath);
 
-        _mockRunner.Setup(r => r.RunAsync("git", "diff --numstat main...HEAD", worktreePath))
+        _mockRunner.Setup(r => r.RunAsync("git", "diff --numstat main...HEAD", clonePath))
             .ReturnsAsync(new CommandResult { Success = true, Output = "" });
 
         // Act
-        var result = await _service.GetChangedFilesAsync(worktreePath, "main");
+        var result = await _service.GetChangedFilesAsync(clonePath, "main");
 
         // Assert
         Assert.That(result, Is.Empty);
@@ -1725,14 +1725,14 @@ public class GitWorktreeServiceTests
     public async Task GetChangedFilesAsync_ParsesAdditions_Correctly()
     {
         // Arrange
-        var worktreePath = Path.Combine(_tempDir, "worktree");
-        Directory.CreateDirectory(worktreePath);
+        var clonePath = Path.Combine(_tempDir, "clone");
+        Directory.CreateDirectory(clonePath);
 
-        _mockRunner.Setup(r => r.RunAsync("git", "diff --numstat main...HEAD", worktreePath))
+        _mockRunner.Setup(r => r.RunAsync("git", "diff --numstat main...HEAD", clonePath))
             .ReturnsAsync(new CommandResult { Success = true, Output = "100\t0\tnew-file.cs" });
 
         // Act
-        var result = await _service.GetChangedFilesAsync(worktreePath, "main");
+        var result = await _service.GetChangedFilesAsync(clonePath, "main");
 
         // Assert
         Assert.That(result, Has.Count.EqualTo(1));
@@ -1745,14 +1745,14 @@ public class GitWorktreeServiceTests
     public async Task GetChangedFilesAsync_ParsesDeletions_Correctly()
     {
         // Arrange
-        var worktreePath = Path.Combine(_tempDir, "worktree");
-        Directory.CreateDirectory(worktreePath);
+        var clonePath = Path.Combine(_tempDir, "clone");
+        Directory.CreateDirectory(clonePath);
 
-        _mockRunner.Setup(r => r.RunAsync("git", "diff --numstat main...HEAD", worktreePath))
+        _mockRunner.Setup(r => r.RunAsync("git", "diff --numstat main...HEAD", clonePath))
             .ReturnsAsync(new CommandResult { Success = true, Output = "0\t50\tdeleted-file.cs" });
 
         // Act
-        var result = await _service.GetChangedFilesAsync(worktreePath, "main");
+        var result = await _service.GetChangedFilesAsync(clonePath, "main");
 
         // Assert
         Assert.That(result, Has.Count.EqualTo(1));
@@ -1765,14 +1765,14 @@ public class GitWorktreeServiceTests
     public async Task GetChangedFilesAsync_DetectsAddedFiles()
     {
         // Arrange
-        var worktreePath = Path.Combine(_tempDir, "worktree");
-        Directory.CreateDirectory(worktreePath);
+        var clonePath = Path.Combine(_tempDir, "clone");
+        Directory.CreateDirectory(clonePath);
 
-        _mockRunner.Setup(r => r.RunAsync("git", "diff --numstat main...HEAD", worktreePath))
+        _mockRunner.Setup(r => r.RunAsync("git", "diff --numstat main...HEAD", clonePath))
             .ReturnsAsync(new CommandResult { Success = true, Output = "25\t0\tnew-feature.cs" });
 
         // Act
-        var result = await _service.GetChangedFilesAsync(worktreePath, "main");
+        var result = await _service.GetChangedFilesAsync(clonePath, "main");
 
         // Assert
         Assert.That(result[0].Status, Is.EqualTo(FileChangeStatus.Added));
@@ -1782,14 +1782,14 @@ public class GitWorktreeServiceTests
     public async Task GetChangedFilesAsync_DetectsDeletedFiles()
     {
         // Arrange
-        var worktreePath = Path.Combine(_tempDir, "worktree");
-        Directory.CreateDirectory(worktreePath);
+        var clonePath = Path.Combine(_tempDir, "clone");
+        Directory.CreateDirectory(clonePath);
 
-        _mockRunner.Setup(r => r.RunAsync("git", "diff --numstat main...HEAD", worktreePath))
+        _mockRunner.Setup(r => r.RunAsync("git", "diff --numstat main...HEAD", clonePath))
             .ReturnsAsync(new CommandResult { Success = true, Output = "0\t30\told-file.cs" });
 
         // Act
-        var result = await _service.GetChangedFilesAsync(worktreePath, "main");
+        var result = await _service.GetChangedFilesAsync(clonePath, "main");
 
         // Assert
         Assert.That(result[0].Status, Is.EqualTo(FileChangeStatus.Deleted));
@@ -1799,14 +1799,14 @@ public class GitWorktreeServiceTests
     public async Task GetChangedFilesAsync_DetectsModifiedFiles()
     {
         // Arrange
-        var worktreePath = Path.Combine(_tempDir, "worktree");
-        Directory.CreateDirectory(worktreePath);
+        var clonePath = Path.Combine(_tempDir, "clone");
+        Directory.CreateDirectory(clonePath);
 
-        _mockRunner.Setup(r => r.RunAsync("git", "diff --numstat main...HEAD", worktreePath))
+        _mockRunner.Setup(r => r.RunAsync("git", "diff --numstat main...HEAD", clonePath))
             .ReturnsAsync(new CommandResult { Success = true, Output = "10\t5\tmodified-file.cs" });
 
         // Act
-        var result = await _service.GetChangedFilesAsync(worktreePath, "main");
+        var result = await _service.GetChangedFilesAsync(clonePath, "main");
 
         // Assert
         Assert.That(result[0].Status, Is.EqualTo(FileChangeStatus.Modified));
@@ -1816,14 +1816,14 @@ public class GitWorktreeServiceTests
     public async Task GetChangedFilesAsync_DetectsRenamedFiles()
     {
         // Arrange
-        var worktreePath = Path.Combine(_tempDir, "worktree");
-        Directory.CreateDirectory(worktreePath);
+        var clonePath = Path.Combine(_tempDir, "clone");
+        Directory.CreateDirectory(clonePath);
 
-        _mockRunner.Setup(r => r.RunAsync("git", "diff --numstat main...HEAD", worktreePath))
+        _mockRunner.Setup(r => r.RunAsync("git", "diff --numstat main...HEAD", clonePath))
             .ReturnsAsync(new CommandResult { Success = true, Output = "0\t0\told-name.cs => new-name.cs" });
 
         // Act
-        var result = await _service.GetChangedFilesAsync(worktreePath, "main");
+        var result = await _service.GetChangedFilesAsync(clonePath, "main");
 
         // Assert
         Assert.That(result[0].Status, Is.EqualTo(FileChangeStatus.Renamed));
@@ -1834,14 +1834,14 @@ public class GitWorktreeServiceTests
     public async Task GetChangedFilesAsync_GitError_ReturnsEmptyList()
     {
         // Arrange
-        var worktreePath = Path.Combine(_tempDir, "worktree");
-        Directory.CreateDirectory(worktreePath);
+        var clonePath = Path.Combine(_tempDir, "clone");
+        Directory.CreateDirectory(clonePath);
 
-        _mockRunner.Setup(r => r.RunAsync("git", "diff --numstat main...HEAD", worktreePath))
+        _mockRunner.Setup(r => r.RunAsync("git", "diff --numstat main...HEAD", clonePath))
             .ReturnsAsync(new CommandResult { Success = false, Error = "fatal: not a git repository" });
 
         // Act
-        var result = await _service.GetChangedFilesAsync(worktreePath, "main");
+        var result = await _service.GetChangedFilesAsync(clonePath, "main");
 
         // Assert
         Assert.That(result, Is.Empty);
@@ -1851,14 +1851,14 @@ public class GitWorktreeServiceTests
     public async Task GetChangedFilesAsync_BinaryFiles_HandlesCorrectly()
     {
         // Arrange
-        var worktreePath = Path.Combine(_tempDir, "worktree");
-        Directory.CreateDirectory(worktreePath);
+        var clonePath = Path.Combine(_tempDir, "clone");
+        Directory.CreateDirectory(clonePath);
 
-        _mockRunner.Setup(r => r.RunAsync("git", "diff --numstat main...HEAD", worktreePath))
+        _mockRunner.Setup(r => r.RunAsync("git", "diff --numstat main...HEAD", clonePath))
             .ReturnsAsync(new CommandResult { Success = true, Output = "-\t-\timage.png" });
 
         // Act
-        var result = await _service.GetChangedFilesAsync(worktreePath, "main");
+        var result = await _service.GetChangedFilesAsync(clonePath, "main");
 
         // Assert
         Assert.That(result, Has.Count.EqualTo(1));
@@ -1872,14 +1872,14 @@ public class GitWorktreeServiceTests
     public async Task GetChangedFilesAsync_PathsWithSpaces_HandlesCorrectly()
     {
         // Arrange
-        var worktreePath = Path.Combine(_tempDir, "worktree");
-        Directory.CreateDirectory(worktreePath);
+        var clonePath = Path.Combine(_tempDir, "clone");
+        Directory.CreateDirectory(clonePath);
 
-        _mockRunner.Setup(r => r.RunAsync("git", "diff --numstat main...HEAD", worktreePath))
+        _mockRunner.Setup(r => r.RunAsync("git", "diff --numstat main...HEAD", clonePath))
             .ReturnsAsync(new CommandResult { Success = true, Output = "5\t3\tsrc/My Components/Button Component.cs" });
 
         // Act
-        var result = await _service.GetChangedFilesAsync(worktreePath, "main");
+        var result = await _service.GetChangedFilesAsync(clonePath, "main");
 
         // Assert
         Assert.That(result, Has.Count.EqualTo(1));
@@ -1888,11 +1888,11 @@ public class GitWorktreeServiceTests
 
     #endregion
 
-    #region ListWorktreesAsync - ExpectedBranch Detection Tests
+    #region ListClonesAsync - ExpectedBranch Detection Tests
 
     [Test]
-    [Description("Regression test for issue 1JudQJ: Worktree folder names use flattened format (feature+test) but branch matching was using slash-preserving format")]
-    public async Task ListWorktreesAsync_WithSlashesInBranchName_DetectsBranchMismatchCorrectly()
+    [Description("Regression test for issue 1JudQJ: Clone folder names use flattened format (feature+test) but branch matching was using slash-preserving format")]
+    public async Task ListClonesAsync_WithSlashesInBranchName_DetectsBranchMismatchCorrectly()
     {
         // Arrange
         var repoPath = Path.Combine(_tempDir, "main");
@@ -1927,20 +1927,20 @@ public class GitWorktreeServiceTests
             });
 
         // Act
-        var result = await _service.ListWorktreesAsync(repoPath);
+        var result = await _service.ListClonesAsync(repoPath);
 
         // Assert
-        var worktree = result.FirstOrDefault(w => w.Path == Path.GetFullPath(clonePath));
-        Assert.That(worktree, Is.Not.Null, "Worktree should be found");
-        Assert.That(worktree!.ExpectedBranch, Is.EqualTo(actualBranchName),
+        var clone = result.FirstOrDefault(w => w.Path == Path.GetFullPath(clonePath));
+        Assert.That(clone, Is.Not.Null, "Clone should be found");
+        Assert.That(clone!.ExpectedBranch, Is.EqualTo(actualBranchName),
             "ExpectedBranch should be set to the branch matching the flattened folder name");
-        Assert.That(worktree.IsOnCorrectBranch, Is.False,
-            "IsOnCorrectBranch should be false since worktree is on 'wrong-branch' but should be on '{0}'", actualBranchName);
+        Assert.That(clone.IsOnCorrectBranch, Is.False,
+            "IsOnCorrectBranch should be false since clone is on 'wrong-branch' but should be on '{0}'", actualBranchName);
     }
 
     [Test]
-    [Description("Test that worktree on correct branch is detected when branch name has slashes")]
-    public async Task ListWorktreesAsync_WorktreeOnCorrectBranchWithSlashes_NoExpectedBranchSet()
+    [Description("Test that clone on correct branch is detected when branch name has slashes")]
+    public async Task ListClonesAsync_CloneOnCorrectBranchWithSlashes_NoExpectedBranchSet()
     {
         // Arrange
         var repoPath = Path.Combine(_tempDir, "main");
@@ -1975,20 +1975,20 @@ public class GitWorktreeServiceTests
             });
 
         // Act
-        var result = await _service.ListWorktreesAsync(repoPath);
+        var result = await _service.ListClonesAsync(repoPath);
 
         // Assert
-        var worktree = result.FirstOrDefault(w => w.Path == Path.GetFullPath(clonePath));
-        Assert.That(worktree, Is.Not.Null, "Worktree should be found");
-        Assert.That(worktree!.ExpectedBranch, Is.Null,
-            "ExpectedBranch should be null when worktree is on the correct branch");
-        Assert.That(worktree.IsOnCorrectBranch, Is.True,
-            "IsOnCorrectBranch should be true since worktree is on the expected branch");
+        var clone = result.FirstOrDefault(w => w.Path == Path.GetFullPath(clonePath));
+        Assert.That(clone, Is.Not.Null, "Clone should be found");
+        Assert.That(clone!.ExpectedBranch, Is.Null,
+            "ExpectedBranch should be null when clone is on the correct branch");
+        Assert.That(clone.IsOnCorrectBranch, Is.True,
+            "IsOnCorrectBranch should be true since clone is on the expected branch");
     }
 
     [Test]
-    [Description("Test that worktree folder name with multiple slashes is matched correctly")]
-    public async Task ListWorktreesAsync_WithMultipleSlashesInBranchName_MatchesCorrectly()
+    [Description("Test that clone folder name with multiple slashes is matched correctly")]
+    public async Task ListClonesAsync_WithMultipleSlashesInBranchName_MatchesCorrectly()
     {
         // Arrange
         var repoPath = Path.Combine(_tempDir, "main");
@@ -2023,15 +2023,15 @@ public class GitWorktreeServiceTests
             });
 
         // Act
-        var result = await _service.ListWorktreesAsync(repoPath);
+        var result = await _service.ListClonesAsync(repoPath);
 
         // Assert
-        var worktree = result.FirstOrDefault(w => w.Path == Path.GetFullPath(clonePath));
-        Assert.That(worktree, Is.Not.Null, "Worktree should be found");
-        Assert.That(worktree!.ExpectedBranch, Is.EqualTo(branchName),
+        var clone = result.FirstOrDefault(w => w.Path == Path.GetFullPath(clonePath));
+        Assert.That(clone, Is.Not.Null, "Clone should be found");
+        Assert.That(clone!.ExpectedBranch, Is.EqualTo(branchName),
             "ExpectedBranch should match the branch with slashes that corresponds to the flattened folder name");
-        Assert.That(worktree.IsOnCorrectBranch, Is.False,
-            "IsOnCorrectBranch should be false since worktree is on 'other' not '{0}'", branchName);
+        Assert.That(clone.IsOnCorrectBranch, Is.False,
+            "IsOnCorrectBranch should be false since clone is on 'other' not '{0}'", branchName);
     }
 
     #endregion

@@ -235,29 +235,29 @@ public class AgentControlPanelTests
 public class AgentControlPanelEntityIdTests
 {
     [Test]
-    public void WorktreeEntityId_GeneratesCorrectFormat()
+    public void CloneEntityId_GeneratesCorrectFormat()
     {
         // Arrange
         var branchName = "feature/my-feature";
 
         // Act
-        var entityId = GenerateWorktreeEntityId(branchName);
+        var entityId = GenerateCloneEntityId(branchName);
 
         // Assert
-        Assert.That(entityId, Is.EqualTo("worktree:feature/my-feature"));
+        Assert.That(entityId, Is.EqualTo("clone:feature/my-feature"));
     }
 
     [Test]
-    public void WorktreeEntityId_HandlesSpecialCharacters()
+    public void CloneEntityId_HandlesSpecialCharacters()
     {
         // Arrange
-        var branchName = "git/feature/improve-worktree+QHcQqi";
+        var branchName = "git/feature/improve-clone+QHcQqi";
 
         // Act
-        var entityId = GenerateWorktreeEntityId(branchName);
+        var entityId = GenerateCloneEntityId(branchName);
 
         // Assert
-        Assert.That(entityId, Is.EqualTo("worktree:git/feature/improve-worktree+QHcQqi"));
+        Assert.That(entityId, Is.EqualTo("clone:git/feature/improve-clone+QHcQqi"));
     }
 
     [Test]
@@ -273,5 +273,5 @@ public class AgentControlPanelEntityIdTests
         Assert.That(entityId, Is.EqualTo("ABC123"));
     }
 
-    private static string GenerateWorktreeEntityId(string branchName) => $"worktree:{branchName}";
+    private static string GenerateCloneEntityId(string branchName) => $"clone:{branchName}";
 }

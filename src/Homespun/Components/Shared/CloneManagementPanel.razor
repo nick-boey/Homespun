@@ -8,7 +8,7 @@
 @using Homespun.Features.PullRequests.Data
 @using Homespun.Features.PullRequests.Data.Entities
 
-@inject IGitWorktreeService GitWorktreeService
+@inject IGitCloneService GitCloneService
 @inject IClaudeSessionStore SessionStore
 @inject IClaudeSessionService SessionService
 @inject IAgentStartupTracker StartupTracker
@@ -18,11 +18,11 @@
 @inject PullRequestDataService PullRequestDataService
 @inject PullRequestWorkflowService PullRequestWorkflowService
 @inject NavigationManager NavigationManager
-@inject ILogger<WorktreeManagementPanel> Logger
+@inject ILogger<CloneManagementPanel> Logger
 
-<div class="worktree-management-panel">
+<div class="clone-management-panel">
     <div class="d-flex justify-content-between align-items-center mb-3">
-        <h4 class="mb-0">Worktrees &amp; Branches</h4>
+        <h4 class="mb-0">Branches</h4>
         <div class="btn-group">
             <button class="btn btn-outline-secondary btn-sm" @onclick="RefreshDataAsync" disabled="@_isLoading">
                 @if (_isLoading)
@@ -38,7 +38,7 @@
                 }
                 <i class="bi bi-cloud-download"></i> Fetch
             </button>
-            <button class="btn btn-outline-secondary btn-sm" @onclick="PruneWorktreesAsync" disabled="@_isPruning" title="Clean up stale worktree references">
+            <button class="btn btn-outline-secondary btn-sm" @onclick="PruneClonesAsync" disabled="@_isPruning" title="Clean up stale clone references">
                 @if (_isPruning)
                 {
                     <span class="spinner-border spinner-border-sm me-1" role="status"></span>
@@ -64,14 +64,14 @@
         </div>
     }
 
-    @* Active Worktrees Section *@
+    @* Active Branches Section *@
     <div class="section-header d-flex justify-content-between align-items-center">
-        <span>Active Worktrees</span>
-        <span class="badge bg-secondary">@_worktrees.Count(w => !w.IsBare)</span>
+        <span>Active Branches</span>
+        <span class="badge bg-secondary">@_clones.Count(w => !w.IsBare)</span>
     </div>
-    @if (_worktrees.Count(w => !w.IsBare) == 0)
+    @if (_clones.Count(w => !w.IsBare) == 0)
     {
-        <div class="text-muted p-3">No active worktrees</div>
+        <div class="text-muted p-3">No active branches</div>
     }
     else
     {
@@ -86,14 +86,14 @@
                 </tr>
             </thead>
             <tbody>
-                @foreach (var worktree in _worktrees.Where(w => !w.IsBare))
+                @foreach (var clone in _clones.Where(w => !w.IsBare))
                 {
-                    var branchName = GetShortBranchName(worktree.Branch);
+                    var branchName = GetShortBranchName(clone.Branch);
                     var branchInfo = _branches.FirstOrDefault(b => b.ShortName == branchName);
-                    var session = GetSessionForWorktree(worktree);
+                    var session = GetSessionForClone(clone);
                     var prInfo = GetPullRequestForBranch(branchName);
-                    var status = GetWorktreeStatus(worktree.Path);
-                    var deleteKey = $"worktree:{branchName}";
+                    var status = GetCloneStatus(clone.Path);
+                    var deleteKey = $"clone:{branchName}";
 
                     <tr class="@(IsDeleteTarget(deleteKey) ? "table-danger" : "")">
                         <td>
@@ -115,9 +115,9 @@
                                         PR #@prInfo.GitHubPRNumber
                                     </a>
                                 }
-                                @if (!worktree.IsOnCorrectBranch)
+                                @if (!clone.IsOnCorrectBranch)
                                 {
-                                    <span class="badge bg-danger" title="Expected branch: @worktree.ExpectedBranch">
+                                    <span class="badge bg-danger" title="Expected branch: @clone.ExpectedBranch">
                                         Wrong Branch
                                     </span>
                                 }
@@ -138,7 +138,7 @@
                                 }
                             </span>
                         </td>
-                        <td><code class="worktree-path">@worktree.Path</code></td>
+                        <td><code class="clone-path">@clone.Path</code></td>
                         <td class="status-col">
                             @if (session != null)
                             {
@@ -146,7 +146,7 @@
                                     @session.Status
                                 </span>
                             }
-                            @if (StartupTracker.IsStarting(GetWorktreeEntityId(worktree)))
+                            @if (StartupTracker.IsStarting(GetCloneEntityId(clone)))
                             {
                                 <span class="badge bg-warning text-dark">
                                     <span class="spinner-border spinner-border-sm me-1" role="status" style="width: 0.6rem; height: 0.6rem;"></span>
@@ -190,10 +190,10 @@
                                             Stop
                                         </button>
                                     }
-                                    else if (!StartupTracker.IsStarting(GetWorktreeEntityId(worktree)))
+                                    else if (!StartupTracker.IsStarting(GetCloneEntityId(clone)))
                                     {
                                         <button class="btn btn-sm btn-success me-1"
-                                                @onclick="() => StartMainBranchSessionAsync(worktree)"
+                                                @onclick="() => StartMainBranchSessionAsync(clone)"
                                                 disabled="@_operationInProgress"
                                                 title="Start a new agent session on the main branch">
                                             <i class="bi bi-robot me-1"></i>Run Agent
@@ -203,7 +203,7 @@
                                     @if (branchInfo?.BehindCount > 0)
                                     {
                                         <button class="btn btn-sm btn-outline-info"
-                                                @onclick="() => UpdateMainBranchAsync(worktree)"
+                                                @onclick="() => UpdateMainBranchAsync(clone)"
                                                 disabled="@(_operationInProgress || _isUpdatingMain)"
                                                 title="Pull latest changes and sync fleece issues (@branchInfo.BehindCount commits behind)">
                                             @if (_isUpdatingMain)
@@ -216,19 +216,19 @@
                                 }
                                 else
                                 {
-                                    @if (!worktree.IsOnCorrectBranch)
+                                    @if (!clone.IsOnCorrectBranch)
                                     {
                                         <button class="btn btn-sm btn-warning me-1"
-                                                @onclick="() => FixBranchAsync(worktree)"
+                                                @onclick="() => FixBranchAsync(clone)"
                                                 disabled="@_operationInProgress"
-                                                title="Checkout the correct branch: @worktree.ExpectedBranch">
+                                                title="Checkout the correct branch: @clone.ExpectedBranch">
                                             Fix Branch
                                         </button>
                                     }
 
                                     <AgentControlPanel
-                                        EntityId="@GetWorktreeEntityId(worktree)"
-                                        WorktreePath="@worktree.Path"
+                                        EntityId="@GetCloneEntityId(clone)"
+                                        ClonePath="@clone.Path"
                                         ProjectId="@Project.Id"
                                         Model="@(Project.DefaultModel ?? "sonnet")"
                                         SystemPrompt="@($"You are working on branch: {branchName}")"
@@ -238,23 +238,23 @@
                                     @if (branchInfo?.BehindCount > 0)
                                     {
                                         <button class="btn btn-sm btn-outline-secondary me-1"
-                                                @onclick="() => PullLatestAsync(worktree)"
+                                                @onclick="() => PullLatestAsync(clone)"
                                                 disabled="@_operationInProgress"
                                                 title="Pull latest changes">
                                             Pull
                                         </button>
                                         <button class="btn btn-sm btn-outline-warning me-1"
-                                                @onclick="() => StartRebaseAgentAsync(worktree)"
-                                                disabled="@(_operationInProgress || session != null || StartupTracker.IsStarting(GetWorktreeEntityId(worktree)))"
+                                                @onclick="() => StartRebaseAgentAsync(clone)"
+                                                disabled="@(_operationInProgress || session != null || StartupTracker.IsStarting(GetCloneEntityId(clone)))"
                                                 title="Start rebase agent to rebase onto @Project.DefaultBranch">
                                             <i class="bi bi-arrow-repeat"></i> Rebase
                                         </button>
                                     }
 
                                     <button class="btn btn-sm btn-outline-danger"
-                                            @onclick="() => ShowDeleteWorktreeConfirmation(worktree, branchInfo)"
+                                            @onclick="() => ShowDeleteCloneConfirmation(clone, branchInfo)"
                                             disabled="@_operationInProgress"
-                                            title="Delete worktree">
+                                            title="Delete clone">
                                         Delete
                                     </button>
                                 }
@@ -264,14 +264,14 @@
                                 @* Inline delete confirmation *@
                                 <div class="inline-confirm">
                                     <div class="inline-confirm-options">
-                                        @if (_deleteIncludesWorktree)
+                                        @if (_deleteIncludesClone)
                                         {
                                             <label class="form-check form-check-inline">
-                                                <input class="form-check-input" type="checkbox" @bind="_deleteWorktreeOnly">
+                                                <input class="form-check-input" type="checkbox" @bind="_deleteCloneOnly">
                                                 <span class="form-check-label">Keep branch</span>
                                             </label>
                                         }
-                                        @if (_hasRemoteBranch && !_deleteWorktreeOnly)
+                                        @if (_hasRemoteBranch && !_deleteCloneOnly)
                                         {
                                             <label class="form-check form-check-inline">
                                                 <input class="form-check-input" type="checkbox" @bind="_deleteRemoteBranch">
@@ -307,12 +307,12 @@
         </table>
     }
 
-    @* Lost Worktrees Section *@
-    @if (_lostWorktrees.Any())
+    @* Lost Clones Section *@
+    @if (_lostClones.Any())
     {
         <div class="section-header d-flex justify-content-between align-items-center bg-warning bg-opacity-25">
-            <span><i class="bi bi-exclamation-triangle me-1"></i> Lost Worktrees</span>
-            <span class="badge bg-warning text-dark">@_lostWorktrees.Count</span>
+            <span><i class="bi bi-exclamation-triangle me-1"></i> Lost Clones</span>
+            <span class="badge bg-warning text-dark">@_lostClones.Count</span>
         </div>
         <table class="table table-sm wt-table">
             <thead>
@@ -324,7 +324,7 @@
                 </tr>
             </thead>
             <tbody>
-                @foreach (var lost in _lostWorktrees)
+                @foreach (var lost in _lostClones)
                 {
                     var deleteKey = $"lost:{lost.FolderName}";
 
@@ -356,7 +356,7 @@
                                 }
                             </span>
                         </td>
-                        <td><code class="worktree-path">@lost.Path</code></td>
+                        <td><code class="clone-path">@lost.Path</code></td>
                         <td class="status-col">
                             @if (lost.Status != null && lost.Status.HasChanges)
                             {
@@ -369,14 +369,14 @@
                                 @if (lost.CanRepair)
                                 {
                                     <button class="btn btn-sm btn-outline-success me-1"
-                                            @onclick="() => RepairLostWorktreeAsync(lost)"
+                                            @onclick="() => RepairLostCloneAsync(lost)"
                                             disabled="@_operationInProgress"
                                             title="Reattach to branch @lost.MatchingBranchName">
                                         Repair
                                     </button>
                                 }
                                 <button class="btn btn-sm btn-outline-danger"
-                                        @onclick="() => ShowDeleteLostWorktreeConfirmation(lost)"
+                                        @onclick="() => ShowDeleteLostCloneConfirmation(lost)"
                                         disabled="@_operationInProgress"
                                         title="Delete folder permanently">
                                     Delete
@@ -384,10 +384,10 @@
                             }
                             else
                             {
-                                @* Inline delete confirmation for lost worktrees *@
+                                @* Inline delete confirmation for lost clones *@
                                 <div class="inline-confirm">
                                     <div class="inline-confirm-actions">
-                                        @if (_deleteLostWorktreeHasChanges)
+                                        @if (_deleteLostCloneHasChanges)
                                         {
                                             <span class="badge bg-danger me-1" title="Has uncommitted changes">has changes</span>
                                         }
@@ -414,15 +414,15 @@
         </table>
     }
 
-    @* Local Branches Without Worktrees *@
+    @* Local Branches Without Clones *@
     @{
-        var branchesWithoutWorktrees = _branches.Where(b => !b.HasWorktree && !IsDefaultBranch(b.ShortName)).ToList();
+        var branchesWithoutClones = _branches.Where(b => !b.HasClone && !IsDefaultBranch(b.ShortName)).ToList();
     }
-    @if (branchesWithoutWorktrees.Any())
+    @if (branchesWithoutClones.Any())
     {
         <div class="section-header d-flex justify-content-between align-items-center">
-            <span>Local Branches (No Worktree)</span>
-            <span class="badge bg-secondary">@branchesWithoutWorktrees.Count</span>
+            <span>Local Branches (No Clone)</span>
+            <span class="badge bg-secondary">@branchesWithoutClones.Count</span>
         </div>
         <table class="table table-sm wt-table">
             <thead>
@@ -433,7 +433,7 @@
                 </tr>
             </thead>
             <tbody>
-                @foreach (var branch in branchesWithoutWorktrees)
+                @foreach (var branch in branchesWithoutClones)
                 {
                     var prInfo = GetPullRequestForBranch(branch.ShortName);
                     var deleteKey = $"branch:{branch.ShortName}";
@@ -466,9 +466,9 @@
                             @if (!IsDeleteTarget(deleteKey))
                             {
                                 <button class="btn btn-sm btn-outline-primary me-1"
-                                        @onclick="() => CreateWorktreeForBranchAsync(branch.ShortName)"
+                                        @onclick="() => CreateCloneForBranchAsync(branch.ShortName)"
                                         disabled="@_operationInProgress"
-                                        title="Create worktree for this branch">
+                                        title="Create branch clone">
                                     Start
                                 </button>
                                 <button class="btn btn-sm btn-outline-danger"
@@ -540,9 +540,9 @@
                         <td><strong class="branch-name">origin/@remoteBranch</strong></td>
                         <td class="actions-col">
                             <button class="btn btn-sm btn-outline-primary me-1"
-                                    @onclick="() => CreateWorktreeFromRemoteAsync(remoteBranch)"
+                                    @onclick="() => CreateCloneFromRemoteAsync(remoteBranch)"
                                     disabled="@_operationInProgress"
-                                    title="Create local worktree from remote branch">
+                                    title="Create local clone from remote branch">
                                 Checkout
                             </button>
                             <button class="btn btn-sm btn-outline-danger"
@@ -560,7 +560,7 @@
 </div>
 
 <style>
-    .worktree-management-panel {
+    .clone-management-panel {
         font-size: 0.875rem;
     }
 
@@ -613,7 +613,7 @@
         margin-right: 0.25rem;
     }
 
-    .worktree-path {
+    .clone-path {
         font-size: 0.75rem;
         word-break: break-all;
     }
@@ -683,12 +683,12 @@
     [Parameter] public required Project Project { get; set; }
     [Parameter] public EventCallback OnDataChanged { get; set; }
 
-    private List<WorktreeInfo> _worktrees = [];
+    private List<CloneInfo> _clones = [];
     private List<BranchInfo> _branches = [];
     private List<string> _remoteBranches = [];
     private List<PullRequest> _pullRequests = [];
-    private List<LostWorktreeInfo> _lostWorktrees = [];
-    private Dictionary<string, WorktreeStatus> _worktreeStatuses = new();
+    private List<LostCloneInfo> _lostClones = [];
+    private Dictionary<string, CloneStatus> _cloneStatuses = new();
     private bool _isLoading;
     private bool _isFetching;
     private bool _isPruning;
@@ -701,14 +701,14 @@
     private string? _deleteTargetKey;
     private string _deleteTargetName = "";
     private bool _deleteTargetIsMerged;
-    private bool _deleteIncludesWorktree;
-    private bool _deleteWorktreeOnly;
+    private bool _deleteIncludesClone;
+    private bool _deleteCloneOnly;
     private bool _deleteRemoteBranch;
     private bool _hasRemoteBranch;
-    private bool _deleteLostWorktreeHasChanges;
-    private WorktreeInfo? _deleteTargetWorktree;
+    private bool _deleteLostCloneHasChanges;
+    private CloneInfo? _deleteTargetClone;
     private BranchInfo? _deleteTargetBranch;
-    private LostWorktreeInfo? _deleteTargetLostWorktree;
+    private LostCloneInfo? _deleteTargetLostClone;
 
     private bool IsDeleteTarget(string key) => _deleteTargetKey == key;
 
@@ -725,54 +725,54 @@
 
         try
         {
-            // Load worktrees
-            _worktrees = await GitWorktreeService.ListWorktreesAsync(Project.LocalPath);
+            // Load clones
+            _clones = await GitCloneService.ListClonesAsync(Project.LocalPath);
 
             // Load local branches with their info
-            _branches = await GitWorktreeService.ListLocalBranchesAsync(Project.LocalPath);
+            _branches = await GitCloneService.ListLocalBranchesAsync(Project.LocalPath);
 
             // Check merge status for each branch
             foreach (var branch in _branches.Where(b => !IsDefaultBranch(b.ShortName)))
             {
-                branch.IsMerged = await GitWorktreeService.IsBranchMergedAsync(
+                branch.IsMerged = await GitCloneService.IsBranchMergedAsync(
                     Project.LocalPath,
                     branch.ShortName,
                     Project.DefaultBranch);
             }
 
             // Load remote-only branches
-            _remoteBranches = await GitWorktreeService.ListRemoteOnlyBranchesAsync(Project.LocalPath);
+            _remoteBranches = await GitCloneService.ListRemoteOnlyBranchesAsync(Project.LocalPath);
 
             // Load pull requests for this project
             _pullRequests = await PullRequestDataService.GetByProjectIdAsync(Project.Id);
 
-            // Load lost worktrees
-            _lostWorktrees = await GitWorktreeService.FindLostWorktreeFoldersAsync(Project.LocalPath);
+            // Load lost clones
+            _lostClones = await GitCloneService.FindLostCloneFoldersAsync(Project.LocalPath);
 
-            // Load git status for all worktrees (in parallel for performance)
-            _worktreeStatuses.Clear();
-            var statusTasks = _worktrees.Where(w => !w.IsBare).Select(async w =>
+            // Load git status for all clones (in parallel for performance)
+            _cloneStatuses.Clear();
+            var statusTasks = _clones.Where(w => !w.IsBare).Select(async w =>
             {
                 try
                 {
-                    var status = await GitWorktreeService.GetWorktreeStatusAsync(w.Path);
+                    var status = await GitCloneService.GetCloneStatusAsync(w.Path);
                     return (w.Path, status);
                 }
                 catch
                 {
-                    return (w.Path, new WorktreeStatus());
+                    return (w.Path, new CloneStatus());
                 }
             });
 
             var statuses = await Task.WhenAll(statusTasks);
             foreach (var (path, status) in statuses)
             {
-                _worktreeStatuses[path] = status;
+                _cloneStatuses[path] = status;
             }
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "Failed to load worktree data for project {ProjectId}", Project.Id);
+            Logger.LogError(ex, "Failed to load clone data for project {ProjectId}", Project.Id);
             _errorMessage = $"Failed to load data: {ex.Message}";
         }
         finally
@@ -790,7 +790,7 @@
 
         try
         {
-            var success = await GitWorktreeService.FetchAllAsync(Project.LocalPath);
+            var success = await GitCloneService.FetchAllAsync(Project.LocalPath);
             if (success)
             {
                 _successMessage = "Fetched latest changes from remote";
@@ -812,7 +812,7 @@
         }
     }
 
-    private async Task PruneWorktreesAsync()
+    private async Task PruneClonesAsync()
     {
         _isPruning = true;
         _errorMessage = null;
@@ -820,8 +820,8 @@
 
         try
         {
-            await GitWorktreeService.PruneWorktreesAsync(Project.LocalPath);
-            _successMessage = "Pruned stale worktree references";
+            await GitCloneService.PruneClonesAsync(Project.LocalPath);
+            _successMessage = "Pruned stale clone references";
             await RefreshDataAsync();
         }
         catch (Exception ex)
@@ -835,14 +835,14 @@
         }
     }
 
-    private WorktreeStatus? GetWorktreeStatus(string worktreePath)
+    private CloneStatus? GetCloneStatus(string clonePath)
     {
-        return _worktreeStatuses.GetValueOrDefault(worktreePath);
+        return _cloneStatuses.GetValueOrDefault(clonePath);
     }
 
-    private async Task FixBranchAsync(WorktreeInfo worktree)
+    private async Task FixBranchAsync(CloneInfo clone)
     {
-        if (string.IsNullOrEmpty(worktree.ExpectedBranch))
+        if (string.IsNullOrEmpty(clone.ExpectedBranch))
         {
             _errorMessage = "No expected branch to fix";
             return;
@@ -854,15 +854,15 @@
 
         try
         {
-            var success = await GitWorktreeService.CheckoutBranchAsync(worktree.Path, worktree.ExpectedBranch);
+            var success = await GitCloneService.CheckoutBranchAsync(clone.Path, clone.ExpectedBranch);
             if (success)
             {
-                _successMessage = $"Checked out branch {worktree.ExpectedBranch}";
+                _successMessage = $"Checked out branch {clone.ExpectedBranch}";
                 await RefreshDataAsync();
             }
             else
             {
-                _errorMessage = $"Failed to checkout branch {worktree.ExpectedBranch}";
+                _errorMessage = $"Failed to checkout branch {clone.ExpectedBranch}";
             }
         }
         catch (Exception ex)
@@ -876,7 +876,7 @@
         }
     }
 
-    private async Task PullLatestAsync(WorktreeInfo worktree)
+    private async Task PullLatestAsync(CloneInfo clone)
     {
         _operationInProgress = true;
         _errorMessage = null;
@@ -884,10 +884,10 @@
 
         try
         {
-            var success = await GitWorktreeService.PullLatestAsync(worktree.Path);
+            var success = await GitCloneService.PullLatestAsync(clone.Path);
             if (success)
             {
-                _successMessage = $"Pulled latest changes for {GetShortBranchName(worktree.Branch)}";
+                _successMessage = $"Pulled latest changes for {GetShortBranchName(clone.Branch)}";
                 await RefreshDataAsync();
             }
             else
@@ -906,7 +906,7 @@
         }
     }
 
-    private async Task CreateWorktreeForBranchAsync(string branchName)
+    private async Task CreateCloneForBranchAsync(string branchName)
     {
         _operationInProgress = true;
         _errorMessage = null;
@@ -914,25 +914,25 @@
 
         try
         {
-            var worktreePath = await GitWorktreeService.CreateWorktreeAsync(
+            var clonePath = await GitCloneService.CreateCloneAsync(
                 Project.LocalPath,
                 branchName,
                 createBranch: false);
 
-            if (!string.IsNullOrEmpty(worktreePath))
+            if (!string.IsNullOrEmpty(clonePath))
             {
-                _successMessage = $"Created worktree for {branchName}";
+                _successMessage = $"Created clone for {branchName}";
                 await RefreshDataAsync();
                 await OnDataChanged.InvokeAsync();
             }
             else
             {
-                _errorMessage = $"Failed to create worktree for {branchName}";
+                _errorMessage = $"Failed to create clone for {branchName}";
             }
         }
         catch (Exception ex)
         {
-            _errorMessage = $"Failed to create worktree: {ex.Message}";
+            _errorMessage = $"Failed to create clone: {ex.Message}";
         }
         finally
         {
@@ -941,7 +941,7 @@
         }
     }
 
-    private async Task CreateWorktreeFromRemoteAsync(string remoteBranch)
+    private async Task CreateCloneFromRemoteAsync(string remoteBranch)
     {
         _operationInProgress = true;
         _errorMessage = null;
@@ -949,20 +949,20 @@
 
         try
         {
-            // Use the dedicated method that creates the worktree without checking out in main
-            var worktreePath = await GitWorktreeService.CreateWorktreeFromRemoteBranchAsync(
+            // Use the dedicated method that creates the clone without checking out in main
+            var clonePath = await GitCloneService.CreateCloneFromRemoteBranchAsync(
                 Project.LocalPath,
                 remoteBranch);
 
-            if (!string.IsNullOrEmpty(worktreePath))
+            if (!string.IsNullOrEmpty(clonePath))
             {
-                _successMessage = $"Created worktree for {remoteBranch}";
+                _successMessage = $"Created clone for {remoteBranch}";
                 await RefreshDataAsync();
                 await OnDataChanged.InvokeAsync();
             }
             else
             {
-                _errorMessage = $"Failed to create worktree for {remoteBranch}";
+                _errorMessage = $"Failed to create clone for {remoteBranch}";
             }
         }
         catch (Exception ex)
@@ -984,7 +984,7 @@
 
         try
         {
-            var success = await GitWorktreeService.DeleteRemoteBranchAsync(Project.LocalPath, remoteBranch);
+            var success = await GitCloneService.DeleteRemoteBranchAsync(Project.LocalPath, remoteBranch);
             if (success)
             {
                 _successMessage = $"Deleted remote branch origin/{remoteBranch}";
@@ -1006,7 +1006,7 @@
         }
     }
 
-    private async Task RepairLostWorktreeAsync(LostWorktreeInfo lost)
+    private async Task RepairLostCloneAsync(LostCloneInfo lost)
     {
         if (!lost.CanRepair || string.IsNullOrEmpty(lost.MatchingBranchName))
         {
@@ -1020,25 +1020,25 @@
 
         try
         {
-            var success = await GitWorktreeService.RepairWorktreeAsync(
+            var success = await GitCloneService.RepairCloneAsync(
                 Project.LocalPath,
                 lost.Path,
                 lost.MatchingBranchName);
 
             if (success)
             {
-                _successMessage = $"Repaired worktree for branch {lost.MatchingBranchName}";
+                _successMessage = $"Repaired clone for branch {lost.MatchingBranchName}";
                 await RefreshDataAsync();
                 await OnDataChanged.InvokeAsync();
             }
             else
             {
-                _errorMessage = $"Failed to repair worktree for {lost.FolderName}";
+                _errorMessage = $"Failed to repair clone for {lost.FolderName}";
             }
         }
         catch (Exception ex)
         {
-            _errorMessage = $"Failed to repair worktree: {ex.Message}";
+            _errorMessage = $"Failed to repair clone: {ex.Message}";
         }
         finally
         {
@@ -1047,22 +1047,22 @@
         }
     }
 
-    private void ShowDeleteLostWorktreeConfirmation(LostWorktreeInfo lost)
+    private void ShowDeleteLostCloneConfirmation(LostCloneInfo lost)
     {
         _deleteTargetKey = $"lost:{lost.FolderName}";
         _deleteTargetName = lost.FolderName;
         _deleteTargetIsMerged = false;
-        _deleteIncludesWorktree = false;
-        _deleteWorktreeOnly = false;
+        _deleteIncludesClone = false;
+        _deleteCloneOnly = false;
         _deleteRemoteBranch = false;
         _hasRemoteBranch = false;
-        _deleteLostWorktreeHasChanges = lost.Status?.HasChanges ?? false;
-        _deleteTargetWorktree = null;
+        _deleteLostCloneHasChanges = lost.Status?.HasChanges ?? false;
+        _deleteTargetClone = null;
         _deleteTargetBranch = null;
-        _deleteTargetLostWorktree = lost;
+        _deleteTargetLostClone = lost;
     }
 
-    private async Task DeleteLostWorktreeAsync(LostWorktreeInfo lost)
+    private async Task DeleteLostCloneAsync(LostCloneInfo lost)
     {
         _operationInProgress = true;
         _errorMessage = null;
@@ -1070,7 +1070,7 @@
 
         try
         {
-            var success = await GitWorktreeService.DeleteWorktreeFolderAsync(lost.Path);
+            var success = await GitCloneService.DeleteCloneFolderAsync(lost.Path);
             if (success)
             {
                 _successMessage = $"Deleted folder {lost.FolderName}";
@@ -1093,10 +1093,10 @@
         }
     }
 
-    private async Task StartSessionAsync(WorktreeInfo worktree, SessionMode mode)
+    private async Task StartSessionAsync(CloneInfo clone, SessionMode mode)
     {
-        var entityId = GetWorktreeEntityId(worktree);
-        var branchName = GetShortBranchName(worktree.Branch);
+        var entityId = GetCloneEntityId(clone);
+        var branchName = GetShortBranchName(clone.Branch);
 
         StartupTracker.MarkAsStarting(entityId);
         StateHasChanged();
@@ -1106,7 +1106,7 @@
             var session = await SessionService.StartSessionAsync(
                 entityId,
                 Project.Id,
-                worktree.Path,
+                clone.Path,
                 mode,
                 Project.DefaultModel ?? "sonnet",
                 systemPrompt: $"You are working on branch: {branchName}");
@@ -1118,16 +1118,16 @@
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "Failed to start session for worktree {WorktreePath}", worktree.Path);
+            Logger.LogError(ex, "Failed to start session for clone {ClonePath}", clone.Path);
             StartupTracker.MarkAsFailed(entityId, ex.Message);
             _errorMessage = $"Failed to start session: {ex.Message}";
             StateHasChanged();
         }
     }
 
-    private async Task StartMainBranchSessionAsync(WorktreeInfo worktree)
+    private async Task StartMainBranchSessionAsync(CloneInfo clone)
     {
-        var entityId = GetWorktreeEntityId(worktree);
+        var entityId = GetCloneEntityId(clone);
 
         StartupTracker.MarkAsStarting(entityId);
         StateHasChanged();
@@ -1138,7 +1138,7 @@
             var session = await SessionService.StartSessionAsync(
                 entityId,
                 Project.Id,
-                worktree.Path,
+                clone.Path,
                 SessionMode.Build,
                 Project.DefaultModel ?? "sonnet",
                 systemPrompt: null);
@@ -1150,14 +1150,14 @@
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "Failed to start main branch session for worktree {WorktreePath}", worktree.Path);
+            Logger.LogError(ex, "Failed to start main branch session for clone {ClonePath}", clone.Path);
             StartupTracker.MarkAsFailed(entityId, ex.Message);
             _errorMessage = $"Failed to start session: {ex.Message}";
             StateHasChanged();
         }
     }
 
-    private async Task UpdateMainBranchAsync(WorktreeInfo worktree)
+    private async Task UpdateMainBranchAsync(CloneInfo clone)
     {
         _isUpdatingMain = true;
         _operationInProgress = true;
@@ -1169,7 +1169,7 @@
         {
             // Use fleece sync which handles: commit .fleece/ changes, pull from remote, push
             var syncResult = await FleeceIssuesSyncService.SyncAsync(
-                worktree.Path,
+                clone.Path,
                 Project.DefaultBranch);
 
             if (syncResult.Success)
@@ -1181,7 +1181,7 @@
             else if (syncResult.RequiresPullFirst && syncResult.HasNonFleeceChanges)
             {
                 // Non-fleece changes are blocking the sync - try a plain pull instead
-                var pullSuccess = await GitWorktreeService.PullLatestAsync(worktree.Path);
+                var pullSuccess = await GitCloneService.PullLatestAsync(clone.Path);
                 if (pullSuccess)
                 {
                     _successMessage = $"Updated {Project.DefaultBranch} to latest";
@@ -1233,9 +1233,9 @@
         }
     }
 
-    private async Task StartRebaseAgentAsync(WorktreeInfo worktree)
+    private async Task StartRebaseAgentAsync(CloneInfo clone)
     {
-        var branchName = GetShortBranchName(worktree.Branch);
+        var branchName = GetShortBranchName(clone.Branch);
         var entityId = $"rebase-{branchName}";
 
         StartupTracker.MarkAsStarting(entityId);
@@ -1253,7 +1253,7 @@
 
             var session = await RebaseAgentService.StartRebaseAgentAsync(
                 Project.Id,
-                worktree.Path,
+                clone.Path,
                 branchName,
                 Project.DefaultBranch,
                 Project.DefaultModel ?? "sonnet",
@@ -1266,7 +1266,7 @@
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "Failed to start rebase agent for worktree {WorktreePath}", worktree.Path);
+            Logger.LogError(ex, "Failed to start rebase agent for clone {ClonePath}", clone.Path);
             StartupTracker.MarkAsFailed(entityId, ex.Message);
             _errorMessage = $"Failed to start rebase agent: {ex.Message}";
         }
@@ -1277,17 +1277,17 @@
         }
     }
 
-    private void ShowDeleteWorktreeConfirmation(WorktreeInfo worktree, BranchInfo? branchInfo)
+    private void ShowDeleteCloneConfirmation(CloneInfo clone, BranchInfo? branchInfo)
     {
-        var branchName = GetShortBranchName(worktree.Branch);
-        _deleteTargetKey = $"worktree:{branchName}";
+        var branchName = GetShortBranchName(clone.Branch);
+        _deleteTargetKey = $"clone:{branchName}";
         _deleteTargetName = branchName;
         _deleteTargetIsMerged = branchInfo?.IsMerged ?? false;
-        _deleteIncludesWorktree = true;
-        _deleteWorktreeOnly = false;
+        _deleteIncludesClone = true;
+        _deleteCloneOnly = false;
         _deleteRemoteBranch = false;
         _hasRemoteBranch = branchInfo?.Upstream != null;
-        _deleteTargetWorktree = worktree;
+        _deleteTargetClone = clone;
         _deleteTargetBranch = branchInfo;
     }
 
@@ -1296,21 +1296,21 @@
         _deleteTargetKey = $"branch:{branch.ShortName}";
         _deleteTargetName = branch.ShortName;
         _deleteTargetIsMerged = branch.IsMerged;
-        _deleteIncludesWorktree = false;
-        _deleteWorktreeOnly = false;
+        _deleteIncludesClone = false;
+        _deleteCloneOnly = false;
         _deleteRemoteBranch = false;
         _hasRemoteBranch = branch.Upstream != null;
-        _deleteTargetWorktree = null;
+        _deleteTargetClone = null;
         _deleteTargetBranch = branch;
     }
 
     private void HideDeleteConfirmation()
     {
         _deleteTargetKey = null;
-        _deleteTargetWorktree = null;
+        _deleteTargetClone = null;
         _deleteTargetBranch = null;
-        _deleteTargetLostWorktree = null;
-        _deleteLostWorktreeHasChanges = false;
+        _deleteTargetLostClone = null;
+        _deleteLostCloneHasChanges = false;
     }
 
     private async Task ExecuteDeleteAsync()
@@ -1320,41 +1320,41 @@
 
         try
         {
-            // Handle lost worktree deletion
-            if (_deleteTargetLostWorktree != null)
+            // Handle lost clone deletion
+            if (_deleteTargetLostClone != null)
             {
-                await DeleteLostWorktreeAsync(_deleteTargetLostWorktree);
+                await DeleteLostCloneAsync(_deleteTargetLostClone);
                 return;
             }
 
-            var branchName = _deleteTargetBranch?.ShortName ?? GetShortBranchName(_deleteTargetWorktree?.Branch);
+            var branchName = _deleteTargetBranch?.ShortName ?? GetShortBranchName(_deleteTargetClone?.Branch);
 
             // Stop any active session first
-            if (_deleteTargetWorktree != null)
+            if (_deleteTargetClone != null)
             {
-                var session = GetSessionForWorktree(_deleteTargetWorktree);
+                var session = GetSessionForClone(_deleteTargetClone);
                 if (session != null)
                 {
                     await SessionService.StopSessionAsync(session.Id);
                 }
 
-                // Remove the worktree
-                var worktreeRemoved = await GitWorktreeService.RemoveWorktreeAsync(
+                // Remove the clone
+                var cloneRemoved = await GitCloneService.RemoveCloneAsync(
                     Project.LocalPath,
-                    _deleteTargetWorktree.Path);
+                    _deleteTargetClone.Path);
 
-                if (!worktreeRemoved)
+                if (!cloneRemoved)
                 {
-                    _errorMessage = "Failed to remove worktree";
+                    _errorMessage = "Failed to remove clone";
                     return;
                 }
             }
 
-            // Delete the branch if not worktree-only
-            if (!_deleteWorktreeOnly && !string.IsNullOrEmpty(branchName))
+            // Delete the branch if not clone-only
+            if (!_deleteCloneOnly && !string.IsNullOrEmpty(branchName))
             {
                 var forceDelete = !_deleteTargetIsMerged;
-                var branchDeleted = await GitWorktreeService.DeleteLocalBranchAsync(
+                var branchDeleted = await GitCloneService.DeleteLocalBranchAsync(
                     Project.LocalPath,
                     branchName,
                     force: forceDelete);
@@ -1368,7 +1368,7 @@
                 // Delete remote branch if requested
                 if (_deleteRemoteBranch)
                 {
-                    var remoteDeleted = await GitWorktreeService.DeleteRemoteBranchAsync(
+                    var remoteDeleted = await GitCloneService.DeleteRemoteBranchAsync(
                         Project.LocalPath,
                         branchName);
 
@@ -1380,8 +1380,8 @@
                 }
             }
 
-            _successMessage = _deleteWorktreeOnly
-                ? $"Removed worktree for {branchName}"
+            _successMessage = _deleteCloneOnly
+                ? $"Removed clone for {branchName}"
                 : $"Deleted {branchName}" + (_deleteRemoteBranch ? " (local and remote)" : " (local)");
 
             HideDeleteConfirmation();
@@ -1399,17 +1399,17 @@
         }
     }
 
-    private ClaudeSession? GetSessionForWorktree(WorktreeInfo worktree)
+    private ClaudeSession? GetSessionForClone(CloneInfo clone)
     {
-        var entityId = GetWorktreeEntityId(worktree);
+        var entityId = GetCloneEntityId(clone);
         return SessionStore.GetByEntityId(entityId);
     }
 
-    private string GetWorktreeEntityId(WorktreeInfo worktree)
+    private string GetCloneEntityId(CloneInfo clone)
     {
         // Use the branch name as the entity ID for session tracking
-        var branchName = GetShortBranchName(worktree.Branch);
-        return $"worktree:{branchName}";
+        var branchName = GetShortBranchName(clone.Branch);
+        return $"clone:{branchName}";
     }
 
     private PullRequest? GetPullRequestForBranch(string? branchName)

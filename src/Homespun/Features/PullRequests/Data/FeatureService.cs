@@ -10,7 +10,7 @@ namespace Homespun.Features.PullRequests.Data;
 /// </summary>
 public class PullRequestDataService(
     IDataStore dataStore, 
-    IGitWorktreeService worktreeService,
+    IGitCloneService cloneService,
     ILogger<PullRequestDataService> logger)
 {
     public Task<List<PullRequest>> GetByProjectIdAsync(string projectId)
@@ -98,13 +98,13 @@ public class PullRequestDataService(
         var pullRequest = dataStore.GetPullRequest(id);
         if (pullRequest == null) return false;
 
-        // Get project for worktree cleanup
+        // Get project for clone cleanup
         var project = dataStore.GetProject(pullRequest.ProjectId);
 
-        // Clean up worktree if exists
-        if (!string.IsNullOrEmpty(pullRequest.WorktreePath) && project != null)
+        // Clean up clone if exists
+        if (!string.IsNullOrEmpty(pullRequest.ClonePath) && project != null)
         {
-            await worktreeService.RemoveWorktreeAsync(project.LocalPath, pullRequest.WorktreePath);
+            await cloneService.RemoveCloneAsync(project.LocalPath, pullRequest.ClonePath);
         }
 
         await dataStore.RemovePullRequestAsync(id);
@@ -137,12 +137,12 @@ public class PullRequestDataService(
         }
 
         logger.LogInformation(
-            "Creating worktree for PR {PullRequestId} branch {BranchName} in {LocalPath}",
+            "Creating clone for PR {PullRequestId} branch {BranchName} in {LocalPath}",
             id, pullRequest.BranchName, project.LocalPath);
 
         // Ensure the base branch is up-to-date before creating a new branch from it
         var baseBranch = project.DefaultBranch;
-        var fetchSuccess = await worktreeService.FetchAndUpdateBranchAsync(project.LocalPath, baseBranch);
+        var fetchSuccess = await cloneService.FetchAndUpdateBranchAsync(project.LocalPath, baseBranch);
         if (!fetchSuccess)
         {
             logger.LogWarning(
@@ -150,26 +150,26 @@ public class PullRequestDataService(
                 baseBranch);
         }
 
-        // Create worktree for the pull request
-        var worktreePath = await worktreeService.CreateWorktreeAsync(
+        // Create clone for the pull request
+        var clonePath = await cloneService.CreateCloneAsync(
             project.LocalPath,
             pullRequest.BranchName,
             createBranch: true,
             baseBranch: project.DefaultBranch);
 
-        if (worktreePath == null)
+        if (clonePath == null)
         {
             logger.LogError(
-                "Failed to create worktree for PR {PullRequestId} branch {BranchName}. " +
+                "Failed to create clone for PR {PullRequestId} branch {BranchName}. " +
                 "Check git logs for details.",
                 id, pullRequest.BranchName);
             return false;
         }
 
-        logger.LogInformation("Worktree created at {WorktreePath} for PR {PullRequestId}", 
-            worktreePath, id);
+        logger.LogInformation("Clone created at {ClonePath} for PR {PullRequestId}",
+            clonePath, id);
 
-        pullRequest.WorktreePath = worktreePath;
+        pullRequest.ClonePath = clonePath;
         pullRequest.Status = OpenPullRequestStatus.InDevelopment;
         pullRequest.UpdatedAt = DateTime.UtcNow;
 
@@ -201,12 +201,12 @@ public class PullRequestDataService(
         return true;
     }
 
-    public async Task<bool> UpdateWorktreePathAsync(string id, string worktreePath)
+    public async Task<bool> UpdateClonePathAsync(string id, string clonePath)
     {
         var pullRequest = dataStore.GetPullRequest(id);
         if (pullRequest == null) return false;
 
-        pullRequest.WorktreePath = worktreePath;
+        pullRequest.ClonePath = clonePath;
         pullRequest.UpdatedAt = DateTime.UtcNow;
 
         await dataStore.UpdatePullRequestAsync(pullRequest);
@@ -224,10 +224,10 @@ public class PullRequestDataService(
 
         var project = dataStore.GetProject(pullRequest.ProjectId);
 
-        // Clean up worktree
-        if (!string.IsNullOrEmpty(pullRequest.WorktreePath) && project != null)
+        // Clean up clone
+        if (!string.IsNullOrEmpty(pullRequest.ClonePath) && project != null)
         {
-            await worktreeService.RemoveWorktreeAsync(project.LocalPath, pullRequest.WorktreePath);
+            await cloneService.RemoveCloneAsync(project.LocalPath, pullRequest.ClonePath);
         }
 
         // Remove from local tracking - merged/cancelled PRs should be fetched from GitHub
@@ -264,11 +264,11 @@ public class PullRequestDataService(
         return true;
     }
 
-    public async Task CleanupStaleWorktreesAsync(string projectId)
+    public async Task CleanupStaleClonesAsync(string projectId)
     {
         var project = dataStore.GetProject(projectId);
         if (project == null) return;
 
-        await worktreeService.PruneWorktreesAsync(project.LocalPath);
+        await cloneService.PruneClonesAsync(project.LocalPath);
     }
 }
