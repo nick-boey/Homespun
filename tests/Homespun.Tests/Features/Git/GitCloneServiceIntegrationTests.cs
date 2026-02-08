@@ -5,21 +5,21 @@ using Homespun.Tests.Helpers;
 namespace Homespun.Tests.Features.Git;
 
 /// <summary>
-/// Integration tests for GitWorktreeService that test against real git repositories.
+/// Integration tests for GitCloneService that test against real git repositories.
 /// These tests require git to be installed and available on the PATH.
 /// </summary>
 [TestFixture]
 [Category("Integration")]
-public class GitWorktreeServiceIntegrationTests
+public class GitCloneServiceIntegrationTests
 {
     private TempGitRepositoryFixture _fixture = null!;
-    private GitWorktreeService _service = null!;
+    private GitCloneService _service = null!;
 
     [SetUp]
     public void SetUp()
     {
         _fixture = new TempGitRepositoryFixture();
-        _service = new GitWorktreeService(); // Uses real CommandRunner
+        _service = new GitCloneService(); // Uses real CommandRunner
     }
 
     [TearDown]
@@ -34,36 +34,36 @@ public class GitWorktreeServiceIntegrationTests
     private static string NormalizePath(string path) => path.Replace('\\', '/').TrimEnd('/');
 
     [Test]
-    public async Task CreateWorktree_WithExistingBranch_CreatesWorktreeSuccessfully()
+    public async Task CreateClone_WithExistingBranch_CreatesCloneSuccessfully()
     {
         // Arrange
-        var branchName = "feature/test-worktree";
+        var branchName = "feature/test-clone";
         _fixture.CreateBranch(branchName);
 
         // Act
-        var worktreePath = await _service.CreateWorktreeAsync(_fixture.RepositoryPath, branchName);
+        var clonePath = await _service.CreateCloneAsync(_fixture.RepositoryPath, branchName);
 
         // Assert
-        Assert.That(worktreePath, Is.Not.Null);
-        Assert.That(Directory.Exists(worktreePath), Is.True);
-        Assert.That(File.Exists(Path.Combine(worktreePath!, "README.md")), Is.True);
+        Assert.That(clonePath, Is.Not.Null);
+        Assert.That(Directory.Exists(clonePath), Is.True);
+        Assert.That(File.Exists(Path.Combine(clonePath!, "README.md")), Is.True);
     }
 
     [Test]
-    public async Task CreateWorktree_WithNewBranch_CreatesBranchAndWorktree()
+    public async Task CreateClone_WithNewBranch_CreatesBranchAndClone()
     {
         // Arrange
         var branchName = "feature/new-branch";
 
         // Act
-        var worktreePath = await _service.CreateWorktreeAsync(
+        var clonePath = await _service.CreateCloneAsync(
             _fixture.RepositoryPath,
             branchName,
             createBranch: true);
 
         // Assert
-        Assert.That(worktreePath, Is.Not.Null);
-        Assert.That(Directory.Exists(worktreePath), Is.True);
+        Assert.That(clonePath, Is.Not.Null);
+        Assert.That(Directory.Exists(clonePath), Is.True);
 
         // Verify the branch was created
         var branches = _fixture.RunGit("branch --list");
@@ -71,7 +71,7 @@ public class GitWorktreeServiceIntegrationTests
     }
 
     [Test]
-    public async Task CreateWorktree_WithBaseBranch_CreatesBranchFromSpecifiedBase()
+    public async Task CreateClone_WithBaseBranch_CreatesBranchFromSpecifiedBase()
     {
         // Arrange
         var baseBranch = "develop";
@@ -83,211 +83,211 @@ public class GitWorktreeServiceIntegrationTests
         _fixture.RunGit("checkout -"); // Go back to main/master
 
         // Act
-        var worktreePath = await _service.CreateWorktreeAsync(
+        var clonePath = await _service.CreateCloneAsync(
             _fixture.RepositoryPath,
             featureBranch,
             createBranch: true,
             baseBranch: baseBranch);
 
         // Assert
-        Assert.That(worktreePath, Is.Not.Null);
-        Assert.That(Directory.Exists(worktreePath), Is.True);
-        // The worktree should have the file from develop branch
-        Assert.That(File.Exists(Path.Combine(worktreePath!, "develop.txt")), Is.True);
+        Assert.That(clonePath, Is.Not.Null);
+        Assert.That(Directory.Exists(clonePath), Is.True);
+        // The clone should have the file from develop branch
+        Assert.That(File.Exists(Path.Combine(clonePath!, "develop.txt")), Is.True);
     }
 
     [Test]
-    public async Task CreateWorktree_NonExistentBranch_ReturnsNull()
+    public async Task CreateClone_NonExistentBranch_ReturnsNull()
     {
         // Arrange
         var branchName = "non-existent-branch";
 
         // Act
-        var worktreePath = await _service.CreateWorktreeAsync(
+        var clonePath = await _service.CreateCloneAsync(
             _fixture.RepositoryPath,
             branchName,
             createBranch: false);
 
         // Assert
-        Assert.That(worktreePath, Is.Null);
+        Assert.That(clonePath, Is.Null);
     }
 
     [Test]
-    public async Task ListWorktrees_ReturnsMainWorktree()
+    public async Task ListClones_ReturnsMainClone()
     {
         // Act
-        var worktrees = await _service.ListWorktreesAsync(_fixture.RepositoryPath);
+        var clones = await _service.ListClonesAsync(_fixture.RepositoryPath);
 
         // Assert
-        Assert.That(worktrees, Is.Not.Null);
-        Assert.That(worktrees, Has.Count.EqualTo(1));
-        Assert.That(NormalizePath(worktrees[0].Path), Is.EqualTo(NormalizePath(_fixture.RepositoryPath)));
+        Assert.That(clones, Is.Not.Null);
+        Assert.That(clones, Has.Count.EqualTo(1));
+        Assert.That(NormalizePath(clones[0].Path), Is.EqualTo(NormalizePath(_fixture.RepositoryPath)));
     }
 
     [Test]
-    public async Task ListWorktrees_AfterCreatingWorktree_ReturnsMultipleWorktrees()
+    public async Task ListClones_AfterCreatingClone_ReturnsMultipleClones()
     {
         // Arrange
         var branchName = "feature/list-test";
         _fixture.CreateBranch(branchName);
-        await _service.CreateWorktreeAsync(_fixture.RepositoryPath, branchName);
+        await _service.CreateCloneAsync(_fixture.RepositoryPath, branchName);
 
         // Act
-        var worktrees = await _service.ListWorktreesAsync(_fixture.RepositoryPath);
+        var clones = await _service.ListClonesAsync(_fixture.RepositoryPath);
 
         // Assert
-        Assert.That(worktrees, Is.Not.Null);
-        Assert.That(worktrees, Has.Count.EqualTo(2));
-        Assert.That(worktrees, Has.Some.Matches<WorktreeInfo>(w => NormalizePath(w.Path) == NormalizePath(_fixture.RepositoryPath)));
-        Assert.That(worktrees, Has.Some.Matches<WorktreeInfo>(w => w.Branch?.EndsWith(branchName) == true));
+        Assert.That(clones, Is.Not.Null);
+        Assert.That(clones, Has.Count.EqualTo(2));
+        Assert.That(clones, Has.Some.Matches<CloneInfo>(w => NormalizePath(w.Path) == NormalizePath(_fixture.RepositoryPath)));
+        Assert.That(clones, Has.Some.Matches<CloneInfo>(w => w.Branch?.EndsWith(branchName) == true));
     }
 
     [Test]
-    public async Task ListWorktrees_ReturnsCorrectBranchInfo()
+    public async Task ListClones_ReturnsCorrectBranchInfo()
     {
         // Arrange
         var branchName = "feature/branch-info-test";
         _fixture.CreateBranch(branchName);
-        var worktreePath = await _service.CreateWorktreeAsync(_fixture.RepositoryPath, branchName);
-        Assert.That(worktreePath, Is.Not.Null);
+        var clonePath = await _service.CreateCloneAsync(_fixture.RepositoryPath, branchName);
+        Assert.That(clonePath, Is.Not.Null);
 
         // Act
-        var worktrees = await _service.ListWorktreesAsync(_fixture.RepositoryPath);
+        var clones = await _service.ListClonesAsync(_fixture.RepositoryPath);
 
         // Assert
-        var worktree = worktrees.FirstOrDefault(w => NormalizePath(w.Path) == NormalizePath(worktreePath!));
-        Assert.That(worktree, Is.Not.Null);
-        Assert.That(worktree!.Branch, Does.EndWith(branchName));
-        Assert.That(worktree.HeadCommit, Is.Not.Null);
-        Assert.That(worktree.IsDetached, Is.False);
+        var clone = clones.FirstOrDefault(w => NormalizePath(w.Path) == NormalizePath(clonePath!));
+        Assert.That(clone, Is.Not.Null);
+        Assert.That(clone!.Branch, Does.EndWith(branchName));
+        Assert.That(clone.HeadCommit, Is.Not.Null);
+        Assert.That(clone.IsDetached, Is.False);
     }
 
     [Test]
-    public async Task RemoveWorktree_ExistingWorktree_RemovesSuccessfully()
+    public async Task RemoveClone_ExistingClone_RemovesSuccessfully()
     {
         // Arrange
         var branchName = "feature/remove-test";
         _fixture.CreateBranch(branchName);
-        var worktreePath = await _service.CreateWorktreeAsync(_fixture.RepositoryPath, branchName);
-        Assert.That(worktreePath, Is.Not.Null);
-        Assert.That(Directory.Exists(worktreePath), Is.True);
+        var clonePath = await _service.CreateCloneAsync(_fixture.RepositoryPath, branchName);
+        Assert.That(clonePath, Is.Not.Null);
+        Assert.That(Directory.Exists(clonePath), Is.True);
 
         // Act
-        var result = await _service.RemoveWorktreeAsync(_fixture.RepositoryPath, worktreePath!);
+        var result = await _service.RemoveCloneAsync(_fixture.RepositoryPath, clonePath!);
 
         // Assert
         Assert.That(result, Is.True);
-        Assert.That(Directory.Exists(worktreePath), Is.False);
+        Assert.That(Directory.Exists(clonePath), Is.False);
     }
 
     [Test]
-    public async Task RemoveWorktree_NonExistentWorktree_ReturnsFalse()
+    public async Task RemoveClone_NonExistentClone_ReturnsFalse()
     {
         // Arrange
-        var fakeWorktreePath = Path.Combine(_fixture.RepositoryPath, ".worktrees", "non-existent");
+        var fakeClonePath = Path.Combine(_fixture.RepositoryPath, ".clones", "non-existent");
 
         // Act
-        var result = await _service.RemoveWorktreeAsync(_fixture.RepositoryPath, fakeWorktreePath);
+        var result = await _service.RemoveCloneAsync(_fixture.RepositoryPath, fakeClonePath);
 
         // Assert
         Assert.That(result, Is.False);
     }
 
     [Test]
-    public async Task WorktreeExists_ExistingWorktree_ReturnsTrue()
+    public async Task CloneExists_ExistingClone_ReturnsTrue()
     {
         // Arrange
         var branchName = "feature/exists-test";
         _fixture.CreateBranch(branchName);
-        await _service.CreateWorktreeAsync(_fixture.RepositoryPath, branchName);
+        await _service.CreateCloneAsync(_fixture.RepositoryPath, branchName);
 
         // Act
-        var exists = await _service.WorktreeExistsAsync(_fixture.RepositoryPath, branchName);
+        var exists = await _service.CloneExistsAsync(_fixture.RepositoryPath, branchName);
 
         // Assert
         Assert.That(exists, Is.True);
     }
 
     [Test]
-    public async Task WorktreeExists_NonExistentWorktree_ReturnsFalse()
+    public async Task CloneExists_NonExistentClone_ReturnsFalse()
     {
         // Act
-        var exists = await _service.WorktreeExistsAsync(_fixture.RepositoryPath, "non-existent-branch");
+        var exists = await _service.CloneExistsAsync(_fixture.RepositoryPath, "non-existent-branch");
 
         // Assert
         Assert.That(exists, Is.False);
     }
 
     [Test]
-    public async Task PruneWorktrees_RemovesStaleWorktreeReferences()
+    public async Task PruneClones_RemovesStaleCloneReferences()
     {
         // Arrange
         var branchName = "feature/prune-test";
         _fixture.CreateBranch(branchName);
-        var worktreePath = await _service.CreateWorktreeAsync(_fixture.RepositoryPath, branchName);
-        Assert.That(worktreePath, Is.Not.Null);
+        var clonePath = await _service.CreateCloneAsync(_fixture.RepositoryPath, branchName);
+        Assert.That(clonePath, Is.Not.Null);
 
-        // Manually delete the worktree directory (simulating stale worktree)
-        if (Directory.Exists(worktreePath))
+        // Manually delete the clone directory (simulating stale clone)
+        if (Directory.Exists(clonePath))
         {
-            Directory.Delete(worktreePath!, recursive: true);
+            Directory.Delete(clonePath!, recursive: true);
         }
 
         // Act - should not throw
-        await _service.PruneWorktreesAsync(_fixture.RepositoryPath);
+        await _service.PruneClonesAsync(_fixture.RepositoryPath);
 
-        // Assert - worktree should be pruned from the list
-        var worktrees = await _service.ListWorktreesAsync(_fixture.RepositoryPath);
-        Assert.That(worktrees, Has.None.Matches<WorktreeInfo>(w => NormalizePath(w.Path) == NormalizePath(worktreePath!)));
+        // Assert - clone should be pruned from the list
+        var clones = await _service.ListClonesAsync(_fixture.RepositoryPath);
+        Assert.That(clones, Has.None.Matches<CloneInfo>(w => NormalizePath(w.Path) == NormalizePath(clonePath!)));
     }
 
     [Test]
-    public async Task CreateWorktree_WithModifiedFiles_WorktreeHasCleanState()
+    public async Task CreateClone_WithModifiedFiles_CloneHasCleanState()
     {
         // Arrange
         var branchName = "feature/clean-state-test";
         _fixture.CreateBranch(branchName);
 
-        // Modify a file in the main worktree (uncommitted change)
+        // Modify a file in the main clone (uncommitted change)
         var readmePath = Path.Combine(_fixture.RepositoryPath, "README.md");
         File.AppendAllText(readmePath, "\n\nModified content.");
 
         // Act
-        var worktreePath = await _service.CreateWorktreeAsync(_fixture.RepositoryPath, branchName);
+        var clonePath = await _service.CreateCloneAsync(_fixture.RepositoryPath, branchName);
 
         // Assert
-        Assert.That(worktreePath, Is.Not.Null);
+        Assert.That(clonePath, Is.Not.Null);
 
-        // The new worktree should have the clean version from the branch
-        var worktreeReadme = File.ReadAllText(Path.Combine(worktreePath!, "README.md"));
-        Assert.That(worktreeReadme, Does.Not.Contain("Modified content."));
+        // The new clone should have the clean version from the branch
+        var cloneReadme = File.ReadAllText(Path.Combine(clonePath!, "README.md"));
+        Assert.That(cloneReadme, Does.Not.Contain("Modified content."));
     }
 
     [Test]
-    public async Task CreateWorktree_BranchNameWithSpecialCharacters_SanitizesPath()
+    public async Task CreateClone_BranchNameWithSpecialCharacters_SanitizesPath()
     {
         // Arrange
         var branchName = "feature/special@chars#test";
         _fixture.RunGit($"branch \"{branchName}\"");
 
         // Act
-        var worktreePath = await _service.CreateWorktreeAsync(_fixture.RepositoryPath, branchName);
+        var clonePath = await _service.CreateCloneAsync(_fixture.RepositoryPath, branchName);
 
         // Assert
-        Assert.That(worktreePath, Is.Not.Null);
-        Assert.That(worktreePath, Does.Not.Contain("@"));
-        Assert.That(worktreePath, Does.Not.Contain("#"));
-        Assert.That(Directory.Exists(worktreePath), Is.True);
+        Assert.That(clonePath, Is.Not.Null);
+        Assert.That(clonePath, Does.Not.Contain("@"));
+        Assert.That(clonePath, Does.Not.Contain("#"));
+        Assert.That(Directory.Exists(clonePath), Is.True);
     }
 
-    #region GetWorktreePathForBranchAsync Integration Tests
+    #region GetClonePathForBranchAsync Integration Tests
 
     /// <summary>
-    /// Integration test: Worktree path with + character should be preserved in the flat structure.
+    /// Integration test: Clone path with + character should be preserved in the flat structure.
     /// The new flat structure uses + as a separator between type, branch-id, and issue-id.
     /// </summary>
     [Test]
-    public async Task GetWorktreePathForBranch_WithPlusInBranchName_PreservesPlusInWorktreePath()
+    public async Task GetClonePathForBranch_WithPlusInBranchName_PreservesPlusInClonePath()
     {
         // Arrange
         // The branch name as it would appear in the new flat format: type/name+issueId
@@ -296,77 +296,77 @@ public class GitWorktreeServiceIntegrationTests
         // Create the branch in git (git allows + in branch names)
         _fixture.RunGit($"branch \"{branchName}\"");
 
-        // Create a worktree for this branch - path will be flat with + preserved
-        var worktreePath = await _service.CreateWorktreeAsync(_fixture.RepositoryPath, branchName);
-        Assert.That(worktreePath, Is.Not.Null);
+        // Create a clone for this branch - path will be flat with + preserved
+        var clonePath = await _service.CreateCloneAsync(_fixture.RepositoryPath, branchName);
+        Assert.That(clonePath, Is.Not.Null);
 
-        // Verify the worktree is in .worktrees directory with flat name
-        Assert.That(worktreePath, Does.Contain(".clones"));
+        // Verify the clone is in .clones directory with flat name
+        Assert.That(clonePath, Does.Contain(".clones"));
         // + is preserved, slashes become +
-        Assert.That(worktreePath, Does.Contain("feature+improve-tool-output+aLP3LH"));
+        Assert.That(clonePath, Does.Contain("feature+improve-tool-output+aLP3LH"));
 
         // Act - Now simulate what happens during PR sync:
-        // Given only the branch name (with +), can we find the existing worktree?
-        var foundPath = await _service.GetWorktreePathForBranchAsync(_fixture.RepositoryPath, branchName);
+        // Given only the branch name (with +), can we find the existing clone?
+        var foundPath = await _service.GetClonePathForBranchAsync(_fixture.RepositoryPath, branchName);
 
         // Assert
-        Assert.That(foundPath, Is.Not.Null, "Should find the worktree path for the branch with + character");
-        Assert.That(NormalizePath(foundPath!), Is.EqualTo(NormalizePath(worktreePath!)));
+        Assert.That(foundPath, Is.Not.Null, "Should find the clone path for the branch with + character");
+        Assert.That(NormalizePath(foundPath!), Is.EqualTo(NormalizePath(clonePath!)));
     }
 
     [Test]
-    public async Task GetWorktreePathForBranch_WithNoExistingWorktree_ReturnsNull()
+    public async Task GetClonePathForBranch_WithNoExistingClone_ReturnsNull()
     {
         // Arrange
-        var branchName = "feature/no-worktree+test";
+        var branchName = "feature/no-clone+test";
         _fixture.RunGit($"branch \"{branchName}\"");
-        // Note: We do NOT create a worktree for this branch
+        // Note: We do NOT create a clone for this branch
 
         // Act
-        var foundPath = await _service.GetWorktreePathForBranchAsync(_fixture.RepositoryPath, branchName);
+        var foundPath = await _service.GetClonePathForBranchAsync(_fixture.RepositoryPath, branchName);
 
         // Assert
         Assert.That(foundPath, Is.Null);
     }
 
     [Test]
-    public async Task GetWorktreePathForBranch_WithRegularBranchName_MatchesDirectly()
+    public async Task GetClonePathForBranch_WithRegularBranchName_MatchesDirectly()
     {
         // Arrange
         var branchName = "feature/normal-branch";
         _fixture.CreateBranch(branchName);
 
-        var worktreePath = await _service.CreateWorktreeAsync(_fixture.RepositoryPath, branchName);
-        Assert.That(worktreePath, Is.Not.Null);
+        var clonePath = await _service.CreateCloneAsync(_fixture.RepositoryPath, branchName);
+        Assert.That(clonePath, Is.Not.Null);
 
         // Act
-        var foundPath = await _service.GetWorktreePathForBranchAsync(_fixture.RepositoryPath, branchName);
+        var foundPath = await _service.GetClonePathForBranchAsync(_fixture.RepositoryPath, branchName);
 
         // Assert
         Assert.That(foundPath, Is.Not.Null);
-        Assert.That(NormalizePath(foundPath!), Is.EqualTo(NormalizePath(worktreePath!)));
+        Assert.That(NormalizePath(foundPath!), Is.EqualTo(NormalizePath(clonePath!)));
     }
 
     [Test]
-    public async Task GetWorktreePathForBranch_WithMultipleSpecialCharacters_MatchesFlattenedPath()
+    public async Task GetClonePathForBranch_WithMultipleSpecialCharacters_MatchesFlattenedPath()
     {
         // Arrange - Test with special characters that get sanitized
         // Note: + is preserved, but @ and # become dashes
         var branchName = "feature/test+foo@bar#baz";
         _fixture.RunGit($"branch \"{branchName}\"");
 
-        var worktreePath = await _service.CreateWorktreeAsync(_fixture.RepositoryPath, branchName);
-        Assert.That(worktreePath, Is.Not.Null);
+        var clonePath = await _service.CreateCloneAsync(_fixture.RepositoryPath, branchName);
+        Assert.That(clonePath, Is.Not.Null);
 
         // Verify sanitization happened - + is preserved, @ and # become -
-        Assert.That(worktreePath, Does.Contain("feature+test+foo-bar-baz"));
+        Assert.That(clonePath, Does.Contain("feature+test+foo-bar-baz"));
 
         // Act
-        var foundPath = await _service.GetWorktreePathForBranchAsync(_fixture.RepositoryPath, branchName);
+        var foundPath = await _service.GetClonePathForBranchAsync(_fixture.RepositoryPath, branchName);
 
         // Assert
         Assert.That(foundPath, Is.Not.Null);
-        Assert.That(NormalizePath(foundPath!), Is.EqualTo(NormalizePath(worktreePath!)));
+        Assert.That(NormalizePath(foundPath!), Is.EqualTo(NormalizePath(clonePath!)));
     }
 
     #endregion
@@ -406,23 +406,23 @@ public class GitWorktreeServiceIntegrationTests
     }
 
     [Test]
-    public async Task ListLocalBranchesAsync_IdentifiesWorktreeBranches()
+    public async Task ListLocalBranchesAsync_IdentifiesCloneBranches()
     {
         // Arrange
-        var branchName = "feature/worktree-branch";
+        var branchName = "feature/clone-branch";
         _fixture.CreateBranch(branchName);
 
-        var worktreePath = await _service.CreateWorktreeAsync(_fixture.RepositoryPath, branchName);
-        Assert.That(worktreePath, Is.Not.Null);
+        var clonePath = await _service.CreateCloneAsync(_fixture.RepositoryPath, branchName);
+        Assert.That(clonePath, Is.Not.Null);
 
         // Act
         var branches = await _service.ListLocalBranchesAsync(_fixture.RepositoryPath);
 
         // Assert
-        var worktreeBranch = branches.FirstOrDefault(b => b.ShortName == branchName);
-        Assert.That(worktreeBranch, Is.Not.Null);
-        Assert.That(worktreeBranch!.HasWorktree, Is.True);
-        Assert.That(worktreeBranch.WorktreePath, Is.Not.Null);
+        var cloneBranch = branches.FirstOrDefault(b => b.ShortName == branchName);
+        Assert.That(cloneBranch, Is.Not.Null);
+        Assert.That(cloneBranch!.HasClone, Is.True);
+        Assert.That(cloneBranch.ClonePath, Is.Not.Null);
     }
 
     [Test]
@@ -633,12 +633,12 @@ public class GitWorktreeServiceIntegrationTests
     #region Branch Name Recalculation Tests (Issue 1JudQJ)
 
     /// <summary>
-    /// Integration test for issue 1JudQJ: Verifies that when creating a worktree,
+    /// Integration test for issue 1JudQJ: Verifies that when creating a clone,
     /// the branch name is calculated from current issue properties (type, title).
-    /// This test simulates the scenario where an issue's type changes before creating a worktree.
+    /// This test simulates the scenario where an issue's type changes before creating a clone.
     /// </summary>
     [Test]
-    public async Task CreateWorktree_WithRecalculatedBranchName_CreatesCorrectBranch()
+    public async Task CreateClone_WithRecalculatedBranchName_CreatesCorrectBranch()
     {
         // Arrange - Simulate the branch naming pattern used by Homespun
         // New flat format: {type}/{branch-id}+{issue-id}
@@ -650,15 +650,15 @@ public class GitWorktreeServiceIntegrationTests
         // Recalculated branch name (as if issue was changed to Bug type)
         var recalculatedBranchName = $"bug/fix-something+{issueId}";
 
-        // Act - Create worktree with the recalculated branch name
-        var worktreePath = await _service.CreateWorktreeAsync(
+        // Act - Create clone with the recalculated branch name
+        var clonePath = await _service.CreateCloneAsync(
             _fixture.RepositoryPath,
             recalculatedBranchName,
             createBranch: true);
 
-        // Assert - Worktree should be created with the recalculated name
-        Assert.That(worktreePath, Is.Not.Null);
-        Assert.That(Directory.Exists(worktreePath), Is.True);
+        // Assert - Clone should be created with the recalculated name
+        Assert.That(clonePath, Is.Not.Null);
+        Assert.That(Directory.Exists(clonePath), Is.True);
 
         // Verify the branch was created with the correct name
         var branches = _fixture.RunGit("branch --list");
@@ -667,28 +667,28 @@ public class GitWorktreeServiceIntegrationTests
     }
 
     /// <summary>
-    /// Integration test: Verifies that the worktree path uses the flat structure
-    /// with the .worktrees directory and flattened branch name.
+    /// Integration test: Verifies that the clone path uses the flat structure
+    /// with the .clones directory and flattened branch name.
     /// </summary>
     [Test]
-    public async Task CreateWorktree_UsesFlatWorktreeStructure()
+    public async Task CreateClone_UsesFlatCloneStructure()
     {
         // Arrange - Branch name in new flat format
         var branchName = "task/implement-feature+xyz789";
 
         // Act
-        var worktreePath = await _service.CreateWorktreeAsync(
+        var clonePath = await _service.CreateCloneAsync(
             _fixture.RepositoryPath,
             branchName,
             createBranch: true);
 
         // Assert
-        Assert.That(worktreePath, Is.Not.Null);
-        Assert.That(Directory.Exists(worktreePath), Is.True);
+        Assert.That(clonePath, Is.Not.Null);
+        Assert.That(Directory.Exists(clonePath), Is.True);
 
-        // Verify the worktree is in .worktrees directory with flat name
-        Assert.That(worktreePath, Does.Contain(".clones"));
-        Assert.That(worktreePath, Does.Contain("task+implement-feature+xyz789"));
+        // Verify the clone is in .clones directory with flat name
+        Assert.That(clonePath, Does.Contain(".clones"));
+        Assert.That(clonePath, Does.Contain("task+implement-feature+xyz789"));
 
         // Verify the branch was created correctly
         var branches = _fixture.RunGit("branch --list");
@@ -696,36 +696,36 @@ public class GitWorktreeServiceIntegrationTests
     }
 
     /// <summary>
-    /// Integration test: Verifies that the worktree path matches
+    /// Integration test: Verifies that the clone path matches
     /// the branch name (after flattening) to ensure consistency.
     /// </summary>
     [Test]
-    public async Task CreateWorktree_BranchNameAndWorktreePath_AreConsistent()
+    public async Task CreateClone_BranchNameAndClonePath_AreConsistent()
     {
         // Arrange - New flat format
         var branchName = "feature/some-feature+def456";
 
         // Act
-        var worktreePath = await _service.CreateWorktreeAsync(
+        var clonePath = await _service.CreateCloneAsync(
             _fixture.RepositoryPath,
             branchName,
             createBranch: true);
 
-        // Assert - Worktree path should be in .worktrees with flattened name
-        Assert.That(worktreePath, Is.Not.Null);
+        // Assert - Clone path should be in .clones with flattened name
+        Assert.That(clonePath, Is.Not.Null);
 
-        // The worktree folder name should be flattened (/ -> +, existing + preserved)
-        Assert.That(worktreePath, Does.Contain(".clones"));
-        Assert.That(worktreePath, Does.Contain("feature+some-feature+def456"));
+        // The clone folder name should be flattened (/ -> +, existing + preserved)
+        Assert.That(clonePath, Does.Contain(".clones"));
+        Assert.That(clonePath, Does.Contain("feature+some-feature+def456"));
     }
 
     /// <summary>
-    /// Integration test for issue 1JudQJ: Verifies that creating a worktree with a different
-    /// branch name (simulating an issue property change) creates a separate worktree.
-    /// This demonstrates that old worktrees are NOT automatically updated.
+    /// Integration test for issue 1JudQJ: Verifies that creating a clone with a different
+    /// branch name (simulating an issue property change) creates a separate clone.
+    /// This demonstrates that old clones are NOT automatically updated.
     /// </summary>
     [Test]
-    public async Task CreateWorktree_WithDifferentBranchNames_CreatesSeparateWorktrees()
+    public async Task CreateClone_WithDifferentBranchNames_CreatesSeparateClones()
     {
         // Arrange - Two different branch names for same logical issue
         // (simulating issue type change from Feature to Bug)
@@ -733,22 +733,22 @@ public class GitWorktreeServiceIntegrationTests
         var originalBranchName = $"feature/test-issue+{issueId}";
         var modifiedBranchName = $"bug/test-issue+{issueId}";
 
-        // Act - Create worktrees with both names
-        var worktree1 = await _service.CreateWorktreeAsync(
+        // Act - Create clones with both names
+        var clone1 = await _service.CreateCloneAsync(
             _fixture.RepositoryPath,
             originalBranchName,
             createBranch: true);
 
-        var worktree2 = await _service.CreateWorktreeAsync(
+        var clone2 = await _service.CreateCloneAsync(
             _fixture.RepositoryPath,
             modifiedBranchName,
             createBranch: true);
 
-        // Assert - Both worktrees should exist (this is the current behavior)
+        // Assert - Both clones should exist (this is the current behavior)
         // The fix ensures the UI always uses the recalculated name, preventing this scenario
-        Assert.That(worktree1, Is.Not.Null);
-        Assert.That(worktree2, Is.Not.Null);
-        Assert.That(worktree1, Is.Not.EqualTo(worktree2));
+        Assert.That(clone1, Is.Not.Null);
+        Assert.That(clone2, Is.Not.Null);
+        Assert.That(clone1, Is.Not.EqualTo(clone2));
 
         // Both branches should exist
         var branches = _fixture.RunGit("branch --list");
@@ -757,27 +757,27 @@ public class GitWorktreeServiceIntegrationTests
     }
 
     /// <summary>
-    /// Integration test for issue 1JudQJ: Verifies that GetWorktreePathForBranch
-    /// can find a worktree using the recalculated branch name.
+    /// Integration test for issue 1JudQJ: Verifies that GetClonePathForBranch
+    /// can find a clone using the recalculated branch name.
     /// </summary>
     [Test]
-    public async Task GetWorktreePathForBranch_WithRecalculatedName_FindsCorrectWorktree()
+    public async Task GetClonePathForBranch_WithRecalculatedName_FindsCorrectClone()
     {
-        // Arrange - Create a worktree with initial branch name (new flat format)
+        // Arrange - Create a clone with initial branch name (new flat format)
         var branchName = "task/my-task+recalc1";
-        var worktreePath = await _service.CreateWorktreeAsync(
+        var clonePath = await _service.CreateCloneAsync(
             _fixture.RepositoryPath,
             branchName,
             createBranch: true);
-        Assert.That(worktreePath, Is.Not.Null);
+        Assert.That(clonePath, Is.Not.Null);
 
-        // Act - Look up the worktree using the same branch name
+        // Act - Look up the clone using the same branch name
         // (simulating that recalculation produces the same name)
-        var foundPath = await _service.GetWorktreePathForBranchAsync(_fixture.RepositoryPath, branchName);
+        var foundPath = await _service.GetClonePathForBranchAsync(_fixture.RepositoryPath, branchName);
 
         // Assert
         Assert.That(foundPath, Is.Not.Null);
-        Assert.That(NormalizePath(foundPath!), Is.EqualTo(NormalizePath(worktreePath!)));
+        Assert.That(NormalizePath(foundPath!), Is.EqualTo(NormalizePath(clonePath!)));
     }
 
     #endregion

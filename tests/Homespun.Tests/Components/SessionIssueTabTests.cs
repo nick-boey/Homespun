@@ -92,11 +92,11 @@ public class SessionIssueTabTests : BunitTestContext
     }
 
     [Test]
-    public void SessionIssueTab_WorktreeEntity_ShowsNotLinkedMessage()
+    public void SessionIssueTab_CloneEntity_ShowsNotLinkedMessage()
     {
-        // Act - worktree entities start with "worktree:"
+        // Act - clone entities start with "clone:"
         var cut = Render<SessionIssueTab>(parameters => parameters
-            .Add(p => p.EntityId, "worktree:feature/test")
+            .Add(p => p.EntityId, "clone:feature/test")
             .Add(p => p.ProjectId, "proj-1"));
 
         // Assert

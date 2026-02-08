@@ -46,14 +46,14 @@ public class BranchInfo
     public int BehindCount { get; set; }
 
     /// <summary>
-    /// Whether the branch has a corresponding worktree.
+    /// Whether the branch has a corresponding clone.
     /// </summary>
-    public bool HasWorktree { get; set; }
+    public bool HasClone { get; set; }
 
     /// <summary>
-    /// Path to the worktree if one exists.
+    /// Path to the clone if one exists.
     /// </summary>
-    public string? WorktreePath { get; set; }
+    public string? ClonePath { get; set; }
 
     /// <summary>
     /// Whether the branch has been merged into the default branch.

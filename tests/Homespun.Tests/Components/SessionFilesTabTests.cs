@@ -10,13 +10,13 @@ namespace Homespun.Tests.Components;
 [TestFixture]
 public class SessionFilesTabTests : BunitTestContext
 {
-    private Mock<IGitWorktreeService> _mockGitService = null!;
+    private Mock<IGitCloneService> _mockGitService = null!;
 
     [SetUp]
     public new void Setup()
     {
         base.Setup();
-        _mockGitService = new Mock<IGitWorktreeService>();
+        _mockGitService = new Mock<IGitCloneService>();
         Services.AddSingleton(_mockGitService.Object);
     }
 

@@ -162,8 +162,8 @@ Resources follow the pattern `{type}-{baseName}-{environmentSuffix}`:
 
 ## Key Design Decisions
 
-- **NFS over SMB**: NFS provides POSIX semantics (chmod, symlinks) needed for git worktrees, Tailscale state directories, and Claude Code operations. SMB lacks these capabilities.
+- **NFS over SMB**: NFS provides POSIX semantics (chmod, symlinks) needed for git clones, Tailscale state directories, and Claude Code operations. SMB lacks these capabilities.
 - **VNet integration**: Required for NFS private endpoint access. The ACA environment is internal-only; Tailscale handles all external access.
 - **Single worker app**: One worker container app handles multiple agent sessions concurrently via `WorkerSessionService`, scaling horizontally through ACA replicas rather than per-session containers.
-- **Shared NFS volume**: Both main app and worker mount the same NFS share, enabling shared filesystem access for git repos, worktrees, and application data.
+- **Shared NFS volume**: Both main app and worker mount the same NFS share, enabling shared filesystem access for git repos, clones, and application data.
 - **API version 2025-01-01**: The `nfsAzureFile` storage mount type requires this minimum API version for ACA resources. Earlier GA versions (e.g. `2024-03-01`) only support SMB.

@@ -1,9 +1,9 @@
 namespace Homespun.Features.Git;
 
 /// <summary>
-/// Represents the git status of a worktree with file change counts.
+/// Represents the git status of a clone with file change counts.
 /// </summary>
-public class WorktreeStatus
+public class CloneStatus
 {
     /// <summary>
     /// Count of staged files (added to index).
@@ -21,7 +21,7 @@ public class WorktreeStatus
     public int UntrackedCount { get; set; }
 
     /// <summary>
-    /// Whether the worktree has any changes (staged, modified, or untracked).
+    /// Whether the clone has any changes (staged, modified, or untracked).
     /// </summary>
     public bool HasChanges => StagedCount > 0 || ModifiedCount > 0 || UntrackedCount > 0;
 }

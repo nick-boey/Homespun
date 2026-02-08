@@ -3,11 +3,11 @@ using NUnit.Framework;
 namespace Homespun.Tests.Components;
 
 /// <summary>
-/// Unit tests for WorktreeManagementPanel component logic.
+/// Unit tests for CloneManagementPanel component logic.
 /// These tests focus on the helper methods and logic used in the component.
 /// </summary>
 [TestFixture]
-public class WorktreeManagementPanelTests
+public class CloneManagementPanelTests
 {
     [Test]
     public void GetShortBranchName_WithRefsHeadsPrefix_RemovesPrefix()
@@ -132,29 +132,29 @@ public class WorktreeManagementPanelTests
     }
 
     [Test]
-    public void GetWorktreeEntityId_WithBranch_ReturnsWorktreePrefixedId()
+    public void GetCloneEntityId_WithBranch_ReturnsClonePrefixedId()
     {
         // Arrange
         var branch = "refs/heads/feature/my-branch";
 
         // Act
-        var result = GetWorktreeEntityId(branch);
+        var result = GetCloneEntityId(branch);
 
         // Assert
-        Assert.That(result, Is.EqualTo("worktree:feature/my-branch"));
+        Assert.That(result, Is.EqualTo("clone:feature/my-branch"));
     }
 
     [Test]
-    public void GetWorktreeEntityId_WithMainBranch_ReturnsWorktreePrefixedMain()
+    public void GetCloneEntityId_WithMainBranch_ReturnsClonePrefixedMain()
     {
         // Arrange
         var branch = "refs/heads/main";
 
         // Act
-        var result = GetWorktreeEntityId(branch);
+        var result = GetCloneEntityId(branch);
 
         // Assert
-        Assert.That(result, Is.EqualTo("worktree:main"));
+        Assert.That(result, Is.EqualTo("clone:main"));
     }
 
     [Test]
@@ -223,10 +223,10 @@ public class WorktreeManagementPanelTests
         return branchName == defaultBranch;
     }
 
-    private static string GetWorktreeEntityId(string branch)
+    private static string GetCloneEntityId(string branch)
     {
         var branchName = GetShortBranchName(branch);
-        return $"worktree:{branchName}";
+        return $"clone:{branchName}";
     }
 
     private static string TruncateMessage(string? message, int maxLength = 60)

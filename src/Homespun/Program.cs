@@ -89,7 +89,7 @@ else
     builder.Services.AddScoped<IProjectService, ProjectService>();
     builder.Services.AddSingleton<IGitHubEnvironmentService, GitHubEnvironmentService>();
     builder.Services.AddSingleton<ICommandRunner, CommandRunner>();
-    builder.Services.AddSingleton<IGitWorktreeService, GitWorktreeService>();
+    builder.Services.AddSingleton<IGitCloneService, GitCloneService>();
     builder.Services.AddSingleton<IMergeStatusCacheService, MergeStatusCacheService>();
     builder.Services.AddScoped<PullRequestDataService>();
     builder.Services.AddSingleton<IGitHubClientWrapper, GitHubClientWrapper>();

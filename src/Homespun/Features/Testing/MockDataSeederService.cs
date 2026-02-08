@@ -356,14 +356,14 @@ public class MockDataSeederService : IHostedService
             new()
             {
                 Id = "1JudQJ",
-                Title = "Fix issues with worktree and branch naming",
-                Description = @"When a new worktree is created for an issue, it currently creates the new worktree with a default automatically generated branch name. It appears that this is being persisted independent to the {group}/{type}/{branch-id} pattern, so when these details are changed for an issue they are not recalculated and updated prior to creating the branch and worktree.
+                Title = "Fix issues with clone and branch naming",
+                Description = @"When a new clone is created for an issue, it currently creates the new clone with a default automatically generated branch name. It appears that this is being persisted independent to the {group}/{type}/{branch-id} pattern, so when these details are changed for an issue they are not recalculated and updated prior to creating the branch and clone.
 
-Create an integration test to confirm that this does occur, then fix it - the branch name and worktree folder name should always match and should always be recalculated just before creating the branch and worktree.",
+Create an integration test to confirm that this does occur, then fix it - the branch name and clone folder name should always match and should always be recalculated just before creating the branch and clone.",
                 Type = IssueType.Bug, // This was originally Feature, now Bug
                 Status = IssueStatus.Progress,
                 Priority = 1,
-                WorkingBranchId = "fix-issues-with-worktree-and-branch-naming",
+                WorkingBranchId = "fix-issues-with-clone-and-branch-naming",
                 CreatedAt = now.AddDays(-1),
                 LastUpdate = now
             }

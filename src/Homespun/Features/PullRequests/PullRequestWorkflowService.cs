@@ -293,7 +293,7 @@ public class PullRequestWorkflowService(
 
     private async Task<bool> RebaseBranchAsync(Project project, TrackedPullRequest pullRequest, RebaseResult result)
     {
-        var workingDir = pullRequest.WorktreePath ?? project.LocalPath;
+        var workingDir = pullRequest.ClonePath ?? project.LocalPath;
         var baseBranch = project.DefaultBranch ?? "main";
 
         // Perform rebase

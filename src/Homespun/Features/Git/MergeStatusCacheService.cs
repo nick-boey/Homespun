@@ -10,7 +10,7 @@ namespace Homespun.Features.Git;
 /// Cache is stored in JSON files with a 1-hour expiry.
 /// </summary>
 public class MergeStatusCacheService(
-    IGitWorktreeService gitWorktreeService,
+    IGitCloneService gitCloneService,
     ILogger<MergeStatusCacheService> logger)
     : IMergeStatusCacheService
 {
@@ -42,7 +42,7 @@ public class MergeStatusCacheService(
         logger.LogDebug("Computing merge status for branch {BranchName}", branchName);
         status = new MergeStatus
         {
-            IsMerged = await gitWorktreeService.IsBranchMergedAsync(repoPath, branchName, targetBranch),
+            IsMerged = await gitCloneService.IsBranchMergedAsync(repoPath, branchName, targetBranch),
             IsSquashMerged = false, // Only compute if not already merged
             CheckedAt = DateTime.UtcNow
         };
@@ -50,7 +50,7 @@ public class MergeStatusCacheService(
         // Only check squash-merged if not already regular-merged
         if (!status.IsMerged)
         {
-            status.IsSquashMerged = await gitWorktreeService.IsSquashMergedAsync(repoPath, branchName, targetBranch);
+            status.IsSquashMerged = await gitCloneService.IsSquashMergedAsync(repoPath, branchName, targetBranch);
         }
 
         // Update cache

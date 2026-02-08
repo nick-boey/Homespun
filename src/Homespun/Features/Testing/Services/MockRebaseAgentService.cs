@@ -23,15 +23,15 @@ public class MockRebaseAgentService : IRebaseAgentService
 
     public async Task<ClaudeSession> StartRebaseAgentAsync(
         string projectId,
-        string worktreePath,
+        string clonePath,
         string branchName,
         string defaultBranch,
         string model,
         IEnumerable<PullRequestInfo>? recentMergedPRs = null,
         CancellationToken cancellationToken = default)
     {
-        _logger.LogDebug("[Mock] StartRebaseAgent for branch {BranchName} in {WorktreePath}",
-            branchName, worktreePath);
+        _logger.LogDebug("[Mock] StartRebaseAgent for branch {BranchName} in {ClonePath}",
+            branchName, clonePath);
 
         var systemPrompt = GenerateRebaseSystemPrompt(branchName, defaultBranch);
         var initialMessage = GenerateRebaseInitialMessage(branchName, defaultBranch, recentMergedPRs);
@@ -42,7 +42,7 @@ public class MockRebaseAgentService : IRebaseAgentService
         var session = await _sessionService.StartSessionAsync(
             entityId,
             projectId,
-            worktreePath,
+            clonePath,
             SessionMode.Build,
             model,
             systemPrompt,

@@ -8,7 +8,7 @@ namespace Homespun.Tests.Features.Git;
 [TestFixture]
 public class MergeStatusCacheServiceTests
 {
-    private Mock<IGitWorktreeService> _mockGitService = null!;
+    private Mock<IGitCloneService> _mockGitService = null!;
     private Mock<ILogger<MergeStatusCacheService>> _mockLogger = null!;
     private MergeStatusCacheService _cacheService = null!;
     private string _testRepoPath = null!;
@@ -16,7 +16,7 @@ public class MergeStatusCacheServiceTests
     [SetUp]
     public void Setup()
     {
-        _mockGitService = new Mock<IGitWorktreeService>();
+        _mockGitService = new Mock<IGitCloneService>();
         _mockLogger = new Mock<ILogger<MergeStatusCacheService>>();
         _cacheService = new MergeStatusCacheService(_mockGitService.Object, _mockLogger.Object);
         _testRepoPath = Path.Combine(Path.GetTempPath(), $"test-repo-{Guid.NewGuid():N}");

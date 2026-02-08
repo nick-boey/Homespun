@@ -4,22 +4,22 @@ using Microsoft.AspNetCore.Mvc;
 namespace Homespun.Features.Git.Controllers;
 
 /// <summary>
-/// API endpoints for managing Git worktrees.
+/// API endpoints for managing Git clones.
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
 [Produces("application/json")]
-public class WorktreesController(
-    IGitWorktreeService worktreeService,
+public class ClonesController(
+    IGitCloneService cloneService,
     IProjectService projectService) : ControllerBase
 {
     /// <summary>
-    /// List worktrees for a project.
+    /// List clones for a project.
     /// </summary>
     [HttpGet]
-    [ProducesResponseType<List<WorktreeInfo>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<List<CloneInfo>>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<List<WorktreeInfo>>> List([FromQuery] string projectId)
+    public async Task<ActionResult<List<CloneInfo>>> List([FromQuery] string projectId)
     {
         var project = await projectService.GetByIdAsync(projectId);
         if (project == null)
@@ -27,18 +27,18 @@ public class WorktreesController(
             return NotFound("Project not found");
         }
 
-        var worktrees = await worktreeService.ListWorktreesAsync(project.LocalPath);
-        return Ok(worktrees);
+        var clones = await cloneService.ListClonesAsync(project.LocalPath);
+        return Ok(clones);
     }
 
     /// <summary>
-    /// Create a new worktree.
+    /// Create a new clone.
     /// </summary>
     [HttpPost]
-    [ProducesResponseType<CreateWorktreeResponse>(StatusCodes.Status201Created)]
+    [ProducesResponseType<CreateCloneResponse>(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<CreateWorktreeResponse>> Create([FromBody] CreateWorktreeRequest request)
+    public async Task<ActionResult<CreateCloneResponse>> Create([FromBody] CreateCloneRequest request)
     {
         var project = await projectService.GetByIdAsync(request.ProjectId);
         if (project == null)
@@ -46,30 +46,30 @@ public class WorktreesController(
             return NotFound("Project not found");
         }
 
-        var worktreePath = await worktreeService.CreateWorktreeAsync(
+        var clonePath = await cloneService.CreateCloneAsync(
             project.LocalPath,
             request.BranchName,
             request.CreateBranch,
             request.BaseBranch);
 
-        if (worktreePath == null)
+        if (clonePath == null)
         {
-            return BadRequest("Failed to create worktree");
+            return BadRequest("Failed to create clone");
         }
 
         return Created(
             string.Empty,
-            new CreateWorktreeResponse { Path = worktreePath, BranchName = request.BranchName });
+            new CreateCloneResponse { Path = clonePath, BranchName = request.BranchName });
     }
 
     /// <summary>
-    /// Delete a worktree.
+    /// Delete a clone.
     /// </summary>
     [HttpDelete]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Delete([FromQuery] string projectId, [FromQuery] string worktreePath)
+    public async Task<IActionResult> Delete([FromQuery] string projectId, [FromQuery] string clonePath)
     {
         var project = await projectService.GetByIdAsync(projectId);
         if (project == null)
@@ -77,22 +77,22 @@ public class WorktreesController(
             return NotFound("Project not found");
         }
 
-        var removed = await worktreeService.RemoveWorktreeAsync(project.LocalPath, worktreePath);
+        var removed = await cloneService.RemoveCloneAsync(project.LocalPath, clonePath);
         if (!removed)
         {
-            return BadRequest("Failed to remove worktree");
+            return BadRequest("Failed to remove clone");
         }
 
         return NoContent();
     }
 
     /// <summary>
-    /// Check if a worktree exists for a branch.
+    /// Check if a clone exists for a branch.
     /// </summary>
     [HttpGet("exists")]
-    [ProducesResponseType<WorktreeExistsResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<CloneExistsResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<WorktreeExistsResponse>> Exists([FromQuery] string projectId, [FromQuery] string branchName)
+    public async Task<ActionResult<CloneExistsResponse>> Exists([FromQuery] string projectId, [FromQuery] string branchName)
     {
         var project = await projectService.GetByIdAsync(projectId);
         if (project == null)
@@ -100,12 +100,12 @@ public class WorktreesController(
             return NotFound("Project not found");
         }
 
-        var exists = await worktreeService.WorktreeExistsAsync(project.LocalPath, branchName);
-        return Ok(new WorktreeExistsResponse { Exists = exists });
+        var exists = await cloneService.CloneExistsAsync(project.LocalPath, branchName);
+        return Ok(new CloneExistsResponse { Exists = exists });
     }
 
     /// <summary>
-    /// Prune worktrees (remove stale entries).
+    /// Prune clones (remove stale entries).
     /// </summary>
     [HttpPost("prune")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -118,19 +118,19 @@ public class WorktreesController(
             return NotFound("Project not found");
         }
 
-        await worktreeService.PruneWorktreesAsync(project.LocalPath);
+        await cloneService.PruneClonesAsync(project.LocalPath);
         return NoContent();
     }
 
     /// <summary>
-    /// Pull latest changes for a worktree.
+    /// Pull latest changes for a clone.
     /// </summary>
     [HttpPost("pull")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> Pull([FromQuery] string worktreePath)
+    public async Task<IActionResult> Pull([FromQuery] string clonePath)
     {
-        var success = await worktreeService.PullLatestAsync(worktreePath);
+        var success = await cloneService.PullLatestAsync(clonePath);
         if (!success)
         {
             return BadRequest("Failed to pull latest");
@@ -140,9 +140,9 @@ public class WorktreesController(
 }
 
 /// <summary>
-/// Request model for creating a worktree.
+/// Request model for creating a clone.
 /// </summary>
-public class CreateWorktreeRequest
+public class CreateCloneRequest
 {
     /// <summary>
     /// The project ID.
@@ -166,12 +166,12 @@ public class CreateWorktreeRequest
 }
 
 /// <summary>
-/// Response model for creating a worktree.
+/// Response model for creating a clone.
 /// </summary>
-public class CreateWorktreeResponse
+public class CreateCloneResponse
 {
     /// <summary>
-    /// The path to the created worktree.
+    /// The path to the created clone.
     /// </summary>
     public required string Path { get; set; }
 
@@ -182,12 +182,12 @@ public class CreateWorktreeResponse
 }
 
 /// <summary>
-/// Response model for checking worktree existence.
+/// Response model for checking clone existence.
 /// </summary>
-public class WorktreeExistsResponse
+public class CloneExistsResponse
 {
     /// <summary>
-    /// Whether the worktree exists.
+    /// Whether the clone exists.
     /// </summary>
     public bool Exists { get; set; }
 }

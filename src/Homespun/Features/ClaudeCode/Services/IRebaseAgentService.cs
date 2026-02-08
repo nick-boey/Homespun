@@ -11,12 +11,12 @@ namespace Homespun.Features.ClaudeCode.Services;
 public interface IRebaseAgentService
 {
     /// <summary>
-    /// Start a rebase agent session for the specified worktree.
+    /// Start a rebase agent session for the specified clone.
     /// The agent will fetch the latest changes, rebase onto the target branch,
     /// resolve any conflicts, run tests, and push the changes.
     /// </summary>
     /// <param name="projectId">The project ID</param>
-    /// <param name="worktreePath">Path to the git worktree</param>
+    /// <param name="clonePath">Path to the git clone</param>
     /// <param name="branchName">Name of the branch being rebased</param>
     /// <param name="defaultBranch">The default branch to rebase onto (e.g., "main")</param>
     /// <param name="model">The Claude model to use (e.g., "sonnet")</param>
@@ -25,7 +25,7 @@ public interface IRebaseAgentService
     /// <returns>The created Claude session</returns>
     Task<ClaudeSession> StartRebaseAgentAsync(
         string projectId,
-        string worktreePath,
+        string clonePath,
         string branchName,
         string defaultBranch,
         string model,

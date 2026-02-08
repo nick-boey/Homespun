@@ -1,6 +1,6 @@
 @using Homespun.Features.ClaudeCode.Data
 @using Homespun.Features.Git
-@inject IGitWorktreeService GitService
+@inject IGitCloneService GitService
 
 <div class="files-tab">
     @if (string.IsNullOrEmpty(WorkingDirectory))

@@ -15,7 +15,7 @@
 @inject IAgentStartupTracker StartupTracker
 @inject IAgentPromptService AgentPromptService
 @inject IFleeceService FleeceService
-@inject IGitWorktreeService GitWorktreeService
+@inject IGitCloneService GitCloneService
 @inject IRebaseAgentService RebaseAgentService
 @inject IIssuePrStatusService IssuePrStatusService
 @inject PullRequestWorkflowService PullRequestWorkflowService
@@ -125,7 +125,7 @@
             <SessionCacheHistory
                 EntityId="@Issue.Id"
                 ProjectId="@ProjectId"
-                WorkingDirectory="@_worktreeInfo?.Path"
+                WorkingDirectory="@_cloneInfo?.Path"
                 ShowBorder="true"
                 ShowEmptyState="false" />
         </div>
@@ -179,7 +179,7 @@
                             OnStart="HandleAgentStart" />
                     </div>
 
-                    @if (_worktreeInfo != null && _branchInfo?.BehindCount > 0)
+                    @if (_cloneInfo != null && _branchInfo?.BehindCount > 0)
                     {
                         <button class="btn btn-sm btn-outline-warning w-full mb-2"
                                 @onclick="StartRebaseAsync"
@@ -260,7 +260,7 @@
     private Project? _project;
     private string _selectedModel = "opus";
     private string _selectedBaseBranch = "";
-    private WorktreeInfo? _worktreeInfo;
+    private CloneInfo? _cloneInfo;
     private BranchInfo? _branchInfo;
     private bool _isRebasing;
     private IssuePullRequestStatus? _prStatus;
@@ -288,17 +288,17 @@
     {
         _session = null;
         _errorMessage = null;
-        _worktreeInfo = null;
+        _cloneInfo = null;
         _branchInfo = null;
         _prStatus = null;
 
         // Check for existing session
         _session = SessionStore.GetByEntityId(Issue.Id);
 
-        // Load worktree and branch info if project is available
+        // Load clone and branch info if project is available
         if (_project != null)
         {
-            await LoadWorktreeInfoAsync();
+            await LoadCloneInfoAsync();
             // Load PR status in background to not block UI
             _ = LoadPrStatusAsync();
         }
@@ -324,26 +324,26 @@
         }
     }
 
-    private async Task LoadWorktreeInfoAsync()
+    private async Task LoadCloneInfoAsync()
     {
         if (_project == null) return;
 
         try
         {
             var branchName = GetBranchPreview();
-            var worktrees = await GitWorktreeService.ListWorktreesAsync(_project.LocalPath);
-            _worktreeInfo = worktrees.FirstOrDefault(w =>
+            var clones = await GitCloneService.ListClonesAsync(_project.LocalPath);
+            _cloneInfo = clones.FirstOrDefault(w =>
                 w.Branch?.Replace("refs/heads/", "") == branchName);
 
-            if (_worktreeInfo != null)
+            if (_cloneInfo != null)
             {
-                var branches = await GitWorktreeService.ListLocalBranchesAsync(_project.LocalPath);
+                var branches = await GitCloneService.ListLocalBranchesAsync(_project.LocalPath);
                 _branchInfo = branches.FirstOrDefault(b => b.ShortName == branchName);
             }
         }
         catch (Exception ex)
         {
-            Logger.LogWarning(ex, "Failed to load worktree info for issue {IssueId}", Issue.Id);
+            Logger.LogWarning(ex, "Failed to load clone info for issue {IssueId}", Issue.Id);
         }
     }
 
@@ -382,15 +382,15 @@
 
         try
         {
-            // Get or create worktree for the issue's branch
+            // Get or create clone for the issue's branch
             var branchName = GetBranchPreview();
 
-            // Check if worktree already exists for this branch
-            var worktreePath = await GitWorktreeService.GetWorktreePathForBranchAsync(_project.LocalPath, branchName);
+            // Check if clone already exists for this branch
+            var clonePath = await GitCloneService.GetClonePathForBranchAsync(_project.LocalPath, branchName);
 
-            if (!string.IsNullOrEmpty(worktreePath))
+            if (!string.IsNullOrEmpty(clonePath))
             {
-                Logger.LogInformation("Found existing worktree at {WorktreePath} for branch {BranchName}", worktreePath, branchName);
+                Logger.LogInformation("Found existing clone at {ClonePath} for branch {BranchName}", clonePath, branchName);
             }
             else
             {
@@ -400,29 +400,29 @@
                     : _project.DefaultBranch;
 
                 // Fetch the latest changes for the selected base branch
-                var fetchSuccess = await GitWorktreeService.FetchAndUpdateBranchAsync(_project.LocalPath, baseBranch);
+                var fetchSuccess = await GitCloneService.FetchAndUpdateBranchAsync(_project.LocalPath, baseBranch);
                 if (!fetchSuccess)
                 {
                     Logger.LogWarning("Failed to fetch latest changes for base branch {BaseBranch}, continuing with local version", baseBranch);
                 }
 
-                // Create new worktree for the issue's branch
-                Logger.LogInformation("Creating worktree for branch {BranchName} from base {BaseBranch} in {ProjectPath}", branchName, baseBranch, _project.LocalPath);
+                // Create new clone for the issue's branch
+                Logger.LogInformation("Creating clone for branch {BranchName} from base {BaseBranch} in {ProjectPath}", branchName, baseBranch, _project.LocalPath);
 
-                worktreePath = await GitWorktreeService.CreateWorktreeAsync(
+                clonePath = await GitCloneService.CreateCloneAsync(
                     _project.LocalPath,
                     branchName,
                     createBranch: true,
                     baseBranch: baseBranch);
 
-                if (string.IsNullOrEmpty(worktreePath))
+                if (string.IsNullOrEmpty(clonePath))
                 {
-                    _errorMessage = "Failed to create worktree for issue branch.";
+                    _errorMessage = "Failed to create clone for issue branch.";
                     StartupTracker.MarkAsFailed(Issue.Id, _errorMessage);
                     return;
                 }
 
-                Logger.LogInformation("Created worktree at {WorktreePath} for issue {IssueId}", worktreePath, Issue.Id);
+                Logger.LogInformation("Created clone at {ClonePath} for issue {IssueId}", clonePath, Issue.Id);
             }
 
             // Use the prompt's mode, or default to Build if no prompt selected
@@ -432,7 +432,7 @@
             _session = await SessionService.StartSessionAsync(
                 Issue.Id,
                 ProjectId,
-                worktreePath,
+                clonePath,
                 mode,
                 _selectedModel,
                 systemPrompt);
@@ -512,9 +512,9 @@
 
     private async Task StartRebaseAsync()
     {
-        if (_project == null || _worktreeInfo == null)
+        if (_project == null || _cloneInfo == null)
         {
-            _errorMessage = "Project or worktree not available.";
+            _errorMessage = "Project or clone not available.";
             return;
         }
 
@@ -541,7 +541,7 @@
 
             var session = await RebaseAgentService.StartRebaseAgentAsync(
                 _project.Id,
-                _worktreeInfo.Path,
+                _cloneInfo.Path,
                 branchName,
                 rebaseBranch,
                 _selectedModel,

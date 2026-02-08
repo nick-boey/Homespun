@@ -7,7 +7,7 @@ namespace Homespun.Features.ClaudeCode.Data;
 /// <param name="SessionId">Claude's session UUID (from filename)</param>
 /// <param name="EntityId">Our PR or issue ID</param>
 /// <param name="ProjectId">Our project ID</param>
-/// <param name="WorkingDirectory">The worktree path</param>
+/// <param name="WorkingDirectory">The clone path</param>
 /// <param name="Mode">Session mode (Plan or Build)</param>
 /// <param name="Model">Claude model used</param>
 /// <param name="SystemPrompt">Optional system prompt</param>

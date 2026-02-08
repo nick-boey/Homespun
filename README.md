@@ -8,7 +8,7 @@ Homespun provides a visual interface for planning and executing software develop
 
 - **Feature Tree**: Visualize past, present, and future pull requests as a tree structure
 - **Multiple Projects**: Work on multiple repositories simultaneously
-- **Git Worktrees**: Automatically manage worktrees for each feature branch
+- **Git Clones**: Automatically manage clones for each feature branch
 - **Claude Code Agents**: Spawn and manage headless Claude Code instances
 - **Message Persistence**: Store all agent communications in JSON storage
 
@@ -66,7 +66,7 @@ Set the following environment variables before running:
 |----------|-------------|---------|
 | `HOMESPUN_DATA_PATH` | Path to data file | `~/.homespun/homespun-data.json` |
 | `GITHUB_TOKEN` | GitHub personal access token for PR operations | (required for GitHub sync) |
-| `HOMESPUN_WORKTREE_ROOT` | Base directory for worktrees | (uses project path) |
+| `HOMESPUN_CLONE_ROOT` | Base directory for clones | (uses project path) |
 | `CLAUDE_CODE_PATH` | Path to Claude Code CLI executable | (uses PATH) |
 
 Example:
@@ -99,7 +99,7 @@ The application will be available at `https://localhost:5001` (or the configured
    - Optionally set a parent feature to create hierarchical relationships
 3. **Sync with GitHub**: Use the "Sync" button to import existing pull requests
 4. **Start Development**: Click "Start" on a feature to:
-   - Create a Git worktree automatically
+   - Create a Git clone automatically
    - Spawn a Claude Code agent
    - Begin development in isolation
 
@@ -120,7 +120,7 @@ Homespun supports customizable system prompts with template variables:
 | `{{FeatureTitle}}` | Title of the feature being worked on |
 | `{{FeatureDescription}}` | Description of the feature |
 | `{{BranchName}}` | Git branch name |
-| `{{WorktreePath}}` | Path to the worktree directory |
+| `{{ClonePath}}` | Path to the clone directory |
 
 Create prompt templates in the Prompt Templates page to reuse across features and projects.
 
@@ -322,13 +322,13 @@ dotnet test
 
 ## Known Issues
 
-### OpenCode Web UI Shows Wrong Branch for Worktrees
+### OpenCode Web UI Shows Wrong Branch for Clones
 
-When running OpenCode in a Git worktree, the web UI may display "main" (or your default branch) instead of the actual worktree branch. This is a bug in OpenCode's VCS module where it runs `git rev-parse --abbrev-ref HEAD` in the main repository directory instead of the worktree directory.
+When running OpenCode in a Git clone, the web UI may display "main" (or your default branch) instead of the actual clone branch. This is a bug in OpenCode's VCS module where it runs `git rev-parse --abbrev-ref HEAD` in the main repository directory instead of the clone directory.
 
-**Workaround**: The terminal within the OpenCode web UI correctly operates in the worktree, so you can verify the actual branch using `git branch` in the terminal.
+**Workaround**: The terminal within the OpenCode web UI correctly operates in the clone, so you can verify the actual branch using `git branch` in the terminal.
 
-**Root Cause**: In OpenCode's `packages/opencode/src/project/vcs.ts`, line 35 uses `.cwd(Instance.worktree)` which points to the main repository path (from `git rev-parse --git-common-dir`), not the worktree directory (`Instance.directory`).
+**Root Cause**: In OpenCode's `packages/opencode/src/project/vcs.ts`, line 35 uses `.cwd(Instance.worktree)` which points to the main repository path (from `git rev-parse --git-common-dir`), not the clone directory (`Instance.directory`).
 
 **Status**: A similar fix was applied to OpenCode's TUI in commit `16f9edc1a` but the web app still has this issue. The fix requires changing `.cwd(Instance.worktree)` to `.cwd(Instance.directory)` in the `currentBranch()` function.
 

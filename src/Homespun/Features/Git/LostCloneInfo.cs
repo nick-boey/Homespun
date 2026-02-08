@@ -1,12 +1,12 @@
 namespace Homespun.Features.Git;
 
 /// <summary>
-/// Information about a lost/orphaned worktree folder that is not tracked by git worktree.
+/// Information about a lost/orphaned clone folder that is not tracked.
 /// </summary>
-public class LostWorktreeInfo
+public class LostCloneInfo
 {
     /// <summary>
-    /// Full path to the lost worktree folder.
+    /// Full path to the lost clone folder.
     /// </summary>
     public string Path { get; set; } = "";
 
@@ -16,9 +16,9 @@ public class LostWorktreeInfo
     public string? MatchingBranchName { get; set; }
 
     /// <summary>
-    /// Git status of the worktree (file change counts), if available.
+    /// Git status of the clone (file change counts), if available.
     /// </summary>
-    public WorktreeStatus? Status { get; set; }
+    public CloneStatus? Status { get; set; }
 
     /// <summary>
     /// Gets the folder name from the path.
@@ -26,7 +26,7 @@ public class LostWorktreeInfo
     public string FolderName => System.IO.Path.GetFileName(Path) ?? "";
 
     /// <summary>
-    /// Whether this lost worktree can be repaired (has a matching branch).
+    /// Whether this lost clone can be repaired (has a matching branch).
     /// </summary>
     public bool CanRepair => !string.IsNullOrEmpty(MatchingBranchName);
 }

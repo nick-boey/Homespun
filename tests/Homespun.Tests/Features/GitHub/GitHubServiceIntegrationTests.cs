@@ -69,9 +69,9 @@ public class GitHubServiceIntegrationTests
         var runner = new CommandRunner(mockGitHubEnv.Object, new Microsoft.Extensions.Logging.Abstractions.NullLogger<CommandRunner>());
         var client = new GitHubClientWrapper();
         var mockLinkingService = new Mock<IIssuePrLinkingService>();
-        var mockWorktreeService = new Mock<IGitWorktreeService>();
+        var mockCloneService = new Mock<IGitCloneService>();
         var logger = new Microsoft.Extensions.Logging.Abstractions.NullLogger<GitHubService>();
-        var service = new GitHubService(_dataStore, runner, config, client, mockLinkingService.Object, mockWorktreeService.Object, logger);
+        var service = new GitHubService(_dataStore, runner, config, client, mockLinkingService.Object, mockCloneService.Object, logger);
 
         // Act
         var result = await service.GetOpenPullRequestsAsync(project.Id);

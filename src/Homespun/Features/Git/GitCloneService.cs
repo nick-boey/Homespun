@@ -7,13 +7,13 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Homespun.Features.Git;
 
-public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktreeService> logger) : IGitWorktreeService
+public class GitCloneService(ICommandRunner commandRunner, ILogger<GitCloneService> logger) : IGitCloneService
 {
-    public GitWorktreeService() : this(
+    public GitCloneService() : this(
         new CommandRunner(
             new NullGitHubEnvironmentService(),
             NullLogger<CommandRunner>.Instance),
-        NullLogger<GitWorktreeService>.Instance)
+        NullLogger<GitCloneService>.Instance)
     {
     }
 
@@ -30,9 +30,9 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
             Task.FromResult(new GitHubAuthStatus { IsAuthenticated = false, AuthMethod = GitHubAuthMethod.None });
     }
 
-    public async Task<string?> CreateWorktreeAsync(string repoPath, string branchName, bool createBranch = false, string? baseBranch = null)
+    public async Task<string?> CreateCloneAsync(string repoPath, string branchName, bool createBranch = false, string? baseBranch = null)
     {
-        var flattenedName = SanitizeBranchNameForWorktree(branchName);
+        var flattenedName = SanitizeBranchNameForClone(branchName);
         // Create clone inside .clones directory as sibling of the main repo
         // e.g., ~/.homespun/src/repo/main -> ~/.homespun/src/repo/.clones/<flattened-branch-name>
         var parentDir = Path.GetDirectoryName(repoPath);
@@ -106,47 +106,47 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
         return clonePath;
     }
 
-    public Task<bool> RemoveWorktreeAsync(string repoPath, string worktreePath)
+    public Task<bool> RemoveCloneAsync(string repoPath, string clonePath)
     {
         try
         {
-            if (!Directory.Exists(worktreePath))
+            if (!Directory.Exists(clonePath))
             {
-                logger.LogWarning("Clone directory does not exist at {WorktreePath}", worktreePath);
+                logger.LogWarning("Clone directory does not exist at {ClonePath}", clonePath);
                 return Task.FromResult(false);
             }
 
-            Directory.Delete(worktreePath, recursive: true);
-            logger.LogInformation("Removed clone {WorktreePath}", worktreePath);
+            Directory.Delete(clonePath, recursive: true);
+            logger.LogInformation("Removed clone {ClonePath}", clonePath);
             return Task.FromResult(true);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to remove clone at {WorktreePath}", worktreePath);
+            logger.LogError(ex, "Failed to remove clone at {ClonePath}", clonePath);
             return Task.FromResult(false);
         }
     }
 
-    public async Task<List<WorktreeInfo>> ListWorktreesAsync(string repoPath)
+    public async Task<List<CloneInfo>> ListClonesAsync(string repoPath)
     {
-        var worktrees = await ListWorktreesRawAsync(repoPath);
+        var clones = await ListClonesRawAsync(repoPath);
 
         // Populate ExpectedBranch for branch mismatch detection
         var branches = await ListLocalBranchesAsync(repoPath);
-        foreach (var worktree in worktrees.Where(w => !w.IsBare))
+        foreach (var clone in clones.Where(w => !w.IsBare))
         {
-            var expectedBranch = DetermineExpectedBranch(worktree, branches);
+            var expectedBranch = DetermineExpectedBranch(clone, branches);
             if (expectedBranch != null)
             {
-                var currentBranch = worktree.Branch?.Replace("refs/heads/", "") ?? "";
+                var currentBranch = clone.Branch?.Replace("refs/heads/", "") ?? "";
                 if (!string.Equals(currentBranch, expectedBranch, StringComparison.OrdinalIgnoreCase))
                 {
-                    worktree.ExpectedBranch = expectedBranch;
+                    clone.ExpectedBranch = expectedBranch;
                 }
             }
         }
 
-        return worktrees;
+        return clones;
     }
 
     /// <summary>
@@ -154,15 +154,15 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
     /// This is the raw version that does NOT enrich with branch mismatch detection,
     /// avoiding mutual recursion with ListLocalBranchesAsync.
     /// </summary>
-    private async Task<List<WorktreeInfo>> ListWorktreesRawAsync(string repoPath)
+    private async Task<List<CloneInfo>> ListClonesRawAsync(string repoPath)
     {
-        var worktrees = new List<WorktreeInfo>();
+        var clones = new List<CloneInfo>();
 
         // Always include the main repo itself
         var mainBranchResult = await commandRunner.RunAsync("git", "rev-parse --abbrev-ref HEAD", repoPath);
         var mainCommitResult = await commandRunner.RunAsync("git", "rev-parse HEAD", repoPath);
 
-        worktrees.Add(new WorktreeInfo
+        clones.Add(new CloneInfo
         {
             Path = repoPath,
             Branch = mainBranchResult is { Success: true }
@@ -179,13 +179,13 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
         var parentDir = Path.GetDirectoryName(repoPath);
         if (string.IsNullOrEmpty(parentDir))
         {
-            return worktrees;
+            return clones;
         }
 
         var clonesDir = Path.Combine(parentDir, ".clones");
         if (!Directory.Exists(clonesDir))
         {
-            return worktrees;
+            return clones;
         }
 
         foreach (var dir in Directory.GetDirectories(clonesDir))
@@ -203,7 +203,7 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
             var branchName = branchResult is { Success: true } ? branchResult.Output.Trim() : null;
             var commitHash = commitResult is { Success: true } ? commitResult.Output.Trim() : null;
 
-            worktrees.Add(new WorktreeInfo
+            clones.Add(new CloneInfo
             {
                 Path = Path.GetFullPath(dir),
                 Branch = branchName != null ? $"refs/heads/{branchName}" : null,
@@ -213,16 +213,16 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
             });
         }
 
-        return worktrees;
+        return clones;
     }
 
     /// <summary>
-    /// Determines the expected branch for a worktree based on its folder name.
+    /// Determines the expected branch for a clone based on its folder name.
     /// Checks both sanitized and unsanitized branch names.
     /// </summary>
-    private string? DetermineExpectedBranch(WorktreeInfo worktree, List<BranchInfo> branches)
+    private string? DetermineExpectedBranch(CloneInfo clone, List<BranchInfo> branches)
     {
-        var folderName = worktree.FolderName;
+        var folderName = clone.FolderName;
         if (string.IsNullOrEmpty(folderName)) return null;
 
         // First check for exact match (unsanitized)
@@ -230,10 +230,10 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
             string.Equals(b.ShortName, folderName, StringComparison.OrdinalIgnoreCase));
         if (exactMatch != null) return exactMatch.ShortName;
 
-        // Then check for sanitized match using worktree sanitization (flattened with + instead of /)
+        // Then check for sanitized match using clone sanitization (flattened with + instead of /)
         foreach (var branch in branches)
         {
-            var sanitizedBranchName = SanitizeBranchNameForWorktree(branch.ShortName);
+            var sanitizedBranchName = SanitizeBranchNameForClone(branch.ShortName);
             if (string.Equals(sanitizedBranchName, folderName, StringComparison.OrdinalIgnoreCase))
             {
                 return branch.ShortName;
@@ -243,7 +243,7 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
         return null;
     }
 
-    public Task PruneWorktreesAsync(string repoPath)
+    public Task PruneClonesAsync(string repoPath)
     {
         // Scan .clones/ directory for broken clones (missing .git) and delete them
         var parentDir = Path.GetDirectoryName(repoPath);
@@ -278,18 +278,18 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
         return Task.CompletedTask;
     }
 
-    public async Task<bool> WorktreeExistsAsync(string repoPath, string branchName)
+    public async Task<bool> CloneExistsAsync(string repoPath, string branchName)
     {
-        var worktrees = await ListWorktreesAsync(repoPath);
-        return worktrees.Any(w => w.Branch?.EndsWith(branchName) == true);
+        var clones = await ListClonesAsync(repoPath);
+        return clones.Any(w => w.Branch?.EndsWith(branchName) == true);
     }
 
-    public async Task<string?> GetWorktreePathForBranchAsync(string repoPath, string branchName)
+    public async Task<string?> GetClonePathForBranchAsync(string repoPath, string branchName)
     {
-        var worktrees = await ListWorktreesAsync(repoPath);
+        var clones = await ListClonesAsync(repoPath);
 
         // First, try direct branch match (handles most cases where branch name hasn't been sanitized)
-        var directMatch = worktrees.FirstOrDefault(w =>
+        var directMatch = clones.FirstOrDefault(w =>
             w.Branch?.EndsWith(branchName) == true ||
             w.Branch == $"refs/heads/{branchName}");
 
@@ -301,7 +301,7 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
 
         // Fall back to path-based matching using flattened name in .clones directory
         // This handles cases where the branch name contains special characters
-        var flattenedName = SanitizeBranchNameForWorktree(branchName);
+        var flattenedName = SanitizeBranchNameForClone(branchName);
         var parentDir = Path.GetDirectoryName(repoPath);
 
         if (string.IsNullOrEmpty(parentDir))
@@ -310,7 +310,7 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
         }
 
         var expectedPath = Path.GetFullPath(Path.Combine(parentDir, ".clones", flattenedName));
-        var pathMatch = worktrees.FirstOrDefault(w =>
+        var pathMatch = clones.FirstOrDefault(w =>
             Path.GetFullPath(w.Path).Equals(expectedPath, StringComparison.OrdinalIgnoreCase));
 
         if (pathMatch != null)
@@ -321,16 +321,16 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
         return pathMatch?.Path;
     }
 
-    public async Task<bool> PullLatestAsync(string worktreePath)
+    public async Task<bool> PullLatestAsync(string clonePath)
     {
         // First fetch from remote (may fail for local-only branches, which is OK)
-        await commandRunner.RunAsync("git", "fetch origin", worktreePath);
+        await commandRunner.RunAsync("git", "fetch origin", clonePath);
 
         // Try to pull with rebase to get latest changes
-        var pullResult = await commandRunner.RunAsync("git", "pull --rebase --autostash", worktreePath);
-        
+        var pullResult = await commandRunner.RunAsync("git", "pull --rebase --autostash", clonePath);
+
         // Pull might fail if no upstream is set, which is fine for new branches
-        return pullResult.Success || 
+        return pullResult.Success ||
                pullResult.Error.Contains("no tracking information") ||
                pullResult.Error.Contains("There is no tracking information");
     }
@@ -339,12 +339,12 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
     {
         // Fetch the specific branch from origin
         var fetchResult = await commandRunner.RunAsync("git", $"fetch origin {branchName}:{branchName}", repoPath);
-        
+
         if (!fetchResult.Success)
         {
             // Try a simple fetch if the branch update fails (might be checked out)
             var simpleFetchResult = await commandRunner.RunAsync("git", "fetch origin", repoPath);
-            
+
             if (!simpleFetchResult.Success)
             {
                 return false;
@@ -374,11 +374,11 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
     }
 
     /// <summary>
-    /// Sanitizes a branch name for use as a worktree folder name.
+    /// Sanitizes a branch name for use as a clone folder name.
     /// Converts slashes to plus signs to create a flat folder structure.
     /// Example: "feature/my-branch+abc123" -> "feature+my-branch+abc123"
     /// </summary>
-    public static string SanitizeBranchNameForWorktree(string branchName)
+    public static string SanitizeBranchNameForClone(string branchName)
     {
         // Normalize path separators and convert to plus for flat structure
         var sanitized = branchName.Replace('\\', '+').Replace('/', '+');
@@ -396,10 +396,10 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
 
     public async Task<List<BranchInfo>> ListLocalBranchesAsync(string repoPath)
     {
-        // Get list of worktrees first to map branches to their worktree paths
-        // Use the raw version to avoid mutual recursion with ListWorktreesAsync
-        var worktrees = await ListWorktreesRawAsync(repoPath);
-        var worktreeByBranch = worktrees
+        // Get list of clones first to map branches to their clone paths
+        // Use the raw version to avoid mutual recursion with ListClonesAsync
+        var clones = await ListClonesRawAsync(repoPath);
+        var cloneByBranch = clones
             .Where(w => !string.IsNullOrEmpty(w.Branch))
             .GroupBy(w => w.Branch!.Replace("refs/heads/", ""))
             .ToDictionary(
@@ -454,11 +454,11 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
                 LastCommitDate = DateTime.TryParse(dateStr, out var date) ? date : null
             };
 
-            // Check if branch has a worktree
-            if (worktreeByBranch.TryGetValue(branchName, out var worktreePath))
+            // Check if branch has a clone
+            if (cloneByBranch.TryGetValue(branchName, out var clonePath))
             {
-                branch.HasWorktree = true;
-                branch.WorktreePath = worktreePath;
+                branch.HasClone = true;
+                branch.ClonePath = clonePath;
             }
 
             branches.Add(branch);
@@ -674,11 +674,11 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
         return (ahead, behind);
     }
 
-    public async Task<WorktreeStatus> GetWorktreeStatusAsync(string worktreePath)
+    public async Task<CloneStatus> GetCloneStatusAsync(string clonePath)
     {
-        var result = await commandRunner.RunAsync("git", "status --porcelain", worktreePath);
+        var result = await commandRunner.RunAsync("git", "status --porcelain", clonePath);
 
-        var status = new WorktreeStatus();
+        var status = new CloneStatus();
 
         if (!result.Success || string.IsNullOrWhiteSpace(result.Output))
         {
@@ -692,7 +692,7 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
             if (line.Length < 2) continue;
 
             var indexStatus = line[0];
-            var worktreeStatus = line[1];
+            var workingTreeStatus = line[1];
 
             // Staged files: any non-space/? in first position
             if (indexStatus != ' ' && indexStatus != '?')
@@ -701,13 +701,13 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
             }
 
             // Modified files: any non-space in second position (except ?)
-            if (worktreeStatus != ' ' && worktreeStatus != '?')
+            if (workingTreeStatus != ' ' && workingTreeStatus != '?')
             {
                 status.ModifiedCount++;
             }
 
             // Untracked files: ??
-            if (indexStatus == '?' && worktreeStatus == '?')
+            if (indexStatus == '?' && workingTreeStatus == '?')
             {
                 status.UntrackedCount++;
             }
@@ -716,20 +716,20 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
         return status;
     }
 
-    public async Task<List<LostWorktreeInfo>> FindLostWorktreeFoldersAsync(string repoPath)
+    public async Task<List<LostCloneInfo>> FindLostCloneFoldersAsync(string repoPath)
     {
-        var lostWorktrees = new List<LostWorktreeInfo>();
+        var lostClones = new List<LostCloneInfo>();
 
         // Get the parent directory where clones are siblings
         var parentDir = Path.GetDirectoryName(repoPath);
         if (string.IsNullOrEmpty(parentDir) || !Directory.Exists(parentDir))
         {
-            return lostWorktrees;
+            return lostClones;
         }
 
         // Get all tracked clone paths (use raw version to avoid unnecessary branch enrichment)
-        var worktrees = await ListWorktreesRawAsync(repoPath);
-        var trackedPaths = worktrees.Select(w => Path.GetFullPath(w.Path)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var clones = await ListClonesRawAsync(repoPath);
+        var trackedPaths = clones.Select(w => Path.GetFullPath(w.Path)).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         // Get all local branches for matching
         var branches = await ListLocalBranchesAsync(repoPath);
@@ -785,7 +785,7 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
                 continue;
             }
 
-            var lostWorktree = new LostWorktreeInfo
+            var lostClone = new LostCloneInfo
             {
                 Path = fullPath
             };
@@ -794,31 +794,31 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
             // The folder name might be a sanitized version of the branch name
             var matchingBranch = branchNames.FirstOrDefault(b =>
                 SanitizeBranchName(b).Equals(folderName, StringComparison.OrdinalIgnoreCase) ||
-                SanitizeBranchNameForWorktree(b).Equals(folderName, StringComparison.OrdinalIgnoreCase) ||
+                SanitizeBranchNameForClone(b).Equals(folderName, StringComparison.OrdinalIgnoreCase) ||
                 b.Equals(folderName, StringComparison.OrdinalIgnoreCase));
 
             if (matchingBranch != null)
             {
-                lostWorktree.MatchingBranchName = matchingBranch;
+                lostClone.MatchingBranchName = matchingBranch;
             }
 
-            // Try to get the status of the lost worktree
+            // Try to get the status of the lost clone
             try
             {
-                lostWorktree.Status = await GetWorktreeStatusAsync(fullPath);
+                lostClone.Status = await GetCloneStatusAsync(fullPath);
             }
             catch
             {
                 // Ignore errors getting status
             }
 
-            lostWorktrees.Add(lostWorktree);
+            lostClones.Add(lostClone);
         }
 
-        return lostWorktrees;
+        return lostClones;
     }
 
-    public Task<bool> DeleteWorktreeFolderAsync(string folderPath)
+    public Task<bool> DeleteCloneFolderAsync(string folderPath)
     {
         try
         {
@@ -829,19 +829,19 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
 
             // Delete the directory recursively
             Directory.Delete(folderPath, recursive: true);
-            logger.LogInformation("Deleted worktree folder {FolderPath}", folderPath);
+            logger.LogInformation("Deleted clone folder {FolderPath}", folderPath);
             return Task.FromResult(true);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to delete worktree folder {FolderPath}", folderPath);
+            logger.LogError(ex, "Failed to delete clone folder {FolderPath}", folderPath);
             return Task.FromResult(false);
         }
     }
 
-    public async Task<string?> GetCurrentBranchAsync(string worktreePath)
+    public async Task<string?> GetCurrentBranchAsync(string clonePath)
     {
-        var result = await commandRunner.RunAsync("git", "rev-parse --abbrev-ref HEAD", worktreePath);
+        var result = await commandRunner.RunAsync("git", "rev-parse --abbrev-ref HEAD", clonePath);
 
         if (!result.Success)
         {
@@ -851,18 +851,18 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
         return result.Output.Trim();
     }
 
-    public async Task<bool> CheckoutBranchAsync(string worktreePath, string branchName)
+    public async Task<bool> CheckoutBranchAsync(string clonePath, string branchName)
     {
-        var result = await commandRunner.RunAsync("git", $"checkout \"{branchName}\"", worktreePath);
+        var result = await commandRunner.RunAsync("git", $"checkout \"{branchName}\"", clonePath);
 
         if (result.Success)
         {
-            logger.LogInformation("Checked out branch {BranchName} in worktree {WorktreePath}", branchName, worktreePath);
+            logger.LogInformation("Checked out branch {BranchName} in clone {ClonePath}", branchName, clonePath);
         }
         else
         {
-            logger.LogWarning("Failed to checkout branch {BranchName} in worktree {WorktreePath}: {Error}",
-                branchName, worktreePath, result.Error);
+            logger.LogWarning("Failed to checkout branch {BranchName} in clone {ClonePath}: {Error}",
+                branchName, clonePath, result.Error);
         }
 
         return result.Success;
@@ -900,7 +900,7 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
         return string.IsNullOrEmpty(output) || !output.Contains('+');
     }
 
-    public async Task<string?> CreateWorktreeFromRemoteBranchAsync(string repoPath, string remoteBranch)
+    public async Task<string?> CreateCloneFromRemoteBranchAsync(string repoPath, string remoteBranch)
     {
         // First, fetch from remote to ensure we have the latest refs
         await commandRunner.RunAsync("git", "fetch origin", repoPath);
@@ -920,15 +920,15 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
             // Continue anyway - the branch might exist
         }
 
-        // Reuse the clone-based CreateWorktreeAsync
-        return await CreateWorktreeAsync(repoPath, remoteBranch);
+        // Reuse the clone-based CreateCloneAsync
+        return await CreateCloneAsync(repoPath, remoteBranch);
     }
 
     /// <summary>
     /// Repairs a lost clone by re-cloning if needed.
     /// For valid clones, this is a no-op. For broken clones, it re-creates them.
     /// </summary>
-    public async Task<bool> RepairWorktreeAsync(string repoPath, string folderPath, string branchName)
+    public async Task<bool> RepairCloneAsync(string repoPath, string folderPath, string branchName)
     {
         logger.LogInformation(
             "Attempting to repair clone at {FolderPath} for branch {BranchName}",
@@ -967,7 +967,7 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
             Directory.Delete(folderPath, recursive: true);
         }
 
-        var newPath = await CreateWorktreeAsync(repoPath, branchName);
+        var newPath = await CreateCloneAsync(repoPath, branchName);
         if (newPath != null)
         {
             logger.LogInformation("Successfully re-cloned at {FolderPath}", newPath);
@@ -978,13 +978,13 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
         return false;
     }
 
-    public async Task<List<FileChangeInfo>> GetChangedFilesAsync(string worktreePath, string targetBranch)
+    public async Task<List<FileChangeInfo>> GetChangedFilesAsync(string clonePath, string targetBranch)
     {
-        var result = await commandRunner.RunAsync("git", $"diff --numstat {targetBranch}...HEAD", worktreePath);
+        var result = await commandRunner.RunAsync("git", $"diff --numstat {targetBranch}...HEAD", clonePath);
 
         if (!result.Success)
         {
-            logger.LogWarning("Failed to get changed files in {WorktreePath}: {Error}", worktreePath, result.Error);
+            logger.LogWarning("Failed to get changed files in {ClonePath}: {Error}", clonePath, result.Error);
             return [];
         }
 

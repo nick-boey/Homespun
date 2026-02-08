@@ -261,7 +261,7 @@ public class RebaseAgentServiceTests
     {
         // Arrange
         var projectId = "project-123";
-        var worktreePath = "/path/to/worktree";
+        var clonePath = "/path/to/clone";
         var branchName = "feature/test";
         var model = "sonnet";
         var defaultBranch = "main";
@@ -271,7 +271,7 @@ public class RebaseAgentServiceTests
             Id = "session-123",
             EntityId = $"rebase-{branchName}",
             ProjectId = projectId,
-            WorkingDirectory = worktreePath,
+            WorkingDirectory = clonePath,
             Mode = SessionMode.Build,
             Model = model,
             Status = ClaudeSessionStatus.WaitingForInput,
@@ -282,7 +282,7 @@ public class RebaseAgentServiceTests
             .Setup(s => s.StartSessionAsync(
                 It.IsAny<string>(),
                 projectId,
-                worktreePath,
+                clonePath,
                 SessionMode.Build,
                 model,
                 It.IsAny<string>(),
@@ -290,14 +290,14 @@ public class RebaseAgentServiceTests
             .ReturnsAsync(expectedSession);
 
         // Act
-        var session = await _service.StartRebaseAgentAsync(projectId, worktreePath, branchName, defaultBranch, model);
+        var session = await _service.StartRebaseAgentAsync(projectId, clonePath, branchName, defaultBranch, model);
 
         // Assert
         Assert.That(session.Mode, Is.EqualTo(SessionMode.Build));
         _sessionServiceMock.Verify(s => s.StartSessionAsync(
             It.IsAny<string>(),
             projectId,
-            worktreePath,
+            clonePath,
             SessionMode.Build,
             model,
             It.IsAny<string>(),
@@ -309,7 +309,7 @@ public class RebaseAgentServiceTests
     {
         // Arrange
         var projectId = "project-123";
-        var worktreePath = "/path/to/worktree";
+        var clonePath = "/path/to/clone";
         var branchName = "feature/test";
         var model = "sonnet";
         var defaultBranch = "main";
@@ -332,7 +332,7 @@ public class RebaseAgentServiceTests
                 Id = "session-123",
                 EntityId = "rebase-feature/test",
                 ProjectId = projectId,
-                WorkingDirectory = worktreePath,
+                WorkingDirectory = clonePath,
                 Mode = SessionMode.Build,
                 Model = model,
                 Status = ClaudeSessionStatus.WaitingForInput,
@@ -340,7 +340,7 @@ public class RebaseAgentServiceTests
             });
 
         // Act
-        await _service.StartRebaseAgentAsync(projectId, worktreePath, branchName, defaultBranch, model);
+        await _service.StartRebaseAgentAsync(projectId, clonePath, branchName, defaultBranch, model);
 
         // Assert
         Assert.That(capturedEntityId, Is.EqualTo($"rebase-{branchName}"));
@@ -351,7 +351,7 @@ public class RebaseAgentServiceTests
     {
         // Arrange
         var projectId = "project-123";
-        var worktreePath = "/path/to/worktree";
+        var clonePath = "/path/to/clone";
         var branchName = "feature/test";
         var model = "sonnet";
         var defaultBranch = "main";
@@ -374,7 +374,7 @@ public class RebaseAgentServiceTests
                 Id = "session-123",
                 EntityId = "rebase-feature/test",
                 ProjectId = projectId,
-                WorkingDirectory = worktreePath,
+                WorkingDirectory = clonePath,
                 Mode = SessionMode.Build,
                 Model = model,
                 Status = ClaudeSessionStatus.WaitingForInput,
@@ -382,7 +382,7 @@ public class RebaseAgentServiceTests
             });
 
         // Act
-        await _service.StartRebaseAgentAsync(projectId, worktreePath, branchName, defaultBranch, model);
+        await _service.StartRebaseAgentAsync(projectId, clonePath, branchName, defaultBranch, model);
 
         // Assert
         Assert.That(capturedSystemPrompt, Is.Not.Null.And.Not.Empty);
@@ -395,7 +395,7 @@ public class RebaseAgentServiceTests
     {
         // Arrange
         var projectId = "project-123";
-        var worktreePath = "/path/to/worktree";
+        var clonePath = "/path/to/clone";
         var branchName = "feature/test";
         var model = "sonnet";
         var defaultBranch = "main";
@@ -415,7 +415,7 @@ public class RebaseAgentServiceTests
                 Id = sessionId,
                 EntityId = "rebase-feature/test",
                 ProjectId = projectId,
-                WorkingDirectory = worktreePath,
+                WorkingDirectory = clonePath,
                 Mode = SessionMode.Build,
                 Model = model,
                 Status = ClaudeSessionStatus.WaitingForInput,
@@ -423,7 +423,7 @@ public class RebaseAgentServiceTests
             });
 
         // Act
-        await _service.StartRebaseAgentAsync(projectId, worktreePath, branchName, defaultBranch, model);
+        await _service.StartRebaseAgentAsync(projectId, clonePath, branchName, defaultBranch, model);
 
         // Assert
         _sessionServiceMock.Verify(s => s.SendMessageAsync(
@@ -437,7 +437,7 @@ public class RebaseAgentServiceTests
     {
         // Arrange
         var projectId = "project-123";
-        var worktreePath = "/path/to/worktree";
+        var clonePath = "/path/to/clone";
         var branchName = "feature/test";
         var model = "sonnet";
         var defaultBranch = "main";
@@ -469,7 +469,7 @@ public class RebaseAgentServiceTests
                 Id = sessionId,
                 EntityId = "rebase-feature/test",
                 ProjectId = projectId,
-                WorkingDirectory = worktreePath,
+                WorkingDirectory = clonePath,
                 Mode = SessionMode.Build,
                 Model = model,
                 Status = ClaudeSessionStatus.WaitingForInput,
@@ -485,7 +485,7 @@ public class RebaseAgentServiceTests
             .Returns(Task.CompletedTask);
 
         // Act
-        await _service.StartRebaseAgentAsync(projectId, worktreePath, branchName, defaultBranch, model, recentPRs);
+        await _service.StartRebaseAgentAsync(projectId, clonePath, branchName, defaultBranch, model, recentPRs);
 
         // Assert
         Assert.That(capturedMessage, Does.Contain("#100"));
