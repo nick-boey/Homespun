@@ -623,4 +623,206 @@ Line 2";
     }
 
     #endregion
+
+    #region Security: Event Handler Attribute Sanitization
+
+    [Test]
+    public void RenderToHtml_WithOnclickInGenericAttributes_DoesNotRenderOnclickAttribute()
+    {
+        // Arrange - GenericAttributesExtension should be excluded, so {onclick=...} is literal text
+        var markdown = "## Title{onclick=alert(1)}";
+
+        // Act
+        var result = _service.RenderToHtml(markdown);
+
+        // Assert - onclick should NOT appear as an HTML attribute
+        Assert.That(result, Does.Not.Contain("onclick=\""));
+        Assert.That(result, Does.Contain("<h2"));
+    }
+
+    [Test]
+    public void RenderToHtml_WithOnclickOnLink_DoesNotRenderOnclickAttribute()
+    {
+        // Arrange
+        var markdown = "[link](url){onclick=alert(1)}";
+
+        // Act
+        var result = _service.RenderToHtml(markdown);
+
+        // Assert
+        Assert.That(result, Does.Not.Contain("onclick=\""));
+        Assert.That(result, Does.Contain("<a href="));
+    }
+
+    [Test]
+    public void RenderToHtml_WithOnerrorOnImage_DoesNotRenderOnerrorAttribute()
+    {
+        // Arrange
+        var markdown = "## Test\n\n![img](x){onerror=alert(1)}";
+
+        // Act
+        var result = _service.RenderToHtml(markdown);
+
+        // Assert
+        Assert.That(result, Does.Not.Contain("onerror=\""));
+    }
+
+    [Test]
+    public void RenderToHtml_WithMultipleEventHandlers_DoesNotRenderAny()
+    {
+        // Arrange
+        var markdown = "## Title {.foo onclick=alert(1) onmouseover=evil()}";
+
+        // Act
+        var result = _service.RenderToHtml(markdown);
+
+        // Assert
+        Assert.That(result, Does.Not.Contain("onclick=\""));
+        Assert.That(result, Does.Not.Contain("onmouseover=\""));
+    }
+
+    [Test]
+    public void RenderToHtml_WithAtOnclickDirective_DoesNotCrashBlazor()
+    {
+        // Arrange - @onclick would crash Blazor's DOM patching if rendered as an attribute
+        // because @ is not a valid HTML attribute name character
+        var markdown = "## Title with @onclick mention";
+
+        // Act
+        var result = _service.RenderToHtml(markdown);
+
+        // Assert - @onclick should only appear as text content, never as an attribute
+        Assert.That(result, Does.Not.Match(@"<[^>]+\s@onclick\s*="));
+        Assert.That(result, Does.Contain("@onclick"));  // It's fine as text content
+    }
+
+    [Test]
+    public void SanitizeHtml_RemovesOnclickAttribute()
+    {
+        // Arrange
+        var html = "<h2 id=\"title\" onclick=\"alert(1)\">Title</h2>";
+
+        // Act
+        var result = MarkdownRenderingService.SanitizeHtml(html);
+
+        // Assert
+        Assert.That(result, Does.Not.Contain("onclick"));
+        Assert.That(result, Does.Contain("<h2"));
+        Assert.That(result, Does.Contain("id=\"title\""));
+        Assert.That(result, Does.Contain("Title"));
+    }
+
+    [Test]
+    public void SanitizeHtml_RemovesOnerrorAttribute()
+    {
+        // Arrange
+        var html = "<img src=\"x\" onerror=\"alert(1)\" alt=\"img\" />";
+
+        // Act
+        var result = MarkdownRenderingService.SanitizeHtml(html);
+
+        // Assert
+        Assert.That(result, Does.Not.Contain("onerror"));
+        Assert.That(result, Does.Contain("<img"));
+        Assert.That(result, Does.Contain("src=\"x\""));
+    }
+
+    [Test]
+    public void SanitizeHtml_RemovesOnloadAttribute()
+    {
+        // Arrange
+        var html = "<body onload=\"init()\">";
+
+        // Act
+        var result = MarkdownRenderingService.SanitizeHtml(html);
+
+        // Assert
+        Assert.That(result, Does.Not.Contain("onload"));
+    }
+
+    [Test]
+    public void SanitizeHtml_RemovesAtOnclickAttribute()
+    {
+        // Arrange - Blazor directive @onclick as a literal attribute crashes the circuit
+        var html = "<button @onclick=\"HandleClick\">Click</button>";
+
+        // Act
+        var result = MarkdownRenderingService.SanitizeHtml(html);
+
+        // Assert
+        Assert.That(result, Does.Not.Contain("@onclick"));
+        Assert.That(result, Does.Contain("<button"));
+        Assert.That(result, Does.Contain("Click"));
+    }
+
+    [Test]
+    public void SanitizeHtml_RemovesOnclickWithColonVariant()
+    {
+        // Arrange - onclick:preventDefault is an invalid HTML attribute name
+        var html = "<h2 onclick:preventDefault=\"true\">Title</h2>";
+
+        // Act
+        var result = MarkdownRenderingService.SanitizeHtml(html);
+
+        // Assert
+        Assert.That(result, Does.Not.Contain("onclick:preventDefault"));
+    }
+
+    [Test]
+    public void SanitizeHtml_PreservesNonEventAttributes()
+    {
+        // Arrange
+        var html = "<h2 id=\"title\" class=\"heading\">Title</h2>";
+
+        // Act
+        var result = MarkdownRenderingService.SanitizeHtml(html);
+
+        // Assert
+        Assert.That(result, Is.EqualTo(html));  // Should be unchanged
+    }
+
+    [Test]
+    public void SanitizeHtml_PreservesTextContentWithOnPrefix()
+    {
+        // Arrange - "onclick" as text content (not attribute) should be preserved
+        var html = "<p>The @onclick directive is used in Blazor</p>";
+
+        // Act
+        var result = MarkdownRenderingService.SanitizeHtml(html);
+
+        // Assert - Text content should be preserved
+        Assert.That(result, Does.Contain("@onclick"));
+    }
+
+    [Test]
+    public void SanitizeHtml_RemovesMultipleEventHandlers()
+    {
+        // Arrange
+        var html = "<div onclick=\"a()\" onmouseover=\"b()\" class=\"test\" onload=\"c()\">content</div>";
+
+        // Act
+        var result = MarkdownRenderingService.SanitizeHtml(html);
+
+        // Assert
+        Assert.That(result, Does.Not.Contain("onclick"));
+        Assert.That(result, Does.Not.Contain("onmouseover"));
+        Assert.That(result, Does.Not.Contain("onload"));
+        Assert.That(result, Does.Contain("class=\"test\""));
+        Assert.That(result, Does.Contain("content"));
+    }
+
+    [Test]
+    public void SanitizeHtml_HandlesSingleQuotedAttributes()
+    {
+        // Arrange
+        var html = "<div onclick='alert(1)'>content</div>";
+
+        // Act
+        var result = MarkdownRenderingService.SanitizeHtml(html);
+
+        // Assert
+        Assert.That(result, Does.Not.Contain("onclick"));
+    }
+
+    #endregion
 }
