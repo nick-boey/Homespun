@@ -278,4 +278,116 @@ public class FleeceServiceTests
     }
 
     #endregion
+
+    #region ReloadFromDiskAsync Tests
+
+    [Test]
+    public async Task ReloadFromDiskAsync_ClearsAndReloadsCache()
+    {
+        // Arrange - create an issue through the service (writes to disk and populates cache)
+        var issue = await _service.CreateIssueAsync(_tempDir, "Original Title", IssueType.Task);
+
+        // Verify it's in the cache
+        var cached = await _service.GetIssueAsync(_tempDir, issue.Id);
+        Assert.That(cached, Is.Not.Null);
+        Assert.That(cached!.Title, Is.EqualTo("Original Title"));
+
+        // Modify the issue directly on disk by finding and editing the JSONL file
+        var issueFiles = Directory.GetFiles(Path.Combine(_tempDir, ".fleece"), "issues_*.jsonl")
+            .Concat(Directory.GetFiles(Path.Combine(_tempDir, ".fleece"), "issues.jsonl"))
+            .ToArray();
+        Assert.That(issueFiles, Has.Length.GreaterThan(0), "Expected at least one issues JSONL file on disk");
+
+        var issueFile = issueFiles[0];
+        var lines = await File.ReadAllLinesAsync(issueFile);
+        var updatedLines = lines.Select(line =>
+            line.Contains(issue.Id)
+                ? line.Replace("Original Title", "Modified On Disk")
+                : line
+        ).ToArray();
+        await File.WriteAllLinesAsync(issueFile, updatedLines);
+
+        // Act - reload from disk
+        await _service.ReloadFromDiskAsync(_tempDir);
+
+        // Assert - cache should now reflect the on-disk changes
+        var reloaded = await _service.GetIssueAsync(_tempDir, issue.Id);
+        Assert.That(reloaded, Is.Not.Null);
+        Assert.That(reloaded!.Title, Is.EqualTo("Modified On Disk"));
+    }
+
+    [Test]
+    public async Task ReloadFromDiskAsync_PicksUpExternallyAddedIssues()
+    {
+        // Arrange - create an initial issue to establish the .fleece directory and file
+        var existingIssue = await _service.CreateIssueAsync(_tempDir, "Existing Issue", IssueType.Task);
+
+        // Find the issues JSONL file on disk
+        var issueFiles = Directory.GetFiles(Path.Combine(_tempDir, ".fleece"), "issues_*.jsonl")
+            .Concat(Directory.GetFiles(Path.Combine(_tempDir, ".fleece"), "issues.jsonl"))
+            .ToArray();
+        Assert.That(issueFiles, Has.Length.GreaterThan(0));
+
+        var issueFile = issueFiles[0];
+
+        // Read an existing line to use as a template, then create a new issue line
+        var lines = await File.ReadAllLinesAsync(issueFile);
+        var templateLine = lines.First(l => l.Contains(existingIssue.Id));
+
+        // Create a new issue entry by modifying the template
+        var newIssueLine = templateLine
+            .Replace(existingIssue.Id, "EXT001")
+            .Replace("Existing Issue", "Externally Added Issue");
+        await File.AppendAllTextAsync(issueFile, newIssueLine + Environment.NewLine);
+
+        // Verify the external issue is NOT visible before reload
+        var beforeReload = await _service.GetIssueAsync(_tempDir, "EXT001");
+        Assert.That(beforeReload, Is.Null, "External issue should not be in cache before reload");
+
+        // Act - reload from disk
+        await _service.ReloadFromDiskAsync(_tempDir);
+
+        // Assert - the externally added issue should now be visible
+        var afterReload = await _service.GetIssueAsync(_tempDir, "EXT001");
+        Assert.That(afterReload, Is.Not.Null, "External issue should be visible after reload");
+        Assert.That(afterReload!.Title, Is.EqualTo("Externally Added Issue"));
+
+        // Original issue should still be there
+        var original = await _service.GetIssueAsync(_tempDir, existingIssue.Id);
+        Assert.That(original, Is.Not.Null);
+    }
+
+    [Test]
+    public async Task ReloadFromDiskAsync_PicksUpExternallyDeletedIssues()
+    {
+        // Arrange - create two issues through the service
+        var issue1 = await _service.CreateIssueAsync(_tempDir, "Issue One", IssueType.Task);
+        var issue2 = await _service.CreateIssueAsync(_tempDir, "Issue Two", IssueType.Bug);
+
+        // Verify both are in cache
+        Assert.That(await _service.GetIssueAsync(_tempDir, issue1.Id), Is.Not.Null);
+        Assert.That(await _service.GetIssueAsync(_tempDir, issue2.Id), Is.Not.Null);
+
+        // Remove issue1 from disk by filtering it out of the JSONL file
+        var issueFiles = Directory.GetFiles(Path.Combine(_tempDir, ".fleece"), "issues_*.jsonl")
+            .Concat(Directory.GetFiles(Path.Combine(_tempDir, ".fleece"), "issues.jsonl"))
+            .ToArray();
+        var issueFile = issueFiles[0];
+        var lines = await File.ReadAllLinesAsync(issueFile);
+        var filteredLines = lines.Where(line => !line.Contains(issue1.Id)).ToArray();
+        await File.WriteAllLinesAsync(issueFile, filteredLines);
+
+        // Act - reload from disk
+        await _service.ReloadFromDiskAsync(_tempDir);
+
+        // Assert - issue1 should no longer be in cache, issue2 should still be there
+        var reloadedIssue1 = await _service.GetIssueAsync(_tempDir, issue1.Id);
+        Assert.That(reloadedIssue1, Is.Null, "Deleted issue should not be in cache after reload");
+
+        var reloadedIssue2 = await _service.GetIssueAsync(_tempDir, issue2.Id);
+        Assert.That(reloadedIssue2, Is.Not.Null, "Remaining issue should still be in cache after reload");
+        Assert.That(reloadedIssue2!.Title, Is.EqualTo("Issue Two"));
+    }
+
+    #endregion
 }
