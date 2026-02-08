@@ -2035,4 +2035,50 @@ public class GitWorktreeServiceTests
     }
 
     #endregion
+
+    #region ListLocalBranchesAsync - Duplicate Branch Regression Tests
+
+    [Test]
+    [Description("Regression test for FJTVh5: Main repo and clone both on 'main' branch should not throw duplicate key exception")]
+    public async Task ListLocalBranchesAsync_MainRepoAndCloneOnSameBranch_DoesNotThrow()
+    {
+        // Arrange
+        var repoPath = Path.Combine(_tempDir, "main");
+        Directory.CreateDirectory(repoPath);
+
+        // Create a clone directory that is also on "main" (simulates a fresh clone before checkout)
+        var clonesDir = Path.Combine(_tempDir, ".clones");
+        var clonePath = Path.GetFullPath(Path.Combine(clonesDir, "feature+test"));
+        Directory.CreateDirectory(clonePath);
+        Directory.CreateDirectory(Path.Combine(clonePath, ".git"));
+
+        // Mock main repo on "main" branch
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "main" });
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse HEAD", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "abc123" });
+
+        // Mock clone also on "main" branch (duplicate key scenario)
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", clonePath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "main" });
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse HEAD", clonePath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "abc123" });
+
+        // Mock for-each-ref
+        _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.Contains("for-each-ref")), repoPath))
+            .ReturnsAsync(new CommandResult
+            {
+                Success = true,
+                Output = "'main|abc123|||2024-01-15|Initial commit'\n'feature/test|def456|||2024-01-16|Add feature'"
+            });
+
+        // Act & Assert - should not throw ArgumentException about duplicate key
+        Assert.DoesNotThrowAsync(async () => await _service.ListLocalBranchesAsync(repoPath));
+
+        var result = await _service.ListLocalBranchesAsync(repoPath);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result, Has.Count.EqualTo(2));
+    }
+
+    #endregion
 }

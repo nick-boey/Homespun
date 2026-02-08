@@ -401,9 +401,10 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
         var worktrees = await ListWorktreesRawAsync(repoPath);
         var worktreeByBranch = worktrees
             .Where(w => !string.IsNullOrEmpty(w.Branch))
+            .GroupBy(w => w.Branch!.Replace("refs/heads/", ""))
             .ToDictionary(
-                w => w.Branch!.Replace("refs/heads/", ""),
-                w => w.Path);
+                g => g.Key,
+                g => g.First().Path);
 
         // Get branch info with format: branch name, commit sha, upstream, and tracking info
         var result = await commandRunner.RunAsync(

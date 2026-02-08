@@ -377,7 +377,7 @@
             return;
         }
 
-        StartupTracker.MarkAsStarting(Issue.Id);
+        if (!StartupTracker.TryMarkAsStarting(Issue.Id)) return;
         _errorMessage = null;
 
         try
@@ -463,6 +463,7 @@
         {
             Logger.LogError(ex, "Failed to start session for issue {IssueId}", Issue.Id);
             StartupTracker.MarkAsFailed(Issue.Id, ex.Message);
+            StartupTracker.Clear(Issue.Id);
             _errorMessage = $"Failed to start session: {ex.Message}";
             _session = null;
         }

@@ -25,6 +25,22 @@ public class AgentStartupTracker : IAgentStartupTracker
     }
 
     /// <inheritdoc />
+    public bool TryMarkAsStarting(string entityId)
+    {
+        var state = new AgentStartupState
+        {
+            EntityId = entityId,
+            Status = AgentStartupStatus.Starting
+        };
+
+        if (!_states.TryAdd(entityId, state))
+            return false;
+
+        OnStateChanged?.Invoke(entityId, state);
+        return true;
+    }
+
+    /// <inheritdoc />
     public void MarkAsStarted(string entityId)
     {
         if (_states.TryGetValue(entityId, out var state))

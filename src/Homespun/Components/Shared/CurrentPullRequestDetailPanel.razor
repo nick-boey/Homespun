@@ -345,7 +345,7 @@
 
     private async Task StartSession(AgentPrompt? prompt)
     {
-        StartupTracker.MarkAsStarting(PullRequest.Id);
+        if (!StartupTracker.TryMarkAsStarting(PullRequest.Id)) return;
         _sessionErrorMessage = null;
 
         try
@@ -449,6 +449,7 @@
         {
             Logger.LogError(ex, "Failed to start session for PR {PullRequestId}", PullRequest.Id);
             StartupTracker.MarkAsFailed(PullRequest.Id, ex.Message);
+            StartupTracker.Clear(PullRequest.Id);
             _sessionErrorMessage = $"Failed to start session: {ex.Message}";
             _session = null;
         }
