@@ -181,6 +181,15 @@ else
     builder.Services.AddSingleton<IMessageCacheStore>(sp =>
         new MessageCacheStore(messageCacheDir, sp.GetRequiredService<ILogger<MessageCacheStore>>()));
 
+    // Issue workspace service - manages per-issue folder structure for agent isolation
+    var projectsBaseDir = builder.Configuration["HOMESPUN_PROJECTS_PATH"]
+        ?? Path.Combine(dataDirectory!, "projects");
+    builder.Services.AddSingleton<IIssueWorkspaceService>(sp =>
+        new IssueWorkspaceService(
+            projectsBaseDir,
+            sp.GetRequiredService<ICommandRunner>(),
+            sp.GetRequiredService<ILogger<IssueWorkspaceService>>()));
+
     builder.Services.AddSingleton<IToolResultParser, ToolResultParser>();
     builder.Services.AddSingleton<IHooksService, HooksService>();
     builder.Services.AddSingleton<IClaudeSessionService, ClaudeSessionService>();

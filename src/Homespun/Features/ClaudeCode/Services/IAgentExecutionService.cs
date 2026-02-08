@@ -19,7 +19,10 @@ public record AgentStartRequest(
     string Model,
     string Prompt,
     string? SystemPrompt = null,
-    string? ResumeSessionId = null
+    string? ResumeSessionId = null,
+    string? IssueId = null,
+    string? ProjectId = null,
+    string? ProjectName = null
 );
 
 /// <summary>
