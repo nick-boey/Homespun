@@ -23,9 +23,9 @@
 
         <div class="mb-3">
             <span class="badge @GetStatusBadgeClass()">@PullRequest.Status</span>
-            @if (PullRequest.GitHubPRNumber.HasValue)
+            @if (PullRequest.GitHubPRNumber.HasValue && PullRequest.Project != null)
             {
-                <a href="https://github.com/@PullRequest.Project.GitHubOwner/@PullRequest.Project?.GitHubRepo/pull/@PullRequest.GitHubPRNumber"
+                <a href="https://github.com/@PullRequest.Project.GitHubOwner/@PullRequest.Project.GitHubRepo/pull/@PullRequest.GitHubPRNumber"
                    target="_blank"
                    class="badge bg-secondary text-decoration-none ml-1">
                     PR #@PullRequest.GitHubPRNumber
