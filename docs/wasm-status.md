@@ -13,13 +13,21 @@ Parent issue: `oU1zLd` - Split into Blazor WASM and ASP.NET server
 - Added API route constants (ApiRoutes.cs) and request/response DTOs
 - Build: 0 errors | Unit tests: 1304 passed, 5 pre-existing failures | API tests: 36 passed
 
+### JvWPpe (bbb) - Create Homespun.Server ASP.NET minimal API project
+- Created `src/Homespun.Server/` as `Microsoft.NET.Sdk.Web` project targeting net10.0
+- Pure API server Program.cs (no Razor components) with CORS, SignalR hubs, Swagger, health checks
+- References Homespun (for Features/), Homespun.Shared, and Homespun.ClaudeAgentSdk
+- Added `Microsoft.AspNetCore.Components.WebAssembly.Server` for hosting WASM client files
+- Configured `UseBlazorFrameworkFiles()` and `MapFallbackToFile("index.html")` for WASM hosting
+- Copied appsettings.json, appsettings.Mock.json, launchSettings.json, start.sh
+- Build: 0 errors | Unit tests: 1304 passed, 5 pre-existing failures | API tests: 36 passed
+
 ## In Progress
 
 None
 
 ## Remaining
 
-- JvWPpe (bbb) - Create Homespun.Server ASP.NET minimal API project
 - kwvBrH (ccc) - Create Homespun.Client Blazor WASM project
 - m1zqCB (ddd) - Migrate backend services from monolith to Homespun.Server
 - kH1MPa (eee) - Create client-side HTTP service layer for Blazor WASM
