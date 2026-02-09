@@ -19,5 +19,17 @@ builder.Services.AddScoped<HttpIssueApiService>();
 builder.Services.AddScoped<HttpCloneApiService>();
 builder.Services.AddScoped<HttpNotificationApiService>();
 builder.Services.AddScoped<HttpOrchestrationApiService>();
+builder.Services.AddScoped<HttpAgentPromptApiService>();
+builder.Services.AddScoped<HttpGitHubInfoApiService>();
+builder.Services.AddScoped<HttpGraphApiService>();
+builder.Services.AddScoped<HttpSessionCacheApiService>();
+builder.Services.AddScoped<HttpIssuePrStatusApiService>();
+builder.Services.AddScoped<HttpFleeceSyncApiService>();
+builder.Services.AddScoped<HttpComponentRegistryService>();
+
+// Register client-side services
+builder.Services.AddScoped<IBreadcrumbService, BreadcrumbService>();
+builder.Services.AddSingleton<IMarkdownRenderingService, MarkdownRenderingService>();
+builder.Services.AddSingleton<IAgentStartupTracker, AgentStartupTracker>();
 
 await builder.Build().RunAsync();

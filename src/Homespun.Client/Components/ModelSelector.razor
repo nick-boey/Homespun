@@ -1,0 +1,28 @@
+<div class="relative">
+    <select class="form-select form-select-sm"
+            id="@($"model-selector-{Id}")"
+            value="@SelectedModel"
+            @onchange="OnModelChanged">
+        <option value="opus">Opus</option>
+        <option value="sonnet">Sonnet</option>
+        <option value="haiku">Haiku</option>
+    </select>
+</div>
+
+@code {
+    [Parameter]
+    public string SelectedModel { get; set; } = "opus";
+
+    [Parameter]
+    public EventCallback<string> SelectedModelChanged { get; set; }
+
+    [Parameter]
+    public string Id { get; set; } = "default";
+
+    private async Task OnModelChanged(ChangeEventArgs e)
+    {
+        var newModel = e.Value?.ToString() ?? "opus";
+        SelectedModel = newModel;
+        await SelectedModelChanged.InvokeAsync(newModel);
+    }
+}

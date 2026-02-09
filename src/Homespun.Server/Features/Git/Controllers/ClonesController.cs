@@ -1,4 +1,5 @@
 using Homespun.Features.Projects;
+using Homespun.Shared.Models.Sessions;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Homespun.Features.Git.Controllers;
@@ -120,6 +121,31 @@ public class ClonesController(
 
         await cloneService.PruneClonesAsync(project.LocalPath);
         return NoContent();
+    }
+
+    /// <summary>
+    /// List local branches for a project.
+    /// </summary>
+    [HttpGet("branches")]
+    [ProducesResponseType<List<BranchInfo>>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<List<BranchInfo>>> ListBranches([FromQuery] string repoPath)
+    {
+        var branches = await cloneService.ListLocalBranchesAsync(repoPath);
+        return Ok(branches);
+    }
+
+    /// <summary>
+    /// Get changed files between a clone and a target branch.
+    /// </summary>
+    [HttpGet("changed-files")]
+    [ProducesResponseType<List<FileChangeInfo>>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<List<FileChangeInfo>>> GetChangedFiles(
+        [FromQuery] string workingDirectory,
+        [FromQuery] string targetBranch)
+    {
+        var files = await cloneService.GetChangedFilesAsync(workingDirectory, targetBranch);
+        return Ok(files);
     }
 
     /// <summary>

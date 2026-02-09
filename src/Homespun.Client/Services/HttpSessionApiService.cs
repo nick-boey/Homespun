@@ -27,6 +27,15 @@ public class HttpSessionApiService(HttpClient http)
             $"{ApiRoutes.Sessions}/project/{projectId}") ?? [];
     }
 
+    public async Task<ClaudeSession?> GetSessionByEntityIdAsync(string entityId)
+    {
+        var response = await http.GetAsync($"{ApiRoutes.Sessions}/entity/{entityId}");
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            return null;
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<ClaudeSession>();
+    }
+
     public async Task<ClaudeSession?> CreateSessionAsync(CreateSessionRequest request)
     {
         var response = await http.PostAsJsonAsync(ApiRoutes.Sessions, request);
@@ -40,6 +49,11 @@ public class HttpSessionApiService(HttpClient http)
         response.EnsureSuccessStatusCode();
     }
 
+    public async Task SendMessageAsync(string sessionId, string message)
+    {
+        await SendMessageAsync(sessionId, new SendMessageRequest { Message = message });
+    }
+
     public async Task StopSessionAsync(string sessionId)
     {
         var response = await http.DeleteAsync($"{ApiRoutes.Sessions}/{sessionId}");
@@ -50,5 +64,71 @@ public class HttpSessionApiService(HttpClient http)
     {
         var response = await http.PostAsync($"{ApiRoutes.Sessions}/{sessionId}/interrupt", null);
         response.EnsureSuccessStatusCode();
+    }
+
+    public async Task<ClaudeSession?> StartSessionAsync(
+        string entityId,
+        string projectId,
+        string workingDirectory,
+        SessionMode mode,
+        string model,
+        string? systemPrompt = null)
+    {
+        return await CreateSessionAsync(new CreateSessionRequest
+        {
+            EntityId = entityId,
+            ProjectId = projectId,
+            WorkingDirectory = workingDirectory,
+            Mode = mode,
+            Model = model,
+            SystemPrompt = systemPrompt
+        });
+    }
+
+    public async Task<ClaudeSession?> ResumeSessionAsync(
+        string sessionId,
+        string entityId,
+        string projectId,
+        string workingDirectory)
+    {
+        var response = await http.PostAsJsonAsync(
+            $"{ApiRoutes.Sessions}/{sessionId}/resume",
+            new ResumeSessionRequest
+            {
+                EntityId = entityId,
+                ProjectId = projectId,
+                WorkingDirectory = workingDirectory
+            });
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<ClaudeSession>();
+    }
+
+    public async Task<List<ResumableSession>> GetResumableSessionsAsync(
+        string entityId,
+        string workingDirectory)
+    {
+        return await http.GetFromJsonAsync<List<ResumableSession>>(
+            $"{ApiRoutes.Sessions}/entity/{entityId}/resumable?workingDirectory={Uri.EscapeDataString(workingDirectory)}") ?? [];
+    }
+
+    public async Task<int> StopAllSessionsForEntityAsync(string entityId)
+    {
+        var response = await http.DeleteAsync($"{ApiRoutes.Sessions}/entity/{entityId}");
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<int>();
+    }
+
+    public async Task<List<ClaudeMessage>> GetCachedMessagesAsync(string sessionId)
+    {
+        return await http.GetFromJsonAsync<List<ClaudeMessage>>(
+            $"{ApiRoutes.Sessions}/{sessionId}/cached-messages") ?? [];
+    }
+
+    public async Task<List<SessionCacheSummary>> GetSessionHistoryAsync(
+        string projectId,
+        string entityId)
+    {
+        return await http.GetFromJsonAsync<List<SessionCacheSummary>>(
+            $"{ApiRoutes.Sessions}/history/{projectId}/{entityId}") ?? [];
     }
 }

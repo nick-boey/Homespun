@@ -1,0 +1,220 @@
+@using Microsoft.AspNetCore.SignalR.Client
+@implements IAsyncDisposable
+
+@inject HttpSessionApiService SessionStoreApi
+@inject NavigationManager NavigationManager
+
+<div class="agent-status-panel @(IsRunning ? "running" : "")">
+    <div class="panel-header">
+        <h6>Claude Code Session</h6>
+        @if (IsRunning)
+        {
+            <span class="status-indicator running"></span>
+        }
+    </div>
+
+    @if (IsLoading)
+    {
+        <div class="panel-body">
+            <div class="flex justify-center py-3">
+                <div class="spinner-border spinner-border-sm" role="status">
+                    <span class="sr-only">Loading...</span>
+                </div>
+            </div>
+        </div>
+    }
+    else if (_session != null)
+    {
+        <div class="panel-body">
+            <div class="status-info">
+                <small class="text-text-muted">
+                    Mode: <span class="badge @(_session.Mode == SessionMode.Plan ? "bg-status-info" : "bg-status-success") ml-1">@_session.Mode</span>
+                </small>
+                <small class="text-text-muted block">
+                    Model: <code>@GetModelDisplayName(_session.Model)</code>
+                </small>
+                <small class="text-text-muted block">
+                    Status: <code>@_session.Status</code>
+                </small>
+            </div>
+
+            @if (_session.Messages.Count > 0)
+            {
+                <div class="last-message mt-2">
+                    <small class="text-text-muted">Messages: @_session.Messages.Count</small>
+                </div>
+            }
+        </div>
+        <div class="panel-footer">
+            <a href="/session/@_session.Id" class="btn btn-sm btn-outline-primary mr-2">
+                Open Chat
+            </a>
+            <button class="btn btn-sm btn-outline-danger" @onclick="StopSession" disabled="@IsLoading">
+                Stop Session
+            </button>
+        </div>
+    }
+    else
+    {
+        <div class="panel-body">
+            <p class="text-text-muted text-sm mb-0">No session active.</p>
+        </div>
+        @if (CanStart)
+        {
+            <div class="panel-footer">
+                <div class="mb-2">
+                    <ModelSelector Id="@($"agent-{EntityId}")"
+                                 SelectedModel="@_selectedModel"
+                                 SelectedModelChanged="OnModelChanged" />
+                </div>
+                <div class="flex gap-2">
+                    <button class="btn btn-sm btn-outline-primary" @onclick="StartPlanning" disabled="@IsLoading" title="Read-only planning session">
+                        Plan
+                    </button>
+                    <button class="btn btn-sm btn-success" @onclick="StartBuilding" disabled="@IsLoading" title="Full code editing session">
+                        Build
+                    </button>
+                </div>
+            </div>
+        }
+    }
+
+    @if (!string.IsNullOrEmpty(ErrorMessage))
+    {
+        <div class="alert alert-danger m-2 py-1 px-2 text-sm mb-0">@ErrorMessage</div>
+    }
+</div>
+
+<style>
+    .agent-status-panel {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border-color);
+    }
+
+    .agent-status-panel.running {
+        border-color: var(--status-success);
+    }
+
+    .panel-header {
+        padding: var(--spacing-sm) var(--spacing-md);
+        border-bottom: 1px solid var(--border-color);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .panel-header h6 {
+        margin: 0;
+        font-size: 0.8125rem;
+    }
+
+    .status-indicator {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--text-muted);
+    }
+
+    .status-indicator.running {
+        background: var(--status-success);
+        animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    .panel-body {
+        padding: var(--spacing-sm) var(--spacing-md);
+    }
+
+    .panel-footer {
+        padding: var(--spacing-sm) var(--spacing-md);
+        border-top: 1px solid var(--border-color);
+    }
+
+    .status-info code {
+        font-size: 0.6875rem;
+    }
+
+    .last-message {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+    }
+
+    /* Note: pulse keyframes animation is defined globally in app.css */
+</style>
+
+@code {
+    [Parameter] public string EntityId { get; set; } = "";
+    [Parameter] public bool CanStart { get; set; } = true;
+    [Parameter] public EventCallback OnStatusChanged { get; set; }
+
+    private ClaudeSession? _session;
+    private bool IsLoading { get; set; }
+    private string? ErrorMessage { get; set; }
+    private string _selectedModel = "opus";
+
+    private bool IsRunning => _session != null && _session.Status.IsActive();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await RefreshStatusAsync();
+    }
+
+    private async Task RefreshStatusAsync()
+    {
+        // SessionStoreApi doesn't have GetByEntityId; sessions are looked up by session ID.
+        // For now, we leave _session as null since we can't look up by entity ID via HTTP API.
+        // TODO: Add entity-based session lookup to the API
+        _session = null;
+    }
+
+    private void OnModelChanged(string modelId)
+    {
+        _selectedModel = modelId;
+    }
+
+    private void StartPlanning()
+    {
+        // TODO: Integrate with session creation via SessionStoreApi
+        ErrorMessage = "Session service not yet implemented. Coming soon!";
+    }
+
+    private void StartBuilding()
+    {
+        // TODO: Integrate with session creation via SessionStoreApi
+        ErrorMessage = "Session service not yet implemented. Coming soon!";
+    }
+
+    private async Task StopSession()
+    {
+        if (_session == null) return;
+
+        IsLoading = true;
+        ErrorMessage = null;
+        try
+        {
+            // TODO: Integrate with ClaudeSessionService in Phase 5
+            await SessionStoreApi.StopSessionAsync(_session.Id);
+            _session = null;
+            await OnStatusChanged.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private static string GetModelDisplayName(string model)
+    {
+        var parts = model.Split('/');
+        return parts.Length > 1 ? parts[1] : model;
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        return ValueTask.CompletedTask;
+    }
+}

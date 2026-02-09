@@ -1,0 +1,200 @@
+<div class="todos-tab">
+    @if (_todos.Count == 0)
+    {
+        <div class="empty-state">
+            <span class="empty-icon">📋</span>
+            <p>No tasks tracked in this session</p>
+        </div>
+    }
+    else
+    {
+        <div class="todos-summary">
+            <span class="completed-count">@_completedCount</span>
+            <span class="separator">/</span>
+            <span class="total-count">@_todos.Count</span>
+            <span class="summary-label">tasks completed</span>
+        </div>
+        <div class="todos-list">
+            @foreach (var todo in _todos)
+            {
+                <div class="todo-item @GetStatusClass(todo.Status)">
+                    <span class="status-icon @GetStatusClass(todo.Status)">@GetStatusIcon(todo.Status)</span>
+                    <div class="todo-content">
+                        <span class="todo-text @(todo.Status == TodoStatus.Completed ? "completed" : "")">@todo.Content</span>
+                        @if (todo.Status == TodoStatus.InProgress)
+                        {
+                            <span class="active-form">@todo.ActiveForm</span>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<style>
+    .todos-tab {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+    }
+
+    .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: var(--spacing-lg);
+        color: var(--text-muted);
+        text-align: center;
+        gap: var(--spacing-sm);
+    }
+
+    .empty-icon {
+        font-size: 2rem;
+        opacity: 0.5;
+    }
+
+    .empty-state p {
+        margin: 0;
+        font-size: 0.875rem;
+    }
+
+    .todos-summary {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-xs);
+        padding: var(--spacing-sm);
+        border-bottom: 1px solid var(--border-color);
+        font-size: 0.875rem;
+    }
+
+    .completed-count {
+        font-weight: 600;
+        color: var(--status-success);
+    }
+
+    .separator {
+        color: var(--text-muted);
+    }
+
+    .total-count {
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    .summary-label {
+        color: var(--text-muted);
+        margin-left: var(--spacing-xs);
+    }
+
+    .todos-list {
+        flex: 1;
+        overflow-y: auto;
+    }
+
+    .todo-item {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--spacing-sm);
+        padding: var(--spacing-sm);
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .todo-item:last-child {
+        border-bottom: none;
+    }
+
+    .todo-item.in-progress {
+        background: rgba(255, 193, 7, 0.05);
+    }
+
+    .status-icon {
+        width: 20px;
+        height: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.875rem;
+        flex-shrink: 0;
+        border-radius: 50%;
+    }
+
+    .status-icon.pending {
+        color: var(--text-muted);
+    }
+
+    .status-icon.in-progress {
+        color: var(--status-warning);
+        animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    .status-icon.completed {
+        color: var(--status-success);
+    }
+
+    @@keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+    }
+
+    .todo-content {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    .todo-text {
+        font-size: 0.875rem;
+        color: var(--text-primary);
+    }
+
+    .todo-text.completed {
+        text-decoration: line-through;
+        color: var(--text-muted);
+    }
+
+    .active-form {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+        font-style: italic;
+    }
+</style>
+
+@code {
+    [Parameter] public List<ClaudeMessage>? Messages { get; set; }
+
+    private IReadOnlyList<SessionTodoItem> _todos = [];
+    private int _completedCount;
+
+    protected override void OnParametersSet()
+    {
+        if (Messages != null)
+        {
+            _todos = new TodoParser().ParseFromMessages(Messages);
+            _completedCount = _todos.Count(t => t.Status == TodoStatus.Completed);
+        }
+        else
+        {
+            _todos = [];
+            _completedCount = 0;
+        }
+    }
+
+    private static string GetStatusClass(TodoStatus status) => status switch
+    {
+        TodoStatus.Pending => "pending",
+        TodoStatus.InProgress => "in-progress",
+        TodoStatus.Completed => "completed",
+        _ => "pending"
+    };
+
+    private static string GetStatusIcon(TodoStatus status) => status switch
+    {
+        TodoStatus.Pending => "○",
+        TodoStatus.InProgress => "◐",
+        TodoStatus.Completed => "✓",
+        _ => "○"
+    };
+}

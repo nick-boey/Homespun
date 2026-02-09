@@ -1,0 +1,109 @@
+@page "/projects"
+@inject HttpProjectApiService ProjectApi
+@inject IBreadcrumbService BreadcrumbService
+
+<PageTitle>Projects</PageTitle>
+
+<h1>Projects</h1>
+
+@if (_projects == null)
+{
+    <p>Loading...</p>
+}
+else if (_projects.Count == 0)
+{
+    <EmptyState
+        Title="No Projects Yet"
+        Description="Create one to get started."
+        ActionLabel="New Project"
+        ActionHref="projects/create">
+        <Icon>
+            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" />
+            </svg>
+        </Icon>
+    </EmptyState>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th class="no-select">Name</th>
+                <th class="no-select">Local Path</th>
+                <th class="no-select">GitHub</th>
+                <th class="no-select">Default Branch</th>
+                <th class="no-select">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var project in _projects)
+            {
+                <tr>
+                    <td><a href="projects/@project.Id">@project.Name</a></td>
+                    <td>@project.LocalPath</td>
+                    <td>
+                        @if (!string.IsNullOrEmpty(project.GitHubOwner) && !string.IsNullOrEmpty(project.GitHubRepo))
+                        {
+                            <a href="https://github.com/@project.GitHubOwner/@project.GitHubRepo" target="_blank">
+                                @project.GitHubOwner/@project.GitHubRepo
+                            </a>
+                        }
+                        else
+                        {
+                            <span class="text-text-muted">-</span>
+                        }
+                    </td>
+                    <td>@project.DefaultBranch</td>
+                    <td class="actions-cell">
+                        <a href="projects/@project.Id/edit" class="btn btn-sm btn-outline-secondary">Edit</a>
+                        <button class="btn btn-sm btn-danger" @onclick="() => DeleteProject(project.Id)">Delete</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+    <p><a href="projects/create" class="btn btn-primary btn-sm">New Project</a></p>
+}
+
+<style>
+    .no-select {
+        user-select: none;
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+    }
+    
+    .actions-cell {
+        white-space: nowrap;
+    }
+    
+    .actions-cell .btn {
+        margin-right: 0.25rem;
+    }
+    
+    .btn-outline-secondary {
+        border: 1px solid var(--border-color);
+    }
+</style>
+
+@code {
+    private List<Project>? _projects;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await BreadcrumbService.SetContextAsync(new BreadcrumbContext { PageName = "Projects" });
+        await LoadProjects();
+    }
+
+    private async Task LoadProjects()
+    {
+        _projects = await ProjectApi.GetAllProjectsAsync();
+    }
+
+    private async Task DeleteProject(string id)
+    {
+        await ProjectApi.DeleteProjectAsync(id);
+        await LoadProjects();
+    }
+}

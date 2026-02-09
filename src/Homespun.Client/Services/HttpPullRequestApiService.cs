@@ -23,6 +23,8 @@ public class HttpPullRequestApiService(HttpClient http)
         return await response.Content.ReadFromJsonAsync<PullRequest>();
     }
 
+    public Task<PullRequest?> GetByIdAsync(string id) => GetPullRequestAsync(id);
+
     public async Task<PullRequest?> CreatePullRequestAsync(CreatePullRequestRequest request)
     {
         var response = await http.PostAsJsonAsync(ApiRoutes.PullRequests, request);

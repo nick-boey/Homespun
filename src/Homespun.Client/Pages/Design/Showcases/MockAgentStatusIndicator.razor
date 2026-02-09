@@ -1,0 +1,67 @@
+@* Mock version of AgentStatusIndicator that doesn't depend on services *@
+
+@if (WorkingCount + QuestionCount + PlanReadyCount + WaitingCount + ErrorCount > 0)
+{
+    <a href="/sessions" class="agent-status-indicator" title="@GetTooltipText()">
+        @if (WorkingCount > 0)
+        {
+            <span class="status-dot working" aria-label="Working agents"></span>
+            <span class="count">@WorkingCount</span>
+        }
+        @if (QuestionCount > 0)
+        {
+            <span class="status-dot question" aria-label="Agents awaiting response"></span>
+            <span class="count">@QuestionCount</span>
+        }
+        @if (PlanReadyCount > 0)
+        {
+            <span class="status-dot plan-ready" aria-label="Agents with plan ready"></span>
+            <span class="count">@PlanReadyCount</span>
+        }
+        @if (WaitingCount > 0)
+        {
+            <span class="status-dot waiting" aria-label="Agents waiting for input"></span>
+            <span class="count">@WaitingCount</span>
+        }
+        @if (ErrorCount > 0)
+        {
+            <span class="status-dot error" aria-label="Agents in error state"></span>
+            <span class="count">@ErrorCount</span>
+        }
+    </a>
+}
+
+@code {
+    [Parameter]
+    public int WorkingCount { get; set; }
+
+    [Parameter]
+    public int QuestionCount { get; set; }
+
+    [Parameter]
+    public int PlanReadyCount { get; set; }
+
+    [Parameter]
+    public int WaitingCount { get; set; }
+
+    [Parameter]
+    public int ErrorCount { get; set; }
+
+    private string GetTooltipText()
+    {
+        var parts = new List<string>();
+        if (WorkingCount > 0)
+            parts.Add($"{WorkingCount} working");
+        if (QuestionCount > 0)
+            parts.Add($"{QuestionCount} awaiting response");
+        if (PlanReadyCount > 0)
+            parts.Add($"{PlanReadyCount} plan ready");
+        if (WaitingCount > 0)
+            parts.Add($"{WaitingCount} waiting for input");
+        if (ErrorCount > 0)
+            parts.Add($"{ErrorCount} in error");
+
+        var status = parts.Count > 0 ? string.Join(", ", parts) + " - " : "";
+        return $"{status}Click to view";
+    }
+}

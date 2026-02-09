@@ -1,0 +1,160 @@
+<div class="showcase-section">
+    <h3>Basic Usage</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Simple work item</div>
+        <div class="showcase-preview">
+            <WorkItem
+                Title="Implement user authentication"
+                Number="42"
+                StatusColor="status-progress"
+                StatusTooltip="In Progress"
+                IsFirst="true"
+                IsLast="true" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>With URL Link</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Clickable work item with external link</div>
+        <div class="showcase-preview">
+            <WorkItem
+                Title="Add dark mode support"
+                Number="123"
+                Url="https://github.com/example/repo/issues/123"
+                StatusColor="status-next"
+                StatusTooltip="Ready for development"
+                IsFirst="true"
+                IsLast="true" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Status Colors</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Different status indicators</div>
+        <div class="showcase-preview">
+            <WorkItem
+                Title="Feature: Add search functionality"
+                Number="1"
+                StatusColor="status-idea"
+                StatusTooltip="Idea"
+                Subtitle="Feature"
+                IsFirst="true"
+                IsLast="false" />
+            <WorkItem
+                Title="Bug: Fix login redirect"
+                Number="2"
+                StatusColor="status-progress"
+                StatusTooltip="In Progress"
+                Subtitle="Bug"
+                IsFirst="false"
+                IsLast="false" />
+            <WorkItem
+                Title="Task: Update dependencies"
+                Number="3"
+                StatusColor="status-review"
+                StatusTooltip="In Review"
+                Subtitle="Task"
+                IsFirst="false"
+                IsLast="false" />
+            <WorkItem
+                Title="Feature: Dashboard redesign"
+                Number="4"
+                StatusColor="status-complete"
+                StatusTooltip="Complete"
+                Subtitle="Feature"
+                IsFirst="false"
+                IsLast="true" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>With Indentation</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Hierarchical display</div>
+        <div class="showcase-preview">
+            <WorkItem
+                Title="Epic: User Management"
+                Number="10"
+                StatusColor="status-progress"
+                IndentLevel="0"
+                IsFirst="true"
+                IsLast="false" />
+            <WorkItem
+                Title="Feature: User registration"
+                Number="11"
+                StatusColor="status-complete"
+                IndentLevel="1"
+                IsFirst="false"
+                IsLast="false" />
+            <WorkItem
+                Title="Feature: User profile"
+                Number="12"
+                StatusColor="status-progress"
+                IndentLevel="1"
+                IsFirst="false"
+                IsLast="false" />
+            <WorkItem
+                Title="Task: Add avatar upload"
+                Number="13"
+                StatusColor="status-next"
+                IndentLevel="2"
+                IsFirst="false"
+                IsLast="true" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Clickable & Selected States</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Interactive work items</div>
+        <div class="showcase-preview">
+            <WorkItem
+                Title="Clickable item (hover me)"
+                Number="20"
+                StatusColor="status-next"
+                IsClickable="true"
+                OnClick="@(() => { })"
+                IsFirst="true"
+                IsLast="false" />
+            <WorkItem
+                Title="Selected item"
+                Number="21"
+                StatusColor="status-progress"
+                IsSelected="true"
+                IsClickable="true"
+                OnClick="@(() => { })"
+                IsFirst="false"
+                IsLast="true" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Agent Startup States</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Work items with agent status</div>
+        <div class="showcase-preview">
+            <WorkItem
+                Title="Starting agent session..."
+                Number="30"
+                StatusColor="status-progress"
+                StartupState="AgentStartupStatus.Starting"
+                IsFirst="true"
+                IsLast="false" />
+            <WorkItem
+                Title="Agent failed to start"
+                Number="31"
+                StatusColor="status-failed"
+                StartupState="AgentStartupStatus.Failed"
+                StartupErrorMessage="Connection timeout"
+                IsFirst="false"
+                IsLast="true" />
+        </div>
+    </div>
+</div>

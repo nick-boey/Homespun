@@ -48,3 +48,24 @@ public class SendMessageRequest
     /// </summary>
     public required string Message { get; set; }
 }
+
+/// <summary>
+/// Request model for resuming a session.
+/// </summary>
+public class ResumeSessionRequest
+{
+    /// <summary>
+    /// The entity ID (e.g., issue ID, PR ID).
+    /// </summary>
+    public required string EntityId { get; set; }
+
+    /// <summary>
+    /// The project ID.
+    /// </summary>
+    public required string ProjectId { get; set; }
+
+    /// <summary>
+    /// Working directory for the session.
+    /// </summary>
+    public required string WorkingDirectory { get; set; }
+}

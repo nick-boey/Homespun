@@ -1,5 +1,6 @@
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Projects;
+using Homespun.Shared.Requests;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Homespun.Features.ClaudeCode.Controllers;
@@ -43,6 +44,22 @@ public class SessionsController(
     }
 
     /// <summary>
+    /// Get a session by entity ID.
+    /// </summary>
+    [HttpGet("entity/{entityId}")]
+    [ProducesResponseType<ClaudeSession>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public ActionResult<ClaudeSession> GetByEntityId(string entityId)
+    {
+        var session = sessionService.GetSessionByEntityId(entityId);
+        if (session == null)
+        {
+            return NotFound();
+        }
+        return Ok(session);
+    }
+
+    /// <summary>
     /// Get sessions for a project.
     /// </summary>
     [HttpGet("project/{projectId}")]
@@ -52,6 +69,43 @@ public class SessionsController(
         var sessions = sessionService.GetSessionsForProject(projectId);
         var summaries = sessions.Select(MapToSummary).ToList();
         return Ok(summaries);
+    }
+
+    /// <summary>
+    /// Get resumable sessions for an entity.
+    /// </summary>
+    [HttpGet("entity/{entityId}/resumable")]
+    [ProducesResponseType<IReadOnlyList<ResumableSession>>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<ResumableSession>>> GetResumableSessions(
+        string entityId,
+        [FromQuery] string workingDirectory)
+    {
+        var sessions = await sessionService.GetResumableSessionsAsync(entityId, workingDirectory);
+        return Ok(sessions);
+    }
+
+    /// <summary>
+    /// Get session history for an entity.
+    /// </summary>
+    [HttpGet("history/{projectId}/{entityId}")]
+    [ProducesResponseType<IReadOnlyList<SessionCacheSummary>>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<SessionCacheSummary>>> GetSessionHistory(
+        string projectId,
+        string entityId)
+    {
+        var history = await sessionService.GetSessionHistoryAsync(projectId, entityId);
+        return Ok(history);
+    }
+
+    /// <summary>
+    /// Get cached messages for a session.
+    /// </summary>
+    [HttpGet("{id}/cached-messages")]
+    [ProducesResponseType<IReadOnlyList<ClaudeMessage>>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<ClaudeMessage>>> GetCachedMessages(string id)
+    {
+        var messages = await sessionService.GetCachedMessagesAsync(id);
+        return Ok(messages);
     }
 
     /// <summary>
@@ -88,6 +142,41 @@ public class SessionsController(
         {
             return BadRequest($"Failed to start session: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// Resume a previously saved session.
+    /// </summary>
+    [HttpPost("{id}/resume")]
+    [ProducesResponseType<ClaudeSession>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<ClaudeSession>> Resume(string id, [FromBody] ResumeSessionRequest request)
+    {
+        try
+        {
+            var session = await sessionService.ResumeSessionAsync(
+                id,
+                request.EntityId,
+                request.ProjectId,
+                request.WorkingDirectory);
+
+            return Ok(session);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest($"Failed to resume session: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Stop all sessions for an entity.
+    /// </summary>
+    [HttpDelete("entity/{entityId}")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<ActionResult<int>> StopAllForEntity(string entityId)
+    {
+        var count = await sessionService.StopAllSessionsForEntityAsync(entityId);
+        return Ok(count);
     }
 
     /// <summary>

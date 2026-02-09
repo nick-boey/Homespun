@@ -1,6 +1,7 @@
 using System.Net.Http.Json;
 using Homespun.Shared;
 using Homespun.Shared.Models.Git;
+using Homespun.Shared.Models.Sessions;
 using Homespun.Shared.Requests;
 
 namespace Homespun.Client.Services;
@@ -45,5 +46,17 @@ public class HttpCloneApiService(HttpClient http)
         var response = await http.PostAsync(
             $"{ApiRoutes.Clones}/pull?clonePath={Uri.EscapeDataString(clonePath)}", null);
         response.EnsureSuccessStatusCode();
+    }
+
+    public async Task<List<BranchInfo>> ListLocalBranchesAsync(string repoPath)
+    {
+        return await http.GetFromJsonAsync<List<BranchInfo>>(
+            $"{ApiRoutes.Clones}/branches?repoPath={Uri.EscapeDataString(repoPath)}") ?? [];
+    }
+
+    public async Task<List<FileChangeInfo>> GetChangedFilesAsync(string workingDirectory, string targetBranch)
+    {
+        return await http.GetFromJsonAsync<List<FileChangeInfo>>(
+            $"{ApiRoutes.Clones}/changed-files?workingDirectory={Uri.EscapeDataString(workingDirectory)}&targetBranch={Uri.EscapeDataString(targetBranch)}") ?? [];
     }
 }

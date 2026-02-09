@@ -31,6 +31,18 @@ global using DiscoveredSession = Homespun.Shared.Models.Sessions.DiscoveredSessi
 global using SessionMetadata = Homespun.Shared.Models.Sessions.SessionMetadata;
 global using AgentPrompt = Homespun.Shared.Models.Sessions.AgentPrompt;
 global using SessionSummary = Homespun.Shared.Models.Sessions.SessionSummary;
+global using SessionTodoItem = Homespun.Shared.Models.Sessions.SessionTodoItem;
+global using TodoStatus = Homespun.Shared.Models.Sessions.TodoStatus;
+global using ITodoParser = Homespun.Shared.Models.Sessions.ITodoParser;
+global using TodoParser = Homespun.Shared.Models.Sessions.TodoParser;
+global using ResumableSession = Homespun.Shared.Models.Sessions.ResumableSession;
+global using ToolExecution = Homespun.Shared.Models.Sessions.ToolExecution;
+global using ToolExecutionGroup = Homespun.Shared.Models.Sessions.ToolExecutionGroup;
+global using AgentStartupState = Homespun.Shared.Models.Sessions.AgentStartupState;
+global using AgentStartupStatus = Homespun.Shared.Models.Sessions.AgentStartupStatus;
+global using PromptContext = Homespun.Shared.Models.Sessions.PromptContext;
+global using ClaudeSessionStatusExtensions = Homespun.Shared.Models.Sessions.ClaudeSessionStatusExtensions;
+global using static Homespun.Shared.Models.Sessions.ClaudeSessionStatusExtensions;
 
 // Projects
 global using Project = Homespun.Shared.Models.Projects.Project;
@@ -46,6 +58,7 @@ global using PullRequestWithStatus = Homespun.Shared.Models.PullRequests.PullReq
 global using PullRequestWithTime = Homespun.Shared.Models.PullRequests.PullRequestWithTime;
 global using PullRequestReviewInfo = Homespun.Shared.Models.PullRequests.PullRequestReviewInfo;
 global using ReviewSummary = Homespun.Shared.Models.PullRequests.ReviewSummary;
+global using BranchNameGenerator = Homespun.Shared.Models.PullRequests.BranchNameGenerator;
 
 // Git
 global using CloneInfo = Homespun.Shared.Models.Git.CloneInfo;
@@ -82,6 +95,9 @@ global using GraphNodeType = Homespun.Shared.Models.Gitgraph.GraphNodeType;
 global using GraphNodeStatus = Homespun.Shared.Models.Gitgraph.GraphNodeStatus;
 global using RowLaneInfo = Homespun.Shared.Models.Gitgraph.RowLaneInfo;
 global using TimelineLaneLayout = Homespun.Shared.Models.Gitgraph.TimelineLaneLayout;
+global using AgentStatusData = Homespun.Shared.Models.Gitgraph.AgentStatusData;
+global using TimelineLaneCalculator = Homespun.Shared.Models.Gitgraph.TimelineLaneCalculator;
+global using TimelineSvgRenderer = Homespun.Shared.Models.Gitgraph.TimelineSvgRenderer;
 
 // Feature namespaces (for service interfaces and types that remain in these namespaces)
 global using Homespun.Features.ClaudeCode.Data;

@@ -1,0 +1,208 @@
+@page "/design/{ComponentId}"
+@using Fleece.Core.Models
+@inject HttpComponentRegistryService ComponentRegistry
+@inject IBreadcrumbService BreadcrumbService
+@inject NavigationManager NavigationManager
+
+<PageTitle>@(_component?.Name ?? "Component") - Design System - Homespun</PageTitle>
+
+@if (_component == null)
+{
+    <div class="alert alert-warning">
+        <h4>Component Not Found</h4>
+        <p>The component "@ComponentId" was not found in the registry.</p>
+        <a href="/design" class="btn btn-primary">Back to Design System</a>
+    </div>
+}
+else
+{
+    <nav class="mb-4">
+        <a href="/design" class="text-link">&larr; Back to Design System</a>
+    </nav>
+
+    <div class="component-header mb-6">
+        <h1>@_component.Name</h1>
+        <p class="text-text-secondary">@_component.Description</p>
+        <div class="flex gap-2 mt-2">
+            <span class="badge bg-secondary">@_component.Category</span>
+            @foreach (var tag in _component.Tags)
+            {
+                <span class="badge bg-tertiary">@tag</span>
+            }
+        </div>
+    </div>
+
+    <div class="showcase-container">
+        @* Render the component based on its ID *@
+        @switch (_component.Id)
+        {
+            // Core UI Components
+            case "work-item":
+                <WorkItemShowcase />
+                break;
+            case "pr-status-badges":
+                <PrStatusBadgesShowcase />
+                break;
+            case "agent-status-indicator":
+                <AgentStatusIndicatorShowcase />
+                break;
+            case "notification-banner":
+                <NotificationBannerShowcase />
+                break;
+            case "form-message":
+                <FormMessageShowcase />
+                break;
+            case "model-selector":
+                <ModelSelectorShowcase />
+                break;
+            case "info-list":
+                <InfoListShowcase />
+                break;
+            case "quick-issue-create-bar":
+                <QuickIssueCreateBarShowcase />
+                break;
+
+            // Panel Components
+            case "issue-detail-panel":
+                <IssueDetailPanelShowcase />
+                break;
+            case "current-pull-request-detail-panel":
+                <CurrentPullRequestDetailPanelShowcase />
+                break;
+            case "agent-management-panel":
+                <AgentManagementPanelShowcase />
+                break;
+            case "agent-status-panel":
+                <AgentStatusPanelShowcase />
+                break;
+            case "clone-management-panel":
+                <CloneManagementPanelShowcase />
+                break;
+            case "gitgraph-visualization":
+                <GitgraphVisualizationShowcase />
+                break;
+            case "session-history-list":
+                <SessionHistoryListShowcase />
+                break;
+            case "agent-selector":
+                <AgentSelectorShowcase />
+                break;
+
+            // Chat Components
+            case "chat-message":
+                <ChatMessageShowcase />
+                break;
+            case "chat-input":
+                <ChatInputShowcase />
+                break;
+            case "content-block":
+                <ContentBlockShowcase />
+                break;
+            case "text-block":
+                <TextBlockShowcase />
+                break;
+            case "tool-use-block":
+                <ToolUseBlockShowcase />
+                break;
+            case "tool-result-block":
+                <ToolResultBlockShowcase />
+                break;
+            case "thinking-block":
+                <ThinkingBlockShowcase />
+                break;
+            case "processing-indicator":
+                <ProcessingIndicatorShowcase />
+                break;
+            case "loading-spinner":
+                <LoadingSpinnerShowcase />
+                break;
+
+            default:
+                <div class="alert alert-info">
+                    <p>This component does not have a showcase implementation yet.</p>
+                    <p class="text-text-muted mt-2">Component path: <code>@_component.ComponentPath</code></p>
+                </div>
+                break;
+        }
+    </div>
+}
+
+<style>
+    .component-header h1 {
+        margin-bottom: var(--spacing-xs);
+    }
+
+    .showcase-container {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        padding: var(--spacing-lg);
+    }
+
+    .showcase-section {
+        margin-bottom: var(--spacing-xl);
+    }
+
+    .showcase-section:last-child {
+        margin-bottom: 0;
+    }
+
+    .showcase-section h3 {
+        font-size: 0.875rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--text-muted);
+        margin-bottom: var(--spacing-md);
+        padding-bottom: var(--spacing-xs);
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .showcase-item {
+        margin-bottom: var(--spacing-md);
+    }
+
+    .showcase-item:last-child {
+        margin-bottom: 0;
+    }
+
+    .showcase-label {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        margin-bottom: var(--spacing-xs);
+    }
+
+    .showcase-preview {
+        background: var(--bg-primary);
+        border: 1px dashed var(--border-color);
+        border-radius: var(--radius-sm);
+        padding: var(--spacing-md);
+    }
+
+    .badge.bg-tertiary {
+        background: var(--bg-tertiary);
+        color: var(--text-secondary);
+    }
+</style>
+
+@code {
+    [Parameter]
+    public string ComponentId { get; set; } = "";
+
+    private ComponentMetadata? _component;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ComponentRegistry.InitializeAsync();
+        _component = ComponentRegistry.GetComponent(ComponentId);
+        await BreadcrumbService.SetContextAsync(new BreadcrumbContext
+        {
+            PageName = _component?.Name ?? "Component"
+        });
+    }
+
+    protected override void OnParametersSet()
+    {
+        _component = ComponentRegistry.GetComponent(ComponentId);
+    }
+}

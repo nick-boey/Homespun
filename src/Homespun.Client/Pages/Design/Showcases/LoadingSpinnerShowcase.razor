@@ -1,0 +1,102 @@
+<div class="showcase-section">
+    <h3>Size Variants</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Small (sm) - for inline button use</div>
+        <div class="showcase-preview">
+            <LoadingSpinner Size="SpinnerSize.Sm" />
+        </div>
+    </div>
+    <div class="showcase-item">
+        <div class="showcase-label">Medium (md) - default size</div>
+        <div class="showcase-preview">
+            <LoadingSpinner Size="SpinnerSize.Md" />
+        </div>
+    </div>
+    <div class="showcase-item">
+        <div class="showcase-label">Large (lg) - for page-level loading</div>
+        <div class="showcase-preview">
+            <LoadingSpinner Size="SpinnerSize.Lg" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>With Labels</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Small with label</div>
+        <div class="showcase-preview">
+            <LoadingSpinner Size="SpinnerSize.Sm" Label="Loading..." />
+        </div>
+    </div>
+    <div class="showcase-item">
+        <div class="showcase-label">Medium with label</div>
+        <div class="showcase-preview">
+            <LoadingSpinner Size="SpinnerSize.Md" Label="Processing request..." />
+        </div>
+    </div>
+    <div class="showcase-item">
+        <div class="showcase-label">Large with label</div>
+        <div class="showcase-preview">
+            <LoadingSpinner Size="SpinnerSize.Lg" Label="Loading sessions..." />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Inline Button Usage</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Spinner inside a button (inline mode)</div>
+        <div class="showcase-preview">
+            <button class="btn btn-primary" disabled>
+                <LoadingSpinner Size="SpinnerSize.Sm" Label="Saving..." Inline="true" />
+            </button>
+            <button class="btn btn-outline" disabled>
+                <LoadingSpinner Size="SpinnerSize.Sm" Label="Syncing..." Inline="true" />
+            </button>
+        </div>
+    </div>
+    <div class="showcase-item">
+        <div class="showcase-label">Spinner only in button</div>
+        <div class="showcase-preview">
+            <button class="btn btn-sm btn-outline" disabled>
+                <LoadingSpinner Size="SpinnerSize.Sm" Inline="true" ScreenReaderText="Refreshing" />
+                <i class="bi bi-arrow-clockwise"></i> Refresh
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Centered Layout</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Centered spinner for page loading states</div>
+        <div class="showcase-preview">
+            <div style="border: 1px dashed var(--border-color); padding: 2rem; width: 100%;">
+                <LoadingSpinner Size="SpinnerSize.Lg" Label="Loading sessions..." Centered="true" />
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Status Badge Context</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Within a status badge</div>
+        <div class="showcase-preview">
+            <span class="badge bg-status-info">
+                <LoadingSpinner Size="SpinnerSize.Sm" Label="Syncing..." Inline="true" />
+            </span>
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Accessibility</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Custom screen reader text</div>
+        <div class="showcase-preview">
+            <LoadingSpinner Size="SpinnerSize.Md" ScreenReaderText="Checking authentication status" />
+            <span class="text-text-muted text-sm ms-3">(Inspect to see sr-only span)</span>
+        </div>
+    </div>
+</div>

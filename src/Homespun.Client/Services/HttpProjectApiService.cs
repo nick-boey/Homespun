@@ -21,6 +21,10 @@ public class HttpProjectApiService(HttpClient http)
         return await response.Content.ReadFromJsonAsync<Project>();
     }
 
+    public Task<Project?> GetByIdAsync(string id) => GetProjectAsync(id);
+
+    public Task<List<Project>> GetAllAsync() => GetAllProjectsAsync();
+
     public async Task<Project?> CreateProjectAsync(CreateProjectRequest request)
     {
         var response = await http.PostAsJsonAsync(ApiRoutes.Projects, request);
