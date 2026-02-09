@@ -3,6 +3,7 @@ using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Testing.Services;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Homespun.Features.Testing;
 
@@ -18,6 +19,8 @@ public class MockDataSeederService : IHostedService
     private readonly IToolResultParser _toolResultParser;
     private readonly IJsonlSessionLoader _jsonlSessionLoader;
     private readonly ILogger<MockDataSeederService> _logger;
+    private readonly LiveClaudeTestOptions? _liveTestOptions;
+    private readonly List<string> _createdTempDirectories = [];
 
     /// <summary>
     /// Default path to look for JSONL session files when running in container.
@@ -39,7 +42,8 @@ public class MockDataSeederService : IHostedService
         IClaudeSessionStore sessionStore,
         IToolResultParser toolResultParser,
         IJsonlSessionLoader jsonlSessionLoader,
-        ILogger<MockDataSeederService> logger)
+        ILogger<MockDataSeederService> logger,
+        IOptions<LiveClaudeTestOptions>? liveTestOptions = null)
     {
         _dataStore = dataStore;
         _fleeceService = fleeceService;
@@ -48,6 +52,7 @@ public class MockDataSeederService : IHostedService
         _toolResultParser = toolResultParser;
         _jsonlSessionLoader = jsonlSessionLoader;
         _logger = logger;
+        _liveTestOptions = liveTestOptions?.Value;
     }
 
     public async Task StartAsync(CancellationToken cancellationToken)
@@ -141,7 +146,44 @@ public class MockDataSeederService : IHostedService
 
     public Task StopAsync(CancellationToken cancellationToken)
     {
+        foreach (var dir in _createdTempDirectories)
+        {
+            try
+            {
+                if (Directory.Exists(dir))
+                {
+                    Directory.Delete(dir, recursive: true);
+                    _logger.LogDebug("Cleaned up temp mock directory: {Path}", dir);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to clean up temp mock directory: {Path}", dir);
+            }
+        }
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Gets the local path for a mock project. When live Claude sessions are enabled,
+    /// creates a real temporary directory so that SubprocessCliTransport can validate it.
+    /// Otherwise returns a fake path for fully-mocked mode.
+    /// </summary>
+    private string GetMockProjectPath(string projectId)
+    {
+        if (!string.IsNullOrEmpty(_liveTestOptions?.TestWorkingDirectory))
+        {
+            var tempDir = Path.Combine(Path.GetTempPath(), "homespun-mock", projectId);
+            if (!Directory.Exists(tempDir))
+            {
+                Directory.CreateDirectory(tempDir);
+                _createdTempDirectories.Add(tempDir);
+                _logger.LogDebug("Created temp directory for mock project {ProjectId}: {Path}", projectId, tempDir);
+            }
+            return tempDir;
+        }
+
+        return $"/mock/projects/{projectId}";
     }
 
     private async Task SeedProjectsAsync()
@@ -151,7 +193,7 @@ public class MockDataSeederService : IHostedService
         {
             Id = "demo-project",
             Name = "Demo Project",
-            LocalPath = "/mock/projects/demo-project",
+            LocalPath = GetMockProjectPath("demo-project"),
             GitHubOwner = "demo-org",
             GitHubRepo = "demo-project",
             DefaultBranch = "main",
@@ -165,7 +207,7 @@ public class MockDataSeederService : IHostedService
         {
             Id = "sample-app",
             Name = "Sample Application",
-            LocalPath = "/mock/projects/sample-app",
+            LocalPath = GetMockProjectPath("sample-app"),
             GitHubOwner = "demo-org",
             GitHubRepo = "sample-app",
             DefaultBranch = "main",
@@ -367,9 +409,10 @@ Create an integration test to confirm that this does occur, then fix it - the br
             }
         };
 
+        var demoProjectPath = GetMockProjectPath("demo-project");
         foreach (var issue in issues)
         {
-            _fleeceService.SeedIssue("/mock/projects/demo-project", issue);
+            _fleeceService.SeedIssue(demoProjectPath, issue);
         }
 
         _logger.LogDebug("Seeded {Count} issues", issues.Count);
