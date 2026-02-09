@@ -16,7 +16,7 @@ Click any component card to view its showcase with multiple variations and state
 
 When creating a new shared component, add it to the design system for visual testing:
 
-1. **Register the component** in `Features/Design/ComponentRegistryService.cs`:
+1. **Register the component** in `src/Homespun.Server/Features/Design/ComponentRegistryService.cs`:
    ```csharp
    new ComponentMetadata
    {
@@ -24,12 +24,12 @@ When creating a new shared component, add it to the design system for visual tes
        Name = "MyComponent",          // Display name
        Description = "Brief description of what it does.",
        Category = "Core",             // Core, Forms, Chat, or Panels
-       ComponentPath = "Components/Shared/MyComponent.razor",
+       ComponentPath = "Components/MyComponent.razor",
        Tags = ["tag1", "tag2"]        // For search/filtering
    }
    ```
 
-2. **Create a showcase file** at `Components/Pages/Design/Showcases/MyComponentShowcase.razor`:
+2. **Create a showcase file** at `Pages/Design/Showcases/MyComponentShowcase.razor`:
    ```razor
    <div class="showcase-section">
        <h3>Default State</h3>
@@ -56,7 +56,7 @@ When creating a new shared component, add it to the design system for visual tes
    }
    ```
 
-3. **Add the showcase case** to `Components/Pages/Design/ComponentShowcase.razor`:
+3. **Add the showcase case** to `Pages/Design/ComponentShowcase.razor`:
    ```csharp
    case "my-component":
        <MyComponentShowcase />
@@ -72,4 +72,3 @@ When creating a new shared component, add it to the design system for visual tes
 - Include edge cases: long text, missing data, extreme values
 - For interactive components, show both enabled and disabled states
 - Group related variations under descriptive `<h3>` headings
-

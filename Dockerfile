@@ -27,7 +27,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copy solution and project files first for better layer caching
 COPY Homespun.sln ./
-COPY src/Homespun/Homespun.csproj src/Homespun/
 COPY src/Homespun.Server/Homespun.Server.csproj src/Homespun.Server/
 COPY src/Homespun.Client/Homespun.Client.csproj src/Homespun.Client/
 COPY src/Homespun.Shared/Homespun.Shared.csproj src/Homespun.Shared/
