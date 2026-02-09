@@ -18,6 +18,13 @@ using Microsoft.AspNetCore.DataProtection;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Enable static web assets resolution for non-production environments (e.g. Mock)
+// By default, only the Development environment activates this automatically
+if (!builder.Environment.IsProduction())
+{
+    builder.WebHost.UseStaticWebAssets();
+}
+
 // Check for mock mode
 var mockModeOptions = new MockModeOptions();
 builder.Configuration.GetSection(MockModeOptions.SectionName).Bind(mockModeOptions);
@@ -255,9 +262,6 @@ app.UseSwaggerUI(options =>
 
 app.UseCors();
 
-app.UseBlazorFrameworkFiles();
-app.UseStaticFiles();
-
 // Map SignalR hubs
 app.MapHub<NotificationHub>("/hubs/notifications");
 app.MapHub<ClaudeCodeHub>("/hubs/claudecode");
@@ -268,6 +272,9 @@ app.MapHealthChecks("/health");
 // Map API controllers
 app.MapControllers();
 
+// MapStaticAssets replaces UseBlazorFrameworkFiles + UseStaticFiles in .NET 10
+// It serves both Blazor WASM framework files and static assets via endpoint routing
+app.MapStaticAssets();
 app.MapFallbackToFile("index.html");
 
 app.Run();
