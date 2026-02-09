@@ -259,8 +259,6 @@ app.UseCors();
 // app.UseBlazorFrameworkFiles();
 app.UseStaticFiles();
 
-app.UseAntiforgery();
-
 // Map SignalR hubs
 app.MapHub<NotificationHub>("/hubs/notifications");
 app.MapHub<ClaudeCodeHub>("/hubs/claudecode");

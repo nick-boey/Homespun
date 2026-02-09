@@ -31,13 +31,21 @@ Parent issue: `oU1zLd` - Split into Blazor WASM and ASP.NET server
 - Server-client WASM hosting deferred to avoid static asset conflicts during transition
 - Build: 0 errors | Unit tests: 1304 passed, 5 pre-existing failures | API tests: 36 passed
 
+### m1zqCB (ddd) - Migrate backend services from monolith to Homespun.Server
+- Moved entire Features/ directory from monolith to Homespun.Server
+- Kept namespaces as `Homespun.Features.*` for compatibility
+- Blazor .razor component files kept in monolith (UI stays in monolith during transition)
+- Inverted dependency: monolith now references Homespun.Server (instead of vice versa)
+- Removed `UseAntiforgery()` from Server Program.cs (not needed for pure API server)
+- Updated API test project to reference Homespun.Server directly
+- Build: 0 errors | Unit tests: 1304 passed, 5 pre-existing failures | API tests: 36 passed
+
 ## In Progress
 
 None
 
 ## Remaining
 
-- m1zqCB (ddd) - Migrate backend services from monolith to Homespun.Server
 - kH1MPa (eee) - Create client-side HTTP service layer for Blazor WASM
 - XAdrC8 (fff) - Migrate Blazor components to WASM client and rewire to HTTP services
 - W3HDnD (ggg) - Implement SignalR client integration for Blazor WASM
