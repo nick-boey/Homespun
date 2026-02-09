@@ -255,8 +255,7 @@ app.UseSwaggerUI(options =>
 
 app.UseCors();
 
-// TODO: Enable when Homespun.Client WASM project is wired up
-// app.UseBlazorFrameworkFiles();
+app.UseBlazorFrameworkFiles();
 app.UseStaticFiles();
 
 // Map SignalR hubs
@@ -269,7 +268,6 @@ app.MapHealthChecks("/health");
 // Map API controllers
 app.MapControllers();
 
-// TODO: Enable when Homespun.Client WASM project is wired up
-// app.MapFallbackToFile("index.html");
+app.MapFallbackToFile("index.html");
 
 app.Run();

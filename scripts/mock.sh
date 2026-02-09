@@ -51,7 +51,7 @@ log_info "Running with mock services and demo data..."
 echo
 
 # Build the dotnet run command
-DOTNET_ARGS="--project $PROJECT_ROOT/src/Homespun/Homespun.csproj --launch-profile mock"
+DOTNET_ARGS="--project $PROJECT_ROOT/src/Homespun.Server/Homespun.Server.csproj --launch-profile mock"
 
 if [ -n "$PORT" ]; then
     log_info "Using custom port: $PORT"
