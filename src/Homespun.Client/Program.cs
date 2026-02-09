@@ -27,6 +27,10 @@ builder.Services.AddScoped<HttpIssuePrStatusApiService>();
 builder.Services.AddScoped<HttpFleeceSyncApiService>();
 builder.Services.AddScoped<HttpComponentRegistryService>();
 
+// Register SignalR services
+builder.Services.AddScoped<ClaudeCodeSignalRService>();
+builder.Services.AddScoped<NotificationSignalRService>();
+
 // Register client-side services
 builder.Services.AddScoped<IBreadcrumbService, BreadcrumbService>();
 builder.Services.AddSingleton<IMarkdownRenderingService, MarkdownRenderingService>();
