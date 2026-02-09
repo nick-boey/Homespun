@@ -1,10 +1,7 @@
 using Bunit;
-using Fleece.Core.Models;
-using Homespun.Features.ClaudeCode.Components.SessionInfoPanel;
-using Homespun.Features.ClaudeCode.Services;
-using Homespun.Features.Fleece.Services;
-using Homespun.Features.Projects;
-using Homespun.Features.Shared.Services;
+using Homespun.Client.Components.ClaudeCode.SessionInfoPanel;
+using Homespun.Client.Services;
+using Homespun.Tests.Helpers;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 
@@ -13,50 +10,31 @@ namespace Homespun.Tests.Components;
 [TestFixture]
 public class SessionInfoPanelTests : BunitTestContext
 {
-    private Mock<IFleeceService> _mockFleeceService = null!;
-    private Mock<IProjectService> _mockProjectService = null!;
-    private Mock<IGitCloneService> _mockGitService = null!;
-    private Mock<ITodoParser> _mockTodoParser = null!;
-    private Mock<IIssuePrStatusService> _mockPrStatusService = null!;
-    private Mock<IMarkdownRenderingService> _mockMarkdownService = null!;
-
     [SetUp]
     public new void Setup()
     {
         base.Setup();
 
-        _mockFleeceService = new Mock<IFleeceService>();
-        _mockProjectService = new Mock<IProjectService>();
-        _mockGitService = new Mock<IGitCloneService>();
-        _mockTodoParser = new Mock<ITodoParser>();
-        _mockPrStatusService = new Mock<IIssuePrStatusService>();
-        _mockMarkdownService = new Mock<IMarkdownRenderingService>();
+        var mockHandler = new MockHttpMessageHandler();
 
-        Services.AddSingleton(_mockFleeceService.Object);
-        Services.AddSingleton(_mockProjectService.Object);
-        Services.AddSingleton(_mockGitService.Object);
-        Services.AddSingleton(_mockTodoParser.Object);
-        Services.AddSingleton(_mockPrStatusService.Object);
-        Services.AddSingleton(_mockMarkdownService.Object);
+        // Default responses for child tab HTTP calls
+        mockHandler
+            .RespondWith("changed-files", new List<FileChangeInfo>())
+            .RespondNotFound("api/issues/")
+            .RespondNotFound("api/issue-pr-status/");
 
-        // Default setups
-        _mockProjectService.Setup(p => p.GetByIdAsync(It.IsAny<string>()))
-            .ReturnsAsync(new Project { Id = "proj-1", LocalPath = "/test/path", Name = "Test", DefaultBranch = "main" });
+        var httpClient = mockHandler.CreateClient();
 
-        _mockMarkdownService.Setup(m => m.RenderToHtml(It.IsAny<string?>()))
+        // Register HTTP API services needed by child tabs
+        Services.AddSingleton(new HttpCloneApiService(httpClient));
+        Services.AddSingleton(new HttpIssueApiService(httpClient));
+        Services.AddSingleton(new HttpIssuePrStatusApiService(httpClient));
+
+        // Register IMarkdownRenderingService needed by SessionIssueTab and SessionPrTab
+        var mockMarkdownService = new Mock<IMarkdownRenderingService>();
+        mockMarkdownService.Setup(m => m.RenderToHtml(It.IsAny<string?>()))
             .Returns((string? text) => text ?? "");
-
-        _mockTodoParser.Setup(p => p.ParseFromMessages(It.IsAny<IReadOnlyList<ClaudeMessage>>()))
-            .Returns(new List<SessionTodoItem>());
-
-        _mockGitService.Setup(g => g.GetChangedFilesAsync(It.IsAny<string>(), It.IsAny<string>()))
-            .ReturnsAsync(new List<FileChangeInfo>());
-
-        _mockFleeceService.Setup(s => s.GetIssueAsync(It.IsAny<string>(), It.IsAny<string>(), default))
-            .ReturnsAsync(new Issue { Id = "ABC123", Title = "Test Issue", Status = IssueStatus.Progress, Type = IssueType.Feature, LastUpdate = DateTime.UtcNow });
-
-        _mockPrStatusService.Setup(s => s.GetPullRequestStatusForIssueAsync(It.IsAny<string>(), It.IsAny<string>()))
-            .ReturnsAsync((IssuePullRequestStatus?)null);
+        Services.AddSingleton(mockMarkdownService.Object);
     }
 
     private static ClaudeSession CreateTestSession()

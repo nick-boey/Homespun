@@ -1,5 +1,5 @@
 using Bunit;
-using Homespun.Components.Shared;
+using Homespun.Client.Components;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 

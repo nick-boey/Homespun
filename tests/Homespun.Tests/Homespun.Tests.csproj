@@ -21,7 +21,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Homespun\Homespun.csproj" />
+    <ProjectReference Include="..\..\src\Homespun.Server\Homespun.Server.csproj" />
     <ProjectReference Include="..\..\src\Homespun.Client\Homespun.Client.csproj" />
     <ProjectReference Include="..\..\src\Homespun.Shared\Homespun.Shared.csproj" />
   </ItemGroup>
