@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
 using Homespun.Features.ClaudeCode.Settings;
-using Homespun.Features.Commands;
 
 namespace Homespun.Features.ClaudeCode.Services;
 

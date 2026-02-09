@@ -1,4 +1,3 @@
-using Homespun.Features.Fleece.Models;
 
 namespace Homespun.Features.Fleece.Services;
 

@@ -1,4 +1,3 @@
-using Homespun.Features.GitHub;
 using Octokit;
 
 namespace Homespun.Features.Testing.Services;

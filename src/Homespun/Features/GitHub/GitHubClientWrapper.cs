@@ -40,17 +40,17 @@ public class GitHubClientWrapper : IGitHubClientWrapper
         return _client;
     }
 
-    public async Task<IReadOnlyList<PullRequest>> GetPullRequestsAsync(string owner, string repo, PullRequestRequest request)
+    public async Task<IReadOnlyList<Octokit.PullRequest>> GetPullRequestsAsync(string owner, string repo, PullRequestRequest request)
     {
         return await GetClient().PullRequest.GetAllForRepository(owner, repo, request);
     }
 
-    public async Task<PullRequest> GetPullRequestAsync(string owner, string repo, int number)
+    public async Task<Octokit.PullRequest> GetPullRequestAsync(string owner, string repo, int number)
     {
         return await GetClient().PullRequest.Get(owner, repo, number);
     }
 
-    public async Task<PullRequest> CreatePullRequestAsync(string owner, string repo, NewPullRequest newPullRequest)
+    public async Task<Octokit.PullRequest> CreatePullRequestAsync(string owner, string repo, NewPullRequest newPullRequest)
     {
         return await GetClient().PullRequest.Create(owner, repo, newPullRequest);
     }

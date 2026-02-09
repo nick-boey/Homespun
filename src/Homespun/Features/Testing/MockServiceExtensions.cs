@@ -1,11 +1,8 @@
 using Homespun.Features.AgentOrchestration.Services;
 using Homespun.Features.ClaudeCode.Services;
-using Homespun.Features.Commands;
 using Homespun.Features.Design;
 using Homespun.Features.Fleece.Services;
-using Homespun.Features.Git;
 using Homespun.Features.Gitgraph.Services;
-using Homespun.Features.GitHub;
 using Homespun.Features.Projects;
 using Homespun.Features.PullRequests.Data;
 using Homespun.Features.Testing.Services;

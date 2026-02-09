@@ -1,15 +1,8 @@
-using Homespun.Features.Commands;
-using Homespun.Features.GitHub;
-using Homespun.Features.PullRequests;
-using Homespun.Features.PullRequests.Data.Entities;
 using Homespun.Features.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Octokit;
-using Project = Homespun.Features.PullRequests.Data.Entities.Project;
-using TrackedPullRequest = Homespun.Features.PullRequests.Data.Entities.PullRequest;
-using PullRequestStatus = Homespun.Features.PullRequests.PullRequestStatus;
 
 namespace Homespun.Tests.Features.GitHub;
 
@@ -87,7 +80,7 @@ public class IssuePrStatusServiceTests
         var project = await CreateTestProject();
 
         // Create a tracked PR linked to an issue
-        var trackedPr = new TrackedPullRequest
+        var trackedPr = new PullRequest
         {
             ProjectId = project.Id,
             Title = "Test PR",
@@ -134,7 +127,7 @@ public class IssuePrStatusServiceTests
         // Arrange
         var project = await CreateTestProject();
 
-        var trackedPr = new TrackedPullRequest
+        var trackedPr = new PullRequest
         {
             ProjectId = project.Id,
             Title = "Failing PR",
@@ -180,7 +173,7 @@ public class IssuePrStatusServiceTests
         // Arrange
         var project = await CreateTestProject();
 
-        var trackedPr = new TrackedPullRequest
+        var trackedPr = new PullRequest
         {
             ProjectId = project.Id,
             Title = "Approved PR",
@@ -234,7 +227,7 @@ public class IssuePrStatusServiceTests
         };
         await _dataStore.AddProjectAsync(project);
 
-        var trackedPr = new TrackedPullRequest
+        var trackedPr = new PullRequest
         {
             ProjectId = project.Id,
             Title = "Test PR",
@@ -259,7 +252,7 @@ public class IssuePrStatusServiceTests
         var project = await CreateTestProject();
 
         // Create a tracked PR without GitHub PR number
-        var trackedPr = new TrackedPullRequest
+        var trackedPr = new PullRequest
         {
             ProjectId = project.Id,
             Title = "Local PR",

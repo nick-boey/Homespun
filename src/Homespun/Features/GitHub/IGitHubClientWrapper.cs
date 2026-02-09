@@ -8,9 +8,9 @@ namespace Homespun.Features.GitHub;
 public interface IGitHubClientWrapper
 {
     Task<Repository> GetRepositoryAsync(string owner, string repo);
-    Task<IReadOnlyList<PullRequest>> GetPullRequestsAsync(string owner, string repo, PullRequestRequest request);
-    Task<PullRequest> GetPullRequestAsync(string owner, string repo, int number);
-    Task<PullRequest> CreatePullRequestAsync(string owner, string repo, NewPullRequest newPullRequest);
+    Task<IReadOnlyList<Octokit.PullRequest>> GetPullRequestsAsync(string owner, string repo, PullRequestRequest request);
+    Task<Octokit.PullRequest> GetPullRequestAsync(string owner, string repo, int number);
+    Task<Octokit.PullRequest> CreatePullRequestAsync(string owner, string repo, NewPullRequest newPullRequest);
     Task<IReadOnlyList<PullRequestReview>> GetPullRequestReviewsAsync(string owner, string repo, int number);
     Task<CombinedCommitStatus> GetCombinedCommitStatusAsync(string owner, string repo, string reference);
     Task<PullRequestMerge> MergePullRequestAsync(string owner, string repo, int number, MergePullRequest merge);

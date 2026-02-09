@@ -8,7 +8,6 @@ using Azure.Identity;
 using Azure.ResourceManager;
 using Azure.ResourceManager.AppContainers;
 using Azure.ResourceManager.AppContainers.Models;
-using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.ClaudeCode.Exceptions;
 using Microsoft.Extensions.Options;
 

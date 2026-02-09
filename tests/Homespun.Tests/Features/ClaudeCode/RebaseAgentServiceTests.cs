@@ -1,6 +1,4 @@
-using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.ClaudeCode.Services;
-using Homespun.Features.PullRequests;
 using Microsoft.Extensions.Logging;
 using Moq;
 using NUnit.Framework;

@@ -1,7 +1,5 @@
 using Bunit;
 using Homespun.Features.ClaudeCode.Components.SessionInfoPanel;
-using Homespun.Features.ClaudeCode.Data;
-using Homespun.Features.Git;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 

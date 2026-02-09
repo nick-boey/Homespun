@@ -1,5 +1,4 @@
 using System.Text.Json;
-using Homespun.Features.ClaudeCode.Data;
 using Microsoft.Extensions.Logging;
 
 namespace Homespun.Features.ClaudeCode.Services;

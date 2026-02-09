@@ -1,4 +1,3 @@
-using Homespun.Features.GitHub;
 
 namespace Homespun.Features.Testing.Services;
 

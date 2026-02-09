@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Homespun.Features.PullRequests;
 
 namespace Homespun.Features.Gitgraph.Services;
 

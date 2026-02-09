@@ -1,6 +1,4 @@
 using System.Text;
-using Homespun.Features.ClaudeCode.Data;
-using Homespun.Features.PullRequests;
 
 namespace Homespun.Features.ClaudeCode.Services;
 

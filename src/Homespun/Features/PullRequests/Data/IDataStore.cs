@@ -1,4 +1,3 @@
-using Homespun.Features.ClaudeCode.Data;
 
 namespace Homespun.Features.PullRequests.Data;
 
@@ -12,17 +11,17 @@ public interface IDataStore
     /// <summary>
     /// Gets all projects.
     /// </summary>
-    IReadOnlyList<Entities.Project> Projects { get; }
+    IReadOnlyList<Project> Projects { get; }
 
     /// <summary>
     /// Adds a project to the store.
     /// </summary>
-    Task AddProjectAsync(Entities.Project project);
+    Task AddProjectAsync(Project project);
 
     /// <summary>
     /// Updates a project in the store.
     /// </summary>
-    Task UpdateProjectAsync(Entities.Project project);
+    Task UpdateProjectAsync(Project project);
 
     /// <summary>
     /// Removes a project from the store.
@@ -32,7 +31,7 @@ public interface IDataStore
     /// <summary>
     /// Gets a project by ID.
     /// </summary>
-    Entities.Project? GetProject(string id);
+    Project? GetProject(string id);
     
     #endregion
 
@@ -41,17 +40,17 @@ public interface IDataStore
     /// <summary>
     /// Gets all pull requests.
     /// </summary>
-    IReadOnlyList<Entities.PullRequest> PullRequests { get; }
+    IReadOnlyList<PullRequest> PullRequests { get; }
 
     /// <summary>
     /// Adds a pull request to the store.
     /// </summary>
-    Task AddPullRequestAsync(Entities.PullRequest pullRequest);
+    Task AddPullRequestAsync(PullRequest pullRequest);
 
     /// <summary>
     /// Updates a pull request in the store.
     /// </summary>
-    Task UpdatePullRequestAsync(Entities.PullRequest pullRequest);
+    Task UpdatePullRequestAsync(PullRequest pullRequest);
 
     /// <summary>
     /// Removes a pull request from the store.
@@ -61,12 +60,12 @@ public interface IDataStore
     /// <summary>
     /// Gets a pull request by ID.
     /// </summary>
-    Entities.PullRequest? GetPullRequest(string id);
+    PullRequest? GetPullRequest(string id);
 
     /// <summary>
     /// Gets pull requests for a specific project.
     /// </summary>
-    IReadOnlyList<Entities.PullRequest> GetPullRequestsByProject(string projectId);
+    IReadOnlyList<PullRequest> GetPullRequestsByProject(string projectId);
     
     #endregion
 

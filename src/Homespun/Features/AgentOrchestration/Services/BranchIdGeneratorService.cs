@@ -1,5 +1,4 @@
 using System.Text.RegularExpressions;
-using Homespun.Features.PullRequests;
 
 namespace Homespun.Features.AgentOrchestration.Services;
 

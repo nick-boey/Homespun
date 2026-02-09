@@ -1,6 +1,5 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Homespun.Features.ClaudeCode.Data;
 
 namespace Homespun.Features.ClaudeCode.Services;
 

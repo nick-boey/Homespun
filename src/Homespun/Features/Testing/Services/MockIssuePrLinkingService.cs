@@ -1,5 +1,4 @@
 using Fleece.Core.Models;
-using Homespun.Features.GitHub;
 using Homespun.Features.PullRequests.Data;
 using Microsoft.Extensions.Logging;
 

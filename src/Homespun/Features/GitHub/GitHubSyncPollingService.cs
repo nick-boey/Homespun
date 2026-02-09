@@ -1,8 +1,6 @@
 using Fleece.Core.Models;
 using Homespun.Features.Fleece.Services;
-using Homespun.Features.Notifications;
 using Homespun.Features.PullRequests.Data;
-using Homespun.Features.PullRequests.Data.Entities;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Options;
 

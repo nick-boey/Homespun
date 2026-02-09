@@ -1,6 +1,5 @@
 using Fleece.Core.Models;
 using Homespun.Features.Fleece.Services;
-using Homespun.Features.PullRequests;
 using Homespun.Features.PullRequests.Data;
 
 namespace Homespun.Features.GitHub;

@@ -1,6 +1,5 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Homespun.Features.Gitgraph.Data;
 
 namespace Homespun.Features.Gitgraph.Services;
 

@@ -1,4 +1,3 @@
-@using Homespun.Features.GitHub
 @using Homespun.Features.Projects
 @using Homespun.Features.Shared.Services
 @inject IIssuePrStatusService PrStatusService
@@ -274,11 +273,11 @@
 
     private string GetCloneBranch() => EntityId?.Replace("clone:", "") ?? "";
 
-    private static string GetStatusBadgeClass(Features.PullRequests.PullRequestStatus status) => status switch
+    private static string GetStatusBadgeClass(PullRequestStatus status) => status switch
     {
-        Features.PullRequests.PullRequestStatus.ReadyForMerging => "mergeable",
-        Features.PullRequests.PullRequestStatus.ChecksFailing => "failure",
-        Features.PullRequests.PullRequestStatus.Conflict => "not-mergeable",
+        PullRequestStatus.ReadyForMerging => "mergeable",
+        PullRequestStatus.ChecksFailing => "failure",
+        PullRequestStatus.Conflict => "not-mergeable",
         _ => ""
     };
 }

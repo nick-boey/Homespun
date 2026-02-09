@@ -1,6 +1,4 @@
 using System.Text.Json;
-using Homespun.Features.ClaudeCode.Data;
-using Homespun.Features.PullRequests.Data.Entities;
 
 namespace Homespun.Features.PullRequests.Data;
 

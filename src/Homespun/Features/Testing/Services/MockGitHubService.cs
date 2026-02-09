@@ -1,7 +1,4 @@
-using Homespun.Features.GitHub;
-using Homespun.Features.PullRequests;
 using Homespun.Features.PullRequests.Data;
-using Homespun.Features.PullRequests.Data.Entities;
 using Microsoft.Extensions.Logging;
 
 namespace Homespun.Features.Testing.Services;

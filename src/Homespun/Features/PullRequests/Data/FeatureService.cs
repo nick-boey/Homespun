@@ -1,5 +1,3 @@
-using Homespun.Features.Git;
-using Homespun.Features.PullRequests.Data.Entities;
 using Microsoft.Extensions.Logging;
 
 namespace Homespun.Features.PullRequests.Data;

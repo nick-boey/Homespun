@@ -1,16 +1,10 @@
 using Homespun.Features.AgentOrchestration.Services;
-using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.ClaudeCode.Hubs;
 using Homespun.Features.ClaudeCode.Services;
-using Homespun.Features.Commands;
 using Homespun.Features.Fleece.Services;
-using Homespun.Features.Git;
-using Homespun.Features.GitHub;
 using Homespun.Features.Gitgraph.Services;
 using Homespun.Features.Navigation;
-using Homespun.Features.Notifications;
 using Homespun.Features.Projects;
-using Homespun.Features.PullRequests;
 using Homespun.Features.PullRequests.Data;
 using Homespun.Features.Shared.Services;
 using Homespun.Features.SignalR;

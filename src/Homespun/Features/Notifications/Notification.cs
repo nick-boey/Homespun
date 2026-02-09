@@ -2,6 +2,7 @@ namespace Homespun.Features.Notifications;
 
 /// <summary>
 /// Represents an application notification displayed to the user.
+/// Server-side only - contains Action callback not suitable for serialization.
 /// </summary>
 public class Notification
 {

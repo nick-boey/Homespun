@@ -1,8 +1,6 @@
 using Fleece.Core.Models;
 using Fleece.Core.Serialization;
 using Fleece.Core.Services;
-using Homespun.Features.Commands;
-using Homespun.Features.Fleece.Models;
 
 namespace Homespun.Features.Fleece.Services;
 

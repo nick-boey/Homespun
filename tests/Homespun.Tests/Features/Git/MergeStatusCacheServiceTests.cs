@@ -1,4 +1,3 @@
-using Homespun.Features.Git;
 using Microsoft.Extensions.Logging;
 using Moq;
 using NUnit.Framework;

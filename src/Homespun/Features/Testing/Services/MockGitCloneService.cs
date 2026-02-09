@@ -1,6 +1,4 @@
 using System.Collections.Concurrent;
-using Homespun.Features.ClaudeCode.Data;
-using Homespun.Features.Git;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 

@@ -1,6 +1,5 @@
 using System.Text.Json;
 using Homespun.Features.Gitgraph.Services;
-using Homespun.Features.PullRequests;
 using Microsoft.Extensions.Logging;
 using Moq;
 

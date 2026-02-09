@@ -1,4 +1,3 @@
-using Homespun.Features.PullRequests;
 using Homespun.Features.PullRequests.Data;
 
 namespace Homespun.Features.GitHub;

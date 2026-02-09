@@ -1,7 +1,4 @@
 using System.Text.RegularExpressions;
-using Homespun.Features.ClaudeCode.Data;
-using Homespun.Features.Commands;
-using Homespun.Features.GitHub;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 

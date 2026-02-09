@@ -1,10 +1,5 @@
-using Homespun.Features.Commands;
-using Homespun.Features.Git;
-using Homespun.Features.GitHub;
 using Homespun.Features.PullRequests.Data;
 using Octokit;
-using Project = Homespun.Features.PullRequests.Data.Entities.Project;
-using TrackedPullRequest = Homespun.Features.PullRequests.Data.Entities.PullRequest;
 
 namespace Homespun.Features.PullRequests;
 
@@ -291,7 +286,7 @@ public class PullRequestWorkflowService(
         return result;
     }
 
-    private async Task<bool> RebaseBranchAsync(Project project, TrackedPullRequest pullRequest, RebaseResult result)
+    private async Task<bool> RebaseBranchAsync(Project project, PullRequest pullRequest, RebaseResult result)
     {
         var workingDir = pullRequest.ClonePath ?? project.LocalPath;
         var baseBranch = project.DefaultBranch ?? "main";

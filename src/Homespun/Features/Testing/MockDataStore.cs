@@ -1,6 +1,4 @@
-using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.PullRequests.Data;
-using Homespun.Features.PullRequests.Data.Entities;
 
 namespace Homespun.Features.Testing;
 

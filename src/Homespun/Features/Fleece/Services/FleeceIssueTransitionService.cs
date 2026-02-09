@@ -1,5 +1,4 @@
 using Fleece.Core.Models;
-using Homespun.Features.Notifications;
 using Homespun.Features.PullRequests.Data;
 using Microsoft.AspNetCore.SignalR;
 

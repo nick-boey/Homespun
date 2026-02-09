@@ -1,10 +1,5 @@
-using Homespun.Features.Commands;
-using Homespun.Features.Git;
-using Homespun.Features.PullRequests;
 using Homespun.Features.PullRequests.Data;
-using Homespun.Features.PullRequests.Data.Entities;
 using Octokit;
-using TrackedPullRequest = Homespun.Features.PullRequests.Data.Entities.PullRequest;
 
 namespace Homespun.Features.GitHub;
 
@@ -341,7 +336,7 @@ public class GitHubService(
                 else
                 {
                     // Import as new tracked pull request
-                    var pullRequest = new TrackedPullRequest
+                    var pullRequest = new PullRequest
                     {
                         ProjectId = projectId,
                         Title = pr.Title,

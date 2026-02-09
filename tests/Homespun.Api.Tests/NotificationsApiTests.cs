@@ -1,6 +1,5 @@
 using System.Net;
 using System.Net.Http.Json;
-using Homespun.Features.Notifications;
 using Homespun.Features.Notifications.Controllers;
 
 namespace Homespun.Api.Tests;

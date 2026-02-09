@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
 using Homespun.ClaudeAgentSdk;
-using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.ClaudeCode.Hubs;
 using Microsoft.AspNetCore.SignalR;
 
@@ -917,15 +916,15 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                 return;
             }
 
-            var questions = new List<Data.UserQuestion>();
+            var questions = new List<UserQuestion>();
             foreach (var questionElement in questionsElement.EnumerateArray())
             {
-                var options = new List<Data.QuestionOption>();
+                var options = new List<QuestionOption>();
                 if (questionElement.TryGetProperty("options", out var optionsElement))
                 {
                     foreach (var optionElement in optionsElement.EnumerateArray())
                     {
-                        options.Add(new Data.QuestionOption
+                        options.Add(new QuestionOption
                         {
                             Label = optionElement.GetProperty("label").GetString() ?? "",
                             Description = optionElement.GetProperty("description").GetString() ?? ""
@@ -933,7 +932,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                     }
                 }
 
-                questions.Add(new Data.UserQuestion
+                questions.Add(new UserQuestion
                 {
                     Question = questionElement.GetProperty("question").GetString() ?? "",
                     Header = questionElement.TryGetProperty("header", out var headerElement) ? headerElement.GetString() ?? "" : "",
@@ -949,7 +948,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             }
 
             // Create the pending question
-            var pendingQuestion = new Data.PendingQuestion
+            var pendingQuestion = new PendingQuestion
             {
                 Id = Guid.NewGuid().ToString(),
                 ToolUseId = toolUseContent.ToolUseId ?? "",

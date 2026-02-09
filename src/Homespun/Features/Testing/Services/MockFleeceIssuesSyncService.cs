@@ -1,4 +1,3 @@
-using Homespun.Features.Fleece.Models;
 using Homespun.Features.Fleece.Services;
 using Microsoft.Extensions.Logging;
 

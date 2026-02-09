@@ -1,5 +1,4 @@
 using Fleece.Core.Models;
-using Homespun.Features.PullRequests;
 
 namespace Homespun.Features.Gitgraph.Data;
 

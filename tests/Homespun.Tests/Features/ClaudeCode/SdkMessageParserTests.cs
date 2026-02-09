@@ -1,5 +1,4 @@
 using System.Text.Json;
-using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.ClaudeCode.Services;
 using NUnit.Framework;
 

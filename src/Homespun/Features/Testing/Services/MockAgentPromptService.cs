@@ -1,5 +1,4 @@
 using System.Text.RegularExpressions;
-using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.PullRequests.Data;
 using Microsoft.Extensions.Logging;

@@ -1,9 +1,6 @@
 using Bunit;
 using Homespun.Features.ClaudeCode.Components.SessionInfoPanel;
-using Homespun.Features.GitHub;
 using Homespun.Features.Projects;
-using Homespun.Features.PullRequests;
-using Homespun.Features.PullRequests.Data.Entities;
 using Homespun.Features.Shared.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;

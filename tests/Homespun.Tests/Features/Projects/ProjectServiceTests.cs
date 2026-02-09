@@ -1,5 +1,3 @@
-using Homespun.Features.Commands;
-using Homespun.Features.GitHub;
 using Homespun.Features.Projects;
 using Homespun.Features.Testing;
 using Microsoft.Extensions.Configuration;
@@ -192,7 +190,7 @@ public class ProjectServiceTests
     public async Task UpdateAsync_ValidProject_UpdatesDefaultModel()
     {
         // Arrange
-        var project = new Homespun.Features.PullRequests.Data.Entities.Project
+        var project = new Project
         {
             Name = "repo",
             LocalPath = "/path",
@@ -228,7 +226,7 @@ public class ProjectServiceTests
     public async Task DeleteAsync_ExistingProject_ReturnsTrue()
     {
         // Arrange
-        var project = new Homespun.Features.PullRequests.Data.Entities.Project
+        var project = new Project
         {
             Name = "repo",
             LocalPath = "/path",
@@ -264,7 +262,7 @@ public class ProjectServiceTests
     public async Task GetAllAsync_ReturnsAllProjects()
     {
         // Arrange
-        var project1 = new Homespun.Features.PullRequests.Data.Entities.Project
+        var project1 = new Project
         {
             Name = "repo1",
             LocalPath = "/path1",
@@ -272,7 +270,7 @@ public class ProjectServiceTests
             GitHubRepo = "repo1",
             DefaultBranch = "main"
         };
-        var project2 = new Homespun.Features.PullRequests.Data.Entities.Project
+        var project2 = new Project
         {
             Name = "repo2",
             LocalPath = "/path2",

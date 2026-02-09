@@ -1,4 +1,3 @@
-using Homespun.Features.PullRequests.Data.Entities;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Homespun.Features.Projects.Controllers;

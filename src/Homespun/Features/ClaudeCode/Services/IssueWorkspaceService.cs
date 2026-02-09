@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using Homespun.Features.Commands;
 using Microsoft.Extensions.Logging;
 
 namespace Homespun.Features.ClaudeCode.Services;

@@ -3,7 +3,6 @@ using System.Net.Http.Headers;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
-using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.ClaudeCode.Exceptions;
 using Microsoft.Extensions.Options;
 

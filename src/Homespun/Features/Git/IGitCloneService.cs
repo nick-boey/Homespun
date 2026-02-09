@@ -183,5 +183,5 @@ public interface IGitCloneService
     /// <param name="clonePath">Path to the clone directory</param>
     /// <param name="targetBranch">Target branch to compare against (e.g., "main")</param>
     /// <returns>List of changed files with their status and line counts</returns>
-    Task<List<ClaudeCode.Data.FileChangeInfo>> GetChangedFilesAsync(string clonePath, string targetBranch);
+    Task<List<FileChangeInfo>> GetChangedFilesAsync(string clonePath, string targetBranch);
 }

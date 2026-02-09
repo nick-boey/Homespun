@@ -2,7 +2,6 @@ using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Homespun.ClaudeAgentSdk;
-using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.ClaudeCode.Exceptions;
 
 namespace Homespun.Features.ClaudeCode.Services;

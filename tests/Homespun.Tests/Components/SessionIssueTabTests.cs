@@ -3,7 +3,6 @@ using Fleece.Core.Models;
 using Homespun.Features.ClaudeCode.Components.SessionInfoPanel;
 using Homespun.Features.Fleece.Services;
 using Homespun.Features.Projects;
-using Homespun.Features.PullRequests.Data.Entities;
 using Homespun.Features.Shared.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;

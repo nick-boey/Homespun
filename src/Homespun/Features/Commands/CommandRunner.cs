@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using Homespun.Features.GitHub;
 
 namespace Homespun.Features.Commands;
 

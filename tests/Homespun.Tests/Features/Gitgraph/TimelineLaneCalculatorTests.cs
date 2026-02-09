@@ -1,4 +1,3 @@
-using Homespun.Features.Gitgraph.Data;
 using Homespun.Features.Gitgraph.Services;
 
 namespace Homespun.Tests.Features.Gitgraph;

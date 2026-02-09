@@ -1,11 +1,7 @@
 using Fleece.Core.Models;
-using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.ClaudeCode.Services;
-using Homespun.Features.Gitgraph.Data;
 using Homespun.Features.Gitgraph.Services;
-using Homespun.Features.PullRequests;
 using Homespun.Features.PullRequests.Data;
-using Homespun.Features.PullRequests.Data.Entities;
 using Microsoft.Extensions.Logging;
 
 namespace Homespun.Features.Testing.Services;

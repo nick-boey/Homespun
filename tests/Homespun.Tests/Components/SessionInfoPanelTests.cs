@@ -1,13 +1,9 @@
 using Bunit;
 using Fleece.Core.Models;
 using Homespun.Features.ClaudeCode.Components.SessionInfoPanel;
-using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Fleece.Services;
-using Homespun.Features.Git;
-using Homespun.Features.GitHub;
 using Homespun.Features.Projects;
-using Homespun.Features.PullRequests.Data.Entities;
 using Homespun.Features.Shared.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;

@@ -1,4 +1,3 @@
-using Homespun.Features.PullRequests.Data.Entities;
 
 namespace Homespun.Features.Projects;
 

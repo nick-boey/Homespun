@@ -1,22 +1,6 @@
-using Homespun.Features.Commands;
-using Homespun.Features.GitHub;
 using Homespun.Features.PullRequests.Data;
-using Homespun.Features.PullRequests.Data.Entities;
 
 namespace Homespun.Features.Projects;
-
-/// <summary>
-/// Result of a project creation attempt.
-/// </summary>
-public class CreateProjectResult
-{
-    public bool Success { get; init; }
-    public Project? Project { get; init; }
-    public string? ErrorMessage { get; init; }
-
-    public static CreateProjectResult Ok(Project project) => new() { Success = true, Project = project };
-    public static CreateProjectResult Error(string message) => new() { Success = false, ErrorMessage = message };
-}
 
 public class ProjectService(
     IDataStore dataStore,

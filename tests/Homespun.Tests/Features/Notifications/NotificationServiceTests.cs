@@ -1,4 +1,3 @@
-using Homespun.Features.Notifications;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Homespun.Tests.Features.Notifications;

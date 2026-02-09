@@ -1,4 +1,3 @@
-using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Projects;
 using Microsoft.AspNetCore.Mvc;
