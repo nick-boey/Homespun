@@ -1,4 +1,3 @@
-﻿using Homespun.Features.PullRequests;
 
 namespace Homespun.Tests.Features.PullRequests;
 

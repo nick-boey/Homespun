@@ -1,5 +1,4 @@
 using Homespun.ClaudeAgentSdk;
-using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.ClaudeCode.Services;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;

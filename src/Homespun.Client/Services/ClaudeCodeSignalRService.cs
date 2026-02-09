@@ -1,0 +1,264 @@
+using Homespun.Shared.Hubs;
+using Homespun.Shared.Models.Sessions;
+using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.SignalR.Client;
+
+namespace Homespun.Client.Services;
+
+/// <summary>
+/// Client-side SignalR service for real-time Claude Code session communication.
+/// Manages the HubConnection lifecycle and exposes events for server-to-client messages.
+/// </summary>
+public class ClaudeCodeSignalRService : IAsyncDisposable
+{
+    private readonly NavigationManager _navigationManager;
+    private HubConnection? _hubConnection;
+    private readonly HashSet<string> _joinedSessions = new();
+
+    public ClaudeCodeSignalRService(NavigationManager navigationManager)
+    {
+        _navigationManager = navigationManager;
+    }
+
+    /// <summary>
+    /// Whether the hub connection is currently active.
+    /// </summary>
+    public bool IsConnected => _hubConnection?.State == HubConnectionState.Connected;
+
+    /// <summary>
+    /// Session IDs currently joined for receiving group messages.
+    /// Tracked for automatic re-joining after reconnection.
+    /// </summary>
+    public IReadOnlySet<string> JoinedSessions => _joinedSessions;
+
+    // Server-to-client events
+
+    /// <summary>Fired when a new session starts.</summary>
+    public event Action<ClaudeSession>? OnSessionStarted;
+
+    /// <summary>Fired when a session stops.</summary>
+    public event Action<string>? OnSessionStopped;
+
+    /// <summary>Fired when the current session state is received (on join).</summary>
+    public event Action<ClaudeSession>? OnSessionState;
+
+    /// <summary>Fired when a complete message is received in a session.</summary>
+    public event Action<ClaudeMessage>? OnMessageReceived;
+
+    /// <summary>Fired when a content block is received in a session.</summary>
+    public event Action<ClaudeMessageContent>? OnContentBlockReceived;
+
+    /// <summary>Fired when a session's status changes.</summary>
+    public event Action<string, ClaudeSessionStatus>? OnSessionStatusChanged;
+
+    /// <summary>Fired when session result (cost, duration) is received.</summary>
+    public event Action<string, decimal, long>? OnSessionResultReceived;
+
+    /// <summary>Fired when a streaming content block starts.</summary>
+    public event Action<ClaudeMessageContent, int>? OnStreamingContentStarted;
+
+    /// <summary>Fired when a streaming content delta is received.</summary>
+    public event Action<ClaudeMessageContent, string, int>? OnStreamingContentDelta;
+
+    /// <summary>Fired when a streaming content block stops.</summary>
+    public event Action<ClaudeMessageContent, int>? OnStreamingContentStopped;
+
+    /// <summary>Fired when Claude asks a question requiring user input.</summary>
+    public event Action<PendingQuestion>? OnQuestionReceived;
+
+    /// <summary>Fired when a pending question has been answered.</summary>
+    public event Action? OnQuestionAnswered;
+
+    /// <summary>Fired when context has been cleared for a session.</summary>
+    public event Action<string>? OnContextCleared;
+
+    /// <summary>
+    /// Establishes the SignalR connection and registers all message handlers.
+    /// </summary>
+    public async Task ConnectAsync()
+    {
+        if (_hubConnection is not null)
+            return;
+
+        _hubConnection = new HubConnectionBuilder()
+            .WithUrl(_navigationManager.ToAbsoluteUri(HubConstants.ClaudeCodeHub))
+            .WithAutomaticReconnect()
+            .Build();
+
+        RegisterHandlers(_hubConnection);
+
+        _hubConnection.Reconnected += OnReconnected;
+
+        await _hubConnection.StartAsync();
+    }
+
+    /// <summary>
+    /// Disconnects from the SignalR hub.
+    /// </summary>
+    public async Task DisconnectAsync()
+    {
+        if (_hubConnection is not null)
+        {
+            _hubConnection.Reconnected -= OnReconnected;
+            await _hubConnection.StopAsync();
+            await _hubConnection.DisposeAsync();
+            _hubConnection = null;
+        }
+
+        _joinedSessions.Clear();
+    }
+
+    // Client-to-server methods
+
+    /// <summary>
+    /// Join a session group to receive session-specific messages.
+    /// </summary>
+    public async Task JoinSessionAsync(string sessionId)
+    {
+        if (_hubConnection is null) return;
+        await _hubConnection.InvokeAsync("JoinSession", sessionId);
+        _joinedSessions.Add(sessionId);
+    }
+
+    /// <summary>
+    /// Leave a session group.
+    /// </summary>
+    public async Task LeaveSessionAsync(string sessionId)
+    {
+        if (_hubConnection is null) return;
+        await _hubConnection.InvokeAsync("LeaveSession", sessionId);
+        _joinedSessions.Remove(sessionId);
+    }
+
+    /// <summary>
+    /// Send a message to a session.
+    /// </summary>
+    public async Task SendMessageAsync(string sessionId, string message, int permissionMode = 0)
+    {
+        if (_hubConnection is null) return;
+        await _hubConnection.InvokeAsync("SendMessage", sessionId, message, permissionMode);
+    }
+
+    /// <summary>
+    /// Stop a session.
+    /// </summary>
+    public async Task StopSessionAsync(string sessionId)
+    {
+        if (_hubConnection is null) return;
+        await _hubConnection.InvokeAsync("StopSession", sessionId);
+    }
+
+    /// <summary>
+    /// Interrupt a session's current execution without fully stopping it.
+    /// </summary>
+    public async Task InterruptSessionAsync(string sessionId)
+    {
+        if (_hubConnection is null) return;
+        await _hubConnection.InvokeAsync("InterruptSession", sessionId);
+    }
+
+    /// <summary>
+    /// Get all active sessions.
+    /// </summary>
+    public async Task<IReadOnlyList<ClaudeSession>> GetAllSessionsAsync()
+    {
+        if (_hubConnection is null) return Array.Empty<ClaudeSession>();
+        return await _hubConnection.InvokeAsync<IReadOnlyList<ClaudeSession>>("GetAllSessions");
+    }
+
+    /// <summary>
+    /// Get sessions for a specific project.
+    /// </summary>
+    public async Task<IReadOnlyList<ClaudeSession>> GetProjectSessionsAsync(string projectId)
+    {
+        if (_hubConnection is null) return Array.Empty<ClaudeSession>();
+        return await _hubConnection.InvokeAsync<IReadOnlyList<ClaudeSession>>("GetProjectSessions", projectId);
+    }
+
+    /// <summary>
+    /// Get a specific session by ID.
+    /// </summary>
+    public async Task<ClaudeSession?> GetSessionAsync(string sessionId)
+    {
+        if (_hubConnection is null) return null;
+        return await _hubConnection.InvokeAsync<ClaudeSession?>("GetSession", sessionId);
+    }
+
+    /// <summary>
+    /// Answer a pending question in a session.
+    /// </summary>
+    public async Task AnswerQuestionAsync(string sessionId, string answersJson)
+    {
+        if (_hubConnection is null) return;
+        await _hubConnection.InvokeAsync("AnswerQuestion", sessionId, answersJson);
+    }
+
+    /// <summary>
+    /// Execute a plan by optionally clearing context and sending it as a message.
+    /// </summary>
+    public async Task ExecutePlanAsync(string sessionId, bool clearContext = true)
+    {
+        if (_hubConnection is null) return;
+        await _hubConnection.InvokeAsync("ExecutePlan", sessionId, clearContext);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await DisconnectAsync();
+    }
+
+    private void RegisterHandlers(HubConnection connection)
+    {
+        connection.On<ClaudeSession>("SessionStarted",
+            session => OnSessionStarted?.Invoke(session));
+
+        connection.On<string>("SessionStopped",
+            sessionId => OnSessionStopped?.Invoke(sessionId));
+
+        connection.On<ClaudeSession>("SessionState",
+            session => OnSessionState?.Invoke(session));
+
+        connection.On<ClaudeMessage>("MessageReceived",
+            message => OnMessageReceived?.Invoke(message));
+
+        connection.On<ClaudeMessageContent>("ContentBlockReceived",
+            content => OnContentBlockReceived?.Invoke(content));
+
+        connection.On<string, ClaudeSessionStatus>("SessionStatusChanged",
+            (sessionId, status) => OnSessionStatusChanged?.Invoke(sessionId, status));
+
+        connection.On<string, decimal, long>("SessionResultReceived",
+            (sessionId, totalCostUsd, durationMs) =>
+                OnSessionResultReceived?.Invoke(sessionId, totalCostUsd, durationMs));
+
+        connection.On<ClaudeMessageContent, int>("StreamingContentStarted",
+            (content, index) => OnStreamingContentStarted?.Invoke(content, index));
+
+        connection.On<ClaudeMessageContent, string, int>("StreamingContentDelta",
+            (content, delta, index) => OnStreamingContentDelta?.Invoke(content, delta, index));
+
+        connection.On<ClaudeMessageContent, int>("StreamingContentStopped",
+            (content, index) => OnStreamingContentStopped?.Invoke(content, index));
+
+        connection.On<PendingQuestion>("QuestionReceived",
+            question => OnQuestionReceived?.Invoke(question));
+
+        connection.On("QuestionAnswered",
+            () => OnQuestionAnswered?.Invoke());
+
+        connection.On<string>("ContextCleared",
+            sessionId => OnContextCleared?.Invoke(sessionId));
+    }
+
+    private async Task OnReconnected(string? connectionId)
+    {
+        // Re-join all tracked session groups after reconnection
+        foreach (var sessionId in _joinedSessions)
+        {
+            if (_hubConnection is not null)
+            {
+                await _hubConnection.InvokeAsync("JoinSession", sessionId);
+            }
+        }
+    }
+}

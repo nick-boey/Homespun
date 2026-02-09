@@ -33,8 +33,8 @@ Homespun provides a visual interface for planning and executing software develop
 
 ## Technology Stack
 
-- **.NET 8+**: Core runtime
-- **Blazor Server**: Web frontend with SSR
+- **.NET 10**: Core runtime
+- **Blazor WebAssembly**: Web frontend
 - **JSON File Storage**: Persistence
 - **SignalR**: Real-time updates
 - **Claude Code CLI**: AI agent
@@ -44,7 +44,7 @@ Homespun provides a visual interface for planning and executing software develop
 
 ### Prerequisites
 
-- .NET 8 SDK or later
+- .NET 10 SDK or later
 - Git
 - Claude Code CLI installed and configured
 - GitHub personal access token (for PR synchronization)
@@ -78,7 +78,7 @@ export HOMESPUN_DATA_PATH="/data/.homespun/homespun-data.json"
 ### Running
 
 ```bash
-dotnet run --project src/Homespun
+dotnet run --project src/Homespun.Server
 ```
 
 The application will be available at `https://localhost:5001` (or the configured port).

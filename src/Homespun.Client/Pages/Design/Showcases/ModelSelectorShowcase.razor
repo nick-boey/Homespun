@@ -1,0 +1,71 @@
+<div class="showcase-section">
+    <h3>Default (Opus Selected)</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Default model selector</div>
+        <div class="showcase-preview">
+            <ModelSelector
+                Id="default"
+                SelectedModel="@_selectedModel1"
+                SelectedModelChanged="@(m => _selectedModel1 = m)" />
+            <p class="text-text-muted text-sm mt-2">Selected: @_selectedModel1</p>
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Sonnet Selected</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Model selector with Sonnet pre-selected</div>
+        <div class="showcase-preview">
+            <ModelSelector
+                Id="sonnet"
+                SelectedModel="@_selectedModel2"
+                SelectedModelChanged="@(m => _selectedModel2 = m)" />
+            <p class="text-text-muted text-sm mt-2">Selected: @_selectedModel2</p>
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Haiku Selected</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Model selector with Haiku pre-selected</div>
+        <div class="showcase-preview">
+            <ModelSelector
+                Id="haiku"
+                SelectedModel="@_selectedModel3"
+                SelectedModelChanged="@(m => _selectedModel3 = m)" />
+            <p class="text-text-muted text-sm mt-2">Selected: @_selectedModel3</p>
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>In Form Context</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Model selector within a form layout</div>
+        <div class="showcase-preview">
+            <div class="max-w-md">
+                <div class="mb-3">
+                    <label class="form-label text-sm mb-1">Agent Name</label>
+                    <input type="text" class="form-control form-control-sm" value="Build Agent" readonly />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label text-sm mb-1">Model</label>
+                    <ModelSelector
+                        Id="form-context"
+                        SelectedModel="@_selectedModel4"
+                        SelectedModelChanged="@(m => _selectedModel4 = m)" />
+                </div>
+                <button class="btn btn-primary btn-sm">Start Session</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string _selectedModel1 = "opus";
+    private string _selectedModel2 = "sonnet";
+    private string _selectedModel3 = "haiku";
+    private string _selectedModel4 = "opus";
+}

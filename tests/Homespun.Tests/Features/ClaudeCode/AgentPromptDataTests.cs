@@ -1,4 +1,3 @@
-using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.Testing;
 
 namespace Homespun.Tests.Features.ClaudeCode;

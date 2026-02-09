@@ -1,15 +1,8 @@
-using Homespun.Features.Commands;
-using Homespun.Features.Git;
-using Homespun.Features.GitHub;
-using Homespun.Features.PullRequests;
-using Homespun.Features.PullRequests.Data.Entities;
 using Homespun.Features.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Octokit;
-using Project = Homespun.Features.PullRequests.Data.Entities.Project;
-using TrackedPullRequest = Homespun.Features.PullRequests.Data.Entities.PullRequest;
 
 namespace Homespun.Tests.Features.GitHub;
 
@@ -62,9 +55,9 @@ public class GitHubServiceTests
         return project;
     }
 
-    private async Task<TrackedPullRequest> CreateTestPullRequest(string projectId, string? branchName = "feature/test", int? prNumber = null)
+    private async Task<PullRequest> CreateTestPullRequest(string projectId, string? branchName = "feature/test", int? prNumber = null)
     {
-        var pullRequest = new TrackedPullRequest
+        var pullRequest = new PullRequest
         {
             ProjectId = projectId,
             Title = "Test Pull Request",
@@ -540,7 +533,7 @@ public class GitHubServiceTests
 
         var pullRequests = _dataStore.GetPullRequestsByProject(project.Id);
         Assert.That(pullRequests, Has.Count.EqualTo(2));
-        Assert.That(pullRequests, Has.All.Matches<TrackedPullRequest>(pr => pr.Status == OpenPullRequestStatus.ReadyForReview));
+        Assert.That(pullRequests, Has.All.Matches<PullRequest>(pr => pr.Status == OpenPullRequestStatus.ReadyForReview));
     }
 
     // Helper to create mock Octokit PullRequest objects

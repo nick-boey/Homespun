@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Homespun.Client</RootNamespace>
+    <OverrideHtmlAssetPlaceholders>true</OverrideHtmlAssetPlaceholders>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Markdig" Version="0.44.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.2" />
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Homespun.Shared\Homespun.Shared.csproj" />
+  </ItemGroup>
+
+  <!-- Tailwind CSS Build -->
+  <Target Name="CheckNodeModules" BeforeTargets="BuildTailwindCSS">
+    <Message Importance="high" Text="Checking for node_modules..." />
+    <Exec Command="npm install" WorkingDirectory="$(ProjectDir)" Condition="!Exists('$(ProjectDir)node_modules')" />
+  </Target>
+
+  <Target Name="BuildTailwindCSS" BeforeTargets="Compile">
+    <Message Importance="high" Text="Building Tailwind CSS..." />
+    <Exec Command="npx tailwindcss -i ./wwwroot/css/tailwind.css -o ./wwwroot/css/tailwind.min.css --minify" WorkingDirectory="$(ProjectDir)" />
+  </Target>
+
+</Project>

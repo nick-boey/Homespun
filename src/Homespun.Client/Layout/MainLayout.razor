@@ -1,0 +1,153 @@
+@inherits LayoutComponentBase
+@implements IDisposable
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
+@inject IBreadcrumbService BreadcrumbService
+@using System.Reflection
+
+<div class="page @(_sidebarOpen ? "sidebar-open" : "sidebar-closed")" @onkeydown="HandleKeyDown" tabindex="-1">
+    <header class="top-bar">
+        <button class="sidebar-toggle" @onclick="ToggleSidebar" title="Toggle sidebar">
+            <span class="toggle-icon"></span>
+        </button>
+        <nav class="breadcrumbs" aria-label="Breadcrumb">
+            <a href="" class="brand">Homespun</a>
+            @foreach (var crumb in BreadcrumbService.Breadcrumbs)
+            {
+                <span class="separator">/</span>
+                @if (crumb.Url != null)
+                {
+                    <a href="@crumb.Url">@crumb.Title</a>
+                }
+                else
+                {
+                    <span class="current">@crumb.Title</span>
+                }
+            }
+        </nav>
+        <div class="top-bar-spacer"></div>
+        <AgentStatusIndicator />
+        <span class="version-display" title="Homespun v@_version">v@_version</span>
+        <button class="theme-toggle" @onclick="CycleTheme" title="@GetThemeTooltip()">
+            <span class="theme-icon @_currentTheme"></span>
+        </button>
+    </header>
+
+    <aside class="sidebar">
+        <NavMenu />
+    </aside>
+
+    @if (_sidebarOpen)
+    {
+        <div class="sidebar-backdrop" @onclick="CloseSidebar"></div>
+    }
+
+    <main class="main-content">
+        <article class="content">
+            <NotificationBanner />
+            @Body
+        </article>
+    </main>
+</div>
+
+<div id="blazor-error-ui" data-nosnippet>
+    An unhandled error has occurred.
+    <a href="." class="reload">Reload</a>
+    <span class="dismiss">X</span>
+</div>
+
+@code {
+    private bool _sidebarOpen = false;
+    private string _currentTheme = "auto";
+    private string _version = GetShortVersion();
+
+    private static string GetShortVersion()
+    {
+        var fullVersion = Assembly.GetExecutingAssembly()
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "0.0.0";
+
+        // Strip the +hash suffix if present (e.g., "0.1.0+abc123" -> "0.1.0")
+        var plusIndex = fullVersion.IndexOf('+');
+        return plusIndex > 0 ? fullVersion[..plusIndex] : fullVersion;
+    }
+
+    protected override void OnInitialized()
+    {
+        NavigationManager.LocationChanged += OnLocationChanged;
+        BreadcrumbService.OnBreadcrumbsChanged += OnBreadcrumbsChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _currentTheme = await JSRuntime.InvokeAsync<string>("themeManager.getTheme") ?? "auto";
+
+            // Set sidebar open for desktop, closed for mobile
+            var isMobile = await JSRuntime.InvokeAsync<bool>("sidebarManager.isMobile");
+            _sidebarOpen = !isMobile;
+
+            StateHasChanged();
+        }
+    }
+
+    private async void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        // Close sidebar on mobile when navigating
+        var isMobile = await JSRuntime.InvokeAsync<bool>("sidebarManager.isMobile");
+        if (isMobile && _sidebarOpen)
+        {
+            _sidebarOpen = false;
+        }
+
+        StateHasChanged();
+    }
+
+    private void OnBreadcrumbsChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void ToggleSidebar()
+    {
+        _sidebarOpen = !_sidebarOpen;
+    }
+
+    private void CloseSidebar()
+    {
+        _sidebarOpen = false;
+    }
+
+    private void HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape" && _sidebarOpen)
+        {
+            _sidebarOpen = false;
+        }
+    }
+
+    private async Task CycleTheme()
+    {
+        _currentTheme = _currentTheme switch
+        {
+            "auto" => "light",
+            "light" => "dark",
+            "dark" => "auto",
+            _ => "auto"
+        };
+        await JSRuntime.InvokeVoidAsync("themeManager.setTheme", _currentTheme);
+    }
+
+    private string GetThemeTooltip() => _currentTheme switch
+    {
+        "light" => "Theme: Light (click to switch to Dark)",
+        "dark" => "Theme: Dark (click to switch to Auto)",
+        _ => "Theme: Auto (click to switch to Light)"
+    };
+
+    public void Dispose()
+    {
+        NavigationManager.LocationChanged -= OnLocationChanged;
+        BreadcrumbService.OnBreadcrumbsChanged -= OnBreadcrumbsChanged;
+    }
+}

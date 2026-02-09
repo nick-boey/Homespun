@@ -1,7 +1,5 @@
 using Bunit;
-using Homespun.Components.Shared;
-using Homespun.Features.GitHub;
-using Homespun.Features.PullRequests;
+using Homespun.Client.Components;
 
 namespace Homespun.Tests.Components;
 

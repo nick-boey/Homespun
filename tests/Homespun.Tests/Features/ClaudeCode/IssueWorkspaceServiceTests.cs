@@ -1,5 +1,4 @@
 using Homespun.Features.ClaudeCode.Services;
-using Homespun.Features.Commands;
 using Microsoft.Extensions.Logging;
 using Moq;
 

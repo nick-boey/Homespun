@@ -1,7 +1,3 @@
-using Homespun.Features.Commands;
-using Homespun.Features.Git;
-using Homespun.Features.GitHub;
-using Homespun.Features.PullRequests.Data.Entities;
 using Homespun.Features.Testing;
 using Microsoft.Extensions.Configuration;
 using Moq;

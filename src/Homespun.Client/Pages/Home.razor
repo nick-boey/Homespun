@@ -1,0 +1,77 @@
+@page "/"
+@inject HttpProjectApiService ProjectApi
+
+<PageTitle>Homespun - Projects</PageTitle>
+
+<h1>Projects</h1>
+
+@if (_projects == null)
+{
+    <p>Loading...</p>
+}
+else if (_projects.Count == 0)
+{
+    <p>No projects yet. Create one to get started.</p>
+    <p><a href="projects/create" class="btn btn-primary btn-sm">New Project</a></p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th class="select-none">Name</th>
+                <th class="select-none">Local Path</th>
+                <th class="select-none">GitHub</th>
+                <th class="select-none">Default Branch</th>
+                <th class="select-none">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var project in _projects)
+            {
+                <tr>
+                    <td><a href="projects/@project.Id">@project.Name</a></td>
+                    <td>@project.LocalPath</td>
+                    <td>
+                        @if (!string.IsNullOrEmpty(project.GitHubOwner) && !string.IsNullOrEmpty(project.GitHubRepo))
+                        {
+                            <a href="https://github.com/@project.GitHubOwner/@project.GitHubRepo" target="_blank">
+                                @project.GitHubOwner/@project.GitHubRepo
+                            </a>
+                        }
+                        else
+                        {
+                            <span class="text-text-muted">-</span>
+                        }
+                    </td>
+                    <td>@project.DefaultBranch</td>
+                    <td class="whitespace-nowrap">
+                        <a href="projects/@project.Id/edit" class="btn btn-sm btn-outline mr-1">Edit</a>
+                        <button class="btn btn-sm btn-danger" @onclick="() => DeleteProject(project.Id)">Delete</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+    <p><a href="projects/create" class="btn btn-primary btn-sm">New Project</a></p>
+}
+
+@code {
+    private List<Project>? _projects;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadProjects();
+    }
+
+    private async Task LoadProjects()
+    {
+        _projects = await ProjectApi.GetAllProjectsAsync();
+    }
+
+    private async Task DeleteProject(string id)
+    {
+        await ProjectApi.DeleteProjectAsync(id);
+        await LoadProjects();
+    }
+}

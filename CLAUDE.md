@@ -27,25 +27,37 @@ Homespun is a Blazor web application for managing development features and AI ag
 
 ### Project Structure (Vertical Slice Architecture)
 
-The project follows Vertical Slice Architecture, organizing code by feature rather than technical layer. Each feature contains its own services, data models, and components.
+The project follows Vertical Slice Architecture with a Blazor WebAssembly (WASM) frontend and ASP.NET server backend. Code is organized by feature rather than technical layer.
 
 ```
-src/Homespun/
-├── Features/                    # Feature slices (all business logic)
-│   ├── Fleece/                  # Fleece issue tracking integration
-│   ├── ClaudeCode/              # Claude Code SDK session management
-│   ├── Commands/                # Shell command execution
-│   ├── Git/                     # Git clone operations
-│   ├── GitHub/                  # GitHub API integration (Octokit)
-│   ├── Projects/                # Project management
-│   ├── PullRequests/            # PR workflow and data entities
-│   └── Notifications/           # Toast notifications via SignalR
-├── Components/                  # Shared Blazor components
+src/
+├── Homespun.Server/             # ASP.NET backend (API, SignalR hubs, services)
+│   ├── Features/                # Feature slices (all business logic)
+│   │   ├── AgentOrchestration/  # Agent lifecycle management
+│   │   ├── ClaudeCode/          # Claude Code SDK session management
+│   │   ├── Commands/            # Shell command execution
+│   │   ├── Design/              # Design system component registry
+│   │   ├── Fleece/              # Fleece issue tracking integration
+│   │   ├── Git/                 # Git clone operations
+│   │   ├── GitHub/              # GitHub API integration (Octokit)
+│   │   ├── Navigation/          # Navigation services
+│   │   ├── Notifications/       # Toast notifications via SignalR
+│   │   ├── Projects/            # Project management
+│   │   ├── PullRequests/        # PR workflow and data entities
+│   │   └── SignalR/             # SignalR hub implementations
+│   └── Program.cs               # Application entry point
+├── Homespun.Client/             # Blazor WASM frontend
+│   ├── Components/              # Shared Blazor components
 │   ├── Layout/                  # Layout components
 │   ├── Pages/                   # Page components
-│   └── Shared/                  # Reusable components
-├── HealthChecks/                # Health check implementations
-└── Program.cs                   # Application entry point
+│   ├── Services/                # Client-side HTTP services
+│   └── Program.cs               # WASM entry point
+├── Homespun.Shared/             # Shared library (DTOs, contracts, hub interfaces)
+│   ├── Models/                  # Shared data models
+│   ├── Hubs/                    # SignalR hub interfaces
+│   └── Requests/                # API request/response types
+├── Homespun.ClaudeAgentSdk/     # Claude Code SDK C# wrapper
+└── Homespun.Worker/             # TypeScript agent worker (Hono + Claude Agent SDK)
 
 tests/
 ├── Homespun.Tests/              # Unit tests (NUnit + bUnit + Moq)
@@ -225,11 +237,11 @@ When styling components, always use Tailwind CSS utility classes. Avoid inline s
 
 Build Tailwind CSS after making changes to the CSS files:
 ```bash
-cd src/Homespun && npm run css:build
+cd src/Homespun.Client && npm run css:build
 ```
 
 ## Design System and Component Showcases
 
 The design system at `/design` provides a catalog of all UI components with mock data for visual testing. This is only available in mock mode.
 
-A further description on how to use the design system is at `./src/Homespun/Components/CLAUDE.md`. Always create and update the showcase when creating and modifying components.
+A further description on how to use the design system is at `./src/Homespun.Client/Components/CLAUDE.md`. Always create and update the showcase when creating and modifying components.

@@ -1,39 +1,52 @@
 using Bunit;
-using Homespun.Features.ClaudeCode.Components.SessionInfoPanel;
-using Homespun.Features.ClaudeCode.Data;
-using Homespun.Features.ClaudeCode.Services;
-using Microsoft.Extensions.DependencyInjection;
-using Moq;
+using Homespun.Client.Components.ClaudeCode.SessionInfoPanel;
+using System.Text.Json;
 
 namespace Homespun.Tests.Components;
 
 [TestFixture]
 public class SessionTodosTabTests : BunitTestContext
 {
-    private Mock<ITodoParser> _mockTodoParser = null!;
-
     [SetUp]
     public new void Setup()
     {
         base.Setup();
-        _mockTodoParser = new Mock<ITodoParser>();
-        Services.AddSingleton(_mockTodoParser.Object);
+    }
+
+    private static List<ClaudeMessage> CreateMessagesWithTodos(params (string content, string activeForm, string status)[] todos)
+    {
+        var todoJson = JsonSerializer.Serialize(new
+        {
+            todos = todos.Select(t => new { content = t.content, activeForm = t.activeForm, status = t.status }).ToList()
+        });
+
+        return
+        [
+            new ClaudeMessage
+            {
+                SessionId = "test-session",
+                Role = ClaudeMessageRole.Assistant,
+                Content =
+                [
+                    new ClaudeMessageContent
+                    {
+                        Type = ClaudeContentType.ToolUse,
+                        ToolName = "TodoWrite",
+                        ToolInput = todoJson
+                    }
+                ]
+            }
+        ];
     }
 
     [Test]
     public void SessionTodosTab_WithTodos_DisplaysList()
     {
         // Arrange
-        var todos = new List<SessionTodoItem>
-        {
-            new() { Content = "Task 1", ActiveForm = "Doing task 1", Status = TodoStatus.Pending },
-            new() { Content = "Task 2", ActiveForm = "Doing task 2", Status = TodoStatus.InProgress },
-            new() { Content = "Task 3", ActiveForm = "Doing task 3", Status = TodoStatus.Completed }
-        };
-        _mockTodoParser.Setup(p => p.ParseFromMessages(It.IsAny<IReadOnlyList<ClaudeMessage>>()))
-            .Returns(todos);
-
-        var messages = new List<ClaudeMessage>();
+        var messages = CreateMessagesWithTodos(
+            ("Task 1", "Doing task 1", "pending"),
+            ("Task 2", "Doing task 2", "in_progress"),
+            ("Task 3", "Doing task 3", "completed"));
 
         // Act
         var cut = Render<SessionTodosTab>(parameters => parameters
@@ -48,16 +61,11 @@ public class SessionTodosTabTests : BunitTestContext
     public void SessionTodosTab_PendingItem_ShowsCircleIcon()
     {
         // Arrange
-        var todos = new List<SessionTodoItem>
-        {
-            new() { Content = "Pending task", ActiveForm = "Pending task", Status = TodoStatus.Pending }
-        };
-        _mockTodoParser.Setup(p => p.ParseFromMessages(It.IsAny<IReadOnlyList<ClaudeMessage>>()))
-            .Returns(todos);
+        var messages = CreateMessagesWithTodos(("Pending task", "Pending task", "pending"));
 
         // Act
         var cut = Render<SessionTodosTab>(parameters => parameters
-            .Add(p => p.Messages, new List<ClaudeMessage>()));
+            .Add(p => p.Messages, messages));
 
         // Assert
         var statusIcon = cut.Find(".status-icon.pending");
@@ -68,16 +76,11 @@ public class SessionTodosTabTests : BunitTestContext
     public void SessionTodosTab_InProgressItem_ShowsSpinnerIcon()
     {
         // Arrange
-        var todos = new List<SessionTodoItem>
-        {
-            new() { Content = "In progress task", ActiveForm = "Working on task", Status = TodoStatus.InProgress }
-        };
-        _mockTodoParser.Setup(p => p.ParseFromMessages(It.IsAny<IReadOnlyList<ClaudeMessage>>()))
-            .Returns(todos);
+        var messages = CreateMessagesWithTodos(("In progress task", "Working on task", "in_progress"));
 
         // Act
         var cut = Render<SessionTodosTab>(parameters => parameters
-            .Add(p => p.Messages, new List<ClaudeMessage>()));
+            .Add(p => p.Messages, messages));
 
         // Assert
         var statusIcon = cut.Find(".status-icon.in-progress");
@@ -88,16 +91,11 @@ public class SessionTodosTabTests : BunitTestContext
     public void SessionTodosTab_CompletedItem_ShowsCheckIcon()
     {
         // Arrange
-        var todos = new List<SessionTodoItem>
-        {
-            new() { Content = "Completed task", ActiveForm = "Completed task", Status = TodoStatus.Completed }
-        };
-        _mockTodoParser.Setup(p => p.ParseFromMessages(It.IsAny<IReadOnlyList<ClaudeMessage>>()))
-            .Returns(todos);
+        var messages = CreateMessagesWithTodos(("Completed task", "Completed task", "completed"));
 
         // Act
         var cut = Render<SessionTodosTab>(parameters => parameters
-            .Add(p => p.Messages, new List<ClaudeMessage>()));
+            .Add(p => p.Messages, messages));
 
         // Assert
         var statusIcon = cut.Find(".status-icon.completed");
@@ -108,16 +106,11 @@ public class SessionTodosTabTests : BunitTestContext
     public void SessionTodosTab_InProgressItem_ShowsActiveForm()
     {
         // Arrange
-        var todos = new List<SessionTodoItem>
-        {
-            new() { Content = "Task content", ActiveForm = "Currently working on task", Status = TodoStatus.InProgress }
-        };
-        _mockTodoParser.Setup(p => p.ParseFromMessages(It.IsAny<IReadOnlyList<ClaudeMessage>>()))
-            .Returns(todos);
+        var messages = CreateMessagesWithTodos(("Task content", "Currently working on task", "in_progress"));
 
         // Act
         var cut = Render<SessionTodosTab>(parameters => parameters
-            .Add(p => p.Messages, new List<ClaudeMessage>()));
+            .Add(p => p.Messages, messages));
 
         // Assert
         var activeForm = cut.Find(".active-form");
@@ -127,10 +120,6 @@ public class SessionTodosTabTests : BunitTestContext
     [Test]
     public void SessionTodosTab_NoTodos_ShowsEmptyState()
     {
-        // Arrange
-        _mockTodoParser.Setup(p => p.ParseFromMessages(It.IsAny<IReadOnlyList<ClaudeMessage>>()))
-            .Returns(new List<SessionTodoItem>());
-
         // Act
         var cut = Render<SessionTodosTab>(parameters => parameters
             .Add(p => p.Messages, new List<ClaudeMessage>()));
@@ -143,10 +132,6 @@ public class SessionTodosTabTests : BunitTestContext
     [Test]
     public void SessionTodosTab_NullMessages_ShowsEmptyState()
     {
-        // Arrange
-        _mockTodoParser.Setup(p => p.ParseFromMessages(It.IsAny<IReadOnlyList<ClaudeMessage>>()))
-            .Returns(new List<SessionTodoItem>());
-
         // Act
         var cut = Render<SessionTodosTab>();
 
@@ -159,18 +144,14 @@ public class SessionTodosTabTests : BunitTestContext
     public void SessionTodosTab_DisplaysProgressSummary()
     {
         // Arrange
-        var todos = new List<SessionTodoItem>
-        {
-            new() { Content = "Task 1", ActiveForm = "Task 1", Status = TodoStatus.Completed },
-            new() { Content = "Task 2", ActiveForm = "Task 2", Status = TodoStatus.InProgress },
-            new() { Content = "Task 3", ActiveForm = "Task 3", Status = TodoStatus.Pending }
-        };
-        _mockTodoParser.Setup(p => p.ParseFromMessages(It.IsAny<IReadOnlyList<ClaudeMessage>>()))
-            .Returns(todos);
+        var messages = CreateMessagesWithTodos(
+            ("Task 1", "Task 1", "completed"),
+            ("Task 2", "Task 2", "in_progress"),
+            ("Task 3", "Task 3", "pending"));
 
         // Act
         var cut = Render<SessionTodosTab>(parameters => parameters
-            .Add(p => p.Messages, new List<ClaudeMessage>()));
+            .Add(p => p.Messages, messages));
 
         // Assert
         var summary = cut.Find(".todos-summary");

@@ -35,7 +35,7 @@ $ErrorActionPreference = "Stop"
 # Get script directory and project root
 $ScriptDir = $PSScriptRoot
 $ProjectRoot = Resolve-Path (Join-Path $ScriptDir "..")
-$ProjectPath = Join-Path $ProjectRoot "src" "Homespun" "Homespun.csproj"
+$ProjectPath = Join-Path $ProjectRoot "src" "Homespun.Server" "Homespun.Server.csproj"
 
 Write-Host "=== Homespun Mock Mode ===" -ForegroundColor Cyan
 Write-Host "Running with mock services and demo data..." -ForegroundColor Cyan

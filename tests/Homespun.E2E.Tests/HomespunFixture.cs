@@ -134,7 +134,7 @@ public class HomespunFixture
 
     private static string GetApplicationDllPath(string projectDir, string configuration)
     {
-        var dllPath = Path.Combine(projectDir, "bin", configuration, "net10.0", "Homespun.dll");
+        var dllPath = Path.Combine(projectDir, "bin", configuration, "net10.0", "Homespun.Server.dll");
 
         if (!File.Exists(dllPath))
         {
@@ -151,18 +151,18 @@ public class HomespunFixture
         var currentDir = Directory.GetCurrentDirectory();
         var searchPaths = new[]
         {
-            Path.Combine(currentDir, "..", "..", "..", "..", "..", "src", "Homespun"),
-            Path.Combine(currentDir, "..", "..", "..", "..", "src", "Homespun"),
-            Path.Combine(currentDir, "..", "..", "..", "src", "Homespun"),
-            Path.Combine(currentDir, "..", "..", "src", "Homespun"),
-            Path.Combine(currentDir, "..", "src", "Homespun"),
-            Path.Combine(currentDir, "src", "Homespun")
+            Path.Combine(currentDir, "..", "..", "..", "..", "..", "src", "Homespun.Server"),
+            Path.Combine(currentDir, "..", "..", "..", "..", "src", "Homespun.Server"),
+            Path.Combine(currentDir, "..", "..", "..", "src", "Homespun.Server"),
+            Path.Combine(currentDir, "..", "..", "src", "Homespun.Server"),
+            Path.Combine(currentDir, "..", "src", "Homespun.Server"),
+            Path.Combine(currentDir, "src", "Homespun.Server")
         };
 
         foreach (var path in searchPaths)
         {
             var fullPath = Path.GetFullPath(path);
-            var projectFile = Path.Combine(fullPath, "Homespun.csproj");
+            var projectFile = Path.Combine(fullPath, "Homespun.Server.csproj");
             if (File.Exists(projectFile))
             {
                 return fullPath;

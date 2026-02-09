@@ -1,14 +1,7 @@
-using Homespun.Features.Commands;
-using Homespun.Features.GitHub;
-using Homespun.Features.PullRequests;
-using Homespun.Features.PullRequests.Data.Entities;
 using Homespun.Features.Testing;
 using Microsoft.Extensions.Configuration;
 using Moq;
 using Octokit;
-using Project = Homespun.Features.PullRequests.Data.Entities.Project;
-using TrackedPullRequest = Homespun.Features.PullRequests.Data.Entities.PullRequest;
-using PullRequestStatus = Homespun.Features.PullRequests.PullRequestStatus;
 
 namespace Homespun.Tests.Features.PullRequests;
 
@@ -393,8 +386,8 @@ public class PullRequestWorkflowTests
         var project = await CreateTestProject();
 
         // Create pull requests for open PRs
-        var pr1 = new TrackedPullRequest { ProjectId = project.Id, Title = "PR 1", BranchName = "feature/one", Status = OpenPullRequestStatus.InDevelopment };
-        var pr2 = new TrackedPullRequest { ProjectId = project.Id, Title = "PR 2", BranchName = "feature/two", Status = OpenPullRequestStatus.InDevelopment };
+        var pr1 = new PullRequest { ProjectId = project.Id, Title = "PR 1", BranchName = "feature/one", Status = OpenPullRequestStatus.InDevelopment };
+        var pr2 = new PullRequest { ProjectId = project.Id, Title = "PR 2", BranchName = "feature/two", Status = OpenPullRequestStatus.InDevelopment };
         await _dataStore.AddPullRequestAsync(pr1);
         await _dataStore.AddPullRequestAsync(pr2);
 
@@ -420,7 +413,7 @@ public class PullRequestWorkflowTests
         // Arrange
         var project = await CreateTestProject();
 
-        var pullRequest = new TrackedPullRequest { ProjectId = project.Id, Title = "Conflicting PR", BranchName = "feature/conflict", Status = OpenPullRequestStatus.InDevelopment };
+        var pullRequest = new PullRequest { ProjectId = project.Id, Title = "Conflicting PR", BranchName = "feature/conflict", Status = OpenPullRequestStatus.InDevelopment };
         await _dataStore.AddPullRequestAsync(pullRequest);
 
         // Mock fetch success but rebase conflict
@@ -447,7 +440,7 @@ public class PullRequestWorkflowTests
         // Arrange
         var project = await CreateTestProject();
 
-        var pullRequest = new TrackedPullRequest { ProjectId = project.Id, Title = "Test PR", BranchName = "feature/test", Status = OpenPullRequestStatus.InDevelopment };
+        var pullRequest = new PullRequest { ProjectId = project.Id, Title = "Test PR", BranchName = "feature/test", Status = OpenPullRequestStatus.InDevelopment };
         await _dataStore.AddPullRequestAsync(pullRequest);
 
         _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.Contains("fetch")), project.LocalPath))

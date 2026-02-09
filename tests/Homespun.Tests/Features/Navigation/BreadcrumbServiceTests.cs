@@ -2,7 +2,6 @@ using Fleece.Core.Models;
 using Homespun.Features.Fleece.Services;
 using Homespun.Features.Navigation;
 using Homespun.Features.Projects;
-using Homespun.Features.PullRequests.Data.Entities;
 using Moq;
 
 namespace Homespun.Tests.Features.Navigation;

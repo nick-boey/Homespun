@@ -1,10 +1,7 @@
 using Bunit;
-using Homespun.Features.ClaudeCode.Components.SessionInfoPanel;
-using Homespun.Features.GitHub;
-using Homespun.Features.Projects;
-using Homespun.Features.PullRequests;
-using Homespun.Features.PullRequests.Data.Entities;
-using Homespun.Features.Shared.Services;
+using Homespun.Client.Components.ClaudeCode.SessionInfoPanel;
+using Homespun.Client.Services;
+using Homespun.Tests.Helpers;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
 
@@ -13,8 +10,7 @@ namespace Homespun.Tests.Components;
 [TestFixture]
 public class SessionPrTabTests : BunitTestContext
 {
-    private Mock<IProjectService> _mockProjectService = null!;
-    private Mock<IIssuePrStatusService> _mockPrStatusService = null!;
+    private MockHttpMessageHandler _mockHandler = null!;
     private Mock<IMarkdownRenderingService> _mockMarkdownService = null!;
 
     [SetUp]
@@ -22,25 +18,19 @@ public class SessionPrTabTests : BunitTestContext
     {
         base.Setup();
 
-        _mockProjectService = new Mock<IProjectService>();
-        _mockPrStatusService = new Mock<IIssuePrStatusService>();
+        _mockHandler = new MockHttpMessageHandler();
         _mockMarkdownService = new Mock<IMarkdownRenderingService>();
 
-        Services.AddSingleton(_mockProjectService.Object);
-        Services.AddSingleton(_mockPrStatusService.Object);
+        var httpClient = _mockHandler.CreateClient();
+        Services.AddSingleton(new HttpIssuePrStatusApiService(httpClient));
         Services.AddSingleton(_mockMarkdownService.Object);
-
-        // Setup project service
-        _mockProjectService.Setup(p => p.GetByIdAsync(It.IsAny<string>()))
-            .ReturnsAsync(new Project { Id = "proj-1", LocalPath = "/test/path", Name = "Test", GitHubOwner = "owner", GitHubRepo = "repo", DefaultBranch = "main" });
 
         // Setup markdown service
         _mockMarkdownService.Setup(m => m.RenderToHtml(It.IsAny<string?>()))
             .Returns((string? text) => text ?? "");
 
-        // Setup PR status service
-        _mockPrStatusService.Setup(s => s.GetPullRequestStatusForIssueAsync(It.IsAny<string>(), It.IsAny<string>()))
-            .ReturnsAsync((IssuePullRequestStatus?)null);
+        // Default: no PR status found
+        _mockHandler.RespondNotFound("api/issue-pr-status/");
     }
 
     [Test]
@@ -53,8 +43,7 @@ public class SessionPrTabTests : BunitTestContext
             PrUrl = "https://github.com/owner/repo/pull/123",
             Status = PullRequestStatus.InProgress
         };
-        _mockPrStatusService.Setup(s => s.GetPullRequestStatusForIssueAsync("proj-1", "ABC123"))
-            .ReturnsAsync(prStatus);
+        _mockHandler.RespondWith("api/issue-pr-status/proj-1/ABC123", prStatus);
 
         // Act
         var cut = Render<SessionPrTab>(parameters => parameters
@@ -72,8 +61,7 @@ public class SessionPrTabTests : BunitTestContext
     public void SessionPrTab_NoPr_ShowsEmptyState()
     {
         // Arrange
-        _mockPrStatusService.Setup(s => s.GetPullRequestStatusForIssueAsync("proj-1", "ABC123"))
-            .ReturnsAsync((IssuePullRequestStatus?)null);
+        _mockHandler.RespondNotFound("api/issue-pr-status/proj-1/ABC123");
 
         // Act
         var cut = Render<SessionPrTab>(parameters => parameters

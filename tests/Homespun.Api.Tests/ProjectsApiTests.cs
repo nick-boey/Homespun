@@ -1,7 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
 using Homespun.Features.Projects.Controllers;
-using Homespun.Features.PullRequests.Data.Entities;
 
 namespace Homespun.Api.Tests;
 

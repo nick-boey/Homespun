@@ -1,4 +1,3 @@
-using Homespun.Features.Commands;
 using Homespun.Features.Fleece.Services;
 using Microsoft.Extensions.Logging;
 using Moq;

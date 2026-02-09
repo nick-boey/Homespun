@@ -1,4 +1,3 @@
-using Homespun.Features.ClaudeCode.Data;
 using NUnit.Framework;
 
 namespace Homespun.Tests.Features.ClaudeCode;

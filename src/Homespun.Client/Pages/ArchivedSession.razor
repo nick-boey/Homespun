@@ -1,0 +1,479 @@
+@page "/session/{SessionId}/archived"
+@using Microsoft.AspNetCore.Components.Web
+@using static Microsoft.AspNetCore.Components.Web.RenderMode
+@inject HttpSessionApiService SessionApi
+@inject HttpSessionCacheApiService SessionCacheApi
+@inject NavigationManager NavigationManager
+@inject IMarkdownRenderingService MarkdownService
+@inject IBreadcrumbService BreadcrumbService
+
+<PageTitle>Archived Session - Homespun</PageTitle>
+
+<div class="archived-session-page">
+    @if (_isLoading)
+    {
+        <div class="d-flex justify-content-center align-items-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading session...</span>
+            </div>
+        </div>
+    }
+    else if (_summary == null)
+    {
+        <div class="session-not-found py-5 text-center">
+            <h2>Session Not Found</h2>
+            <p class="text-muted">The archived session you're looking for doesn't exist or has been deleted.</p>
+            <button class="btn btn-primary" @onclick="GoBack">
+                <i class="bi bi-arrow-left me-1"></i>
+                Go Back
+            </button>
+        </div>
+    }
+    else
+    {
+        <div class="session-header border-bottom pb-3 mb-3">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <h1 class="h4 mb-2">
+                        <i class="bi bi-archive me-2"></i>
+                        Archived Session
+                    </h1>
+                    <div class="d-flex gap-2 align-items-center flex-wrap">
+                        @if (_summary.Mode.HasValue)
+                        {
+                            <span class="badge @(_summary.Mode == SessionMode.Plan ? "bg-info" : "bg-success")">
+                                @_summary.Mode
+                            </span>
+                        }
+                        @if (!string.IsNullOrEmpty(_summary.Model))
+                        {
+                            <code class="small">@_summary.Model</code>
+                        }
+                        <span class="text-muted small">
+                            @_summary.MessageCount messages
+                        </span>
+                        <span class="text-muted small">
+                            Created: @_summary.CreatedAt.ToLocalTime().ToString("g")
+                        </span>
+                        <span class="text-muted small">
+                            Last activity: @_summary.LastMessageAt.ToLocalTime().ToString("g")
+                        </span>
+                    </div>
+                </div>
+                <div class="btn-group">
+                    <button class="btn btn-outline-secondary btn-sm" @onclick="GoBack">
+                        <i class="bi bi-arrow-left me-1"></i>
+                        Back
+                    </button>
+                    @if (!string.IsNullOrEmpty(_workingDirectory))
+                    {
+                        <button class="btn btn-primary btn-sm" @onclick="ResumeSession" disabled="@_isResuming">
+                            @if (_isResuming)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                            }
+                            else
+                            {
+                                <i class="bi bi-play-fill me-1"></i>
+                            }
+                            Resume
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrEmpty(_errorMessage))
+        {
+            <div class="alert alert-danger">@_errorMessage</div>
+        }
+
+        <div class="messages-container">
+            @if (_messages.Count == 0)
+            {
+                <div class="text-center text-muted py-4">
+                    <i class="bi bi-chat-square-text fs-1 d-block mb-2"></i>
+                    No messages in this session.
+                </div>
+            }
+            else
+            {
+                @foreach (var displayItem in GetDisplayItems())
+                {
+                    @if (displayItem is ClaudeMessage message)
+                    {
+                        var messageClass = message.Role == ClaudeMessageRole.User ? "user-message" : "assistant-message";
+                        <div class="message @messageClass mb-3 p-3 rounded border">
+                            <div class="message-header d-flex justify-content-between mb-2">
+                                <span class="fw-bold @(message.Role == ClaudeMessageRole.User ? "text-primary" : "text-success")">
+                                    @(message.Role == ClaudeMessageRole.User ? "You" : "Claude")
+                                </span>
+                                <span class="text-muted small">@message.CreatedAt.ToLocalTime().ToString("HH:mm:ss")</span>
+                            </div>
+                            <div class="message-content">
+                                @foreach (var content in message.Content)
+                                {
+                                    <div class="content-block mb-2 @GetContentBlockClass(content.Type)">
+                                        @switch (content.Type)
+                                        {
+                                            case ClaudeContentType.Text:
+                                                <div class="text-content markdown-content">
+                                                    @((MarkupString)MarkdownService.RenderToHtml(content.Text))
+                                                </div>
+                                                break;
+
+                                            case ClaudeContentType.Thinking:
+                                                <details class="thinking-block border rounded p-2 bg-light">
+                                                    <summary class="text-muted small">
+                                                        <i class="bi bi-lightbulb me-1"></i>
+                                                        Thinking (@GetTextPreview(content.Text))
+                                                    </summary>
+                                                    <div class="mt-2 markdown-content">
+                                                        @((MarkupString)MarkdownService.RenderToHtml(content.Text))
+                                                    </div>
+                                                </details>
+                                                break;
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                    else if (displayItem is ToolExecutionGroup toolGroup)
+                    {
+                        <ToolExecutionGroupDisplay Group="toolGroup" />
+                    }
+                }
+            }
+        </div>
+    }
+</div>
+
+<style>
+    .archived-session-page {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 1rem;
+    }
+
+    .message.user-message {
+        background-color: var(--bs-primary-bg-subtle, #cfe2ff);
+    }
+
+    .message.assistant-message {
+        background-color: var(--bs-success-bg-subtle, #d1e7dd);
+    }
+
+    .tool-group {
+        background-color: var(--bs-light, #f8f9fa);
+        border: 1px solid var(--bs-border-color, #dee2e6);
+        border-radius: 0.375rem;
+        margin-bottom: 1rem;
+        overflow: hidden;
+    }
+
+    .tool-group-header {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 0.75rem;
+        background-color: var(--bs-secondary-bg-subtle, #e2e3e5);
+        border-bottom: 1px solid var(--bs-border-color, #dee2e6);
+        font-size: 0.875rem;
+        font-weight: 600;
+    }
+
+    .tool-execution-row {
+        border-bottom: 1px solid var(--bs-border-color, #dee2e6);
+    }
+
+    .tool-execution-row:last-child {
+        border-bottom: none;
+    }
+
+    .tool-execution-row.error {
+        border-left: 3px solid var(--bs-danger, #dc3545);
+    }
+
+    .tool-execution-row .running-summary {
+        padding: 0.5rem 0.75rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.875rem;
+    }
+
+    .thinking-block summary {
+        cursor: pointer;
+    }
+
+    .markdown-content pre {
+        background-color: var(--bs-gray-100);
+        padding: 0.5rem;
+        border-radius: 0.25rem;
+        overflow-x: auto;
+    }
+
+    .markdown-content code {
+        font-size: 0.875em;
+    }
+</style>
+
+@code {
+    [Parameter] public string SessionId { get; set; } = "";
+
+    private SessionCacheSummary? _summary;
+    private IReadOnlyList<ClaudeMessage> _messages = [];
+    private bool _isLoading = true;
+    private bool _isResuming;
+    private string? _errorMessage;
+    private string? _workingDirectory;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await BreadcrumbService.SetContextAsync(new BreadcrumbContext
+        {
+            SessionId = SessionId,
+            PageName = "Archived"
+        });
+        await LoadSessionAsync();
+    }
+
+    private async Task LoadSessionAsync()
+    {
+        _isLoading = true;
+        _errorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            // Load the session summary and messages in parallel
+            var summaryTask = SessionCacheApi.GetSummaryAsync(SessionId);
+            var messagesTask = SessionApi.GetCachedMessagesAsync(SessionId);
+
+            await Task.WhenAll(summaryTask, messagesTask);
+
+            _summary = await summaryTask;
+            _messages = await messagesTask;
+
+            // Set working directory from summary if available
+            if (_summary != null && !string.IsNullOrEmpty(_summary.ProjectId))
+            {
+                // Working directory would need to be retrieved from project or session metadata
+                // For now, we don't have direct access to it in the archived session
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to load session: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void GoBack()
+    {
+        NavigationManager.NavigateTo("javascript:history.back()");
+    }
+
+    private async Task ResumeSession()
+    {
+        if (_summary == null || string.IsNullOrEmpty(_workingDirectory))
+        {
+            _errorMessage = "Cannot resume: missing session info or working directory.";
+            return;
+        }
+
+        _isResuming = true;
+        _errorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            var session = await SessionApi.ResumeSessionAsync(
+                SessionId,
+                _summary.EntityId,
+                _summary.ProjectId,
+                _workingDirectory);
+
+            NavigationManager.NavigateTo($"/session/{session.Id}");
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to resume session: {ex.Message}";
+        }
+        finally
+        {
+            _isResuming = false;
+        }
+    }
+
+    private static bool IsRealUserMessage(ClaudeMessage message)
+    {
+        if (message.Role != ClaudeMessageRole.User) return false;
+        return message.Content.Any(c => c.Type == ClaudeContentType.Text && !string.IsNullOrWhiteSpace(c.Text));
+    }
+
+    /// <summary>
+    /// Transforms the flat message list into a list of display items (ClaudeMessage or ToolExecutionGroup).
+    /// Groups consecutive tool use/result message pairs into consolidated ToolExecutionGroup objects.
+    /// </summary>
+    private List<object> GetDisplayItems()
+    {
+        var messages = _messages.ToList();
+        var displayItems = new List<object>();
+        var currentToolGroup = new List<ToolExecution>();
+        var currentGroupMessages = new List<ClaudeMessage>();
+        DateTime currentGroupTimestamp = DateTime.UtcNow;
+
+        void FlushToolGroup()
+        {
+            if (currentToolGroup.Count > 0)
+            {
+                displayItems.Add(new ToolExecutionGroup
+                {
+                    Executions = new List<ToolExecution>(currentToolGroup),
+                    Timestamp = currentGroupTimestamp,
+                    OriginalMessages = new List<ClaudeMessage>(currentGroupMessages)
+                });
+                currentToolGroup.Clear();
+                currentGroupMessages.Clear();
+            }
+        }
+
+        for (int i = 0; i < messages.Count; i++)
+        {
+            var msg = messages[i];
+
+            if (msg.Role == ClaudeMessageRole.Assistant)
+            {
+                var toolUseBlocks = msg.Content.Where(c => c.Type == ClaudeContentType.ToolUse).ToList();
+                var nonToolBlocks = msg.Content.Where(c => c.Type != ClaudeContentType.ToolUse).ToList();
+
+                if (toolUseBlocks.Count > 0)
+                {
+                    if (nonToolBlocks.Any(c => c.Type == ClaudeContentType.Text || c.Type == ClaudeContentType.Thinking))
+                    {
+                        FlushToolGroup();
+
+                        var textMessage = new ClaudeMessage
+                        {
+                            Id = msg.Id,
+                            SessionId = msg.SessionId,
+                            Role = msg.Role,
+                            CreatedAt = msg.CreatedAt,
+                            IsStreaming = msg.IsStreaming
+                        };
+                        foreach (var block in nonToolBlocks)
+                        {
+                            textMessage.Content.Add(block);
+                        }
+                        displayItems.Add(textMessage);
+                    }
+
+                    if (currentToolGroup.Count == 0)
+                    {
+                        currentGroupTimestamp = msg.CreatedAt;
+                    }
+                    currentGroupMessages.Add(msg);
+
+                    foreach (var toolUse in toolUseBlocks)
+                    {
+                        currentToolGroup.Add(new ToolExecution { ToolUse = toolUse });
+                    }
+                }
+                else
+                {
+                    FlushToolGroup();
+                    displayItems.Add(msg);
+                }
+            }
+            else if (msg.Role == ClaudeMessageRole.User)
+            {
+                if (!IsRealUserMessage(msg))
+                {
+                    currentGroupMessages.Add(msg);
+                    foreach (var resultContent in msg.Content.Where(c => c.Type == ClaudeContentType.ToolResult))
+                    {
+                        var matchingExecution = currentToolGroup
+                            .FirstOrDefault(e => e.ToolResult == null && e.ToolUse.ToolUseId == resultContent.ToolUseId);
+
+                        if (matchingExecution != null)
+                        {
+                            matchingExecution.ToolResult = resultContent;
+                        }
+                        else
+                        {
+                            var unmatchedExecution = currentToolGroup.FirstOrDefault(e => e.ToolResult == null);
+                            if (unmatchedExecution != null)
+                            {
+                                unmatchedExecution.ToolResult = resultContent;
+                            }
+                            else
+                            {
+                                currentToolGroup.Add(new ToolExecution
+                                {
+                                    ToolUse = new ClaudeMessageContent
+                                    {
+                                        Type = ClaudeContentType.ToolUse,
+                                        ToolName = resultContent.ParsedToolResult?.ToolName ?? resultContent.ToolName ?? "Tool",
+                                        ToolUseId = resultContent.ToolUseId
+                                    },
+                                    ToolResult = resultContent
+                                });
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    FlushToolGroup();
+                    displayItems.Add(msg);
+                }
+            }
+        }
+
+        FlushToolGroup();
+
+        return displayItems;
+    }
+
+    private static string GetContentBlockClass(ClaudeContentType type)
+    {
+        return type switch
+        {
+            ClaudeContentType.Text => "text-block",
+            ClaudeContentType.Thinking => "thinking-block",
+            ClaudeContentType.ToolUse => "tool-use-block",
+            ClaudeContentType.ToolResult => "tool-result-block",
+            _ => ""
+        };
+    }
+
+    private static string GetTextPreview(string? text)
+    {
+        if (string.IsNullOrEmpty(text)) return "empty";
+        var preview = text.Replace('\n', ' ').Replace('\r', ' ');
+        if (preview.Length > 50)
+        {
+            preview = preview[..50] + "...";
+        }
+        return preview;
+    }
+
+    private static string FormatToolInput(string? input)
+    {
+        if (string.IsNullOrEmpty(input)) return "";
+        try
+        {
+            var obj = System.Text.Json.JsonSerializer.Deserialize<object>(input);
+            return System.Text.Json.JsonSerializer.Serialize(obj, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+        }
+        catch
+        {
+            return input;
+        }
+    }
+}

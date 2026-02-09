@@ -1,5 +1,5 @@
 # Homespun Dockerfile
-# Multi-stage build for .NET 10 Blazor Server application
+# Multi-stage build for .NET 10 Blazor WASM application (Server + Client)
 # Includes: git, gh CLI, and Fleece issue tracking tools
 #
 # Environment Variables (passed at runtime via scripts/run.sh):
@@ -27,8 +27,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copy solution and project files first for better layer caching
 COPY Homespun.sln ./
-COPY src/Homespun/Homespun.csproj src/Homespun/
-COPY src/Homespun.AgentWorker/Homespun.AgentWorker.csproj src/Homespun.AgentWorker/
+COPY src/Homespun.Server/Homespun.Server.csproj src/Homespun.Server/
+COPY src/Homespun.Client/Homespun.Client.csproj src/Homespun.Client/
+COPY src/Homespun.Shared/Homespun.Shared.csproj src/Homespun.Shared/
 COPY src/Homespun.ClaudeAgentSdk/Homespun.ClaudeAgentSdk.csproj src/Homespun.ClaudeAgentSdk/
 COPY tests/Homespun.Tests/Homespun.Tests.csproj tests/Homespun.Tests/
 COPY tests/Homespun.Api.Tests/Homespun.Api.Tests.csproj tests/Homespun.Api.Tests/
@@ -45,15 +46,15 @@ ARG BUILD_CONFIGURATION=Release
 # Copy everything else
 COPY . .
 
-# Install npm dependencies for Tailwind CSS build
+# Install npm dependencies for Tailwind CSS build (Client project)
 # (node_modules is excluded by .dockerignore, so we must install here)
 # Use npm ci for clean, reproducible installs from package-lock.json
-RUN cd src/Homespun && rm -rf node_modules && npm ci
+RUN cd src/Homespun.Client && rm -rf node_modules && npm ci
 
-# Build and publish
-# Note: Cannot use --no-restore here because Blazor framework files
-# (blazor.web.js, etc.) are in an implicit package that's only resolved during publish
-RUN dotnet publish src/Homespun/Homespun.csproj \
+# Build and publish the Server project
+# The Server references the Client project, so publishing Server automatically
+# includes the WASM client output (wwwroot/_framework/) in the publish directory
+RUN dotnet publish src/Homespun.Server/Homespun.Server.csproj \
     -c $BUILD_CONFIGURATION \
     /p:Version=$VERSION \
     -o /app/publish
@@ -103,7 +104,7 @@ COPY --from=build /src/tests/data/sessions /app/test-sessions
 RUN chown -R homespun:homespun /app/test-sessions
 
 # Copy start script
-COPY src/Homespun/start.sh .
+COPY src/Homespun.Server/start.sh .
 RUN chmod +x start.sh
 
 # Set ownership

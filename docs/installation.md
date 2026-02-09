@@ -53,7 +53,7 @@ On your development machine:
 
 ```bash
 cd Homespun
-dotnet publish src/Homespun -c Release -o ./publish
+dotnet publish src/Homespun.Server -c Release -o ./publish
 ```
 
 Copy the `publish` folder to your VM:

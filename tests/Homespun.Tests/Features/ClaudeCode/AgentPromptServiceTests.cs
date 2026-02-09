@@ -1,4 +1,3 @@
-using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Testing;
 
@@ -327,7 +326,7 @@ public class AgentPromptServiceTests
     [Test]
     public async Task RemoveProject_CascadeDeletesProjectPrompts()
     {
-        await _dataStore.AddProjectAsync(new Homespun.Features.PullRequests.Data.Entities.Project
+        await _dataStore.AddProjectAsync(new Project
         {
             Id = "project-1",
             Name = "Test Project",

@@ -1,0 +1,280 @@
+@inject HttpIssuePrStatusApiService IssuePrStatusApi
+@inject IMarkdownRenderingService MarkdownService
+
+<div class="pr-tab">
+    @if (string.IsNullOrEmpty(EntityId) || string.IsNullOrEmpty(ProjectId))
+    {
+        <div class="empty-state">
+            <span class="empty-icon">🔀</span>
+            <p>Session not loaded</p>
+        </div>
+    }
+    else if (IsCloneEntity())
+    {
+        <div class="empty-state">
+            <span class="empty-icon">🔀</span>
+            <p>No pull request for this session</p>
+            <span class="entity-info">Working on branch: @GetCloneBranch()</span>
+        </div>
+    }
+    else if (_isLoading)
+    {
+        <div class="loading-state">
+            <div class="spinner-border spinner-border-sm" role="status"></div>
+            <span>Loading PR info...</span>
+        </div>
+    }
+    else if (_prStatus == null)
+    {
+        <div class="empty-state">
+            <span class="empty-icon">🔀</span>
+            <p>No pull request for this issue</p>
+            <span class="entity-info">Create a PR to see details here</span>
+        </div>
+    }
+    else
+    {
+        <div class="pr-header">
+            <div class="pr-number">#@_prStatus.PrNumber</div>
+            <div class="pr-badges">
+                <span class="badge pr-status @GetStatusBadgeClass(_prStatus.Status)">@_prStatus.Status</span>
+                @if (_prStatus.IsMergeable)
+                {
+                    <span class="badge mergeable">Ready to Merge</span>
+                }
+                @if (_prStatus.HasConflicts)
+                {
+                    <span class="badge not-mergeable">Conflicts</span>
+                }
+                @if (_prStatus.ChecksPassing == true)
+                {
+                    <span class="badge checks-status success">✓ Checks Passing</span>
+                }
+                else if (_prStatus.ChecksFailing)
+                {
+                    <span class="badge checks-status failure">✗ Checks Failing</span>
+                }
+                else if (_prStatus.ChecksRunning)
+                {
+                    <span class="badge checks-status pending">◐ Checks Running</span>
+                }
+            </div>
+        </div>
+
+        <div class="pr-link">
+            <a href="@_prStatus.PrUrl" target="_blank" class="github-link">
+                <span class="link-icon">🔗</span>
+                View on GitHub
+            </a>
+        </div>
+
+        @if (!string.IsNullOrEmpty(_prStatus.BranchName))
+        {
+            <div class="pr-meta">
+                <span class="meta-label">Branch:</span>
+                <span class="meta-value"><code>@_prStatus.BranchName</code></span>
+            </div>
+        }
+
+        @if (_prStatus.ApprovalCount > 0 || _prStatus.ChangesRequestedCount > 0)
+        {
+            <div class="pr-meta">
+                <span class="meta-label">Reviews:</span>
+                <span class="meta-value">
+                    @if (_prStatus.ApprovalCount > 0)
+                    {
+                        <span class="approved-count">✓ @_prStatus.ApprovalCount approved</span>
+                    }
+                    @if (_prStatus.ChangesRequestedCount > 0)
+                    {
+                        <span class="changes-count">⚠ @_prStatus.ChangesRequestedCount changes requested</span>
+                    }
+                </span>
+            </div>
+        }
+    }
+</div>
+
+<style>
+    .pr-tab {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        overflow-y: auto;
+    }
+
+    .loading-state,
+    .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: var(--spacing-lg);
+        color: var(--text-muted);
+        text-align: center;
+        gap: var(--spacing-sm);
+    }
+
+    .empty-icon {
+        font-size: 2rem;
+        opacity: 0.5;
+    }
+
+    .empty-state p {
+        margin: 0;
+        font-size: 0.875rem;
+    }
+
+    .entity-info {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        font-family: monospace;
+    }
+
+    .pr-header {
+        padding: var(--spacing-sm);
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .pr-number {
+        font-size: 0.875rem;
+        color: var(--text-muted);
+        font-family: monospace;
+        margin-bottom: var(--spacing-xs);
+    }
+
+    .pr-badges {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--spacing-xs);
+    }
+
+    .badge {
+        padding: 0.125rem 0.5rem;
+        border-radius: var(--radius-sm);
+        font-size: 0.6875rem;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    .badge.pr-status {
+        background: var(--bg-tertiary);
+        color: var(--text-secondary);
+    }
+
+    .badge.mergeable { background: var(--status-success); color: white; }
+    .badge.not-mergeable { background: var(--status-error); color: white; }
+
+    .badge.checks-status.success { background: var(--status-success); color: white; }
+    .badge.checks-status.pending { background: var(--status-warning); color: #333; }
+    .badge.checks-status.failure { background: var(--status-error); color: white; }
+
+    .pr-link {
+        padding: var(--spacing-sm);
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .github-link {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-xs);
+        color: var(--color-lagoon);
+        text-decoration: none;
+        font-size: 0.875rem;
+    }
+
+    .github-link:hover {
+        text-decoration: underline;
+    }
+
+    .link-icon {
+        font-size: 1rem;
+    }
+
+    .pr-meta {
+        padding: var(--spacing-xs) var(--spacing-sm);
+        font-size: 0.8125rem;
+        display: flex;
+        gap: var(--spacing-sm);
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .meta-label {
+        color: var(--text-muted);
+        flex-shrink: 0;
+    }
+
+    .meta-value {
+        color: var(--text-secondary);
+        display: flex;
+        gap: var(--spacing-sm);
+        flex-wrap: wrap;
+    }
+
+    .meta-value code {
+        font-size: 0.75rem;
+        background: var(--bg-tertiary);
+        padding: 0.125rem 0.25rem;
+        border-radius: var(--radius-sm);
+    }
+
+    .approved-count {
+        color: var(--status-success);
+    }
+
+    .changes-count {
+        color: var(--status-warning);
+    }
+</style>
+
+@code {
+    [Parameter] public string? EntityId { get; set; }
+    [Parameter] public string? ProjectId { get; set; }
+
+    private IssuePullRequestStatus? _prStatus;
+    private bool _isLoading = true;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!string.IsNullOrEmpty(EntityId) && !string.IsNullOrEmpty(ProjectId) && !IsCloneEntity())
+        {
+            await LoadPrStatusAsync();
+        }
+        else
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task LoadPrStatusAsync()
+    {
+        _isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            _prStatus = await IssuePrStatusApi.GetStatusAsync(ProjectId!, EntityId!);
+        }
+        catch
+        {
+            _prStatus = null;
+        }
+        finally
+        {
+            _isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private bool IsCloneEntity() => EntityId?.StartsWith("clone:") == true;
+
+    private string GetCloneBranch() => EntityId?.Replace("clone:", "") ?? "";
+
+    private static string GetStatusBadgeClass(PullRequestStatus status) => status switch
+    {
+        PullRequestStatus.ReadyForMerging => "mergeable",
+        PullRequestStatus.ChecksFailing => "failure",
+        PullRequestStatus.Conflict => "not-mergeable",
+        _ => ""
+    };
+}

@@ -1,8 +1,6 @@
 using Fleece.Core.Models;
 using Homespun.Features.Fleece.Services;
-using Homespun.Features.GitHub;
 using Homespun.Features.PullRequests.Data;
-using Homespun.Features.PullRequests.Data.Entities;
 using Homespun.Features.Testing;
 using Microsoft.Extensions.Logging;
 using Moq;

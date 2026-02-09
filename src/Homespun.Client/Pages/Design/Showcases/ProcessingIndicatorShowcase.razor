@@ -1,0 +1,30 @@
+<div class="showcase-section">
+    <h3>Default Processing Indicator</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Shows that Claude is processing</div>
+        <div class="showcase-preview">
+            <ProcessingIndicator />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>In Chat Context</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Processing indicator within a chat flow</div>
+        <div class="showcase-preview">
+            <div class="chat-message chat-message-user">
+                <div class="chat-message-header">
+                    <span class="chat-message-role">You</span>
+                    <span class="chat-message-time">@DateTime.Now.AddSeconds(-10).ToString("HH:mm:ss")</span>
+                </div>
+                <div class="chat-message-content">
+                    <div class="content-block">
+                        <p>Can you analyze this codebase and suggest improvements?</p>
+                    </div>
+                </div>
+            </div>
+            <ProcessingIndicator />
+        </div>
+    </div>
+</div>

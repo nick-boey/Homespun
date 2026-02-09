@@ -1,0 +1,86 @@
+
+<div class="showcase-section">
+    <h3>Info Notification</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Informational message</div>
+        <div class="showcase-preview notification-preview">
+            <MockNotificationBanner
+                Type="NotificationType.Info"
+                Title="Build Complete"
+                Message="Your project has been built successfully." />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Warning Notification</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Warning message requiring attention</div>
+        <div class="showcase-preview notification-preview">
+            <MockNotificationBanner
+                Type="NotificationType.Warning"
+                Title="Disk Space Low"
+                Message="Less than 10% disk space remaining. Consider cleaning up old files." />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Action Required Notification</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Notification requiring user action</div>
+        <div class="showcase-preview notification-preview">
+            <MockNotificationBanner
+                Type="NotificationType.ActionRequired"
+                Title="Review Required"
+                Message="PR #42 is waiting for your review."
+                ActionLabel="View PR" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Non-Dismissible Notification</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Notification that cannot be dismissed</div>
+        <div class="showcase-preview notification-preview">
+            <MockNotificationBanner
+                Type="NotificationType.Warning"
+                Title="GitHub Token Required"
+                Message="Configure your GitHub token to enable PR creation."
+                IsDismissible="false"
+                ActionLabel="Configure" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Long Message</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Notification with a longer message</div>
+        <div class="showcase-preview notification-preview">
+            <MockNotificationBanner
+                Type="NotificationType.Info"
+                Title="Agent Session Complete"
+                Message="The Claude Code agent has finished working on issue #123: Implement user authentication. The changes have been pushed to branch feature/user-auth and a pull request has been created." />
+        </div>
+    </div>
+</div>
+
+<style>
+    .notification-preview {
+        position: relative;
+        min-height: 60px;
+    }
+
+    .mock-notification-banner {
+        position: relative;
+        left: 0;
+        right: 0;
+        bottom: auto;
+    }
+</style>
+
+@* Mock component that renders a single notification without the service dependency *@
+@code {
+}
