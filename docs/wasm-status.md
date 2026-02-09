@@ -22,13 +22,21 @@ Parent issue: `oU1zLd` - Split into Blazor WASM and ASP.NET server
 - Copied appsettings.json, appsettings.Mock.json, launchSettings.json, start.sh
 - Build: 0 errors | Unit tests: 1304 passed, 5 pre-existing failures | API tests: 36 passed
 
+### kwvBrH (ccc) - Create Homespun.Client Blazor WASM project
+- Created `src/Homespun.Client/` as `Microsoft.NET.Sdk.BlazorWebAssembly` project targeting net10.0
+- WASM entry point with Program.cs, App.razor router, MainLayout, NavMenu
+- Copied wwwroot assets (index.html, app.css, tailwind.css, favicon.png)
+- Tailwind CSS build pipeline (package.json, tailwind.config.js)
+- References Homespun.Shared only (no direct server-side dependencies)
+- Server-client WASM hosting deferred to avoid static asset conflicts during transition
+- Build: 0 errors | Unit tests: 1304 passed, 5 pre-existing failures | API tests: 36 passed
+
 ## In Progress
 
 None
 
 ## Remaining
 
-- kwvBrH (ccc) - Create Homespun.Client Blazor WASM project
 - m1zqCB (ddd) - Migrate backend services from monolith to Homespun.Server
 - kH1MPa (eee) - Create client-side HTTP service layer for Blazor WASM
 - XAdrC8 (fff) - Migrate Blazor components to WASM client and rewire to HTTP services

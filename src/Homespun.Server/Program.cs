@@ -255,8 +255,8 @@ app.UseSwaggerUI(options =>
 
 app.UseCors();
 
-// Serve the Blazor WASM client static files
-app.UseBlazorFrameworkFiles();
+// TODO: Enable when Homespun.Client WASM project is wired up
+// app.UseBlazorFrameworkFiles();
 app.UseStaticFiles();
 
 app.UseAntiforgery();
@@ -271,7 +271,7 @@ app.MapHealthChecks("/health");
 // Map API controllers
 app.MapControllers();
 
-// Fallback to index.html for client-side routing
-app.MapFallbackToFile("index.html");
+// TODO: Enable when Homespun.Client WASM project is wired up
+// app.MapFallbackToFile("index.html");
 
 app.Run();

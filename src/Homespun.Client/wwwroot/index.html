@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Homespun</title>
+    <base href="/" />
+    <!-- Figtree Font from Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600&display=swap" rel="stylesheet" />
+    <!-- Stylesheets -->
+    <link rel="stylesheet" href="css/tailwind.min.css" />
+    <link rel="stylesheet" href="app.css" />
+    <link href="Homespun.Client.styles.css" rel="stylesheet" />
+    <link rel="icon" type="image/png" href="favicon.png" />
+    <!-- Apply theme before render to prevent flash -->
+    <script>
+        (function() {
+            var theme = localStorage.getItem('homespun-theme') || 'auto';
+            if (theme === 'auto') {
+                document.documentElement.removeAttribute('data-theme');
+            } else {
+                document.documentElement.setAttribute('data-theme', theme);
+            }
+        })();
+    </script>
+</head>
+
+<body>
+    <div id="app">Loading...</div>
+
+    <div id="blazor-error-ui">
+        An unhandled error has occurred.
+        <a href="" class="reload">Reload</a>
+        <a class="dismiss">X</a>
+    </div>
+
+    <script src="_framework/blazor.webassembly.js"></script>
+    <script>
+        window.themeManager = {
+            getTheme: function() {
+                return localStorage.getItem('homespun-theme') || 'auto';
+            },
+            setTheme: function(theme) {
+                localStorage.setItem('homespun-theme', theme);
+                if (theme === 'auto') {
+                    document.documentElement.removeAttribute('data-theme');
+                } else {
+                    document.documentElement.setAttribute('data-theme', theme);
+                }
+            }
+        };
+        window.sidebarManager = {
+            isMobile: function() {
+                return window.innerWidth <= 768;
+            }
+        };
+    </script>
+</body>
+
+</html>
