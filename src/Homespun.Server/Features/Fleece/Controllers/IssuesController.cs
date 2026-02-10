@@ -2,6 +2,7 @@ using Fleece.Core.Models;
 using Homespun.Features.AgentOrchestration.Services;
 using Homespun.Features.Fleece.Services;
 using Homespun.Features.Projects;
+using Homespun.Shared.Models.Fleece;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Homespun.Features.Fleece.Controllers;
@@ -22,9 +23,9 @@ public class IssuesController(
     /// Get all issues for a project.
     /// </summary>
     [HttpGet("projects/{projectId}/issues")]
-    [ProducesResponseType<List<Issue>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<List<IssueResponse>>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<List<Issue>>> GetByProject(
+    public async Task<ActionResult<List<IssueResponse>>> GetByProject(
         string projectId,
         [FromQuery] IssueStatus? status = null,
         [FromQuery] IssueType? type = null,
@@ -37,16 +38,18 @@ public class IssuesController(
         }
 
         var issues = await fleeceService.ListIssuesAsync(project.LocalPath, status, type, priority);
-        return Ok(issues.ToList());
+        var response = issues.ToResponseList();
+        logger.LogDebug("Returning {Count} issues for project {ProjectId}", response.Count, projectId);
+        return Ok(response);
     }
 
     /// <summary>
     /// Get ready issues for a project (issues with no blocking dependencies).
     /// </summary>
     [HttpGet("projects/{projectId}/issues/ready")]
-    [ProducesResponseType<List<Issue>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<List<IssueResponse>>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<List<Issue>>> GetReadyIssues(string projectId)
+    public async Task<ActionResult<List<IssueResponse>>> GetReadyIssues(string projectId)
     {
         var project = await projectService.GetByIdAsync(projectId);
         if (project == null)
@@ -55,16 +58,18 @@ public class IssuesController(
         }
 
         var issues = await fleeceService.GetReadyIssuesAsync(project.LocalPath);
-        return Ok(issues.ToList());
+        var response = issues.ToResponseList();
+        logger.LogDebug("Returning {Count} ready issues for project {ProjectId}", response.Count, projectId);
+        return Ok(response);
     }
 
     /// <summary>
     /// Get an issue by ID.
     /// </summary>
     [HttpGet("issues/{issueId}")]
-    [ProducesResponseType<Issue>(StatusCodes.Status200OK)]
+    [ProducesResponseType<IssueResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<Issue>> GetById(string issueId, [FromQuery] string projectId)
+    public async Task<ActionResult<IssueResponse>> GetById(string issueId, [FromQuery] string projectId)
     {
         var project = await projectService.GetByIdAsync(projectId);
         if (project == null)
@@ -77,7 +82,7 @@ public class IssuesController(
         {
             return NotFound("Issue not found");
         }
-        return Ok(issue);
+        return Ok(issue.ToResponse());
     }
 
     /// <summary>
@@ -85,10 +90,10 @@ public class IssuesController(
     /// If no working branch ID is provided, one will be auto-generated using AI.
     /// </summary>
     [HttpPost("issues")]
-    [ProducesResponseType<Issue>(StatusCodes.Status201Created)]
+    [ProducesResponseType<IssueResponse>(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<Issue>> Create([FromBody] CreateIssueRequest request)
+    public async Task<ActionResult<IssueResponse>> Create([FromBody] CreateIssueRequest request)
     {
         var project = await projectService.GetByIdAsync(request.ProjectId);
         if (project == null)
@@ -142,16 +147,16 @@ public class IssuesController(
         return CreatedAtAction(
             nameof(GetById),
             new { issueId = issue.Id, projectId = request.ProjectId },
-            issue);
+            issue.ToResponse());
     }
 
     /// <summary>
     /// Update an issue.
     /// </summary>
     [HttpPut("issues/{issueId}")]
-    [ProducesResponseType<Issue>(StatusCodes.Status200OK)]
+    [ProducesResponseType<IssueResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<Issue>> Update(string issueId, [FromBody] UpdateIssueRequest request)
+    public async Task<ActionResult<IssueResponse>> Update(string issueId, [FromBody] UpdateIssueRequest request)
     {
         var project = await projectService.GetByIdAsync(request.ProjectId);
         if (project == null)
@@ -173,7 +178,7 @@ public class IssuesController(
             return NotFound("Issue not found");
         }
 
-        return Ok(issue);
+        return Ok(issue.ToResponse());
     }
 
     /// <summary>

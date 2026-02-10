@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using Fleece.Core.Models;
+using Homespun.Shared.Models.Fleece;
 
 namespace Homespun.Shared.Models.PullRequests;
 
@@ -15,14 +16,16 @@ public static partial class BranchNameGenerator
     public static string GenerateBranchName(Issue issue)
     {
         ArgumentNullException.ThrowIfNull(issue);
+        return GenerateBranchNamePreview(issue.Id, issue.Type, issue.Title, issue.WorkingBranchId);
+    }
 
-        var type = issue.Type.ToString().ToLowerInvariant();
-
-        var branchId = !string.IsNullOrWhiteSpace(issue.WorkingBranchId)
-            ? issue.WorkingBranchId.Trim()
-            : SanitizeForBranch(issue.Title);
-
-        return $"{type}/{branchId}+{issue.Id}";
+    /// <summary>
+    /// Generates a branch name for an issue response DTO.
+    /// </summary>
+    public static string GenerateBranchName(IssueResponse issue)
+    {
+        ArgumentNullException.ThrowIfNull(issue);
+        return GenerateBranchNamePreview(issue.Id, issue.Type, issue.Title, issue.WorkingBranchId);
     }
 
     /// <summary>

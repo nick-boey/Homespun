@@ -407,15 +407,15 @@ else
     private List<FlattenedPR> _flattenedCurrentPRs = [];
     private PullRequest? _selectedPullRequest;
     private string? _selectedPullRequestId;
-    private Issue? _selectedIssue;
+    private IssueResponse? _selectedIssue;
     private string? _selectedIssueId;
     private bool _isSyncingPRs;
     private bool _tokenMissing;
     private string? _syncError;
     private SyncResult? _lastSyncResult;
     private List<PullRequestWithTime>? _pastPRs;
-    private List<Issue>? _openIssues;
-    private List<Issue>? _inProgressIssues;
+    private List<IssueResponse>? _openIssues;
+    private List<IssueResponse>? _inProgressIssues;
     private TimelineVisualization? _graphVisualization;
     private HubConnection? _hubConnection;
     private bool _isRefreshing;
@@ -863,14 +863,14 @@ else
         _ => "status-default"
     };
 
-    private static string GetIssueStatusColor(Issue issue)
+    private static string GetIssueStatusColor(IssueResponse issue)
     {
         if (issue.Status == IssueStatus.Closed || issue.Status == IssueStatus.Complete)
             return "status-approved";
         return GetIssueTypeStatusColor(issue.Type);
     }
 
-    private static string GetIssueStatusTooltip(Issue issue)
+    private static string GetIssueStatusTooltip(IssueResponse issue)
     {
         return $"{issue.Type} ({issue.Status})";
     }
@@ -900,7 +900,7 @@ else
         return parts.Count > 0 ? string.Join(" - ", parts) : null;
     }
 
-    private static string? GetIssueSubtitle(Issue issue)
+    private static string? GetIssueSubtitle(IssueResponse issue)
     {
         if (!string.IsNullOrEmpty(issue.Description))
         {
