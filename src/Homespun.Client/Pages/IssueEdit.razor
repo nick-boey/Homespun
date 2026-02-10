@@ -246,7 +246,7 @@ else
     private string? _successMessage;
 
     private Project? _project;
-    private Issue? _issue;
+    private IssueResponse? _issue;
 
     // Form fields
     private string _title = "";
@@ -356,7 +356,7 @@ else
     /// Saves issue changes and returns the updated issue, or null on failure.
     /// Sets _errorMessage on validation or save failure.
     /// </summary>
-    private async Task<Issue?> SaveChangesAsync()
+    private async Task<IssueResponse?> SaveChangesAsync()
     {
         if (string.IsNullOrWhiteSpace(_title))
         {

@@ -202,7 +202,7 @@
     [Parameter] public string? EntityId { get; set; }
     [Parameter] public string? ProjectId { get; set; }
 
-    private Issue? _issue;
+    private IssueResponse? _issue;
     private bool _isLoading = true;
 
     protected override async Task OnParametersSetAsync()
