@@ -1,8 +1,9 @@
 <Project>
   <PropertyGroup>
     <Version>0.1.0</Version>
-    <AssemblyVersion>0.1.0.0</AssemblyVersion>
-    <FileVersion>0.1.0.0</FileVersion>
-    <InformationalVersion>0.1.0</InformationalVersion>
+    <!-- AssemblyVersion, FileVersion, and InformationalVersion are derived
+         automatically by the .NET SDK from Version. This allows /p:Version=X.Y.Z
+         on the command line (used by Dockerfile/CD pipeline) to propagate correctly
+         to all assemblies including Homespun.Client's UI version display. -->
   </PropertyGroup>
 </Project>
