@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Net;
 using System.Net.Http.Headers;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -128,6 +129,62 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
     /// </summary>
     internal static string GetIssueContainerName(string issueId)
         => $"homespun-issue-{issueId}";
+
+    internal static string ParseWorkerIpAddress(string dockerInspectOutput)
+    {
+        if (string.IsNullOrWhiteSpace(dockerInspectOutput))
+            throw new AgentStartupException(
+                $"Docker inspect returned empty output (raw: '{dockerInspectOutput ?? "(null)"}')");
+
+        var trimmed = dockerInspectOutput.Trim();
+
+        // Strip surrounding quotes (single or double)
+        if ((trimmed.StartsWith('"') && trimmed.EndsWith('"')) ||
+            (trimmed.StartsWith('\'') && trimmed.EndsWith('\'')))
+        {
+            trimmed = trimmed[1..^1];
+        }
+
+        // Reject Go template nil output
+        if (trimmed.StartsWith('<'))
+            throw new AgentStartupException(
+                $"Docker inspect returned nil/template value (raw: '{dockerInspectOutput.Trim()}')");
+
+        // Try direct parse for the clean case (must be dotted-quad IPv4)
+        if (IsValidIPv4(trimmed))
+            return trimmed;
+
+        // Fall back: scan substrings from start to extract first valid IPv4
+        // Handles concatenated IPs from docker inspect (e.g. "172.17.0.3172.18.0.4")
+        // Min IPv4 length = 7 ("0.0.0.0"), max = 15 ("255.255.255.255")
+        for (var len = 7; len <= Math.Min(15, trimmed.Length); len++)
+        {
+            var candidate = trimmed[..len];
+            if (IsValidIPv4(candidate))
+                return candidate;
+        }
+
+        throw new AgentStartupException(
+            $"Could not parse IP address from docker inspect output (raw: '{dockerInspectOutput.Trim()}')");
+    }
+
+    internal static string BuildWorkerUrl(string ipAddress)
+    {
+        if (string.IsNullOrWhiteSpace(ipAddress))
+            throw new AgentStartupException("Worker IP address is null or empty");
+
+        var url = $"http://{ipAddress}:8080";
+
+        if (!Uri.TryCreate(url, UriKind.Absolute, out _))
+            throw new AgentStartupException($"Constructed worker URL is invalid: '{url}'");
+
+        return url;
+    }
+
+    private static bool IsValidIPv4(string value)
+        => value.Count(c => c == '.') == 3
+           && IPAddress.TryParse(value, out var ip)
+           && ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork;
 
     /// <inheritdoc />
     public async IAsyncEnumerable<SdkMessage> StartSessionAsync(
@@ -744,15 +801,21 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         using var inspectProcess = System.Diagnostics.Process.Start(inspectStartInfo)
             ?? throw new AgentStartupException($"Failed to inspect container {containerId}");
 
-        var ipAddress = (await inspectProcess.StandardOutput.ReadToEndAsync(cancellationToken)).Trim();
+        var inspectStdout = await inspectProcess.StandardOutput.ReadToEndAsync(cancellationToken);
+        var inspectStderr = await inspectProcess.StandardError.ReadToEndAsync(cancellationToken);
         await inspectProcess.WaitForExitAsync(cancellationToken);
 
-        if (string.IsNullOrEmpty(ipAddress))
+        _logger.LogDebug("Docker inspect for {ContainerId}: exit={ExitCode}, stdout='{Stdout}', stderr='{Stderr}'",
+            containerId, inspectProcess.ExitCode, inspectStdout.Trim(), inspectStderr.Trim());
+
+        if (inspectProcess.ExitCode != 0)
         {
-            throw new AgentStartupException($"Could not get IP address for container {containerId}");
+            throw new AgentStartupException(
+                $"Docker inspect failed for container {containerId} (exit code {inspectProcess.ExitCode}): {inspectStderr.Trim()}");
         }
 
-        var workerUrl = $"http://{ipAddress}:8080";
+        var ipAddress = ParseWorkerIpAddress(inspectStdout);
+        var workerUrl = BuildWorkerUrl(ipAddress);
 
         await WaitForWorkerReadyAsync(workerUrl, cancellationToken);
 
@@ -779,6 +842,11 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
             catch (HttpRequestException)
             {
                 // Worker not ready yet
+            }
+            catch (UriFormatException ex)
+            {
+                // Bad URL won't fix itself on retry
+                throw new AgentStartupException($"Worker URL is malformed: {workerUrl} ({ex.Message})");
             }
 
             await Task.Delay(delay, cancellationToken);
