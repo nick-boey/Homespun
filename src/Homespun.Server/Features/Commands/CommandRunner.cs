@@ -14,7 +14,7 @@ public class CommandRunner(
         // TODO: Make --no-daemon configurable via BeadsService options
         var effectiveArguments = AddBeadsFlags(command, arguments);
 
-        logger.LogInformation(
+        logger.LogTrace(
             "Executing command: {Command} {Arguments} in {WorkingDirectory}",
             command, effectiveArguments, workingDirectory);
 
@@ -57,14 +57,14 @@ public class CommandRunner(
 
             if (result.Success)
             {
-                logger.LogInformation(
+                logger.LogTrace(
                     "Command completed: {Command} {Arguments} | ExitCode={ExitCode} | Duration={Duration}ms",
                     command, arguments, result.ExitCode, stopwatch.ElapsedMilliseconds);
                 
                 // Log output at debug level for successful commands
                 if (!string.IsNullOrWhiteSpace(output))
                 {
-                    logger.LogDebug("Command output: {Output}", TruncateOutput(output));
+                    logger.LogTrace("Command output: {Output}", TruncateOutput(output));
                 }
             }
             else

@@ -418,8 +418,11 @@ public class MockGraphService : IGraphService
         var sessions = _sessionStore.GetByProjectId(projectId);
         if (sessions.Count == 0) return;
 
-        // Build lookup by entity ID (works for issues directly, and for PRs via their internal ID)
-        var sessionsByEntityId = sessions.ToDictionary(s => s.EntityId, StringComparer.OrdinalIgnoreCase);
+        // Build lookup by entity ID, taking the most recently active session per entity
+        // (multiple sessions can exist for the same entity when agents are stopped and restarted)
+        var sessionsByEntityId = sessions
+            .GroupBy(s => s.EntityId, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(s => s.LastActivityAt).First(), StringComparer.OrdinalIgnoreCase);
 
         // Build lookup from GitHub PR number to internal PR ID for matching PR sessions
         var trackedPrs = _dataStore.GetPullRequestsByProject(projectId);

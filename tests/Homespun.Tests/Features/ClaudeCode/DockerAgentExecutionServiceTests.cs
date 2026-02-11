@@ -265,6 +265,133 @@ public class DockerAgentExecutionServiceTests
 
     #endregion
 
+    #region ParseWorkerIpAddress Tests
+
+    [Test]
+    public void ParseWorkerIpAddress_ValidIp_ReturnsIp()
+    {
+        var result = DockerAgentExecutionService.ParseWorkerIpAddress("172.17.0.3");
+        Assert.That(result, Is.EqualTo("172.17.0.3"));
+    }
+
+    [Test]
+    public void ParseWorkerIpAddress_ValidIpWithWhitespace_ReturnsTrimmedIp()
+    {
+        var result = DockerAgentExecutionService.ParseWorkerIpAddress("  172.17.0.3\n");
+        Assert.That(result, Is.EqualTo("172.17.0.3"));
+    }
+
+    [Test]
+    public void ParseWorkerIpAddress_QuotedIp_ReturnsUnquotedIp()
+    {
+        var result = DockerAgentExecutionService.ParseWorkerIpAddress("\"172.17.0.3\"");
+        Assert.That(result, Is.EqualTo("172.17.0.3"));
+    }
+
+    [Test]
+    public void ParseWorkerIpAddress_SingleQuotedIp_ReturnsUnquotedIp()
+    {
+        var result = DockerAgentExecutionService.ParseWorkerIpAddress("'172.17.0.3'");
+        Assert.That(result, Is.EqualTo("172.17.0.3"));
+    }
+
+    [Test]
+    public void ParseWorkerIpAddress_ConcatenatedIps_ReturnsFirstIp()
+    {
+        var result = DockerAgentExecutionService.ParseWorkerIpAddress("172.17.0.3172.18.0.4");
+        Assert.That(result, Is.EqualTo("172.17.0.3"));
+    }
+
+    [Test]
+    public void ParseWorkerIpAddress_NullInput_Throws()
+    {
+        Assert.That(() => DockerAgentExecutionService.ParseWorkerIpAddress(null!),
+            Throws.InstanceOf<AgentStartupException>());
+    }
+
+    [Test]
+    public void ParseWorkerIpAddress_EmptyInput_Throws()
+    {
+        Assert.That(() => DockerAgentExecutionService.ParseWorkerIpAddress(""),
+            Throws.InstanceOf<AgentStartupException>());
+    }
+
+    [Test]
+    public void ParseWorkerIpAddress_WhitespaceOnly_Throws()
+    {
+        Assert.That(() => DockerAgentExecutionService.ParseWorkerIpAddress("   "),
+            Throws.InstanceOf<AgentStartupException>());
+    }
+
+    [Test]
+    public void ParseWorkerIpAddress_GoTemplateNilValue_Throws()
+    {
+        Assert.That(() => DockerAgentExecutionService.ParseWorkerIpAddress("<no value>"),
+            Throws.InstanceOf<AgentStartupException>());
+    }
+
+    [Test]
+    public void ParseWorkerIpAddress_ErrorText_Throws()
+    {
+        Assert.That(() => DockerAgentExecutionService.ParseWorkerIpAddress("Error: No such container"),
+            Throws.InstanceOf<AgentStartupException>());
+    }
+
+    [Test]
+    public void ParseWorkerIpAddress_GarbageText_Throws()
+    {
+        Assert.That(() => DockerAgentExecutionService.ParseWorkerIpAddress("not-an-ip-address"),
+            Throws.InstanceOf<AgentStartupException>());
+    }
+
+    [Test]
+    public void ParseWorkerIpAddress_PartialIp_Throws()
+    {
+        Assert.That(() => DockerAgentExecutionService.ParseWorkerIpAddress("172.17"),
+            Throws.InstanceOf<AgentStartupException>());
+    }
+
+    #endregion
+
+    #region BuildWorkerUrl Tests
+
+    [Test]
+    public void BuildWorkerUrl_ValidIp_ReturnsHttpUrl()
+    {
+        var result = DockerAgentExecutionService.BuildWorkerUrl("172.17.0.3");
+        Assert.That(result, Is.EqualTo("http://172.17.0.3:8080"));
+    }
+
+    [Test]
+    public void BuildWorkerUrl_LocalhostIp_ReturnsHttpUrl()
+    {
+        var result = DockerAgentExecutionService.BuildWorkerUrl("127.0.0.1");
+        Assert.That(result, Is.EqualTo("http://127.0.0.1:8080"));
+    }
+
+    [Test]
+    public void BuildWorkerUrl_EmptyString_Throws()
+    {
+        Assert.That(() => DockerAgentExecutionService.BuildWorkerUrl(""),
+            Throws.InstanceOf<AgentStartupException>());
+    }
+
+    [Test]
+    public void BuildWorkerUrl_NullInput_Throws()
+    {
+        Assert.That(() => DockerAgentExecutionService.BuildWorkerUrl(null!),
+            Throws.InstanceOf<AgentStartupException>());
+    }
+
+    [Test]
+    public void BuildWorkerUrl_MalformedInput_Throws()
+    {
+        Assert.That(() => DockerAgentExecutionService.BuildWorkerUrl("not:valid"),
+            Throws.InstanceOf<AgentStartupException>());
+    }
+
+    #endregion
+
     #region DisposeAsync Tests
 
     [Test]

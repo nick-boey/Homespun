@@ -40,8 +40,10 @@ COPY --from=build /app/package.json ./
 COPY start.sh ./
 RUN chmod +x start.sh
 
-# Non-root user
-RUN useradd --create-home --shell /bin/bash homespun \
+# Non-root user (UID 1000 to match the main container's homespun user)
+# The base node image has a 'node' user at UID 1000 — remove it first
+RUN userdel node \
+    && useradd --create-home --shell /bin/bash --uid 1000 homespun \
     && mkdir -p /home/homespun/.claude/todos /home/homespun/.claude/debug /home/homespun/.claude/projects /home/homespun/.claude/statsig /home/homespun/.claude/plans \
     && mkdir -p /home/homespun/.local/share /home/homespun/.config /home/homespun/.cache \
     && mkdir -p /workdir \
