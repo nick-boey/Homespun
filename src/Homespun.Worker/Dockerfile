@@ -13,10 +13,25 @@ RUN npm run build
 FROM node:22-bookworm-slim
 WORKDIR /app
 
-# Install git, curl, and other essentials
+# Install git, curl, and other essentials (including .NET runtime dependencies)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git curl ca-certificates gnupg sudo \
+    libicu72 libssl3 zlib1g \
     && rm -rf /var/lib/apt/lists/*
+
+# Install .NET SDKs 8, 9, and 10 via official install script
+ENV DOTNET_ROOT=/usr/share/dotnet
+RUN curl -fsSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh \
+    && chmod +x /tmp/dotnet-install.sh \
+    && /tmp/dotnet-install.sh --channel 8.0 --install-dir $DOTNET_ROOT \
+    && /tmp/dotnet-install.sh --channel 9.0 --install-dir $DOTNET_ROOT \
+    && /tmp/dotnet-install.sh --channel 10.0 --install-dir $DOTNET_ROOT \
+    && rm /tmp/dotnet-install.sh \
+    && ln -sf $DOTNET_ROOT/dotnet /usr/local/bin/dotnet
+ENV DOTNET_PRINT_TELEMETRY_MESSAGE=false
+
+# Install Fleece CLI for issue tracking
+RUN dotnet tool install Fleece.Cli --tool-path /usr/local/bin
 
 # GitHub CLI
 RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
