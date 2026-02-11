@@ -76,6 +76,7 @@ export class SessionManager {
   }): Promise<WorkerSession> {
     const id = randomUUID();
     const isPlan = opts.mode.toLowerCase() === 'plan';
+    console.log(`[Worker][SessionManager] create() - mode='${opts.mode}', isPlan=${isPlan}, model='${opts.model}'`);
     const common = buildCommonOptions(opts.model, opts.systemPrompt, opts.workingDirectory);
 
     const sessionOptions: Record<string, unknown> = {
@@ -89,6 +90,7 @@ export class SessionManager {
       sessionOptions.permissionMode = 'bypassPermissions';
       sessionOptions.allowDangerouslySkipPermissions = true;
     }
+    console.log(`[Worker][SessionManager] create() - attempting permissionMode='${sessionOptions.permissionMode}', allowDangerouslySkipPermissions=${sessionOptions.allowDangerouslySkipPermissions}`);
 
     let session: Session;
     if (opts.resumeSessionId) {
@@ -109,6 +111,7 @@ export class SessionManager {
     };
 
     this.sessions.set(id, workerSession);
+    console.log(`[Worker][SessionManager] create() - session created, workerSessionId='${id}'`);
 
     // Send the initial prompt
     await session.send(opts.prompt);
@@ -118,6 +121,7 @@ export class SessionManager {
   }
 
   async send(sessionId: string, message: string, model?: string): Promise<WorkerSession> {
+    console.log(`[Worker][SessionManager] send() - sessionId='${sessionId}', messageLength=${message?.length}, model=${model || 'default'}`);
     const ws = this.sessions.get(sessionId);
     if (!ws) {
       throw new Error(`Session ${sessionId} not found`);
@@ -137,10 +141,31 @@ export class SessionManager {
     }
 
     try {
+      let permissionModeSet = false;
       for await (const msg of ws.session.stream()) {
         // Capture the conversation ID from any message
         if (msg.session_id) {
           ws.conversationId = msg.session_id;
+        }
+
+        // After first message (process is running), set the correct permission mode.
+        // SessionImpl hardcodes permissionMode="default", so we override at runtime.
+        if (!permissionModeSet) {
+          permissionModeSet = true;
+          const targetMode = ws.mode.toLowerCase() === 'plan' ? 'plan' : 'bypassPermissions';
+          const query = (ws.session as any).query;
+          if (query?.setPermissionMode) {
+            await query.setPermissionMode(targetMode);
+            console.log(`[Worker][SessionManager] stream() - setPermissionMode('${targetMode}') applied`);
+          }
+        }
+
+        if (msg.type === 'system' && (msg as any).subtype === 'init') {
+          console.log(`[Worker][SessionManager] stream() - SDK init: permissionMode='${(msg as any).permissionMode}', model='${(msg as any).model}'`);
+        }
+        if (msg.type === 'result') {
+          const r = msg as any;
+          console.log(`[Worker][SessionManager] stream() - result: subtype='${r.subtype}', is_error=${r.is_error}`);
         }
         yield msg;
       }

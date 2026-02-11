@@ -286,6 +286,61 @@ describe('SessionManager', () => {
       expect(ws.status).toBe('idle');
     });
 
+    it('calls setPermissionMode with bypassPermissions for Build mode', async () => {
+      const ws = await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Build' });
+      mockStreamFromMessages(mockSession, [createSystemMessage(), createResultMessage()]);
+
+      await collectAsyncGenerator(manager.stream(ws.id));
+
+      expect(mockSession.query.setPermissionMode).toHaveBeenCalledOnce();
+      expect(mockSession.query.setPermissionMode).toHaveBeenCalledWith('bypassPermissions');
+    });
+
+    it('calls setPermissionMode with plan for Plan mode', async () => {
+      const ws = await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Plan' });
+      mockStreamFromMessages(mockSession, [createSystemMessage(), createResultMessage()]);
+
+      await collectAsyncGenerator(manager.stream(ws.id));
+
+      expect(mockSession.query.setPermissionMode).toHaveBeenCalledOnce();
+      expect(mockSession.query.setPermissionMode).toHaveBeenCalledWith('plan');
+    });
+
+    it('calls setPermissionMode only once even with multiple messages', async () => {
+      const ws = await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Build' });
+      mockStreamFromMessages(mockSession, [
+        createSystemMessage(),
+        createAssistantMessage(),
+        createResultMessage(),
+      ]);
+
+      await collectAsyncGenerator(manager.stream(ws.id));
+
+      expect(mockSession.query.setPermissionMode).toHaveBeenCalledOnce();
+    });
+
+    it('calls setPermissionMode after first message, not before', async () => {
+      const ws = await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Build' });
+      const callOrder: string[] = [];
+
+      mockSession.query.setPermissionMode.mockImplementation(async () => {
+        callOrder.push('setPermissionMode');
+      });
+
+      mockSession.stream.mockReturnValue(
+        (async function* () {
+          callOrder.push('first-message');
+          yield createSystemMessage();
+          callOrder.push('second-message');
+          yield createResultMessage();
+        })(),
+      );
+
+      await collectAsyncGenerator(manager.stream(ws.id));
+
+      expect(callOrder).toEqual(['first-message', 'setPermissionMode', 'second-message']);
+    });
+
     it('throws for non-existent session', async () => {
       const gen = manager.stream('no-such-id');
       await expect(gen.next()).rejects.toThrow('Session no-such-id not found');
