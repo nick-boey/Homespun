@@ -52,6 +52,7 @@ function buildCommonOptions(model: string, systemPrompt?: string, workingDirecto
       },
     },
     env: {
+      ...process.env,
       GIT_AUTHOR_NAME: gitAuthorName,
       GIT_AUTHOR_EMAIL: gitAuthorEmail,
       GIT_COMMITTER_NAME: process.env.GIT_COMMITTER_NAME || gitAuthorName,

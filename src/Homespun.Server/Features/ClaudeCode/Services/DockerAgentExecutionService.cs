@@ -763,6 +763,10 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         string dockerArgs,
         CancellationToken cancellationToken)
     {
+        _logger.LogInformation(
+            "Docker run for container {ContainerName}: docker {DockerArgs}",
+            containerName, dockerArgs);
+
         var startInfo = new System.Diagnostics.ProcessStartInfo
         {
             FileName = "docker",
@@ -780,18 +784,41 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         var stderr = await process.StandardError.ReadToEndAsync(cancellationToken);
         await process.WaitForExitAsync(cancellationToken);
 
+        _logger.LogInformation(
+            "Docker run result for {ContainerName}: exit={ExitCode}, stdout='{Stdout}', stderr='{Stderr}'",
+            containerName, process.ExitCode, stdout.Trim(), stderr.Trim());
+
         if (process.ExitCode != 0)
         {
             throw new AgentStartupException($"Docker run failed: {stderr}");
         }
 
         var containerId = stdout.Trim();
-        _logger.LogDebug("Started container {ContainerId}", containerId);
+
+        // Verify container is actually running before inspecting network
+        var containerState = await GetContainerStateAsync(containerId, cancellationToken);
+        _logger.LogInformation(
+            "Container {ContainerId} state after run: {ContainerState}",
+            containerId, containerState);
+
+        if (containerState != "running")
+        {
+            var containerLogs = await GetContainerLogsAsync(containerId, cancellationToken);
+            _logger.LogError(
+                "Container {ContainerId} is not running (state: {ContainerState}). Container logs:\n{ContainerLogs}",
+                containerId, containerState, containerLogs);
+
+            throw new AgentStartupException(
+                $"Container {containerName} exited immediately (state: {containerState}). Container logs:\n{containerLogs}");
+        }
+
+        var inspectArgs = $"inspect -f \"{{{{range.NetworkSettings.Networks}}}}{{{{.IPAddress}}}}{{{{end}}}}\" {containerId}";
+        _logger.LogInformation("Docker inspect command: docker {InspectArgs}", inspectArgs);
 
         var inspectStartInfo = new System.Diagnostics.ProcessStartInfo
         {
             FileName = "docker",
-            Arguments = $"inspect -f \"{{{{range.NetworkSettings.Networks}}}}{{{{.IPAddress}}}}{{{{end}}}}\" {containerId}",
+            Arguments = inspectArgs,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
@@ -805,21 +832,181 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         var inspectStderr = await inspectProcess.StandardError.ReadToEndAsync(cancellationToken);
         await inspectProcess.WaitForExitAsync(cancellationToken);
 
-        _logger.LogDebug("Docker inspect for {ContainerId}: exit={ExitCode}, stdout='{Stdout}', stderr='{Stderr}'",
-            containerId, inspectProcess.ExitCode, inspectStdout.Trim(), inspectStderr.Trim());
+        _logger.LogInformation(
+            "Docker inspect IP result for {ContainerId}: exit={ExitCode}, stdout='{Stdout}' (len={StdoutLen}), stderr='{Stderr}'",
+            containerId, inspectProcess.ExitCode, inspectStdout.Trim(), inspectStdout.Length, inspectStderr.Trim());
 
         if (inspectProcess.ExitCode != 0)
         {
+            // Capture full container details on failure for diagnostics
+            var fullInspect = await GetFullContainerInspectAsync(containerId, cancellationToken);
+            _logger.LogError(
+                "Docker inspect failed for container {ContainerId} (exit code {ExitCode}). Full inspect: {FullInspect}",
+                containerId, inspectProcess.ExitCode, fullInspect);
+
             throw new AgentStartupException(
                 $"Docker inspect failed for container {containerId} (exit code {inspectProcess.ExitCode}): {inspectStderr.Trim()}");
         }
 
-        var ipAddress = ParseWorkerIpAddress(inspectStdout);
+        string ipAddress;
+        try
+        {
+            ipAddress = ParseWorkerIpAddress(inspectStdout);
+        }
+        catch (AgentStartupException ex)
+        {
+            // IP parse failed — capture full container network details for diagnostics
+            var networkInspect = await GetContainerNetworkInspectAsync(containerId, cancellationToken);
+            _logger.LogError(
+                "Failed to parse IP for container {ContainerId}. " +
+                "Raw inspect stdout: '{RawStdout}' (bytes: [{RawBytes}]). " +
+                "Network details: {NetworkInspect}",
+                containerId,
+                inspectStdout.Trim(),
+                string.Join(", ", System.Text.Encoding.UTF8.GetBytes(inspectStdout.Trim()).Select(b => $"0x{b:X2}")),
+                networkInspect);
+            throw;
+        }
+
         var workerUrl = BuildWorkerUrl(ipAddress);
+        _logger.LogInformation(
+            "Container {ContainerId} ready at {WorkerUrl} (IP: {IpAddress})",
+            containerId, workerUrl, ipAddress);
 
         await WaitForWorkerReadyAsync(workerUrl, cancellationToken);
 
         return (containerId, workerUrl);
+    }
+
+    /// <summary>
+    /// Gets the running state of a container (e.g. "running", "exited", "created").
+    /// </summary>
+    private async Task<string> GetContainerStateAsync(string containerId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var startInfo = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "docker",
+                Arguments = $"inspect -f \"{{{{.State.Status}}}}\" {containerId}",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using var process = System.Diagnostics.Process.Start(startInfo);
+            if (process == null) return "(failed to start docker inspect)";
+
+            var output = await process.StandardOutput.ReadToEndAsync(cancellationToken);
+            await process.WaitForExitAsync(cancellationToken);
+            return output.Trim();
+        }
+        catch (Exception ex)
+        {
+            return $"(error: {ex.Message})";
+        }
+    }
+
+    /// <summary>
+    /// Gets the stdout/stderr logs from a container (for crash diagnostics).
+    /// </summary>
+    private async Task<string> GetContainerLogsAsync(string containerId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var startInfo = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "docker",
+                Arguments = $"logs {containerId}",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using var process = System.Diagnostics.Process.Start(startInfo);
+            if (process == null) return "(failed to start docker logs)";
+
+            var stdout = await process.StandardOutput.ReadToEndAsync(cancellationToken);
+            var stderr = await process.StandardError.ReadToEndAsync(cancellationToken);
+            await process.WaitForExitAsync(cancellationToken);
+
+            var combined = new StringBuilder();
+            if (!string.IsNullOrWhiteSpace(stdout))
+                combined.Append(stdout.Trim());
+            if (!string.IsNullOrWhiteSpace(stderr))
+            {
+                if (combined.Length > 0) combined.Append('\n');
+                combined.Append(stderr.Trim());
+            }
+
+            return combined.Length > 0 ? combined.ToString() : "(no logs)";
+        }
+        catch (Exception ex)
+        {
+            return $"(error retrieving logs: {ex.Message})";
+        }
+    }
+
+    /// <summary>
+    /// Gets full JSON inspect output for a container (for diagnostics).
+    /// </summary>
+    private async Task<string> GetFullContainerInspectAsync(string containerId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var startInfo = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "docker",
+                Arguments = $"inspect {containerId}",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using var process = System.Diagnostics.Process.Start(startInfo);
+            if (process == null) return "(failed to start docker inspect)";
+
+            var output = await process.StandardOutput.ReadToEndAsync(cancellationToken);
+            await process.WaitForExitAsync(cancellationToken);
+            return output.Trim();
+        }
+        catch (Exception ex)
+        {
+            return $"(error: {ex.Message})";
+        }
+    }
+
+    /// <summary>
+    /// Gets network-specific inspect output for a container (for IP diagnostics).
+    /// </summary>
+    private async Task<string> GetContainerNetworkInspectAsync(string containerId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var startInfo = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "docker",
+                Arguments = $"inspect -f \"{{{{json .NetworkSettings}}}}\" {containerId}",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using var process = System.Diagnostics.Process.Start(startInfo);
+            if (process == null) return "(failed to start docker inspect)";
+
+            var output = await process.StandardOutput.ReadToEndAsync(cancellationToken);
+            await process.WaitForExitAsync(cancellationToken);
+            return output.Trim();
+        }
+        catch (Exception ex)
+        {
+            return $"(error: {ex.Message})";
+        }
     }
 
     private async Task WaitForWorkerReadyAsync(string workerUrl, CancellationToken cancellationToken)
