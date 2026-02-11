@@ -346,6 +346,60 @@ public class GraphServiceAgentStatusTests
 
     #endregion
 
+    #region Duplicate Session Tests
+
+    [Test]
+    public async Task BuildGraphJsonAsync_MultipleSessionsForSameEntity_UsesLatestSession()
+    {
+        // Arrange - Create an issue with two sessions (e.g., started, stopped, started again)
+        var issue = CreateIssue("hsp-123");
+        var olderSession = CreateSessionWithActivity("hsp-123", ClaudeSessionStatus.Stopped, DateTime.UtcNow.AddMinutes(-10));
+        var newerSession = CreateSessionWithActivity("hsp-123", ClaudeSessionStatus.Running, DateTime.UtcNow);
+
+        _mockFleeceService.Setup(s => s.ListIssuesAsync(_testProject.LocalPath, null, null, null, default))
+            .ReturnsAsync(new List<Issue> { issue });
+        _mockSessionStore.Setup(s => s.GetByProjectId(_testProject.Id))
+            .Returns(new List<ClaudeSession> { olderSession, newerSession });
+
+        // Act - Should not throw (was previously throwing ArgumentException for duplicate key)
+        var jsonData = await _service.BuildGraphJsonAsync(_testProject.Id);
+
+        // Assert - Should use the most recently active session
+        var issueCommit = jsonData.Commits.FirstOrDefault(c => c.IssueId == "hsp-123");
+        Assert.That(issueCommit, Is.Not.Null);
+        Assert.That(issueCommit!.AgentStatus, Is.Not.Null);
+        Assert.That(issueCommit.AgentStatus!.IsActive, Is.True);
+        Assert.That(issueCommit.AgentStatus.Status, Is.EqualTo("Running"));
+        Assert.That(issueCommit.AgentStatus.SessionId, Is.EqualTo(newerSession.Id));
+    }
+
+    [Test]
+    public async Task BuildGraphJsonAsync_MultipleSessionsForSamePR_UsesLatestSession()
+    {
+        // Arrange - Create a tracked PR with two sessions
+        var trackedPr = await CreateTrackedPullRequest(_testProject.Id, gitHubPrNumber: 42);
+        var olderSession = CreateSessionWithActivity(trackedPr.Id, ClaudeSessionStatus.Stopped, DateTime.UtcNow.AddMinutes(-10));
+        var newerSession = CreateSessionWithActivity(trackedPr.Id, ClaudeSessionStatus.WaitingForInput, DateTime.UtcNow);
+
+        var githubPr = CreateGitHubPullRequest(42, "Test PR");
+        _mockGitHubService.Setup(s => s.GetOpenPullRequestsAsync(_testProject.Id))
+            .ReturnsAsync(new List<PullRequestInfo> { githubPr });
+        _mockSessionStore.Setup(s => s.GetByProjectId(_testProject.Id))
+            .Returns(new List<ClaudeSession> { olderSession, newerSession });
+
+        // Act - Should not throw
+        var jsonData = await _service.BuildGraphJsonAsync(_testProject.Id);
+
+        // Assert - Should use the most recently active session
+        var prCommit = jsonData.Commits.FirstOrDefault(c => c.PullRequestNumber == 42);
+        Assert.That(prCommit, Is.Not.Null);
+        Assert.That(prCommit!.AgentStatus, Is.Not.Null);
+        Assert.That(prCommit.AgentStatus!.SessionId, Is.EqualTo(newerSession.Id));
+        Assert.That(prCommit.AgentStatus.Status, Is.EqualTo("WaitingForInput"));
+    }
+
+    #endregion
+
     #region Helper Methods
 
     private static Issue CreateIssue(string id, IssueStatus status = IssueStatus.Open)
@@ -399,6 +453,21 @@ public class GraphServiceAgentStatusTests
             Model = "claude-sonnet-4-20250514",
             Mode = SessionMode.Build,
             Status = status
+        };
+    }
+
+    private ClaudeSession CreateSessionWithActivity(string entityId, ClaudeSessionStatus status, DateTime lastActivityAt)
+    {
+        return new ClaudeSession
+        {
+            Id = Guid.NewGuid().ToString(),
+            EntityId = entityId,
+            ProjectId = _testProject.Id,
+            WorkingDirectory = _testProject.LocalPath,
+            Model = "claude-sonnet-4-20250514",
+            Mode = SessionMode.Build,
+            Status = status,
+            LastActivityAt = lastActivityAt
         };
     }
 
