@@ -47,6 +47,11 @@ public class SendMessageRequest
     /// The message to send.
     /// </summary>
     public required string Message { get; set; }
+
+    /// <summary>
+    /// The permission mode for this message. Defaults to BypassPermissions.
+    /// </summary>
+    public PermissionMode PermissionMode { get; set; } = PermissionMode.BypassPermissions;
 }
 
 /// <summary>

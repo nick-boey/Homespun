@@ -2414,7 +2414,11 @@
 
         try
         {
-            await SessionApi.SendMessageAsync(SessionId, new SendMessageRequest { Message = message });
+            await SessionApi.SendMessageAsync(SessionId, new SendMessageRequest
+            {
+                Message = message,
+                PermissionMode = _selectedPermissionMode
+            });
         }
         catch (Exception ex)
         {

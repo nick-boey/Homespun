@@ -249,7 +249,8 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
         var messageRequest = new
         {
             Message = request.Message,
-            Model = request.Model
+            Model = request.Model,
+            PermissionMode = request.PermissionMode.ToString()
         };
 
         var workerUrl = $"{session.WorkerUrl}/api/sessions/{session.WorkerSessionId}/message";

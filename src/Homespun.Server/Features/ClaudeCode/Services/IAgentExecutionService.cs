@@ -1,3 +1,4 @@
+using Homespun.ClaudeAgentSdk;
 
 namespace Homespun.Features.ClaudeCode.Services;
 
@@ -30,6 +31,7 @@ public record AgentStartRequest(
 public record AgentMessageRequest(
     string SessionId,
     string Message,
+    PermissionMode PermissionMode = PermissionMode.BypassPermissions,
     string? Model = null
 );
 

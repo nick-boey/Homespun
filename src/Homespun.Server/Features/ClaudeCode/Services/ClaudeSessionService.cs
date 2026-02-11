@@ -434,10 +434,11 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             }
             else
             {
-                // Subsequent message - send to existing session
+                // Subsequent message - send to existing session with permission mode
                 var messageRequest = new AgentMessageRequest(
                     SessionId: agentSessionId,
                     Message: message,
+                    PermissionMode: permissionMode,
                     Model: effectiveModel
                 );
                 messageStream = _agentExecutionService.SendMessageAsync(messageRequest, linkedCts.Token);
