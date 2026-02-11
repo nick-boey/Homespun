@@ -435,11 +435,23 @@
             // Send an initial message to start the agent working (if a prompt is selected)
             if (_session != null && prompt != null && !string.IsNullOrEmpty(prompt.InitialMessage))
             {
-                // Template rendering is server-side only; send the raw initial message
-                await SessionApi.SendMessageAsync(_session.Id, new SendMessageRequest
+                var promptContext = new PromptContext
                 {
-                    Message = prompt.InitialMessage
-                });
+                    Title = Issue.Title,
+                    Id = Issue.Id,
+                    Description = Issue.Description,
+                    Branch = branchName,
+                    Type = Issue.Type.ToString()
+                };
+                var renderedMessage = HttpAgentPromptApiService.RenderTemplate(prompt.InitialMessage, promptContext);
+
+                if (!string.IsNullOrEmpty(renderedMessage))
+                {
+                    await SessionApi.SendMessageAsync(_session.Id, new SendMessageRequest
+                    {
+                        Message = renderedMessage
+                    });
+                }
             }
 
             // Agent started - user stays on current page and can monitor via status indicator

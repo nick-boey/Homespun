@@ -1,5 +1,9 @@
+using Fleece.Core.Models;
+using Homespun.Client.Services;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Testing;
+using Homespun.Shared.Models.Fleece;
+using static Homespun.Shared.Models.PullRequests.BranchNameGenerator;
 
 namespace Homespun.Tests.Features.ClaudeCode;
 
@@ -95,6 +99,81 @@ public class AgentPromptServiceTests
     }
 
     #region Template Rendering Tests
+
+    [Test]
+    public void RenderTemplate_WithIssueContext_ReplacesAllPlaceholders()
+    {
+        // Simulates building a PromptContext from IssueResponse data,
+        // as IssueDetailPanel should do before sending the initial message
+        var issue = new IssueResponse
+        {
+            Id = "PtJ11e",
+            Title = "Fix template rendering bug",
+            Description = "Templates should have variables replaced",
+            Type = IssueType.Bug
+        };
+        var branchName = GenerateBranchName(issue);
+
+        var context = new PromptContext
+        {
+            Title = issue.Title,
+            Id = issue.Id,
+            Description = issue.Description,
+            Branch = branchName,
+            Type = issue.Type.ToString()
+        };
+
+        var template = "## Issue: {{title}}\n**ID:** {{id}}\n**Type:** {{type}}\n**Branch:** {{branch}}\n### Description\n{{description}}";
+
+        var result = _service.RenderTemplate(template, context);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Does.Contain("Fix template rendering bug"));
+            Assert.That(result, Does.Contain("PtJ11e"));
+            Assert.That(result, Does.Contain("Bug"));
+            Assert.That(result, Does.Contain(branchName));
+            Assert.That(result, Does.Contain("Templates should have variables replaced"));
+            Assert.That(result, Does.Not.Contain("{{title}}"));
+            Assert.That(result, Does.Not.Contain("{{id}}"));
+            Assert.That(result, Does.Not.Contain("{{type}}"));
+            Assert.That(result, Does.Not.Contain("{{branch}}"));
+            Assert.That(result, Does.Not.Contain("{{description}}"));
+        });
+    }
+
+    [Test]
+    public void ClientSideRenderTemplate_WithIssueContext_ReplacesAllPlaceholders()
+    {
+        // Tests the client-side static RenderTemplate (used in Blazor components)
+        var issue = new IssueResponse
+        {
+            Id = "ABC123",
+            Title = "Add authentication",
+            Description = "Implement OAuth2",
+            Type = IssueType.Feature
+        };
+        var branchName = GenerateBranchName(issue);
+
+        var context = new PromptContext
+        {
+            Title = issue.Title,
+            Id = issue.Id,
+            Description = issue.Description,
+            Branch = branchName,
+            Type = issue.Type.ToString()
+        };
+
+        var template = "Working on {{title}} ({{id}}) - {{type}}";
+
+        var result = HttpAgentPromptApiService.RenderTemplate(template, context);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Is.EqualTo($"Working on Add authentication (ABC123) - Feature"));
+            Assert.That(result, Does.Not.Contain("{{"));
+        });
+    }
 
     [Test]
     public void RenderTemplate_ReplacesPlaceholders()
