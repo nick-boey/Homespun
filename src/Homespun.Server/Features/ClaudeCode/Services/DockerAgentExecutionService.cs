@@ -592,7 +592,7 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
             var relativePath = containerPath[_options.DataVolumePath.Length..].TrimStart('/');
             return string.IsNullOrEmpty(relativePath)
                 ? _options.HostDataPath
-                : Path.Combine(_options.HostDataPath, relativePath);
+                : $"{_options.HostDataPath}/{relativePath}";
         }
 
         return containerPath;
