@@ -24,7 +24,33 @@ vi.mock('node:crypto', () => ({
   randomUUID: mockRandomUUID,
 }));
 
-import { SessionManager } from '#src/services/session-manager.js';
+import { SessionManager, mapPermissionMode } from '#src/services/session-manager.js';
+
+describe('mapPermissionMode()', () => {
+  it('maps Default to default', () => {
+    expect(mapPermissionMode('Default')).toBe('default');
+  });
+
+  it('maps AcceptEdits to acceptEdits', () => {
+    expect(mapPermissionMode('AcceptEdits')).toBe('acceptEdits');
+  });
+
+  it('maps Plan to plan', () => {
+    expect(mapPermissionMode('Plan')).toBe('plan');
+  });
+
+  it('maps BypassPermissions to bypassPermissions', () => {
+    expect(mapPermissionMode('BypassPermissions')).toBe('bypassPermissions');
+  });
+
+  it('returns bypassPermissions for undefined', () => {
+    expect(mapPermissionMode(undefined)).toBe('bypassPermissions');
+  });
+
+  it('returns bypassPermissions for unknown value', () => {
+    expect(mapPermissionMode('SomethingElse')).toBe('bypassPermissions');
+  });
+});
 
 describe('SessionManager', () => {
   let manager: SessionManager;
@@ -198,6 +224,18 @@ describe('SessionManager', () => {
       expect(opts.env.GITHUB_TOKEN).toBe('ghp_fallback');
     });
 
+    it('initializes permissionMode to plan for Plan mode', async () => {
+      const ws = await manager.create(baseOpts);
+
+      expect(ws.permissionMode).toBe('plan');
+    });
+
+    it('initializes permissionMode to bypassPermissions for Build mode', async () => {
+      const ws = await manager.create({ ...baseOpts, mode: 'Build' });
+
+      expect(ws.permissionMode).toBe('bypassPermissions');
+    });
+
     it('includes Playwright MCP server config', async () => {
       await manager.create(baseOpts);
 
@@ -230,6 +268,32 @@ describe('SessionManager', () => {
       await manager.send(ws.id, 'msg');
 
       expect(ws.status).toBe('streaming');
+    });
+
+    it('updates permissionMode when provided', async () => {
+      const ws = await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Plan' });
+      expect(ws.permissionMode).toBe('plan');
+
+      await manager.send(ws.id, 'msg', undefined, 'BypassPermissions');
+
+      expect(ws.permissionMode).toBe('bypassPermissions');
+    });
+
+    it('preserves permissionMode when not provided', async () => {
+      const ws = await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Build' });
+      expect(ws.permissionMode).toBe('bypassPermissions');
+
+      await manager.send(ws.id, 'msg');
+
+      expect(ws.permissionMode).toBe('bypassPermissions');
+    });
+
+    it('maps AcceptEdits permissionMode correctly', async () => {
+      const ws = await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Build' });
+
+      await manager.send(ws.id, 'msg', undefined, 'AcceptEdits');
+
+      expect(ws.permissionMode).toBe('acceptEdits');
     });
 
     it('throws for non-existent session', async () => {
@@ -339,6 +403,27 @@ describe('SessionManager', () => {
       await collectAsyncGenerator(manager.stream(ws.id));
 
       expect(callOrder).toEqual(['first-message', 'setPermissionMode', 'second-message']);
+    });
+
+    it('uses per-message permissionMode override (BypassPermissions on Plan session)', async () => {
+      const ws = await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Plan' });
+      // Simulate a send() that changed the permissionMode
+      await manager.send(ws.id, 'do it', undefined, 'BypassPermissions');
+      mockStreamFromMessages(mockSession, [createSystemMessage(), createResultMessage()]);
+
+      await collectAsyncGenerator(manager.stream(ws.id));
+
+      expect(mockSession.query.setPermissionMode).toHaveBeenCalledWith('bypassPermissions');
+    });
+
+    it('uses per-message permissionMode override (AcceptEdits on Build session)', async () => {
+      const ws = await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Build' });
+      await manager.send(ws.id, 'edit carefully', undefined, 'AcceptEdits');
+      mockStreamFromMessages(mockSession, [createSystemMessage(), createResultMessage()]);
+
+      await collectAsyncGenerator(manager.stream(ws.id));
+
+      expect(mockSession.query.setPermissionMode).toHaveBeenCalledWith('acceptEdits');
     });
 
     it('throws for non-existent session', async () => {

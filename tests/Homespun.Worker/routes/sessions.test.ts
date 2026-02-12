@@ -107,7 +107,37 @@ describe('POST /sessions/:id/message', () => {
     });
 
     expect(res.status).toBe(200);
-    expect(sm.send).toHaveBeenCalledWith('sess-1', 'Follow up', undefined);
+    expect(sm.send).toHaveBeenCalledWith('sess-1', 'Follow up', undefined, undefined);
+  });
+
+  it('passes permissionMode to send()', async () => {
+    const { sm, app } = createApp();
+    sm.send.mockResolvedValue(undefined);
+    sm.get.mockReturnValue({ id: 'sess-1', conversationId: 'c1' });
+    sm.stream.mockReturnValue((async function* () {})());
+
+    await app.request('/sess-1/message', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: 'Follow up', permissionMode: 'BypassPermissions' }),
+    });
+
+    expect(sm.send).toHaveBeenCalledWith('sess-1', 'Follow up', undefined, 'BypassPermissions');
+  });
+
+  it('passes undefined permissionMode when not provided', async () => {
+    const { sm, app } = createApp();
+    sm.send.mockResolvedValue(undefined);
+    sm.get.mockReturnValue({ id: 'sess-1', conversationId: 'c1' });
+    sm.stream.mockReturnValue((async function* () {})());
+
+    await app.request('/sess-1/message', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: 'Follow up' }),
+    });
+
+    expect(sm.send).toHaveBeenCalledWith('sess-1', 'Follow up', undefined, undefined);
   });
 
   it('returns MESSAGE_ERROR event on send failure', async () => {

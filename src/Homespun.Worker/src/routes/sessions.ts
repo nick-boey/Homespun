@@ -70,7 +70,7 @@ export function createSessionsRoute(sessionManager: SessionManager) {
 
     return stream(c, async (s) => {
       try {
-        await sessionManager.send(sessionId, body.message, body.model);
+        await sessionManager.send(sessionId, body.message, body.model, body.permissionMode);
 
         for await (const chunk of streamSessionEvents(sessionManager, sessionId)) {
           await s.write(chunk);

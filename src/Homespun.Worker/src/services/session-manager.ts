@@ -8,12 +8,27 @@ import { randomUUID } from 'node:crypto';
 
 type Session = ReturnType<typeof unstable_v2_createSession>;
 
+export type SdkPermissionMode = 'default' | 'acceptEdits' | 'plan' | 'bypassPermissions';
+
+const PERMISSION_MODE_MAP: Record<string, SdkPermissionMode> = {
+  Default: 'default',
+  AcceptEdits: 'acceptEdits',
+  Plan: 'plan',
+  BypassPermissions: 'bypassPermissions',
+};
+
+export function mapPermissionMode(value: string | undefined): SdkPermissionMode {
+  if (!value) return 'bypassPermissions';
+  return PERMISSION_MODE_MAP[value] ?? 'bypassPermissions';
+}
+
 interface WorkerSession {
   id: string;
   session: Session;
   conversationId?: string;
   mode: string;
   model: string;
+  permissionMode: SdkPermissionMode;
   status: 'idle' | 'streaming' | 'closed';
   createdAt: Date;
   lastActivityAt: Date;
@@ -105,6 +120,7 @@ export class SessionManager {
       conversationId: opts.resumeSessionId,
       mode: opts.mode,
       model: opts.model,
+      permissionMode: isPlan ? 'plan' : 'bypassPermissions',
       status: 'idle',
       createdAt: new Date(),
       lastActivityAt: new Date(),
@@ -120,11 +136,15 @@ export class SessionManager {
     return workerSession;
   }
 
-  async send(sessionId: string, message: string, model?: string): Promise<WorkerSession> {
-    console.log(`[Worker][SessionManager] send() - sessionId='${sessionId}', messageLength=${message?.length}, model=${model || 'default'}`);
+  async send(sessionId: string, message: string, model?: string, permissionMode?: string): Promise<WorkerSession> {
+    console.log(`[Worker][SessionManager] send() - sessionId='${sessionId}', messageLength=${message?.length}, model=${model || 'default'}, permissionMode=${permissionMode || 'unchanged'}`);
     const ws = this.sessions.get(sessionId);
     if (!ws) {
       throw new Error(`Session ${sessionId} not found`);
+    }
+
+    if (permissionMode) {
+      ws.permissionMode = mapPermissionMode(permissionMode);
     }
 
     ws.lastActivityAt = new Date();
@@ -150,13 +170,13 @@ export class SessionManager {
 
         // After first message (process is running), set the correct permission mode.
         // SessionImpl hardcodes permissionMode="default", so we override at runtime.
+        // Uses ws.permissionMode which may have been updated by send() for per-message overrides.
         if (!permissionModeSet) {
           permissionModeSet = true;
-          const targetMode = ws.mode.toLowerCase() === 'plan' ? 'plan' : 'bypassPermissions';
           const query = (ws.session as any).query;
           if (query?.setPermissionMode) {
-            await query.setPermissionMode(targetMode);
-            console.log(`[Worker][SessionManager] stream() - setPermissionMode('${targetMode}') applied`);
+            await query.setPermissionMode(ws.permissionMode);
+            console.log(`[Worker][SessionManager] stream() - setPermissionMode('${ws.permissionMode}') applied`);
           }
         }
 
