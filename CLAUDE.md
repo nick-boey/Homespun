@@ -88,7 +88,7 @@ The application is containerised and should always be run in a container. Helper
 
 ```bash
 # Linux
-./scripts/run.sh                # Production: Runs Watchtower and the latest container on GHCR
+./scripts/run.sh                # Production: Runs the latest container on GHCR
 ./scripts/run.sh --local        # Development: Builds a container from source and runs it
 ./scripts/mock.sh               # Testing: Builds a container from source using mock services for local UI testing
 

@@ -256,43 +256,6 @@ Run with:
 GITHUB_TOKEN=ghp_your_token docker-compose up -d
 ```
 
-### Automatic updates with Watchtower
-
-For production deployments using the pre-built GHCR image, use [Watchtower](https://containrrr.dev/watchtower/) to automatically update when new releases are published:
-
-```yaml
-version: '3.8'
-
-services:
-  homespun:
-    image: ghcr.io/nick-boey/homespun:latest
-    container_name: homespun
-    ports:
-      - "8080:8080"
-    volumes:
-      - homespun-data:/data
-    environment:
-      - GITHUB_TOKEN=${GITHUB_TOKEN}
-      - ASPNETCORE_ENVIRONMENT=Production
-    restart: unless-stopped
-
-  watchtower:
-    image: containrrr/watchtower
-    container_name: watchtower
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    environment:
-      - WATCHTOWER_CLEANUP=true
-      - WATCHTOWER_POLL_INTERVAL=300
-    restart: unless-stopped
-    command: homespun
-
-volumes:
-  homespun-data:
-```
-
-See the [main README](../README.md#deployment) for detailed Watchtower configuration options.
-
 ### Tailscale integration for containers
 
 To make your container accessible via Tailscale:
