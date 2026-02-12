@@ -1,15 +1,21 @@
 import { vi, type Mock } from 'vitest';
-import { createMockSDKSession, mockStreamFromMessages, type MockSDKSession } from '../helpers/mock-sdk.js';
+import { createMockSDKSession, mockStreamFromMessages, mockQueryFromMessages, type MockSDKSession } from '../helpers/mock-sdk.js';
 import { createAssistantMessage, createResultMessage, createSystemMessage } from '../helpers/test-fixtures.js';
 import { collectAsyncGenerator } from '../helpers/async-helpers.js';
 
 // Use vi.hoisted to ensure variables are available during vi.mock factory execution
-const { mockCreateSession, mockResumeSession, mockRandomUUID, getMockSession, setMockSession } = vi.hoisted(() => {
+const { mockCreateSession, mockResumeSession, mockRandomUUID, mockQuery, getMockSession, setMockSession } = vi.hoisted(() => {
   let _mockSession: any = null;
   return {
     mockCreateSession: vi.fn((..._args: any[]) => _mockSession),
     mockResumeSession: vi.fn((..._args: any[]) => _mockSession),
     mockRandomUUID: vi.fn(() => 'test-uuid-1234'),
+    mockQuery: vi.fn((..._args: any[]) => {
+      if (!_mockSession?.query) {
+        throw new Error('Mock session not initialized');
+      }
+      return _mockSession.query;
+    }),
     getMockSession: () => _mockSession,
     setMockSession: (s: any) => { _mockSession = s; },
   };
@@ -18,6 +24,7 @@ const { mockCreateSession, mockResumeSession, mockRandomUUID, getMockSession, se
 vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
   unstable_v2_createSession: mockCreateSession,
   unstable_v2_resumeSession: mockResumeSession,
+  query: mockQuery,
 }));
 
 vi.mock('node:crypto', () => ({
@@ -86,8 +93,10 @@ describe('SessionManager', () => {
     it('passes permissionMode plan and allowedTools for plan mode', async () => {
       await manager.create(baseOpts);
 
-      expect(mockCreateSession).toHaveBeenCalledOnce();
-      const opts = mockCreateSession.mock.calls[0][0] as Record<string, unknown>;
+      expect(mockQuery).toHaveBeenCalledOnce();
+      const callArgs = mockQuery.mock.calls[0][0] as Record<string, unknown>;
+      expect(callArgs.prompt).toBe('Hello agent');
+      const opts = callArgs.options as Record<string, unknown>;
       expect(opts.permissionMode).toBe('plan');
       expect(opts.allowedTools).toEqual([
         'Read', 'Glob', 'Grep', 'WebFetch', 'WebSearch',
@@ -98,30 +107,37 @@ describe('SessionManager', () => {
     it('passes permissionMode bypassPermissions for build mode', async () => {
       await manager.create({ ...baseOpts, mode: 'Build' });
 
-      const opts = mockCreateSession.mock.calls[0][0] as Record<string, unknown>;
+      expect(mockQuery).toHaveBeenCalledOnce();
+      const callArgs = mockQuery.mock.calls[0][0] as Record<string, unknown>;
+      const opts = callArgs.options as Record<string, unknown>;
       expect(opts.permissionMode).toBe('bypassPermissions');
       expect(opts.allowDangerouslySkipPermissions).toBe(true);
     });
 
-    it('calls unstable_v2_resumeSession when resumeSessionId is provided', async () => {
+    it('calls query with resume when resumeSessionId is provided', async () => {
       await manager.create({ ...baseOpts, resumeSessionId: 'conv-abc' });
 
-      expect(mockResumeSession).toHaveBeenCalledOnce();
-      expect(mockResumeSession.mock.calls[0][0]).toBe('conv-abc');
-      expect(mockCreateSession).not.toHaveBeenCalled();
+      expect(mockQuery).toHaveBeenCalledOnce();
+      const callArgs = mockQuery.mock.calls[0][0] as Record<string, unknown>;
+      const opts = callArgs.options as Record<string, unknown>;
+      expect(opts.resume).toBe('conv-abc');
     });
 
-    it('calls unstable_v2_createSession without resumeSessionId', async () => {
+    it('calls query without resume when resumeSessionId not provided', async () => {
       await manager.create(baseOpts);
 
-      expect(mockCreateSession).toHaveBeenCalledOnce();
-      expect(mockResumeSession).not.toHaveBeenCalled();
+      expect(mockQuery).toHaveBeenCalledOnce();
+      const callArgs = mockQuery.mock.calls[0][0] as Record<string, unknown>;
+      const opts = callArgs.options as Record<string, unknown>;
+      expect(opts.resume).toBeUndefined();
     });
 
-    it('sends initial prompt via session.send()', async () => {
+    it('passes initial prompt to query', async () => {
       await manager.create(baseOpts);
 
-      expect(mockSession.send).toHaveBeenCalledWith('Hello agent');
+      expect(mockQuery).toHaveBeenCalledOnce();
+      const callArgs = mockQuery.mock.calls[0][0] as Record<string, unknown>;
+      expect(callArgs.prompt).toBe('Hello agent');
     });
 
     it('sets status to streaming after send', async () => {
@@ -146,7 +162,9 @@ describe('SessionManager', () => {
     it('passes append field in systemPrompt option when systemPrompt provided', async () => {
       await manager.create({ ...baseOpts, systemPrompt: 'Be helpful' });
 
-      const opts = mockCreateSession.mock.calls[0][0] as Record<string, unknown>;
+      expect(mockQuery).toHaveBeenCalledOnce();
+      const callArgs = mockQuery.mock.calls[0][0] as Record<string, unknown>;
+      const opts = callArgs.options as Record<string, unknown>;
       expect(opts.systemPrompt).toEqual({
         type: 'preset',
         preset: 'claude_code',
@@ -157,7 +175,9 @@ describe('SessionManager', () => {
     it('omits append when no systemPrompt', async () => {
       await manager.create(baseOpts);
 
-      const opts = mockCreateSession.mock.calls[0][0] as Record<string, unknown>;
+      expect(mockQuery).toHaveBeenCalledOnce();
+      const callArgs = mockQuery.mock.calls[0][0] as Record<string, unknown>;
+      const opts = callArgs.options as Record<string, unknown>;
       expect(opts.systemPrompt).toEqual({
         type: 'preset',
         preset: 'claude_code',
@@ -167,14 +187,18 @@ describe('SessionManager', () => {
     it('uses workingDirectory param over env var', async () => {
       await manager.create({ ...baseOpts, workingDirectory: '/custom/dir' });
 
-      const opts = mockCreateSession.mock.calls[0][0] as Record<string, unknown>;
+      expect(mockQuery).toHaveBeenCalledOnce();
+      const callArgs = mockQuery.mock.calls[0][0] as Record<string, unknown>;
+      const opts = callArgs.options as Record<string, unknown>;
       expect(opts.cwd).toBe('/custom/dir');
     });
 
     it('falls back to WORKING_DIRECTORY env var', async () => {
       await manager.create(baseOpts);
 
-      const opts = mockCreateSession.mock.calls[0][0] as Record<string, unknown>;
+      expect(mockQuery).toHaveBeenCalledOnce();
+      const callArgs = mockQuery.mock.calls[0][0] as Record<string, unknown>;
+      const opts = callArgs.options as Record<string, unknown>;
       expect(opts.cwd).toBe('/test/workdir');
     });
 
@@ -183,14 +207,18 @@ describe('SessionManager', () => {
 
       await manager.create(baseOpts);
 
-      const opts = mockCreateSession.mock.calls[0][0] as Record<string, unknown>;
+      expect(mockQuery).toHaveBeenCalledOnce();
+      const callArgs = mockQuery.mock.calls[0][0] as Record<string, unknown>;
+      const opts = callArgs.options as Record<string, unknown>;
       expect(opts.cwd).toBe('/workdir');
     });
 
     it('uses env var defaults for git identity', async () => {
       await manager.create(baseOpts);
 
-      const opts = mockCreateSession.mock.calls[0][0] as Record<string, any>;
+      expect(mockQuery).toHaveBeenCalledOnce();
+      const callArgs = mockQuery.mock.calls[0][0] as Record<string, unknown>;
+      const opts = callArgs.options as Record<string, any>;
       expect(opts.env.GIT_AUTHOR_NAME).toBe('Test Author');
       expect(opts.env.GIT_AUTHOR_EMAIL).toBe('test@example.com');
     });
@@ -201,7 +229,9 @@ describe('SessionManager', () => {
 
       await manager.create(baseOpts);
 
-      const opts = mockCreateSession.mock.calls[0][0] as Record<string, any>;
+      expect(mockQuery).toHaveBeenCalledOnce();
+      const callArgs = mockQuery.mock.calls[0][0] as Record<string, unknown>;
+      const opts = callArgs.options as Record<string, any>;
       expect(opts.env.GIT_AUTHOR_NAME).toBe('Homespun Bot');
       expect(opts.env.GIT_AUTHOR_EMAIL).toBe('homespun@localhost');
     });
@@ -209,7 +239,9 @@ describe('SessionManager', () => {
     it('resolves GITHUB_TOKEN from env', async () => {
       await manager.create(baseOpts);
 
-      const opts = mockCreateSession.mock.calls[0][0] as Record<string, any>;
+      expect(mockQuery).toHaveBeenCalledOnce();
+      const callArgs = mockQuery.mock.calls[0][0] as Record<string, unknown>;
+      const opts = callArgs.options as Record<string, any>;
       expect(opts.env.GITHUB_TOKEN).toBe('ghp_test123');
       expect(opts.env.GH_TOKEN).toBe('ghp_test123');
     });
@@ -220,7 +252,9 @@ describe('SessionManager', () => {
 
       await manager.create(baseOpts);
 
-      const opts = mockCreateSession.mock.calls[0][0] as Record<string, any>;
+      expect(mockQuery).toHaveBeenCalledOnce();
+      const callArgs = mockQuery.mock.calls[0][0] as Record<string, unknown>;
+      const opts = callArgs.options as Record<string, any>;
       expect(opts.env.GITHUB_TOKEN).toBe('ghp_fallback');
     });
 
@@ -239,7 +273,9 @@ describe('SessionManager', () => {
     it('includes Playwright MCP server config', async () => {
       await manager.create(baseOpts);
 
-      const opts = mockCreateSession.mock.calls[0][0] as Record<string, any>;
+      expect(mockQuery).toHaveBeenCalledOnce();
+      const callArgs = mockQuery.mock.calls[0][0] as Record<string, unknown>;
+      const opts = callArgs.options as Record<string, any>;
       expect(opts.mcpServers.playwright).toMatchObject({
         type: 'stdio',
         command: 'npx',
@@ -249,15 +285,18 @@ describe('SessionManager', () => {
   });
 
   describe('send()', () => {
-    it('calls session.send with message and updates lastActivityAt', async () => {
+    it('creates new query with message and updates lastActivityAt', async () => {
       const ws = await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Build' });
       const beforeActivity = ws.lastActivityAt;
+      mockQuery.mockClear(); // Clear the create() call
 
       await new Promise((r) => setTimeout(r, 5));
 
       await manager.send(ws.id, 'follow up');
 
-      expect(mockSession.send).toHaveBeenCalledWith('follow up');
+      expect(mockQuery).toHaveBeenCalledOnce();
+      const callArgs = mockQuery.mock.calls[0][0] as Record<string, unknown>;
+      expect(callArgs.prompt).toBe('follow up');
       expect(ws.lastActivityAt.getTime()).toBeGreaterThanOrEqual(beforeActivity.getTime());
     });
 
@@ -304,9 +343,9 @@ describe('SessionManager', () => {
   });
 
   describe('stream()', () => {
-    it('yields SDK messages from underlying session stream', async () => {
+    it('yields SDK messages from underlying query', async () => {
       const ws = await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Build' });
-      mockStreamFromMessages(mockSession, [createAssistantMessage(), createResultMessage()]);
+      mockQueryFromMessages(ws.query, [createAssistantMessage(), createResultMessage()]);
 
       const result = await collectAsyncGenerator(manager.stream(ws.id));
 
@@ -315,7 +354,7 @@ describe('SessionManager', () => {
 
     it('captures msg.session_id as conversationId', async () => {
       const ws = await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Build' });
-      mockStreamFromMessages(mockSession, [
+      mockQueryFromMessages(ws.query, [
         createSystemMessage({ session_id: 'captured-conv-id' }),
       ]);
 
@@ -326,7 +365,7 @@ describe('SessionManager', () => {
 
     it('sets status to idle when stream completes', async () => {
       const ws = await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Build' });
-      mockStreamFromMessages(mockSession, [createAssistantMessage()]);
+      mockQueryFromMessages(ws.query, [createAssistantMessage()]);
 
       await collectAsyncGenerator(manager.stream(ws.id));
 
@@ -335,11 +374,11 @@ describe('SessionManager', () => {
 
     it('sets status to idle even when stream throws', async () => {
       const ws = await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Build' });
-      mockSession.stream.mockReturnValue(
-        (async function* () {
+      (ws.query as any)[Symbol.asyncIterator] = () => ({
+        async next() {
           throw new Error('boom');
-        })(),
-      );
+        },
+      });
 
       try {
         await collectAsyncGenerator(manager.stream(ws.id));
@@ -350,81 +389,6 @@ describe('SessionManager', () => {
       expect(ws.status).toBe('idle');
     });
 
-    it('calls setPermissionMode with bypassPermissions for Build mode', async () => {
-      const ws = await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Build' });
-      mockStreamFromMessages(mockSession, [createSystemMessage(), createResultMessage()]);
-
-      await collectAsyncGenerator(manager.stream(ws.id));
-
-      expect(mockSession.query.setPermissionMode).toHaveBeenCalledOnce();
-      expect(mockSession.query.setPermissionMode).toHaveBeenCalledWith('bypassPermissions');
-    });
-
-    it('calls setPermissionMode with plan for Plan mode', async () => {
-      const ws = await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Plan' });
-      mockStreamFromMessages(mockSession, [createSystemMessage(), createResultMessage()]);
-
-      await collectAsyncGenerator(manager.stream(ws.id));
-
-      expect(mockSession.query.setPermissionMode).toHaveBeenCalledOnce();
-      expect(mockSession.query.setPermissionMode).toHaveBeenCalledWith('plan');
-    });
-
-    it('calls setPermissionMode only once even with multiple messages', async () => {
-      const ws = await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Build' });
-      mockStreamFromMessages(mockSession, [
-        createSystemMessage(),
-        createAssistantMessage(),
-        createResultMessage(),
-      ]);
-
-      await collectAsyncGenerator(manager.stream(ws.id));
-
-      expect(mockSession.query.setPermissionMode).toHaveBeenCalledOnce();
-    });
-
-    it('calls setPermissionMode after first message, not before', async () => {
-      const ws = await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Build' });
-      const callOrder: string[] = [];
-
-      mockSession.query.setPermissionMode.mockImplementation(async () => {
-        callOrder.push('setPermissionMode');
-      });
-
-      mockSession.stream.mockReturnValue(
-        (async function* () {
-          callOrder.push('first-message');
-          yield createSystemMessage();
-          callOrder.push('second-message');
-          yield createResultMessage();
-        })(),
-      );
-
-      await collectAsyncGenerator(manager.stream(ws.id));
-
-      expect(callOrder).toEqual(['first-message', 'setPermissionMode', 'second-message']);
-    });
-
-    it('uses per-message permissionMode override (BypassPermissions on Plan session)', async () => {
-      const ws = await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Plan' });
-      // Simulate a send() that changed the permissionMode
-      await manager.send(ws.id, 'do it', undefined, 'BypassPermissions');
-      mockStreamFromMessages(mockSession, [createSystemMessage(), createResultMessage()]);
-
-      await collectAsyncGenerator(manager.stream(ws.id));
-
-      expect(mockSession.query.setPermissionMode).toHaveBeenCalledWith('bypassPermissions');
-    });
-
-    it('uses per-message permissionMode override (AcceptEdits on Build session)', async () => {
-      const ws = await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Build' });
-      await manager.send(ws.id, 'edit carefully', undefined, 'AcceptEdits');
-      mockStreamFromMessages(mockSession, [createSystemMessage(), createResultMessage()]);
-
-      await collectAsyncGenerator(manager.stream(ws.id));
-
-      expect(mockSession.query.setPermissionMode).toHaveBeenCalledWith('acceptEdits');
-    });
 
     it('throws for non-existent session', async () => {
       const gen = manager.stream('no-such-id');
@@ -433,12 +397,13 @@ describe('SessionManager', () => {
   });
 
   describe('close()', () => {
-    it('calls session.close(), removes from map, sets status to closed', async () => {
+    it('aborts controller, removes from map, sets status to closed', async () => {
       const ws = await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Build' });
+      const abortSpy = vi.spyOn(ws.abortController, 'abort');
 
       await manager.close(ws.id);
 
-      expect(mockSession.close).toHaveBeenCalled();
+      expect(abortSpy).toHaveBeenCalled();
       expect(ws.status).toBe('closed');
       expect(manager.get(ws.id)).toBeUndefined();
     });
