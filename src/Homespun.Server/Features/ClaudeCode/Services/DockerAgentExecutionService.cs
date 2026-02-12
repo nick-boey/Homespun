@@ -242,7 +242,7 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
 
                 var startRequest = new
                 {
-                    WorkingDirectory = request.WorkingDirectory,
+                    WorkingDirectory = "/workdir",
                     Mode = request.Mode.ToString(),
                     Model = request.Model,
                     Prompt = request.Prompt,
@@ -624,10 +624,16 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
             await StopContainerAsync(existing.ContainerId);
         }
 
-        // Start new container with per-issue mounts
+        // Start new container - compute issue workspace working directory if no explicit one provided
         var containerName = GetIssueContainerName(issueId);
-        var (containerId, workerUrl) = await StartIssueContainerAsync(
-            containerName, issueId, projectName, workingDirectory, cancellationToken);
+        var effectiveWorkingDirectory = workingDirectory;
+        if (string.IsNullOrEmpty(effectiveWorkingDirectory))
+        {
+            var issueBasePath = $"{_options.DataVolumePath}/{_options.ProjectsBasePath}/{projectName ?? "default"}/issues/{issueId}";
+            effectiveWorkingDirectory = $"{issueBasePath}/src";
+        }
+        var (containerId, workerUrl) = await StartContainerAsync(
+            containerName, effectiveWorkingDirectory, useRm: false, issueId, projectName, cancellationToken);
 
         _issueContainers[issueId] = new IssueContainer(issueId, containerId, containerName, workerUrl, DateTime.UtcNow);
         return (containerId, workerUrl);
@@ -650,57 +656,15 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
     }
 
     /// <summary>
-    /// Starts a per-issue container with specific volume mounts for .claude and src directories.
+    /// Builds Docker run arguments for a worker container.
+    /// Mounts the provided working directory to /workdir in the container.
     /// </summary>
-    private async Task<(string containerId, string workerUrl)> StartIssueContainerAsync(
-        string containerName,
-        string issueId,
-        string? projectName,
-        string workingDirectory,
-        CancellationToken cancellationToken)
-    {
-        var dockerArgs = new StringBuilder();
-        dockerArgs.Append("run -d "); // No --rm: issue containers persist
-        dockerArgs.Append($"--name {containerName} ");
-        dockerArgs.Append($"--memory {_options.MemoryLimitBytes} ");
-        dockerArgs.Append($"--cpus {_options.CpuLimit} ");
-
-        var userFlag = ProcessUserInfo.GetDockerUserFlag();
-        if (!string.IsNullOrEmpty(userFlag))
-        {
-            dockerArgs.Append($"--user {userFlag} ");
-        }
-
-        // Per-issue volume mounts
-        var issueBasePath = $"{_options.DataVolumePath}/{_options.ProjectsBasePath}/{projectName ?? "default"}/issues/{issueId}";
-        var hostIssueBasePath = TranslateToHostPath(issueBasePath);
-
-        dockerArgs.Append($"-v \"{hostIssueBasePath}/.claude:/home/homespun/.claude\" ");
-        dockerArgs.Append($"-v \"{hostIssueBasePath}/src:/workdir\" ");
-
-        // Issue/project environment variables
-        dockerArgs.Append($"-e ISSUE_ID={issueId} ");
-        if (!string.IsNullOrEmpty(projectName))
-            dockerArgs.Append($"-e PROJECT_NAME={projectName} ");
-        dockerArgs.Append("-e WORKING_DIRECTORY=/workdir ");
-
-        AppendAuthEnvironmentVars(dockerArgs);
-        AppendCredentialsMount(dockerArgs);
-
-        dockerArgs.Append($"--network {_options.NetworkName} ");
-        dockerArgs.Append(_options.WorkerImage);
-
-        return await RunDockerAndGetUrl(containerName, dockerArgs.ToString(), cancellationToken);
-    }
-
-    /// <summary>
-    /// Starts a legacy per-session container with a single data volume mount.
-    /// </summary>
-    private async Task<(string containerId, string workerUrl)> StartContainerAsync(
+    internal string BuildContainerDockerArgs(
         string containerName,
         string workingDirectory,
         bool useRm,
-        CancellationToken cancellationToken)
+        string? issueId = null,
+        string? projectName = null)
     {
         var dockerArgs = new StringBuilder();
         dockerArgs.Append(useRm ? "run -d --rm " : "run -d ");
@@ -714,9 +678,17 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
             dockerArgs.Append($"--user {userFlag} ");
         }
 
-        var dataVolumeHostPath = TranslateToHostPath(_options.DataVolumePath);
-        dockerArgs.Append($"-v \"{dataVolumeHostPath}:{_options.DataVolumePath}\" ");
-        dockerArgs.Append($"-e ASPNETCORE_URLS=http://+:8080 ");
+        // Mount working directory to /workdir
+        var hostWorkingDirectory = TranslateToHostPath(workingDirectory);
+        dockerArgs.Append($"-v \"{hostWorkingDirectory}:/workdir\" ");
+
+        // Environment variables
+        dockerArgs.Append("-e WORKING_DIRECTORY=/workdir ");
+
+        if (!string.IsNullOrEmpty(issueId))
+            dockerArgs.Append($"-e ISSUE_ID={issueId} ");
+        if (!string.IsNullOrEmpty(projectName))
+            dockerArgs.Append($"-e PROJECT_NAME={projectName} ");
 
         AppendAuthEnvironmentVars(dockerArgs);
         AppendCredentialsMount(dockerArgs);
@@ -724,7 +696,22 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         dockerArgs.Append($"--network {_options.NetworkName} ");
         dockerArgs.Append(_options.WorkerImage);
 
-        return await RunDockerAndGetUrl(containerName, dockerArgs.ToString(), cancellationToken);
+        return dockerArgs.ToString();
+    }
+
+    /// <summary>
+    /// Starts a worker container with the working directory mounted to /workdir.
+    /// </summary>
+    private async Task<(string containerId, string workerUrl)> StartContainerAsync(
+        string containerName,
+        string workingDirectory,
+        bool useRm,
+        string? issueId = null,
+        string? projectName = null,
+        CancellationToken cancellationToken = default)
+    {
+        var dockerArgs = BuildContainerDockerArgs(containerName, workingDirectory, useRm, issueId, projectName);
+        return await RunDockerAndGetUrl(containerName, dockerArgs, cancellationToken);
     }
 
     private void AppendAuthEnvironmentVars(StringBuilder dockerArgs)

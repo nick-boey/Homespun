@@ -163,7 +163,7 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
                 if (hasIssue)
                 {
                     workerUrl = await GetOrCreateIssueContainerAppAsync(
-                        request.IssueId!, request.ProjectName, cancellationToken);
+                        request.IssueId!, request.ProjectName, request.WorkingDirectory, cancellationToken);
                 }
                 else
                 {
@@ -181,7 +181,7 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
 
                 var startRequest = new
                 {
-                    WorkingDirectory = request.WorkingDirectory,
+                    WorkingDirectory = "/workdir",
                     Mode = request.Mode.ToString(),
                     Model = request.Model,
                     Prompt = request.Prompt,
@@ -448,6 +448,7 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
     private async Task<string> GetOrCreateIssueContainerAppAsync(
         string issueId,
         string? projectName,
+        string workingDirectory,
         CancellationToken cancellationToken)
     {
         // Check for existing app
@@ -467,7 +468,7 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
 
         // Create new Container App
         var appName = GetIssueContainerAppName(issueId);
-        var workerUrl = await CreateContainerAppAsync(appName, issueId, projectName, cancellationToken);
+        var workerUrl = await CreateContainerAppAsync(appName, issueId, projectName, workingDirectory, cancellationToken);
 
         _issueApps[issueId] = new IssueContainerApp(issueId, appName, workerUrl, DateTime.UtcNow);
         return workerUrl;
@@ -477,6 +478,7 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
         string appName,
         string issueId,
         string? projectName,
+        string workingDirectory,
         CancellationToken cancellationToken)
     {
         if (_armClient == null)
@@ -487,8 +489,6 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
         var subscription = await _armClient.GetDefaultSubscriptionAsync(cancellationToken);
         var resourceGroup = (await subscription.GetResourceGroupAsync(_options.ResourceGroupName!, cancellationToken)).Value;
         var containerApps = resourceGroup.GetContainerApps();
-
-        var issueBasePath = $"{_options.ProjectsBasePath}/{projectName ?? "default"}/issues/{issueId}";
 
         var containerAppData = new ContainerAppData(resourceGroup.Data.Location)
         {
@@ -540,18 +540,15 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
                 StorageName = _options.StorageMountName,
             });
 
+            // Convert working directory to NFS SubPath by stripping the data volume prefix
+            var workdirSubPath = workingDirectory.TrimStart('/');
+
             var container = containerAppData.Template.Containers[0];
             container.VolumeMounts.Add(new ContainerAppVolumeMount
             {
                 VolumeName = "claude-data",
-                MountPath = "/home/homespun/.claude",
-                SubPath = $"{issueBasePath}/.claude"
-            });
-            container.VolumeMounts.Add(new ContainerAppVolumeMount
-            {
-                VolumeName = "claude-data",
                 MountPath = "/workdir",
-                SubPath = $"{issueBasePath}/src"
+                SubPath = workdirSubPath
             });
         }
 
