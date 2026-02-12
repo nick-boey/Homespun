@@ -8,12 +8,27 @@ import { randomUUID } from 'node:crypto';
 
 type Session = ReturnType<typeof unstable_v2_createSession>;
 
+export type SdkPermissionMode = 'default' | 'acceptEdits' | 'plan' | 'bypassPermissions';
+
+const PERMISSION_MODE_MAP: Record<string, SdkPermissionMode> = {
+  Default: 'default',
+  AcceptEdits: 'acceptEdits',
+  Plan: 'plan',
+  BypassPermissions: 'bypassPermissions',
+};
+
+export function mapPermissionMode(value: string | undefined): SdkPermissionMode {
+  if (!value) return 'bypassPermissions';
+  return PERMISSION_MODE_MAP[value] ?? 'bypassPermissions';
+}
+
 interface WorkerSession {
   id: string;
   session: Session;
   conversationId?: string;
   mode: string;
   model: string;
+  permissionMode: SdkPermissionMode;
   status: 'idle' | 'streaming' | 'closed';
   createdAt: Date;
   lastActivityAt: Date;
@@ -76,6 +91,7 @@ export class SessionManager {
   }): Promise<WorkerSession> {
     const id = randomUUID();
     const isPlan = opts.mode.toLowerCase() === 'plan';
+    console.log(`[Worker][SessionManager] create() - mode='${opts.mode}', isPlan=${isPlan}, model='${opts.model}'`);
     const common = buildCommonOptions(opts.model, opts.systemPrompt, opts.workingDirectory);
 
     const sessionOptions: Record<string, unknown> = {
@@ -89,6 +105,7 @@ export class SessionManager {
       sessionOptions.permissionMode = 'bypassPermissions';
       sessionOptions.allowDangerouslySkipPermissions = true;
     }
+    console.log(`[Worker][SessionManager] create() - attempting permissionMode='${sessionOptions.permissionMode}', allowDangerouslySkipPermissions=${sessionOptions.allowDangerouslySkipPermissions}`);
 
     let session: Session;
     if (opts.resumeSessionId) {
@@ -103,12 +120,14 @@ export class SessionManager {
       conversationId: opts.resumeSessionId,
       mode: opts.mode,
       model: opts.model,
+      permissionMode: isPlan ? 'plan' : 'bypassPermissions',
       status: 'idle',
       createdAt: new Date(),
       lastActivityAt: new Date(),
     };
 
     this.sessions.set(id, workerSession);
+    console.log(`[Worker][SessionManager] create() - session created, workerSessionId='${id}'`);
 
     // Send the initial prompt
     await session.send(opts.prompt);
@@ -117,10 +136,15 @@ export class SessionManager {
     return workerSession;
   }
 
-  async send(sessionId: string, message: string, model?: string): Promise<WorkerSession> {
+  async send(sessionId: string, message: string, model?: string, permissionMode?: string): Promise<WorkerSession> {
+    console.log(`[Worker][SessionManager] send() - sessionId='${sessionId}', messageLength=${message?.length}, model=${model || 'default'}, permissionMode=${permissionMode || 'unchanged'}`);
     const ws = this.sessions.get(sessionId);
     if (!ws) {
       throw new Error(`Session ${sessionId} not found`);
+    }
+
+    if (permissionMode) {
+      ws.permissionMode = mapPermissionMode(permissionMode);
     }
 
     ws.lastActivityAt = new Date();
@@ -137,10 +161,31 @@ export class SessionManager {
     }
 
     try {
+      let permissionModeSet = false;
       for await (const msg of ws.session.stream()) {
         // Capture the conversation ID from any message
         if (msg.session_id) {
           ws.conversationId = msg.session_id;
+        }
+
+        // After first message (process is running), set the correct permission mode.
+        // SessionImpl hardcodes permissionMode="default", so we override at runtime.
+        // Uses ws.permissionMode which may have been updated by send() for per-message overrides.
+        if (!permissionModeSet) {
+          permissionModeSet = true;
+          const query = (ws.session as any).query;
+          if (query?.setPermissionMode) {
+            await query.setPermissionMode(ws.permissionMode);
+            console.log(`[Worker][SessionManager] stream() - setPermissionMode('${ws.permissionMode}') applied`);
+          }
+        }
+
+        if (msg.type === 'system' && (msg as any).subtype === 'init') {
+          console.log(`[Worker][SessionManager] stream() - SDK init: permissionMode='${(msg as any).permissionMode}', model='${(msg as any).model}'`);
+        }
+        if (msg.type === 'result') {
+          const r = msg as any;
+          console.log(`[Worker][SessionManager] stream() - result: subtype='${r.subtype}', is_error=${r.is_error}`);
         }
         yield msg;
       }

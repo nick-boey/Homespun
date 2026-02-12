@@ -26,6 +26,7 @@ export function createSessionsRoute(sessionManager: SessionManager) {
   // POST /sessions - Start or resume a session (SSE stream)
   sessions.post('/', async (c) => {
     const body = await c.req.json<StartSessionRequest>();
+    console.log(`[Worker][Route] POST /sessions - mode=${body.mode}, model=${body.model}, workingDirectory=${body.workingDirectory}, resumeSessionId=${body.resumeSessionId || 'none'}`);
 
     c.header('Content-Type', 'text/event-stream');
     c.header('Cache-Control', 'no-cache');
@@ -61,6 +62,7 @@ export function createSessionsRoute(sessionManager: SessionManager) {
   sessions.post('/:id/message', async (c) => {
     const sessionId = c.req.param('id');
     const body = await c.req.json<SendMessageRequest>();
+    console.log(`[Worker][Route] POST /sessions/${sessionId}/message - permissionMode=${body.permissionMode}, messageLength=${body.message?.length}, model=${body.model}`);
 
     c.header('Content-Type', 'text/event-stream');
     c.header('Cache-Control', 'no-cache');
@@ -68,7 +70,7 @@ export function createSessionsRoute(sessionManager: SessionManager) {
 
     return stream(c, async (s) => {
       try {
-        await sessionManager.send(sessionId, body.message, body.model);
+        await sessionManager.send(sessionId, body.message, body.model, body.permissionMode);
 
         for await (const chunk of streamSessionEvents(sessionManager, sessionId)) {
           await s.write(chunk);
@@ -89,6 +91,7 @@ export function createSessionsRoute(sessionManager: SessionManager) {
   sessions.post('/:id/answer', async (c) => {
     const sessionId = c.req.param('id');
     const body = await c.req.json<AnswerQuestionRequest>();
+    console.log(`[Worker][Route] POST /sessions/${sessionId}/answer - ${Object.keys(body.answers).length} answers`);
 
     c.header('Content-Type', 'text/event-stream');
     c.header('Cache-Control', 'no-cache');

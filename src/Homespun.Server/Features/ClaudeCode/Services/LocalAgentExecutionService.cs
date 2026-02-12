@@ -95,10 +95,10 @@ public class LocalAgentExecutionService : IAgentExecutionService, IAsyncDisposab
 
         session.LastActivityAt = DateTime.UtcNow;
 
-        // Create options for this query
+        // Create options for this query, using the permission mode from the request
         var queryOptions = _optionsFactory.Create(session.Mode, session.WorkingDirectory,
             request.Model ?? session.Model, session.SystemPrompt);
-        queryOptions.PermissionMode = PermissionMode.BypassPermissions;
+        queryOptions.PermissionMode = request.PermissionMode;
         queryOptions.IncludePartialMessages = true;
         queryOptions.Resume = session.ConversationId;
 

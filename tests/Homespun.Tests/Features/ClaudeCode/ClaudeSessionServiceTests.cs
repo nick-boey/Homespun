@@ -597,6 +597,29 @@ public class ClaudeSessionServicePermissionModeTests
         // Verify it throws for missing options (getting past all validations)
         Assert.That(ex!.Message, Does.Contain("No options found"));
     }
+
+    [Test]
+    public void AgentMessageRequest_ShouldIncludePermissionMode()
+    {
+        // Verify that AgentMessageRequest includes a PermissionMode field
+        var request = new AgentMessageRequest(
+            SessionId: "session-1",
+            Message: "Hello",
+            PermissionMode: PermissionMode.AcceptEdits);
+
+        Assert.That(request.PermissionMode, Is.EqualTo(PermissionMode.AcceptEdits));
+    }
+
+    [Test]
+    public void AgentMessageRequest_PermissionMode_DefaultsBypassPermissions()
+    {
+        // AgentMessageRequest should default to BypassPermissions when not specified
+        var request = new AgentMessageRequest(
+            SessionId: "session-1",
+            Message: "Hello");
+
+        Assert.That(request.PermissionMode, Is.EqualTo(PermissionMode.BypassPermissions));
+    }
 }
 
 /// <summary>

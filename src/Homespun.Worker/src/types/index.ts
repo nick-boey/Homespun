@@ -12,6 +12,7 @@ export interface StartSessionRequest {
 export interface SendMessageRequest {
   message: string;
   model?: string;
+  permissionMode?: 'Default' | 'AcceptEdits' | 'Plan' | 'BypassPermissions';
 }
 
 export interface AnswerQuestionRequest {

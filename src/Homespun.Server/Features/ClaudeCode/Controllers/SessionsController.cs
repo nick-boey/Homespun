@@ -2,6 +2,7 @@ using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Projects;
 using Homespun.Shared.Requests;
 using Microsoft.AspNetCore.Mvc;
+using SdkPermissionMode = Homespun.ClaudeAgentSdk.PermissionMode;
 
 namespace Homespun.Features.ClaudeCode.Controllers;
 
@@ -195,7 +196,7 @@ public class SessionsController(
 
         try
         {
-            await sessionService.SendMessageAsync(id, request.Message);
+            await sessionService.SendMessageAsync(id, request.Message, (SdkPermissionMode)request.PermissionMode);
             return Accepted();
         }
         catch (Exception ex)
@@ -332,4 +333,10 @@ public class SendMessageRequest
     /// The message to send.
     /// </summary>
     public required string Message { get; set; }
+
+    /// <summary>
+    /// The permission mode for this message. Defaults to BypassPermissions.
+    /// </summary>
+    public Homespun.Shared.Models.Sessions.PermissionMode PermissionMode { get; set; } =
+        Homespun.Shared.Models.Sessions.PermissionMode.BypassPermissions;
 }

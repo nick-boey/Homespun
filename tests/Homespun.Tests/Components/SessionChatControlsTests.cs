@@ -190,6 +190,33 @@ public class SessionChatControlsTests
         Assert.That(defaultMode, Is.EqualTo(PermissionMode.BypassPermissions));
     }
 
+    [Test]
+    public void SendMessageRequest_ShouldIncludePermissionMode()
+    {
+        // SendMessageRequest must carry the permission mode from the UI to the server
+        var request = new Homespun.Shared.Requests.SendMessageRequest
+        {
+            Message = "Hello",
+            PermissionMode = Homespun.Shared.Models.Sessions.PermissionMode.AcceptEdits
+        };
+
+        Assert.That(request.PermissionMode,
+            Is.EqualTo(Homespun.Shared.Models.Sessions.PermissionMode.AcceptEdits));
+    }
+
+    [Test]
+    public void SendMessageRequest_PermissionMode_DefaultsBypassPermissions()
+    {
+        // When not specified, should default to BypassPermissions
+        var request = new Homespun.Shared.Requests.SendMessageRequest
+        {
+            Message = "Hello"
+        };
+
+        Assert.That(request.PermissionMode,
+            Is.EqualTo(Homespun.Shared.Models.Sessions.PermissionMode.BypassPermissions));
+    }
+
     #endregion
 
     #region Clear Context Tests

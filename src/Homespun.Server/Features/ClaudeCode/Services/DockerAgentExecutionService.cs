@@ -322,7 +322,8 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         var messageRequest = new
         {
             Message = request.Message,
-            Model = request.Model
+            Model = request.Model,
+            PermissionMode = request.PermissionMode.ToString()
         };
 
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, session.Cts.Token);

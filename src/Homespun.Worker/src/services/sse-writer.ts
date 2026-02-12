@@ -33,6 +33,12 @@ export async function* streamSessionEvents(
 
   try {
     for await (const msg of sessionManager.stream(sessionId)) {
+      if (msg.type === 'system') {
+        console.log(`[Worker][SSE] system message: subtype='${(msg as any).subtype}', permissionMode='${(msg as any).permissionMode || 'N/A'}'`);
+      }
+      if (msg.type === 'result') {
+        console.log(`[Worker][SSE] result: subtype='${(msg as any).subtype}'`);
+      }
       yield formatSSE(msg.type, msg);
 
       if (msg.type === 'result') {
