@@ -295,10 +295,6 @@ docker pull ghcr.io/nick-boey/homespun:latest
 
 Available tags: `latest`, `x.y.z` (specific version), `x.y` (latest patch)
 
-### Watchtower Auto-updates
-
-When running in production mode (default), Watchtower monitors for new releases and automatically updates the container every 5 minutes.
-
 ### Data Persistence
 
 Data is stored in `~/.homespun-container/data/` including:

@@ -5,18 +5,17 @@ set -e
 # Homespun Docker Runner
 # ============================================================================
 #
-# This script runs Homespun using Docker. By default, it builds images locally
-# for development. Use --watchtower for production deployments with auto-updates.
+# This script runs Homespun using Docker. By default, it uses pre-built GHCR images.
+# Use --local for development to build images locally.
 #
 # Usage:
-#   ./run.sh                    # Development: Build local images, Docker agents
-#   ./run.sh --watchtower       # Production: GHCR images + Watchtower auto-updates
+#   ./run.sh                    # Production: GHCR images
+#   ./run.sh --local            # Development: Build local images, Docker agents
 #   ./run.sh --local-agents     # Development: Build local, in-process agents
 #   ./run.sh --stop             # Stop all containers
 #   ./run.sh --logs             # View container logs
 #
 # Options:
-#   --watchtower                Use GHCR images with Watchtower auto-updates
 #   --local-agents              Use in-process agent execution (no worker containers)
 #   --debug                     Build in Debug configuration
 #   --mock                      Run in mock mode with seeded demo data
@@ -25,7 +24,7 @@ set -e
 #   -d, --detach                Run in detached mode (background) [default]
 #   --stop                      Stop running containers
 #   --logs                      Follow container logs
-#   --pull                      Pull latest image before starting (with --watchtower)
+#   --pull                      Pull latest image before starting
 #   --external-hostname HOST    Set external hostname for agent URLs
 #   --data-dir DIR              Override data directory (default: ~/.homespun-container/data)
 #   --container-name NAME       Override container name (default: homespun)
@@ -55,7 +54,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # Default values
-USE_WATCHTOWER=false
+USE_LOCAL=false
 USE_LOCAL_AGENTS=false
 USE_DEBUG=false
 USE_MOCK=false
@@ -90,7 +89,7 @@ show_help() {
 # Parse arguments
 while [[ "$#" -gt 0 ]]; do
     case $1 in
-        --watchtower) USE_WATCHTOWER=true ;;
+        --local) USE_LOCAL=true ;;
         --local-agents) USE_LOCAL_AGENTS=true ;;
         --debug) USE_DEBUG=true ;;
         --mock) USE_MOCK=true ;;
@@ -121,9 +120,7 @@ echo
 if [ "$ACTION" = "stop" ]; then
     log_info "Stopping containers..."
     docker stop "$CONTAINER_NAME" 2>/dev/null || true
-    docker stop watchtower 2>/dev/null || true
     docker rm "$CONTAINER_NAME" 2>/dev/null || true
-    docker rm watchtower 2>/dev/null || true
     log_success "Containers stopped."
     exit 0
 fi
@@ -145,18 +142,7 @@ log_success "      Docker is available."
 
 # Step 2: Check/build image
 log_info "[2/5] Checking container images..."
-if [ "$USE_WATCHTOWER" = true ]; then
-    # Production: Use GHCR images
-    IMAGE_NAME="ghcr.io/nick-boey/homespun:latest"
-    WORKER_IMAGE="ghcr.io/nick-boey/homespun-worker:latest"
-    if [ "$PULL_FIRST" = true ]; then
-        log_info "      Pulling latest images..."
-        docker pull "$IMAGE_NAME"
-        docker pull "$WORKER_IMAGE"
-    fi
-    log_success "      Using GHCR image: $IMAGE_NAME"
-    log_success "      Using GHCR worker: $WORKER_IMAGE"
-else
+if [ "$USE_LOCAL" = true ]; then
     # Development: Build base + both app images locally
     IMAGE_NAME="homespun:local"
     WORKER_IMAGE="homespun-worker:local"
@@ -186,6 +172,17 @@ else
         exit 1
     fi
     log_success "      Worker image built: $WORKER_IMAGE"
+else
+    # Production: Use GHCR images
+    IMAGE_NAME="ghcr.io/nick-boey/homespun:latest"
+    WORKER_IMAGE="ghcr.io/nick-boey/homespun-worker:latest"
+    if [ "$PULL_FIRST" = true ]; then
+        log_info "      Pulling latest images..."
+        docker pull "$IMAGE_NAME"
+        docker pull "$WORKER_IMAGE"
+    fi
+    log_success "      Using GHCR image: $IMAGE_NAME"
+    log_success "      Using GHCR worker: $WORKER_IMAGE"
 fi
 
 # Step 3: Read credentials
@@ -388,10 +385,10 @@ fi
 if [ "$USE_MOCK" = true ]; then
     echo "  Mock mode:   Enabled (seeded demo data)"
 fi
-if [ "$USE_WATCHTOWER" = true ]; then
-    echo "  Watchtower:  Enabled (auto-updates every 5 min)"
+if [ "$USE_LOCAL" = true ]; then
+    echo "  Build:       Local (development mode)"
 else
-    echo "  Watchtower:  Disabled (local development mode)"
+    echo "  Build:       GHCR (production images)"
 fi
 if [ "$USE_LOCAL_AGENTS" = true ]; then
     echo "  Agents:      In-process (Local mode)"
@@ -446,8 +443,8 @@ if [ -n "$EXTERNAL_HOSTNAME" ]; then
     DOCKER_CMD="$DOCKER_CMD -e HSP_EXTERNAL_HOSTNAME=$EXTERNAL_HOSTNAME"
 fi
 
-# Set worker image for Docker agent execution (when not using GHCR)
-if [ "$USE_WATCHTOWER" = false ]; then
+# Set worker image for Docker agent execution (when using local images)
+if [ "$USE_LOCAL" = true ]; then
     DOCKER_CMD="$DOCKER_CMD -e AgentExecution__Docker__WorkerImage=$WORKER_IMAGE"
 fi
 
@@ -470,23 +467,6 @@ DOCKER_CMD="$DOCKER_CMD $IMAGE_NAME"
 if [ "$DETACHED" = true ]; then
     log_info "Starting container in detached mode..."
     eval $DOCKER_CMD
-
-    # Start Watchtower for production mode (only with --watchtower)
-    if [ "$USE_WATCHTOWER" = true ]; then
-        docker stop watchtower 2>/dev/null || true
-        docker rm watchtower 2>/dev/null || true
-        log_info "      Pulling latest Watchtower image..."
-        docker pull nickfedor/watchtower:latest
-        docker run -d \
-            --name watchtower \
-            -v /var/run/docker.sock:/var/run/docker.sock \
-            -e WATCHTOWER_CLEANUP=true \
-            -e WATCHTOWER_POLL_INTERVAL=${WATCHTOWER_POLL_INTERVAL:-300} \
-            -e WATCHTOWER_INCLUDE_STOPPED=false \
-            -e WATCHTOWER_ROLLING_RESTART=true \
-            --restart unless-stopped \
-            nickfedor/watchtower "$CONTAINER_NAME"
-    fi
 
     echo
     log_success "Container started successfully!"

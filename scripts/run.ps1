@@ -1,27 +1,27 @@
 #!/usr/bin/env pwsh
 <#
 .SYNOPSIS
-    Runs the Homespun Docker container. By default, builds images locally for development.
+    Runs the Homespun Docker container. By default, uses pre-built GHCR images.
 
 .DESCRIPTION
     This script:
     - Validates Docker is running
     - Reads GitHub token from environment variables or .NET user secrets
     - Creates the ~/.homespun-container/data directory
-    - Builds local images by default for development
-    - Use -Watchtower for production deployments with auto-updates
+    - Uses pre-built GHCR images by default
+    - Use -Local for development to build images locally
 
 .EXAMPLE
     .\run.ps1
+    Production: Uses pre-built GHCR images.
+
+.EXAMPLE
+    .\run.ps1 -Local
     Development: Builds local images with Docker agent execution.
 
 .EXAMPLE
-    .\run.ps1 -Watchtower
-    Production: Uses GHCR images with Watchtower auto-updates.
-
-.EXAMPLE
     .\run.ps1 -LocalAgents
-    Development: Builds local images with in-process agent execution.
+    Development: Uses GHCR images with in-process agent execution.
 
 .EXAMPLE
     .\run.ps1 -DebugBuild
@@ -74,7 +74,7 @@
 [CmdletBinding(DefaultParameterSetName = 'Run')]
 param(
     [Parameter(ParameterSetName = 'Run')]
-    [switch]$Watchtower,
+    [switch]$Local,
 
     [Parameter(ParameterSetName = 'Run')]
     [switch]$LocalAgents,
@@ -306,8 +306,6 @@ try {
         Write-Host "Stopping container '$ContainerName'..." -ForegroundColor Cyan
         docker stop $ContainerName 2>$null
         docker rm $ContainerName 2>$null
-        docker stop watchtower 2>$null
-        docker rm watchtower 2>$null
         Write-Host "Containers stopped." -ForegroundColor Green
         exit 0
     }
@@ -331,19 +329,7 @@ try {
 
     # Step 2: Check/build image
     Write-Host "[2/5] Checking container images..." -ForegroundColor Cyan
-    if ($Watchtower) {
-        # Production: Use GHCR images
-        $ImageName = "ghcr.io/nick-boey/homespun:latest"
-        $WorkerImage = "ghcr.io/nick-boey/homespun-worker:latest"
-        if ($Pull) {
-            Write-Host "      Pulling latest images..." -ForegroundColor Cyan
-            docker pull $ImageName
-            docker pull $WorkerImage
-        }
-        Write-Host "      Using GHCR image: $ImageName" -ForegroundColor Green
-        Write-Host "      Using GHCR worker: $WorkerImage" -ForegroundColor Green
-    }
-    else {
+    if ($Local) {
         # Development: Build base + both app images locally
         $ImageName = "homespun:local"
         $WorkerImage = "homespun-worker:local"
@@ -371,6 +357,18 @@ try {
             Write-Error "Failed to build Worker Docker image."
         }
         Write-Host "      Worker image built: $WorkerImage" -ForegroundColor Green
+    }
+    else {
+        # Production: Use GHCR images
+        $ImageName = "ghcr.io/nick-boey/homespun:latest"
+        $WorkerImage = "ghcr.io/nick-boey/homespun-worker:latest"
+        if ($Pull) {
+            Write-Host "      Pulling latest images..." -ForegroundColor Cyan
+            docker pull $ImageName
+            docker pull $WorkerImage
+        }
+        Write-Host "      Using GHCR image: $ImageName" -ForegroundColor Green
+        Write-Host "      Using GHCR worker: $WorkerImage" -ForegroundColor Green
     }
 
     # Step 3: Read GitHub token
@@ -523,11 +521,11 @@ try {
     if ($MockMode) {
         Write-Host "  Mock mode:   Enabled (seeded demo data)"
     }
-    if ($Watchtower) {
-        Write-Host "  Watchtower:  Enabled (auto-updates every 5 min)"
+    if ($Local) {
+        Write-Host "  Build:       Local (development mode)"
     }
     else {
-        Write-Host "  Watchtower:  Disabled (local development mode)"
+        Write-Host "  Build:       GHCR (production images)"
     }
     if ($LocalAgents) {
         Write-Host "  Agents:      In-process (Local mode)"
@@ -598,8 +596,8 @@ try {
         $dockerArgs += "-e", "HSP_EXTERNAL_HOSTNAME=$externalHostnameValue"
     }
 
-    # Set worker image for Docker agent execution (when not using GHCR)
-    if (-not $Watchtower) {
+    # Set worker image for Docker agent execution (when using local images)
+    if ($Local) {
         $dockerArgs += "-e", "AgentExecution__Docker__WorkerImage=$WorkerImage"
     }
 
@@ -623,23 +621,6 @@ try {
     if ($runDetached) {
         Write-Host "Starting container in detached mode..." -ForegroundColor Cyan
         & docker @dockerArgs
-
-        # Start Watchtower for production mode (only with -Watchtower)
-        if ($Watchtower) {
-            docker stop watchtower 2>$null
-            docker rm watchtower 2>$null
-            Write-Host "      Pulling latest Watchtower image..." -ForegroundColor Cyan
-            docker pull nickfedor/watchtower:latest
-            docker run -d `
-                --name watchtower `
-                -v /var/run/docker.sock:/var/run/docker.sock `
-                -e WATCHTOWER_CLEANUP=true `
-                -e WATCHTOWER_POLL_INTERVAL=300 `
-                -e WATCHTOWER_INCLUDE_STOPPED=false `
-                -e WATCHTOWER_ROLLING_RESTART=true `
-                --restart unless-stopped `
-                nickfedor/watchtower $ContainerName
-        }
 
         Write-Host ""
         Write-Host "Container started successfully!" -ForegroundColor Green
