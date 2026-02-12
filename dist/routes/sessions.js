@@ -71,41 +71,6 @@ export function createSessionsRoute(sessionManager) {
             }
         });
     });
-    // POST /sessions/:id/answer - Answer a pending question (SSE stream)
-    sessions.post('/:id/answer', async (c) => {
-        const sessionId = c.req.param('id');
-        const body = await c.req.json();
-        console.log(`[Worker][Route] POST /sessions/${sessionId}/answer - ${Object.keys(body.answers).length} answers`);
-        c.header('Content-Type', 'text/event-stream');
-        c.header('Cache-Control', 'no-cache');
-        c.header('Connection', 'keep-alive');
-        return stream(c, async (s) => {
-            try {
-                // Format answers into a message, matching the C# worker behavior
-                const lines = ["I've answered your questions:", ''];
-                for (const [question, answer] of Object.entries(body.answers)) {
-                    lines.push(`**${question}**`);
-                    lines.push(`My answer: ${answer}`);
-                    lines.push('');
-                }
-                lines.push('Please continue with the task based on my answers above.');
-                const formattedMessage = lines.join('\n').trim();
-                await sessionManager.send(sessionId, formattedMessage);
-                for await (const chunk of streamSessionEvents(sessionManager, sessionId)) {
-                    await s.write(chunk);
-                }
-            }
-            catch (err) {
-                const message = err instanceof Error ? err.message : String(err);
-                await s.write(formatSSE('error', {
-                    sessionId,
-                    message,
-                    code: 'ANSWER_ERROR',
-                    isRecoverable: false,
-                }));
-            }
-        });
-    });
     // POST /sessions/:id/interrupt - Interrupt current turn
     sessions.post('/:id/interrupt', async (c) => {
         const sessionId = c.req.param('id');
