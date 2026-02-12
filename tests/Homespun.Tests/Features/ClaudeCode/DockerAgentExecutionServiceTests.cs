@@ -392,6 +392,137 @@ public class DockerAgentExecutionServiceTests
 
     #endregion
 
+    #region BuildContainerDockerArgs Tests
+
+    [Test]
+    public void BuildContainerDockerArgs_MountsWorkingDirectoryToWorkdir()
+    {
+        // Arrange
+        var options = new DockerAgentExecutionOptions
+        {
+            DataVolumePath = "/data",
+            HostDataPath = "/host/data",
+            WorkerImage = "test-image:latest",
+            NetworkName = "bridge"
+        };
+        var service = new DockerAgentExecutionService(
+            Options.Create(options), _loggerMock.Object);
+
+        // Act
+        var args = service.BuildContainerDockerArgs(
+            "test-container", "/data/src/Homespun/.clones/my-branch", useRm: false);
+
+        // Assert - working directory is mounted to /workdir with host path translation
+        Assert.That(args, Does.Contain("-v \"/host/data/src/Homespun/.clones/my-branch:/workdir\""));
+    }
+
+    [Test]
+    public void BuildContainerDockerArgs_SetsWorkingDirectoryEnvVar()
+    {
+        // Act
+        var args = _service.BuildContainerDockerArgs(
+            "test-container", "/data/some/path", useRm: false);
+
+        // Assert
+        Assert.That(args, Does.Contain("-e WORKING_DIRECTORY=/workdir"));
+    }
+
+    [Test]
+    public void BuildContainerDockerArgs_DoesNotMountFullDataVolume()
+    {
+        // Act
+        var args = _service.BuildContainerDockerArgs(
+            "test-container", "/data/some/path", useRm: false);
+
+        // Assert - should NOT have the full /data volume mount
+        Assert.That(args, Does.Not.Contain($"-v \"/data:/data\""));
+    }
+
+    [Test]
+    public void BuildContainerDockerArgs_IncludesRmFlag_WhenUseRmIsTrue()
+    {
+        // Act
+        var args = _service.BuildContainerDockerArgs(
+            "test-container", "/data/some/path", useRm: true);
+
+        // Assert
+        Assert.That(args, Does.Contain("run -d --rm"));
+    }
+
+    [Test]
+    public void BuildContainerDockerArgs_ExcludesRmFlag_WhenUseRmIsFalse()
+    {
+        // Act
+        var args = _service.BuildContainerDockerArgs(
+            "test-container", "/data/some/path", useRm: false);
+
+        // Assert
+        Assert.That(args, Does.Contain("run -d "));
+        Assert.That(args, Does.Not.Contain("--rm"));
+    }
+
+    [Test]
+    public void BuildContainerDockerArgs_IncludesIssueEnvVars_WhenProvided()
+    {
+        // Act
+        var args = _service.BuildContainerDockerArgs(
+            "test-container", "/data/some/path", useRm: false,
+            issueId: "abc123", projectName: "my-project");
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(args, Does.Contain("-e ISSUE_ID=abc123"));
+            Assert.That(args, Does.Contain("-e PROJECT_NAME=my-project"));
+        });
+    }
+
+    [Test]
+    public void BuildContainerDockerArgs_ExcludesIssueEnvVars_WhenNotProvided()
+    {
+        // Act
+        var args = _service.BuildContainerDockerArgs(
+            "test-container", "/data/some/path", useRm: false);
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(args, Does.Not.Contain("ISSUE_ID"));
+            Assert.That(args, Does.Not.Contain("PROJECT_NAME"));
+        });
+    }
+
+    [Test]
+    public void BuildContainerDockerArgs_IncludesContainerNameAndResourceLimits()
+    {
+        // Act
+        var args = _service.BuildContainerDockerArgs(
+            "my-container", "/data/some/path", useRm: false);
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(args, Does.Contain("--name my-container"));
+            Assert.That(args, Does.Contain($"--memory {_options.MemoryLimitBytes}"));
+            Assert.That(args, Does.Contain($"--cpus {_options.CpuLimit}"));
+            Assert.That(args, Does.Contain($"--network {_options.NetworkName}"));
+            Assert.That(args, Does.Contain(_options.WorkerImage));
+        });
+    }
+
+    [Test]
+    public void BuildContainerDockerArgs_DoesNotIncludeAspNetCoreUrls()
+    {
+        // Act
+        var args = _service.BuildContainerDockerArgs(
+            "test-container", "/data/some/path", useRm: false);
+
+        // Assert
+        Assert.That(args, Does.Not.Contain("ASPNETCORE_URLS"));
+    }
+
+    #endregion
+
     #region DisposeAsync Tests
 
     [Test]

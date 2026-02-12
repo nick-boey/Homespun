@@ -1,12 +1,10 @@
 import {
-  unstable_v2_createSession,
-  unstable_v2_resumeSession,
+  query as createQuery,
   type SDKMessage,
+  type Query,
 } from '@anthropic-ai/claude-agent-sdk';
 import type { SessionInfo } from '../types/index.js';
 import { randomUUID } from 'node:crypto';
-
-type Session = ReturnType<typeof unstable_v2_createSession>;
 
 export type SdkPermissionMode = 'default' | 'acceptEdits' | 'plan' | 'bypassPermissions';
 
@@ -24,7 +22,9 @@ export function mapPermissionMode(value: string | undefined): SdkPermissionMode 
 
 interface WorkerSession {
   id: string;
-  session: Session;
+  query: Query;
+  abortController: AbortController;
+  commonOptions: Record<string, unknown>;
   conversationId?: string;
   mode: string;
   model: string;
@@ -94,44 +94,35 @@ export class SessionManager {
     console.log(`[Worker][SessionManager] create() - mode='${opts.mode}', isPlan=${isPlan}, model='${opts.model}'`);
     const common = buildCommonOptions(opts.model, opts.systemPrompt, opts.workingDirectory);
 
-    const sessionOptions: Record<string, unknown> = {
+    const abortController = new AbortController();
+    const queryOptions: Record<string, unknown> = {
       ...common,
+      abortController,
+      permissionMode: isPlan ? 'plan' : 'bypassPermissions',
+      allowDangerouslySkipPermissions: !isPlan,
+      ...(isPlan && { allowedTools: PLAN_MODE_TOOLS }),
+      ...(opts.resumeSessionId && { resume: opts.resumeSessionId }),
     };
+    console.log(`[Worker][SessionManager] create() - permissionMode='${queryOptions.permissionMode}', allowDangerouslySkipPermissions=${queryOptions.allowDangerouslySkipPermissions}, cwd='${common.cwd}'`);
 
-    if (isPlan) {
-      sessionOptions.permissionMode = 'plan';
-      sessionOptions.allowedTools = PLAN_MODE_TOOLS;
-    } else {
-      sessionOptions.permissionMode = 'bypassPermissions';
-      sessionOptions.allowDangerouslySkipPermissions = true;
-    }
-    console.log(`[Worker][SessionManager] create() - attempting permissionMode='${sessionOptions.permissionMode}', allowDangerouslySkipPermissions=${sessionOptions.allowDangerouslySkipPermissions}`);
-
-    let session: Session;
-    if (opts.resumeSessionId) {
-      session = unstable_v2_resumeSession(opts.resumeSessionId, sessionOptions as Parameters<typeof unstable_v2_resumeSession>[1]);
-    } else {
-      session = unstable_v2_createSession(sessionOptions as Parameters<typeof unstable_v2_createSession>[0]);
-    }
+    const q = createQuery({ prompt: opts.prompt, options: queryOptions as any });
 
     const workerSession: WorkerSession = {
       id,
-      session,
+      query: q,
+      abortController,
+      commonOptions: common,
       conversationId: opts.resumeSessionId,
       mode: opts.mode,
       model: opts.model,
       permissionMode: isPlan ? 'plan' : 'bypassPermissions',
-      status: 'idle',
+      status: 'streaming',
       createdAt: new Date(),
       lastActivityAt: new Date(),
     };
 
     this.sessions.set(id, workerSession);
     console.log(`[Worker][SessionManager] create() - session created, workerSessionId='${id}'`);
-
-    // Send the initial prompt
-    await session.send(opts.prompt);
-    workerSession.status = 'streaming';
 
     return workerSession;
   }
@@ -147,8 +138,19 @@ export class SessionManager {
       ws.permissionMode = mapPermissionMode(permissionMode);
     }
 
+    const abortController = new AbortController();
+    const queryOptions: Record<string, unknown> = {
+      ...ws.commonOptions,
+      abortController,
+      model: model || ws.model,
+      permissionMode: ws.permissionMode,
+      allowDangerouslySkipPermissions: ws.permissionMode === 'bypassPermissions',
+      resume: ws.conversationId,
+    };
+
+    ws.query = createQuery({ prompt: message, options: queryOptions as any });
+    ws.abortController = abortController;
     ws.lastActivityAt = new Date();
-    await ws.session.send(message);
     ws.status = 'streaming';
 
     return ws;
@@ -161,23 +163,10 @@ export class SessionManager {
     }
 
     try {
-      let permissionModeSet = false;
-      for await (const msg of ws.session.stream()) {
+      for await (const msg of ws.query) {
         // Capture the conversation ID from any message
         if (msg.session_id) {
           ws.conversationId = msg.session_id;
-        }
-
-        // After first message (process is running), set the correct permission mode.
-        // SessionImpl hardcodes permissionMode="default", so we override at runtime.
-        // Uses ws.permissionMode which may have been updated by send() for per-message overrides.
-        if (!permissionModeSet) {
-          permissionModeSet = true;
-          const query = (ws.session as any).query;
-          if (query?.setPermissionMode) {
-            await query.setPermissionMode(ws.permissionMode);
-            console.log(`[Worker][SessionManager] stream() - setPermissionMode('${ws.permissionMode}') applied`);
-          }
         }
 
         if (msg.type === 'system' && (msg as any).subtype === 'init') {
@@ -198,7 +187,7 @@ export class SessionManager {
     const ws = this.sessions.get(sessionId);
     if (!ws) return;
 
-    ws.session.close();
+    ws.abortController.abort();
     ws.status = 'closed';
     this.sessions.delete(sessionId);
   }
