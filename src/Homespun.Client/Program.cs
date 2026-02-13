@@ -35,5 +35,6 @@ builder.Services.AddScoped<NotificationSignalRService>();
 builder.Services.AddScoped<IBreadcrumbService, BreadcrumbService>();
 builder.Services.AddSingleton<IMarkdownRenderingService, MarkdownRenderingService>();
 builder.Services.AddSingleton<IAgentStartupTracker, AgentStartupTracker>();
+builder.Services.AddScoped<MessageDisplayService>();
 
 await builder.Build().RunAsync();

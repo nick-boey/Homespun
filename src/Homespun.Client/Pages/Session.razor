@@ -14,6 +14,7 @@
 @inject IBreadcrumbService BreadcrumbService
 @inject HttpIssueApiService IssueApi
 @inject HttpProjectApiService ProjectApi
+@inject MessageDisplayService MessageDisplayService
 
 <PageTitle>Session - Homespun</PageTitle>
 
@@ -1669,136 +1670,7 @@
     private List<object> GetDisplayItems()
     {
         if (_session == null) return [];
-
-        var messages = _session.Messages.ToList();
-        var displayItems = new List<object>();
-        var currentToolGroup = new List<ToolExecution>();
-        var currentGroupMessages = new List<ClaudeMessage>();
-        DateTime currentGroupTimestamp = DateTime.UtcNow;
-
-        void FlushToolGroup()
-        {
-            if (currentToolGroup.Count > 0)
-            {
-                displayItems.Add(new ToolExecutionGroup
-                {
-                    Executions = new List<ToolExecution>(currentToolGroup),
-                    Timestamp = currentGroupTimestamp,
-                    OriginalMessages = new List<ClaudeMessage>(currentGroupMessages)
-                });
-                currentToolGroup.Clear();
-                currentGroupMessages.Clear();
-            }
-        }
-
-        for (int i = 0; i < messages.Count; i++)
-        {
-            var msg = messages[i];
-
-            if (msg.Role == ClaudeMessageRole.Assistant)
-            {
-                // Check if this assistant message has any tool use blocks
-                var toolUseBlocks = msg.Content.Where(c => c.Type == ClaudeContentType.ToolUse).ToList();
-                var nonToolBlocks = msg.Content.Where(c => c.Type != ClaudeContentType.ToolUse).ToList();
-
-                if (toolUseBlocks.Count > 0)
-                {
-                    // If there are non-tool blocks (text/thinking), emit them as a regular message first
-                    if (nonToolBlocks.Any(c => c.Type == ClaudeContentType.Text || c.Type == ClaudeContentType.Thinking))
-                    {
-                        // Flush any existing tool group before the text
-                        FlushToolGroup();
-
-                        // Create a synthetic message with only the non-tool content
-                        var textMessage = new ClaudeMessage
-                        {
-                            Id = msg.Id,
-                            SessionId = msg.SessionId,
-                            Role = msg.Role,
-                            CreatedAt = msg.CreatedAt,
-                            IsStreaming = msg.IsStreaming
-                        };
-                        foreach (var block in nonToolBlocks)
-                        {
-                            textMessage.Content.Add(block);
-                        }
-                        displayItems.Add(textMessage);
-                    }
-
-                    // Track the timestamp for the group
-                    if (currentToolGroup.Count == 0)
-                    {
-                        currentGroupTimestamp = msg.CreatedAt;
-                    }
-                    currentGroupMessages.Add(msg);
-
-                    // Add all tool use blocks to the current group
-                    foreach (var toolUse in toolUseBlocks)
-                    {
-                        currentToolGroup.Add(new ToolExecution { ToolUse = toolUse });
-                    }
-                }
-                else
-                {
-                    // No tool use blocks - flush any pending tool group and emit as regular message
-                    FlushToolGroup();
-                    displayItems.Add(msg);
-                }
-            }
-            else if (msg.Role == ClaudeMessageRole.User)
-            {
-                if (!IsRealUserMessage(msg))
-                {
-                    // This is a tool result message - pair results with pending tool uses
-                    currentGroupMessages.Add(msg);
-                    foreach (var resultContent in msg.Content.Where(c => c.Type == ClaudeContentType.ToolResult))
-                    {
-                        // Find the matching tool use by ToolUseId
-                        var matchingExecution = currentToolGroup
-                            .FirstOrDefault(e => e.ToolResult == null && e.ToolUse.ToolUseId == resultContent.ToolUseId);
-
-                        if (matchingExecution != null)
-                        {
-                            matchingExecution.ToolResult = resultContent;
-                        }
-                        else
-                        {
-                            // Fallback: match by position (first unmatched tool use)
-                            var unmatchedExecution = currentToolGroup.FirstOrDefault(e => e.ToolResult == null);
-                            if (unmatchedExecution != null)
-                            {
-                                unmatchedExecution.ToolResult = resultContent;
-                            }
-                            else
-                            {
-                                // No matching tool use found - create a standalone execution
-                                currentToolGroup.Add(new ToolExecution
-                                {
-                                    ToolUse = new ClaudeMessageContent
-                                    {
-                                        Type = ClaudeContentType.ToolUse,
-                                        ToolName = resultContent.ParsedToolResult?.ToolName ?? resultContent.ToolName ?? "Tool",
-                                        ToolUseId = resultContent.ToolUseId
-                                    },
-                                    ToolResult = resultContent
-                                });
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    // Real user message - flush tool group and emit
-                    FlushToolGroup();
-                    displayItems.Add(msg);
-                }
-            }
-        }
-
-        // Flush any remaining tool group
-        FlushToolGroup();
-
-        return displayItems;
+        return MessageDisplayService.GetDisplayItems(_session.Messages);
     }
 
     /// <summary>
