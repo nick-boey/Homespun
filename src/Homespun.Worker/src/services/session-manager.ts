@@ -1,9 +1,10 @@
 import {
-  query as createQuery,
+  query,
   type SDKMessage,
   type Query,
+  type PermissionResult,
 } from '@anthropic-ai/claude-agent-sdk';
-import type { SessionInfo } from '../types/index.js';
+import type { SessionInfo, AskUserQuestionInput, ExitPlanModeInput } from '../types/index.js';
 import { randomUUID } from 'node:crypto';
 
 export type SdkPermissionMode = 'default' | 'acceptEdits' | 'plan' | 'bypassPermissions';
@@ -20,11 +21,21 @@ export function mapPermissionMode(value: string | undefined): SdkPermissionMode 
   return PERMISSION_MODE_MAP[value] ?? 'bypassPermissions';
 }
 
+interface PendingQuestionState {
+  questions: AskUserQuestionInput['questions'];
+  resolve: (answers: Record<string, string>) => void;
+  reject: (error: Error) => void;
+}
+
+interface PendingPlanApprovalState {
+  resolve: (approved: boolean) => void;
+  reject: (error: Error) => void;
+}
+
 interface WorkerSession {
   id: string;
   query: Query;
-  abortController: AbortController;
-  commonOptions: Record<string, unknown>;
+  inputController: InputController;
   conversationId?: string;
   mode: string;
   model: string;
@@ -32,6 +43,68 @@ interface WorkerSession {
   status: 'idle' | 'streaming' | 'closed';
   createdAt: Date;
   lastActivityAt: Date;
+}
+
+/**
+ * Controller for managing streaming input to the V1 query() API.
+ * Allows sending messages to an active query session.
+ */
+class InputController {
+  private messageQueue: SDKUserMessage[] = [];
+  private resolver: ((value: IteratorResult<SDKUserMessage>) => void) | null = null;
+  private done = false;
+
+  async *[Symbol.asyncIterator](): AsyncGenerator<SDKUserMessage> {
+    while (!this.done) {
+      if (this.messageQueue.length > 0) {
+        yield this.messageQueue.shift()!;
+      } else {
+        // Wait for next message
+        const result = await new Promise<IteratorResult<SDKUserMessage>>((resolve) => {
+          this.resolver = resolve;
+        });
+        if (result.done) break;
+        yield result.value;
+      }
+    }
+  }
+
+  send(message: string): void {
+    const userMessage: SDKUserMessage = {
+      type: 'user',
+      session_id: '',
+      message: {
+        role: 'user',
+        content: [{ type: 'text', text: message }],
+      },
+      parent_tool_use_id: null,
+    };
+
+    if (this.resolver) {
+      this.resolver({ value: userMessage, done: false });
+      this.resolver = null;
+    } else {
+      this.messageQueue.push(userMessage);
+    }
+  }
+
+  close(): void {
+    this.done = true;
+    if (this.resolver) {
+      this.resolver({ value: undefined as any, done: true });
+      this.resolver = null;
+    }
+  }
+}
+
+interface SDKUserMessage {
+  type: 'user';
+  session_id: string;
+  message: {
+    role: 'user';
+    content: Array<{ type: 'text'; text: string }>;
+  };
+  parent_tool_use_id: string | null;
 }
 
 const PLAN_MODE_TOOLS = [
@@ -80,6 +153,8 @@ function buildCommonOptions(model: string, systemPrompt?: string, workingDirecto
 
 export class SessionManager {
   private sessions = new Map<string, WorkerSession>();
+  private pendingQuestions = new Map<string, PendingQuestionState>();
+  private pendingPlanApprovals = new Map<string, PendingPlanApprovalState>();
 
   async create(opts: {
     prompt: string;
@@ -94,24 +169,59 @@ export class SessionManager {
     console.log(`[Worker][SessionManager] create() - mode='${opts.mode}', isPlan=${isPlan}, model='${opts.model}'`);
     const common = buildCommonOptions(opts.model, opts.systemPrompt, opts.workingDirectory);
 
-    const abortController = new AbortController();
-    const queryOptions: Record<string, unknown> = {
-      ...common,
-      abortController,
-      permissionMode: isPlan ? 'plan' : 'bypassPermissions',
-      allowDangerouslySkipPermissions: !isPlan,
-      ...(isPlan && { allowedTools: PLAN_MODE_TOOLS }),
-      ...(opts.resumeSessionId && { resume: opts.resumeSessionId }),
-    };
-    console.log(`[Worker][SessionManager] create() - permissionMode='${queryOptions.permissionMode}', allowDangerouslySkipPermissions=${queryOptions.allowDangerouslySkipPermissions}, cwd='${common.cwd}'`);
+    const inputController = new InputController();
 
-    const q = createQuery({ prompt: opts.prompt, options: queryOptions as any });
+    // Create canUseTool callback that handles AskUserQuestion and ExitPlanMode
+    const canUseTool = this.createCanUseToolCallback(id);
+
+    // Build session options
+    const sessionOptions: Record<string, unknown> = {
+      ...common,
+      canUseTool,
+    };
+
+    if (isPlan) {
+      sessionOptions.permissionMode = 'plan';
+      sessionOptions.allowedTools = PLAN_MODE_TOOLS;
+    } else {
+      sessionOptions.permissionMode = 'bypassPermissions';
+      sessionOptions.allowDangerouslySkipPermissions = true;
+    }
+
+    if (opts.resumeSessionId) {
+      sessionOptions.resume = opts.resumeSessionId;
+    }
+
+    console.log(`[Worker][SessionManager] create() - attempting permissionMode='${sessionOptions.permissionMode}', allowDangerouslySkipPermissions=${sessionOptions.allowDangerouslySkipPermissions}`);
+
+    // Create async generator that yields the initial message and subsequent messages
+    async function* createInputStream(initialPrompt: string, controller: InputController): AsyncGenerator<SDKUserMessage> {
+      // Yield initial prompt
+      yield {
+        type: 'user',
+        session_id: '',
+        message: {
+          role: 'user',
+          content: [{ type: 'text', text: initialPrompt }],
+        },
+        parent_tool_use_id: null,
+      };
+
+      // Yield subsequent messages from the controller
+      for await (const msg of controller) {
+        yield msg;
+      }
+    }
+
+    const q = query({
+      prompt: createInputStream(opts.prompt, inputController),
+      options: sessionOptions as Parameters<typeof query>[0]['options'],
+    });
 
     const workerSession: WorkerSession = {
       id,
       query: q,
-      abortController,
-      commonOptions: common,
+      inputController,
       conversationId: opts.resumeSessionId,
       mode: opts.mode,
       model: opts.model,
@@ -127,6 +237,139 @@ export class SessionManager {
     return workerSession;
   }
 
+  /**
+   * Creates the canUseTool callback for a session.
+   * This callback intercepts AskUserQuestion and ExitPlanMode tools to pause execution
+   * until the user provides a response.
+   */
+  private createCanUseToolCallback(sessionId: string) {
+    return async (
+      toolName: string,
+      input: Record<string, unknown>,
+    ): Promise<PermissionResult> => {
+      console.log(`[Worker][SessionManager] canUseTool - tool='${toolName}', sessionId='${sessionId}'`);
+
+      if (toolName === 'AskUserQuestion') {
+        const questionInput = input as unknown as AskUserQuestionInput;
+
+        // Create promise that will be resolved when /answer endpoint is called
+        const answersPromise = new Promise<Record<string, string>>((resolve, reject) => {
+          this.pendingQuestions.set(sessionId, {
+            questions: questionInput.questions,
+            resolve,
+            reject,
+          });
+        });
+
+        console.log(`[Worker][SessionManager] canUseTool - waiting for answers on session '${sessionId}'`);
+
+        // Wait for answers (this pauses SDK execution)
+        const answers = await answersPromise;
+
+        console.log(`[Worker][SessionManager] canUseTool - received answers for session '${sessionId}'`);
+
+        // Return allow with populated answers
+        return {
+          behavior: 'allow',
+          updatedInput: {
+            questions: questionInput.questions,
+            answers,
+          },
+        };
+      }
+
+      if (toolName === 'ExitPlanMode') {
+        // Create promise that will be resolved when /approve-plan endpoint is called
+        const approvalPromise = new Promise<boolean>((resolve, reject) => {
+          this.pendingPlanApprovals.set(sessionId, {
+            resolve,
+            reject,
+          });
+        });
+
+        console.log(`[Worker][SessionManager] canUseTool - waiting for plan approval on session '${sessionId}'`);
+
+        // Wait for approval (this pauses SDK execution)
+        const approved = await approvalPromise;
+
+        console.log(`[Worker][SessionManager] canUseTool - plan ${approved ? 'approved' : 'rejected'} for session '${sessionId}'`);
+
+        if (approved) {
+          return {
+            behavior: 'allow',
+            updatedInput: input,
+          };
+        } else {
+          return {
+            behavior: 'deny',
+            message: 'User rejected the plan',
+          };
+        }
+      }
+
+      // Allow other tools
+      return {
+        behavior: 'allow',
+        updatedInput: input,
+      };
+    };
+  }
+
+  /**
+   * Resolves a pending question for a session.
+   * Called by the /answer endpoint when the user provides answers.
+   */
+  resolvePendingQuestion(sessionId: string, answers: Record<string, string>): boolean {
+    const pending = this.pendingQuestions.get(sessionId);
+    if (!pending) {
+      console.log(`[Worker][SessionManager] resolvePendingQuestion - no pending question for session '${sessionId}'`);
+      return false;
+    }
+
+    pending.resolve(answers);
+    this.pendingQuestions.delete(sessionId);
+    console.log(`[Worker][SessionManager] resolvePendingQuestion - resolved for session '${sessionId}'`);
+    return true;
+  }
+
+  /**
+   * Resolves a pending plan approval for a session.
+   * Called by the /approve-plan endpoint when the user approves or rejects the plan.
+   */
+  resolvePendingPlanApproval(sessionId: string, approved: boolean): boolean {
+    const pending = this.pendingPlanApprovals.get(sessionId);
+    if (!pending) {
+      console.log(`[Worker][SessionManager] resolvePendingPlanApproval - no pending approval for session '${sessionId}'`);
+      return false;
+    }
+
+    pending.resolve(approved);
+    this.pendingPlanApprovals.delete(sessionId);
+    console.log(`[Worker][SessionManager] resolvePendingPlanApproval - resolved (approved=${approved}) for session '${sessionId}'`);
+    return true;
+  }
+
+  /**
+   * Checks if a session has a pending question.
+   */
+  hasPendingQuestion(sessionId: string): boolean {
+    return this.pendingQuestions.has(sessionId);
+  }
+
+  /**
+   * Checks if a session has a pending plan approval.
+   */
+  hasPendingPlanApproval(sessionId: string): boolean {
+    return this.pendingPlanApprovals.has(sessionId);
+  }
+
+  /**
+   * Gets the pending questions for a session.
+   */
+  getPendingQuestions(sessionId: string): AskUserQuestionInput['questions'] | undefined {
+    return this.pendingQuestions.get(sessionId)?.questions;
+  }
+
   async send(sessionId: string, message: string, model?: string, permissionMode?: string): Promise<WorkerSession> {
     console.log(`[Worker][SessionManager] send() - sessionId='${sessionId}', messageLength=${message?.length}, model=${model || 'default'}, permissionMode=${permissionMode || 'unchanged'}`);
     const ws = this.sessions.get(sessionId);
@@ -136,21 +379,15 @@ export class SessionManager {
 
     if (permissionMode) {
       ws.permissionMode = mapPermissionMode(permissionMode);
+      // Update permission mode on the query if possible
+      if (ws.query.setPermissionMode) {
+        await ws.query.setPermissionMode(ws.permissionMode);
+        console.log(`[Worker][SessionManager] send() - setPermissionMode('${ws.permissionMode}') applied`);
+      }
     }
 
-    const abortController = new AbortController();
-    const queryOptions: Record<string, unknown> = {
-      ...ws.commonOptions,
-      abortController,
-      model: model || ws.model,
-      permissionMode: ws.permissionMode,
-      allowDangerouslySkipPermissions: ws.permissionMode === 'bypassPermissions',
-      resume: ws.conversationId,
-    };
-
-    ws.query = createQuery({ prompt: message, options: queryOptions as any });
-    ws.abortController = abortController;
     ws.lastActivityAt = new Date();
+    ws.inputController.send(message);
     ws.status = 'streaming';
 
     return ws;
@@ -187,7 +424,20 @@ export class SessionManager {
     const ws = this.sessions.get(sessionId);
     if (!ws) return;
 
-    ws.abortController.abort();
+    // Reject any pending questions or approvals
+    const pendingQuestion = this.pendingQuestions.get(sessionId);
+    if (pendingQuestion) {
+      pendingQuestion.reject(new Error('Session closed'));
+      this.pendingQuestions.delete(sessionId);
+    }
+
+    const pendingApproval = this.pendingPlanApprovals.get(sessionId);
+    if (pendingApproval) {
+      pendingApproval.reject(new Error('Session closed'));
+      this.pendingPlanApprovals.delete(sessionId);
+    }
+
+    ws.inputController.close();
     ws.status = 'closed';
     this.sessions.delete(sessionId);
   }

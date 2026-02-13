@@ -160,8 +160,35 @@ describe('POST /sessions/:id/message', () => {
 });
 
 describe('POST /sessions/:id/answer', () => {
-  it('formats Q&A into markdown and sends', async () => {
+  it('resolves pending question when one exists', async () => {
     const { sm, app } = createApp();
+    sm.resolvePendingQuestion.mockReturnValue(true);
+    sm.get.mockReturnValue({ id: 'sess-1', conversationId: 'c1' });
+    sm.stream.mockReturnValue((async function* () {})());
+
+    const res = await app.request('/sess-1/answer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        answers: {
+          'Which framework?': 'React',
+          'Include tests?': 'Yes',
+        },
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(sm.resolvePendingQuestion).toHaveBeenCalledWith('sess-1', {
+      'Which framework?': 'React',
+      'Include tests?': 'Yes',
+    });
+    // Should not send as message when pending question was resolved
+    expect(sm.send).not.toHaveBeenCalled();
+  });
+
+  it('falls back to message format when no pending question', async () => {
+    const { sm, app } = createApp();
+    sm.resolvePendingQuestion.mockReturnValue(false);
     sm.send.mockResolvedValue(undefined);
     sm.get.mockReturnValue({ id: 'sess-1', conversationId: 'c1' });
     sm.stream.mockReturnValue((async function* () {})());
@@ -186,8 +213,9 @@ describe('POST /sessions/:id/answer', () => {
     expect(sentMessage).toContain('Please continue with the task based on my answers above.');
   });
 
-  it('returns ANSWER_ERROR event on send failure', async () => {
+  it('returns ANSWER_ERROR event on send failure in fallback mode', async () => {
     const { sm, app } = createApp();
+    sm.resolvePendingQuestion.mockReturnValue(false);
     sm.send.mockRejectedValue(new Error('Send failed'));
 
     const res = await app.request('/sess-1/answer', {
@@ -202,6 +230,55 @@ describe('POST /sessions/:id/answer', () => {
     expect(errorEvent!.data).toMatchObject({
       code: 'ANSWER_ERROR',
     });
+  });
+});
+
+describe('POST /sessions/:id/approve-plan', () => {
+  it('resolves pending plan approval when approved', async () => {
+    const { sm, app } = createApp();
+    sm.resolvePendingPlanApproval.mockReturnValue(true);
+    sm.get.mockReturnValue({ id: 'sess-1', conversationId: 'c1' });
+    sm.stream.mockReturnValue((async function* () {})());
+
+    const res = await app.request('/sess-1/approve-plan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ approved: true }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(sm.resolvePendingPlanApproval).toHaveBeenCalledWith('sess-1', true);
+  });
+
+  it('resolves pending plan approval when rejected', async () => {
+    const { sm, app } = createApp();
+    sm.resolvePendingPlanApproval.mockReturnValue(true);
+    sm.get.mockReturnValue({ id: 'sess-1', conversationId: 'c1' });
+    sm.stream.mockReturnValue((async function* () {})());
+
+    const res = await app.request('/sess-1/approve-plan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ approved: false }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(sm.resolvePendingPlanApproval).toHaveBeenCalledWith('sess-1', false);
+  });
+
+  it('returns 400 when no pending plan approval', async () => {
+    const { sm, app } = createApp();
+    sm.resolvePendingPlanApproval.mockReturnValue(false);
+
+    const res = await app.request('/sess-1/approve-plan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ approved: true }),
+    });
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe('No pending plan approval for session');
   });
 });
 

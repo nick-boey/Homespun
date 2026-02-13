@@ -7,6 +7,7 @@ import type {
   StartSessionRequest,
   SendMessageRequest,
   AnswerQuestionRequest,
+  ApprovePlanRequest,
 } from '../types/index.js';
 
 export function createSessionsRoute(sessionManager: SessionManager) {
@@ -93,24 +94,54 @@ export function createSessionsRoute(sessionManager: SessionManager) {
     const body = await c.req.json<AnswerQuestionRequest>();
     console.log(`[Worker][Route] POST /sessions/${sessionId}/answer - ${Object.keys(body.answers).length} answers`);
 
+    // Resolve the pending question (this unblocks the canUseTool callback)
+    const resolved = sessionManager.resolvePendingQuestion(sessionId, body.answers);
+    if (!resolved) {
+      // Fall back to sending as a message if no pending question
+      // This handles the case where the session wasn't waiting for a question
+      console.log(`[Worker][Route] POST /sessions/${sessionId}/answer - no pending question, sending as message`);
+
+      c.header('Content-Type', 'text/event-stream');
+      c.header('Cache-Control', 'no-cache');
+      c.header('Connection', 'keep-alive');
+
+      return stream(c, async (s) => {
+        try {
+          // Format answers into a message as fallback
+          const lines: string[] = ["I've answered your questions:", ''];
+          for (const [question, answer] of Object.entries(body.answers)) {
+            lines.push(`**${question}**`);
+            lines.push(`My answer: ${answer}`);
+            lines.push('');
+          }
+          lines.push('Please continue with the task based on my answers above.');
+
+          const formattedMessage = lines.join('\n').trim();
+          await sessionManager.send(sessionId, formattedMessage);
+
+          for await (const chunk of streamSessionEvents(sessionManager, sessionId)) {
+            await s.write(chunk);
+          }
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          await s.write(formatSSE('error', {
+            sessionId,
+            message,
+            code: 'ANSWER_ERROR',
+            isRecoverable: false,
+          }));
+        }
+      });
+    }
+
+    // The pending question was resolved - the stream continues automatically
+    // We need to return a stream to continue receiving messages
     c.header('Content-Type', 'text/event-stream');
     c.header('Cache-Control', 'no-cache');
     c.header('Connection', 'keep-alive');
 
     return stream(c, async (s) => {
       try {
-        // Format answers into a message, matching the C# worker behavior
-        const lines: string[] = ["I've answered your questions:", ''];
-        for (const [question, answer] of Object.entries(body.answers)) {
-          lines.push(`**${question}**`);
-          lines.push(`My answer: ${answer}`);
-          lines.push('');
-        }
-        lines.push('Please continue with the task based on my answers above.');
-
-        const formattedMessage = lines.join('\n').trim();
-        await sessionManager.send(sessionId, formattedMessage);
-
         for await (const chunk of streamSessionEvents(sessionManager, sessionId)) {
           await s.write(chunk);
         }
@@ -120,6 +151,40 @@ export function createSessionsRoute(sessionManager: SessionManager) {
           sessionId,
           message,
           code: 'ANSWER_ERROR',
+          isRecoverable: false,
+        }));
+      }
+    });
+  });
+
+  // POST /sessions/:id/approve-plan - Approve or reject a pending plan (SSE stream)
+  sessions.post('/:id/approve-plan', async (c) => {
+    const sessionId = c.req.param('id');
+    const body = await c.req.json<ApprovePlanRequest>();
+    console.log(`[Worker][Route] POST /sessions/${sessionId}/approve-plan - approved=${body.approved}`);
+
+    // Resolve the pending plan approval (this unblocks the canUseTool callback)
+    const resolved = sessionManager.resolvePendingPlanApproval(sessionId, body.approved);
+    if (!resolved) {
+      return c.json({ error: 'No pending plan approval for session' }, 400);
+    }
+
+    // The pending approval was resolved - the stream continues automatically
+    c.header('Content-Type', 'text/event-stream');
+    c.header('Cache-Control', 'no-cache');
+    c.header('Connection', 'keep-alive');
+
+    return stream(c, async (s) => {
+      try {
+        for await (const chunk of streamSessionEvents(sessionManager, sessionId)) {
+          await s.write(chunk);
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        await s.write(formatSSE('error', {
+          sessionId,
+          message,
+          code: 'APPROVE_PLAN_ERROR',
           isRecoverable: false,
         }));
       }

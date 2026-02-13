@@ -19,6 +19,33 @@ export interface AnswerQuestionRequest {
   answers: Record<string, string>;
 }
 
+export interface ApprovePlanRequest {
+  approved: boolean;
+}
+
+// SDK tool input types
+
+export interface QuestionOption {
+  label: string;
+  description: string;
+}
+
+export interface UserQuestion {
+  question: string;
+  header: string;
+  options: QuestionOption[];
+  multiSelect: boolean;
+}
+
+export interface AskUserQuestionInput {
+  questions: UserQuestion[];
+  answers?: Record<string, string>;
+}
+
+export interface ExitPlanModeInput {
+  plan?: string;
+}
+
 export interface FileReadRequest {
   filePath: string;
 }

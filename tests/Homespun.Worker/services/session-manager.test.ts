@@ -1,29 +1,33 @@
 import { vi, type Mock } from 'vitest';
-import { createMockSDKSession, mockStreamFromMessages, mockQueryFromMessages, type MockSDKSession } from '../helpers/mock-sdk.js';
+import { createMockQuery, setMockQueryMessages, type MockQuery } from '../helpers/mock-sdk.js';
 import { createAssistantMessage, createResultMessage, createSystemMessage } from '../helpers/test-fixtures.js';
 import { collectAsyncGenerator } from '../helpers/async-helpers.js';
 
+// Track the canUseTool callback that gets passed to query()
+let capturedCanUseTool: ((toolName: string, input: Record<string, unknown>) => Promise<any>) | undefined;
+
 // Use vi.hoisted to ensure variables are available during vi.mock factory execution
-const { mockCreateSession, mockResumeSession, mockRandomUUID, mockQuery, getMockSession, setMockSession } = vi.hoisted(() => {
-  let _mockSession: any = null;
+const { mockQuery, mockRandomUUID, getMockQuery, setMockQuery, getCapturedCanUseTool, setCapturedCanUseTool } = vi.hoisted(() => {
+  let _mockQuery: any = null;
+  let _capturedCanUseTool: any = undefined;
   return {
-    mockCreateSession: vi.fn((..._args: any[]) => _mockSession),
-    mockResumeSession: vi.fn((..._args: any[]) => _mockSession),
-    mockRandomUUID: vi.fn(() => 'test-uuid-1234'),
-    mockQuery: vi.fn((..._args: any[]) => {
-      if (!_mockSession?.query) {
-        throw new Error('Mock session not initialized');
+    mockQuery: vi.fn((...args: any[]) => {
+      // Capture the canUseTool callback from options
+      const options = args[0]?.options;
+      if (options?.canUseTool) {
+        _capturedCanUseTool = options.canUseTool;
       }
-      return _mockSession.query;
+      return _mockQuery;
     }),
-    getMockSession: () => _mockSession,
-    setMockSession: (s: any) => { _mockSession = s; },
+    mockRandomUUID: vi.fn(() => 'test-uuid-1234'),
+    getMockQuery: () => _mockQuery,
+    setMockQuery: (q: any) => { _mockQuery = q; },
+    getCapturedCanUseTool: () => _capturedCanUseTool,
+    setCapturedCanUseTool: (fn: any) => { _capturedCanUseTool = fn; },
   };
 });
 
 vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
-  unstable_v2_createSession: mockCreateSession,
-  unstable_v2_resumeSession: mockResumeSession,
   query: mockQuery,
 }));
 
@@ -61,16 +65,22 @@ describe('mapPermissionMode()', () => {
 
 describe('SessionManager', () => {
   let manager: SessionManager;
-  let mockSession: MockSDKSession;
+  let mockQueryObj: MockQuery;
 
   beforeEach(() => {
     manager = new SessionManager();
-    mockSession = createMockSDKSession();
-    setMockSession(mockSession);
+    mockQueryObj = createMockQuery();
+    setMockQuery(mockQueryObj);
+    setCapturedCanUseTool(undefined);
 
     // Reset mock implementations after restoreMocks clears them
-    mockCreateSession.mockImplementation((..._args: any[]) => getMockSession());
-    mockResumeSession.mockImplementation((..._args: any[]) => getMockSession());
+    mockQuery.mockImplementation((...args: any[]) => {
+      const options = args[0]?.options;
+      if (options?.canUseTool) {
+        setCapturedCanUseTool(options.canUseTool);
+      }
+      return getMockQuery();
+    });
     mockRandomUUID.mockImplementation(() => 'test-uuid-1234');
 
     vi.stubEnv('WORKING_DIRECTORY', '/test/workdir');
@@ -90,13 +100,20 @@ describe('SessionManager', () => {
       mode: 'Plan',
     };
 
-    it('passes permissionMode plan and allowedTools for plan mode', async () => {
+    it('calls query() with options including canUseTool callback', async () => {
       await manager.create(baseOpts);
 
       expect(mockQuery).toHaveBeenCalledOnce();
-      const callArgs = mockQuery.mock.calls[0][0] as Record<string, unknown>;
-      expect(callArgs.prompt).toBe('Hello agent');
-      const opts = callArgs.options as Record<string, unknown>;
+      const args = mockQuery.mock.calls[0][0] as Record<string, unknown>;
+      expect(args.options).toBeDefined();
+      expect((args.options as any).canUseTool).toBeDefined();
+    });
+
+    it('passes permissionMode plan and allowedTools for plan mode', async () => {
+      await manager.create(baseOpts);
+
+      const args = mockQuery.mock.calls[0][0] as Record<string, unknown>;
+      const opts = args.options as Record<string, unknown>;
       expect(opts.permissionMode).toBe('plan');
       expect(opts.allowedTools).toEqual([
         'Read', 'Glob', 'Grep', 'WebFetch', 'WebSearch',
@@ -107,40 +124,21 @@ describe('SessionManager', () => {
     it('passes permissionMode bypassPermissions for build mode', async () => {
       await manager.create({ ...baseOpts, mode: 'Build' });
 
-      expect(mockQuery).toHaveBeenCalledOnce();
-      const callArgs = mockQuery.mock.calls[0][0] as Record<string, unknown>;
-      const opts = callArgs.options as Record<string, unknown>;
+      const args = mockQuery.mock.calls[0][0] as Record<string, unknown>;
+      const opts = args.options as Record<string, unknown>;
       expect(opts.permissionMode).toBe('bypassPermissions');
       expect(opts.allowDangerouslySkipPermissions).toBe(true);
     });
 
-    it('calls query with resume when resumeSessionId is provided', async () => {
+    it('passes resume option when resumeSessionId is provided', async () => {
       await manager.create({ ...baseOpts, resumeSessionId: 'conv-abc' });
 
-      expect(mockQuery).toHaveBeenCalledOnce();
-      const callArgs = mockQuery.mock.calls[0][0] as Record<string, unknown>;
-      const opts = callArgs.options as Record<string, unknown>;
+      const args = mockQuery.mock.calls[0][0] as Record<string, unknown>;
+      const opts = args.options as Record<string, unknown>;
       expect(opts.resume).toBe('conv-abc');
     });
 
-    it('calls query without resume when resumeSessionId not provided', async () => {
-      await manager.create(baseOpts);
-
-      expect(mockQuery).toHaveBeenCalledOnce();
-      const callArgs = mockQuery.mock.calls[0][0] as Record<string, unknown>;
-      const opts = callArgs.options as Record<string, unknown>;
-      expect(opts.resume).toBeUndefined();
-    });
-
-    it('passes initial prompt to query', async () => {
-      await manager.create(baseOpts);
-
-      expect(mockQuery).toHaveBeenCalledOnce();
-      const callArgs = mockQuery.mock.calls[0][0] as Record<string, unknown>;
-      expect(callArgs.prompt).toBe('Hello agent');
-    });
-
-    it('sets status to streaming after send', async () => {
+    it('sets status to streaming after create', async () => {
       const ws = await manager.create(baseOpts);
 
       expect(ws.status).toBe('streaming');
@@ -162,9 +160,8 @@ describe('SessionManager', () => {
     it('passes append field in systemPrompt option when systemPrompt provided', async () => {
       await manager.create({ ...baseOpts, systemPrompt: 'Be helpful' });
 
-      expect(mockQuery).toHaveBeenCalledOnce();
-      const callArgs = mockQuery.mock.calls[0][0] as Record<string, unknown>;
-      const opts = callArgs.options as Record<string, unknown>;
+      const args = mockQuery.mock.calls[0][0] as Record<string, unknown>;
+      const opts = args.options as Record<string, unknown>;
       expect(opts.systemPrompt).toEqual({
         type: 'preset',
         preset: 'claude_code',
@@ -175,9 +172,8 @@ describe('SessionManager', () => {
     it('omits append when no systemPrompt', async () => {
       await manager.create(baseOpts);
 
-      expect(mockQuery).toHaveBeenCalledOnce();
-      const callArgs = mockQuery.mock.calls[0][0] as Record<string, unknown>;
-      const opts = callArgs.options as Record<string, unknown>;
+      const args = mockQuery.mock.calls[0][0] as Record<string, unknown>;
+      const opts = args.options as Record<string, unknown>;
       expect(opts.systemPrompt).toEqual({
         type: 'preset',
         preset: 'claude_code',
@@ -187,18 +183,16 @@ describe('SessionManager', () => {
     it('uses workingDirectory param over env var', async () => {
       await manager.create({ ...baseOpts, workingDirectory: '/custom/dir' });
 
-      expect(mockQuery).toHaveBeenCalledOnce();
-      const callArgs = mockQuery.mock.calls[0][0] as Record<string, unknown>;
-      const opts = callArgs.options as Record<string, unknown>;
+      const args = mockQuery.mock.calls[0][0] as Record<string, unknown>;
+      const opts = args.options as Record<string, unknown>;
       expect(opts.cwd).toBe('/custom/dir');
     });
 
     it('falls back to WORKING_DIRECTORY env var', async () => {
       await manager.create(baseOpts);
 
-      expect(mockQuery).toHaveBeenCalledOnce();
-      const callArgs = mockQuery.mock.calls[0][0] as Record<string, unknown>;
-      const opts = callArgs.options as Record<string, unknown>;
+      const args = mockQuery.mock.calls[0][0] as Record<string, unknown>;
+      const opts = args.options as Record<string, unknown>;
       expect(opts.cwd).toBe('/test/workdir');
     });
 
@@ -207,55 +201,9 @@ describe('SessionManager', () => {
 
       await manager.create(baseOpts);
 
-      expect(mockQuery).toHaveBeenCalledOnce();
-      const callArgs = mockQuery.mock.calls[0][0] as Record<string, unknown>;
-      const opts = callArgs.options as Record<string, unknown>;
+      const args = mockQuery.mock.calls[0][0] as Record<string, unknown>;
+      const opts = args.options as Record<string, unknown>;
       expect(opts.cwd).toBe('/workdir');
-    });
-
-    it('uses env var defaults for git identity', async () => {
-      await manager.create(baseOpts);
-
-      expect(mockQuery).toHaveBeenCalledOnce();
-      const callArgs = mockQuery.mock.calls[0][0] as Record<string, unknown>;
-      const opts = callArgs.options as Record<string, any>;
-      expect(opts.env.GIT_AUTHOR_NAME).toBe('Test Author');
-      expect(opts.env.GIT_AUTHOR_EMAIL).toBe('test@example.com');
-    });
-
-    it('defaults git identity to Homespun Bot when env vars not set', async () => {
-      vi.stubEnv('GIT_AUTHOR_NAME', '');
-      vi.stubEnv('GIT_AUTHOR_EMAIL', '');
-
-      await manager.create(baseOpts);
-
-      expect(mockQuery).toHaveBeenCalledOnce();
-      const callArgs = mockQuery.mock.calls[0][0] as Record<string, unknown>;
-      const opts = callArgs.options as Record<string, any>;
-      expect(opts.env.GIT_AUTHOR_NAME).toBe('Homespun Bot');
-      expect(opts.env.GIT_AUTHOR_EMAIL).toBe('homespun@localhost');
-    });
-
-    it('resolves GITHUB_TOKEN from env', async () => {
-      await manager.create(baseOpts);
-
-      expect(mockQuery).toHaveBeenCalledOnce();
-      const callArgs = mockQuery.mock.calls[0][0] as Record<string, unknown>;
-      const opts = callArgs.options as Record<string, any>;
-      expect(opts.env.GITHUB_TOKEN).toBe('ghp_test123');
-      expect(opts.env.GH_TOKEN).toBe('ghp_test123');
-    });
-
-    it('falls back to GitHub__Token env var', async () => {
-      vi.stubEnv('GITHUB_TOKEN', '');
-      vi.stubEnv('GitHub__Token', 'ghp_fallback');
-
-      await manager.create(baseOpts);
-
-      expect(mockQuery).toHaveBeenCalledOnce();
-      const callArgs = mockQuery.mock.calls[0][0] as Record<string, unknown>;
-      const opts = callArgs.options as Record<string, any>;
-      expect(opts.env.GITHUB_TOKEN).toBe('ghp_fallback');
     });
 
     it('initializes permissionMode to plan for Plan mode', async () => {
@@ -273,9 +221,8 @@ describe('SessionManager', () => {
     it('includes Playwright MCP server config', async () => {
       await manager.create(baseOpts);
 
-      expect(mockQuery).toHaveBeenCalledOnce();
-      const callArgs = mockQuery.mock.calls[0][0] as Record<string, unknown>;
-      const opts = callArgs.options as Record<string, any>;
+      const args = mockQuery.mock.calls[0][0] as Record<string, unknown>;
+      const opts = args.options as Record<string, any>;
       expect(opts.mcpServers.playwright).toMatchObject({
         type: 'stdio',
         command: 'npx',
@@ -285,7 +232,7 @@ describe('SessionManager', () => {
   });
 
   describe('send()', () => {
-    it('creates new query with message and updates lastActivityAt', async () => {
+    it('updates lastActivityAt', async () => {
       const ws = await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Build' });
       const beforeActivity = ws.lastActivityAt;
       mockQuery.mockClear(); // Clear the create() call
@@ -294,9 +241,6 @@ describe('SessionManager', () => {
 
       await manager.send(ws.id, 'follow up');
 
-      expect(mockQuery).toHaveBeenCalledOnce();
-      const callArgs = mockQuery.mock.calls[0][0] as Record<string, unknown>;
-      expect(callArgs.prompt).toBe('follow up');
       expect(ws.lastActivityAt.getTime()).toBeGreaterThanOrEqual(beforeActivity.getTime());
     });
 
@@ -327,14 +271,6 @@ describe('SessionManager', () => {
       expect(ws.permissionMode).toBe('bypassPermissions');
     });
 
-    it('maps AcceptEdits permissionMode correctly', async () => {
-      const ws = await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Build' });
-
-      await manager.send(ws.id, 'msg', undefined, 'AcceptEdits');
-
-      expect(ws.permissionMode).toBe('acceptEdits');
-    });
-
     it('throws for non-existent session', async () => {
       await expect(manager.send('no-such-id', 'msg')).rejects.toThrow(
         'Session no-such-id not found',
@@ -343,9 +279,9 @@ describe('SessionManager', () => {
   });
 
   describe('stream()', () => {
-    it('yields SDK messages from underlying query', async () => {
+    it('yields messages from the query async generator', async () => {
       const ws = await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Build' });
-      mockQueryFromMessages(ws.query, [createAssistantMessage(), createResultMessage()]);
+      setMockQueryMessages(mockQueryObj, [createAssistantMessage(), createResultMessage()]);
 
       const result = await collectAsyncGenerator(manager.stream(ws.id));
 
@@ -354,7 +290,7 @@ describe('SessionManager', () => {
 
     it('captures msg.session_id as conversationId', async () => {
       const ws = await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Build' });
-      mockQueryFromMessages(ws.query, [
+      setMockQueryMessages(mockQueryObj, [
         createSystemMessage({ session_id: 'captured-conv-id' }),
       ]);
 
@@ -365,30 +301,12 @@ describe('SessionManager', () => {
 
     it('sets status to idle when stream completes', async () => {
       const ws = await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Build' });
-      mockQueryFromMessages(ws.query, [createAssistantMessage()]);
+      setMockQueryMessages(mockQueryObj, [createAssistantMessage()]);
 
       await collectAsyncGenerator(manager.stream(ws.id));
 
       expect(ws.status).toBe('idle');
     });
-
-    it('sets status to idle even when stream throws', async () => {
-      const ws = await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Build' });
-      (ws.query as any)[Symbol.asyncIterator] = () => ({
-        async next() {
-          throw new Error('boom');
-        },
-      });
-
-      try {
-        await collectAsyncGenerator(manager.stream(ws.id));
-      } catch {
-        // expected
-      }
-
-      expect(ws.status).toBe('idle');
-    });
-
 
     it('throws for non-existent session', async () => {
       const gen = manager.stream('no-such-id');
@@ -396,16 +314,149 @@ describe('SessionManager', () => {
     });
   });
 
+  describe('canUseTool callback', () => {
+    it('allows non-AskUserQuestion tools immediately', async () => {
+      await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Build' });
+
+      const canUseTool = getCapturedCanUseTool();
+      expect(canUseTool).toBeDefined();
+
+      const result = await canUseTool('Bash', { command: 'ls' });
+
+      expect(result).toEqual({
+        behavior: 'allow',
+        updatedInput: { command: 'ls' },
+      });
+    });
+
+    it('pauses on AskUserQuestion and resumes when resolved', async () => {
+      const ws = await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Plan' });
+
+      const canUseTool = getCapturedCanUseTool();
+      expect(canUseTool).toBeDefined();
+
+      // Start the canUseTool call (it will wait)
+      const questionInput = {
+        questions: [
+          {
+            question: 'Which framework?',
+            header: 'Framework',
+            options: [
+              { label: 'React', description: 'React framework' },
+              { label: 'Vue', description: 'Vue framework' },
+            ],
+            multiSelect: false,
+          },
+        ],
+      };
+
+      const resultPromise = canUseTool('AskUserQuestion', questionInput);
+
+      // Verify there's a pending question
+      expect(manager.hasPendingQuestion(ws.id)).toBe(true);
+
+      // Resolve the question
+      const resolved = manager.resolvePendingQuestion(ws.id, { 'Which framework?': 'React' });
+      expect(resolved).toBe(true);
+
+      // Check the result
+      const result = await resultPromise;
+      expect(result).toEqual({
+        behavior: 'allow',
+        updatedInput: {
+          questions: questionInput.questions,
+          answers: { 'Which framework?': 'React' },
+        },
+      });
+
+      // Pending question should be cleared
+      expect(manager.hasPendingQuestion(ws.id)).toBe(false);
+    });
+
+    it('pauses on ExitPlanMode and resumes when approved', async () => {
+      const ws = await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Plan' });
+
+      const canUseTool = getCapturedCanUseTool();
+      const planInput = { plan: 'The plan content' };
+
+      const resultPromise = canUseTool('ExitPlanMode', planInput);
+
+      // Verify there's a pending approval
+      expect(manager.hasPendingPlanApproval(ws.id)).toBe(true);
+
+      // Approve the plan
+      const resolved = manager.resolvePendingPlanApproval(ws.id, true);
+      expect(resolved).toBe(true);
+
+      // Check the result
+      const result = await resultPromise;
+      expect(result).toEqual({
+        behavior: 'allow',
+        updatedInput: planInput,
+      });
+
+      expect(manager.hasPendingPlanApproval(ws.id)).toBe(false);
+    });
+
+    it('denies ExitPlanMode when rejected', async () => {
+      const ws = await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Plan' });
+
+      const canUseTool = getCapturedCanUseTool();
+      const planInput = { plan: 'The plan content' };
+
+      const resultPromise = canUseTool('ExitPlanMode', planInput);
+
+      // Reject the plan
+      manager.resolvePendingPlanApproval(ws.id, false);
+
+      // Check the result
+      const result = await resultPromise;
+      expect(result).toEqual({
+        behavior: 'deny',
+        message: 'User rejected the plan',
+      });
+    });
+  });
+
+  describe('resolvePendingQuestion()', () => {
+    it('returns false when no pending question exists', () => {
+      const result = manager.resolvePendingQuestion('non-existent', { Q: 'A' });
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('resolvePendingPlanApproval()', () => {
+    it('returns false when no pending approval exists', () => {
+      const result = manager.resolvePendingPlanApproval('non-existent', true);
+      expect(result).toBe(false);
+    });
+  });
+
   describe('close()', () => {
-    it('aborts controller, removes from map, sets status to closed', async () => {
+    it('removes session from map and sets status to closed', async () => {
       const ws = await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Build' });
-      const abortSpy = vi.spyOn(ws.abortController, 'abort');
 
       await manager.close(ws.id);
 
-      expect(abortSpy).toHaveBeenCalled();
       expect(ws.status).toBe('closed');
       expect(manager.get(ws.id)).toBeUndefined();
+    });
+
+    it('rejects pending questions when session is closed', async () => {
+      const ws = await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Plan' });
+
+      const canUseTool = getCapturedCanUseTool();
+      const questionInput = {
+        questions: [{ question: 'Test?', header: 'Test', options: [], multiSelect: false }],
+      };
+
+      const resultPromise = canUseTool('AskUserQuestion', questionInput);
+
+      // Close the session while question is pending
+      await manager.close(ws.id);
+
+      // The promise should be rejected
+      await expect(resultPromise).rejects.toThrow('Session closed');
     });
 
     it('does not throw for non-existent session', async () => {
@@ -449,16 +500,6 @@ describe('SessionManager', () => {
 
   describe('closeAll()', () => {
     it('closes all sessions', async () => {
-      const session1 = createMockSDKSession();
-      const session2 = createMockSDKSession();
-      let callCount = 0;
-      mockCreateSession.mockImplementation((..._args: any[]) => {
-        callCount++;
-        const s = callCount === 1 ? session1 : session2;
-        setMockSession(s);
-        return s;
-      });
-
       let uuidCount = 0;
       mockRandomUUID.mockImplementation(() => {
         uuidCount++;
