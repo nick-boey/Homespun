@@ -152,13 +152,6 @@ else
                                 Open Existing Session
                             </a>
                         }
-                        else if (_isStarting)
-                        {
-                            <button class="btn btn-sm btn-secondary w-full" disabled>
-                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                                Starting Session...
-                            </button>
-                        }
                         else
                         {
                             <div class="mb-2">
@@ -257,7 +250,6 @@ else
     private string _workingBranchId = "";
 
     // Agent run state
-    private bool _isStarting;
     private string _selectedModel = "opus";
     private string _selectedBaseBranch = "";
     private string _selectedPromptId = "";
@@ -436,7 +428,8 @@ else
     }
 
     /// <summary>
-    /// Saves changes and immediately starts an agent session on the issue.
+    /// Saves changes and starts an agent session asynchronously, then navigates to the project page.
+    /// The agent startup happens in the background - the user is returned to the project page immediately.
     /// </summary>
     private async Task HandleSaveAndRunAgent()
     {
@@ -453,8 +446,13 @@ else
             // 2. Refresh _issue with saved data so agent sees latest state
             _issue = updated;
 
-            // 3. Start agent session
-            await StartAgentSession();
+            // 3. Start agent session in background (fire-and-forget)
+            // Error handling is done via StartupTracker which persists error state
+            _ = StartAgentSessionAsync();
+
+            // 4. Navigate immediately to project page
+            // User can monitor agent startup via IssueDetailPanel on the project page
+            Navigation.NavigateTo($"projects/{ProjectId}");
         }
         catch (Exception ex)
         {
@@ -468,10 +466,12 @@ else
     }
 
     /// <summary>
-    /// Starts an agent session for the current issue.
-    /// Creates or finds a clone, starts the Claude session, and navigates to the chat page.
+    /// Starts an agent session for the current issue asynchronously.
+    /// Creates or finds a clone and starts the Claude session.
+    /// This method is designed to be called fire-and-forget from HandleSaveAndRunAgent.
+    /// Errors are tracked via StartupTracker.
     /// </summary>
-    private async Task StartAgentSession()
+    private async Task StartAgentSessionAsync()
     {
         if (_project == null)
         {
@@ -572,8 +572,8 @@ else
                 }
             }
 
-            // Navigate to session chat page
-            Navigation.NavigateTo($"/session/{session.Id}");
+            // Agent started successfully - user has already been navigated to project page
+            // They can monitor agent progress via IssueDetailPanel which receives SignalR updates
         }
         catch (Exception ex)
         {
