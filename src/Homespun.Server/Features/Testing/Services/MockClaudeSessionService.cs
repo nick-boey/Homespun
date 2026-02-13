@@ -431,6 +431,60 @@ public class MockClaudeSessionService : IClaudeSessionService
         _sessionStore.Update(session);
     }
 
+    public async Task ApprovePlanAsync(
+        string sessionId,
+        bool approved,
+        bool keepContext,
+        string? feedback = null,
+        CancellationToken cancellationToken = default)
+    {
+        _logger.LogDebug("[Mock] ApprovePlan for session {SessionId}: approved={Approved}, keepContext={KeepContext}",
+            sessionId, approved, keepContext);
+
+        var session = _sessionStore.GetById(sessionId);
+        if (session == null)
+        {
+            throw new InvalidOperationException($"Session {sessionId} not found");
+        }
+
+        if (approved)
+        {
+            await ExecutePlanAsync(sessionId, clearContext: !keepContext, cancellationToken);
+        }
+        else
+        {
+            // Send feedback as message
+            session.Status = ClaudeSessionStatus.Running;
+            _sessionStore.Update(session);
+            await _hubContext.BroadcastSessionStatusChanged(sessionId, session.Status);
+
+            var rejectMessage = !string.IsNullOrEmpty(feedback)
+                ? $"[Mock] Plan rejected with feedback: {feedback}"
+                : "[Mock] Plan rejected. Please revise.";
+
+            var assistantMessage = new ClaudeMessage
+            {
+                SessionId = session.Id,
+                Role = ClaudeMessageRole.Assistant,
+                Content =
+                [
+                    new ClaudeMessageContent
+                    {
+                        Type = ClaudeContentType.Text,
+                        Text = rejectMessage
+                    }
+                ],
+                CreatedAt = DateTime.UtcNow
+            };
+            session.Messages.Add(assistantMessage);
+            await _hubContext.BroadcastMessageReceived(sessionId, assistantMessage);
+
+            session.Status = ClaudeSessionStatus.WaitingForInput;
+            _sessionStore.Update(session);
+            await _hubContext.BroadcastSessionStatusChanged(sessionId, session.Status);
+        }
+    }
+
     public Task<IReadOnlyList<ClaudeMessage>> GetCachedMessagesAsync(
         string sessionId,
         CancellationToken cancellationToken = default)

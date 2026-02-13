@@ -128,6 +128,19 @@ public interface IClaudeSessionService
     Task AnswerQuestionAsync(string sessionId, Dictionary<string, string> answers, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Approves or rejects a pending plan from ExitPlanMode.
+    /// For Docker/Azure: routes through the worker's /approve-plan endpoint.
+    /// For local: falls back to ExecutePlanAsync or sends feedback as a message.
+    /// </summary>
+    /// <param name="sessionId">The session ID</param>
+    /// <param name="approved">Whether the plan is approved</param>
+    /// <param name="keepContext">If approved, whether to keep existing context (true) or clear context (false)</param>
+    /// <param name="feedback">User feedback when rejecting the plan</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    Task ApprovePlanAsync(string sessionId, bool approved, bool keepContext, string? feedback = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Gets cached messages for a session from the message cache store.
     /// Returns messages from the persistent JSONL cache, not the in-memory store.
     /// </summary>

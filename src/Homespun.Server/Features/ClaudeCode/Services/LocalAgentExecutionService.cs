@@ -214,6 +214,22 @@ public class LocalAgentExecutionService : IAgentExecutionService, IAsyncDisposab
         return Task.FromResult(0);
     }
 
+    /// <inheritdoc />
+    public Task<bool> AnswerQuestionAsync(string sessionId, Dictionary<string, string> answers,
+        CancellationToken cancellationToken = default)
+    {
+        // Local mode answers go through SendMessageAsync, not via worker HTTP
+        return Task.FromResult(false);
+    }
+
+    /// <inheritdoc />
+    public Task<bool> ApprovePlanAsync(string sessionId, bool approved, bool keepContext, string? feedback = null,
+        CancellationToken cancellationToken = default)
+    {
+        // Local mode plan approval uses ExecutePlanAsync fallback in ClaudeSessionService
+        return Task.FromResult(false);
+    }
+
     private async IAsyncEnumerable<SdkMessage> ProcessMessagesAsync(
         LocalSession session,
         string prompt,

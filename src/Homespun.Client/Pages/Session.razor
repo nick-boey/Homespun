@@ -224,18 +224,38 @@
                             </div>
                             <div class="action-panel-options">
                                 <button class="action-panel-btn action-panel-btn-primary"
-                                        @onclick="ExecutePlanWithClearContext"
+                                        @onclick="ApprovePlanClearContext"
                                         title="Clear conversation context and start fresh implementation">
                                     <span class="action-panel-btn-icon">🔄</span>
                                     Clear Context & Start Implementation
                                 </button>
                                 <button class="action-panel-btn"
-                                        @onclick="ExecutePlanKeepContext"
+                                        @onclick="ApprovePlanKeepContext"
                                         title="Continue with existing conversation context">
                                     <span class="action-panel-btn-icon">▶️</span>
                                     Continue with Context
                                 </button>
+                                <button class="action-panel-btn action-panel-btn-danger"
+                                        @onclick="() => _showPlanRejectFeedback = !_showPlanRejectFeedback"
+                                        title="Reject the plan and provide feedback">
+                                    <span class="action-panel-btn-icon">✏️</span>
+                                    Reject & Modify
+                                </button>
                             </div>
+                            @if (_showPlanRejectFeedback)
+                            {
+                                <div class="action-panel-feedback">
+                                    <textarea class="action-panel-textarea"
+                                              @bind="_planRejectFeedback"
+                                              placeholder="Describe what changes you'd like to the plan..."
+                                              rows="3"></textarea>
+                                    <button class="action-panel-btn action-panel-btn-danger"
+                                            @onclick="RejectPlan"
+                                            title="Send feedback to revise the plan">
+                                        Send Feedback
+                                    </button>
+                                </div>
+                            }
                         </div>
                     }
                 }
@@ -1507,6 +1527,8 @@
     private IReadOnlyList<AgentPrompt> _availablePrompts = [];
     private bool _showScrollToBottomButton = false;
     private bool _isNearBottom = true;
+    private bool _showPlanRejectFeedback = false;
+    private string _planRejectFeedback = string.Empty;
     private ElementReference _messagesContainer;
     private HubConnection? _hubConnection;
     private string? _signalRError;
@@ -2660,31 +2682,50 @@
         }
     }
 
-    private async Task ExecutePlanWithClearContext()
+    private async Task ApprovePlanClearContext()
     {
         if (_session == null || _hubConnection == null) return;
 
         try
         {
-            await _hubConnection.SendAsync("ExecutePlan", SessionId, true);
+            _showPlanRejectFeedback = false;
+            await _hubConnection.SendAsync("ApprovePlan", SessionId, true, false, null);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error executing plan: {ex.Message}");
+            Console.WriteLine($"Error approving plan: {ex.Message}");
         }
     }
 
-    private async Task ExecutePlanKeepContext()
+    private async Task ApprovePlanKeepContext()
     {
         if (_session == null || _hubConnection == null) return;
 
         try
         {
-            await _hubConnection.SendAsync("ExecutePlan", SessionId, false);
+            _showPlanRejectFeedback = false;
+            await _hubConnection.SendAsync("ApprovePlan", SessionId, true, true, null);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error executing plan: {ex.Message}");
+            Console.WriteLine($"Error approving plan: {ex.Message}");
+        }
+    }
+
+    private async Task RejectPlan()
+    {
+        if (_session == null || _hubConnection == null) return;
+
+        try
+        {
+            var feedback = string.IsNullOrWhiteSpace(_planRejectFeedback) ? null : _planRejectFeedback.Trim();
+            _showPlanRejectFeedback = false;
+            _planRejectFeedback = string.Empty;
+            await _hubConnection.SendAsync("ApprovePlan", SessionId, false, false, feedback);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error rejecting plan: {ex.Message}");
         }
     }
 

@@ -4,7 +4,7 @@ import {
   type Query,
   type PermissionResult,
 } from '@anthropic-ai/claude-agent-sdk';
-import type { SessionInfo, AskUserQuestionInput, ExitPlanModeInput } from '../types/index.js';
+import type { SessionInfo, AskUserQuestionInput, ExitPlanModeInput, UserQuestion, ApprovePlanRequest } from '../types/index.js';
 import { randomUUID } from 'node:crypto';
 
 export type SdkPermissionMode = 'default' | 'acceptEdits' | 'plan' | 'bypassPermissions';
@@ -21,6 +21,69 @@ export function mapPermissionMode(value: string | undefined): SdkPermissionMode 
   return PERMISSION_MODE_MAP[value] ?? 'bypassPermissions';
 }
 
+// --- OutputChannel types ---
+
+export interface ControlEvent {
+  type: 'question_pending' | 'plan_pending';
+  data: { questions: UserQuestion[] } | { plan: string };
+}
+
+export type OutputEvent = SDKMessage | ControlEvent;
+
+export function isControlEvent(event: OutputEvent): event is ControlEvent {
+  if (!('type' in event) || !('data' in event)) return false;
+  const t = (event as ControlEvent).type;
+  return t === 'question_pending' || t === 'plan_pending';
+}
+
+/**
+ * Single-consumer async queue that merges pushes from multiple producers
+ * (the SDK query background task and the canUseTool callback).
+ */
+export class OutputChannel {
+  private queue: OutputEvent[] = [];
+  private resolver: ((result: IteratorResult<OutputEvent>) => void) | null = null;
+  private done = false;
+
+  push(event: OutputEvent): void {
+    if (this.done) return;
+    if (this.resolver) {
+      const resolve = this.resolver;
+      this.resolver = null;
+      resolve({ value: event, done: false });
+    } else {
+      this.queue.push(event);
+    }
+  }
+
+  complete(): void {
+    this.done = true;
+    if (this.resolver) {
+      const resolve = this.resolver;
+      this.resolver = null;
+      resolve({ value: undefined as any, done: true });
+    }
+  }
+
+  async *[Symbol.asyncIterator](): AsyncGenerator<OutputEvent> {
+    while (true) {
+      if (this.queue.length > 0) {
+        yield this.queue.shift()!;
+      } else if (this.done) {
+        return;
+      } else {
+        const result = await new Promise<IteratorResult<OutputEvent>>((resolve) => {
+          this.resolver = resolve;
+        });
+        if (result.done) return;
+        yield result.value;
+      }
+    }
+  }
+}
+
+// --- Session types ---
+
 interface PendingQuestionState {
   questions: AskUserQuestionInput['questions'];
   resolve: (answers: Record<string, string>) => void;
@@ -28,7 +91,8 @@ interface PendingQuestionState {
 }
 
 interface PendingPlanApprovalState {
-  resolve: (approved: boolean) => void;
+  plan: string;
+  resolve: (result: PermissionResult) => void;
   reject: (error: Error) => void;
 }
 
@@ -36,6 +100,7 @@ interface WorkerSession {
   id: string;
   query: Query;
   inputController: InputController;
+  outputChannel: OutputChannel;
   conversationId?: string;
   mode: string;
   model: string;
@@ -218,10 +283,13 @@ export class SessionManager {
       options: sessionOptions as Parameters<typeof query>[0]['options'],
     });
 
+    const outputChannel = new OutputChannel();
+
     const workerSession: WorkerSession = {
       id,
       query: q,
       inputController,
+      outputChannel,
       conversationId: opts.resumeSessionId,
       mode: opts.mode,
       model: opts.model,
@@ -234,13 +302,26 @@ export class SessionManager {
     this.sessions.set(id, workerSession);
     console.log(`[Worker][SessionManager] create() - session created, workerSessionId='${id}'`);
 
+    // Background task: forward SDK query messages to the output channel
+    (async () => {
+      try {
+        for await (const msg of q) {
+          outputChannel.push(msg);
+        }
+      } catch (err) {
+        console.error(`[Worker][SessionManager] query forwarder error for session '${id}':`, err);
+      } finally {
+        outputChannel.complete();
+      }
+    })();
+
     return workerSession;
   }
 
   /**
    * Creates the canUseTool callback for a session.
-   * This callback intercepts AskUserQuestion and ExitPlanMode tools to pause execution
-   * until the user provides a response.
+   * Intercepts AskUserQuestion to emit a control event before pausing.
+   * Allows ExitPlanMode immediately (server handles plan display/approval).
    */
   private createCanUseToolCallback(sessionId: string) {
     return async (
@@ -261,7 +342,15 @@ export class SessionManager {
           });
         });
 
-        console.log(`[Worker][SessionManager] canUseTool - waiting for answers on session '${sessionId}'`);
+        // Emit control event BEFORE pausing — this flows to the SSE stream
+        // so the server can detect the pending question and show it to the user
+        const ws = this.sessions.get(sessionId);
+        ws?.outputChannel.push({
+          type: 'question_pending',
+          data: { questions: questionInput.questions },
+        });
+
+        console.log(`[Worker][SessionManager] canUseTool - emitted question_pending, waiting for answers on session '${sessionId}'`);
 
         // Wait for answers (this pauses SDK execution)
         const answers = await answersPromise;
@@ -279,32 +368,34 @@ export class SessionManager {
       }
 
       if (toolName === 'ExitPlanMode') {
+        const planInput = input as unknown as ExitPlanModeInput;
+        const planContent = planInput.plan || '';
+
         // Create promise that will be resolved when /approve-plan endpoint is called
-        const approvalPromise = new Promise<boolean>((resolve, reject) => {
+        const approvalPromise = new Promise<PermissionResult>((resolve, reject) => {
           this.pendingPlanApprovals.set(sessionId, {
+            plan: planContent,
             resolve,
             reject,
           });
         });
 
-        console.log(`[Worker][SessionManager] canUseTool - waiting for plan approval on session '${sessionId}'`);
+        // Emit control event BEFORE pausing — this flows to the SSE stream
+        // so the server can detect the pending plan and show it to the user
+        const ws = this.sessions.get(sessionId);
+        ws?.outputChannel.push({
+          type: 'plan_pending',
+          data: { plan: planContent },
+        });
 
-        // Wait for approval (this pauses SDK execution)
-        const approved = await approvalPromise;
+        console.log(`[Worker][SessionManager] canUseTool - emitted plan_pending, waiting for approval on session '${sessionId}'`);
 
-        console.log(`[Worker][SessionManager] canUseTool - plan ${approved ? 'approved' : 'rejected'} for session '${sessionId}'`);
+        // Wait for approval decision (this pauses SDK execution)
+        const result = await approvalPromise;
 
-        if (approved) {
-          return {
-            behavior: 'allow',
-            updatedInput: input,
-          };
-        } else {
-          return {
-            behavior: 'deny',
-            message: 'User rejected the plan',
-          };
-        }
+        console.log(`[Worker][SessionManager] canUseTool - received plan approval decision for session '${sessionId}': behavior='${result.behavior}'`);
+
+        return result;
       }
 
       // Allow other tools
@@ -334,26 +425,41 @@ export class SessionManager {
 
   /**
    * Resolves a pending plan approval for a session.
-   * Called by the /approve-plan endpoint when the user approves or rejects the plan.
+   * Called by the /approve-plan endpoint when the user makes a decision.
    */
-  resolvePendingPlanApproval(sessionId: string, approved: boolean): boolean {
+  resolvePendingPlanApproval(sessionId: string, approved: boolean, keepContext?: boolean, feedback?: string): boolean {
     const pending = this.pendingPlanApprovals.get(sessionId);
     if (!pending) {
       console.log(`[Worker][SessionManager] resolvePendingPlanApproval - no pending approval for session '${sessionId}'`);
       return false;
     }
 
-    pending.resolve(approved);
-    this.pendingPlanApprovals.delete(sessionId);
-    console.log(`[Worker][SessionManager] resolvePendingPlanApproval - resolved (approved=${approved}) for session '${sessionId}'`);
-    return true;
-  }
+    let result: PermissionResult;
 
-  /**
-   * Checks if a session has a pending question.
-   */
-  hasPendingQuestion(sessionId: string): boolean {
-    return this.pendingQuestions.has(sessionId);
+    if (approved && keepContext) {
+      // Approve and continue in same session context
+      result = {
+        behavior: 'allow',
+        updatedInput: { plan: pending.plan },
+      };
+    } else if (approved && !keepContext) {
+      // Approve but signal to interrupt (server will start fresh session with plan)
+      result = {
+        behavior: 'deny',
+        message: 'Plan approved. Interrupting to start fresh implementation session.',
+      };
+    } else {
+      // Reject — agent should revise the plan
+      result = {
+        behavior: 'deny',
+        message: feedback ? `User rejected the plan: ${feedback}` : 'User rejected the plan. Please revise.',
+      };
+    }
+
+    pending.resolve(result);
+    this.pendingPlanApprovals.delete(sessionId);
+    console.log(`[Worker][SessionManager] resolvePendingPlanApproval - resolved for session '${sessionId}', approved=${approved}, keepContext=${keepContext}`);
+    return true;
   }
 
   /**
@@ -361,6 +467,13 @@ export class SessionManager {
    */
   hasPendingPlanApproval(sessionId: string): boolean {
     return this.pendingPlanApprovals.has(sessionId);
+  }
+
+  /**
+   * Checks if a session has a pending question.
+   */
+  hasPendingQuestion(sessionId: string): boolean {
+    return this.pendingQuestions.has(sessionId);
   }
 
   /**
@@ -393,15 +506,22 @@ export class SessionManager {
     return ws;
   }
 
-  async *stream(sessionId: string): AsyncGenerator<SDKMessage> {
+  async *stream(sessionId: string): AsyncGenerator<OutputEvent> {
     const ws = this.sessions.get(sessionId);
     if (!ws) {
       throw new Error(`Session ${sessionId} not found`);
     }
 
     try {
-      for await (const msg of ws.query) {
-        // Capture the conversation ID from any message
+      for await (const event of ws.outputChannel) {
+        if (isControlEvent(event)) {
+          console.log(`[Worker][SessionManager] stream() - control event: type='${event.type}'`);
+          yield event;
+          continue;
+        }
+
+        // SDK message — capture conversation ID
+        const msg = event;
         if (msg.session_id) {
           ws.conversationId = msg.session_id;
         }
@@ -413,7 +533,7 @@ export class SessionManager {
           const r = msg as any;
           console.log(`[Worker][SessionManager] stream() - result: subtype='${r.subtype}', is_error=${r.is_error}`);
         }
-        yield msg;
+        yield event;
       }
     } finally {
       ws.status = 'idle';
@@ -424,19 +544,21 @@ export class SessionManager {
     const ws = this.sessions.get(sessionId);
     if (!ws) return;
 
-    // Reject any pending questions or approvals
+    // Reject any pending questions
     const pendingQuestion = this.pendingQuestions.get(sessionId);
     if (pendingQuestion) {
       pendingQuestion.reject(new Error('Session closed'));
       this.pendingQuestions.delete(sessionId);
     }
 
-    const pendingApproval = this.pendingPlanApprovals.get(sessionId);
-    if (pendingApproval) {
-      pendingApproval.reject(new Error('Session closed'));
+    // Reject any pending plan approvals
+    const pendingPlan = this.pendingPlanApprovals.get(sessionId);
+    if (pendingPlan) {
+      pendingPlan.reject(new Error('Session closed'));
       this.pendingPlanApprovals.delete(sessionId);
     }
 
+    ws.outputChannel.complete();
     ws.inputController.close();
     ws.status = 'closed';
     this.sessions.delete(sessionId);

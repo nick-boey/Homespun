@@ -749,4 +749,160 @@ public class SdkMessageRecordTests
             Assert.That(status.LastActivityAt, Is.EqualTo(now));
         });
     }
+
+    [Test]
+    public void SdkQuestionPendingMessage_Properties_AreSetCorrectly()
+    {
+        // Arrange & Act
+        var questionsJson = "{\"questions\":[{\"question\":\"Which option?\",\"header\":\"Choice\",\"options\":[],\"multiSelect\":false}]}";
+        var msg = new SdkQuestionPendingMessage("session-123", questionsJson);
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(msg.SessionId, Is.EqualTo("session-123"));
+            Assert.That(msg.Type, Is.EqualTo("question_pending"));
+            Assert.That(msg.QuestionsJson, Is.EqualTo(questionsJson));
+        });
+    }
+
+    [Test]
+    public void SdkQuestionPendingMessage_WithClause_RemapsSessionId()
+    {
+        // Arrange
+        var msg = new SdkQuestionPendingMessage("original-session", "{\"questions\":[]}");
+
+        // Act
+        var remapped = msg with { SessionId = "new-session" };
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(remapped.SessionId, Is.EqualTo("new-session"));
+            Assert.That(remapped.QuestionsJson, Is.EqualTo("{\"questions\":[]}"));
+            Assert.That(remapped.Type, Is.EqualTo("question_pending"));
+        });
+    }
+
+    [Test]
+    public void SdkPlanPendingMessage_Properties_AreSetCorrectly()
+    {
+        // Arrange & Act
+        var planJson = "{\"plan\":\"# My Plan\\n\\n1. Step one\"}";
+        var msg = new SdkPlanPendingMessage("session-123", planJson);
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(msg.SessionId, Is.EqualTo("session-123"));
+            Assert.That(msg.Type, Is.EqualTo("plan_pending"));
+            Assert.That(msg.PlanJson, Is.EqualTo(planJson));
+        });
+    }
+
+    [Test]
+    public void SdkPlanPendingMessage_WithClause_RemapsSessionId()
+    {
+        // Arrange
+        var msg = new SdkPlanPendingMessage("original-session", "{\"plan\":\"test\"}");
+
+        // Act
+        var remapped = msg with { SessionId = "new-session" };
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(remapped.SessionId, Is.EqualTo("new-session"));
+            Assert.That(remapped.PlanJson, Is.EqualTo("{\"plan\":\"test\"}"));
+            Assert.That(remapped.Type, Is.EqualTo("plan_pending"));
+        });
+    }
+}
+
+/// <summary>
+/// Tests for AnswerQuestionAsync on execution services.
+/// </summary>
+[TestFixture]
+public class AnswerQuestionAsyncTests
+{
+    [Test]
+    public async Task DockerAnswerQuestionAsync_NonExistentSession_ReturnsFalse()
+    {
+        // Arrange
+        var loggerMock = new Mock<ILogger<DockerAgentExecutionService>>();
+        var options = new DockerAgentExecutionOptions();
+        var service = new DockerAgentExecutionService(
+            Options.Create(options), loggerMock.Object);
+
+        // Act
+        var result = await service.AnswerQuestionAsync("non-existent-session",
+            new Dictionary<string, string> { { "q", "a" } });
+
+        // Assert
+        Assert.That(result, Is.False);
+
+        await service.DisposeAsync();
+    }
+
+    [Test]
+    public async Task LocalAnswerQuestionAsync_AlwaysReturnsFalse()
+    {
+        // Arrange
+        var loggerMock = new Mock<ILogger<LocalAgentExecutionService>>();
+        var factoryLoggerMock = new Mock<ILogger<SessionOptionsFactory>>();
+        var optionsFactory = new SessionOptionsFactory(factoryLoggerMock.Object);
+        var service = new LocalAgentExecutionService(optionsFactory, loggerMock.Object);
+
+        // Act
+        var result = await service.AnswerQuestionAsync("any-session",
+            new Dictionary<string, string> { { "q", "a" } });
+
+        // Assert - local mode always returns false
+        Assert.That(result, Is.False);
+
+        await service.DisposeAsync();
+    }
+}
+
+/// <summary>
+/// Tests for ApprovePlanAsync on execution services.
+/// </summary>
+[TestFixture]
+public class ApprovePlanAsyncTests
+{
+    [Test]
+    public async Task DockerApprovePlanAsync_NonExistentSession_ReturnsFalse()
+    {
+        // Arrange
+        var loggerMock = new Mock<ILogger<DockerAgentExecutionService>>();
+        var options = new DockerAgentExecutionOptions();
+        var service = new DockerAgentExecutionService(
+            Options.Create(options), loggerMock.Object);
+
+        // Act
+        var result = await service.ApprovePlanAsync("non-existent-session", true, true);
+
+        // Assert
+        Assert.That(result, Is.False);
+
+        await service.DisposeAsync();
+    }
+
+    [Test]
+    public async Task LocalApprovePlanAsync_AlwaysReturnsFalse()
+    {
+        // Arrange
+        var loggerMock = new Mock<ILogger<LocalAgentExecutionService>>();
+        var factoryLoggerMock = new Mock<ILogger<SessionOptionsFactory>>();
+        var optionsFactory = new SessionOptionsFactory(factoryLoggerMock.Object);
+        var service = new LocalAgentExecutionService(optionsFactory, loggerMock.Object);
+
+        // Act
+        var result = await service.ApprovePlanAsync("any-session", true, true);
+
+        // Assert - local mode always returns false
+        Assert.That(result, Is.False);
+
+        await service.DisposeAsync();
+    }
 }

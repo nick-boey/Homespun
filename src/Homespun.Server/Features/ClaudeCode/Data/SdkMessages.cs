@@ -55,6 +55,24 @@ public record SdkSystemMessage(
 ) : SdkMessage("system", SessionId);
 
 /// <summary>
+/// Control event emitted by the worker when AskUserQuestion is intercepted in canUseTool.
+/// Contains the raw questions JSON so the server can parse and display them.
+/// </summary>
+public record SdkQuestionPendingMessage(
+    string SessionId,
+    string QuestionsJson
+) : SdkMessage("question_pending", SessionId);
+
+/// <summary>
+/// Control event emitted by the worker when ExitPlanMode is intercepted in canUseTool.
+/// Contains the plan content so the server can display it and wait for user approval.
+/// </summary>
+public record SdkPlanPendingMessage(
+    string SessionId,
+    string PlanJson
+) : SdkMessage("plan_pending", SessionId);
+
+/// <summary>
 /// Stream event containing incremental content (content_block_start/delta/stop).
 /// </summary>
 public record SdkStreamEvent(

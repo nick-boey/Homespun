@@ -21,6 +21,8 @@ export interface AnswerQuestionRequest {
 
 export interface ApprovePlanRequest {
   approved: boolean;
+  keepContext?: boolean;
+  feedback?: string;
 }
 
 // SDK tool input types
