@@ -18,7 +18,13 @@
 <PageTitle>Session - Homespun</PageTitle>
 
 <div class="session-page">
-    @if (_session == null)
+    @if (_isLoading)
+    {
+        <div class="session-loading">
+            <LoadingSpinner Size="SpinnerSize.Lg" Label="Loading session..." Centered="true" />
+        </div>
+    }
+    else if (_session == null)
     {
         <div class="session-not-found">
             <h2>Session Not Found</h2>
@@ -389,6 +395,13 @@
         max-width: 1600px;
         margin: 0 auto;
         padding: var(--spacing-lg);
+    }
+
+    .session-loading {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 50vh;
     }
 
     .session-not-found {
@@ -1485,6 +1498,7 @@
     [Parameter] public string SessionId { get; set; } = string.Empty;
 
     private ClaudeSession? _session;
+    private bool _isLoading = true;
     private string _inputMessage = string.Empty;
     private PermissionMode _selectedPermissionMode = PermissionMode.BypassPermissions;
     private string _selectedModel = "sonnet";
@@ -1868,70 +1882,78 @@
 
     protected override async Task OnInitializedAsync()
     {
-        await BreadcrumbService.SetContextAsync(new BreadcrumbContext { SessionId = SessionId });
-
-        _session = await SessionApi.GetSessionAsync(SessionId);
-
-        // Load available prompts (project-specific + global if session has a project)
-        if (_session != null && !string.IsNullOrEmpty(_session.ProjectId))
+        try
         {
-            var projectPrompts = await AgentPromptApi.GetProjectPromptsAsync(_session.ProjectId);
-            var globalPrompts = await AgentPromptApi.GetAllPromptsAsync();
-            _availablePrompts = projectPrompts.Concat(globalPrompts).ToList();
-        }
-        else
-        {
-            _availablePrompts = await AgentPromptApi.GetAllPromptsAsync();
-        }
+            await BreadcrumbService.SetContextAsync(new BreadcrumbContext { SessionId = SessionId });
 
-        if (_session != null)
-        {
-            // CRITICAL: Ensure all content is marked as not streaming for immediate display
-            // This is essential for JSONL-loaded sessions and for sessions where we want
-            // complete messages to display without streaming artifacts
-            foreach (var message in _session.Messages)
+            _session = await SessionApi.GetSessionAsync(SessionId);
+
+            // Load available prompts (project-specific + global if session has a project)
+            if (_session != null && !string.IsNullOrEmpty(_session.ProjectId))
             {
-                message.IsStreaming = false;
-                foreach (var content in message.Content)
-                {
-                    content.IsStreaming = false;
-                }
+                var projectPrompts = await AgentPromptApi.GetProjectPromptsAsync(_session.ProjectId);
+                var globalPrompts = await AgentPromptApi.GetAllPromptsAsync();
+                _availablePrompts = projectPrompts.Concat(globalPrompts).ToList();
+            }
+            else
+            {
+                _availablePrompts = await AgentPromptApi.GetAllPromptsAsync();
             }
 
-            // Initialize pending question from session if present
-            _pendingQuestion = _session.PendingQuestion;
-            if (_pendingQuestion != null)
+            if (_session != null)
             {
-                // Initialize answers with first option for non-multiselect questions
-                foreach (var q in _pendingQuestion.Questions)
+                // CRITICAL: Ensure all content is marked as not streaming for immediate display
+                // This is essential for JSONL-loaded sessions and for sessions where we want
+                // complete messages to display without streaming artifacts
+                foreach (var message in _session.Messages)
                 {
-                    if (q.Options.Count > 0 && !q.MultiSelect)
+                    message.IsStreaming = false;
+                    foreach (var content in message.Content)
                     {
-                        _questionAnswers[q.Question] = q.Options[0].Label;
+                        content.IsStreaming = false;
                     }
                 }
+
+                // Initialize pending question from session if present
+                _pendingQuestion = _session.PendingQuestion;
+                if (_pendingQuestion != null)
+                {
+                    // Initialize answers with first option for non-multiselect questions
+                    foreach (var q in _pendingQuestion.Questions)
+                    {
+                        if (q.Options.Count > 0 && !q.MultiSelect)
+                        {
+                            _questionAnswers[q.Question] = q.Options[0].Label;
+                        }
+                    }
+                }
+
+                // Set initial model from session
+                _selectedModel = _session.Model;
+
+                // Load issue title for header display
+                await LoadIssueTitleAsync();
+
+                // Trigger render BEFORE SignalR setup to show messages immediately
+                StateHasChanged();
+
+                try
+                {
+                    await SetupSignalR();
+                }
+                catch (Exception ex)
+                {
+                    // SignalR connection failed - this can happen when accessing via external hostname
+                    // that the container can't resolve. Continue without real-time updates.
+                    _signalRError = $"Real-time updates unavailable: {ex.Message}";
+                    Console.WriteLine($"SignalR connection failed: {ex.Message}");
+                }
             }
-
-            // Set initial model from session
-            _selectedModel = _session.Model;
-
-            // Load issue title for header display
-            await LoadIssueTitleAsync();
-
-            // Trigger render BEFORE SignalR setup to show messages immediately
+        }
+        finally
+        {
+            _isLoading = false;
             StateHasChanged();
-
-            try
-            {
-                await SetupSignalR();
-            }
-            catch (Exception ex)
-            {
-                // SignalR connection failed - this can happen when accessing via external hostname
-                // that the container can't resolve. Continue without real-time updates.
-                _signalRError = $"Real-time updates unavailable: {ex.Message}";
-                Console.WriteLine($"SignalR connection failed: {ex.Message}");
-            }
         }
     }
 
