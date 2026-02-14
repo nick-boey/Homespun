@@ -291,3 +291,19 @@ public class AgentControlPanelEntityIdTests
 
     private static string GenerateCloneEntityId(string branchName) => $"clone:{branchName}";
 }
+
+/// <summary>
+/// Tests for AgentControlPanel SignalR session refresh behavior.
+/// Verifies that the component implements IAsyncDisposable for proper SignalR cleanup.
+/// </summary>
+[TestFixture]
+public class AgentControlPanelSessionRefreshTests
+{
+    [Test]
+    public void AgentControlPanel_ImplementsIAsyncDisposable()
+    {
+        // Assert - verify the component implements IAsyncDisposable for SignalR cleanup
+        Assert.That(typeof(IAsyncDisposable).IsAssignableFrom(typeof(AgentControlPanel)),
+            "AgentControlPanel should implement IAsyncDisposable for proper SignalR cleanup");
+    }
+}
