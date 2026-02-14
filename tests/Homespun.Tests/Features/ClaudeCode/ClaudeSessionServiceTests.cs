@@ -1,9 +1,12 @@
 using Homespun.ClaudeAgentSdk;
 using Homespun.Features.ClaudeCode.Services;
+using Homespun.Shared.Models.Sessions;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 using Moq;
 using NUnit.Framework;
+using SdkPermissionMode = Homespun.ClaudeAgentSdk.PermissionMode;
+using SharedPermissionMode = Homespun.Shared.Models.Sessions.PermissionMode;
 
 namespace Homespun.Tests.Features.ClaudeCode;
 
@@ -466,7 +469,7 @@ public class ClaudeSessionServiceMessageTests
     {
         // Act & Assert
         Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await _service.SendMessageAsync("non-existent-session", "Hello", PermissionMode.AcceptEdits));
+            await _service.SendMessageAsync("non-existent-session", "Hello", SdkPermissionMode.AcceptEdits));
     }
 
     [Test]
@@ -488,7 +491,7 @@ public class ClaudeSessionServiceMessageTests
 
         // Act & Assert
         Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await _service.SendMessageAsync("stopped-session", "Hello", PermissionMode.Plan));
+            await _service.SendMessageAsync("stopped-session", "Hello", SdkPermissionMode.Plan));
     }
 }
 
@@ -545,11 +548,11 @@ public class ClaudeSessionServicePermissionModeTests
             _agentExecutionServiceMock.Object);
     }
 
-    [TestCase(PermissionMode.Default)]
-    [TestCase(PermissionMode.AcceptEdits)]
-    [TestCase(PermissionMode.Plan)]
-    [TestCase(PermissionMode.BypassPermissions)]
-    public void SendMessageAsync_WithPermissionMode_AcceptsAllModes(PermissionMode permissionMode)
+    [TestCase(SdkPermissionMode.Default)]
+    [TestCase(SdkPermissionMode.AcceptEdits)]
+    [TestCase(SdkPermissionMode.Plan)]
+    [TestCase(SdkPermissionMode.BypassPermissions)]
+    public void SendMessageAsync_WithPermissionMode_AcceptsAllModes(SdkPermissionMode permissionMode)
     {
         // Arrange - session without options will throw, but after permission mode validation
         var session = new ClaudeSession
@@ -605,9 +608,9 @@ public class ClaudeSessionServicePermissionModeTests
         var request = new AgentMessageRequest(
             SessionId: "session-1",
             Message: "Hello",
-            PermissionMode: PermissionMode.AcceptEdits);
+            PermissionMode: SharedPermissionMode.AcceptEdits);
 
-        Assert.That(request.PermissionMode, Is.EqualTo(PermissionMode.AcceptEdits));
+        Assert.That(request.PermissionMode, Is.EqualTo(SharedPermissionMode.AcceptEdits));
     }
 
     [Test]
@@ -618,7 +621,7 @@ public class ClaudeSessionServicePermissionModeTests
             SessionId: "session-1",
             Message: "Hello");
 
-        Assert.That(request.PermissionMode, Is.EqualTo(PermissionMode.BypassPermissions));
+        Assert.That(request.PermissionMode, Is.EqualTo(SharedPermissionMode.BypassPermissions));
     }
 }
 
@@ -2021,5 +2024,289 @@ public class ClaudeSessionServiceToolResultDetectionTests
             Assert.That(session.PlanContent, Is.EqualTo(planContent),
                 "Should have fetched plan content from agent container");
         });
+    }
+}
+
+/// <summary>
+/// Tests for CheckCloneStateAsync and StartSessionWithTerminationAsync methods.
+/// These methods support the simplified agent worker container management.
+/// </summary>
+[TestFixture]
+public class ClaudeSessionServiceCloneStateTests
+{
+    private ClaudeSessionService _service = null!;
+    private IClaudeSessionStore _sessionStore = null!;
+    private SessionOptionsFactory _optionsFactory = null!;
+    private Mock<ILogger<ClaudeSessionService>> _loggerMock = null!;
+    private Mock<ILogger<SessionOptionsFactory>> _factoryLoggerMock = null!;
+    private Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>> _hubContextMock = null!;
+    private Mock<IClaudeSessionDiscovery> _discoveryMock = null!;
+    private Mock<ISessionMetadataStore> _metadataStoreMock = null!;
+    private Mock<IMessageCacheStore> _messageCacheMock = null!;
+    private IToolResultParser _toolResultParser = null!;
+    private Mock<IHooksService> _hooksServiceMock = null!;
+    private Mock<IAgentExecutionService> _agentExecutionServiceMock = null!;
+
+    [SetUp]
+    public void SetUp()
+    {
+        _sessionStore = new ClaudeSessionStore();
+        _factoryLoggerMock = new Mock<ILogger<SessionOptionsFactory>>();
+        _optionsFactory = new SessionOptionsFactory(_factoryLoggerMock.Object);
+        _loggerMock = new Mock<ILogger<ClaudeSessionService>>();
+        _hubContextMock = new Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>>();
+        _discoveryMock = new Mock<IClaudeSessionDiscovery>();
+        _metadataStoreMock = new Mock<ISessionMetadataStore>();
+        _messageCacheMock = new Mock<IMessageCacheStore>();
+        _toolResultParser = new ToolResultParser();
+        _hooksServiceMock = new Mock<IHooksService>();
+        _agentExecutionServiceMock = new Mock<IAgentExecutionService>();
+
+        var clientsMock = new Mock<IHubClients>();
+        var clientProxyMock = new Mock<IClientProxy>();
+        clientsMock.Setup(c => c.All).Returns(clientProxyMock.Object);
+        clientsMock.Setup(c => c.Group(It.IsAny<string>())).Returns(clientProxyMock.Object);
+        _hubContextMock.Setup(h => h.Clients).Returns(clientsMock.Object);
+
+        _service = new ClaudeSessionService(
+            _sessionStore,
+            _optionsFactory,
+            _loggerMock.Object,
+            _hubContextMock.Object,
+            _discoveryMock.Object,
+            _metadataStoreMock.Object,
+            _toolResultParser,
+            _hooksServiceMock.Object,
+            _messageCacheMock.Object,
+            _agentExecutionServiceMock.Object);
+    }
+
+    [Test]
+    public async Task CheckCloneStateAsync_NoContainer_ReturnsStartNew()
+    {
+        // Arrange
+        _agentExecutionServiceMock
+            .Setup(s => s.GetCloneContainerStateAsync("/test/path", It.IsAny<CancellationToken>()))
+            .ReturnsAsync((CloneContainerState?)null);
+
+        // Act
+        var result = await _service.CheckCloneStateAsync("/test/path");
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Action, Is.EqualTo(AgentStartAction.StartNew));
+            Assert.That(result.ExistingState, Is.Null);
+            Assert.That(result.Message, Is.Null);
+        });
+    }
+
+    [Test]
+    public async Task CheckCloneStateAsync_RunningSession_ReturnsNotifyActive()
+    {
+        // Arrange
+        var containerState = new CloneContainerState(
+            "/test/path",
+            "container-123",
+            "session-123",
+            "worker-session-123",
+            ClaudeSessionStatus.Running,
+            DateTime.UtcNow,
+            false,
+            false);
+
+        _agentExecutionServiceMock
+            .Setup(s => s.GetCloneContainerStateAsync("/test/path", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(containerState);
+
+        // Act
+        var result = await _service.CheckCloneStateAsync("/test/path");
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Action, Is.EqualTo(AgentStartAction.NotifyActive));
+            Assert.That(result.ExistingState, Is.EqualTo(containerState));
+            Assert.That(result.Message, Does.Contain("currently working"));
+        });
+    }
+
+    [Test]
+    public async Task CheckCloneStateAsync_WaitingForQuestion_ReturnsNotifyActive()
+    {
+        // Arrange
+        var containerState = new CloneContainerState(
+            "/test/path",
+            "container-123",
+            "session-123",
+            "worker-session-123",
+            ClaudeSessionStatus.WaitingForQuestionAnswer,
+            DateTime.UtcNow,
+            true,
+            false);
+
+        _agentExecutionServiceMock
+            .Setup(s => s.GetCloneContainerStateAsync("/test/path", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(containerState);
+
+        // Act
+        var result = await _service.CheckCloneStateAsync("/test/path");
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Action, Is.EqualTo(AgentStartAction.NotifyActive));
+            Assert.That(result.Message, Does.Contain("answer a question"));
+        });
+    }
+
+    [Test]
+    public async Task CheckCloneStateAsync_WaitingForPlan_ReturnsNotifyActive()
+    {
+        // Arrange
+        var containerState = new CloneContainerState(
+            "/test/path",
+            "container-123",
+            "session-123",
+            "worker-session-123",
+            ClaudeSessionStatus.WaitingForPlanExecution,
+            DateTime.UtcNow,
+            false,
+            true);
+
+        _agentExecutionServiceMock
+            .Setup(s => s.GetCloneContainerStateAsync("/test/path", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(containerState);
+
+        // Act
+        var result = await _service.CheckCloneStateAsync("/test/path");
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Action, Is.EqualTo(AgentStartAction.NotifyActive));
+            Assert.That(result.Message, Does.Contain("plan waiting"));
+        });
+    }
+
+    [Test]
+    public async Task CheckCloneStateAsync_IdleSession_ReturnsConfirmTerminate()
+    {
+        // Arrange
+        var containerState = new CloneContainerState(
+            "/test/path",
+            "container-123",
+            "session-123",
+            "worker-session-123",
+            ClaudeSessionStatus.WaitingForInput,
+            DateTime.UtcNow,
+            false,
+            false);
+
+        _agentExecutionServiceMock
+            .Setup(s => s.GetCloneContainerStateAsync("/test/path", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(containerState);
+
+        // Act
+        var result = await _service.CheckCloneStateAsync("/test/path");
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Action, Is.EqualTo(AgentStartAction.ConfirmTerminate));
+            Assert.That(result.ExistingState, Is.EqualTo(containerState));
+            Assert.That(result.Message, Does.Contain("terminate"));
+        });
+    }
+
+    [Test]
+    public async Task CheckCloneStateAsync_StoppedSession_ReturnsReuseContainer()
+    {
+        // Arrange
+        var containerState = new CloneContainerState(
+            "/test/path",
+            "container-123",
+            null,
+            null,
+            ClaudeSessionStatus.Stopped,
+            null,
+            false,
+            false);
+
+        _agentExecutionServiceMock
+            .Setup(s => s.GetCloneContainerStateAsync("/test/path", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(containerState);
+
+        // Act
+        var result = await _service.CheckCloneStateAsync("/test/path");
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Action, Is.EqualTo(AgentStartAction.ReuseContainer));
+            Assert.That(result.ExistingState, Is.EqualTo(containerState));
+            Assert.That(result.Message, Is.Null);
+        });
+    }
+
+    [Test]
+    public async Task StartSessionWithTerminationAsync_WithTerminateExisting_CallsTerminate()
+    {
+        // Arrange
+        _agentExecutionServiceMock
+            .Setup(s => s.TerminateCloneSessionAsync("/test/path", It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        // Act
+        var session = await _service.StartSessionWithTerminationAsync(
+            "entity-123",
+            "project-456",
+            "/test/path",
+            SessionMode.Build,
+            "sonnet",
+            terminateExisting: true);
+
+        // Assert
+        _agentExecutionServiceMock.Verify(
+            s => s.TerminateCloneSessionAsync("/test/path", It.IsAny<CancellationToken>()),
+            Times.Once);
+        Assert.That(session, Is.Not.Null);
+        Assert.That(session.EntityId, Is.EqualTo("entity-123"));
+    }
+
+    [Test]
+    public async Task StartSessionWithTerminationAsync_WithoutTerminateExisting_DoesNotCallTerminate()
+    {
+        // Act
+        var session = await _service.StartSessionWithTerminationAsync(
+            "entity-123",
+            "project-456",
+            "/test/path",
+            SessionMode.Build,
+            "sonnet",
+            terminateExisting: false);
+
+        // Assert
+        _agentExecutionServiceMock.Verify(
+            s => s.TerminateCloneSessionAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+        Assert.That(session, Is.Not.Null);
+    }
+
+    [Test]
+    public async Task StartSessionWithTerminationAsync_WithSystemPrompt_PassesPromptToStartSession()
+    {
+        // Act
+        var session = await _service.StartSessionWithTerminationAsync(
+            "entity-123",
+            "project-456",
+            "/test/path",
+            SessionMode.Plan,
+            "opus",
+            terminateExisting: false,
+            systemPrompt: "You are a helpful assistant.");
+
+        // Assert
+        Assert.That(session.SystemPrompt, Is.EqualTo("You are a helpful assistant."));
     }
 }

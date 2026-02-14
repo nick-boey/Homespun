@@ -9,6 +9,7 @@ using Azure.ResourceManager;
 using Azure.ResourceManager.AppContainers;
 using Azure.ResourceManager.AppContainers.Models;
 using Homespun.Features.ClaudeCode.Exceptions;
+using Homespun.Shared.Models.Sessions;
 using Microsoft.Extensions.Options;
 
 namespace Homespun.Features.ClaudeCode.Services;
@@ -87,6 +88,7 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
     private readonly HttpClient _httpClient;
     private readonly ConcurrentDictionary<string, WorkerSession> _sessions = new();
     private readonly ConcurrentDictionary<string, IssueContainerApp> _issueApps = new();
+    private readonly ConcurrentDictionary<string, CloneContainerApp> _cloneApps = new();
     private readonly ConcurrentDictionary<string, string> _sessionToIssue = new();
     private readonly ArmClient? _armClient;
 
@@ -114,6 +116,24 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
         string ContainerAppName,
         string WorkerUrl,
         DateTime CreatedAt);
+
+    private record CloneContainerApp(
+        string WorkingDirectory,
+        string ContainerAppName,
+        string WorkerUrl,
+        DateTime CreatedAt,
+        string? IssueId = null);
+
+    /// <summary>
+    /// Response from the worker's /sessions/active endpoint.
+    /// </summary>
+    private record ActiveSessionResponse(
+        bool HasActiveSession,
+        string? SessionId,
+        string? Status,
+        bool? HasPendingQuestion,
+        bool? HasPendingPlanApproval,
+        string? LastActivityAt);
 
     public AzureContainerAppsAgentExecutionService(
         IOptions<AzureContainerAppsAgentExecutionOptions> options,
@@ -447,6 +467,159 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
     }
 
     /// <inheritdoc />
+    public async Task<CloneContainerState?> GetCloneContainerStateAsync(
+        string workingDirectory,
+        CancellationToken cancellationToken = default)
+    {
+        if (!_cloneApps.TryGetValue(workingDirectory, out var app))
+        {
+            _logger.LogDebug("GetCloneContainerStateAsync: No Container App found for working directory {WorkingDirectory}",
+                workingDirectory);
+            return null;
+        }
+
+        // Check if the worker is still healthy
+        if (!await IsWorkerHealthyAsync(app.WorkerUrl, cancellationToken))
+        {
+            _logger.LogWarning("GetCloneContainerStateAsync: Container App {AppName} for {WorkingDirectory} is unhealthy, removing",
+                app.ContainerAppName, workingDirectory);
+            _cloneApps.TryRemove(workingDirectory, out _);
+            return null;
+        }
+
+        // Query worker for active session
+        try
+        {
+            var response = await _httpClient.GetAsync(
+                $"{app.WorkerUrl}/api/sessions/active", cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogDebug("GetCloneContainerStateAsync: Worker returned {StatusCode} for active session query",
+                    response.StatusCode);
+                return new CloneContainerState(
+                    workingDirectory, app.ContainerAppName, null, null,
+                    ClaudeSessionStatus.Stopped, null, false, false);
+            }
+
+            var json = await response.Content.ReadAsStringAsync(cancellationToken);
+            var activeSession = JsonSerializer.Deserialize<ActiveSessionResponse>(json, CamelCaseJsonOptions);
+
+            if (activeSession?.HasActiveSession != true)
+            {
+                return new CloneContainerState(
+                    workingDirectory, app.ContainerAppName, null, null,
+                    ClaudeSessionStatus.Stopped, null, false, false);
+            }
+
+            // Map worker session status to ClaudeSessionStatus
+            var sessionStatus = MapWorkerSessionStatus(activeSession);
+            DateTime? lastActivity = null;
+            if (activeSession.LastActivityAt != null && DateTime.TryParse(activeSession.LastActivityAt, out var parsed))
+            {
+                lastActivity = parsed;
+            }
+
+            return new CloneContainerState(
+                workingDirectory,
+                app.ContainerAppName,
+                activeSession.SessionId,
+                activeSession.SessionId,
+                sessionStatus,
+                lastActivity,
+                activeSession.HasPendingQuestion ?? false,
+                activeSession.HasPendingPlanApproval ?? false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "GetCloneContainerStateAsync: Error querying worker for active session");
+            return new CloneContainerState(
+                workingDirectory, app.ContainerAppName, null, null,
+                ClaudeSessionStatus.Error, null, false, false);
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task TerminateCloneSessionAsync(
+        string workingDirectory,
+        CancellationToken cancellationToken = default)
+    {
+        if (!_cloneApps.TryGetValue(workingDirectory, out var app))
+        {
+            _logger.LogDebug("TerminateCloneSessionAsync: No Container App found for working directory {WorkingDirectory}",
+                workingDirectory);
+            return;
+        }
+
+        try
+        {
+            // Get active session from worker
+            var response = await _httpClient.GetAsync(
+                $"{app.WorkerUrl}/api/sessions/active", cancellationToken);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var json = await response.Content.ReadAsStringAsync(cancellationToken);
+                var activeSession = JsonSerializer.Deserialize<ActiveSessionResponse>(json, CamelCaseJsonOptions);
+
+                if (activeSession?.HasActiveSession == true && activeSession.SessionId != null)
+                {
+                    // Stop the worker session
+                    _logger.LogInformation("TerminateCloneSessionAsync: Terminating worker session {WorkerSessionId} for {WorkingDirectory}",
+                        activeSession.SessionId, workingDirectory);
+
+                    await _httpClient.DeleteAsync(
+                        $"{app.WorkerUrl}/api/sessions/{activeSession.SessionId}", cancellationToken);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "TerminateCloneSessionAsync: Error terminating worker session for {WorkingDirectory}",
+                workingDirectory);
+        }
+
+        // Also remove from our session tracking
+        var sessionsToRemove = _sessions.Values
+            .Where(s => s.WorkerUrl == app.WorkerUrl)
+            .Select(s => s.SessionId)
+            .ToList();
+
+        foreach (var sessionId in sessionsToRemove)
+        {
+            if (_sessions.TryRemove(sessionId, out var session))
+            {
+                session.Cts.Cancel();
+                session.Cts.Dispose();
+            }
+            _sessionToIssue.TryRemove(sessionId, out _);
+        }
+
+        _logger.LogDebug("TerminateCloneSessionAsync: Removed {Count} local sessions for {WorkingDirectory}",
+            sessionsToRemove.Count, workingDirectory);
+    }
+
+    /// <summary>
+    /// Maps worker session status to ClaudeSessionStatus enum.
+    /// </summary>
+    private static ClaudeSessionStatus MapWorkerSessionStatus(ActiveSessionResponse activeSession)
+    {
+        if (activeSession.HasPendingQuestion == true)
+            return ClaudeSessionStatus.WaitingForQuestionAnswer;
+
+        if (activeSession.HasPendingPlanApproval == true)
+            return ClaudeSessionStatus.WaitingForPlanExecution;
+
+        return activeSession.Status switch
+        {
+            "streaming" => ClaudeSessionStatus.Running,
+            "idle" => ClaudeSessionStatus.WaitingForInput,
+            "closed" => ClaudeSessionStatus.Stopped,
+            _ => ClaudeSessionStatus.Running
+        };
+    }
+
+    /// <inheritdoc />
     public Task<AgentSessionStatus?> GetSessionStatusAsync(string sessionId, CancellationToken cancellationToken = default)
     {
         if (_sessions.TryGetValue(sessionId, out var session))
@@ -560,7 +733,11 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
         var appName = GetIssueContainerAppName(issueId);
         var workerUrl = await CreateContainerAppAsync(appName, issueId, projectName, workingDirectory, cancellationToken);
 
+        // Track both by issueId (legacy) and by workingDirectory (new)
         _issueApps[issueId] = new IssueContainerApp(issueId, appName, workerUrl, DateTime.UtcNow);
+        _cloneApps[workingDirectory] = new CloneContainerApp(
+            workingDirectory, appName, workerUrl, DateTime.UtcNow, issueId);
+
         return workerUrl;
     }
 
@@ -857,6 +1034,7 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
         await Task.WhenAll(deleteTasks);
         _sessions.Clear();
         _issueApps.Clear();
+        _cloneApps.Clear();
         _sessionToIssue.Clear();
         _httpClient.Dispose();
     }

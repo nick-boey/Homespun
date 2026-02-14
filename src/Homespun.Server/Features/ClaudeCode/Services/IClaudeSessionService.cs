@@ -162,4 +162,37 @@ public interface IClaudeSessionService
         string projectId,
         string entityId,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Checks the state of any existing container for a working directory.
+    /// Returns information about what action should be taken before starting a new session.
+    /// </summary>
+    /// <param name="workingDirectory">The working directory (clone path)</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Result indicating what action to take</returns>
+    Task<AgentStartCheckResult> CheckCloneStateAsync(
+        string workingDirectory,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Starts a session after optionally terminating any existing session in the container.
+    /// </summary>
+    /// <param name="entityId">The entity ID (issue/PR)</param>
+    /// <param name="projectId">The project ID</param>
+    /// <param name="workingDirectory">The working directory (clone path)</param>
+    /// <param name="mode">Session mode (Plan/Build)</param>
+    /// <param name="model">Model to use</param>
+    /// <param name="terminateExisting">Whether to terminate any existing session first</param>
+    /// <param name="systemPrompt">Optional system prompt</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>The new session</returns>
+    Task<ClaudeSession> StartSessionWithTerminationAsync(
+        string entityId,
+        string projectId,
+        string workingDirectory,
+        SessionMode mode,
+        string model,
+        bool terminateExisting,
+        string? systemPrompt = null,
+        CancellationToken cancellationToken = default);
 }

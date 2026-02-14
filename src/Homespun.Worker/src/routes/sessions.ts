@@ -24,6 +24,25 @@ export function createSessionsRoute(sessionManager: SessionManager) {
     });
   });
 
+  // GET /sessions/active - Get currently active session (if any)
+  sessions.get('/active', (c) => {
+    const allSessions = sessionManager.list();
+    const active = allSessions.find(s => s.status !== 'closed');
+
+    if (!active) {
+      return c.json({ hasActiveSession: false });
+    }
+
+    return c.json({
+      hasActiveSession: true,
+      sessionId: active.sessionId,
+      status: active.status,
+      hasPendingQuestion: sessionManager.hasPendingQuestion(active.sessionId),
+      hasPendingPlanApproval: sessionManager.hasPendingPlanApproval(active.sessionId),
+      lastActivityAt: active.lastActivityAt,
+    });
+  });
+
   // POST /sessions - Start or resume a session (SSE stream)
   sessions.post('/', async (c) => {
     const body = await c.req.json<StartSessionRequest>();

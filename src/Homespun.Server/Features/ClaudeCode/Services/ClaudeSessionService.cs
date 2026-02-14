@@ -3,6 +3,7 @@ using System.Text.Json;
 using Homespun.ClaudeAgentSdk;
 using Homespun.Features.ClaudeCode.Hubs;
 using Microsoft.AspNetCore.SignalR;
+using SharedPermissionMode = Homespun.Shared.Models.Sessions.PermissionMode;
 
 namespace Homespun.Features.ClaudeCode.Services;
 
@@ -438,7 +439,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                 var messageRequest = new AgentMessageRequest(
                     SessionId: agentSessionId,
                     Message: message,
-                    PermissionMode: permissionMode,
+                    PermissionMode: MapToSharedPermissionMode(permissionMode),
                     Model: effectiveModel
                 );
                 messageStream = _agentExecutionService.SendMessageAsync(messageRequest, linkedCts.Token);
@@ -1878,6 +1879,64 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
     }
 
     /// <inheritdoc />
+    public async Task<AgentStartCheckResult> CheckCloneStateAsync(
+        string workingDirectory,
+        CancellationToken cancellationToken = default)
+    {
+        var containerState = await _agentExecutionService.GetCloneContainerStateAsync(
+            workingDirectory, cancellationToken);
+
+        if (containerState == null)
+        {
+            return new AgentStartCheckResult(AgentStartAction.StartNew, null, null);
+        }
+
+        return containerState.SessionStatus switch
+        {
+            ClaudeSessionStatus.Starting or
+            ClaudeSessionStatus.RunningHooks or
+            ClaudeSessionStatus.Running =>
+                new AgentStartCheckResult(AgentStartAction.NotifyActive, containerState,
+                    "An agent is currently working on this clone."),
+
+            ClaudeSessionStatus.WaitingForQuestionAnswer =>
+                new AgentStartCheckResult(AgentStartAction.NotifyActive, containerState,
+                    "An agent is waiting for you to answer a question."),
+
+            ClaudeSessionStatus.WaitingForPlanExecution =>
+                new AgentStartCheckResult(AgentStartAction.NotifyActive, containerState,
+                    "An agent has a plan waiting for approval."),
+
+            ClaudeSessionStatus.WaitingForInput =>
+                new AgentStartCheckResult(AgentStartAction.ConfirmTerminate, containerState,
+                    "An existing session is waiting for input. Would you like to terminate it?"),
+
+            _ => new AgentStartCheckResult(AgentStartAction.ReuseContainer, containerState, null)
+        };
+    }
+
+    /// <inheritdoc />
+    public async Task<ClaudeSession> StartSessionWithTerminationAsync(
+        string entityId,
+        string projectId,
+        string workingDirectory,
+        SessionMode mode,
+        string model,
+        bool terminateExisting,
+        string? systemPrompt = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (terminateExisting)
+        {
+            _logger.LogInformation("Terminating existing session for working directory {WorkingDirectory}", workingDirectory);
+            await _agentExecutionService.TerminateCloneSessionAsync(workingDirectory, cancellationToken);
+        }
+
+        return await StartSessionAsync(entityId, projectId, workingDirectory, mode, model,
+            systemPrompt, cancellationToken);
+    }
+
+    /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
         _logger.LogInformation("Disposing ClaudeSessionService");
@@ -1914,5 +1973,20 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
 
         // Clear agent session ID mappings
         _agentSessionIds.Clear();
+    }
+
+    /// <summary>
+    /// Maps SDK PermissionMode to shared PermissionMode.
+    /// </summary>
+    private static SharedPermissionMode MapToSharedPermissionMode(PermissionMode mode)
+    {
+        return mode switch
+        {
+            PermissionMode.Default => SharedPermissionMode.Default,
+            PermissionMode.AcceptEdits => SharedPermissionMode.AcceptEdits,
+            PermissionMode.Plan => SharedPermissionMode.Plan,
+            PermissionMode.BypassPermissions => SharedPermissionMode.BypassPermissions,
+            _ => SharedPermissionMode.BypassPermissions
+        };
     }
 }

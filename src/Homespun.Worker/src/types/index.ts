@@ -80,3 +80,12 @@ export interface PlanFile {
   path: string;
   name: string;
 }
+
+export interface ActiveSessionResponse {
+  hasActiveSession: boolean;
+  sessionId?: string;
+  status?: 'idle' | 'streaming' | 'closed';
+  hasPendingQuestion?: boolean;
+  hasPendingPlanApproval?: boolean;
+  lastActivityAt?: string;
+}
