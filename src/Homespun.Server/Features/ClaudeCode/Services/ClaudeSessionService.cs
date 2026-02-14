@@ -527,8 +527,16 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                     sysMsg.Subtype, sysMsg.SessionId);
                 break;
 
+            case SdkQuestionPendingMessage questionMsg:
+                await HandleQuestionPendingFromWorkerAsync(sessionId, session, questionMsg, cancellationToken);
+                break;
+
+            case SdkPlanPendingMessage planMsg:
+                await HandlePlanPendingFromWorkerAsync(sessionId, session, planMsg, cancellationToken);
+                break;
+
             case SdkStreamEvent streamEvt:
-                ProcessStreamEvent(sessionId, session, context, streamEvt);
+                await ProcessStreamEventAsync(sessionId, session, context, streamEvt);
                 break;
 
             case SdkAssistantMessage assistantMsg:
@@ -571,7 +579,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
     /// <summary>
     /// Processes stream events (content_block_start/delta/stop) for real-time content assembly.
     /// </summary>
-    private void ProcessStreamEvent(
+    private async Task ProcessStreamEventAsync(
         string sessionId,
         ClaudeSession session,
         MessageProcessingContext context,
@@ -633,13 +641,13 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                         content.ToolName == "AskUserQuestion" &&
                         !string.IsNullOrEmpty(content.ToolInput))
                     {
-                        _ = HandleAskUserQuestionTool(sessionId, session, content, CancellationToken.None);
+                        await HandleAskUserQuestionTool(sessionId, session, content, CancellationToken.None);
                     }
 
                     // Check for ExitPlanMode
                     if (content.ToolName?.Equals("ExitPlanMode", StringComparison.OrdinalIgnoreCase) == true)
                     {
-                        _ = HandleExitPlanModeCompletedAsync(sessionId, session, content, CancellationToken.None);
+                        await HandleExitPlanModeCompletedAsync(sessionId, session, content, CancellationToken.None);
                     }
 
                     // Capture plan content from Write tool
@@ -970,6 +978,168 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         catch (JsonException ex)
         {
             _logger.LogError(ex, "Failed to parse AskUserQuestion tool input in session {SessionId}", sessionId);
+        }
+    }
+
+    /// <summary>
+    /// Handles a question_pending control event from a Docker/Azure worker.
+    /// Parses the questions JSON and sets up the pending question, same as HandleAskUserQuestionTool
+    /// but without needing to parse from tool_use content blocks.
+    /// </summary>
+    private async Task HandleQuestionPendingFromWorkerAsync(
+        string sessionId,
+        ClaudeSession session,
+        SdkQuestionPendingMessage questionMsg,
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("question_pending control event received for session {SessionId}", sessionId);
+
+        try
+        {
+            using var doc = JsonDocument.Parse(questionMsg.QuestionsJson);
+            var questionsElement = doc.RootElement.TryGetProperty("questions", out var qe) ? qe : doc.RootElement;
+
+            var questions = new List<UserQuestion>();
+
+            // Handle both { questions: [...] } and bare array [...]
+            var arrayToEnumerate = questionsElement.ValueKind == JsonValueKind.Array
+                ? questionsElement
+                : throw new JsonException("Expected questions array in question_pending data");
+
+            foreach (var questionElement in arrayToEnumerate.EnumerateArray())
+            {
+                var options = new List<QuestionOption>();
+                if (questionElement.TryGetProperty("options", out var optionsElement))
+                {
+                    foreach (var optionElement in optionsElement.EnumerateArray())
+                    {
+                        options.Add(new QuestionOption
+                        {
+                            Label = optionElement.GetProperty("label").GetString() ?? "",
+                            Description = optionElement.GetProperty("description").GetString() ?? ""
+                        });
+                    }
+                }
+
+                questions.Add(new UserQuestion
+                {
+                    Question = questionElement.GetProperty("question").GetString() ?? "",
+                    Header = questionElement.TryGetProperty("header", out var headerElement) ? headerElement.GetString() ?? "" : "",
+                    Options = options,
+                    MultiSelect = questionElement.TryGetProperty("multiSelect", out var multiSelectElement) && multiSelectElement.GetBoolean()
+                });
+            }
+
+            if (questions.Count == 0)
+            {
+                _logger.LogWarning("question_pending event had no questions for session {SessionId}", sessionId);
+                return;
+            }
+
+            var pendingQuestion = new PendingQuestion
+            {
+                Id = Guid.NewGuid().ToString(),
+                ToolUseId = "",
+                Questions = questions
+            };
+
+            session.PendingQuestion = pendingQuestion;
+            session.Status = ClaudeSessionStatus.WaitingForQuestionAnswer;
+
+            await _hubContext.BroadcastQuestionReceived(sessionId, pendingQuestion);
+            await _hubContext.BroadcastSessionStatusChanged(sessionId, ClaudeSessionStatus.WaitingForQuestionAnswer);
+
+            _logger.LogInformation("Session {SessionId} is now waiting for user to answer {QuestionCount} questions (from worker)",
+                sessionId, questions.Count);
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogError(ex, "Failed to parse question_pending JSON for session {SessionId}", sessionId);
+        }
+    }
+
+    /// <summary>
+    /// Handles a plan_pending control event from a Docker/Azure worker.
+    /// The worker has paused on ExitPlanMode and emitted the plan content.
+    /// Parses the plan, displays it, and sets status to WaitingForPlanExecution.
+    /// </summary>
+    private async Task HandlePlanPendingFromWorkerAsync(
+        string sessionId,
+        ClaudeSession session,
+        SdkPlanPendingMessage planMsg,
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("plan_pending control event received for session {SessionId}", sessionId);
+
+        try
+        {
+            // Parse plan content from the control event JSON
+            string? planContent = null;
+            using var doc = JsonDocument.Parse(planMsg.PlanJson);
+            if (doc.RootElement.TryGetProperty("plan", out var planElement))
+            {
+                planContent = planElement.GetString();
+            }
+
+            // If plan content is empty from control event, try stored plan content
+            if (string.IsNullOrEmpty(planContent) && !string.IsNullOrEmpty(session.PlanContent))
+            {
+                planContent = session.PlanContent;
+                _logger.LogInformation("plan_pending: Using stored plan content for session {SessionId}", sessionId);
+            }
+
+            // If still no content, try to fetch from agent container
+            if (string.IsNullOrEmpty(planContent) && !string.IsNullOrEmpty(session.PlanFilePath) &&
+                _agentSessionIds.TryGetValue(sessionId, out var agentSessionId))
+            {
+                planContent = await _agentExecutionService.ReadFileFromAgentAsync(
+                    agentSessionId, session.PlanFilePath, cancellationToken);
+            }
+
+            // Last resort: search common plan locations via agent container
+            if (string.IsNullOrEmpty(planContent) &&
+                _agentSessionIds.TryGetValue(sessionId, out var agentSid))
+            {
+                planContent = await TryReadPlanFromAgentAsync(agentSid, session.WorkingDirectory, cancellationToken);
+            }
+
+            if (!string.IsNullOrEmpty(planContent))
+            {
+                session.PlanContent = planContent;
+
+                // Create a plan message to display in chat
+                var planMessage = new ClaudeMessage
+                {
+                    SessionId = sessionId,
+                    Role = ClaudeMessageRole.Assistant,
+                    Content =
+                    [
+                        new ClaudeMessageContent
+                        {
+                            Type = ClaudeContentType.Text,
+                            Text = $"## 📋 Implementation Plan\n\n{planContent}"
+                        }
+                    ]
+                };
+
+                session.Messages.Add(planMessage);
+                await _hubContext.BroadcastMessageReceived(sessionId, planMessage);
+            }
+            else
+            {
+                _logger.LogWarning("plan_pending: No plan content found for session {SessionId}", sessionId);
+            }
+
+            // Set status to WaitingForPlanExecution so UI shows the action buttons
+            session.Status = ClaudeSessionStatus.WaitingForPlanExecution;
+            await _hubContext.BroadcastSessionStatusChanged(sessionId, session.Status);
+
+            _logger.LogInformation("Session {SessionId} is now waiting for plan approval (from worker plan_pending)",
+                sessionId);
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogError(ex, "Failed to parse plan_pending JSON for session {SessionId}", sessionId);
         }
     }
 
@@ -1311,14 +1481,37 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         _logger.LogInformation("Answering question in session {SessionId} with {AnswerCount} answers",
             sessionId, answers.Count);
 
-        // Format the answers in a clear, structured way that Claude can understand
-        // Since we're resuming with --resume, Claude will see this as a continuation
+        // Store the questions for reference before clearing
+        var pendingQuestion = session.PendingQuestion;
+
+        // Clear the pending question and update status
+        session.PendingQuestion = null;
+        session.Status = ClaudeSessionStatus.Running;
+
+        // Broadcast that the question was answered
+        await _hubContext.BroadcastQuestionAnswered(sessionId);
+        await _hubContext.BroadcastSessionStatusChanged(sessionId, ClaudeSessionStatus.Running);
+
+        // Try to route the answer through the agent execution service (Docker/Azure workers).
+        // When the worker has a pending question, this resolves it via HTTP POST to the worker's
+        // /answer endpoint, and messages continue flowing through the original SSE stream.
+        if (_agentSessionIds.TryGetValue(sessionId, out var agentSessionId))
+        {
+            var resolved = await _agentExecutionService.AnswerQuestionAsync(
+                agentSessionId, answers, cancellationToken);
+            if (resolved)
+            {
+                _logger.LogInformation("AnswerQuestionAsync: Worker resolved question for session {SessionId}", sessionId);
+                return;
+            }
+        }
+
+        // Fallback for local mode: send formatted answer as a new message
         var formattedAnswers = new System.Text.StringBuilder();
         formattedAnswers.AppendLine("I've answered your questions:");
         formattedAnswers.AppendLine();
 
-        // Include the original questions and user's selections for context
-        foreach (var question in session.PendingQuestion.Questions)
+        foreach (var question in pendingQuestion.Questions)
         {
             formattedAnswers.AppendLine($"**{question.Header}**: {question.Question}");
             if (answers.TryGetValue(question.Question, out var answer))
@@ -1334,21 +1527,6 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
 
         formattedAnswers.AppendLine("Please continue with the task based on my answers above.");
 
-        // Store the questions for reference before clearing
-        var pendingQuestion = session.PendingQuestion;
-
-        // Clear the pending question
-        session.PendingQuestion = null;
-
-        // Update session status before sending
-        session.Status = ClaudeSessionStatus.Running;
-
-        // Broadcast that the question was answered
-        await _hubContext.BroadcastQuestionAnswered(sessionId);
-        await _hubContext.BroadcastSessionStatusChanged(sessionId, ClaudeSessionStatus.Running);
-
-        // Send the answer as a regular message - this will resume the conversation
-        // The --resume flag ensures Claude has context from the previous turn
         await SendMessageAsync(sessionId, formattedAnswers.ToString().Trim(), PermissionMode.BypassPermissions, cancellationToken);
     }
 
@@ -1405,6 +1583,90 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         // which fails when running in a new container after context clearing.
         var executionMessage = $"Please proceed with the implementation of the plan below. The full plan is provided here — do NOT attempt to read or find a plan file on disk.\n\n{session.PlanContent}";
         await SendMessageAsync(sessionId, executionMessage, PermissionMode.BypassPermissions, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task ApprovePlanAsync(string sessionId, bool approved, bool keepContext, string? feedback = null,
+        CancellationToken cancellationToken = default)
+    {
+        var session = _sessionStore.GetById(sessionId);
+        if (session == null)
+        {
+            throw new InvalidOperationException($"Session {sessionId} not found");
+        }
+
+        if (session.Status != ClaudeSessionStatus.WaitingForPlanExecution)
+        {
+            throw new InvalidOperationException($"Session {sessionId} is not waiting for plan approval (status: {session.Status})");
+        }
+
+        _logger.LogInformation(
+            "Plan approval for session {SessionId}: approved={Approved}, keepContext={KeepContext}, hasFeedback={HasFeedback}",
+            sessionId, approved, keepContext, feedback != null);
+
+        if (approved)
+        {
+            if (keepContext)
+            {
+                // Approve with context: tell worker to allow the ExitPlanMode tool, agent continues
+                session.Status = ClaudeSessionStatus.Running;
+                await _hubContext.BroadcastSessionStatusChanged(sessionId, session.Status);
+
+                if (_agentSessionIds.TryGetValue(sessionId, out var agentSessionId))
+                {
+                    var resolved = await _agentExecutionService.ApprovePlanAsync(
+                        agentSessionId, true, true, null, cancellationToken);
+                    if (resolved)
+                    {
+                        _logger.LogInformation("ApprovePlanAsync: Worker approved plan (keep context) for session {SessionId}", sessionId);
+                        return;
+                    }
+                }
+
+                // Local fallback: execute plan keeping context
+                await ExecutePlanAsync(sessionId, clearContext: false, cancellationToken);
+            }
+            else
+            {
+                // Approve with clear context: tell worker to deny (interrupts), then start fresh
+                if (_agentSessionIds.TryGetValue(sessionId, out var agentSessionId))
+                {
+                    var resolved = await _agentExecutionService.ApprovePlanAsync(
+                        agentSessionId, true, false, null, cancellationToken);
+                    if (resolved)
+                    {
+                        _logger.LogInformation("ApprovePlanAsync: Worker notified (clear context) for session {SessionId}", sessionId);
+                    }
+                }
+
+                // Execute the plan in a fresh context
+                await ExecutePlanAsync(sessionId, clearContext: true, cancellationToken);
+            }
+        }
+        else
+        {
+            // Reject: tell worker to deny (without interrupt), agent revises plan
+            session.Status = ClaudeSessionStatus.Running;
+            await _hubContext.BroadcastSessionStatusChanged(sessionId, session.Status);
+
+            if (_agentSessionIds.TryGetValue(sessionId, out var agentSessionId))
+            {
+                var resolved = await _agentExecutionService.ApprovePlanAsync(
+                    agentSessionId, false, false, feedback, cancellationToken);
+                if (resolved)
+                {
+                    _logger.LogInformation("ApprovePlanAsync: Worker rejected plan for session {SessionId}", sessionId);
+                    return;
+                }
+            }
+
+            // Local fallback: send feedback as a new message
+            var rejectMessage = !string.IsNullOrEmpty(feedback)
+                ? $"I've reviewed your plan and would like changes. Here's my feedback:\n\n{feedback}\n\nPlease revise the plan based on my feedback."
+                : "I've reviewed your plan and would like you to revise it. Please create an updated plan.";
+
+            await SendMessageAsync(sessionId, rejectMessage, PermissionMode.BypassPermissions, cancellationToken);
+        }
     }
 
     /// <inheritdoc />

@@ -7,6 +7,7 @@ import type {
   StartSessionRequest,
   SendMessageRequest,
   AnswerQuestionRequest,
+  ApprovePlanRequest,
 } from '../types/index.js';
 
 export function createSessionsRoute(sessionManager: SessionManager) {
@@ -87,43 +88,35 @@ export function createSessionsRoute(sessionManager: SessionManager) {
     });
   });
 
-  // POST /sessions/:id/answer - Answer a pending question (SSE stream)
+  // POST /sessions/:id/answer - Answer a pending question (JSON response)
+  // Messages continue flowing through the original SSE stream after the promise resolves.
   sessions.post('/:id/answer', async (c) => {
     const sessionId = c.req.param('id');
     const body = await c.req.json<AnswerQuestionRequest>();
     console.log(`[Worker][Route] POST /sessions/${sessionId}/answer - ${Object.keys(body.answers).length} answers`);
 
-    c.header('Content-Type', 'text/event-stream');
-    c.header('Cache-Control', 'no-cache');
-    c.header('Connection', 'keep-alive');
+    const resolved = sessionManager.resolvePendingQuestion(sessionId, body.answers);
+    if (!resolved) {
+      return c.json({ ok: false, error: 'No pending question' }, 400);
+    }
 
-    return stream(c, async (s) => {
-      try {
-        // Format answers into a message, matching the C# worker behavior
-        const lines: string[] = ["I've answered your questions:", ''];
-        for (const [question, answer] of Object.entries(body.answers)) {
-          lines.push(`**${question}**`);
-          lines.push(`My answer: ${answer}`);
-          lines.push('');
-        }
-        lines.push('Please continue with the task based on my answers above.');
+    return c.json({ ok: true });
+  });
 
-        const formattedMessage = lines.join('\n').trim();
-        await sessionManager.send(sessionId, formattedMessage);
+  // POST /sessions/:id/approve-plan - Approve or reject a pending plan (JSON response)
+  // Messages continue flowing through the original SSE stream after the promise resolves.
+  sessions.post('/:id/approve-plan', async (c) => {
+    const sessionId = c.req.param('id');
+    const body = await c.req.json<ApprovePlanRequest>();
+    console.log(`[Worker][Route] POST /sessions/${sessionId}/approve-plan - approved=${body.approved}, keepContext=${body.keepContext}`);
 
-        for await (const chunk of streamSessionEvents(sessionManager, sessionId)) {
-          await s.write(chunk);
-        }
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        await s.write(formatSSE('error', {
-          sessionId,
-          message,
-          code: 'ANSWER_ERROR',
-          isRecoverable: false,
-        }));
-      }
-    });
+    const resolved = sessionManager.resolvePendingPlanApproval(
+      sessionId, body.approved, body.keepContext, body.feedback);
+    if (!resolved) {
+      return c.json({ ok: false, error: 'No pending plan approval' }, 400);
+    }
+
+    return c.json({ ok: true });
   });
 
   // POST /sessions/:id/interrupt - Interrupt current turn

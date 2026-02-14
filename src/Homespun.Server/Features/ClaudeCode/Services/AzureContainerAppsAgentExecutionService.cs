@@ -357,6 +357,96 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
     }
 
     /// <inheritdoc />
+    public async Task<bool> AnswerQuestionAsync(string sessionId, Dictionary<string, string> answers,
+        CancellationToken cancellationToken = default)
+    {
+        if (!_sessions.TryGetValue(sessionId, out var session))
+        {
+            _logger.LogDebug("AnswerQuestionAsync: Session {SessionId} not found", sessionId);
+            return false;
+        }
+
+        if (string.IsNullOrEmpty(session.WorkerSessionId))
+        {
+            _logger.LogWarning("AnswerQuestionAsync: Worker session ID not set for session {SessionId}", sessionId);
+            return false;
+        }
+
+        try
+        {
+            var requestBody = new { Answers = answers };
+            var json = JsonSerializer.Serialize(requestBody, CamelCaseJsonOptions);
+            using var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            var url = $"{session.WorkerUrl}/api/sessions/{session.WorkerSessionId}/answer";
+            _logger.LogInformation("AnswerQuestionAsync: POSTing answers to {Url} for session {SessionId}", url, sessionId);
+
+            var response = await _httpClient.PostAsync(url, content, cancellationToken);
+
+            if (response.IsSuccessStatusCode)
+            {
+                _logger.LogInformation("AnswerQuestionAsync: Worker resolved question for session {SessionId}", sessionId);
+                return true;
+            }
+
+            var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            _logger.LogWarning("AnswerQuestionAsync: Worker returned {StatusCode}: {Error} for session {SessionId}",
+                response.StatusCode, errorBody, sessionId);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "AnswerQuestionAsync: Error posting answers for session {SessionId}", sessionId);
+            return false;
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> ApprovePlanAsync(string sessionId, bool approved, bool keepContext, string? feedback = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (!_sessions.TryGetValue(sessionId, out var session))
+        {
+            _logger.LogDebug("ApprovePlanAsync: Session {SessionId} not found", sessionId);
+            return false;
+        }
+
+        if (string.IsNullOrEmpty(session.WorkerSessionId))
+        {
+            _logger.LogWarning("ApprovePlanAsync: Worker session ID not set for session {SessionId}", sessionId);
+            return false;
+        }
+
+        try
+        {
+            var requestBody = new { Approved = approved, KeepContext = keepContext, Feedback = feedback };
+            var json = JsonSerializer.Serialize(requestBody, CamelCaseJsonOptions);
+            using var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            var url = $"{session.WorkerUrl}/api/sessions/{session.WorkerSessionId}/approve-plan";
+            _logger.LogInformation("ApprovePlanAsync: POSTing plan decision to {Url} for session {SessionId}", url, sessionId);
+
+            var response = await _httpClient.PostAsync(url, content, cancellationToken);
+
+            if (response.IsSuccessStatusCode)
+            {
+                _logger.LogInformation("ApprovePlanAsync: Worker resolved plan approval for session {SessionId}", sessionId);
+                return true;
+            }
+
+            var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            _logger.LogWarning("ApprovePlanAsync: Worker returned {StatusCode}: {Error} for session {SessionId}",
+                response.StatusCode, errorBody, sessionId);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "ApprovePlanAsync: Error posting plan decision for session {SessionId}", sessionId);
+            return false;
+        }
+    }
+
+    /// <inheritdoc />
     public Task<AgentSessionStatus?> GetSessionStatusAsync(string sessionId, CancellationToken cancellationToken = default)
     {
         if (_sessions.TryGetValue(sessionId, out var session))
@@ -713,6 +803,16 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
                 );
             }
 
+            if (eventType == "question_pending")
+            {
+                return new SdkQuestionPendingMessage(sessionId, data);
+            }
+
+            if (eventType == "plan_pending")
+            {
+                return new SdkPlanPendingMessage(sessionId, data);
+            }
+
             if (eventType == "error")
             {
                 _logger.LogWarning("Received error event from worker: {Data}", data);
@@ -737,6 +837,8 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
             SdkResultMessage m => m with { SessionId = sessionId },
             SdkSystemMessage m => m with { SessionId = sessionId },
             SdkStreamEvent m => m with { SessionId = sessionId },
+            SdkQuestionPendingMessage m => m with { SessionId = sessionId },
+            SdkPlanPendingMessage m => m with { SessionId = sessionId },
             _ => msg
         };
     }

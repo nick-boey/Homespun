@@ -342,6 +342,25 @@
     @apply bg-btn-primary-hover border-btn-primary-hover;
   }
 
+  .action-panel-btn-danger {
+    @apply border-btn-danger-bg text-btn-danger-text;
+  }
+
+  .action-panel-btn-danger:hover {
+    @apply bg-btn-danger-bg border-btn-danger-hover;
+  }
+
+  .action-panel-feedback {
+    @apply flex flex-col gap-sm mt-sm;
+  }
+
+  .action-panel-textarea {
+    @apply w-full bg-bg-tertiary border border-border rounded-md;
+    @apply px-sm py-xs text-sm text-text-primary;
+    @apply resize-y;
+    @apply focus:outline-none focus:border-lagoon;
+  }
+
   .action-panel-btn-icon {
     @apply text-base;
   }

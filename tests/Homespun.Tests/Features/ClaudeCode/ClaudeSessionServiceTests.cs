@@ -1211,6 +1211,469 @@ public class ClaudeSessionServicePlanExecutionTests
 }
 
 /// <summary>
+/// Tests for question_pending control event and AnswerQuestionAsync routing.
+/// </summary>
+[TestFixture]
+public class ClaudeSessionServiceQuestionPendingTests
+{
+    private ClaudeSessionService _service = null!;
+    private IClaudeSessionStore _sessionStore = null!;
+    private SessionOptionsFactory _optionsFactory = null!;
+    private Mock<ILogger<ClaudeSessionService>> _loggerMock = null!;
+    private Mock<ILogger<SessionOptionsFactory>> _factoryLoggerMock = null!;
+    private Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>> _hubContextMock = null!;
+    private Mock<IClaudeSessionDiscovery> _discoveryMock = null!;
+    private Mock<ISessionMetadataStore> _metadataStoreMock = null!;
+    private Mock<IMessageCacheStore> _messageCacheMock = null!;
+    private IToolResultParser _toolResultParser = null!;
+    private Mock<IHooksService> _hooksServiceMock = null!;
+    private Mock<IAgentExecutionService> _agentExecutionServiceMock = null!;
+
+    [SetUp]
+    public void SetUp()
+    {
+        _sessionStore = new ClaudeSessionStore();
+        _factoryLoggerMock = new Mock<ILogger<SessionOptionsFactory>>();
+        _optionsFactory = new SessionOptionsFactory(_factoryLoggerMock.Object);
+        _loggerMock = new Mock<ILogger<ClaudeSessionService>>();
+        _hubContextMock = new Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>>();
+        _discoveryMock = new Mock<IClaudeSessionDiscovery>();
+        _metadataStoreMock = new Mock<ISessionMetadataStore>();
+        _messageCacheMock = new Mock<IMessageCacheStore>();
+        _toolResultParser = new ToolResultParser();
+        _hooksServiceMock = new Mock<IHooksService>();
+        _agentExecutionServiceMock = new Mock<IAgentExecutionService>();
+
+        var clientsMock = new Mock<IHubClients>();
+        var clientProxyMock = new Mock<IClientProxy>();
+        clientsMock.Setup(c => c.All).Returns(clientProxyMock.Object);
+        clientsMock.Setup(c => c.Group(It.IsAny<string>())).Returns(clientProxyMock.Object);
+        _hubContextMock.Setup(h => h.Clients).Returns(clientsMock.Object);
+
+        _service = new ClaudeSessionService(
+            _sessionStore,
+            _optionsFactory,
+            _loggerMock.Object,
+            _hubContextMock.Object,
+            _discoveryMock.Object,
+            _metadataStoreMock.Object,
+            _toolResultParser,
+            _hooksServiceMock.Object,
+            _messageCacheMock.Object,
+            _agentExecutionServiceMock.Object);
+    }
+
+    private static async IAsyncEnumerable<SdkMessage> CreateSdkMessageStream(params SdkMessage[] messages)
+    {
+        foreach (var msg in messages)
+        {
+            yield return msg;
+        }
+        await Task.CompletedTask;
+    }
+
+    [Test]
+    public async Task ProcessSdkMessage_QuestionPending_SetsWaitingStatus()
+    {
+        // Arrange
+        var session = await _service.StartSessionAsync(
+            "entity-1", "project-1", "/test/path", SessionMode.Build, "sonnet");
+
+        var questionsJson = "{\"questions\":[{\"question\":\"Which option?\",\"header\":\"Choice\",\"options\":[{\"label\":\"A\",\"description\":\"Option A\"}],\"multiSelect\":false}]}";
+
+        // Simulate a question_pending event followed by a result
+        _agentExecutionServiceMock
+            .Setup(s => s.StartSessionAsync(It.IsAny<AgentStartRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(CreateSdkMessageStream(
+                new SdkSystemMessage("agent-1", null, "session_started", null, null),
+                new SdkQuestionPendingMessage("agent-1", questionsJson),
+                new SdkResultMessage("agent-1", null, null, 0, 0, false, 0, 0, null)));
+
+        // Act
+        await _service.SendMessageAsync(session.Id, "Do something");
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(session.Status, Is.EqualTo(ClaudeSessionStatus.WaitingForQuestionAnswer));
+            Assert.That(session.PendingQuestion, Is.Not.Null);
+            Assert.That(session.PendingQuestion!.Questions, Has.Count.EqualTo(1));
+            Assert.That(session.PendingQuestion.Questions[0].Question, Is.EqualTo("Which option?"));
+        });
+    }
+
+    [Test]
+    public async Task AnswerQuestionAsync_DockerMode_CallsExecutionService()
+    {
+        // Arrange
+        var session = await _service.StartSessionAsync(
+            "entity-1", "project-1", "/test/path", SessionMode.Build, "sonnet");
+
+        // Set up agent session mapping via a StartSession call
+        _agentExecutionServiceMock
+            .Setup(s => s.StartSessionAsync(It.IsAny<AgentStartRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(CreateSdkMessageStream(
+                new SdkSystemMessage("agent-1", null, "session_started", null, null),
+                new SdkResultMessage("agent-1", null, null, 0, 0, false, 0, 0, null)));
+
+        // Send a message to establish the agent session mapping
+        await _service.SendMessageAsync(session.Id, "Hello");
+
+        // Set up the question pending state
+        session.PendingQuestion = new PendingQuestion
+        {
+            Id = "q1",
+            ToolUseId = "",
+            Questions = new List<UserQuestion>
+            {
+                new() { Question = "Which?", Header = "Choice", Options = new List<QuestionOption>() }
+            }
+        };
+        session.Status = ClaudeSessionStatus.WaitingForQuestionAnswer;
+
+        // Mock the execution service to resolve the question
+        _agentExecutionServiceMock
+            .Setup(s => s.AnswerQuestionAsync(It.IsAny<string>(), It.IsAny<Dictionary<string, string>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        // Act
+        var answers = new Dictionary<string, string> { { "Which?", "Option A" } };
+        await _service.AnswerQuestionAsync(session.Id, answers);
+
+        // Assert
+        _agentExecutionServiceMock.Verify(
+            s => s.AnswerQuestionAsync(It.IsAny<string>(), answers, It.IsAny<CancellationToken>()),
+            Times.Once);
+        Assert.That(session.Status, Is.EqualTo(ClaudeSessionStatus.Running));
+        Assert.That(session.PendingQuestion, Is.Null);
+    }
+
+    [Test]
+    public async Task AnswerQuestionAsync_LocalMode_FallsBackToSendMessage()
+    {
+        // Arrange
+        var session = await _service.StartSessionAsync(
+            "entity-1", "project-1", "/test/path", SessionMode.Build, "sonnet");
+
+        // Set up the question pending state (no agent session mapping = local mode fallback)
+        session.PendingQuestion = new PendingQuestion
+        {
+            Id = "q1",
+            ToolUseId = "",
+            Questions = new List<UserQuestion>
+            {
+                new() { Question = "Which?", Header = "Choice", Options = new List<QuestionOption>() }
+            }
+        };
+        session.Status = ClaudeSessionStatus.WaitingForQuestionAnswer;
+
+        // Mock the execution service to start a session (for the fallback SendMessage)
+        _agentExecutionServiceMock
+            .Setup(s => s.StartSessionAsync(It.IsAny<AgentStartRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(CreateSdkMessageStream(
+                new SdkSystemMessage("agent-1", null, "session_started", null, null),
+                new SdkResultMessage("agent-1", null, null, 0, 0, false, 0, 0, null)));
+
+        // Act
+        var answers = new Dictionary<string, string> { { "Which?", "Option A" } };
+        await _service.AnswerQuestionAsync(session.Id, answers);
+
+        // Assert - should NOT call AnswerQuestionAsync on execution service (no agent mapping)
+        _agentExecutionServiceMock.Verify(
+            s => s.AnswerQuestionAsync(It.IsAny<string>(), It.IsAny<Dictionary<string, string>>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+
+        // Should have started a new session (via SendMessageAsync fallback)
+        _agentExecutionServiceMock.Verify(
+            s => s.StartSessionAsync(It.IsAny<AgentStartRequest>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+}
+
+/// <summary>
+/// Tests for plan approval (ApprovePlanAsync) in ClaudeSessionService.
+/// </summary>
+[TestFixture]
+public class ClaudeSessionServicePlanApprovalTests
+{
+    private ClaudeSessionService _service = null!;
+    private IClaudeSessionStore _sessionStore = null!;
+    private SessionOptionsFactory _optionsFactory = null!;
+    private Mock<ILogger<ClaudeSessionService>> _loggerMock = null!;
+    private Mock<ILogger<SessionOptionsFactory>> _factoryLoggerMock = null!;
+    private Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>> _hubContextMock = null!;
+    private Mock<IClaudeSessionDiscovery> _discoveryMock = null!;
+    private Mock<ISessionMetadataStore> _metadataStoreMock = null!;
+    private Mock<IMessageCacheStore> _messageCacheMock = null!;
+    private IToolResultParser _toolResultParser = null!;
+    private Mock<IHooksService> _hooksServiceMock = null!;
+    private Mock<IAgentExecutionService> _agentExecutionServiceMock = null!;
+
+    [SetUp]
+    public void SetUp()
+    {
+        _sessionStore = new ClaudeSessionStore();
+        _factoryLoggerMock = new Mock<ILogger<SessionOptionsFactory>>();
+        _optionsFactory = new SessionOptionsFactory(_factoryLoggerMock.Object);
+        _loggerMock = new Mock<ILogger<ClaudeSessionService>>();
+        _hubContextMock = new Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>>();
+        _discoveryMock = new Mock<IClaudeSessionDiscovery>();
+        _metadataStoreMock = new Mock<ISessionMetadataStore>();
+        _messageCacheMock = new Mock<IMessageCacheStore>();
+        _toolResultParser = new ToolResultParser();
+        _hooksServiceMock = new Mock<IHooksService>();
+        _agentExecutionServiceMock = new Mock<IAgentExecutionService>();
+
+        var clientsMock = new Mock<IHubClients>();
+        var clientProxyMock = new Mock<IClientProxy>();
+        clientsMock.Setup(c => c.All).Returns(clientProxyMock.Object);
+        clientsMock.Setup(c => c.Group(It.IsAny<string>())).Returns(clientProxyMock.Object);
+        _hubContextMock.Setup(h => h.Clients).Returns(clientsMock.Object);
+
+        _service = new ClaudeSessionService(
+            _sessionStore,
+            _optionsFactory,
+            _loggerMock.Object,
+            _hubContextMock.Object,
+            _discoveryMock.Object,
+            _metadataStoreMock.Object,
+            _toolResultParser,
+            _hooksServiceMock.Object,
+            _messageCacheMock.Object,
+            _agentExecutionServiceMock.Object);
+    }
+
+    private static async IAsyncEnumerable<SdkMessage> CreateSdkMessageStream(params SdkMessage[] messages)
+    {
+        foreach (var msg in messages)
+        {
+            yield return msg;
+        }
+        await Task.CompletedTask;
+    }
+
+    [Test]
+    public void ApprovePlanAsync_NotWaitingForPlan_ThrowsInvalidOperationException()
+    {
+        // Arrange
+        var session = new ClaudeSession
+        {
+            Id = "test-session",
+            EntityId = "entity-123",
+            ProjectId = "project-456",
+            WorkingDirectory = "/test/path",
+            Model = "model",
+            Mode = SessionMode.Plan,
+            Status = ClaudeSessionStatus.Running,
+            CreatedAt = DateTime.UtcNow
+        };
+        _sessionStore.Add(session);
+
+        // Act & Assert
+        var ex = Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await _service.ApprovePlanAsync("test-session", true, true));
+        Assert.That(ex!.Message, Does.Contain("not waiting for plan approval"));
+    }
+
+    [Test]
+    public void ApprovePlanAsync_NonExistentSession_ThrowsInvalidOperationException()
+    {
+        // Act & Assert
+        Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await _service.ApprovePlanAsync("non-existent-session", true, true));
+    }
+
+    [Test]
+    public async Task ApprovePlanAsync_Approved_KeepContext_CallsExecutionService()
+    {
+        // Arrange
+        var session = await _service.StartSessionAsync(
+            "entity-1", "project-1", "/test/path", SessionMode.Plan, "sonnet");
+
+        session.PlanContent = "# Test Plan";
+        session.Status = ClaudeSessionStatus.WaitingForPlanExecution;
+
+        // Set up agent session mapping
+        _agentExecutionServiceMock
+            .Setup(s => s.StartSessionAsync(It.IsAny<AgentStartRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(CreateSdkMessageStream(
+                new SdkSystemMessage("agent-1", null, "session_started", null, null),
+                new SdkResultMessage("agent-1", null, null, 0, 0, false, 0, 0, null)));
+
+        await _service.SendMessageAsync(session.Id, "Hello");
+        session.Status = ClaudeSessionStatus.WaitingForPlanExecution;
+
+        // Mock the execution service to resolve the plan approval
+        _agentExecutionServiceMock
+            .Setup(s => s.ApprovePlanAsync(It.IsAny<string>(), true, true, null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        // Act
+        await _service.ApprovePlanAsync(session.Id, approved: true, keepContext: true);
+
+        // Assert
+        _agentExecutionServiceMock.Verify(
+            s => s.ApprovePlanAsync(It.IsAny<string>(), true, true, null, It.IsAny<CancellationToken>()),
+            Times.Once);
+        Assert.That(session.Status, Is.EqualTo(ClaudeSessionStatus.Running));
+    }
+
+    [Test]
+    public async Task ApprovePlanAsync_Approved_ClearContext_ExecutesPlan()
+    {
+        // Arrange
+        var session = await _service.StartSessionAsync(
+            "entity-1", "project-1", "/test/path", SessionMode.Plan, "sonnet");
+
+        session.PlanContent = "# Test Plan\n\n1. Step one";
+        session.Status = ClaudeSessionStatus.WaitingForPlanExecution;
+
+        // Set up agent session mapping
+        _agentExecutionServiceMock
+            .Setup(s => s.StartSessionAsync(It.IsAny<AgentStartRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(CreateSdkMessageStream(
+                new SdkSystemMessage("agent-1", null, "session_started", null, null),
+                new SdkResultMessage("agent-1", null, null, 0, 0, false, 0, 0, null)));
+
+        // Mock the execution service for plan notification
+        _agentExecutionServiceMock
+            .Setup(s => s.ApprovePlanAsync(It.IsAny<string>(), true, false, null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        // Act
+        await _service.ApprovePlanAsync(session.Id, approved: true, keepContext: false);
+
+        // Assert - should clear context and send plan as message
+        Assert.That(session.ContextClearMarkers, Has.Count.EqualTo(1),
+            "Should have a context clear marker");
+
+        // Verify the plan content was sent as a message
+        var lastUserMessage = session.Messages.LastOrDefault(m => m.Role == ClaudeMessageRole.User);
+        Assert.That(lastUserMessage, Is.Not.Null);
+        Assert.That(lastUserMessage!.Content[0].Text, Does.Contain("# Test Plan"));
+    }
+
+    [Test]
+    public async Task ApprovePlanAsync_Rejected_CallsExecutionServiceWithFeedback()
+    {
+        // Arrange
+        var session = await _service.StartSessionAsync(
+            "entity-1", "project-1", "/test/path", SessionMode.Plan, "sonnet");
+
+        session.PlanContent = "# Test Plan";
+        session.Status = ClaudeSessionStatus.WaitingForPlanExecution;
+
+        // Set up agent session mapping
+        _agentExecutionServiceMock
+            .Setup(s => s.StartSessionAsync(It.IsAny<AgentStartRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(CreateSdkMessageStream(
+                new SdkSystemMessage("agent-1", null, "session_started", null, null),
+                new SdkResultMessage("agent-1", null, null, 0, 0, false, 0, 0, null)));
+
+        await _service.SendMessageAsync(session.Id, "Hello");
+        session.Status = ClaudeSessionStatus.WaitingForPlanExecution;
+
+        // Mock the execution service to resolve the rejection
+        _agentExecutionServiceMock
+            .Setup(s => s.ApprovePlanAsync(It.IsAny<string>(), false, false, "Please add tests", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        // Act
+        await _service.ApprovePlanAsync(session.Id, approved: false, keepContext: false, feedback: "Please add tests");
+
+        // Assert
+        _agentExecutionServiceMock.Verify(
+            s => s.ApprovePlanAsync(It.IsAny<string>(), false, false, "Please add tests", It.IsAny<CancellationToken>()),
+            Times.Once);
+        Assert.That(session.Status, Is.EqualTo(ClaudeSessionStatus.Running));
+    }
+
+    [Test]
+    public async Task ApprovePlanAsync_Rejected_LocalFallback_SendsFeedbackAsMessage()
+    {
+        // Arrange
+        var session = await _service.StartSessionAsync(
+            "entity-1", "project-1", "/test/path", SessionMode.Plan, "sonnet");
+
+        session.PlanContent = "# Test Plan";
+        session.Status = ClaudeSessionStatus.WaitingForPlanExecution;
+
+        // No agent session mapping = local mode fallback
+
+        // Mock SendMessage to work (via StartSessionAsync)
+        _agentExecutionServiceMock
+            .Setup(s => s.StartSessionAsync(It.IsAny<AgentStartRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(CreateSdkMessageStream(
+                new SdkSystemMessage("agent-1", null, "session_started", null, null),
+                new SdkResultMessage("agent-1", null, null, 0, 0, false, 0, 0, null)));
+
+        // Act
+        await _service.ApprovePlanAsync(session.Id, approved: false, keepContext: false, feedback: "Add more detail");
+
+        // Assert - should send feedback as a message (local fallback)
+        var lastUserMessage = session.Messages.LastOrDefault(m => m.Role == ClaudeMessageRole.User);
+        Assert.That(lastUserMessage, Is.Not.Null);
+        Assert.That(lastUserMessage!.Content[0].Text, Does.Contain("Add more detail"));
+    }
+
+    [Test]
+    public async Task ApprovePlanAsync_Approved_LocalFallback_ExecutesPlan()
+    {
+        // Arrange
+        var session = await _service.StartSessionAsync(
+            "entity-1", "project-1", "/test/path", SessionMode.Plan, "sonnet");
+
+        session.PlanContent = "# Test Plan\n\n1. Do things";
+        session.Status = ClaudeSessionStatus.WaitingForPlanExecution;
+
+        // No agent session mapping = local mode fallback
+
+        // Mock StartSessionAsync for the ExecutePlan call
+        _agentExecutionServiceMock
+            .Setup(s => s.StartSessionAsync(It.IsAny<AgentStartRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(CreateSdkMessageStream(
+                new SdkSystemMessage("agent-1", null, "session_started", null, null),
+                new SdkResultMessage("agent-1", null, null, 0, 0, false, 0, 0, null)));
+
+        // Act
+        await _service.ApprovePlanAsync(session.Id, approved: true, keepContext: true);
+
+        // Assert - should fall back to ExecutePlanAsync
+        var lastUserMessage = session.Messages.LastOrDefault(m => m.Role == ClaudeMessageRole.User);
+        Assert.That(lastUserMessage, Is.Not.Null);
+        Assert.That(lastUserMessage!.Content[0].Text, Does.Contain("# Test Plan"));
+    }
+
+    [Test]
+    public async Task ProcessSdkMessage_PlanPending_SetsWaitingForPlanExecution()
+    {
+        // Arrange
+        var session = await _service.StartSessionAsync(
+            "entity-1", "project-1", "/test/path", SessionMode.Plan, "sonnet");
+
+        var planJson = "{\"plan\":\"# My Plan\\n\\n1. Step one\\n2. Step two\"}";
+
+        // Simulate a plan_pending event followed by a result
+        _agentExecutionServiceMock
+            .Setup(s => s.StartSessionAsync(It.IsAny<AgentStartRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(CreateSdkMessageStream(
+                new SdkSystemMessage("agent-1", null, "session_started", null, null),
+                new SdkPlanPendingMessage("agent-1", planJson),
+                new SdkResultMessage("agent-1", null, null, 0, 0, false, 0, 0, null)));
+
+        // Act
+        await _service.SendMessageAsync(session.Id, "Plan this feature");
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(session.Status, Is.EqualTo(ClaudeSessionStatus.WaitingForPlanExecution));
+            Assert.That(session.PlanContent, Is.Not.Null.And.Not.Empty);
+        });
+    }
+}
+
+/// <summary>
 /// Tests for tool result detection in user messages (agent mode).
 /// In agent mode, tool_use blocks are not streamed — only tool results arrive as user messages.
 /// These tests verify that Write and ExitPlanMode are detected from tool results.

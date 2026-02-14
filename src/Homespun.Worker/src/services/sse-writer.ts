@@ -1,4 +1,5 @@
 import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
+import { isControlEvent, type OutputEvent } from './session-manager.js';
 import type { SessionManager } from './session-manager.js';
 
 export function formatSSE(event: string, data: unknown): string {
@@ -6,8 +7,9 @@ export function formatSSE(event: string, data: unknown): string {
 }
 
 /**
- * Streams raw SDK messages as SSE-formatted strings.
- * Each SDK message is emitted with its `type` field as the SSE event name.
+ * Streams raw SDK messages and control events as SSE-formatted strings.
+ * SDK messages are emitted with their `type` field as the SSE event name.
+ * Control events (e.g. question_pending) use their own event type.
  * The C# consumer handles all content block assembly and question parsing.
  */
 export async function* streamSessionEvents(
@@ -32,7 +34,14 @@ export async function* streamSessionEvents(
   });
 
   try {
-    for await (const msg of sessionManager.stream(sessionId)) {
+    for await (const event of sessionManager.stream(sessionId)) {
+      if (isControlEvent(event)) {
+        console.log(`[Worker][SSE] control event: type='${event.type}'`);
+        yield formatSSE(event.type, event.data);
+        continue;
+      }
+
+      const msg = event as SDKMessage;
       if (msg.type === 'system') {
         console.log(`[Worker][SSE] system message: subtype='${(msg as any).subtype}', permissionMode='${(msg as any).permissionMode || 'N/A'}'`);
       }

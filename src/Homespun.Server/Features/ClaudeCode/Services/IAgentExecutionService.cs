@@ -104,4 +104,20 @@ public interface IAgentExecutionService
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Count of orphaned containers/sessions cleaned up.</returns>
     Task<int> CleanupOrphanedContainersAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Answers a pending question in a worker session (Docker/Azure).
+    /// Returns true if the worker had a pending question and it was resolved.
+    /// For local mode, returns false (local answers go through SendMessageAsync).
+    /// </summary>
+    Task<bool> AnswerQuestionAsync(string sessionId, Dictionary<string, string> answers,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Approves or rejects a pending plan in a worker session (Docker/Azure).
+    /// Returns true if the worker had a pending plan approval and it was resolved.
+    /// For local mode, returns false (local plan approval uses ExecutePlanAsync fallback).
+    /// </summary>
+    Task<bool> ApprovePlanAsync(string sessionId, bool approved, bool keepContext, string? feedback = null,
+        CancellationToken cancellationToken = default);
 }

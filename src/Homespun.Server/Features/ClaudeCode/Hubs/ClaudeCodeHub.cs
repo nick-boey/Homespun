@@ -111,6 +111,18 @@ public class ClaudeCodeHub(IClaudeSessionService sessionService) : Hub
     {
         await sessionService.ExecutePlanAsync(sessionId, clearContext);
     }
+
+    /// <summary>
+    /// Approve or reject a pending plan from ExitPlanMode.
+    /// </summary>
+    /// <param name="sessionId">The session ID</param>
+    /// <param name="approved">Whether the plan is approved</param>
+    /// <param name="keepContext">If approved, whether to keep existing context</param>
+    /// <param name="feedback">User feedback when rejecting the plan</param>
+    public async Task ApprovePlan(string sessionId, bool approved, bool keepContext, string? feedback = null)
+    {
+        await sessionService.ApprovePlanAsync(sessionId, approved, keepContext, feedback);
+    }
 }
 
 /// <summary>
