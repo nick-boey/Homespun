@@ -396,12 +396,12 @@ public class GitCloneService(ICommandRunner commandRunner, ILogger<GitCloneServi
         // Get list of clones first to map branches to their clone paths
         // Use the raw version to avoid mutual recursion with ListClonesAsync
         var clones = await ListClonesRawAsync(repoPath);
-        var cloneByBranch = clones
-            .Where(w => !string.IsNullOrEmpty(w.Branch))
-            .GroupBy(w => w.Branch!.Replace("refs/heads/", ""))
-            .ToDictionary(
-                g => g.Key,
-                g => g.First().Path);
+        var cloneByBranch = new Dictionary<string, string>();
+        foreach (var clone in clones.Where(w => !string.IsNullOrEmpty(w.Branch)))
+        {
+            var branchName = clone.Branch!.Replace("refs/heads/", "");
+            cloneByBranch.TryAdd(branchName, clone.Path);
+        }
 
         // Get branch info with format: branch name, commit sha, upstream, and tracking info
         var result = await commandRunner.RunAsync(
