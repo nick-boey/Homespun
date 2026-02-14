@@ -55,6 +55,15 @@ public class GitCloneService(ICommandRunner commandRunner, ILogger<GitCloneServi
             Directory.Delete(clonePath, recursive: true);
         }
 
+        // Create the clone directory structure:
+        // - {clonePath}/.claude : Claude state directory (mounted as /home/homespun/.claude)
+        // - {clonePath}/workdir : Git repository (mounted as /workdir)
+        Directory.CreateDirectory(clonePath);
+        var claudeDir = Path.Combine(clonePath, ".claude");
+        Directory.CreateDirectory(claudeDir);
+
+        var workdirPath = GetWorkdirPath(clonePath);
+
         // Get the real remote URL from the main repo before cloning
         var remoteUrlResult = await commandRunner.RunAsync("git", "remote get-url origin", repoPath);
         var remoteUrl = remoteUrlResult is { Success: true } ? remoteUrlResult.Output.Trim() : null;
@@ -70,29 +79,31 @@ public class GitCloneService(ICommandRunner commandRunner, ILogger<GitCloneServi
             }
         }
 
-        // Clone the main repo locally (uses hardlinks for efficiency)
-        var cloneResult = await commandRunner.RunAsync("git", $"clone --local \"{repoPath}\" \"{clonePath}\"", repoPath);
+        // Clone the main repo locally into workdir subdirectory (uses hardlinks for efficiency)
+        var cloneResult = await commandRunner.RunAsync("git", $"clone --local \"{repoPath}\" \"{workdirPath}\"", repoPath);
 
         if (!cloneResult.Success)
         {
             logger.LogWarning("Failed to create clone at {ClonePath} for branch {BranchName}: {Error}",
-                clonePath, branchName, cloneResult.Error);
+                workdirPath, branchName, cloneResult.Error);
+            // Clean up the failed clone directory
+            Directory.Delete(clonePath, recursive: true);
             return null;
         }
 
         // Fix remote URL - after clone --local, origin points to local path
         if (!string.IsNullOrEmpty(remoteUrl))
         {
-            await commandRunner.RunAsync("git", $"remote set-url origin \"{remoteUrl}\"", clonePath);
+            await commandRunner.RunAsync("git", $"remote set-url origin \"{remoteUrl}\"", workdirPath);
         }
 
         // Checkout the target branch in the clone
-        var checkoutResult = await commandRunner.RunAsync("git", $"checkout \"{branchName}\"", clonePath);
+        var checkoutResult = await commandRunner.RunAsync("git", $"checkout \"{branchName}\"", workdirPath);
 
         if (!checkoutResult.Success)
         {
             logger.LogWarning("Failed to checkout branch {BranchName} in clone at {ClonePath}: {Error}",
-                branchName, clonePath, checkoutResult.Error);
+                branchName, workdirPath, checkoutResult.Error);
             // Clean up the failed clone
             Directory.Delete(clonePath, recursive: true);
             return null;
@@ -187,15 +198,32 @@ public class GitCloneService(ICommandRunner commandRunner, ILogger<GitCloneServi
 
         foreach (var dir in Directory.GetDirectories(clonesDir))
         {
-            // Verify it's a valid git repo by checking for .git
-            var gitPath = Path.Combine(dir, ".git");
-            if (!File.Exists(gitPath) && !Directory.Exists(gitPath))
+            // Check for new directory structure: {dir}/workdir/.git
+            var workdirPath = GetWorkdirPath(dir);
+            var workdirGitPath = Path.Combine(workdirPath, ".git");
+
+            // Fall back to legacy structure: {dir}/.git
+            var legacyGitPath = Path.Combine(dir, ".git");
+
+            string gitRepoPath;
+            if (File.Exists(workdirGitPath) || Directory.Exists(workdirGitPath))
             {
+                // New structure: git repo is in workdir subdirectory
+                gitRepoPath = workdirPath;
+            }
+            else if (File.Exists(legacyGitPath) || Directory.Exists(legacyGitPath))
+            {
+                // Legacy structure: git repo is directly in clone directory
+                gitRepoPath = dir;
+            }
+            else
+            {
+                // Not a valid clone
                 continue;
             }
 
-            var branchResult = await commandRunner.RunAsync("git", "rev-parse --abbrev-ref HEAD", dir);
-            var commitResult = await commandRunner.RunAsync("git", "rev-parse HEAD", dir);
+            var branchResult = await commandRunner.RunAsync("git", "rev-parse --abbrev-ref HEAD", gitRepoPath);
+            var commitResult = await commandRunner.RunAsync("git", "rev-parse HEAD", gitRepoPath);
 
             var branchName = branchResult is { Success: true } ? branchResult.Output.Trim() : null;
             var commitHash = commitResult is { Success: true } ? commitResult.Output.Trim() : null;
@@ -257,8 +285,15 @@ public class GitCloneService(ICommandRunner commandRunner, ILogger<GitCloneServi
 
         foreach (var dir in Directory.GetDirectories(clonesDir))
         {
-            var gitPath = Path.Combine(dir, ".git");
-            if (!File.Exists(gitPath) && !Directory.Exists(gitPath))
+            // Check for new structure: {dir}/workdir/.git
+            var workdirGitPath = Path.Combine(GetWorkdirPath(dir), ".git");
+            // Check for legacy structure: {dir}/.git
+            var legacyGitPath = Path.Combine(dir, ".git");
+
+            var hasNewStructure = File.Exists(workdirGitPath) || Directory.Exists(workdirGitPath);
+            var hasLegacyStructure = File.Exists(legacyGitPath) || Directory.Exists(legacyGitPath);
+
+            if (!hasNewStructure && !hasLegacyStructure)
             {
                 try
                 {
@@ -320,16 +355,38 @@ public class GitCloneService(ICommandRunner commandRunner, ILogger<GitCloneServi
 
     public async Task<bool> PullLatestAsync(string clonePath)
     {
+        // Determine the git repo path (new structure uses workdir subdirectory)
+        var gitRepoPath = GetGitRepoPath(clonePath);
+
         // First fetch from remote (may fail for local-only branches, which is OK)
-        await commandRunner.RunAsync("git", "fetch origin", clonePath);
+        await commandRunner.RunAsync("git", "fetch origin", gitRepoPath);
 
         // Try to pull with rebase to get latest changes
-        var pullResult = await commandRunner.RunAsync("git", "pull --rebase --autostash", clonePath);
+        var pullResult = await commandRunner.RunAsync("git", "pull --rebase --autostash", gitRepoPath);
 
         // Pull might fail if no upstream is set, which is fine for new branches
         return pullResult.Success ||
                pullResult.Error.Contains("no tracking information") ||
                pullResult.Error.Contains("There is no tracking information");
+    }
+
+    /// <summary>
+    /// Gets the git repository path for a clone directory.
+    /// Handles both new structure (workdir subdirectory) and legacy structure (direct).
+    /// </summary>
+    private string GetGitRepoPath(string clonePath)
+    {
+        var workdirPath = GetWorkdirPath(clonePath);
+        var workdirGitPath = Path.Combine(workdirPath, ".git");
+
+        // Check for new structure first
+        if (File.Exists(workdirGitPath) || Directory.Exists(workdirGitPath))
+        {
+            return workdirPath;
+        }
+
+        // Fall back to legacy structure (git repo directly in clone path)
+        return clonePath;
     }
 
     public async Task<bool> FetchAndUpdateBranchAsync(string repoPath, string branchName)
@@ -369,6 +426,13 @@ public class GitCloneService(ICommandRunner commandRunner, ILogger<GitCloneServi
         // Trim dashes and slashes from ends
         return sanitized.Trim('-', '/');
     }
+
+    /// <summary>
+    /// Gets the workdir path for a clone directory.
+    /// In the new structure, git repo is cloned into {clonePath}/workdir.
+    /// </summary>
+    public static string GetWorkdirPath(string clonePath)
+        => Path.Combine(clonePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), "workdir");
 
     /// <summary>
     /// Sanitizes a branch name for use as a clone folder name.
@@ -673,7 +737,8 @@ public class GitCloneService(ICommandRunner commandRunner, ILogger<GitCloneServi
 
     public async Task<CloneStatus> GetCloneStatusAsync(string clonePath)
     {
-        var result = await commandRunner.RunAsync("git", "status --porcelain", clonePath);
+        var gitRepoPath = GetGitRepoPath(clonePath);
+        var result = await commandRunner.RunAsync("git", "status --porcelain", gitRepoPath);
 
         var status = new CloneStatus();
 
@@ -769,9 +834,15 @@ public class GitCloneService(ICommandRunner commandRunner, ILogger<GitCloneServi
                 continue;
             }
 
-            // Check if it looks like a git repo (has .git file or folder)
-            var gitPath = Path.Combine(dir, ".git");
-            if (!File.Exists(gitPath) && !Directory.Exists(gitPath))
+            // Check for new structure: {dir}/workdir/.git
+            var workdirGitPath = Path.Combine(GetWorkdirPath(dir), ".git");
+            // Check for legacy structure: {dir}/.git
+            var legacyGitPath = Path.Combine(dir, ".git");
+
+            var isGitRepo = File.Exists(workdirGitPath) || Directory.Exists(workdirGitPath) ||
+                           File.Exists(legacyGitPath) || Directory.Exists(legacyGitPath);
+
+            if (!isGitRepo)
             {
                 continue;
             }
@@ -838,7 +909,8 @@ public class GitCloneService(ICommandRunner commandRunner, ILogger<GitCloneServi
 
     public async Task<string?> GetCurrentBranchAsync(string clonePath)
     {
-        var result = await commandRunner.RunAsync("git", "rev-parse --abbrev-ref HEAD", clonePath);
+        var gitRepoPath = GetGitRepoPath(clonePath);
+        var result = await commandRunner.RunAsync("git", "rev-parse --abbrev-ref HEAD", gitRepoPath);
 
         if (!result.Success)
         {
@@ -850,7 +922,8 @@ public class GitCloneService(ICommandRunner commandRunner, ILogger<GitCloneServi
 
     public async Task<bool> CheckoutBranchAsync(string clonePath, string branchName)
     {
-        var result = await commandRunner.RunAsync("git", $"checkout \"{branchName}\"", clonePath);
+        var gitRepoPath = GetGitRepoPath(clonePath);
+        var result = await commandRunner.RunAsync("git", $"checkout \"{branchName}\"", gitRepoPath);
 
         if (result.Success)
         {
@@ -943,12 +1016,21 @@ public class GitCloneService(ICommandRunner commandRunner, ILogger<GitCloneServi
             return false;
         }
 
-        // Check if the clone's git repo is still valid
-        var gitPath = Path.Combine(folderPath, ".git");
-        if (File.Exists(gitPath) || Directory.Exists(gitPath))
+        // Check for new structure: {folderPath}/workdir/.git
+        var workdirGitPath = Path.Combine(GetWorkdirPath(folderPath), ".git");
+        // Check for legacy structure: {folderPath}/.git
+        var legacyGitPath = Path.Combine(folderPath, ".git");
+
+        var gitRepoPath = (File.Exists(workdirGitPath) || Directory.Exists(workdirGitPath))
+            ? GetWorkdirPath(folderPath)
+            : (File.Exists(legacyGitPath) || Directory.Exists(legacyGitPath))
+                ? folderPath
+                : null;
+
+        if (gitRepoPath != null)
         {
             // Try a simple git status to verify the clone is valid
-            var statusResult = await commandRunner.RunAsync("git", "status", folderPath);
+            var statusResult = await commandRunner.RunAsync("git", "status", gitRepoPath);
             if (statusResult.Success)
             {
                 logger.LogInformation("Clone at {FolderPath} is valid, no repair needed", folderPath);
@@ -977,7 +1059,8 @@ public class GitCloneService(ICommandRunner commandRunner, ILogger<GitCloneServi
 
     public async Task<List<FileChangeInfo>> GetChangedFilesAsync(string clonePath, string targetBranch)
     {
-        var result = await commandRunner.RunAsync("git", $"diff --numstat {targetBranch}...HEAD", clonePath);
+        var gitRepoPath = GetGitRepoPath(clonePath);
+        var result = await commandRunner.RunAsync("git", $"diff --numstat {targetBranch}...HEAD", gitRepoPath);
 
         if (!result.Success)
         {
