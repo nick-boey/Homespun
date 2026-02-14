@@ -521,6 +521,76 @@ public class DockerAgentExecutionServiceTests
         Assert.That(args, Does.Not.Contain("ASPNETCORE_URLS"));
     }
 
+    [Test]
+    public void BuildContainerDockerArgs_MountsClaudeDirectory()
+    {
+        // Arrange
+        var options = new DockerAgentExecutionOptions
+        {
+            DataVolumePath = "/data",
+            HostDataPath = "/host/data",
+            WorkerImage = "test-image:latest",
+            NetworkName = "bridge"
+        };
+        var service = new DockerAgentExecutionService(
+            Options.Create(options), _loggerMock.Object);
+
+        // Act - workingDirectory points to clone/workdir
+        var args = service.BuildContainerDockerArgs(
+            "test-container", "/data/repos/project/.clones/my-branch/workdir", useRm: false);
+
+        // Assert - .claude directory (sibling of workdir) should be mounted to /home/homespun/.claude
+        Assert.That(args, Does.Contain("-v \"/host/data/repos/project/.clones/my-branch/.claude:/home/homespun/.claude\""));
+    }
+
+    [Test]
+    public void BuildContainerDockerArgs_DerivesClaudePathFromWorkdir()
+    {
+        // Arrange
+        var options = new DockerAgentExecutionOptions
+        {
+            DataVolumePath = "/data",
+            HostDataPath = null, // No host path translation
+            WorkerImage = "test-image:latest",
+            NetworkName = "bridge"
+        };
+        var service = new DockerAgentExecutionService(
+            Options.Create(options), _loggerMock.Object);
+
+        // Act
+        var args = service.BuildContainerDockerArgs(
+            "test-container", "/data/repos/project/.clones/feature+test/workdir", useRm: false);
+
+        // Assert - should derive .claude path from parent of workdir
+        Assert.That(args, Does.Contain("-v \"/data/repos/project/.clones/feature+test/.claude:/home/homespun/.claude\""));
+        Assert.That(args, Does.Contain("-v \"/data/repos/project/.clones/feature+test/workdir:/workdir\""));
+    }
+
+    [Test]
+    public void BuildContainerDockerArgs_MountsClaudeDirectoryBeforeWorkdir()
+    {
+        // Arrange
+        var options = new DockerAgentExecutionOptions
+        {
+            DataVolumePath = "/data",
+            WorkerImage = "test-image:latest",
+            NetworkName = "bridge"
+        };
+        var service = new DockerAgentExecutionService(
+            Options.Create(options), _loggerMock.Object);
+
+        // Act
+        var args = service.BuildContainerDockerArgs(
+            "test-container", "/data/repos/.clones/branch/workdir", useRm: false);
+
+        // Assert - both mounts should be present
+        var claudeIndex = args.IndexOf(".claude:/home/homespun/.claude", StringComparison.Ordinal);
+        var workdirIndex = args.IndexOf(":/workdir", StringComparison.Ordinal);
+
+        Assert.That(claudeIndex, Is.GreaterThan(0), ".claude mount should be present");
+        Assert.That(workdirIndex, Is.GreaterThan(0), "/workdir mount should be present");
+    }
+
     #endregion
 
     #region DisposeAsync Tests

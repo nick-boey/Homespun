@@ -40,16 +40,16 @@ public class GitCloneServiceTests
         _mockRunner.Setup(r => r.RunAsync("git", "remote get-url origin", repoPath))
             .ReturnsAsync(new CommandResult { Success = true, Output = "https://github.com/user/repo.git" });
 
-        // Mock clone --local
+        // Mock clone --local - now clones into workdir subdirectory
         _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.StartsWith("clone --local")), repoPath))
             .ReturnsAsync(new CommandResult { Success = true, Output = "" });
 
-        // Mock remote set-url in the clone directory
-        _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.StartsWith("remote set-url")), It.Is<string>(s => s.Contains(".clones"))))
+        // Mock remote set-url in the clone directory (in workdir)
+        _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.StartsWith("remote set-url")), It.Is<string>(s => s.Contains("workdir"))))
             .ReturnsAsync(new CommandResult { Success = true, Output = "" });
 
-        // Mock checkout in the clone directory
-        _mockRunner.Setup(r => r.RunAsync("git", $"checkout \"{branchName}\"", It.Is<string>(s => s.Contains(".clones"))))
+        // Mock checkout in the clone directory (in workdir)
+        _mockRunner.Setup(r => r.RunAsync("git", $"checkout \"{branchName}\"", It.Is<string>(s => s.Contains("workdir"))))
             .ReturnsAsync(new CommandResult { Success = true, Output = "" });
 
         // Act
@@ -60,6 +60,9 @@ public class GitCloneServiceTests
         // Clone should be in .clones directory with flattened name (/ becomes +)
         Assert.That(result, Does.Contain(".clones"));
         Assert.That(result, Does.Contain("feature+test"));
+        // Verify .claude directory was created
+        var claudeDir = Path.Combine(result!, ".claude");
+        Assert.That(Directory.Exists(claudeDir), Is.True, "Expected .claude directory to be created");
     }
 
     [Test]
@@ -342,16 +345,16 @@ public class GitCloneServiceTests
         _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.StartsWith("branch ")), repoPath))
             .ReturnsAsync(new CommandResult { Success = true });
 
-        // Mock clone --local
+        // Mock clone --local - now clones into workdir subdirectory
         _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.StartsWith("clone --local")), repoPath))
             .ReturnsAsync(new CommandResult { Success = true, Output = "" });
 
-        // Mock remote set-url in clone
-        _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.StartsWith("remote set-url")), It.Is<string>(s => s.Contains(".clones"))))
+        // Mock remote set-url in clone (in workdir)
+        _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.StartsWith("remote set-url")), It.Is<string>(s => s.Contains("workdir"))))
             .ReturnsAsync(new CommandResult { Success = true });
 
-        // Mock checkout in clone
-        _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.StartsWith("checkout")), It.Is<string>(s => s.Contains(".clones"))))
+        // Mock checkout in clone (in workdir)
+        _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.StartsWith("checkout")), It.Is<string>(s => s.Contains("workdir"))))
             .ReturnsAsync(new CommandResult { Success = true });
 
         // Act
@@ -2029,6 +2032,195 @@ public class GitCloneServiceTests
             "ExpectedBranch should match the branch with slashes that corresponds to the flattened folder name");
         Assert.That(clone.IsOnCorrectBranch, Is.False,
             "IsOnCorrectBranch should be false since clone is on 'other' not '{0}'", branchName);
+    }
+
+    #endregion
+
+    #region GetWorkdirPath Tests
+
+    [Test]
+    public void GetWorkdirPath_ReturnsWorkdirSubpath()
+    {
+        // Arrange
+        var clonePath = "/data/repos/myproject/.clones/feature+test";
+
+        // Act
+        var result = GitCloneService.GetWorkdirPath(clonePath);
+
+        // Assert
+        Assert.That(result, Is.EqualTo("/data/repos/myproject/.clones/feature+test/workdir"));
+    }
+
+    [Test]
+    public void GetWorkdirPath_HandlesTrailingSlash()
+    {
+        // Arrange
+        var clonePath = "/data/repos/myproject/.clones/feature+test/";
+
+        // Act
+        var result = GitCloneService.GetWorkdirPath(clonePath);
+
+        // Assert
+        Assert.That(result, Does.EndWith("workdir"));
+    }
+
+    #endregion
+
+    #region CreateCloneAsync - New Directory Structure Tests
+
+    [Test]
+    public async Task CreateCloneAsync_Success_CreatesClaudeDirectory()
+    {
+        // Arrange
+        var repoPath = Path.Combine(_tempDir, "repo");
+        Directory.CreateDirectory(repoPath);
+        var branchName = "feature/test-claude";
+
+        // Mock remote get-url
+        _mockRunner.Setup(r => r.RunAsync("git", "remote get-url origin", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "https://github.com/user/repo.git" });
+
+        // Mock clone --local - note: now clones into workdir subdirectory
+        _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.StartsWith("clone --local")), repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "" });
+
+        // Mock remote set-url in the clone directory (in workdir)
+        _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.StartsWith("remote set-url")), It.Is<string>(s => s.Contains("workdir"))))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "" });
+
+        // Mock checkout in the clone directory (in workdir)
+        _mockRunner.Setup(r => r.RunAsync("git", $"checkout \"{branchName}\"", It.Is<string>(s => s.Contains("workdir"))))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "" });
+
+        // Act
+        var result = await _service.CreateCloneAsync(repoPath, branchName);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        // Verify .claude directory was created
+        var claudeDir = Path.Combine(result!, ".claude");
+        Assert.That(Directory.Exists(claudeDir), Is.True, "Expected .claude directory to be created");
+    }
+
+    [Test]
+    public async Task CreateCloneAsync_Success_ClonesIntoWorkdirSubdirectory()
+    {
+        // Arrange
+        var repoPath = Path.Combine(_tempDir, "repo");
+        Directory.CreateDirectory(repoPath);
+        var branchName = "feature/test-workdir";
+        string? clonedPath = null;
+
+        // Mock remote get-url
+        _mockRunner.Setup(r => r.RunAsync("git", "remote get-url origin", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "https://github.com/user/repo.git" });
+
+        // Mock clone --local - capture the clone destination path
+        _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.StartsWith("clone --local")), repoPath))
+            .Callback<string, string, string>((_, args, _) =>
+            {
+                // Extract the destination path from: clone --local "source" "dest"
+                var parts = args.Split('"');
+                if (parts.Length >= 4)
+                {
+                    clonedPath = parts[3];
+                }
+            })
+            .ReturnsAsync(new CommandResult { Success = true, Output = "" });
+
+        // Mock remote set-url
+        _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.StartsWith("remote set-url")), It.IsAny<string>()))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "" });
+
+        // Mock checkout
+        _mockRunner.Setup(r => r.RunAsync("git", $"checkout \"{branchName}\"", It.IsAny<string>()))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "" });
+
+        // Act
+        var result = await _service.CreateCloneAsync(repoPath, branchName);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(clonedPath, Is.Not.Null);
+        Assert.That(clonedPath, Does.EndWith("workdir"), "Git clone should target workdir subdirectory");
+    }
+
+    #endregion
+
+    #region ListClonesRawAsync - New Directory Structure Tests
+
+    [Test]
+    public async Task ListClonesAsync_NewStructure_FindsClonesWithWorkdirSubdirectory()
+    {
+        // Arrange
+        var repoPath = Path.Combine(_tempDir, "main");
+        Directory.CreateDirectory(repoPath);
+
+        // Create .clones directory with new structure: clone/workdir/.git
+        var clonesDir = Path.Combine(_tempDir, ".clones");
+        var clone1 = Path.Combine(clonesDir, "feature-1");
+        var clone1Workdir = Path.Combine(clone1, "workdir");
+        Directory.CreateDirectory(clone1Workdir);
+        Directory.CreateDirectory(Path.Combine(clone1Workdir, ".git"));
+        Directory.CreateDirectory(Path.Combine(clone1, ".claude"));
+
+        // Mock main repo branch/commit
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "main" });
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse HEAD", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "abc123" });
+
+        // Mock clone 1 (workdir subdirectory)
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", clone1Workdir))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "feature-1" });
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse HEAD", clone1Workdir))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "def456" });
+
+        // Mock for-each-ref
+        _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.Contains("for-each-ref")), repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "" });
+
+        // Act
+        var result = await _service.ListClonesAsync(repoPath);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result, Has.Count.EqualTo(2)); // main + 1 clone
+        var clone = result.FirstOrDefault(c => c.Path.Contains("feature-1"));
+        Assert.That(clone, Is.Not.Null);
+    }
+
+    #endregion
+
+    #region PruneClonesAsync - New Directory Structure Tests
+
+    [Test]
+    public async Task PruneClonesAsync_NewStructure_ChecksWorkdirGit()
+    {
+        // Arrange
+        var repoPath = Path.Combine(_tempDir, "main");
+        Directory.CreateDirectory(repoPath);
+
+        // Create .clones directory with new structure
+        var clonesDir = Path.Combine(_tempDir, ".clones");
+
+        // Valid clone with workdir/.git
+        var validClone = Path.Combine(clonesDir, "valid-clone");
+        var validWorkdir = Path.Combine(validClone, "workdir");
+        Directory.CreateDirectory(validWorkdir);
+        Directory.CreateDirectory(Path.Combine(validWorkdir, ".git"));
+
+        // Broken clone without workdir/.git
+        var brokenClone = Path.Combine(clonesDir, "broken-clone");
+        Directory.CreateDirectory(brokenClone);
+        // No workdir/.git directory
+
+        // Act
+        await _service.PruneClonesAsync(repoPath);
+
+        // Assert
+        Assert.That(Directory.Exists(brokenClone), Is.False, "Broken clone without workdir/.git should be deleted");
+        Assert.That(Directory.Exists(validClone), Is.True, "Valid clone with workdir/.git should be preserved");
     }
 
     #endregion

@@ -45,7 +45,11 @@ public class GitCloneServiceIntegrationTests
         // Assert
         Assert.That(clonePath, Is.Not.Null);
         Assert.That(Directory.Exists(clonePath), Is.True);
-        Assert.That(File.Exists(Path.Combine(clonePath!, "README.md")), Is.True);
+        // Git repo is now in workdir subdirectory
+        var workdirPath = GitCloneService.GetWorkdirPath(clonePath!);
+        Assert.That(File.Exists(Path.Combine(workdirPath, "README.md")), Is.True);
+        // Verify .claude directory was created
+        Assert.That(Directory.Exists(Path.Combine(clonePath!, ".claude")), Is.True);
     }
 
     [Test]
@@ -91,8 +95,9 @@ public class GitCloneServiceIntegrationTests
         // Assert
         Assert.That(clonePath, Is.Not.Null);
         Assert.That(Directory.Exists(clonePath), Is.True);
-        // The clone should have the file from develop branch
-        Assert.That(File.Exists(Path.Combine(clonePath!, "develop.txt")), Is.True);
+        // The clone should have the file from develop branch (in workdir subdirectory)
+        var workdirPath = GitCloneService.GetWorkdirPath(clonePath!);
+        Assert.That(File.Exists(Path.Combine(workdirPath, "develop.txt")), Is.True);
     }
 
     [Test]
@@ -257,8 +262,9 @@ public class GitCloneServiceIntegrationTests
         // Assert
         Assert.That(clonePath, Is.Not.Null);
 
-        // The new clone should have the clean version from the branch
-        var cloneReadme = File.ReadAllText(Path.Combine(clonePath!, "README.md"));
+        // The new clone should have the clean version from the branch (in workdir subdirectory)
+        var workdirPath = GitCloneService.GetWorkdirPath(clonePath!);
+        var cloneReadme = File.ReadAllText(Path.Combine(workdirPath, "README.md"));
         Assert.That(cloneReadme, Does.Not.Contain("Modified content."));
     }
 
