@@ -338,6 +338,9 @@
     private Dictionary<int, string> _laneColors = [];
     private int _currentMaxPastPRs = 5;
 
+    // Track ProjectId changes for navigation between projects
+    private string? _previousProjectId;
+
     // Tooltip state
     private bool _tooltipVisible;
     private IGraphNode? _tooltipNode;
@@ -373,6 +376,56 @@
         // PHASE 2: Refresh with fresh data in background
         // This fetches from GitHub and updates the cache for next time
         _ = RefreshWithFreshDataAsync();
+
+        _previousProjectId = ProjectId;
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_previousProjectId != null && _previousProjectId != ProjectId)
+        {
+            // ProjectId parameter changed — navigated to a different project via sidebar
+            // Dispose old SignalR connection
+            if (_hubConnection != null)
+            {
+                await _hubConnection.DisposeAsync();
+                _hubConnection = null;
+            }
+
+            // Reset all state for new project
+            _graph = null;
+            _layout = null;
+            _agentStatusesByIssueId.Clear();
+            _agentStatusesByPrNumber.Clear();
+            _laneColors.Clear();
+            _currentMaxPastPRs = 5;
+            _isLoading = true;
+            _isRefreshing = false;
+            _error = null;
+            _tooltipVisible = false;
+            _tooltipNode = null;
+
+            // Reload data for the new project
+            var cachedData = await GraphApi.GetGraphDataAsync(ProjectId, _currentMaxPastPRs);
+            if (cachedData != null)
+            {
+                _graph = await GraphApi.GetGraphAsync(ProjectId, _currentMaxPastPRs);
+                if (_graph != null)
+                {
+                    _layout = _laneCalculator.Calculate(_graph.Nodes);
+                }
+                ExtractAgentStatuses(cachedData);
+                BuildLaneColors();
+                _isLoading = false;
+            }
+
+            // Set up new SignalR connection for the new project
+            _ = SetupSignalRConnectionAsync();
+
+            // Refresh with fresh data in background
+            _ = RefreshWithFreshDataAsync();
+        }
+        _previousProjectId = ProjectId;
     }
 
     private async Task SetupSignalRConnectionAsync()
