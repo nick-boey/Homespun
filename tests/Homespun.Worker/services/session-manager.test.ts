@@ -280,8 +280,8 @@ describe('SessionManager', () => {
 
   describe('stream()', () => {
     it('yields messages from the query async generator', async () => {
-      const ws = await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Build' });
       setMockQueryMessages(mockQueryObj, [createAssistantMessage(), createResultMessage()]);
+      const ws = await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Build' });
 
       const result = await collectAsyncGenerator(manager.stream(ws.id));
 
@@ -289,10 +289,10 @@ describe('SessionManager', () => {
     });
 
     it('captures msg.session_id as conversationId', async () => {
-      const ws = await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Build' });
       setMockQueryMessages(mockQueryObj, [
         createSystemMessage({ session_id: 'captured-conv-id' }),
       ]);
+      const ws = await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Build' });
 
       await collectAsyncGenerator(manager.stream(ws.id));
 
@@ -373,7 +373,7 @@ describe('SessionManager', () => {
       expect(manager.hasPendingQuestion(ws.id)).toBe(false);
     });
 
-    it('pauses on ExitPlanMode and resumes when approved', async () => {
+    it('pauses on ExitPlanMode and resumes when approved with keepContext', async () => {
       const ws = await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Plan' });
 
       const canUseTool = getCapturedCanUseTool();
@@ -384,18 +384,36 @@ describe('SessionManager', () => {
       // Verify there's a pending approval
       expect(manager.hasPendingPlanApproval(ws.id)).toBe(true);
 
-      // Approve the plan
-      const resolved = manager.resolvePendingPlanApproval(ws.id, true);
+      // Approve the plan with keepContext=true
+      const resolved = manager.resolvePendingPlanApproval(ws.id, true, true);
       expect(resolved).toBe(true);
 
       // Check the result
       const result = await resultPromise;
       expect(result).toEqual({
         behavior: 'allow',
-        updatedInput: planInput,
+        updatedInput: { plan: planInput.plan },
       });
 
       expect(manager.hasPendingPlanApproval(ws.id)).toBe(false);
+    });
+
+    it('denies ExitPlanMode when approved without keepContext', async () => {
+      const ws = await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Plan' });
+
+      const canUseTool = getCapturedCanUseTool();
+      const planInput = { plan: 'The plan content' };
+
+      const resultPromise = canUseTool('ExitPlanMode', planInput);
+
+      // Approve the plan without keepContext (interrupts to start fresh session)
+      manager.resolvePendingPlanApproval(ws.id, true);
+
+      const result = await resultPromise;
+      expect(result).toEqual({
+        behavior: 'deny',
+        message: 'Plan approved. Interrupting to start fresh implementation session.',
+      });
     });
 
     it('denies ExitPlanMode when rejected', async () => {
@@ -413,7 +431,7 @@ describe('SessionManager', () => {
       const result = await resultPromise;
       expect(result).toEqual({
         behavior: 'deny',
-        message: 'User rejected the plan',
+        message: 'User rejected the plan. Please revise.',
       });
     });
   });
