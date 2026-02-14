@@ -1,3 +1,6 @@
+@using Microsoft.AspNetCore.SignalR.Client
+@implements IAsyncDisposable
+
 @inject HttpCloneApiService CloneApi
 @inject HttpSessionApiService SessionStoreApi
 @inject HttpSessionApiService SessionApi
@@ -685,6 +688,7 @@
     private bool _operationInProgress;
     private string? _errorMessage;
     private string? _successMessage;
+    private HubConnection? _hubConnection;
 
     // Delete confirmation state
     private string? _deleteTargetKey;
@@ -704,6 +708,73 @@
     protected override async Task OnInitializedAsync()
     {
         await RefreshDataAsync();
+
+        // Set up SignalR connection for real-time updates (non-blocking)
+        _ = SetupSignalRConnectionAsync();
+    }
+
+    private async Task SetupSignalRConnectionAsync()
+    {
+        try
+        {
+            _hubConnection = new HubConnectionBuilder()
+                .WithUrl(NavigationManager.ToAbsoluteUri("/hubs/claudecode"))
+                .WithAutomaticReconnect()
+                .Build();
+
+            // Subscribe to session started events - update UI when a session becomes active
+            _hubConnection.On<ClaudeSession>("SessionStarted", async (session) =>
+            {
+                // Only handle events for sessions in this project
+                if (session.ProjectId == Project.Id)
+                {
+                    await InvokeAsync(async () =>
+                    {
+                        // Refresh session list to show new session
+                        _projectSessions = await SessionStoreApi.GetProjectSessionsAsync(Project.Id);
+                        StateHasChanged();
+                    });
+                }
+            });
+
+            // Subscribe to session status changes - refresh session data
+            _hubConnection.On<string, ClaudeSessionStatus>("SessionStatusChanged", async (sessionId, status) =>
+            {
+                // Check if any of our tracked sessions matches
+                var matchingSession = _projectSessions.FirstOrDefault(s => s.Id == sessionId);
+                if (matchingSession != null)
+                {
+                    await InvokeAsync(async () =>
+                    {
+                        // Refresh session list to get updated status
+                        _projectSessions = await SessionStoreApi.GetProjectSessionsAsync(Project.Id);
+                        StateHasChanged();
+                    });
+                }
+            });
+
+            // Subscribe to session stopped events - refresh the session list
+            _hubConnection.On<string>("SessionStopped", async (sessionId) =>
+            {
+                // Check if any of our tracked sessions matches
+                var matchingSession = _projectSessions.FirstOrDefault(s => s.Id == sessionId);
+                if (matchingSession != null)
+                {
+                    await InvokeAsync(async () =>
+                    {
+                        // Refresh session list to remove stopped session
+                        _projectSessions = await SessionStoreApi.GetProjectSessionsAsync(Project.Id);
+                        StateHasChanged();
+                    });
+                }
+            });
+
+            await _hubConnection.StartAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to set up SignalR connection for CloneManagementPanel");
+        }
     }
 
     private async Task RefreshDataAsync()
@@ -1322,4 +1393,19 @@
         ClaudeSessionStatus.Error => "bg-danger",
         _ => "bg-secondary"
     };
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_hubConnection != null)
+        {
+            try
+            {
+                await _hubConnection.DisposeAsync();
+            }
+            catch
+            {
+                // Ignore disposal errors
+            }
+        }
+    }
 }

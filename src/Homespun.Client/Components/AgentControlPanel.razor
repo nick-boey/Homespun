@@ -1,3 +1,6 @@
+@using Microsoft.AspNetCore.SignalR.Client
+@implements IAsyncDisposable
+
 @inject HttpSessionApiService SessionStoreApi
 @inject HttpSessionApiService SessionApi
 @inject HttpAgentPromptApiService AgentPromptApi
@@ -134,10 +137,74 @@ else
     private bool _isStarting;
     private bool _isLoading;
     private string? _errorMessage;
+    private HubConnection? _hubConnection;
 
     protected override async Task OnInitializedAsync()
     {
         await UpdateSessionStateAsync();
+
+        // Set up SignalR connection for real-time updates (non-blocking)
+        _ = SetupSignalRConnectionAsync();
+    }
+
+    private async Task SetupSignalRConnectionAsync()
+    {
+        try
+        {
+            _hubConnection = new HubConnectionBuilder()
+                .WithUrl(NavigationManager.ToAbsoluteUri("/hubs/claudecode"))
+                .WithAutomaticReconnect()
+                .Build();
+
+            // Subscribe to session started events - update UI when session becomes active
+            _hubConnection.On<ClaudeSession>("SessionStarted", async (session) =>
+            {
+                // Only handle events for this specific entity
+                if (session.EntityId == EntityId)
+                {
+                    await InvokeAsync(() =>
+                    {
+                        _session = session;
+                        _isStarting = false;
+                        StateHasChanged();
+                    });
+                }
+            });
+
+            // Subscribe to session status changes - refresh session data
+            _hubConnection.On<string, ClaudeSessionStatus>("SessionStatusChanged", async (sessionId, status) =>
+            {
+                // Refresh if the changed session is ours
+                if (_session?.Id == sessionId)
+                {
+                    await InvokeAsync(async () =>
+                    {
+                        _session = await SessionStoreApi.GetSessionByEntityIdAsync(EntityId);
+                        StateHasChanged();
+                    });
+                }
+            });
+
+            // Subscribe to session stopped events - clear the session
+            _hubConnection.On<string>("SessionStopped", async (sessionId) =>
+            {
+                // Clear session if it was ours
+                if (_session?.Id == sessionId)
+                {
+                    await InvokeAsync(() =>
+                    {
+                        _session = null;
+                        StateHasChanged();
+                    });
+                }
+            });
+
+            await _hubConnection.StartAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to set up SignalR connection for AgentControlPanel");
+        }
     }
 
     protected override async Task OnParametersSetAsync()
@@ -230,6 +297,21 @@ else
         {
             _isLoading = false;
             StateHasChanged();
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_hubConnection != null)
+        {
+            try
+            {
+                await _hubConnection.DisposeAsync();
+            }
+            catch
+            {
+                // Ignore disposal errors
+            }
         }
     }
 }
