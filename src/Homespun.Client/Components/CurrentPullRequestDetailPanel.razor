@@ -1,4 +1,6 @@
 @using Fleece.Core.Models
+@using Microsoft.AspNetCore.SignalR.Client
+@implements IAsyncDisposable
 
 @inject HttpIssueApiService IssueApi
 @inject HttpSessionApiService SessionStoreApi
@@ -261,6 +263,13 @@
     private bool _isStarting;
     private string? _startupError;
     private IssueResponse? _linkedIssue;
+    private HubConnection? _hubConnection;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Set up SignalR connection for real-time updates (non-blocking)
+        _ = SetupSignalRConnectionAsync();
+    }
 
     protected override async Task OnParametersSetAsync()
     {
@@ -648,5 +657,80 @@
         if (string.IsNullOrEmpty(text) || text.Length <= maxLength)
             return text;
         return text[..maxLength].TrimEnd() + "...";
+    }
+
+    private async Task SetupSignalRConnectionAsync()
+    {
+        try
+        {
+            _hubConnection = new HubConnectionBuilder()
+                .WithUrl(NavigationManager.ToAbsoluteUri("/hubs/claudecode"))
+                .WithAutomaticReconnect()
+                .Build();
+
+            // Subscribe to session started events - update UI when session becomes active
+            _hubConnection.On<ClaudeSession>("SessionStarted", async (session) =>
+            {
+                // Only handle events for this specific PR
+                if (session.EntityId == PullRequest.Id)
+                {
+                    await InvokeAsync(() =>
+                    {
+                        _session = session;
+                        _isStarting = false;
+                        StateHasChanged();
+                    });
+                }
+            });
+
+            // Subscribe to session status changes - refresh session data
+            _hubConnection.On<string, ClaudeSessionStatus>("SessionStatusChanged", async (sessionId, status) =>
+            {
+                // Refresh if the changed session is ours
+                if (_session?.Id == sessionId)
+                {
+                    await InvokeAsync(async () =>
+                    {
+                        _session = await SessionStoreApi.GetSessionByEntityIdAsync(PullRequest.Id);
+                        StateHasChanged();
+                    });
+                }
+            });
+
+            // Subscribe to session stopped events - clear the session
+            _hubConnection.On<string>("SessionStopped", async (sessionId) =>
+            {
+                // Clear session if it was ours
+                if (_session?.Id == sessionId)
+                {
+                    await InvokeAsync(() =>
+                    {
+                        _session = null;
+                        StateHasChanged();
+                    });
+                }
+            });
+
+            await _hubConnection.StartAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to set up SignalR connection for CurrentPullRequestDetailPanel");
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_hubConnection != null)
+        {
+            try
+            {
+                await _hubConnection.DisposeAsync();
+            }
+            catch
+            {
+                // Ignore disposal errors
+            }
+        }
     }
 }
