@@ -1,10 +1,14 @@
 @using Fleece.Core.Models
+@using Microsoft.AspNetCore.SignalR.Client
+@implements IAsyncDisposable
 
 @inject HttpSessionApiService SessionStoreApi
 @inject HttpSessionApiService SessionApi
 @inject HttpProjectApiService ProjectApi
 @inject HttpPullRequestApiService PullRequestApi
 @inject HttpIssueApiService IssueApi
+@inject NavigationManager NavigationManager
+@inject ILogger<AgentManagementPanel> Logger
 
 <div class="agent-management-panel">
     @if (_sessions.Count == 0)
@@ -298,10 +302,14 @@
     private Dictionary<string, EntityInfo> _entityInfoCache = new();
     private HashSet<string> _stoppingSessions = new();
     private string? _errorMessage;
+    private HubConnection? _hubConnection;
 
     protected override async Task OnInitializedAsync()
     {
         await RefreshSessions();
+
+        // Set up SignalR connection for real-time updates (non-blocking)
+        _ = SetupSignalRConnectionAsync();
     }
 
     protected override async Task OnParametersSetAsync()
@@ -477,6 +485,68 @@
         // Extract the model name from full ID like "anthropic/claude-sonnet-4-20250514"
         var parts = model.Split('/');
         return parts.Length > 1 ? parts[1] : model;
+    }
+
+    private async Task SetupSignalRConnectionAsync()
+    {
+        try
+        {
+            _hubConnection = new HubConnectionBuilder()
+                .WithUrl(NavigationManager.ToAbsoluteUri("/hubs/claudecode"))
+                .WithAutomaticReconnect()
+                .Build();
+
+            // Subscribe to session started events - refresh list when a new session appears
+            _hubConnection.On<ClaudeSession>("SessionStarted", async (_) =>
+            {
+                await InvokeAsync(async () =>
+                {
+                    await RefreshSessions();
+                    StateHasChanged();
+                });
+            });
+
+            // Subscribe to session status changes - refresh to update status indicators
+            _hubConnection.On<string, ClaudeSessionStatus>("SessionStatusChanged", async (_, _) =>
+            {
+                await InvokeAsync(async () =>
+                {
+                    await RefreshSessions();
+                    StateHasChanged();
+                });
+            });
+
+            // Subscribe to session stopped events - refresh list to remove stopped session
+            _hubConnection.On<string>("SessionStopped", async (_) =>
+            {
+                await InvokeAsync(async () =>
+                {
+                    await RefreshSessions();
+                    StateHasChanged();
+                });
+            });
+
+            await _hubConnection.StartAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to set up SignalR connection for AgentManagementPanel");
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_hubConnection != null)
+        {
+            try
+            {
+                await _hubConnection.DisposeAsync();
+            }
+            catch
+            {
+                // Ignore disposal errors
+            }
+        }
     }
 
     private class ProjectGroupInfo
