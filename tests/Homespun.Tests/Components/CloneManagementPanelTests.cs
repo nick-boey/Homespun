@@ -1,6 +1,23 @@
+using Homespun.Client.Components;
 using NUnit.Framework;
 
 namespace Homespun.Tests.Components;
+
+/// <summary>
+/// Tests for CloneManagementPanel session refresh behavior.
+/// Verifies that the component implements IAsyncDisposable for proper SignalR cleanup.
+/// </summary>
+[TestFixture]
+public class CloneManagementPanelSessionRefreshTests
+{
+    [Test]
+    public void CloneManagementPanel_ImplementsIAsyncDisposable()
+    {
+        // Assert - verify the component implements IAsyncDisposable for SignalR cleanup
+        Assert.That(typeof(IAsyncDisposable).IsAssignableFrom(typeof(CloneManagementPanel)),
+            "CloneManagementPanel should implement IAsyncDisposable for proper SignalR cleanup");
+    }
+}
 
 /// <summary>
 /// Unit tests for CloneManagementPanel component logic.
