@@ -387,6 +387,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         };
         session.Messages.Add(userMessage);
         session.Status = ClaudeSessionStatus.Running;
+        await _hubContext.BroadcastSessionStatusChanged(sessionId, session.Status);
 
         // Cache the user message
         await _messageCache.AppendMessageAsync(sessionId, userMessage, cancellationToken);
@@ -475,6 +476,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                 session.Status != ClaudeSessionStatus.WaitingForPlanExecution)
             {
                 session.Status = ClaudeSessionStatus.WaitingForInput;
+                await _hubContext.BroadcastSessionStatusChanged(sessionId, session.Status);
             }
             _logger.LogInformation("Message processing completed for session {SessionId}, status: {Status}", sessionId, session.Status);
         }
@@ -488,6 +490,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             if (_sessionStore.GetById(sessionId) != null && session.Status != ClaudeSessionStatus.Stopped)
             {
                 session.Status = ClaudeSessionStatus.WaitingForInput;
+                await _hubContext.BroadcastSessionStatusChanged(sessionId, session.Status);
             }
         }
         catch (Exception ex)
