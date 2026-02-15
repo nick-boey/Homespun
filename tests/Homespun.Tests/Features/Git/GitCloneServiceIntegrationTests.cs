@@ -234,6 +234,8 @@ public class GitCloneServiceIntegrationTests
         // Manually delete the clone directory (simulating stale clone)
         if (Directory.Exists(clonePath))
         {
+            foreach (var file in Directory.GetFiles(clonePath!, "*", SearchOption.AllDirectories))
+                File.SetAttributes(file, FileAttributes.Normal);
             Directory.Delete(clonePath!, recursive: true);
         }
 

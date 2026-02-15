@@ -955,10 +955,11 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
 
         // Mount .claude directory (sibling of workdir) to /home/homespun/.claude for Claude Code state persistence
         // The working directory is expected to be {clonePath}/workdir, so .claude is at {clonePath}/.claude
-        var cloneRoot = Path.GetDirectoryName(workingDirectory);
+        var lastSlash = workingDirectory.LastIndexOfAny(['/', '\\']);
+        var cloneRoot = lastSlash > 0 ? workingDirectory[..lastSlash] : null;
         if (!string.IsNullOrEmpty(cloneRoot))
         {
-            var claudePath = Path.Combine(cloneRoot, ".claude");
+            var claudePath = $"{cloneRoot}/.claude";
             var hostClaudePath = TranslateToHostPath(claudePath);
             dockerArgs.Append($"-v \"{hostClaudePath}:/home/homespun/.claude\" ");
         }

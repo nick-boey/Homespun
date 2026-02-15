@@ -52,7 +52,7 @@ public class GitCloneService(ICommandRunner commandRunner, ILogger<GitCloneServi
         // If clone directory already exists, remove it first
         if (Directory.Exists(clonePath))
         {
-            Directory.Delete(clonePath, recursive: true);
+            ForceDeleteDirectory(clonePath);
         }
 
         // Create the clone directory structure:
@@ -87,7 +87,7 @@ public class GitCloneService(ICommandRunner commandRunner, ILogger<GitCloneServi
             logger.LogWarning("Failed to create clone at {ClonePath} for branch {BranchName}: {Error}",
                 workdirPath, branchName, cloneResult.Error);
             // Clean up the failed clone directory
-            Directory.Delete(clonePath, recursive: true);
+            ForceDeleteDirectory(clonePath);
             return null;
         }
 
@@ -105,7 +105,7 @@ public class GitCloneService(ICommandRunner commandRunner, ILogger<GitCloneServi
             logger.LogWarning("Failed to checkout branch {BranchName} in clone at {ClonePath}: {Error}",
                 branchName, workdirPath, checkoutResult.Error);
             // Clean up the failed clone
-            Directory.Delete(clonePath, recursive: true);
+            ForceDeleteDirectory(clonePath);
             return null;
         }
 
@@ -124,7 +124,7 @@ public class GitCloneService(ICommandRunner commandRunner, ILogger<GitCloneServi
                 return Task.FromResult(false);
             }
 
-            Directory.Delete(clonePath, recursive: true);
+            ForceDeleteDirectory(clonePath);
             logger.LogInformation("Removed clone {ClonePath}", clonePath);
             return Task.FromResult(true);
         }
@@ -298,7 +298,7 @@ public class GitCloneService(ICommandRunner commandRunner, ILogger<GitCloneServi
                 try
                 {
                     logger.LogInformation("Pruning broken clone at {Path}", dir);
-                    Directory.Delete(dir, recursive: true);
+                    ForceDeleteDirectory(dir);
                 }
                 catch (Exception ex)
                 {
@@ -432,7 +432,10 @@ public class GitCloneService(ICommandRunner commandRunner, ILogger<GitCloneServi
     /// In the new structure, git repo is cloned into {clonePath}/workdir.
     /// </summary>
     public static string GetWorkdirPath(string clonePath)
-        => Path.Combine(clonePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), "workdir");
+    {
+        var trimmed = clonePath.TrimEnd('/', '\\');
+        return $"{trimmed}/workdir";
+    }
 
     /// <summary>
     /// Sanitizes a branch name for use as a clone folder name.
@@ -715,6 +718,20 @@ public class GitCloneService(ICommandRunner commandRunner, ILogger<GitCloneServi
         return result.Success;
     }
 
+    /// <summary>
+    /// Deletes a directory recursively, clearing read-only file attributes first.
+    /// Required on Windows where git creates read-only files in .git/objects.
+    /// </summary>
+    private static void ForceDeleteDirectory(string path)
+    {
+        if (!Directory.Exists(path)) return;
+        foreach (var file in Directory.GetFiles(path, "*", SearchOption.AllDirectories))
+        {
+            File.SetAttributes(file, FileAttributes.Normal);
+        }
+        Directory.Delete(path, recursive: true);
+    }
+
     private static (int ahead, int behind) ParseTrackingInfo(string trackingInfo)
     {
         var ahead = 0;
@@ -896,7 +913,7 @@ public class GitCloneService(ICommandRunner commandRunner, ILogger<GitCloneServi
             }
 
             // Delete the directory recursively
-            Directory.Delete(folderPath, recursive: true);
+            ForceDeleteDirectory(folderPath);
             logger.LogInformation("Deleted clone folder {FolderPath}", folderPath);
             return Task.FromResult(true);
         }
@@ -1043,7 +1060,7 @@ public class GitCloneService(ICommandRunner commandRunner, ILogger<GitCloneServi
 
         if (Directory.Exists(folderPath))
         {
-            Directory.Delete(folderPath, recursive: true);
+            ForceDeleteDirectory(folderPath);
         }
 
         var newPath = await CreateCloneAsync(repoPath, branchName);
