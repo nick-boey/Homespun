@@ -90,6 +90,18 @@ public record AgentStartCheckResult(
 );
 
 /// <summary>
+/// Information about a container for listing purposes.
+/// </summary>
+public record ContainerInfo(
+    string ContainerId,
+    string ContainerName,
+    string WorkingDirectory,
+    string? IssueId,
+    DateTime CreatedAt,
+    CloneContainerState? State
+);
+
+/// <summary>
 /// Service for executing Claude agents in various environments (local, Docker, Azure).
 /// Returns raw SdkMessage types from the Claude SDK. All content block assembly,
 /// question parsing, and message formatting is handled by the consumer (ClaudeSessionService).
@@ -176,4 +188,19 @@ public interface IAgentExecutionService
     Task TerminateCloneSessionAsync(
         string workingDirectory,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Lists all currently tracked containers with their state.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>List of container information for all tracked containers.</returns>
+    Task<IReadOnlyList<ContainerInfo>> ListContainersAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Stops a container by its ID and removes it from tracking.
+    /// </summary>
+    /// <param name="containerId">The container ID to stop.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>True if the container was found and stopped, false if not found.</returns>
+    Task<bool> StopContainerByIdAsync(string containerId, CancellationToken cancellationToken = default);
 }

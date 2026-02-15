@@ -677,6 +677,80 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
             sessionsToRemove.Count, workingDirectory);
     }
 
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<ContainerInfo>> ListContainersAsync(CancellationToken cancellationToken = default)
+    {
+        var containers = new List<ContainerInfo>();
+
+        foreach (var (workingDirectory, container) in _cloneContainers)
+        {
+            try
+            {
+                var state = await GetCloneContainerStateAsync(workingDirectory, cancellationToken);
+
+                containers.Add(new ContainerInfo(
+                    container.ContainerId,
+                    container.ContainerName,
+                    container.WorkingDirectory,
+                    container.IssueId,
+                    container.CreatedAt,
+                    state));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "ListContainersAsync: Error getting state for container {ContainerName}",
+                    container.ContainerName);
+
+                // Still include the container but with null state
+                containers.Add(new ContainerInfo(
+                    container.ContainerId,
+                    container.ContainerName,
+                    container.WorkingDirectory,
+                    container.IssueId,
+                    container.CreatedAt,
+                    null));
+            }
+        }
+
+        return containers;
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> StopContainerByIdAsync(string containerId, CancellationToken cancellationToken = default)
+    {
+        // Find the container by ID
+        var containerEntry = _cloneContainers.FirstOrDefault(kvp => kvp.Value.ContainerId == containerId);
+        if (containerEntry.Value == null)
+        {
+            _logger.LogDebug("StopContainerByIdAsync: Container {ContainerId} not found", containerId);
+            return false;
+        }
+
+        var workingDirectory = containerEntry.Key;
+        var container = containerEntry.Value;
+
+        _logger.LogInformation("StopContainerByIdAsync: Stopping container {ContainerName} ({ContainerId})",
+            container.ContainerName, containerId);
+
+        // Terminate any active sessions first
+        await TerminateCloneSessionAsync(workingDirectory, cancellationToken);
+
+        // Stop the Docker container
+        try
+        {
+            await StopContainerAsync(containerId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "StopContainerByIdAsync: Error stopping container {ContainerId}", containerId);
+        }
+
+        // Remove from tracking
+        _cloneContainers.TryRemove(workingDirectory, out _);
+
+        return true;
+    }
+
     /// <summary>
     /// Maps worker session status to ClaudeSessionStatus enum.
     /// </summary>

@@ -27,7 +27,8 @@ public class BreadcrumbService(HttpProjectApiService projectApi, HttpIssueApiSer
         { "Projects", "/projects" },
         { "Settings", "/settings" },
         { "Agents", "/agents" },
-        { "Sessions", "/sessions" }
+        { "Sessions", "/sessions" },
+        { "Containers", "/containers" }
     };
 
     public IReadOnlyList<BreadcrumbItem> Breadcrumbs => _breadcrumbs.AsReadOnly();

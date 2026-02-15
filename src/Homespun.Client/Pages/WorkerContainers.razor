@@ -1,0 +1,391 @@
+@page "/containers"
+@implements IAsyncDisposable
+@using Microsoft.AspNetCore.SignalR.Client
+@using Homespun.Shared.Models.Containers
+@inject HttpContainerApiService ContainerApi
+@inject IBreadcrumbService BreadcrumbService
+@inject NavigationManager NavigationManager
+@inject ILogger<WorkerContainers> Logger
+
+<PageTitle>Containers - Homespun</PageTitle>
+
+<h1>Containers</h1>
+
+<p class="text-text-muted mb-4">
+    View and manage worker containers running Claude Code agents.
+</p>
+
+<div class="worker-containers-page">
+    @if (_isLoading)
+    {
+        <div class="py-5">
+            <LoadingSpinner Size="SpinnerSize.Lg" Label="Loading containers..." Centered="true" />
+        </div>
+    }
+    else if (_containers.Count == 0)
+    {
+        <div class="empty-state">
+            <div class="empty-icon">📦</div>
+            <h5>No Active Containers</h5>
+            <p class="text-text-muted">Worker containers are started automatically when you begin a session for an issue.</p>
+        </div>
+    }
+    else
+    {
+        <div class="containers-list">
+            @foreach (var container in _containers)
+            {
+                <div class="container-card">
+                    <div class="container-card-header">
+                        <div class="container-title">
+                            <span class="container-name">@container.ContainerName</span>
+                        </div>
+                        <span class="status-indicator @GetStatusIndicatorClass(container.SessionStatus)" title="@container.SessionStatus.ToDisplayLabel()"></span>
+                    </div>
+
+                    <div class="container-card-body">
+                        <div class="container-details">
+                            <div class="detail-row">
+                                <span class="detail-label">Project:</span>
+                                <span class="detail-value">@(container.ProjectName ?? "Unknown")</span>
+                            </div>
+
+                            @if (!string.IsNullOrEmpty(container.IssueTitle) || !string.IsNullOrEmpty(container.IssueId))
+                            {
+                                <div class="detail-row">
+                                    <span class="detail-label">Issue:</span>
+                                    <span class="detail-value">@(container.IssueTitle ?? container.IssueId ?? "N/A")</span>
+                                </div>
+                            }
+
+                            <div class="detail-row">
+                                <span class="detail-label">Status:</span>
+                                <span class="detail-value">@container.SessionStatus.ToDisplayLabel()</span>
+                            </div>
+
+                            @if (container.LastActivityAt.HasValue)
+                            {
+                                <div class="detail-row">
+                                    <span class="detail-label">Last Activity:</span>
+                                    <span class="detail-value">@FormatTimeAgo(container.LastActivityAt.Value)</span>
+                                </div>
+                            }
+
+                            <div class="detail-row">
+                                <span class="detail-label">Created:</span>
+                                <span class="detail-value">@FormatTimeAgo(container.CreatedAt)</span>
+                            </div>
+                        </div>
+
+                        @if (container.HasPendingQuestion)
+                        {
+                            <div class="pending-badge mt-2">
+                                <span class="badge bg-status-question">Question Pending</span>
+                            </div>
+                        }
+                        else if (container.HasPendingPlanApproval)
+                        {
+                            <div class="pending-badge mt-2">
+                                <span class="badge bg-status-info">Plan Approval Pending</span>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="container-card-footer">
+                        @if (!string.IsNullOrEmpty(container.ActiveSessionId))
+                        {
+                            <a href="/session/@container.ActiveSessionId" class="btn btn-sm btn-outline-primary">
+                                Open Session
+                            </a>
+                        }
+
+                        <button class="btn btn-sm btn-outline-danger"
+                                @onclick="() => StopContainer(container.ContainerId)"
+                                disabled="@(_stoppingContainers.Contains(container.ContainerId))">
+                            @if (_stoppingContainers.Contains(container.ContainerId))
+                            {
+                                <span class="spinner-border spinner-border-sm mr-1" role="status"></span>
+                            }
+                            Kill Container
+                        </button>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(_errorMessage))
+    {
+        <div class="alert alert-danger mt-3">@_errorMessage</div>
+    }
+</div>
+
+<style>
+    .worker-containers-page {
+        max-width: 1200px;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: var(--spacing-xl) var(--spacing-lg);
+        background: var(--bg-secondary);
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--border-color);
+    }
+
+    .empty-icon {
+        font-size: 4rem;
+        margin-bottom: var(--spacing-md);
+    }
+
+    .empty-state h5 {
+        margin-bottom: var(--spacing-sm);
+        color: var(--text-primary);
+    }
+
+    .containers-list {
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-md);
+    }
+
+    .container-card {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        overflow: hidden;
+    }
+
+    .container-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: var(--spacing-sm) var(--spacing-md);
+        background: var(--bg-tertiary);
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .container-title {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+        flex: 1;
+        min-width: 0;
+    }
+
+    .container-name {
+        font-weight: 500;
+        font-family: var(--font-mono);
+        font-size: 0.875rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .status-indicator {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+
+    .status-indicator.running {
+        background: var(--status-success);
+        animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    .status-indicator.processing {
+        background: var(--status-info);
+        animation: pulse 1s ease-in-out infinite;
+    }
+
+    .status-indicator.waiting {
+        background: var(--status-warning);
+    }
+
+    .status-indicator.question {
+        background: var(--status-question);
+        animation: pulse 1s ease-in-out infinite;
+    }
+
+    .status-indicator.stopped {
+        background: var(--text-muted);
+    }
+
+    .status-indicator.error {
+        background: var(--status-error);
+    }
+
+    .container-card-body {
+        padding: var(--spacing-md);
+    }
+
+    .container-details {
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-xs);
+    }
+
+    .detail-row {
+        display: flex;
+        align-items: baseline;
+        gap: var(--spacing-sm);
+        font-size: 0.875rem;
+    }
+
+    .detail-label {
+        color: var(--text-muted);
+        font-weight: 500;
+        min-width: 100px;
+        flex-shrink: 0;
+    }
+
+    .detail-value {
+        color: var(--text-secondary);
+    }
+
+    .pending-badge {
+        display: flex;
+        gap: var(--spacing-sm);
+    }
+
+    .container-card-footer {
+        display: flex;
+        gap: var(--spacing-sm);
+        padding: var(--spacing-sm) var(--spacing-md);
+        background: var(--bg-tertiary);
+        border-top: 1px solid var(--border-color);
+    }
+</style>
+
+@code {
+    private List<WorkerContainerDto> _containers = [];
+    private bool _isLoading = true;
+    private string? _errorMessage;
+    private HashSet<string> _stoppingContainers = [];
+    private HubConnection? _hubConnection;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await BreadcrumbService.SetContextAsync(new BreadcrumbContext { PageName = "Containers" });
+        await RefreshContainers();
+
+        // Set up SignalR connection for real-time updates (non-blocking)
+        _ = SetupSignalRConnectionAsync();
+    }
+
+    private async Task RefreshContainers()
+    {
+        try
+        {
+            _isLoading = true;
+            _errorMessage = null;
+            _containers = await ContainerApi.GetAllContainersAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to load containers");
+            _errorMessage = $"Failed to load containers: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task StopContainer(string containerId)
+    {
+        _stoppingContainers.Add(containerId);
+        _errorMessage = null;
+
+        try
+        {
+            await ContainerApi.StopContainerAsync(containerId);
+            await RefreshContainers();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to stop container {ContainerId}", containerId);
+            _errorMessage = $"Failed to stop container: {ex.Message}";
+        }
+        finally
+        {
+            _stoppingContainers.Remove(containerId);
+        }
+    }
+
+    private static string GetStatusIndicatorClass(ClaudeSessionStatus status) => status.ToIndicatorClass();
+
+    private static string FormatTimeAgo(DateTime utcTime)
+    {
+        var elapsed = DateTime.UtcNow - utcTime;
+
+        if (elapsed.TotalMinutes < 1)
+            return "just now";
+        if (elapsed.TotalMinutes < 60)
+            return $"{(int)elapsed.TotalMinutes}m ago";
+        if (elapsed.TotalHours < 24)
+            return $"{(int)elapsed.TotalHours}h {elapsed.Minutes}m ago";
+        return $"{(int)elapsed.TotalDays}d ago";
+    }
+
+    private async Task SetupSignalRConnectionAsync()
+    {
+        try
+        {
+            _hubConnection = new HubConnectionBuilder()
+                .WithUrl(NavigationManager.ToAbsoluteUri("/hubs/claudecode"))
+                .WithAutomaticReconnect()
+                .Build();
+
+            // Subscribe to session events to refresh container list
+            _hubConnection.On<ClaudeSession>("SessionStarted", async (_) =>
+            {
+                await InvokeAsync(async () =>
+                {
+                    await RefreshContainers();
+                    StateHasChanged();
+                });
+            });
+
+            _hubConnection.On<string, ClaudeSessionStatus>("SessionStatusChanged", async (_, _) =>
+            {
+                await InvokeAsync(async () =>
+                {
+                    await RefreshContainers();
+                    StateHasChanged();
+                });
+            });
+
+            _hubConnection.On<string>("SessionStopped", async (_) =>
+            {
+                await InvokeAsync(async () =>
+                {
+                    await RefreshContainers();
+                    StateHasChanged();
+                });
+            });
+
+            await _hubConnection.StartAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to set up SignalR connection for WorkerContainers");
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_hubConnection != null)
+        {
+            try
+            {
+                await _hubConnection.DisposeAsync();
+            }
+            catch
+            {
+                // Ignore disposal errors
+            }
+        }
+    }
+}

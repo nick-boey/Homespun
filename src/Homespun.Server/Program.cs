@@ -2,6 +2,7 @@ using Homespun.Features.AgentOrchestration.Services;
 using Homespun.Features.ClaudeCode.Hubs;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Commands;
+using Homespun.Features.Containers.Services;
 using Homespun.Features.Fleece.Services;
 using Homespun.Features.Git;
 using Homespun.Features.GitHub;
@@ -91,6 +92,7 @@ else
 
     // Core services
     builder.Services.AddScoped<IProjectService, ProjectService>();
+    builder.Services.AddScoped<IContainerQueryService, ContainerQueryService>();
     builder.Services.AddSingleton<IGitHubEnvironmentService, GitHubEnvironmentService>();
     builder.Services.AddSingleton<ICommandRunner, CommandRunner>();
     builder.Services.AddSingleton<IGitCloneService, GitCloneService>();

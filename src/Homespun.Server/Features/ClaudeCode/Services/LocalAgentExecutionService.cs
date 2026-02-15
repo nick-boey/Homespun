@@ -264,6 +264,20 @@ public class LocalAgentExecutionService : IAgentExecutionService, IAsyncDisposab
         return Task.CompletedTask;
     }
 
+    /// <inheritdoc />
+    public Task<IReadOnlyList<ContainerInfo>> ListContainersAsync(CancellationToken cancellationToken = default)
+    {
+        // Local mode runs in-process, no containers to list
+        return Task.FromResult<IReadOnlyList<ContainerInfo>>(Array.Empty<ContainerInfo>());
+    }
+
+    /// <inheritdoc />
+    public Task<bool> StopContainerByIdAsync(string containerId, CancellationToken cancellationToken = default)
+    {
+        // Local mode runs in-process, no containers to stop
+        return Task.FromResult(false);
+    }
+
     private async IAsyncEnumerable<SdkMessage> ProcessMessagesAsync(
         LocalSession session,
         string prompt,
