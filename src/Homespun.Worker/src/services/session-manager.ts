@@ -191,7 +191,7 @@ function buildCommonOptions(model: string, systemPrompt?: string, workingDirecto
   return {
     model,
     cwd,
-    includePartialMessages: true,
+    includePartialMessages: false,
     settingSources: ['user' as const, 'project' as const],
     systemPrompt: systemPromptOption,
     mcpServers: {
