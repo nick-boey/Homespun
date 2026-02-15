@@ -11,4 +11,5 @@ public static class ApiRoutes
     public const string Clones = "api/clones";
     public const string Issues = "api/issues";
     public const string Orchestration = "api/orchestration";
+    public const string Containers = "api/containers";
 }

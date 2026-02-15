@@ -13,6 +13,7 @@ builder.Services.AddScoped(sp =>
 
 // Register HTTP API services
 builder.Services.AddScoped<HttpProjectApiService>();
+builder.Services.AddScoped<HttpContainerApiService>();
 builder.Services.AddScoped<HttpSessionApiService>();
 builder.Services.AddScoped<HttpPullRequestApiService>();
 builder.Services.AddScoped<HttpIssueApiService>();

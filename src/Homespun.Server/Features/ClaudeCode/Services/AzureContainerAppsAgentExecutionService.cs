@@ -599,6 +599,116 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
             sessionsToRemove.Count, workingDirectory);
     }
 
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<ContainerInfo>> ListContainersAsync(CancellationToken cancellationToken = default)
+    {
+        var containers = new List<ContainerInfo>();
+
+        foreach (var (workingDirectory, app) in _cloneApps)
+        {
+            try
+            {
+                var state = await GetCloneContainerStateAsync(workingDirectory, cancellationToken);
+
+                containers.Add(new ContainerInfo(
+                    app.ContainerAppName,
+                    app.ContainerAppName,
+                    app.WorkingDirectory,
+                    app.IssueId,
+                    app.CreatedAt,
+                    state));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "ListContainersAsync: Error getting state for Container App {AppName}",
+                    app.ContainerAppName);
+
+                // Still include the container but with null state
+                containers.Add(new ContainerInfo(
+                    app.ContainerAppName,
+                    app.ContainerAppName,
+                    app.WorkingDirectory,
+                    app.IssueId,
+                    app.CreatedAt,
+                    null));
+            }
+        }
+
+        return containers;
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> StopContainerByIdAsync(string containerId, CancellationToken cancellationToken = default)
+    {
+        // Find the container app by name (containerId is the app name in ACA)
+        var appEntry = _cloneApps.FirstOrDefault(kvp => kvp.Value.ContainerAppName == containerId);
+        if (appEntry.Value == null)
+        {
+            _logger.LogDebug("StopContainerByIdAsync: Container App {ContainerId} not found", containerId);
+            return false;
+        }
+
+        var workingDirectory = appEntry.Key;
+        var app = appEntry.Value;
+
+        _logger.LogInformation("StopContainerByIdAsync: Stopping Container App {AppName}", app.ContainerAppName);
+
+        // Terminate any active sessions first
+        await TerminateCloneSessionAsync(workingDirectory, cancellationToken);
+
+        // Delete the Container App if in dynamic mode
+        if (_options.IsDynamicMode && _armClient != null)
+        {
+            try
+            {
+                await DeleteContainerAppByNameAsync(app.ContainerAppName, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "StopContainerByIdAsync: Error deleting Container App {AppName}", app.ContainerAppName);
+            }
+        }
+
+        // Remove from tracking
+        _cloneApps.TryRemove(workingDirectory, out _);
+
+        return true;
+    }
+
+    /// <summary>
+    /// Deletes a Container App by name using ARM API.
+    /// </summary>
+    private async Task DeleteContainerAppByNameAsync(string appName, CancellationToken cancellationToken)
+    {
+        if (_armClient == null || string.IsNullOrEmpty(_options.ResourceGroupName))
+        {
+            _logger.LogWarning("DeleteContainerAppByNameAsync: ARM client not configured, cannot delete Container App");
+            return;
+        }
+
+        try
+        {
+            var resourceGroup = _armClient.GetResourceGroupResource(
+                new Azure.Core.ResourceIdentifier($"/subscriptions/{_armClient.GetDefaultSubscription().Id.SubscriptionId}/resourceGroups/{_options.ResourceGroupName}"));
+
+            var containerApp = await resourceGroup.GetContainerAppAsync(appName, cancellationToken);
+            if (containerApp != null)
+            {
+                await containerApp.Value.DeleteAsync(WaitUntil.Started, cancellationToken);
+                _logger.LogInformation("DeleteContainerAppByNameAsync: Initiated deletion of Container App {AppName}", appName);
+            }
+        }
+        catch (RequestFailedException ex) when (ex.Status == 404)
+        {
+            _logger.LogDebug("DeleteContainerAppByNameAsync: Container App {AppName} not found (already deleted)", appName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "DeleteContainerAppByNameAsync: Error deleting Container App {AppName}", appName);
+            throw;
+        }
+    }
+
     /// <summary>
     /// Maps worker session status to ClaudeSessionStatus enum.
     /// </summary>
