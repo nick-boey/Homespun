@@ -150,8 +150,6 @@ else
         .GetSection(AgentExecutionOptions.SectionName)
         .GetValue<AgentExecutionMode>("Mode");
 
-    Console.WriteLine($"[AgentExecution] Production mode: Configured mode = {agentExecutionMode}");
-
     switch (agentExecutionMode)
     {
         case AgentExecutionMode.Docker:

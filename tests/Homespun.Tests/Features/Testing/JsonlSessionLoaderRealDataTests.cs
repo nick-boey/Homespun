@@ -73,7 +73,7 @@ public class JsonlSessionLoaderRealDataTests
                 $"Session {session.Id} should have at least one user message");
 
             // In real sessions, we expect assistant messages with tool uses
-            Console.WriteLine($"Session {session.Id}: {userMessages} user, {assistantMessages} assistant messages");
+            TestContext.WriteLine($"Session {session.Id}: {userMessages} user, {assistantMessages} assistant messages");
         }
     }
 
@@ -167,10 +167,10 @@ public class JsonlSessionLoaderRealDataTests
             }
         }
 
-        Console.WriteLine("Content type distribution across all sessions:");
+        TestContext.WriteLine("Content type distribution across all sessions:");
         foreach (var kvp in contentTypeCounts)
         {
-            Console.WriteLine($"  {kvp.Key}: {kvp.Value}");
+            TestContext.WriteLine($"  {kvp.Key}: {kvp.Value}");
         }
 
         // Verify we have the expected content types
@@ -196,13 +196,13 @@ public class JsonlSessionLoaderRealDataTests
         // Assert - sessions should have metadata loaded
         foreach (var session in sessions)
         {
-            Console.WriteLine($"Session {session.Id}:");
-            Console.WriteLine($"  ProjectId: {session.ProjectId}");
-            Console.WriteLine($"  EntityId: {session.EntityId}");
-            Console.WriteLine($"  Mode: {session.Mode}");
-            Console.WriteLine($"  Model: {session.Model}");
-            Console.WriteLine($"  MessageCount: {session.Messages.Count}");
-            Console.WriteLine();
+            TestContext.WriteLine($"Session {session.Id}:");
+            TestContext.WriteLine($"  ProjectId: {session.ProjectId}");
+            TestContext.WriteLine($"  EntityId: {session.EntityId}");
+            TestContext.WriteLine($"  Mode: {session.Mode}");
+            TestContext.WriteLine($"  Model: {session.Model}");
+            TestContext.WriteLine($"  MessageCount: {session.Messages.Count}");
+            TestContext.WriteLine("");
         }
 
         // At least one session should have metadata

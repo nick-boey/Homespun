@@ -3,5 +3,6 @@
   <RunConfiguration>
     <!-- Run only integration tests -->
     <TestCaseFilter>Category=Integration</TestCaseFilter>
+    <ResultsDirectory>./TestResults</ResultsDirectory>
   </RunConfiguration>
 </RunSettings>

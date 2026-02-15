@@ -1,8 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <RunSettings>
   <RunConfiguration>
-    <!-- Run only unit tests (exclude integration tests) -->
-    <TestCaseFilter>Category!=Integration</TestCaseFilter>
     <ResultsDirectory>./TestResults</ResultsDirectory>
   </RunConfiguration>
 </RunSettings>
