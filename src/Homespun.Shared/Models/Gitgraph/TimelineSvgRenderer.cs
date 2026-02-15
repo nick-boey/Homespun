@@ -119,6 +119,19 @@ public static class TimelineSvgRenderer
         return sb.ToString();
     }
 
+    /// <summary>
+    /// Generates a pulsing glow effect ring around actionable issue nodes.
+    /// Actionable items (lane 0 in task graph mode) get a subtle glow to indicate they're ready to work on.
+    /// </summary>
+    public static string GenerateActionableIndicator(int laneIndex, string color)
+    {
+        var cx = GetLaneCenterX(laneIndex);
+        var cy = GetRowCenterY();
+        var outerRadius = DiamondSize + 4;
+        // Subtle glow ring around actionable items
+        return $"<circle cx=\"{cx}\" cy=\"{cy}\" r=\"{outerRadius}\" fill=\"none\" stroke=\"{EscapeAttribute(color)}\" stroke-width=\"1\" opacity=\"0.4\" />";
+    }
+
     public static string GenerateRowSvg(
         int nodeLane,
         IReadOnlySet<int> activeLanes,
@@ -133,7 +146,8 @@ public static class TimelineSvgRenderer
         IReadOnlySet<int>? lanesEndingThisRow = null,
         IReadOnlySet<int>? reservedLanes = null,
         bool isOutlineOnly = false,
-        bool showErrorCross = false)
+        bool showErrorCross = false,
+        bool isActionable = false)
     {
         var width = CalculateSvgWidth(maxLanes);
         var sb = new StringBuilder();
@@ -182,6 +196,11 @@ public static class TimelineSvgRenderer
         }
         else if (isIssue)
         {
+            // Add actionable indicator ring before the diamond (so it appears behind)
+            if (isActionable)
+            {
+                sb.Append(GenerateActionableIndicator(nodeLane, nodeColor));
+            }
             sb.Append(isOutlineOnly
                 ? GenerateDiamondNodeOutline(nodeLane, nodeColor)
                 : GenerateDiamondNode(nodeLane, nodeColor));

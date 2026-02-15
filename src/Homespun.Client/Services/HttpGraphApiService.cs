@@ -29,6 +29,32 @@ public class HttpGraphApiService(HttpClient http)
     }
 
     /// <summary>
+    /// Gets the task graph data from the server.
+    /// The task graph displays issues with actionable items on the left (lane 0)
+    /// and parent/blocking issues on the right (higher lanes).
+    /// </summary>
+    public async Task<GraphApiResponse?> GetTaskGraphDataAsync(string projectId)
+    {
+        try
+        {
+            return await http.GetFromJsonAsync<GraphApiResponse>($"{BaseUrl}/{projectId}/taskgraph");
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Gets the task graph data and converts it to a Graph model for visualization.
+    /// </summary>
+    public async Task<Graph?> GetTaskGraphAsync(string projectId)
+    {
+        var data = await GetTaskGraphDataAsync(projectId);
+        return data != null ? ToGraph(data) : null;
+    }
+
+    /// <summary>
     /// Converts a GraphApiResponse to a Graph model for visualization.
     /// </summary>
     private static Graph ToGraph(GraphApiResponse data)

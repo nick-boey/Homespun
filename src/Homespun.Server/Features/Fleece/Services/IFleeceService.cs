@@ -57,6 +57,20 @@ public interface IFleeceService
 
     #endregion
 
+    #region Task Graph Operations
+
+    /// <summary>
+    /// Builds a task graph for the specified project using Fleece.Core's TaskGraphService.
+    /// The task graph organizes issues with actionable items at lane 0 (left) and
+    /// parent/blocking issues at higher lanes (right).
+    /// </summary>
+    /// <param name="projectPath">Path to the project containing .fleece/ directory</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>The task graph, or null if no issues exist.</returns>
+    Task<TaskGraph?> GetTaskGraphAsync(string projectPath, CancellationToken ct = default);
+
+    #endregion
+
     #region Write Operations
 
     /// <summary>

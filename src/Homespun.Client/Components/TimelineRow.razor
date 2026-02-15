@@ -50,6 +50,12 @@ else
     [Parameter] public EventCallback<(IGraphNode Node, ElementReference Element)> OnNodeHover { get; set; }
     [Parameter] public EventCallback OnNodeLeave { get; set; }
 
+    /// <summary>
+    /// Whether this node is actionable (lane 0 in task graph mode).
+    /// Used for visual differentiation of actionable items.
+    /// </summary>
+    [Parameter] public bool IsActionable { get; set; }
+
     private string SvgContent = "";
 
     protected override void OnParametersSet()
@@ -90,8 +96,10 @@ else
                 isFirstRowInLane: LaneInfo.IsFirstRowInLane,
                 isLastRowInLane: LaneInfo.IsLastRowInLane,
                 lanesEndingThisRow: LaneInfo.LanesEndingAtThisRow,
+                reservedLanes: LaneInfo.ReservedLanes,
                 isOutlineOnly: isIssue && isOutlineOnly,
-                showErrorCross: isIssue && showErrorCross
+                showErrorCross: isIssue && showErrorCross,
+                isActionable: IsActionable
             );
         }
     }

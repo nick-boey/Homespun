@@ -453,10 +453,9 @@ public class FleeceIssuesSyncService(
 
         try
         {
-            // 1. Load local .fleece/ issues and changes into memory
+            // 1. Load local .fleece/ issues into memory
             var localStorage = new JsonlStorageService(projectPath, serializer, schemaValidator);
             var localIssues = await localStorage.LoadIssuesAsync(ct);
-            var localChanges = await localStorage.LoadChangesAsync(ct);
 
             var localIssueMap = localIssues.ToDictionary(i => i.Id, StringComparer.OrdinalIgnoreCase);
 
@@ -470,10 +469,9 @@ public class FleeceIssuesSyncService(
                 return (true, null, false);
             }
 
-            // 3. Load remote .fleece/ issues and changes
+            // 3. Load remote .fleece/ issues
             var remoteStorage = new JsonlStorageService(projectPath, serializer, schemaValidator);
             var remoteIssues = await remoteStorage.LoadIssuesAsync(ct);
-            var remoteChanges = await remoteStorage.LoadChangesAsync(ct);
 
             var remoteIssueMap = remoteIssues.ToDictionary(i => i.Id, StringComparer.OrdinalIgnoreCase);
 
@@ -505,21 +503,12 @@ public class FleeceIssuesSyncService(
                 }
             }
 
-            // 5. Merge change records by deduplicating on ChangeId
-            var mergedChanges = localChanges
-                .Concat(remoteChanges)
-                .GroupBy(c => c.ChangeId)
-                .Select(g => g.First())
-                .OrderBy(c => c.ChangedAt)
-                .ToList();
-
-            // 6. Write merged result back to .fleece/
+            // 5. Write merged result back to .fleece/
+            // Note: ChangeService was removed in Fleece.Core v1.2.0, so we only save issues
             var mergedStorage = new JsonlStorageService(projectPath, serializer, schemaValidator);
             await mergedStorage.SaveIssuesAsync(mergedIssues, ct);
-            await mergedStorage.SaveChangesAsync(mergedChanges, ct);
 
-            logger.LogInformation("Merged {IssueCount} issues and {ChangeCount} changes from remote",
-                mergedIssues.Count, mergedChanges.Count);
+            logger.LogInformation("Merged {IssueCount} issues from remote", mergedIssues.Count);
 
             return (true, null, true);
         }
