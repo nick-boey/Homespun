@@ -79,8 +79,8 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
 
     // Session tracking: sessionId -> session info
     private readonly ConcurrentDictionary<string, DockerSession> _sessions = new();
-    // Issue container tracking: issueId -> container info (for reuse) - legacy
-    private readonly ConcurrentDictionary<string, IssueContainer> _issueContainers = new();
+    // Issue container tracking: (projectId, issueId) -> container info (for reuse)
+    private readonly ConcurrentDictionary<(string ProjectId, string IssueId), IssueContainer> _issueContainers = new();
     // Clone container tracking: workingDirectory -> container info (for reuse)
     private readonly ConcurrentDictionary<string, CloneContainer> _cloneContainers = new();
     // Session-to-issue mapping for routing
@@ -109,6 +109,7 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
     }
 
     private record IssueContainer(
+        string ProjectId,
         string IssueId,
         string ContainerId,
         string ContainerName,
@@ -121,6 +122,7 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         string ContainerName,
         string WorkerUrl,
         DateTime CreatedAt,
+        string? ProjectId = null,
         string? IssueId = null);
 
     /// <summary>
@@ -149,8 +151,8 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
     /// <summary>
     /// Gets the container name for an issue. Deterministic naming enables reuse detection.
     /// </summary>
-    internal static string GetIssueContainerName(string issueId)
-        => $"homespun-issue-{issueId}";
+    internal static string GetIssueContainerName(string projectId, string issueId)
+        => $"homespun-issue-{projectId}-{issueId}";
 
     internal static string ParseWorkerIpAddress(string dockerInspectOutput)
     {
@@ -214,9 +216,9 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var sessionId = Guid.NewGuid().ToString();
-        var hasIssue = !string.IsNullOrEmpty(request.IssueId);
+        var hasIssue = !string.IsNullOrEmpty(request.IssueId) && !string.IsNullOrEmpty(request.ProjectId);
         var containerName = hasIssue
-            ? GetIssueContainerName(request.IssueId!)
+            ? GetIssueContainerName(request.ProjectId!, request.IssueId!)
             : $"homespun-agent-{sessionId[..8]}";
 
         _logger.LogInformation(
@@ -236,7 +238,7 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
                 {
                     // Per-issue container: reuse if healthy, otherwise start new
                     (containerId, workerUrl) = await GetOrStartIssueContainerAsync(
-                        request.IssueId!, request.ProjectName, request.WorkingDirectory, cancellationToken);
+                        request.ProjectId!, request.IssueId!, request.ProjectName, request.WorkingDirectory, cancellationToken);
                 }
                 else
                 {
@@ -423,12 +425,13 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
     /// Stops and removes the container for a specific issue.
     /// Called when an issue is completed or explicitly stopped.
     /// </summary>
-    public async Task StopIssueContainerAsync(string issueId, CancellationToken cancellationToken = default)
+    public async Task StopIssueContainerAsync(string projectId, string issueId, CancellationToken cancellationToken = default)
     {
-        if (_issueContainers.TryRemove(issueId, out var container))
+        var key = (projectId, issueId);
+        if (_issueContainers.TryRemove(key, out var container))
         {
-            _logger.LogInformation("Stopping issue container {ContainerName} for issue {IssueId}",
-                container.ContainerName, issueId);
+            _logger.LogInformation("Stopping issue container {ContainerName} for project {ProjectId} issue {IssueId}",
+                container.ContainerName, projectId, issueId);
 
             // Remove all sessions for this issue
             var sessionIds = _sessionToIssue
@@ -960,29 +963,32 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
     /// Also tracks the container by working directory for state checking.
     /// </summary>
     private async Task<(string containerId, string workerUrl)> GetOrStartIssueContainerAsync(
+        string projectId,
         string issueId,
         string? projectName,
         string workingDirectory,
         CancellationToken cancellationToken)
     {
-        // Check for existing healthy container by issueId
-        if (_issueContainers.TryGetValue(issueId, out var existing))
+        var key = (projectId, issueId);
+
+        // Check for existing healthy container by (projectId, issueId)
+        if (_issueContainers.TryGetValue(key, out var existing))
         {
             if (await IsContainerHealthyAsync(existing.WorkerUrl, cancellationToken))
             {
-                _logger.LogDebug("Reusing existing container {ContainerName} for issue {IssueId}",
-                    existing.ContainerName, issueId);
+                _logger.LogDebug("Reusing existing container {ContainerName} for project {ProjectId} issue {IssueId}",
+                    existing.ContainerName, projectId, issueId);
                 return (existing.ContainerId, existing.WorkerUrl);
             }
 
-            _logger.LogWarning("Container {ContainerName} for issue {IssueId} is unhealthy, removing",
-                existing.ContainerName, issueId);
-            _issueContainers.TryRemove(issueId, out _);
+            _logger.LogWarning("Container {ContainerName} for project {ProjectId} issue {IssueId} is unhealthy, removing",
+                existing.ContainerName, projectId, issueId);
+            _issueContainers.TryRemove(key, out _);
             await StopContainerAsync(existing.ContainerId);
         }
 
         // Start new container - compute issue workspace working directory if no explicit one provided
-        var containerName = GetIssueContainerName(issueId);
+        var containerName = GetIssueContainerName(projectId, issueId);
         var effectiveWorkingDirectory = workingDirectory;
         if (string.IsNullOrEmpty(effectiveWorkingDirectory))
         {
@@ -992,10 +998,10 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         var (containerId, workerUrl) = await StartContainerAsync(
             containerName, effectiveWorkingDirectory, useRm: false, issueId, projectName, cancellationToken);
 
-        // Track both by issueId (legacy) and by workingDirectory (new)
-        _issueContainers[issueId] = new IssueContainer(issueId, containerId, containerName, workerUrl, DateTime.UtcNow);
+        // Track both by (projectId, issueId) and by workingDirectory
+        _issueContainers[key] = new IssueContainer(projectId, issueId, containerId, containerName, workerUrl, DateTime.UtcNow);
         _cloneContainers[effectiveWorkingDirectory] = new CloneContainer(
-            effectiveWorkingDirectory, containerId, containerName, workerUrl, DateTime.UtcNow, issueId);
+            effectiveWorkingDirectory, containerId, containerName, workerUrl, DateTime.UtcNow, projectId, issueId);
 
         return (containerId, workerUrl);
     }

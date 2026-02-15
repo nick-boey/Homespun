@@ -80,23 +80,31 @@ public class DockerAgentExecutionServiceTests
     [Test]
     public void GetIssueContainerName_ReturnsCorrectFormat()
     {
-        var name = DockerAgentExecutionService.GetIssueContainerName("abc123");
-        Assert.That(name, Is.EqualTo("homespun-issue-abc123"));
+        var name = DockerAgentExecutionService.GetIssueContainerName("project-1", "abc123");
+        Assert.That(name, Is.EqualTo("homespun-issue-project-1-abc123"));
     }
 
     [Test]
     public void GetIssueContainerName_IsDeterministic()
     {
-        var name1 = DockerAgentExecutionService.GetIssueContainerName("abc123");
-        var name2 = DockerAgentExecutionService.GetIssueContainerName("abc123");
+        var name1 = DockerAgentExecutionService.GetIssueContainerName("project-1", "abc123");
+        var name2 = DockerAgentExecutionService.GetIssueContainerName("project-1", "abc123");
         Assert.That(name1, Is.EqualTo(name2));
     }
 
     [Test]
     public void GetIssueContainerName_DifferentIssues_ReturnDifferentNames()
     {
-        var name1 = DockerAgentExecutionService.GetIssueContainerName("issue-1");
-        var name2 = DockerAgentExecutionService.GetIssueContainerName("issue-2");
+        var name1 = DockerAgentExecutionService.GetIssueContainerName("project-1", "issue-1");
+        var name2 = DockerAgentExecutionService.GetIssueContainerName("project-1", "issue-2");
+        Assert.That(name1, Is.Not.EqualTo(name2));
+    }
+
+    [Test]
+    public void GetIssueContainerName_DifferentProjects_SameIssue_ReturnDifferentNames()
+    {
+        var name1 = DockerAgentExecutionService.GetIssueContainerName("project-1", "issue-1");
+        var name2 = DockerAgentExecutionService.GetIssueContainerName("project-2", "issue-1");
         Assert.That(name1, Is.Not.EqualTo(name2));
     }
 

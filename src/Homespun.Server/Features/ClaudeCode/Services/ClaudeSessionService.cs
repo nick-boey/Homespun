@@ -430,7 +430,9 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                     Model: effectiveModel,
                     Prompt: message,
                     SystemPrompt: session.SystemPrompt,
-                    ResumeSessionId: session.ConversationId
+                    ResumeSessionId: session.ConversationId,
+                    IssueId: session.EntityId,
+                    ProjectId: session.ProjectId
                 );
                 messageStream = _agentExecutionService.StartSessionAsync(startRequest, linkedCts.Token);
             }
