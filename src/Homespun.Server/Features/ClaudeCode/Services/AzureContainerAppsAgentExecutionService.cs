@@ -926,9 +926,23 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
         string? currentEventType = null;
         var dataBuffer = new StringBuilder();
 
-        while (!reader.EndOfStream && !cancellationToken.IsCancellationRequested)
+        while (!cancellationToken.IsCancellationRequested)
         {
-            var line = await reader.ReadLineAsync(cancellationToken);
+            string? line;
+            try
+            {
+                line = await reader.ReadLineAsync(cancellationToken);
+            }
+            catch (HttpIOException ex) when (ex.HttpRequestError == HttpRequestError.ResponseEnded)
+            {
+                _logger.LogWarning(ex,
+                    "SSE stream for session {SessionId} ended prematurely (worker connection lost)", sessionId);
+                throw new AgentConnectionLostException(
+                    "Worker connection lost: the worker's response ended prematurely. " +
+                    "This usually means the Claude SDK query failed to start.",
+                    ex, sessionId);
+            }
+
             if (line == null) break;
 
             if (line.StartsWith("event: "))

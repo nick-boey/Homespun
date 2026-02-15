@@ -300,6 +300,22 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
             {
                 _logger.LogError(ex, "Error in Docker session {SessionId}", sessionId);
 
+                // Fetch container logs before stopping for diagnostics
+                if (!string.IsNullOrEmpty(containerId))
+                {
+                    try
+                    {
+                        var containerLogs = await GetContainerLogsAsync(containerId, CancellationToken.None);
+                        _logger.LogError(
+                            "Container logs for failed session {SessionId} (container {ContainerId}):\n{ContainerLogs}",
+                            sessionId, containerId, containerLogs);
+                    }
+                    catch (Exception logEx)
+                    {
+                        _logger.LogWarning(logEx, "Failed to fetch container logs for session {SessionId}", sessionId);
+                    }
+                }
+
                 // Only stop container for non-issue (ephemeral) containers
                 if (!hasIssue && !string.IsNullOrEmpty(containerId))
                 {
@@ -1366,9 +1382,26 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         string? currentEventType = null;
         var dataBuffer = new StringBuilder();
 
-        while (!reader.EndOfStream && !cancellationToken.IsCancellationRequested)
+        while (!cancellationToken.IsCancellationRequested)
         {
-            var line = await reader.ReadLineAsync(cancellationToken);
+            // Read the next line, handling premature stream termination gracefully.
+            // HttpIOException(ResponseEnded) occurs when the worker's chunked HTTP response
+            // ends without proper termination (e.g., worker process crashed or SDK query failed).
+            string? line;
+            try
+            {
+                line = await reader.ReadLineAsync(cancellationToken);
+            }
+            catch (HttpIOException ex) when (ex.HttpRequestError == HttpRequestError.ResponseEnded)
+            {
+                _logger.LogWarning(ex,
+                    "SSE stream for session {SessionId} ended prematurely (worker connection lost)", sessionId);
+                throw new AgentConnectionLostException(
+                    "Worker connection lost: the agent container's response ended prematurely. " +
+                    "This usually means the Claude SDK query failed to start. Check container logs for details.",
+                    ex, sessionId);
+            }
+
             if (line == null) break;
 
             if (line.StartsWith("event: "))
