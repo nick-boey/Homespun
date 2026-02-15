@@ -17,4 +17,5 @@ public interface IClaudeCodeHub
     ClaudeSession? GetSession(string sessionId);
     Task AnswerQuestion(string sessionId, string answersJson);
     Task ExecutePlan(string sessionId, bool clearContext = true);
+    Task<int> GetCachedMessageCount(string sessionId);
 }
