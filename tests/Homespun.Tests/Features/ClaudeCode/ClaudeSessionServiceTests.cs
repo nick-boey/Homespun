@@ -2539,4 +2539,63 @@ public class ClaudeSessionServiceStatusBroadcastTests
             Is.True,
             "Should broadcast WaitingForInput status when plan execution completes");
     }
+
+    [Test]
+    public async Task SendMessageAsync_AgentStartRequest_IncludesIssueIdAndProjectId()
+    {
+        // Arrange
+        var entityId = "issue-42";
+        var projectId = "project-abc";
+        var session = await _service.StartSessionAsync(
+            entityId, projectId, "/test/path", SessionMode.Build, "sonnet");
+
+        AgentStartRequest? capturedRequest = null;
+        _agentExecutionServiceMock
+            .Setup(s => s.StartSessionAsync(It.IsAny<AgentStartRequest>(), It.IsAny<CancellationToken>()))
+            .Callback<AgentStartRequest, CancellationToken>((req, _) => capturedRequest = req)
+            .Returns(CreateSdkMessageStream(
+                new SdkSystemMessage("agent-1", null, "session_started", null, null),
+                new SdkResultMessage("agent-1", null, null, 0, 0, false, 0, 0, null)));
+
+        // Act
+        await _service.SendMessageAsync(session.Id, "hello");
+
+        // Assert
+        Assert.That(capturedRequest, Is.Not.Null, "AgentStartRequest should have been captured");
+        Assert.Multiple(() =>
+        {
+            Assert.That(capturedRequest!.IssueId, Is.EqualTo(entityId),
+                "AgentStartRequest.IssueId should be set to the session's EntityId");
+            Assert.That(capturedRequest.ProjectId, Is.EqualTo(projectId),
+                "AgentStartRequest.ProjectId should be set to the session's ProjectId");
+        });
+    }
+
+    [Test]
+    public async Task SendMessageAsync_AgentStartRequest_IncludesWorkingDirectoryAndModel()
+    {
+        // Arrange
+        var session = await _service.StartSessionAsync(
+            "entity-1", "project-1", "/work/dir", SessionMode.Plan, "opus");
+
+        AgentStartRequest? capturedRequest = null;
+        _agentExecutionServiceMock
+            .Setup(s => s.StartSessionAsync(It.IsAny<AgentStartRequest>(), It.IsAny<CancellationToken>()))
+            .Callback<AgentStartRequest, CancellationToken>((req, _) => capturedRequest = req)
+            .Returns(CreateSdkMessageStream(
+                new SdkSystemMessage("agent-1", null, "session_started", null, null),
+                new SdkResultMessage("agent-1", null, null, 0, 0, false, 0, 0, null)));
+
+        // Act
+        await _service.SendMessageAsync(session.Id, "test message");
+
+        // Assert
+        Assert.That(capturedRequest, Is.Not.Null, "AgentStartRequest should have been captured");
+        Assert.Multiple(() =>
+        {
+            Assert.That(capturedRequest!.WorkingDirectory, Is.EqualTo("/work/dir"));
+            Assert.That(capturedRequest.Mode, Is.EqualTo(SessionMode.Plan));
+            Assert.That(capturedRequest.Prompt, Is.EqualTo("test message"));
+        });
+    }
 }
