@@ -309,7 +309,22 @@ export class SessionManager {
           outputChannel.push(msg);
         }
       } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
         console.error(`[Worker][SessionManager] query forwarder error for session '${id}':`, err);
+        // Push a synthetic error result so the SSE stream reports the failure
+        // instead of ending silently
+        outputChannel.push({
+          type: 'result',
+          subtype: 'error_max_turns',
+          session_id: id,
+          is_error: true,
+          duration_ms: 0,
+          duration_api_ms: 0,
+          num_turns: 0,
+          total_cost_usd: 0,
+          usage: { input_tokens: 0, output_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 },
+          result: message,
+        } as unknown as SDKMessage);
       } finally {
         outputChannel.complete();
       }
