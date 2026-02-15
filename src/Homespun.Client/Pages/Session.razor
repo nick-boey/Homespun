@@ -55,6 +55,24 @@
         <div class="session-content">
         <div class="chat-container @(_sidePanelOpen ? "" : "expanded")">
             <div class="messages-area" @ref="_messagesContainer" @onscroll="HandleScroll">
+                @if (_showLoadHistoryButton)
+                {
+                    <div class="load-history-banner">
+                        <button class="btn btn-outline btn-sm"
+                                @onclick="LoadHistoryAsync"
+                                disabled="@_isLoadingHistory">
+                            @if (_isLoadingHistory)
+                            {
+                                <span class="spinner-border spinner-border-sm" role="status"></span>
+                                <span>Loading...</span>
+                            }
+                            else
+                            {
+                                <span>Load @(_cachedMessageCount - _session.Messages.Count) previous messages</span>
+                            }
+                        </button>
+                    </div>
+                }
                 @if (_session.Messages.Count == 0 && _session.Status != ClaudeSessionStatus.Running)
                 {
                     <div class="empty-state">
@@ -1239,6 +1257,24 @@
         color: var(--text-muted);
     }
 
+    /* Load history banner */
+    .load-history-banner {
+        display: flex;
+        justify-content: center;
+        padding: var(--spacing-sm) var(--spacing-md);
+        background: var(--bg-tertiary);
+        border-bottom: 1px solid var(--border-color);
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+
+    .load-history-banner .btn {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-xs);
+    }
+
     /* Scroll to bottom button */
     .messages-area {
         position: relative;
@@ -1551,6 +1587,11 @@
     // Message queue for mid-execution prompts
     private Queue<string> _pendingMessages = new();
     private const int MaxQueuedMessages = 5;
+
+    // Load history state
+    private bool _showLoadHistoryButton = false;
+    private int _cachedMessageCount = 0;
+    private bool _isLoadingHistory = false;
 
     // Debug log entry class (needs to be accessible in both Debug and Release for Razor compilation)
     private class DebugLogEntry
@@ -2318,6 +2359,37 @@
         await _hubConnection.StartAsync();
         await _hubConnection.SendAsync("JoinSession", SessionId);
         // Server sends SessionState after JoinSession, which we now handle above
+
+        // Check for historical messages available in the cache
+        await CheckForHistoricalMessages();
+    }
+
+    /// <summary>
+    /// Checks if there are more messages in the server cache than currently loaded.
+    /// Shows the "Load previous messages" button if the session is actively processing
+    /// and more cached messages exist.
+    /// </summary>
+    private async Task CheckForHistoricalMessages()
+    {
+        if (_hubConnection == null || _session == null) return;
+
+        try
+        {
+            var cachedCount = await _hubConnection.InvokeAsync<int>("GetCachedMessageCount", SessionId);
+            _cachedMessageCount = cachedCount;
+
+            var isActivelyProcessing = _session.Status is
+                ClaudeSessionStatus.Starting or
+                ClaudeSessionStatus.RunningHooks or
+                ClaudeSessionStatus.Running;
+
+            _showLoadHistoryButton = isActivelyProcessing && cachedCount > _session.Messages.Count;
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Session] Error checking cached message count: {ex.Message}");
+        }
     }
 
     private async Task SendMessage()
@@ -2741,6 +2813,49 @@
             var key = match.Groups[1].Value.ToLowerInvariant();
             return context.TryGetValue(key, out var value) ? value : match.Value;
         }, RegexOptions.IgnoreCase);
+    }
+
+    /// <summary>
+    /// Loads all historical messages from the server cache and merges them with current messages.
+    /// </summary>
+    private async Task LoadHistoryAsync()
+    {
+        if (_session == null || _isLoadingHistory) return;
+
+        _isLoadingHistory = true;
+        StateHasChanged();
+
+        try
+        {
+            // Get all cached messages from server
+            var cachedMessages = await SessionApi.GetCachedMessagesAsync(SessionId);
+
+            // Clear and rebuild message list with cached messages
+            _session.Messages.Clear();
+
+            foreach (var msg in cachedMessages)
+            {
+                // Ensure all messages are marked as not streaming
+                msg.IsStreaming = false;
+                foreach (var content in msg.Content)
+                {
+                    content.IsStreaming = false;
+                }
+                _session.Messages.Add(msg);
+            }
+
+            // Hide the button after loading
+            _showLoadHistoryButton = false;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading history: {ex.Message}");
+        }
+        finally
+        {
+            _isLoadingHistory = false;
+            StateHasChanged();
+        }
     }
 
     public async ValueTask DisposeAsync()

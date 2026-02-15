@@ -10,7 +10,7 @@ namespace Homespun.Features.ClaudeCode.Hubs;
 /// <summary>
 /// SignalR hub for Claude Code session real-time communication.
 /// </summary>
-public class ClaudeCodeHub(IClaudeSessionService sessionService) : Hub
+public class ClaudeCodeHub(IClaudeSessionService sessionService, IMessageCacheStore messageCacheStore) : Hub
 {
     /// <summary>
     /// Join a session group to receive session-specific messages.
@@ -148,6 +148,18 @@ public class ClaudeCodeHub(IClaudeSessionService sessionService) : Hub
             request.Model,
             terminateExisting,
             request.SystemPrompt);
+    }
+
+    /// <summary>
+    /// Gets the number of cached messages for a session.
+    /// Used by clients to determine if historical messages are available.
+    /// </summary>
+    /// <param name="sessionId">The session ID</param>
+    /// <returns>The number of cached messages, or 0 if no cache exists</returns>
+    public async Task<int> GetCachedMessageCount(string sessionId)
+    {
+        var summary = await messageCacheStore.GetSessionSummaryAsync(sessionId);
+        return summary?.MessageCount ?? 0;
     }
 }
 
