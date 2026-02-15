@@ -1,4 +1,7 @@
 using Homespun.ClaudeAgentSdk;
+using Homespun.Shared.Models.Sessions;
+
+using SharedPermissionMode = Homespun.Shared.Models.Sessions.PermissionMode;
 
 namespace Homespun.Features.ClaudeCode.Services;
 
@@ -31,7 +34,7 @@ public record AgentStartRequest(
 public record AgentMessageRequest(
     string SessionId,
     string Message,
-    PermissionMode PermissionMode = PermissionMode.BypassPermissions,
+    SharedPermissionMode PermissionMode = SharedPermissionMode.BypassPermissions,
     string? Model = null
 );
 
@@ -46,6 +49,44 @@ public record AgentSessionStatus(
     string? ConversationId,
     DateTime CreatedAt,
     DateTime LastActivityAt
+);
+
+/// <summary>
+/// State of a container for a working directory.
+/// </summary>
+public record CloneContainerState(
+    string WorkingDirectory,
+    string ContainerIdentifier,
+    string? ActiveSessionId,
+    string? WorkerSessionId,
+    ClaudeSessionStatus SessionStatus,
+    DateTime? LastActivityAt,
+    bool HasPendingQuestion,
+    bool HasPendingPlanApproval
+);
+
+/// <summary>
+/// Action to take when starting a session.
+/// </summary>
+public enum AgentStartAction
+{
+    /// <summary>No container or session stopped/error - start new session.</summary>
+    StartNew,
+    /// <summary>Active session exists (working/question/plan) - notify user.</summary>
+    NotifyActive,
+    /// <summary>Idle session exists - ask user to confirm termination.</summary>
+    ConfirmTerminate,
+    /// <summary>Container exists but no active session - reuse container.</summary>
+    ReuseContainer
+}
+
+/// <summary>
+/// Result of checking container state before starting.
+/// </summary>
+public record AgentStartCheckResult(
+    AgentStartAction Action,
+    CloneContainerState? ExistingState,
+    string? Message
 );
 
 /// <summary>
@@ -119,5 +160,20 @@ public interface IAgentExecutionService
     /// For local mode, returns false (local plan approval uses ExecutePlanAsync fallback).
     /// </summary>
     Task<bool> ApprovePlanAsync(string sessionId, bool approved, bool keepContext, string? feedback = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets the active session state for a working directory.
+    /// Returns null if no container exists for that working directory.
+    /// </summary>
+    Task<CloneContainerState?> GetCloneContainerStateAsync(
+        string workingDirectory,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Terminates any active session in a container, preparing for a new session.
+    /// </summary>
+    Task TerminateCloneSessionAsync(
+        string workingDirectory,
         CancellationToken cancellationToken = default);
 }

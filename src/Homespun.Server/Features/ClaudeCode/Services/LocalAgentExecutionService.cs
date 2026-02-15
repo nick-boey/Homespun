@@ -3,6 +3,8 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Homespun.ClaudeAgentSdk;
 using Homespun.Features.ClaudeCode.Exceptions;
+using SdkPermissionMode = Homespun.ClaudeAgentSdk.PermissionMode;
+using SharedPermissionMode = Homespun.Shared.Models.Sessions.PermissionMode;
 
 namespace Homespun.Features.ClaudeCode.Services;
 
@@ -98,7 +100,7 @@ public class LocalAgentExecutionService : IAgentExecutionService, IAsyncDisposab
         // Create options for this query, using the permission mode from the request
         var queryOptions = _optionsFactory.Create(session.Mode, session.WorkingDirectory,
             request.Model ?? session.Model, session.SystemPrompt);
-        queryOptions.PermissionMode = request.PermissionMode;
+        queryOptions.PermissionMode = MapPermissionMode(request.PermissionMode);
         queryOptions.IncludePartialMessages = true;
         queryOptions.Resume = session.ConversationId;
 
@@ -228,6 +230,38 @@ public class LocalAgentExecutionService : IAgentExecutionService, IAsyncDisposab
     {
         // Local mode plan approval uses ExecutePlanAsync fallback in ClaudeSessionService
         return Task.FromResult(false);
+    }
+
+    /// <inheritdoc />
+    public Task<CloneContainerState?> GetCloneContainerStateAsync(
+        string workingDirectory,
+        CancellationToken cancellationToken = default)
+    {
+        // Local mode runs in-process, no container tracking needed
+        return Task.FromResult<CloneContainerState?>(null);
+    }
+
+    /// <inheritdoc />
+    public Task TerminateCloneSessionAsync(
+        string workingDirectory,
+        CancellationToken cancellationToken = default)
+    {
+        // Local mode runs in-process, terminate by stopping sessions with matching working directory
+        var sessionsToStop = _sessions.Values
+            .Where(s => s.WorkingDirectory == workingDirectory)
+            .Select(s => s.Id)
+            .ToList();
+
+        foreach (var sessionId in sessionsToStop)
+        {
+            if (_sessions.TryRemove(sessionId, out var session))
+            {
+                session.Cts.Cancel();
+                session.Cts.Dispose();
+            }
+        }
+
+        return Task.CompletedTask;
     }
 
     private async IAsyncEnumerable<SdkMessage> ProcessMessagesAsync(
@@ -409,6 +443,21 @@ public class LocalAgentExecutionService : IAgentExecutionService, IAsyncDisposab
                 root.TryGetProperty("name", out var name) ? name.GetString() ?? "" : "",
                 root.TryGetProperty("input", out var input) ? input.Clone() : default),
             _ => null
+        };
+    }
+
+    /// <summary>
+    /// Maps shared permission mode to SDK permission mode.
+    /// </summary>
+    private static SdkPermissionMode MapPermissionMode(SharedPermissionMode mode)
+    {
+        return mode switch
+        {
+            SharedPermissionMode.Default => SdkPermissionMode.Default,
+            SharedPermissionMode.AcceptEdits => SdkPermissionMode.AcceptEdits,
+            SharedPermissionMode.Plan => SdkPermissionMode.Plan,
+            SharedPermissionMode.BypassPermissions => SdkPermissionMode.BypassPermissions,
+            _ => SdkPermissionMode.BypassPermissions
         };
     }
 

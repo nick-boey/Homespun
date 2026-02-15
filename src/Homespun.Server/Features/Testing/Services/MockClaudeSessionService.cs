@@ -536,6 +536,33 @@ public class MockClaudeSessionService : IClaudeSessionService
         return Task.FromResult<IReadOnlyList<SessionCacheSummary>>(history);
     }
 
+    public Task<AgentStartCheckResult> CheckCloneStateAsync(
+        string workingDirectory,
+        CancellationToken cancellationToken = default)
+    {
+        _logger.LogDebug("[Mock] CheckCloneState for working directory {WorkingDirectory}", workingDirectory);
+
+        // Mock always returns StartNew - no container tracking in mock mode
+        return Task.FromResult(new AgentStartCheckResult(AgentStartAction.StartNew, null, null));
+    }
+
+    public Task<ClaudeSession> StartSessionWithTerminationAsync(
+        string entityId,
+        string projectId,
+        string workingDirectory,
+        SessionMode mode,
+        string model,
+        bool terminateExisting,
+        string? systemPrompt = null,
+        CancellationToken cancellationToken = default)
+    {
+        _logger.LogDebug("[Mock] StartSessionWithTermination for entity {EntityId}, terminateExisting={TerminateExisting}",
+            entityId, terminateExisting);
+
+        // Mock just delegates to StartSessionAsync since there's no real container tracking
+        return StartSessionAsync(entityId, projectId, workingDirectory, mode, model, systemPrompt, cancellationToken);
+    }
+
     /// <summary>
     /// Generates a mock response with tool use and tool result blocks.
     /// Returns the assistant message content and any tool result messages.

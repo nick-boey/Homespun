@@ -2,6 +2,7 @@ using System.Text.Json;
 using Homespun.ClaudeAgentSdk;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.ClaudeCode.Settings;
+using Homespun.Shared.Requests;
 using Microsoft.AspNetCore.SignalR;
 
 namespace Homespun.Features.ClaudeCode.Hubs;
@@ -122,6 +123,31 @@ public class ClaudeCodeHub(IClaudeSessionService sessionService) : Hub
     public async Task ApprovePlan(string sessionId, bool approved, bool keepContext, string? feedback = null)
     {
         await sessionService.ApprovePlanAsync(sessionId, approved, keepContext, feedback);
+    }
+
+    /// <summary>
+    /// Checks the state of any existing container for a working directory.
+    /// Returns information about what action should be taken before starting a new session.
+    /// </summary>
+    /// <param name="workingDirectory">The working directory (clone path)</param>
+    public async Task<AgentStartCheckResult> CheckCloneState(string workingDirectory)
+    {
+        return await sessionService.CheckCloneStateAsync(workingDirectory);
+    }
+
+    /// <summary>
+    /// Starts a session after optionally terminating any existing session in the container.
+    /// </summary>
+    public async Task<ClaudeSession> StartSessionWithTermination(CreateSessionRequest request, bool terminateExisting)
+    {
+        return await sessionService.StartSessionWithTerminationAsync(
+            request.EntityId,
+            request.ProjectId,
+            request.WorkingDirectory,
+            request.Mode,
+            request.Model,
+            terminateExisting,
+            request.SystemPrompt);
     }
 }
 

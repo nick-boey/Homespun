@@ -17,6 +17,100 @@ function createApp() {
   return { sm, app };
 }
 
+describe('GET /sessions/active', () => {
+  it('returns hasActiveSession: false when no sessions', async () => {
+    const { sm, app } = createApp();
+    sm.list.mockReturnValue([]);
+
+    const res = await app.request('/active');
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body).toEqual({ hasActiveSession: false });
+  });
+
+  it('returns hasActiveSession: false when all sessions are closed', async () => {
+    const { sm, app } = createApp();
+    sm.list.mockReturnValue([{ sessionId: 's1', status: 'closed' }]);
+
+    const res = await app.request('/active');
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body).toEqual({ hasActiveSession: false });
+  });
+
+  it('returns active session details when idle session exists', async () => {
+    const { sm, app } = createApp();
+    sm.list.mockReturnValue([
+      { sessionId: 's1', status: 'idle', lastActivityAt: '2025-01-01T00:00:00Z' },
+    ]);
+    sm.hasPendingQuestion.mockReturnValue(false);
+    sm.hasPendingPlanApproval.mockReturnValue(false);
+
+    const res = await app.request('/active');
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body).toEqual({
+      hasActiveSession: true,
+      sessionId: 's1',
+      status: 'idle',
+      hasPendingQuestion: false,
+      hasPendingPlanApproval: false,
+      lastActivityAt: '2025-01-01T00:00:00Z',
+    });
+  });
+
+  it('returns active session details when streaming session exists', async () => {
+    const { sm, app } = createApp();
+    sm.list.mockReturnValue([
+      { sessionId: 's1', status: 'streaming', lastActivityAt: '2025-01-01T00:00:00Z' },
+    ]);
+    sm.hasPendingQuestion.mockReturnValue(false);
+    sm.hasPendingPlanApproval.mockReturnValue(false);
+
+    const res = await app.request('/active');
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.hasActiveSession).toBe(true);
+    expect(body.status).toBe('streaming');
+  });
+
+  it('includes pending question flag when question is pending', async () => {
+    const { sm, app } = createApp();
+    sm.list.mockReturnValue([
+      { sessionId: 's1', status: 'idle', lastActivityAt: '2025-01-01T00:00:00Z' },
+    ]);
+    sm.hasPendingQuestion.mockReturnValue(true);
+    sm.hasPendingPlanApproval.mockReturnValue(false);
+
+    const res = await app.request('/active');
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.hasPendingQuestion).toBe(true);
+    expect(body.hasPendingPlanApproval).toBe(false);
+  });
+
+  it('includes pending plan approval flag when plan is pending', async () => {
+    const { sm, app } = createApp();
+    sm.list.mockReturnValue([
+      { sessionId: 's1', status: 'idle', lastActivityAt: '2025-01-01T00:00:00Z' },
+    ]);
+    sm.hasPendingQuestion.mockReturnValue(false);
+    sm.hasPendingPlanApproval.mockReturnValue(true);
+
+    const res = await app.request('/active');
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.hasPendingQuestion).toBe(false);
+    expect(body.hasPendingPlanApproval).toBe(true);
+  });
+});
+
 describe('GET /sessions', () => {
   it('returns active and discovered sessions', async () => {
     const { sm, app } = createApp();
