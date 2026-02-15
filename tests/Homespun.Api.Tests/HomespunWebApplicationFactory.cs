@@ -1,9 +1,11 @@
 using Homespun.Features.PullRequests.Data;
 using Homespun.Features.Testing;
+using Homespun.Tests.Helpers;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 
 namespace Homespun.Api.Tests;
 
@@ -30,6 +32,17 @@ public class HomespunWebApplicationFactory : WebApplicationFactory<Program>
             // Add our test data store as singleton
             services.AddSingleton(MockDataStore);
             services.AddSingleton<IDataStore>(MockDataStore);
+        });
+
+        // Redirect logging to file instead of console for better test performance
+        builder.ConfigureLogging(logging =>
+        {
+            logging.ClearProviders();
+            logging.SetMinimumLevel(LogLevel.Warning);
+
+            var testResultsDir = Path.Combine(Directory.GetCurrentDirectory(), "TestResults", "ApiTests");
+            var logFilePath = Path.Combine(testResultsDir, $"api-test-{DateTime.Now:yyyyMMdd-HHmmss}.log");
+            logging.AddProvider(new TestFileLoggerProvider(logFilePath));
         });
 
         builder.UseEnvironment("Testing");

@@ -23,6 +23,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Homespun.Server\Homespun.Server.csproj" />
     <ProjectReference Include="..\..\src\Homespun.Shared\Homespun.Shared.csproj" />
+    <ProjectReference Include="..\Homespun.Tests\Homespun.Tests.csproj" />
   </ItemGroup>
 
 </Project>

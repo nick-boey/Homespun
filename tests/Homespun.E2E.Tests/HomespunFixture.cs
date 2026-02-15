@@ -4,17 +4,55 @@ using Microsoft.Playwright;
 namespace Homespun.E2E.Tests;
 
 /// <summary>
+/// Simple file logger for E2E test output.
+/// </summary>
+internal class E2EFileLogger : IDisposable
+{
+    private readonly StreamWriter _writer;
+    private readonly object _lock = new();
+
+    public E2EFileLogger(string logFilePath)
+    {
+        var directory = Path.GetDirectoryName(logFilePath);
+        if (!string.IsNullOrEmpty(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+        _writer = new StreamWriter(logFilePath, append: true) { AutoFlush = true };
+    }
+
+    public void Log(string message)
+    {
+        lock (_lock)
+        {
+            _writer.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] {message}");
+        }
+    }
+
+    public void Dispose()
+    {
+        _writer.Dispose();
+    }
+}
+
+/// <summary>
 /// Manages the Homespun application process for E2E tests.
 /// </summary>
 [SetUpFixture]
 public class HomespunFixture
 {
     private static Process? _appProcess;
+    private static E2EFileLogger? _logger;
     public static string BaseUrl { get; private set; } = "http://localhost:5000";
 
     [OneTimeSetUp]
     public async Task GlobalSetup()
     {
+        // Initialize file logger for E2E test output
+        var testResultsDir = Path.Combine(Directory.GetCurrentDirectory(), "TestResults", "E2ETests");
+        var logFilePath = Path.Combine(testResultsDir, $"e2e-app-{DateTime.Now:yyyyMMdd-HHmmss}.log");
+        _logger = new E2EFileLogger(logFilePath);
+
         // Install Playwright browsers
         var exitCode = Microsoft.Playwright.Program.Main(["install", "--with-deps", "chromium"]);
         if (exitCode != 0)
@@ -29,13 +67,13 @@ public class HomespunFixture
         if (!string.IsNullOrEmpty(customBaseUrl))
         {
             BaseUrl = customBaseUrl;
-            Console.WriteLine($"Using custom base URL: {BaseUrl}");
+            _logger.Log($"Using custom base URL: {BaseUrl}");
             return;
         }
 
         if (startApp.Equals("false", StringComparison.OrdinalIgnoreCase))
         {
-            Console.WriteLine("E2E_START_APP is false, expecting external app");
+            _logger.Log("E2E_START_APP is false, expecting external app");
             return;
         }
 
@@ -49,11 +87,11 @@ public class HomespunFixture
         var config = GetBuildConfiguration();
         var dllPath = GetApplicationDllPath(projectDir, config);
 
-        Console.WriteLine("Starting Homespun application");
-        Console.WriteLine($"  Configuration: {config}");
-        Console.WriteLine($"  DLL: {dllPath}");
-        Console.WriteLine($"  Working directory: {projectDir}");
-        Console.WriteLine($"  URL: {BaseUrl}");
+        _logger.Log("Starting Homespun application");
+        _logger.Log($"  Configuration: {config}");
+        _logger.Log($"  DLL: {dllPath}");
+        _logger.Log($"  Working directory: {projectDir}");
+        _logger.Log($"  URL: {BaseUrl}");
 
         // Start the application by running the compiled DLL directly
         // (more reliable than `dotnet run --no-build` in CI)
@@ -78,13 +116,13 @@ public class HomespunFixture
         _appProcess.OutputDataReceived += (_, e) =>
         {
             if (!string.IsNullOrEmpty(e.Data))
-                Console.WriteLine($"[App] {e.Data}");
+                _logger?.Log($"[App] {e.Data}");
         };
 
         _appProcess.ErrorDataReceived += (_, e) =>
         {
             if (!string.IsNullOrEmpty(e.Data))
-                Console.WriteLine($"[App Error] {e.Data}");
+                _logger?.Log($"[App Error] {e.Data}");
         };
 
         _appProcess.Start();
@@ -101,7 +139,7 @@ public class HomespunFixture
         // Wait for the application to start
         await WaitForApplicationAsync(BaseUrl, TimeSpan.FromSeconds(30));
 
-        Console.WriteLine("Homespun application started successfully");
+        _logger.Log("Homespun application started successfully");
     }
 
     [OneTimeTearDown]
@@ -109,12 +147,15 @@ public class HomespunFixture
     {
         if (_appProcess != null && !_appProcess.HasExited)
         {
-            Console.WriteLine("Stopping Homespun application...");
+            _logger?.Log("Stopping Homespun application...");
             _appProcess.Kill(entireProcessTree: true);
             _appProcess.WaitForExit(5000);
             _appProcess.Dispose();
             _appProcess = null;
         }
+
+        _logger?.Dispose();
+        _logger = null;
     }
 
     private static string GetBuildConfiguration()
