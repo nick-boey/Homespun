@@ -1,6 +1,23 @@
+using Homespun.Client.Components;
 using NUnit.Framework;
 
 namespace Homespun.Tests.Components;
+
+/// <summary>
+/// Tests for AgentManagementPanel session refresh behavior.
+/// Verifies that the component implements IAsyncDisposable for proper SignalR cleanup.
+/// </summary>
+[TestFixture]
+public class AgentManagementPanelSessionRefreshTests
+{
+    [Test]
+    public void AgentManagementPanel_ImplementsIAsyncDisposable()
+    {
+        // Assert - verify the component implements IAsyncDisposable for SignalR cleanup
+        Assert.That(typeof(IAsyncDisposable).IsAssignableFrom(typeof(AgentManagementPanel)),
+            "AgentManagementPanel should implement IAsyncDisposable for proper SignalR cleanup");
+    }
+}
 
 /// <summary>
 /// Unit tests for AgentManagementPanel component logic.

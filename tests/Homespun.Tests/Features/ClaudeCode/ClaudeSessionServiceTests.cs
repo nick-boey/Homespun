@@ -2310,3 +2310,233 @@ public class ClaudeSessionServiceCloneStateTests
         Assert.That(session.SystemPrompt, Is.EqualTo("You are a helpful assistant."));
     }
 }
+
+/// <summary>
+/// Tests for SignalR status broadcasts in SendMessageAsync (Issue 4wBwBc).
+/// These tests verify that status changes are properly broadcast to clients via SignalR.
+/// </summary>
+[TestFixture]
+public class ClaudeSessionServiceStatusBroadcastTests
+{
+    private ClaudeSessionService _service = null!;
+    private IClaudeSessionStore _sessionStore = null!;
+    private SessionOptionsFactory _optionsFactory = null!;
+    private Mock<ILogger<ClaudeSessionService>> _loggerMock = null!;
+    private Mock<ILogger<SessionOptionsFactory>> _factoryLoggerMock = null!;
+    private Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>> _hubContextMock = null!;
+    private Mock<IClaudeSessionDiscovery> _discoveryMock = null!;
+    private Mock<ISessionMetadataStore> _metadataStoreMock = null!;
+    private Mock<IMessageCacheStore> _messageCacheMock = null!;
+    private IToolResultParser _toolResultParser = null!;
+    private Mock<IHooksService> _hooksServiceMock = null!;
+    private Mock<IAgentExecutionService> _agentExecutionServiceMock = null!;
+    private Mock<IClientProxy> _clientProxyMock = null!;
+    private List<(string Method, object?[] Args)> _broadcastCalls = null!;
+
+    [SetUp]
+    public void SetUp()
+    {
+        _sessionStore = new ClaudeSessionStore();
+        _factoryLoggerMock = new Mock<ILogger<SessionOptionsFactory>>();
+        _optionsFactory = new SessionOptionsFactory(_factoryLoggerMock.Object);
+        _loggerMock = new Mock<ILogger<ClaudeSessionService>>();
+        _hubContextMock = new Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>>();
+        _discoveryMock = new Mock<IClaudeSessionDiscovery>();
+        _metadataStoreMock = new Mock<ISessionMetadataStore>();
+        _messageCacheMock = new Mock<IMessageCacheStore>();
+        _toolResultParser = new ToolResultParser();
+        _hooksServiceMock = new Mock<IHooksService>();
+        _agentExecutionServiceMock = new Mock<IAgentExecutionService>();
+        _broadcastCalls = new List<(string Method, object?[] Args)>();
+
+        var clientsMock = new Mock<IHubClients>();
+        _clientProxyMock = new Mock<IClientProxy>();
+
+        // Track all SendAsync calls to verify broadcasts
+        _clientProxyMock
+            .Setup(c => c.SendCoreAsync(
+                It.IsAny<string>(),
+                It.IsAny<object?[]>(),
+                It.IsAny<CancellationToken>()))
+            .Callback<string, object?[], CancellationToken>((method, args, _) =>
+            {
+                _broadcastCalls.Add((method, args));
+            })
+            .Returns(Task.CompletedTask);
+
+        clientsMock.Setup(c => c.All).Returns(_clientProxyMock.Object);
+        clientsMock.Setup(c => c.Group(It.IsAny<string>())).Returns(_clientProxyMock.Object);
+        _hubContextMock.Setup(h => h.Clients).Returns(clientsMock.Object);
+
+        _service = new ClaudeSessionService(
+            _sessionStore,
+            _optionsFactory,
+            _loggerMock.Object,
+            _hubContextMock.Object,
+            _discoveryMock.Object,
+            _metadataStoreMock.Object,
+            _toolResultParser,
+            _hooksServiceMock.Object,
+            _messageCacheMock.Object,
+            _agentExecutionServiceMock.Object);
+    }
+
+    private static async IAsyncEnumerable<SdkMessage> CreateSdkMessageStream(params SdkMessage[] messages)
+    {
+        foreach (var msg in messages)
+        {
+            yield return msg;
+        }
+        await Task.CompletedTask;
+    }
+
+    [Test]
+    public async Task SendMessageAsync_BroadcastsRunningStatus_WhenProcessingStarts()
+    {
+        // Arrange
+        var session = await _service.StartSessionAsync(
+            "entity-1", "project-1", "/test/path", SessionMode.Build, "sonnet");
+
+        // Clear broadcasts from StartSessionAsync
+        _broadcastCalls.Clear();
+
+        // Setup mock to return a valid SDK message stream
+        _agentExecutionServiceMock
+            .Setup(s => s.StartSessionAsync(It.IsAny<AgentStartRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(CreateSdkMessageStream(
+                new SdkSystemMessage("agent-1", null, "session_started", null, null),
+                new SdkResultMessage("agent-1", null, null, 0, 0, false, 0, 0, null)));
+
+        // Act
+        await _service.SendMessageAsync(session.Id, "Hello");
+
+        // Assert - Should have broadcast Running status when processing started
+        var statusBroadcasts = _broadcastCalls
+            .Where(c => c.Method == "SessionStatusChanged")
+            .ToList();
+
+        Assert.That(statusBroadcasts.Any(c =>
+            c.Args.Length >= 2 &&
+            c.Args[1] is ClaudeSessionStatus status &&
+            status == ClaudeSessionStatus.Running),
+            Is.True,
+            "Should broadcast Running status when message processing starts");
+    }
+
+    [Test]
+    public async Task SendMessageAsync_BroadcastsWaitingForInputStatus_WhenProcessingCompletes()
+    {
+        // Arrange
+        var session = await _service.StartSessionAsync(
+            "entity-1", "project-1", "/test/path", SessionMode.Build, "sonnet");
+
+        // Clear broadcasts from StartSessionAsync
+        _broadcastCalls.Clear();
+
+        // Setup mock to return a valid SDK message stream
+        _agentExecutionServiceMock
+            .Setup(s => s.StartSessionAsync(It.IsAny<AgentStartRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(CreateSdkMessageStream(
+                new SdkSystemMessage("agent-1", null, "session_started", null, null),
+                new SdkResultMessage("agent-1", null, null, 0, 0, false, 0, 0, null)));
+
+        // Act
+        await _service.SendMessageAsync(session.Id, "Hello");
+
+        // Assert - Should have broadcast WaitingForInput status when processing completed
+        var statusBroadcasts = _broadcastCalls
+            .Where(c => c.Method == "SessionStatusChanged")
+            .ToList();
+
+        Assert.That(statusBroadcasts.Any(c =>
+            c.Args.Length >= 2 &&
+            c.Args[1] is ClaudeSessionStatus status &&
+            status == ClaudeSessionStatus.WaitingForInput),
+            Is.True,
+            "Should broadcast WaitingForInput status when message processing completes");
+    }
+
+    [Test]
+    public async Task SendMessageAsync_BroadcastsStatusInCorrectOrder()
+    {
+        // Arrange
+        var session = await _service.StartSessionAsync(
+            "entity-1", "project-1", "/test/path", SessionMode.Build, "sonnet");
+
+        // Clear broadcasts from StartSessionAsync
+        _broadcastCalls.Clear();
+
+        // Setup mock to return a valid SDK message stream
+        _agentExecutionServiceMock
+            .Setup(s => s.StartSessionAsync(It.IsAny<AgentStartRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(CreateSdkMessageStream(
+                new SdkSystemMessage("agent-1", null, "session_started", null, null),
+                new SdkResultMessage("agent-1", null, null, 0, 0, false, 0, 0, null)));
+
+        // Act
+        await _service.SendMessageAsync(session.Id, "Hello");
+
+        // Assert - Get status broadcasts in order (BroadcastSessionStatusChanged sends to both All and Group)
+        var statusBroadcasts = _broadcastCalls
+            .Where(c => c.Method == "SessionStatusChanged")
+            .Select(c => c.Args.Length >= 2 ? c.Args[1] as ClaudeSessionStatus? : null)
+            .Where(s => s.HasValue)
+            .Select(s => s!.Value)
+            .ToList();
+
+        // Should have at least 2 broadcasts (Running then WaitingForInput), each sent twice (All and Group)
+        // So we expect Running, Running, WaitingForInput, WaitingForInput
+        var distinctStatuses = statusBroadcasts.Distinct().ToList();
+        Assert.That(distinctStatuses, Has.Count.GreaterThanOrEqualTo(2),
+            "Should have at least Running and WaitingForInput status broadcasts");
+
+        // Verify Running comes before WaitingForInput
+        var firstRunningIndex = statusBroadcasts.IndexOf(ClaudeSessionStatus.Running);
+        var firstWaitingIndex = statusBroadcasts.IndexOf(ClaudeSessionStatus.WaitingForInput);
+
+        Assert.That(firstRunningIndex, Is.LessThan(firstWaitingIndex),
+            "Running status should be broadcast before WaitingForInput status");
+    }
+
+    [Test]
+    public async Task ExecutePlanAsync_WithClearContext_BroadcastsStatusChanges()
+    {
+        // Arrange
+        var session = await _service.StartSessionAsync(
+            "entity-1", "project-1", "/test/path", SessionMode.Plan, "sonnet");
+
+        session.PlanContent = "# Test Plan\n\n1. Step one";
+        session.Status = ClaudeSessionStatus.WaitingForPlanExecution;
+
+        // Clear broadcasts from setup
+        _broadcastCalls.Clear();
+
+        // Setup mock to return a valid SDK message stream
+        _agentExecutionServiceMock
+            .Setup(s => s.StartSessionAsync(It.IsAny<AgentStartRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(CreateSdkMessageStream(
+                new SdkSystemMessage("agent-1", null, "session_started", null, null),
+                new SdkResultMessage("agent-1", null, null, 0, 0, false, 0, 0, null)));
+
+        // Act
+        await _service.ExecutePlanAsync(session.Id, clearContext: true);
+
+        // Assert - Should have broadcast status changes during plan execution
+        var statusBroadcasts = _broadcastCalls
+            .Where(c => c.Method == "SessionStatusChanged")
+            .Select(c => c.Args.Length >= 2 ? c.Args[1] as ClaudeSessionStatus? : null)
+            .Where(s => s.HasValue)
+            .Select(s => s!.Value)
+            .ToList();
+
+        // Should have Running broadcast (from ExecutePlanAsync setting status before SendMessageAsync)
+        // and then Running again from SendMessageAsync start, then WaitingForInput at end
+        Assert.That(statusBroadcasts.Any(s => s == ClaudeSessionStatus.Running),
+            Is.True,
+            "Should broadcast Running status during plan execution");
+
+        Assert.That(statusBroadcasts.Any(s => s == ClaudeSessionStatus.WaitingForInput),
+            Is.True,
+            "Should broadcast WaitingForInput status when plan execution completes");
+    }
+}
