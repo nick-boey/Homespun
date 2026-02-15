@@ -896,4 +896,8 @@
 {"changeId":"4b3bf967-718c-4bb7-827d-a8a01b2f0274","issueId":"cKZao0","type":"Merged","changedBy":"Homespun Bot","changedAt":"2026-02-15T08:43:26.3742075+00:00","propertyChanges":[{"propertyName":"Status","oldValue":"Open","newValue":"Progress","timestamp":"2026-02-15T08:43:26.3741874+00:00","mergeResolution":"A"},{"propertyName":"Status","oldValue":"Open","newValue":"Progress","timestamp":"2026-02-15T08:43:26.3741927+00:00","mergeResolution":"A"},{"propertyName":"Status","oldValue":"Open","newValue":"Progress","timestamp":"2026-02-15T08:43:26.3741975+00:00","mergeResolution":"A"},{"propertyName":"Status","oldValue":"Open","newValue":"Progress","timestamp":"2026-02-15T08:43:26.3742019+00:00","mergeResolution":"A"}]}
 ========
 {"changeId":"168b9409-b7ab-45ab-aa6d-9d6908743c7e","issueId":"zns9X7","type":"Updated","changedBy":"Homespun Bot","changedAt":"2026-02-14T13:15:39.129003+00:00","propertyChanges":[{"propertyName":"Status","oldValue":"Open","newValue":"Progress","timestamp":"2026-02-14T13:15:39.129003+00:00"}]}
+<<<<<<<< HEAD:.fleece/changes_dcb4be.jsonl
 >>>>>>>> c9384b9 (feat: Add load previous messages button for mid-session joins):.fleece/changes_9b35ac.jsonl
+========
+{"changeId":"64659b5f-03eb-430f-98d8-fa213700f21f","issueId":"zns9X7","type":"Updated","changedBy":"Homespun Bot","changedAt":"2026-02-15T06:27:18.8567735+00:00","propertyChanges":[{"propertyName":"Status","oldValue":"Progress","newValue":"Review","timestamp":"2026-02-15T06:27:18.8567735+00:00"},{"propertyName":"LinkedPR","newValue":"236","timestamp":"2026-02-15T06:27:18.8567735+00:00"}]}
+>>>>>>>> e00fa18 (Update fleece issues):.fleece/changes_235543.jsonl
