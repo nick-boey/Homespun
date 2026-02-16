@@ -599,6 +599,58 @@ public class DockerAgentExecutionServiceTests
         Assert.That(workdirIndex, Is.GreaterThan(0), "/workdir mount should be present");
     }
 
+    [Test]
+    public void BuildContainerDockerArgs_UsesExplicitClaudePath()
+    {
+        // Arrange
+        var options = new DockerAgentExecutionOptions
+        {
+            DataVolumePath = "/data",
+            HostDataPath = "/host/data",
+            WorkerImage = "test-image:latest",
+            NetworkName = "bridge"
+        };
+        var service = new DockerAgentExecutionService(
+            Options.Create(options), _loggerMock.Object);
+
+        // Act - provide explicit claudePath separate from workingDirectory
+        var args = service.BuildContainerDockerArgs(
+            "test-container",
+            "/data/projects/myproject/issues/abc123/src",
+            useRm: false,
+            claudePath: "/data/projects/myproject/issues/abc123/.claude");
+
+        // Assert - should use the explicit .claude path, not derive from workingDirectory
+        Assert.That(args, Does.Contain("-v \"/host/data/projects/myproject/issues/abc123/.claude:/home/homespun/.claude\""));
+        Assert.That(args, Does.Contain("-v \"/host/data/projects/myproject/issues/abc123/src:/workdir\""));
+    }
+
+    [Test]
+    public void BuildContainerDockerArgs_ExplicitClaudePathOverridesDerived()
+    {
+        // Arrange
+        var options = new DockerAgentExecutionOptions
+        {
+            DataVolumePath = "/data",
+            WorkerImage = "test-image:latest",
+            NetworkName = "bridge"
+        };
+        var service = new DockerAgentExecutionService(
+            Options.Create(options), _loggerMock.Object);
+
+        // Act - provide an explicit claudePath that differs from what would be derived
+        var args = service.BuildContainerDockerArgs(
+            "test-container",
+            "/data/some/path/src",
+            useRm: false,
+            claudePath: "/data/different/issue/.claude");
+
+        // Assert - should use the explicit .claude path
+        Assert.That(args, Does.Contain("-v \"/data/different/issue/.claude:/home/homespun/.claude\""));
+        // Should NOT use the derived path
+        Assert.That(args, Does.Not.Contain("-v \"/data/some/path/.claude:/home/homespun/.claude\""));
+    }
+
     #endregion
 
     #region DisposeAsync Tests

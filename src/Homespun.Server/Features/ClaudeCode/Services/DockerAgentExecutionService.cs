@@ -987,16 +987,16 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
             await StopContainerAsync(existing.ContainerId);
         }
 
-        // Start new container - compute issue workspace working directory if no explicit one provided
+        // Start new container - compute issue workspace paths
         var containerName = GetIssueContainerName(projectId, issueId);
-        var effectiveWorkingDirectory = workingDirectory;
-        if (string.IsNullOrEmpty(effectiveWorkingDirectory))
-        {
-            var issueBasePath = $"{_options.DataVolumePath}/{_options.ProjectsBasePath}/{projectName ?? "default"}/issues/{issueId}";
-            effectiveWorkingDirectory = $"{issueBasePath}/src";
-        }
+        var issueBasePath = $"{_options.DataVolumePath}/{_options.ProjectsBasePath}/{projectName ?? "default"}/issues/{issueId}";
+        var effectiveWorkingDirectory = string.IsNullOrEmpty(workingDirectory)
+            ? $"{issueBasePath}/src"
+            : workingDirectory;
+        // Use the per-issue .claude folder explicitly to avoid contention
+        var claudePath = $"{issueBasePath}/.claude";
         var (containerId, workerUrl) = await StartContainerAsync(
-            containerName, effectiveWorkingDirectory, useRm: false, issueId, projectName, cancellationToken);
+            containerName, effectiveWorkingDirectory, useRm: false, claudePath, issueId, projectName, cancellationToken);
 
         // Track both by (projectId, issueId) and by workingDirectory
         _issueContainers[key] = new IssueContainer(projectId, issueId, containerId, containerName, workerUrl, DateTime.UtcNow);
@@ -1026,10 +1026,17 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
     /// Builds Docker run arguments for a worker container.
     /// Mounts the provided working directory to /workdir in the container.
     /// </summary>
+    /// <param name="containerName">Name for the Docker container.</param>
+    /// <param name="workingDirectory">Working directory to mount as /workdir.</param>
+    /// <param name="useRm">Whether to use --rm flag.</param>
+    /// <param name="claudePath">Explicit path to .claude directory. If null, derived from workingDirectory parent.</param>
+    /// <param name="issueId">Optional issue ID for environment variable.</param>
+    /// <param name="projectName">Optional project name for environment variable.</param>
     internal string BuildContainerDockerArgs(
         string containerName,
         string workingDirectory,
         bool useRm,
+        string? claudePath = null,
         string? issueId = null,
         string? projectName = null)
     {
@@ -1049,14 +1056,21 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         var hostWorkingDirectory = TranslateToHostPath(workingDirectory);
         dockerArgs.Append($"-v \"{hostWorkingDirectory}:/workdir\" ");
 
-        // Mount .claude directory (sibling of workdir) to /home/homespun/.claude for Claude Code state persistence
-        // The working directory is expected to be {clonePath}/workdir, so .claude is at {clonePath}/.claude
-        var lastSlash = workingDirectory.LastIndexOfAny(['/', '\\']);
-        var cloneRoot = lastSlash > 0 ? workingDirectory[..lastSlash] : null;
-        if (!string.IsNullOrEmpty(cloneRoot))
+        // Mount .claude directory to /home/homespun/.claude for Claude Code state persistence
+        // Use explicit claudePath if provided, otherwise derive from workingDirectory parent
+        var effectiveClaudePath = claudePath;
+        if (string.IsNullOrEmpty(effectiveClaudePath))
         {
-            var claudePath = $"{cloneRoot}/.claude";
-            var hostClaudePath = TranslateToHostPath(claudePath);
+            var lastSlash = workingDirectory.LastIndexOfAny(['/', '\\']);
+            var cloneRoot = lastSlash > 0 ? workingDirectory[..lastSlash] : null;
+            if (!string.IsNullOrEmpty(cloneRoot))
+            {
+                effectiveClaudePath = $"{cloneRoot}/.claude";
+            }
+        }
+        if (!string.IsNullOrEmpty(effectiveClaudePath))
+        {
+            var hostClaudePath = TranslateToHostPath(effectiveClaudePath);
             dockerArgs.Append($"-v \"{hostClaudePath}:/home/homespun/.claude\" ");
         }
 
@@ -1080,15 +1094,23 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
     /// <summary>
     /// Starts a worker container with the working directory mounted to /workdir.
     /// </summary>
+    /// <param name="containerName">Name for the Docker container.</param>
+    /// <param name="workingDirectory">Working directory to mount as /workdir.</param>
+    /// <param name="useRm">Whether to use --rm flag.</param>
+    /// <param name="claudePath">Explicit path to .claude directory. If null, derived from workingDirectory parent.</param>
+    /// <param name="issueId">Optional issue ID for environment variable.</param>
+    /// <param name="projectName">Optional project name for environment variable.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
     private async Task<(string containerId, string workerUrl)> StartContainerAsync(
         string containerName,
         string workingDirectory,
         bool useRm,
+        string? claudePath = null,
         string? issueId = null,
         string? projectName = null,
         CancellationToken cancellationToken = default)
     {
-        var dockerArgs = BuildContainerDockerArgs(containerName, workingDirectory, useRm, issueId, projectName);
+        var dockerArgs = BuildContainerDockerArgs(containerName, workingDirectory, useRm, claudePath, issueId, projectName);
         return await RunDockerAndGetUrl(containerName, dockerArgs, cancellationToken);
     }
 
