@@ -79,4 +79,20 @@ public interface IGraphNode
     /// Used to determine fill style: filled diamond (has description) vs outline-only diamond (no description).
     /// </summary>
     bool? HasDescription { get; }
+
+    /// <summary>
+    /// Lane assignment for task graph mode. Null for timeline mode nodes.
+    /// Lane 0 = actionable (left), higher lanes = blocked/parent issues (right).
+    /// </summary>
+    int? TaskGraphLane => null;
+
+    /// <summary>
+    /// Row position for task graph mode. Null for timeline mode nodes.
+    /// </summary>
+    int? TaskGraphRow => null;
+
+    /// <summary>
+    /// Whether this issue is actionable (no blocking dependencies) in task graph mode.
+    /// </summary>
+    bool? IsActionable => null;
 }

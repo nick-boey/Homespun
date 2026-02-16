@@ -23,6 +23,7 @@ public class GraphService(
     ILogger<GraphService> logger) : IGraphService
 {
     private readonly GraphBuilder _graphBuilder = new();
+    private readonly TaskGraphBuilder _taskGraphBuilder = new();
     private readonly GitgraphApiMapper _mapper = new();
 
     /// <inheritdoc />
@@ -122,6 +123,65 @@ public class GraphService(
     public bool HasCachedData(string projectId)
     {
         return cacheService.GetCachedPRData(projectId) != null;
+    }
+
+    /// <inheritdoc />
+    public async Task<Graph?> BuildTaskGraphAsync(string projectId)
+    {
+        var project = await projectService.GetByIdAsync(projectId);
+        if (project == null)
+        {
+            logger.LogWarning("Project not found: {ProjectId}", projectId);
+            return null;
+        }
+
+        try
+        {
+            // Get task graph from Fleece.Core
+            var taskGraph = await fleeceService.GetTaskGraphAsync(project.LocalPath);
+            if (taskGraph == null)
+            {
+                logger.LogDebug("No task graph available for project {ProjectId}", projectId);
+                return null;
+            }
+
+            // Get issues for detail lookup
+            var issues = await GetIssuesAsync(project.LocalPath);
+
+            // Filter out issues that are linked to PRs
+            var linkedIssueIds = GetLinkedIssueIds(projectId);
+            var filteredIssues = issues.Where(i => !linkedIssueIds.Contains(i.Id)).ToList();
+
+            // Build lookup of issue ID to PR status
+            var issuePrStatuses = await GetIssuePrStatusesAsync(projectId, filteredIssues);
+
+            logger.LogDebug(
+                "Building task graph for project {ProjectId}: {NodeCount} nodes, {TotalLanes} lanes",
+                projectId, taskGraph.Nodes.Count, taskGraph.TotalLanes);
+
+            // Note: TaskGraphBuilder.Build was updated in Fleece.Core v1.2.0 - issues are now embedded in TaskGraphNode
+            return _taskGraphBuilder.Build(taskGraph, issuePrStatuses);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to build task graph for project {ProjectId}", projectId);
+            return null;
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<GitgraphJsonData?> BuildTaskGraphJsonAsync(string projectId)
+    {
+        var graph = await BuildTaskGraphAsync(projectId);
+        if (graph == null)
+            return null;
+
+        var jsonData = _mapper.ToJson(graph);
+
+        // Enrich nodes with agent status data
+        EnrichWithAgentStatuses(jsonData, projectId);
+
+        return jsonData;
     }
 
     /// <summary>

@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
 using Fleece.Core.Models;
+using Fleece.Core.Services;
+using Fleece.Core.Services.Interfaces;
 using Homespun.Features.Fleece.Services;
 using Microsoft.Extensions.Logging;
 
@@ -235,6 +237,32 @@ public class MockFleeceService : IFleeceService
         _issuesByProject.Clear();
     }
 
+    public Task<TaskGraph?> GetTaskGraphAsync(string projectPath, CancellationToken ct = default)
+    {
+        _logger.LogDebug("[Mock] GetTaskGraph from {ProjectPath}", projectPath);
+
+        if (!_issuesByProject.TryGetValue(projectPath, out var issues))
+        {
+            return Task.FromResult<TaskGraph?>(null);
+        }
+
+        var openIssues = issues
+            .Where(i => i.Status is IssueStatus.Open or IssueStatus.Progress or IssueStatus.Review)
+            .ToList();
+
+        if (openIssues.Count == 0)
+        {
+            return Task.FromResult<TaskGraph?>(null);
+        }
+
+        // Build a mock TaskGraph - use a MockIssueService to satisfy the TaskGraphService dependencies
+        var mockIssueService = new MockIssueServiceAdapter(openIssues);
+        var nextService = new NextService(mockIssueService);
+        var taskGraphService = new TaskGraphService(mockIssueService, nextService);
+
+        return taskGraphService.BuildGraphAsync(ct);
+    }
+
     private string GenerateIssueId(IssueType type)
     {
         var prefix = type switch
@@ -249,4 +277,96 @@ public class MockFleeceService : IFleeceService
         var randomPart = Guid.NewGuid().ToString("N")[..6];
         return $"{prefix}/{randomPart}";
     }
+}
+
+/// <summary>
+/// Adapter to satisfy IIssueService interface for TaskGraphService with a list of in-memory issues.
+/// Only implements the read methods required by TaskGraphService; write methods throw NotImplementedException.
+/// </summary>
+internal class MockIssueServiceAdapter(IReadOnlyList<Issue> issues) : IIssueService
+{
+    public Task<IReadOnlyList<Issue>> GetAllAsync(CancellationToken cancellationToken = default)
+        => Task.FromResult(issues);
+
+    public Task<Issue?> GetByIdAsync(string id, CancellationToken cancellationToken = default)
+        => Task.FromResult(issues.FirstOrDefault(i => i.Id == id));
+
+    public Task<IReadOnlyList<Issue>> ResolveByPartialIdAsync(string partialId, CancellationToken cancellationToken = default)
+    {
+        var matches = issues.Where(i => i.Id.Contains(partialId, StringComparison.OrdinalIgnoreCase)).ToList();
+        return Task.FromResult<IReadOnlyList<Issue>>(matches);
+    }
+
+    public Task<IReadOnlyList<Issue>> FilterAsync(
+        IssueStatus? status = null,
+        IssueType? type = null,
+        int? priority = null,
+        string? tag = null,
+        IReadOnlyList<string>? labels = null,
+        int? limit = null,
+        bool excludeTerminal = false,
+        CancellationToken cancellationToken = default)
+    {
+        IEnumerable<Issue> result = issues;
+        if (status.HasValue) result = result.Where(i => i.Status == status.Value);
+        if (type.HasValue) result = result.Where(i => i.Type == type.Value);
+        if (priority.HasValue) result = result.Where(i => i.Priority == priority.Value);
+        if (excludeTerminal) result = result.Where(i => i.Status is not (IssueStatus.Complete or IssueStatus.Closed or IssueStatus.Archived or IssueStatus.Deleted));
+        if (limit.HasValue) result = result.Take(limit.Value);
+        return Task.FromResult<IReadOnlyList<Issue>>(result.ToList());
+    }
+
+    public Task<IReadOnlyList<Issue>> SearchAsync(string searchTerm, CancellationToken cancellationToken = default)
+    {
+        var results = issues.Where(i =>
+            i.Title.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+            (i.Description?.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ?? false));
+        return Task.FromResult<IReadOnlyList<Issue>>(results.ToList());
+    }
+
+    // Write methods - not needed for TaskGraphService, throw NotImplementedException
+    public Task<Issue> CreateAsync(
+        string title,
+        IssueType type,
+        string? description = null,
+        IssueStatus status = IssueStatus.Open,
+        int? priority = null,
+        int? sortOrder = null,
+        IReadOnlyList<string>? tags = null,
+        IReadOnlyList<ParentIssueRef>? parentIssues = null,
+        string? workingBranchId = null,
+        IReadOnlyList<string>? labels = null,
+        string? area = null,
+        ExecutionMode? executionMode = null,
+        CancellationToken cancellationToken = default)
+        => throw new NotImplementedException("Mock does not support create");
+
+    public Task<Issue> UpdateAsync(
+        string id,
+        string? title = null,
+        string? description = null,
+        IssueStatus? status = null,
+        IssueType? type = null,
+        int? priority = null,
+        int? sortOrder = null,
+        IReadOnlyList<string>? tags = null,
+        IReadOnlyList<ParentIssueRef>? parentIssues = null,
+        string? workingBranchId = null,
+        IReadOnlyList<string>? labels = null,
+        string? area = null,
+        ExecutionMode? executionMode = null,
+        CancellationToken cancellationToken = default)
+        => throw new NotImplementedException("Mock does not support update");
+
+    public Task<Issue> UpdateQuestionsAsync(string id, IReadOnlyList<Question> questions, CancellationToken cancellationToken = default)
+        => throw new NotImplementedException("Mock does not support UpdateQuestions");
+
+    public Task<bool> DeleteAsync(string id, CancellationToken cancellationToken = default)
+        => throw new NotImplementedException("Mock does not support delete");
+
+    public Task<Issue> AddParentAsync(string childId, string parentId, CancellationToken cancellationToken = default)
+        => throw new NotImplementedException("Mock does not support AddParent");
+
+    public Task<Issue> RemoveParentAsync(string childId, string parentId, CancellationToken cancellationToken = default)
+        => throw new NotImplementedException("Mock does not support RemoveParent");
 }

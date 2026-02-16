@@ -41,8 +41,8 @@ public sealed class FleeceService : IFleeceService, IDisposable
 
             var schemaValidator = new SchemaValidator();
             var storageService = new JsonlStorageService(path, _serializer, schemaValidator);
-            var changeService = new ChangeService(storageService);
-            return new IssueService(storageService, _idGenerator, _gitConfigService, changeService);
+            // Note: ChangeService was removed in Fleece.Core v1.2.0
+            return new IssueService(storageService, _idGenerator, _gitConfigService);
         });
     }
 
@@ -368,6 +368,41 @@ public sealed class FleeceService : IFleeceService, IDisposable
         }
 
         return deleted;
+    }
+
+    #endregion
+
+    #region Task Graph Operations
+
+    public async Task<TaskGraph?> GetTaskGraphAsync(string projectPath, CancellationToken ct = default)
+    {
+        var cache = await EnsureCacheLoadedAsync(projectPath, ct);
+
+        // Get open issues only (same filter as GetReadyIssuesAsync uses)
+        var openIssues = cache.Values
+            .Where(i => i.Status is IssueStatus.Open or IssueStatus.Progress or IssueStatus.Review)
+            .ToList();
+
+        if (openIssues.Count == 0)
+        {
+            _logger.LogDebug("No open issues found for task graph in project: {ProjectPath}", projectPath);
+            return null;
+        }
+
+        // Create the IssueService and use the TaskGraphService from Fleece.Core
+        var issueService = GetOrCreateIssueService(projectPath);
+
+        // Create NextService and TaskGraphService
+        var nextService = new NextService(issueService);
+        var taskGraphService = new TaskGraphService(issueService, nextService);
+
+        var taskGraph = await taskGraphService.BuildGraphAsync(ct);
+
+        _logger.LogDebug(
+            "Built task graph with {NodeCount} nodes and {TotalLanes} lanes for project: {ProjectPath}",
+            taskGraph.Nodes.Count, taskGraph.TotalLanes, projectPath);
+
+        return taskGraph;
     }
 
     #endregion

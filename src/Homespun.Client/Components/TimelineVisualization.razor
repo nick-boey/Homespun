@@ -17,10 +17,10 @@
             <span>Failed to load timeline: @_error</span>
         </div>
     }
-    else if (_graph != null && _layout != null)
+    else if (EffectiveGraph != null && EffectiveLayout != null)
     {
         <div class="timeline-container">
-            @if (_graph.HasMorePastPRs)
+            @if (EffectiveGraph.HasMorePastPRs)
             {
                 <div class="timeline-load-more" @onclick="LoadMorePastPRs">
                     <div class="timeline-load-more-graph">
@@ -31,24 +31,26 @@
                     </div>
                 </div>
             }
-            @for (var i = 0; i < _graph.Nodes.Count; i++)
+            @for (var i = 0; i < EffectiveGraph.Nodes.Count; i++)
             {
-                var node = _graph.Nodes[i];
-                var laneInfo = _layout.RowInfos[i];
+                var node = EffectiveGraph.Nodes[i];
+                var laneInfo = EffectiveLayout.RowInfos[i];
                 var isSelected = node.Id == SelectedNodeId ||
                                 (node.PullRequestNumber.HasValue && $"pr-{node.PullRequestNumber}" == SelectedNodeId) ||
                                 (node.IssueId != null && $"issue-{node.IssueId}" == SelectedNodeId);
                 var agentStatus = GetAgentStatus(node);
+                var isActionable = EffectiveLayout?.LaneAssignments.TryGetValue(node.Id, out var nodeLane) == true && nodeLane == 0;
 
                 <TimelineRow
                     Node="node"
                     LaneInfo="laneInfo"
-                    MaxLanes="_layout.MaxLanes"
+                    MaxLanes="EffectiveLayout.MaxLanes"
                     IsSelected="isSelected"
                     AgentStatus="agentStatus"
                     LaneColors="_laneColors"
                     OnNodeClick="HandleNodeClick"
-                    OnNodeLeave="HandleNodeLeave" />
+                    OnNodeLeave="HandleNodeLeave"
+                    IsActionable="isActionable" />
             }
         </div>
     }
@@ -327,12 +329,21 @@
     [Parameter] public EventCallback<string> OnIssueClick { get; set; }
     [Parameter] public string? SelectedNodeId { get; set; }
 
+    /// <summary>
+    /// When true (default), displays issues using task graph mode where actionable items
+    /// appear on the left and blocking issues appear on the right.
+    /// When false, uses the traditional timeline visualization.
+    /// </summary>
+    [Parameter] public bool UseTaskGraphMode { get; set; } = true;
+
     private HubConnection? _hubConnection;
     private bool _isLoading = true;
     private bool _isRefreshing = false;
     private string? _error;
     private Graph? _graph;
+    private Graph? _taskGraph;
     private TimelineLaneLayout? _layout;
+    private TimelineLaneLayout? _taskGraphLayout;
     private Dictionary<string, AgentStatusData> _agentStatusesByIssueId = new(StringComparer.OrdinalIgnoreCase);
     private Dictionary<int, AgentStatusData> _agentStatusesByPrNumber = [];
     private Dictionary<int, string> _laneColors = [];
@@ -348,6 +359,17 @@
     private double _tooltipY;
 
     private readonly TimelineLaneCalculator _laneCalculator = new();
+    private readonly TaskGraphLaneCalculator _taskGraphLaneCalculator = new();
+
+    /// <summary>
+    /// Gets the effective graph to display (task graph if available and enabled, otherwise regular graph).
+    /// </summary>
+    private Graph? EffectiveGraph => UseTaskGraphMode && _taskGraph != null ? _taskGraph : _graph;
+
+    /// <summary>
+    /// Gets the effective layout for rendering.
+    /// </summary>
+    private TimelineLaneLayout? EffectiveLayout => UseTaskGraphMode && _taskGraphLayout != null ? _taskGraphLayout : _layout;
 
     protected override async Task OnInitializedAsync()
     {
@@ -368,6 +390,12 @@
             BuildLaneColors();
             _isLoading = false;
             StateHasChanged();
+        }
+
+        // Load task graph if task graph mode is enabled
+        if (UseTaskGraphMode)
+        {
+            await LoadTaskGraphAsync();
         }
 
         // Set up SignalR connection for real-time updates (non-blocking)
@@ -394,7 +422,9 @@
 
             // Reset all state for new project
             _graph = null;
+            _taskGraph = null;
             _layout = null;
+            _taskGraphLayout = null;
             _agentStatusesByIssueId.Clear();
             _agentStatusesByPrNumber.Clear();
             _laneColors.Clear();
@@ -417,6 +447,12 @@
                 ExtractAgentStatuses(cachedData);
                 BuildLaneColors();
                 _isLoading = false;
+            }
+
+            // Load task graph if task graph mode is enabled
+            if (UseTaskGraphMode)
+            {
+                await LoadTaskGraphAsync();
             }
 
             // Set up new SignalR connection for the new project
@@ -568,6 +604,37 @@
         }
 
         StateHasChanged();
+    }
+
+    /// <summary>
+    /// Loads the task graph for displaying issues with actionable items on the left
+    /// and blocking issues on the right.
+    /// </summary>
+    private async Task LoadTaskGraphAsync()
+    {
+        try
+        {
+            var taskGraphData = await GraphApi.GetTaskGraphDataAsync(ProjectId);
+            if (taskGraphData != null)
+            {
+                _taskGraph = await GraphApi.GetTaskGraphAsync(ProjectId);
+                if (_taskGraph != null)
+                {
+                    _taskGraphLayout = _taskGraphLaneCalculator.Calculate(_taskGraph.Nodes);
+                }
+
+                // Extract agent statuses from task graph data
+                ExtractAgentStatuses(taskGraphData);
+                BuildLaneColors();
+            }
+        }
+        catch (Exception ex)
+        {
+            // Log error but don't fail - fall back to regular timeline
+            Console.WriteLine($"Failed to load task graph: {ex.Message}");
+            _taskGraph = null;
+            _taskGraphLayout = null;
+        }
     }
 
     private void BuildLaneColors()

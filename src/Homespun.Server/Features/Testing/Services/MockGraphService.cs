@@ -118,6 +118,37 @@ public class MockGraphService : IGraphService
         return true;
     }
 
+    public Task<Graph?> BuildTaskGraphAsync(string projectId)
+    {
+        _logger.LogDebug("[Mock] BuildTaskGraph for project {ProjectId}", projectId);
+
+        // In mock mode, return a simplified graph with just issues
+        // The fake issues have parent dependencies that form a task graph structure
+        var fakeIssues = GetFakeIssues();
+
+        // Build a simple graph with just the issues
+        var graph = _graphBuilder.Build([], fakeIssues, null);
+        return Task.FromResult<Graph?>(graph);
+    }
+
+    public async Task<GitgraphJsonData?> BuildTaskGraphJsonAsync(string projectId)
+    {
+        _logger.LogDebug("[Mock] BuildTaskGraphJson for project {ProjectId}", projectId);
+
+        var graph = await BuildTaskGraphAsync(projectId);
+        if (graph == null)
+        {
+            return null;
+        }
+
+        var jsonData = _mapper.ToJson(graph);
+
+        // Enrich nodes with agent status data
+        EnrichWithAgentStatuses(jsonData, projectId);
+
+        return jsonData;
+    }
+
     private static PullRequestInfo ConvertToPullRequestInfo(PullRequest pr)
     {
         return new PullRequestInfo

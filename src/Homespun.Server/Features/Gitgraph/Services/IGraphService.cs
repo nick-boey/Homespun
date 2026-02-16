@@ -60,4 +60,20 @@ public interface IGraphService
     /// <param name="maxPastPRs">Maximum number of past (closed/merged) PRs to show. If null, shows all. Default is 5.</param>
     /// <returns>Graph JSON data from cache, or null if no cache exists.</returns>
     Task<GitgraphJsonData?> BuildGraphJsonFromCacheOnlyAsync(string projectId, int? maxPastPRs = 5);
+
+    /// <summary>
+    /// Builds a task graph for a project using Fleece.Core's TaskGraphService.
+    /// The task graph displays issues with actionable items on the left (lane 0)
+    /// and parent/blocking issues on the right (higher lanes).
+    /// </summary>
+    /// <param name="projectId">The project ID.</param>
+    /// <returns>Task graph data, or null if no issues exist.</returns>
+    Task<Graph?> BuildTaskGraphAsync(string projectId);
+
+    /// <summary>
+    /// Builds task graph JSON data for a project, ready for visualization.
+    /// </summary>
+    /// <param name="projectId">The project ID.</param>
+    /// <returns>Task graph JSON data, or null if no issues exist.</returns>
+    Task<GitgraphJsonData?> BuildTaskGraphJsonAsync(string projectId);
 }
