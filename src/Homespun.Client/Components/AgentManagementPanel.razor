@@ -242,6 +242,11 @@
         animation: pulse 1s ease-in-out infinite;
     }
 
+    .status-indicator.plan-ready {
+        background: var(--status-info);
+        animation: pulse 1s ease-in-out infinite;
+    }
+
     .status-indicator.stopped {
         background: var(--text-muted);
     }
@@ -432,13 +437,15 @@
 
     private static int GetStatusSortOrder(ClaudeSessionStatus status) => status switch
     {
-        ClaudeSessionStatus.WaitingForQuestionAnswer => 0,  // Question at top (requires immediate user action)
-        ClaudeSessionStatus.WaitingForInput => 1,           // Waiting
-        ClaudeSessionStatus.Starting => 2,
-        ClaudeSessionStatus.Running => 3,
-        ClaudeSessionStatus.Stopped => 4,
-        ClaudeSessionStatus.Error => 5,
-        _ => 6
+        ClaudeSessionStatus.WaitingForPlanExecution => 0,   // Plan ready at top (requires user approval)
+        ClaudeSessionStatus.WaitingForQuestionAnswer => 1,  // Question (requires immediate user action)
+        ClaudeSessionStatus.WaitingForInput => 2,           // Waiting
+        ClaudeSessionStatus.Running => 3,                   // Working
+        ClaudeSessionStatus.Starting => 4,
+        ClaudeSessionStatus.RunningHooks => 5,
+        ClaudeSessionStatus.Stopped => 6,
+        ClaudeSessionStatus.Error => 7,
+        _ => 8
     };
 
     private async Task StopSession(string sessionId)
