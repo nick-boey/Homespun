@@ -90,7 +90,13 @@
     --text-inverse: var(--color-white);
     --text-sidebar: var(--color-white);
     --text-sidebar-muted: rgba(255, 255, 255, 0.7);
-    
+
+    /* Thinking Message Colors */
+    --thinking-bg: rgba(0, 0, 0, 0.03);
+    --thinking-text: var(--text-muted);
+    --thinking-border: var(--border-color-light);
+    --thinking-opacity: 0.85;
+
     /* Border Colors */
     --border-color: #dee2e6;
     --border-color-light: #e9ecef;
@@ -171,17 +177,23 @@
         --text-inverse: var(--color-black);
         --text-sidebar: var(--color-white);
         --text-sidebar-muted: rgba(255, 255, 255, 0.6);
-        
+
+        /* Thinking Message Colors */
+        --thinking-bg: rgba(255, 255, 255, 0.03);
+        --thinking-text: var(--text-muted);
+        --thinking-border: var(--border-color-light);
+        --thinking-opacity: 0.8;
+
         /* Border Colors */
         --border-color: var(--color-basalt);
         --border-color-light: #4a4a4a;
         --border-selected: var(--color-lagoon);
-        
+
         /* Interactive Colors */
         --link-color: var(--color-ocean);
         --link-hover: var(--color-gum);
         --focus-ring: var(--color-ocean);
-        
+
         /* Button Colors */
         --btn-primary-bg: var(--color-lagoon);
         --btn-primary-text: var(--color-white);
@@ -192,7 +204,7 @@
         --btn-danger-bg: var(--color-red);
         --btn-danger-text: var(--color-white);
         --btn-danger-hover: #e63946;
-        
+
         /* Status Colors */
         --status-success: var(--color-lagoon);
         --status-warning: var(--color-wattle);
@@ -253,17 +265,23 @@
     --text-inverse: var(--color-black);
     --text-sidebar: var(--color-white);
     --text-sidebar-muted: rgba(255, 255, 255, 0.6);
-    
+
+    /* Thinking Message Colors */
+    --thinking-bg: rgba(255, 255, 255, 0.03);
+    --thinking-text: var(--text-muted);
+    --thinking-border: var(--border-color-light);
+    --thinking-opacity: 0.8;
+
     /* Border Colors */
     --border-color: var(--color-basalt);
     --border-color-light: #4a4a4a;
     --border-selected: var(--color-lagoon);
-    
+
     /* Interactive Colors */
     --link-color: var(--color-ocean);
     --link-hover: var(--color-gum);
     --focus-ring: var(--color-ocean);
-    
+
     /* Button Colors */
     --btn-primary-bg: var(--color-lagoon);
     --btn-primary-text: var(--color-white);
@@ -274,7 +292,7 @@
     --btn-danger-bg: var(--color-red);
     --btn-danger-text: var(--color-white);
     --btn-danger-hover: #e63946;
-    
+
     /* Status Colors */
     --status-success: var(--color-lagoon);
     --status-warning: var(--color-wattle);
@@ -1369,4 +1387,44 @@ pre code {
 .nav-tabs .nav-link.active i {
     opacity: 1;
     color: var(--color-lagoon);
+}
+
+/* ==========================================================================
+   Thinking Block Styles
+
+   Visual styling for AI thinking messages that appear with lower visual
+   priority compared to direct messages. Uses CSS variables for theming.
+   ========================================================================== */
+
+.thinking-details {
+    background: var(--thinking-bg);
+    padding: var(--spacing-sm);
+    border-radius: var(--radius-sm);
+    font-size: 0.8125rem;
+    border-left: 2px solid var(--thinking-border);
+    opacity: var(--thinking-opacity);
+}
+
+.thinking-details summary {
+    cursor: pointer;
+    color: var(--thinking-text);
+    font-style: italic;
+    font-weight: var(--font-weight-normal);
+    user-select: none;
+}
+
+.thinking-details summary:hover {
+    color: var(--text-secondary);
+}
+
+.thinking-details[open] summary {
+    margin-bottom: var(--spacing-xs);
+}
+
+.thinking-content {
+    margin-top: var(--spacing-sm);
+    white-space: pre-wrap;
+    color: var(--thinking-text);
+    font-style: italic;
+    line-height: 1.5;
 }
