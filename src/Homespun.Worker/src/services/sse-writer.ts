@@ -1,6 +1,7 @@
 import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 import { isControlEvent, type OutputEvent } from './session-manager.js';
 import type { SessionManager } from './session-manager.js';
+import { info } from '../utils/logger.js';
 
 export function formatSSE(event: string, data: unknown): string {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
@@ -36,17 +37,17 @@ export async function* streamSessionEvents(
   try {
     for await (const event of sessionManager.stream(sessionId)) {
       if (isControlEvent(event)) {
-        console.log(`[Worker][SSE] control event: type='${event.type}'`);
+        info(`control event: type='${event.type}'`);
         yield formatSSE(event.type, event.data);
         continue;
       }
 
       const msg = event as SDKMessage;
       if (msg.type === 'system') {
-        console.log(`[Worker][SSE] system message: subtype='${(msg as any).subtype}', permissionMode='${(msg as any).permissionMode || 'N/A'}'`);
+        info(`system message: subtype='${(msg as any).subtype}', permissionMode='${(msg as any).permissionMode || 'N/A'}'`);
       }
       if (msg.type === 'result') {
-        console.log(`[Worker][SSE] result: subtype='${(msg as any).subtype}'`);
+        info(`result: subtype='${(msg as any).subtype}'`);
       }
       yield formatSSE(msg.type, msg);
 

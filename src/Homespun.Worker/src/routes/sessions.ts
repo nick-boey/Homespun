@@ -9,6 +9,7 @@ import type {
   AnswerQuestionRequest,
   ApprovePlanRequest,
 } from '../types/index.js';
+import { info } from '../utils/logger.js';
 
 export function createSessionsRoute(sessionManager: SessionManager) {
   const sessions = new Hono();
@@ -46,7 +47,7 @@ export function createSessionsRoute(sessionManager: SessionManager) {
   // POST /sessions - Start or resume a session (SSE stream)
   sessions.post('/', async (c) => {
     const body = await c.req.json<StartSessionRequest>();
-    console.log(`[Worker][Route] POST /sessions - mode=${body.mode}, model=${body.model}, workingDirectory=${body.workingDirectory}, resumeSessionId=${body.resumeSessionId || 'none'}`);
+    info(`POST /sessions - mode=${body.mode}, model=${body.model}, workingDirectory=${body.workingDirectory}, resumeSessionId=${body.resumeSessionId || 'none'}`);
 
     c.header('Content-Type', 'text/event-stream');
     c.header('Cache-Control', 'no-cache');
@@ -82,7 +83,7 @@ export function createSessionsRoute(sessionManager: SessionManager) {
   sessions.post('/:id/message', async (c) => {
     const sessionId = c.req.param('id');
     const body = await c.req.json<SendMessageRequest>();
-    console.log(`[Worker][Route] POST /sessions/${sessionId}/message - permissionMode=${body.permissionMode}, messageLength=${body.message?.length}, model=${body.model}`);
+    info(`POST /sessions/${sessionId}/message - permissionMode=${body.permissionMode}, messageLength=${body.message?.length}, model=${body.model}`);
 
     c.header('Content-Type', 'text/event-stream');
     c.header('Cache-Control', 'no-cache');
@@ -112,7 +113,7 @@ export function createSessionsRoute(sessionManager: SessionManager) {
   sessions.post('/:id/answer', async (c) => {
     const sessionId = c.req.param('id');
     const body = await c.req.json<AnswerQuestionRequest>();
-    console.log(`[Worker][Route] POST /sessions/${sessionId}/answer - ${Object.keys(body.answers).length} answers`);
+    info(`POST /sessions/${sessionId}/answer - ${Object.keys(body.answers).length} answers`);
 
     const resolved = sessionManager.resolvePendingQuestion(sessionId, body.answers);
     if (!resolved) {
@@ -127,7 +128,7 @@ export function createSessionsRoute(sessionManager: SessionManager) {
   sessions.post('/:id/approve-plan', async (c) => {
     const sessionId = c.req.param('id');
     const body = await c.req.json<ApprovePlanRequest>();
-    console.log(`[Worker][Route] POST /sessions/${sessionId}/approve-plan - approved=${body.approved}, keepContext=${body.keepContext}`);
+    info(`POST /sessions/${sessionId}/approve-plan - approved=${body.approved}, keepContext=${body.keepContext}`);
 
     const resolved = sessionManager.resolvePendingPlanApproval(
       sessionId, body.approved, body.keepContext, body.feedback);

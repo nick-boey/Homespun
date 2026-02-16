@@ -5,6 +5,7 @@ import { createInfoRoute } from './routes/info.js';
 import { createSessionsRoute } from './routes/sessions.js';
 import files from './routes/files.js';
 import { SessionManager } from './services/session-manager.js';
+import { info } from './utils/logger.js';
 
 const app = new Hono();
 const sessionManager = new SessionManager();
@@ -19,15 +20,15 @@ app.route('/api', api);
 
 const port = parseInt(process.env.PORT || '8080', 10);
 
-console.log(`Starting Homespun Worker on port ${port}...`);
+info(`Starting Homespun Worker on port ${port}...`);
 
 serve({ fetch: app.fetch, port });
 
-console.log(`Homespun Worker listening on http://0.0.0.0:${port}`);
+info(`Homespun Worker listening on http://0.0.0.0:${port}`);
 
 // Graceful shutdown
 async function shutdown() {
-  console.log('Shutting down...');
+  info('Shutting down...');
   await sessionManager.closeAll();
   process.exit(0);
 }

@@ -6,6 +6,7 @@ import {
 } from '@anthropic-ai/claude-agent-sdk';
 import type { SessionInfo, AskUserQuestionInput, ExitPlanModeInput, UserQuestion, ApprovePlanRequest } from '../types/index.js';
 import { randomUUID } from 'node:crypto';
+import { info, error } from '../utils/logger.js';
 
 export type SdkPermissionMode = 'default' | 'acceptEdits' | 'plan' | 'bypassPermissions';
 
@@ -231,7 +232,7 @@ export class SessionManager {
   }): Promise<WorkerSession> {
     const id = randomUUID();
     const isPlan = opts.mode.toLowerCase() === 'plan';
-    console.log(`[Worker][SessionManager] create() - mode='${opts.mode}', isPlan=${isPlan}, model='${opts.model}'`);
+    info(`mode='${opts.mode}', isPlan=${isPlan}, model='${opts.model}'`);
     const common = buildCommonOptions(opts.model, opts.systemPrompt, opts.workingDirectory);
 
     const inputController = new InputController();
@@ -257,7 +258,7 @@ export class SessionManager {
       sessionOptions.resume = opts.resumeSessionId;
     }
 
-    console.log(`[Worker][SessionManager] create() - attempting permissionMode='${sessionOptions.permissionMode}', allowDangerouslySkipPermissions=${sessionOptions.allowDangerouslySkipPermissions}`);
+    info(`attempting permissionMode='${sessionOptions.permissionMode}', allowDangerouslySkipPermissions=${sessionOptions.allowDangerouslySkipPermissions}`);
 
     // Create async generator that yields the initial message and subsequent messages
     async function* createInputStream(initialPrompt: string, controller: InputController): AsyncGenerator<SDKUserMessage> {
@@ -300,7 +301,7 @@ export class SessionManager {
     };
 
     this.sessions.set(id, workerSession);
-    console.log(`[Worker][SessionManager] create() - session created, workerSessionId='${id}'`);
+    info(`session created, workerSessionId='${id}'`);
 
     // Background task: forward SDK query messages to the output channel
     (async () => {
@@ -310,7 +311,7 @@ export class SessionManager {
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        console.error(`[Worker][SessionManager] query forwarder error for session '${id}':`, err);
+        error(`query forwarder error for session '${id}'`, err);
         // Push a synthetic error result so the SSE stream reports the failure
         // instead of ending silently
         outputChannel.push({
@@ -343,7 +344,7 @@ export class SessionManager {
       toolName: string,
       input: Record<string, unknown>,
     ): Promise<PermissionResult> => {
-      console.log(`[Worker][SessionManager] canUseTool - tool='${toolName}', sessionId='${sessionId}'`);
+      info(`canUseTool - tool='${toolName}', sessionId='${sessionId}'`);
 
       if (toolName === 'AskUserQuestion') {
         const questionInput = input as unknown as AskUserQuestionInput;
@@ -365,12 +366,12 @@ export class SessionManager {
           data: { questions: questionInput.questions },
         });
 
-        console.log(`[Worker][SessionManager] canUseTool - emitted question_pending, waiting for answers on session '${sessionId}'`);
+        info(`emitted question_pending, waiting for answers on session '${sessionId}'`);
 
         // Wait for answers (this pauses SDK execution)
         const answers = await answersPromise;
 
-        console.log(`[Worker][SessionManager] canUseTool - received answers for session '${sessionId}'`);
+        info(`received answers for session '${sessionId}'`);
 
         // Return allow with populated answers
         return {
@@ -403,12 +404,12 @@ export class SessionManager {
           data: { plan: planContent },
         });
 
-        console.log(`[Worker][SessionManager] canUseTool - emitted plan_pending, waiting for approval on session '${sessionId}'`);
+        info(`emitted plan_pending, waiting for approval on session '${sessionId}'`);
 
         // Wait for approval decision (this pauses SDK execution)
         const result = await approvalPromise;
 
-        console.log(`[Worker][SessionManager] canUseTool - received plan approval decision for session '${sessionId}': behavior='${result.behavior}'`);
+        info(`received plan approval decision for session '${sessionId}': behavior='${result.behavior}'`);
 
         return result;
       }
@@ -428,13 +429,13 @@ export class SessionManager {
   resolvePendingQuestion(sessionId: string, answers: Record<string, string>): boolean {
     const pending = this.pendingQuestions.get(sessionId);
     if (!pending) {
-      console.log(`[Worker][SessionManager] resolvePendingQuestion - no pending question for session '${sessionId}'`);
+      info(`resolvePendingQuestion - no pending question for session '${sessionId}'`);
       return false;
     }
 
     pending.resolve(answers);
     this.pendingQuestions.delete(sessionId);
-    console.log(`[Worker][SessionManager] resolvePendingQuestion - resolved for session '${sessionId}'`);
+    info(`resolvePendingQuestion - resolved for session '${sessionId}'`);
     return true;
   }
 
@@ -445,7 +446,7 @@ export class SessionManager {
   resolvePendingPlanApproval(sessionId: string, approved: boolean, keepContext?: boolean, feedback?: string): boolean {
     const pending = this.pendingPlanApprovals.get(sessionId);
     if (!pending) {
-      console.log(`[Worker][SessionManager] resolvePendingPlanApproval - no pending approval for session '${sessionId}'`);
+      info(`resolvePendingPlanApproval - no pending approval for session '${sessionId}'`);
       return false;
     }
 
@@ -473,7 +474,7 @@ export class SessionManager {
 
     pending.resolve(result);
     this.pendingPlanApprovals.delete(sessionId);
-    console.log(`[Worker][SessionManager] resolvePendingPlanApproval - resolved for session '${sessionId}', approved=${approved}, keepContext=${keepContext}`);
+    info(`resolvePendingPlanApproval - resolved for session '${sessionId}', approved=${approved}, keepContext=${keepContext}`);
     return true;
   }
 
@@ -499,7 +500,7 @@ export class SessionManager {
   }
 
   async send(sessionId: string, message: string, model?: string, permissionMode?: string): Promise<WorkerSession> {
-    console.log(`[Worker][SessionManager] send() - sessionId='${sessionId}', messageLength=${message?.length}, model=${model || 'default'}, permissionMode=${permissionMode || 'unchanged'}`);
+    info(`send() - sessionId='${sessionId}', messageLength=${message?.length}, model=${model || 'default'}, permissionMode=${permissionMode || 'unchanged'}`);
     const ws = this.sessions.get(sessionId);
     if (!ws) {
       throw new Error(`Session ${sessionId} not found`);
@@ -510,7 +511,7 @@ export class SessionManager {
       // Update permission mode on the query if possible
       if (ws.query.setPermissionMode) {
         await ws.query.setPermissionMode(ws.permissionMode);
-        console.log(`[Worker][SessionManager] send() - setPermissionMode('${ws.permissionMode}') applied`);
+        info(`setPermissionMode('${ws.permissionMode}') applied`);
       }
     }
 
@@ -530,7 +531,7 @@ export class SessionManager {
     try {
       for await (const event of ws.outputChannel) {
         if (isControlEvent(event)) {
-          console.log(`[Worker][SessionManager] stream() - control event: type='${event.type}'`);
+          info(`stream() - control event: type='${event.type}'`);
           yield event;
           continue;
         }
@@ -542,11 +543,11 @@ export class SessionManager {
         }
 
         if (msg.type === 'system' && (msg as any).subtype === 'init') {
-          console.log(`[Worker][SessionManager] stream() - SDK init: permissionMode='${(msg as any).permissionMode}', model='${(msg as any).model}'`);
+          info(`SDK init: permissionMode='${(msg as any).permissionMode}', model='${(msg as any).model}'`);
         }
         if (msg.type === 'result') {
           const r = msg as any;
-          console.log(`[Worker][SessionManager] stream() - result: subtype='${r.subtype}', is_error=${r.is_error}`);
+          info(`result: subtype='${r.subtype}', is_error=${r.is_error}`);
         }
         yield event;
       }
