@@ -152,7 +152,7 @@ public class TaskGraphBuilderTests
     #region Node Ordering
 
     [Test]
-    public void Build_NodesOrderedByRowThenLane()
+    public void Build_NodesOrderedByRowThenId()
     {
         // Arrange
         var issue1 = CreateIssue("bd-001");
@@ -161,9 +161,7 @@ public class TaskGraphBuilderTests
         var taskGraph = new TaskGraph
         {
             Nodes = [
-                // Row 0: bd-001 at lane 1
                 CreateTaskGraphNode(issue1, lane: 1, row: 0, isActionable: false),
-                // Row 1: bd-002 at lane 0, bd-003 at lane 2
                 CreateTaskGraphNode(issue2, lane: 0, row: 1, isActionable: true),
                 CreateTaskGraphNode(issue3, lane: 2, row: 1, isActionable: false)
             ],
@@ -173,11 +171,11 @@ public class TaskGraphBuilderTests
         // Act
         var graph = _builder.Build(taskGraph);
 
-        // Assert - Ordered by row first, then lane within row
+        // Assert - Ordered by row first, then issue ID within row
         var nodes = graph.Nodes.OfType<TaskGraphIssueNode>().ToList();
-        Assert.That(nodes[0].Issue.Id, Is.EqualTo("bd-001")); // Row 0, Lane 1
-        Assert.That(nodes[1].Issue.Id, Is.EqualTo("bd-002")); // Row 1, Lane 0
-        Assert.That(nodes[2].Issue.Id, Is.EqualTo("bd-003")); // Row 1, Lane 2
+        Assert.That(nodes[0].Issue.Id, Is.EqualTo("bd-001")); // Row 0
+        Assert.That(nodes[1].Issue.Id, Is.EqualTo("bd-002")); // Row 1, ID bd-002
+        Assert.That(nodes[2].Issue.Id, Is.EqualTo("bd-003")); // Row 1, ID bd-003
     }
 
     #endregion

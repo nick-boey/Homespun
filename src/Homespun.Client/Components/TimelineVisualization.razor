@@ -39,7 +39,7 @@
                                 (node.PullRequestNumber.HasValue && $"pr-{node.PullRequestNumber}" == SelectedNodeId) ||
                                 (node.IssueId != null && $"issue-{node.IssueId}" == SelectedNodeId);
                 var agentStatus = GetAgentStatus(node);
-                var isActionable = node.IsActionable ?? false;
+                var isActionable = EffectiveLayout?.LaneAssignments.TryGetValue(node.Id, out var nodeLane) == true && nodeLane == 0;
 
                 <TimelineRow
                     Node="node"

@@ -32,10 +32,11 @@ public class TaskGraphBuilder
             Color = "#6b7280"  // Gray
         };
 
-        // Process TaskGraphNodes in row order (row determines vertical position)
+        // Process TaskGraphNodes in row order (row determines vertical position).
+        // Lanes are computed client-side by TaskGraphLaneCalculator from parent relationships.
         var orderedNodes = taskGraph.Nodes
             .OrderBy(n => n.Row)
-            .ThenBy(n => n.Lane)
+            .ThenBy(n => n.Issue.Id)
             .ToList();
 
         foreach (var taskNode in orderedNodes)

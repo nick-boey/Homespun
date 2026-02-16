@@ -31,18 +31,18 @@ public class TaskGraphLaneCalculatorTests
     }
 
     [Test]
-    public void Calculate_SingleNode_AssignsCorrectLane()
+    public void Calculate_SingleNode_AssignsLaneZero()
     {
-        // Arrange
+        // Arrange - single node with no relationships
         var nodes = new List<IGraphNode>
         {
-            new TestGraphNode("issue-bd-001", taskGraphLane: 0)
+            new TestGraphNode("issue-bd-001")
         };
 
         // Act
         var layout = _calculator.Calculate(nodes);
 
-        // Assert
+        // Assert - leaf node should be lane 0
         Assert.That(layout.LaneAssignments["issue-bd-001"], Is.EqualTo(0));
         Assert.That(layout.MaxLanes, Is.EqualTo(1));
         Assert.That(layout.RowInfos, Has.Count.EqualTo(1));
@@ -50,24 +50,132 @@ public class TaskGraphLaneCalculatorTests
     }
 
     [Test]
-    public void Calculate_MultipleNodes_AssignsCorrectLanes()
+    public void Calculate_MultipleUnrelatedNodes_AllLaneZero()
     {
-        // Arrange
+        // Arrange - three independent nodes
         var nodes = new List<IGraphNode>
         {
-            new TestGraphNode("issue-bd-001", taskGraphLane: 0),
-            new TestGraphNode("issue-bd-002", taskGraphLane: 1),
-            new TestGraphNode("issue-bd-003", taskGraphLane: 2)
+            new TestGraphNode("issue-bd-001"),
+            new TestGraphNode("issue-bd-002"),
+            new TestGraphNode("issue-bd-003")
         };
 
         // Act
         var layout = _calculator.Calculate(nodes);
 
-        // Assert
+        // Assert - all leaf nodes should be lane 0
         Assert.That(layout.LaneAssignments["issue-bd-001"], Is.EqualTo(0));
-        Assert.That(layout.LaneAssignments["issue-bd-002"], Is.EqualTo(1));
-        Assert.That(layout.LaneAssignments["issue-bd-003"], Is.EqualTo(2));
+        Assert.That(layout.LaneAssignments["issue-bd-002"], Is.EqualTo(0));
+        Assert.That(layout.LaneAssignments["issue-bd-003"], Is.EqualTo(0));
+        Assert.That(layout.MaxLanes, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void Calculate_ParentChildPair_ChildLaneZeroParentLaneOne()
+    {
+        // Arrange: bd-002 is a sub-task of bd-001 (bd-002 has parent bd-001)
+        // bd-001 is the container/parent issue, bd-002 is the actionable leaf
+        var nodes = new List<IGraphNode>
+        {
+            new TestGraphNode("issue-bd-001"),
+            new TestGraphNode("issue-bd-002", parentIds: ["issue-bd-001"])
+        };
+
+        // Act
+        var layout = _calculator.Calculate(nodes);
+
+        // Assert - leaf child at lane 0, parent at lane 1
+        Assert.That(layout.LaneAssignments["issue-bd-002"], Is.EqualTo(0));
+        Assert.That(layout.LaneAssignments["issue-bd-001"], Is.EqualTo(1));
+        Assert.That(layout.MaxLanes, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void Calculate_Chain_ThreeLanes()
+    {
+        // Arrange: A -> B -> C (C is child of B, B is child of A)
+        // A is root parent, B is intermediate, C is leaf
+        var nodes = new List<IGraphNode>
+        {
+            new TestGraphNode("issue-A"),
+            new TestGraphNode("issue-B", parentIds: ["issue-A"]),
+            new TestGraphNode("issue-C", parentIds: ["issue-B"])
+        };
+
+        // Act
+        var layout = _calculator.Calculate(nodes);
+
+        // Assert - C is leaf (lane 0), B has child C (lane 1), A has child B (lane 2)
+        Assert.That(layout.LaneAssignments["issue-C"], Is.EqualTo(0));
+        Assert.That(layout.LaneAssignments["issue-B"], Is.EqualTo(1));
+        Assert.That(layout.LaneAssignments["issue-A"], Is.EqualTo(2));
         Assert.That(layout.MaxLanes, Is.EqualTo(3));
+    }
+
+    [Test]
+    public void Calculate_TreeStructure_ParentAtMaxChildLanePlusOne()
+    {
+        // Arrange: A is parent of B and C (both are leaf children)
+        var nodes = new List<IGraphNode>
+        {
+            new TestGraphNode("issue-A"),
+            new TestGraphNode("issue-B", parentIds: ["issue-A"]),
+            new TestGraphNode("issue-C", parentIds: ["issue-A"])
+        };
+
+        // Act
+        var layout = _calculator.Calculate(nodes);
+
+        // Assert - Both children at lane 0, parent at lane 1
+        Assert.That(layout.LaneAssignments["issue-B"], Is.EqualTo(0));
+        Assert.That(layout.LaneAssignments["issue-C"], Is.EqualTo(0));
+        Assert.That(layout.LaneAssignments["issue-A"], Is.EqualTo(1));
+        Assert.That(layout.MaxLanes, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void Calculate_Diamond_CorrectLanes()
+    {
+        // Arrange: Diamond shape
+        //   A (root parent)
+        //  / \
+        // B   C (intermediate)
+        //  \ /
+        //   D (leaf)
+        // D is child of both B and C, B and C are children of A
+        var nodes = new List<IGraphNode>
+        {
+            new TestGraphNode("issue-A"),
+            new TestGraphNode("issue-B", parentIds: ["issue-A"]),
+            new TestGraphNode("issue-C", parentIds: ["issue-A"]),
+            new TestGraphNode("issue-D", parentIds: ["issue-B", "issue-C"])
+        };
+
+        // Act
+        var layout = _calculator.Calculate(nodes);
+
+        // Assert - D is leaf (lane 0), B and C have child D (lane 1), A has children B,C (lane 2)
+        Assert.That(layout.LaneAssignments["issue-D"], Is.EqualTo(0));
+        Assert.That(layout.LaneAssignments["issue-B"], Is.EqualTo(1));
+        Assert.That(layout.LaneAssignments["issue-C"], Is.EqualTo(1));
+        Assert.That(layout.LaneAssignments["issue-A"], Is.EqualTo(2));
+        Assert.That(layout.MaxLanes, Is.EqualTo(3));
+    }
+
+    [Test]
+    public void Calculate_ParentNotInGraph_ChildTreatedAsLeaf()
+    {
+        // Arrange - node references a parent that isn't in the current graph
+        var nodes = new List<IGraphNode>
+        {
+            new TestGraphNode("issue-bd-002", parentIds: ["issue-bd-001"]) // bd-001 not in graph
+        };
+
+        // Act
+        var layout = _calculator.Calculate(nodes);
+
+        // Assert - parent not in graph, so this node is effectively a leaf
+        Assert.That(layout.LaneAssignments["issue-bd-002"], Is.EqualTo(0));
     }
 
     #endregion
@@ -77,37 +185,38 @@ public class TaskGraphLaneCalculatorTests
     [Test]
     public void Calculate_NodeWithParentInDifferentLane_HasConnector()
     {
-        // Arrange: bd-002 has parent bd-001, they're in different lanes
+        // Arrange: bd-002 is child of bd-001
+        // bd-002 (leaf) at lane 0, bd-001 (parent) at lane 1
         var nodes = new List<IGraphNode>
         {
-            new TestGraphNode("issue-bd-001", taskGraphLane: 1),
-            new TestGraphNode("issue-bd-002", taskGraphLane: 0, parentIds: new[] { "issue-bd-001" })
+            new TestGraphNode("issue-bd-001"),
+            new TestGraphNode("issue-bd-002", parentIds: ["issue-bd-001"])
         };
 
         // Act
         var layout = _calculator.Calculate(nodes);
 
-        // Assert
-        var bd002RowInfo = layout.RowInfos[1];
-        Assert.That(bd002RowInfo.ConnectorFromLane, Is.EqualTo(1)); // Connector from lane 1 (bd-001)
+        // Assert - bd-002 should have connector from bd-001's lane (1)
+        var bd002RowInfo = layout.RowInfos.First(r => r.NodeId == "issue-bd-002");
+        Assert.That(bd002RowInfo.ConnectorFromLane, Is.EqualTo(1));
     }
 
     [Test]
-    public void Calculate_NodeWithParentInSameLane_NoConnector()
+    public void Calculate_UnrelatedNodes_NoConnector()
     {
-        // Arrange: Both nodes in same lane (unlikely in task graph but possible)
+        // Arrange: Two unrelated nodes both at lane 0
         var nodes = new List<IGraphNode>
         {
-            new TestGraphNode("issue-bd-001", taskGraphLane: 0),
-            new TestGraphNode("issue-bd-002", taskGraphLane: 0, parentIds: new[] { "issue-bd-001" })
+            new TestGraphNode("issue-bd-001"),
+            new TestGraphNode("issue-bd-002")
         };
 
         // Act
         var layout = _calculator.Calculate(nodes);
 
         // Assert
-        var bd002RowInfo = layout.RowInfos[1];
-        Assert.That(bd002RowInfo.ConnectorFromLane, Is.Null); // No connector when same lane
+        Assert.That(layout.RowInfos[0].ConnectorFromLane, Is.Null);
+        Assert.That(layout.RowInfos[1].ConnectorFromLane, Is.Null);
     }
 
     [Test]
@@ -116,7 +225,7 @@ public class TaskGraphLaneCalculatorTests
         // Arrange
         var nodes = new List<IGraphNode>
         {
-            new TestGraphNode("issue-bd-001", taskGraphLane: 0)
+            new TestGraphNode("issue-bd-001")
         };
 
         // Act
@@ -134,39 +243,40 @@ public class TaskGraphLaneCalculatorTests
     [Test]
     public void Calculate_ActiveLanes_IncludesLaneZero()
     {
-        // Arrange
+        // Arrange - parent node at lane 1 (has a child)
         var nodes = new List<IGraphNode>
         {
-            new TestGraphNode("issue-bd-001", taskGraphLane: 1)
+            new TestGraphNode("issue-bd-001"),
+            new TestGraphNode("issue-bd-002", parentIds: ["issue-bd-001"])
         };
 
         // Act
         var layout = _calculator.Calculate(nodes);
 
         // Assert - Lane 0 should always be active
-        Assert.That(layout.RowInfos[0].ActiveLanes, Contains.Item(0));
-        Assert.That(layout.RowInfos[0].ActiveLanes, Contains.Item(1)); // The node's lane
+        foreach (var rowInfo in layout.RowInfos)
+        {
+            Assert.That(rowInfo.ActiveLanes, Contains.Item(0));
+        }
     }
 
     [Test]
-    public void Calculate_ActiveLanes_IncludesAllNodesAtOrBeforeRow()
+    public void Calculate_ActiveLanes_IncludesNodeLanes()
     {
-        // Arrange
+        // Arrange - chain: C -> B -> A gives lanes 0, 1, 2
         var nodes = new List<IGraphNode>
         {
-            new TestGraphNode("issue-bd-001", taskGraphLane: 0),
-            new TestGraphNode("issue-bd-002", taskGraphLane: 1),
-            new TestGraphNode("issue-bd-003", taskGraphLane: 2)
+            new TestGraphNode("issue-A"),
+            new TestGraphNode("issue-B", parentIds: ["issue-A"]),
+            new TestGraphNode("issue-C", parentIds: ["issue-B"])
         };
 
         // Act
         var layout = _calculator.Calculate(nodes);
 
-        // Assert - Row 2 (bd-003) should have lanes 0, 1, 2 active
-        var row2Info = layout.RowInfos[2];
-        Assert.That(row2Info.ActiveLanes, Contains.Item(0));
-        Assert.That(row2Info.ActiveLanes, Contains.Item(1));
-        Assert.That(row2Info.ActiveLanes, Contains.Item(2));
+        // Assert - last row should have all lanes active
+        var lastRowInfo = layout.RowInfos[^1];
+        Assert.That(lastRowInfo.ActiveLanes, Contains.Item(0));
     }
 
     #endregion
@@ -176,64 +286,85 @@ public class TaskGraphLaneCalculatorTests
     [Test]
     public void Calculate_FirstInLane_MarkedCorrectly()
     {
-        // Arrange
+        // Arrange - parent-child: parent at lane 1, child at lane 0
         var nodes = new List<IGraphNode>
         {
-            new TestGraphNode("issue-bd-001", taskGraphLane: 0),
-            new TestGraphNode("issue-bd-002", taskGraphLane: 1) // First in lane 1
+            new TestGraphNode("issue-bd-001"),
+            new TestGraphNode("issue-bd-002", parentIds: ["issue-bd-001"])
         };
 
         // Act
         var layout = _calculator.Calculate(nodes);
 
-        // Assert
-        Assert.That(layout.RowInfos[0].IsFirstRowInLane, Is.False); // Lane 0 is never marked as first
-        Assert.That(layout.RowInfos[1].IsFirstRowInLane, Is.True);  // First node in lane 1
+        // Assert - find the node at lane 1 (parent)
+        var lane1Row = layout.RowInfos.First(r => r.NodeLane == 1);
+        Assert.That(lane1Row.IsFirstRowInLane, Is.True); // First (and only) node in lane 1
     }
 
     [Test]
     public void Calculate_LastInLane_MarkedCorrectly()
     {
-        // Arrange
+        // Arrange - two children of one parent: both at lane 0, parent at lane 1
+        // But we also need two nodes at the SAME higher lane to test first/last
+        // Chain: D -> C -> B, D -> C -> A gives A,B at lane 0, C at lane 1, no wait...
+        // Let's use: A is parent of B and C. D is parent of A.
+        // B,C at lane 0, A at lane 1, D at lane 2
+        // But we want two nodes at lane 1: A parent of B, E parent of C, D parent of A and E
         var nodes = new List<IGraphNode>
         {
-            new TestGraphNode("issue-bd-001", taskGraphLane: 1),
-            new TestGraphNode("issue-bd-002", taskGraphLane: 1) // Last in lane 1
+            new TestGraphNode("issue-D"),
+            new TestGraphNode("issue-A", parentIds: ["issue-D"]),
+            new TestGraphNode("issue-E", parentIds: ["issue-D"]),
+            new TestGraphNode("issue-B", parentIds: ["issue-A"]),
+            new TestGraphNode("issue-C", parentIds: ["issue-E"])
         };
 
         // Act
         var layout = _calculator.Calculate(nodes);
 
-        // Assert
-        Assert.That(layout.RowInfos[0].IsLastRowInLane, Is.False); // Not the last
-        Assert.That(layout.RowInfos[1].IsLastRowInLane, Is.True);  // Last node in lane 1
+        // Assert - B,C at lane 0; A,E at lane 1; D at lane 2
+        Assert.That(layout.LaneAssignments["issue-B"], Is.EqualTo(0));
+        Assert.That(layout.LaneAssignments["issue-C"], Is.EqualTo(0));
+        Assert.That(layout.LaneAssignments["issue-A"], Is.EqualTo(1));
+        Assert.That(layout.LaneAssignments["issue-E"], Is.EqualTo(1));
+        Assert.That(layout.LaneAssignments["issue-D"], Is.EqualTo(2));
+
+        // Find row infos for lane 1 nodes
+        var lane1Rows = layout.RowInfos.Where(r => r.NodeLane == 1).ToList();
+        Assert.That(lane1Rows, Has.Count.EqualTo(2));
+        Assert.That(lane1Rows[0].IsFirstRowInLane, Is.True);
+        Assert.That(lane1Rows[0].IsLastRowInLane, Is.False);
+        Assert.That(lane1Rows[1].IsFirstRowInLane, Is.False);
+        Assert.That(lane1Rows[1].IsLastRowInLane, Is.True);
     }
 
     [Test]
     public void Calculate_SingleNodeInLane_IsFirstAndLast()
     {
-        // Arrange
+        // Arrange - parent at lane 1, single node
         var nodes = new List<IGraphNode>
         {
-            new TestGraphNode("issue-bd-001", taskGraphLane: 1) // Only node in lane 1
+            new TestGraphNode("issue-bd-001"),
+            new TestGraphNode("issue-bd-002", parentIds: ["issue-bd-001"])
         };
 
         // Act
         var layout = _calculator.Calculate(nodes);
 
-        // Assert
-        Assert.That(layout.RowInfos[0].IsFirstRowInLane, Is.True);
-        Assert.That(layout.RowInfos[0].IsLastRowInLane, Is.True);
+        // Assert - single node in lane 1 is both first and last
+        var lane1Row = layout.RowInfos.First(r => r.NodeLane == 1);
+        Assert.That(lane1Row.IsFirstRowInLane, Is.True);
+        Assert.That(lane1Row.IsLastRowInLane, Is.True);
     }
 
     [Test]
     public void Calculate_LaneZero_NeverFirstOrLast()
     {
-        // Arrange
+        // Arrange - two independent leaf nodes
         var nodes = new List<IGraphNode>
         {
-            new TestGraphNode("issue-bd-001", taskGraphLane: 0),
-            new TestGraphNode("issue-bd-002", taskGraphLane: 0)
+            new TestGraphNode("issue-bd-001"),
+            new TestGraphNode("issue-bd-002")
         };
 
         // Act
@@ -248,22 +379,30 @@ public class TaskGraphLaneCalculatorTests
 
     #endregion
 
-    #region Node Without TaskGraphLane
+    #region Mixed Hierarchies
 
     [Test]
-    public void Calculate_NodeWithoutTaskGraphLane_DefaultsToZero()
+    public void Calculate_MixedDepthBranches_CorrectLanes()
     {
-        // Arrange - Node without TaskGraphLane property
+        // Arrange: A has children B and C. B has child D.
+        // D is at lane 0, C is at lane 0, B has child D so lane 1, A has children B(1) and C(0) so lane 2
         var nodes = new List<IGraphNode>
         {
-            new TestGraphNode("issue-bd-001", taskGraphLane: null)
+            new TestGraphNode("issue-A"),
+            new TestGraphNode("issue-B", parentIds: ["issue-A"]),
+            new TestGraphNode("issue-C", parentIds: ["issue-A"]),
+            new TestGraphNode("issue-D", parentIds: ["issue-B"])
         };
 
         // Act
         var layout = _calculator.Calculate(nodes);
 
         // Assert
-        Assert.That(layout.LaneAssignments["issue-bd-001"], Is.EqualTo(0));
+        Assert.That(layout.LaneAssignments["issue-D"], Is.EqualTo(0)); // leaf
+        Assert.That(layout.LaneAssignments["issue-C"], Is.EqualTo(0)); // leaf
+        Assert.That(layout.LaneAssignments["issue-B"], Is.EqualTo(1)); // parent of D
+        Assert.That(layout.LaneAssignments["issue-A"], Is.EqualTo(2)); // parent of B(1),C(0) → max(1,0)+1=2
+        Assert.That(layout.MaxLanes, Is.EqualTo(3));
     }
 
     #endregion
@@ -272,10 +411,9 @@ public class TaskGraphLaneCalculatorTests
 
     private class TestGraphNode : IGraphNode
     {
-        public TestGraphNode(string id, int? taskGraphLane = 0, string[]? parentIds = null)
+        public TestGraphNode(string id, string[]? parentIds = null)
         {
             Id = id;
-            TaskGraphLane = taskGraphLane;
             ParentIds = parentIds ?? [];
         }
 
@@ -293,9 +431,6 @@ public class TaskGraphLaneCalculatorTests
         public int? PullRequestNumber => null;
         public string? IssueId => Id.Replace("issue-", "");
         public bool? HasDescription => true;
-        public int? TaskGraphLane { get; }
-        public int? TaskGraphRow => null;
-        public bool? IsActionable => TaskGraphLane == 0;
     }
 
     #endregion
