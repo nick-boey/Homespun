@@ -50,6 +50,7 @@ var containerAppName = 'ca-${resourceSuffix}'
 var workerAppName = 'ca-worker-${resourceSuffix}'
 var vnetName = 'vnet-${resourceSuffix}'
 var storageEndpointName = 'pe-st-${resourceSuffix}'
+var appInsightsName = 'appi-${resourceSuffix}'
 
 // Create managed identity
 module identity 'modules/identity.bicep' = {
@@ -117,6 +118,16 @@ module environment 'modules/environment.bicep' = {
   }
 }
 
+// Create Application Insights for telemetry
+module appInsights 'modules/appinsights.bicep' = {
+  name: 'appinsights-deployment'
+  params: {
+    location: location
+    appInsightsName: appInsightsName
+    logAnalyticsWorkspaceId: environment.outputs.logAnalyticsWorkspaceId
+  }
+}
+
 // Create worker container app for agent sessions (only if using AzureContainerApps mode)
 module workerApp 'modules/worker-containerapp.bicep' = if (agentExecutionMode == 'AzureContainerApps') {
   name: 'worker-containerapp-deployment'
@@ -160,6 +171,7 @@ module containerApp 'modules/containerapp.bicep' = {
     workerImage: workerImage
     resourceGroupName: resourceGroup().name
     deploymentTimestamp: deploymentTimestamp
+    appInsightsConnectionString: appInsights.outputs.connectionString
   }
 }
 

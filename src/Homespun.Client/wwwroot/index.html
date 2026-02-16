@@ -39,6 +39,105 @@
 
     <script src="_framework/blazor.webassembly.js"></script>
     <script>
+        // Application Insights telemetry interop
+        window.appInsights = {
+            _initialized: false,
+            _appInsights: null,
+
+            initialize: async function(connectionString) {
+                if (this._initialized) {
+                    return true;
+                }
+
+                try {
+                    // Dynamically load the Application Insights SDK
+                    await new Promise((resolve, reject) => {
+                        const script = document.createElement('script');
+                        script.src = 'https://js.monitor.azure.com/scripts/b/ai.3.gbl.min.js';
+                        script.crossOrigin = 'anonymous';
+                        script.onload = resolve;
+                        script.onerror = reject;
+                        document.head.appendChild(script);
+                    });
+
+                    // Wait for SDK to be available
+                    await new Promise(resolve => setTimeout(resolve, 100));
+
+                    if (typeof Microsoft === 'undefined' || !Microsoft.ApplicationInsights) {
+                        console.error('[AppInsights] SDK not loaded');
+                        return false;
+                    }
+
+                    // Initialize Application Insights
+                    const config = {
+                        connectionString: connectionString,
+                        enableAutoRouteTracking: false, // We handle this manually via NavigationTracker
+                        disableFetchTracking: true, // We handle this via TelemetryDelegatingHandler
+                        disableAjaxTracking: true,
+                        enableCorsCorrelation: true,
+                        enableRequestHeaderTracking: true,
+                        enableResponseHeaderTracking: true
+                    };
+
+                    this._appInsights = new Microsoft.ApplicationInsights.ApplicationInsights({ config: config });
+                    this._appInsights.loadAppInsights();
+                    this._initialized = true;
+
+                    console.log('[AppInsights] Initialized successfully');
+                    return true;
+                } catch (error) {
+                    console.error('[AppInsights] Initialization failed:', error);
+                    return false;
+                }
+            },
+
+            trackPageView: function(name, uri) {
+                if (!this._initialized || !this._appInsights) return;
+                try {
+                    this._appInsights.trackPageView({ name: name, uri: uri || window.location.href });
+                } catch (e) {
+                    console.error('[AppInsights] trackPageView error:', e);
+                }
+            },
+
+            trackEvent: function(name, properties) {
+                if (!this._initialized || !this._appInsights) return;
+                try {
+                    this._appInsights.trackEvent({ name: name, properties: properties || {} });
+                } catch (e) {
+                    console.error('[AppInsights] trackEvent error:', e);
+                }
+            },
+
+            trackException: function(message, stack, properties) {
+                if (!this._initialized || !this._appInsights) return;
+                try {
+                    const error = new Error(message);
+                    error.stack = stack;
+                    this._appInsights.trackException({ exception: error, properties: properties || {} });
+                } catch (e) {
+                    console.error('[AppInsights] trackException error:', e);
+                }
+            },
+
+            trackDependency: function(type, target, name, duration, success, statusCode) {
+                if (!this._initialized || !this._appInsights) return;
+                try {
+                    this._appInsights.trackDependencyData({
+                        id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(),
+                        type: type,
+                        target: target,
+                        name: name,
+                        duration: duration,
+                        success: success,
+                        responseCode: statusCode || 0
+                    });
+                } catch (e) {
+                    console.error('[AppInsights] trackDependency error:', e);
+                }
+            }
+        };
+
         window.themeManager = {
             getTheme: function() {
                 return localStorage.getItem('homespun-theme') || 'auto';

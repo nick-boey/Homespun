@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using Homespun.Client;
 using Homespun.Client.Services;
+using Homespun.Client.Services.Observability;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
@@ -38,4 +39,17 @@ builder.Services.AddSingleton<IMarkdownRenderingService, MarkdownRenderingServic
 builder.Services.AddSingleton<IAgentStartupTracker, AgentStartupTracker>();
 builder.Services.AddScoped<MessageDisplayService>();
 
-await builder.Build().RunAsync();
+// Register telemetry services
+builder.Services.AddScoped<ConsoleTelemetryService>();
+builder.Services.AddScoped<ApplicationInsightsTelemetryService>();
+builder.Services.AddScoped<ITelemetryService>(sp => sp.GetRequiredService<ApplicationInsightsTelemetryService>());
+builder.Services.AddScoped<TelemetryDelegatingHandler>();
+
+// Build the host
+var host = builder.Build();
+
+// Initialize telemetry before running the app
+var telemetry = host.Services.GetRequiredService<ITelemetryService>();
+await telemetry.InitializeAsync();
+
+await host.RunAsync();
