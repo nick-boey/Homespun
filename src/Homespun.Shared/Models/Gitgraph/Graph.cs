@@ -2,7 +2,7 @@ namespace Homespun.Shared.Models.Gitgraph;
 
 /// <summary>
 /// Represents the complete graph structure for visualization.
-/// Contains ordered nodes with parent references, ready for Gitgraph.js rendering.
+/// Contains ordered nodes with parent references, ready for timeline rendering.
 /// </summary>
 public class Graph
 {
