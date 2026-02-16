@@ -760,7 +760,8 @@ else
     private async Task NavigateToIssueEdit(string issueId)
     {
         await RefreshData();
-        NavigationManager.NavigateTo($"/projects/{Id}/issues/{issueId}/edit");
+        // autoSuggest=true triggers background branch ID generation on the edit page
+        NavigationManager.NavigateTo($"/projects/{Id}/issues/{issueId}/edit?autoSuggest=true");
     }
 
     private async Task SelectPullRequest(string pullRequestId)
