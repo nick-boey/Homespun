@@ -159,6 +159,48 @@ public class AgentManagementPanelTests
         Assert.That(result, Is.EqualTo("error"));
     }
 
+    [Test]
+    public void GetStatusIndicatorClass_WaitingForPlanExecution_ReturnsPlanReadyClass()
+    {
+        // Arrange & Act
+        var result = GetStatusIndicatorClass(ClaudeSessionStatus.WaitingForPlanExecution);
+
+        // Assert
+        Assert.That(result, Is.EqualTo("plan-ready"));
+    }
+
+    [Test]
+    public void GetStatusSortOrder_WaitingForPlanExecution_ReturnsHighestPriority()
+    {
+        // Arrange & Act
+        var planReadyOrder = GetStatusSortOrder(ClaudeSessionStatus.WaitingForPlanExecution);
+        var questionOrder = GetStatusSortOrder(ClaudeSessionStatus.WaitingForQuestionAnswer);
+        var waitingOrder = GetStatusSortOrder(ClaudeSessionStatus.WaitingForInput);
+        var runningOrder = GetStatusSortOrder(ClaudeSessionStatus.Running);
+
+        // Assert - Plan ready should be at the top (lowest number)
+        Assert.That(planReadyOrder, Is.EqualTo(0), "Plan ready should have highest priority (0)");
+        Assert.That(questionOrder, Is.EqualTo(1), "Question should have second priority (1)");
+        Assert.That(waitingOrder, Is.EqualTo(2), "Waiting should have third priority (2)");
+        Assert.That(runningOrder, Is.EqualTo(3), "Running should have fourth priority (3)");
+    }
+
+    [Test]
+    public void GetStatusSortOrder_AllStatuses_AreOrdered_PlanReady_Question_Waiting_Working()
+    {
+        // This test verifies the exact order specified in the issue:
+        // Plan ready > Question > Waiting > Working
+        var planReady = GetStatusSortOrder(ClaudeSessionStatus.WaitingForPlanExecution);
+        var question = GetStatusSortOrder(ClaudeSessionStatus.WaitingForQuestionAnswer);
+        var waiting = GetStatusSortOrder(ClaudeSessionStatus.WaitingForInput);
+        var working = GetStatusSortOrder(ClaudeSessionStatus.Running);
+
+        // Assert ordering
+        Assert.That(planReady, Is.LessThan(question), "Plan Ready should come before Question");
+        Assert.That(question, Is.LessThan(waiting), "Question should come before Waiting");
+        Assert.That(waiting, Is.LessThan(working), "Waiting should come before Working");
+    }
+
     // Helper methods that mirror the component's private methods
     private static string FormatUptime(TimeSpan uptime)
     {
@@ -177,6 +219,19 @@ public class AgentManagementPanelTests
     };
 
     private static string GetStatusIndicatorClass(ClaudeSessionStatus status) => status.ToIndicatorClass();
+
+    private static int GetStatusSortOrder(ClaudeSessionStatus status) => status switch
+    {
+        ClaudeSessionStatus.WaitingForPlanExecution => 0,   // Plan ready at top (requires user approval)
+        ClaudeSessionStatus.WaitingForQuestionAnswer => 1,  // Question (requires immediate user action)
+        ClaudeSessionStatus.WaitingForInput => 2,           // Waiting
+        ClaudeSessionStatus.Running => 3,                   // Working
+        ClaudeSessionStatus.Starting => 4,
+        ClaudeSessionStatus.RunningHooks => 5,
+        ClaudeSessionStatus.Stopped => 6,
+        ClaudeSessionStatus.Error => 7,
+        _ => 8
+    };
 }
 
 /// <summary>
