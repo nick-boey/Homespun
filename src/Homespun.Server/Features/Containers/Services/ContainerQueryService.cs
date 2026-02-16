@@ -13,17 +13,20 @@ public class ContainerQueryService : IContainerQueryService
     private readonly IAgentExecutionService _agentExecutionService;
     private readonly IProjectService _projectService;
     private readonly IFleeceService _fleeceService;
+    private readonly IClaudeSessionService _sessionService;
     private readonly ILogger<ContainerQueryService> _logger;
 
     public ContainerQueryService(
         IAgentExecutionService agentExecutionService,
         IProjectService projectService,
         IFleeceService fleeceService,
+        IClaudeSessionService sessionService,
         ILogger<ContainerQueryService> logger)
     {
         _agentExecutionService = agentExecutionService;
         _projectService = projectService;
         _fleeceService = fleeceService;
+        _sessionService = sessionService;
         _logger = logger;
     }
 
@@ -96,12 +99,24 @@ public class ContainerQueryService : IContainerQueryService
             ProjectName = projectName,
             IssueId = container.IssueId,
             IssueTitle = issueTitle,
-            ActiveSessionId = container.State?.ActiveSessionId,
+            ActiveSessionId = GetHomespunSessionId(container.IssueId),
             SessionStatus = container.State?.SessionStatus ?? Homespun.Shared.Models.Sessions.ClaudeSessionStatus.Stopped,
             LastActivityAt = container.State?.LastActivityAt,
             CreatedAt = container.CreatedAt,
             HasPendingQuestion = container.State?.HasPendingQuestion ?? false,
             HasPendingPlanApproval = container.State?.HasPendingPlanApproval ?? false
         };
+    }
+
+    /// <summary>
+    /// Gets the Homespun session ID for an entity (issue) ID.
+    /// </summary>
+    private string? GetHomespunSessionId(string? issueId)
+    {
+        if (string.IsNullOrEmpty(issueId))
+            return null;
+
+        var session = _sessionService.GetSessionByEntityId(issueId);
+        return session?.Id;
     }
 }
