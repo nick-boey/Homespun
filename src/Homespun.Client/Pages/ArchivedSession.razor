@@ -6,6 +6,7 @@
 @inject NavigationManager NavigationManager
 @inject IMarkdownRenderingService MarkdownService
 @inject IBreadcrumbService BreadcrumbService
+@inject MessageDisplayService MessageDisplayService
 
 <PageTitle>Archived Session - Homespun</PageTitle>
 
@@ -123,12 +124,12 @@
                                                 break;
 
                                             case ClaudeContentType.Thinking:
-                                                <details class="thinking-block border rounded p-2 bg-light">
-                                                    <summary class="text-muted small">
+                                                <details class="thinking-details">
+                                                    <summary>
                                                         <i class="bi bi-lightbulb me-1"></i>
                                                         Thinking (@GetTextPreview(content.Text))
                                                     </summary>
-                                                    <div class="mt-2 markdown-content">
+                                                    <div class="thinking-content markdown-content">
                                                         @((MarkupString)MarkdownService.RenderToHtml(content.Text))
                                                     </div>
                                                 </details>
@@ -201,10 +202,6 @@
         align-items: center;
         gap: 0.5rem;
         font-size: 0.875rem;
-    }
-
-    .thinking-block summary {
-        cursor: pointer;
     }
 
     .markdown-content pre {
@@ -310,134 +307,12 @@
         }
     }
 
-    private static bool IsRealUserMessage(ClaudeMessage message)
-    {
-        if (message.Role != ClaudeMessageRole.User) return false;
-        return message.Content.Any(c => c.Type == ClaudeContentType.Text && !string.IsNullOrWhiteSpace(c.Text));
-    }
-
     /// <summary>
-    /// Transforms the flat message list into a list of display items (ClaudeMessage or ToolExecutionGroup).
-    /// Groups consecutive tool use/result message pairs into consolidated ToolExecutionGroup objects.
+    /// Gets display items using the shared MessageDisplayService for consistent ordering.
     /// </summary>
     private List<object> GetDisplayItems()
     {
-        var messages = _messages.ToList();
-        var displayItems = new List<object>();
-        var currentToolGroup = new List<ToolExecution>();
-        var currentGroupMessages = new List<ClaudeMessage>();
-        DateTime currentGroupTimestamp = DateTime.UtcNow;
-
-        void FlushToolGroup()
-        {
-            if (currentToolGroup.Count > 0)
-            {
-                displayItems.Add(new ToolExecutionGroup
-                {
-                    Executions = new List<ToolExecution>(currentToolGroup),
-                    Timestamp = currentGroupTimestamp,
-                    OriginalMessages = new List<ClaudeMessage>(currentGroupMessages)
-                });
-                currentToolGroup.Clear();
-                currentGroupMessages.Clear();
-            }
-        }
-
-        for (int i = 0; i < messages.Count; i++)
-        {
-            var msg = messages[i];
-
-            if (msg.Role == ClaudeMessageRole.Assistant)
-            {
-                var toolUseBlocks = msg.Content.Where(c => c.Type == ClaudeContentType.ToolUse).ToList();
-                var nonToolBlocks = msg.Content.Where(c => c.Type != ClaudeContentType.ToolUse).ToList();
-
-                if (toolUseBlocks.Count > 0)
-                {
-                    if (nonToolBlocks.Any(c => c.Type == ClaudeContentType.Text || c.Type == ClaudeContentType.Thinking))
-                    {
-                        FlushToolGroup();
-
-                        var textMessage = new ClaudeMessage
-                        {
-                            Id = msg.Id,
-                            SessionId = msg.SessionId,
-                            Role = msg.Role,
-                            CreatedAt = msg.CreatedAt,
-                            IsStreaming = msg.IsStreaming
-                        };
-                        foreach (var block in nonToolBlocks)
-                        {
-                            textMessage.Content.Add(block);
-                        }
-                        displayItems.Add(textMessage);
-                    }
-
-                    if (currentToolGroup.Count == 0)
-                    {
-                        currentGroupTimestamp = msg.CreatedAt;
-                    }
-                    currentGroupMessages.Add(msg);
-
-                    foreach (var toolUse in toolUseBlocks)
-                    {
-                        currentToolGroup.Add(new ToolExecution { ToolUse = toolUse });
-                    }
-                }
-                else
-                {
-                    FlushToolGroup();
-                    displayItems.Add(msg);
-                }
-            }
-            else if (msg.Role == ClaudeMessageRole.User)
-            {
-                if (!IsRealUserMessage(msg))
-                {
-                    currentGroupMessages.Add(msg);
-                    foreach (var resultContent in msg.Content.Where(c => c.Type == ClaudeContentType.ToolResult))
-                    {
-                        var matchingExecution = currentToolGroup
-                            .FirstOrDefault(e => e.ToolResult == null && e.ToolUse.ToolUseId == resultContent.ToolUseId);
-
-                        if (matchingExecution != null)
-                        {
-                            matchingExecution.ToolResult = resultContent;
-                        }
-                        else
-                        {
-                            var unmatchedExecution = currentToolGroup.FirstOrDefault(e => e.ToolResult == null);
-                            if (unmatchedExecution != null)
-                            {
-                                unmatchedExecution.ToolResult = resultContent;
-                            }
-                            else
-                            {
-                                currentToolGroup.Add(new ToolExecution
-                                {
-                                    ToolUse = new ClaudeMessageContent
-                                    {
-                                        Type = ClaudeContentType.ToolUse,
-                                        ToolName = resultContent.ParsedToolResult?.ToolName ?? resultContent.ToolName ?? "Tool",
-                                        ToolUseId = resultContent.ToolUseId
-                                    },
-                                    ToolResult = resultContent
-                                });
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    FlushToolGroup();
-                    displayItems.Add(msg);
-                }
-            }
-        }
-
-        FlushToolGroup();
-
-        return displayItems;
+        return MessageDisplayService.GetDisplayItems(_messages);
     }
 
     private static string GetContentBlockClass(ClaudeContentType type)

@@ -62,24 +62,9 @@
     word-break: break-word;
 }
 
-/* Thinking Block */
-.thinking-details {
-    background: var(--bg-secondary);
-    padding: var(--spacing-sm);
-    border-radius: var(--radius-sm);
-    font-size: 0.875rem;
-}
-
-.thinking-details summary {
-    cursor: pointer;
-    color: var(--text-muted);
-}
-
-.thinking-content {
-    margin-top: var(--spacing-sm);
-    white-space: pre-wrap;
-    color: var(--text-secondary);
-}
+/* Thinking Block - Lower Visual Priority
+   Note: Main styling is in app.css for global availability.
+   Component-specific overrides can be added here if needed. */
 
 /* Tool Use Block */
 .tool-use-container,
