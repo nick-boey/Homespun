@@ -69,3 +69,4 @@ output environmentName string = environment.name
 output defaultDomain string = environment.properties.defaultDomain
 output staticIp string = environment.properties.staticIp
 output storageMountName string = storageMount.name
+output logAnalyticsWorkspaceId string = logAnalytics.id

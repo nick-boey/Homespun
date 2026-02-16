@@ -1,0 +1,35 @@
+@implements IDisposable
+@inject NavigationManager NavigationManager
+@inject ITelemetryService TelemetryService
+
+@code {
+    protected override void OnInitialized()
+    {
+        // Track initial page view
+        TrackCurrentPage();
+
+        // Subscribe to navigation changes
+        NavigationManager.LocationChanged += OnLocationChanged;
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        TrackCurrentPage();
+    }
+
+    private void TrackCurrentPage()
+    {
+        var uri = NavigationManager.Uri;
+        var relativePath = NavigationManager.ToBaseRelativePath(uri);
+
+        // Use the relative path as the page name, or "Home" for root
+        var pageName = string.IsNullOrEmpty(relativePath) ? "Home" : relativePath;
+
+        TelemetryService.TrackPageView(pageName, uri);
+    }
+
+    public void Dispose()
+    {
+        NavigationManager.LocationChanged -= OnLocationChanged;
+    }
+}

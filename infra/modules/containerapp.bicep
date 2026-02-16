@@ -38,6 +38,9 @@ param resourceGroupName string = ''
 @description('Deployment timestamp for revision suffix to force new revisions')
 param deploymentTimestamp string
 
+@description('Application Insights connection string for telemetry')
+param appInsightsConnectionString string = ''
+
 resource containerApp 'Microsoft.App/containerApps@2025-01-01' = {
   name: containerAppName
   location: location
@@ -139,6 +142,10 @@ resource containerApp 'Microsoft.App/containerApps@2025-01-01' = {
             {
               name: 'AgentExecution__AzureContainerApps__StorageMountName'
               value: storageMountName
+            }
+            {
+              name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
+              value: appInsightsConnectionString
             }
           ]
           volumeMounts: [
