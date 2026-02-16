@@ -38,7 +38,7 @@ public class CreateIssueRequest
     public ExecutionMode? ExecutionMode { get; set; }
 
     /// <summary>
-    /// Optional working branch ID. If not provided, one will be auto-generated using AI.
+    /// Optional working branch ID. If not provided, the client can trigger AI generation on the edit page.
     /// </summary>
     public string? WorkingBranchId { get; set; }
 }
@@ -77,4 +77,9 @@ public class UpdateIssueRequest
     /// Issue priority (1-5).
     /// </summary>
     public int? Priority { get; set; }
+
+    /// <summary>
+    /// Optional working branch ID update.
+    /// </summary>
+    public string? WorkingBranchId { get; set; }
 }

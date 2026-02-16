@@ -230,6 +230,7 @@ else
 @code {
     [Parameter] public string ProjectId { get; set; } = "";
     [Parameter] public string IssueId { get; set; } = "";
+    [SupplyParameterFromQuery] public bool AutoSuggest { get; set; }
 
     private bool _loading = true;
     private bool _notFound;
@@ -320,6 +321,13 @@ else
 
             // Check for existing active session
             _existingSession = await SessionStoreApi.GetSessionByEntityIdAsync(IssueId);
+
+            // Auto-trigger branch ID suggestion if requested and no branch ID exists
+            if (AutoSuggest && string.IsNullOrWhiteSpace(_workingBranchId))
+            {
+                // Fire-and-forget - don't await to allow page to render immediately
+                _ = SuggestBranchId();
+            }
         }
         catch (Exception ex)
         {
@@ -377,6 +385,9 @@ else
             var typeToUpdate = _type != _issue.Type ? _type : (IssueType?)null;
             var statusToUpdate = _status != _issue.Status ? _status : (IssueStatus?)null;
             var priorityToUpdate = priority != _issue.Priority ? priority : null;
+            var branchIdToUpdate = _workingBranchId.Trim() != (_issue.WorkingBranchId ?? "")
+                ? _workingBranchId.Trim()
+                : null;
 
             // Perform update
             var updated = await IssueApi.UpdateIssueAsync(_issue.Id, new UpdateIssueRequest
@@ -386,7 +397,8 @@ else
                 Status = statusToUpdate,
                 Type = typeToUpdate,
                 Description = descToUpdate,
-                Priority = priorityToUpdate
+                Priority = priorityToUpdate,
+                WorkingBranchId = branchIdToUpdate
             });
 
             if (updated == null)
@@ -631,6 +643,12 @@ else
         if (string.IsNullOrWhiteSpace(_title))
         {
             _errorMessage = "Please enter a title first to generate a branch ID suggestion.";
+            return;
+        }
+
+        // Prevent duplicate calls (race condition guard)
+        if (_isSuggestingBranchId)
+        {
             return;
         }
 

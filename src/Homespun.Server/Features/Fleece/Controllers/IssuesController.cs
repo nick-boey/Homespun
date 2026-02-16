@@ -1,5 +1,4 @@
 using Fleece.Core.Models;
-using Homespun.Features.AgentOrchestration.Services;
 using Homespun.Features.Fleece.Services;
 using Homespun.Features.Projects;
 using Homespun.Shared.Models.Fleece;
@@ -16,7 +15,6 @@ namespace Homespun.Features.Fleece.Controllers;
 public class IssuesController(
     IFleeceService fleeceService,
     IProjectService projectService,
-    IBranchIdGeneratorService branchIdGeneratorService,
     ILogger<IssuesController> logger) : ControllerBase
 {
     /// <summary>
@@ -87,7 +85,8 @@ public class IssuesController(
 
     /// <summary>
     /// Create a new issue.
-    /// If no working branch ID is provided, one will be auto-generated using AI.
+    /// If a working branch ID is provided, it will be applied to the issue.
+    /// Otherwise, the client should trigger branch ID generation on the edit page.
     /// </summary>
     [HttpPost("issues")]
     [ProducesResponseType<IssueResponse>(StatusCodes.Status201Created)]
@@ -110,34 +109,9 @@ public class IssuesController(
             request.Priority,
             request.ExecutionMode);
 
-        // Auto-generate working branch ID if not provided
-        if (string.IsNullOrWhiteSpace(request.WorkingBranchId))
+        // Apply provided working branch ID if any
+        if (!string.IsNullOrWhiteSpace(request.WorkingBranchId))
         {
-            try
-            {
-                var branchIdResult = await branchIdGeneratorService.GenerateAsync(request.Title);
-                if (branchIdResult.Success && !string.IsNullOrWhiteSpace(branchIdResult.BranchId))
-                {
-                    // Update the issue with the generated branch ID
-                    issue = await fleeceService.UpdateIssueAsync(
-                        project.LocalPath,
-                        issue.Id,
-                        workingBranchId: branchIdResult.BranchId) ?? issue;
-
-                    logger.LogInformation(
-                        "Auto-generated working branch ID '{BranchId}' for issue '{IssueId}' (AI: {WasAiGenerated})",
-                        branchIdResult.BranchId, issue.Id, branchIdResult.WasAiGenerated);
-                }
-            }
-            catch (Exception ex)
-            {
-                // Log but don't fail the issue creation
-                logger.LogWarning(ex, "Failed to auto-generate working branch ID for issue '{IssueId}'", issue.Id);
-            }
-        }
-        else
-        {
-            // Use the provided working branch ID
             issue = await fleeceService.UpdateIssueAsync(
                 project.LocalPath,
                 issue.Id,
@@ -171,7 +145,8 @@ public class IssuesController(
             request.Status,
             request.Type,
             request.Description,
-            request.Priority);
+            request.Priority,
+            workingBranchId: request.WorkingBranchId);
 
         if (issue == null)
         {
@@ -280,4 +255,9 @@ public class UpdateIssueRequest
     /// Issue priority (1-5).
     /// </summary>
     public int? Priority { get; set; }
+
+    /// <summary>
+    /// Optional working branch ID update.
+    /// </summary>
+    public string? WorkingBranchId { get; set; }
 }
