@@ -122,12 +122,10 @@ public class MockGraphService : IGraphService
     {
         _logger.LogDebug("[Mock] BuildTaskGraph for project {ProjectId}", projectId);
 
-        // In mock mode, return a simplified graph with just issues
-        // The fake issues have parent dependencies that form a task graph structure
+        var mergedPrs = GetMergedPrHistory();
         var fakeIssues = GetFakeIssues();
 
-        // Build a simple graph with just the issues
-        var graph = _graphBuilder.Build([], fakeIssues, null);
+        var graph = _graphBuilder.Build(mergedPrs, fakeIssues, 5);
         return Task.FromResult<Graph?>(graph);
     }
 

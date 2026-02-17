@@ -4,7 +4,7 @@ using System.Text.Json.Serialization;
 namespace Homespun.Features.Gitgraph.Services;
 
 /// <summary>
-/// Converts a Graph to JSON format for the Gitgraph.js visualization.
+/// Converts a Graph to JSON format for the timeline visualization.
 /// </summary>
 public class GitgraphApiMapper
 {
@@ -16,14 +16,8 @@ public class GitgraphApiMapper
     };
 
     /// <summary>
-    /// Converts a Graph to JSON data for the Gitgraph.js visualization.
+    /// Converts a Graph to JSON data for the timeline visualization.
     /// </summary>
-    /// <remarks>
-    /// Important: GitgraphJS has rendering issues with long hash values.
-    /// PRs use "pr-{number}" format which works fine.
-    /// Issues use sequential numbers starting at 100 to avoid text alignment problems.
-    /// The original issue ID is preserved in the IssueId property for click handling.
-    /// </remarks>
     public GitgraphJsonData ToJson(Graph graph)
     {
         var branches = graph.Branches.Values
@@ -36,33 +30,22 @@ public class GitgraphApiMapper
             })
             .ToList();
 
-        // Use sequential numbers for issues (starting at 100) to avoid GitgraphJS rendering issues
-        // GitgraphJS has problems with long hash values like "issue-hsp-xxx"
-        var issueIndex = 100;
         var commits = graph.Nodes
-            .Select(n =>
+            .Select(n => new GitgraphCommitData
             {
-                // For issues, use sequential numbers; for PRs, keep the original ID format
-                var hash = n.IssueId != null
-                    ? (issueIndex++).ToString()
-                    : n.Id;
-
-                return new GitgraphCommitData
-                {
-                    Hash = hash,
-                    Subject = n.Title,
-                    Branch = n.BranchName,
-                    ParentIds = n.ParentIds.ToList(),
-                    Color = n.Color,
-                    Tag = n.Tag,
-                    NodeType = n.NodeType.ToString(),
-                    Status = n.Status.ToString(),
-                    Url = n.Url,
-                    TimeDimension = n.TimeDimension,
-                    PullRequestNumber = n.PullRequestNumber,
-                    IssueId = n.IssueId,
-                    HasDescription = n.HasDescription
-                };
+                Hash = n.Id,
+                Subject = n.Title,
+                Branch = n.BranchName,
+                ParentIds = n.ParentIds.ToList(),
+                Color = n.Color,
+                Tag = n.Tag,
+                NodeType = n.NodeType.ToString(),
+                Status = n.Status.ToString(),
+                Url = n.Url,
+                TimeDimension = n.TimeDimension,
+                PullRequestNumber = n.PullRequestNumber,
+                IssueId = n.IssueId,
+                HasDescription = n.HasDescription
             })
             .ToList();
 
@@ -87,7 +70,7 @@ public class GitgraphApiMapper
 }
 
 /// <summary>
-/// Root JSON data structure for the Gitgraph.js visualization.
+/// Root JSON data structure for the timeline visualization.
 /// </summary>
 public class GitgraphJsonData
 {

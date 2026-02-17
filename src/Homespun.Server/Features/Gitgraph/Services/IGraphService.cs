@@ -14,7 +14,7 @@ public interface IGraphService
     Task<Graph> BuildGraphAsync(string projectId, int? maxPastPRs = 5);
 
     /// <summary>
-    /// Builds graph JSON data for a project, ready for Gitgraph.js visualization.
+    /// Builds graph JSON data for a project, ready for timeline visualization.
     /// Uses cached PR data if available for faster initial load.
     /// </summary>
     /// <param name="projectId">The project ID.</param>
