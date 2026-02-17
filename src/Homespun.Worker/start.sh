@@ -46,5 +46,9 @@ ASKPASS_EOF
     git config --global credential.helper '' 2>/dev/null || true
 fi
 
+# Ensure required .claude subdirectories exist in mounted volume
+# The mounted host directory may not have these, and the Claude SDK expects them
+mkdir -p "$HOME/.claude/debug" "$HOME/.claude/todos" "$HOME/.claude/projects" "$HOME/.claude/statsig" "$HOME/.claude/plans" 2>/dev/null || true
+
 echo "Starting Homespun Worker..."
 exec node dist/index.js

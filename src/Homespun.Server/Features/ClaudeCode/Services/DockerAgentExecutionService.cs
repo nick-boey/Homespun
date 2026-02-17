@@ -1110,8 +1110,42 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         string? projectName = null,
         CancellationToken cancellationToken = default)
     {
+        EnsureClaudeDirectoryExists(workingDirectory, claudePath);
         var dockerArgs = BuildContainerDockerArgs(containerName, workingDirectory, useRm, claudePath, issueId, projectName);
         return await RunDockerAndGetUrl(containerName, dockerArgs, cancellationToken);
+    }
+
+    /// <summary>
+    /// Ensures the .claude directory and required subdirectories exist before Docker mounts them.
+    /// If Docker mounts a non-existent host directory, the Docker daemon creates it as root,
+    /// which causes permission errors for the non-root container user.
+    /// </summary>
+    internal void EnsureClaudeDirectoryExists(string workingDirectory, string? claudePath)
+    {
+        var effectiveClaudePath = claudePath;
+        if (string.IsNullOrEmpty(effectiveClaudePath))
+        {
+            var lastSlash = workingDirectory.LastIndexOfAny(['/', '\\']);
+            var cloneRoot = lastSlash > 0 ? workingDirectory[..lastSlash] : null;
+            if (!string.IsNullOrEmpty(cloneRoot))
+            {
+                effectiveClaudePath = $"{cloneRoot}/.claude";
+            }
+        }
+
+        if (string.IsNullOrEmpty(effectiveClaudePath))
+            return;
+
+        string[] subdirectories = ["debug", "todos", "projects", "statsig", "plans"];
+        foreach (var subdir in subdirectories)
+        {
+            var fullPath = Path.Combine(effectiveClaudePath, subdir);
+            if (!Directory.Exists(fullPath))
+            {
+                Directory.CreateDirectory(fullPath);
+                _logger.LogDebug("Created .claude subdirectory: {Path}", fullPath);
+            }
+        }
     }
 
     private void AppendAuthEnvironmentVars(StringBuilder dockerArgs)
