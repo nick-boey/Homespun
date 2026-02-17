@@ -641,12 +641,14 @@
     {
         _laneColors.Clear();
 
-        if (_graph == null || _layout == null) return;
+        var graph = EffectiveGraph;
+        var layout = EffectiveLayout;
+        if (graph == null || layout == null) return;
 
         // Assign colors to lanes based on first node in each lane
-        foreach (var node in _graph.Nodes)
+        foreach (var node in graph.Nodes)
         {
-            if (_layout.LaneAssignments.TryGetValue(node.Id, out var lane))
+            if (layout.LaneAssignments.TryGetValue(node.Id, out var lane))
             {
                 if (!_laneColors.ContainsKey(lane))
                 {

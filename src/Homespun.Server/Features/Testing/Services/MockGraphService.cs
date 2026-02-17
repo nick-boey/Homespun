@@ -1,4 +1,6 @@
 using Fleece.Core.Models;
+using Fleece.Core.Services;
+using Fleece.Core.Services.Interfaces;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Gitgraph.Services;
 using Homespun.Features.PullRequests.Data;
@@ -15,6 +17,7 @@ public class MockGraphService : IGraphService
     private readonly IClaudeSessionStore _sessionStore;
     private readonly ILogger<MockGraphService> _logger;
     private readonly GraphBuilder _graphBuilder = new();
+    private readonly TaskGraphBuilder _taskGraphBuilder = new();
     private readonly GitgraphApiMapper _mapper = new();
 
     public MockGraphService(
@@ -118,15 +121,26 @@ public class MockGraphService : IGraphService
         return true;
     }
 
-    public Task<Graph?> BuildTaskGraphAsync(string projectId)
+    public async Task<Graph?> BuildTaskGraphAsync(string projectId)
     {
         _logger.LogDebug("[Mock] BuildTaskGraph for project {ProjectId}", projectId);
 
-        var mergedPrs = GetMergedPrHistory();
         var fakeIssues = GetFakeIssues();
 
-        var graph = _graphBuilder.Build(mergedPrs, fakeIssues, 5);
-        return Task.FromResult<Graph?>(graph);
+        // Filter to open issues (matching real FleeceService.GetTaskGraphAsync behavior)
+        var openIssues = fakeIssues
+            .Where(i => i.Status is IssueStatus.Open or IssueStatus.Progress or IssueStatus.Review)
+            .ToList();
+
+        if (openIssues.Count == 0) return null;
+
+        // Use Fleece.Core's real TaskGraphService for correct ordering
+        var mockIssueService = new MockIssueServiceAdapter(openIssues);
+        var nextService = new NextService(mockIssueService);
+        var taskGraphService = new TaskGraphService(mockIssueService, nextService);
+        var taskGraph = await taskGraphService.BuildGraphAsync();
+
+        return _taskGraphBuilder.Build(taskGraph);
     }
 
     public async Task<GitgraphJsonData?> BuildTaskGraphJsonAsync(string projectId)
