@@ -651,6 +651,74 @@ public class DockerAgentExecutionServiceTests
         Assert.That(args, Does.Not.Contain("-v \"/data/some/path/.claude:/home/homespun/.claude\""));
     }
 
+    [Test]
+    public void EnsureClaudeDirectoryExists_CreatesSubdirectories_WithExplicitPath()
+    {
+        // Arrange
+        var tempDir = Path.Combine(Path.GetTempPath(), $"claude-test-{Guid.NewGuid():N}");
+        try
+        {
+            var claudePath = Path.Combine(tempDir, ".claude");
+
+            // Act
+            _service.EnsureClaudeDirectoryExists("/data/some/workdir", claudePath);
+
+            // Assert
+            Assert.That(Directory.Exists(Path.Combine(claudePath, "debug")), Is.True);
+            Assert.That(Directory.Exists(Path.Combine(claudePath, "todos")), Is.True);
+            Assert.That(Directory.Exists(Path.Combine(claudePath, "projects")), Is.True);
+            Assert.That(Directory.Exists(Path.Combine(claudePath, "statsig")), Is.True);
+            Assert.That(Directory.Exists(Path.Combine(claudePath, "plans")), Is.True);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+                Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Test]
+    public void EnsureClaudeDirectoryExists_DerivesPathFromWorkingDirectory()
+    {
+        // Arrange
+        var tempDir = Path.Combine(Path.GetTempPath(), $"claude-test-{Guid.NewGuid():N}");
+        try
+        {
+            // Act - no explicit claudePath, should derive from workingDirectory parent
+            _service.EnsureClaudeDirectoryExists($"{tempDir}/workdir", claudePath: null);
+
+            // Assert - should create .claude as sibling of workdir
+            var derivedClaudePath = Path.Combine(tempDir, ".claude");
+            Assert.That(Directory.Exists(Path.Combine(derivedClaudePath, "debug")), Is.True);
+            Assert.That(Directory.Exists(Path.Combine(derivedClaudePath, "todos")), Is.True);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+                Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Test]
+    public void EnsureClaudeDirectoryExists_DoesNotThrow_WhenDirectoriesAlreadyExist()
+    {
+        // Arrange
+        var tempDir = Path.Combine(Path.GetTempPath(), $"claude-test-{Guid.NewGuid():N}");
+        try
+        {
+            var claudePath = Path.Combine(tempDir, ".claude");
+            Directory.CreateDirectory(Path.Combine(claudePath, "debug"));
+
+            // Act & Assert - should not throw when directories already exist
+            Assert.DoesNotThrow(() => _service.EnsureClaudeDirectoryExists("/data/workdir", claudePath));
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+                Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
     #endregion
 
     #region DisposeAsync Tests
