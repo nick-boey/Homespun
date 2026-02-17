@@ -407,14 +407,102 @@ public class TaskGraphLaneCalculatorTests
 
     #endregion
 
+    #region Pre-computed Lanes
+
+    [Test]
+    public void Calculate_PrecomputedLanes_UsedDirectly()
+    {
+        // Arrange: Nodes with pre-computed lanes should bypass parent-child algorithm
+        // Without pre-computed lanes, A->B->C would give C=0, B=1, A=2
+        // With pre-computed lanes, we can assign any values
+        var nodes = new List<IGraphNode>
+        {
+            new TestGraphNode("issue-A", taskGraphLane: 3),
+            new TestGraphNode("issue-B", parentIds: ["issue-A"], taskGraphLane: 2),
+            new TestGraphNode("issue-C", parentIds: ["issue-B"], taskGraphLane: 1)
+        };
+
+        // Act
+        var layout = _calculator.Calculate(nodes);
+
+        // Assert - pre-computed values used as-is
+        Assert.That(layout.LaneAssignments["issue-A"], Is.EqualTo(3));
+        Assert.That(layout.LaneAssignments["issue-B"], Is.EqualTo(2));
+        Assert.That(layout.LaneAssignments["issue-C"], Is.EqualTo(1));
+    }
+
+    [Test]
+    public void Calculate_PrecomputedLanes_SiblingLeafNotAtZero()
+    {
+        // Arrange: Simulates the real scenario where ISSUE-011 (leaf) should be lane 1, not 0
+        // Parent at lane 2 has two children: one with sub-children (lane 1) and one leaf (also lane 1)
+        // Without pre-computed lanes, both leaves would get lane 0 (wrong)
+        var nodes = new List<IGraphNode>
+        {
+            new TestGraphNode("issue-parent", taskGraphLane: 2),
+            new TestGraphNode("issue-deep-child", parentIds: ["issue-parent"], taskGraphLane: 1),
+            new TestGraphNode("issue-leaf-sibling", parentIds: ["issue-parent"], taskGraphLane: 1),
+            new TestGraphNode("issue-deepest", parentIds: ["issue-deep-child"], taskGraphLane: 0)
+        };
+
+        // Act
+        var layout = _calculator.Calculate(nodes);
+
+        // Assert - leaf sibling at lane 1 (not lane 0)
+        Assert.That(layout.LaneAssignments["issue-leaf-sibling"], Is.EqualTo(1));
+        Assert.That(layout.LaneAssignments["issue-deepest"], Is.EqualTo(0));
+        Assert.That(layout.LaneAssignments["issue-parent"], Is.EqualTo(2));
+    }
+
+    [Test]
+    public void Calculate_PrecomputedLanes_ConnectorsStillWork()
+    {
+        // Arrange: Pre-computed lanes with parent-child connectors
+        var nodes = new List<IGraphNode>
+        {
+            new TestGraphNode("issue-root", taskGraphLane: 3),
+            new TestGraphNode("issue-child", parentIds: ["issue-root"], taskGraphLane: 1)
+        };
+
+        // Act
+        var layout = _calculator.Calculate(nodes);
+
+        // Assert - connector from parent lane (3) to child lane (1)
+        var childRow = layout.RowInfos.First(r => r.NodeId == "issue-child");
+        Assert.That(childRow.ConnectorFromLane, Is.EqualTo(3));
+    }
+
+    [Test]
+    public void Calculate_NoPrecomputedLanes_FallsBackToParentChildAlgorithm()
+    {
+        // Arrange: No TaskGraphLane set, should use existing bottom-up algorithm
+        var nodes = new List<IGraphNode>
+        {
+            new TestGraphNode("issue-A"),
+            new TestGraphNode("issue-B", parentIds: ["issue-A"]),
+            new TestGraphNode("issue-C", parentIds: ["issue-B"])
+        };
+
+        // Act
+        var layout = _calculator.Calculate(nodes);
+
+        // Assert - original algorithm: leaf=0, parent=max(child)+1
+        Assert.That(layout.LaneAssignments["issue-C"], Is.EqualTo(0));
+        Assert.That(layout.LaneAssignments["issue-B"], Is.EqualTo(1));
+        Assert.That(layout.LaneAssignments["issue-A"], Is.EqualTo(2));
+    }
+
+    #endregion
+
     #region Helper Classes
 
     private class TestGraphNode : IGraphNode
     {
-        public TestGraphNode(string id, string[]? parentIds = null)
+        public TestGraphNode(string id, string[]? parentIds = null, int? taskGraphLane = null)
         {
             Id = id;
             ParentIds = parentIds ?? [];
+            TaskGraphLane = taskGraphLane;
         }
 
         public string Id { get; }
@@ -431,6 +519,7 @@ public class TaskGraphLaneCalculatorTests
         public int? PullRequestNumber => null;
         public string? IssueId => Id.Replace("issue-", "");
         public bool? HasDescription => true;
+        public int? TaskGraphLane { get; }
     }
 
     #endregion

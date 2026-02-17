@@ -2,6 +2,7 @@ using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Gitgraph.Data;
 using Homespun.Features.PullRequests.Data;
 using Homespun.Features.Testing.Services;
+using Homespun.Shared.Models.Gitgraph;
 using Microsoft.Extensions.Logging;
 using Moq;
 
@@ -86,5 +87,47 @@ public class MockGraphServiceTaskGraphTests
         Assert.That(issue001.Lane, Is.EqualTo(0));
         Assert.That(issue002.Lane, Is.EqualTo(0));
         Assert.That(issue003.Lane, Is.EqualTo(0));
+    }
+
+    [Test]
+    public async Task BuildTaskGraphAsync_SiblingLeafNotAtLaneZero()
+    {
+        var graph = await _service.BuildTaskGraphAsync("demo-project");
+
+        Assert.That(graph, Is.Not.Null);
+
+        var nodes = graph!.Nodes.OfType<TaskGraphIssueNode>().ToList();
+
+        // ISSUE-011 is a leaf (no children), sibling of ISSUE-009 under ISSUE-008
+        // It should NOT be at lane 0 because its parent ISSUE-008 is at lane 2
+        // Fleece.Core assigns lane = parent_lane - 1, so ISSUE-011 = lane 1
+        var issue011 = nodes.Single(n => n.Issue.Id == "ISSUE-011");
+        Assert.That(issue011.Lane, Is.GreaterThan(0), "Leaf sibling ISSUE-011 should not be at lane 0");
+    }
+
+    [Test]
+    public async Task BuildTaskGraphAsync_LaneCalculatorUsesPrecomputedLanes()
+    {
+        // Verify that TaskGraphLaneCalculator produces the same lanes as Fleece.Core
+        var graph = await _service.BuildTaskGraphAsync("demo-project");
+
+        Assert.That(graph, Is.Not.Null);
+
+        var nodes = graph!.Nodes.ToList();
+        var calculator = new TaskGraphLaneCalculator();
+        var layout = calculator.Calculate(nodes);
+
+        // The calculator should use TaskGraphLane values from the nodes
+        var issueNodes = nodes.OfType<TaskGraphIssueNode>().ToList();
+        foreach (var node in issueNodes)
+        {
+            Assert.That(layout.LaneAssignments[$"issue-{node.Issue.Id}"], Is.EqualTo(node.Lane),
+                $"LaneCalculator lane for {node.Issue.Id} should match Fleece.Core lane");
+        }
+
+        // Specifically verify ISSUE-011 is not at lane 0 through the calculator
+        var issue011Lane = layout.LaneAssignments["issue-ISSUE-011"];
+        Assert.That(issue011Lane, Is.GreaterThan(0),
+            "LaneCalculator should place ISSUE-011 at lane > 0 using pre-computed values");
     }
 }

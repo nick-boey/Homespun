@@ -2,16 +2,17 @@ namespace Homespun.Shared.Models.Gitgraph;
 
 /// <summary>
 /// Calculates lane layout information for task graph nodes.
-/// Computes lanes from parent-child relationships in the graph:
-/// - Lane 0 (left): Leaf nodes (actionable items with no sub-tasks)
-/// - Higher lanes (right): Parent/container issues that have sub-tasks
+/// Uses pre-computed TaskGraphLane values from Fleece.Core when available (top-down algorithm),
+/// otherwise falls back to computing lanes from parent-child relationships:
+/// - Lane 0 (left): Actionable items
+/// - Higher lanes (right): Parent/container issues
 /// Connectors draw horizontally from parent (right) to child (left).
 /// </summary>
 public class TaskGraphLaneCalculator
 {
     /// <summary>
     /// Calculate lane layout for task graph nodes.
-    /// Lanes are computed from parent-child relationships, not pre-assigned values.
+    /// Uses pre-computed TaskGraphLane values when available, otherwise computes from parent-child relationships.
     /// </summary>
     /// <param name="nodes">Nodes in display order.</param>
     /// <returns>Layout information including computed lane assignments and per-row rendering info.</returns>
@@ -150,9 +151,9 @@ public class TaskGraphLaneCalculator
     }
 
     /// <summary>
-    /// Assigns lanes based on children: leaf nodes get lane 0,
-    /// parent nodes get max(children lanes) + 1.
-    /// Nodes must be in topological order (leaves first).
+    /// Assigns lanes to nodes. Uses pre-computed TaskGraphLane values when available
+    /// (from Fleece.Core's top-down algorithm), otherwise falls back to bottom-up
+    /// computation where leaf nodes get lane 0 and parents get max(children lanes) + 1.
     /// </summary>
     private static Dictionary<string, int> AssignLanes(
         List<IGraphNode> sortedNodes,
@@ -160,6 +161,17 @@ public class TaskGraphLaneCalculator
     {
         var lanes = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
+        // Use pre-computed lanes from Fleece.Core when available
+        if (sortedNodes.Any(n => n.TaskGraphLane.HasValue))
+        {
+            foreach (var node in sortedNodes)
+            {
+                lanes[node.Id] = node.TaskGraphLane ?? 0;
+            }
+            return lanes;
+        }
+
+        // Fallback: compute from parent-child relationships (bottom-up)
         foreach (var node in sortedNodes)
         {
             if (childrenByNodeId.TryGetValue(node.Id, out var children) && children.Count > 0)
