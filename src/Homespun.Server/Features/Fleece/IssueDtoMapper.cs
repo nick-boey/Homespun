@@ -39,4 +39,19 @@ public static class IssueDtoMapper
     {
         return issues.Select(i => i.ToResponse()).ToList();
     }
+
+    public static TaskGraphResponse ToResponse(this TaskGraph taskGraph)
+    {
+        return new TaskGraphResponse
+        {
+            Nodes = taskGraph.Nodes.Select(n => new TaskGraphNodeResponse
+            {
+                Issue = n.Issue.ToResponse(),
+                Lane = n.Lane,
+                Row = n.Row,
+                IsActionable = n.IsActionable
+            }).ToList(),
+            TotalLanes = taskGraph.TotalLanes
+        };
+    }
 }

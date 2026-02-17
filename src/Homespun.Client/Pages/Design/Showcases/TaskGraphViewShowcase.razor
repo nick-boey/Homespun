@@ -1,0 +1,180 @@
+@using Fleece.Core.Models
+@using Homespun.Shared.Models.Fleece
+@using Homespun.Shared.Models.Gitgraph
+
+<div class="showcase-section">
+    <h3>Single Orphan Issue (Actionable)</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">A standalone actionable issue with accent-colored border marker</div>
+        <div class="showcase-preview">
+            <TaskGraphView TaskGraph="@_singleOrphan" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Parent-Child with Connector</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Child at lane 0 connects to parent at lane 1 with horizontal line and vertical connector</div>
+        <div class="showcase-preview">
+            <TaskGraphView TaskGraph="@_parentChild" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Multiple Siblings Sharing Parent</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">First child uses top-right junction, subsequent siblings use right-tee junction</div>
+        <div class="showcase-preview">
+            <TaskGraphView TaskGraph="@_siblings" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>All Marker Types</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Actionable (accent border), Open (muted border), Complete (green filled), Closed (gray filled)</div>
+        <div class="showcase-preview">
+            <TaskGraphView TaskGraph="@_allMarkers" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Selected Issue</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Second issue is selected with highlight background and marker glow</div>
+        <div class="showcase-preview">
+            <TaskGraphView TaskGraph="@_selectedDemo" SelectedNodeId="issue-DEMO-002" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>With Agent Status Badges</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Issues with active and inactive agent sessions</div>
+        <div class="showcase-preview">
+            <TaskGraphView TaskGraph="@_agentDemo" AgentStatuses="@_agentStatuses" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Full Mock Graph (13 Issues)</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Complete task graph with orphans, chains, siblings, and multiple disconnected groups</div>
+        <div class="showcase-preview">
+            <TaskGraphView TaskGraph="@_fullMock" />
+        </div>
+    </div>
+</div>
+
+@code {
+    private TaskGraphResponse _singleOrphan = new()
+    {
+        TotalLanes = 1,
+        Nodes =
+        [
+            new() { Issue = new() { Id = "FEAT-001", Title = "Add dark mode support", Status = IssueStatus.Open }, Lane = 0, Row = 0, IsActionable = true }
+        ]
+    };
+
+    private TaskGraphResponse _parentChild = new()
+    {
+        TotalLanes = 2,
+        Nodes =
+        [
+            new() { Issue = new() { Id = "TASK-002", Title = "Implement login page", Status = IssueStatus.Open,
+                ParentIssues = [new() { ParentIssue = "TASK-001" }] }, Lane = 0, Row = 0, IsActionable = true },
+            new() { Issue = new() { Id = "TASK-001", Title = "Design authentication flow", Status = IssueStatus.Open }, Lane = 1, Row = 1, IsActionable = false }
+        ]
+    };
+
+    private TaskGraphResponse _siblings = new()
+    {
+        TotalLanes = 2,
+        Nodes =
+        [
+            new() { Issue = new() { Id = "TASK-010", Title = "Write unit tests", Status = IssueStatus.Open,
+                ParentIssues = [new() { ParentIssue = "TASK-005" }] }, Lane = 0, Row = 0, IsActionable = true },
+            new() { Issue = new() { Id = "TASK-011", Title = "Write integration tests", Status = IssueStatus.Open,
+                ParentIssues = [new() { ParentIssue = "TASK-005" }] }, Lane = 0, Row = 1, IsActionable = true },
+            new() { Issue = new() { Id = "TASK-012", Title = "Write e2e tests", Status = IssueStatus.Open,
+                ParentIssues = [new() { ParentIssue = "TASK-005" }] }, Lane = 0, Row = 2, IsActionable = true },
+            new() { Issue = new() { Id = "TASK-005", Title = "Implement feature", Status = IssueStatus.Open }, Lane = 1, Row = 3, IsActionable = false }
+        ]
+    };
+
+    private TaskGraphResponse _allMarkers = new()
+    {
+        TotalLanes = 1,
+        Nodes =
+        [
+            new() { Issue = new() { Id = "MRK-001", Title = "Actionable issue (next to work on)", Status = IssueStatus.Open }, Lane = 0, Row = 0, IsActionable = true },
+            new() { Issue = new() { Id = "MRK-002", Title = "Open issue (blocked by dependencies)", Status = IssueStatus.Open }, Lane = 0, Row = 1, IsActionable = false },
+            new() { Issue = new() { Id = "MRK-003", Title = "Completed issue", Status = IssueStatus.Complete }, Lane = 0, Row = 2, IsActionable = false },
+            new() { Issue = new() { Id = "MRK-004", Title = "Closed issue (won't fix)", Status = IssueStatus.Closed }, Lane = 0, Row = 3, IsActionable = false }
+        ]
+    };
+
+    private TaskGraphResponse _selectedDemo = new()
+    {
+        TotalLanes = 1,
+        Nodes =
+        [
+            new() { Issue = new() { Id = "DEMO-001", Title = "First issue", Status = IssueStatus.Open }, Lane = 0, Row = 0, IsActionable = true },
+            new() { Issue = new() { Id = "DEMO-002", Title = "Selected issue (highlighted)", Status = IssueStatus.Open }, Lane = 0, Row = 1, IsActionable = true },
+            new() { Issue = new() { Id = "DEMO-003", Title = "Third issue", Status = IssueStatus.Open }, Lane = 0, Row = 2, IsActionable = true }
+        ]
+    };
+
+    private TaskGraphResponse _agentDemo = new()
+    {
+        TotalLanes = 1,
+        Nodes =
+        [
+            new() { Issue = new() { Id = "AGT-001", Title = "Issue with active agent", Status = IssueStatus.Progress }, Lane = 0, Row = 0, IsActionable = false },
+            new() { Issue = new() { Id = "AGT-002", Title = "Issue with inactive agent", Status = IssueStatus.Open }, Lane = 0, Row = 1, IsActionable = true },
+            new() { Issue = new() { Id = "AGT-003", Title = "Issue without agent", Status = IssueStatus.Open }, Lane = 0, Row = 2, IsActionable = true }
+        ]
+    };
+
+    private Dictionary<string, AgentStatusData> _agentStatuses = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["AGT-001"] = new() { IsActive = true, Status = "Running", SessionId = "session-1" },
+        ["AGT-002"] = new() { IsActive = false, Status = "Stopped", SessionId = "session-2" }
+    };
+
+    private TaskGraphResponse _fullMock = new()
+    {
+        TotalLanes = 6,
+        Nodes =
+        [
+            new() { Issue = new() { Id = "ISSUE-003", Title = "Fix login timeout bug", Status = IssueStatus.Progress }, Lane = 0, Row = 0, IsActionable = false },
+            new() { Issue = new() { Id = "ISSUE-001", Title = "Add dark mode support", Status = IssueStatus.Open }, Lane = 0, Row = 1, IsActionable = true },
+            new() { Issue = new() { Id = "ISSUE-010", Title = "Implement DELETE endpoints", Status = IssueStatus.Open,
+                ParentIssues = [new() { ParentIssue = "ISSUE-009" }] }, Lane = 0, Row = 2, IsActionable = true },
+            new() { Issue = new() { Id = "ISSUE-009", Title = "Implement PUT/PATCH endpoints", Status = IssueStatus.Open,
+                ParentIssues = [new() { ParentIssue = "ISSUE-008" }] }, Lane = 1, Row = 3, IsActionable = false },
+            new() { Issue = new() { Id = "ISSUE-011", Title = "Add request validation", Status = IssueStatus.Open,
+                ParentIssues = [new() { ParentIssue = "ISSUE-008" }] }, Lane = 1, Row = 4, IsActionable = false },
+            new() { Issue = new() { Id = "ISSUE-008", Title = "Implement POST endpoints", Status = IssueStatus.Open,
+                ParentIssues = [new() { ParentIssue = "ISSUE-007" }] }, Lane = 2, Row = 5, IsActionable = false },
+            new() { Issue = new() { Id = "ISSUE-012", Title = "Add rate limiting", Status = IssueStatus.Open,
+                ParentIssues = [new() { ParentIssue = "ISSUE-007" }] }, Lane = 2, Row = 6, IsActionable = false },
+            new() { Issue = new() { Id = "ISSUE-007", Title = "Implement GET endpoints", Status = IssueStatus.Open,
+                ParentIssues = [new() { ParentIssue = "ISSUE-005" }] }, Lane = 3, Row = 7, IsActionable = false },
+            new() { Issue = new() { Id = "ISSUE-006", Title = "Write API documentation", Status = IssueStatus.Open,
+                ParentIssues = [new() { ParentIssue = "ISSUE-005" }] }, Lane = 3, Row = 8, IsActionable = true },
+            new() { Issue = new() { Id = "ISSUE-013", Title = "Set up API monitoring", Status = IssueStatus.Open,
+                ParentIssues = [new() { ParentIssue = "ISSUE-005" }] }, Lane = 3, Row = 9, IsActionable = false },
+            new() { Issue = new() { Id = "ISSUE-005", Title = "Implement API endpoints", Status = IssueStatus.Open,
+                ParentIssues = [new() { ParentIssue = "ISSUE-004" }] }, Lane = 4, Row = 10, IsActionable = false },
+            new() { Issue = new() { Id = "ISSUE-004", Title = "Design API schema", Status = IssueStatus.Open }, Lane = 5, Row = 11, IsActionable = false },
+            new() { Issue = new() { Id = "ISSUE-002", Title = "Improve mobile responsiveness", Status = IssueStatus.Open }, Lane = 0, Row = 12, IsActionable = true }
+        ]
+    };
+}

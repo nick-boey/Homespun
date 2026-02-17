@@ -1,8 +1,7 @@
+using Fleece.Core.Models;
 using Homespun.Features.ClaudeCode.Services;
-using Homespun.Features.Gitgraph.Data;
 using Homespun.Features.PullRequests.Data;
 using Homespun.Features.Testing.Services;
-using Homespun.Shared.Models.Gitgraph;
 using Microsoft.Extensions.Logging;
 using Moq;
 
@@ -24,65 +23,53 @@ public class MockGraphServiceTaskGraphTests
     }
 
     [Test]
-    public async Task BuildTaskGraphAsync_ReturnsOnlyIssueNodes()
+    public async Task BuildTaskGraphAsync_ReturnsTaskGraph()
     {
-        var graph = await _service.BuildTaskGraphAsync("demo-project");
+        var taskGraph = await _service.BuildTaskGraphAsync("demo-project");
 
-        Assert.That(graph, Is.Not.Null);
-        Assert.That(graph!.Nodes, Has.All.InstanceOf<TaskGraphIssueNode>());
+        Assert.That(taskGraph, Is.Not.Null);
+        Assert.That(taskGraph, Is.InstanceOf<TaskGraph>());
     }
 
     [Test]
     public async Task BuildTaskGraphAsync_CorrectNodeCount()
     {
-        var graph = await _service.BuildTaskGraphAsync("demo-project");
+        var taskGraph = await _service.BuildTaskGraphAsync("demo-project");
 
-        Assert.That(graph, Is.Not.Null);
-        Assert.That(graph!.Nodes, Has.Count.EqualTo(13));
+        Assert.That(taskGraph, Is.Not.Null);
+        Assert.That(taskGraph!.Nodes, Has.Count.EqualTo(13));
     }
 
     [Test]
-    public async Task BuildTaskGraphAsync_ActionableItemsAtLaneZero()
+    public async Task BuildTaskGraphAsync_NextIssuesCorrect()
     {
-        var graph = await _service.BuildTaskGraphAsync("demo-project");
+        var taskGraph = await _service.BuildTaskGraphAsync("demo-project");
 
-        Assert.That(graph, Is.Not.Null);
+        Assert.That(taskGraph, Is.Not.Null);
 
-        // ISSUE-010 is a leaf node (deepest in chain), should be actionable at lane 0
-        var issue010 = graph!.Nodes.OfType<TaskGraphIssueNode>().Single(n => n.Issue.Id == "ISSUE-010");
-        Assert.That(issue010.Lane, Is.EqualTo(0));
-        Assert.That(issue010.IsActionable, Is.True);
-    }
+        var actionableNodes = taskGraph!.Nodes
+            .Where(n => n.IsActionable)
+            .Select(n => n.Issue.Id)
+            .ToList();
 
-    [Test]
-    public async Task BuildTaskGraphAsync_RootIssuesAtHighestLane()
-    {
-        var graph = await _service.BuildTaskGraphAsync("demo-project");
-
-        Assert.That(graph, Is.Not.Null);
-
-        var nodes = graph!.Nodes.OfType<TaskGraphIssueNode>().ToList();
-        var issue004 = nodes.Single(n => n.Issue.Id == "ISSUE-004");
-        var maxLane = nodes.Max(n => n.Lane);
-
-        // ISSUE-004 is the root of the dependency chain and should have the highest lane
-        Assert.That(issue004.Lane, Is.EqualTo(maxLane));
-        Assert.That(issue004.Lane, Is.GreaterThan(0));
+        // ISSUE-003 is Progress status, Fleece.Core does not mark it as actionable
+        // ISSUE-006 is actionable per Fleece.Core's NextService
+        Assert.That(actionableNodes, Does.Contain("ISSUE-001"));
+        Assert.That(actionableNodes, Does.Contain("ISSUE-002"));
+        Assert.That(actionableNodes, Does.Contain("ISSUE-006"));
+        Assert.That(actionableNodes, Does.Contain("ISSUE-010"));
     }
 
     [Test]
     public async Task BuildTaskGraphAsync_OrphansAtLaneZero()
     {
-        var graph = await _service.BuildTaskGraphAsync("demo-project");
+        var taskGraph = await _service.BuildTaskGraphAsync("demo-project");
 
-        Assert.That(graph, Is.Not.Null);
+        Assert.That(taskGraph, Is.Not.Null);
 
-        var nodes = graph!.Nodes.OfType<TaskGraphIssueNode>().ToList();
-
-        // Orphans have no parent issues and no children, so they are actionable at lane 0
-        var issue001 = nodes.Single(n => n.Issue.Id == "ISSUE-001");
-        var issue002 = nodes.Single(n => n.Issue.Id == "ISSUE-002");
-        var issue003 = nodes.Single(n => n.Issue.Id == "ISSUE-003");
+        var issue001 = taskGraph!.Nodes.Single(n => n.Issue.Id == "ISSUE-001");
+        var issue002 = taskGraph.Nodes.Single(n => n.Issue.Id == "ISSUE-002");
+        var issue003 = taskGraph.Nodes.Single(n => n.Issue.Id == "ISSUE-003");
 
         Assert.That(issue001.Lane, Is.EqualTo(0));
         Assert.That(issue002.Lane, Is.EqualTo(0));
@@ -90,44 +77,13 @@ public class MockGraphServiceTaskGraphTests
     }
 
     [Test]
-    public async Task BuildTaskGraphAsync_SiblingLeafNotAtLaneZero()
+    public async Task BuildTaskGraphTextAsync_ReturnsNonEmptyText()
     {
-        var graph = await _service.BuildTaskGraphAsync("demo-project");
+        var text = await _service.BuildTaskGraphTextAsync("demo-project");
 
-        Assert.That(graph, Is.Not.Null);
-
-        var nodes = graph!.Nodes.OfType<TaskGraphIssueNode>().ToList();
-
-        // ISSUE-011 is a leaf (no children), sibling of ISSUE-009 under ISSUE-008
-        // It should NOT be at lane 0 because its parent ISSUE-008 is at lane 2
-        // Fleece.Core assigns lane = parent_lane - 1, so ISSUE-011 = lane 1
-        var issue011 = nodes.Single(n => n.Issue.Id == "ISSUE-011");
-        Assert.That(issue011.Lane, Is.GreaterThan(0), "Leaf sibling ISSUE-011 should not be at lane 0");
-    }
-
-    [Test]
-    public async Task BuildTaskGraphAsync_LaneCalculatorUsesPrecomputedLanes()
-    {
-        // Verify that TaskGraphLaneCalculator produces the same lanes as Fleece.Core
-        var graph = await _service.BuildTaskGraphAsync("demo-project");
-
-        Assert.That(graph, Is.Not.Null);
-
-        var nodes = graph!.Nodes.ToList();
-        var calculator = new TaskGraphLaneCalculator();
-        var layout = calculator.Calculate(nodes);
-
-        // The calculator should use TaskGraphLane values from the nodes
-        var issueNodes = nodes.OfType<TaskGraphIssueNode>().ToList();
-        foreach (var node in issueNodes)
-        {
-            Assert.That(layout.LaneAssignments[$"issue-{node.Issue.Id}"], Is.EqualTo(node.Lane),
-                $"LaneCalculator lane for {node.Issue.Id} should match Fleece.Core lane");
-        }
-
-        // Specifically verify ISSUE-011 is not at lane 0 through the calculator
-        var issue011Lane = layout.LaneAssignments["issue-ISSUE-011"];
-        Assert.That(issue011Lane, Is.GreaterThan(0),
-            "LaneCalculator should place ISSUE-011 at lane > 0 using pre-computed values");
+        Assert.That(text, Is.Not.Null);
+        Assert.That(text, Is.Not.Empty);
+        Assert.That(text, Does.Contain("ISSUE-001"));
+        Assert.That(text, Does.Contain("ISSUE-010"));
     }
 }

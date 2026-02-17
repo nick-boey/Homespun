@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using Homespun.Shared.Models.Fleece;
 using Homespun.Shared.Models.Gitgraph;
 
 namespace Homespun.Client.Services;
@@ -29,15 +30,19 @@ public class HttpGraphApiService(HttpClient http)
     }
 
     /// <summary>
-    /// Gets the task graph data from the server.
+    /// Gets the task graph as plain text from the server.
     /// The task graph displays issues with actionable items on the left (lane 0)
     /// and parent/blocking issues on the right (higher lanes).
     /// </summary>
-    public async Task<GraphApiResponse?> GetTaskGraphDataAsync(string projectId)
+    public async Task<string?> GetTaskGraphTextAsync(string projectId)
     {
         try
         {
-            return await http.GetFromJsonAsync<GraphApiResponse>($"{BaseUrl}/{projectId}/taskgraph");
+            var response = await http.GetAsync($"{BaseUrl}/{projectId}/taskgraph");
+            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+                return null;
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadAsStringAsync();
         }
         catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
@@ -45,13 +50,16 @@ public class HttpGraphApiService(HttpClient http)
         }
     }
 
-    /// <summary>
-    /// Gets the task graph data and converts it to a Graph model for visualization.
-    /// </summary>
-    public async Task<Graph?> GetTaskGraphAsync(string projectId)
+    public async Task<TaskGraphResponse?> GetTaskGraphDataAsync(string projectId)
     {
-        var data = await GetTaskGraphDataAsync(projectId);
-        return data != null ? ToGraph(data) : null;
+        try
+        {
+            return await http.GetFromJsonAsync<TaskGraphResponse>($"{BaseUrl}/{projectId}/taskgraph/data");
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            return null;
+        }
     }
 
     /// <summary>

@@ -818,4 +818,204 @@ public class TimelineSvgRendererTests
     }
 
     #endregion
+
+    #region GenerateTaskGraphIssueSvg Tests
+
+    [Test]
+    public void GenerateTaskGraphIssueSvg_NoParent_OnlyDiamondNoConnectors()
+    {
+        var svg = TimelineSvgRenderer.GenerateTaskGraphIssueSvg(
+            nodeLane: 0, parentLane: null, isFirstChild: false, maxLanes: 1,
+            nodeColor: "#51A5C1", isOutlineOnly: true, isActionable: false);
+
+        Assert.That(svg, Does.Contain("<svg"));
+        Assert.That(svg, Does.Contain("<path"));
+        // No horizontal or junction paths since no parent
+        Assert.That(CountOccurrences(svg, "<path"), Is.EqualTo(1), "Should only have the diamond path");
+    }
+
+    [Test]
+    public void GenerateTaskGraphIssueSvg_WithParent_FirstChild_BottomHalfJunction()
+    {
+        // Node at lane 0, parent at lane 1 — first child gets bottom-half junction (toward parent below)
+        var svg = TimelineSvgRenderer.GenerateTaskGraphIssueSvg(
+            nodeLane: 0, parentLane: 1, isFirstChild: true, maxLanes: 2,
+            nodeColor: "#6b7280", isOutlineOnly: true, isActionable: false);
+
+        var px = TimelineSvgRenderer.GetLaneCenterX(1); // 36
+        // Bottom-half junction: M px 20 L px 40 (center to bottom, pointing toward parent)
+        Assert.That(svg, Does.Contain($"M {px} 20 L {px} 40"));
+    }
+
+    [Test]
+    public void GenerateTaskGraphIssueSvg_WithParent_SubsequentChild_FullHeightJunction()
+    {
+        // Node at lane 0, parent at lane 1 — subsequent child gets full-height junction
+        var svg = TimelineSvgRenderer.GenerateTaskGraphIssueSvg(
+            nodeLane: 0, parentLane: 1, isFirstChild: false, maxLanes: 2,
+            nodeColor: "#6b7280", isOutlineOnly: true, isActionable: false);
+
+        var px = TimelineSvgRenderer.GetLaneCenterX(1); // 36
+        // Full-height junction: M px 0 L px 40
+        Assert.That(svg, Does.Contain($"M {px} 0 L {px} 40"));
+    }
+
+    [Test]
+    public void GenerateTaskGraphIssueSvg_WithParent_DrawsHorizontalLine()
+    {
+        // Node at lane 0, parent at lane 2
+        var svg = TimelineSvgRenderer.GenerateTaskGraphIssueSvg(
+            nodeLane: 0, parentLane: 2, isFirstChild: true, maxLanes: 3,
+            nodeColor: "#6b7280", isOutlineOnly: true, isActionable: false);
+
+        var cx = TimelineSvgRenderer.GetLaneCenterX(0); // 12
+        var px = TimelineSvgRenderer.GetLaneCenterX(2); // 60
+        var startX = cx + TimelineSvgRenderer.DiamondSize + 2; // 12 + 7 + 2 = 21
+        // Horizontal line from diamond right edge to parent lane center
+        Assert.That(svg, Does.Contain($"M {startX} 20 L {px} 20"));
+    }
+
+    [Test]
+    public void GenerateTaskGraphIssueSvg_Actionable_ContainsGlowRing()
+    {
+        var svg = TimelineSvgRenderer.GenerateTaskGraphIssueSvg(
+            nodeLane: 0, parentLane: null, isFirstChild: false, maxLanes: 1,
+            nodeColor: "#51A5C1", isOutlineOnly: true, isActionable: true);
+
+        Assert.That(svg, Does.Contain("opacity=\"0.4\""));
+        Assert.That(svg, Does.Contain("<circle"));
+    }
+
+    [Test]
+    public void GenerateTaskGraphIssueSvg_NotActionable_NoGlowRing()
+    {
+        var svg = TimelineSvgRenderer.GenerateTaskGraphIssueSvg(
+            nodeLane: 0, parentLane: null, isFirstChild: false, maxLanes: 1,
+            nodeColor: "#6b7280", isOutlineOnly: true, isActionable: false);
+
+        Assert.That(svg, Does.Not.Contain("<circle"));
+    }
+
+    [Test]
+    public void GenerateTaskGraphIssueSvg_Filled_ContainsFillColor()
+    {
+        var svg = TimelineSvgRenderer.GenerateTaskGraphIssueSvg(
+            nodeLane: 0, parentLane: null, isFirstChild: false, maxLanes: 1,
+            nodeColor: "#10b981", isOutlineOnly: false, isActionable: false);
+
+        Assert.That(svg, Does.Contain("fill=\"#10b981\""));
+        Assert.That(svg, Does.Not.Contain("fill=\"none\""));
+    }
+
+    [Test]
+    public void GenerateTaskGraphIssueSvg_Outline_ContainsStrokeNoFill()
+    {
+        var svg = TimelineSvgRenderer.GenerateTaskGraphIssueSvg(
+            nodeLane: 0, parentLane: null, isFirstChild: false, maxLanes: 1,
+            nodeColor: "#51A5C1", isOutlineOnly: true, isActionable: false);
+
+        Assert.That(svg, Does.Contain("fill=\"none\""));
+        Assert.That(svg, Does.Contain("stroke=\"#51A5C1\""));
+    }
+
+    [Test]
+    public void GenerateTaskGraphIssueSvg_SvgWidth_MatchesCalculateSvgWidth()
+    {
+        var maxLanes = 3;
+        var expectedWidth = TimelineSvgRenderer.CalculateSvgWidth(maxLanes);
+
+        var svg = TimelineSvgRenderer.GenerateTaskGraphIssueSvg(
+            nodeLane: 0, parentLane: null, isFirstChild: false, maxLanes: maxLanes,
+            nodeColor: "#6b7280", isOutlineOnly: true, isActionable: false);
+
+        Assert.That(svg, Does.Contain($"width=\"{expectedWidth}\""));
+        Assert.That(svg, Does.Contain($"height=\"{TimelineSvgRenderer.RowHeight}\""));
+    }
+
+    [Test]
+    public void GenerateTaskGraphIssueSvg_NonZeroLane_CorrectCoordinates()
+    {
+        // Node at lane 2, no parent
+        var svg = TimelineSvgRenderer.GenerateTaskGraphIssueSvg(
+            nodeLane: 2, parentLane: null, isFirstChild: false, maxLanes: 3,
+            nodeColor: "#6b7280", isOutlineOnly: true, isActionable: false);
+
+        var cx = TimelineSvgRenderer.GetLaneCenterX(2); // 60
+        var cy = TimelineSvgRenderer.GetRowCenterY(); // 20
+        var s = TimelineSvgRenderer.DiamondSize; // 7
+        // Diamond at lane 2: M 60 13
+        Assert.That(svg, Does.Contain($"M {cx} {cy - s}"));
+    }
+
+    [Test]
+    public void GenerateTaskGraphIssueSvg_WithOpacity_AppliesOpacityToDiamond()
+    {
+        var svg = TimelineSvgRenderer.GenerateTaskGraphIssueSvg(
+            nodeLane: 0, parentLane: null, isFirstChild: false, maxLanes: 1,
+            nodeColor: "#6b7280", isOutlineOnly: false, isActionable: false, opacity: 0.5);
+
+        Assert.That(svg, Does.Contain("opacity=\"0.5\""));
+    }
+
+    [Test]
+    public void GenerateTaskGraphIssueSvg_DrawTopLine_DrawsVerticalAboveDiamond()
+    {
+        // drawTopLine draws a vertical line from y=0 to cy - DiamondSize - 2 = 20 - 7 - 2 = 11
+        var svg = TimelineSvgRenderer.GenerateTaskGraphIssueSvg(
+            nodeLane: 1, parentLane: null, isFirstChild: false, maxLanes: 2,
+            nodeColor: "#51A5C1", isOutlineOnly: true, isActionable: false, drawTopLine: true);
+
+        var x = TimelineSvgRenderer.GetLaneCenterX(1); // 36
+        Assert.That(svg, Does.Contain($"M {x} 0 L {x} 11"));
+    }
+
+    [Test]
+    public void GenerateTaskGraphIssueSvg_NoDrawTopLine_NoTopVertical()
+    {
+        // Without drawTopLine, there should be no vertical line above the diamond
+        var svg = TimelineSvgRenderer.GenerateTaskGraphIssueSvg(
+            nodeLane: 1, parentLane: null, isFirstChild: false, maxLanes: 2,
+            nodeColor: "#51A5C1", isOutlineOnly: true, isActionable: false, drawTopLine: false);
+
+        var x = TimelineSvgRenderer.GetLaneCenterX(1); // 36
+        Assert.That(svg, Does.Not.Contain($"M {x} 0 L {x} 11"));
+    }
+
+    #endregion
+
+    #region GenerateTaskGraphConnectorSvg Tests
+
+    [Test]
+    public void GenerateTaskGraphConnectorSvg_DefaultHeight_CorrectSvgAndPath()
+    {
+        var svg = TimelineSvgRenderer.GenerateTaskGraphConnectorSvg(lane: 1, maxLanes: 2);
+
+        var x = TimelineSvgRenderer.GetLaneCenterX(1); // 36
+        Assert.That(svg, Does.Contain("height=\"16\""));
+        Assert.That(svg, Does.Contain($"M {x} 0 L {x} 16"));
+        Assert.That(svg, Does.Contain("stroke=\"#6b7280\""));
+    }
+
+    [Test]
+    public void GenerateTaskGraphConnectorSvg_CustomHeight_Respected()
+    {
+        var svg = TimelineSvgRenderer.GenerateTaskGraphConnectorSvg(lane: 0, maxLanes: 1, height: 24);
+
+        var x = TimelineSvgRenderer.GetLaneCenterX(0); // 12
+        Assert.That(svg, Does.Contain("height=\"24\""));
+        Assert.That(svg, Does.Contain($"M {x} 0 L {x} 24"));
+    }
+
+    [Test]
+    public void GenerateTaskGraphConnectorSvg_SvgWidth_MatchesCalculateSvgWidth()
+    {
+        var maxLanes = 3;
+        var expectedWidth = TimelineSvgRenderer.CalculateSvgWidth(maxLanes);
+
+        var svg = TimelineSvgRenderer.GenerateTaskGraphConnectorSvg(lane: 1, maxLanes: maxLanes);
+
+        Assert.That(svg, Does.Contain($"width=\"{expectedWidth}\""));
+    }
+
+    #endregion
 }

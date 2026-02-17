@@ -17,7 +17,6 @@ public class MockGraphService : IGraphService
     private readonly IClaudeSessionStore _sessionStore;
     private readonly ILogger<MockGraphService> _logger;
     private readonly GraphBuilder _graphBuilder = new();
-    private readonly TaskGraphBuilder _taskGraphBuilder = new();
     private readonly GitgraphApiMapper _mapper = new();
 
     public MockGraphService(
@@ -121,7 +120,7 @@ public class MockGraphService : IGraphService
         return true;
     }
 
-    public async Task<Graph?> BuildTaskGraphAsync(string projectId)
+    public async Task<TaskGraph?> BuildTaskGraphAsync(string projectId)
     {
         _logger.LogDebug("[Mock] BuildTaskGraph for project {ProjectId}", projectId);
 
@@ -138,27 +137,18 @@ public class MockGraphService : IGraphService
         var mockIssueService = new MockIssueServiceAdapter(openIssues);
         var nextService = new NextService(mockIssueService);
         var taskGraphService = new TaskGraphService(mockIssueService, nextService);
-        var taskGraph = await taskGraphService.BuildGraphAsync();
-
-        return _taskGraphBuilder.Build(taskGraph);
+        return await taskGraphService.BuildGraphAsync();
     }
 
-    public async Task<GitgraphJsonData?> BuildTaskGraphJsonAsync(string projectId)
+    public async Task<string?> BuildTaskGraphTextAsync(string projectId)
     {
-        _logger.LogDebug("[Mock] BuildTaskGraphJson for project {ProjectId}", projectId);
+        _logger.LogDebug("[Mock] BuildTaskGraphText for project {ProjectId}", projectId);
 
-        var graph = await BuildTaskGraphAsync(projectId);
-        if (graph == null)
-        {
+        var taskGraph = await BuildTaskGraphAsync(projectId);
+        if (taskGraph == null)
             return null;
-        }
 
-        var jsonData = _mapper.ToJson(graph);
-
-        // Enrich nodes with agent status data
-        EnrichWithAgentStatuses(jsonData, projectId);
-
-        return jsonData;
+        return TaskGraphTextRenderer.Render(taskGraph);
     }
 
     private static PullRequestInfo ConvertToPullRequestInfo(PullRequest pr)
