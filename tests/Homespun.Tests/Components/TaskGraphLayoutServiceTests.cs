@@ -504,6 +504,265 @@ public class TaskGraphLayoutServiceTests
     /// TaskGraphTextRendererTests.Render_MockIssueData_MatchesExpectedOutput.
     /// This represents the pre-computed output from Fleece.Core's TaskGraphService.
     /// </summary>
+    [Test]
+    public void ComputeLayout_MergedPrs_IssueLanesOffsetByOne()
+    {
+        // When merged PRs exist, issue nodes should have their lanes offset by +1
+        // to make room for the vertical line in lane 0 connecting PRs to issues.
+        // Connected issues in the same group maintain relative positions with offset applied.
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes =
+            [
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "CHILD-001", Title = "Child at lane 0", Status = IssueStatus.Open,
+                        ParentIssues = [new ParentIssueRefResponse { ParentIssue = "PARENT-001" }] },
+                    Lane = 0, Row = 0, IsActionable = true
+                },
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "PARENT-001", Title = "Parent at lane 1", Status = IssueStatus.Open },
+                    Lane = 1, Row = 1, IsActionable = false
+                }
+            ],
+            TotalLanes = 2,
+            MergedPrs =
+            [
+                new TaskGraphPrResponse { Number = 100, Title = "PR 100", IsMerged = true }
+            ]
+        };
+
+        var result = TaskGraphLayoutService.ComputeLayout(taskGraph);
+
+        // Skip load more, PR, and separator lines to find issue lines
+        var issueLines = result.OfType<TaskGraphIssueRenderLine>().ToList();
+        Assert.That(issueLines, Has.Count.EqualTo(2));
+        Assert.That(issueLines[0].Lane, Is.EqualTo(1), "Issue originally at lane 0 should be offset to lane 1");
+        Assert.That(issueLines[1].Lane, Is.EqualTo(2), "Issue originally at lane 1 should be offset to lane 2");
+    }
+
+    [Test]
+    public void ComputeLayout_MergedPrs_ParentLaneAlsoOffset()
+    {
+        // ParentLane should also be offset when merged PRs exist
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes =
+            [
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "CHILD-001", Title = "Child", Status = IssueStatus.Open,
+                        ParentIssues = [new ParentIssueRefResponse { ParentIssue = "PARENT-001" }] },
+                    Lane = 0, Row = 0, IsActionable = true
+                },
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "PARENT-001", Title = "Parent", Status = IssueStatus.Open },
+                    Lane = 1, Row = 1, IsActionable = false
+                }
+            ],
+            TotalLanes = 2,
+            MergedPrs =
+            [
+                new TaskGraphPrResponse { Number = 100, Title = "PR 100", IsMerged = true }
+            ]
+        };
+
+        var result = TaskGraphLayoutService.ComputeLayout(taskGraph);
+
+        var issueLines = result.OfType<TaskGraphIssueRenderLine>().ToList();
+        var childLine = issueLines.First(l => l.IssueId == "CHILD-001");
+        Assert.That(childLine.Lane, Is.EqualTo(1), "Child should be offset to lane 1");
+        Assert.That(childLine.ParentLane, Is.EqualTo(2), "ParentLane should be offset to lane 2");
+    }
+
+    [Test]
+    public void ComputeLayout_NoMergedPrs_NoLaneOffset()
+    {
+        // Without merged PRs, lanes should not be offset
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes =
+            [
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "ISSUE-001", Title = "Issue in lane 0", Status = IssueStatus.Open },
+                    Lane = 0, Row = 0, IsActionable = true
+                }
+            ],
+            TotalLanes = 1
+        };
+
+        var result = TaskGraphLayoutService.ComputeLayout(taskGraph);
+
+        var issueLine = result.OfType<TaskGraphIssueRenderLine>().First();
+        Assert.That(issueLine.Lane, Is.EqualTo(0), "Without merged PRs, lane should remain at 0");
+    }
+
+    [Test]
+    public void ComputeLayout_MergedPrs_FirstPrHasNoTopLine()
+    {
+        // First (oldest) PR should not have a top connector line
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes = [],
+            TotalLanes = 0,
+            MergedPrs =
+            [
+                new TaskGraphPrResponse { Number = 101, Title = "PR 101 (oldest)", IsMerged = true },
+                new TaskGraphPrResponse { Number = 102, Title = "PR 102 (newest)", IsMerged = true }
+            ]
+        };
+
+        var result = TaskGraphLayoutService.ComputeLayout(taskGraph);
+
+        var prLines = result.OfType<TaskGraphPrRenderLine>().ToList();
+        Assert.That(prLines, Has.Count.EqualTo(2));
+        Assert.That(prLines[0].DrawTopLine, Is.False, "First PR should have no top line");
+    }
+
+    [Test]
+    public void ComputeLayout_MergedPrs_MiddlePrsHaveTopAndBottomLines()
+    {
+        // Middle PRs should have both top and bottom connector lines
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes = [],
+            TotalLanes = 0,
+            MergedPrs =
+            [
+                new TaskGraphPrResponse { Number = 101, Title = "PR 101 (oldest)", IsMerged = true },
+                new TaskGraphPrResponse { Number = 102, Title = "PR 102 (middle)", IsMerged = true },
+                new TaskGraphPrResponse { Number = 103, Title = "PR 103 (newest)", IsMerged = true }
+            ]
+        };
+
+        var result = TaskGraphLayoutService.ComputeLayout(taskGraph);
+
+        var prLines = result.OfType<TaskGraphPrRenderLine>().ToList();
+        Assert.That(prLines, Has.Count.EqualTo(3));
+        Assert.That(prLines[1].DrawTopLine, Is.True, "Middle PR should have top line");
+        Assert.That(prLines[1].DrawBottomLine, Is.True, "Middle PR should have bottom line");
+    }
+
+    [Test]
+    public void ComputeLayout_MergedPrs_LastPrHasTopAndBottomLines()
+    {
+        // Last (newest) PR should have top line (connects to previous) and bottom line (connects to issues)
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes =
+            [
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "ISSUE-001", Title = "Some issue", Status = IssueStatus.Open },
+                    Lane = 0, Row = 0, IsActionable = true
+                }
+            ],
+            TotalLanes = 1,
+            MergedPrs =
+            [
+                new TaskGraphPrResponse { Number = 101, Title = "PR 101 (oldest)", IsMerged = true },
+                new TaskGraphPrResponse { Number = 102, Title = "PR 102 (newest)", IsMerged = true }
+            ]
+        };
+
+        var result = TaskGraphLayoutService.ComputeLayout(taskGraph);
+
+        var prLines = result.OfType<TaskGraphPrRenderLine>().ToList();
+        Assert.That(prLines, Has.Count.EqualTo(2));
+        Assert.That(prLines[1].DrawTopLine, Is.True, "Last PR should have top line");
+        Assert.That(prLines[1].DrawBottomLine, Is.True, "Last PR should have bottom line connecting to issues");
+    }
+
+    [Test]
+    public void ComputeLayout_SingleMergedPr_WithIssues_HasBottomLineOnly()
+    {
+        // Single PR with issues below: no top line but has bottom line
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes =
+            [
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "ISSUE-001", Title = "Some issue", Status = IssueStatus.Open },
+                    Lane = 0, Row = 0, IsActionable = true
+                }
+            ],
+            TotalLanes = 1,
+            MergedPrs =
+            [
+                new TaskGraphPrResponse { Number = 100, Title = "Only PR", IsMerged = true }
+            ]
+        };
+
+        var result = TaskGraphLayoutService.ComputeLayout(taskGraph);
+
+        var prLines = result.OfType<TaskGraphPrRenderLine>().ToList();
+        Assert.That(prLines, Has.Count.EqualTo(1));
+        Assert.That(prLines[0].DrawTopLine, Is.False, "Single PR should have no top line");
+        Assert.That(prLines[0].DrawBottomLine, Is.True, "Single PR with issues below should have bottom line");
+    }
+
+    [Test]
+    public void ComputeLayout_SingleMergedPr_NoIssues_NoBottomLine()
+    {
+        // Single PR with no issues below: neither top nor bottom line
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes = [],
+            TotalLanes = 0,
+            MergedPrs =
+            [
+                new TaskGraphPrResponse { Number = 100, Title = "Only PR", IsMerged = true }
+            ]
+        };
+
+        var result = TaskGraphLayoutService.ComputeLayout(taskGraph);
+
+        var prLines = result.OfType<TaskGraphPrRenderLine>().ToList();
+        Assert.That(prLines, Has.Count.EqualTo(1));
+        Assert.That(prLines[0].DrawTopLine, Is.False, "Single PR should have no top line");
+        Assert.That(prLines[0].DrawBottomLine, Is.False, "Single PR with no issues should have no bottom line");
+    }
+
+    [Test]
+    public void ComputeLayout_MergedPrs_SeriesConnectorFromLaneNotOffset()
+    {
+        // SeriesConnectorFromLane should also be offset by +1 when merged PRs exist
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes =
+            [
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "CHILD-A", Title = "First child", Status = IssueStatus.Open,
+                        ParentIssues = [new ParentIssueRefResponse { ParentIssue = "PARENT-001" }] },
+                    Lane = 0, Row = 0, IsActionable = true
+                },
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "PARENT-001", Title = "Series parent", Status = IssueStatus.Open,
+                        ExecutionMode = ExecutionMode.Series },
+                    Lane = 1, Row = 1, IsActionable = false
+                }
+            ],
+            TotalLanes = 2,
+            MergedPrs =
+            [
+                new TaskGraphPrResponse { Number = 100, Title = "PR 100", IsMerged = true }
+            ]
+        };
+
+        var result = TaskGraphLayoutService.ComputeLayout(taskGraph);
+
+        var issueLines = result.OfType<TaskGraphIssueRenderLine>().ToList();
+        var parentLine = issueLines.First(l => l.IssueId == "PARENT-001");
+        Assert.That(parentLine.SeriesConnectorFromLane, Is.EqualTo(1),
+            "SeriesConnectorFromLane should be offset to lane 1 (original 0 + offset 1)");
+    }
+
     private static TaskGraphResponse BuildFullMockTaskGraph()
     {
         return new TaskGraphResponse

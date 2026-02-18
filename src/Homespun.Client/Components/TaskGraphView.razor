@@ -346,10 +346,11 @@
     protected override void OnParametersSet()
     {
         _renderLines = TaskGraphLayoutService.ComputeLayout(TaskGraph);
+        var hasMergedPrs = TaskGraph?.MergedPrs.Count > 0;
         _maxLane = _renderLines
             .OfType<TaskGraphIssueRenderLine>()
             .Select(l => Math.Max(l.Lane, l.ParentLane ?? 0))
-            .DefaultIfEmpty(0)
+            .DefaultIfEmpty(hasMergedPrs ? 1 : 0)  // Account for lane offset when PRs exist
             .Max();
     }
 
@@ -384,8 +385,8 @@
             nodeColor: color,
             isOutlineOnly: isOutlineOnly,
             isActionable: false,
-            drawTopLine: false,
-            drawBottomLine: true,
+            drawTopLine: prLine.DrawTopLine,
+            drawBottomLine: prLine.DrawBottomLine,
             isSeriesChild: false,
             seriesConnectorFromLane: null);
     }

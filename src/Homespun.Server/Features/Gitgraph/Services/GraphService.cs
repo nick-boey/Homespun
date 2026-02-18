@@ -470,7 +470,7 @@ public class GraphService(
             {
                 var closedPrs = cachedData.ClosedPrs
                     .Where(pr => pr.Status == PullRequestStatus.Merged || pr.Status == PullRequestStatus.Closed)
-                    .OrderByDescending(pr => pr.MergedAt ?? pr.ClosedAt ?? pr.CreatedAt)
+                    .OrderBy(pr => pr.MergedAt ?? pr.ClosedAt ?? pr.CreatedAt)  // Oldest at top, newest at bottom
                     .ToList();
 
                 var totalClosedPrs = closedPrs.Count;

@@ -13,7 +13,7 @@ public record TaskGraphIssueRenderLine(
     bool DrawTopLine, bool DrawBottomLine, int? SeriesConnectorFromLane,
     IssueType IssueType, bool HasDescription, TaskGraphLinkedPr? LinkedPr, AgentStatusData? AgentStatus) : TaskGraphRenderLine;
 public record TaskGraphSeparatorRenderLine : TaskGraphRenderLine;
-public record TaskGraphPrRenderLine(int PrNumber, string Title, string? Url, bool IsMerged, bool HasDescription, AgentStatusData? AgentStatus) : TaskGraphRenderLine;
+public record TaskGraphPrRenderLine(int PrNumber, string Title, string? Url, bool IsMerged, bool HasDescription, AgentStatusData? AgentStatus, bool DrawTopLine, bool DrawBottomLine) : TaskGraphRenderLine;
 public record TaskGraphLoadMoreRenderLine : TaskGraphRenderLine;
 
 /// <summary>
@@ -25,7 +25,11 @@ public static class TaskGraphLayoutService
 {
     public static List<TaskGraphRenderLine> ComputeLayout(TaskGraphResponse? taskGraph)
     {
-        if (taskGraph == null || taskGraph.Nodes.Count == 0)
+        if (taskGraph == null)
+            return [];
+
+        // Return early if no nodes and no PRs
+        if (taskGraph.Nodes.Count == 0 && taskGraph.MergedPrs.Count == 0)
             return [];
 
         var result = new List<TaskGraphRenderLine>();
@@ -36,16 +40,29 @@ public static class TaskGraphLayoutService
             result.Add(new TaskGraphLoadMoreRenderLine());
         }
 
-        // Add merged/closed PRs at the top
-        foreach (var pr in taskGraph.MergedPrs)
+        // Add merged/closed PRs at the top with appropriate top/bottom line flags
+        var hasIssues = taskGraph.Nodes.Count > 0;
+        for (var prIdx = 0; prIdx < taskGraph.MergedPrs.Count; prIdx++)
         {
+            var pr = taskGraph.MergedPrs[prIdx];
+            var isFirstPr = prIdx == 0;
+            var isLastPr = prIdx == taskGraph.MergedPrs.Count - 1;
+
+            // First PR: no top line (nothing above it)
+            // Last PR: has bottom line only if there are issues below
+            // Middle PRs: both top and bottom lines
+            var drawTopLine = !isFirstPr;
+            var drawBottomLine = !isLastPr || (isLastPr && hasIssues);
+
             result.Add(new TaskGraphPrRenderLine(
                 pr.Number,
                 pr.Title,
                 pr.Url,
                 pr.IsMerged,
                 pr.HasDescription,
-                pr.AgentStatus));
+                pr.AgentStatus,
+                drawTopLine,
+                drawBottomLine));
         }
 
         // Add separator if we have PRs and issues
@@ -54,10 +71,14 @@ public static class TaskGraphLayoutService
             result.Add(new TaskGraphSeparatorRenderLine());
         }
 
+        // When merged PRs exist, offset all lanes by +1 to make room for the
+        // vertical connector line in lane 0 that connects PRs to issues
+        var laneOffset = taskGraph.MergedPrs.Count > 0 ? 1 : 0;
+
         var groups = GroupNodes(taskGraph.Nodes);
         foreach (var group in groups)
         {
-            RenderGroup(result, group, taskGraph.AgentStatuses, taskGraph.LinkedPrs);
+            RenderGroup(result, group, taskGraph.AgentStatuses, taskGraph.LinkedPrs, laneOffset);
         }
 
         return result;
@@ -130,7 +151,8 @@ public static class TaskGraphLayoutService
         List<TaskGraphRenderLine> result,
         List<TaskGraphNodeResponse> group,
         Dictionary<string, AgentStatusData> agentStatuses,
-        Dictionary<string, TaskGraphLinkedPr> linkedPrs)
+        Dictionary<string, TaskGraphLinkedPr> linkedPrs,
+        int laneOffset = 0)
     {
         if (group.Count == 0) return;
 
@@ -160,6 +182,7 @@ public static class TaskGraphLayoutService
         }
 
         // Pre-compute series child lane by parent: for parents with Series execution mode
+        // Store the original (non-offset) lanes for internal calculations
         var seriesChildLaneByParent = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         foreach (var node in group)
         {
@@ -175,14 +198,16 @@ public static class TaskGraphLayoutService
         for (var i = 0; i < group.Count; i++)
         {
             var node = group[i];
-            var lane = node.Lane - minLane;
+            var baseLane = node.Lane - minLane;
+            var lane = baseLane + laneOffset; // Apply lane offset for final position
             var marker = GetMarker(node);
 
             parentByNode.TryGetValue(node.Issue.Id, out var parentNode);
-            var parentLane = parentNode != null ? parentNode.Lane - minLane : (int?)null;
+            var baseParentLane = parentNode != null ? parentNode.Lane - minLane : (int?)null;
+            var parentLane = baseParentLane.HasValue ? baseParentLane.Value + laneOffset : (int?)null;
             var isFirstChild = false;
 
-            if (parentNode != null && parentLane > lane)
+            if (parentNode != null && baseParentLane > baseLane)
             {
                 if (!childrenRendered.ContainsKey(parentNode.Issue.Id))
                     childrenRendered[parentNode.Issue.Id] = 0;
@@ -195,19 +220,19 @@ public static class TaskGraphLayoutService
             var isSeriesChild = parentNode != null
                 && parentNode.Issue.ExecutionMode == ExecutionMode.Series;
 
-            // Compute DrawTopLine
+            // Compute DrawTopLine (uses base lanes for calculations)
             var drawTopLine = false;
             if (i > 0)
             {
                 var prevNode = group[i - 1];
-                var prevLane = prevNode.Lane - minLane;
+                var prevBaseLane = prevNode.Lane - minLane;
                 parentByNode.TryGetValue(prevNode.Issue.Id, out var prevParentNode);
-                var prevParentLane = prevParentNode != null ? prevParentNode.Lane - minLane : (int?)null;
+                var prevBaseParentLane = prevParentNode != null ? prevParentNode.Lane - minLane : (int?)null;
                 var prevIsSeriesChild = prevParentNode != null
                     && prevParentNode.Issue.ExecutionMode == ExecutionMode.Series;
 
                 // Previous node is a parallel child whose junction is at this node's lane
-                if (!prevIsSeriesChild && prevParentLane.HasValue && prevParentLane.Value == lane && prevParentLane.Value > prevLane)
+                if (!prevIsSeriesChild && prevBaseParentLane.HasValue && prevBaseParentLane.Value == baseLane && prevBaseParentLane.Value > prevBaseLane)
                     drawTopLine = true;
 
                 // Previous node is a series sibling of the same parent (vertical continuity)
@@ -220,8 +245,9 @@ public static class TaskGraphLayoutService
             var drawBottomLine = isSeriesChild;
 
             // Compute SeriesConnectorFromLane: set when this node is a parent receiving series children
+            // Apply lane offset to the series connector lane as well
             int? seriesConnectorFromLane = seriesChildLaneByParent.TryGetValue(node.Issue.Id, out var childLane)
-                ? childLane : null;
+                ? childLane + laneOffset : null;
 
             // Get linked PR and agent status for this issue
             linkedPrs.TryGetValue(node.Issue.Id, out var linkedPr);
