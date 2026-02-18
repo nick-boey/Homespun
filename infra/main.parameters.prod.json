@@ -9,10 +9,10 @@
       "value": "prod"
     },
     "mainAppImage": {
-      "value": "ghcr.io/nick-boey/homespun:0.3.1"
+      "value": "ghcr.io/nick-boey/homespun:0.4.2"
     },
     "workerImage": {
-      "value": "ghcr.io/nick-boey/homespun-worker:0.3.1"
+      "value": "ghcr.io/nick-boey/homespun-worker:0.4.2"
     },
     "agentExecutionMode": {
       "value": "AzureContainerApps"
