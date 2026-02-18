@@ -7,11 +7,11 @@
 # No external dependencies (GitHub API, Claude API, etc.) are required.
 #
 # Usage:
-#   ./mock.sh              # Run in mock mode on default port (5095)
+#   ./mock.sh              # Run in mock mode
 #   ./mock.sh --port 8080  # Run in mock mode on custom port
 #
 # Options:
-#   --port PORT    Override the default port (5095)
+#   --port PORT    Override the port from the launch profile
 #   -h, --help     Show this help message
 
 set -e
@@ -54,11 +54,7 @@ echo
 DOTNET_ARGS="--project $PROJECT_ROOT/src/Homespun.Server/Homespun.Server.csproj --launch-profile mock"
 
 if [ -n "$PORT" ]; then
-    log_info "Using custom port: $PORT"
-    echo
     exec dotnet run $DOTNET_ARGS --urls "http://localhost:$PORT"
 else
-    log_info "Running on http://localhost:5095"
-    echo
     exec dotnet run $DOTNET_ARGS
 fi
