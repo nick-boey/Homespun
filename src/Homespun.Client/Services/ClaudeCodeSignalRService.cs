@@ -73,6 +73,12 @@ public class ClaudeCodeSignalRService : IAsyncDisposable
     public event Action<string>? OnContextCleared;
 
     /// <summary>
+    /// Fired when a session encounters an error.
+    /// Parameters: sessionId, errorMessage, errorSubtype, isRecoverable
+    /// </summary>
+    public event Action<string, string, string?, bool>? OnSessionError;
+
+    /// <summary>
     /// Establishes the SignalR connection and registers all message handlers.
     /// </summary>
     public async Task ConnectAsync()
@@ -248,6 +254,10 @@ public class ClaudeCodeSignalRService : IAsyncDisposable
 
         connection.On<string>("ContextCleared",
             sessionId => OnContextCleared?.Invoke(sessionId));
+
+        connection.On<string, string, string?, bool>("SessionError",
+            (sessionId, errorMessage, errorSubtype, isRecoverable) =>
+                OnSessionError?.Invoke(sessionId, errorMessage, errorSubtype, isRecoverable));
     }
 
     private async Task OnReconnected(string? connectionId)

@@ -321,4 +321,24 @@ public static class ClaudeCodeHubExtensions
         await hubContext.Clients.Group($"session-{sessionId}")
             .SendAsync("ContextCleared", sessionId);
     }
+
+    /// <summary>
+    /// Broadcasts when a session encounters an error.
+    /// </summary>
+    /// <param name="hubContext">The hub context</param>
+    /// <param name="sessionId">The session ID</param>
+    /// <param name="errorMessage">User-friendly error message</param>
+    /// <param name="errorSubtype">SDK error subtype (e.g., error_max_turns, error_during_execution)</param>
+    /// <param name="isRecoverable">Whether the session can be resumed by sending another message</param>
+    public static async Task BroadcastSessionError(
+        this IHubContext<ClaudeCodeHub> hubContext,
+        string sessionId,
+        string errorMessage,
+        string? errorSubtype,
+        bool isRecoverable)
+    {
+        await hubContext.Clients.All.SendAsync("SessionError", sessionId, errorMessage, errorSubtype, isRecoverable);
+        await hubContext.Clients.Group($"session-{sessionId}")
+            .SendAsync("SessionError", sessionId, errorMessage, errorSubtype, isRecoverable);
+    }
 }
