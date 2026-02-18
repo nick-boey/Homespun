@@ -78,7 +78,7 @@ public class ProjectServiceTests
         var result = await _service.CreateAsync("owner/repo");
 
         // Assert
-        var expectedPathEnd = Path.Combine(".homespun", "src", "repo", "main");
+        var expectedPathEnd = Path.Combine(".homespun", "projects", "repo", "main");
         Assert.That(result.Project!.LocalPath, Does.EndWith(expectedPathEnd.Replace('/', Path.DirectorySeparatorChar)));
     }
 

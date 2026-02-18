@@ -1141,8 +1141,12 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         }
 
         // Start new container
-        // Use the per-issue .claude folder explicitly to avoid contention
-        var claudePath = $"{issueBasePath}/.claude";
+        // Only use explicit per-issue claude path when no working directory is provided
+        // Otherwise, let BuildContainerDockerArgs derive it from the working directory's parent
+        // so that .claude sits beside the workdir for clone-based workflows
+        var claudePath = string.IsNullOrEmpty(workingDirectory)
+            ? $"{issueBasePath}/.claude"
+            : null;
         var (containerId, workerUrl) = await StartContainerAsync(
             containerName, effectiveWorkingDirectory, useRm: false, claudePath, issueId, projectName, cancellationToken);
 

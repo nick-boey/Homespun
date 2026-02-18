@@ -28,16 +28,16 @@ public class ProjectService(
             var dataPath = configuration["HOMESPUN_DATA_PATH"];
             if (!string.IsNullOrEmpty(dataPath))
             {
-                // If data path is /data/.homespun/homespun-data.json, base path should be /data/.homespun/src
+                // If data path is /data/.homespun/homespun-data.json, base path should be /data/.homespun/projects
                 var dataDir = Path.GetDirectoryName(dataPath);
                 if (!string.IsNullOrEmpty(dataDir))
                 {
-                    return Path.Combine(dataDir, "src");
+                    return Path.Combine(dataDir, "projects");
                 }
             }
-            
-            // Default: ~/.homespun/src
-            return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".homespun", "src");
+
+            // Default: ~/.homespun/projects
+            return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".homespun", "projects");
         }
     }
 

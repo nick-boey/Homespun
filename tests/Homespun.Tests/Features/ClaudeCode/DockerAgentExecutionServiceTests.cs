@@ -418,10 +418,10 @@ public class DockerAgentExecutionServiceTests
 
         // Act
         var args = service.BuildContainerDockerArgs(
-            "test-container", "/data/src/Homespun/.clones/my-branch", useRm: false);
+            "test-container", "/data/projects/Homespun/.clones/my-branch", useRm: false);
 
         // Assert - working directory is mounted to /workdir with host path translation
-        Assert.That(args, Does.Contain("-v \"/host/data/src/Homespun/.clones/my-branch:/workdir\""));
+        Assert.That(args, Does.Contain("-v \"/host/data/projects/Homespun/.clones/my-branch:/workdir\""));
     }
 
     [Test]
