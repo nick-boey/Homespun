@@ -72,6 +72,12 @@ public class AzureContainerAppsAgentExecutionOptions
     /// True when EnvironmentId and ResourceGroupName are configured.
     /// </summary>
     public bool IsDynamicMode => !string.IsNullOrEmpty(EnvironmentId) && !string.IsNullOrEmpty(ResourceGroupName);
+
+    /// <summary>
+    /// Client ID of the user-assigned managed identity for Azure authentication.
+    /// If not set, DefaultAzureCredential will use environment variables or system-assigned identity.
+    /// </summary>
+    public string? ManagedIdentityClientId { get; set; }
 }
 
 /// <summary>
@@ -148,7 +154,12 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
 
         if (_options.IsDynamicMode)
         {
-            _armClient = new ArmClient(new DefaultAzureCredential());
+            var credentialOptions = new DefaultAzureCredentialOptions();
+            if (!string.IsNullOrEmpty(_options.ManagedIdentityClientId))
+            {
+                credentialOptions.ManagedIdentityClientId = _options.ManagedIdentityClientId;
+            }
+            _armClient = new ArmClient(new DefaultAzureCredential(credentialOptions));
         }
     }
 
