@@ -474,7 +474,10 @@ public class GraphService(
                     .ToList();
 
                 var totalClosedPrs = closedPrs.Count;
-                var shownPrs = closedPrs.Take(maxPastPRs).ToList();
+                // Take the most recent N PRs (from the end of the sorted list)
+                var shownPrs = closedPrs.Count > maxPastPRs
+                    ? closedPrs.Skip(closedPrs.Count - maxPastPRs).ToList()
+                    : closedPrs;
 
                 response.MergedPrs = shownPrs.Select(pr => new TaskGraphPrResponse
                 {
