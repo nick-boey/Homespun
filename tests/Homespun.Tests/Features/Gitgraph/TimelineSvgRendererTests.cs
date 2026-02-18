@@ -1104,6 +1104,81 @@ public class TimelineSvgRendererTests
 
     #endregion
 
+    #region GenerateTaskGraphCircleSvg Lane 0 Connector Tests
+
+    [Test]
+    public void GenerateTaskGraphCircleSvg_Lane0PassThrough_DrawsFullVerticalAtLane0()
+    {
+        var svg = TimelineSvgRenderer.GenerateTaskGraphCircleSvg(
+            nodeLane: 2, parentLane: null, isFirstChild: false, maxLanes: 3,
+            nodeColor: "#3b82f6", isOutlineOnly: false, isActionable: false,
+            drawLane0PassThrough: true);
+
+        var lane0X = TimelineSvgRenderer.GetLaneCenterX(0); // 12
+        Assert.That(svg, Does.Contain($"M {lane0X} 0 L {lane0X} {TimelineSvgRenderer.RowHeight}"),
+            "Should draw full vertical line at lane 0");
+        Assert.That(svg, Does.Contain("stroke=\"#6b7280\""),
+            "Lane 0 connector should use gray color");
+    }
+
+    [Test]
+    public void GenerateTaskGraphCircleSvg_Lane0Connector_NonLast_DrawsVerticalAndBranch()
+    {
+        var svg = TimelineSvgRenderer.GenerateTaskGraphCircleSvg(
+            nodeLane: 1, parentLane: null, isFirstChild: false, maxLanes: 2,
+            nodeColor: "#3b82f6", isOutlineOnly: false, isActionable: false,
+            drawLane0Connector: true, isLastLane0Connector: false);
+
+        var lane0X = TimelineSvgRenderer.GetLaneCenterX(0); // 12
+        var cx = TimelineSvgRenderer.GetLaneCenterX(1); // 36
+        var cy = TimelineSvgRenderer.GetRowCenterY(); // 20
+        var nodeEdgeX = cx - TimelineSvgRenderer.NodeRadius - 2; // 28
+
+        // Full vertical at lane 0
+        Assert.That(svg, Does.Contain($"M {lane0X} 0 L {lane0X} {TimelineSvgRenderer.RowHeight}"),
+            "Non-last connector should have full vertical at lane 0");
+        // Horizontal branch from lane 0 to node left edge
+        Assert.That(svg, Does.Contain($"M {lane0X} {cy} L {nodeEdgeX} {cy}"),
+            "Non-last connector should have horizontal branch to node");
+    }
+
+    [Test]
+    public void GenerateTaskGraphCircleSvg_Lane0Connector_Last_DrawsArcToNode()
+    {
+        var svg = TimelineSvgRenderer.GenerateTaskGraphCircleSvg(
+            nodeLane: 1, parentLane: null, isFirstChild: false, maxLanes: 2,
+            nodeColor: "#3b82f6", isOutlineOnly: false, isActionable: false,
+            drawLane0Connector: true, isLastLane0Connector: true);
+
+        var lane0X = TimelineSvgRenderer.GetLaneCenterX(0); // 12
+        var cx = TimelineSvgRenderer.GetLaneCenterX(1); // 36
+        var cy = TimelineSvgRenderer.GetRowCenterY(); // 20
+        var nodeEdgeX = cx - TimelineSvgRenderer.NodeRadius - 2; // 28
+        var r = TimelineSvgRenderer.NodeRadius; // 6
+
+        // Arc path: vertical down to junction, arc, horizontal to node
+        Assert.That(svg, Does.Contain(
+            $"M {lane0X} 0 L {lane0X} {cy - r} A {r} {r} 0 0 0 {lane0X + r} {cy} L {nodeEdgeX} {cy}"),
+            "Last connector should have arc from lane 0 to node");
+        // Should NOT have full vertical (it terminates at the arc)
+        Assert.That(svg, Does.Not.Contain($"M {lane0X} 0 L {lane0X} {TimelineSvgRenderer.RowHeight}"),
+            "Last connector should not have full vertical at lane 0");
+    }
+
+    [Test]
+    public void GenerateTaskGraphCircleSvg_NoLane0Flags_NoLane0Lines()
+    {
+        var svg = TimelineSvgRenderer.GenerateTaskGraphCircleSvg(
+            nodeLane: 1, parentLane: null, isFirstChild: false, maxLanes: 2,
+            nodeColor: "#3b82f6", isOutlineOnly: false, isActionable: false);
+
+        var lane0X = TimelineSvgRenderer.GetLaneCenterX(0); // 12
+        Assert.That(svg, Does.Not.Contain($"M {lane0X} 0"),
+            "Without lane 0 flags, should not draw anything at lane 0");
+    }
+
+    #endregion
+
     #region GenerateTaskGraphConnectorSvg Tests
 
     [Test]
