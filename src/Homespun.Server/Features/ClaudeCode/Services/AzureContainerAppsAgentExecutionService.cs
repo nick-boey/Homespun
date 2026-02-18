@@ -920,13 +920,35 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
             // Convert working directory to NFS SubPath by stripping the data volume prefix
             var workdirSubPath = workingDirectory.TrimStart('/');
 
+            // Derive .claude path from working directory parent (same logic as Docker service)
+            var lastSlash = workingDirectory.LastIndexOfAny(['/', '\\']);
+            var cloneRoot = lastSlash > 0 ? workingDirectory[..lastSlash] : null;
+            var claudeSubPath = !string.IsNullOrEmpty(cloneRoot)
+                ? $"{cloneRoot.TrimStart('/')}/.claude"
+                : null;
+
             var container = containerAppData.Template.Containers[0];
+
+            // Mount workdir
             container.VolumeMounts.Add(new ContainerAppVolumeMount
             {
                 VolumeName = "claude-data",
                 MountPath = "/workdir",
                 SubPath = workdirSubPath
             });
+            _logger.LogInformation("Mounting working directory: {SubPath} -> /workdir", workdirSubPath);
+
+            // Mount .claude directory for session state persistence
+            if (!string.IsNullOrEmpty(claudeSubPath))
+            {
+                container.VolumeMounts.Add(new ContainerAppVolumeMount
+                {
+                    VolumeName = "claude-data",
+                    MountPath = "/home/homespun/.claude",
+                    SubPath = claudeSubPath
+                });
+                _logger.LogInformation("Mounting .claude directory: {SubPath} -> /home/homespun/.claude", claudeSubPath);
+            }
         }
 
         // Pass auth secrets as environment variables
