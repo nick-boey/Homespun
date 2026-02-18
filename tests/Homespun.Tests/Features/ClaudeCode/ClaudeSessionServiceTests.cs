@@ -2039,7 +2039,7 @@ public class ClaudeSessionServiceToolResultDetectionTests
         var planFilePath = "/home/user/.claude/plans/test-plan.md";
         var planContent = "# Plan from container\n\nFetched remotely.";
 
-        // Set up the plan file path but no content (simulates Docker/Azure mode)
+        // Set up the plan file path but no content (simulates Docker mode)
         session.PlanFilePath = planFilePath;
 
         // Mock ReadFileFromAgentAsync to return plan content

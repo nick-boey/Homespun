@@ -64,7 +64,7 @@ The `build-base-image` job may still be needed for the main `homespun` image if 
 
 ### Remove old types
 - Remove `AgentEvent` hierarchy from `IAgentExecutionService.cs` (replaced by `SdkMessage` in Phase 2)
-- Remove old SSE event type constants and parsing code from Docker/ACA services
+- Remove old SSE event type constants and parsing code from Docker service
 
 ## 6.3 Script Updates
 

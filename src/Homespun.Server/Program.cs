@@ -145,9 +145,6 @@ else
         if (!string.IsNullOrEmpty(hostPath))
             options.HostDataPath = hostPath;
     });
-    builder.Services.Configure<AzureContainerAppsAgentExecutionOptions>(
-        builder.Configuration.GetSection(AzureContainerAppsAgentExecutionOptions.SectionName));
-
     var agentExecutionMode = builder.Configuration
         .GetSection(AgentExecutionOptions.SectionName)
         .GetValue<AgentExecutionMode>("Mode");
@@ -156,9 +153,6 @@ else
     {
         case AgentExecutionMode.Docker:
             builder.Services.AddSingleton<IAgentExecutionService, DockerAgentExecutionService>();
-            break;
-        case AgentExecutionMode.AzureContainerApps:
-            builder.Services.AddSingleton<IAgentExecutionService, AzureContainerAppsAgentExecutionService>();
             break;
         default:
             builder.Services.AddSingleton<IAgentExecutionService, LocalAgentExecutionService>();
