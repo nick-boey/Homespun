@@ -35,14 +35,9 @@ public static class TaskGraphTextRenderer
         var groups = GroupNodes(taskGraph.Nodes);
 
         var sb = new StringBuilder();
-        var firstGroup = true;
 
         foreach (var group in groups)
         {
-            if (!firstGroup)
-                sb.Append('\n');
-            firstGroup = false;
-
             RenderGroup(sb, group, taskGraph.TotalLanes);
         }
 

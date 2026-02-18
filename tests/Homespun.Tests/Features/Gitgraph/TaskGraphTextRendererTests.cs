@@ -259,9 +259,7 @@ public class TaskGraphTextRendererTests
         var expected = string.Join("\n", new[]
         {
             "\u25CC  ISSUE-003 Fix login timeout bug",
-            "",
             "\u25CB  ISSUE-001 Add dark mode support",
-            "",
             "\u25CB  ISSUE-010 Implement DELETE endpoints",
             "\u2514\u2500\u25CC  ISSUE-009 Implement PUT/PATCH endpoints",
             "  \u25CC  ISSUE-011 Add request validation",
@@ -272,7 +270,6 @@ public class TaskGraphTextRendererTests
             "      \u25CC  ISSUE-013 Set up API monitoring",
             "      \u2514\u2500\u25CC  ISSUE-005 Implement API endpoints",
             "        \u2514\u2500\u25CC  ISSUE-004 Design API schema",
-            "",
             "\u25CB  ISSUE-002 Improve mobile responsiveness"
         });
 

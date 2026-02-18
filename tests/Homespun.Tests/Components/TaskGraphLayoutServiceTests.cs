@@ -373,7 +373,7 @@ public class TaskGraphLayoutServiceTests
     }
 
     [Test]
-    public void ComputeLayout_DisconnectedGroups_SeparatedBySeparatorLine()
+    public void ComputeLayout_DisconnectedGroups_NoSeparators()
     {
         var taskGraph = new TaskGraphResponse
         {
@@ -395,8 +395,9 @@ public class TaskGraphLayoutServiceTests
 
         var result = TaskGraphLayoutService.ComputeLayout(taskGraph);
 
-        // Two orphans = two disconnected groups = separator between them
-        Assert.That(result.Count(l => l is TaskGraphSeparatorRenderLine), Is.EqualTo(1));
+        // Two orphans = two disconnected groups, no separators between them
+        Assert.That(result.Count(l => l is TaskGraphSeparatorRenderLine), Is.EqualTo(0));
+        Assert.That(result.Count(l => l is TaskGraphIssueRenderLine), Is.EqualTo(2));
     }
 
     [Test]
@@ -485,8 +486,7 @@ public class TaskGraphLayoutServiceTests
     [Test]
     public void ComputeLayout_FullMockData_CorrectLineCount()
     {
-        // No connector rows — only issue lines + separators
-        // 13 issue lines + 3 separator lines = 16
+        // No connector rows, no separators — only issue lines
         var taskGraph = BuildFullMockTaskGraph();
 
         var result = TaskGraphLayoutService.ComputeLayout(taskGraph);
@@ -495,8 +495,8 @@ public class TaskGraphLayoutServiceTests
         var separatorCount = result.Count(l => l is TaskGraphSeparatorRenderLine);
 
         Assert.That(issueCount, Is.EqualTo(13), "Should have 13 issue lines");
-        Assert.That(separatorCount, Is.EqualTo(3), "Should have 3 separator lines");
-        Assert.That(result, Has.Count.EqualTo(16), "Total: 13 issues + 3 separators");
+        Assert.That(separatorCount, Is.EqualTo(0), "Should have no separator lines");
+        Assert.That(result, Has.Count.EqualTo(13), "Total: 13 issues only");
     }
 
     /// <summary>

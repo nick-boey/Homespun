@@ -219,8 +219,9 @@ public class TaskGraphViewTests : BunitTestContext
         var fromX = TimelineSvgRenderer.GetLaneCenterX(0); // 12
         var cx = TimelineSvgRenderer.GetLaneCenterX(1); // 36
         var nodeEdgeX = cx - TimelineSvgRenderer.DiamondSize - 2; // 27
-        Assert.That(parentCell.InnerHtml, Does.Contain($"M {fromX} 0 L {fromX} 20 L {nodeEdgeX} 20"),
-            "Parent should have L-shaped connector from series children's lane");
+        var r = TimelineSvgRenderer.TaskGraphArcRadius; // 7
+        Assert.That(parentCell.InnerHtml, Does.Contain($"M {fromX} 0 L {fromX} {20 - r} A {r} {r} 0 0 0 {fromX + r} 20 L {nodeEdgeX} 20"),
+            "Parent should have L-shaped connector with arc from series children's lane");
     }
 
     [Test]
@@ -296,7 +297,7 @@ public class TaskGraphViewTests : BunitTestContext
     }
 
     [Test]
-    public void Renders_GroupSeparator()
+    public void Renders_DisconnectedGroups_NoSeparator()
     {
         var taskGraph = new TaskGraphResponse
         {
@@ -318,6 +319,10 @@ public class TaskGraphViewTests : BunitTestContext
 
         var cut = Render<TaskGraphView>(p => p.Add(x => x.TaskGraph, taskGraph));
 
-        cut.Find(".task-graph-separator");
+        // No separators between disconnected groups
+        Assert.Throws<Bunit.ElementNotFoundException>(() => cut.Find(".task-graph-separator"));
+        // Both issue rows should render
+        var issueRows = cut.FindAll(".task-graph-row");
+        Assert.That(issueRows, Has.Count.EqualTo(2));
     }
 }

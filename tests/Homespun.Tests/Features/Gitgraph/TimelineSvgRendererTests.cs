@@ -37,6 +37,13 @@ public class TimelineSvgRendererTests
         Assert.That(TimelineSvgRenderer.ConnectorArcRadius, Is.EqualTo(10));
     }
 
+    [Test]
+    public void TaskGraphArcRadius_EqualsDiamondSize()
+    {
+        Assert.That(TimelineSvgRenderer.TaskGraphArcRadius, Is.EqualTo(TimelineSvgRenderer.DiamondSize));
+        Assert.That(TimelineSvgRenderer.TaskGraphArcRadius, Is.EqualTo(7));
+    }
+
     #endregion
 
     #region GetLaneCenterX Tests
@@ -835,16 +842,20 @@ public class TimelineSvgRendererTests
     }
 
     [Test]
-    public void GenerateTaskGraphIssueSvg_WithParent_FirstChild_BottomHalfJunction()
+    public void GenerateTaskGraphIssueSvg_WithParent_FirstChild_MergedArcPath()
     {
-        // Node at lane 0, parent at lane 1 — first child gets bottom-half junction (toward parent below)
+        // Node at lane 0, parent at lane 1 — first child gets merged horizontal+arc+vertical path
         var svg = TimelineSvgRenderer.GenerateTaskGraphIssueSvg(
             nodeLane: 0, parentLane: 1, isFirstChild: true, maxLanes: 2,
             nodeColor: "#6b7280", isOutlineOnly: true, isActionable: false);
 
+        var cx = TimelineSvgRenderer.GetLaneCenterX(0); // 12
         var px = TimelineSvgRenderer.GetLaneCenterX(1); // 36
-        // Bottom-half junction: M px 20 L px 40 (center to bottom, pointing toward parent)
-        Assert.That(svg, Does.Contain($"M {px} 20 L {px} 40"));
+        var startX = cx + TimelineSvgRenderer.DiamondSize + 2; // 21
+        var r = TimelineSvgRenderer.TaskGraphArcRadius; // 7
+        // Merged path: horizontal → arc elbow → vertical down
+        // M 21 20 L 29 20 A 7 7 0 0 1 36 27 L 36 40
+        Assert.That(svg, Does.Contain($"M {startX} 20 L {px - r} 20 A {r} {r} 0 0 1 {px} {20 + r} L {px} {TimelineSvgRenderer.RowHeight}"));
     }
 
     [Test]
@@ -861,18 +872,19 @@ public class TimelineSvgRendererTests
     }
 
     [Test]
-    public void GenerateTaskGraphIssueSvg_WithParent_DrawsHorizontalLine()
+    public void GenerateTaskGraphIssueSvg_WithParent_FirstChild_DrawsMergedArcPath()
     {
-        // Node at lane 0, parent at lane 2
+        // Node at lane 0, parent at lane 2 — first child gets merged horizontal+arc+vertical
         var svg = TimelineSvgRenderer.GenerateTaskGraphIssueSvg(
             nodeLane: 0, parentLane: 2, isFirstChild: true, maxLanes: 3,
             nodeColor: "#6b7280", isOutlineOnly: true, isActionable: false);
 
         var cx = TimelineSvgRenderer.GetLaneCenterX(0); // 12
         var px = TimelineSvgRenderer.GetLaneCenterX(2); // 60
-        var startX = cx + TimelineSvgRenderer.DiamondSize + 2; // 12 + 7 + 2 = 21
-        // Horizontal line from diamond right edge to parent lane center
-        Assert.That(svg, Does.Contain($"M {startX} 20 L {px} 20"));
+        var startX = cx + TimelineSvgRenderer.DiamondSize + 2; // 21
+        var r = TimelineSvgRenderer.TaskGraphArcRadius; // 7
+        // Merged path: M 21 20 L 53 20 A 7 7 0 0 1 60 27 L 60 40
+        Assert.That(svg, Does.Contain($"M {startX} 20 L {px - r} 20 A {r} {r} 0 0 1 {px} {20 + r} L {px} {TimelineSvgRenderer.RowHeight}"));
     }
 
     [Test]
@@ -1044,7 +1056,7 @@ public class TimelineSvgRendererTests
     }
 
     [Test]
-    public void GenerateTaskGraphIssueSvg_SeriesConnectorFromLane_DrawsLShapedPath()
+    public void GenerateTaskGraphIssueSvg_SeriesConnectorFromLane_DrawsLShapedPathWithArc()
     {
         // Parent at lane 1 receiving series children from lane 0
         var svg = TimelineSvgRenderer.GenerateTaskGraphIssueSvg(
@@ -1055,14 +1067,16 @@ public class TimelineSvgRendererTests
         var fromX = TimelineSvgRenderer.GetLaneCenterX(0); // 12
         var cx = TimelineSvgRenderer.GetLaneCenterX(1); // 36
         var cy = TimelineSvgRenderer.GetRowCenterY(); // 20
-        var nodeEdgeX = cx - TimelineSvgRenderer.DiamondSize - 2; // 36 - 7 - 2 = 27
+        var nodeEdgeX = cx - TimelineSvgRenderer.DiamondSize - 2; // 27
+        var r = TimelineSvgRenderer.TaskGraphArcRadius; // 7
 
-        // L-shaped path: down from top at child lane, then horizontal to parent diamond's left edge
-        Assert.That(svg, Does.Contain($"M {fromX} 0 L {fromX} {cy} L {nodeEdgeX} {cy}"));
+        // L-shaped path with arc: down, arc turn, then horizontal to diamond's left edge
+        // M 12 0 L 12 13 A 7 7 0 0 0 19 20 L 27 20
+        Assert.That(svg, Does.Contain($"M {fromX} 0 L {fromX} {cy - r} A {r} {r} 0 0 0 {fromX + r} {cy} L {nodeEdgeX} {cy}"));
     }
 
     [Test]
-    public void GenerateTaskGraphIssueSvg_SeriesConnectorAndParallelConnector_BothRender()
+    public void GenerateTaskGraphIssueSvg_SeriesConnectorAndParallelConnector_BothRenderWithArcs()
     {
         // Parent at lane 1 receiving series children from lane 0, AND connecting to grandparent at lane 2
         var svg = TimelineSvgRenderer.GenerateTaskGraphIssueSvg(
@@ -1076,16 +1090,16 @@ public class TimelineSvgRendererTests
         var cy = TimelineSvgRenderer.GetRowCenterY(); // 20
         var nodeEdgeLeft = cx - TimelineSvgRenderer.DiamondSize - 2; // 27
         var nodeEdgeRight = cx + TimelineSvgRenderer.DiamondSize + 2; // 45
+        var r = TimelineSvgRenderer.TaskGraphArcRadius; // 7
 
-        // L-shaped path from series children
-        Assert.That(svg, Does.Contain($"M {fromX} 0 L {fromX} {cy} L {nodeEdgeLeft} {cy}"),
-            "Should have L-shaped connector from series children");
-        // Horizontal line from diamond right edge to grandparent lane
-        Assert.That(svg, Does.Contain($"M {nodeEdgeRight} {cy} L {px} {cy}"),
-            "Should have horizontal connector to grandparent");
-        // Junction at grandparent lane (first child = bottom-half)
-        Assert.That(svg, Does.Contain($"M {px} {cy} L {px} {TimelineSvgRenderer.RowHeight}"),
-            "Should have bottom-half junction at grandparent lane");
+        // L-shaped path from series children with arc
+        // M 12 0 L 12 13 A 7 7 0 0 0 19 20 L 27 20
+        Assert.That(svg, Does.Contain($"M {fromX} 0 L {fromX} {cy - r} A {r} {r} 0 0 0 {fromX + r} {cy} L {nodeEdgeLeft} {cy}"),
+            "Should have L-shaped connector with arc from series children");
+        // Merged horizontal + arc + vertical to grandparent (first child)
+        // M 45 20 L 53 20 A 7 7 0 0 1 60 27 L 60 40
+        Assert.That(svg, Does.Contain($"M {nodeEdgeRight} {cy} L {px - r} {cy} A {r} {r} 0 0 1 {px} {cy + r} L {px} {TimelineSvgRenderer.RowHeight}"),
+            "Should have merged arc path to grandparent lane");
     }
 
     #endregion

@@ -14,6 +14,7 @@ public static class TimelineSvgRenderer
     public const int DiamondSize = 7;
     public const double LineStrokeWidth = 2;
     public const int ConnectorArcRadius = 10;
+    public const int TaskGraphArcRadius = DiamondSize;
 
     public static int CalculateSvgWidth(int maxLanes)
     {
@@ -285,19 +286,19 @@ public static class TimelineSvgRenderer
             var px = GetLaneCenterX(parentLane.Value);
             var startX = cx + DiamondSize + 2;
 
-            // Horizontal line from diamond right edge to parent lane center
-            sb.Append(
-                $"<path d=\"M {startX} {cy} L {px} {cy}\" stroke=\"{EscapeAttribute(nodeColor)}\" stroke-width=\"{LineStrokeWidth.ToString(CultureInfo.InvariantCulture)}\" fill=\"none\" />");
-
             // Junction at parent lane
             if (isFirstChild)
             {
-                // Bottom-half vertical: from center to bottom (toward parent below)
+                // Merged horizontal + arc elbow + vertical down
+                var r = TaskGraphArcRadius;
                 sb.Append(
-                    $"<path d=\"M {px} {cy} L {px} {RowHeight}\" stroke=\"{EscapeAttribute(nodeColor)}\" stroke-width=\"{LineStrokeWidth.ToString(CultureInfo.InvariantCulture)}\" fill=\"none\" />");
+                    $"<path d=\"M {startX} {cy} L {px - r} {cy} A {r} {r} 0 0 1 {px} {cy + r} L {px} {RowHeight}\" stroke=\"{EscapeAttribute(nodeColor)}\" stroke-width=\"{LineStrokeWidth.ToString(CultureInfo.InvariantCulture)}\" fill=\"none\" />");
             }
             else
             {
+                // Horizontal line from diamond right edge to parent lane center
+                sb.Append(
+                    $"<path d=\"M {startX} {cy} L {px} {cy}\" stroke=\"{EscapeAttribute(nodeColor)}\" stroke-width=\"{LineStrokeWidth.ToString(CultureInfo.InvariantCulture)}\" fill=\"none\" />");
                 // Full-height vertical
                 sb.Append(
                     $"<path d=\"M {px} 0 L {px} {RowHeight}\" stroke=\"{EscapeAttribute(nodeColor)}\" stroke-width=\"{LineStrokeWidth.ToString(CultureInfo.InvariantCulture)}\" fill=\"none\" />");
@@ -309,8 +310,9 @@ public static class TimelineSvgRenderer
         {
             var fromX = GetLaneCenterX(seriesConnectorFromLane.Value);
             var nodeEdgeX = cx - DiamondSize - 2;
+            var r = TaskGraphArcRadius;
             sb.Append(
-                $"<path d=\"M {fromX} 0 L {fromX} {cy} L {nodeEdgeX} {cy}\" stroke=\"{EscapeAttribute(nodeColor)}\" stroke-width=\"{LineStrokeWidth.ToString(CultureInfo.InvariantCulture)}\" fill=\"none\" />");
+                $"<path d=\"M {fromX} 0 L {fromX} {cy - r} A {r} {r} 0 0 0 {fromX + r} {cy} L {nodeEdgeX} {cy}\" stroke=\"{EscapeAttribute(nodeColor)}\" stroke-width=\"{LineStrokeWidth.ToString(CultureInfo.InvariantCulture)}\" fill=\"none\" />");
         }
 
         if (drawTopLine)

@@ -26,14 +26,9 @@ public static class TaskGraphLayoutService
 
         var groups = GroupNodes(taskGraph.Nodes);
         var result = new List<TaskGraphRenderLine>();
-        var firstGroup = true;
 
         foreach (var group in groups)
         {
-            if (!firstGroup)
-                result.Add(new TaskGraphSeparatorRenderLine());
-            firstGroup = false;
-
             RenderGroup(result, group);
         }
 
