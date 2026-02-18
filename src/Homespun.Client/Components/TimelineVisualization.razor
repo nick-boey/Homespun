@@ -1,10 +1,12 @@
 @using Microsoft.AspNetCore.SignalR.Client
 @using Homespun.Shared.Models.Fleece
+@using Homespun.Client.Services
 @inject HttpGraphApiService GraphApi
 @inject NavigationManager NavigationManager
+@inject IKeyboardNavigationService NavService
 @implements IAsyncDisposable
 
-<div class="timeline-wrapper">
+<div class="timeline-wrapper" tabindex="0" @onkeydown="HandleKeyDown" @ref="_timelineWrapper">
     @if (_isLoading)
     {
         <div class="timeline-loading">
@@ -23,9 +25,10 @@
         <div class="timeline-container">
             <TaskGraphView
                 TaskGraph="@_taskGraphData"
-                OnIssueClick="OnIssueClick"
+                OnIssueClick="HandleTaskGraphIssueClick"
                 OnLoadMoreClick="LoadMoreTaskGraphPRs"
-                SelectedNodeId="@SelectedNodeId" />
+                SelectedNodeId="@GetKeyboardSelectedNodeId()"
+                NavService="@NavService" />
         </div>
     }
     else if (_graph != null && _layout != null)
@@ -369,6 +372,10 @@
     private double _tooltipX;
     private double _tooltipY;
 
+    // Keyboard navigation
+    private ElementReference _timelineWrapper;
+    private List<TaskGraphIssueRenderLine> _issueRenderLines = [];
+
     private readonly TimelineLaneCalculator _laneCalculator = new();
 
     protected override async Task OnInitializedAsync()
@@ -393,6 +400,7 @@
         if (UseTaskGraphMode)
         {
             await LoadTaskGraphAsync();
+            InitializeKeyboardNavigation();
         }
 
         // Set up SignalR connections for real-time updates (non-blocking)
@@ -452,6 +460,7 @@
             if (UseTaskGraphMode)
             {
                 await LoadTaskGraphAsync();
+                InitializeKeyboardNavigation();
             }
 
             // Set up new SignalR connections for the new project
@@ -790,7 +799,7 @@
                 // Ignore disposal errors
             }
         }
-        if (_notificationHubConnection != null)
+if (_notificationHubConnection != null)
         {
             try
             {
@@ -801,5 +810,102 @@
                 // Ignore disposal errors
             }
         }
+        NavService.OnStateChanged -= HandleNavStateChanged;
+        NavService.OnIssueChanged -= HandleIssueChangedAsync;
+    }
+
+    private void HandleKeyDown(KeyboardEventArgs e)
+    {
+        // Don't handle keyboard when in edit mode - let the inline editor handle it
+        if (NavService.EditMode != KeyboardEditMode.Viewing) return;
+
+        switch (e.Key)
+        {
+            case "j":
+            case "ArrowDown":
+                NavService.MoveDown();
+                break;
+            case "k":
+            case "ArrowUp":
+                NavService.MoveUp();
+                break;
+            case "h":
+            case "ArrowLeft":
+                NavService.MoveToChild();
+                break;
+            case "l":
+            case "ArrowRight":
+                NavService.MoveToParent();
+                break;
+            case "i":
+                NavService.StartEditingAtStart();
+                break;
+            case "a":
+                NavService.StartEditingAtEnd();
+                break;
+            case "r":
+                NavService.StartReplacingTitle();
+                break;
+            case "o":
+                if (e.ShiftKey)
+                    NavService.CreateIssueAbove();
+                else
+                    NavService.CreateIssueBelow();
+                break;
+            case "O":
+                NavService.CreateIssueAbove();
+                break;
+        }
+    }
+
+    private void HandleNavStateChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void InitializeKeyboardNavigation()
+    {
+        // Unsubscribe from previous subscriptions if any
+        NavService.OnStateChanged -= HandleNavStateChanged;
+        NavService.OnStateChanged += HandleNavStateChanged;
+        NavService.OnIssueChanged -= HandleIssueChangedAsync;
+        NavService.OnIssueChanged += HandleIssueChangedAsync;
+
+        // Set the project ID for API calls
+        NavService.SetProjectId(ProjectId);
+
+        // Build issue render lines from task graph data
+        if (_taskGraphData != null)
+        {
+            var allRenderLines = TaskGraphLayoutService.ComputeLayout(_taskGraphData);
+            _issueRenderLines = allRenderLines.OfType<TaskGraphIssueRenderLine>().ToList();
+            NavService.Initialize(_issueRenderLines);
+            NavService.SelectFirstActionable();
+        }
+    }
+
+    private async Task HandleIssueChangedAsync()
+    {
+        // Refresh the task graph when an issue is created or updated
+        await LoadTaskGraphAsync();
+        InitializeKeyboardNavigation();
+        StateHasChanged();
+    }
+
+    private async Task HandleTaskGraphIssueClick(string issueId)
+    {
+        // Update keyboard navigation selection when clicking an issue
+        NavService.SelectIssue(issueId);
+        await OnIssueClick.InvokeAsync(issueId);
+    }
+
+    private string? GetKeyboardSelectedNodeId()
+    {
+        // Prefer keyboard selection over parameter if available
+        if (NavService.SelectedIssueId != null)
+        {
+            return $"issue-{NavService.SelectedIssueId}";
+        }
+        return SelectedNodeId
     }
 }

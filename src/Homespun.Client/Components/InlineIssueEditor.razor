@@ -1,0 +1,110 @@
+@using Homespun.Client.Services
+
+@inject IKeyboardNavigationService NavService
+
+<div class="inline-issue-editor">
+    <input type="text"
+           class="inline-issue-input"
+           @bind="Title"
+           @bind:event="oninput"
+           @onkeydown="HandleKeyDown"
+           @onkeydown:preventDefault="@_preventDefaultOnTab"
+           @onblur="HandleBlur"
+           @ref="_inputElement"
+           placeholder="@Placeholder" />
+</div>
+
+<style>
+    .inline-issue-editor {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .inline-issue-input {
+        width: 100%;
+        background: var(--bg-primary, #1a1a2e);
+        border: 2px solid var(--color-ocean, #51A5C1);
+        border-radius: 4px;
+        padding: 4px 8px;
+        color: var(--text-primary, #eaeaea);
+        font-size: 14px;
+        outline: none;
+        box-shadow: 0 0 8px rgba(81, 165, 193, 0.3);
+    }
+
+    .inline-issue-input:focus {
+        border-color: var(--color-ocean, #51A5C1);
+        box-shadow: 0 0 12px rgba(81, 165, 193, 0.5);
+    }
+
+    .inline-issue-input::placeholder {
+        color: var(--text-muted, #6c757d);
+    }
+</style>
+
+@code {
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public EventCallback<string> TitleChanged { get; set; }
+    [Parameter] public string Placeholder { get; set; } = "Enter issue title...";
+    [Parameter] public EditCursorPosition CursorPosition { get; set; } = EditCursorPosition.End;
+
+    private ElementReference _inputElement;
+    private bool _preventDefaultOnTab = true; // Always prevent Tab default to stop focus change
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await FocusInputAsync();
+        }
+    }
+
+    private async Task FocusInputAsync()
+    {
+        try
+        {
+            await _inputElement.FocusAsync();
+            // Note: Cursor positioning would require JS interop for full control
+            // For now, the browser will position at the end by default after focus
+        }
+        catch
+        {
+            // Focus might fail if element is not in DOM yet
+        }
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case "Escape":
+                NavService.CancelEdit();
+                break;
+            case "Enter":
+                await NavService.AcceptEditAsync();
+                break;
+            case "Tab":
+                // Tab is handled via @onkeydown:preventDefault on the element
+                if (e.ShiftKey)
+                {
+                    NavService.UnindentAsSibling();
+                }
+                else
+                {
+                    NavService.IndentAsChild();
+                }
+                break;
+            default:
+                // Update the title in the service as user types
+                await TitleChanged.InvokeAsync(Title);
+                NavService.UpdateEditTitle(Title);
+                break;
+        }
+    }
+
+    private void HandleBlur()
+    {
+        // Don't cancel on blur - let user click elsewhere while editing
+        // The user must explicitly press Escape to cancel or Enter to save
+    }
+}
