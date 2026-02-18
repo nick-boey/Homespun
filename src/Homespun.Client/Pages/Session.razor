@@ -243,18 +243,21 @@
                             <div class="action-panel-options">
                                 <button class="action-panel-btn action-panel-btn-primary"
                                         @onclick="ApprovePlanClearContext"
+                                        disabled="@_isProcessingPlanAction"
                                         title="Clear conversation context and start fresh implementation">
                                     <span class="action-panel-btn-icon">🔄</span>
                                     Clear Context & Start Implementation
                                 </button>
                                 <button class="action-panel-btn"
                                         @onclick="ApprovePlanKeepContext"
+                                        disabled="@_isProcessingPlanAction"
                                         title="Continue with existing conversation context">
                                     <span class="action-panel-btn-icon">▶️</span>
                                     Continue with Context
                                 </button>
                                 <button class="action-panel-btn action-panel-btn-danger"
                                         @onclick="() => _showPlanRejectFeedback = !_showPlanRejectFeedback"
+                                        disabled="@_isProcessingPlanAction"
                                         title="Reject the plan and provide feedback">
                                     <span class="action-panel-btn-icon">✏️</span>
                                     Reject & Modify
@@ -269,6 +272,7 @@
                                               rows="3"></textarea>
                                     <button class="action-panel-btn action-panel-btn-danger"
                                             @onclick="RejectPlan"
+                                            disabled="@_isProcessingPlanAction"
                                             title="Send feedback to revise the plan">
                                         Send Feedback
                                     </button>
@@ -1584,6 +1588,9 @@
     private bool _isStopping = false;
     private bool _isInterrupting = false;
 
+    // Plan action button state (prevents double-click)
+    private bool _isProcessingPlanAction = false;
+
     // Message queue for mid-execution prompts
     private Queue<string> _pendingMessages = new();
     private const int MaxQueuedMessages = 5;
@@ -2146,6 +2153,12 @@
                     if (_session != null && _session.Id == sessionId)
                     {
                         _session.Status = status;
+
+                        // Reset plan action processing flag when status changes from WaitingForPlanExecution
+                        if (status != ClaudeSessionStatus.WaitingForPlanExecution)
+                        {
+                            _isProcessingPlanAction = false;
+                        }
 
                         // When execution completes and we have queued messages, send the next one
                         if (status == ClaudeSessionStatus.WaitingForInput && _pendingMessages.Count > 0)
@@ -2756,48 +2769,63 @@
 
     private async Task ApprovePlanClearContext()
     {
-        if (_session == null || _hubConnection == null) return;
+        if (_session == null || _hubConnection == null || _isProcessingPlanAction) return;
 
         try
         {
+            _isProcessingPlanAction = true;
             _showPlanRejectFeedback = false;
+            StateHasChanged();
+
             await _hubConnection.SendAsync("ApprovePlan", SessionId, true, false, null);
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error approving plan: {ex.Message}");
+            _isProcessingPlanAction = false;
+            StateHasChanged();
         }
     }
 
     private async Task ApprovePlanKeepContext()
     {
-        if (_session == null || _hubConnection == null) return;
+        if (_session == null || _hubConnection == null || _isProcessingPlanAction) return;
 
         try
         {
+            _isProcessingPlanAction = true;
             _showPlanRejectFeedback = false;
+            StateHasChanged();
+
             await _hubConnection.SendAsync("ApprovePlan", SessionId, true, true, null);
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error approving plan: {ex.Message}");
+            _isProcessingPlanAction = false;
+            StateHasChanged();
         }
     }
 
     private async Task RejectPlan()
     {
-        if (_session == null || _hubConnection == null) return;
+        if (_session == null || _hubConnection == null || _isProcessingPlanAction) return;
 
         try
         {
+            _isProcessingPlanAction = true;
             var feedback = string.IsNullOrWhiteSpace(_planRejectFeedback) ? null : _planRejectFeedback.Trim();
             _showPlanRejectFeedback = false;
             _planRejectFeedback = string.Empty;
+            StateHasChanged();
+
             await _hubConnection.SendAsync("ApprovePlan", SessionId, false, false, feedback);
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error rejecting plan: {ex.Message}");
+            _isProcessingPlanAction = false;
+            StateHasChanged();
         }
     }
 

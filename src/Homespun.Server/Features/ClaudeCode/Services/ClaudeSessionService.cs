@@ -1635,6 +1635,11 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             else
             {
                 // Approve with clear context: tell worker to deny (interrupts), then start fresh
+
+                // Set status to Running immediately for responsive UI
+                session.Status = ClaudeSessionStatus.Running;
+                await _hubContext.BroadcastSessionStatusChanged(sessionId, session.Status);
+
                 if (_agentSessionIds.TryGetValue(sessionId, out var agentSessionId))
                 {
                     var resolved = await _agentExecutionService.ApprovePlanAsync(
