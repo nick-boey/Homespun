@@ -41,6 +41,9 @@ param deploymentTimestamp string
 @description('Application Insights connection string for telemetry')
 param appInsightsConnectionString string = ''
 
+@description('Client ID of the user-assigned managed identity for Azure SDK authentication')
+param identityClientId string = ''
+
 resource containerApp 'Microsoft.App/containerApps@2025-01-01' = {
   name: containerAppName
   location: location
@@ -146,6 +149,10 @@ resource containerApp 'Microsoft.App/containerApps@2025-01-01' = {
             {
               name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
               value: appInsightsConnectionString
+            }
+            {
+              name: 'AZURE_CLIENT_ID'
+              value: identityClientId
             }
           ]
           volumeMounts: [

@@ -172,6 +172,7 @@ module containerApp 'modules/containerapp.bicep' = {
     resourceGroupName: resourceGroup().name
     deploymentTimestamp: deploymentTimestamp
     appInsightsConnectionString: appInsights.outputs.connectionString
+    identityClientId: identity.outputs.identityClientId
   }
 }
 

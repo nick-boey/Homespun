@@ -106,6 +106,24 @@ public class AzureContainerAppsAgentExecutionServiceTests
         Assert.That(options.IsDynamicMode, Is.True);
     }
 
+    [Test]
+    public void Options_ManagedIdentityClientId_DefaultsToNull()
+    {
+        var options = new AzureContainerAppsAgentExecutionOptions();
+        Assert.That(options.ManagedIdentityClientId, Is.Null);
+    }
+
+    [Test]
+    public void Options_ManagedIdentityClientId_CanBeSet()
+    {
+        var clientId = "12345678-1234-1234-1234-123456789abc";
+        var options = new AzureContainerAppsAgentExecutionOptions
+        {
+            ManagedIdentityClientId = clientId
+        };
+        Assert.That(options.ManagedIdentityClientId, Is.EqualTo(clientId));
+    }
+
     #endregion
 
     #region Container App Naming Tests
