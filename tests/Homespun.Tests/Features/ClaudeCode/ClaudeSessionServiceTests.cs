@@ -1557,6 +1557,59 @@ public class ClaudeSessionServicePlanApprovalTests
     }
 
     [Test]
+    public async Task ApprovePlanAsync_Approved_ClearContext_BroadcastsStatusImmediately()
+    {
+        // Arrange
+        var session = await _service.StartSessionAsync(
+            "entity-1", "project-1", "/test/path", SessionMode.Plan, "sonnet");
+
+        session.PlanContent = "# Test Plan\n\n1. Step one";
+        session.Status = ClaudeSessionStatus.WaitingForPlanExecution;
+
+        // Set up agent session mapping
+        _agentExecutionServiceMock
+            .Setup(s => s.StartSessionAsync(It.IsAny<AgentStartRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(CreateSdkMessageStream(
+                new SdkSystemMessage("agent-1", null, "session_started", null, null),
+                new SdkResultMessage("agent-1", null, null, 0, 0, false, 0, 0, null)));
+
+        // Send message first to establish agent session mapping
+        await _service.SendMessageAsync(session.Id, "Hello");
+        session.Status = ClaudeSessionStatus.WaitingForPlanExecution;
+
+        // Mock the execution service for plan notification
+        _agentExecutionServiceMock
+            .Setup(s => s.ApprovePlanAsync(It.IsAny<string>(), true, false, null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        // Track the status broadcast calls
+        var statusBroadcasts = new List<(string sessionId, ClaudeSessionStatus status)>();
+        _hubContextMock.Setup(h => h.Clients.All.SendCoreAsync(
+            "SessionStatusChanged",
+            It.IsAny<object?[]>(),
+            It.IsAny<CancellationToken>()))
+            .Callback<string, object?[], CancellationToken>((method, args, ct) =>
+            {
+                if (args.Length >= 2 && args[0] is string sid && args[1] is ClaudeSessionStatus st)
+                {
+                    statusBroadcasts.Add((sid, st));
+                }
+            })
+            .Returns(Task.CompletedTask);
+
+        // Act
+        await _service.ApprovePlanAsync(session.Id, approved: true, keepContext: false);
+
+        // Assert - the first broadcast should be Running (immediate status change)
+        Assert.That(statusBroadcasts, Has.Count.GreaterThanOrEqualTo(1),
+            "Should have broadcast at least one status change");
+        Assert.That(statusBroadcasts[0].sessionId, Is.EqualTo(session.Id),
+            "First broadcast should be for the correct session");
+        Assert.That(statusBroadcasts[0].status, Is.EqualTo(ClaudeSessionStatus.Running),
+            "First broadcast should be Running status (immediate feedback)");
+    }
+
+    [Test]
     public async Task ApprovePlanAsync_Rejected_CallsExecutionServiceWithFeedback()
     {
         // Arrange
