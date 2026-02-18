@@ -6,6 +6,7 @@
 @implements IDisposable
 @implements IAsyncDisposable
 @using Fleece.Core.Models
+@using Homespun.Shared.Hubs
 @using Microsoft.AspNetCore.SignalR.Client
 @inject HttpProjectApiService ProjectApi
 @inject HttpPullRequestApiService PullRequestApi
@@ -630,7 +631,7 @@ else
         try
         {
             _hubConnection = new HubConnectionBuilder()
-                .WithUrl(NavigationManager.ToAbsoluteUri("/hubs/agent"))
+                .WithUrl(NavigationManager.ToAbsoluteUri(HubConstants.NotificationHub))
                 .Build();
 
             // Listen for pull request sync events
