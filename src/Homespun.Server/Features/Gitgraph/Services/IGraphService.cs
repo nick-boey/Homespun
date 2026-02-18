@@ -1,4 +1,5 @@
 using Fleece.Core.Models;
+using Homespun.Shared.Models.Fleece;
 
 namespace Homespun.Features.Gitgraph.Services;
 
@@ -77,4 +78,13 @@ public interface IGraphService
     /// <param name="projectId">The project ID.</param>
     /// <returns>Text rendering of the task graph, or null if no issues exist.</returns>
     Task<string?> BuildTaskGraphTextAsync(string projectId);
+
+    /// <summary>
+    /// Builds an enhanced task graph response including merged PRs, agent statuses,
+    /// and linked PR information for the UI.
+    /// </summary>
+    /// <param name="projectId">The project ID.</param>
+    /// <param name="maxPastPRs">Maximum number of past (closed/merged) PRs to show. Default is 5.</param>
+    /// <returns>Enhanced task graph response, or null if no issues exist.</returns>
+    Task<TaskGraphResponse?> BuildEnhancedTaskGraphAsync(string projectId, int maxPastPRs = 5);
 }

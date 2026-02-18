@@ -50,11 +50,11 @@ public class HttpGraphApiService(HttpClient http)
         }
     }
 
-    public async Task<TaskGraphResponse?> GetTaskGraphDataAsync(string projectId)
+    public async Task<TaskGraphResponse?> GetTaskGraphDataAsync(string projectId, int maxPastPRs = 5)
     {
         try
         {
-            return await http.GetFromJsonAsync<TaskGraphResponse>($"{BaseUrl}/{projectId}/taskgraph/data");
+            return await http.GetFromJsonAsync<TaskGraphResponse>($"{BaseUrl}/{projectId}/taskgraph/data?maxPastPRs={maxPastPRs}");
         }
         catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
         {

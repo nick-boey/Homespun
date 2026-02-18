@@ -213,13 +213,13 @@ public class TaskGraphViewTests : BunitTestContext
 
         var cut = Render<TaskGraphView>(p => p.Add(x => x.TaskGraph, taskGraph));
 
-        // The parent row should have an L-shaped path from child lane (0) to parent diamond
+        // The parent row should have an L-shaped path from child lane (0) to parent circle
         var graphCells = cut.FindAll(".task-graph-graph-cell");
         var parentCell = graphCells[2]; // Third issue row = parent
         var fromX = TimelineSvgRenderer.GetLaneCenterX(0); // 12
         var cx = TimelineSvgRenderer.GetLaneCenterX(1); // 36
-        var nodeEdgeX = cx - TimelineSvgRenderer.DiamondSize - 2; // 27
-        var r = TimelineSvgRenderer.TaskGraphArcRadius; // 7
+        var nodeEdgeX = cx - TimelineSvgRenderer.NodeRadius - 2; // 28 (NodeRadius is used for circles)
+        var r = TimelineSvgRenderer.NodeRadius; // 6
         Assert.That(parentCell.InnerHtml, Does.Contain($"M {fromX} 0 L {fromX} {20 - r} A {r} {r} 0 0 0 {fromX + r} 20 L {nodeEdgeX} 20"),
             "Parent should have L-shaped connector with arc from series children's lane");
     }
@@ -237,21 +237,20 @@ public class TaskGraphViewTests : BunitTestContext
                     Lane = 0, Row = 0, IsActionable = true
                 }
             ],
-            TotalLanes = 1
-        };
-        var agentStatuses = new Dictionary<string, AgentStatusData>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["TEST-001"] = new AgentStatusData { IsActive = true, Status = "Running", SessionId = "session-1" }
+            TotalLanes = 1,
+            AgentStatuses = new Dictionary<string, AgentStatusData>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["TEST-001"] = new AgentStatusData { IsActive = true, Status = "Running", SessionId = "session-1" }
+            }
         };
 
         var cut = Render<TaskGraphView>(p =>
         {
             p.Add(x => x.TaskGraph, taskGraph);
-            p.Add(x => x.AgentStatuses, agentStatuses);
         });
 
         var badge = cut.Find(".agent-status-badge");
-        Assert.That(badge.TextContent, Does.Contain("Running"));
+        Assert.That(badge.TextContent, Does.Contain("Working"));
         cut.Find(".agent-status-dot-active");
     }
 

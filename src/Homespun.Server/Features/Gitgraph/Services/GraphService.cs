@@ -1,8 +1,10 @@
 using Fleece.Core.Models;
 using Homespun.Features.ClaudeCode.Services;
+using Homespun.Features.Fleece;
 using Homespun.Features.Fleece.Services;
 using Homespun.Features.Projects;
 using Homespun.Features.PullRequests.Data;
+using Homespun.Shared.Models.Fleece;
 
 namespace Homespun.Features.Gitgraph.Services;
 
@@ -424,6 +426,111 @@ public class GraphService(
         {
             logger.LogWarning(ex, "Failed to get issues for {WorkingDirectory}", workingDirectory);
             return [];
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<TaskGraphResponse?> BuildEnhancedTaskGraphAsync(string projectId, int maxPastPRs = 5)
+    {
+        var project = await projectService.GetByIdAsync(projectId);
+        if (project == null)
+        {
+            logger.LogWarning("Project not found: {ProjectId}", projectId);
+            return null;
+        }
+
+        try
+        {
+            // Get task graph from Fleece.Core
+            var taskGraph = await fleeceService.GetTaskGraphAsync(project.LocalPath);
+            if (taskGraph == null)
+            {
+                logger.LogDebug("No task graph available for project {ProjectId}", projectId);
+                return null;
+            }
+
+            // Build task graph response
+            var response = new TaskGraphResponse
+            {
+                TotalLanes = taskGraph.TotalLanes,
+                Nodes = taskGraph.Nodes.Select(n => new TaskGraphNodeResponse
+                {
+                    Issue = IssueDtoMapper.ToResponse(n.Issue),
+                    Lane = n.Lane,
+                    Row = n.Row,
+                    IsActionable = n.IsActionable
+                }).ToList()
+            };
+
+            // Get merged/closed PRs
+            cacheService.LoadCacheForProject(projectId, project.LocalPath);
+            var cachedData = cacheService.GetCachedPRData(projectId);
+
+            if (cachedData != null)
+            {
+                var closedPrs = cachedData.ClosedPrs
+                    .Where(pr => pr.Status == PullRequestStatus.Merged || pr.Status == PullRequestStatus.Closed)
+                    .OrderByDescending(pr => pr.MergedAt ?? pr.ClosedAt ?? pr.CreatedAt)
+                    .ToList();
+
+                var totalClosedPrs = closedPrs.Count;
+                var shownPrs = closedPrs.Take(maxPastPRs).ToList();
+
+                response.MergedPrs = shownPrs.Select(pr => new TaskGraphPrResponse
+                {
+                    Number = pr.Number,
+                    Title = pr.Title,
+                    Url = pr.HtmlUrl,
+                    IsMerged = pr.Status == PullRequestStatus.Merged,
+                    HasDescription = !string.IsNullOrWhiteSpace(pr.Body)
+                }).ToList();
+
+                response.HasMorePastPrs = totalClosedPrs > maxPastPRs;
+                response.TotalPastPrsShown = shownPrs.Count;
+            }
+
+            // Get agent statuses
+            var sessions = sessionStore.GetByProjectId(projectId);
+            var sessionsByEntityId = sessions
+                .GroupBy(s => s.EntityId, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.OrderByDescending(s => s.LastActivityAt).First(), StringComparer.OrdinalIgnoreCase);
+
+            foreach (var node in response.Nodes)
+            {
+                if (sessionsByEntityId.TryGetValue(node.Issue.Id, out var session))
+                {
+                    response.AgentStatuses[node.Issue.Id] = CreateAgentStatusData(session);
+                }
+            }
+
+            // Get linked PRs
+            var trackedPrs = dataStore.GetPullRequestsByProject(projectId)
+                .Where(pr => !string.IsNullOrEmpty(pr.BeadsIssueId) && pr.GitHubPRNumber.HasValue)
+                .ToList();
+
+            foreach (var trackedPr in trackedPrs)
+            {
+                if (trackedPr.BeadsIssueId != null && trackedPr.GitHubPRNumber.HasValue)
+                {
+                    response.LinkedPrs[trackedPr.BeadsIssueId] = new TaskGraphLinkedPr
+                    {
+                        Number = trackedPr.GitHubPRNumber.Value,
+                        Url = $"https://github.com/{project.GitHubOwner}/{project.GitHubRepo}/pull/{trackedPr.GitHubPRNumber.Value}",
+                        Status = trackedPr.Status.ToString()
+                    };
+                }
+            }
+
+            logger.LogDebug(
+                "Built enhanced task graph for project {ProjectId}: {NodeCount} nodes, {PrCount} merged PRs, {AgentCount} agent statuses, {LinkedPrCount} linked PRs",
+                projectId, response.Nodes.Count, response.MergedPrs.Count, response.AgentStatuses.Count, response.LinkedPrs.Count);
+
+            return response;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to build enhanced task graph for project {ProjectId}", projectId);
+            return null;
         }
     }
 }

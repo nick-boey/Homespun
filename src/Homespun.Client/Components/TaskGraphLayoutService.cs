@@ -1,5 +1,6 @@
 using Fleece.Core.Models;
 using Homespun.Shared.Models.Fleece;
+using Homespun.Shared.Models.Gitgraph;
 
 namespace Homespun.Client.Components;
 
@@ -9,8 +10,11 @@ public abstract record TaskGraphRenderLine;
 public record TaskGraphIssueRenderLine(
     string IssueId, string Title, int Lane, TaskGraphMarkerType Marker,
     int? ParentLane, bool IsFirstChild, bool IsSeriesChild,
-    bool DrawTopLine, bool DrawBottomLine, int? SeriesConnectorFromLane) : TaskGraphRenderLine;
+    bool DrawTopLine, bool DrawBottomLine, int? SeriesConnectorFromLane,
+    IssueType IssueType, bool HasDescription, TaskGraphLinkedPr? LinkedPr, AgentStatusData? AgentStatus) : TaskGraphRenderLine;
 public record TaskGraphSeparatorRenderLine : TaskGraphRenderLine;
+public record TaskGraphPrRenderLine(int PrNumber, string Title, string? Url, bool IsMerged, bool HasDescription, AgentStatusData? AgentStatus) : TaskGraphRenderLine;
+public record TaskGraphLoadMoreRenderLine : TaskGraphRenderLine;
 
 /// <summary>
 /// Converts a TaskGraphResponse into a list of render lines for the TaskGraphView component.
@@ -24,12 +28,36 @@ public static class TaskGraphLayoutService
         if (taskGraph == null || taskGraph.Nodes.Count == 0)
             return [];
 
-        var groups = GroupNodes(taskGraph.Nodes);
         var result = new List<TaskGraphRenderLine>();
 
+        // Add load more button at the very top if there are more PRs
+        if (taskGraph.HasMorePastPrs)
+        {
+            result.Add(new TaskGraphLoadMoreRenderLine());
+        }
+
+        // Add merged/closed PRs at the top
+        foreach (var pr in taskGraph.MergedPrs)
+        {
+            result.Add(new TaskGraphPrRenderLine(
+                pr.Number,
+                pr.Title,
+                pr.Url,
+                pr.IsMerged,
+                pr.HasDescription,
+                pr.AgentStatus));
+        }
+
+        // Add separator if we have PRs and issues
+        if (taskGraph.MergedPrs.Count > 0 && taskGraph.Nodes.Count > 0)
+        {
+            result.Add(new TaskGraphSeparatorRenderLine());
+        }
+
+        var groups = GroupNodes(taskGraph.Nodes);
         foreach (var group in groups)
         {
-            RenderGroup(result, group);
+            RenderGroup(result, group, taskGraph.AgentStatuses, taskGraph.LinkedPrs);
         }
 
         return result;
@@ -98,7 +126,11 @@ public static class TaskGraphLayoutService
         return groups;
     }
 
-    private static void RenderGroup(List<TaskGraphRenderLine> result, List<TaskGraphNodeResponse> group)
+    private static void RenderGroup(
+        List<TaskGraphRenderLine> result,
+        List<TaskGraphNodeResponse> group,
+        Dictionary<string, AgentStatusData> agentStatuses,
+        Dictionary<string, TaskGraphLinkedPr> linkedPrs)
     {
         if (group.Count == 0) return;
 
@@ -191,6 +223,10 @@ public static class TaskGraphLayoutService
             int? seriesConnectorFromLane = seriesChildLaneByParent.TryGetValue(node.Issue.Id, out var childLane)
                 ? childLane : null;
 
+            // Get linked PR and agent status for this issue
+            linkedPrs.TryGetValue(node.Issue.Id, out var linkedPr);
+            agentStatuses.TryGetValue(node.Issue.Id, out var agentStatus);
+
             result.Add(new TaskGraphIssueRenderLine(
                 IssueId: node.Issue.Id,
                 Title: node.Issue.Title,
@@ -201,7 +237,11 @@ public static class TaskGraphLayoutService
                 IsSeriesChild: isSeriesChild,
                 DrawTopLine: drawTopLine,
                 DrawBottomLine: drawBottomLine,
-                SeriesConnectorFromLane: seriesConnectorFromLane
+                SeriesConnectorFromLane: seriesConnectorFromLane,
+                IssueType: node.Issue.Type,
+                HasDescription: !string.IsNullOrWhiteSpace(node.Issue.Description),
+                LinkedPr: linkedPr,
+                AgentStatus: agentStatus
             ));
         }
     }

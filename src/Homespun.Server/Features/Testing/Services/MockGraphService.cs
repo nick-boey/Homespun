@@ -2,8 +2,10 @@ using Fleece.Core.Models;
 using Fleece.Core.Services;
 using Fleece.Core.Services.Interfaces;
 using Homespun.Features.ClaudeCode.Services;
+using Homespun.Features.Fleece;
 using Homespun.Features.Gitgraph.Services;
 using Homespun.Features.PullRequests.Data;
+using Homespun.Shared.Models.Fleece;
 using Microsoft.Extensions.Logging;
 
 namespace Homespun.Features.Testing.Services;
@@ -149,6 +151,65 @@ public class MockGraphService : IGraphService
             return null;
 
         return TaskGraphTextRenderer.Render(taskGraph);
+    }
+
+    public async Task<TaskGraphResponse?> BuildEnhancedTaskGraphAsync(string projectId, int maxPastPRs = 5)
+    {
+        _logger.LogDebug("[Mock] BuildEnhancedTaskGraph for project {ProjectId}", projectId);
+
+        var taskGraph = await BuildTaskGraphAsync(projectId);
+        if (taskGraph == null)
+            return null;
+
+        // Build task graph response
+        var response = new TaskGraphResponse
+        {
+            TotalLanes = taskGraph.TotalLanes,
+            Nodes = taskGraph.Nodes.Select(n => new TaskGraphNodeResponse
+            {
+                Issue = IssueDtoMapper.ToResponse(n.Issue),
+                Lane = n.Lane,
+                Row = n.Row,
+                IsActionable = n.IsActionable
+            }).ToList()
+        };
+
+        // Add merged PRs
+        var mergedPrs = GetMergedPrHistory();
+        var totalMergedPrs = mergedPrs.Count;
+        var shownPrs = mergedPrs.Take(maxPastPRs).ToList();
+
+        response.MergedPrs = shownPrs.Select(pr => new TaskGraphPrResponse
+        {
+            Number = pr.Number,
+            Title = pr.Title,
+            Url = pr.HtmlUrl,
+            IsMerged = pr.Status == PullRequestStatus.Merged,
+            HasDescription = !string.IsNullOrWhiteSpace(pr.Body)
+        }).ToList();
+
+        response.HasMorePastPrs = totalMergedPrs > maxPastPRs;
+        response.TotalPastPrsShown = shownPrs.Count;
+
+        // Get agent statuses
+        var sessions = _sessionStore.GetByProjectId(projectId);
+        var sessionsByEntityId = sessions
+            .GroupBy(s => s.EntityId, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(s => s.LastActivityAt).First(), StringComparer.OrdinalIgnoreCase);
+
+        foreach (var node in response.Nodes)
+        {
+            if (sessionsByEntityId.TryGetValue(node.Issue.Id, out var session))
+            {
+                response.AgentStatuses[node.Issue.Id] = CreateAgentStatusData(session);
+            }
+        }
+
+        _logger.LogDebug(
+            "[Mock] Built enhanced task graph: {NodeCount} nodes, {PrCount} merged PRs, {AgentCount} agent statuses",
+            response.Nodes.Count, response.MergedPrs.Count, response.AgentStatuses.Count);
+
+        return response;
     }
 
     private static PullRequestInfo ConvertToPullRequestInfo(PullRequest pr)

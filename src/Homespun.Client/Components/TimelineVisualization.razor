@@ -24,8 +24,8 @@
             <TaskGraphView
                 TaskGraph="@_taskGraphData"
                 OnIssueClick="OnIssueClick"
-                SelectedNodeId="@SelectedNodeId"
-                AgentStatuses="@_agentStatusesByIssueId" />
+                OnLoadMoreClick="LoadMoreTaskGraphPRs"
+                SelectedNodeId="@SelectedNodeId" />
         </div>
     }
     else if (_graph != null && _layout != null)
@@ -612,13 +612,23 @@
     {
         try
         {
-            _taskGraphData = await GraphApi.GetTaskGraphDataAsync(ProjectId);
+            _taskGraphData = await GraphApi.GetTaskGraphDataAsync(ProjectId, _currentMaxPastPRs);
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Failed to load task graph: {ex.Message}");
             _taskGraphData = null;
         }
+    }
+
+    /// <summary>
+    /// Loads more past PRs in the task graph.
+    /// </summary>
+    private async Task LoadMoreTaskGraphPRs()
+    {
+        _currentMaxPastPRs += 5;
+        await LoadTaskGraphAsync();
+        StateHasChanged();
     }
 
     private void BuildLaneColors()
