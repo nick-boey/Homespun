@@ -365,6 +365,120 @@ public static class TimelineSvgRenderer
         return sb.ToString();
     }
 
+    /// <summary>
+    /// Generates a circle-based node for the task graph (replacing diamond nodes).
+    /// Hollow circles indicate issues without descriptions, solid circles indicate issues with descriptions.
+    /// </summary>
+    public static string GenerateTaskGraphCircleSvg(
+        int nodeLane, int? parentLane, bool isFirstChild, int maxLanes,
+        string nodeColor, bool isOutlineOnly, bool isActionable,
+        bool drawTopLine = false, bool drawBottomLine = false, bool isSeriesChild = false,
+        int? seriesConnectorFromLane = null)
+    {
+        var width = CalculateSvgWidth(maxLanes);
+        var sb = new StringBuilder();
+        sb.Append($"<svg width=\"{width}\" height=\"{RowHeight}\" xmlns=\"http://www.w3.org/2000/svg\">");
+
+        var cx = GetLaneCenterX(nodeLane);
+        var cy = GetRowCenterY();
+
+        if (!isSeriesChild && parentLane.HasValue && parentLane.Value > nodeLane)
+        {
+            var px = GetLaneCenterX(parentLane.Value);
+            var startX = cx + NodeRadius + 2;
+
+            // Junction at parent lane
+            if (isFirstChild)
+            {
+                // Merged horizontal + arc elbow + vertical down
+                var r = NodeRadius;
+                sb.Append(
+                    $"<path d=\"M {startX} {cy} L {px - r} {cy} A {r} {r} 0 0 1 {px} {cy + r} L {px} {RowHeight}\" stroke=\"{EscapeAttribute(nodeColor)}\" stroke-width=\"{LineStrokeWidth.ToString(CultureInfo.InvariantCulture)}\" fill=\"none\" />");
+            }
+            else
+            {
+                // Horizontal line from circle right edge to parent lane center
+                sb.Append(
+                    $"<path d=\"M {startX} {cy} L {px} {cy}\" stroke=\"{EscapeAttribute(nodeColor)}\" stroke-width=\"{LineStrokeWidth.ToString(CultureInfo.InvariantCulture)}\" fill=\"none\" />");
+                // Full-height vertical
+                sb.Append(
+                    $"<path d=\"M {px} 0 L {px} {RowHeight}\" stroke=\"{EscapeAttribute(nodeColor)}\" stroke-width=\"{LineStrokeWidth.ToString(CultureInfo.InvariantCulture)}\" fill=\"none\" />");
+            }
+        }
+
+        // L-shaped connector from series children's lane to this node (parent receiving series children)
+        if (seriesConnectorFromLane.HasValue)
+        {
+            var fromX = GetLaneCenterX(seriesConnectorFromLane.Value);
+            var nodeEdgeX = cx - NodeRadius - 2;
+            var r = NodeRadius;
+            sb.Append(
+                $"<path d=\"M {fromX} 0 L {fromX} {cy - r} A {r} {r} 0 0 0 {fromX + r} {cy} L {nodeEdgeX} {cy}\" stroke=\"{EscapeAttribute(nodeColor)}\" stroke-width=\"{LineStrokeWidth.ToString(CultureInfo.InvariantCulture)}\" fill=\"none\" />");
+        }
+
+        if (drawTopLine)
+        {
+            var topLineEndY = cy - NodeRadius - 2;
+            sb.Append(
+                $"<path d=\"M {cx} 0 L {cx} {topLineEndY}\" stroke=\"{EscapeAttribute(nodeColor)}\" stroke-width=\"{LineStrokeWidth.ToString(CultureInfo.InvariantCulture)}\" fill=\"none\" />");
+        }
+
+        if (drawBottomLine)
+        {
+            var bottomLineStartY = cy + NodeRadius + 2;
+            sb.Append(
+                $"<path d=\"M {cx} {bottomLineStartY} L {cx} {RowHeight}\" stroke=\"{EscapeAttribute(nodeColor)}\" stroke-width=\"{LineStrokeWidth.ToString(CultureInfo.InvariantCulture)}\" fill=\"none\" />");
+        }
+
+        if (isActionable)
+        {
+            // Glow ring for actionable items
+            var outerRadius = NodeRadius + 4;
+            sb.Append(
+                $"<circle cx=\"{cx}\" cy=\"{cy}\" r=\"{outerRadius}\" fill=\"none\" stroke=\"{EscapeAttribute(nodeColor)}\" stroke-width=\"1\" opacity=\"0.4\" />");
+        }
+
+        if (isOutlineOnly)
+        {
+            sb.Append($"<circle cx=\"{cx}\" cy=\"{cy}\" r=\"{NodeRadius}\" fill=\"none\" stroke=\"{EscapeAttribute(nodeColor)}\" stroke-width=\"2\" />");
+        }
+        else
+        {
+            sb.Append($"<circle cx=\"{cx}\" cy=\"{cy}\" r=\"{NodeRadius}\" fill=\"{EscapeAttribute(nodeColor)}\" />");
+        }
+
+        sb.Append("</svg>");
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Generates a load more button node for the task graph.
+    /// </summary>
+    public static string GenerateTaskGraphLoadMoreSvg(int maxLanes)
+    {
+        var width = CalculateSvgWidth(maxLanes);
+        var sb = new StringBuilder();
+        sb.Append($"<svg width=\"{width}\" height=\"{RowHeight}\" xmlns=\"http://www.w3.org/2000/svg\">");
+
+        var cx = GetLaneCenterX(0);
+        var cy = GetRowCenterY();
+        var r = NodeRadius + 2;
+
+        // Draw vertical line below the load more button
+        var bottomLineStartY = cy + r + 2;
+        sb.Append(
+            $"<path d=\"M {cx} {bottomLineStartY} L {cx} {RowHeight}\" stroke=\"#6b7280\" stroke-width=\"{LineStrokeWidth.ToString(CultureInfo.InvariantCulture)}\" fill=\"none\" />");
+
+        // Draw the load more button
+        sb.Append(
+            $"<circle cx=\"{cx}\" cy=\"{cy}\" r=\"{r}\" fill=\"#51A5C1\" stroke=\"white\" stroke-width=\"2\" />");
+        sb.Append(
+            $"<text x=\"{cx}\" y=\"{cy}\" text-anchor=\"middle\" dominant-baseline=\"central\" fill=\"white\" font-size=\"14\" font-weight=\"bold\">+</text>");
+
+        sb.Append("</svg>");
+        return sb.ToString();
+    }
+
     private static string EscapeAttribute(string value)
     {
         return value

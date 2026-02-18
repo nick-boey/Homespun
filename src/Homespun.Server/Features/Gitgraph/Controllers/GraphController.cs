@@ -43,11 +43,13 @@ public class GraphController(IGraphService graphService) : ControllerBase
     [HttpGet("{projectId}/taskgraph/data")]
     [ProducesResponseType<TaskGraphResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<TaskGraphResponse>> GetTaskGraphData(string projectId)
+    public async Task<ActionResult<TaskGraphResponse>> GetTaskGraphData(
+        string projectId,
+        [FromQuery] int maxPastPRs = 5)
     {
-        var taskGraph = await graphService.BuildTaskGraphAsync(projectId);
+        var taskGraph = await graphService.BuildEnhancedTaskGraphAsync(projectId, maxPastPRs);
         if (taskGraph == null)
             return NotFound("No task graph available for this project.");
-        return Ok(taskGraph.ToResponse());
+        return Ok(taskGraph);
     }
 }
