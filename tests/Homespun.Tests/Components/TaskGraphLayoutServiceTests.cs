@@ -763,6 +763,172 @@ public class TaskGraphLayoutServiceTests
             "SeriesConnectorFromLane should be offset to lane 1 (original 0 + offset 1)");
     }
 
+    [Test]
+    public void ComputeLayout_MergedPrs_LeftmostIssuesGetLane0Connector()
+    {
+        // When merged PRs exist, issues at the leftmost lane (laneOffset) should get
+        // DrawLane0Connector=true, and intermediate issues should get DrawLane0PassThrough=true.
+        // Use a connected group so intermediate nodes are genuinely at higher lanes
+        // (orphans get lane-normalized to 0, so they'd always be at laneOffset).
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes =
+            [
+                // Group 1: connected parent-child (child at lane 0, parent at lane 1)
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "CHILD-001", Title = "Child", Status = IssueStatus.Open,
+                        ParentIssues = [new ParentIssueRefResponse { ParentIssue = "PARENT-001" }] },
+                    Lane = 0, Row = 0, IsActionable = true
+                },
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "PARENT-001", Title = "Parent", Status = IssueStatus.Open },
+                    Lane = 1, Row = 1, IsActionable = false
+                },
+                // Group 2: orphan at lane 0
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "ORPHAN-001", Title = "Orphan", Status = IssueStatus.Open },
+                    Lane = 0, Row = 2, IsActionable = true
+                }
+            ],
+            TotalLanes = 2,
+            MergedPrs =
+            [
+                new TaskGraphPrResponse { Number = 100, Title = "PR 100", IsMerged = true }
+            ]
+        };
+
+        var result = TaskGraphLayoutService.ComputeLayout(taskGraph);
+        var issueLines = result.OfType<TaskGraphIssueRenderLine>().ToList();
+
+        // Child at lane 1 (offset from 0) gets connector, not last
+        Assert.That(issueLines[0].IssueId, Is.EqualTo("CHILD-001"));
+        Assert.That(issueLines[0].DrawLane0Connector, Is.True);
+        Assert.That(issueLines[0].IsLastLane0Connector, Is.False);
+        Assert.That(issueLines[0].DrawLane0PassThrough, Is.False);
+
+        // Parent at lane 2 (offset from 1) gets pass-through
+        Assert.That(issueLines[1].IssueId, Is.EqualTo("PARENT-001"));
+        Assert.That(issueLines[1].DrawLane0Connector, Is.False);
+        Assert.That(issueLines[1].DrawLane0PassThrough, Is.True);
+
+        // Orphan at lane 1 (offset from 0) gets connector and is last
+        Assert.That(issueLines[2].IssueId, Is.EqualTo("ORPHAN-001"));
+        Assert.That(issueLines[2].DrawLane0Connector, Is.True);
+        Assert.That(issueLines[2].IsLastLane0Connector, Is.True);
+        Assert.That(issueLines[2].DrawLane0PassThrough, Is.False);
+    }
+
+    [Test]
+    public void ComputeLayout_MergedPrs_SingleLeftmostIssue_IsFirstAndLast()
+    {
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes =
+            [
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "ISSUE-001", Title = "Only actionable", Status = IssueStatus.Open },
+                    Lane = 0, Row = 0, IsActionable = true
+                }
+            ],
+            TotalLanes = 1,
+            MergedPrs =
+            [
+                new TaskGraphPrResponse { Number = 100, Title = "PR 100", IsMerged = true }
+            ]
+        };
+
+        var result = TaskGraphLayoutService.ComputeLayout(taskGraph);
+        var issueLines = result.OfType<TaskGraphIssueRenderLine>().ToList();
+
+        Assert.That(issueLines[0].DrawLane0Connector, Is.True);
+        Assert.That(issueLines[0].IsLastLane0Connector, Is.True);
+    }
+
+    [Test]
+    public void ComputeLayout_NoMergedPrs_NoLane0Connectors()
+    {
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes =
+            [
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "ISSUE-001", Title = "Issue", Status = IssueStatus.Open },
+                    Lane = 0, Row = 0, IsActionable = true
+                }
+            ],
+            TotalLanes = 1
+        };
+
+        var result = TaskGraphLayoutService.ComputeLayout(taskGraph);
+        var issueLines = result.OfType<TaskGraphIssueRenderLine>().ToList();
+
+        Assert.That(issueLines[0].DrawLane0Connector, Is.False);
+        Assert.That(issueLines[0].IsLastLane0Connector, Is.False);
+        Assert.That(issueLines[0].DrawLane0PassThrough, Is.False);
+    }
+
+    [Test]
+    public void ComputeLayout_MergedPrs_NoIssues_NoLane0Connectors()
+    {
+        // No issues at all, just merged PRs - no lane 0 connectors needed
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes = [],
+            TotalLanes = 0,
+            MergedPrs =
+            [
+                new TaskGraphPrResponse { Number = 100, Title = "PR 100", IsMerged = true }
+            ]
+        };
+
+        var result = TaskGraphLayoutService.ComputeLayout(taskGraph);
+        var issueLines = result.OfType<TaskGraphIssueRenderLine>().ToList();
+
+        Assert.That(issueLines, Has.Count.EqualTo(0));
+    }
+
+    [Test]
+    public void ComputeLayout_MergedPrs_FullMock_CorrectLane0ConnectorFlags()
+    {
+        // Use the full mock with merged PRs to verify the complete scenario
+        var taskGraph = BuildFullMockTaskGraph();
+        taskGraph.MergedPrs =
+        [
+            new TaskGraphPrResponse { Number = 97, Title = "PR 97", IsMerged = true },
+            new TaskGraphPrResponse { Number = 98, Title = "PR 98", IsMerged = true }
+        ];
+
+        var result = TaskGraphLayoutService.ComputeLayout(taskGraph);
+        var issueLines = result.OfType<TaskGraphIssueRenderLine>().ToList();
+
+        // With offset, lane 0 nodes become lane 1
+        // ISSUE-003 (lane 0→1): connector
+        Assert.That(issueLines.First(l => l.IssueId == "ISSUE-003").DrawLane0Connector, Is.True);
+        Assert.That(issueLines.First(l => l.IssueId == "ISSUE-003").IsLastLane0Connector, Is.False);
+
+        // ISSUE-001 (lane 0→1): connector
+        Assert.That(issueLines.First(l => l.IssueId == "ISSUE-001").DrawLane0Connector, Is.True);
+        Assert.That(issueLines.First(l => l.IssueId == "ISSUE-001").IsLastLane0Connector, Is.False);
+
+        // ISSUE-010 (lane 0→1): connector
+        Assert.That(issueLines.First(l => l.IssueId == "ISSUE-010").DrawLane0Connector, Is.True);
+        Assert.That(issueLines.First(l => l.IssueId == "ISSUE-010").IsLastLane0Connector, Is.False);
+
+        // Intermediate nodes at higher lanes: pass-through
+        Assert.That(issueLines.First(l => l.IssueId == "ISSUE-009").DrawLane0PassThrough, Is.True);
+        Assert.That(issueLines.First(l => l.IssueId == "ISSUE-008").DrawLane0PassThrough, Is.True);
+        Assert.That(issueLines.First(l => l.IssueId == "ISSUE-007").DrawLane0PassThrough, Is.True);
+
+        // ISSUE-002 (lane 0→1): last connector
+        Assert.That(issueLines.First(l => l.IssueId == "ISSUE-002").DrawLane0Connector, Is.True);
+        Assert.That(issueLines.First(l => l.IssueId == "ISSUE-002").IsLastLane0Connector, Is.True);
+    }
+
     private static TaskGraphResponse BuildFullMockTaskGraph()
     {
         return new TaskGraphResponse

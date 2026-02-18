@@ -369,7 +369,10 @@
             drawTopLine: issueLine.DrawTopLine,
             drawBottomLine: issueLine.DrawBottomLine,
             isSeriesChild: issueLine.IsSeriesChild,
-            seriesConnectorFromLane: issueLine.SeriesConnectorFromLane);
+            seriesConnectorFromLane: issueLine.SeriesConnectorFromLane,
+            drawLane0Connector: issueLine.DrawLane0Connector,
+            isLastLane0Connector: issueLine.IsLastLane0Connector,
+            drawLane0PassThrough: issueLine.DrawLane0PassThrough);
     }
 
     private string GeneratePrSvg(TaskGraphPrRenderLine prLine)

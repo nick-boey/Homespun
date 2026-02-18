@@ -11,7 +11,8 @@ public record TaskGraphIssueRenderLine(
     string IssueId, string Title, int Lane, TaskGraphMarkerType Marker,
     int? ParentLane, bool IsFirstChild, bool IsSeriesChild,
     bool DrawTopLine, bool DrawBottomLine, int? SeriesConnectorFromLane,
-    IssueType IssueType, bool HasDescription, TaskGraphLinkedPr? LinkedPr, AgentStatusData? AgentStatus) : TaskGraphRenderLine;
+    IssueType IssueType, bool HasDescription, TaskGraphLinkedPr? LinkedPr, AgentStatusData? AgentStatus,
+    bool DrawLane0Connector = false, bool IsLastLane0Connector = false, bool DrawLane0PassThrough = false) : TaskGraphRenderLine;
 public record TaskGraphSeparatorRenderLine : TaskGraphRenderLine;
 public record TaskGraphPrRenderLine(int PrNumber, string Title, string? Url, bool IsMerged, bool HasDescription, AgentStatusData? AgentStatus, bool DrawTopLine, bool DrawBottomLine) : TaskGraphRenderLine;
 public record TaskGraphLoadMoreRenderLine : TaskGraphRenderLine;
@@ -79,6 +80,43 @@ public static class TaskGraphLayoutService
         foreach (var group in groups)
         {
             RenderGroup(result, group, taskGraph.AgentStatuses, taskGraph.LinkedPrs, laneOffset);
+        }
+
+        // Post-process: connect merged PR vertical line at lane 0 to leftmost issue nodes
+        if (laneOffset > 0)
+        {
+            var firstIdx = -1;
+            var lastIdx = -1;
+            for (var i = 0; i < result.Count; i++)
+            {
+                if (result[i] is TaskGraphIssueRenderLine irl && irl.Lane == laneOffset)
+                {
+                    if (firstIdx == -1) firstIdx = i;
+                    lastIdx = i;
+                }
+            }
+
+            if (firstIdx >= 0)
+            {
+                for (var i = firstIdx; i <= lastIdx; i++)
+                {
+                    if (result[i] is TaskGraphIssueRenderLine irl)
+                    {
+                        if (irl.Lane == laneOffset)
+                        {
+                            result[i] = irl with
+                            {
+                                DrawLane0Connector = true,
+                                IsLastLane0Connector = i == lastIdx
+                            };
+                        }
+                        else
+                        {
+                            result[i] = irl with { DrawLane0PassThrough = true };
+                        }
+                    }
+                }
+            }
         }
 
         return result;
