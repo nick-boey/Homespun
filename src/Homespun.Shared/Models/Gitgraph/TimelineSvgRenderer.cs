@@ -270,7 +270,8 @@ public static class TimelineSvgRenderer
     public static string GenerateTaskGraphIssueSvg(
         int nodeLane, int? parentLane, bool isFirstChild, int maxLanes,
         string nodeColor, bool isOutlineOnly, bool isActionable, double opacity = 1.0,
-        bool drawTopLine = false)
+        bool drawTopLine = false, bool drawBottomLine = false, bool isSeriesChild = false,
+        int? seriesConnectorFromLane = null)
     {
         var width = CalculateSvgWidth(maxLanes);
         var sb = new StringBuilder();
@@ -279,7 +280,7 @@ public static class TimelineSvgRenderer
         var cx = GetLaneCenterX(nodeLane);
         var cy = GetRowCenterY();
 
-        if (parentLane.HasValue && parentLane.Value > nodeLane)
+        if (!isSeriesChild && parentLane.HasValue && parentLane.Value > nodeLane)
         {
             var px = GetLaneCenterX(parentLane.Value);
             var startX = cx + DiamondSize + 2;
@@ -303,11 +304,27 @@ public static class TimelineSvgRenderer
             }
         }
 
+        // L-shaped connector from series children's lane to this node (parent receiving series children)
+        if (seriesConnectorFromLane.HasValue)
+        {
+            var fromX = GetLaneCenterX(seriesConnectorFromLane.Value);
+            var nodeEdgeX = cx - DiamondSize - 2;
+            sb.Append(
+                $"<path d=\"M {fromX} 0 L {fromX} {cy} L {nodeEdgeX} {cy}\" stroke=\"{EscapeAttribute(nodeColor)}\" stroke-width=\"{LineStrokeWidth.ToString(CultureInfo.InvariantCulture)}\" fill=\"none\" />");
+        }
+
         if (drawTopLine)
         {
             var topLineEndY = cy - DiamondSize - 2;
             sb.Append(
                 $"<path d=\"M {cx} 0 L {cx} {topLineEndY}\" stroke=\"{EscapeAttribute(nodeColor)}\" stroke-width=\"{LineStrokeWidth.ToString(CultureInfo.InvariantCulture)}\" fill=\"none\" />");
+        }
+
+        if (drawBottomLine)
+        {
+            var bottomLineStartY = cy + DiamondSize + 2;
+            sb.Append(
+                $"<path d=\"M {cx} {bottomLineStartY} L {cx} {RowHeight}\" stroke=\"{EscapeAttribute(nodeColor)}\" stroke-width=\"{LineStrokeWidth.ToString(CultureInfo.InvariantCulture)}\" fill=\"none\" />");
         }
 
         if (isActionable)

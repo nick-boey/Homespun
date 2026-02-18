@@ -6,9 +6,11 @@ namespace Homespun.Client.Components;
 public enum TaskGraphMarkerType { Actionable, Open, Complete, Closed }
 
 public abstract record TaskGraphRenderLine;
-public record TaskGraphIssueRenderLine(string IssueId, string Title, int Lane, TaskGraphMarkerType Marker, int? ParentLane, bool IsFirstChild) : TaskGraphRenderLine;
-public record TaskGraphConnectorRenderLine(int Lane) : TaskGraphRenderLine;
-public record TaskGraphSeparatorRenderLine() : TaskGraphRenderLine;
+public record TaskGraphIssueRenderLine(
+    string IssueId, string Title, int Lane, TaskGraphMarkerType Marker,
+    int? ParentLane, bool IsFirstChild, bool IsSeriesChild,
+    bool DrawTopLine, bool DrawBottomLine, int? SeriesConnectorFromLane) : TaskGraphRenderLine;
+public record TaskGraphSeparatorRenderLine : TaskGraphRenderLine;
 
 /// <summary>
 /// Converts a TaskGraphResponse into a list of render lines for the TaskGraphView component.
@@ -107,14 +109,12 @@ public static class TaskGraphLayoutService
 
         var minLane = group.Min(n => n.Lane);
 
-        var childrenRendered = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        // Pre-compute parent assignments and children-per-parent counts
+        var parentByNode = new Dictionary<string, TaskGraphNodeResponse>(StringComparer.OrdinalIgnoreCase);
+        var childrenCountByParent = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
-        for (var i = 0; i < group.Count; i++)
+        foreach (var node in group)
         {
-            var node = group[i];
-            var lane = node.Lane - minLane;
-            var marker = GetMarker(node);
-
             TaskGraphNodeResponse? parentNode = null;
             foreach (var parentRef in node.Issue.ParentIssues)
             {
@@ -124,6 +124,34 @@ public static class TaskGraphLayoutService
                     parentNode = candidate;
             }
 
+            if (parentNode != null && parentNode.Lane - minLane > node.Lane - minLane)
+            {
+                parentByNode[node.Issue.Id] = parentNode;
+                childrenCountByParent.TryGetValue(parentNode.Issue.Id, out var count);
+                childrenCountByParent[parentNode.Issue.Id] = count + 1;
+            }
+        }
+
+        // Pre-compute series child lane by parent: for parents with Series execution mode
+        var seriesChildLaneByParent = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var node in group)
+        {
+            if (parentByNode.TryGetValue(node.Issue.Id, out var pNode)
+                && pNode.Issue.ExecutionMode == ExecutionMode.Series)
+            {
+                seriesChildLaneByParent[pNode.Issue.Id] = node.Lane - minLane;
+            }
+        }
+
+        var childrenRendered = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+        for (var i = 0; i < group.Count; i++)
+        {
+            var node = group[i];
+            var lane = node.Lane - minLane;
+            var marker = GetMarker(node);
+
+            parentByNode.TryGetValue(node.Issue.Id, out var parentNode);
             var parentLane = parentNode != null ? parentNode.Lane - minLane : (int?)null;
             var isFirstChild = false;
 
@@ -136,20 +164,50 @@ public static class TaskGraphLayoutService
                 isFirstChild = childrenRendered[parentNode.Issue.Id] == 1;
             }
 
+            // Determine if this is a series child (parent has Series execution mode)
+            var isSeriesChild = parentNode != null
+                && parentNode.Issue.ExecutionMode == ExecutionMode.Series;
+
+            // Compute DrawTopLine
+            var drawTopLine = false;
+            if (i > 0)
+            {
+                var prevNode = group[i - 1];
+                var prevLane = prevNode.Lane - minLane;
+                parentByNode.TryGetValue(prevNode.Issue.Id, out var prevParentNode);
+                var prevParentLane = prevParentNode != null ? prevParentNode.Lane - minLane : (int?)null;
+                var prevIsSeriesChild = prevParentNode != null
+                    && prevParentNode.Issue.ExecutionMode == ExecutionMode.Series;
+
+                // Previous node is a parallel child whose junction is at this node's lane
+                if (!prevIsSeriesChild && prevParentLane.HasValue && prevParentLane.Value == lane && prevParentLane.Value > prevLane)
+                    drawTopLine = true;
+
+                // Previous node is a series sibling of the same parent (vertical continuity)
+                if (isSeriesChild && prevIsSeriesChild && prevParentNode != null && parentNode != null
+                    && string.Equals(prevParentNode.Issue.Id, parentNode.Issue.Id, StringComparison.OrdinalIgnoreCase))
+                    drawTopLine = true;
+            }
+
+            // Compute DrawBottomLine: true when this node is a series child
+            var drawBottomLine = isSeriesChild;
+
+            // Compute SeriesConnectorFromLane: set when this node is a parent receiving series children
+            int? seriesConnectorFromLane = seriesChildLaneByParent.TryGetValue(node.Issue.Id, out var childLane)
+                ? childLane : null;
+
             result.Add(new TaskGraphIssueRenderLine(
                 IssueId: node.Issue.Id,
                 Title: node.Issue.Title,
                 Lane: lane,
                 Marker: marker,
                 ParentLane: parentLane,
-                IsFirstChild: isFirstChild
+                IsFirstChild: isFirstChild,
+                IsSeriesChild: isSeriesChild,
+                DrawTopLine: drawTopLine,
+                DrawBottomLine: drawBottomLine,
+                SeriesConnectorFromLane: seriesConnectorFromLane
             ));
-
-            // Emit connector line if this node has a parent connection and is not the last in the group
-            if (i < group.Count - 1 && parentNode != null && parentLane > lane)
-            {
-                result.Add(new TaskGraphConnectorRenderLine(Lane: parentLane.Value));
-            }
         }
     }
 

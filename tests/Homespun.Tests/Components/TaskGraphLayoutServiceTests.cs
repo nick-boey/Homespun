@@ -50,6 +50,9 @@ public class TaskGraphLayoutServiceTests
         Assert.That(line.Title, Is.EqualTo("Standalone"));
         Assert.That(line.Lane, Is.EqualTo(0));
         Assert.That(line.ParentLane, Is.Null);
+        Assert.That(line.DrawTopLine, Is.False);
+        Assert.That(line.DrawBottomLine, Is.False);
+        Assert.That(line.SeriesConnectorFromLane, Is.Null);
     }
 
     [Test]
@@ -75,7 +78,7 @@ public class TaskGraphLayoutServiceTests
     }
 
     [Test]
-    public void ComputeLayout_ParentChild_ProducesIssueAndConnectorLines()
+    public void ComputeLayout_ParentChild_ProducesIssueLines()
     {
         var taskGraph = new TaskGraphResponse
         {
@@ -98,11 +101,10 @@ public class TaskGraphLayoutServiceTests
 
         var result = TaskGraphLayoutService.ComputeLayout(taskGraph);
 
-        // Should have: issue (child), connector, issue (parent) = 3 lines
-        Assert.That(result, Has.Count.EqualTo(3));
+        // No connector rows — only 2 issue lines
+        Assert.That(result, Has.Count.EqualTo(2));
         Assert.That(result[0], Is.TypeOf<TaskGraphIssueRenderLine>());
-        Assert.That(result[1], Is.TypeOf<TaskGraphConnectorRenderLine>());
-        Assert.That(result[2], Is.TypeOf<TaskGraphIssueRenderLine>());
+        Assert.That(result[1], Is.TypeOf<TaskGraphIssueRenderLine>());
     }
 
     [Test]
@@ -135,7 +137,38 @@ public class TaskGraphLayoutServiceTests
     }
 
     [Test]
-    public void ComputeLayout_TwoSiblings_FirstChildAndSubsequentJunction()
+    public void ComputeLayout_ParallelChild_FollowedByNodeAtParentLane_DrawTopLine()
+    {
+        // When a parallel child's junction is at lane X, the next node at lane X should have DrawTopLine=true
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes =
+            [
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "CHILD-001", Title = "Child", Status = IssueStatus.Open,
+                        ParentIssues = [new ParentIssueRefResponse { ParentIssue = "PARENT-001" }] },
+                    Lane = 0, Row = 0, IsActionable = true
+                },
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "PARENT-001", Title = "Parent", Status = IssueStatus.Open,
+                        ExecutionMode = ExecutionMode.Parallel },
+                    Lane = 1, Row = 1, IsActionable = false
+                }
+            ],
+            TotalLanes = 2
+        };
+
+        var result = TaskGraphLayoutService.ComputeLayout(taskGraph);
+
+        var parentLine = (TaskGraphIssueRenderLine)result[1];
+        Assert.That(parentLine.DrawTopLine, Is.True,
+            "Parent at same lane as child's junction should have DrawTopLine=true");
+    }
+
+    [Test]
+    public void ComputeLayout_TwoSiblings_SeriesParent_IsSeriesChild()
     {
         var taskGraph = new TaskGraphResponse
         {
@@ -155,7 +188,8 @@ public class TaskGraphLayoutServiceTests
                 },
                 new TaskGraphNodeResponse
                 {
-                    Issue = new IssueResponse { Id = "PARENT-001", Title = "Parent", Status = IssueStatus.Open },
+                    Issue = new IssueResponse { Id = "PARENT-001", Title = "Parent", Status = IssueStatus.Open,
+                        ExecutionMode = ExecutionMode.Series },
                     Lane = 1, Row = 2, IsActionable = false
                 }
             ],
@@ -164,13 +198,178 @@ public class TaskGraphLayoutServiceTests
 
         var result = TaskGraphLayoutService.ComputeLayout(taskGraph);
 
-        // First child should be IsFirstChild=true
+        // First child should be IsFirstChild=true and IsSeriesChild=true
         var firstChild = result.OfType<TaskGraphIssueRenderLine>().First(l => l.IssueId == "CHILD-A");
         Assert.That(firstChild.IsFirstChild, Is.True);
+        Assert.That(firstChild.IsSeriesChild, Is.True);
 
-        // Second child should be IsFirstChild=false
+        // Second child should be IsFirstChild=false and IsSeriesChild=true
         var secondChild = result.OfType<TaskGraphIssueRenderLine>().First(l => l.IssueId == "CHILD-B");
         Assert.That(secondChild.IsFirstChild, Is.False);
+        Assert.That(secondChild.IsSeriesChild, Is.True);
+    }
+
+    [Test]
+    public void ComputeLayout_TwoSiblings_SeriesParent_DrawingFlags()
+    {
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes =
+            [
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "CHILD-A", Title = "First child", Status = IssueStatus.Open,
+                        ParentIssues = [new ParentIssueRefResponse { ParentIssue = "PARENT-001" }] },
+                    Lane = 0, Row = 0, IsActionable = true
+                },
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "CHILD-B", Title = "Second child", Status = IssueStatus.Open,
+                        ParentIssues = [new ParentIssueRefResponse { ParentIssue = "PARENT-001" }] },
+                    Lane = 0, Row = 1, IsActionable = true
+                },
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "PARENT-001", Title = "Parent", Status = IssueStatus.Open,
+                        ExecutionMode = ExecutionMode.Series },
+                    Lane = 1, Row = 2, IsActionable = false
+                }
+            ],
+            TotalLanes = 2
+        };
+
+        var result = TaskGraphLayoutService.ComputeLayout(taskGraph);
+
+        var firstChild = result.OfType<TaskGraphIssueRenderLine>().First(l => l.IssueId == "CHILD-A");
+        Assert.That(firstChild.DrawTopLine, Is.False, "First series child has no top line");
+        Assert.That(firstChild.DrawBottomLine, Is.True, "Series child always has bottom line");
+
+        var secondChild = result.OfType<TaskGraphIssueRenderLine>().First(l => l.IssueId == "CHILD-B");
+        Assert.That(secondChild.DrawTopLine, Is.True, "Second series sibling has top line (continuity)");
+        Assert.That(secondChild.DrawBottomLine, Is.True, "Series child always has bottom line");
+
+        var parent = result.OfType<TaskGraphIssueRenderLine>().First(l => l.IssueId == "PARENT-001");
+        Assert.That(parent.SeriesConnectorFromLane, Is.EqualTo(0),
+            "Parent receiving series children should have SeriesConnectorFromLane set to child lane");
+    }
+
+    [Test]
+    public void ComputeLayout_TwoSiblings_ParallelParent_NotSeriesChild()
+    {
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes =
+            [
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "CHILD-A", Title = "First child", Status = IssueStatus.Open,
+                        ParentIssues = [new ParentIssueRefResponse { ParentIssue = "PARENT-001" }] },
+                    Lane = 0, Row = 0, IsActionable = true
+                },
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "CHILD-B", Title = "Second child", Status = IssueStatus.Open,
+                        ParentIssues = [new ParentIssueRefResponse { ParentIssue = "PARENT-001" }] },
+                    Lane = 0, Row = 1, IsActionable = true
+                },
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "PARENT-001", Title = "Parent", Status = IssueStatus.Open,
+                        ExecutionMode = ExecutionMode.Parallel },
+                    Lane = 1, Row = 2, IsActionable = false
+                }
+            ],
+            TotalLanes = 2
+        };
+
+        var result = TaskGraphLayoutService.ComputeLayout(taskGraph);
+
+        var firstChild = result.OfType<TaskGraphIssueRenderLine>().First(l => l.IssueId == "CHILD-A");
+        Assert.That(firstChild.IsSeriesChild, Is.False);
+        Assert.That(firstChild.DrawBottomLine, Is.False);
+
+        var secondChild = result.OfType<TaskGraphIssueRenderLine>().First(l => l.IssueId == "CHILD-B");
+        Assert.That(secondChild.IsSeriesChild, Is.False);
+        Assert.That(secondChild.DrawBottomLine, Is.False);
+
+        var parent = result.OfType<TaskGraphIssueRenderLine>().First(l => l.IssueId == "PARENT-001");
+        Assert.That(parent.SeriesConnectorFromLane, Is.Null);
+    }
+
+    [Test]
+    public void ComputeLayout_SeriesParent_SingleChild_IsSeriesChild()
+    {
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes =
+            [
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "CHILD-A", Title = "Only child", Status = IssueStatus.Open,
+                        ParentIssues = [new ParentIssueRefResponse { ParentIssue = "PARENT-001" }] },
+                    Lane = 0, Row = 0, IsActionable = true
+                },
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "PARENT-001", Title = "Parent", Status = IssueStatus.Open,
+                        ExecutionMode = ExecutionMode.Series },
+                    Lane = 1, Row = 1, IsActionable = false
+                }
+            ],
+            TotalLanes = 2
+        };
+
+        var result = TaskGraphLayoutService.ComputeLayout(taskGraph);
+
+        var child = result.OfType<TaskGraphIssueRenderLine>().First(l => l.IssueId == "CHILD-A");
+        Assert.That(child.IsSeriesChild, Is.True, "Single child of series parent is a series child");
+        Assert.That(child.DrawBottomLine, Is.True, "Series child has bottom line");
+
+        var parent = result.OfType<TaskGraphIssueRenderLine>().First(l => l.IssueId == "PARENT-001");
+        Assert.That(parent.SeriesConnectorFromLane, Is.EqualTo(0), "Parent receives L-shaped connector from child lane");
+    }
+
+    [Test]
+    public void ComputeLayout_SeriesParentWithParallelConnector_HasBothConnectors()
+    {
+        // ISSUE-005 is a series parent receiving children AND connects horizontally to ISSUE-004
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes =
+            [
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "CHILD-A", Title = "First child", Status = IssueStatus.Open,
+                        ParentIssues = [new ParentIssueRefResponse { ParentIssue = "PARENT-001" }] },
+                    Lane = 0, Row = 0, IsActionable = true
+                },
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "CHILD-B", Title = "Second child", Status = IssueStatus.Open,
+                        ParentIssues = [new ParentIssueRefResponse { ParentIssue = "PARENT-001" }] },
+                    Lane = 0, Row = 1, IsActionable = true
+                },
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "PARENT-001", Title = "Series parent", Status = IssueStatus.Open,
+                        ExecutionMode = ExecutionMode.Series,
+                        ParentIssues = [new ParentIssueRefResponse { ParentIssue = "GRANDPARENT" }] },
+                    Lane = 1, Row = 2, IsActionable = false
+                },
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "GRANDPARENT", Title = "Grandparent", Status = IssueStatus.Open },
+                    Lane = 2, Row = 3, IsActionable = false
+                }
+            ],
+            TotalLanes = 3
+        };
+
+        var result = TaskGraphLayoutService.ComputeLayout(taskGraph);
+
+        var parent = result.OfType<TaskGraphIssueRenderLine>().First(l => l.IssueId == "PARENT-001");
+        Assert.That(parent.SeriesConnectorFromLane, Is.EqualTo(0), "Series connector from child lane");
+        Assert.That(parent.ParentLane, Is.EqualTo(2), "Also has parallel connector to grandparent");
     }
 
     [Test]
@@ -230,9 +429,10 @@ public class TaskGraphLayoutServiceTests
 
         var result = TaskGraphLayoutService.ComputeLayout(taskGraph);
 
-        // Should have: issue, connector, issue, connector, issue = 5 lines
+        // Only issue lines, no connector rows
         var issueLines = result.OfType<TaskGraphIssueRenderLine>().ToList();
         Assert.That(issueLines, Has.Count.EqualTo(3));
+        Assert.That(result, Has.Count.EqualTo(3));
         Assert.That(issueLines[0].Lane, Is.EqualTo(0)); // Leaf at lane 0
         Assert.That(issueLines[1].Lane, Is.EqualTo(1)); // Mid at lane 1
         Assert.That(issueLines[2].Lane, Is.EqualTo(2)); // Root at lane 2
@@ -285,20 +485,18 @@ public class TaskGraphLayoutServiceTests
     [Test]
     public void ComputeLayout_FullMockData_CorrectLineCount()
     {
-        // Mirrors the expected output from TaskGraphTextRendererTests.Render_MockIssueData_MatchesExpectedOutput
-        // The text renderer produces 25 lines (including blank separator lines):
-        //   13 issue lines + 9 connector lines + 3 separator lines = 25
+        // No connector rows — only issue lines + separators
+        // 13 issue lines + 3 separator lines = 16
         var taskGraph = BuildFullMockTaskGraph();
 
         var result = TaskGraphLayoutService.ComputeLayout(taskGraph);
 
         var issueCount = result.Count(l => l is TaskGraphIssueRenderLine);
-        var connectorCount = result.Count(l => l is TaskGraphConnectorRenderLine);
         var separatorCount = result.Count(l => l is TaskGraphSeparatorRenderLine);
 
         Assert.That(issueCount, Is.EqualTo(13), "Should have 13 issue lines");
-        Assert.That(connectorCount, Is.EqualTo(9), "Should have 9 connector lines");
         Assert.That(separatorCount, Is.EqualTo(3), "Should have 3 separator lines");
+        Assert.That(result, Has.Count.EqualTo(16), "Total: 13 issues + 3 separators");
     }
 
     /// <summary>
@@ -347,7 +545,8 @@ public class TaskGraphLayoutServiceTests
                 new TaskGraphNodeResponse
                 {
                     Issue = new IssueResponse { Id = "ISSUE-008", Title = "Implement POST endpoints", Status = IssueStatus.Open,
-                        ParentIssues = [new ParentIssueRefResponse { ParentIssue = "ISSUE-007" }] },
+                        ParentIssues = [new ParentIssueRefResponse { ParentIssue = "ISSUE-007" }],
+                        ExecutionMode = ExecutionMode.Series },
                     Lane = 2, Row = 5, IsActionable = false
                 },
                 new TaskGraphNodeResponse
@@ -359,7 +558,8 @@ public class TaskGraphLayoutServiceTests
                 new TaskGraphNodeResponse
                 {
                     Issue = new IssueResponse { Id = "ISSUE-007", Title = "Implement GET endpoints", Status = IssueStatus.Open,
-                        ParentIssues = [new ParentIssueRefResponse { ParentIssue = "ISSUE-005" }] },
+                        ParentIssues = [new ParentIssueRefResponse { ParentIssue = "ISSUE-005" }],
+                        ExecutionMode = ExecutionMode.Series },
                     Lane = 3, Row = 7, IsActionable = false
                 },
                 new TaskGraphNodeResponse
@@ -377,7 +577,8 @@ public class TaskGraphLayoutServiceTests
                 new TaskGraphNodeResponse
                 {
                     Issue = new IssueResponse { Id = "ISSUE-005", Title = "Implement API endpoints", Status = IssueStatus.Open,
-                        ParentIssues = [new ParentIssueRefResponse { ParentIssue = "ISSUE-004" }] },
+                        ParentIssues = [new ParentIssueRefResponse { ParentIssue = "ISSUE-004" }],
+                        ExecutionMode = ExecutionMode.Series },
                     Lane = 4, Row = 10, IsActionable = false
                 },
                 new TaskGraphNodeResponse

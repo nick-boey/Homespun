@@ -20,6 +20,7 @@ public static class TaskGraphTextRenderer
     private const char Vertical = '\u2502';    // │
     private const char TopRight = '\u2510';    // ┐
     private const char RightTee = '\u2524';    // ┤
+    private const char BottomRight = '\u2514'; // └
 
     /// <summary>
     /// Renders the task graph as a text string.
@@ -130,16 +131,37 @@ public static class TaskGraphTextRenderer
         // Find the minimum lane in this group to normalize lane positions
         var minLane = group.Min(n => n.Lane);
 
-        // Build a lookup: for each parent issue ID, track which children connect to it
-        // (to determine whether to use ┐ or ┤)
-        var childCountByParent = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        // Pre-compute parent assignments and children-per-parent counts
+        var parentByNode = new Dictionary<string, TaskGraphNode>(StringComparer.OrdinalIgnoreCase);
+        var childrenCountByParent = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
         foreach (var node in group)
         {
+            TaskGraphNode? pNode = null;
             foreach (var parentRef in node.Issue.ParentIssues)
             {
-                if (!childCountByParent.ContainsKey(parentRef.ParentIssue))
-                    childCountByParent[parentRef.ParentIssue] = 0;
-                childCountByParent[parentRef.ParentIssue]++;
+                var candidate = group.FirstOrDefault(n =>
+                    string.Equals(n.Issue.Id, parentRef.ParentIssue, StringComparison.OrdinalIgnoreCase));
+                if (candidate != null && (pNode == null || candidate.Lane > pNode.Lane))
+                    pNode = candidate;
+            }
+
+            if (pNode != null && pNode.Lane - minLane > node.Lane - minLane)
+            {
+                parentByNode[node.Issue.Id] = pNode;
+                childrenCountByParent.TryGetValue(pNode.Issue.Id, out var count);
+                childrenCountByParent[pNode.Issue.Id] = count + 1;
+            }
+        }
+
+        // Pre-compute series child lane by parent
+        var seriesChildLaneByParent = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var node in group)
+        {
+            if (parentByNode.TryGetValue(node.Issue.Id, out var pNode)
+                && pNode.Issue.ExecutionMode == ExecutionMode.Series)
+            {
+                seriesChildLaneByParent[pNode.Issue.Id] = node.Lane - minLane;
             }
         }
 
@@ -152,25 +174,69 @@ public static class TaskGraphTextRenderer
             var lane = node.Lane - minLane;
             var marker = GetMarker(node);
 
-            // Find the parent with the highest lane (closest connector)
-            TaskGraphNode? parentNode = null;
-            foreach (var parentRef in node.Issue.ParentIssues)
-            {
-                var candidate = group.FirstOrDefault(n =>
-                    string.Equals(n.Issue.Id, parentRef.ParentIssue, StringComparison.OrdinalIgnoreCase));
-                if (candidate != null && (parentNode == null || candidate.Lane > parentNode.Lane))
-                    parentNode = candidate;
-            }
-
+            parentByNode.TryGetValue(node.Issue.Id, out var parentNode);
             var parentLane = parentNode != null ? parentNode.Lane - minLane : -1;
+
+            // Determine if this is a series child (parent has Series execution mode)
+            var isSeriesChild = parentNode != null
+                && parentNode.Issue.ExecutionMode == ExecutionMode.Series;
+
+            // Check if this parent receives series children (L-shaped connector from child lane)
+            var hasSeriesConnector = seriesChildLaneByParent.TryGetValue(node.Issue.Id, out var seriesChildLane);
 
             // Build the node row
             var nodeRow = new StringBuilder();
 
-            if (parentNode != null && parentLane > lane)
+            if (hasSeriesConnector && parentNode != null && parentLane > lane && !isSeriesChild)
             {
-                // Node connects to parent on the right
-                // Leading spaces up to node position
+                // Parent receiving series children AND has its own parallel connector
+                // Draw: └─marker─┐ (or └─marker─┤)
+                nodeRow.Append(new string(' ', seriesChildLane * 2));
+                nodeRow.Append(BottomRight);
+                // Horizontal from series child lane to this node's lane
+                for (var col = seriesChildLane + 1; col < lane; col++)
+                {
+                    nodeRow.Append(Horizontal);
+                    nodeRow.Append(Horizontal);
+                }
+                if (seriesChildLane < lane)
+                    nodeRow.Append(Horizontal);
+                nodeRow.Append(marker);
+                nodeRow.Append(Horizontal);
+
+                // Horizontal from this node to parent lane
+                for (var col = lane + 1; col < parentLane; col++)
+                {
+                    nodeRow.Append(Horizontal);
+                    nodeRow.Append(Horizontal);
+                }
+
+                // Junction at parent lane
+                if (!childrenRendered.ContainsKey(parentNode.Issue.Id))
+                    childrenRendered[parentNode.Issue.Id] = 0;
+                childrenRendered[parentNode.Issue.Id]++;
+
+                var isFirstChild = childrenRendered[parentNode.Issue.Id] == 1;
+                nodeRow.Append(isFirstChild ? TopRight : RightTee);
+            }
+            else if (hasSeriesConnector)
+            {
+                // Parent receiving series children (no parallel connector to own parent)
+                // Draw: └─marker
+                nodeRow.Append(new string(' ', seriesChildLane * 2));
+                nodeRow.Append(BottomRight);
+                for (var col = seriesChildLane + 1; col < lane; col++)
+                {
+                    nodeRow.Append(Horizontal);
+                    nodeRow.Append(Horizontal);
+                }
+                if (seriesChildLane < lane)
+                    nodeRow.Append(Horizontal);
+                nodeRow.Append(marker);
+            }
+            else if (parentNode != null && parentLane > lane && !isSeriesChild)
+            {
+                // Parallel child: Node connects to parent on the right with horizontal connector
                 nodeRow.Append(new string(' ', lane * 2));
                 nodeRow.Append(marker);
                 nodeRow.Append(Horizontal);
@@ -192,7 +258,7 @@ public static class TaskGraphTextRenderer
             }
             else
             {
-                // Orphan or parent on same lane - just place the marker
+                // Orphan, parent on same lane, or series child - just place the marker
                 nodeRow.Append(new string(' ', lane * 2));
                 nodeRow.Append(marker);
             }
@@ -204,17 +270,6 @@ public static class TaskGraphTextRenderer
             sb.Append(' ');
             sb.Append(node.Issue.Title);
             sb.Append('\n');
-
-            // Render connector row between this node and the next in the same group
-            if (i < group.Count - 1 && parentNode != null && parentLane > lane)
-            {
-                // Find if the next node also connects to this parent or a parent at parentLane
-                var connectorRow = new StringBuilder();
-                connectorRow.Append(new string(' ', parentLane * 2));
-                connectorRow.Append(Vertical);
-                sb.Append(connectorRow);
-                sb.Append('\n');
-            }
         }
     }
 

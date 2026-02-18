@@ -33,14 +33,6 @@
                     </div>
                 </div>
             }
-            else if (line is TaskGraphConnectorRenderLine connectorLine)
-            {
-                <div class="task-graph-connector-row" aria-hidden="true">
-                    <div class="task-graph-graph-cell">
-                        @((MarkupString)GenerateConnectorSvg(connectorLine))
-                    </div>
-                </div>
-            }
             else if (line is TaskGraphSeparatorRenderLine)
             {
                 <div class="task-graph-separator"></div>
@@ -114,10 +106,6 @@
         text-overflow: ellipsis;
     }
 
-    .task-graph-connector-row {
-        min-height: 16px;
-    }
-
     .task-graph-separator {
         height: 8px;
     }
@@ -146,11 +134,6 @@
     {
         var (color, isOutlineOnly, opacity) = ComputeTaskGraphNodeStyle(issueLine.Marker, agentStatus);
 
-        // Draw a top line if the previous render line is a connector at the same lane as this issue
-        var drawTopLine = index > 0
-            && _renderLines[index - 1] is TaskGraphConnectorRenderLine connector
-            && connector.Lane == issueLine.Lane;
-
         return TimelineSvgRenderer.GenerateTaskGraphIssueSvg(
             nodeLane: issueLine.Lane,
             parentLane: issueLine.ParentLane,
@@ -160,14 +143,10 @@
             isOutlineOnly: isOutlineOnly,
             isActionable: issueLine.Marker == TaskGraphMarkerType.Actionable,
             opacity: opacity,
-            drawTopLine: drawTopLine);
-    }
-
-    private string GenerateConnectorSvg(TaskGraphConnectorRenderLine connectorLine)
-    {
-        return TimelineSvgRenderer.GenerateTaskGraphConnectorSvg(
-            lane: connectorLine.Lane,
-            maxLanes: _maxLane + 1);
+            drawTopLine: issueLine.DrawTopLine,
+            drawBottomLine: issueLine.DrawBottomLine,
+            isSeriesChild: issueLine.IsSeriesChild,
+            seriesConnectorFromLane: issueLine.SeriesConnectorFromLane);
     }
 
     private static (string color, bool isOutlineOnly, double opacity) ComputeTaskGraphNodeStyle(

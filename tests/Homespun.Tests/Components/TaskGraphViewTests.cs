@@ -153,7 +153,7 @@ public class TaskGraphViewTests : BunitTestContext
     }
 
     [Test]
-    public void Renders_ConnectorRow_AsNonClickable()
+    public void Renders_NoConnectorRows()
     {
         var taskGraph = new TaskGraphResponse
         {
@@ -176,8 +176,51 @@ public class TaskGraphViewTests : BunitTestContext
 
         var cut = Render<TaskGraphView>(p => p.Add(x => x.TaskGraph, taskGraph));
 
-        var connectorRow = cut.Find(".task-graph-connector-row");
-        Assert.That(connectorRow.GetAttribute("aria-hidden"), Is.EqualTo("true"));
+        // No connector rows — all rendering is done via issue row SVGs
+        Assert.That(cut.FindAll(".task-graph-connector-row"), Is.Empty);
+        // Should have exactly 2 issue rows
+        Assert.That(cut.FindAll(".task-graph-row"), Has.Count.EqualTo(2));
+    }
+
+    [Test]
+    public void Renders_SeriesParent_WithLShapedPath()
+    {
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes =
+            [
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "CHILD-A", Title = "Series child 1", Status = IssueStatus.Open,
+                        ParentIssues = [new ParentIssueRefResponse { ParentIssue = "PARENT-001" }] },
+                    Lane = 0, Row = 0, IsActionable = true
+                },
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "CHILD-B", Title = "Series child 2", Status = IssueStatus.Open,
+                        ParentIssues = [new ParentIssueRefResponse { ParentIssue = "PARENT-001" }] },
+                    Lane = 0, Row = 1, IsActionable = true
+                },
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "PARENT-001", Title = "Series parent", Status = IssueStatus.Open,
+                        ExecutionMode = ExecutionMode.Series },
+                    Lane = 1, Row = 2, IsActionable = false
+                }
+            ],
+            TotalLanes = 2
+        };
+
+        var cut = Render<TaskGraphView>(p => p.Add(x => x.TaskGraph, taskGraph));
+
+        // The parent row should have an L-shaped path from child lane (0) to parent diamond
+        var graphCells = cut.FindAll(".task-graph-graph-cell");
+        var parentCell = graphCells[2]; // Third issue row = parent
+        var fromX = TimelineSvgRenderer.GetLaneCenterX(0); // 12
+        var cx = TimelineSvgRenderer.GetLaneCenterX(1); // 36
+        var nodeEdgeX = cx - TimelineSvgRenderer.DiamondSize - 2; // 27
+        Assert.That(parentCell.InnerHtml, Does.Contain($"M {fromX} 0 L {fromX} 20 L {nodeEdgeX} 20"),
+            "Parent should have L-shaped connector from series children's lane");
     }
 
     [Test]
@@ -209,6 +252,47 @@ public class TaskGraphViewTests : BunitTestContext
         var badge = cut.Find(".agent-status-badge");
         Assert.That(badge.TextContent, Does.Contain("Running"));
         cut.Find(".agent-status-dot-active");
+    }
+
+    [Test]
+    public void Renders_SeriesChild_WithoutHorizontalSvgPath()
+    {
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes =
+            [
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "CHILD-A", Title = "Series child", Status = IssueStatus.Open,
+                        ParentIssues = [new ParentIssueRefResponse { ParentIssue = "PARENT-001" }] },
+                    Lane = 0, Row = 0, IsActionable = true
+                },
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "CHILD-B", Title = "Series child 2", Status = IssueStatus.Open,
+                        ParentIssues = [new ParentIssueRefResponse { ParentIssue = "PARENT-001" }] },
+                    Lane = 0, Row = 1, IsActionable = true
+                },
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "PARENT-001", Title = "Parent", Status = IssueStatus.Open,
+                        ExecutionMode = ExecutionMode.Series },
+                    Lane = 1, Row = 2, IsActionable = false
+                }
+            ],
+            TotalLanes = 2
+        };
+
+        var cut = Render<TaskGraphView>(p => p.Add(x => x.TaskGraph, taskGraph));
+
+        var graphCells = cut.FindAll(".task-graph-graph-cell");
+        // The first issue row (CHILD-A) is a series child - should NOT have horizontal SVG path to parent lane
+        var firstIssueCell = graphCells[0];
+        var px = TimelineSvgRenderer.GetLaneCenterX(1); // parent lane center = 36
+        var cx = TimelineSvgRenderer.GetLaneCenterX(0); // child lane center = 12
+        var startX = cx + TimelineSvgRenderer.DiamondSize + 2; // 21
+        Assert.That(firstIssueCell.InnerHtml, Does.Not.Contain($"M {startX} 20 L {px} 20"),
+            "Series child should not have horizontal connector path");
     }
 
     [Test]

@@ -88,8 +88,8 @@ public class TaskGraphTextRendererTests
         // Should contain both issues
         Assert.That(result, Does.Contain("CHILD-001"));
         Assert.That(result, Does.Contain("PARENT-001"));
-        // Should contain connector characters
-        Assert.That(result, Does.Contain("\u2502")); // │ vertical connector
+        // Default ExecutionMode is Series, so single-child parent uses └ connector
+        Assert.That(result, Does.Contain("\u2514")); // └ series connector to parent
     }
 
     [Test]
@@ -142,7 +142,7 @@ public class TaskGraphTextRendererTests
     }
 
     [Test]
-    public async Task Render_TwoSiblings_ShareParentLane()
+    public async Task Render_TwoSiblings_SeriesParent_NoHorizontalConnectors()
     {
         var issues = new List<Issue>
         {
@@ -152,6 +152,7 @@ public class TaskGraphTextRendererTests
                 Title = "Parent",
                 Type = IssueType.Task,
                 Status = IssueStatus.Open,
+                ExecutionMode = ExecutionMode.Series,
                 CreatedAt = DateTimeOffset.UtcNow,
                 LastUpdate = DateTimeOffset.UtcNow
             },
@@ -184,9 +185,64 @@ public class TaskGraphTextRendererTests
         Assert.That(result, Does.Contain("CHILD-A"));
         Assert.That(result, Does.Contain("CHILD-B"));
         Assert.That(result, Does.Contain("PARENT-001"));
-        // Both siblings connect to the same parent lane, so we should see ┐ and ┤
+        // Series siblings should NOT have horizontal connectors (┐ and ┤) on child rows
+        Assert.That(result, Does.Not.Contain("\u2510"), "Series siblings should not have ┐");
+        Assert.That(result, Does.Not.Contain("\u2524"), "Series siblings should not have ┤");
+        // Should have └─ transition from last child to parent
+        Assert.That(result, Does.Contain("\u2514"), "Should have └ for series-to-parent transition");
+        Assert.That(result, Does.Not.Contain("\u2502"), "No │ connector rows");
+        // The parent row has └─ which contains ─, but children do not
+    }
+
+    [Test]
+    public async Task Render_TwoSiblings_ParallelParent_ShowsHorizontalConnectors()
+    {
+        var issues = new List<Issue>
+        {
+            new()
+            {
+                Id = "PARENT-001",
+                Title = "Parent",
+                Type = IssueType.Task,
+                Status = IssueStatus.Open,
+                ExecutionMode = ExecutionMode.Parallel,
+                CreatedAt = DateTimeOffset.UtcNow,
+                LastUpdate = DateTimeOffset.UtcNow
+            },
+            new()
+            {
+                Id = "CHILD-A",
+                Title = "First child",
+                Type = IssueType.Task,
+                Status = IssueStatus.Open,
+                ParentIssues = [new ParentIssueRef { ParentIssue = "PARENT-001", SortOrder = "0" }],
+                CreatedAt = DateTimeOffset.UtcNow,
+                LastUpdate = DateTimeOffset.UtcNow
+            },
+            new()
+            {
+                Id = "CHILD-B",
+                Title = "Second child",
+                Type = IssueType.Task,
+                Status = IssueStatus.Open,
+                ParentIssues = [new ParentIssueRef { ParentIssue = "PARENT-001", SortOrder = "1" }],
+                CreatedAt = DateTimeOffset.UtcNow,
+                LastUpdate = DateTimeOffset.UtcNow
+            }
+        };
+
+        var taskGraph = await BuildTaskGraph(issues);
+        var result = TaskGraphTextRenderer.Render(taskGraph);
+
+        // Both children and parent present
+        Assert.That(result, Does.Contain("CHILD-A"));
+        Assert.That(result, Does.Contain("CHILD-B"));
+        Assert.That(result, Does.Contain("PARENT-001"));
+        // Parallel siblings connect to the same parent lane, so we should see ┐ and ┤
         Assert.That(result, Does.Contain("\u2510")); // ┐ first child connector
         Assert.That(result, Does.Contain("\u2524")); // ┤ subsequent sibling connector
+        // No connector rows between nodes
+        Assert.That(result, Does.Not.Contain("\u2502"), "No │ connector rows");
     }
 
     [Test]
@@ -198,31 +254,24 @@ public class TaskGraphTextRendererTests
 
         // ISSUE-003 is Progress status - Fleece.Core marks it as not actionable (◌)
         // ISSUE-006 is actionable per Fleece.Core's NextService (○)
+        // All parents default to ExecutionMode.Series, so children render with vertical-only
+        // connections and L-shaped └─ transitions connect series children to their parents
         var expected = string.Join("\n", new[]
         {
             "\u25CC  ISSUE-003 Fix login timeout bug",
             "",
             "\u25CB  ISSUE-001 Add dark mode support",
             "",
-            "\u25CB\u2500\u2510  ISSUE-010 Implement DELETE endpoints",
-            "  \u2502",
-            "  \u25CC\u2500\u2510  ISSUE-009 Implement PUT/PATCH endpoints",
-            "    \u2502",
-            "  \u25CC\u2500\u2524  ISSUE-011 Add request validation",
-            "    \u2502",
-            "    \u25CC\u2500\u2510  ISSUE-008 Implement POST endpoints",
-            "      \u2502",
-            "    \u25CC\u2500\u2524  ISSUE-012 Add rate limiting",
-            "      \u2502",
-            "      \u25CC\u2500\u2510  ISSUE-007 Implement GET endpoints",
-            "        \u2502",
-            "      \u25CB\u2500\u2524  ISSUE-006 Write API documentation",
-            "        \u2502",
-            "      \u25CC\u2500\u2524  ISSUE-013 Set up API monitoring",
-            "        \u2502",
-            "        \u25CC\u2500\u2510  ISSUE-005 Implement API endpoints",
-            "          \u2502",
-            "          \u25CC  ISSUE-004 Design API schema",
+            "\u25CB  ISSUE-010 Implement DELETE endpoints",
+            "\u2514\u2500\u25CC  ISSUE-009 Implement PUT/PATCH endpoints",
+            "  \u25CC  ISSUE-011 Add request validation",
+            "  \u2514\u2500\u25CC  ISSUE-008 Implement POST endpoints",
+            "    \u25CC  ISSUE-012 Add rate limiting",
+            "    \u2514\u2500\u25CC  ISSUE-007 Implement GET endpoints",
+            "      \u25CB  ISSUE-006 Write API documentation",
+            "      \u25CC  ISSUE-013 Set up API monitoring",
+            "      \u2514\u2500\u25CC  ISSUE-005 Implement API endpoints",
+            "        \u2514\u2500\u25CC  ISSUE-004 Design API schema",
             "",
             "\u25CB  ISSUE-002 Improve mobile responsiveness"
         });
@@ -380,6 +429,7 @@ public class TaskGraphTextRendererTests
                 Type = IssueType.Task,
                 Status = IssueStatus.Open,
                 Priority = 2,
+                ExecutionMode = ExecutionMode.Series,
                 ParentIssues = [new ParentIssueRef { ParentIssue = "ISSUE-004", SortOrder = "0" }],
                 CreatedAt = now.AddDays(-9),
                 LastUpdate = now.AddDays(-2)
@@ -402,6 +452,7 @@ public class TaskGraphTextRendererTests
                 Type = IssueType.Task,
                 Status = IssueStatus.Open,
                 Priority = 2,
+                ExecutionMode = ExecutionMode.Series,
                 ParentIssues = [new ParentIssueRef { ParentIssue = "ISSUE-005", SortOrder = "0" }],
                 CreatedAt = now.AddDays(-7),
                 LastUpdate = now.AddDays(-1)
@@ -413,6 +464,7 @@ public class TaskGraphTextRendererTests
                 Type = IssueType.Task,
                 Status = IssueStatus.Open,
                 Priority = 2,
+                ExecutionMode = ExecutionMode.Series,
                 ParentIssues = [new ParentIssueRef { ParentIssue = "ISSUE-007", SortOrder = "0" }],
                 CreatedAt = now.AddDays(-6),
                 LastUpdate = now.AddDays(-1)
