@@ -9,11 +9,11 @@
     Useful for UI development and testing.
 
 .PARAMETER Port
-    Override the default port (5095).
+    Override the port from the launch profile.
 
 .EXAMPLE
     .\mock.ps1
-    Runs the application in mock mode on http://localhost:5095
+    Runs the application in mock mode
 
 .EXAMPLE
     .\mock.ps1 -Port 8080
@@ -49,13 +49,8 @@ $dotnetArgs = @(
 )
 
 if ($Port -ne 0) {
-    Write-Host "Using custom port: $Port" -ForegroundColor Cyan
-    Write-Host ""
     $dotnetArgs += "--urls"
     $dotnetArgs += "http://localhost:$Port"
-} else {
-    Write-Host "Running on http://localhost:5095" -ForegroundColor Cyan
-    Write-Host ""
 }
 
 & dotnet @dotnetArgs
