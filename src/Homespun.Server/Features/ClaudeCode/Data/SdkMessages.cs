@@ -30,6 +30,12 @@ public record SdkUserMessage(
 
 /// <summary>
 /// Result message indicating the session turn has completed.
+/// When IsError is true, Subtype indicates the error type:
+/// - "success": Normal completion
+/// - "error_max_turns": Maximum conversation turns reached
+/// - "error_during_execution": Error occurred during tool execution
+/// - "error_max_budget_usd": Session budget limit reached
+/// - "error_max_structured_output_retries": Failed to generate structured output
 /// </summary>
 public record SdkResultMessage(
     string SessionId,
@@ -40,7 +46,8 @@ public record SdkResultMessage(
     bool IsError,
     int NumTurns,
     decimal TotalCostUsd,
-    string? Result
+    string? Result,
+    List<string>? Errors = null
 ) : SdkMessage("result", SessionId);
 
 /// <summary>

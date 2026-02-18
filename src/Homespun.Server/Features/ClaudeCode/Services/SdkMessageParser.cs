@@ -79,6 +79,18 @@ public class SdkMessageConverter : JsonConverter<SdkMessage>
 
     private static SdkResultMessage DeserializeResult(JsonElement root)
     {
+        // Parse errors array if present
+        List<string>? errors = null;
+        if (root.TryGetProperty("errors", out var errorsElement) && errorsElement.ValueKind == JsonValueKind.Array)
+        {
+            errors = new List<string>();
+            foreach (var err in errorsElement.EnumerateArray())
+            {
+                var errStr = err.GetString();
+                if (errStr != null) errors.Add(errStr);
+            }
+        }
+
         return new SdkResultMessage(
             SessionId: GetString(root, "session_id") ?? "",
             Uuid: GetString(root, "uuid"),
@@ -88,7 +100,8 @@ public class SdkMessageConverter : JsonConverter<SdkMessage>
             IsError: GetBool(root, "is_error"),
             NumTurns: GetInt(root, "num_turns"),
             TotalCostUsd: GetDecimal(root, "total_cost_usd"),
-            Result: GetString(root, "result")
+            Result: GetString(root, "result"),
+            Errors: errors
         );
     }
 

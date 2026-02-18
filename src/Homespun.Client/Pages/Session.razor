@@ -173,6 +173,25 @@
                         </div>
                     }
 
+                    @if (_session.Status == ClaudeSessionStatus.Error && !string.IsNullOrEmpty(_session.ErrorMessage))
+                    {
+                        <div class="session-error-banner">
+                            <div class="error-icon">⚠️</div>
+                            <div class="error-content">
+                                <div class="error-title">@GetErrorTitle(_errorSubtype)</div>
+                                <div class="error-message">@_session.ErrorMessage</div>
+                                @if (_isRecoverable)
+                                {
+                                    <div class="error-actions">
+                                        <button class="btn btn-primary btn-sm" @onclick="ContinueSession">
+                                            Continue Session
+                                        </button>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+
                     @if (_pendingQuestion != null)
                     {
                         <div class="question-container">
@@ -1069,6 +1088,45 @@
         color: var(--text-muted);
     }
 
+    /* Session error banner */
+    .session-error-banner {
+        display: flex;
+        gap: var(--spacing-md);
+        padding: var(--spacing-md);
+        margin: var(--spacing-md);
+        background: rgba(218, 26, 50, 0.1);
+        border: 1px solid var(--status-error);
+        border-radius: var(--radius-md);
+    }
+
+    .session-error-banner .error-icon {
+        font-size: 1.5rem;
+        flex-shrink: 0;
+    }
+
+    .session-error-banner .error-content {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-sm);
+    }
+
+    .session-error-banner .error-title {
+        font-weight: 600;
+        color: var(--status-error);
+        font-size: 1rem;
+    }
+
+    .session-error-banner .error-message {
+        color: var(--text-secondary);
+        font-size: 0.875rem;
+        white-space: pre-wrap;
+    }
+
+    .session-error-banner .error-actions {
+        margin-top: var(--spacing-sm);
+    }
+
     /* Streaming content indicators */
     .streaming-cursor {
         animation: blink 1s step-end infinite;
@@ -1583,6 +1641,10 @@
     // Stop/interrupt button state
     private bool _isStopping = false;
     private bool _isInterrupting = false;
+
+    // Session error state
+    private string? _errorSubtype;
+    private bool _isRecoverable = true;
 
     // Message queue for mid-execution prompts
     private Queue<string> _pendingMessages = new();
@@ -2356,6 +2418,35 @@
             });
         });
 
+        // Handle session error (max turns, execution errors, etc.)
+        _hubConnection.On<string, string, string?, bool>("SessionError", (sessionId, errorMessage, errorSubtype, isRecoverable) =>
+        {
+            _ = InvokeAsync(async () =>
+            {
+                try
+                {
+                    LogDebug("SessionError", $"Error in session {sessionId}: {errorSubtype} - {errorMessage} (recoverable: {isRecoverable})");
+                    Console.WriteLine($"[SignalR] SessionError for session {sessionId}: {errorSubtype}");
+
+                    if (_session != null && _session.Id == sessionId)
+                    {
+                        _session.ErrorMessage = errorMessage;
+                        _session.Status = ClaudeSessionStatus.Error;
+                        _errorSubtype = errorSubtype;
+                        _isRecoverable = isRecoverable;
+
+                        StateHasChanged();
+                        await AutoScrollToBottomIfNearEnd();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    LogDebug("ERROR", $"SessionError handler: {ex.Message}");
+                    Console.WriteLine($"[SignalR] Error in SessionError handler: {ex.Message}");
+                }
+            });
+        });
+
         await _hubConnection.StartAsync();
         await _hubConnection.SendAsync("JoinSession", SessionId);
         // Server sends SessionState after JoinSession, which we now handle above
@@ -2521,6 +2612,38 @@
     /// <summary>
     /// Gets the appropriate placeholder text based on session state.
     /// </summary>
+    /// <summary>
+    /// Gets a user-friendly error title based on the SDK error subtype.
+    /// </summary>
+    private static string GetErrorTitle(string? errorSubtype)
+    {
+        return errorSubtype switch
+        {
+            "error_max_turns" => "Maximum Turns Reached",
+            "error_during_execution" => "Execution Error",
+            "error_max_budget_usd" => "Budget Limit Reached",
+            "error_max_structured_output_retries" => "Output Generation Failed",
+            _ => "Session Error"
+        };
+    }
+
+    /// <summary>
+    /// Continues a session after a recoverable error by clearing the error state.
+    /// The session remains in place so the user can send a new message.
+    /// </summary>
+    private async Task ContinueSession()
+    {
+        if (_session == null) return;
+
+        // Clear the error state
+        _session.Status = ClaudeSessionStatus.WaitingForInput;
+        _session.ErrorMessage = null;
+        _errorSubtype = null;
+        _isRecoverable = true;
+
+        StateHasChanged();
+    }
+
     private string GetInputPlaceholder()
     {
         if (_session?.Status == ClaudeSessionStatus.Running)
