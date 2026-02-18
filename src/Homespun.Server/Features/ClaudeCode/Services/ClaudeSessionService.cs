@@ -561,6 +561,27 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                 session.ConversationId = resultMsg.SessionId;
                 _logger.LogDebug("Stored ConversationId {ConversationId} for session resumption", resultMsg.SessionId);
 
+                // Handle error results - set session to error state and notify clients
+                if (resultMsg.IsError)
+                {
+                    var errorMessage = BuildErrorMessage(resultMsg);
+                    var isRecoverable = IsRecoverableError(resultMsg.Subtype);
+
+                    session.Status = ClaudeSessionStatus.Error;
+                    session.ErrorMessage = errorMessage;
+
+                    _logger.LogWarning(
+                        "Session {SessionId} encountered error: subtype={Subtype}, message={Message}, recoverable={Recoverable}",
+                        sessionId, resultMsg.Subtype, errorMessage, isRecoverable);
+
+                    await _hubContext.BroadcastSessionError(
+                        sessionId,
+                        errorMessage,
+                        resultMsg.Subtype,
+                        isRecoverable);
+                    await _hubContext.BroadcastSessionStatusChanged(sessionId, session.Status);
+                }
+
                 // Update metadata with the actual Claude session ID if it changed
                 if (resultMsg.SessionId != null && resultMsg.SessionId != previousConversationId)
                 {
@@ -1997,6 +2018,50 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             PermissionMode.Plan => SharedPermissionMode.Plan,
             PermissionMode.BypassPermissions => SharedPermissionMode.BypassPermissions,
             _ => SharedPermissionMode.BypassPermissions
+        };
+    }
+
+    /// <summary>
+    /// Builds a user-friendly error message from an SDK error result.
+    /// Prioritizes the Errors array, then falls back to Result field.
+    /// </summary>
+    private static string BuildErrorMessage(SdkResultMessage resultMsg)
+    {
+        // Use errors array if available
+        if (resultMsg.Errors is { Count: > 0 })
+        {
+            return string.Join("\n", resultMsg.Errors);
+        }
+
+        // Fall back to result field
+        if (!string.IsNullOrEmpty(resultMsg.Result))
+        {
+            return resultMsg.Result;
+        }
+
+        // Provide subtype-specific default messages
+        return resultMsg.Subtype switch
+        {
+            "error_max_turns" => "The conversation reached its maximum number of turns. You can continue by sending another message.",
+            "error_during_execution" => "An error occurred during execution. The session can be resumed.",
+            "error_max_budget_usd" => "The session budget limit has been reached.",
+            "error_max_structured_output_retries" => "Failed to generate the expected output format after multiple attempts.",
+            _ => "An unexpected error occurred in the session."
+        };
+    }
+
+    /// <summary>
+    /// Determines whether a session can be resumed after the given error type.
+    /// </summary>
+    private static bool IsRecoverableError(string? subtype)
+    {
+        return subtype switch
+        {
+            "error_max_turns" => true,           // Can continue with a new message
+            "error_during_execution" => true,     // Can retry or continue
+            "error_max_budget_usd" => false,      // Budget exhausted, cannot continue
+            "error_max_structured_output_retries" => true, // Can retry with different prompt
+            _ => true                             // Default to recoverable for unknown errors
         };
     }
 }

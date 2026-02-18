@@ -351,4 +351,122 @@ public class SdkMessageParserTests
         var msg = (SdkStreamEvent)result!;
         Assert.That(msg.Event, Is.Null);
     }
+
+    [Test]
+    public void Deserialize_ResultMessage_WithErrorsArray()
+    {
+        var json = """
+        {
+            "type": "result",
+            "session_id": "sess-123",
+            "subtype": "error_max_turns",
+            "duration_ms": 5000,
+            "duration_api_ms": 4500,
+            "is_error": true,
+            "num_turns": 10,
+            "total_cost_usd": 0.05,
+            "result": "Maximum turns reached",
+            "errors": ["Turn limit exceeded", "Please continue the conversation to proceed"]
+        }
+        """;
+
+        var result = JsonSerializer.Deserialize<SdkMessage>(json, _options);
+
+        Assert.That(result, Is.InstanceOf<SdkResultMessage>());
+        var msg = (SdkResultMessage)result!;
+        Assert.Multiple(() =>
+        {
+            Assert.That(msg.SessionId, Is.EqualTo("sess-123"));
+            Assert.That(msg.Subtype, Is.EqualTo("error_max_turns"));
+            Assert.That(msg.IsError, Is.True);
+            Assert.That(msg.Errors, Is.Not.Null);
+            Assert.That(msg.Errors, Has.Count.EqualTo(2));
+            Assert.That(msg.Errors![0], Is.EqualTo("Turn limit exceeded"));
+            Assert.That(msg.Errors![1], Is.EqualTo("Please continue the conversation to proceed"));
+        });
+    }
+
+    [Test]
+    public void Deserialize_ResultMessage_ErrorDuringExecution()
+    {
+        var json = """
+        {
+            "type": "result",
+            "session_id": "sess-456",
+            "subtype": "error_during_execution",
+            "duration_ms": 2000,
+            "duration_api_ms": 1500,
+            "is_error": true,
+            "num_turns": 3,
+            "total_cost_usd": 0.01,
+            "result": "Tool execution failed",
+            "errors": ["Command timed out after 60 seconds"]
+        }
+        """;
+
+        var result = JsonSerializer.Deserialize<SdkMessage>(json, _options);
+
+        Assert.That(result, Is.InstanceOf<SdkResultMessage>());
+        var msg = (SdkResultMessage)result!;
+        Assert.Multiple(() =>
+        {
+            Assert.That(msg.Subtype, Is.EqualTo("error_during_execution"));
+            Assert.That(msg.IsError, Is.True);
+            Assert.That(msg.Result, Is.EqualTo("Tool execution failed"));
+            Assert.That(msg.Errors, Has.Count.EqualTo(1));
+            Assert.That(msg.Errors![0], Is.EqualTo("Command timed out after 60 seconds"));
+        });
+    }
+
+    [Test]
+    public void Deserialize_ResultMessage_WithEmptyErrorsArray()
+    {
+        var json = """
+        {
+            "type": "result",
+            "session_id": "sess-789",
+            "subtype": "success",
+            "duration_ms": 1000,
+            "duration_api_ms": 900,
+            "is_error": false,
+            "num_turns": 1,
+            "total_cost_usd": 0.001,
+            "errors": []
+        }
+        """;
+
+        var result = JsonSerializer.Deserialize<SdkMessage>(json, _options);
+
+        Assert.That(result, Is.InstanceOf<SdkResultMessage>());
+        var msg = (SdkResultMessage)result!;
+        Assert.Multiple(() =>
+        {
+            Assert.That(msg.IsError, Is.False);
+            Assert.That(msg.Errors, Is.Not.Null);
+            Assert.That(msg.Errors, Is.Empty);
+        });
+    }
+
+    [Test]
+    public void Deserialize_ResultMessage_WithoutErrorsField()
+    {
+        var json = """
+        {
+            "type": "result",
+            "session_id": "sess-abc",
+            "subtype": "success",
+            "duration_ms": 500,
+            "duration_api_ms": 400,
+            "is_error": false,
+            "num_turns": 1,
+            "total_cost_usd": 0.002
+        }
+        """;
+
+        var result = JsonSerializer.Deserialize<SdkMessage>(json, _options);
+
+        Assert.That(result, Is.InstanceOf<SdkResultMessage>());
+        var msg = (SdkResultMessage)result!;
+        Assert.That(msg.Errors, Is.Null);
+    }
 }

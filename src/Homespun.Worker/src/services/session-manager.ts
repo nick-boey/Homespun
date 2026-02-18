@@ -316,7 +316,7 @@ export class SessionManager {
         // instead of ending silently
         outputChannel.push({
           type: 'result',
-          subtype: 'error_max_turns',
+          subtype: 'error_during_execution',
           session_id: id,
           is_error: true,
           duration_ms: 0,
@@ -325,6 +325,7 @@ export class SessionManager {
           total_cost_usd: 0,
           usage: { input_tokens: 0, output_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 },
           result: message,
+          errors: [message],
         } as unknown as SDKMessage);
       } finally {
         outputChannel.complete();
