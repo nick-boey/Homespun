@@ -9,6 +9,7 @@ namespace Homespun.Features.Fleece.Controllers;
 [Produces("application/json")]
 public class FleeceIssueSyncController(
     IFleeceIssuesSyncService fleeceIssuesSyncService,
+    IFleeceService fleeceService,
     IProjectService projectService) : ControllerBase
 {
     [HttpGet("{projectId}/branch-status")]
@@ -45,6 +46,12 @@ public class FleeceIssueSyncController(
             project.LocalPath,
             project.DefaultBranch,
             ct);
+
+        // Reload cache from disk after sync to ensure frontend gets fresh data
+        if (result.Success)
+        {
+            await fleeceService.ReloadFromDiskAsync(project.LocalPath, ct);
+        }
 
         return Ok(result);
     }

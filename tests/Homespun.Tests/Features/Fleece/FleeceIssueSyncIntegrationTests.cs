@@ -2,6 +2,11 @@ using System.Diagnostics;
 using Fleece.Core.Models;
 using Fleece.Core.Serialization;
 using Fleece.Core.Services;
+using Homespun.Features.Commands;
+using Homespun.Features.Fleece.Services;
+using Homespun.Features.GitHub;
+using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
 
 namespace Homespun.Tests.Features.Fleece;
 
@@ -457,6 +462,253 @@ public class FleeceIssueSyncIntegrationTests
             File.SetAttributes(file, FileAttributes.Normal);
         }
         Directory.Delete(path, recursive: true);
+    }
+
+    #endregion
+
+    #region Stash-Pull-Pop-Merge Strategy Tests
+
+    /// <summary>
+    /// Tests the stash-pull-pop-merge strategy using the actual FleeceIssuesSyncService.
+    /// This validates that local uncommitted .fleece/ changes are stashed before pulling,
+    /// then popped and merged after pulling, avoiding divergent commit history.
+    /// </summary>
+    [Test]
+    public async Task SyncAsync_StashPullPopMerge_LocalAndRemoteChanges_NoMergeConflicts()
+    {
+        // Arrange: Clone A creates an issue and pushes
+        var issueA = CreateIssue("AAAAAA", "Issue A from Clone A");
+        await SaveAndCommitIssues(_cloneAPath, [issueA], "Add issue A");
+        RunGitIn(_cloneAPath, "push origin main");
+
+        // Clone B pulls to be up to date
+        RunGitIn(_cloneBPath, "pull origin main");
+
+        // Clone A creates another issue and pushes (Clone B is now behind)
+        var issueA2 = CreateIssue("AAAAAB", "Issue A2 from Clone A");
+        await SaveAndCommitIssues(_cloneAPath, [issueA, issueA2], "Add issue A2");
+        RunGitIn(_cloneAPath, "push origin main");
+
+        // Clone B creates a local issue (uncommitted - just saved to disk)
+        var issueB = CreateIssue("BBBBBB", "Issue B from Clone B");
+        var serializer = new JsonlSerializer();
+        var schemaValidator = new SchemaValidator();
+        var storageB = new JsonlStorageService(_cloneBPath, serializer, schemaValidator);
+        await storageB.SaveIssuesAsync([issueA, issueB], CancellationToken.None);
+        // Don't commit - these are uncommitted local changes
+
+        // Act: Run sync on Clone B using real service
+        var syncService = CreateSyncService();
+        var result = await syncService.SyncAsync(_cloneBPath, "main");
+
+        // Assert: Sync should succeed without conflicts
+        Assert.That(result.Success, Is.True, $"Sync failed: {result.ErrorMessage}");
+        Assert.That(result.PushSucceeded, Is.True, "Push should succeed");
+
+        // Verify all issues exist after sync
+        var finalStorage = new JsonlStorageService(_cloneBPath, serializer, schemaValidator);
+        var finalIssues = await finalStorage.LoadIssuesAsync(CancellationToken.None);
+
+        Assert.That(finalIssues.Any(i => i.Id == "AAAAAA"), Is.True, "Issue A should exist");
+        Assert.That(finalIssues.Any(i => i.Id == "AAAAAB"), Is.True, "Issue A2 should exist");
+        Assert.That(finalIssues.Any(i => i.Id == "BBBBBB"), Is.True, "Issue B should exist");
+    }
+
+    [Test]
+    public async Task SyncAsync_StashPullPopMerge_SameIssueModifiedDifferentFields_BothFieldsPreserved()
+    {
+        // Arrange: Create initial issue in both clones
+        // Use explicit timestamps to avoid race conditions with DateTimeOffset.UtcNow
+        var baseTime = DateTimeOffset.UtcNow.AddMinutes(-10);
+        var titleModifiedTime = DateTimeOffset.UtcNow.AddSeconds(-5);  // Remote title change
+        var statusModifiedTime = DateTimeOffset.UtcNow;  // Local status change (newer than title change)
+
+        var issue = CreateIssue("CCCCCC", "Original Title", IssueStatus.Open, baseTime);
+        await SaveAndCommitIssues(_cloneAPath, [issue], "Add initial issue");
+        RunGitIn(_cloneAPath, "push origin main");
+        RunGitIn(_cloneBPath, "pull origin main");
+
+        // Clone A modifies title and pushes - use explicit timestamp
+        var modifiedByA = issue with
+        {
+            Title = "Title Changed by A",
+            TitleLastUpdate = titleModifiedTime,
+            TitleModifiedBy = "user-a"
+        };
+        await SaveAndCommitIssues(_cloneAPath, [modifiedByA], "Change title");
+        RunGitIn(_cloneAPath, "push origin main");
+
+        // Clone B modifies status (uncommitted - just saved to disk) - use explicit timestamp
+        var modifiedByB = issue with
+        {
+            Status = IssueStatus.Progress,
+            StatusLastUpdate = statusModifiedTime,
+            StatusModifiedBy = "user-b"
+        };
+        var serializer = new JsonlSerializer();
+        var schemaValidator = new SchemaValidator();
+        var storageB = new JsonlStorageService(_cloneBPath, serializer, schemaValidator);
+        await storageB.SaveIssuesAsync([modifiedByB], CancellationToken.None);
+
+        // Debug: Check state before sync - need to fetch first to get accurate rev-list
+        RunGitIn(_cloneBPath, "fetch origin");
+        var (exitCodeBefore, statusBefore, _) = RunGitInWithOutput(_cloneBPath, "status --porcelain .fleece/");
+        var (_, revListBefore, _) = RunGitInWithOutput(_cloneBPath, "rev-list --left-right --count origin/main...HEAD");
+
+        // Verify we're actually behind remote
+        var parts = revListBefore.Trim().Split('\t');
+        Assert.That(parts.Length, Is.GreaterThanOrEqualTo(2), $"Invalid rev-list output: {revListBefore}");
+        var behind = int.Parse(parts[0]);
+        Assert.That(behind, Is.GreaterThan(0), $"Clone B should be behind remote. rev-list: {revListBefore}, status: {statusBefore}");
+
+        // Act: Run sync on Clone B
+        var syncService = CreateSyncService();
+        var result = await syncService.SyncAsync(_cloneBPath, "main");
+
+        // Assert: Sync should succeed
+        Assert.That(result.Success, Is.True, $"Sync failed: {result.ErrorMessage}. BeforeSync: status='{statusBefore.Trim()}', rev-list='{revListBefore.Trim()}'");
+
+        // Verify both field changes are preserved
+        var finalStorage = new JsonlStorageService(_cloneBPath, serializer, schemaValidator);
+        var finalIssues = await finalStorage.LoadIssuesAsync(CancellationToken.None);
+        var mergedIssue = finalIssues.First(i => i.Id == "CCCCCC");
+
+        Assert.That(mergedIssue.Title, Is.EqualTo("Title Changed by A"),
+            $"Title from remote should be preserved. Got Title='{mergedIssue.Title}', TitleLastUpdate={mergedIssue.TitleLastUpdate}. " +
+            $"Status='{mergedIssue.Status}', StatusLastUpdate={mergedIssue.StatusLastUpdate}");
+        Assert.That(mergedIssue.Status, Is.EqualTo(IssueStatus.Progress), "Status from local should be preserved");
+    }
+
+    [Test]
+    public async Task SyncAsync_NoLocalChanges_FastForwardsWithoutStash()
+    {
+        // Arrange: Clone A pushes changes
+        var issue = CreateIssue("FFFFFF", "Issue from Clone A");
+        await SaveAndCommitIssues(_cloneAPath, [issue], "Add issue");
+        RunGitIn(_cloneAPath, "push origin main");
+
+        // Clone B has no local .fleece/ changes (just behind remote)
+
+        // Act: Run sync on Clone B
+        var syncService = CreateSyncService();
+        var result = await syncService.SyncAsync(_cloneBPath, "main");
+
+        // Assert: Sync should succeed (fast-forward)
+        Assert.That(result.Success, Is.True, $"Sync failed: {result.ErrorMessage}");
+
+        // Verify issue exists
+        var serializer = new JsonlSerializer();
+        var schemaValidator = new SchemaValidator();
+        var finalStorage = new JsonlStorageService(_cloneBPath, serializer, schemaValidator);
+        var finalIssues = await finalStorage.LoadIssuesAsync(CancellationToken.None);
+
+        Assert.That(finalIssues.Any(i => i.Id == "FFFFFF"), Is.True, "Issue should exist after sync");
+    }
+
+    [Test]
+    public async Task SyncAsync_CommitMessageContainsSkipCi()
+    {
+        // Arrange: Clone A pushes changes
+        var issue = CreateIssue("GGGGGG", "Issue from Clone A");
+        await SaveAndCommitIssues(_cloneAPath, [issue], "Add issue");
+        RunGitIn(_cloneAPath, "push origin main");
+        RunGitIn(_cloneBPath, "pull origin main");
+
+        // Clone B creates local issue (uncommitted)
+        var issueB = CreateIssue("HHHHHH", "Issue from Clone B");
+        var serializer = new JsonlSerializer();
+        var schemaValidator = new SchemaValidator();
+        var storageB = new JsonlStorageService(_cloneBPath, serializer, schemaValidator);
+        await storageB.SaveIssuesAsync([issue, issueB], CancellationToken.None);
+
+        // Act: Run sync on Clone B
+        var syncService = CreateSyncService();
+        var result = await syncService.SyncAsync(_cloneBPath, "main");
+
+        // Assert: Sync should succeed
+        Assert.That(result.Success, Is.True, $"Sync failed: {result.ErrorMessage}");
+
+        // Verify commit message contains [skip ci]
+        var (_, lastCommitMessage, _) = RunGitInWithOutput(_cloneBPath, "log -1 --format=%s");
+        Assert.That(lastCommitMessage.Trim(), Does.Contain("[skip ci]"),
+            $"Commit message should contain [skip ci], but was: {lastCommitMessage}");
+    }
+
+    [Test]
+    public async Task SyncAsync_MultipleConcurrentModifications_AllPreserved()
+    {
+        // Arrange: Create initial state
+        await SaveAndCommitIssues(_cloneAPath, [], "Initialize empty fleece");
+        RunGitIn(_cloneAPath, "push origin main");
+        RunGitIn(_cloneBPath, "pull origin main");
+
+        // Clone A creates issues X and Y, pushes
+        var issueX = CreateIssue("XXXXXX", "Issue X");
+        var issueY = CreateIssue("YYYYYY", "Issue Y");
+        await SaveAndCommitIssues(_cloneAPath, [issueX, issueY], "Add X and Y");
+        RunGitIn(_cloneAPath, "push origin main");
+
+        // Clone B creates issues Z and W (uncommitted)
+        var issueZ = CreateIssue("ZZZZZZ", "Issue Z");
+        var issueW = CreateIssue("WWWWWW", "Issue W");
+        var serializer = new JsonlSerializer();
+        var schemaValidator = new SchemaValidator();
+        var storageB = new JsonlStorageService(_cloneBPath, serializer, schemaValidator);
+        await storageB.SaveIssuesAsync([issueZ, issueW], CancellationToken.None);
+
+        // Act: Run sync on Clone B
+        var syncService = CreateSyncService();
+        var result = await syncService.SyncAsync(_cloneBPath, "main");
+
+        // Assert: Sync should succeed and all 4 issues should exist
+        Assert.That(result.Success, Is.True, $"Sync failed: {result.ErrorMessage}");
+
+        var finalStorage = new JsonlStorageService(_cloneBPath, serializer, schemaValidator);
+        var finalIssues = await finalStorage.LoadIssuesAsync(CancellationToken.None);
+
+        Assert.That(finalIssues.Count, Is.EqualTo(4), "Should have all 4 issues");
+        Assert.That(finalIssues.Any(i => i.Id == "XXXXXX"), Is.True, "Issue X should exist");
+        Assert.That(finalIssues.Any(i => i.Id == "YYYYYY"), Is.True, "Issue Y should exist");
+        Assert.That(finalIssues.Any(i => i.Id == "ZZZZZZ"), Is.True, "Issue Z should exist");
+        Assert.That(finalIssues.Any(i => i.Id == "WWWWWW"), Is.True, "Issue W should exist");
+    }
+
+    private static (int exitCode, string output, string error) RunGitInWithOutput(string workingDirectory, string arguments)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = "git",
+            Arguments = arguments,
+            WorkingDirectory = workingDirectory,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true
+        };
+
+        using var process = new Process { StartInfo = startInfo };
+        process.Start();
+        var output = process.StandardOutput.ReadToEnd();
+        var error = process.StandardError.ReadToEnd();
+        process.WaitForExit();
+
+        return (process.ExitCode, output, error);
+    }
+
+    private static FleeceIssuesSyncService CreateSyncService()
+    {
+        var mockGitHubEnvService = new Mock<IGitHubEnvironmentService>();
+        mockGitHubEnvService
+            .Setup(x => x.GetGitHubEnvironment())
+            .Returns(new Dictionary<string, string>());
+
+        var commandRunner = new CommandRunner(
+            mockGitHubEnvService.Object,
+            NullLogger<CommandRunner>.Instance);
+
+        return new FleeceIssuesSyncService(
+            commandRunner,
+            NullLogger<FleeceIssuesSyncService>.Instance);
     }
 
     #endregion
