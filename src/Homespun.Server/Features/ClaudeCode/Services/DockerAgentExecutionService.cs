@@ -878,11 +878,11 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
 
         try
         {
-            // List all running containers matching homespun-agent- prefix
+            // List all running containers matching homespun- prefix (covers both homespun-agent-* and homespun-issue-*)
             var startInfo = new System.Diagnostics.ProcessStartInfo
             {
                 FileName = "docker",
-                Arguments = "ps --filter \"name=homespun-agent-\" --format \"{{.ID}}\t{{.Names}}\"",
+                Arguments = "ps --filter \"name=homespun-\" --format \"{{.ID}}\t{{.Names}}\"",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
@@ -905,8 +905,12 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
                 return 0;
             }
 
-            // Get set of tracked container IDs
+            // Get set of tracked container IDs (from sessions and issue containers)
             var trackedContainerIds = _sessions.Values.Select(s => s.ContainerId).ToHashSet();
+            foreach (var ic in _issueContainers.Values)
+            {
+                trackedContainerIds.Add(ic.ContainerId);
+            }
 
             // Parse output and find orphaned containers
             foreach (var line in stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries))
@@ -959,6 +963,132 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
     }
 
     /// <summary>
+    /// Checks Docker directly for an existing container with the given name (e.g. after app restart
+    /// when in-memory tracking is lost). If the container is running and healthy, returns its info
+    /// for recovery. If it's stopped/exited/dead or unhealthy, removes it and returns null.
+    /// Returns null if no container with that name exists.
+    /// </summary>
+    private async Task<(string containerId, string workerUrl)?> TryRecoverOrRemoveExistingContainerAsync(
+        string containerName, CancellationToken cancellationToken)
+    {
+        try
+        {
+            // Check if a container with this name exists and get its state
+            var inspectStartInfo = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "docker",
+                Arguments = $"inspect --format \"{{{{.State.Status}}}} {{{{.Id}}}}\" {containerName}",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using var inspectProcess = System.Diagnostics.Process.Start(inspectStartInfo);
+            if (inspectProcess == null) return null;
+
+            var stdout = await inspectProcess.StandardOutput.ReadToEndAsync(cancellationToken);
+            await inspectProcess.WaitForExitAsync(cancellationToken);
+
+            if (inspectProcess.ExitCode != 0)
+            {
+                // Container doesn't exist — no conflict
+                return null;
+            }
+
+            var parts = stdout.Trim().Split(' ', 2);
+            if (parts.Length < 2)
+            {
+                _logger.LogWarning("Unexpected docker inspect output for {ContainerName}: '{Output}'",
+                    containerName, stdout.Trim());
+                await RemoveContainerAsync(containerName);
+                return null;
+            }
+
+            var state = parts[0].ToLowerInvariant();
+            var containerId = parts[1];
+
+            if (state == "running")
+            {
+                // Container is running — try to recover it
+                _logger.LogInformation(
+                    "Found existing running container {ContainerName} ({ContainerId}) — attempting recovery",
+                    containerName, containerId);
+
+                try
+                {
+                    // Get the container's IP address
+                    var ipInspectStartInfo = new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = "docker",
+                        Arguments = $"inspect -f \"{{{{range.NetworkSettings.Networks}}}}{{{{.IPAddress}}}}{{{{end}}}}\" {containerId}",
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    };
+
+                    using var ipProcess = System.Diagnostics.Process.Start(ipInspectStartInfo);
+                    if (ipProcess == null)
+                    {
+                        await RemoveContainerAsync(containerName);
+                        return null;
+                    }
+
+                    var ipStdout = await ipProcess.StandardOutput.ReadToEndAsync(cancellationToken);
+                    await ipProcess.WaitForExitAsync(cancellationToken);
+
+                    if (ipProcess.ExitCode != 0)
+                    {
+                        _logger.LogWarning("Failed to get IP for running container {ContainerName}, removing",
+                            containerName);
+                        await RemoveContainerAsync(containerName);
+                        return null;
+                    }
+
+                    var ipAddress = ParseWorkerIpAddress(ipStdout);
+                    var workerUrl = BuildWorkerUrl(ipAddress);
+
+                    // Health check
+                    if (await IsContainerHealthyAsync(workerUrl, cancellationToken))
+                    {
+                        _logger.LogInformation(
+                            "Successfully recovered running container {ContainerName} at {WorkerUrl}",
+                            containerName, workerUrl);
+                        return (containerId, workerUrl);
+                    }
+
+                    _logger.LogWarning(
+                        "Running container {ContainerName} failed health check, removing",
+                        containerName);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex,
+                        "Error recovering running container {ContainerName}, removing", containerName);
+                }
+
+                await RemoveContainerAsync(containerName);
+                return null;
+            }
+
+            // Container exists but is stopped/exited/dead/etc — remove it
+            _logger.LogInformation(
+                "Found stale container {ContainerName} in state '{State}', removing before creating new one",
+                containerName, state);
+            await RemoveContainerAsync(containerName);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Error checking for existing container {ContainerName}, proceeding with fresh create",
+                containerName);
+            return null;
+        }
+    }
+
+    /// <summary>
     /// Gets an existing healthy issue container, or starts a new one.
     /// Also tracks the container by working directory for state checking.
     /// </summary>
@@ -987,12 +1117,30 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
             await StopContainerAsync(existing.ContainerId);
         }
 
-        // Start new container - compute issue workspace paths
+        // Compute issue workspace paths
         var containerName = GetIssueContainerName(projectId, issueId);
         var issueBasePath = $"{_options.DataVolumePath}/{_options.ProjectsBasePath}/{projectName ?? "default"}/issues/{issueId}";
         var effectiveWorkingDirectory = string.IsNullOrEmpty(workingDirectory)
             ? $"{issueBasePath}/src"
             : workingDirectory;
+
+        // Check Docker directly for a stale container with this name (e.g. after app restart)
+        var recovered = await TryRecoverOrRemoveExistingContainerAsync(containerName, cancellationToken);
+        if (recovered != null)
+        {
+            var (recoveredContainerId, recoveredWorkerUrl) = recovered.Value;
+            _logger.LogInformation(
+                "Recovered existing container {ContainerName} for project {ProjectId} issue {IssueId}",
+                containerName, projectId, issueId);
+
+            _issueContainers[key] = new IssueContainer(projectId, issueId, recoveredContainerId, containerName, recoveredWorkerUrl, DateTime.UtcNow);
+            _cloneContainers[effectiveWorkingDirectory] = new CloneContainer(
+                effectiveWorkingDirectory, recoveredContainerId, containerName, recoveredWorkerUrl, DateTime.UtcNow, projectId, issueId);
+
+            return (recoveredContainerId, recoveredWorkerUrl);
+        }
+
+        // Start new container
         // Use the per-issue .claude folder explicitly to avoid contention
         var claudePath = $"{issueBasePath}/.claude";
         var (containerId, workerUrl) = await StartContainerAsync(
@@ -1487,6 +1635,34 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Error stopping container {ContainerId}", containerId);
+        }
+
+        await RemoveContainerAsync(containerId);
+    }
+
+    private async Task RemoveContainerAsync(string containerNameOrId)
+    {
+        try
+        {
+            var startInfo = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "docker",
+                Arguments = $"rm -f {containerNameOrId}",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using var process = System.Diagnostics.Process.Start(startInfo);
+            if (process != null)
+            {
+                await process.WaitForExitAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error removing container {ContainerNameOrId}", containerNameOrId);
         }
     }
 

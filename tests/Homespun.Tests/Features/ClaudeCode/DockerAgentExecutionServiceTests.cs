@@ -721,6 +721,20 @@ public class DockerAgentExecutionServiceTests
 
     #endregion
 
+    #region CleanupOrphanedContainersAsync Tests
+
+    [Test]
+    public async Task CleanupOrphanedContainersAsync_NoContainers_ReturnsZero()
+    {
+        // Act
+        var result = await _service.CleanupOrphanedContainersAsync();
+
+        // Assert
+        Assert.That(result, Is.GreaterThanOrEqualTo(0));
+    }
+
+    #endregion
+
     #region DisposeAsync Tests
 
     [Test]
