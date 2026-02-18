@@ -236,6 +236,15 @@ public class ComponentRegistryService : IComponentRegistryService
             Category = "Core",
             ComponentPath = "Shared/LoadingSpinner.razor",
             Tags = new() { "loading", "spinner", "status", "feedback" }
+        },
+        new ComponentMetadata
+        {
+            Id = "task-graph-view",
+            Name = "TaskGraphView",
+            Description = "Renders a task graph with lane-based layout, connectors, and interactive issue rows.",
+            Category = "Core",
+            ComponentPath = "Components/TaskGraphView.razor",
+            Tags = new() { "graph", "task", "issue", "visualization" }
         }
     };
 

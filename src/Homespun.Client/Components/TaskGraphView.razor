@@ -1,0 +1,197 @@
+@using Homespun.Shared.Models.Fleece
+@using Homespun.Shared.Models.Gitgraph
+
+@if (TaskGraph != null && TaskGraph.Nodes.Count > 0)
+{
+    <div class="task-graph">
+        @for (var i = 0; i < _renderLines.Count; i++)
+        {
+            var line = _renderLines[i];
+            @if (line is TaskGraphIssueRenderLine issueLine)
+            {
+                var isSelected = SelectedNodeId == $"issue-{issueLine.IssueId}";
+                var agentStatus = GetAgentStatus(issueLine.IssueId);
+                var index = i;
+
+                <div class="task-graph-row @(isSelected ? "task-graph-row-selected" : "")"
+                     @onclick="() => HandleIssueClick(issueLine.IssueId)">
+                    <div class="task-graph-graph-cell">
+                        @((MarkupString)GenerateIssueSvg(index, issueLine, agentStatus))
+                    </div>
+                    <div class="task-graph-content-cell">
+                        <span class="task-graph-issue-id">@issueLine.IssueId</span>
+                        <span class="task-graph-title">@issueLine.Title</span>
+                        @if (agentStatus != null)
+                        {
+                            var statusClass = agentStatus.IsActive ? "agent-status-running" : "agent-status-inactive";
+                            var dotClass = agentStatus.IsActive ? "agent-status-dot agent-status-dot-active" : "agent-status-dot";
+                            <span class="agent-status-badge @statusClass">
+                                <span class="@dotClass"></span>
+                                @agentStatus.Status
+                            </span>
+                        }
+                    </div>
+                </div>
+            }
+            else if (line is TaskGraphSeparatorRenderLine)
+            {
+                <div class="task-graph-separator"></div>
+            }
+        }
+    </div>
+}
+
+<style>
+    .task-graph {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .task-graph-row {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        align-items: center;
+        min-height: 40px;
+        cursor: pointer;
+        transition: background-color 0.15s ease;
+    }
+
+    .task-graph-row:hover {
+        background-color: var(--bg-secondary, rgba(255, 255, 255, 0.05));
+    }
+
+    .task-graph-row-selected {
+        background-color: var(--bg-secondary, rgba(255, 255, 255, 0.1));
+    }
+
+    .task-graph-row-selected .task-graph-graph-cell svg path[fill]:not([fill="none"]) {
+        filter: drop-shadow(0 0 4px var(--color-ocean, #51A5C1));
+    }
+
+    .task-graph-graph-cell {
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+        flex-shrink: 0;
+    }
+
+    .task-graph-graph-cell svg {
+        display: block;
+    }
+
+    .task-graph-content-cell {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.25rem 0.75rem 0.25rem 0.5rem;
+        overflow: hidden;
+    }
+
+    .task-graph-issue-id {
+        flex-shrink: 0;
+        padding: 1px 6px;
+        border-radius: 3px;
+        font-size: 11px;
+        font-family: var(--font-mono, monospace);
+        background-color: var(--bg-tertiary, rgba(255, 255, 255, 0.08));
+        color: var(--text-secondary, #a0a0a0);
+        border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+    }
+
+    .task-graph-title {
+        color: var(--text-primary, #eaeaea);
+        font-size: 14px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .task-graph-separator {
+        height: 8px;
+    }
+</style>
+
+@code {
+    [Parameter] public TaskGraphResponse? TaskGraph { get; set; }
+    [Parameter] public EventCallback<string> OnIssueClick { get; set; }
+    [Parameter] public string? SelectedNodeId { get; set; }
+    [Parameter] public IReadOnlyDictionary<string, AgentStatusData>? AgentStatuses { get; set; }
+
+    private List<TaskGraphRenderLine> _renderLines = [];
+    private int _maxLane;
+
+    protected override void OnParametersSet()
+    {
+        _renderLines = TaskGraphLayoutService.ComputeLayout(TaskGraph);
+        _maxLane = _renderLines
+            .OfType<TaskGraphIssueRenderLine>()
+            .Select(l => Math.Max(l.Lane, l.ParentLane ?? 0))
+            .DefaultIfEmpty(0)
+            .Max();
+    }
+
+    private string GenerateIssueSvg(int index, TaskGraphIssueRenderLine issueLine, AgentStatusData? agentStatus)
+    {
+        var (color, isOutlineOnly, opacity) = ComputeTaskGraphNodeStyle(issueLine.Marker, agentStatus);
+
+        return TimelineSvgRenderer.GenerateTaskGraphIssueSvg(
+            nodeLane: issueLine.Lane,
+            parentLane: issueLine.ParentLane,
+            isFirstChild: issueLine.IsFirstChild,
+            maxLanes: _maxLane + 1,
+            nodeColor: color,
+            isOutlineOnly: isOutlineOnly,
+            isActionable: issueLine.Marker == TaskGraphMarkerType.Actionable,
+            opacity: opacity,
+            drawTopLine: issueLine.DrawTopLine,
+            drawBottomLine: issueLine.DrawBottomLine,
+            isSeriesChild: issueLine.IsSeriesChild,
+            seriesConnectorFromLane: issueLine.SeriesConnectorFromLane);
+    }
+
+    private static (string color, bool isOutlineOnly, double opacity) ComputeTaskGraphNodeStyle(
+        TaskGraphMarkerType marker, AgentStatusData? agentStatus)
+    {
+        var color = GetMarkerColor(marker);
+        var isOutlineOnly = IsMarkerOutlineOnly(marker);
+        var opacity = marker == TaskGraphMarkerType.Closed ? 0.5 : 1.0;
+
+        // Agent status overrides color when active
+        if (agentStatus is { IsActive: true })
+        {
+            color = "#10b981"; // green for active agent
+        }
+
+        return (color, isOutlineOnly, opacity);
+    }
+
+    private static string GetMarkerColor(TaskGraphMarkerType marker) => marker switch
+    {
+        TaskGraphMarkerType.Actionable => "#51A5C1",
+        TaskGraphMarkerType.Open => "#6b7280",
+        TaskGraphMarkerType.Complete => "#10b981",
+        TaskGraphMarkerType.Closed => "#6b7280",
+        _ => "#6b7280"
+    };
+
+    private static bool IsMarkerOutlineOnly(TaskGraphMarkerType marker) => marker switch
+    {
+        TaskGraphMarkerType.Actionable => true,
+        TaskGraphMarkerType.Open => true,
+        TaskGraphMarkerType.Complete => false,
+        TaskGraphMarkerType.Closed => false,
+        _ => true
+    };
+
+    private AgentStatusData? GetAgentStatus(string issueId)
+    {
+        if (AgentStatuses != null && AgentStatuses.TryGetValue(issueId, out var status))
+            return status;
+        return null;
+    }
+
+    private async Task HandleIssueClick(string issueId)
+    {
+        await OnIssueClick.InvokeAsync(issueId);
+    }
+}

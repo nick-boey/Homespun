@@ -1,4 +1,6 @@
 using Fleece.Core.Models;
+using Fleece.Core.Services;
+using Fleece.Core.Services.Interfaces;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Gitgraph.Services;
 using Homespun.Features.PullRequests.Data;
@@ -118,33 +120,35 @@ public class MockGraphService : IGraphService
         return true;
     }
 
-    public Task<Graph?> BuildTaskGraphAsync(string projectId)
+    public async Task<TaskGraph?> BuildTaskGraphAsync(string projectId)
     {
         _logger.LogDebug("[Mock] BuildTaskGraph for project {ProjectId}", projectId);
 
-        var mergedPrs = GetMergedPrHistory();
         var fakeIssues = GetFakeIssues();
 
-        var graph = _graphBuilder.Build(mergedPrs, fakeIssues, 5);
-        return Task.FromResult<Graph?>(graph);
+        // Filter to open issues (matching real FleeceService.GetTaskGraphAsync behavior)
+        var openIssues = fakeIssues
+            .Where(i => i.Status is IssueStatus.Open or IssueStatus.Progress or IssueStatus.Review)
+            .ToList();
+
+        if (openIssues.Count == 0) return null;
+
+        // Use Fleece.Core's real TaskGraphService for correct ordering
+        var mockIssueService = new MockIssueServiceAdapter(openIssues);
+        var nextService = new NextService(mockIssueService);
+        var taskGraphService = new TaskGraphService(mockIssueService, nextService);
+        return await taskGraphService.BuildGraphAsync();
     }
 
-    public async Task<GitgraphJsonData?> BuildTaskGraphJsonAsync(string projectId)
+    public async Task<string?> BuildTaskGraphTextAsync(string projectId)
     {
-        _logger.LogDebug("[Mock] BuildTaskGraphJson for project {ProjectId}", projectId);
+        _logger.LogDebug("[Mock] BuildTaskGraphText for project {ProjectId}", projectId);
 
-        var graph = await BuildTaskGraphAsync(projectId);
-        if (graph == null)
-        {
+        var taskGraph = await BuildTaskGraphAsync(projectId);
+        if (taskGraph == null)
             return null;
-        }
 
-        var jsonData = _mapper.ToJson(graph);
-
-        // Enrich nodes with agent status data
-        EnrichWithAgentStatuses(jsonData, projectId);
-
-        return jsonData;
+        return TaskGraphTextRenderer.Render(taskGraph);
     }
 
     private static PullRequestInfo ConvertToPullRequestInfo(PullRequest pr)

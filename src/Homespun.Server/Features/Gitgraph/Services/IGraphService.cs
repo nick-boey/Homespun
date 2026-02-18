@@ -1,3 +1,4 @@
+using Fleece.Core.Models;
 
 namespace Homespun.Features.Gitgraph.Services;
 
@@ -68,12 +69,12 @@ public interface IGraphService
     /// </summary>
     /// <param name="projectId">The project ID.</param>
     /// <returns>Task graph data, or null if no issues exist.</returns>
-    Task<Graph?> BuildTaskGraphAsync(string projectId);
+    Task<TaskGraph?> BuildTaskGraphAsync(string projectId);
 
     /// <summary>
-    /// Builds task graph JSON data for a project, ready for visualization.
+    /// Builds a plain text rendering of the task graph for a project.
     /// </summary>
     /// <param name="projectId">The project ID.</param>
-    /// <returns>Task graph JSON data, or null if no issues exist.</returns>
-    Task<GitgraphJsonData?> BuildTaskGraphJsonAsync(string projectId);
+    /// <returns>Text rendering of the task graph, or null if no issues exist.</returns>
+    Task<string?> BuildTaskGraphTextAsync(string projectId);
 }

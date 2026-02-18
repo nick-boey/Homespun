@@ -14,6 +14,7 @@ public static class TimelineSvgRenderer
     public const int DiamondSize = 7;
     public const double LineStrokeWidth = 2;
     public const int ConnectorArcRadius = 10;
+    public const int TaskGraphArcRadius = DiamondSize;
 
     public static int CalculateSvgWidth(int maxLanes)
     {
@@ -30,7 +31,8 @@ public static class TimelineSvgRenderer
         return RowHeight / 2;
     }
 
-    public static string GenerateVerticalLine(int laneIndex, bool hasNodeInLane, bool drawTop = true, bool drawBottom = true, bool isPassThroughEnding = false)
+    public static string GenerateVerticalLine(int laneIndex, bool hasNodeInLane, bool drawTop = true,
+        bool drawBottom = true, bool isPassThroughEnding = false)
     {
         var x = GetLaneCenterX(laneIndex);
         var centerY = GetRowCenterY();
@@ -42,10 +44,12 @@ public static class TimelineSvgRenderer
             {
                 segments.Add($"M {x} 0 L {x} {centerY - NodeRadius - 2}");
             }
+
             if (drawBottom)
             {
                 segments.Add($"M {x} {centerY + NodeRadius + 2} L {x} {RowHeight}");
             }
+
             return string.Join(" ", segments);
         }
 
@@ -69,7 +73,8 @@ public static class TimelineSvgRenderer
         var arcStartY = centerY - arcRadius;
         var arcEndX = fromX + arcRadius;
 
-        return $"M {fromX} 0 L {fromX} {arcStartY} A {arcRadius} {arcRadius} 0 0 0 {arcEndX} {centerY} L {nodeEdgeX} {centerY}";
+        return
+            $"M {fromX} 0 L {fromX} {arcStartY} A {arcRadius} {arcRadius} 0 0 0 {arcEndX} {centerY} L {nodeEdgeX} {centerY}";
     }
 
     public static string GenerateCircleNode(int laneIndex, string color)
@@ -103,8 +108,10 @@ public static class TimelineSvgRenderer
         var cy = GetRowCenterY();
         var crossSize = 3;
         var sb = new StringBuilder();
-        sb.Append($"<line x1=\"{cx - crossSize}\" y1=\"{cy - crossSize}\" x2=\"{cx + crossSize}\" y2=\"{cy + crossSize}\" stroke=\"{EscapeAttribute(color)}\" stroke-width=\"2\" />");
-        sb.Append($"<line x1=\"{cx + crossSize}\" y1=\"{cy - crossSize}\" x2=\"{cx - crossSize}\" y2=\"{cy + crossSize}\" stroke=\"{EscapeAttribute(color)}\" stroke-width=\"2\" />");
+        sb.Append(
+            $"<line x1=\"{cx - crossSize}\" y1=\"{cy - crossSize}\" x2=\"{cx + crossSize}\" y2=\"{cy + crossSize}\" stroke=\"{EscapeAttribute(color)}\" stroke-width=\"2\" />");
+        sb.Append(
+            $"<line x1=\"{cx + crossSize}\" y1=\"{cy - crossSize}\" x2=\"{cx - crossSize}\" y2=\"{cy + crossSize}\" stroke=\"{EscapeAttribute(color)}\" stroke-width=\"2\" />");
         return sb.ToString();
     }
 
@@ -114,8 +121,10 @@ public static class TimelineSvgRenderer
         var cy = GetRowCenterY();
         var r = NodeRadius + 2;
         var sb = new StringBuilder();
-        sb.Append($"<circle cx=\"{cx}\" cy=\"{cy}\" r=\"{r}\" fill=\"{EscapeAttribute(color)}\" stroke=\"white\" stroke-width=\"2\" />");
-        sb.Append($"<text x=\"{cx}\" y=\"{cy}\" text-anchor=\"middle\" dominant-baseline=\"central\" fill=\"white\" font-size=\"14\" font-weight=\"bold\">+</text>");
+        sb.Append(
+            $"<circle cx=\"{cx}\" cy=\"{cy}\" r=\"{r}\" fill=\"{EscapeAttribute(color)}\" stroke=\"white\" stroke-width=\"2\" />");
+        sb.Append(
+            $"<text x=\"{cx}\" y=\"{cy}\" text-anchor=\"middle\" dominant-baseline=\"central\" fill=\"white\" font-size=\"14\" font-weight=\"bold\">+</text>");
         return sb.ToString();
     }
 
@@ -129,7 +138,8 @@ public static class TimelineSvgRenderer
         var cy = GetRowCenterY();
         var outerRadius = DiamondSize + 4;
         // Subtle glow ring around actionable items
-        return $"<circle cx=\"{cx}\" cy=\"{cy}\" r=\"{outerRadius}\" fill=\"none\" stroke=\"{EscapeAttribute(color)}\" stroke-width=\"1\" opacity=\"0.4\" />";
+        return
+            $"<circle cx=\"{cx}\" cy=\"{cy}\" r=\"{outerRadius}\" fill=\"none\" stroke=\"{EscapeAttribute(color)}\" stroke-width=\"1\" opacity=\"0.4\" />";
     }
 
     public static string GenerateRowSvg(
@@ -156,7 +166,8 @@ public static class TimelineSvgRenderer
         if (connectorFromLane.HasValue && connectorFromLane.Value != nodeLane)
         {
             var connectorPath = GenerateConnector(connectorFromLane.Value, nodeLane);
-            sb.Append($"<path d=\"{connectorPath}\" stroke=\"{EscapeAttribute(nodeColor)}\" stroke-width=\"{LineStrokeWidth.ToString(CultureInfo.InvariantCulture)}\" fill=\"none\" />");
+            sb.Append(
+                $"<path d=\"{connectorPath}\" stroke=\"{EscapeAttribute(nodeColor)}\" stroke-width=\"{LineStrokeWidth.ToString(CultureInfo.InvariantCulture)}\" fill=\"none\" />");
         }
 
         foreach (var lane in activeLanes.OrderBy(l => l))
@@ -186,7 +197,8 @@ public static class TimelineSvgRenderer
             var linePath = GenerateVerticalLine(lane, hasNode, drawTop, drawBottom, isPassThroughEnding);
             if (!string.IsNullOrEmpty(linePath))
             {
-                sb.Append($"<path d=\"{linePath}\" stroke=\"{EscapeAttribute(lineColor)}\" stroke-width=\"{LineStrokeWidth.ToString(CultureInfo.InvariantCulture)}\" fill=\"none\" />");
+                sb.Append(
+                    $"<path d=\"{linePath}\" stroke=\"{EscapeAttribute(lineColor)}\" stroke-width=\"{LineStrokeWidth.ToString(CultureInfo.InvariantCulture)}\" fill=\"none\" />");
             }
         }
 
@@ -201,6 +213,7 @@ public static class TimelineSvgRenderer
             {
                 sb.Append(GenerateActionableIndicator(nodeLane, nodeColor));
             }
+
             sb.Append(isOutlineOnly
                 ? GenerateDiamondNodeOutline(nodeLane, nodeColor)
                 : GenerateDiamondNode(nodeLane, nodeColor));
@@ -228,7 +241,8 @@ public static class TimelineSvgRenderer
         var lineColor = laneColors?.GetValueOrDefault(0) ?? "#6b7280";
         var x = GetLaneCenterX(0);
         var linePath = $"M {x} 0 L {x} {RowHeight}";
-        sb.Append($"<path d=\"{linePath}\" stroke=\"{EscapeAttribute(lineColor)}\" stroke-width=\"{LineStrokeWidth.ToString(CultureInfo.InvariantCulture)}\" fill=\"none\" />");
+        sb.Append(
+            $"<path d=\"{linePath}\" stroke=\"{EscapeAttribute(lineColor)}\" stroke-width=\"{LineStrokeWidth.ToString(CultureInfo.InvariantCulture)}\" fill=\"none\" />");
         sb.Append("</svg>");
         return sb.ToString();
     }
@@ -249,6 +263,104 @@ public static class TimelineSvgRenderer
         {
             sb.Append(GenerateErrorCross(0, "white"));
         }
+
+        sb.Append("</svg>");
+        return sb.ToString();
+    }
+
+    public static string GenerateTaskGraphIssueSvg(
+        int nodeLane, int? parentLane, bool isFirstChild, int maxLanes,
+        string nodeColor, bool isOutlineOnly, bool isActionable, double opacity = 1.0,
+        bool drawTopLine = false, bool drawBottomLine = false, bool isSeriesChild = false,
+        int? seriesConnectorFromLane = null)
+    {
+        var width = CalculateSvgWidth(maxLanes);
+        var sb = new StringBuilder();
+        sb.Append($"<svg width=\"{width}\" height=\"{RowHeight}\" xmlns=\"http://www.w3.org/2000/svg\">");
+
+        var cx = GetLaneCenterX(nodeLane);
+        var cy = GetRowCenterY();
+
+        if (!isSeriesChild && parentLane.HasValue && parentLane.Value > nodeLane)
+        {
+            var px = GetLaneCenterX(parentLane.Value);
+            var startX = cx + DiamondSize + 2;
+
+            // Junction at parent lane
+            if (isFirstChild)
+            {
+                // Merged horizontal + arc elbow + vertical down
+                var r = TaskGraphArcRadius;
+                sb.Append(
+                    $"<path d=\"M {startX} {cy} L {px - r} {cy} A {r} {r} 0 0 1 {px} {cy + r} L {px} {RowHeight}\" stroke=\"{EscapeAttribute(nodeColor)}\" stroke-width=\"{LineStrokeWidth.ToString(CultureInfo.InvariantCulture)}\" fill=\"none\" />");
+            }
+            else
+            {
+                // Horizontal line from diamond right edge to parent lane center
+                sb.Append(
+                    $"<path d=\"M {startX} {cy} L {px} {cy}\" stroke=\"{EscapeAttribute(nodeColor)}\" stroke-width=\"{LineStrokeWidth.ToString(CultureInfo.InvariantCulture)}\" fill=\"none\" />");
+                // Full-height vertical
+                sb.Append(
+                    $"<path d=\"M {px} 0 L {px} {RowHeight}\" stroke=\"{EscapeAttribute(nodeColor)}\" stroke-width=\"{LineStrokeWidth.ToString(CultureInfo.InvariantCulture)}\" fill=\"none\" />");
+            }
+        }
+
+        // L-shaped connector from series children's lane to this node (parent receiving series children)
+        if (seriesConnectorFromLane.HasValue)
+        {
+            var fromX = GetLaneCenterX(seriesConnectorFromLane.Value);
+            var nodeEdgeX = cx - DiamondSize - 2;
+            var r = TaskGraphArcRadius;
+            sb.Append(
+                $"<path d=\"M {fromX} 0 L {fromX} {cy - r} A {r} {r} 0 0 0 {fromX + r} {cy} L {nodeEdgeX} {cy}\" stroke=\"{EscapeAttribute(nodeColor)}\" stroke-width=\"{LineStrokeWidth.ToString(CultureInfo.InvariantCulture)}\" fill=\"none\" />");
+        }
+
+        if (drawTopLine)
+        {
+            var topLineEndY = cy - DiamondSize - 2;
+            sb.Append(
+                $"<path d=\"M {cx} 0 L {cx} {topLineEndY}\" stroke=\"{EscapeAttribute(nodeColor)}\" stroke-width=\"{LineStrokeWidth.ToString(CultureInfo.InvariantCulture)}\" fill=\"none\" />");
+        }
+
+        if (drawBottomLine)
+        {
+            var bottomLineStartY = cy + DiamondSize + 2;
+            sb.Append(
+                $"<path d=\"M {cx} {bottomLineStartY} L {cx} {RowHeight}\" stroke=\"{EscapeAttribute(nodeColor)}\" stroke-width=\"{LineStrokeWidth.ToString(CultureInfo.InvariantCulture)}\" fill=\"none\" />");
+        }
+
+        if (isActionable)
+        {
+            sb.Append(GenerateActionableIndicator(nodeLane, nodeColor));
+        }
+
+        if (isOutlineOnly)
+        {
+            sb.Append(GenerateDiamondNodeOutline(nodeLane, nodeColor));
+        }
+        else
+        {
+            var diamond = GenerateDiamondNode(nodeLane, nodeColor);
+            if (opacity < 1.0)
+            {
+                // Insert opacity attribute before the closing />
+                diamond = diamond.Replace(" />", $" opacity=\"{opacity.ToString(CultureInfo.InvariantCulture)}\" />");
+            }
+            sb.Append(diamond);
+        }
+
+        sb.Append("</svg>");
+        return sb.ToString();
+    }
+
+    public static string GenerateTaskGraphConnectorSvg(int lane, int maxLanes, int height = 16)
+    {
+        var width = CalculateSvgWidth(maxLanes);
+        var x = GetLaneCenterX(lane);
+        var sb = new StringBuilder();
+        sb.Append($"<svg width=\"{width}\" height=\"{height}\" xmlns=\"http://www.w3.org/2000/svg\">");
+        sb.Append(
+            $"<path d=\"M {x} 0 L {x} {height}\" stroke=\"#6b7280\" stroke-width=\"{LineStrokeWidth.ToString(CultureInfo.InvariantCulture)}\" fill=\"none\" />");
         sb.Append("</svg>");
         return sb.ToString();
     }

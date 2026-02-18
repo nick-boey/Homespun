@@ -1,4 +1,5 @@
 @using Microsoft.AspNetCore.SignalR.Client
+@using Homespun.Shared.Models.Fleece
 @inject HttpGraphApiService GraphApi
 @inject NavigationManager NavigationManager
 @implements IAsyncDisposable
@@ -17,10 +18,20 @@
             <span>Failed to load timeline: @_error</span>
         </div>
     }
-    else if (EffectiveGraph != null && EffectiveLayout != null)
+    else if (UseTaskGraphMode && _taskGraphData != null)
     {
         <div class="timeline-container">
-            @if (EffectiveGraph.HasMorePastPRs)
+            <TaskGraphView
+                TaskGraph="@_taskGraphData"
+                OnIssueClick="OnIssueClick"
+                SelectedNodeId="@SelectedNodeId"
+                AgentStatuses="@_agentStatusesByIssueId" />
+        </div>
+    }
+    else if (_graph != null && _layout != null)
+    {
+        <div class="timeline-container">
+            @if (_graph.HasMorePastPRs)
             {
                 <div class="timeline-load-more" @onclick="LoadMorePastPRs">
                     <div class="timeline-load-more-graph">
@@ -31,20 +42,20 @@
                     </div>
                 </div>
             }
-            @for (var i = 0; i < EffectiveGraph.Nodes.Count; i++)
+            @for (var i = 0; i < _graph.Nodes.Count; i++)
             {
-                var node = EffectiveGraph.Nodes[i];
-                var laneInfo = EffectiveLayout.RowInfos[i];
+                var node = _graph.Nodes[i];
+                var laneInfo = _layout.RowInfos[i];
                 var isSelected = node.Id == SelectedNodeId ||
                                 (node.PullRequestNumber.HasValue && $"pr-{node.PullRequestNumber}" == SelectedNodeId) ||
                                 (node.IssueId != null && $"issue-{node.IssueId}" == SelectedNodeId);
                 var agentStatus = GetAgentStatus(node);
-                var isActionable = EffectiveLayout?.LaneAssignments.TryGetValue(node.Id, out var nodeLane) == true && nodeLane == 0;
+                var isActionable = _layout.LaneAssignments.TryGetValue(node.Id, out var nodeLane) && nodeLane == 0;
 
                 <TimelineRow
                     Node="node"
                     LaneInfo="laneInfo"
-                    MaxLanes="EffectiveLayout.MaxLanes"
+                    MaxLanes="_layout.MaxLanes"
                     IsSelected="isSelected"
                     AgentStatus="agentStatus"
                     LaneColors="_laneColors"
@@ -341,9 +352,8 @@
     private bool _isRefreshing = false;
     private string? _error;
     private Graph? _graph;
-    private Graph? _taskGraph;
     private TimelineLaneLayout? _layout;
-    private TimelineLaneLayout? _taskGraphLayout;
+    private TaskGraphResponse? _taskGraphData;
     private Dictionary<string, AgentStatusData> _agentStatusesByIssueId = new(StringComparer.OrdinalIgnoreCase);
     private Dictionary<int, AgentStatusData> _agentStatusesByPrNumber = [];
     private Dictionary<int, string> _laneColors = [];
@@ -359,17 +369,6 @@
     private double _tooltipY;
 
     private readonly TimelineLaneCalculator _laneCalculator = new();
-    private readonly TaskGraphLaneCalculator _taskGraphLaneCalculator = new();
-
-    /// <summary>
-    /// Gets the effective graph to display (task graph if available and enabled, otherwise regular graph).
-    /// </summary>
-    private Graph? EffectiveGraph => UseTaskGraphMode && _taskGraph != null ? _taskGraph : _graph;
-
-    /// <summary>
-    /// Gets the effective layout for rendering.
-    /// </summary>
-    private TimelineLaneLayout? EffectiveLayout => UseTaskGraphMode && _taskGraphLayout != null ? _taskGraphLayout : _layout;
 
     protected override async Task OnInitializedAsync()
     {
@@ -422,9 +421,8 @@
 
             // Reset all state for new project
             _graph = null;
-            _taskGraph = null;
             _layout = null;
-            _taskGraphLayout = null;
+            _taskGraphData = null;
             _agentStatusesByIssueId.Clear();
             _agentStatusesByPrNumber.Clear();
             _laneColors.Clear();
@@ -614,26 +612,12 @@
     {
         try
         {
-            var taskGraphData = await GraphApi.GetTaskGraphDataAsync(ProjectId);
-            if (taskGraphData != null)
-            {
-                _taskGraph = await GraphApi.GetTaskGraphAsync(ProjectId);
-                if (_taskGraph != null)
-                {
-                    _taskGraphLayout = _taskGraphLaneCalculator.Calculate(_taskGraph.Nodes);
-                }
-
-                // Extract agent statuses from task graph data
-                ExtractAgentStatuses(taskGraphData);
-                BuildLaneColors();
-            }
+            _taskGraphData = await GraphApi.GetTaskGraphDataAsync(ProjectId);
         }
         catch (Exception ex)
         {
-            // Log error but don't fail - fall back to regular timeline
             Console.WriteLine($"Failed to load task graph: {ex.Message}");
-            _taskGraph = null;
-            _taskGraphLayout = null;
+            _taskGraphData = null;
         }
     }
 
