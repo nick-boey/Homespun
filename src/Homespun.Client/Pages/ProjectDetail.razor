@@ -4,6 +4,7 @@
 @page "/projects/{Id}/prompts"
 @page "/projects/{Id}/settings"
 @implements IDisposable
+@implements IAsyncDisposable
 @using Fleece.Core.Models
 @using Microsoft.AspNetCore.SignalR.Client
 @inject HttpProjectApiService ProjectApi
@@ -18,6 +19,7 @@
 @inject IBreadcrumbService BreadcrumbService
 @inject ILogger<ProjectDetail> Logger
 @inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
 
 <PageTitle>@(_project?.Name ?? "Project")</PageTitle>
 
@@ -537,6 +539,47 @@ else
         }
     }
 
+    // Track if we've already processed the hash fragment
+    private bool _hasProcessedHashFragment;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await HandleHashFragmentAsync();
+        }
+    }
+
+    private async Task HandleHashFragmentAsync()
+    {
+        if (_hasProcessedHashFragment) return;
+        _hasProcessedHashFragment = true;
+
+        var uri = new Uri(NavigationManager.Uri);
+        if (!string.IsNullOrEmpty(uri.Fragment))
+        {
+            var fragment = uri.Fragment.TrimStart('#');
+            if (fragment.StartsWith("issue-"))
+            {
+                var issueId = fragment.Substring(6);
+
+                // Wait a brief moment for issues to be loaded if needed
+                var retries = 0;
+                while ((_openIssues == null || _openIssues.Count == 0) && retries < 10)
+                {
+                    await Task.Delay(100);
+                    retries++;
+                }
+
+                if (_openIssues?.Any(i => i.Id == issueId) == true)
+                {
+                    SelectIssue(issueId);
+                    await InvokeAsync(StateHasChanged);
+                }
+            }
+        }
+    }
+
     private void SwitchTab(string tab)
     {
         if (_activeTab == tab) return;
@@ -565,7 +608,15 @@ else
     public void Dispose()
     {
         StartupTracker.OnStateChanged -= OnStartupStateChanged;
-        _ = _hubConnection?.DisposeAsync();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Dispose();
+        if (_hubConnection != null)
+        {
+            await _hubConnection.DisposeAsync();
+        }
     }
 
     private async void OnStartupStateChanged(string entityId, AgentStartupState state)

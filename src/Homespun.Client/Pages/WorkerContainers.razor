@@ -32,86 +32,116 @@
     }
     else
     {
-        <div class="containers-list">
-            @foreach (var container in _containers)
-            {
-                <div class="container-card">
-                    <div class="container-card-header">
-                        <div class="container-title">
-                            <span class="container-name">@container.ContainerName</span>
-                        </div>
-                        <span class="status-indicator @GetStatusIndicatorClass(container.SessionStatus)" title="@container.SessionStatus.ToDisplayLabel()"></span>
-                    </div>
-
-                    <div class="container-card-body">
-                        <div class="container-details">
-                            <div class="detail-row">
-                                <span class="detail-label">Project:</span>
-                                <span class="detail-value">@(container.ProjectName ?? "Unknown")</span>
-                            </div>
-
-                            @if (!string.IsNullOrEmpty(container.IssueTitle) || !string.IsNullOrEmpty(container.IssueId))
-                            {
-                                <div class="detail-row">
-                                    <span class="detail-label">Issue:</span>
-                                    <span class="detail-value">@(container.IssueTitle ?? container.IssueId ?? "N/A")</span>
-                                </div>
-                            }
-
-                            <div class="detail-row">
-                                <span class="detail-label">Status:</span>
-                                <span class="detail-value">@container.SessionStatus.ToDisplayLabel()</span>
-                            </div>
-
-                            @if (container.LastActivityAt.HasValue)
-                            {
-                                <div class="detail-row">
-                                    <span class="detail-label">Last Activity:</span>
-                                    <span class="detail-value">@FormatTimeAgo(container.LastActivityAt.Value)</span>
-                                </div>
-                            }
-
-                            <div class="detail-row">
-                                <span class="detail-label">Created:</span>
-                                <span class="detail-value">@FormatTimeAgo(container.CreatedAt)</span>
-                            </div>
-                        </div>
-
-                        @if (container.HasPendingQuestion)
+        @foreach (var group in _groupedContainers)
+        {
+            <div class="project-group">
+                <div class="project-header">
+                    <h5>
+                        @if (group.ProjectId != "unknown")
                         {
-                            <div class="pending-badge mt-2">
-                                <span class="badge bg-status-question">Question Pending</span>
-                            </div>
+                            <a href="/projects/@group.ProjectId">@group.ProjectName</a>
                         }
-                        else if (container.HasPendingPlanApproval)
+                        else
                         {
-                            <div class="pending-badge mt-2">
-                                <span class="badge bg-status-info">Plan Approval Pending</span>
-                            </div>
+                            @group.ProjectName
                         }
-                    </div>
-
-                    <div class="container-card-footer">
-                        @if (!string.IsNullOrEmpty(container.ActiveSessionId))
-                        {
-                            <a href="/session/@container.ActiveSessionId" class="btn btn-sm btn-outline-primary">
-                                Open Session
-                            </a>
-                        }
-
-                        <button class="btn btn-sm btn-outline-danger"
-                                @onclick="() => StopContainer(container.ContainerId)"
-                                disabled="@(_stoppingContainers.Contains(container.ContainerId))">
-                            @if (_stoppingContainers.Contains(container.ContainerId))
-                            {
-                                <span class="spinner-border spinner-border-sm mr-1" role="status"></span>
-                            }
-                            Kill Container
-                        </button>
-                    </div>
+                    </h5>
+                    <span class="badge bg-secondary">@group.Containers.Count container@(group.Containers.Count != 1 ? "s" : "")</span>
                 </div>
-            }
-        </div>
+
+                <div class="containers-list">
+                    @foreach (var container in group.Containers)
+                    {
+                        <div class="container-card">
+                            <div class="container-card-header">
+                                <div class="container-title">
+                                    <span class="container-name">@GetDisplayTitle(container)</span>
+                                </div>
+                                <span class="status-indicator @GetStatusIndicatorClass(container.SessionStatus)" title="@container.SessionStatus.ToDisplayLabel()"></span>
+                            </div>
+
+                            <div class="container-card-body">
+                                <div class="container-details">
+                                    <div class="detail-row">
+                                        <span class="detail-label">Container:</span>
+                                        <span class="detail-value font-mono">@container.ContainerName</span>
+                                    </div>
+
+                                    @if (!string.IsNullOrEmpty(container.IssueId))
+                                    {
+                                        <div class="detail-row">
+                                            <span class="detail-label">Issue:</span>
+                                            <span class="detail-value">
+                                                @if (!string.IsNullOrEmpty(container.ProjectId))
+                                                {
+                                                    <a href="/projects/@container.ProjectId#issue-@container.IssueId">
+                                                        @(container.IssueTitle ?? container.IssueId)
+                                                    </a>
+                                                }
+                                                else
+                                                {
+                                                    @(container.IssueTitle ?? container.IssueId)
+                                                }
+                                            </span>
+                                        </div>
+                                    }
+
+                                    <div class="detail-row">
+                                        <span class="detail-label">Status:</span>
+                                        <span class="detail-value status-with-badge">
+                                            @if (container.HasPendingQuestion)
+                                            {
+                                                <span class="badge bg-status-question">Question Pending</span>
+                                            }
+                                            else if (container.HasPendingPlanApproval)
+                                            {
+                                                <span class="badge bg-status-info">Plan Approval Pending</span>
+                                            }
+                                            else
+                                            {
+                                                @container.SessionStatus.ToDisplayLabel()
+                                            }
+                                        </span>
+                                    </div>
+
+                                    @if (container.LastActivityAt.HasValue)
+                                    {
+                                        <div class="detail-row">
+                                            <span class="detail-label">Last Activity:</span>
+                                            <span class="detail-value">@FormatTimeAgo(container.LastActivityAt.Value)</span>
+                                        </div>
+                                    }
+
+                                    <div class="detail-row">
+                                        <span class="detail-label">Created:</span>
+                                        <span class="detail-value">@FormatTimeAgo(container.CreatedAt)</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="container-card-footer">
+                                @if (!string.IsNullOrEmpty(container.ActiveSessionId))
+                                {
+                                    <a href="/session/@container.ActiveSessionId" class="btn btn-sm btn-outline-primary">
+                                        Open Session
+                                    </a>
+                                }
+
+                                <button class="btn btn-sm btn-outline-danger"
+                                        @onclick="() => StopContainer(container.ContainerId)"
+                                        disabled="@(_stoppingContainers.Contains(container.ContainerId))">
+                                    @if (_stoppingContainers.Contains(container.ContainerId))
+                                    {
+                                        <span class="spinner-border spinner-border-sm mr-1" role="status"></span>
+                                    }
+                                    Kill Container
+                                </button>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
     }
 
     @if (!string.IsNullOrEmpty(_errorMessage))
@@ -143,17 +173,50 @@
         color: var(--text-primary);
     }
 
+    .project-group {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--border-color);
+        overflow: hidden;
+        margin-bottom: var(--spacing-lg);
+    }
+
+    .project-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: var(--spacing-md) var(--spacing-lg);
+        background: var(--bg-tertiary);
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .project-header h5 {
+        margin: 0;
+        font-size: 1rem;
+        font-weight: 600;
+    }
+
+    .project-header h5 a {
+        color: var(--text-primary);
+        text-decoration: none;
+    }
+
+    .project-header h5 a:hover {
+        text-decoration: underline;
+    }
+
     .containers-list {
         display: flex;
         flex-direction: column;
-        gap: var(--spacing-md);
     }
 
     .container-card {
         background: var(--bg-secondary);
-        border: 1px solid var(--border-color);
-        border-radius: var(--radius-md);
-        overflow: hidden;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .container-card:last-child {
+        border-bottom: none;
     }
 
     .container-card-header {
@@ -175,7 +238,6 @@
 
     .container-name {
         font-weight: 500;
-        font-family: var(--font-mono);
         font-size: 0.875rem;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -244,9 +306,14 @@
         color: var(--text-secondary);
     }
 
-    .pending-badge {
+    .detail-value.font-mono {
+        font-family: var(--font-mono);
+        font-size: 0.8125rem;
+    }
+
+    .status-with-badge {
         display: flex;
-        gap: var(--spacing-sm);
+        align-items: center;
     }
 
     .container-card-footer {
@@ -260,10 +327,41 @@
 
 @code {
     private List<WorkerContainerDto> _containers = [];
+    private List<ProjectGroupInfo> _groupedContainers = [];
     private bool _isLoading = true;
     private string? _errorMessage;
     private HashSet<string> _stoppingContainers = [];
     private HubConnection? _hubConnection;
+
+    private class ProjectGroupInfo
+    {
+        public required string ProjectId { get; set; }
+        public required string ProjectName { get; set; }
+        public required List<WorkerContainerDto> Containers { get; set; }
+    }
+
+    private void GroupContainersByProject()
+    {
+        _groupedContainers = _containers
+            .GroupBy(c => c.ProjectId ?? "unknown")
+            .Select(group => new ProjectGroupInfo
+            {
+                ProjectId = group.Key,
+                ProjectName = group.First().ProjectName ?? "Unknown Project",
+                Containers = group.OrderBy(c => c.IssueTitle ?? c.IssueId ?? c.ContainerName).ToList()
+            })
+            .OrderBy(g => g.ProjectName)
+            .ToList();
+    }
+
+    private static string GetDisplayTitle(WorkerContainerDto container)
+    {
+        if (!string.IsNullOrEmpty(container.IssueTitle))
+            return container.IssueTitle;
+        if (!string.IsNullOrEmpty(container.IssueId))
+            return container.IssueId;
+        return container.ContainerName;
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -281,6 +379,7 @@
             _isLoading = true;
             _errorMessage = null;
             _containers = await ContainerApi.GetAllContainersAsync();
+            GroupContainersByProject();
         }
         catch (Exception ex)
         {
