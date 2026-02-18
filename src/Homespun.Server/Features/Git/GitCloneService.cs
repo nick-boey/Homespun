@@ -111,21 +111,29 @@ public class GitCloneService(ICommandRunner commandRunner, ILogger<GitCloneServi
 
         logger.LogInformation("Created clone at {ClonePath} for branch {BranchName}", clonePath, branchName);
 
-        return clonePath;
+        // Return the workdir path (the actual git repository) for Docker mounting
+        return workdirPath;
     }
 
     public Task<bool> RemoveCloneAsync(string repoPath, string clonePath)
     {
         try
         {
-            if (!Directory.Exists(clonePath))
+            // Handle both workdir path and clone root path formats
+            // If clonePath ends with "workdir", we need to delete the parent directory
+            var normalizedPath = clonePath.TrimEnd('/', '\\');
+            var pathToDelete = normalizedPath.EndsWith("workdir", StringComparison.OrdinalIgnoreCase)
+                ? Path.GetDirectoryName(normalizedPath) ?? normalizedPath
+                : normalizedPath;
+
+            if (!Directory.Exists(pathToDelete))
             {
-                logger.LogWarning("Clone directory does not exist at {ClonePath}", clonePath);
+                logger.LogWarning("Clone directory does not exist at {ClonePath}", pathToDelete);
                 return Task.FromResult(false);
             }
 
-            ForceDeleteDirectory(clonePath);
-            logger.LogInformation("Removed clone {ClonePath}", clonePath);
+            ForceDeleteDirectory(pathToDelete);
+            logger.LogInformation("Removed clone {ClonePath}", pathToDelete);
             return Task.FromResult(true);
         }
         catch (Exception ex)
@@ -231,6 +239,7 @@ public class GitCloneService(ICommandRunner commandRunner, ILogger<GitCloneServi
             clones.Add(new CloneInfo
             {
                 Path = Path.GetFullPath(dir),
+                WorkdirPath = Path.GetFullPath(gitRepoPath),
                 Branch = branchName != null ? $"refs/heads/{branchName}" : null,
                 HeadCommit = commitHash,
                 IsBare = false,
@@ -327,8 +336,10 @@ public class GitCloneService(ICommandRunner commandRunner, ILogger<GitCloneServi
 
         if (directMatch != null)
         {
-            logger.LogDebug("Found clone for branch {BranchName} via direct match at {Path}", branchName, directMatch.Path);
-            return directMatch.Path;
+            // Return WorkdirPath for Docker mounting
+            var resultPath = directMatch.WorkdirPath ?? directMatch.Path;
+            logger.LogDebug("Found clone for branch {BranchName} via direct match at {Path}", branchName, resultPath);
+            return resultPath;
         }
 
         // Fall back to path-based matching using flattened name in .clones directory
@@ -347,10 +358,13 @@ public class GitCloneService(ICommandRunner commandRunner, ILogger<GitCloneServi
 
         if (pathMatch != null)
         {
-            logger.LogDebug("Found clone for branch {BranchName} via flattened path match at {Path}", branchName, pathMatch.Path);
+            // Return WorkdirPath for Docker mounting
+            var resultPath = pathMatch.WorkdirPath ?? pathMatch.Path;
+            logger.LogDebug("Found clone for branch {BranchName} via flattened path match at {Path}", branchName, resultPath);
+            return resultPath;
         }
 
-        return pathMatch?.Path;
+        return null;
     }
 
     public async Task<bool> PullLatestAsync(string clonePath)

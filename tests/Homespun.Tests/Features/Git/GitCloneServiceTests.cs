@@ -57,12 +57,14 @@ public class GitCloneServiceTests
 
         // Assert
         Assert.That(result, Is.Not.Null);
-        // Clone should be in .clones directory with flattened name (/ becomes +)
+        // Clone should be in .clones directory with flattened name (/ becomes +) and end with workdir
         Assert.That(result, Does.Contain(".clones"));
         Assert.That(result, Does.Contain("feature+test"));
-        // Verify .claude directory was created
-        var claudeDir = Path.Combine(result!, ".claude");
-        Assert.That(Directory.Exists(claudeDir), Is.True, "Expected .claude directory to be created");
+        Assert.That(result, Does.EndWith("workdir"), "CreateCloneAsync should return the workdir path");
+        // Verify .claude directory was created as sibling of workdir
+        var cloneRoot = Path.GetDirectoryName(result!);
+        var claudeDir = Path.Combine(cloneRoot!, ".claude");
+        Assert.That(Directory.Exists(claudeDir), Is.True, "Expected .claude directory to be created as sibling of workdir");
     }
 
     [Test]
@@ -2097,9 +2099,11 @@ public class GitCloneServiceTests
 
         // Assert
         Assert.That(result, Is.Not.Null);
-        // Verify .claude directory was created
-        var claudeDir = Path.Combine(result!, ".claude");
-        Assert.That(Directory.Exists(claudeDir), Is.True, "Expected .claude directory to be created");
+        Assert.That(result, Does.EndWith("workdir"), "CreateCloneAsync should return the workdir path");
+        // Verify .claude directory was created as sibling of workdir
+        var cloneRoot = Path.GetDirectoryName(result!);
+        var claudeDir = Path.Combine(cloneRoot!, ".claude");
+        Assert.That(Directory.Exists(claudeDir), Is.True, "Expected .claude directory to be created as sibling of workdir");
     }
 
     [Test]
@@ -2188,6 +2192,10 @@ public class GitCloneServiceTests
         Assert.That(result, Has.Count.EqualTo(2)); // main + 1 clone
         var clone = result.FirstOrDefault(c => c.Path.Contains("feature-1"));
         Assert.That(clone, Is.Not.Null);
+        // Verify WorkdirPath is populated for the new structure
+        Assert.That(clone!.WorkdirPath, Is.Not.Null);
+        Assert.That(clone.WorkdirPath, Does.EndWith("workdir"));
+        Assert.That(clone.WorkdirPath, Does.Contain(clone.Path));
     }
 
     #endregion

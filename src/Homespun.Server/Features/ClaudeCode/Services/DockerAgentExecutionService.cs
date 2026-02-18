@@ -1203,6 +1203,7 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         // Mount working directory to /workdir
         var hostWorkingDirectory = TranslateToHostPath(workingDirectory);
         dockerArgs.Append($"-v \"{hostWorkingDirectory}:/workdir\" ");
+        _logger.LogInformation("Mounting working directory: {Source} -> /workdir", hostWorkingDirectory);
 
         // Mount .claude directory to /home/homespun/.claude for Claude Code state persistence
         // Use explicit claudePath if provided, otherwise derive from workingDirectory parent
@@ -1220,6 +1221,7 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         {
             var hostClaudePath = TranslateToHostPath(effectiveClaudePath);
             dockerArgs.Append($"-v \"{hostClaudePath}:/home/homespun/.claude\" ");
+            _logger.LogInformation("Mounting .claude directory: {Source} -> /home/homespun/.claude", hostClaudePath);
         }
 
         // Environment variables
