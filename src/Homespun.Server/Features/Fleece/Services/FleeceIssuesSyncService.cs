@@ -107,12 +107,19 @@ public class FleeceIssuesSyncService(
             return new FleeceIssueSyncResult(false, branchStatus.ErrorMessage, 0, false);
         }
 
-        // Step 2: Check for non-fleece changes that might cause merge conflicts
+        // Step 2: Check for non-fleece changes - block sync if present (can't safely stash mixed changes)
         var nonFleeceChanges = await GetNonFleeceChangesAsync(projectPath);
         if (nonFleeceChanges.Count > 0)
         {
-            logger.LogWarning("Found {Count} non-fleece changed files that may cause conflicts: {Files}",
+            logger.LogWarning("Found {Count} non-fleece changed files that block sync: {Files}",
                 nonFleeceChanges.Count, string.Join(", ", nonFleeceChanges.Take(5)));
+            return new FleeceIssueSyncResult(
+                Success: false,
+                ErrorMessage: $"Cannot sync: found {nonFleeceChanges.Count} uncommitted non-fleece file(s). Please commit or discard these changes first.",
+                FilesCommitted: 0,
+                PushSucceeded: false,
+                HasNonFleeceChanges: true,
+                NonFleeceChangedFiles: nonFleeceChanges);
         }
 
         // Step 3: Check for changes in .fleece/
@@ -130,6 +137,155 @@ public class FleeceIssuesSyncService(
         if (hasFleeceChanges)
         {
             logger.LogInformation("Found {Count} changed files in .fleece/", filesCount);
+        }
+        else
+        {
+            logger.LogInformation("No changes in .fleece/ folder");
+        }
+
+        // Step 4: If we're behind remote, use stash-pull-pop-merge strategy
+        if (branchStatus.IsBehindRemote)
+        {
+            logger.LogInformation("Local branch is {Count} commits behind remote, using stash-pull-pop-merge strategy", branchStatus.CommitsBehind);
+
+            // Load local issues into memory before any git operations (in case we need to merge after stash pop)
+            List<Issue>? localIssues = null;
+            if (hasFleeceChanges)
+            {
+                try
+                {
+                    var serializer = new JsonlSerializer();
+                    var schemaValidator = new SchemaValidator();
+                    var localStorage = new JsonlStorageService(projectPath, serializer, schemaValidator);
+                    localIssues = (await localStorage.LoadIssuesAsync(ct)).ToList();
+                    logger.LogInformation("Loaded {Count} local issues into memory for potential merge", localIssues.Count);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "Failed to load local issues into memory, will proceed without local changes");
+                    hasFleeceChanges = false;
+                }
+            }
+
+            // Stash local .fleece/ changes if any
+            bool stashed = false;
+            if (hasFleeceChanges)
+            {
+                var stashResult = await commandRunner.RunAsync("git", "stash push -m \"fleece-sync\" -- .fleece/", projectPath);
+                if (!stashResult.Success)
+                {
+                    // If stash fails but there are changes, we can't proceed safely
+                    logger.LogWarning("Failed to stash .fleece/ changes: {Error}", stashResult.Error);
+                    return new FleeceIssueSyncResult(false, $"Failed to stash local changes: {stashResult.Error}", 0, false);
+                }
+                stashed = true;
+                logger.LogInformation("Stashed local .fleece/ changes");
+            }
+
+            // Fast-forward to origin/main
+            var ffResult = await commandRunner.RunAsync("git", $"merge --ff-only origin/{defaultBranch}", projectPath);
+            if (!ffResult.Success)
+            {
+                // Fast-forward failed - this shouldn't happen if we're just behind with no local commits
+                // But if it does, we need to restore the stash and report error
+                if (stashed)
+                {
+                    await commandRunner.RunAsync("git", "stash pop", projectPath);
+                }
+                logger.LogWarning("Fast-forward merge failed: {Error}", ffResult.Error);
+                return new FleeceIssueSyncResult(
+                    Success: false,
+                    ErrorMessage: $"Failed to fast-forward to remote: {ffResult.Error}. This may indicate divergent history.",
+                    FilesCommitted: 0,
+                    PushSucceeded: false,
+                    RequiresPullFirst: true);
+            }
+            logger.LogInformation("Fast-forwarded to origin/{Branch}", defaultBranch);
+
+            // If we stashed local changes, merge local (from memory) with remote (from disk after fast-forward)
+            // NOTE: We don't use stash pop because git's file-level merging doesn't work well with
+            // fleece's hash-based storage (issue hash changes when content changes, creating different files)
+            if (stashed && localIssues != null)
+            {
+                // Load remote issues from disk (current state after fast-forward)
+                var serializer = new JsonlSerializer();
+                var schemaValidator = new SchemaValidator();
+                var remoteStorage = new JsonlStorageService(projectPath, serializer, schemaValidator);
+                List<Issue> remoteIssues;
+
+                try
+                {
+                    remoteIssues = (await remoteStorage.LoadIssuesAsync(ct)).ToList();
+                    logger.LogInformation("Loaded {Count} remote issues after fast-forward", remoteIssues.Count);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Failed to load remote issues after fast-forward");
+                    // Restore local state before returning error
+                    await commandRunner.RunAsync("git", "stash pop", projectPath);
+                    return new FleeceIssueSyncResult(false, $"Failed to load remote issues: {ex.Message}", 0, false);
+                }
+
+                // Drop the stash - we'll use our in-memory merge instead of git's file-level merge
+                // This avoids issues with fleece's hash-based storage where issue files change names
+                await commandRunner.RunAsync("git", "stash drop", projectPath);
+                logger.LogInformation("Dropped stash, will use in-memory merge");
+
+                // Merge local (stashed) issues with remote issues using IssueMerger
+                logger.LogInformation("Merging {LocalCount} local issues with {RemoteCount} remote issues",
+                    localIssues.Count, remoteIssues.Count);
+
+                var remoteIssueMap = remoteIssues.ToDictionary(i => i.Id, StringComparer.OrdinalIgnoreCase);
+                var localIssueMap = localIssues.ToDictionary(i => i.Id, StringComparer.OrdinalIgnoreCase);
+
+                var mergedIssues = new List<Issue>();
+                var allIssueIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var issue in localIssues)
+                    allIssueIds.Add(issue.Id);
+                foreach (var issue in remoteIssues)
+                    allIssueIds.Add(issue.Id);
+
+                foreach (var issueId in allIssueIds)
+                {
+                    var hasLocal = localIssueMap.TryGetValue(issueId, out var localIssue);
+                    var hasRemote = remoteIssueMap.TryGetValue(issueId, out var remoteIssue);
+
+                    if (hasLocal && hasRemote)
+                    {
+                        var mergeResult = _issueMerger.Merge(localIssue!, remoteIssue!);
+                        mergedIssues.Add(mergeResult.MergedIssue);
+                    }
+                    else if (hasLocal)
+                    {
+                        mergedIssues.Add(localIssue!);
+                    }
+                    else
+                    {
+                        mergedIssues.Add(remoteIssue!);
+                    }
+                }
+
+                // Write merged result to disk
+                try
+                {
+                    var mergedStorage = new JsonlStorageService(projectPath, serializer, schemaValidator);
+                    await mergedStorage.SaveIssuesAsync(mergedIssues, ct);
+                    logger.LogInformation("Merged and saved {Count} issues", mergedIssues.Count);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Failed to save merged issues");
+                    return new FleeceIssueSyncResult(false, $"Failed to save merged issues: {ex.Message}", 0, false);
+                }
+            }
+        }
+
+        // Step 5: Check for any .fleece/ changes to commit (either original changes or merged changes)
+        var finalStatusResult = await commandRunner.RunAsync("git", "status --porcelain .fleece/", projectPath);
+        if (finalStatusResult.Success && !string.IsNullOrWhiteSpace(finalStatusResult.Output))
+        {
+            filesCount = CountChangedFiles(finalStatusResult.Output);
+            logger.LogInformation("Committing {Count} .fleece/ file changes", filesCount);
 
             // Stage all .fleece/ files
             var addResult = await commandRunner.RunAsync("git", "add .fleece/", projectPath);
@@ -140,14 +296,13 @@ public class FleeceIssuesSyncService(
             }
 
             // Commit with standardized message
-            var commitResult = await commandRunner.RunAsync("git", "commit -m \"chore: sync fleece issues\"", projectPath);
+            var commitResult = await commandRunner.RunAsync("git", "commit -m \"Update fleece issues [skip ci]\"", projectPath);
             if (!commitResult.Success)
             {
-                // Check if failure is due to nothing to commit (can happen if files were already staged)
+                // Check if failure is due to nothing to commit
                 if (commitResult.Output.Contains("nothing to commit") || commitResult.Error.Contains("nothing to commit"))
                 {
                     logger.LogInformation("Nothing to commit after staging");
-                    hasFleeceChanges = false;
                     filesCount = 0;
                 }
                 else
@@ -163,88 +318,19 @@ public class FleeceIssuesSyncService(
         }
         else
         {
-            logger.LogInformation("No changes in .fleece/ folder to commit");
+            filesCount = 0;
         }
 
-        // Step 4: If we're behind remote, merge remote changes using field-level merging for .fleece/
-        if (branchStatus.IsBehindRemote)
+        // Step 6: Push to default branch
+        // Re-check if we need to push
+        var revListCheck = await commandRunner.RunAsync("git", $"rev-list --left-right --count origin/{defaultBranch}...HEAD", projectPath);
+        var needsToPush = false;
+        if (revListCheck.Success)
         {
-            logger.LogInformation("Local branch is {Count} commits behind remote, merging remote changes", branchStatus.CommitsBehind);
-
-            // Merge .fleece/ content using field-level merging (last-writer-wins per field)
-            var mergeResult = await MergeFleeceFromRemoteAsync(projectPath, defaultBranch, ct);
-            if (!mergeResult.Success)
+            var parts = revListCheck.Output.Trim().Split('\t', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length >= 2 && int.TryParse(parts[1], out var ahead) && ahead > 0)
             {
-                return new FleeceIssueSyncResult(
-                    Success: false,
-                    ErrorMessage: mergeResult.ErrorMessage,
-                    FilesCommitted: filesCount,
-                    PushSucceeded: false,
-                    RequiresPullFirst: true);
-            }
-
-            if (mergeResult.HasChanges)
-            {
-                // Stage and commit the merged .fleece/ content
-                var addMergedResult = await commandRunner.RunAsync("git", "add .fleece/", projectPath);
-                if (!addMergedResult.Success)
-                {
-                    logger.LogWarning("Failed to stage merged .fleece/ files: {Error}", addMergedResult.Error);
-                    return new FleeceIssueSyncResult(false, $"Failed to stage merged files: {addMergedResult.Error}", filesCount, false);
-                }
-
-                var commitMergedResult = await commandRunner.RunAsync("git", "commit -m \"chore: merge fleece issues from remote\"", projectPath);
-                if (!commitMergedResult.Success && !commitMergedResult.Output.Contains("nothing to commit") && !commitMergedResult.Error.Contains("nothing to commit"))
-                {
-                    logger.LogWarning("Failed to commit merged .fleece/ files: {Error}", commitMergedResult.Error);
-                    return new FleeceIssueSyncResult(false, $"Failed to commit merged files: {commitMergedResult.Error}", filesCount, false);
-                }
-            }
-
-            // Use git merge to integrate remote history (handles non-fleece files naturally)
-            var gitMergeResult = await commandRunner.RunAsync("git", $"merge origin/{defaultBranch} --no-edit", projectPath);
-            if (!gitMergeResult.Success)
-            {
-                var hasConflicts = DetectConflict(gitMergeResult.Error, gitMergeResult.Output);
-                logger.LogWarning("Git merge failed (hasConflicts={HasConflicts}): {Error}", hasConflicts, gitMergeResult.Error);
-
-                // Check if the conflicts are only in .fleece/ files - we can resolve those
-                var fleeceConflictResolved = await TryResolveFleeceConflictsAsync(projectPath, ct);
-                if (!fleeceConflictResolved)
-                {
-                    // Non-fleece conflicts - abort merge and report error
-                    await commandRunner.RunAsync("git", "merge --abort", projectPath);
-
-                    var conflictFiles = await GetNonFleeceChangesAsync(projectPath);
-                    return new FleeceIssueSyncResult(
-                        Success: false,
-                        ErrorMessage: $"Failed to merge from remote: {gitMergeResult.Error}. The sync was aborted.",
-                        FilesCommitted: filesCount,
-                        PushSucceeded: false,
-                        RequiresPullFirst: true,
-                        HasNonFleeceChanges: conflictFiles.Count > 0,
-                        NonFleeceChangedFiles: conflictFiles.Count > 0 ? conflictFiles : null);
-                }
-            }
-
-            logger.LogInformation("Successfully merged remote changes");
-        }
-
-        // Step 5: Push to default branch
-        // Only push if we have commits to push (either we committed fleece changes or we're ahead)
-        var needsToPush = hasFleeceChanges || branchStatus.CommitsAhead > 0;
-
-        // Re-check if we need to push after the merge
-        if (!needsToPush)
-        {
-            var revListCheck = await commandRunner.RunAsync("git", $"rev-list --left-right --count origin/{defaultBranch}...HEAD", projectPath);
-            if (revListCheck.Success)
-            {
-                var parts = revListCheck.Output.Trim().Split('\t', StringSplitOptions.RemoveEmptyEntries);
-                if (parts.Length >= 2 && int.TryParse(parts[1], out var ahead) && ahead > 0)
-                {
-                    needsToPush = true;
-                }
+                needsToPush = true;
             }
         }
 
