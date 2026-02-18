@@ -167,7 +167,7 @@ if [ "$USE_LOCAL" = true ]; then
     log_success "      Main image built: $IMAGE_NAME ($BUILD_CONFIG)"
 
     log_info "      Building Worker image..."
-    if ! docker build -t "$WORKER_IMAGE" -f "$REPO_ROOT/src/Homespun.Worker/Dockerfile" "$REPO_ROOT/src/Homespun.Worker"; then
+    if ! docker build -t "$WORKER_IMAGE" --build-arg BASE_IMAGE="$BASE_IMAGE" -f "$REPO_ROOT/src/Homespun.Worker/Dockerfile" "$REPO_ROOT/src/Homespun.Worker"; then
         log_error "Failed to build Worker Docker image."
         exit 1
     fi

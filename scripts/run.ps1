@@ -352,7 +352,7 @@ try {
         Write-Host "      Main image built: $ImageName ($BuildConfig)" -ForegroundColor Green
 
         Write-Host "      Building Worker image..." -ForegroundColor Cyan
-        docker build -t $WorkerImage -f "$RepoRoot/src/Homespun.Worker/Dockerfile" "$RepoRoot/src/Homespun.Worker"
+        docker build -t $WorkerImage --build-arg BASE_IMAGE=$BaseImage -f "$RepoRoot/src/Homespun.Worker/Dockerfile" "$RepoRoot/src/Homespun.Worker"
         if ($LASTEXITCODE -ne 0) {
             Write-Error "Failed to build Worker Docker image."
         }

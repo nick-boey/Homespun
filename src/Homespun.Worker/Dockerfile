@@ -1,4 +1,14 @@
-# Build stage
+# =============================================================================
+# Worker Container Dockerfile
+# =============================================================================
+# Uses the shared base image (Dockerfile.base) for runtime tooling.
+# Build with: docker build -t homespun-worker:local --build-arg BASE_IMAGE=homespun-base:local -f src/Homespun.Worker/Dockerfile src/Homespun.Worker
+# =============================================================================
+
+# Base image argument - allows overriding for local builds vs CI
+ARG BASE_IMAGE=homespun-base:local
+
+# Build stage - compile TypeScript
 FROM node:22-bookworm-slim AS build
 WORKDIR /app
 
@@ -9,51 +19,9 @@ COPY tsconfig.json ./
 COPY src/ src/
 RUN npm run build
 
-# Runtime stage
-FROM node:22-bookworm-slim
+# Runtime stage - uses shared base image with all tooling pre-installed
+FROM ${BASE_IMAGE}
 WORKDIR /app
-
-# Install git, curl, and other essentials (including .NET runtime dependencies)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    git curl ca-certificates gnupg sudo \
-    libicu72 libssl3 zlib1g \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install .NET SDKs 8, 9, and 10 via official install script
-ENV DOTNET_ROOT=/usr/share/dotnet
-RUN curl -fsSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh \
-    && chmod +x /tmp/dotnet-install.sh \
-    && /tmp/dotnet-install.sh --channel 8.0 --install-dir $DOTNET_ROOT \
-    && /tmp/dotnet-install.sh --channel 9.0 --install-dir $DOTNET_ROOT \
-    && /tmp/dotnet-install.sh --channel 10.0 --install-dir $DOTNET_ROOT \
-    && rm /tmp/dotnet-install.sh \
-    && ln -sf $DOTNET_ROOT/dotnet /usr/local/bin/dotnet
-ENV DOTNET_PRINT_TELEMETRY_MESSAGE=false
-
-# Install Fleece CLI for issue tracking
-RUN dotnet tool install Fleece.Cli --tool-path /usr/local/bin
-
-# GitHub CLI
-RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
-      | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
-    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
-      > /etc/apt/sources.list.d/github-cli.list \
-    && apt-get update && apt-get install -y gh && rm -rf /var/lib/apt/lists/*
-
-# Claude Code CLI
-RUN npm install -g @anthropic-ai/claude-code
-
-# Playwright MCP + Chromium
-# Install browsers to /opt/playwright-browsers with world-writable permissions
-# This is required because containers run with --user $HOST_UID:$HOST_GID
-# and the default location (/root/.cache/ms-playwright) is not accessible to non-root users
-# Permissions must be 777 to allow Playwright to create lock files and temp directories
-# IMPORTANT: Install @playwright/mcp separately so the bundled playwright CLI stays at
-# a predictable path. Use it to ensure browser version matches the MCP package.
-ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers
-RUN npm install -g @playwright/mcp@latest \
-    && /usr/local/lib/node_modules/@playwright/mcp/node_modules/.bin/playwright install chromium --with-deps \
-    && chmod -R 777 /opt/playwright-browsers
 
 # Copy built app and production dependencies
 COPY --from=build /app/dist ./dist
@@ -65,9 +33,8 @@ COPY start.sh ./
 RUN chmod +x start.sh
 
 # Non-root user (UID 1000 to match the main container's homespun user)
-# The base node image has a 'node' user at UID 1000 — remove it first
-RUN userdel node \
-    && useradd --create-home --shell /bin/bash --uid 1000 homespun \
+# The base image uses .NET SDK which doesn't have a conflicting user at UID 1000
+RUN useradd --create-home --shell /bin/bash --uid 1000 homespun \
     && mkdir -p /home/homespun/.claude/todos /home/homespun/.claude/debug /home/homespun/.claude/projects /home/homespun/.claude/statsig /home/homespun/.claude/plans \
     && mkdir -p /home/homespun/.local/share /home/homespun/.config /home/homespun/.cache \
     && mkdir -p /workdir \
