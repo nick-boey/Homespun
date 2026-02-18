@@ -3,6 +3,14 @@ namespace Homespun.Shared.Models.Git;
 public class CloneInfo
 {
     public string Path { get; set; } = "";
+
+    /// <summary>
+    /// The actual working directory path containing the git repository.
+    /// For new structure: {Path}/workdir
+    /// For legacy structure: same as Path
+    /// This is the path that should be mounted as /workdir in containers.
+    /// </summary>
+    public string? WorkdirPath { get; set; }
     public string? Branch { get; set; }
     public string? HeadCommit { get; set; }
     public bool IsBare { get; set; }

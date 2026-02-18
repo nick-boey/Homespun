@@ -44,12 +44,13 @@ public class GitCloneServiceIntegrationTests
 
         // Assert
         Assert.That(clonePath, Is.Not.Null);
+        Assert.That(clonePath, Does.EndWith("workdir"), "CreateCloneAsync should return the workdir path");
         Assert.That(Directory.Exists(clonePath), Is.True);
-        // Git repo is now in workdir subdirectory
-        var workdirPath = GitCloneService.GetWorkdirPath(clonePath!);
-        Assert.That(File.Exists(Path.Combine(workdirPath, "README.md")), Is.True);
-        // Verify .claude directory was created
-        Assert.That(Directory.Exists(Path.Combine(clonePath!, ".claude")), Is.True);
+        // Git repo is now the returned workdir path
+        Assert.That(File.Exists(Path.Combine(clonePath!, "README.md")), Is.True);
+        // Verify .claude directory was created as sibling of workdir
+        var cloneRoot = Path.GetDirectoryName(clonePath!);
+        Assert.That(Directory.Exists(Path.Combine(cloneRoot!, ".claude")), Is.True);
     }
 
     [Test]
@@ -94,10 +95,10 @@ public class GitCloneServiceIntegrationTests
 
         // Assert
         Assert.That(clonePath, Is.Not.Null);
+        Assert.That(clonePath, Does.EndWith("workdir"), "CreateCloneAsync should return the workdir path");
         Assert.That(Directory.Exists(clonePath), Is.True);
-        // The clone should have the file from develop branch (in workdir subdirectory)
-        var workdirPath = GitCloneService.GetWorkdirPath(clonePath!);
-        Assert.That(File.Exists(Path.Combine(workdirPath, "develop.txt")), Is.True);
+        // The clone should have the file from develop branch (workdir is returned directly)
+        Assert.That(File.Exists(Path.Combine(clonePath!, "develop.txt")), Is.True);
     }
 
     [Test]
@@ -158,12 +159,13 @@ public class GitCloneServiceIntegrationTests
         // Act
         var clones = await _service.ListClonesAsync(_fixture.RepositoryPath);
 
-        // Assert
-        var clone = clones.FirstOrDefault(w => NormalizePath(w.Path) == NormalizePath(clonePath!));
+        // Assert - clonePath is now the workdir path, so compare against WorkdirPath
+        var clone = clones.FirstOrDefault(w => w.WorkdirPath != null && NormalizePath(w.WorkdirPath) == NormalizePath(clonePath!));
         Assert.That(clone, Is.Not.Null);
         Assert.That(clone!.Branch, Does.EndWith(branchName));
         Assert.That(clone.HeadCommit, Is.Not.Null);
         Assert.That(clone.IsDetached, Is.False);
+        Assert.That(clone.WorkdirPath, Is.EqualTo(clonePath));
     }
 
     [Test]
@@ -174,14 +176,17 @@ public class GitCloneServiceIntegrationTests
         _fixture.CreateBranch(branchName);
         var clonePath = await _service.CreateCloneAsync(_fixture.RepositoryPath, branchName);
         Assert.That(clonePath, Is.Not.Null);
+        Assert.That(clonePath, Does.EndWith("workdir"), "CreateCloneAsync should return workdir path");
         Assert.That(Directory.Exists(clonePath), Is.True);
 
-        // Act
+        // Act - RemoveCloneAsync handles workdir path (derives clone root from it)
         var result = await _service.RemoveCloneAsync(_fixture.RepositoryPath, clonePath!);
 
-        // Assert
+        // Assert - both workdir and its parent (clone root) should be removed
         Assert.That(result, Is.True);
         Assert.That(Directory.Exists(clonePath), Is.False);
+        var cloneRoot = Path.GetDirectoryName(clonePath!);
+        Assert.That(Directory.Exists(cloneRoot), Is.False);
     }
 
     [Test]
@@ -263,10 +268,10 @@ public class GitCloneServiceIntegrationTests
 
         // Assert
         Assert.That(clonePath, Is.Not.Null);
+        Assert.That(clonePath, Does.EndWith("workdir"), "CreateCloneAsync should return workdir path");
 
-        // The new clone should have the clean version from the branch (in workdir subdirectory)
-        var workdirPath = GitCloneService.GetWorkdirPath(clonePath!);
-        var cloneReadme = File.ReadAllText(Path.Combine(workdirPath, "README.md"));
+        // The new clone should have the clean version from the branch (workdir is returned directly)
+        var cloneReadme = File.ReadAllText(Path.Combine(clonePath!, "README.md"));
         Assert.That(cloneReadme, Does.Not.Contain("Modified content."));
     }
 
