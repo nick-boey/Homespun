@@ -7,6 +7,8 @@
 @implements IAsyncDisposable
 @using Fleece.Core.Models
 @using Homespun.Shared.Hubs
+@using Homespun.Shared.Models.Notifications
+@using Homespun.Shared.Requests
 @using Microsoft.AspNetCore.SignalR.Client
 @inject HttpProjectApiService ProjectApi
 @inject HttpPullRequestApiService PullRequestApi
@@ -18,6 +20,7 @@
 @inject HttpSessionApiService SessionApi
 @inject IAgentStartupTracker StartupTracker
 @inject IBreadcrumbService BreadcrumbService
+@inject HttpNotificationApiService NotificationApi
 @inject ILogger<ProjectDetail> Logger
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JSRuntime
@@ -33,12 +36,13 @@ else
     <div class="flex justify-between items-center mb-3">
         <h1>@_project.Name</h1>
         <div class="btn-group">
-            <AsyncActionButton OnClick="RefreshData"
-                               IsLoadingExternal="_isRefreshing"
+            <AsyncActionButton OnClick="SyncAllAsync"
+                               IsLoadingExternal="_isSyncing"
                                CssClass="btn-outline-secondary btn-sm"
-                               Text="Refresh">
+                               Text="Sync"
+                               LoadingText="Syncing...">
                 <IconContent>
-                    <i class="bi bi-arrow-clockwise"></i>
+                    <i class="bi bi-cloud-arrow-up"></i>
                 </IconContent>
             </AsyncActionButton>
             <a href="projects/@Id/edit" class="btn btn-outline-secondary btn-sm">Edit Project</a>
@@ -115,86 +119,7 @@ else
                                   OnActionCompleted="RefreshData"
                                   OnClose="ClearSelection"/>
             }
-            else
-            {
-                <div class="card">
-                    <div class="card-header">Sync</div>
-                    <div class="card-body">
-                        <div class="sync-actions">
-                            <div class="sync-item">
-                                <span class="sync-label">Fleece Issues</span>
-                                <div class="sync-controls">
-                                    <AsyncActionButton OnClick="SyncFleeceIssuesAsync"
-                                                       IsLoadingExternal="_isSyncingFleece"
-                                                       CssClass="btn-sm btn-outline-secondary"
-                                                       Text="Sync"
-                                                       LoadingText="Syncing...">
-                                        <IconContent>
-                                            <i class="bi bi-cloud-upload me-1"></i>
-                                        </IconContent>
-                                    </AsyncActionButton>
-                                    @if (_fleeceSyncError != null)
-                                    {
-                                        <span class="badge bg-danger ms-2" title="@_fleeceSyncError">Failed</span>
-                                    }
-                                    else if (_lastFleeceSyncResult != null)
-                                    {
-                                        <span class="badge bg-success ms-2">
-                                            @(_lastFleeceSyncResult.FilesCommitted > 0
-                                                ? $"{_lastFleeceSyncResult.FilesCommitted} files"
-                                                : "Up to date")
-                                        </span>
-                                    }
-                                </div>
-                            </div>
-                            @if (!string.IsNullOrEmpty(_project.GitHubOwner) && !string.IsNullOrEmpty(_project.GitHubRepo))
-                            {
-                                <div class="sync-item">
-                                    <span class="sync-label">GitHub PRs</span>
-                                    <div class="sync-controls">
-                                        @if (_isSyncingPRs)
-                                        {
-                                            <span class="badge bg-status-info">
-                                                <LoadingSpinner Size="SpinnerSize.Sm" Label="Syncing..." Inline="true" />
-                                            </span>
-                                        }
-                                        else if (_tokenMissing)
-                                        {
-                                            <span class="badge bg-status-warning text-text-primary"
-                                                  title="Set GITHUB_TOKEN environment variable">Token missing</span>
-                                            <button class="btn btn-sm btn-link p-0 ms-1" @onclick="SyncPullRequestsAsync">
-                                                Retry
-                                            </button>
-                                        }
-                                        else if (_syncError != null)
-                                        {
-                                            <span class="badge bg-status-error" title="@_syncError">Failed</span>
-                                            <button class="btn btn-sm btn-link p-0 ms-1" @onclick="SyncPullRequestsAsync">
-                                                Retry
-                                            </button>
-                                        }
-                                        else
-                                        {
-                                            <button class="btn btn-sm btn-outline-secondary"
-                                                    @onclick="SyncPullRequestsAsync">
-                                                <i class="bi bi-arrow-repeat me-1"></i>
-                                                <span>Sync</span>
-                                            </button>
-                                            @if (_lastSyncResult != null)
-                                            {
-                                                <span class="badge bg-status-success ms-2"
-                                                      title="Imported: @_lastSyncResult.Imported, Updated: @_lastSyncResult.Updated, Removed: @_lastSyncResult.Removed">
-                                                    Synced
-                                                </span>
-                                            }
-                                        }
-                                    </div>
-                                </div>
-                            }
-                        </div>
-                    </div>
-                </div>
-            }
+            @* No item selected - show nothing *@
         </div>
     </div>
 
@@ -363,38 +288,6 @@ else
     }
 
     /* ==========================================================================
-       Sync Panel
-       ========================================================================== */
-    .sync-actions {
-        display: flex;
-        flex-direction: column;
-        gap: var(--spacing-sm);
-    }
-
-    .sync-item {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: var(--spacing-xs) 0;
-    }
-
-    .sync-item:not(:last-child) {
-        border-bottom: 1px solid var(--border-color);
-        padding-bottom: var(--spacing-sm);
-    }
-
-    .sync-label {
-        font-weight: 500;
-        color: var(--text-secondary);
-    }
-
-    .sync-controls {
-        display: flex;
-        align-items: center;
-        gap: var(--spacing-xs);
-    }
-
-    /* ==========================================================================
        Settings Tab
        ========================================================================== */
     .settings-tab-content {
@@ -422,6 +315,7 @@ else
     private TimelineVisualization? _graphVisualization;
     private HubConnection? _hubConnection;
     private bool _isRefreshing;
+    private bool _isSyncing;
 
     // Tab navigation state
     private string _activeTab = "issues";
@@ -806,6 +700,136 @@ else
         {
             _isRefreshing = false;
             StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Combined sync operation that runs fleece sync and PR sync in parallel.
+    /// </summary>
+    private async Task SyncAllAsync()
+    {
+        if (_project == null || _isSyncing)
+            return;
+
+        _isSyncing = true;
+        StateHasChanged();
+
+        var errors = new List<string>();
+
+        try
+        {
+            // Run fleece sync and PR sync in parallel
+            var fleeceSyncTask = SyncFleeceInternalAsync();
+            var prSyncTask = SyncPullRequestsInternalAsync();
+
+            var results = await Task.WhenAll(fleeceSyncTask, prSyncTask);
+
+            // Collect errors
+            if (results[0] is string fleeceError)
+                errors.Add($"Fleece sync: {fleeceError}");
+            if (results[1] is string prError)
+                errors.Add($"PR sync: {prError}");
+
+            // Show error notification if any errors occurred
+            if (errors.Count > 0)
+            {
+                await NotificationApi.CreateNotificationAsync(new CreateNotificationRequest
+                {
+                    Type = NotificationType.Warning,
+                    Title = "Sync completed with errors",
+                    Message = string.Join("; ", errors),
+                    ProjectId = _project.Id,
+                    IsDismissible = true,
+                    DeduplicationKey = $"sync-error-{_project.Id}"
+                });
+            }
+
+            // Refresh data after both complete
+            await LoadData();
+        }
+        finally
+        {
+            _isSyncing = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Internal fleece sync that returns an error message or null on success.
+    /// </summary>
+    private async Task<string?> SyncFleeceInternalAsync()
+    {
+        if (_project == null)
+            return null;
+
+        try
+        {
+            var result = await FleeceSyncApi.SyncAsync(_project.Id);
+
+            if (result != null && !result.Success)
+            {
+                // For conflicts requiring user interaction, skip error reporting
+                // (they'll be handled when user manually syncs via the button)
+                if (result.HasNonFleeceChanges && result.RequiresPullFirst)
+                {
+                    _nonFleeceChangedFiles = result.NonFleeceChangedFiles;
+                    _showNonFleeceChangesModal = true;
+                    return null; // Don't report as error - handled via modal
+                }
+
+                return result.ErrorMessage ?? "Unknown fleece sync error";
+            }
+
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to sync fleece issues for project {ProjectId}", _project.Id);
+            return ex.Message;
+        }
+    }
+
+    /// <summary>
+    /// Internal PR sync that returns an error message or null on success.
+    /// </summary>
+    private async Task<string?> SyncPullRequestsInternalAsync()
+    {
+        if (_project == null)
+            return null;
+
+        var hasGitHubConfig = !string.IsNullOrEmpty(_project.GitHubOwner) &&
+                              !string.IsNullOrEmpty(_project.GitHubRepo);
+        if (!hasGitHubConfig)
+            return null; // No GitHub config is not an error
+
+        try
+        {
+            var isConfigured = await GitHubInfoApi.IsConfiguredAsync();
+            if (!isConfigured)
+            {
+                Logger.LogWarning("PR sync skipped for project {ProjectId}: GITHUB_TOKEN not configured", _project.Id);
+                return null; // Token not configured - silently skip
+            }
+
+            var result = await PullRequestApi.SyncPullRequestsAsync(_project.Id);
+
+            if (result.Errors.Count > 0)
+            {
+                var errorMessage = string.Join("; ", result.Errors);
+                Logger.LogWarning("PR sync completed with errors for project {ProjectId}: {Errors}",
+                    _project.Id, errorMessage);
+                return errorMessage;
+            }
+
+            Logger.LogInformation("PR sync completed for project {ProjectId}: {Imported} imported, {Updated} updated, {Removed} removed",
+                _project.Id, result.Imported, result.Updated, result.Removed);
+
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to sync pull requests for project {ProjectId}", _project.Id);
+            return ex.Message;
         }
     }
 
