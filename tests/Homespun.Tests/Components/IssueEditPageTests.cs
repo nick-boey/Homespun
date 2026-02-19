@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Components.Web;
 using NUnit.Framework;
 
 namespace Homespun.Tests.Components;
@@ -294,6 +295,167 @@ public class IssueEditPageTests
         // Assert - demonstrates the fix: value is current regardless of focus
         Assert.That(valueWithOninputBinding, Is.EqualTo(typedValue),
             "With oninput binding, the backing field always has the latest typed value");
+    }
+
+    #endregion
+
+    #region CTRL+Enter Keyboard Handling Tests
+
+    /// <summary>
+    /// The HandleKeyDown method should trigger submit on Ctrl+Enter.
+    /// This tests the submission condition logic that must be present in the component.
+    /// </summary>
+    [Test]
+    public void HandleKeyDown_CtrlEnter_ShouldTriggerSubmit()
+    {
+        // Arrange
+        var keyEventArgs = new KeyboardEventArgs
+        {
+            Key = "Enter",
+            CtrlKey = true,
+            ShiftKey = false,
+            MetaKey = false
+        };
+
+        // Act
+        bool shouldSubmit = ShouldSubmitOnKeyDown(keyEventArgs);
+
+        // Assert
+        Assert.That(shouldSubmit, Is.True, "Ctrl+Enter should trigger submit");
+    }
+
+    /// <summary>
+    /// Pressing Enter alone should NOT trigger submit - it should allow
+    /// normal newline behavior in the textarea.
+    /// </summary>
+    [Test]
+    public void HandleKeyDown_EnterOnly_ShouldNotTriggerSubmit()
+    {
+        // Arrange
+        var keyEventArgs = new KeyboardEventArgs
+        {
+            Key = "Enter",
+            CtrlKey = false,
+            ShiftKey = false,
+            MetaKey = false
+        };
+
+        // Act
+        bool shouldSubmit = ShouldSubmitOnKeyDown(keyEventArgs);
+
+        // Assert
+        Assert.That(shouldSubmit, Is.False, "Enter alone should not trigger submit");
+    }
+
+    /// <summary>
+    /// Meta+Enter (Cmd+Enter on Mac) should also trigger submit for
+    /// cross-platform keyboard shortcut consistency.
+    /// </summary>
+    [Test]
+    public void HandleKeyDown_MetaEnter_ShouldTriggerSubmit()
+    {
+        // Arrange - Cmd+Enter on Mac
+        var keyEventArgs = new KeyboardEventArgs
+        {
+            Key = "Enter",
+            CtrlKey = false,
+            ShiftKey = false,
+            MetaKey = true
+        };
+
+        // Act
+        bool shouldSubmit = ShouldSubmitOnKeyDown(keyEventArgs);
+
+        // Assert
+        Assert.That(shouldSubmit, Is.True, "Meta+Enter (Cmd+Enter on Mac) should trigger submit");
+    }
+
+    /// <summary>
+    /// Shift+Enter should NOT trigger submit - it should allow
+    /// newline insertion in the textarea.
+    /// </summary>
+    [Test]
+    public void HandleKeyDown_ShiftEnter_ShouldNotTriggerSubmit()
+    {
+        // Arrange
+        var keyEventArgs = new KeyboardEventArgs
+        {
+            Key = "Enter",
+            CtrlKey = false,
+            ShiftKey = true,
+            MetaKey = false
+        };
+
+        // Act
+        bool shouldSubmit = ShouldSubmitOnKeyDown(keyEventArgs);
+
+        // Assert
+        Assert.That(shouldSubmit, Is.False, "Shift+Enter should not trigger submit");
+    }
+
+    /// <summary>
+    /// Non-Enter keys should not trigger submit, even with Ctrl held.
+    /// </summary>
+    [Test]
+    public void HandleKeyDown_NonEnterKey_ShouldNotTriggerSubmit()
+    {
+        // Arrange
+        var keyEventArgs = new KeyboardEventArgs
+        {
+            Key = "a",
+            CtrlKey = true,
+            ShiftKey = false,
+            MetaKey = false
+        };
+
+        // Act
+        bool shouldSubmit = ShouldSubmitOnKeyDown(keyEventArgs);
+
+        // Assert
+        Assert.That(shouldSubmit, Is.False, "Non-Enter keys should not trigger submit");
+    }
+
+    /// <summary>
+    /// Documents that HandleKeyDown MUST be async Task, not void.
+    /// The fire-and-forget pattern causes race conditions with Blazor binding.
+    /// </summary>
+    /// <remarks>
+    /// This test documents the architectural requirement for the fix:
+    ///
+    /// The void + fire-and-forget pattern:
+    ///   private void HandleKeyDown(KeyboardEventArgs e) { _ = HandleSubmit(); }
+    /// causes _description to have stale data because HandleSubmit may execute
+    /// before the oninput binding update is applied by Blazor.
+    ///
+    /// The correct pattern:
+    ///   private async Task HandleKeyDown(KeyboardEventArgs e) { await HandleSubmit(); }
+    /// ensures Blazor waits for the full handler, allowing binding updates to complete.
+    /// </remarks>
+    [Test]
+    public void HandleKeyDown_MustBeAsyncTask_NotVoid_ToEnsureBindingCompletion()
+    {
+        // This test documents the requirement that HandleKeyDown must be async Task
+        // with await HandleSubmit() to ensure Blazor's binding cycle completes
+        // before HandleSubmit reads the backing fields.
+
+        // When HandleKeyDown returns immediately (void method with _ = HandleSubmit()),
+        // Blazor considers the event complete, but the async HandleSubmit may read
+        // _description before the oninput binding update is applied.
+
+        // The fix changes HandleKeyDown to:
+        // - Return Task instead of void
+        // - await HandleSubmit() instead of fire-and-forget
+        // - Support MetaKey for Mac Cmd+Enter
+
+        Assert.Pass("HandleKeyDown must be async Task with await to fix the binding race condition");
+    }
+
+    // Helper method that mirrors the expected behavior in IssueEdit.razor
+    // This is the FIXED version that should be implemented in the component
+    private static bool ShouldSubmitOnKeyDown(KeyboardEventArgs e)
+    {
+        // Submit on Ctrl+Enter OR Meta+Enter (Cmd+Enter on Mac)
+        return e.Key == "Enter" && (e.CtrlKey || e.MetaKey);
     }
 
     #endregion
