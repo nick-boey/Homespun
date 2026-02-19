@@ -252,6 +252,62 @@ public class SessionChatScrollTests
 
     #endregion
 
+    #region Initial Page Load Tests
+
+    [Test]
+    public void InitialLoad_ShouldScrollToBottom()
+    {
+        // On initial load (session loaded and rendered), page should scroll to bottom
+        bool hasScrolledInitially = false;
+        bool hasSession = true;
+        bool isLoading = false;
+
+        bool shouldScroll = ShouldScrollOnInitialLoad(hasScrolledInitially, hasSession, isLoading);
+
+        Assert.That(shouldScroll, Is.True, "Should scroll to bottom on initial page load");
+    }
+
+    [Test]
+    public void InitialLoad_ShouldNotScrollWithoutSession()
+    {
+        // Don't scroll if no session loaded yet
+        bool hasScrolledInitially = false;
+        bool hasSession = false;
+        bool isLoading = false;
+
+        bool shouldScroll = ShouldScrollOnInitialLoad(hasScrolledInitially, hasSession, isLoading);
+
+        Assert.That(shouldScroll, Is.False, "Should not scroll if session not loaded");
+    }
+
+    [Test]
+    public void InitialLoad_ShouldNotScrollWhileLoading()
+    {
+        // Don't scroll while still loading
+        bool hasScrolledInitially = false;
+        bool hasSession = true;
+        bool isLoading = true;
+
+        bool shouldScroll = ShouldScrollOnInitialLoad(hasScrolledInitially, hasSession, isLoading);
+
+        Assert.That(shouldScroll, Is.False, "Should not scroll while still loading");
+    }
+
+    [Test]
+    public void InitialLoad_ShouldNotScrollTwice()
+    {
+        // On subsequent renders, don't force scroll to bottom again
+        bool hasScrolledInitially = true;
+        bool hasSession = true;
+        bool isLoading = false;
+
+        bool shouldScroll = ShouldScrollOnInitialLoad(hasScrolledInitially, hasSession, isLoading);
+
+        Assert.That(shouldScroll, Is.False, "Should not scroll again after initial scroll");
+    }
+
+    #endregion
+
     #region Helper Types and Methods
 
     /// <summary>
@@ -293,6 +349,15 @@ public class SessionChatScrollTests
     private static bool ShouldScrollOnNewMessage(ScrollState state)
     {
         return state.IsNearBottom;
+    }
+
+    /// <summary>
+    /// Determines if should scroll on initial page load.
+    /// Mirrors the OnAfterRenderAsync logic in Session.razor.
+    /// </summary>
+    private static bool ShouldScrollOnInitialLoad(bool hasScrolledInitially, bool hasSession, bool isLoading)
+    {
+        return !hasScrolledInitially && hasSession && !isLoading;
     }
 
     #endregion

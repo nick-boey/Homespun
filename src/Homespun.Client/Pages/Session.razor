@@ -1625,6 +1625,7 @@
     private IReadOnlyList<AgentPrompt> _availablePrompts = [];
     private bool _showScrollToBottomButton = false;
     private bool _isNearBottom = true;
+    private bool _hasScrolledInitially = false;
     private bool _showPlanRejectFeedback = false;
     private string _planRejectFeedback = string.Empty;
     private ElementReference _messagesContainer;
@@ -1958,6 +1959,17 @@
         {
             _isLoading = false;
             StateHasChanged();
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Scroll to bottom after initial load completes
+        // This ensures the chat opens at the bottom so users see the latest messages
+        if (!_hasScrolledInitially && _session != null && !_isLoading)
+        {
+            _hasScrolledInitially = true;
+            await ScrollToBottom();
         }
     }
 
