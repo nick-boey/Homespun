@@ -238,6 +238,22 @@ public class DockerAgentExecutionServiceTests
             await _service.StopSessionAsync("non-existent-session"));
     }
 
+    [Test]
+    public async Task StopSessionAsync_WithForceStopContainerTrue_DoesNotThrow()
+    {
+        // Act & Assert - verifies forceStopContainer parameter is accepted
+        Assert.DoesNotThrowAsync(async () =>
+            await _service.StopSessionAsync("non-existent-session", forceStopContainer: true));
+    }
+
+    [Test]
+    public async Task StopSessionAsync_WithForceStopContainerFalse_DoesNotThrow()
+    {
+        // Act & Assert - verifies default behavior (false) works
+        Assert.DoesNotThrowAsync(async () =>
+            await _service.StopSessionAsync("non-existent-session", forceStopContainer: false));
+    }
+
     #endregion
 
     #region InterruptSessionAsync Tests

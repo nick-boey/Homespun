@@ -1751,7 +1751,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         {
             try
             {
-                await _agentExecutionService.StopSessionAsync(agentSessionId, cancellationToken);
+                await _agentExecutionService.StopSessionAsync(agentSessionId, forceStopContainer: true, cancellationToken);
             }
             catch (Exception ex)
             {
