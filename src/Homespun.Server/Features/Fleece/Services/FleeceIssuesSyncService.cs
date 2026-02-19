@@ -167,7 +167,8 @@ public class FleeceIssuesSyncService(
                 }
             }
 
-            // Stash local .fleece/ changes if any
+            // Stash local .fleece/ changes if any (tracked changes only)
+            // Also need to clean untracked .fleece/ files since stash doesn't include them
             bool stashed = false;
             if (hasFleeceChanges)
             {
@@ -180,6 +181,19 @@ public class FleeceIssuesSyncService(
                 }
                 stashed = true;
                 logger.LogInformation("Stashed local .fleece/ changes");
+
+                // Clean untracked .fleece/ files - stash only includes tracked changes
+                // The hash-based fleece storage creates new files when issues change
+                var cleanResult = await commandRunner.RunAsync("git", "clean -fd -- .fleece/", projectPath);
+                if (!cleanResult.Success)
+                {
+                    logger.LogWarning("Failed to clean untracked .fleece/ files: {Error}", cleanResult.Error);
+                    // Non-fatal - continue with the sync
+                }
+                else
+                {
+                    logger.LogInformation("Cleaned untracked .fleece/ files");
+                }
             }
 
             // Fast-forward to origin/main

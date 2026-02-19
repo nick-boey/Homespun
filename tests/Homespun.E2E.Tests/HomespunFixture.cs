@@ -53,11 +53,24 @@ public class HomespunFixture
         var logFilePath = Path.Combine(testResultsDir, $"e2e-app-{DateTime.Now:yyyyMMdd-HHmmss}.log");
         _logger = new E2EFileLogger(logFilePath);
 
-        // Install Playwright browsers
-        var exitCode = Microsoft.Playwright.Program.Main(["install", "--with-deps", "chromium"]);
-        if (exitCode != 0)
+        // Check if Playwright browsers are already installed (e.g., in container environment)
+        var browsersPath = Environment.GetEnvironmentVariable("PLAYWRIGHT_BROWSERS_PATH");
+        var browserInstalled = !string.IsNullOrEmpty(browsersPath) &&
+            Directory.Exists(browsersPath) &&
+            Directory.GetDirectories(browsersPath, "chromium*").Length > 0;
+
+        if (!browserInstalled)
         {
-            throw new Exception($"Playwright browser installation failed with exit code {exitCode}");
+            // Install Playwright browsers only if not already present
+            var exitCode = Microsoft.Playwright.Program.Main(["install", "--with-deps", "chromium"]);
+            if (exitCode != 0)
+            {
+                throw new Exception($"Playwright browser installation failed with exit code {exitCode}");
+            }
+        }
+        else
+        {
+            _logger.Log($"Playwright browsers already installed at: {browsersPath}");
         }
 
         // Check if we should start the application
