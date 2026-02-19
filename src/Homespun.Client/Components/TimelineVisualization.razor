@@ -6,7 +6,7 @@
 @inject IKeyboardNavigationService NavService
 @implements IAsyncDisposable
 
-<div class="timeline-wrapper" tabindex="0" @onkeydown="HandleKeyDown" @ref="_timelineWrapper">
+<div class="timeline-wrapper" @ref="_timelineWrapper">
     @if (_isLoading)
     {
         <div class="timeline-loading">
@@ -27,8 +27,10 @@
                 TaskGraph="@_taskGraphData"
                 OnIssueClick="HandleTaskGraphIssueClick"
                 OnLoadMoreClick="LoadMoreTaskGraphPRs"
+                OnIssueTypeChanged="HandleIssueChangedAsync"
                 SelectedNodeId="@GetKeyboardSelectedNodeId()"
-                NavService="@NavService" />
+                NavService="@NavService"
+                ProjectId="@ProjectId" />
         </div>
     }
     else if (_graph != null && _layout != null)

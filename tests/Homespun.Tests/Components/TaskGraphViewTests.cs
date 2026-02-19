@@ -1,15 +1,27 @@
 using Bunit;
 using Fleece.Core.Models;
 using Homespun.Client.Components;
+using Homespun.Client.Services;
 using Homespun.Shared.Models.Fleece;
 using Homespun.Shared.Models.Gitgraph;
 using Microsoft.AspNetCore.Components;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Homespun.Tests.Components;
 
 [TestFixture]
 public class TaskGraphViewTests : BunitTestContext
 {
+    [SetUp]
+    public new void Setup()
+    {
+        base.Setup();
+        // Register mock HttpClient and service for TaskGraphView
+        var mockHttpClient = new HttpClient();
+        var issueApi = new HttpIssueApiService(mockHttpClient);
+        Services.AddSingleton(issueApi);
+    }
+
     [Test]
     public void Renders_Nothing_WhenTaskGraphIsNull()
     {

@@ -11,6 +11,7 @@
 @using Homespun.Shared.Models.PullRequests
 @using Homespun.Shared.Requests
 @using Microsoft.AspNetCore.SignalR.Client
+@using Homespun.Client.Services
 @inject HttpProjectApiService ProjectApi
 @inject HttpPullRequestApiService PullRequestApi
 @inject HttpIssueApiService IssueApi
@@ -24,9 +25,11 @@
 @inject ILogger<ProjectDetail> Logger
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JSRuntime
+@inject IKeyboardNavigationService NavService
 
 <PageTitle>@(_project?.Name ?? "Project")</PageTitle>
 
+<div class="project-detail-page" @onkeydown="HandleKeyDown" @onkeydown:preventDefault="ShouldPreventKeyDefault" tabindex="-1" @ref="_pageContainer">
 @if (_project == null)
 {
     <p>Loading...</p>
@@ -269,8 +272,12 @@ else
         </Footer>
     </Modal>
 }
+</div>
 
 <style>
+    .project-detail-page {
+        outline: none;
+    }
     /* ==========================================================================
        Project Layout Grid
        ========================================================================== */
@@ -337,6 +344,14 @@ else
 
     // Track Id changes for same-component navigation
     private string? _previousId;
+
+    // Keyboard navigation state
+    private ElementReference _pageContainer;
+
+    // Prevent default for keyboard shortcuts when on issues tab and not editing in a text field
+    // This is computed based on current state so that navigation keys are prevented
+    private bool ShouldPreventKeyDefault =>
+        _activeTab == "issues" && NavService.EditMode == KeyboardEditMode.Viewing;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -1344,6 +1359,67 @@ else
         {
             _isSyncingFleece = false;
             StateHasChanged();
+        }
+    }
+
+    private void HandleKeyDown(KeyboardEventArgs e)
+    {
+        // Only handle keyboard shortcuts on the issues tab
+        if (_activeTab != "issues") return;
+
+        // Don't handle if in edit mode - let the inline editor handle it
+        if (NavService.EditMode != KeyboardEditMode.Viewing)
+        {
+            // Handle Escape to cancel edit
+            if (e.Key == "Escape")
+            {
+                NavService.CancelEdit();
+            }
+            return;
+        }
+
+        // Handle navigation and edit commands
+        // Note: preventDefault is handled by ShouldPreventKeyDefault property
+        switch (e.Key)
+        {
+            case "j":
+            case "ArrowDown":
+                NavService.MoveDown();
+                break;
+            case "k":
+            case "ArrowUp":
+                NavService.MoveUp();
+                break;
+            case "h":
+            case "ArrowLeft":
+                NavService.MoveToChild();
+                break;
+            case "l":
+            case "ArrowRight":
+                NavService.MoveToParent();
+                break;
+            case "i":
+                NavService.StartEditingAtStart();
+                break;
+            case "a":
+                NavService.StartEditingAtEnd();
+                break;
+            case "r":
+                NavService.StartReplacingTitle();
+                break;
+            case "o":
+                if (e.ShiftKey)
+                    NavService.CreateIssueAbove();
+                else
+                    NavService.CreateIssueBelow();
+                break;
+            case "O":
+                NavService.CreateIssueAbove();
+                break;
+            case "Escape":
+                // Clear selection or close sidebar panel
+                ClearSelection();
+                break;
         }
     }
 
