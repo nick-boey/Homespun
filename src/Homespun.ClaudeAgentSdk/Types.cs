@@ -311,6 +311,15 @@ public class ControlRequest : Message
 }
 
 /// <summary>
+/// Rate limit event message from Claude API.
+/// Indicates that rate limiting is occurring and the SDK should wait.
+/// </summary>
+public class RateLimitEvent : Message
+{
+    public Dictionary<string, object>? Data { get; set; }
+}
+
+/// <summary>
 /// Query options for Claude SDK.
 /// </summary>
 public class ClaudeAgentOptions

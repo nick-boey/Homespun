@@ -247,8 +247,9 @@ public class ClaudeCodeChatClient : IChatClient, IAsyncDisposable
             switch (msg)
             {
                 case ControlRequest:
-                    // Skip control requests - these are internal Claude Code protocol messages
-                    // for MCP tool operations handled transparently
+                case RateLimitEvent:
+                    // Skip control requests and rate limit events - these are internal
+                    // Claude Code protocol messages handled transparently by the SDK
                     continue;
 
                 case AssistantMessage assistant:
@@ -338,8 +339,9 @@ public class ClaudeCodeChatClient : IChatClient, IAsyncDisposable
             switch (msg)
             {
                 case ControlRequest:
-                    // Skip control requests - these are internal Claude Code protocol messages
-                    // for MCP tool operations handled transparently
+                case RateLimitEvent:
+                    // Skip control requests and rate limit events - these are internal
+                    // Claude Code protocol messages handled transparently by the SDK
                     continue;
 
                 case AssistantMessage assistant:
