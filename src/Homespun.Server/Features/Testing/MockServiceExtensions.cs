@@ -149,12 +149,6 @@ public static class MockServiceExtensions
                 });
                 services.AddSingleton<IAgentExecutionService, DockerAgentExecutionService>();
                 break;
-            case AgentExecutionMode.AzureContainerApps:
-                Console.WriteLine("[AgentExecution] Registering AzureContainerAppsAgentExecutionService");
-                services.Configure<AzureContainerAppsAgentExecutionOptions>(
-                    configuration.GetSection(AzureContainerAppsAgentExecutionOptions.SectionName));
-                services.AddSingleton<IAgentExecutionService, AzureContainerAppsAgentExecutionService>();
-                break;
             default:
                 Console.WriteLine("[AgentExecution] Registering LocalAgentExecutionService (default)");
                 services.AddSingleton<IAgentExecutionService, LocalAgentExecutionService>();

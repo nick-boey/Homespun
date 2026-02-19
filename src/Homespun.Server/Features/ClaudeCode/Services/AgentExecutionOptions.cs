@@ -13,12 +13,7 @@ public enum AgentExecutionMode
     /// <summary>
     /// Run agents in Docker containers using Docker-outside-of-Docker (DooD).
     /// </summary>
-    Docker,
-
-    /// <summary>
-    /// Run agents in Azure Container Apps Dynamic Sessions.
-    /// </summary>
-    AzureContainerApps
+    Docker
 }
 
 /// <summary>
