@@ -104,7 +104,7 @@ public record ContainerInfo(
 );
 
 /// <summary>
-/// Service for executing Claude agents in various environments (local, Docker, Azure).
+/// Service for executing Claude agents in various environments (local, Docker).
 /// Returns raw SdkMessage types from the Claude SDK. All content block assembly,
 /// question parsing, and message formatting is handled by the consumer (ClaudeSessionService).
 /// </summary>
@@ -161,7 +161,7 @@ public interface IAgentExecutionService
     Task<int> CleanupOrphanedContainersAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Answers a pending question in a worker session (Docker/Azure).
+    /// Answers a pending question in a worker session (Docker).
     /// Returns true if the worker had a pending question and it was resolved.
     /// For local mode, returns false (local answers go through SendMessageAsync).
     /// </summary>
@@ -169,7 +169,7 @@ public interface IAgentExecutionService
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Approves or rejects a pending plan in a worker session (Docker/Azure).
+    /// Approves or rejects a pending plan in a worker session (Docker).
     /// Returns true if the worker had a pending plan approval and it was resolved.
     /// For local mode, returns false (local plan approval uses ExecutePlanAsync fallback).
     /// </summary>

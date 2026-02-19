@@ -3,12 +3,12 @@ using Homespun.Shared.Models.Sessions;
 namespace Homespun.Shared.Models.Containers;
 
 /// <summary>
-/// Represents a worker container (Docker or Azure Container App) started by the application.
+/// Represents a worker container (Docker) started by the application.
 /// </summary>
 public class WorkerContainerDto
 {
     /// <summary>
-    /// Unique identifier for the container (Docker container ID or ACA app name).
+    /// Unique identifier for the container (Docker container ID).
     /// </summary>
     public required string ContainerId { get; init; }
 

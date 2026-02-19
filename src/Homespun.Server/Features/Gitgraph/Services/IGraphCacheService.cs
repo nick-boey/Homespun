@@ -56,6 +56,26 @@ public interface IGraphCacheService
     /// <param name="projectId">The project ID.</param>
     /// <param name="projectLocalPath">The project's local path.</param>
     void LoadCacheForProject(string projectId, string projectLocalPath);
+
+    /// <summary>
+    /// Updates a PR's status in the cache, moving it from open to closed list.
+    /// Used when a PR is merged or closed on GitHub.
+    /// </summary>
+    /// <param name="projectId">The project ID.</param>
+    /// <param name="projectLocalPath">The project's local path.</param>
+    /// <param name="prNumber">The PR number to update.</param>
+    /// <param name="newStatus">The new status (Merged or Closed).</param>
+    /// <param name="mergedAt">When the PR was merged (if merged).</param>
+    /// <param name="closedAt">When the PR was closed (if closed without merge).</param>
+    /// <param name="issueId">Optional issue ID to update status for.</param>
+    Task UpdatePRStatusAsync(
+        string projectId,
+        string projectLocalPath,
+        int prNumber,
+        PullRequestStatus newStatus,
+        DateTime? mergedAt = null,
+        DateTime? closedAt = null,
+        string? issueId = null);
 }
 
 /// <summary>

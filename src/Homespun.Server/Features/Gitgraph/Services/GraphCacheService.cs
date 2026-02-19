@@ -301,6 +301,64 @@ public class GraphCacheService : IGraphCacheService
         };
     }
 
+    /// <inheritdoc />
+    public async Task UpdatePRStatusAsync(
+        string projectId,
+        string projectLocalPath,
+        int prNumber,
+        PullRequestStatus newStatus,
+        DateTime? mergedAt = null,
+        DateTime? closedAt = null,
+        string? issueId = null)
+    {
+        if (!_memoryCache.TryGetValue(projectId, out var cachedData))
+        {
+            _logger.LogDebug("Cannot update PR #{PrNumber} status: project {ProjectId} not in cache", prNumber, projectId);
+            return;
+        }
+
+        // Find the PR in the open list
+        var prToMove = cachedData.OpenPrs.FirstOrDefault(p => p.Number == prNumber);
+        if (prToMove == null)
+        {
+            _logger.LogDebug("Cannot update PR #{PrNumber} status: PR not found in open list for project {ProjectId}", prNumber, projectId);
+            return;
+        }
+
+        // Remove from open list
+        cachedData.OpenPrs.Remove(prToMove);
+
+        // Update the status and timestamps
+        prToMove.Status = newStatus;
+        if (mergedAt.HasValue)
+        {
+            prToMove.MergedAt = mergedAt.Value;
+        }
+        if (closedAt.HasValue)
+        {
+            prToMove.ClosedAt = closedAt.Value;
+        }
+
+        // Add to closed list
+        cachedData.ClosedPrs.Add(prToMove);
+
+        // Update issue PR status if provided
+        if (!string.IsNullOrEmpty(issueId))
+        {
+            cachedData.IssuePrStatuses[issueId] = newStatus;
+        }
+
+        // Update the cache timestamp
+        cachedData.CachedAt = DateTime.UtcNow;
+
+        _logger.LogInformation(
+            "Updated PR #{PrNumber} status to {NewStatus} for project {ProjectId}",
+            prNumber, newStatus, projectId);
+
+        // Persist to JSONL file
+        await PersistToJsonlAsync(projectId, projectLocalPath, cachedData);
+    }
+
     private SemaphoreSlim GetProjectLock(string projectId)
     {
         return _projectLocks.GetOrAdd(projectId, _ => new SemaphoreSlim(1, 1));

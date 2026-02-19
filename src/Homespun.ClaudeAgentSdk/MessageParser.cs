@@ -22,6 +22,7 @@ public static class MessageParser
             "result" => ParseResultMessage(data),
             "stream" or "stream_event" => ParseStreamEvent(data),
             "control_request" => ParseControlRequest(data),
+            "rate_limit_event" => ParseRateLimitEvent(data),
             _ => throw new ArgumentException($"Unknown message type: {type}")
         };
     }
@@ -115,6 +116,16 @@ public static class MessageParser
                 ? JsonSerializer.Deserialize<Dictionary<string, object>>(dataElement.GetRawText())
                 : null,
             ParentToolUseId = GetStringOrNull(data, "parent_tool_use_id")
+        };
+    }
+
+    private static RateLimitEvent ParseRateLimitEvent(Dictionary<string, object> data)
+    {
+        return new RateLimitEvent
+        {
+            Data = data.TryGetValue("data", out var dataObj) && dataObj is JsonElement dataElement
+                ? JsonSerializer.Deserialize<Dictionary<string, object>>(dataElement.GetRawText())
+                : null
         };
     }
 

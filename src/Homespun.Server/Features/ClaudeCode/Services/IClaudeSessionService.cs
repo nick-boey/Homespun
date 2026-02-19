@@ -129,7 +129,7 @@ public interface IClaudeSessionService
 
     /// <summary>
     /// Approves or rejects a pending plan from ExitPlanMode.
-    /// For Docker/Azure: routes through the worker's /approve-plan endpoint.
+    /// For Docker: routes through the worker's /approve-plan endpoint.
     /// For local: falls back to ExecutePlanAsync or sends feedback as a message.
     /// </summary>
     /// <param name="sessionId">The session ID</param>

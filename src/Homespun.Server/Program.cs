@@ -121,6 +121,9 @@ else
         new GraphCacheService(sp.GetRequiredService<ILogger<GraphCacheService>>()));
     builder.Services.AddScoped<IGraphService, GraphService>();
 
+    // PR status resolver (for resolving merged/closed PR statuses in the graph cache)
+    builder.Services.AddScoped<IPRStatusResolver, PRStatusResolver>();
+
     // Issue-PR linking service (must be registered before GitHubService as it depends on it)
     builder.Services.AddScoped<IIssuePrLinkingService, IssuePrLinkingService>();
 
@@ -145,9 +148,6 @@ else
         if (!string.IsNullOrEmpty(hostPath))
             options.HostDataPath = hostPath;
     });
-    builder.Services.Configure<AzureContainerAppsAgentExecutionOptions>(
-        builder.Configuration.GetSection(AzureContainerAppsAgentExecutionOptions.SectionName));
-
     var agentExecutionMode = builder.Configuration
         .GetSection(AgentExecutionOptions.SectionName)
         .GetValue<AgentExecutionMode>("Mode");
@@ -156,9 +156,6 @@ else
     {
         case AgentExecutionMode.Docker:
             builder.Services.AddSingleton<IAgentExecutionService, DockerAgentExecutionService>();
-            break;
-        case AgentExecutionMode.AzureContainerApps:
-            builder.Services.AddSingleton<IAgentExecutionService, AzureContainerAppsAgentExecutionService>();
             break;
         default:
             builder.Services.AddSingleton<IAgentExecutionService, LocalAgentExecutionService>();

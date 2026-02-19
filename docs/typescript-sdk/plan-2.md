@@ -2,7 +2,7 @@
 
 ## Context
 
-The current C# codebase has a custom `AgentEvent` hierarchy that the Docker/ACA execution services produce by parsing SSE events from the worker. The Hono worker (Phase 1) now streams raw `SDKMessage` types from the TypeScript SDK. This phase updates the C# side to consume these SDK message types directly, eliminating lossy translation layers.
+The current C# codebase has a custom `AgentEvent` hierarchy that the Docker execution service produces by parsing SSE events from the worker. The Hono worker (Phase 1) now streams raw `SDKMessage` types from the TypeScript SDK. This phase updates the C# side to consume these SDK message types directly, eliminating lossy translation layers.
 
 ## 2.1 New `SdkMessage` Types
 

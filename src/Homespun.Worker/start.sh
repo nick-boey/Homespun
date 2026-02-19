@@ -22,8 +22,8 @@ git config --global user.name "${GIT_AUTHOR_NAME:-Homespun Bot}" 2>/dev/null || 
 git config --global user.email "${GIT_AUTHOR_EMAIL:-homespun@localhost}" 2>/dev/null || true
 
 # Resolve GitHub token from multiple sources:
-# - GITHUB_TOKEN (standard, set by Bicep or Docker passthrough)
-# - GitHub__Token (ASP.NET Core config style, set by Azure Container Apps Bicep)
+# - GITHUB_TOKEN (standard, set by Docker passthrough)
+# - GitHub__Token (ASP.NET Core config style)
 if [ -z "$GITHUB_TOKEN" ] && [ -n "$GitHub__Token" ]; then
     export GITHUB_TOKEN="$GitHub__Token"
 fi

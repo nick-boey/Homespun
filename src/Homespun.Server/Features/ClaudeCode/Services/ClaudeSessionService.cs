@@ -1035,7 +1035,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
     }
 
     /// <summary>
-    /// Handles a question_pending control event from a Docker/Azure worker.
+    /// Handles a question_pending control event from a Docker worker.
     /// Parses the questions JSON and sets up the pending question, same as HandleAskUserQuestionTool
     /// but without needing to parse from tool_use content blocks.
     /// </summary>
@@ -1112,7 +1112,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
     }
 
     /// <summary>
-    /// Handles a plan_pending control event from a Docker/Azure worker.
+    /// Handles a plan_pending control event from a Docker worker.
     /// The worker has paused on ExitPlanMode and emitted the plan content.
     /// Parses the plan, displays it, and sets status to WaitingForPlanExecution.
     /// </summary>
@@ -1240,7 +1240,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         }
 
         // If still no plan content, try to fetch the file from the agent container's filesystem.
-        // This handles the case where the agent runs in a Docker/Azure container and the plan file
+        // This handles the case where the agent runs in a Docker container and the plan file
         // exists only inside that container (e.g., ~/.claude/plans/), not on the parent's filesystem.
         if (string.IsNullOrEmpty(planContent) && !string.IsNullOrEmpty(planFilePath) &&
             _agentSessionIds.TryGetValue(sessionId, out var agentSessionId))
@@ -1545,7 +1545,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         await _hubContext.BroadcastQuestionAnswered(sessionId);
         await _hubContext.BroadcastSessionStatusChanged(sessionId, ClaudeSessionStatus.Running);
 
-        // Try to route the answer through the agent execution service (Docker/Azure workers).
+        // Try to route the answer through the agent execution service (Docker workers).
         // When the worker has a pending question, this resolves it via HTTP POST to the worker's
         // /answer endpoint, and messages continue flowing through the original SSE stream.
         if (_agentSessionIds.TryGetValue(sessionId, out var agentSessionId))
