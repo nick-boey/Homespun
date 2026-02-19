@@ -121,6 +121,9 @@ else
         new GraphCacheService(sp.GetRequiredService<ILogger<GraphCacheService>>()));
     builder.Services.AddScoped<IGraphService, GraphService>();
 
+    // PR status resolver (for resolving merged/closed PR statuses in the graph cache)
+    builder.Services.AddScoped<IPRStatusResolver, PRStatusResolver>();
+
     // Issue-PR linking service (must be registered before GitHubService as it depends on it)
     builder.Services.AddScoped<IIssuePrLinkingService, IssuePrLinkingService>();
 
