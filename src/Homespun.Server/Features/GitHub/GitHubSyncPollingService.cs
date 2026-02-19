@@ -101,6 +101,7 @@ public class GitHubSyncPollingService(
             // Close linked Fleece issues for removed (merged/closed) PRs
             using var closeScope = scopeFactory.CreateScope();
             var fleeceService = closeScope.ServiceProvider.GetRequiredService<IFleeceService>();
+            var prStatusResolver = closeScope.ServiceProvider.GetRequiredService<IPRStatusResolver>();
 
             foreach (var removedPr in syncResult.RemovedPrs)
             {
@@ -132,6 +133,19 @@ public class GitHubSyncPollingService(
                             "Error closing issue {IssueId} linked to merged/closed PR #{PrNumber}",
                             removedPr.BeadsIssueId, removedPr.GitHubPrNumber);
                     }
+                }
+            }
+
+            // Resolve the final status (merged/closed) for removed PRs and update the graph cache
+            if (syncResult.RemovedPrs.Count > 0)
+            {
+                try
+                {
+                    await prStatusResolver.ResolveClosedPRStatusesAsync(project.Id, syncResult.RemovedPrs);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Error resolving PR statuses for project {ProjectId}", project.Id);
                 }
             }
 

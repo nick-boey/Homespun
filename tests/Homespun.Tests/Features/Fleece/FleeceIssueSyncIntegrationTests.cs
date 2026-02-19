@@ -566,16 +566,14 @@ public class FleeceIssueSyncIntegrationTests
         var result = await syncService.SyncAsync(_cloneBPath, "main");
 
         // Assert: Sync should succeed
-        Assert.That(result.Success, Is.True, $"Sync failed: {result.ErrorMessage}. BeforeSync: status='{statusBefore.Trim()}', rev-list='{revListBefore.Trim()}'");
+        Assert.That(result.Success, Is.True, $"Sync failed: {result.ErrorMessage}");
 
         // Verify both field changes are preserved
         var finalStorage = new JsonlStorageService(_cloneBPath, serializer, schemaValidator);
         var finalIssues = await finalStorage.LoadIssuesAsync(CancellationToken.None);
         var mergedIssue = finalIssues.First(i => i.Id == "CCCCCC");
 
-        Assert.That(mergedIssue.Title, Is.EqualTo("Title Changed by A"),
-            $"Title from remote should be preserved. Got Title='{mergedIssue.Title}', TitleLastUpdate={mergedIssue.TitleLastUpdate}. " +
-            $"Status='{mergedIssue.Status}', StatusLastUpdate={mergedIssue.StatusLastUpdate}");
+        Assert.That(mergedIssue.Title, Is.EqualTo("Title Changed by A"), "Title from remote should be preserved");
         Assert.That(mergedIssue.Status, Is.EqualTo(IssueStatus.Progress), "Status from local should be preserved");
     }
 

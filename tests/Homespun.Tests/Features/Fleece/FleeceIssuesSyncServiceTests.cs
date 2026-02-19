@@ -228,6 +228,9 @@ public class FleeceIssuesSyncServiceTests
         _mockRunner.Setup(r => r.RunAsync("git", "stash push -m \"fleece-sync\" -- .fleece/", ProjectPath))
             .ReturnsAsync(new CommandResult { Success = true });
 
+        _mockRunner.Setup(r => r.RunAsync("git", "clean -fd -- .fleece/", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true });
+
         _mockRunner.Setup(r => r.RunAsync("git", "merge --ff-only origin/main", ProjectPath))
             .ReturnsAsync(new CommandResult { Success = true });
 
@@ -351,6 +354,9 @@ public class FleeceIssuesSyncServiceTests
         _mockRunner.Setup(r => r.RunAsync("git", "stash push -m \"fleece-sync\" -- .fleece/", ProjectPath))
             .ReturnsAsync(new CommandResult { Success = true });
 
+        _mockRunner.Setup(r => r.RunAsync("git", "clean -fd -- .fleece/", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true });
+
         // Fast-forward fails due to divergent history
         _mockRunner.Setup(r => r.RunAsync("git", "merge --ff-only origin/main", ProjectPath))
             .ReturnsAsync(new CommandResult { Success = false, Error = "fatal: Not possible to fast-forward, aborting." });
@@ -391,6 +397,9 @@ public class FleeceIssuesSyncServiceTests
             .ReturnsAsync(new CommandResult { Success = true, Output = " M .fleece/issues.jsonl" });
 
         _mockRunner.Setup(r => r.RunAsync("git", "stash push -m \"fleece-sync\" -- .fleece/", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true });
+
+        _mockRunner.Setup(r => r.RunAsync("git", "clean -fd -- .fleece/", ProjectPath))
             .ReturnsAsync(new CommandResult { Success = true });
 
         _mockRunner.Setup(r => r.RunAsync("git", "merge --ff-only origin/main", ProjectPath))
@@ -715,6 +724,9 @@ public class FleeceIssuesSyncServiceTests
 
         // Stash-ff-drop-merge sequence
         _mockRunner.Setup(r => r.RunAsync("git", "stash push -m \"fleece-sync\" -- .fleece/", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true });
+
+        _mockRunner.Setup(r => r.RunAsync("git", "clean -fd -- .fleece/", ProjectPath))
             .ReturnsAsync(new CommandResult { Success = true });
 
         _mockRunner.Setup(r => r.RunAsync("git", "merge --ff-only origin/main", ProjectPath))

@@ -3,6 +3,7 @@ using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Design;
 using Homespun.Features.Fleece.Services;
 using Homespun.Features.Gitgraph.Services;
+using Homespun.Features.GitHub;
 using Homespun.Features.Projects;
 using Homespun.Features.PullRequests.Data;
 using Homespun.Features.Testing.Services;
@@ -45,6 +46,7 @@ public static class MockServiceExtensions
         // GitHub services
         services.AddScoped<IGitHubService, MockGitHubService>();
         services.AddScoped<IIssuePrLinkingService, MockIssuePrLinkingService>();
+        services.AddScoped<IPRStatusResolver, MockPRStatusResolver>();
 
         // Project service
         services.AddScoped<IProjectService, MockProjectService>();
