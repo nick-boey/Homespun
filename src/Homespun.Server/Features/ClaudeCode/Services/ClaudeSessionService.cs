@@ -379,6 +379,34 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
 
         _logger.LogInformation("Sending message to session {SessionId} with permission mode {PermissionMode}", sessionId, permissionMode);
 
+        // Track if mode or model changed to broadcast updates
+        var originalMode = session.Mode;
+        var originalModel = session.Model;
+
+        // Update mode based on permission mode
+        var newMode = permissionMode == PermissionMode.Plan ? SessionMode.Plan : SessionMode.Build;
+        if (session.Mode != newMode)
+        {
+            session.Mode = newMode;
+            _logger.LogInformation("Session {SessionId} mode changed from {OldMode} to {NewMode}",
+                sessionId, originalMode, newMode);
+        }
+
+        // Update model if specified
+        var effectiveModel = !string.IsNullOrEmpty(model) ? model : session.Model;
+        if (!string.IsNullOrEmpty(model) && session.Model != model)
+        {
+            session.Model = model;
+            _logger.LogInformation("Session {SessionId} model changed from {OldModel} to {NewModel}",
+                sessionId, originalModel, model);
+        }
+
+        // Broadcast mode/model changes if either changed
+        if (session.Mode != originalMode || session.Model != originalModel)
+        {
+            await _hubContext.BroadcastSessionModeModelChanged(sessionId, session.Mode, session.Model);
+        }
+
         // Add user message to session
         var userMessage = new ClaudeMessage
         {
@@ -403,8 +431,6 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             using var linkedCts = cts != null
                 ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, cts.Token)
                 : CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-
-            var effectiveModel = !string.IsNullOrEmpty(model) ? model : (baseOptions.Model ?? "sonnet");
 
             // Track the current assistant message being built
             var currentAssistantMessage = new ClaudeMessage

@@ -2280,6 +2280,30 @@
             });
         });
 
+        _hubConnection.On<string, SessionMode, string>("SessionModeModelChanged", (sessionId, mode, model) =>
+        {
+            _ = InvokeAsync(() =>
+            {
+                try
+                {
+                    LogDebug("SessionModeModelChanged", $"Mode: {mode}, Model: {model}");
+
+                    if (_session != null && _session.Id == sessionId)
+                    {
+                        _session.Mode = mode;
+                        _session.Model = model;
+                        StateHasChanged();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    LogDebug("ERROR", $"SessionModeModelChanged: {ex.Message}");
+                    Console.WriteLine($"[SignalR] Error in SessionModeModelChanged: {ex.Message}");
+                }
+                return Task.CompletedTask;
+            });
+        });
+
         _hubConnection.On<string, decimal, long>("SessionResultReceived", (sessionId, cost, duration) =>
         {
             _ = InvokeAsync(async () =>

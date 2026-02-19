@@ -523,6 +523,16 @@
                 });
             });
 
+            // Subscribe to session mode/model changes - refresh to update mode/model display
+            _hubConnection.On<string, SessionMode, string>("SessionModeModelChanged", async (_, _, _) =>
+            {
+                await InvokeAsync(async () =>
+                {
+                    await RefreshSessions();
+                    StateHasChanged();
+                });
+            });
+
             // Subscribe to session stopped events - refresh list to remove stopped session
             _hubConnection.On<string>("SessionStopped", async (_) =>
             {
