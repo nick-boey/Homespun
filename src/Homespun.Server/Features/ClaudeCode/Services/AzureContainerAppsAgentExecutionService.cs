@@ -137,6 +137,9 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
         bool HasActiveSession,
         string? SessionId,
         string? Status,
+        string? Mode,
+        string? Model,
+        string? PermissionMode,
         bool? HasPendingQuestion,
         bool? HasPendingPlanApproval,
         string? LastActivityAt);
@@ -510,7 +513,7 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
                     response.StatusCode);
                 return new CloneContainerState(
                     workingDirectory, app.ContainerAppName, null, null,
-                    ClaudeSessionStatus.Stopped, null, false, false);
+                    ClaudeSessionStatus.Stopped, null, null, null, false, false);
             }
 
             var json = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -520,7 +523,7 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
             {
                 return new CloneContainerState(
                     workingDirectory, app.ContainerAppName, null, null,
-                    ClaudeSessionStatus.Stopped, null, false, false);
+                    ClaudeSessionStatus.Stopped, null, null, null, false, false);
             }
 
             // Map worker session status to ClaudeSessionStatus
@@ -531,12 +534,23 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
                 lastActivity = parsed;
             }
 
+            // Parse mode from permissionMode
+            SessionMode? sessionMode = null;
+            if (!string.IsNullOrEmpty(activeSession.PermissionMode))
+            {
+                sessionMode = activeSession.PermissionMode.Equals("plan", StringComparison.OrdinalIgnoreCase)
+                    ? SessionMode.Plan
+                    : SessionMode.Build;
+            }
+
             return new CloneContainerState(
                 workingDirectory,
                 app.ContainerAppName,
                 activeSession.SessionId,
                 activeSession.SessionId,
                 sessionStatus,
+                sessionMode,
+                activeSession.Model,
                 lastActivity,
                 activeSession.HasPendingQuestion ?? false,
                 activeSession.HasPendingPlanApproval ?? false);
@@ -546,7 +560,7 @@ public class AzureContainerAppsAgentExecutionService : IAgentExecutionService, I
             _logger.LogWarning(ex, "GetCloneContainerStateAsync: Error querying worker for active session");
             return new CloneContainerState(
                 workingDirectory, app.ContainerAppName, null, null,
-                ClaudeSessionStatus.Error, null, false, false);
+                ClaudeSessionStatus.Error, null, null, null, false, false);
         }
     }
 

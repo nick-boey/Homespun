@@ -224,6 +224,19 @@ public static class ClaudeCodeHubExtensions
     }
 
     /// <summary>
+    /// Broadcasts session mode and model change.
+    /// </summary>
+    public static async Task BroadcastSessionModeModelChanged(
+        this IHubContext<ClaudeCodeHub> hubContext,
+        string sessionId,
+        SessionMode mode,
+        string model)
+    {
+        await hubContext.Clients.All.SendAsync("SessionModeModelChanged", sessionId, mode, model);
+        await hubContext.Clients.Group($"session-{sessionId}").SendAsync("SessionModeModelChanged", sessionId, mode, model);
+    }
+
+    /// <summary>
     /// Broadcasts session result (cost, duration, etc.).
     /// </summary>
     public static async Task BroadcastSessionResultReceived(

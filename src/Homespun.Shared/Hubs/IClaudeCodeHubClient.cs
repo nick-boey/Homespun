@@ -13,6 +13,15 @@ public interface IClaudeCodeHubClient
     Task MessageReceived(ClaudeMessage message);
     Task ContentBlockReceived(ClaudeMessageContent content);
     Task SessionStatusChanged(string sessionId, ClaudeSessionStatus status);
+
+    /// <summary>
+    /// Notifies clients when a session's mode or model changes.
+    /// </summary>
+    /// <param name="sessionId">The session ID</param>
+    /// <param name="mode">The new session mode (Plan or Build)</param>
+    /// <param name="model">The current model being used</param>
+    Task SessionModeModelChanged(string sessionId, SessionMode mode, string model);
+
     Task SessionResultReceived(string sessionId, decimal totalCostUsd, long durationMs);
     Task StreamingContentStarted(ClaudeMessageContent content, int index);
     Task StreamingContentDelta(ClaudeMessageContent content, string delta, int index);

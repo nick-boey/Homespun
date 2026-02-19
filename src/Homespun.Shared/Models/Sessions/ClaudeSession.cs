@@ -27,13 +27,15 @@ public class ClaudeSession
 
     /// <summary>
     /// The Claude model being used for this session.
+    /// Can be updated when a different model is used for a message.
     /// </summary>
-    public required string Model { get; init; }
+    public required string Model { get; set; }
 
     /// <summary>
     /// The session mode (Plan or Build).
+    /// Can be updated when permission mode changes (e.g., Plan to Build after plan approval).
     /// </summary>
-    public required SessionMode Mode { get; init; }
+    public required SessionMode Mode { get; set; }
 
     /// <summary>
     /// Current status of the session.

@@ -59,6 +59,7 @@ export interface SessionInfo {
   conversationId?: string;
   mode: string;
   model: string;
+  permissionMode: string;
   status: 'idle' | 'streaming' | 'closed';
   createdAt: string;
   lastActivityAt: string;
@@ -85,6 +86,9 @@ export interface ActiveSessionResponse {
   hasActiveSession: boolean;
   sessionId?: string;
   status?: 'idle' | 'streaming' | 'closed';
+  mode?: string;
+  model?: string;
+  permissionMode?: string;
   hasPendingQuestion?: boolean;
   hasPendingPlanApproval?: boolean;
   lastActivityAt?: string;

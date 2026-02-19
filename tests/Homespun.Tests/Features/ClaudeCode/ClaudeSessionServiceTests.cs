@@ -2164,6 +2164,8 @@ public class ClaudeSessionServiceCloneStateTests
             "session-123",
             "worker-session-123",
             ClaudeSessionStatus.Running,
+            SessionMode.Build,
+            "sonnet",
             DateTime.UtcNow,
             false,
             false);
@@ -2194,6 +2196,8 @@ public class ClaudeSessionServiceCloneStateTests
             "session-123",
             "worker-session-123",
             ClaudeSessionStatus.WaitingForQuestionAnswer,
+            SessionMode.Plan,
+            "haiku",
             DateTime.UtcNow,
             true,
             false);
@@ -2223,6 +2227,8 @@ public class ClaudeSessionServiceCloneStateTests
             "session-123",
             "worker-session-123",
             ClaudeSessionStatus.WaitingForPlanExecution,
+            SessionMode.Plan,
+            "sonnet",
             DateTime.UtcNow,
             false,
             true);
@@ -2252,6 +2258,8 @@ public class ClaudeSessionServiceCloneStateTests
             "session-123",
             "worker-session-123",
             ClaudeSessionStatus.WaitingForInput,
+            SessionMode.Build,
+            "sonnet",
             DateTime.UtcNow,
             false,
             false);
@@ -2282,6 +2290,8 @@ public class ClaudeSessionServiceCloneStateTests
             null,
             null,
             ClaudeSessionStatus.Stopped,
+            null,
+            null,
             null,
             false,
             false);
@@ -2639,8 +2649,9 @@ public class ClaudeSessionServiceStatusBroadcastTests
                 new SdkSystemMessage("agent-1", null, "session_started", null, null),
                 new SdkResultMessage("agent-1", null, null, 0, 0, false, 0, 0, null)));
 
-        // Act
-        await _service.SendMessageAsync(session.Id, "test message");
+        // Act - use PermissionMode.Plan to keep the session in Plan mode
+        // (the session mode is updated based on the permission mode of each message)
+        await _service.SendMessageAsync(session.Id, "test message", SdkPermissionMode.Plan);
 
         // Assert
         Assert.That(capturedRequest, Is.Not.Null, "AgentStartRequest should have been captured");
@@ -2651,4 +2662,5 @@ public class ClaudeSessionServiceStatusBroadcastTests
             Assert.That(capturedRequest.Prompt, Is.EqualTo("test message"));
         });
     }
+
 }

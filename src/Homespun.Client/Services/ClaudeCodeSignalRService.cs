@@ -51,6 +51,9 @@ public class ClaudeCodeSignalRService : IAsyncDisposable
     /// <summary>Fired when a session's status changes.</summary>
     public event Action<string, ClaudeSessionStatus>? OnSessionStatusChanged;
 
+    /// <summary>Fired when a session's mode or model changes.</summary>
+    public event Action<string, SessionMode, string>? OnSessionModeModelChanged;
+
     /// <summary>Fired when session result (cost, duration) is received.</summary>
     public event Action<string, decimal, long>? OnSessionResultReceived;
 
@@ -232,6 +235,9 @@ public class ClaudeCodeSignalRService : IAsyncDisposable
 
         connection.On<string, ClaudeSessionStatus>("SessionStatusChanged",
             (sessionId, status) => OnSessionStatusChanged?.Invoke(sessionId, status));
+
+        connection.On<string, SessionMode, string>("SessionModeModelChanged",
+            (sessionId, mode, model) => OnSessionModeModelChanged?.Invoke(sessionId, mode, model));
 
         connection.On<string, decimal, long>("SessionResultReceived",
             (sessionId, totalCostUsd, durationMs) =>

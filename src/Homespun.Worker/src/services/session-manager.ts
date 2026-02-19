@@ -507,8 +507,17 @@ export class SessionManager {
       throw new Error(`Session ${sessionId} not found`);
     }
 
+    // Track model changes when a different model is specified
+    if (model) {
+      ws.model = model;
+      info(`model updated to '${model}'`);
+    }
+
     if (permissionMode) {
       ws.permissionMode = mapPermissionMode(permissionMode);
+      // Update the mode string to reflect the permission mode change
+      ws.mode = ws.permissionMode === 'plan' ? 'Plan' : 'Build';
+      info(`mode updated to '${ws.mode}', permissionMode='${ws.permissionMode}'`);
       // Update permission mode on the query if possible
       if (ws.query.setPermissionMode) {
         await ws.query.setPermissionMode(ws.permissionMode);
@@ -591,6 +600,7 @@ export class SessionManager {
       conversationId: ws.conversationId,
       mode: ws.mode,
       model: ws.model,
+      permissionMode: ws.permissionMode,
       status: ws.status,
       createdAt: ws.createdAt.toISOString(),
       lastActivityAt: ws.lastActivityAt.toISOString(),

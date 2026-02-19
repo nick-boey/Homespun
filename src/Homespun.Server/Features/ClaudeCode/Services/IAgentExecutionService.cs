@@ -60,6 +60,8 @@ public record CloneContainerState(
     string? ActiveSessionId,
     string? WorkerSessionId,
     ClaudeSessionStatus SessionStatus,
+    SessionMode? Mode,
+    string? Model,
     DateTime? LastActivityAt,
     bool HasPendingQuestion,
     bool HasPendingPlanApproval
