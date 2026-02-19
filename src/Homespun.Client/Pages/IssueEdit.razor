@@ -56,7 +56,7 @@ else
                         <div class="mb-3">
                             <label for="description" class="form-label">Description</label>
                             <textarea class="form-control" id="description" rows="6"
-                                      @bind="_description"
+                                      @bind="_description" @bind:event="oninput"
                                       placeholder="Implementation details, acceptance criteria..."></textarea>
                         </div>
 
