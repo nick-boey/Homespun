@@ -11,22 +11,52 @@ public class HttpGraphApiService(HttpClient http)
     /// <summary>
     /// Gets the raw graph API response data from the server.
     /// This returns the full response including commit-level agent status data.
+    /// Always uses cached data when available.
     /// </summary>
-    public async Task<GraphApiResponse?> GetGraphDataAsync(string projectId, int? maxPastPRs = null, bool useCache = true)
+    public async Task<GraphApiResponse?> GetGraphDataAsync(string projectId, int? maxPastPRs = null)
     {
-        var url = $"{BaseUrl}/{projectId}?useCache={useCache}";
+        var url = $"{BaseUrl}/{projectId}";
         if (maxPastPRs.HasValue)
-            url += $"&maxPastPRs={maxPastPRs.Value}";
+            url += $"?maxPastPRs={maxPastPRs.Value}";
         return await http.GetFromJsonAsync<GraphApiResponse>(url);
     }
 
     /// <summary>
-    /// Gets the graph data and converts it to a Graph model for timeline visualization.
+    /// Performs an incremental refresh: fetches only open PRs from GitHub,
+    /// compares with cache to detect changes, and updates the cache.
+    /// Falls back to full fetch if no cache exists.
     /// </summary>
-    public async Task<Graph?> GetGraphAsync(string projectId, int? maxPastPRs = null, bool useCache = true)
+    public async Task<GraphApiResponse?> RefreshGraphDataAsync(string projectId, int? maxPastPRs = null)
     {
-        var data = await GetGraphDataAsync(projectId, maxPastPRs, useCache);
-        return data != null ? ToGraph(data) : null;
+        var url = $"{BaseUrl}/{projectId}/refresh";
+        if (maxPastPRs.HasValue)
+            url += $"?maxPastPRs={maxPastPRs.Value}";
+        var response = await http.PostAsync(url, null);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<GraphApiResponse>();
+    }
+
+    /// <summary>
+    /// Gets graph data using ONLY cached data. No GitHub API calls are made.
+    /// Returns null if no cache exists.
+    /// </summary>
+    public async Task<GraphApiResponse?> GetCachedGraphDataAsync(string projectId, int? maxPastPRs = null)
+    {
+        try
+        {
+            var url = $"{BaseUrl}/{projectId}/cached";
+            if (maxPastPRs.HasValue)
+                url += $"?maxPastPRs={maxPastPRs.Value}";
+            var response = await http.GetAsync(url);
+            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+                return null;
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadFromJsonAsync<GraphApiResponse>();
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            return null;
+        }
     }
 
     /// <summary>
@@ -65,7 +95,7 @@ public class HttpGraphApiService(HttpClient http)
     /// <summary>
     /// Converts a GraphApiResponse to a Graph model for visualization.
     /// </summary>
-    private static Graph ToGraph(GraphApiResponse data)
+    public static Graph ToGraph(GraphApiResponse data)
     {
         var nodes = data.Commits.Select(c => new GraphApiNode
         {
