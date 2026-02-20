@@ -1,7 +1,7 @@
 using Homespun.Shared.Models.Observability;
 using Microsoft.AspNetCore.Mvc;
 
-namespace Homespun.Server.Features.Observability;
+namespace Homespun.Features.Observability;
 
 [ApiController]
 [Route("api/[controller]")]
