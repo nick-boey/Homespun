@@ -42,7 +42,8 @@ public static class A2ATaskState
 [JsonDerivedType(typeof(A2ATaskArtifactUpdateEvent), A2AEventKind.ArtifactUpdate)]
 public abstract record A2AEvent
 {
-    [JsonPropertyName("kind")]
+    // Kind is handled by JsonPolymorphic discriminator, expose for convenience
+    [JsonIgnore]
     public abstract string Kind { get; }
 }
 
@@ -168,6 +169,7 @@ public record A2ATaskStatus
 /// <summary>
 /// Base type for A2A message parts.
 /// Uses 'kind' discriminator for polymorphic deserialization.
+/// The 'kind' property is handled by the JsonPolymorphic attribute.
 /// </summary>
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "kind")]
 [JsonDerivedType(typeof(A2ATextPart), "text")]
@@ -175,9 +177,6 @@ public record A2ATaskStatus
 [JsonDerivedType(typeof(A2AFilePart), "file")]
 public abstract record A2APart
 {
-    [JsonPropertyName("kind")]
-    public abstract string Kind { get; }
-
     [JsonPropertyName("metadata")]
     public Dictionary<string, JsonElement>? Metadata { get; init; }
 }
@@ -187,8 +186,6 @@ public abstract record A2APart
 /// </summary>
 public record A2ATextPart : A2APart
 {
-    public override string Kind => "text";
-
     [JsonPropertyName("text")]
     public required string Text { get; init; }
 }
@@ -198,8 +195,6 @@ public record A2ATextPart : A2APart
 /// </summary>
 public record A2ADataPart : A2APart
 {
-    public override string Kind => "data";
-
     [JsonPropertyName("data")]
     public required JsonElement Data { get; init; }
 }
@@ -209,8 +204,6 @@ public record A2ADataPart : A2APart
 /// </summary>
 public record A2AFilePart : A2APart
 {
-    public override string Kind => "file";
-
     [JsonPropertyName("file")]
     public required A2AFile File { get; init; }
 }
