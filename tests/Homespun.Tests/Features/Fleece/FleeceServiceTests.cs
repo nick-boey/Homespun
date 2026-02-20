@@ -390,4 +390,176 @@ public class FleeceServiceTests
     }
 
     #endregion
+
+    #region AddParentAsync Tests
+
+    [Test]
+    public async Task AddParentAsync_CreatesParentRelationship()
+    {
+        // Arrange
+        var child = await _service.CreateIssueAsync(_tempDir, "Child Issue", IssueType.Task);
+        var parent = await _service.CreateIssueAsync(_tempDir, "Parent Issue", IssueType.Task);
+
+        // Act
+        var updated = await _service.AddParentAsync(_tempDir, child.Id, parent.Id);
+
+        // Assert
+        Assert.That(updated, Is.Not.Null);
+        Assert.That(updated.ParentIssues, Has.Count.EqualTo(1));
+        Assert.That(updated.ParentIssues[0].ParentIssue, Is.EqualTo(parent.Id));
+    }
+
+    [Test]
+    public async Task AddParentAsync_UpdatesCache()
+    {
+        // Arrange
+        var child = await _service.CreateIssueAsync(_tempDir, "Child Issue", IssueType.Task);
+        var parent = await _service.CreateIssueAsync(_tempDir, "Parent Issue", IssueType.Task);
+
+        // Act
+        await _service.AddParentAsync(_tempDir, child.Id, parent.Id);
+
+        // Assert - verify cache is updated
+        var retrieved = await _service.GetIssueAsync(_tempDir, child.Id);
+        Assert.That(retrieved, Is.Not.Null);
+        Assert.That(retrieved!.ParentIssues, Has.Count.EqualTo(1));
+        Assert.That(retrieved.ParentIssues[0].ParentIssue, Is.EqualTo(parent.Id));
+    }
+
+    [Test]
+    public async Task AddParentAsync_EnqueuesWriteOperation()
+    {
+        // Arrange
+        var child = await _service.CreateIssueAsync(_tempDir, "Child Issue", IssueType.Task);
+        var parent = await _service.CreateIssueAsync(_tempDir, "Parent Issue", IssueType.Task);
+        _mockQueue.Invocations.Clear();
+
+        // Act
+        await _service.AddParentAsync(_tempDir, child.Id, parent.Id);
+
+        // Assert
+        _mockQueue.Verify(
+            q => q.EnqueueAsync(
+                It.Is<IssueWriteOperation>(op => op.Type == WriteOperationType.Update && op.IssueId == child.Id),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Test]
+    public async Task AddParentAsync_NonExistentChild_ThrowsKeyNotFoundException()
+    {
+        // Arrange
+        var parent = await _service.CreateIssueAsync(_tempDir, "Parent Issue", IssueType.Task);
+
+        // Act & Assert
+        Assert.ThrowsAsync<KeyNotFoundException>(async () =>
+            await _service.AddParentAsync(_tempDir, "non-existent-id", parent.Id));
+    }
+
+    [Test]
+    public async Task AddParentAsync_CanAddMultipleParents()
+    {
+        // Arrange
+        var child = await _service.CreateIssueAsync(_tempDir, "Child Issue", IssueType.Task);
+        var parent1 = await _service.CreateIssueAsync(_tempDir, "Parent 1", IssueType.Task);
+        var parent2 = await _service.CreateIssueAsync(_tempDir, "Parent 2", IssueType.Feature);
+
+        // Act
+        await _service.AddParentAsync(_tempDir, child.Id, parent1.Id);
+        var updated = await _service.AddParentAsync(_tempDir, child.Id, parent2.Id);
+
+        // Assert
+        Assert.That(updated.ParentIssues, Has.Count.EqualTo(2));
+        var parentIds = updated.ParentIssues.Select(p => p.ParentIssue).ToList();
+        Assert.That(parentIds, Does.Contain(parent1.Id));
+        Assert.That(parentIds, Does.Contain(parent2.Id));
+    }
+
+    #endregion
+
+    #region RemoveParentAsync Tests
+
+    [Test]
+    public async Task RemoveParentAsync_RemovesParentRelationship()
+    {
+        // Arrange
+        var child = await _service.CreateIssueAsync(_tempDir, "Child Issue", IssueType.Task);
+        var parent = await _service.CreateIssueAsync(_tempDir, "Parent Issue", IssueType.Task);
+        await _service.AddParentAsync(_tempDir, child.Id, parent.Id);
+
+        // Act
+        var updated = await _service.RemoveParentAsync(_tempDir, child.Id, parent.Id);
+
+        // Assert
+        Assert.That(updated, Is.Not.Null);
+        Assert.That(updated.ParentIssues, Is.Empty);
+    }
+
+    [Test]
+    public async Task RemoveParentAsync_UpdatesCache()
+    {
+        // Arrange
+        var child = await _service.CreateIssueAsync(_tempDir, "Child Issue", IssueType.Task);
+        var parent = await _service.CreateIssueAsync(_tempDir, "Parent Issue", IssueType.Task);
+        await _service.AddParentAsync(_tempDir, child.Id, parent.Id);
+
+        // Act
+        await _service.RemoveParentAsync(_tempDir, child.Id, parent.Id);
+
+        // Assert - verify cache is updated
+        var retrieved = await _service.GetIssueAsync(_tempDir, child.Id);
+        Assert.That(retrieved, Is.Not.Null);
+        Assert.That(retrieved!.ParentIssues, Is.Empty);
+    }
+
+    [Test]
+    public async Task RemoveParentAsync_EnqueuesWriteOperation()
+    {
+        // Arrange
+        var child = await _service.CreateIssueAsync(_tempDir, "Child Issue", IssueType.Task);
+        var parent = await _service.CreateIssueAsync(_tempDir, "Parent Issue", IssueType.Task);
+        await _service.AddParentAsync(_tempDir, child.Id, parent.Id);
+        _mockQueue.Invocations.Clear();
+
+        // Act
+        await _service.RemoveParentAsync(_tempDir, child.Id, parent.Id);
+
+        // Assert
+        _mockQueue.Verify(
+            q => q.EnqueueAsync(
+                It.Is<IssueWriteOperation>(op => op.Type == WriteOperationType.Update && op.IssueId == child.Id),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Test]
+    public async Task RemoveParentAsync_NonExistentChild_ThrowsKeyNotFoundException()
+    {
+        // Arrange
+        var parent = await _service.CreateIssueAsync(_tempDir, "Parent Issue", IssueType.Task);
+
+        // Act & Assert
+        Assert.ThrowsAsync<KeyNotFoundException>(async () =>
+            await _service.RemoveParentAsync(_tempDir, "non-existent-id", parent.Id));
+    }
+
+    [Test]
+    public async Task RemoveParentAsync_KeepsOtherParents()
+    {
+        // Arrange
+        var child = await _service.CreateIssueAsync(_tempDir, "Child Issue", IssueType.Task);
+        var parent1 = await _service.CreateIssueAsync(_tempDir, "Parent 1", IssueType.Task);
+        var parent2 = await _service.CreateIssueAsync(_tempDir, "Parent 2", IssueType.Feature);
+        await _service.AddParentAsync(_tempDir, child.Id, parent1.Id);
+        await _service.AddParentAsync(_tempDir, child.Id, parent2.Id);
+
+        // Act
+        var updated = await _service.RemoveParentAsync(_tempDir, child.Id, parent1.Id);
+
+        // Assert
+        Assert.That(updated.ParentIssues, Has.Count.EqualTo(1));
+        Assert.That(updated.ParentIssues[0].ParentIssue, Is.EqualTo(parent2.Id));
+    }
+
+    #endregion
 }

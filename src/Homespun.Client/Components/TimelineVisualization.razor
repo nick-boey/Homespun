@@ -25,12 +25,13 @@
         <div class="timeline-container">
             <TaskGraphView
                 TaskGraph="@_taskGraphData"
+                ProjectId="@ProjectId"
                 OnIssueClick="HandleTaskGraphIssueClick"
                 OnLoadMoreClick="LoadMoreTaskGraphPRs"
+                OnIssueCreated="HandleIssueCreated"
                 OnIssueTypeChanged="HandleIssueChangedAsync"
                 SelectedNodeId="@GetKeyboardSelectedNodeId()"
-                NavService="@NavService"
-                ProjectId="@ProjectId" />
+                NavService="@NavService" />
         </div>
     }
     else if (_graph != null && _layout != null)
@@ -358,6 +359,12 @@
     [Parameter] public EventCallback<int> OnPullRequestClick { get; set; }
     [Parameter] public EventCallback<string> OnIssueClick { get; set; }
     [Parameter] public string? SelectedNodeId { get; set; }
+
+    /// <summary>
+    /// Called when an issue is created via inline keyboard controls.
+    /// The parent should refresh data and select the new issue.
+    /// </summary>
+    [Parameter] public EventCallback<string> OnIssueCreated { get; set; }
 
     /// <summary>
     /// When true (default), displays issues using task graph mode where actionable items
@@ -800,6 +807,16 @@
             await LoadTaskGraphAsync();
             StateHasChanged();
         }
+    }
+
+    private async Task HandleIssueCreated(string newIssueId)
+    {
+        // Refresh the task graph to show the new issue
+        await LoadTaskGraphAsync();
+        StateHasChanged();
+
+        // Notify parent component
+        await OnIssueCreated.InvokeAsync(newIssueId);
     }
 
     public async ValueTask DisposeAsync()

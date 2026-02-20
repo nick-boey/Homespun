@@ -41,6 +41,16 @@ public class CreateIssueRequest
     /// Optional working branch ID. If not provided, the client can trigger AI generation on the edit page.
     /// </summary>
     public string? WorkingBranchId { get; set; }
+
+    /// <summary>
+    /// Optional parent issue ID. If provided, the new issue will have this issue as its parent.
+    /// </summary>
+    public string? ParentIssueId { get; set; }
+
+    /// <summary>
+    /// Optional child issue ID. If provided, the new issue will become the parent of this issue.
+    /// </summary>
+    public string? ChildIssueId { get; set; }
 }
 
 /// <summary>

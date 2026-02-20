@@ -5,12 +5,11 @@ using Homespun.Features.Notifications;
 using Homespun.Features.Projects;
 using Homespun.Shared.Models.Fleece;
 using Homespun.Shared.Models.Projects;
+using Homespun.Shared.Requests;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
-using ControllerCreateIssueRequest = Homespun.Features.Fleece.Controllers.CreateIssueRequest;
-using ControllerUpdateIssueRequest = Homespun.Features.Fleece.Controllers.UpdateIssueRequest;
 
 namespace Homespun.Tests.Features.Fleece;
 
@@ -83,7 +82,7 @@ public class IssuesControllerTests
                 It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<ExecutionMode?>()))
             .ReturnsAsync(issue);
 
-        var request = new ControllerCreateIssueRequest { ProjectId = TestProject.Id, Title = "Test Issue" };
+        var request = new CreateIssueRequest { ProjectId = TestProject.Id, Title = "Test Issue" };
 
         // Act
         await _controller.Create(request);
@@ -114,7 +113,7 @@ public class IssuesControllerTests
                 It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<ExecutionMode?>()))
             .ReturnsAsync(issue);
 
-        var request = new ControllerCreateIssueRequest { ProjectId = TestProject.Id, Title = "Test Issue" };
+        var request = new CreateIssueRequest { ProjectId = TestProject.Id, Title = "Test Issue" };
 
         // Act
         var result = await _controller.Create(request);
@@ -131,7 +130,7 @@ public class IssuesControllerTests
             .Setup(x => x.GetByIdAsync(It.IsAny<string>()))
             .ReturnsAsync((Project?)null);
 
-        var request = new ControllerCreateIssueRequest { ProjectId = "nonexistent", Title = "Test Issue" };
+        var request = new CreateIssueRequest { ProjectId = "nonexistent", Title = "Test Issue" };
 
         // Act
         await _controller.Create(request);
@@ -163,7 +162,7 @@ public class IssuesControllerTests
                 It.IsAny<int?>(), It.IsAny<ExecutionMode?>(), It.IsAny<string?>()))
             .ReturnsAsync(issue);
 
-        var request = new ControllerUpdateIssueRequest { ProjectId = TestProject.Id, Title = "Updated Issue" };
+        var request = new UpdateIssueRequest { ProjectId = TestProject.Id, Title = "Updated Issue" };
 
         // Act
         await _controller.Update(issueId, request);
@@ -193,7 +192,7 @@ public class IssuesControllerTests
                 It.IsAny<int?>(), It.IsAny<ExecutionMode?>(), It.IsAny<string?>()))
             .ReturnsAsync((Issue?)null);
 
-        var request = new ControllerUpdateIssueRequest { ProjectId = TestProject.Id, Title = "Updated Issue" };
+        var request = new UpdateIssueRequest { ProjectId = TestProject.Id, Title = "Updated Issue" };
 
         // Act
         await _controller.Update("nonexistent", request);

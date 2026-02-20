@@ -370,6 +370,103 @@ public sealed class FleeceService : IFleeceService, IDisposable
         return deleted;
     }
 
+    public async Task<Issue> AddParentAsync(string projectPath, string childId, string parentId, CancellationToken ct = default)
+    {
+        var cache = await EnsureCacheLoadedAsync(projectPath, ct);
+
+        // Check if the child issue exists in cache
+        if (!cache.TryGetValue(childId, out var existingIssue))
+        {
+            _logger.LogWarning("Child issue '{ChildId}' not found in project '{ProjectPath}'", childId, projectPath);
+            throw new KeyNotFoundException($"Issue '{childId}' not found");
+        }
+
+        // Build the new parent issues list with the added parent
+        var newParentIssues = existingIssue.ParentIssues.ToList();
+        newParentIssues.Add(new ParentIssueRef { ParentIssue = parentId, SortOrder = "0" });
+
+        // Perform the update via Fleece.Core
+        var service = GetOrCreateIssueService(projectPath);
+        var issue = await service.UpdateAsync(childId, parentIssues: newParentIssues, cancellationToken: ct);
+
+        // Update the in-memory cache immediately
+        cache[childId] = issue;
+
+        // Queue a background persistence operation for consistency
+        await _serializationQueue.EnqueueAsync(new IssueWriteOperation(
+            ProjectPath: projectPath,
+            IssueId: childId,
+            Type: WriteOperationType.Update,
+            WriteAction: async (innerCt) =>
+            {
+                var svc = GetOrCreateIssueService(projectPath);
+                var currentIssue = await svc.GetByIdAsync(childId, innerCt);
+                if (currentIssue != null)
+                {
+                    var updatedParents = currentIssue.ParentIssues.ToList();
+                    if (!updatedParents.Any(p => p.ParentIssue == parentId))
+                    {
+                        updatedParents.Add(new ParentIssueRef { ParentIssue = parentId, SortOrder = "0" });
+                        await svc.UpdateAsync(childId, parentIssues: updatedParents, cancellationToken: innerCt);
+                    }
+                }
+            },
+            QueuedAt: DateTimeOffset.UtcNow
+        ), ct);
+
+        _logger.LogInformation("Added parent '{ParentId}' to issue '{ChildId}'", parentId, childId);
+
+        return issue;
+    }
+
+    public async Task<Issue> RemoveParentAsync(string projectPath, string childId, string parentId, CancellationToken ct = default)
+    {
+        var cache = await EnsureCacheLoadedAsync(projectPath, ct);
+
+        // Check if the child issue exists in cache
+        if (!cache.TryGetValue(childId, out var existingIssue))
+        {
+            _logger.LogWarning("Child issue '{ChildId}' not found in project '{ProjectPath}'", childId, projectPath);
+            throw new KeyNotFoundException($"Issue '{childId}' not found");
+        }
+
+        // Build the new parent issues list without the removed parent
+        var newParentIssues = existingIssue.ParentIssues
+            .Where(p => p.ParentIssue != parentId)
+            .ToList();
+
+        // Perform the update via Fleece.Core
+        var service = GetOrCreateIssueService(projectPath);
+        var issue = await service.UpdateAsync(childId, parentIssues: newParentIssues, cancellationToken: ct);
+
+        // Update the in-memory cache immediately
+        cache[childId] = issue;
+
+        // Queue a background persistence operation for consistency
+        await _serializationQueue.EnqueueAsync(new IssueWriteOperation(
+            ProjectPath: projectPath,
+            IssueId: childId,
+            Type: WriteOperationType.Update,
+            WriteAction: async (innerCt) =>
+            {
+                var svc = GetOrCreateIssueService(projectPath);
+                var currentIssue = await svc.GetByIdAsync(childId, innerCt);
+                if (currentIssue != null)
+                {
+                    var updatedParents = currentIssue.ParentIssues
+                        .Where(p => p.ParentIssue != parentId)
+                        .ToList();
+                    await svc.UpdateAsync(childId, parentIssues: updatedParents, cancellationToken: innerCt);
+                }
+            },
+            QueuedAt: DateTimeOffset.UtcNow
+        ), ct);
+
+        _logger.LogInformation("Removed parent '{ParentId}' from issue '{ChildId}'", parentId, childId);
+
+        return issue;
+    }
+
     #endregion
 
     #region Task Graph Operations

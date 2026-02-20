@@ -7,7 +7,11 @@
 
 @if (TaskGraph != null && (_renderLines.Count > 0 || TaskGraph.MergedPrs.Count > 0))
 {
-    <div class="task-graph">
+    <div class="task-graph"
+         tabindex="0"
+         @onkeydown="HandleKeyDown"
+         @onkeydown:preventDefault="_isCreatingInline"
+         data-testid="task-graph">
         @for (var i = 0; i < _renderLines.Count; i++)
         {
             var line = _renderLines[i];
@@ -73,8 +77,23 @@
                 var isEditing = NavService?.EditMode == KeyboardEditMode.EditingExisting
                     && NavService?.PendingEdit?.IssueId == issueLine.IssueId;
 
+                @* Show inline create above this issue if creating above selected *@
+                @if (_isCreatingInline && _inlineCreateAbove && issueLine.IssueId == _selectedIssueIdForCreate)
+                {
+                    <InlineIssueCreateInput ProjectId="@ProjectId"
+                                            InsertIndex="@index"
+                                            InsertAbove="true"
+                                            AdjacentIssueId="@GetAdjacentIssueId(index, true)"
+                                            CanMoveUp="@CanMoveUp(index, true)"
+                                            CanMoveDown="@CanMoveDown(index, true)"
+                                            OnCancel="CancelInlineCreate"
+                                            OnCreated="HandleInlineIssueCreated" />
+                }
+
                 <div class="task-graph-row @(isSelected ? "task-graph-row-selected" : "") @(isEditing ? "task-graph-row-editing" : "")"
-                     @onclick="() => HandleIssueClick(issueLine.IssueId)">
+                     @onclick="() => HandleIssueClick(issueLine.IssueId)"
+                     data-testid="task-graph-issue-row"
+                     data-issue-id="@issueLine.IssueId">
                     <div class="task-graph-graph-cell">
                         @((MarkupString)GenerateIssueSvg(index, issueLine, agentStatus))
                     </div>
@@ -120,6 +139,19 @@
                         }
                     </div>
                 </div>
+
+                @* Show inline create below this issue if creating below selected *@
+                @if (_isCreatingInline && !_inlineCreateAbove && issueLine.IssueId == _selectedIssueIdForCreate)
+                {
+                    <InlineIssueCreateInput ProjectId="@ProjectId"
+                                            InsertIndex="@(index + 1)"
+                                            InsertAbove="false"
+                                            AdjacentIssueId="@GetAdjacentIssueId(index, false)"
+                                            CanMoveUp="@CanMoveUp(index, false)"
+                                            CanMoveDown="@CanMoveDown(index, false)"
+                                            OnCancel="CancelInlineCreate"
+                                            OnCreated="HandleInlineIssueCreated" />
+                }
             }
             else if (line is TaskGraphSeparatorRenderLine)
             {
@@ -509,11 +541,32 @@
     [Parameter] public EventCallback OnIssueTypeChanged { get; set; }
     [Parameter] public string? SelectedNodeId { get; set; }
     [Parameter] public IKeyboardNavigationService? NavService { get; set; }
+
+    /// <summary>
+    /// The project ID for creating issues. Required when EnableKeyboardControls is true.
+    /// </summary>
     [Parameter] public string? ProjectId { get; set; }
+
+    /// <summary>
+    /// When true (default), enables keyboard controls for issue creation:
+    /// - 'o': Create issue below selected
+    /// - 'O' (Shift+o): Create issue above selected
+    /// </summary>
+    [Parameter] public bool EnableKeyboardControls { get; set; } = true;
+
+    /// <summary>
+    /// Called when an issue is created via inline keyboard creation.
+    /// </summary>
+    [Parameter] public EventCallback<string> OnIssueCreated { get; set; }
 
     private List<TaskGraphRenderLine> _renderLines = [];
     private int _maxLane;
     private string? _typeMenuOpenForIssueId;
+
+    // Inline creation state
+    private bool _isCreatingInline;
+    private bool _inlineCreateAbove;
+    private string? _selectedIssueIdForCreate;
 
     protected override void OnParametersSet()
     {
@@ -524,6 +577,100 @@
             .Select(l => Math.Max(l.Lane, l.ParentLane ?? 0))
             .DefaultIfEmpty(hasMergedPrs ? 1 : 0)  // Account for lane offset when PRs exist
             .Max();
+
+        // Cancel inline create if selection changes
+        if (_isCreatingInline && SelectedNodeId != $"issue-{_selectedIssueIdForCreate}")
+        {
+            _isCreatingInline = false;
+            _selectedIssueIdForCreate = null;
+        }
+    }
+
+    private void HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (!EnableKeyboardControls || string.IsNullOrEmpty(ProjectId)) return;
+        if (_isCreatingInline) return; // Already creating, ignore
+
+        // Get the selected issue ID from SelectedNodeId (format: "issue-{id}")
+        if (SelectedNodeId?.StartsWith("issue-") != true) return;
+        var selectedIssueId = SelectedNodeId[6..];
+
+        // Find the selected issue in the render lines
+        var selectedIndex = _renderLines.FindIndex(l =>
+            l is TaskGraphIssueRenderLine irl && irl.IssueId == selectedIssueId);
+        if (selectedIndex < 0) return;
+
+        switch (e.Key)
+        {
+            case "o" when !e.ShiftKey:
+                // Create below
+                _isCreatingInline = true;
+                _inlineCreateAbove = false;
+                _selectedIssueIdForCreate = selectedIssueId;
+                StateHasChanged();
+                break;
+
+            case "O" when e.ShiftKey:
+            case "o" when e.ShiftKey:
+                // Create above (Shift+O or Shift+o)
+                _isCreatingInline = true;
+                _inlineCreateAbove = true;
+                _selectedIssueIdForCreate = selectedIssueId;
+                StateHasChanged();
+                break;
+        }
+    }
+
+    private void CancelInlineCreate()
+    {
+        _isCreatingInline = false;
+        _selectedIssueIdForCreate = null;
+        StateHasChanged();
+    }
+
+    private async Task HandleInlineIssueCreated(string newIssueId)
+    {
+        _isCreatingInline = false;
+        _selectedIssueIdForCreate = null;
+
+        // Notify parent to refresh and select the new issue
+        await OnIssueCreated.InvokeAsync(newIssueId);
+    }
+
+    /// <summary>
+    /// Gets the adjacent issue ID for parent/child relationship.
+    /// When creating above: the issue below becomes the adjacent (for making new issue its parent or child)
+    /// When creating below: the issue above becomes the adjacent
+    /// </summary>
+    private string? GetAdjacentIssueId(int currentIndex, bool insertAbove)
+    {
+        // The adjacent issue is the one that was selected (current row)
+        var currentLine = _renderLines[currentIndex];
+        if (currentLine is TaskGraphIssueRenderLine issueLine)
+        {
+            return issueLine.IssueId;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Returns true if TAB (move up lane / become parent) is allowed.
+    /// TAB is allowed when there's an adjacent issue to become parent of.
+    /// </summary>
+    private bool CanMoveUp(int currentIndex, bool insertAbove)
+    {
+        // Can always make the new issue a parent of the adjacent issue
+        return GetAdjacentIssueId(currentIndex, insertAbove) != null;
+    }
+
+    /// <summary>
+    /// Returns true if Shift+TAB (move down lane / become child) is allowed.
+    /// Shift+TAB is allowed when there's an adjacent issue to become child of.
+    /// </summary>
+    private bool CanMoveDown(int currentIndex, bool insertAbove)
+    {
+        // Can always make the new issue a child of the adjacent issue
+        return GetAdjacentIssueId(currentIndex, insertAbove) != null;
     }
 
     private string GenerateIssueSvg(int index, TaskGraphIssueRenderLine issueLine, AgentStatusData? agentStatus)

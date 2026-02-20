@@ -3,6 +3,7 @@ using Homespun.Features.Fleece.Services;
 using Homespun.Features.Notifications;
 using Homespun.Features.Projects;
 using Homespun.Shared.Models.Fleece;
+using Homespun.Shared.Requests;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 
@@ -121,6 +122,24 @@ public class IssuesController(
                 workingBranchId: request.WorkingBranchId.Trim()) ?? issue;
         }
 
+        // If a parent issue ID was provided, add this issue as a child of that parent
+        if (!string.IsNullOrWhiteSpace(request.ParentIssueId))
+        {
+            issue = await fleeceService.AddParentAsync(
+                project.LocalPath,
+                issue.Id,
+                request.ParentIssueId.Trim());
+        }
+
+        // If a child issue ID was provided, make the new issue the parent of that child
+        if (!string.IsNullOrWhiteSpace(request.ChildIssueId))
+        {
+            await fleeceService.AddParentAsync(
+                project.LocalPath,
+                request.ChildIssueId.Trim(),
+                issue.Id);
+        }
+
         // Broadcast issue creation to connected clients
         await notificationHub.BroadcastIssuesChanged(request.ProjectId, IssueChangeType.Created, issue.Id);
 
@@ -190,86 +209,4 @@ public class IssuesController(
 
         return NoContent();
     }
-}
-
-/// <summary>
-/// Request model for creating an issue.
-/// </summary>
-public class CreateIssueRequest
-{
-    /// <summary>
-    /// The project ID.
-    /// </summary>
-    public required string ProjectId { get; set; }
-
-    /// <summary>
-    /// Issue title.
-    /// </summary>
-    public required string Title { get; set; }
-
-    /// <summary>
-    /// Issue type.
-    /// </summary>
-    public IssueType Type { get; set; } = IssueType.Task;
-
-    /// <summary>
-    /// Issue description.
-    /// </summary>
-    public string? Description { get; set; }
-
-    /// <summary>
-    /// Issue priority (1-5).
-    /// </summary>
-    public int? Priority { get; set; }
-
-    /// <summary>
-    /// Execution mode for child issues (Series or Parallel).
-    /// </summary>
-    public ExecutionMode? ExecutionMode { get; set; }
-
-    /// <summary>
-    /// Optional working branch ID. If not provided, one will be auto-generated using AI.
-    /// </summary>
-    public string? WorkingBranchId { get; set; }
-}
-
-/// <summary>
-/// Request model for updating an issue.
-/// </summary>
-public class UpdateIssueRequest
-{
-    /// <summary>
-    /// The project ID.
-    /// </summary>
-    public required string ProjectId { get; set; }
-
-    /// <summary>
-    /// Issue title.
-    /// </summary>
-    public string? Title { get; set; }
-
-    /// <summary>
-    /// Issue status.
-    /// </summary>
-    public IssueStatus? Status { get; set; }
-
-    /// <summary>
-    /// Issue type.
-    /// </summary>
-    public IssueType? Type { get; set; }
-
-    /// <summary>
-    /// Issue description.
-    /// </summary>
-    public string? Description { get; set; }
-
-    /// <summary>
-    /// Issue priority (1-5).
-    /// </summary>
-    public int? Priority { get; set; }
-
-    /// <summary>
-    /// Optional working branch ID update.
-    /// </summary>
-    public string? WorkingBranchId { get; set; }
 }
