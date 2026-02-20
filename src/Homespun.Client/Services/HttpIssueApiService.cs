@@ -61,4 +61,28 @@ public class HttpIssueApiService(HttpClient http)
         var response = await http.DeleteAsync($"{ApiRoutes.Issues}/{issueId}?projectId={projectId}");
         response.EnsureSuccessStatusCode();
     }
+
+    /// <summary>
+    /// Gets the resolved branch name for an issue by checking linked PRs and existing clones.
+    /// </summary>
+    /// <param name="issueId">The issue ID to resolve the branch for</param>
+    /// <param name="projectId">The project ID</param>
+    /// <returns>The resolved branch name, or null if no existing branch was found</returns>
+    public async Task<string?> GetResolvedBranchAsync(string issueId, string projectId)
+    {
+        var response = await http.GetAsync($"{ApiRoutes.Issues}/{issueId}/resolved-branch?projectId={projectId}");
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            return null;
+        response.EnsureSuccessStatusCode();
+        var result = await response.Content.ReadFromJsonAsync<ResolvedBranchResponse>();
+        return result?.BranchName;
+    }
+}
+
+/// <summary>
+/// Response model for resolved branch lookup.
+/// </summary>
+public class ResolvedBranchResponse
+{
+    public string? BranchName { get; set; }
 }

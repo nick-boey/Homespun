@@ -118,6 +118,7 @@ else
     builder.Services.AddSingleton<IFleeceService, FleeceService>();
     builder.Services.AddScoped<IFleeceIssueTransitionService, FleeceIssueTransitionService>();
     builder.Services.AddSingleton<IFleeceIssuesSyncService, FleeceIssuesSyncService>();
+    builder.Services.AddScoped<IIssueBranchResolverService, IssueBranchResolverService>();
 
     // Markdown rendering service
     builder.Services.AddSingleton<IMarkdownRenderingService, MarkdownRenderingService>();

@@ -93,3 +93,14 @@ public class UpdateIssueRequest
     /// </summary>
     public string? WorkingBranchId { get; set; }
 }
+
+/// <summary>
+/// Response model for resolved branch lookup.
+/// </summary>
+public class ResolvedBranchResponse
+{
+    /// <summary>
+    /// The resolved branch name, or null if no existing branch was found.
+    /// </summary>
+    public string? BranchName { get; set; }
+}
