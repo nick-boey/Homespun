@@ -1,0 +1,211 @@
+@*
+    SplitButton Component
+
+    A button with a primary action and a dropdown for secondary actions.
+
+    Usage:
+    <SplitButton PrimaryText="Pull"
+                 PrimaryOnClick="HandlePullAsync"
+                 CssClass="btn-primary"
+                 Actions="@_actions" />
+*@
+
+<div class="split-button @CssClass">
+    @* Backdrop to close dropdown when clicking outside *@
+    @if (_isDropdownOpen)
+    {
+        <div class="split-button-backdrop" @onclick="CloseDropdown"></div>
+    }
+
+    @* Primary button *@
+    <button type="button"
+            class="btn @ButtonCssClass split-button-primary"
+            disabled="@(IsLoading || Disabled)"
+            @onclick="HandlePrimaryClick">
+        @if (IsLoading && _activeAction == null)
+        {
+            <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+            @if (!string.IsNullOrEmpty(PrimaryLoadingText))
+            {
+                <span>@PrimaryLoadingText</span>
+            }
+            else
+            {
+                <span>@PrimaryText</span>
+            }
+        }
+        else
+        {
+            @if (PrimaryIcon != null)
+            {
+                @PrimaryIcon
+            }
+            <span>@PrimaryText</span>
+        }
+    </button>
+
+    @* Dropdown toggle button *@
+    <button type="button"
+            class="btn @ButtonCssClass split-button-toggle"
+            disabled="@(IsLoading || Disabled)"
+            @onclick="ToggleDropdown"
+            @onclick:stopPropagation="true">
+        <i class="bi bi-caret-down-fill"></i>
+    </button>
+
+    @* Dropdown menu *@
+    @if (_isDropdownOpen)
+    {
+        <div class="split-button-menu">
+            @foreach (var action in Actions)
+            {
+                <button type="button"
+                        class="split-button-item"
+                        disabled="@IsLoading"
+                        @onclick="() => HandleActionClick(action)">
+                    @if (IsLoading && _activeAction == action.Key)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                    }
+                    else if (action.Icon != null)
+                    {
+                        <span class="me-2">@action.Icon</span>
+                    }
+                    <span>@action.Text</span>
+                </button>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    /// <summary>
+    /// Text to display on the primary button.
+    /// </summary>
+    [Parameter]
+    public string PrimaryText { get; set; } = "";
+
+    /// <summary>
+    /// Text to display on the primary button when loading.
+    /// </summary>
+    [Parameter]
+    public string? PrimaryLoadingText { get; set; }
+
+    /// <summary>
+    /// Icon to display on the primary button.
+    /// </summary>
+    [Parameter]
+    public RenderFragment? PrimaryIcon { get; set; }
+
+    /// <summary>
+    /// Click handler for the primary button.
+    /// </summary>
+    [Parameter]
+    public EventCallback<MouseEventArgs> PrimaryOnClick { get; set; }
+
+    /// <summary>
+    /// Secondary actions to display in the dropdown.
+    /// </summary>
+    [Parameter]
+    public IReadOnlyList<SplitButtonAction> Actions { get; set; } = [];
+
+    /// <summary>
+    /// CSS class for the container (e.g., for sizing).
+    /// </summary>
+    [Parameter]
+    public string CssClass { get; set; } = "";
+
+    /// <summary>
+    /// CSS class for the buttons (e.g., "btn-primary", "btn-secondary").
+    /// </summary>
+    [Parameter]
+    public string ButtonCssClass { get; set; } = "btn-primary";
+
+    /// <summary>
+    /// Whether the button is in loading state (externally controlled).
+    /// </summary>
+    [Parameter]
+    public bool? IsLoadingExternal { get; set; }
+
+    /// <summary>
+    /// Whether the button is disabled.
+    /// </summary>
+    [Parameter]
+    public bool Disabled { get; set; }
+
+    private bool _isDropdownOpen;
+    private bool _isLoadingInternal;
+    private string? _activeAction;
+
+    private bool IsLoading => IsLoadingExternal ?? _isLoadingInternal;
+
+    private void ToggleDropdown()
+    {
+        if (!IsLoading && !Disabled)
+        {
+            _isDropdownOpen = !_isDropdownOpen;
+        }
+    }
+
+    private void CloseDropdown()
+    {
+        _isDropdownOpen = false;
+    }
+
+    private async Task HandlePrimaryClick(MouseEventArgs args)
+    {
+        if (IsLoading || Disabled)
+            return;
+
+        CloseDropdown();
+
+        if (IsLoadingExternal.HasValue)
+        {
+            await PrimaryOnClick.InvokeAsync(args);
+            return;
+        }
+
+        _isLoadingInternal = true;
+        _activeAction = null;
+        StateHasChanged();
+
+        try
+        {
+            await PrimaryOnClick.InvokeAsync(args);
+        }
+        finally
+        {
+            _isLoadingInternal = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleActionClick(SplitButtonAction action)
+    {
+        if (IsLoading || Disabled)
+            return;
+
+        CloseDropdown();
+
+        if (IsLoadingExternal.HasValue)
+        {
+            await action.OnClick.InvokeAsync();
+            return;
+        }
+
+        _isLoadingInternal = true;
+        _activeAction = action.Key;
+        StateHasChanged();
+
+        try
+        {
+            await action.OnClick.InvokeAsync();
+        }
+        finally
+        {
+            _isLoadingInternal = false;
+            _activeAction = null;
+            StateHasChanged();
+        }
+    }
+}

@@ -8,8 +8,10 @@
 @using Fleece.Core.Models
 @using Homespun.Shared.Hubs
 @using Homespun.Shared.Models.Notifications
+@using Homespun.Shared.Models.PullRequests
 @using Homespun.Shared.Requests
 @using Microsoft.AspNetCore.SignalR.Client
+@using Homespun.Client.Services
 @inject HttpProjectApiService ProjectApi
 @inject HttpPullRequestApiService PullRequestApi
 @inject HttpIssueApiService IssueApi
@@ -23,9 +25,11 @@
 @inject ILogger<ProjectDetail> Logger
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JSRuntime
+@inject IKeyboardNavigationService NavService
 
 <PageTitle>@(_project?.Name ?? "Project")</PageTitle>
 
+<div class="project-detail-page" @onkeydown="HandleKeyDown" @onkeydown:preventDefault="ShouldPreventKeyDefault" tabindex="-1" @ref="_pageContainer">
 @if (_project == null)
 {
     <p>Loading...</p>
@@ -34,17 +38,16 @@ else
 {
     <div class="flex justify-between items-center mb-3">
         <h1>@_project.Name</h1>
-        <div class="btn-group">
-            <AsyncActionButton OnClick="SyncAllAsync"
-                               IsLoadingExternal="_isSyncing"
-                               CssClass="btn-outline-secondary btn-sm"
-                               Text="Sync"
-                               LoadingText="Syncing...">
-                <IconContent>
-                    <i class="bi bi-cloud-arrow-up"></i>
-                </IconContent>
-            </AsyncActionButton>
-            <a href="projects/@Id/edit" class="btn btn-outline-secondary btn-sm">Edit Project</a>
+        <div class="flex items-center gap-2">
+            <SplitButton PrimaryText="Pull"
+                         PrimaryOnClick="PullAsync"
+                         ButtonCssClass="btn-outline btn-sm"
+                         Actions="@_syncActions">
+                <PrimaryIcon>
+                    <i class="bi bi-cloud-arrow-down me-1"></i>
+                </PrimaryIcon>
+            </SplitButton>
+            <a href="projects/@Id/edit" class="btn btn-outline btn-sm">Edit Project</a>
         </div>
     </div>
 
@@ -111,6 +114,21 @@ else
                 <CurrentPullRequestDetailPanel PullRequest="_selectedPullRequest"
                                                OnActionCompleted="RefreshData"
                                                OnClose="ClearSelection"/>
+            }
+            else if (_selectedMergedPr != null)
+            {
+                <MergedPullRequestDetailPanel Details="_selectedMergedPr"
+                                              ProjectId="@Id"
+                                              OnClose="ClearSelection"/>
+            }
+            else if (_isLoadingMergedPr)
+            {
+                <div class="card">
+                    <div class="card-body text-center">
+                        <span class="spinner-border spinner-border-sm mr-2" role="status"></span>
+                        Loading pull request details...
+                    </div>
+                </div>
             }
             else if (_selectedIssue != null)
             {
@@ -255,8 +273,12 @@ else
         </Footer>
     </Modal>
 }
+</div>
 
 <style>
+    .project-detail-page {
+        outline: none;
+    }
     /* ==========================================================================
        Project Layout Grid
        ========================================================================== */
@@ -303,6 +325,8 @@ else
     private List<FlattenedPR> _flattenedCurrentPRs = [];
     private PullRequest? _selectedPullRequest;
     private string? _selectedPullRequestId;
+    private MergedPullRequestDetails? _selectedMergedPr;
+    private bool _isLoadingMergedPr;
     private IssueResponse? _selectedIssue;
     private string? _selectedIssueId;
     private bool _isSyncingPRs;
@@ -322,6 +346,15 @@ else
     // Track Id changes for same-component navigation
     private string? _previousId;
 
+    // Keyboard navigation state
+    private ElementReference _pageContainer;
+    private KeyboardEditMode _previousEditMode = KeyboardEditMode.Viewing;
+
+    // Prevent default for keyboard shortcuts when on issues tab and not editing in a text field
+    // This is computed based on current state so that navigation keys are prevented
+    private bool ShouldPreventKeyDefault =>
+        _activeTab == "issues" && NavService.EditMode == KeyboardEditMode.Viewing;
+
     protected override async Task OnParametersSetAsync()
     {
         if (_previousId != null && _previousId != Id)
@@ -337,6 +370,8 @@ else
             // Reset all state
             _selectedPullRequest = null;
             _selectedPullRequestId = null;
+            _selectedMergedPr = null;
+            _isLoadingMergedPr = false;
             _selectedIssue = null;
             _selectedIssueId = null;
             _lastSyncResult = null;
@@ -393,10 +428,33 @@ else
     private bool _showNonFleeceChangesModal;
     private IReadOnlyList<string>? _nonFleeceChangedFiles;
 
+    // Split button sync actions
+    private IReadOnlyList<SplitButtonAction> _syncActions = [];
+
+    private void InitializeSyncActions()
+    {
+        _syncActions =
+        [
+            new SplitButtonAction(
+                Key: "sync",
+                Text: "Sync",
+                Icon: (RenderFragment)(builder =>
+                {
+                    builder.OpenElement(0, "i");
+                    builder.AddAttribute(1, "class", "bi bi-cloud-arrow-up");
+                    builder.CloseElement();
+                }),
+                OnClick: EventCallback.Factory.Create(this, SyncAllAsync))
+        ];
+    }
+
     private record FlattenedPR(PullRequest PullRequest, int Level);
 
     protected override async Task OnInitializedAsync()
     {
+        // Initialize sync actions for split button
+        InitializeSyncActions();
+
         // Determine active tab from URL
         var uri = NavigationManager.Uri;
         if (uri.Contains("/settings"))
@@ -438,6 +496,13 @@ else
         if (firstRender)
         {
             await HandleHashFragmentAsync();
+
+            if (_activeTab == "issues")
+            {
+                await JSRuntime.InvokeVoidAsync("homespunInterop.focusElement", _pageContainer);
+            }
+
+            NavService.OnStateChanged += OnNavServiceStateChanged;
         }
     }
 
@@ -471,9 +536,29 @@ else
         }
     }
 
+    private void OnNavServiceStateChanged()
+    {
+        var currentMode = NavService.EditMode;
+        if (_previousEditMode != KeyboardEditMode.Viewing && currentMode == KeyboardEditMode.Viewing)
+        {
+            // Transitioned from edit/create mode back to viewing - re-focus page container
+            _ = InvokeAsync(async () =>
+            {
+                await JSRuntime.InvokeVoidAsync("homespunInterop.focusElement", _pageContainer);
+            });
+        }
+        _previousEditMode = currentMode;
+    }
+
     private void SwitchTab(string tab)
     {
         if (_activeTab == tab) return;
+
+        // Cancel any in-progress edit when leaving issues tab
+        if (_activeTab == "issues" && NavService.EditMode != KeyboardEditMode.Viewing)
+        {
+            NavService.CancelEdit();
+        }
 
         _activeTab = tab;
         ClearSelection();
@@ -488,6 +573,14 @@ else
             _ => $"/projects/{Id}"
         };
         NavigationManager.NavigateTo(newUrl, forceLoad: false, replace: true);
+
+        if (tab == "issues")
+        {
+            _ = InvokeAsync(async () =>
+            {
+                await JSRuntime.InvokeVoidAsync("homespunInterop.focusElement", _pageContainer);
+            });
+        }
     }
 
     private void SwitchToIssuesTab() => SwitchTab("issues");
@@ -499,6 +592,7 @@ else
     public void Dispose()
     {
         StartupTracker.OnStateChanged -= OnStartupStateChanged;
+        NavService.OnStateChanged -= OnNavServiceStateChanged;
     }
 
     public async ValueTask DisposeAsync()
@@ -680,6 +774,92 @@ else
     }
 
     /// <summary>
+    /// Pull operation that fetches from remote and merges fleece issues without committing/pushing.
+    /// Also syncs GitHub PRs.
+    /// </summary>
+    private async Task PullAsync()
+    {
+        if (_project == null || _isSyncing)
+            return;
+
+        _isSyncing = true;
+        StateHasChanged();
+
+        var errors = new List<string>();
+
+        try
+        {
+            // Run fleece pull and PR sync in parallel
+            var fleecePullTask = PullFleeceInternalAsync();
+            var prSyncTask = SyncPullRequestsInternalAsync();
+
+            var results = await Task.WhenAll(fleecePullTask, prSyncTask);
+
+            // Collect errors
+            if (results[0] is string fleeceError)
+                errors.Add($"Fleece pull: {fleeceError}");
+            if (results[1] is string prError)
+                errors.Add($"PR sync: {prError}");
+
+            // Show error notification if any errors occurred
+            if (errors.Count > 0)
+            {
+                await NotificationApi.CreateNotificationAsync(new CreateNotificationRequest
+                {
+                    Type = NotificationType.Warning,
+                    Title = "Pull completed with errors",
+                    Message = string.Join("; ", errors),
+                    ProjectId = _project.Id,
+                    IsDismissible = true,
+                    DeduplicationKey = $"pull-error-{_project.Id}"
+                });
+            }
+
+            // Refresh data after both complete
+            await LoadData();
+        }
+        finally
+        {
+            _isSyncing = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Internal fleece pull that returns an error message or null on success.
+    /// </summary>
+    private async Task<string?> PullFleeceInternalAsync()
+    {
+        if (_project == null)
+            return null;
+
+        try
+        {
+            var result = await FleeceSyncApi.PullFleeceOnlyAsync(_project.Id);
+
+            if (result != null && !result.Success)
+            {
+                // For conflicts requiring user interaction, show modal
+                if (result.HasNonFleeceChanges)
+                {
+                    _nonFleeceChangedFiles = result.NonFleeceChangedFiles;
+                    _showNonFleeceChangesModal = true;
+                    return null; // Don't report as error - handled via modal
+                }
+
+                return result.ErrorMessage ?? "Unknown fleece pull error";
+            }
+
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to pull fleece issues for project {ProjectId}", _project.Id);
+            return ex.Message;
+        }
+    }
+
+    /// <summary>
     /// Combined sync operation that runs fleece sync and PR sync in parallel.
     /// </summary>
     private async Task SyncAllAsync()
@@ -818,9 +998,10 @@ else
 
     private async Task SelectPullRequest(string pullRequestId)
     {
-        // Clear any issue selection
+        // Clear any other selection
         _selectedIssueId = null;
         _selectedIssue = null;
+        _selectedMergedPr = null;
 
         _selectedPullRequestId = pullRequestId;
         _selectedPullRequest = await PullRequestApi.GetPullRequestAsync(pullRequestId);
@@ -831,6 +1012,7 @@ else
         // Clear any pull request selection
         _selectedPullRequestId = null;
         _selectedPullRequest = null;
+        _selectedMergedPr = null;
 
         _selectedIssueId = issueId;
         _selectedIssue = _openIssues?.FirstOrDefault(i => i.Id == issueId)
@@ -848,9 +1030,10 @@ else
 
     private async Task SelectPullRequestByNumber(int prNumber)
     {
-        // Clear any issue selection
+        // Clear any existing selection
         _selectedIssueId = null;
         _selectedIssue = null;
+        _selectedMergedPr = null;
 
         // Find the PR in current PRs (internal database)
         var currentPr = _flattenedCurrentPRs.FirstOrDefault(p => p.PullRequest.GitHubPRNumber == prNumber);
@@ -861,10 +1044,27 @@ else
             return;
         }
 
-        // For past PRs, we don't have internal IDs, so clear selection
-        // (Past PRs from GitHub API are view-only in the graph)
+        // Not in current PRs - try to fetch as merged/closed PR
         _selectedPullRequestId = null;
         _selectedPullRequest = null;
+
+        // Show loading state and fetch merged PR details
+        _isLoadingMergedPr = true;
+        StateHasChanged();
+
+        try
+        {
+            _selectedMergedPr = await PullRequestApi.GetMergedPullRequestDetailsAsync(Id, prNumber);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to fetch merged PR #{PrNumber} details", prNumber);
+            _selectedMergedPr = null;
+        }
+        finally
+        {
+            _isLoadingMergedPr = false;
+        }
     }
 
     private string? GetSelectedNodeId()
@@ -872,6 +1072,11 @@ else
         if (_selectedPullRequest != null && _selectedPullRequest.GitHubPRNumber.HasValue)
         {
             return $"pr-{_selectedPullRequest.GitHubPRNumber}";
+        }
+
+        if (_selectedMergedPr != null)
+        {
+            return $"pr-{_selectedMergedPr.PullRequest.Number}";
         }
 
         if (_selectedIssueId != null)
@@ -886,6 +1091,7 @@ else
     {
         _selectedPullRequestId = null;
         _selectedPullRequest = null;
+        _selectedMergedPr = null;
         _selectedIssueId = null;
         _selectedIssue = null;
     }
@@ -1200,6 +1406,67 @@ else
         {
             _isSyncingFleece = false;
             StateHasChanged();
+        }
+    }
+
+    private void HandleKeyDown(KeyboardEventArgs e)
+    {
+        // Only handle keyboard shortcuts on the issues tab
+        if (_activeTab != "issues") return;
+
+        // Don't handle if in edit mode - let the inline editor handle it
+        if (NavService.EditMode != KeyboardEditMode.Viewing)
+        {
+            // Handle Escape to cancel edit
+            if (e.Key == "Escape")
+            {
+                NavService.CancelEdit();
+            }
+            return;
+        }
+
+        // Handle navigation and edit commands
+        // Note: preventDefault is handled by ShouldPreventKeyDefault property
+        switch (e.Key)
+        {
+            case "j":
+            case "ArrowDown":
+                NavService.MoveDown();
+                break;
+            case "k":
+            case "ArrowUp":
+                NavService.MoveUp();
+                break;
+            case "h":
+            case "ArrowLeft":
+                NavService.MoveToChild();
+                break;
+            case "l":
+            case "ArrowRight":
+                NavService.MoveToParent();
+                break;
+            case "i":
+                NavService.StartEditingAtStart();
+                break;
+            case "a":
+                NavService.StartEditingAtEnd();
+                break;
+            case "r":
+                NavService.StartReplacingTitle();
+                break;
+            case "o":
+                if (e.ShiftKey)
+                    NavService.CreateIssueAbove();
+                else
+                    NavService.CreateIssueBelow();
+                break;
+            case "O":
+                NavService.CreateIssueAbove();
+                break;
+            case "Escape":
+                // Clear selection or close sidebar panel
+                ClearSelection();
+                break;
         }
     }
 

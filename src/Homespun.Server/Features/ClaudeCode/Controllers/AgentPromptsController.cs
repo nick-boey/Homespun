@@ -37,6 +37,14 @@ public class AgentPromptsController(IAgentPromptService agentPromptService) : Co
         return Ok(prompts);
     }
 
+    [HttpGet("available-for-project/{projectId}")]
+    [ProducesResponseType<IReadOnlyList<AgentPrompt>>(StatusCodes.Status200OK)]
+    public ActionResult<IReadOnlyList<AgentPrompt>> GetAvailableForProject(string projectId)
+    {
+        var prompts = agentPromptService.GetGlobalPromptsNotOverridden(projectId);
+        return Ok(prompts);
+    }
+
     [HttpPost]
     [ProducesResponseType<AgentPrompt>(StatusCodes.Status201Created)]
     public async Task<ActionResult<AgentPrompt>> Create([FromBody] CreateAgentPromptRequest request)

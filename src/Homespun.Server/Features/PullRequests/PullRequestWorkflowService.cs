@@ -1,4 +1,5 @@
 using Homespun.Features.PullRequests.Data;
+using Homespun.Shared.Models.PullRequests;
 using Octokit;
 
 namespace Homespun.Features.PullRequests;
@@ -360,6 +361,50 @@ public class PullRequestWorkflowService(
             ClosedAt = pr.ClosedAt?.UtcDateTime,
             UpdatedAt = pr.UpdatedAt.UtcDateTime
         };
+    }
+
+    #endregion
+
+    #region Merged PR Details
+
+    /// <summary>
+    /// Gets details for a merged pull request including linked issue information.
+    /// </summary>
+    /// <param name="projectId">The project ID.</param>
+    /// <param name="prNumber">The GitHub PR number.</param>
+    /// <returns>The merged PR details, or null if not found.</returns>
+    public async Task<MergedPullRequestDetails?> GetMergedPullRequestDetailsAsync(string projectId, int prNumber)
+    {
+        var project = dataStore.GetProject(projectId);
+        if (project == null || string.IsNullOrEmpty(project.GitHubOwner) || string.IsNullOrEmpty(project.GitHubRepo))
+        {
+            logger.LogDebug("Cannot get merged PR details: project {ProjectId} not found or missing GitHub config", projectId);
+            return null;
+        }
+
+        ConfigureClient();
+
+        try
+        {
+            logger.LogInformation("Fetching PR #{PrNumber} from {Owner}/{Repo}", prNumber, project.GitHubOwner, project.GitHubRepo);
+            var pr = await githubClient.GetPullRequestAsync(project.GitHubOwner, project.GitHubRepo, prNumber);
+            var prInfo = MapToPullRequestInfo(pr);
+
+            // Extract linked issue ID from branch name
+            var linkedIssueId = BranchNameParser.ExtractIssueId(prInfo.BranchName);
+
+            return new MergedPullRequestDetails
+            {
+                PullRequest = prInfo,
+                LinkedIssueId = linkedIssueId,
+                LinkedIssue = null // Issue loading handled separately by the API endpoint
+            };
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to fetch PR #{PrNumber} from {Owner}/{Repo}", prNumber, project.GitHubOwner, project.GitHubRepo);
+            return null;
+        }
     }
 
     #endregion

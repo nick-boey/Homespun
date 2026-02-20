@@ -165,7 +165,7 @@ public class GitCloneServiceIntegrationTests
         Assert.That(clone!.Branch, Does.EndWith(branchName));
         Assert.That(clone.HeadCommit, Is.Not.Null);
         Assert.That(clone.IsDetached, Is.False);
-        Assert.That(clone.WorkdirPath, Is.EqualTo(clonePath));
+        Assert.That(NormalizePath(clone.WorkdirPath!), Is.EqualTo(NormalizePath(clonePath!)));
     }
 
     [Test]

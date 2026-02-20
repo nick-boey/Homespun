@@ -65,4 +65,13 @@ public class HttpPullRequestApiService(HttpClient http)
         return await http.GetFromJsonAsync<List<PullRequestWithTime>>(
             $"{ApiRoutes.Projects}/{projectId}/pull-requests/merged") ?? [];
     }
+
+    public async Task<MergedPullRequestDetails?> GetMergedPullRequestDetailsAsync(string projectId, int prNumber)
+    {
+        var response = await http.GetAsync($"{ApiRoutes.Projects}/{projectId}/pull-requests/merged/{prNumber}");
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            return null;
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<MergedPullRequestDetails>();
+    }
 }

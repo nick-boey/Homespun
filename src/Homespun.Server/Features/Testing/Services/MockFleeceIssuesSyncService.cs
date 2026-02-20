@@ -1,4 +1,5 @@
 using Homespun.Features.Fleece.Services;
+using Homespun.Shared.Models.Fleece;
 using Microsoft.Extensions.Logging;
 
 namespace Homespun.Features.Testing.Services;
@@ -64,5 +65,16 @@ public class MockFleeceIssuesSyncService : IFleeceIssuesSyncService
     {
         _logger.LogDebug("[Mock] DiscardNonFleeceChangesAsync for project at {ProjectPath}", projectPath);
         return Task.FromResult(true);
+    }
+
+    public Task<FleecePullResult> PullFleeceOnlyAsync(string projectPath, string defaultBranch, CancellationToken ct = default)
+    {
+        _logger.LogDebug("[Mock] PullFleeceOnlyAsync for project at {ProjectPath}, branch {DefaultBranch}", projectPath, defaultBranch);
+        return Task.FromResult(new FleecePullResult(
+            Success: true,
+            ErrorMessage: null,
+            IssuesMerged: 0,
+            WasBehindRemote: false,
+            CommitsPulled: 0));
     }
 }

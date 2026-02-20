@@ -376,6 +376,52 @@
   .tool-group-toggle:hover {
     @apply opacity-100 text-text-primary;
   }
+
+  /* Split Button */
+  .split-button {
+    @apply relative inline-flex;
+  }
+
+  .split-button-primary {
+    @apply rounded-r-none border-r-0;
+  }
+
+  .split-button-toggle {
+    @apply rounded-l-none px-sm;
+  }
+
+  .split-button-backdrop {
+    @apply fixed inset-0 z-40;
+  }
+
+  .split-button-menu {
+    @apply absolute right-0 top-full mt-1 min-w-40;
+    @apply bg-bg-secondary border border-border rounded-md shadow-lg;
+    @apply z-50;
+  }
+
+  .split-button-item {
+    @apply flex items-center w-full px-md py-sm;
+    @apply text-left text-sm text-text-primary;
+    @apply bg-transparent border-none cursor-pointer;
+    @apply transition-all duration-fast;
+  }
+
+  .split-button-item:hover:not(:disabled) {
+    @apply bg-bg-hover;
+  }
+
+  .split-button-item:disabled {
+    @apply opacity-50 cursor-not-allowed;
+  }
+
+  .split-button-item:first-child {
+    @apply rounded-t-md;
+  }
+
+  .split-button-item:last-child {
+    @apply rounded-b-md;
+  }
 }
 
 /* ==========================================================================

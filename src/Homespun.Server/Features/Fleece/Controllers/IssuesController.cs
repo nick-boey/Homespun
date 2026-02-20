@@ -1,9 +1,11 @@
 using Fleece.Core.Models;
 using Homespun.Features.Fleece.Services;
+using Homespun.Features.Notifications;
 using Homespun.Features.Projects;
 using Homespun.Shared.Models.Fleece;
 using Homespun.Shared.Requests;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 
 namespace Homespun.Features.Fleece.Controllers;
 
@@ -16,6 +18,7 @@ namespace Homespun.Features.Fleece.Controllers;
 public class IssuesController(
     IFleeceService fleeceService,
     IProjectService projectService,
+    IHubContext<NotificationHub> notificationHub,
     ILogger<IssuesController> logger) : ControllerBase
 {
     /// <summary>
@@ -137,6 +140,9 @@ public class IssuesController(
                 issue.Id);
         }
 
+        // Broadcast issue creation to connected clients
+        await notificationHub.BroadcastIssuesChanged(request.ProjectId, IssueChangeType.Created, issue.Id);
+
         return CreatedAtAction(
             nameof(GetById),
             new { issueId = issue.Id, projectId = request.ProjectId },
@@ -172,6 +178,9 @@ public class IssuesController(
             return NotFound("Issue not found");
         }
 
+        // Broadcast issue update to connected clients
+        await notificationHub.BroadcastIssuesChanged(request.ProjectId, IssueChangeType.Updated, issueId);
+
         return Ok(issue.ToResponse());
     }
 
@@ -194,6 +203,9 @@ public class IssuesController(
         {
             return NotFound("Issue not found");
         }
+
+        // Broadcast issue deletion to connected clients
+        await notificationHub.BroadcastIssuesChanged(projectId, IssueChangeType.Deleted, issueId);
 
         return NoContent();
     }

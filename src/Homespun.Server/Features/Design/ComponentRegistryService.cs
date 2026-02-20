@@ -102,6 +102,15 @@ public class ComponentRegistryService : IComponentRegistryService
         },
         new ComponentMetadata
         {
+            Id = "merged-pull-request-detail-panel",
+            Name = "MergedPullRequestDetailPanel",
+            Description = "Panel displaying merged pull request details with linked issue information.",
+            Category = "Panels",
+            ComponentPath = "Shared/MergedPullRequestDetailPanel.razor",
+            Tags = new() { "panel", "pr", "merged", "issue" }
+        },
+        new ComponentMetadata
+        {
             Id = "agent-management-panel",
             Name = "AgentManagementPanel",
             Description = "Panel for managing Claude Code agent sessions with controls and status display.",
@@ -245,6 +254,15 @@ public class ComponentRegistryService : IComponentRegistryService
             Category = "Core",
             ComponentPath = "Components/TaskGraphView.razor",
             Tags = new() { "graph", "task", "issue", "visualization" }
+        },
+        new ComponentMetadata
+        {
+            Id = "split-button",
+            Name = "SplitButton",
+            Description = "A button with a primary action and a dropdown for secondary actions.",
+            Category = "Core",
+            ComponentPath = "Components/SplitButton.razor",
+            Tags = new() { "button", "dropdown", "action" }
         }
     };
 

@@ -340,6 +340,7 @@ public class MockDataSeederService : IHostedService
                 Type = IssueType.Feature,
                 Status = IssueStatus.Open,
                 Priority = 3,
+                ParentIssues = [new ParentIssueRef { ParentIssue = "task/abc123", SortOrder = "0" }],
                 CreatedAt = now.AddDays(-10),
                 LastUpdate = now.AddDays(-3)
             },
@@ -373,6 +374,7 @@ public class MockDataSeederService : IHostedService
                 Type = IssueType.Task,
                 Status = IssueStatus.Open,
                 Priority = 3,
+                ParentIssues = [new ParentIssueRef { ParentIssue = "feat/def456", SortOrder = "0" }],
                 CreatedAt = now.AddDays(-7),
                 LastUpdate = now.AddDays(-4)
             },
@@ -404,6 +406,7 @@ Create an integration test to confirm that this does occur, then fix it - the br
                 Status = IssueStatus.Progress,
                 Priority = 1,
                 WorkingBranchId = "fix-issues-with-clone-and-branch-naming",
+                ParentIssues = [new ParentIssueRef { ParentIssue = "X4LlBY", SortOrder = "0" }],
                 CreatedAt = now.AddDays(-1),
                 LastUpdate = now
             },

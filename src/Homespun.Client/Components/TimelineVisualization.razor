@@ -1,10 +1,12 @@
 @using Microsoft.AspNetCore.SignalR.Client
 @using Homespun.Shared.Models.Fleece
+@using Homespun.Client.Services
 @inject HttpGraphApiService GraphApi
 @inject NavigationManager NavigationManager
+@inject IKeyboardNavigationService NavService
 @implements IAsyncDisposable
 
-<div class="timeline-wrapper">
+<div class="timeline-wrapper" @ref="_timelineWrapper">
     @if (_isLoading)
     {
         <div class="timeline-loading">
@@ -24,10 +26,12 @@
             <TaskGraphView
                 TaskGraph="@_taskGraphData"
                 ProjectId="@ProjectId"
-                OnIssueClick="OnIssueClick"
+                OnIssueClick="HandleTaskGraphIssueClick"
                 OnLoadMoreClick="LoadMoreTaskGraphPRs"
                 OnIssueCreated="HandleIssueCreated"
-                SelectedNodeId="@SelectedNodeId" />
+                OnIssueTypeChanged="HandleIssueChangedAsync"
+                SelectedNodeId="@GetKeyboardSelectedNodeId()"
+                NavService="@NavService" />
         </div>
     }
     else if (_graph != null && _layout != null)
@@ -68,6 +72,11 @@
         </div>
     }
 </div>
+
+@if (NavService.EditMode != KeyboardEditMode.Viewing)
+{
+    <div class="keyboard-mode-indicator">-- INSERT --</div>
+}
 
 @* Tooltip element *@
 @if (_tooltipVisible && _tooltipNode != null)
@@ -334,6 +343,15 @@
         padding: 2px 4px;
         border-radius: 3px;
     }
+
+    .keyboard-mode-indicator {
+        text-align: center;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--color-ocean, #51A5C1);
+        padding: 4px 0;
+        letter-spacing: 0.05em;
+    }
 </style>
 
 @code {
@@ -356,6 +374,7 @@
     [Parameter] public bool UseTaskGraphMode { get; set; } = true;
 
     private HubConnection? _hubConnection;
+    private HubConnection? _notificationHubConnection;
     private bool _isLoading = true;
     private bool _isRefreshing = false;
     private string? _error;
@@ -375,6 +394,10 @@
     private IGraphNode? _tooltipNode;
     private double _tooltipX;
     private double _tooltipY;
+
+    // Keyboard navigation
+    private ElementReference _timelineWrapper;
+    private List<TaskGraphIssueRenderLine> _issueRenderLines = [];
 
     private readonly TimelineLaneCalculator _laneCalculator = new();
 
@@ -400,10 +423,12 @@
         if (UseTaskGraphMode)
         {
             await LoadTaskGraphAsync();
+            InitializeKeyboardNavigation();
         }
 
-        // Set up SignalR connection for real-time updates (non-blocking)
+        // Set up SignalR connections for real-time updates (non-blocking)
         _ = SetupSignalRConnectionAsync();
+        _ = SetupNotificationHubConnectionAsync();
 
         // PHASE 2: Refresh with fresh data in background
         // This fetches from GitHub and updates the cache for next time
@@ -417,11 +442,16 @@
         if (_previousProjectId != null && _previousProjectId != ProjectId)
         {
             // ProjectId parameter changed — navigated to a different project via sidebar
-            // Dispose old SignalR connection
+            // Dispose old SignalR connections
             if (_hubConnection != null)
             {
                 await _hubConnection.DisposeAsync();
                 _hubConnection = null;
+            }
+            if (_notificationHubConnection != null)
+            {
+                await _notificationHubConnection.DisposeAsync();
+                _notificationHubConnection = null;
             }
 
             // Reset all state for new project
@@ -453,10 +483,12 @@
             if (UseTaskGraphMode)
             {
                 await LoadTaskGraphAsync();
+                InitializeKeyboardNavigation();
             }
 
-            // Set up new SignalR connection for the new project
+            // Set up new SignalR connections for the new project
             _ = SetupSignalRConnectionAsync();
+            _ = SetupNotificationHubConnectionAsync();
 
             // Refresh with fresh data in background
             _ = RefreshWithFreshDataAsync();
@@ -505,6 +537,42 @@
         catch (Exception ex)
         {
             Console.WriteLine($"Failed to set up SignalR connection for timeline: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Sets up a SignalR connection to NotificationHub for issue change events.
+    /// When issues are created, updated, or deleted, the graph will be refreshed.
+    /// </summary>
+    private async Task SetupNotificationHubConnectionAsync()
+    {
+        try
+        {
+            _notificationHubConnection = new HubConnectionBuilder()
+                .WithUrl(NavigationManager.ToAbsoluteUri("/hubs/notification"))
+                .WithAutomaticReconnect()
+                .Build();
+
+            // Subscribe to issue change events (changeType is serialized as int)
+            _notificationHubConnection.On<string, int, string>("IssuesChanged", async (projectId, changeType, issueId) =>
+            {
+                if (projectId == ProjectId)
+                {
+                    await InvokeAsync(async () =>
+                    {
+                        await RefreshAsync();
+                    });
+                }
+            });
+
+            await _notificationHubConnection.StartAsync();
+
+            // Join the project group for targeted updates
+            await _notificationHubConnection.InvokeAsync("JoinProjectGroup", ProjectId);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to set up NotificationHub connection for timeline: {ex.Message}");
         }
     }
 
@@ -734,6 +802,11 @@
     public async Task RefreshAsync()
     {
         await LoadGraphAsync();
+        if (UseTaskGraphMode)
+        {
+            await LoadTaskGraphAsync();
+            StateHasChanged();
+        }
     }
 
     private async Task HandleIssueCreated(string newIssueId)
@@ -759,5 +832,113 @@
                 // Ignore disposal errors
             }
         }
+if (_notificationHubConnection != null)
+        {
+            try
+            {
+                await _notificationHubConnection.DisposeAsync();
+            }
+            catch
+            {
+                // Ignore disposal errors
+            }
+        }
+        NavService.OnStateChanged -= HandleNavStateChanged;
+        NavService.OnIssueChanged -= HandleIssueChangedAsync;
+    }
+
+    private void HandleKeyDown(KeyboardEventArgs e)
+    {
+        // Don't handle keyboard when in edit mode - let the inline editor handle it
+        if (NavService.EditMode != KeyboardEditMode.Viewing) return;
+
+        switch (e.Key)
+        {
+            case "j":
+            case "ArrowDown":
+                NavService.MoveDown();
+                break;
+            case "k":
+            case "ArrowUp":
+                NavService.MoveUp();
+                break;
+            case "h":
+            case "ArrowLeft":
+                NavService.MoveToChild();
+                break;
+            case "l":
+            case "ArrowRight":
+                NavService.MoveToParent();
+                break;
+            case "i":
+                NavService.StartEditingAtStart();
+                break;
+            case "a":
+                NavService.StartEditingAtEnd();
+                break;
+            case "r":
+                NavService.StartReplacingTitle();
+                break;
+            case "o":
+                if (e.ShiftKey)
+                    NavService.CreateIssueAbove();
+                else
+                    NavService.CreateIssueBelow();
+                break;
+            case "O":
+                NavService.CreateIssueAbove();
+                break;
+        }
+    }
+
+    private void HandleNavStateChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void InitializeKeyboardNavigation()
+    {
+        // Unsubscribe from previous subscriptions if any
+        NavService.OnStateChanged -= HandleNavStateChanged;
+        NavService.OnStateChanged += HandleNavStateChanged;
+        NavService.OnIssueChanged -= HandleIssueChangedAsync;
+        NavService.OnIssueChanged += HandleIssueChangedAsync;
+
+        // Set the project ID for API calls
+        NavService.SetProjectId(ProjectId);
+
+        // Build issue render lines from task graph data
+        if (_taskGraphData != null)
+        {
+            var allRenderLines = TaskGraphLayoutService.ComputeLayout(_taskGraphData);
+            _issueRenderLines = allRenderLines.OfType<TaskGraphIssueRenderLine>().ToList();
+            NavService.Initialize(_issueRenderLines);
+            NavService.SelectFirstActionable();
+        }
+    }
+
+    private async Task HandleIssueChangedAsync()
+    {
+        // Refresh the task graph when an issue is created or updated
+        await LoadTaskGraphAsync();
+        InitializeKeyboardNavigation();
+        StateHasChanged();
+    }
+
+    private async Task HandleTaskGraphIssueClick(string issueId)
+    {
+        // Update keyboard navigation selection when clicking an issue
+        NavService.SelectIssue(issueId);
+        await OnIssueClick.InvokeAsync(issueId);
+    }
+
+    private string? GetKeyboardSelectedNodeId()
+    {
+        // Prefer keyboard selection over parameter if available
+        if (NavService.SelectedIssueId != null)
+        {
+            return $"issue-{NavService.SelectedIssueId}";
+        }
+        return SelectedNodeId;
     }
 }

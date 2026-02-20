@@ -55,6 +55,14 @@ RUN npm install -g @playwright/mcp@latest \
     && /usr/local/lib/node_modules/@playwright/mcp/node_modules/.bin/playwright install chromium --with-deps \
     && chmod -R 777 /opt/playwright-browsers
 
+# Install .NET Playwright browsers for E2E tests
+# The Node.js @playwright/mcp installs browsers for its version, but E2E tests use
+# Microsoft.Playwright which requires a different browser version. Install the CLI
+# tool and run it to download the matching browser version.
+RUN dotnet tool install Microsoft.Playwright.CLI --version 1.2.3 --tool-path /usr/local/bin \
+    && /usr/local/bin/playwright install chromium \
+    && chmod -R 777 /opt/playwright-browsers
+
 # Copy built app and production dependencies
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/node_modules ./node_modules

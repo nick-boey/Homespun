@@ -120,10 +120,8 @@
 
     private void HandleKeyDown(KeyboardEventArgs e)
     {
-        if (e.Key == "Escape" && _sidebarOpen)
-        {
-            _sidebarOpen = false;
-        }
+        // Don't close sidebar on Escape - let page components handle Escape
+        // The sidebar can be closed via backdrop click or toggle button
     }
 
     private async Task CycleTheme()
