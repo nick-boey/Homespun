@@ -27,6 +27,7 @@ builder.Services.AddScoped<HttpGraphApiService>();
 builder.Services.AddScoped<HttpSessionCacheApiService>();
 builder.Services.AddScoped<HttpIssuePrStatusApiService>();
 builder.Services.AddScoped<HttpFleeceSyncApiService>();
+builder.Services.AddScoped<HttpSecretsApiService>();
 builder.Services.AddScoped<HttpComponentRegistryService>();
 builder.Services.AddScoped<HttpPlansApiService>();
 

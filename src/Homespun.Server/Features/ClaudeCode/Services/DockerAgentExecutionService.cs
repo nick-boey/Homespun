@@ -5,6 +5,7 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 using Homespun.Features.ClaudeCode.Exceptions;
+using Homespun.Features.Secrets;
 using Homespun.Shared.Models.Sessions;
 using Microsoft.Extensions.Options;
 
@@ -75,6 +76,7 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
 {
     private readonly DockerAgentExecutionOptions _options;
     private readonly ILogger<DockerAgentExecutionService> _logger;
+    private readonly ISecretsService _secretsService;
     private readonly HttpClient _httpClient;
 
     // Session tracking: sessionId -> session info
@@ -141,10 +143,12 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
 
     public DockerAgentExecutionService(
         IOptions<DockerAgentExecutionOptions> options,
-        ILogger<DockerAgentExecutionService> logger)
+        ILogger<DockerAgentExecutionService> logger,
+        ISecretsService secretsService)
     {
         _options = options.Value;
         _logger = logger;
+        _secretsService = secretsService;
         _httpClient = new HttpClient
         {
             Timeout = _options.RequestTimeout
@@ -1298,6 +1302,20 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
     {
         EnsureClaudeDirectoryExists(workingDirectory, claudePath);
         var dockerArgs = BuildContainerDockerArgs(containerName, workingDirectory, useRm, claudePath, issueId, projectName);
+
+        // Append project-specific secrets as environment variables
+        var secretsArgs = new StringBuilder();
+        await AppendProjectSecretsAsync(secretsArgs, workingDirectory);
+        if (secretsArgs.Length > 0)
+        {
+            // Insert secrets before the image name (at the end of the args)
+            var imageIndex = dockerArgs.LastIndexOf(_options.WorkerImage, StringComparison.Ordinal);
+            if (imageIndex > 0)
+            {
+                dockerArgs = dockerArgs.Insert(imageIndex, secretsArgs.ToString());
+            }
+        }
+
         return await RunDockerAndGetUrl(containerName, dockerArgs, cancellationToken);
     }
 
@@ -1363,6 +1381,35 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
                 dockerArgs.Append($"-v \"{credentialsFile}:/home/homespun/.claude/.credentials.json:ro\" ");
                 _logger.LogDebug("Mounting Claude credentials file for agent container");
             }
+        }
+    }
+
+    /// <summary>
+    /// Appends project-specific secrets from secrets.env as environment variables.
+    /// </summary>
+    /// <param name="dockerArgs">The StringBuilder for Docker arguments.</param>
+    /// <param name="workingDirectory">Working directory to derive project path from.</param>
+    private async Task AppendProjectSecretsAsync(StringBuilder dockerArgs, string workingDirectory)
+    {
+        try
+        {
+            var secrets = await _secretsService.GetSecretsForInjectionAsync(workingDirectory);
+            foreach (var (name, value) in secrets)
+            {
+                // Escape double quotes and backslashes in the value for shell safety
+                var escapedValue = value.Replace("\\", "\\\\").Replace("\"", "\\\"");
+                dockerArgs.Append($"-e {name}=\"{escapedValue}\" ");
+                _logger.LogDebug("Injecting project secret {SecretName} into agent container", name);
+            }
+
+            if (secrets.Count > 0)
+            {
+                _logger.LogInformation("Injected {Count} project secrets into agent container", secrets.Count);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to load project secrets for container, continuing without secrets");
         }
     }
 
