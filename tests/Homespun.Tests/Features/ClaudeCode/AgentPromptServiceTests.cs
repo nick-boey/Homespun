@@ -342,14 +342,15 @@ public class AgentPromptServiceTests
     }
 
     [Test]
-    public async Task GetPromptsForProject_ReturnsCombinedProjectAndGlobalPrompts()
+    public async Task GetPromptsForProject_ReturnsCombinedProjectAndGlobalPromptsWithDifferentNames()
     {
         await _service.CreatePromptAsync("Global Plan", "message", SessionMode.Plan);
-        await _service.CreatePromptAsync("Global Build", "message", SessionMode.Build);
+        await _service.CreatePromptAsync("Global Rebase", "message", SessionMode.Build);
         await _service.CreatePromptAsync("Project Build", "message", SessionMode.Build, "project-1");
 
         var result = _service.GetPromptsForProject("project-1");
 
+        // All 3 have different names so no override occurs
         Assert.That(result, Has.Count.EqualTo(3));
     }
 
@@ -420,6 +421,102 @@ public class AgentPromptServiceTests
         Assert.That(_service.GetProjectPrompts("project-1"), Is.Empty);
         Assert.That(_service.GetAllPrompts(), Has.Count.EqualTo(1));
         Assert.That(_service.GetAllPrompts()[0].Name, Is.EqualTo("Global Prompt"));
+    }
+
+    #endregion
+
+    #region Prompt Override Tests
+
+    [Test]
+    public async Task GetPromptsForProject_ExcludesGlobalPromptsOverriddenByProject()
+    {
+        // Create global "Build" prompt
+        await _service.CreatePromptAsync("Build", "global build message", SessionMode.Build);
+        // Create project "Build" prompt that should override the global
+        await _service.CreatePromptAsync("Build", "project build message", SessionMode.Build, "project-1");
+
+        var result = _service.GetPromptsForProject("project-1");
+
+        // Should only have one "Build" prompt - the project one
+        Assert.That(result.Count(p => p.Name == "Build"), Is.EqualTo(1));
+        Assert.That(result.First(p => p.Name == "Build").InitialMessage, Is.EqualTo("project build message"));
+        Assert.That(result.First(p => p.Name == "Build").ProjectId, Is.EqualTo("project-1"));
+    }
+
+    [Test]
+    public async Task GetPromptsForProject_ReturnsGlobalPromptsNotOverridden()
+    {
+        // Create global "Build" and "Plan" prompts
+        await _service.CreatePromptAsync("Build", "global build", SessionMode.Build);
+        await _service.CreatePromptAsync("Plan", "global plan", SessionMode.Plan);
+        // Create project "Build" prompt only
+        await _service.CreatePromptAsync("Build", "project build", SessionMode.Build, "project-1");
+
+        var result = _service.GetPromptsForProject("project-1");
+
+        // Should have project "Build" + global "Plan"
+        Assert.That(result, Has.Count.EqualTo(2));
+        Assert.That(result.Any(p => p.Name == "Build" && p.ProjectId == "project-1"), Is.True);
+        Assert.That(result.Any(p => p.Name == "Plan" && p.ProjectId == null), Is.True);
+    }
+
+    [Test]
+    public async Task GetPromptsForProject_CaseInsensitiveNameMatching()
+    {
+        // Create global "Build" prompt
+        await _service.CreatePromptAsync("Build", "global build", SessionMode.Build);
+        // Create project "build" prompt (lowercase) that should override
+        await _service.CreatePromptAsync("build", "project build", SessionMode.Build, "project-1");
+
+        var result = _service.GetPromptsForProject("project-1");
+
+        // Should only have one Build prompt - override works case-insensitively
+        Assert.That(result.Count(p => p.Name.Equals("build", StringComparison.OrdinalIgnoreCase)), Is.EqualTo(1));
+        Assert.That(result.First(p => p.Name.Equals("build", StringComparison.OrdinalIgnoreCase)).ProjectId, Is.EqualTo("project-1"));
+    }
+
+    [Test]
+    public async Task GetGlobalPromptsNotOverridden_ReturnsOnlyNonOverriddenGlobals()
+    {
+        // Create global prompts
+        await _service.CreatePromptAsync("Build", "global build", SessionMode.Build);
+        await _service.CreatePromptAsync("Plan", "global plan", SessionMode.Plan);
+        await _service.CreatePromptAsync("Rebase", "global rebase", SessionMode.Build);
+        // Create project "Build" prompt that overrides the global
+        await _service.CreatePromptAsync("Build", "project build", SessionMode.Build, "project-1");
+
+        var result = _service.GetGlobalPromptsNotOverridden("project-1");
+
+        // Should return only "Plan" and "Rebase" (not "Build" which is overridden)
+        Assert.That(result, Has.Count.EqualTo(2));
+        Assert.That(result.Any(p => p.Name == "Plan"), Is.True);
+        Assert.That(result.Any(p => p.Name == "Rebase"), Is.True);
+        Assert.That(result.Any(p => p.Name == "Build"), Is.False);
+    }
+
+    [Test]
+    public async Task GetGlobalPromptsNotOverridden_ReturnsAllGlobalsWhenNoOverrides()
+    {
+        // Create global prompts only
+        await _service.CreatePromptAsync("Build", "global build", SessionMode.Build);
+        await _service.CreatePromptAsync("Plan", "global plan", SessionMode.Plan);
+
+        var result = _service.GetGlobalPromptsNotOverridden("project-1");
+
+        // Should return all globals since none are overridden
+        Assert.That(result, Has.Count.EqualTo(2));
+    }
+
+    [Test]
+    public async Task GetGlobalPromptsNotOverridden_CaseInsensitiveMatching()
+    {
+        await _service.CreatePromptAsync("Build", "global build", SessionMode.Build);
+        await _service.CreatePromptAsync("BUILD", "project build", SessionMode.Build, "project-1");
+
+        var result = _service.GetGlobalPromptsNotOverridden("project-1");
+
+        // Should be empty since "BUILD" overrides "Build" (case-insensitive)
+        Assert.That(result, Is.Empty);
     }
 
     #endregion

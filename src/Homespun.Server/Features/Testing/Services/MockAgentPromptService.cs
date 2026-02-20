@@ -40,8 +40,29 @@ public partial class MockAgentPromptService : IAgentPromptService
     {
         _logger.LogDebug("[Mock] GetPromptsForProject {ProjectId}", projectId);
         var projectPrompts = GetProjectPrompts(projectId);
-        var globalPrompts = GetAllPrompts();
+        var projectPromptNames = projectPrompts
+            .Select(p => p.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var globalPrompts = GetAllPrompts()
+            .Where(g => !projectPromptNames.Contains(g.Name))
+            .ToList();
+
         return projectPrompts.Concat(globalPrompts).ToList().AsReadOnly();
+    }
+
+    public IReadOnlyList<AgentPrompt> GetGlobalPromptsNotOverridden(string projectId)
+    {
+        _logger.LogDebug("[Mock] GetGlobalPromptsNotOverridden {ProjectId}", projectId);
+        var projectPrompts = GetProjectPrompts(projectId);
+        var projectPromptNames = projectPrompts
+            .Select(p => p.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        return GetAllPrompts()
+            .Where(g => !projectPromptNames.Contains(g.Name))
+            .ToList()
+            .AsReadOnly();
     }
 
     public AgentPrompt? GetPrompt(string id)
