@@ -127,7 +127,10 @@ public interface IAgentExecutionService
     /// <summary>
     /// Stops an agent session.
     /// </summary>
-    Task StopSessionAsync(string sessionId, CancellationToken cancellationToken = default);
+    /// <param name="sessionId">The session ID to stop.</param>
+    /// <param name="forceStopContainer">If true, always stops the container even for issue-based sessions.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    Task StopSessionAsync(string sessionId, bool forceStopContainer = false, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Interrupts an agent session's current execution without fully stopping it.

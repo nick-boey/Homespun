@@ -308,6 +308,26 @@ public class ClaudeSessionServiceTests
     }
 
     [Test]
+    public async Task StopSessionAsync_CallsAgentExecutionService_WithForceStopContainerTrue()
+    {
+        // Arrange
+        var session = await _service.StartSessionAsync(
+            "entity-123",
+            "project-456",
+            "/test/path",
+            SessionMode.Plan,
+            "claude-sonnet-4-20250514");
+
+        // Act
+        await _service.StopSessionAsync(session.Id);
+
+        // Assert - StopSessionAsync should be called with forceStopContainer: true
+        _agentExecutionServiceMock.Verify(
+            x => x.StopSessionAsync(It.IsAny<string>(), true, It.IsAny<CancellationToken>()),
+            Times.AtMostOnce());
+    }
+
+    [Test]
     public async Task InterruptSessionAsync_SetsStatusToWaitingForInput()
     {
         // Arrange

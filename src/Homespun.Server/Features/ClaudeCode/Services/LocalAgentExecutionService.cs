@@ -122,8 +122,9 @@ public class LocalAgentExecutionService : IAgentExecutionService, IAsyncDisposab
     }
 
     /// <inheritdoc />
-    public Task StopSessionAsync(string sessionId, CancellationToken cancellationToken = default)
+    public Task StopSessionAsync(string sessionId, bool forceStopContainer = false, CancellationToken cancellationToken = default)
     {
+        // forceStopContainer is ignored for local execution (no containers)
         if (_sessions.TryRemove(sessionId, out var session))
         {
             _logger.LogInformation("Stopping local session {SessionId}", sessionId);

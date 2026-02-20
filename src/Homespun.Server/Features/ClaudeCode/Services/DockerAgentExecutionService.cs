@@ -387,39 +387,57 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
     }
 
     /// <inheritdoc />
-    public async Task StopSessionAsync(string sessionId, CancellationToken cancellationToken = default)
+    public async Task StopSessionAsync(string sessionId, bool forceStopContainer = false, CancellationToken cancellationToken = default)
     {
         if (_sessions.TryRemove(sessionId, out var session))
         {
-            _logger.LogInformation("Stopping Docker session {SessionId}, container {ContainerName}",
-                sessionId, session.ContainerName);
+            _logger.LogInformation("Stopping Docker session {SessionId}, container {ContainerName}, forceStopContainer={ForceStop}",
+                sessionId, session.ContainerName, forceStopContainer);
 
             session.Cts.Cancel();
             session.Cts.Dispose();
 
-            // For issue containers, only stop the worker session (container stays running)
-            if (!string.IsNullOrEmpty(session.IssueId))
+            _sessionToIssue.TryRemove(sessionId, out _);
+
+            // Stop worker session via HTTP if exists
+            if (!string.IsNullOrEmpty(session.WorkerSessionId))
             {
-                _sessionToIssue.TryRemove(sessionId, out _);
-                if (!string.IsNullOrEmpty(session.WorkerSessionId))
+                try
                 {
-                    try
-                    {
-                        var response = await _httpClient.DeleteAsync(
-                            $"{session.WorkerUrl}/api/sessions/{session.WorkerSessionId}", cancellationToken);
-                        _logger.LogDebug("Worker session {WorkerSessionId} stop response: {StatusCode}",
-                            session.WorkerSessionId, response.StatusCode);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "Error stopping worker session {WorkerSessionId}", session.WorkerSessionId);
-                    }
+                    var response = await _httpClient.DeleteAsync(
+                        $"{session.WorkerUrl}/api/sessions/{session.WorkerSessionId}", cancellationToken);
+                    _logger.LogDebug("Worker session {WorkerSessionId} stop response: {StatusCode}",
+                        session.WorkerSessionId, response.StatusCode);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Error stopping worker session {WorkerSessionId}", session.WorkerSessionId);
                 }
             }
-            else
+
+            // Stop container if forced or if legacy (no IssueId)
+            bool shouldStopContainer = forceStopContainer || string.IsNullOrEmpty(session.IssueId);
+
+            if (shouldStopContainer)
             {
-                // For legacy per-session containers, stop the entire container
                 await StopContainerAsync(session.ContainerId);
+
+                // Remove from _issueContainers tracking
+                if (!string.IsNullOrEmpty(session.IssueId))
+                {
+                    var issueKey = _issueContainers.FirstOrDefault(kvp => kvp.Value.ContainerId == session.ContainerId).Key;
+                    if (issueKey != default)
+                    {
+                        _issueContainers.TryRemove(issueKey, out _);
+                    }
+                }
+
+                // Remove from _cloneContainers tracking
+                var cloneKey = _cloneContainers.FirstOrDefault(kvp => kvp.Value.ContainerId == session.ContainerId).Key;
+                if (!string.IsNullOrEmpty(cloneKey))
+                {
+                    _cloneContainers.TryRemove(cloneKey, out _);
+                }
             }
         }
     }
