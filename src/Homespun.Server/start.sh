@@ -81,6 +81,20 @@ if [ -n "$TS_AUTHKEY" ]; then
         tailscale --socket="$TS_SOCKET" serve --bg --https=443 http://127.0.0.1:8080 || true
         echo "Tailscale HTTPS proxy enabled on port 443"
 
+        # Expose Grafana over Tailscale if PLG stack is running (reachable via Docker network).
+        # Run in background because Grafana may not be ready yet (it depends on Loki health checks).
+        (
+            for i in $(seq 1 30); do
+                if getent hosts homespun-grafana >/dev/null 2>&1; then
+                    echo "Enabling Tailscale HTTPS serve for Grafana..."
+                    tailscale --socket="$TS_SOCKET" serve --bg --https=3000 http://homespun-grafana:3000 || true
+                    echo "Tailscale Grafana proxy enabled on port 3000"
+                    break
+                fi
+                sleep 2
+            done
+        ) &
+
         # Show Tailscale status
         tailscale --socket="$TS_SOCKET" status || true
     fi
