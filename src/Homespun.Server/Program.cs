@@ -9,6 +9,7 @@ using Homespun.Features.GitHub;
 using Homespun.Features.Gitgraph.Services;
 using Homespun.Features.Navigation;
 using Homespun.Features.Notifications;
+using Homespun.Features.Plans;
 using Homespun.Features.Projects;
 using Homespun.Features.PullRequests;
 using Homespun.Features.PullRequests.Data;
@@ -215,6 +216,9 @@ else
 builder.Services.Configure<SignalROptions>(
     builder.Configuration.GetSection(SignalROptions.SectionName));
 builder.Services.AddSingleton<ISignalRUrlProvider, SignalRUrlProvider>();
+
+// Plans service (reads plan files from .claude/plans directory)
+builder.Services.AddSingleton<IPlansService, PlansService>();
 
 builder.Services.AddSignalR();
 builder.Services.AddHealthChecks();

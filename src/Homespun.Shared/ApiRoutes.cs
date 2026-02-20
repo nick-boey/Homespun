@@ -12,4 +12,5 @@ public static class ApiRoutes
     public const string Issues = "api/issues";
     public const string Orchestration = "api/orchestration";
     public const string Containers = "api/containers";
+    public const string Plans = "api/plans";
 }
