@@ -4,6 +4,7 @@ using System.Net.Http.Headers;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
+using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.ClaudeCode.Exceptions;
 using Homespun.Shared.Models.Sessions;
 using Microsoft.Extensions.Options;
@@ -1789,6 +1790,33 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
     {
         try
         {
+            // A2A protocol events have 'task', 'message', or 'status-update' as event types
+            if (eventType == A2AEventKind.Task ||
+                eventType == A2AEventKind.Message ||
+                eventType == A2AEventKind.StatusUpdate ||
+                eventType == A2AEventKind.ArtifactUpdate)
+            {
+                var a2aEvent = A2AMessageParser.ParseSseEvent(eventType, data);
+                if (a2aEvent != null)
+                {
+                    var sdkMessage = A2AMessageParser.ConvertToSdkMessage(a2aEvent, sessionId);
+                    if (sdkMessage != null)
+                    {
+                        _logger.LogDebug("Parsed A2A event {EventType} -> {SdkMessageType}",
+                            eventType, sdkMessage.Type);
+                        return sdkMessage;
+                    }
+
+                    // A2A event parsed but no SDK message needed (e.g., 'working' status)
+                    _logger.LogDebug("A2A event {EventType} parsed but no SDK message conversion needed", eventType);
+                    return null;
+                }
+
+                _logger.LogWarning("Failed to parse A2A event {EventType}: {Data}", eventType, data);
+                return null;
+            }
+
+            // Legacy event types for backwards compatibility during migration
             // "session_started" is a custom lifecycle event, not a raw SDK message
             if (eventType == "session_started")
             {
