@@ -1,4 +1,7 @@
+using Homespun.Features.Fleece;
+using Homespun.Features.Fleece.Services;
 using Homespun.Features.PullRequests.Data;
+using Homespun.Shared.Models.PullRequests;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Homespun.Features.PullRequests.Controllers;
@@ -12,6 +15,7 @@ namespace Homespun.Features.PullRequests.Controllers;
 public class PullRequestsController(
     IDataStore dataStore,
     IGitHubService gitHubService,
+    IFleeceService fleeceService,
     PullRequestWorkflowService workflowService) : ControllerBase
 {
     /// <summary>
@@ -180,6 +184,39 @@ public class PullRequestsController(
         }
 
         var result = await workflowService.GetMergedPullRequestsWithTimeAsync(projectId);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Get details for a specific merged PR including linked issue information.
+    /// </summary>
+    [HttpGet("projects/{projectId}/pull-requests/merged/{prNumber:int}")]
+    [ProducesResponseType<MergedPullRequestDetails>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<MergedPullRequestDetails>> GetMergedPullRequestDetails(string projectId, int prNumber)
+    {
+        var project = dataStore.GetProject(projectId);
+        if (project == null)
+        {
+            return NotFound("Project not found");
+        }
+
+        var result = await workflowService.GetMergedPullRequestDetailsAsync(projectId, prNumber);
+        if (result == null)
+        {
+            return NotFound("Pull request not found");
+        }
+
+        // Load linked issue details if an issue ID was found
+        if (!string.IsNullOrEmpty(result.LinkedIssueId) && !string.IsNullOrEmpty(project.LocalPath))
+        {
+            var issue = await fleeceService.GetIssueAsync(project.LocalPath, result.LinkedIssueId);
+            if (issue != null)
+            {
+                result.LinkedIssue = issue.ToResponse();
+            }
+        }
+
         return Ok(result);
     }
 }

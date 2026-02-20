@@ -551,4 +551,123 @@ public class PullRequestWorkflowTests
     }
 
     #endregion
+
+    #region GetMergedPullRequestDetailsAsync
+
+    [Test]
+    public async Task GetMergedPullRequestDetails_ReturnsDetails_WhenPrExists()
+    {
+        // Arrange
+        var project = await CreateTestProject();
+        var mockPr = CreateMockPullRequest(42, "Merged PR Title", ItemState.Closed, "task/feature-name+abc123", merged: true, mergedAt: DateTime.UtcNow.AddDays(-1));
+
+        _mockGitHubClient.Setup(c => c.GetPullRequestAsync(
+            project.GitHubOwner!,
+            project.GitHubRepo!,
+            42))
+            .ReturnsAsync(mockPr);
+
+        // Act
+        var result = await _service.GetMergedPullRequestDetailsAsync(project.Id, 42);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.PullRequest.Number, Is.EqualTo(42));
+        Assert.That(result.PullRequest.Title, Is.EqualTo("Merged PR Title"));
+        Assert.That(result.PullRequest.Status, Is.EqualTo(PullRequestStatus.Merged));
+    }
+
+    [Test]
+    public async Task GetMergedPullRequestDetails_ExtractsLinkedIssueId_FromBranchName()
+    {
+        // Arrange
+        var project = await CreateTestProject();
+        var mockPr = CreateMockPullRequest(42, "PR with Issue", ItemState.Closed, "task/feature-name+abc123", merged: true);
+
+        _mockGitHubClient.Setup(c => c.GetPullRequestAsync(
+            project.GitHubOwner!,
+            project.GitHubRepo!,
+            42))
+            .ReturnsAsync(mockPr);
+
+        // Act
+        var result = await _service.GetMergedPullRequestDetailsAsync(project.Id, 42);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.LinkedIssueId, Is.EqualTo("abc123"));
+    }
+
+    [Test]
+    public async Task GetMergedPullRequestDetails_ReturnsNullLinkedIssueId_WhenBranchHasNoIssue()
+    {
+        // Arrange
+        var project = await CreateTestProject();
+        var mockPr = CreateMockPullRequest(42, "PR without Issue", ItemState.Closed, "feature/some-feature", merged: true);
+
+        _mockGitHubClient.Setup(c => c.GetPullRequestAsync(
+            project.GitHubOwner!,
+            project.GitHubRepo!,
+            42))
+            .ReturnsAsync(mockPr);
+
+        // Act
+        var result = await _service.GetMergedPullRequestDetailsAsync(project.Id, 42);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.LinkedIssueId, Is.Null);
+    }
+
+    [Test]
+    public async Task GetMergedPullRequestDetails_ReturnsNull_WhenProjectNotFound()
+    {
+        // Act
+        var result = await _service.GetMergedPullRequestDetailsAsync("non-existent-project", 42);
+
+        // Assert
+        Assert.That(result, Is.Null);
+    }
+
+    [Test]
+    public async Task GetMergedPullRequestDetails_ReturnsNull_WhenProjectHasNoGitHubConfig()
+    {
+        // Arrange
+        var project = new Project
+        {
+            Name = "no-github-project",
+            LocalPath = "/test/path",
+            DefaultBranch = "main",
+            GitHubOwner = null,
+            GitHubRepo = null
+        };
+        await _dataStore.AddProjectAsync(project);
+
+        // Act
+        var result = await _service.GetMergedPullRequestDetailsAsync(project.Id, 42);
+
+        // Assert
+        Assert.That(result, Is.Null);
+    }
+
+    [Test]
+    public async Task GetMergedPullRequestDetails_ReturnsNull_WhenGitHubThrows()
+    {
+        // Arrange
+        var project = await CreateTestProject();
+
+        _mockGitHubClient.Setup(c => c.GetPullRequestAsync(
+            project.GitHubOwner!,
+            project.GitHubRepo!,
+            42))
+            .ThrowsAsync(new Octokit.NotFoundException("PR not found", System.Net.HttpStatusCode.NotFound));
+
+        // Act
+        var result = await _service.GetMergedPullRequestDetailsAsync(project.Id, 42);
+
+        // Assert
+        Assert.That(result, Is.Null);
+    }
+
+    #endregion
 }

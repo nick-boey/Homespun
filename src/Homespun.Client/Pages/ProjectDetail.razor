@@ -8,6 +8,7 @@
 @using Fleece.Core.Models
 @using Homespun.Shared.Hubs
 @using Homespun.Shared.Models.Notifications
+@using Homespun.Shared.Models.PullRequests
 @using Homespun.Shared.Requests
 @using Microsoft.AspNetCore.SignalR.Client
 @inject HttpProjectApiService ProjectApi
@@ -110,6 +111,21 @@ else
                 <CurrentPullRequestDetailPanel PullRequest="_selectedPullRequest"
                                                OnActionCompleted="RefreshData"
                                                OnClose="ClearSelection"/>
+            }
+            else if (_selectedMergedPr != null)
+            {
+                <MergedPullRequestDetailPanel Details="_selectedMergedPr"
+                                              ProjectId="@Id"
+                                              OnClose="ClearSelection"/>
+            }
+            else if (_isLoadingMergedPr)
+            {
+                <div class="card">
+                    <div class="card-body text-center">
+                        <span class="spinner-border spinner-border-sm mr-2" role="status"></span>
+                        Loading pull request details...
+                    </div>
+                </div>
             }
             else if (_selectedIssue != null)
             {
@@ -302,6 +318,8 @@ else
     private List<FlattenedPR> _flattenedCurrentPRs = [];
     private PullRequest? _selectedPullRequest;
     private string? _selectedPullRequestId;
+    private MergedPullRequestDetails? _selectedMergedPr;
+    private bool _isLoadingMergedPr;
     private IssueResponse? _selectedIssue;
     private string? _selectedIssueId;
     private bool _isSyncingPRs;
@@ -336,6 +354,8 @@ else
             // Reset all state
             _selectedPullRequest = null;
             _selectedPullRequestId = null;
+            _selectedMergedPr = null;
+            _isLoadingMergedPr = false;
             _selectedIssue = null;
             _selectedIssueId = null;
             _lastSyncResult = null;
@@ -817,9 +837,10 @@ else
 
     private async Task SelectPullRequest(string pullRequestId)
     {
-        // Clear any issue selection
+        // Clear any other selection
         _selectedIssueId = null;
         _selectedIssue = null;
+        _selectedMergedPr = null;
 
         _selectedPullRequestId = pullRequestId;
         _selectedPullRequest = await PullRequestApi.GetPullRequestAsync(pullRequestId);
@@ -830,6 +851,7 @@ else
         // Clear any pull request selection
         _selectedPullRequestId = null;
         _selectedPullRequest = null;
+        _selectedMergedPr = null;
 
         _selectedIssueId = issueId;
         _selectedIssue = _openIssues?.FirstOrDefault(i => i.Id == issueId)
@@ -838,9 +860,10 @@ else
 
     private async Task SelectPullRequestByNumber(int prNumber)
     {
-        // Clear any issue selection
+        // Clear any existing selection
         _selectedIssueId = null;
         _selectedIssue = null;
+        _selectedMergedPr = null;
 
         // Find the PR in current PRs (internal database)
         var currentPr = _flattenedCurrentPRs.FirstOrDefault(p => p.PullRequest.GitHubPRNumber == prNumber);
@@ -851,10 +874,27 @@ else
             return;
         }
 
-        // For past PRs, we don't have internal IDs, so clear selection
-        // (Past PRs from GitHub API are view-only in the graph)
+        // Not in current PRs - try to fetch as merged/closed PR
         _selectedPullRequestId = null;
         _selectedPullRequest = null;
+
+        // Show loading state and fetch merged PR details
+        _isLoadingMergedPr = true;
+        StateHasChanged();
+
+        try
+        {
+            _selectedMergedPr = await PullRequestApi.GetMergedPullRequestDetailsAsync(Id, prNumber);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to fetch merged PR #{PrNumber} details", prNumber);
+            _selectedMergedPr = null;
+        }
+        finally
+        {
+            _isLoadingMergedPr = false;
+        }
     }
 
     private string? GetSelectedNodeId()
@@ -862,6 +902,11 @@ else
         if (_selectedPullRequest != null && _selectedPullRequest.GitHubPRNumber.HasValue)
         {
             return $"pr-{_selectedPullRequest.GitHubPRNumber}";
+        }
+
+        if (_selectedMergedPr != null)
+        {
+            return $"pr-{_selectedMergedPr.PullRequest.Number}";
         }
 
         if (_selectedIssueId != null)
@@ -876,6 +921,7 @@ else
     {
         _selectedPullRequestId = null;
         _selectedPullRequest = null;
+        _selectedMergedPr = null;
         _selectedIssueId = null;
         _selectedIssue = null;
     }
