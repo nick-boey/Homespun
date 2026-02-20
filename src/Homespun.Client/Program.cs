@@ -39,6 +39,7 @@ builder.Services.AddScoped<IBreadcrumbService, BreadcrumbService>();
 builder.Services.AddSingleton<IMarkdownRenderingService, MarkdownRenderingService>();
 builder.Services.AddSingleton<IAgentStartupTracker, AgentStartupTracker>();
 builder.Services.AddScoped<MessageDisplayService>();
+builder.Services.AddScoped<IKeyboardNavigationService, KeyboardNavigationService>();
 
 // Register telemetry services
 builder.Services.AddScoped<ConsoleTelemetryService>();

@@ -1,5 +1,9 @@
 @using Homespun.Shared.Models.Fleece
 @using Homespun.Shared.Models.Gitgraph
+@using Homespun.Client.Services
+@using Homespun.Shared.Requests
+@using Fleece.Core.Models
+@inject HttpIssueApiService IssueApi
 
 @if (TaskGraph != null && (_renderLines.Count > 0 || TaskGraph.MergedPrs.Count > 0))
 {
@@ -43,26 +47,71 @@
             }
             else if (line is TaskGraphIssueRenderLine issueLine)
             {
+                @* Insert new issue before this issue if needed (for inserting above first issue) *@
+                @if (NavService?.EditMode == KeyboardEditMode.CreatingNew
+                    && NavService?.PendingNewIssue != null
+                    && NavService.PendingNewIssue.IsAbove
+                    && NavService.PendingNewIssue.ReferenceIssueId == issueLine.IssueId)
+                {
+                    <div class="task-graph-row task-graph-row-selected task-graph-row-editing">
+                        <div class="task-graph-graph-cell">
+                            @((MarkupString)GenerateNewIssueSvg(issueLine.Lane))
+                        </div>
+                        <div class="task-graph-content-cell">
+                            <span class="task-graph-issue-type task">Task</span>
+                            <span class="task-graph-issue-id task-graph-issue-id-new">NEW</span>
+                            <InlineIssueEditor Title="@NavService.PendingNewIssue.Title"
+                                               CursorPosition="EditCursorPosition.Start"
+                                               Placeholder="Enter new issue title..." />
+                        </div>
+                    </div>
+                }
+
                 var isSelected = SelectedNodeId == $"issue-{issueLine.IssueId}";
                 var agentStatus = issueLine.AgentStatus;
                 var index = i;
+                var isEditing = NavService?.EditMode == KeyboardEditMode.EditingExisting
+                    && NavService?.PendingEdit?.IssueId == issueLine.IssueId;
 
-                <div class="task-graph-row @(isSelected ? "task-graph-row-selected" : "")"
+                <div class="task-graph-row @(isSelected ? "task-graph-row-selected" : "") @(isEditing ? "task-graph-row-editing" : "")"
                      @onclick="() => HandleIssueClick(issueLine.IssueId)">
                     <div class="task-graph-graph-cell">
                         @((MarkupString)GenerateIssueSvg(index, issueLine, agentStatus))
                     </div>
                     <div class="task-graph-content-cell">
-                        <span class="task-graph-issue-type @GetIssueTypeClass(issueLine.IssueType)">@GetIssueTypeLabel(issueLine.IssueType)</span>
+                        <div class="task-graph-issue-type-wrapper">
+                            <span class="task-graph-issue-type @GetIssueTypeClass(issueLine.IssueType)"
+                                  @onclick="() => ToggleTypeMenu(issueLine.IssueId)"
+                                  @onclick:stopPropagation="true"
+                                  title="Click to change type">@GetIssueTypeLabel(issueLine.IssueType)</span>
+                            @if (_typeMenuOpenForIssueId == issueLine.IssueId)
+                            {
+                                <div class="task-graph-type-menu" @onclick:stopPropagation="true">
+                                    <button class="type-menu-item bug" @onclick="() => ChangeIssueType(issueLine.IssueId, IssueType.Bug)">Bug</button>
+                                    <button class="type-menu-item task" @onclick="() => ChangeIssueType(issueLine.IssueId, IssueType.Task)">Task</button>
+                                    <button class="type-menu-item feature" @onclick="() => ChangeIssueType(issueLine.IssueId, IssueType.Feature)">Feature</button>
+                                    <button class="type-menu-item chore" @onclick="() => ChangeIssueType(issueLine.IssueId, IssueType.Chore)">Chore</button>
+                                </div>
+                            }
+                        </div>
                         <span class="task-graph-issue-id">@issueLine.IssueId</span>
-                        <span class="task-graph-title">@issueLine.Title</span>
-                        @if (issueLine.LinkedPr != null)
+                        @if (isEditing && NavService?.PendingEdit != null)
+                        {
+                            <InlineIssueEditor Title="@NavService.PendingEdit.Title"
+                                               CursorPosition="@NavService.PendingEdit.CursorPosition"
+                                               Placeholder="Enter issue title..." />
+                        }
+                        else
+                        {
+                            <span class="task-graph-title">@issueLine.Title</span>
+                        }
+                        @if (issueLine.LinkedPr != null && !isEditing)
                         {
                             <a class="task-graph-pr-link" href="@issueLine.LinkedPr.Url" target="_blank" @onclick:stopPropagation="true">
                                 #@issueLine.LinkedPr.Number
                             </a>
                         }
-                        @if (agentStatus != null)
+                        @if (agentStatus != null && !isEditing)
                         {
                             <span class="agent-status-badge @GetAgentStatusClass(agentStatus)">
                                 <span class="agent-status-dot @(agentStatus.IsActive ? "agent-status-dot-active" : "")"></span>
@@ -84,6 +133,45 @@
                     </div>
                 </div>
             }
+
+            @* Insert new issue row when creating inline *@
+            @if (NavService?.EditMode == KeyboardEditMode.CreatingNew
+                && NavService?.PendingNewIssue != null
+                && line is TaskGraphIssueRenderLine currentIssue
+                && ShouldInsertNewIssueAfter(currentIssue.IssueId))
+            {
+                <div class="task-graph-row task-graph-row-selected task-graph-row-editing">
+                    <div class="task-graph-graph-cell">
+                        @((MarkupString)GenerateNewIssueSvg(currentIssue.Lane))
+                    </div>
+                    <div class="task-graph-content-cell">
+                        <span class="task-graph-issue-type task">Task</span>
+                        <span class="task-graph-issue-id task-graph-issue-id-new">NEW</span>
+                        <InlineIssueEditor Title="@NavService.PendingNewIssue.Title"
+                                           CursorPosition="EditCursorPosition.Start"
+                                           Placeholder="Enter new issue title..." />
+                    </div>
+                </div>
+            }
+        }
+
+        @* Handle new issue at the end of the list *@
+        @if (NavService?.EditMode == KeyboardEditMode.CreatingNew
+            && NavService?.PendingNewIssue != null
+            && ShouldInsertNewIssueAtEnd())
+        {
+            <div class="task-graph-row task-graph-row-selected task-graph-row-editing">
+                <div class="task-graph-graph-cell">
+                    @((MarkupString)GenerateNewIssueSvg(0))
+                </div>
+                <div class="task-graph-content-cell">
+                    <span class="task-graph-issue-type task">Task</span>
+                    <span class="task-graph-issue-id task-graph-issue-id-new">NEW</span>
+                    <InlineIssueEditor Title="@NavService.PendingNewIssue.Title"
+                                       CursorPosition="EditCursorPosition.Start"
+                                       Placeholder="Enter new issue title..." />
+                </div>
+            </div>
         }
     </div>
 }
@@ -332,16 +420,100 @@
         color: var(--text-muted, #6c757d);
         white-space: nowrap;
     }
+
+    /* Editing row styles */
+    .task-graph-row-editing {
+        background-color: var(--bg-secondary, rgba(255, 255, 255, 0.1));
+    }
+
+    .task-graph-issue-id-new {
+        background-color: rgba(81, 165, 193, 0.2);
+        color: var(--color-ocean, #51A5C1);
+        border-color: var(--color-ocean, #51A5C1);
+    }
+
+    /* Issue type wrapper for dropdown positioning */
+    .task-graph-issue-type-wrapper {
+        position: relative;
+        flex-shrink: 0;
+    }
+
+    .task-graph-issue-type {
+        cursor: pointer;
+        transition: filter 0.15s ease;
+    }
+
+    .task-graph-issue-type:hover {
+        filter: brightness(1.2);
+    }
+
+    /* Type change dropdown menu */
+    .task-graph-type-menu {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        z-index: 100;
+        background: var(--bg-primary, #1a1a2e);
+        border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+        border-radius: 4px;
+        padding: 4px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 80px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        margin-top: 4px;
+    }
+
+    .type-menu-item {
+        padding: 4px 8px;
+        border: none;
+        border-radius: 3px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        cursor: pointer;
+        text-align: left;
+        transition: filter 0.15s ease;
+    }
+
+    .type-menu-item:hover {
+        filter: brightness(1.2);
+    }
+
+    .type-menu-item.bug {
+        background-color: rgba(239, 68, 68, 0.2);
+        color: #ef4444;
+    }
+
+    .type-menu-item.task {
+        background-color: rgba(59, 130, 246, 0.2);
+        color: #3b82f6;
+    }
+
+    .type-menu-item.feature {
+        background-color: rgba(16, 185, 129, 0.2);
+        color: #10b981;
+    }
+
+    .type-menu-item.chore {
+        background-color: rgba(107, 114, 128, 0.2);
+        color: #6b7280;
+    }
 </style>
 
 @code {
     [Parameter] public TaskGraphResponse? TaskGraph { get; set; }
     [Parameter] public EventCallback<string> OnIssueClick { get; set; }
     [Parameter] public EventCallback OnLoadMoreClick { get; set; }
+    [Parameter] public EventCallback OnIssueTypeChanged { get; set; }
     [Parameter] public string? SelectedNodeId { get; set; }
+    [Parameter] public IKeyboardNavigationService? NavService { get; set; }
+    [Parameter] public string? ProjectId { get; set; }
 
     private List<TaskGraphRenderLine> _renderLines = [];
     private int _maxLane;
+    private string? _typeMenuOpenForIssueId;
 
     protected override void OnParametersSet()
     {
@@ -402,6 +574,68 @@
     private string GenerateDividerSvg()
     {
         return TimelineSvgRenderer.GenerateDividerRowSvg(_maxLane + 1);
+    }
+
+    private string GenerateNewIssueSvg(int lane)
+    {
+        // New issue uses task color (blue) and is placed in the same lane as the selected issue
+        return TimelineSvgRenderer.GenerateTaskGraphCircleSvg(
+            nodeLane: lane,
+            parentLane: null,
+            isFirstChild: false,
+            maxLanes: _maxLane + 1,
+            nodeColor: "#3b82f6", // Blue (task color)
+            isOutlineOnly: true, // Outline only for new issue
+            isActionable: lane == 0,
+            drawTopLine: true,
+            drawBottomLine: false,
+            isSeriesChild: false,
+            seriesConnectorFromLane: null);
+    }
+
+    private bool ShouldInsertNewIssueAfter(string issueId)
+    {
+        if (NavService?.PendingNewIssue == null) return false;
+
+        // Only check for inserting below (above case is handled separately in the render loop)
+        if (!NavService.PendingNewIssue.IsAbove &&
+            NavService.PendingNewIssue.ReferenceIssueId == issueId)
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private bool ShouldInsertNewIssueAtEnd()
+    {
+        if (NavService?.PendingNewIssue == null) return false;
+
+        // Check if we should insert at the start (above first issue)
+        if (NavService.PendingNewIssue.IsAbove)
+        {
+            var issueLines = _renderLines.OfType<TaskGraphIssueRenderLine>().ToList();
+            if (issueLines.Count > 0 &&
+                issueLines[0].IssueId == NavService.PendingNewIssue.ReferenceIssueId)
+            {
+                // Need to insert at the beginning, but there's no issue before it
+                // This case is handled specially in the render loop
+                return false;
+            }
+        }
+
+        // Insert at end if reference issue is the last one and we're inserting below
+        if (!NavService.PendingNewIssue.IsAbove)
+        {
+            var issueLines = _renderLines.OfType<TaskGraphIssueRenderLine>().ToList();
+            if (issueLines.Count > 0 &&
+                issueLines[^1].IssueId == NavService.PendingNewIssue.ReferenceIssueId)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static (string color, bool isOutlineOnly) ComputeTaskGraphNodeStyle(
@@ -496,5 +730,35 @@
     {
         // PR clicks navigate to GitHub - handled by href on the row
         // This is a no-op but could be extended for internal PR handling
+    }
+
+    private void ToggleTypeMenu(string issueId)
+    {
+        if (_typeMenuOpenForIssueId == issueId)
+        {
+            _typeMenuOpenForIssueId = null;
+        }
+        else
+        {
+            _typeMenuOpenForIssueId = issueId;
+        }
+    }
+
+    private async Task ChangeIssueType(string issueId, IssueType newType)
+    {
+        if (string.IsNullOrEmpty(ProjectId)) return;
+
+        // Close the menu
+        _typeMenuOpenForIssueId = null;
+
+        // Update the issue type via API
+        await IssueApi.UpdateIssueAsync(issueId, new UpdateIssueRequest
+        {
+            ProjectId = ProjectId,
+            Type = newType
+        });
+
+        // Notify parent to refresh data
+        await OnIssueTypeChanged.InvokeAsync();
     }
 }

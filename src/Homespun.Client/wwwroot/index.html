@@ -156,6 +156,38 @@
                 return window.innerWidth <= 768;
             }
         };
+        window.homespunInterop = {
+            focusWithCursor: function(element, cursorPosition, valueLength) {
+                requestAnimationFrame(function() {
+                    if (!element) return;
+                    element.focus();
+                    var len = valueLength || 0;
+                    if (cursorPosition === 'start') {
+                        element.setSelectionRange(0, 0);
+                    } else if (cursorPosition === 'end') {
+                        element.setSelectionRange(len, len);
+                    } else if (cursorPosition === 'replace') {
+                        element.setSelectionRange(0, len);
+                    }
+                    // Prevent Tab from moving focus (only Tab, not other keys)
+                    if (!element.__tabPreventDefault) {
+                        element.addEventListener('keydown', function(e) {
+                            if (e.key === 'Tab') {
+                                e.preventDefault();
+                            }
+                        });
+                        element.__tabPreventDefault = true;
+                    }
+                });
+            },
+            focusElement: function(element) {
+                requestAnimationFrame(function() {
+                    if (element) {
+                        element.focus();
+                    }
+                });
+            }
+        };
     </script>
 </body>
 

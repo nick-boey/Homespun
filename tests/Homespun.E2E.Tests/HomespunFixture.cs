@@ -121,7 +121,8 @@ public class HomespunFixture
                 Environment =
                 {
                     ["ASPNETCORE_URLS"] = BaseUrl,
-                    ["ASPNETCORE_ENVIRONMENT"] = "Development"
+                    ["ASPNETCORE_ENVIRONMENT"] = "Development",
+                    ["HOMESPUN_MOCK_MODE"] = "true"
                 }
             }
         };
