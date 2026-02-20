@@ -616,11 +616,11 @@ else
         return sb.ToString();
     }
 
-    private void HandleKeyDown(KeyboardEventArgs e)
+    private async Task HandleKeyDown(KeyboardEventArgs e)
     {
-        if (e.Key == "Enter" && e.CtrlKey)
+        if (e.Key == "Enter" && (e.CtrlKey || e.MetaKey))
         {
-            _ = HandleSubmit();
+            await HandleSubmit();
         }
     }
 
