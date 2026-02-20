@@ -9,6 +9,7 @@ using Homespun.Features.GitHub;
 using Homespun.Features.Gitgraph.Services;
 using Homespun.Features.Navigation;
 using Homespun.Features.Notifications;
+using Homespun.Features.Observability;
 using Homespun.Features.Plans;
 using Homespun.Features.Projects;
 using Homespun.Features.PullRequests;
@@ -17,6 +18,7 @@ using Homespun.Features.Shared.Services;
 using Homespun.Features.SignalR;
 using Homespun.Features.Testing;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.Extensions.Logging.Console;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -37,9 +39,15 @@ if (Environment.GetEnvironmentVariable("HOMESPUN_MOCK_MODE") == "true")
     mockModeOptions.Enabled = true;
 }
 
-// Configure console logging with readable output
+// Configure console logging with single-line format
 builder.Logging.ClearProviders();
-builder.Logging.AddConsole();
+builder.Logging.AddConsole(options => options.FormatterName = SingleLineConsoleFormatter.FormatterName)
+    .AddConsoleFormatter<SingleLineConsoleFormatter, SingleLineConsoleFormatterOptions>(options =>
+    {
+        options.TimestampFormat = "yyyy-MM-dd HH:mm:ss.fff";
+        options.UseUtcTimestamp = true;
+        options.ColorEnabled = !Console.IsOutputRedirected;
+    });
 
 // Resolve data path from configuration or use default (used by production and for data protection keys)
 var homespunDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".homespun");
