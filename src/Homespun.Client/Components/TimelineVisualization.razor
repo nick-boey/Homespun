@@ -832,6 +832,16 @@
         await OnIssueCreated.InvokeAsync(newIssueId);
     }
 
+    private async Task HandleIssueCreated(string newIssueId)
+    {
+        // Refresh the task graph to show the new issue
+        await LoadTaskGraphAsync();
+        StateHasChanged();
+
+        // Notify parent component
+        await OnIssueCreated.InvokeAsync(newIssueId);
+    }
+
     public async ValueTask DisposeAsync()
     {
         if (_hubConnection != null)
