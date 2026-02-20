@@ -1,6 +1,7 @@
 using Bunit;
 using Homespun.Client.Components.ClaudeCode.SessionInfoPanel;
 using Homespun.Client.Services;
+using Homespun.Shared.Models.Plans;
 using Homespun.Tests.Helpers;
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
@@ -20,6 +21,7 @@ public class SessionInfoPanelTests : BunitTestContext
         // Default responses for child tab HTTP calls
         mockHandler
             .RespondWith("changed-files", new List<FileChangeInfo>())
+            .RespondWith("api/plans", new List<PlanFileInfo>())
             .RespondNotFound("api/issues/")
             .RespondNotFound("api/issue-pr-status/");
 
@@ -29,6 +31,7 @@ public class SessionInfoPanelTests : BunitTestContext
         Services.AddSingleton(new HttpCloneApiService(httpClient));
         Services.AddSingleton(new HttpIssueApiService(httpClient));
         Services.AddSingleton(new HttpIssuePrStatusApiService(httpClient));
+        Services.AddSingleton(new HttpPlansApiService(httpClient));
 
         // Register IMarkdownRenderingService needed by SessionIssueTab and SessionPrTab
         var mockMarkdownService = new Mock<IMarkdownRenderingService>();
@@ -52,7 +55,7 @@ public class SessionInfoPanelTests : BunitTestContext
     }
 
     [Test]
-    public void SessionInfoPanel_Renders_AllFourTabs()
+    public void SessionInfoPanel_Renders_AllFiveTabs()
     {
         // Arrange
         var session = CreateTestSession();
@@ -65,7 +68,7 @@ public class SessionInfoPanelTests : BunitTestContext
         // Assert - scope to desktop panel since mobile panel also renders tabs
         var desktopPanel = cut.Find(".desktop-panel");
         var tabButtons = desktopPanel.QuerySelectorAll(".tab-button");
-        Assert.That(tabButtons, Has.Count.EqualTo(4));
+        Assert.That(tabButtons, Has.Count.EqualTo(5));
     }
 
     [Test]

@@ -28,6 +28,7 @@ builder.Services.AddScoped<HttpSessionCacheApiService>();
 builder.Services.AddScoped<HttpIssuePrStatusApiService>();
 builder.Services.AddScoped<HttpFleeceSyncApiService>();
 builder.Services.AddScoped<HttpComponentRegistryService>();
+builder.Services.AddScoped<HttpPlansApiService>();
 
 // Register SignalR services
 builder.Services.AddScoped<ClaudeCodeSignalRService>();

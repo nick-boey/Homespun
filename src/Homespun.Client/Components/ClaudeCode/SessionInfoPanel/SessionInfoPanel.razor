@@ -33,6 +33,10 @@
                         @onclick="() => SetActiveTab(Tab.Files)">
                     Files
                 </button>
+                <button class="tab-button @(_activeTab == Tab.Plans ? "active" : "")"
+                        @onclick="() => SetActiveTab(Tab.Plans)">
+                    Plans
+                </button>
             </div>
 
             <div class="panel-content">
@@ -51,6 +55,10 @@
                 else if (_activeTab == Tab.Files)
                 {
                     <SessionFilesTab WorkingDirectory="@Session.WorkingDirectory" TargetBranch="main" />
+                }
+                else if (_activeTab == Tab.Plans)
+                {
+                    <SessionPlansTab WorkingDirectory="@Session.WorkingDirectory" />
                 }
             </div>
         }
@@ -84,6 +92,10 @@
                             @onclick="() => SetActiveTab(Tab.Files)">
                         Files
                     </button>
+                    <button class="tab-button @(_activeTab == Tab.Plans ? "active" : "")"
+                            @onclick="() => SetActiveTab(Tab.Plans)">
+                        Plans
+                    </button>
                 </div>
 
                 <div class="panel-content">
@@ -102,6 +114,10 @@
                     else if (_activeTab == Tab.Files)
                     {
                         <SessionFilesTab WorkingDirectory="@Session.WorkingDirectory" TargetBranch="main" />
+                    }
+                    else if (_activeTab == Tab.Plans)
+                    {
+                        <SessionPlansTab WorkingDirectory="@Session.WorkingDirectory" />
                     }
                 </div>
             </div>
@@ -314,7 +330,8 @@
         Issue,
         PR,
         Todos,
-        Files
+        Files,
+        Plans
     }
 
     private void SetActiveTab(Tab tab)
