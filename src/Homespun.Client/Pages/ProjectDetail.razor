@@ -34,17 +34,16 @@ else
 {
     <div class="flex justify-between items-center mb-3">
         <h1>@_project.Name</h1>
-        <div class="btn-group">
-            <AsyncActionButton OnClick="SyncAllAsync"
-                               IsLoadingExternal="_isSyncing"
-                               CssClass="btn-outline-secondary btn-sm"
-                               Text="Sync"
-                               LoadingText="Syncing...">
-                <IconContent>
-                    <i class="bi bi-cloud-arrow-up"></i>
-                </IconContent>
-            </AsyncActionButton>
-            <a href="projects/@Id/edit" class="btn btn-outline-secondary btn-sm">Edit Project</a>
+        <div class="flex items-center gap-2">
+            <SplitButton PrimaryText="Pull"
+                         PrimaryOnClick="PullAsync"
+                         ButtonCssClass="btn-outline btn-sm"
+                         Actions="@_syncActions">
+                <PrimaryIcon>
+                    <i class="bi bi-cloud-arrow-down me-1"></i>
+                </PrimaryIcon>
+            </SplitButton>
+            <a href="projects/@Id/edit" class="btn btn-outline btn-sm">Edit Project</a>
         </div>
     </div>
 
@@ -392,10 +391,33 @@ else
     private bool _showNonFleeceChangesModal;
     private IReadOnlyList<string>? _nonFleeceChangedFiles;
 
+    // Split button sync actions
+    private IReadOnlyList<SplitButtonAction> _syncActions = [];
+
+    private void InitializeSyncActions()
+    {
+        _syncActions =
+        [
+            new SplitButtonAction(
+                Key: "sync",
+                Text: "Sync",
+                Icon: (RenderFragment)(builder =>
+                {
+                    builder.OpenElement(0, "i");
+                    builder.AddAttribute(1, "class", "bi bi-cloud-arrow-up");
+                    builder.CloseElement();
+                }),
+                OnClick: EventCallback.Factory.Create(this, SyncAllAsync))
+        ];
+    }
+
     private record FlattenedPR(PullRequest PullRequest, int Level);
 
     protected override async Task OnInitializedAsync()
     {
+        // Initialize sync actions for split button
+        InitializeSyncActions();
+
         // Determine active tab from URL
         var uri = NavigationManager.Uri;
         if (uri.Contains("/settings"))
@@ -675,6 +697,92 @@ else
         {
             _isRefreshing = false;
             StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Pull operation that fetches from remote and merges fleece issues without committing/pushing.
+    /// Also syncs GitHub PRs.
+    /// </summary>
+    private async Task PullAsync()
+    {
+        if (_project == null || _isSyncing)
+            return;
+
+        _isSyncing = true;
+        StateHasChanged();
+
+        var errors = new List<string>();
+
+        try
+        {
+            // Run fleece pull and PR sync in parallel
+            var fleecePullTask = PullFleeceInternalAsync();
+            var prSyncTask = SyncPullRequestsInternalAsync();
+
+            var results = await Task.WhenAll(fleecePullTask, prSyncTask);
+
+            // Collect errors
+            if (results[0] is string fleeceError)
+                errors.Add($"Fleece pull: {fleeceError}");
+            if (results[1] is string prError)
+                errors.Add($"PR sync: {prError}");
+
+            // Show error notification if any errors occurred
+            if (errors.Count > 0)
+            {
+                await NotificationApi.CreateNotificationAsync(new CreateNotificationRequest
+                {
+                    Type = NotificationType.Warning,
+                    Title = "Pull completed with errors",
+                    Message = string.Join("; ", errors),
+                    ProjectId = _project.Id,
+                    IsDismissible = true,
+                    DeduplicationKey = $"pull-error-{_project.Id}"
+                });
+            }
+
+            // Refresh data after both complete
+            await LoadData();
+        }
+        finally
+        {
+            _isSyncing = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Internal fleece pull that returns an error message or null on success.
+    /// </summary>
+    private async Task<string?> PullFleeceInternalAsync()
+    {
+        if (_project == null)
+            return null;
+
+        try
+        {
+            var result = await FleeceSyncApi.PullFleeceOnlyAsync(_project.Id);
+
+            if (result != null && !result.Success)
+            {
+                // For conflicts requiring user interaction, show modal
+                if (result.HasNonFleeceChanges)
+                {
+                    _nonFleeceChangedFiles = result.NonFleeceChangedFiles;
+                    _showNonFleeceChangesModal = true;
+                    return null; // Don't report as error - handled via modal
+                }
+
+                return result.ErrorMessage ?? "Unknown fleece pull error";
+            }
+
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to pull fleece issues for project {ProjectId}", _project.Id);
+            return ex.Message;
         }
     }
 

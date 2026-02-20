@@ -245,6 +245,15 @@ public class ComponentRegistryService : IComponentRegistryService
             Category = "Core",
             ComponentPath = "Components/TaskGraphView.razor",
             Tags = new() { "graph", "task", "issue", "visualization" }
+        },
+        new ComponentMetadata
+        {
+            Id = "split-button",
+            Name = "SplitButton",
+            Description = "A button with a primary action and a dropdown for secondary actions.",
+            Category = "Core",
+            ComponentPath = "Components/SplitButton.razor",
+            Tags = new() { "button", "dropdown", "action" }
         }
     };
 

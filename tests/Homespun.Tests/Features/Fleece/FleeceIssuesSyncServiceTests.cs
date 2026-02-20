@@ -797,6 +797,211 @@ public class FleeceIssuesSyncServiceTests
 
     #endregion
 
+    #region PullFleeceOnlyAsync Tests
+
+    [Test]
+    public async Task PullFleeceOnlyAsync_OnWrongBranch_ReturnsError()
+    {
+        // Arrange
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "feature/other-branch\n" });
+
+        // Act
+        var result = await _service.PullFleeceOnlyAsync(ProjectPath, DefaultBranch);
+
+        // Assert
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorMessage, Does.Contain("feature/other-branch"));
+        Assert.That(result.ErrorMessage, Does.Contain("main"));
+    }
+
+    [Test]
+    public async Task PullFleeceOnlyAsync_UpToDate_ReturnsSuccessWithNoChanges()
+    {
+        // Arrange - on correct branch, not behind remote
+        SetupBranchCheck(isOnBranch: true, commitsBehind: 0, commitsAhead: 0);
+
+        _mockRunner.Setup(r => r.RunAsync("git", "status --porcelain", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "" });
+
+        // Act
+        var result = await _service.PullFleeceOnlyAsync(ProjectPath, DefaultBranch);
+
+        // Assert
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.WasBehindRemote, Is.False);
+        Assert.That(result.CommitsPulled, Is.EqualTo(0));
+        Assert.That(result.IssuesMerged, Is.EqualTo(0));
+    }
+
+    [Test]
+    public async Task PullFleeceOnlyAsync_BehindRemote_MergesWithoutCommit()
+    {
+        // Arrange - Behind remote with no local fleece changes
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "main\n" });
+
+        _mockRunner.Setup(r => r.RunAsync("git", "fetch origin", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true });
+
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-list --left-right --count origin/main...HEAD", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "3\t0" }); // 3 behind, 0 ahead
+
+        _mockRunner.Setup(r => r.RunAsync("git", "status --porcelain .fleece/", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "" }); // No local fleece changes
+
+        _mockRunner.Setup(r => r.RunAsync("git", "status --porcelain", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "" }); // No changes at all
+
+        _mockRunner.Setup(r => r.RunAsync("git", "merge --ff-only origin/main", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true });
+
+        // Act
+        var result = await _service.PullFleeceOnlyAsync(ProjectPath, DefaultBranch);
+
+        // Assert
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.WasBehindRemote, Is.True);
+        Assert.That(result.CommitsPulled, Is.EqualTo(3));
+
+        // Verify fast-forward was used
+        _mockRunner.Verify(r => r.RunAsync("git", "merge --ff-only origin/main", ProjectPath), Times.Once);
+
+        // Verify no commit/push operations
+        _mockRunner.Verify(r => r.RunAsync("git", "commit -m \"Update fleece issues [skip ci]\"", ProjectPath), Times.Never);
+        _mockRunner.Verify(r => r.RunAsync("git", "push origin main", ProjectPath), Times.Never);
+    }
+
+    [Test]
+    public async Task PullFleeceOnlyAsync_WithNonFleeceChanges_ReturnsError()
+    {
+        // Arrange - Behind remote but has non-fleece changes
+        SetupBranchCheck(isOnBranch: true, commitsBehind: 2, commitsAhead: 0);
+
+        _mockRunner.Setup(r => r.RunAsync("git", "status --porcelain", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = " M src/SomeFile.cs" });
+
+        // Act
+        var result = await _service.PullFleeceOnlyAsync(ProjectPath, DefaultBranch);
+
+        // Assert
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.HasNonFleeceChanges, Is.True);
+        Assert.That(result.NonFleeceChangedFiles, Does.Contain("src/SomeFile.cs"));
+        Assert.That(result.ErrorMessage, Does.Contain("uncommitted non-fleece file"));
+
+        // Verify no git operations were attempted
+        _mockRunner.Verify(r => r.RunAsync("git", "merge --ff-only origin/main", ProjectPath), Times.Never);
+    }
+
+    [Test]
+    public async Task PullFleeceOnlyAsync_BehindRemoteWithFleeceChanges_StashesMergesAndRestores()
+    {
+        // Arrange - Behind remote with local fleece changes
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "main\n" });
+
+        _mockRunner.Setup(r => r.RunAsync("git", "fetch origin", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true });
+
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-list --left-right --count origin/main...HEAD", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "2\t0" }); // 2 behind, 0 ahead
+
+        _mockRunner.Setup(r => r.RunAsync("git", "status --porcelain .fleece/", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = " M .fleece/issues.jsonl" });
+
+        _mockRunner.Setup(r => r.RunAsync("git", "status --porcelain", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = " M .fleece/issues.jsonl" });
+
+        _mockRunner.Setup(r => r.RunAsync("git", "stash push -m \"fleece-sync\" -- .fleece/", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true });
+
+        _mockRunner.Setup(r => r.RunAsync("git", "clean -fd -- .fleece/", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true });
+
+        _mockRunner.Setup(r => r.RunAsync("git", "merge --ff-only origin/main", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true });
+
+        _mockRunner.Setup(r => r.RunAsync("git", "stash drop", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true });
+
+        // Act
+        var result = await _service.PullFleeceOnlyAsync(ProjectPath, DefaultBranch);
+
+        // Assert
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.WasBehindRemote, Is.True);
+        Assert.That(result.CommitsPulled, Is.EqualTo(2));
+
+        // Verify stash-ff-drop sequence
+        _mockRunner.Verify(r => r.RunAsync("git", "stash push -m \"fleece-sync\" -- .fleece/", ProjectPath), Times.Once);
+        _mockRunner.Verify(r => r.RunAsync("git", "merge --ff-only origin/main", ProjectPath), Times.Once);
+        _mockRunner.Verify(r => r.RunAsync("git", "stash drop", ProjectPath), Times.Once);
+
+        // Verify no commit/push operations
+        _mockRunner.Verify(r => r.RunAsync("git", "commit -m \"Update fleece issues [skip ci]\"", ProjectPath), Times.Never);
+        _mockRunner.Verify(r => r.RunAsync("git", "push origin main", ProjectPath), Times.Never);
+    }
+
+    [Test]
+    public async Task SyncAsync_BehindRemote_UsesPullThenCommitsPushes()
+    {
+        // Arrange - Behind remote with fleece changes
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "main\n" });
+
+        _mockRunner.Setup(r => r.RunAsync("git", "fetch origin", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true });
+
+        _mockRunner.SetupSequence(r => r.RunAsync("git", "rev-list --left-right --count origin/main...HEAD", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "2\t0" })   // First: behind
+            .ReturnsAsync(new CommandResult { Success = true, Output = "0\t1" });  // After commit: ahead
+
+        _mockRunner.SetupSequence(r => r.RunAsync("git", "status --porcelain .fleece/", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = " M .fleece/issues.jsonl" })
+            .ReturnsAsync(new CommandResult { Success = true, Output = " M .fleece/issues.jsonl" });
+
+        _mockRunner.Setup(r => r.RunAsync("git", "status --porcelain", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = " M .fleece/issues.jsonl" });
+
+        _mockRunner.Setup(r => r.RunAsync("git", "stash push -m \"fleece-sync\" -- .fleece/", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true });
+
+        _mockRunner.Setup(r => r.RunAsync("git", "clean -fd -- .fleece/", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true });
+
+        _mockRunner.Setup(r => r.RunAsync("git", "merge --ff-only origin/main", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true });
+
+        _mockRunner.Setup(r => r.RunAsync("git", "stash drop", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true });
+
+        _mockRunner.Setup(r => r.RunAsync("git", "add .fleece/", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true });
+
+        _mockRunner.Setup(r => r.RunAsync("git", "commit -m \"Update fleece issues [skip ci]\"", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true });
+
+        _mockRunner.Setup(r => r.RunAsync("git", "push origin main", ProjectPath))
+            .ReturnsAsync(new CommandResult { Success = true });
+
+        // Act
+        var result = await _service.SyncAsync(ProjectPath, DefaultBranch);
+
+        // Assert - Sync should pull first, then commit and push
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.PushSucceeded, Is.True);
+
+        // Verify the sequence: pull (stash-ff-drop), then commit and push
+        _mockRunner.Verify(r => r.RunAsync("git", "stash push -m \"fleece-sync\" -- .fleece/", ProjectPath), Times.Once);
+        _mockRunner.Verify(r => r.RunAsync("git", "merge --ff-only origin/main", ProjectPath), Times.Once);
+        _mockRunner.Verify(r => r.RunAsync("git", "stash drop", ProjectPath), Times.Once);
+        _mockRunner.Verify(r => r.RunAsync("git", "commit -m \"Update fleece issues [skip ci]\"", ProjectPath), Times.Once);
+        _mockRunner.Verify(r => r.RunAsync("git", "push origin main", ProjectPath), Times.Once);
+    }
+
+    #endregion
+
     #region Helper Methods
 
     private void SetupBranchCheck(bool isOnBranch, int commitsBehind, int commitsAhead)

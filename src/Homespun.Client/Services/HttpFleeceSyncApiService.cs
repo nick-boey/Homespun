@@ -21,4 +21,11 @@ public class HttpFleeceSyncApiService(HttpClient http)
 
     public Task<FleeceIssueSyncResult?> PullChangesAsync(string projectId, CancellationToken ct = default)
         => SyncAsync(projectId, ct);
+
+    public async Task<FleecePullResult?> PullFleeceOnlyAsync(string projectId, CancellationToken ct = default)
+    {
+        var response = await http.PostAsync($"{BaseUrl}/{projectId}/pull", null, ct);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<FleecePullResult>(ct);
+    }
 }

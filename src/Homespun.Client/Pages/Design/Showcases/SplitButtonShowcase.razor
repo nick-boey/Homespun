@@ -1,0 +1,213 @@
+@using Homespun.Client.Components
+
+<div class="showcase-section">
+    <h3>Default State</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Primary action with dropdown</div>
+        <div class="showcase-preview">
+            <SplitButton PrimaryText="Pull"
+                         PrimaryOnClick="HandlePrimaryClick"
+                         ButtonCssClass="btn-primary"
+                         Actions="@_defaultActions">
+                <PrimaryIcon>
+                    <i class="bi bi-cloud-arrow-down me-1"></i>
+                </PrimaryIcon>
+            </SplitButton>
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Button Variants</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Outline style</div>
+        <div class="showcase-preview">
+            <SplitButton PrimaryText="Pull"
+                         PrimaryOnClick="HandlePrimaryClick"
+                         ButtonCssClass="btn-outline"
+                         Actions="@_defaultActions">
+                <PrimaryIcon>
+                    <i class="bi bi-cloud-arrow-down me-1"></i>
+                </PrimaryIcon>
+            </SplitButton>
+        </div>
+    </div>
+    <div class="showcase-item">
+        <div class="showcase-label">Secondary style</div>
+        <div class="showcase-preview">
+            <SplitButton PrimaryText="Pull"
+                         PrimaryOnClick="HandlePrimaryClick"
+                         ButtonCssClass="btn-secondary"
+                         Actions="@_defaultActions">
+                <PrimaryIcon>
+                    <i class="bi bi-cloud-arrow-down me-1"></i>
+                </PrimaryIcon>
+            </SplitButton>
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Size Variants</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Small size</div>
+        <div class="showcase-preview">
+            <SplitButton PrimaryText="Pull"
+                         PrimaryOnClick="HandlePrimaryClick"
+                         ButtonCssClass="btn-outline btn-sm"
+                         Actions="@_defaultActions">
+                <PrimaryIcon>
+                    <i class="bi bi-cloud-arrow-down me-1"></i>
+                </PrimaryIcon>
+            </SplitButton>
+        </div>
+    </div>
+    <div class="showcase-item">
+        <div class="showcase-label">Regular size</div>
+        <div class="showcase-preview">
+            <SplitButton PrimaryText="Pull"
+                         PrimaryOnClick="HandlePrimaryClick"
+                         ButtonCssClass="btn-outline"
+                         Actions="@_defaultActions">
+                <PrimaryIcon>
+                    <i class="bi bi-cloud-arrow-down me-1"></i>
+                </PrimaryIcon>
+            </SplitButton>
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Loading State</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">External loading control</div>
+        <div class="showcase-preview">
+            <SplitButton PrimaryText="Pull"
+                         PrimaryLoadingText="Pulling..."
+                         PrimaryOnClick="HandlePrimaryClick"
+                         ButtonCssClass="btn-outline"
+                         IsLoadingExternal="@_isLoading"
+                         Actions="@_defaultActions">
+                <PrimaryIcon>
+                    <i class="bi bi-cloud-arrow-down me-1"></i>
+                </PrimaryIcon>
+            </SplitButton>
+            <button class="btn btn-sm btn-secondary ms-3" @onclick="ToggleLoading">
+                Toggle Loading
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Disabled State</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Disabled split button</div>
+        <div class="showcase-preview">
+            <SplitButton PrimaryText="Pull"
+                         PrimaryOnClick="HandlePrimaryClick"
+                         ButtonCssClass="btn-outline"
+                         Disabled="true"
+                         Actions="@_defaultActions">
+                <PrimaryIcon>
+                    <i class="bi bi-cloud-arrow-down me-1"></i>
+                </PrimaryIcon>
+            </SplitButton>
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Multiple Actions</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Multiple dropdown options</div>
+        <div class="showcase-preview">
+            <SplitButton PrimaryText="Save"
+                         PrimaryOnClick="HandlePrimaryClick"
+                         ButtonCssClass="btn-primary"
+                         Actions="@_multipleActions">
+                <PrimaryIcon>
+                    <i class="bi bi-floppy me-1"></i>
+                </PrimaryIcon>
+            </SplitButton>
+        </div>
+    </div>
+</div>
+
+@code {
+    private bool _isLoading;
+
+    private IReadOnlyList<SplitButtonAction> _defaultActions = [];
+    private IReadOnlyList<SplitButtonAction> _multipleActions = [];
+
+    protected override void OnInitialized()
+    {
+        _defaultActions =
+        [
+            new SplitButtonAction(
+                Key: "sync",
+                Text: "Sync",
+                Icon: (RenderFragment)(builder =>
+                {
+                    builder.OpenElement(0, "i");
+                    builder.AddAttribute(1, "class", "bi bi-cloud-arrow-up");
+                    builder.CloseElement();
+                }),
+                OnClick: EventCallback.Factory.Create(this, HandleSyncClick))
+        ];
+
+        _multipleActions =
+        [
+            new SplitButtonAction(
+                Key: "save-draft",
+                Text: "Save as Draft",
+                Icon: (RenderFragment)(builder =>
+                {
+                    builder.OpenElement(0, "i");
+                    builder.AddAttribute(1, "class", "bi bi-file-earmark");
+                    builder.CloseElement();
+                }),
+                OnClick: EventCallback.Factory.Create(this, HandleSaveClick)),
+            new SplitButtonAction(
+                Key: "save-publish",
+                Text: "Save and Publish",
+                Icon: (RenderFragment)(builder =>
+                {
+                    builder.OpenElement(0, "i");
+                    builder.AddAttribute(1, "class", "bi bi-send");
+                    builder.CloseElement();
+                }),
+                OnClick: EventCallback.Factory.Create(this, HandleSaveClick)),
+            new SplitButtonAction(
+                Key: "export",
+                Text: "Export",
+                Icon: (RenderFragment)(builder =>
+                {
+                    builder.OpenElement(0, "i");
+                    builder.AddAttribute(1, "class", "bi bi-download");
+                    builder.CloseElement();
+                }),
+                OnClick: EventCallback.Factory.Create(this, HandleSaveClick))
+        ];
+    }
+
+    private Task HandlePrimaryClick()
+    {
+        return Task.CompletedTask;
+    }
+
+    private Task HandleSyncClick()
+    {
+        return Task.CompletedTask;
+    }
+
+    private Task HandleSaveClick()
+    {
+        return Task.CompletedTask;
+    }
+
+    private void ToggleLoading()
+    {
+        _isLoading = !_isLoading;
+    }
+}
