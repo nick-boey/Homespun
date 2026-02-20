@@ -38,7 +38,7 @@ public class KeyboardNavigationTests : PageTest
         await Expect(selectedRow).ToBeVisibleAsync(new() { Timeout = 5000 });
 
         // Get the original title text
-        var titleCell = selectedRow.Locator(".task-graph-title-cell");
+        var titleCell = selectedRow.Locator(".task-graph-title");
         var originalTitle = (await titleCell.TextContentAsync())?.Trim() ?? "";
 
         // Press i to enter insert mode (cursor at start)
