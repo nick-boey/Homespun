@@ -19,6 +19,7 @@ public class IssuesController(
     IFleeceService fleeceService,
     IProjectService projectService,
     IHubContext<NotificationHub> notificationHub,
+    IIssueBranchResolverService branchResolverService,
     ILogger<IssuesController> logger) : ControllerBase
 {
     /// <summary>
@@ -85,6 +86,26 @@ public class IssuesController(
             return NotFound("Issue not found");
         }
         return Ok(issue.ToResponse());
+    }
+
+    /// <summary>
+    /// Get the resolved branch name for an issue.
+    /// Checks linked PRs first, then existing clones with matching issue ID.
+    /// Returns null if no existing branch is found.
+    /// </summary>
+    [HttpGet("issues/{issueId}/resolved-branch")]
+    [ProducesResponseType<ResolvedBranchResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<ResolvedBranchResponse>> GetResolvedBranch(string issueId, [FromQuery] string projectId)
+    {
+        var project = await projectService.GetByIdAsync(projectId);
+        if (project == null)
+        {
+            return NotFound("Project not found");
+        }
+
+        var branchName = await branchResolverService.ResolveIssueBranchAsync(projectId, issueId);
+        return Ok(new ResolvedBranchResponse { BranchName = branchName });
     }
 
     /// <summary>

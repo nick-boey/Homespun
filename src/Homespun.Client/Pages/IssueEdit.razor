@@ -496,7 +496,14 @@ else
 
         try
         {
-            var branchName = GetBranchPreview();
+            // Try to resolve an existing branch from linked PR or existing clone
+            var resolvedBranch = await IssueApi.GetResolvedBranchAsync(IssueId, ProjectId);
+            var branchName = resolvedBranch ?? GetBranchPreview();
+
+            if (resolvedBranch != null)
+            {
+                Logger.LogInformation("Using resolved branch {BranchName} for issue {IssueId}", branchName, IssueId);
+            }
 
             // Get or create clone for the issue's branch
             string? clonePath = null;
