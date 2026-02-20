@@ -157,18 +157,26 @@
             }
         };
         window.homespunInterop = {
-            focusAndSetValue: function(element, value, cursorPosition) {
+            focusWithCursor: function(element, cursorPosition, valueLength) {
                 requestAnimationFrame(function() {
                     if (!element) return;
-                    element.value = value || '';
                     element.focus();
+                    var len = valueLength || 0;
                     if (cursorPosition === 'start') {
                         element.setSelectionRange(0, 0);
                     } else if (cursorPosition === 'end') {
-                        var len = element.value.length;
                         element.setSelectionRange(len, len);
                     } else if (cursorPosition === 'replace') {
-                        element.setSelectionRange(0, element.value.length);
+                        element.setSelectionRange(0, len);
+                    }
+                    // Prevent Tab from moving focus (only Tab, not other keys)
+                    if (!element.__tabPreventDefault) {
+                        element.addEventListener('keydown', function(e) {
+                            if (e.key === 'Tab') {
+                                e.preventDefault();
+                            }
+                        });
+                        element.__tabPreventDefault = true;
                     }
                 });
             },

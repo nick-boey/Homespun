@@ -6,10 +6,9 @@
 <div class="inline-issue-editor">
     <input type="text"
            class="inline-issue-input"
-           @bind="Title"
-           @bind:event="oninput"
+           value="@Title"
+           @oninput="HandleInput"
            @onkeydown="HandleKeyDown"
-           @onkeydown:preventDefault="@_preventDefaultOnTab"
            @onkeydown:stopPropagation="true"
            @onblur="HandleBlur"
            @ref="_inputElement"
@@ -51,7 +50,6 @@
     [Parameter] public EditCursorPosition CursorPosition { get; set; } = EditCursorPosition.End;
 
     private ElementReference _inputElement;
-    private bool _preventDefaultOnTab = true; // Always prevent Tab default to stop focus change
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -72,7 +70,7 @@
                 EditCursorPosition.Replace => "replace",
                 _ => "end"
             };
-            await JSRuntime.InvokeVoidAsync("homespunInterop.focusAndSetValue", _inputElement, Title, cursorPos);
+            await JSRuntime.InvokeVoidAsync("homespunInterop.focusWithCursor", _inputElement, cursorPos, Title.Length);
         }
         catch
         {
@@ -91,7 +89,7 @@
                 await NavService.AcceptEditAsync();
                 break;
             case "Tab":
-                // Tab is handled via @onkeydown:preventDefault on the element
+                // Tab default is prevented via JS in focusWithCursor
                 if (e.ShiftKey)
                 {
                     NavService.UnindentAsSibling();
@@ -101,12 +99,14 @@
                     NavService.IndentAsChild();
                 }
                 break;
-            default:
-                // Update the title in the service as user types
-                await TitleChanged.InvokeAsync(Title);
-                NavService.UpdateEditTitle(Title);
-                break;
         }
+    }
+
+    private async Task HandleInput(ChangeEventArgs e)
+    {
+        Title = e.Value?.ToString() ?? "";
+        await TitleChanged.InvokeAsync(Title);
+        NavService.UpdateEditTitle(Title);
     }
 
     private void HandleBlur()
