@@ -1,3 +1,4 @@
+using Homespun.Shared.Models.Fleece;
 using Microsoft.AspNetCore.SignalR;
 
 namespace Homespun.Features.Notifications;
@@ -72,5 +73,22 @@ public static class NotificationHubExtensions
         string notificationId)
     {
         await hubContext.Clients.All.SendAsync("NotificationDismissed", notificationId);
+    }
+
+    /// <summary>
+    /// Broadcasts when issues are changed (created, updated, deleted) in a project.
+    /// </summary>
+    public static async Task BroadcastIssuesChanged(
+        this IHubContext<NotificationHub> hubContext,
+        string projectId,
+        IssueChangeType changeType,
+        string issueId)
+    {
+        // Send to all clients
+        await hubContext.Clients.All.SendAsync("IssuesChanged", projectId, changeType, issueId);
+
+        // Also send to project-specific group
+        await hubContext.Clients.Group($"project-{projectId}")
+            .SendAsync("IssuesChanged", projectId, changeType, issueId);
     }
 }

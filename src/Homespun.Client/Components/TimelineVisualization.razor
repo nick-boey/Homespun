@@ -348,6 +348,7 @@
     [Parameter] public bool UseTaskGraphMode { get; set; } = true;
 
     private HubConnection? _hubConnection;
+    private HubConnection? _notificationHubConnection;
     private bool _isLoading = true;
     private bool _isRefreshing = false;
     private string? _error;
@@ -394,8 +395,9 @@
             await LoadTaskGraphAsync();
         }
 
-        // Set up SignalR connection for real-time updates (non-blocking)
+        // Set up SignalR connections for real-time updates (non-blocking)
         _ = SetupSignalRConnectionAsync();
+        _ = SetupNotificationHubConnectionAsync();
 
         // PHASE 2: Refresh with fresh data in background
         // This fetches from GitHub and updates the cache for next time
@@ -409,11 +411,16 @@
         if (_previousProjectId != null && _previousProjectId != ProjectId)
         {
             // ProjectId parameter changed — navigated to a different project via sidebar
-            // Dispose old SignalR connection
+            // Dispose old SignalR connections
             if (_hubConnection != null)
             {
                 await _hubConnection.DisposeAsync();
                 _hubConnection = null;
+            }
+            if (_notificationHubConnection != null)
+            {
+                await _notificationHubConnection.DisposeAsync();
+                _notificationHubConnection = null;
             }
 
             // Reset all state for new project
@@ -447,8 +454,9 @@
                 await LoadTaskGraphAsync();
             }
 
-            // Set up new SignalR connection for the new project
+            // Set up new SignalR connections for the new project
             _ = SetupSignalRConnectionAsync();
+            _ = SetupNotificationHubConnectionAsync();
 
             // Refresh with fresh data in background
             _ = RefreshWithFreshDataAsync();
@@ -497,6 +505,42 @@
         catch (Exception ex)
         {
             Console.WriteLine($"Failed to set up SignalR connection for timeline: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Sets up a SignalR connection to NotificationHub for issue change events.
+    /// When issues are created, updated, or deleted, the graph will be refreshed.
+    /// </summary>
+    private async Task SetupNotificationHubConnectionAsync()
+    {
+        try
+        {
+            _notificationHubConnection = new HubConnectionBuilder()
+                .WithUrl(NavigationManager.ToAbsoluteUri("/hubs/notification"))
+                .WithAutomaticReconnect()
+                .Build();
+
+            // Subscribe to issue change events (changeType is serialized as int)
+            _notificationHubConnection.On<string, int, string>("IssuesChanged", async (projectId, changeType, issueId) =>
+            {
+                if (projectId == ProjectId)
+                {
+                    await InvokeAsync(async () =>
+                    {
+                        await RefreshAsync();
+                    });
+                }
+            });
+
+            await _notificationHubConnection.StartAsync();
+
+            // Join the project group for targeted updates
+            await _notificationHubConnection.InvokeAsync("JoinProjectGroup", ProjectId);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to set up NotificationHub connection for timeline: {ex.Message}");
         }
     }
 
@@ -726,6 +770,11 @@
     public async Task RefreshAsync()
     {
         await LoadGraphAsync();
+        if (UseTaskGraphMode)
+        {
+            await LoadTaskGraphAsync();
+            StateHasChanged();
+        }
     }
 
     public async ValueTask DisposeAsync()
@@ -735,6 +784,17 @@
             try
             {
                 await _hubConnection.DisposeAsync();
+            }
+            catch
+            {
+                // Ignore disposal errors
+            }
+        }
+        if (_notificationHubConnection != null)
+        {
+            try
+            {
+                await _notificationHubConnection.DisposeAsync();
             }
             catch
             {
