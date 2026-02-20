@@ -347,6 +347,7 @@ else
 
     // Keyboard navigation state
     private ElementReference _pageContainer;
+    private KeyboardEditMode _previousEditMode = KeyboardEditMode.Viewing;
 
     // Prevent default for keyboard shortcuts when on issues tab and not editing in a text field
     // This is computed based on current state so that navigation keys are prevented
@@ -494,6 +495,13 @@ else
         if (firstRender)
         {
             await HandleHashFragmentAsync();
+
+            if (_activeTab == "issues")
+            {
+                await JSRuntime.InvokeVoidAsync("homespunInterop.focusElement", _pageContainer);
+            }
+
+            NavService.OnStateChanged += OnNavServiceStateChanged;
         }
     }
 
@@ -527,9 +535,29 @@ else
         }
     }
 
+    private void OnNavServiceStateChanged()
+    {
+        var currentMode = NavService.EditMode;
+        if (_previousEditMode != KeyboardEditMode.Viewing && currentMode == KeyboardEditMode.Viewing)
+        {
+            // Transitioned from edit/create mode back to viewing - re-focus page container
+            _ = InvokeAsync(async () =>
+            {
+                await JSRuntime.InvokeVoidAsync("homespunInterop.focusElement", _pageContainer);
+            });
+        }
+        _previousEditMode = currentMode;
+    }
+
     private void SwitchTab(string tab)
     {
         if (_activeTab == tab) return;
+
+        // Cancel any in-progress edit when leaving issues tab
+        if (_activeTab == "issues" && NavService.EditMode != KeyboardEditMode.Viewing)
+        {
+            NavService.CancelEdit();
+        }
 
         _activeTab = tab;
         ClearSelection();
@@ -544,6 +572,14 @@ else
             _ => $"/projects/{Id}"
         };
         NavigationManager.NavigateTo(newUrl, forceLoad: false, replace: true);
+
+        if (tab == "issues")
+        {
+            _ = InvokeAsync(async () =>
+            {
+                await JSRuntime.InvokeVoidAsync("homespunInterop.focusElement", _pageContainer);
+            });
+        }
     }
 
     private void SwitchToIssuesTab() => SwitchTab("issues");
@@ -555,6 +591,7 @@ else
     public void Dispose()
     {
         StartupTracker.OnStateChanged -= OnStartupStateChanged;
+        NavService.OnStateChanged -= OnNavServiceStateChanged;
     }
 
     public async ValueTask DisposeAsync()

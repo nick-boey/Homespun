@@ -2,6 +2,7 @@ using Fleece.Core.Models;
 using Homespun.Client.Components;
 using Homespun.Client.Services;
 using Homespun.Shared.Models.Fleece;
+using Homespun.Tests.Helpers;
 using Moq;
 
 namespace Homespun.Tests.Services;
@@ -11,11 +12,20 @@ public class KeyboardNavigationServiceTests
 {
     private KeyboardNavigationService _service = null!;
     private Mock<HttpIssueApiService> _mockIssueApi = null!;
+    private MockHttpMessageHandler _mockHandler = null!;
     private List<TaskGraphIssueRenderLine> _sampleRenderLines = null!;
 
     [SetUp]
     public void Setup()
     {
+        _mockHandler = new MockHttpMessageHandler();
+        _mockHandler.RespondWith("issues", new IssueResponse
+        {
+            Id = "new-issue",
+            Title = "test",
+            Type = IssueType.Task,
+            Status = IssueStatus.Open
+        });
         _mockIssueApi = new Mock<HttpIssueApiService>(MockBehavior.Loose, (HttpClient)null!);
         _service = new KeyboardNavigationService(_mockIssueApi.Object);
 
@@ -525,6 +535,98 @@ public class KeyboardNavigationServiceTests
 
         Assert.That(_service.EditMode, Is.EqualTo(KeyboardEditMode.CreatingNew));
         _mockIssueApi.VerifyNoOtherCalls();
+    }
+
+    [Test]
+    public async Task AcceptEditAsync_EditExisting_WithValidTitle_TransitionsToViewing()
+    {
+        var service = CreateServiceWithHttpClient();
+        service.Initialize(_sampleRenderLines);
+        service.SetProjectId("test-project");
+        service.SelectFirstActionable();
+        service.StartEditingAtStart();
+        service.UpdateEditTitle("Updated title");
+
+        await service.AcceptEditAsync();
+
+        Assert.That(service.EditMode, Is.EqualTo(KeyboardEditMode.Viewing));
+        Assert.That(service.PendingEdit, Is.Null);
+        Assert.That(service.SelectedIssueId, Is.EqualTo("ISSUE-001")); // Selection preserved
+    }
+
+    [Test]
+    public async Task AcceptEditAsync_EditExisting_RaisesOnStateChanged()
+    {
+        var service = CreateServiceWithHttpClient();
+        service.Initialize(_sampleRenderLines);
+        service.SetProjectId("test-project");
+        service.SelectFirstActionable();
+        service.StartEditingAtStart();
+        service.UpdateEditTitle("Updated title");
+        var stateChanged = false;
+        service.OnStateChanged += () => stateChanged = true;
+
+        await service.AcceptEditAsync();
+
+        Assert.That(stateChanged, Is.True);
+    }
+
+    [Test]
+    public async Task AcceptEditAsync_CreateNew_WithValidTitle_TransitionsToViewing()
+    {
+        var service = CreateServiceWithHttpClient();
+        service.Initialize(_sampleRenderLines);
+        service.SetProjectId("test-project");
+        service.SelectFirstActionable();
+        service.CreateIssueBelow();
+        service.UpdateEditTitle("New issue");
+
+        await service.AcceptEditAsync();
+
+        Assert.That(service.EditMode, Is.EqualTo(KeyboardEditMode.Viewing));
+        Assert.That(service.PendingNewIssue, Is.Null);
+    }
+
+    [Test]
+    public async Task AcceptEditAsync_CreateNew_RaisesOnStateChanged()
+    {
+        var service = CreateServiceWithHttpClient();
+        service.Initialize(_sampleRenderLines);
+        service.SetProjectId("test-project");
+        service.SelectFirstActionable();
+        service.CreateIssueBelow();
+        service.UpdateEditTitle("New issue");
+        var stateChanged = false;
+        service.OnStateChanged += () => stateChanged = true;
+
+        await service.AcceptEditAsync();
+
+        Assert.That(stateChanged, Is.True);
+    }
+
+    [Test]
+    public async Task AcceptEditAsync_WithNoProjectId_DoesNotTransition()
+    {
+        _service.Initialize(_sampleRenderLines);
+        // No SetProjectId call
+        _service.SelectFirstActionable();
+        _service.StartEditingAtStart();
+        _service.UpdateEditTitle("Updated title");
+
+        await _service.AcceptEditAsync();
+
+        // Should remain in edit mode because no project ID is set
+        Assert.That(_service.EditMode, Is.EqualTo(KeyboardEditMode.EditingExisting));
+    }
+
+    /// <summary>
+    /// Creates a KeyboardNavigationService backed by a real HttpIssueApiService
+    /// with a mock HTTP handler, for tests that exercise AcceptEditAsync API calls.
+    /// </summary>
+    private KeyboardNavigationService CreateServiceWithHttpClient()
+    {
+        var issueApi = new HttpIssueApiService(_mockHandler.CreateClient());
+        return new KeyboardNavigationService(issueApi);
     }
 
     #endregion

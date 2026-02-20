@@ -156,6 +156,30 @@
                 return window.innerWidth <= 768;
             }
         };
+        window.homespunInterop = {
+            focusAndSetValue: function(element, value, cursorPosition) {
+                requestAnimationFrame(function() {
+                    if (!element) return;
+                    element.value = value || '';
+                    element.focus();
+                    if (cursorPosition === 'start') {
+                        element.setSelectionRange(0, 0);
+                    } else if (cursorPosition === 'end') {
+                        var len = element.value.length;
+                        element.setSelectionRange(len, len);
+                    } else if (cursorPosition === 'replace') {
+                        element.setSelectionRange(0, element.value.length);
+                    }
+                });
+            },
+            focusElement: function(element) {
+                requestAnimationFrame(function() {
+                    if (element) {
+                        element.focus();
+                    }
+                });
+            }
+        };
     </script>
 </body>
 

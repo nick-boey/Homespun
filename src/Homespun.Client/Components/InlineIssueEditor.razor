@@ -1,6 +1,7 @@
 @using Homespun.Client.Services
 
 @inject IKeyboardNavigationService NavService
+@inject IJSRuntime JSRuntime
 
 <div class="inline-issue-editor">
     <input type="text"
@@ -9,6 +10,7 @@
            @bind:event="oninput"
            @onkeydown="HandleKeyDown"
            @onkeydown:preventDefault="@_preventDefaultOnTab"
+           @onkeydown:stopPropagation="true"
            @onblur="HandleBlur"
            @ref="_inputElement"
            placeholder="@Placeholder" />
@@ -63,9 +65,14 @@
     {
         try
         {
-            await _inputElement.FocusAsync();
-            // Note: Cursor positioning would require JS interop for full control
-            // For now, the browser will position at the end by default after focus
+            var cursorPos = CursorPosition switch
+            {
+                EditCursorPosition.Start => "start",
+                EditCursorPosition.End => "end",
+                EditCursorPosition.Replace => "replace",
+                _ => "end"
+            };
+            await JSRuntime.InvokeVoidAsync("homespunInterop.focusAndSetValue", _inputElement, Title, cursorPos);
         }
         catch
         {

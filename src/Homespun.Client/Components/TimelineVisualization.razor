@@ -72,6 +72,11 @@
     }
 </div>
 
+@if (NavService.EditMode != KeyboardEditMode.Viewing)
+{
+    <div class="keyboard-mode-indicator">-- INSERT --</div>
+}
+
 @* Tooltip element *@
 @if (_tooltipVisible && _tooltipNode != null)
 {
@@ -336,6 +341,15 @@
         background: var(--bg-secondary, #16213e);
         padding: 2px 4px;
         border-radius: 3px;
+    }
+
+    .keyboard-mode-indicator {
+        text-align: center;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--color-ocean, #51A5C1);
+        padding: 4px 0;
+        letter-spacing: 0.05em;
     }
 </style>
 
