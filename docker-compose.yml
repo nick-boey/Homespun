@@ -1,0 +1,130 @@
+# Docker Compose for Homespun with PLG Logging Stack
+# Usage:
+#   docker compose up -d                              # Start all services including PLG stack
+#   docker compose up -d homespun                     # Start only Homespun without PLG stack (--no-plg mode)
+#   docker compose down                               # Stop all services
+#   docker compose logs -f                            # Follow all logs
+#
+# Environment variables (set via .env.compose or export):
+#   HOMESPUN_IMAGE         - Main Homespun image (default: ghcr.io/nick-boey/homespun:latest)
+#   WORKER_IMAGE           - Worker image (default: ghcr.io/nick-boey/homespun-worker:latest)
+#   CONTAINER_NAME         - Container name (default: homespun)
+#   HOST_PORT              - Host port for Homespun (default: 8080)
+#   HOST_UID, HOST_GID     - User/group IDs for file permissions
+#   DATA_DIR               - Data directory path
+#   GITHUB_TOKEN           - GitHub personal access token
+#   CLAUDE_CODE_OAUTH_TOKEN - Claude Code OAuth token
+#   GRAFANA_PORT           - Grafana port (default: 3000)
+#   GRAFANA_ADMIN_PASSWORD - Grafana admin password (default: admin)
+#   NO_PLG                 - Set to "true" to skip PLG services (used by run.sh --no-plg)
+
+services:
+  # Main Homespun application
+  homespun:
+    image: ${HOMESPUN_IMAGE:-ghcr.io/nick-boey/homespun:latest}
+    container_name: ${CONTAINER_NAME:-homespun}
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    ports:
+      - "${HOST_PORT:-8080}:8080"
+    volumes:
+      - ${DATA_DIR:-~/.homespun-container/data}:/data
+      - ${SSH_DIR:-~/.ssh}:/home/homespun/.ssh:ro
+      - ${CLAUDE_CREDENTIALS:-/dev/null}:/home/homespun/.claude/.credentials.json:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - HOME=/home/homespun
+      - HSP_HOST_DATA_PATH=${DATA_DIR:-~/.homespun-container/data}
+      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Production}
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
+      - TAILSCALE_AUTH_KEY=${TAILSCALE_AUTH_KEY:-}
+      - TS_HOSTNAME=${TS_HOSTNAME:-homespun-dev}
+      - HSP_EXTERNAL_HOSTNAME=${HSP_EXTERNAL_HOSTNAME:-}
+      - AgentExecution__Mode=${AGENT_MODE:-Docker}
+      - AgentExecution__Docker__WorkerImage=${WORKER_IMAGE:-ghcr.io/nick-boey/homespun-worker:latest}
+    group_add:
+      - ${DOCKER_GID:-999}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - homespun-net
+    labels:
+      - "logging=promtail"
+      - "logging_jobname=homespun-server"
+    depends_on:
+      loki:
+        condition: service_started
+        required: false
+
+  # Loki - Log aggregation
+  loki:
+    image: grafana/loki:2.9.0
+    container_name: homespun-loki
+    profiles: ["plg"]
+    ports:
+      - "${LOKI_PORT:-3100}:3100"
+    volumes:
+      - ./config/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki-data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    restart: unless-stopped
+    networks:
+      - homespun-net
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3100/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Promtail - Log collector
+  promtail:
+    image: grafana/promtail:2.9.0
+    container_name: homespun-promtail
+    profiles: ["plg"]
+    volumes:
+      - ./config/promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    command: -config.file=/etc/promtail/config.yml
+    restart: unless-stopped
+    networks:
+      - homespun-net
+    depends_on:
+      loki:
+        condition: service_healthy
+
+  # Grafana - Visualization
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: homespun-grafana
+    profiles: ["plg"]
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    volumes:
+      - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana-data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+    restart: unless-stopped
+    networks:
+      - homespun-net
+    depends_on:
+      loki:
+        condition: service_healthy
+
+networks:
+  homespun-net:
+    driver: bridge
+
+volumes:
+  loki-data:
+  grafana-data:

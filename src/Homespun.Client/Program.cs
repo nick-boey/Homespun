@@ -42,8 +42,9 @@ builder.Services.AddScoped<MessageDisplayService>();
 
 // Register telemetry services
 builder.Services.AddScoped<ConsoleTelemetryService>();
+builder.Services.AddScoped<LokiTelemetryService>();
 builder.Services.AddScoped<ApplicationInsightsTelemetryService>();
-builder.Services.AddScoped<ITelemetryService>(sp => sp.GetRequiredService<ApplicationInsightsTelemetryService>());
+builder.Services.AddScoped<ITelemetryService>(sp => sp.GetRequiredService<LokiTelemetryService>());
 builder.Services.AddScoped<TelemetryDelegatingHandler>();
 
 // Build the host
