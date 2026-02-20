@@ -1,3 +1,4 @@
+using A2A;
 using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.ClaudeCode.Services;
 using NUnit.Framework;
@@ -8,7 +9,7 @@ namespace Homespun.Tests.Features.ClaudeCode;
 public class A2AMessageParserTests
 {
     [Test]
-    public void ParseSseEvent_TaskEvent_ReturnsA2ATask()
+    public void ParseSseEvent_TaskEvent_ReturnsAgentTask()
     {
         var json = """
         {
@@ -22,21 +23,20 @@ public class A2AMessageParserTests
         }
         """;
 
-        var result = A2AMessageParser.ParseSseEvent(A2AEventKind.Task, json);
+        var result = A2AMessageParser.ParseSseEvent(HomespunA2AEventKind.Task, json);
 
-        Assert.That(result, Is.InstanceOf<A2ATask>());
-        var task = (A2ATask)result!;
+        Assert.That(result, Is.InstanceOf<ParsedAgentTask>());
+        var parsed = (ParsedAgentTask)result!;
         Assert.Multiple(() =>
         {
-            Assert.That(task.Kind, Is.EqualTo("task"));
-            Assert.That(task.Id, Is.EqualTo("task-123"));
-            Assert.That(task.ContextId, Is.EqualTo("context-456"));
-            Assert.That(task.Status.State, Is.EqualTo("submitted"));
+            Assert.That(parsed.Task.Id, Is.EqualTo("task-123"));
+            Assert.That(parsed.Task.ContextId, Is.EqualTo("context-456"));
+            Assert.That(parsed.Task.Status.State, Is.EqualTo(TaskState.Submitted));
         });
     }
 
     [Test]
-    public void ParseSseEvent_MessageEvent_AgentRole_ReturnsA2AMessage()
+    public void ParseSseEvent_MessageEvent_AgentRole_ReturnsAgentMessage()
     {
         var json = """
         {
@@ -51,23 +51,22 @@ public class A2AMessageParserTests
         }
         """;
 
-        var result = A2AMessageParser.ParseSseEvent(A2AEventKind.Message, json);
+        var result = A2AMessageParser.ParseSseEvent(HomespunA2AEventKind.Message, json);
 
-        Assert.That(result, Is.InstanceOf<A2AMessage>());
-        var msg = (A2AMessage)result!;
+        Assert.That(result, Is.InstanceOf<ParsedAgentMessage>());
+        var parsed = (ParsedAgentMessage)result!;
         Assert.Multiple(() =>
         {
-            Assert.That(msg.Kind, Is.EqualTo("message"));
-            Assert.That(msg.MessageId, Is.EqualTo("msg-123"));
-            Assert.That(msg.Role, Is.EqualTo("agent"));
-            Assert.That(msg.Parts, Has.Count.EqualTo(1));
-            Assert.That(msg.Parts[0], Is.InstanceOf<A2ATextPart>());
-            Assert.That(((A2ATextPart)msg.Parts[0]).Text, Is.EqualTo("Hello, world!"));
+            Assert.That(parsed.Message.MessageId, Is.EqualTo("msg-123"));
+            Assert.That(parsed.Message.Role, Is.EqualTo(MessageRole.Agent));
+            Assert.That(parsed.Message.Parts, Has.Count.EqualTo(1));
+            Assert.That(parsed.Message.Parts![0], Is.InstanceOf<TextPart>());
+            Assert.That(((TextPart)parsed.Message.Parts[0]).Text, Is.EqualTo("Hello, world!"));
         });
     }
 
     [Test]
-    public void ParseSseEvent_MessageEvent_UserRole_ReturnsA2AMessage()
+    public void ParseSseEvent_MessageEvent_UserRole_ReturnsAgentMessage()
     {
         var json = """
         {
@@ -81,15 +80,15 @@ public class A2AMessageParserTests
         }
         """;
 
-        var result = A2AMessageParser.ParseSseEvent(A2AEventKind.Message, json);
+        var result = A2AMessageParser.ParseSseEvent(HomespunA2AEventKind.Message, json);
 
-        Assert.That(result, Is.InstanceOf<A2AMessage>());
-        var msg = (A2AMessage)result!;
-        Assert.That(msg.Role, Is.EqualTo("user"));
+        Assert.That(result, Is.InstanceOf<ParsedAgentMessage>());
+        var parsed = (ParsedAgentMessage)result!;
+        Assert.That(parsed.Message.Role, Is.EqualTo(MessageRole.User));
     }
 
     [Test]
-    public void ParseSseEvent_MessageEvent_WithDataPart_ReturnsA2AMessage()
+    public void ParseSseEvent_MessageEvent_WithDataPart_ReturnsAgentMessage()
     {
         var json = """
         {
@@ -107,16 +106,16 @@ public class A2AMessageParserTests
         }
         """;
 
-        var result = A2AMessageParser.ParseSseEvent(A2AEventKind.Message, json);
+        var result = A2AMessageParser.ParseSseEvent(HomespunA2AEventKind.Message, json);
 
-        Assert.That(result, Is.InstanceOf<A2AMessage>());
-        var msg = (A2AMessage)result!;
-        Assert.That(msg.Parts, Has.Count.EqualTo(1));
-        Assert.That(msg.Parts[0], Is.InstanceOf<A2ADataPart>());
+        Assert.That(result, Is.InstanceOf<ParsedAgentMessage>());
+        var parsed = (ParsedAgentMessage)result!;
+        Assert.That(parsed.Message.Parts, Has.Count.EqualTo(1));
+        Assert.That(parsed.Message.Parts![0], Is.InstanceOf<DataPart>());
     }
 
     [Test]
-    public void ParseSseEvent_StatusUpdateEvent_Working_ReturnsA2ATaskStatusUpdateEvent()
+    public void ParseSseEvent_StatusUpdateEvent_Working_ReturnsTaskStatusUpdateEvent()
     {
         var json = """
         {
@@ -131,21 +130,20 @@ public class A2AMessageParserTests
         }
         """;
 
-        var result = A2AMessageParser.ParseSseEvent(A2AEventKind.StatusUpdate, json);
+        var result = A2AMessageParser.ParseSseEvent(HomespunA2AEventKind.StatusUpdate, json);
 
-        Assert.That(result, Is.InstanceOf<A2ATaskStatusUpdateEvent>());
-        var statusUpdate = (A2ATaskStatusUpdateEvent)result!;
+        Assert.That(result, Is.InstanceOf<ParsedTaskStatusUpdateEvent>());
+        var parsed = (ParsedTaskStatusUpdateEvent)result!;
         Assert.Multiple(() =>
         {
-            Assert.That(statusUpdate.Kind, Is.EqualTo("status-update"));
-            Assert.That(statusUpdate.TaskId, Is.EqualTo("task-123"));
-            Assert.That(statusUpdate.Status.State, Is.EqualTo("working"));
-            Assert.That(statusUpdate.Final, Is.False);
+            Assert.That(parsed.StatusUpdate.TaskId, Is.EqualTo("task-123"));
+            Assert.That(parsed.StatusUpdate.Status.State, Is.EqualTo(TaskState.Working));
+            Assert.That(parsed.StatusUpdate.Final, Is.False);
         });
     }
 
     [Test]
-    public void ParseSseEvent_StatusUpdateEvent_InputRequired_ReturnsA2ATaskStatusUpdateEvent()
+    public void ParseSseEvent_StatusUpdateEvent_InputRequired_ReturnsTaskStatusUpdateEvent()
     {
         var json = """
         {
@@ -163,19 +161,19 @@ public class A2AMessageParserTests
         }
         """;
 
-        var result = A2AMessageParser.ParseSseEvent(A2AEventKind.StatusUpdate, json);
+        var result = A2AMessageParser.ParseSseEvent(HomespunA2AEventKind.StatusUpdate, json);
 
-        Assert.That(result, Is.InstanceOf<A2ATaskStatusUpdateEvent>());
-        var statusUpdate = (A2ATaskStatusUpdateEvent)result!;
+        Assert.That(result, Is.InstanceOf<ParsedTaskStatusUpdateEvent>());
+        var parsed = (ParsedTaskStatusUpdateEvent)result!;
         Assert.Multiple(() =>
         {
-            Assert.That(statusUpdate.Status.State, Is.EqualTo("input-required"));
-            Assert.That(statusUpdate.Final, Is.False);
+            Assert.That(parsed.StatusUpdate.Status.State, Is.EqualTo(TaskState.InputRequired));
+            Assert.That(parsed.StatusUpdate.Final, Is.False);
         });
     }
 
     [Test]
-    public void ParseSseEvent_StatusUpdateEvent_Completed_ReturnsA2ATaskStatusUpdateEvent()
+    public void ParseSseEvent_StatusUpdateEvent_Completed_ReturnsTaskStatusUpdateEvent()
     {
         var json = """
         {
@@ -197,20 +195,20 @@ public class A2AMessageParserTests
         }
         """;
 
-        var result = A2AMessageParser.ParseSseEvent(A2AEventKind.StatusUpdate, json);
+        var result = A2AMessageParser.ParseSseEvent(HomespunA2AEventKind.StatusUpdate, json);
 
-        Assert.That(result, Is.InstanceOf<A2ATaskStatusUpdateEvent>());
-        var statusUpdate = (A2ATaskStatusUpdateEvent)result!;
+        Assert.That(result, Is.InstanceOf<ParsedTaskStatusUpdateEvent>());
+        var parsed = (ParsedTaskStatusUpdateEvent)result!;
         Assert.Multiple(() =>
         {
-            Assert.That(statusUpdate.Status.State, Is.EqualTo("completed"));
-            Assert.That(statusUpdate.Final, Is.True);
-            Assert.That(statusUpdate.Status.Message, Is.Not.Null);
+            Assert.That(parsed.StatusUpdate.Status.State, Is.EqualTo(TaskState.Completed));
+            Assert.That(parsed.StatusUpdate.Final, Is.True);
+            Assert.That(parsed.StatusUpdate.Status.Message, Is.Not.Null);
         });
     }
 
     [Test]
-    public void ParseSseEvent_StatusUpdateEvent_Failed_ReturnsA2ATaskStatusUpdateEvent()
+    public void ParseSseEvent_StatusUpdateEvent_Failed_ReturnsTaskStatusUpdateEvent()
     {
         var json = """
         {
@@ -232,14 +230,14 @@ public class A2AMessageParserTests
         }
         """;
 
-        var result = A2AMessageParser.ParseSseEvent(A2AEventKind.StatusUpdate, json);
+        var result = A2AMessageParser.ParseSseEvent(HomespunA2AEventKind.StatusUpdate, json);
 
-        Assert.That(result, Is.InstanceOf<A2ATaskStatusUpdateEvent>());
-        var statusUpdate = (A2ATaskStatusUpdateEvent)result!;
+        Assert.That(result, Is.InstanceOf<ParsedTaskStatusUpdateEvent>());
+        var parsed = (ParsedTaskStatusUpdateEvent)result!;
         Assert.Multiple(() =>
         {
-            Assert.That(statusUpdate.Status.State, Is.EqualTo("failed"));
-            Assert.That(statusUpdate.Final, Is.True);
+            Assert.That(parsed.StatusUpdate.Status.State, Is.EqualTo(TaskState.Failed));
+            Assert.That(parsed.StatusUpdate.Final, Is.True);
         });
     }
 
@@ -248,7 +246,7 @@ public class A2AMessageParserTests
     {
         var json = "not valid json";
 
-        var result = A2AMessageParser.ParseSseEvent(A2AEventKind.Task, json);
+        var result = A2AMessageParser.ParseSseEvent(HomespunA2AEventKind.Task, json);
 
         Assert.That(result, Is.Null);
     }
@@ -271,19 +269,19 @@ public class A2AMessageParserTests
     [Test]
     public void IsA2AEventKind_TaskKind_ReturnsTrue()
     {
-        Assert.That(A2AMessageParser.IsA2AEventKind(A2AEventKind.Task), Is.True);
+        Assert.That(A2AMessageParser.IsA2AEventKind(HomespunA2AEventKind.Task), Is.True);
     }
 
     [Test]
     public void IsA2AEventKind_MessageKind_ReturnsTrue()
     {
-        Assert.That(A2AMessageParser.IsA2AEventKind(A2AEventKind.Message), Is.True);
+        Assert.That(A2AMessageParser.IsA2AEventKind(HomespunA2AEventKind.Message), Is.True);
     }
 
     [Test]
     public void IsA2AEventKind_StatusUpdateKind_ReturnsTrue()
     {
-        Assert.That(A2AMessageParser.IsA2AEventKind(A2AEventKind.StatusUpdate), Is.True);
+        Assert.That(A2AMessageParser.IsA2AEventKind(HomespunA2AEventKind.StatusUpdate), Is.True);
     }
 
     [Test]
@@ -295,18 +293,19 @@ public class A2AMessageParserTests
     [Test]
     public void ConvertToSdkMessage_Task_Submitted_ReturnsSystemMessage()
     {
-        var task = new A2ATask
+        var task = new AgentTask
         {
             Id = "task-123",
             ContextId = "context-456",
-            Status = new A2ATaskStatus
+            Status = new AgentTaskStatus
             {
-                State = A2ATaskState.Submitted,
-                Timestamp = "2024-01-01T00:00:00Z"
+                State = TaskState.Submitted,
+                Timestamp = DateTimeOffset.Parse("2024-01-01T00:00:00Z")
             }
         };
+        var parsed = new ParsedAgentTask(task);
 
-        var result = A2AMessageParser.ConvertToSdkMessage(task, "session-1");
+        var result = A2AMessageParser.ConvertToSdkMessage(parsed, "session-1");
 
         Assert.That(result, Is.InstanceOf<SdkSystemMessage>());
         var sysMsg = (SdkSystemMessage)result!;
@@ -316,15 +315,16 @@ public class A2AMessageParserTests
     [Test]
     public void ConvertToSdkMessage_Message_AgentRole_ReturnsAssistantMessage()
     {
-        var message = new A2AMessage
+        var message = new AgentMessage
         {
             MessageId = "msg-123",
-            Role = "agent",
-            Parts = new List<A2APart> { new A2ATextPart { Text = "Hello" } },
+            Role = MessageRole.Agent,
+            Parts = new List<Part> { new TextPart { Text = "Hello" } },
             ContextId = "context-456"
         };
+        var parsed = new ParsedAgentMessage(message);
 
-        var result = A2AMessageParser.ConvertToSdkMessage(message, "session-1");
+        var result = A2AMessageParser.ConvertToSdkMessage(parsed, "session-1");
 
         Assert.That(result, Is.InstanceOf<SdkAssistantMessage>());
         var assistantMsg = (SdkAssistantMessage)result!;
@@ -335,15 +335,16 @@ public class A2AMessageParserTests
     [Test]
     public void ConvertToSdkMessage_Message_UserRole_ReturnsUserMessage()
     {
-        var message = new A2AMessage
+        var message = new AgentMessage
         {
             MessageId = "msg-123",
-            Role = "user",
-            Parts = new List<A2APart> { new A2ATextPart { Text = "Hello from user" } },
+            Role = MessageRole.User,
+            Parts = new List<Part> { new TextPart { Text = "Hello from user" } },
             ContextId = "context-456"
         };
+        var parsed = new ParsedAgentMessage(message);
 
-        var result = A2AMessageParser.ConvertToSdkMessage(message, "session-1");
+        var result = A2AMessageParser.ConvertToSdkMessage(parsed, "session-1");
 
         Assert.That(result, Is.InstanceOf<SdkUserMessage>());
         var userMsg = (SdkUserMessage)result!;
@@ -353,26 +354,27 @@ public class A2AMessageParserTests
     [Test]
     public void ConvertToSdkMessage_StatusUpdate_Completed_ReturnsResultMessage()
     {
-        var statusUpdate = new A2ATaskStatusUpdateEvent
+        var statusUpdate = new TaskStatusUpdateEvent
         {
             TaskId = "task-123",
             ContextId = "context-456",
-            Status = new A2ATaskStatus
+            Status = new AgentTaskStatus
             {
-                State = A2ATaskState.Completed,
-                Timestamp = "2024-01-01T00:00:00Z",
-                Message = new A2AMessage
+                State = TaskState.Completed,
+                Timestamp = DateTimeOffset.Parse("2024-01-01T00:00:00Z"),
+                Message = new AgentMessage
                 {
                     MessageId = "result-msg",
-                    Role = "agent",
-                    Parts = new List<A2APart> { new A2ATextPart { Text = "Success" } },
+                    Role = MessageRole.Agent,
+                    Parts = new List<Part> { new TextPart { Text = "Success" } },
                     ContextId = "context-456"
                 }
             },
             Final = true
         };
+        var parsed = new ParsedTaskStatusUpdateEvent(statusUpdate);
 
-        var result = A2AMessageParser.ConvertToSdkMessage(statusUpdate, "session-1");
+        var result = A2AMessageParser.ConvertToSdkMessage(parsed, "session-1");
 
         Assert.That(result, Is.InstanceOf<SdkResultMessage>());
         var resultMsg = (SdkResultMessage)result!;
@@ -387,26 +389,27 @@ public class A2AMessageParserTests
     [Test]
     public void ConvertToSdkMessage_StatusUpdate_Failed_ReturnsResultMessageWithError()
     {
-        var statusUpdate = new A2ATaskStatusUpdateEvent
+        var statusUpdate = new TaskStatusUpdateEvent
         {
             TaskId = "task-123",
             ContextId = "context-456",
-            Status = new A2ATaskStatus
+            Status = new AgentTaskStatus
             {
-                State = A2ATaskState.Failed,
-                Timestamp = "2024-01-01T00:00:00Z",
-                Message = new A2AMessage
+                State = TaskState.Failed,
+                Timestamp = DateTimeOffset.Parse("2024-01-01T00:00:00Z"),
+                Message = new AgentMessage
                 {
                     MessageId = "error-msg",
-                    Role = "agent",
-                    Parts = new List<A2APart> { new A2ATextPart { Text = "Something went wrong" } },
+                    Role = MessageRole.Agent,
+                    Parts = new List<Part> { new TextPart { Text = "Something went wrong" } },
                     ContextId = "context-456"
                 }
             },
             Final = true
         };
+        var parsed = new ParsedTaskStatusUpdateEvent(statusUpdate);
 
-        var result = A2AMessageParser.ConvertToSdkMessage(statusUpdate, "session-1");
+        var result = A2AMessageParser.ConvertToSdkMessage(parsed, "session-1");
 
         Assert.That(result, Is.InstanceOf<SdkResultMessage>());
         var resultMsg = (SdkResultMessage)result!;
@@ -420,19 +423,20 @@ public class A2AMessageParserTests
     [Test]
     public void ConvertToSdkMessage_StatusUpdate_Working_ReturnsNull()
     {
-        var statusUpdate = new A2ATaskStatusUpdateEvent
+        var statusUpdate = new TaskStatusUpdateEvent
         {
             TaskId = "task-123",
             ContextId = "context-456",
-            Status = new A2ATaskStatus
+            Status = new AgentTaskStatus
             {
-                State = A2ATaskState.Working,
-                Timestamp = "2024-01-01T00:00:00Z"
+                State = TaskState.Working,
+                Timestamp = DateTimeOffset.Parse("2024-01-01T00:00:00Z")
             },
             Final = false
         };
+        var parsed = new ParsedTaskStatusUpdateEvent(statusUpdate);
 
-        var result = A2AMessageParser.ConvertToSdkMessage(statusUpdate, "session-1");
+        var result = A2AMessageParser.ConvertToSdkMessage(parsed, "session-1");
 
         Assert.That(result, Is.Null);
     }

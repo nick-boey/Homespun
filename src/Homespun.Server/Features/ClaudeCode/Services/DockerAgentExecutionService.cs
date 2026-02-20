@@ -1791,10 +1791,10 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         try
         {
             // A2A protocol events have 'task', 'message', or 'status-update' as event types
-            if (eventType == A2AEventKind.Task ||
-                eventType == A2AEventKind.Message ||
-                eventType == A2AEventKind.StatusUpdate ||
-                eventType == A2AEventKind.ArtifactUpdate)
+            if (eventType == HomespunA2AEventKind.Task ||
+                eventType == HomespunA2AEventKind.Message ||
+                eventType == HomespunA2AEventKind.StatusUpdate ||
+                eventType == HomespunA2AEventKind.ArtifactUpdate)
             {
                 var a2aEvent = A2AMessageParser.ParseSseEvent(eventType, data);
                 if (a2aEvent != null)
