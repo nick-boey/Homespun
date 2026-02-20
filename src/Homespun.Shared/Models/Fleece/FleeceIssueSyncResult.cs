@@ -13,6 +13,18 @@ public record FleeceIssueSyncResult(
     IReadOnlyList<string>? NonFleeceChangedFiles = null);
 
 /// <summary>
+/// Result of a fleece-only pull operation (no commit/push).
+/// </summary>
+public record FleecePullResult(
+    bool Success,
+    string? ErrorMessage,
+    int IssuesMerged,
+    bool WasBehindRemote,
+    int CommitsPulled,
+    bool HasNonFleeceChanges = false,
+    IReadOnlyList<string>? NonFleeceChangedFiles = null);
+
+/// <summary>
 /// Result of a pull operation.
 /// </summary>
 public record PullResult(

@@ -1,3 +1,4 @@
+using Homespun.Shared.Models.Fleece;
 
 namespace Homespun.Features.Fleece.Services;
 
@@ -57,4 +58,14 @@ public interface IFleeceIssuesSyncService
     /// <param name="ct">Cancellation token.</param>
     /// <returns>True if discard was successful.</returns>
     Task<bool> DiscardNonFleeceChangesAsync(string projectPath, CancellationToken ct = default);
+
+    /// <summary>
+    /// Pulls fleece issues from the remote repository without committing or pushing.
+    /// This operation fetches from remote, fast-forwards if behind, and merges fleece issues locally.
+    /// </summary>
+    /// <param name="projectPath">The local path of the project.</param>
+    /// <param name="defaultBranch">The default branch name to pull from.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Result indicating success/failure and number of issues merged.</returns>
+    Task<FleecePullResult> PullFleeceOnlyAsync(string projectPath, string defaultBranch, CancellationToken ct = default);
 }
