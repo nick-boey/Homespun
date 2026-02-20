@@ -2,16 +2,17 @@
 set -e
 
 # ============================================================================
-# Homespun Docker Runner
+# Homespun Docker Compose Runner
 # ============================================================================
 #
-# This script runs Homespun using Docker. By default, it uses pre-built GHCR images.
-# Use --local for development to build images locally.
+# This script runs Homespun using Docker Compose with optional PLG logging stack.
+# By default, it uses pre-built GHCR images and enables the PLG (Promtail, Loki, Grafana) stack.
 #
 # Usage:
-#   ./run.sh                    # Production: GHCR images
+#   ./run.sh                    # Production: GHCR images with PLG stack
 #   ./run.sh --local            # Development: Build local images, Docker agents
 #   ./run.sh --local-agents     # Development: Build local, in-process agents
+#   ./run.sh --no-plg           # Run without PLG logging stack
 #   ./run.sh --stop             # Stop all containers
 #   ./run.sh --logs             # View container logs
 #
@@ -29,6 +30,7 @@ set -e
 #   --data-dir DIR              Override data directory (default: ~/.homespun-container/data)
 #   --container-name NAME       Override container name (default: homespun)
 #   --no-tailscale              Disable Tailscale (do not load auth key)
+#   --no-plg                    Disable PLG logging stack (Promtail, Loki, Grafana)
 #
 # Environment Variables:
 #   HSP_GITHUB_TOKEN            GitHub token (preferred for VM secrets)
@@ -59,6 +61,7 @@ USE_LOCAL_AGENTS=false
 USE_DEBUG=false
 USE_MOCK=false
 NO_TAILSCALE=false
+NO_PLG=false
 DETACHED=true
 ACTION="start"
 PULL_FIRST=false
@@ -66,6 +69,7 @@ EXTERNAL_HOSTNAME=""
 DATA_DIR_PARAM=""
 CONTAINER_NAME="homespun"
 HOST_PORT="8080"
+GRAFANA_PORT="3000"
 USER_SECRETS_ID="2cfc6c57-72da-4b56-944b-08f2c1df76f6"
 
 # Colors
@@ -94,6 +98,7 @@ while [[ "$#" -gt 0 ]]; do
         --debug) USE_DEBUG=true ;;
         --mock) USE_MOCK=true ;;
         --no-tailscale) NO_TAILSCALE=true ;;
+        --no-plg) NO_PLG=true ;;
         --port) HOST_PORT="$2"; shift ;;
         -it|--interactive) DETACHED=false ;;
         -d|--detach) DETACHED=true ;;
@@ -113,14 +118,23 @@ done
 cd "$REPO_ROOT"
 
 echo
-log_info "=== Homespun Docker Runner ==="
+log_info "=== Homespun Docker Compose Runner ==="
 echo
+
+# Compose file and env file paths
+COMPOSE_FILE="$REPO_ROOT/docker-compose.yml"
+ENV_FILE="$REPO_ROOT/.env.compose"
 
 # Handle stop action
 if [ "$ACTION" = "stop" ]; then
     log_info "Stopping containers..."
+    if [ -f "$ENV_FILE" ]; then
+        docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" down 2>/dev/null || true
+    fi
     docker stop "$CONTAINER_NAME" 2>/dev/null || true
     docker rm "$CONTAINER_NAME" 2>/dev/null || true
+    docker stop homespun-loki homespun-promtail homespun-grafana 2>/dev/null || true
+    docker rm homespun-loki homespun-promtail homespun-grafana 2>/dev/null || true
     log_success "Containers stopped."
     exit 0
 fi
@@ -128,7 +142,11 @@ fi
 # Handle logs action
 if [ "$ACTION" = "logs" ]; then
     log_info "Following container logs (Ctrl+C to exit)..."
-    docker logs -f "$CONTAINER_NAME"
+    if [ -f "$ENV_FILE" ]; then
+        docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs -f
+    else
+        docker logs -f "$CONTAINER_NAME"
+    fi
     exit 0
 fi
 
@@ -350,8 +368,8 @@ if [ -z "$EXTERNAL_HOSTNAME" ] && [ -f "$REPO_ROOT/.env" ]; then
     EXTERNAL_HOSTNAME=$(grep -E "^HSP_EXTERNAL_HOSTNAME=" "$REPO_ROOT/.env" 2>/dev/null | cut -d'=' -f2- | tr -d '"' | tr -d "'" || true)
 fi
 
-# Step 5: Start containers
-log_info "[5/5] Starting containers..."
+# Step 5: Generate .env.compose and start containers
+log_info "[5/5] Starting containers with Docker Compose..."
 echo
 
 log_info "======================================"
@@ -363,13 +381,11 @@ echo "  User:        $HOST_UID:$HOST_GID (host user)"
 echo "  Port:        $HOST_PORT"
 echo "  URL:         http://localhost:$HOST_PORT"
 echo "  Data mount:  $DATA_DIR"
-if [ -n "$SSH_MOUNT" ]; then
+if [ -d "$SSH_DIR" ]; then
     echo "  SSH mount:   $SSH_DIR (read-only)"
 fi
-if [ -n "$DOCKER_SOCKET_MOUNT" ]; then
-    echo "  Docker:      DooD enabled (host socket mounted)"
-fi
-if [ -n "$CLAUDE_CREDENTIALS_MOUNT" ]; then
+echo "  Docker:      DooD enabled (host socket mounted)"
+if [ -f "$CLAUDE_CREDENTIALS_FILE" ]; then
     echo "  Claude:      Credentials mounted (OAuth enabled)"
 elif [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
     echo "  Claude:      OAuth token via environment variable"
@@ -395,83 +411,95 @@ if [ "$USE_LOCAL_AGENTS" = true ]; then
 else
     echo "  Agents:      Docker containers ($WORKER_IMAGE)"
 fi
+if [ "$NO_PLG" = false ]; then
+    echo "  PLG Stack:   Enabled (Grafana at http://localhost:$GRAFANA_PORT)"
+else
+    echo "  PLG Stack:   Disabled"
+fi
 log_info "======================================"
 echo
 
+# Generate .env.compose file for Docker Compose
+log_info "Generating $ENV_FILE..."
+
+# Determine ASP.NET environment
+if [ "$USE_MOCK" = true ]; then
+    ASPNETCORE_ENV="MockLive"
+else
+    ASPNETCORE_ENV="Production"
+fi
+
+# Determine agent mode
+if [ "$USE_LOCAL_AGENTS" = true ]; then
+    AGENT_MODE="Local"
+else
+    AGENT_MODE="Docker"
+fi
+
+# Write environment file for Docker Compose
+cat > "$ENV_FILE" << EOF
+# Generated by run.sh on $(date)
+# Do not edit manually - regenerated on each run
+
+# Container settings
+HOMESPUN_IMAGE=$IMAGE_NAME
+WORKER_IMAGE=$WORKER_IMAGE
+CONTAINER_NAME=$CONTAINER_NAME
+HOST_PORT=$HOST_PORT
+HOST_UID=$HOST_UID
+HOST_GID=$HOST_GID
+DOCKER_GID=$DOCKER_SOCKET_GID
+
+# Directories
+DATA_DIR=$DATA_DIR
+SSH_DIR=$SSH_DIR
+CLAUDE_CREDENTIALS=${CLAUDE_CREDENTIALS_FILE:-/dev/null}
+
+# Environment
+ASPNETCORE_ENVIRONMENT=$ASPNETCORE_ENV
+AGENT_MODE=$AGENT_MODE
+
+# Credentials
+GITHUB_TOKEN=${GITHUB_TOKEN:-}
+CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
+TAILSCALE_AUTH_KEY=${TAILSCALE_AUTH_KEY:-}
+TS_HOSTNAME=${TS_HOSTNAME:-homespun-dev}
+HSP_EXTERNAL_HOSTNAME=${EXTERNAL_HOSTNAME:-}
+
+# Grafana
+GRAFANA_PORT=$GRAFANA_PORT
+GRAFANA_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+EOF
+
+log_success "Environment file generated: $ENV_FILE"
+
 # Stop existing containers first
+log_info "Stopping any existing containers..."
+docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" down 2>/dev/null || true
 docker stop "$CONTAINER_NAME" 2>/dev/null || true
 docker rm "$CONTAINER_NAME" 2>/dev/null || true
 
-# Build docker run command
-DOCKER_CMD="docker run"
-if [ "$DETACHED" = true ]; then
-    DOCKER_CMD="$DOCKER_CMD -d"
-fi
-DOCKER_CMD="$DOCKER_CMD --name $CONTAINER_NAME"
-DOCKER_CMD="$DOCKER_CMD --user $HOST_UID:$HOST_GID"
-DOCKER_CMD="$DOCKER_CMD $DOCKER_GROUP_ADD"
-DOCKER_CMD="$DOCKER_CMD -p $HOST_PORT:8080"
-DOCKER_CMD="$DOCKER_CMD -v $DATA_DIR:/data"
-DOCKER_CMD="$DOCKER_CMD $SSH_MOUNT"
-DOCKER_CMD="$DOCKER_CMD $DOCKER_SOCKET_MOUNT"
-DOCKER_CMD="$DOCKER_CMD $CLAUDE_CREDENTIALS_MOUNT"
-DOCKER_CMD="$DOCKER_CMD -e HOME=/home/homespun"
-DOCKER_CMD="$DOCKER_CMD -e HSP_HOST_DATA_PATH=$DATA_DIR"
+# Build compose command
+COMPOSE_CMD="docker compose -f $COMPOSE_FILE --env-file $ENV_FILE"
 
-if [ "$USE_MOCK" = true ]; then
-    DOCKER_CMD="$DOCKER_CMD -e HOMESPUN_MOCK_MODE=true"
-    DOCKER_CMD="$DOCKER_CMD -e MockMode__UseLiveClaudeSessions=true"
-    DOCKER_CMD="$DOCKER_CMD -e ASPNETCORE_ENVIRONMENT=MockLive"
-else
-    DOCKER_CMD="$DOCKER_CMD -e ASPNETCORE_ENVIRONMENT=Production"
+# Add PLG profile if not disabled
+if [ "$NO_PLG" = false ]; then
+    COMPOSE_CMD="$COMPOSE_CMD --profile plg"
 fi
-
-if [ -n "$GITHUB_TOKEN" ]; then
-    DOCKER_CMD="$DOCKER_CMD -e GITHUB_TOKEN=$GITHUB_TOKEN"
-fi
-
-if [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
-    DOCKER_CMD="$DOCKER_CMD -e CLAUDE_CODE_OAUTH_TOKEN=$CLAUDE_CODE_OAUTH_TOKEN"
-fi
-
-if [ -n "$TAILSCALE_AUTH_KEY" ]; then
-    DOCKER_CMD="$DOCKER_CMD -e TAILSCALE_AUTH_KEY=$TAILSCALE_AUTH_KEY"
-    DOCKER_CMD="$DOCKER_CMD -e TS_HOSTNAME=homespun-dev"
-fi
-
-if [ -n "$EXTERNAL_HOSTNAME" ]; then
-    DOCKER_CMD="$DOCKER_CMD -e HSP_EXTERNAL_HOSTNAME=$EXTERNAL_HOSTNAME"
-fi
-
-# Set worker image for Docker agent execution (when using local images)
-if [ "$USE_LOCAL" = true ]; then
-    DOCKER_CMD="$DOCKER_CMD -e AgentExecution__Docker__WorkerImage=$WORKER_IMAGE"
-fi
-
-# Set agent execution mode explicitly
-if [ "$USE_LOCAL_AGENTS" = true ]; then
-    DOCKER_CMD="$DOCKER_CMD -e AgentExecution__Mode=Local"
-else
-    # Explicitly set Docker mode to ensure config is not ambiguous
-    DOCKER_CMD="$DOCKER_CMD -e AgentExecution__Mode=Docker"
-fi
-
-DOCKER_CMD="$DOCKER_CMD --restart unless-stopped"
-DOCKER_CMD="$DOCKER_CMD --health-cmd 'curl -f http://localhost:8080/health || exit 1'"
-DOCKER_CMD="$DOCKER_CMD --health-interval 30s"
-DOCKER_CMD="$DOCKER_CMD --health-timeout 10s"
-DOCKER_CMD="$DOCKER_CMD --health-retries 3"
-DOCKER_CMD="$DOCKER_CMD --health-start-period 10s"
-DOCKER_CMD="$DOCKER_CMD $IMAGE_NAME"
 
 if [ "$DETACHED" = true ]; then
-    log_info "Starting container in detached mode..."
-    eval $DOCKER_CMD
+    log_info "Starting containers in detached mode..."
+    eval "$COMPOSE_CMD up -d"
 
     echo
-    log_success "Container started successfully!"
+    log_success "Containers started successfully!"
     echo
-    echo "Access URL: http://localhost:$HOST_PORT"
+    echo "Access URLs:"
+    echo "  Homespun:    http://localhost:$HOST_PORT"
+    if [ "$NO_PLG" = false ]; then
+        echo "  Grafana:     http://localhost:$GRAFANA_PORT (admin/admin)"
+        echo "  Loki:        http://localhost:3100"
+    fi
     echo
     echo "Useful commands:"
     echo "  View logs:     $0 --logs"
@@ -479,10 +507,10 @@ if [ "$DETACHED" = true ]; then
     echo "  Health check:  curl http://localhost:$HOST_PORT/health"
     echo
 else
-    log_warn "Starting container in interactive mode..."
+    log_warn "Starting containers in interactive mode..."
     log_warn "Press Ctrl+C to stop."
     echo
-    eval $DOCKER_CMD
+    eval "$COMPOSE_CMD up"
     echo
-    log_warn "Container stopped."
+    log_warn "Containers stopped."
 fi
