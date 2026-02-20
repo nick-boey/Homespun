@@ -10,7 +10,6 @@
 @using Microsoft.AspNetCore.SignalR.Client
 @inject HttpProjectApiService ProjectApi
 @inject HttpPullRequestApiService PullRequestApi
-@inject HttpPullRequestApiService PullRequestWorkflowApi
 @inject HttpIssueApiService IssueApi
 @inject HttpFleeceSyncApiService FleeceSyncApi
 @inject HttpGitHubInfoApiService GitHubInfoApi
@@ -416,7 +415,6 @@ else
     private bool _tokenMissing;
     private string? _syncError;
     private SyncResult? _lastSyncResult;
-    private List<PullRequestWithTime>? _pastPRs;
     private List<IssueResponse>? _openIssues;
     private List<IssueResponse>? _inProgressIssues;
     private TimelineVisualization? _graphVisualization;
@@ -446,7 +444,6 @@ else
             _selectedPullRequestId = null;
             _selectedIssue = null;
             _selectedIssueId = null;
-            _pastPRs = null;
             _lastSyncResult = null;
             _syncError = null;
             _activeTab = "issues";
@@ -469,7 +466,6 @@ else
                     await InvokeAsync(async () =>
                     {
                         await SyncPullRequestsAsync();
-                        await LoadPastPRsAsync();
                     });
                 });
             }
@@ -525,7 +521,7 @@ else
         await LoadData();
         await SetupSignalRConnection();
 
-        // Start sync and load past PRs after project is loaded
+        // Start sync after project is loaded
         // Using Task.Run to not block the initial render
         if (_project != null)
         {
@@ -534,7 +530,6 @@ else
                 await InvokeAsync(async () =>
                 {
                     await SyncPullRequestsAsync();
-                    await LoadPastPRsAsync();
                 });
             });
         }
@@ -709,26 +704,6 @@ else
         return result;
     }
 
-    private async Task LoadPastPRsAsync()
-    {
-        if (_project == null)
-            return;
-
-        var isConfigured = await GitHubInfoApi.IsConfiguredAsync();
-        if (!isConfigured)
-            return;
-
-        try
-        {
-            _pastPRs = await PullRequestWorkflowApi.GetMergedPullRequestsAsync(Id);
-        }
-        catch (Exception ex)
-        {
-            Logger.LogWarning(ex, "Failed to load past PRs for project {ProjectId}", Id);
-            _pastPRs = [];
-        }
-    }
-
     private async Task SyncPullRequestsAsync()
     {
         if (_project == null || _isSyncingPRs)
@@ -891,13 +866,6 @@ else
         return _flattenedCurrentPRs.Count + (_inProgressIssues?.Count ?? 0);
     }
 
-    private static string GetPastPRStatusColor(PullRequestStatus status) => status switch
-    {
-        PullRequestStatus.Merged => "status-merged",
-        PullRequestStatus.Closed => "status-closed",
-        _ => "status-default"
-    };
-
     private static string GetCurrentPRStatusColor(OpenPullRequestStatus status) => status switch
     {
         OpenPullRequestStatus.InDevelopment => "status-in-development",
@@ -926,21 +894,6 @@ else
     private static string GetIssueStatusTooltip(IssueResponse issue)
     {
         return $"{issue.Type} ({issue.Status})";
-    }
-
-    private static string? GetPastPRSubtitle(PullRequestInfo pr)
-    {
-        var parts = new List<string>();
-
-        if (pr.MergedAt.HasValue)
-            parts.Add($"Merged {pr.MergedAt.Value:MMM d, yyyy}");
-        else if (pr.ClosedAt.HasValue)
-            parts.Add($"Closed {pr.ClosedAt.Value:MMM d, yyyy}");
-
-        if (!string.IsNullOrEmpty(pr.Group))
-            parts.Add(pr.Group);
-
-        return parts.Count > 0 ? string.Join(" - ", parts) : null;
     }
 
     private static string? GetCurrentPRSubtitle(PullRequest pr)

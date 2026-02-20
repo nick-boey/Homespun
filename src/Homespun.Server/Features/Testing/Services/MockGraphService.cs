@@ -110,6 +110,17 @@ public class MockGraphService : IGraphService
         return jsonData;
     }
 
+    public async Task<GitgraphJsonData> IncrementalRefreshAsync(string projectId, int? maxPastPRs = 5)
+    {
+        _logger.LogDebug("[Mock] IncrementalRefresh for project {ProjectId}", projectId);
+
+        // In mock mode, just build the graph normally (no real GitHub API to refresh from)
+        var graph = await BuildGraphAsync(projectId, maxPastPRs);
+        var jsonData = _mapper.ToJson(graph);
+        EnrichWithAgentStatuses(jsonData, projectId);
+        return jsonData;
+    }
+
     public DateTime? GetCacheTimestamp(string projectId)
     {
         // Mock mode doesn't have real caching, return current time

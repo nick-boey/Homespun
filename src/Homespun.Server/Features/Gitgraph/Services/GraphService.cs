@@ -2,9 +2,11 @@ using Fleece.Core.Models;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Fleece;
 using Homespun.Features.Fleece.Services;
+using Homespun.Features.GitHub;
 using Homespun.Features.Projects;
 using Homespun.Features.PullRequests.Data;
 using Homespun.Shared.Models.Fleece;
+using Homespun.Shared.Models.GitHub;
 
 namespace Homespun.Features.Gitgraph.Services;
 
@@ -22,6 +24,7 @@ public class GraphService(
     IDataStore dataStore,
     PullRequestWorkflowService workflowService,
     IGraphCacheService cacheService,
+    IPRStatusResolver prStatusResolver,
     ILogger<GraphService> logger) : IGraphService
 {
     private readonly GraphBuilder _graphBuilder = new();
@@ -112,6 +115,119 @@ public class GraphService(
         EnrichWithAgentStatuses(jsonData, projectId);
 
         return jsonData;
+    }
+
+    /// <inheritdoc />
+    public async Task<GitgraphJsonData> IncrementalRefreshAsync(string projectId, int? maxPastPRs = 5)
+    {
+        var project = await projectService.GetByIdAsync(projectId);
+        if (project == null)
+        {
+            logger.LogWarning("Project not found: {ProjectId}", projectId);
+            return _mapper.ToJson(new Graph([], new Dictionary<string, GraphBranch>()));
+        }
+
+        // Ensure cache is loaded from disk
+        cacheService.LoadCacheForProject(projectId, project.LocalPath);
+        var cachedData = cacheService.GetCachedPRData(projectId);
+
+        if (cachedData == null)
+        {
+            // No cache - fall back to full fetch (cold start)
+            logger.LogInformation("No cache for project {ProjectId}, performing full fetch", projectId);
+            return await BuildGraphJsonWithFreshDataAsync(projectId, maxPastPRs);
+        }
+
+        // Fetch only open PRs from GitHub
+        logger.LogDebug("Incremental refresh for project {ProjectId}: fetching open PRs only", projectId);
+        var freshOpenPrs = await GetOpenPullRequestsSafe(projectId);
+
+        // Detect newly closed PRs: cached open PRs not in fresh open list
+        var freshOpenPrNumbers = freshOpenPrs.Select(p => p.Number).ToHashSet();
+        var cachedOpenPrNumbers = cachedData.OpenPrs.Select(p => p.Number).ToHashSet();
+        var newlyClosedPrNumbers = cachedOpenPrNumbers.Except(freshOpenPrNumbers).ToList();
+
+        if (newlyClosedPrNumbers.Count > 0)
+        {
+            // Build RemovedPrInfo list from tracked PRs
+            var trackedPrs = dataStore.GetPullRequestsByProject(projectId);
+            var trackedByNumber = trackedPrs
+                .Where(pr => pr.GitHubPRNumber.HasValue)
+                .ToDictionary(pr => pr.GitHubPRNumber!.Value);
+
+            var removedPrs = newlyClosedPrNumbers.Select(prNumber => new RemovedPrInfo
+            {
+                PullRequestId = trackedByNumber.TryGetValue(prNumber, out var tp) ? tp.Id : prNumber.ToString(),
+                GitHubPrNumber = prNumber,
+                BeadsIssueId = trackedByNumber.TryGetValue(prNumber, out var tp2) ? tp2.BeadsIssueId : null
+            }).ToList();
+
+            logger.LogInformation(
+                "Detected {Count} newly closed PRs for project {ProjectId}: {PrNumbers}",
+                newlyClosedPrNumbers.Count, projectId, string.Join(", ", newlyClosedPrNumbers));
+
+            await prStatusResolver.ResolveClosedPRStatusesAsync(projectId, removedPrs);
+        }
+
+        // Reload cache after status resolution (it may have been updated)
+        cachedData = cacheService.GetCachedPRData(projectId) ?? cachedData;
+        var closedPrs = cachedData.ClosedPrs;
+
+        // Build issue-PR statuses from tracked PRs + fresh open PR data (no GitHub call)
+        var issuePrStatuses = BuildIssuePrStatusesFromTrackedPrs(projectId, freshOpenPrs);
+
+        // Update cache with fresh open PRs + existing closed PRs + statuses
+        await cacheService.CachePRDataWithStatusesAsync(
+            projectId, project.LocalPath, freshOpenPrs, closedPrs, issuePrStatuses);
+
+        // Build graph from the refreshed data
+        var allPrs = closedPrs.Concat(freshOpenPrs).ToList();
+        var issues = await GetIssuesAsync(project.LocalPath);
+        var linkedIssueIds = GetLinkedIssueIds(projectId);
+        var filteredIssues = issues.Where(i => !linkedIssueIds.Contains(i.Id)).ToList();
+
+        logger.LogDebug(
+            "Incremental refresh for project {ProjectId}: {OpenPrCount} open PRs, {ClosedPrCount} closed PRs, {NewlyClosedCount} newly closed, {IssueCount} issues",
+            projectId, freshOpenPrs.Count, closedPrs.Count, newlyClosedPrNumbers.Count, filteredIssues.Count);
+
+        var graph = _graphBuilder.Build(allPrs, filteredIssues, maxPastPRs, issuePrStatuses);
+        var jsonData = _mapper.ToJson(graph);
+        EnrichWithAgentStatuses(jsonData, projectId);
+        return jsonData;
+    }
+
+    /// <summary>
+    /// Builds issue-PR status lookup from tracked PRs and fresh open PR data.
+    /// This avoids calling GetOpenPullRequestsWithStatusAsync which hits GitHub for review statuses.
+    /// </summary>
+    private Dictionary<string, PullRequestStatus> BuildIssuePrStatusesFromTrackedPrs(
+        string projectId, List<PullRequestInfo> openPrs)
+    {
+        var result = new Dictionary<string, PullRequestStatus>(StringComparer.OrdinalIgnoreCase);
+
+        var trackedPrs = dataStore.GetPullRequestsByProject(projectId)
+            .Where(pr => !string.IsNullOrEmpty(pr.BeadsIssueId) && pr.GitHubPRNumber.HasValue)
+            .ToList();
+
+        if (trackedPrs.Count == 0)
+            return result;
+
+        var openPrNumbers = openPrs.Select(p => p.Number).ToHashSet();
+
+        foreach (var trackedPr in trackedPrs)
+        {
+            if (trackedPr.BeadsIssueId != null && trackedPr.GitHubPRNumber.HasValue)
+            {
+                if (openPrNumbers.Contains(trackedPr.GitHubPRNumber.Value))
+                {
+                    // PR is open - use InProgress status to indicate it's active
+                    result[trackedPr.BeadsIssueId] = PullRequestStatus.InProgress;
+                }
+                // If not in open PRs, the status will be resolved by PRStatusResolver
+            }
+        }
+
+        return result;
     }
 
     /// <inheritdoc />

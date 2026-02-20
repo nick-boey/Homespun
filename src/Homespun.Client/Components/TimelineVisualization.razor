@@ -373,15 +373,12 @@
     protected override async Task OnInitializedAsync()
     {
         // PHASE 1: Try immediate render from cache (NO GitHub API calls)
-        // This is the fast path - uses only locally cached data
-        var cachedData = await GraphApi.GetGraphDataAsync(ProjectId, _currentMaxPastPRs);
+        // Uses the cache-only endpoint that never hits GitHub
+        var cachedData = await GraphApi.GetCachedGraphDataAsync(ProjectId, _currentMaxPastPRs);
         if (cachedData != null)
         {
-            _graph = await GraphApi.GetGraphAsync(ProjectId, _currentMaxPastPRs);
-            if (_graph != null)
-            {
-                _layout = _laneCalculator.Calculate(_graph.Nodes);
-            }
+            _graph = HttpGraphApiService.ToGraph(cachedData);
+            _layout = _laneCalculator.Calculate(_graph.Nodes);
 
             // Get agent statuses from cached JSON data
             ExtractAgentStatuses(cachedData);
@@ -433,15 +430,12 @@
             _tooltipVisible = false;
             _tooltipNode = null;
 
-            // Reload data for the new project
-            var cachedData = await GraphApi.GetGraphDataAsync(ProjectId, _currentMaxPastPRs);
+            // Reload data for the new project (cache-only, no GitHub calls)
+            var cachedData = await GraphApi.GetCachedGraphDataAsync(ProjectId, _currentMaxPastPRs);
             if (cachedData != null)
             {
-                _graph = await GraphApi.GetGraphAsync(ProjectId, _currentMaxPastPRs);
-                if (_graph != null)
-                {
-                    _layout = _laneCalculator.Calculate(_graph.Nodes);
-                }
+                _graph = HttpGraphApiService.ToGraph(cachedData);
+                _layout = _laneCalculator.Calculate(_graph.Nodes);
                 ExtractAgentStatuses(cachedData);
                 BuildLaneColors();
                 _isLoading = false;
@@ -528,12 +522,11 @@
                 await InvokeAsync(StateHasChanged);
             }
 
-            // Get fresh data from GitHub (this also updates the cache with statuses)
-            var freshJsonData = await GraphApi.GetGraphDataAsync(ProjectId, _currentMaxPastPRs, useCache: false);
-            var freshGraph = await GraphApi.GetGraphAsync(ProjectId, _currentMaxPastPRs, useCache: false);
+            // Incremental refresh: only fetches open PRs, detects newly closed ones
+            var freshJsonData = await GraphApi.RefreshGraphDataAsync(ProjectId, _currentMaxPastPRs);
 
             // Always update if this is initial load, or update the display
-            _graph = freshGraph;
+            _graph = freshJsonData != null ? HttpGraphApiService.ToGraph(freshJsonData) : null;
             if (_graph != null)
             {
                 _layout = _laneCalculator.Calculate(_graph.Nodes);
@@ -574,8 +567,8 @@
     {
         try
         {
-            var jsonData = await GraphApi.GetGraphDataAsync(ProjectId, _currentMaxPastPRs);
-            _graph = await GraphApi.GetGraphAsync(ProjectId, _currentMaxPastPRs);
+            var jsonData = await GraphApi.GetCachedGraphDataAsync(ProjectId, _currentMaxPastPRs);
+            _graph = jsonData != null ? HttpGraphApiService.ToGraph(jsonData) : null;
 
             // Calculate lane layout
             if (_graph != null)

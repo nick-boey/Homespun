@@ -91,6 +91,7 @@ public class GraphServiceLinkedIssueFilterTests
             _dataStore,
             _mockWorkflowService.Object,
             _mockCacheService.Object,
+            new Mock<IPRStatusResolver>().Object,
             _mockLogger.Object);
     }
 

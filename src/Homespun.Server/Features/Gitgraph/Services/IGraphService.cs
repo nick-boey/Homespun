@@ -64,6 +64,16 @@ public interface IGraphService
     Task<GitgraphJsonData?> BuildGraphJsonFromCacheOnlyAsync(string projectId, int? maxPastPRs = 5);
 
     /// <summary>
+    /// Performs an incremental refresh of graph data.
+    /// If cache exists, fetches only open PRs from GitHub and compares with cache
+    /// to detect newly closed PRs. Falls back to full fetch if no cache exists.
+    /// </summary>
+    /// <param name="projectId">The project ID.</param>
+    /// <param name="maxPastPRs">Maximum number of past (closed/merged) PRs to show. Default is 5.</param>
+    /// <returns>Graph JSON data with incrementally refreshed PR data.</returns>
+    Task<GitgraphJsonData> IncrementalRefreshAsync(string projectId, int? maxPastPRs = 5);
+
+    /// <summary>
     /// Builds a task graph for a project using Fleece.Core's TaskGraphService.
     /// The task graph displays issues with actionable items on the left (lane 0)
     /// and parent/blocking issues on the right (higher lanes).

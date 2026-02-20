@@ -14,10 +14,41 @@ public class GraphController(IGraphService graphService) : ControllerBase
     [ProducesResponseType<GitgraphJsonData>(StatusCodes.Status200OK)]
     public async Task<ActionResult<GitgraphJsonData>> GetGraph(
         string projectId,
-        [FromQuery] int? maxPastPRs,
-        [FromQuery] bool useCache = true)
+        [FromQuery] int? maxPastPRs)
     {
-        var data = await graphService.BuildGraphJsonAsync(projectId, maxPastPRs, useCache);
+        var data = await graphService.BuildGraphJsonAsync(projectId, maxPastPRs);
+        return Ok(data);
+    }
+
+    /// <summary>
+    /// Performs an incremental refresh: fetches only open PRs from GitHub,
+    /// compares with cache to detect newly closed PRs, and updates the cache.
+    /// Falls back to full fetch if no cache exists.
+    /// </summary>
+    [HttpPost("{projectId}/refresh")]
+    [ProducesResponseType<GitgraphJsonData>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<GitgraphJsonData>> RefreshGraph(
+        string projectId,
+        [FromQuery] int? maxPastPRs)
+    {
+        var data = await graphService.IncrementalRefreshAsync(projectId, maxPastPRs);
+        return Ok(data);
+    }
+
+    /// <summary>
+    /// Gets graph data using ONLY cached data. No GitHub API calls are made.
+    /// Returns 404 if no cache exists.
+    /// </summary>
+    [HttpGet("{projectId}/cached")]
+    [ProducesResponseType<GitgraphJsonData>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetCachedGraph(
+        string projectId,
+        [FromQuery] int? maxPastPRs)
+    {
+        var data = await graphService.BuildGraphJsonFromCacheOnlyAsync(projectId, maxPastPRs);
+        if (data == null)
+            return NotFound();
         return Ok(data);
     }
 
