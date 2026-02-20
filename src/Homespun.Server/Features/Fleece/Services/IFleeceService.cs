@@ -130,5 +130,27 @@ public interface IFleeceService
     /// <returns>True if the issue was found and deleted.</returns>
     Task<bool> DeleteIssueAsync(string projectPath, string issueId, CancellationToken ct = default);
 
+    /// <summary>
+    /// Adds a parent relationship to an issue. The child issue will be blocked by the parent.
+    /// </summary>
+    /// <param name="projectPath">Path to the project.</param>
+    /// <param name="childId">The ID of the child issue that will have the parent added.</param>
+    /// <param name="parentId">The ID of the parent issue to add.</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>The updated child issue with the new parent relationship.</returns>
+    /// <exception cref="KeyNotFoundException">If the child issue is not found.</exception>
+    Task<Issue> AddParentAsync(string projectPath, string childId, string parentId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Removes a parent relationship from an issue.
+    /// </summary>
+    /// <param name="projectPath">Path to the project.</param>
+    /// <param name="childId">The ID of the child issue that will have the parent removed.</param>
+    /// <param name="parentId">The ID of the parent issue to remove.</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>The updated child issue with the parent relationship removed.</returns>
+    /// <exception cref="KeyNotFoundException">If the child issue is not found.</exception>
+    Task<Issue> RemoveParentAsync(string projectPath, string childId, string parentId, CancellationToken ct = default);
+
     #endregion
 }

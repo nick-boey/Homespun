@@ -217,6 +217,95 @@ public class MockFleeceService : IFleeceService
         return Task.FromResult(true);
     }
 
+    public Task<Issue> AddParentAsync(string projectPath, string childId, string parentId, CancellationToken ct = default)
+    {
+        _logger.LogDebug("[Mock] AddParent {ParentId} to {ChildId} in {ProjectPath}", parentId, childId, projectPath);
+
+        if (!_issuesByProject.TryGetValue(projectPath, out var issues))
+        {
+            throw new KeyNotFoundException($"Issue '{childId}' not found");
+        }
+
+        lock (issues)
+        {
+            var existingIndex = issues.FindIndex(i => i.Id == childId);
+            if (existingIndex < 0)
+            {
+                throw new KeyNotFoundException($"Issue '{childId}' not found");
+            }
+
+            var existing = issues[existingIndex];
+
+            // Create a new list with the added parent
+            var newParentIssues = existing.ParentIssues.ToList();
+            newParentIssues.Add(new ParentIssueRef { ParentIssue = parentId, SortOrder = "0" });
+
+            // Create a new issue with the updated parent list (Issue has init-only properties)
+            var updated = new Issue
+            {
+                Id = existing.Id,
+                Title = existing.Title,
+                Description = existing.Description,
+                Type = existing.Type,
+                Status = existing.Status,
+                Priority = existing.Priority,
+                ExecutionMode = existing.ExecutionMode,
+                WorkingBranchId = existing.WorkingBranchId,
+                ParentIssues = newParentIssues,
+                CreatedAt = existing.CreatedAt,
+                LastUpdate = DateTime.UtcNow
+            };
+
+            issues[existingIndex] = updated;
+            return Task.FromResult(updated);
+        }
+    }
+
+    public Task<Issue> RemoveParentAsync(string projectPath, string childId, string parentId, CancellationToken ct = default)
+    {
+        _logger.LogDebug("[Mock] RemoveParent {ParentId} from {ChildId} in {ProjectPath}", parentId, childId, projectPath);
+
+        if (!_issuesByProject.TryGetValue(projectPath, out var issues))
+        {
+            throw new KeyNotFoundException($"Issue '{childId}' not found");
+        }
+
+        lock (issues)
+        {
+            var existingIndex = issues.FindIndex(i => i.Id == childId);
+            if (existingIndex < 0)
+            {
+                throw new KeyNotFoundException($"Issue '{childId}' not found");
+            }
+
+            var existing = issues[existingIndex];
+
+            // Create a new list without the removed parent
+            var newParentIssues = existing.ParentIssues
+                .Where(p => p.ParentIssue != parentId)
+                .ToList();
+
+            // Create a new issue with the updated parent list (Issue has init-only properties)
+            var updated = new Issue
+            {
+                Id = existing.Id,
+                Title = existing.Title,
+                Description = existing.Description,
+                Type = existing.Type,
+                Status = existing.Status,
+                Priority = existing.Priority,
+                ExecutionMode = existing.ExecutionMode,
+                WorkingBranchId = existing.WorkingBranchId,
+                ParentIssues = newParentIssues,
+                CreatedAt = existing.CreatedAt,
+                LastUpdate = DateTime.UtcNow
+            };
+
+            issues[existingIndex] = updated;
+            return Task.FromResult(updated);
+        }
+    }
+
     /// <summary>
     /// Seeds an issue directly for testing/demo purposes.
     /// </summary>
@@ -301,18 +390,17 @@ internal class MockIssueServiceAdapter(IReadOnlyList<Issue> issues) : IIssueServ
         IssueStatus? status = null,
         IssueType? type = null,
         int? priority = null,
-        string? tag = null,
-        IReadOnlyList<string>? labels = null,
-        int? limit = null,
-        bool excludeTerminal = false,
+        string? assignedTo = null,
+        IReadOnlyList<string>? tags = null,
+        int? linkedPr = null,
+        bool includeTerminal = false,
         CancellationToken cancellationToken = default)
     {
         IEnumerable<Issue> result = issues;
         if (status.HasValue) result = result.Where(i => i.Status == status.Value);
         if (type.HasValue) result = result.Where(i => i.Type == type.Value);
         if (priority.HasValue) result = result.Where(i => i.Priority == priority.Value);
-        if (excludeTerminal) result = result.Where(i => i.Status is not (IssueStatus.Complete or IssueStatus.Closed or IssueStatus.Archived or IssueStatus.Deleted));
-        if (limit.HasValue) result = result.Take(limit.Value);
+        if (!includeTerminal) result = result.Where(i => i.Status is not (IssueStatus.Complete or IssueStatus.Closed or IssueStatus.Archived or IssueStatus.Deleted));
         return Task.FromResult<IReadOnlyList<Issue>>(result.ToList());
     }
 
@@ -331,12 +419,12 @@ internal class MockIssueServiceAdapter(IReadOnlyList<Issue> issues) : IIssueServ
         string? description = null,
         IssueStatus status = IssueStatus.Open,
         int? priority = null,
-        int? sortOrder = null,
-        IReadOnlyList<string>? tags = null,
+        int? linkedPr = null,
+        IReadOnlyList<string>? linkedIssues = null,
         IReadOnlyList<ParentIssueRef>? parentIssues = null,
+        string? assignedTo = null,
+        IReadOnlyList<string>? tags = null,
         string? workingBranchId = null,
-        IReadOnlyList<string>? labels = null,
-        string? area = null,
         ExecutionMode? executionMode = null,
         CancellationToken cancellationToken = default)
         => throw new NotImplementedException("Mock does not support create");
@@ -348,12 +436,12 @@ internal class MockIssueServiceAdapter(IReadOnlyList<Issue> issues) : IIssueServ
         IssueStatus? status = null,
         IssueType? type = null,
         int? priority = null,
-        int? sortOrder = null,
-        IReadOnlyList<string>? tags = null,
+        int? linkedPr = null,
+        IReadOnlyList<string>? linkedIssues = null,
         IReadOnlyList<ParentIssueRef>? parentIssues = null,
+        string? assignedTo = null,
+        IReadOnlyList<string>? tags = null,
         string? workingBranchId = null,
-        IReadOnlyList<string>? labels = null,
-        string? area = null,
         ExecutionMode? executionMode = null,
         CancellationToken cancellationToken = default)
         => throw new NotImplementedException("Mock does not support update");
@@ -363,10 +451,4 @@ internal class MockIssueServiceAdapter(IReadOnlyList<Issue> issues) : IIssueServ
 
     public Task<bool> DeleteAsync(string id, CancellationToken cancellationToken = default)
         => throw new NotImplementedException("Mock does not support delete");
-
-    public Task<Issue> AddParentAsync(string childId, string parentId, CancellationToken cancellationToken = default)
-        => throw new NotImplementedException("Mock does not support AddParent");
-
-    public Task<Issue> RemoveParentAsync(string childId, string parentId, CancellationToken cancellationToken = default)
-        => throw new NotImplementedException("Mock does not support RemoveParent");
 }

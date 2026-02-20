@@ -101,6 +101,7 @@ else
                     ProjectId="@Id"
                     OnPullRequestClick="@SelectPullRequestByNumber"
                     OnIssueClick="@SelectIssue"
+                    OnIssueCreated="@HandleInlineIssueCreated"
                     SelectedNodeId="@GetSelectedNodeId()" />
             </div>
 
@@ -834,6 +835,15 @@ else
         _selectedIssueId = issueId;
         _selectedIssue = _openIssues?.FirstOrDefault(i => i.Id == issueId)
                          ?? _inProgressIssues?.FirstOrDefault(i => i.Id == issueId);
+    }
+
+    private async Task HandleInlineIssueCreated(string newIssueId)
+    {
+        // Refresh data to include the new issue
+        await RefreshData();
+
+        // Select the newly created issue
+        SelectIssue(newIssueId);
     }
 
     private async Task SelectPullRequestByNumber(int prNumber)
