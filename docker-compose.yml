@@ -64,7 +64,7 @@ services:
 
   # Loki - Log aggregation
   loki:
-    image: grafana/loki:2.9.0
+    image: grafana/loki:3.6.6
     container_name: homespun-loki
     profiles: ["plg"]
     ports:
@@ -76,16 +76,9 @@ services:
     restart: unless-stopped
     networks:
       - homespun-net
-    healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3100/ready || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-
   # Promtail - Log collector
   promtail:
-    image: grafana/promtail:2.9.0
+    image: grafana/promtail:3.6.6
     container_name: homespun-promtail
     profiles: ["plg"]
     volumes:
@@ -98,11 +91,11 @@ services:
       - homespun-net
     depends_on:
       loki:
-        condition: service_healthy
+        condition: service_started
 
   # Grafana - Visualization
   grafana:
-    image: grafana/grafana:10.2.0
+    image: grafana/grafana:12.3.3
     container_name: homespun-grafana
     profiles: ["plg"]
     ports:
@@ -120,7 +113,7 @@ services:
       - homespun-net
     depends_on:
       loki:
-        condition: service_healthy
+        condition: service_started
 
 networks:
   homespun-net:

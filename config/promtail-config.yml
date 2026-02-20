@@ -46,7 +46,6 @@ scrape_configs:
             message: Message
             exception: Exception
             category: SourceContext
-          drop_malformed: true
       # Parse plain text logs for containers that don't use JSON
       - match:
           selector: '{container=~".+"}'
