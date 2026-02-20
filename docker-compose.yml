@@ -42,6 +42,7 @@ services:
       - HSP_EXTERNAL_HOSTNAME=${HSP_EXTERNAL_HOSTNAME:-}
       - AgentExecution__Mode=${AGENT_MODE:-Docker}
       - AgentExecution__Docker__WorkerImage=${WORKER_IMAGE:-ghcr.io/nick-boey/homespun-worker:latest}
+      - AgentExecution__Docker__NetworkName=homespun-net
     group_add:
       - ${DOCKER_GID:-999}
     restart: unless-stopped
@@ -124,6 +125,7 @@ services:
 networks:
   homespun-net:
     driver: bridge
+    name: homespun-net
 
 volumes:
   loki-data:
