@@ -7,6 +7,7 @@
         <div class="quick-issue-top-row">
             <select class="quick-input type-select"
                     @bind="_type"
+                    @onkeydown:stopPropagation="true"
                     disabled="@_isSubmitting">
                 @foreach (var type in Enum.GetValues<IssueType>())
                 {
@@ -16,6 +17,7 @@
 
             <select class="quick-input status-select"
                     @bind="_status"
+                    @onkeydown:stopPropagation="true"
                     disabled="@_isSubmitting">
                 <option value="@IssueStatus.Open">open</option>
                 <option value="@IssueStatus.Progress">progress</option>
@@ -30,6 +32,7 @@
                    @bind="_title"
                    @bind:event="oninput"
                    @onkeydown="HandleKeyDown"
+                   @onkeydown:stopPropagation="true"
                    @ref="_titleInput"
                    disabled="@_isSubmitting" />
 
