@@ -6,27 +6,11 @@
             <label class="form-label small mb-1">Agent</label>
             <select class="form-select form-select-sm" @bind="_selectedPromptId" disabled="@Disabled" aria-label="Select agent prompt">
                 <option value="">None (no prompt)</option>
-                @if (_projectPrompts.Any())
+                @foreach (var prompt in _prompts)
                 {
-                    <optgroup label="Project">
-                        @foreach (var prompt in _projectPrompts)
-                        {
-                            <option value="@prompt.Id">@prompt.Name (@prompt.Mode)</option>
-                        }
-                    </optgroup>
-                    <optgroup label="Global">
-                        @foreach (var prompt in _globalPrompts)
-                        {
-                            <option value="@prompt.Id">@prompt.Name (@prompt.Mode)</option>
-                        }
-                    </optgroup>
-                }
-                else
-                {
-                    @foreach (var prompt in _globalPrompts)
-                    {
-                        <option value="@prompt.Id">@prompt.Name (@prompt.Mode)</option>
-                    }
+                    <option value="@prompt.Id">
+                        @prompt.Name (@prompt.Mode)@(prompt.ProjectId != null ? " *" : "")
+                    </option>
                 }
             </select>
         </div>
@@ -45,6 +29,10 @@
             }
         </button>
     </div>
+    @if (_prompts.Any(p => p.ProjectId != null))
+    {
+        <small class="text-muted d-block mt-1">* Project-specific prompt</small>
+    }
 </div>
 
 @code {
@@ -70,8 +58,7 @@
     /// </summary>
     [Parameter] public EventCallback<AgentPrompt?> OnStart { get; set; }
 
-    private IReadOnlyList<AgentPrompt> _projectPrompts = [];
-    private IReadOnlyList<AgentPrompt> _globalPrompts = [];
+    private IReadOnlyList<AgentPrompt> _prompts = [];
     private string _selectedPromptId = string.Empty;
 
     protected override async Task OnInitializedAsync()
@@ -79,20 +66,19 @@
         // Ensure default prompts exist
         await AgentPromptApi.EnsureDefaultPromptsAsync();
 
+        // Load prompts - GetProjectPromptsAsync returns combined project + global prompts
+        // with project prompts overriding global prompts of the same name
         if (!string.IsNullOrEmpty(ProjectId))
         {
-            _projectPrompts = await AgentPromptApi.GetProjectPromptsAsync(ProjectId);
-            _globalPrompts = await AgentPromptApi.GetAllPromptsAsync();
+            _prompts = await AgentPromptApi.GetProjectPromptsAsync(ProjectId);
         }
         else
         {
-            _projectPrompts = [];
-            _globalPrompts = await AgentPromptApi.GetAllPromptsAsync();
+            _prompts = await AgentPromptApi.GetAllPromptsAsync();
         }
 
-        // Default to "Build" if available - prefer project-specific, then global
-        var allPrompts = _projectPrompts.Concat(_globalPrompts);
-        var buildPrompt = allPrompts.FirstOrDefault(p => p.Name == "Build");
+        // Default to "Build" if available
+        var buildPrompt = _prompts.FirstOrDefault(p => p.Name == "Build");
         if (buildPrompt != null)
         {
             _selectedPromptId = buildPrompt.Id;

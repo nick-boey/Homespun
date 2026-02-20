@@ -30,6 +30,15 @@ public partial class HttpAgentPromptApiService(HttpClient http)
         return await http.GetFromJsonAsync<List<AgentPrompt>>($"{BaseUrl}/project/{projectId}") ?? [];
     }
 
+    /// <summary>
+    /// Gets global prompts that are not overridden by project-specific prompts.
+    /// Useful for showing which global prompts can still be copied to project scope.
+    /// </summary>
+    public async Task<List<AgentPrompt>> GetAvailableGlobalPromptsAsync(string projectId)
+    {
+        return await http.GetFromJsonAsync<List<AgentPrompt>>($"{BaseUrl}/available-for-project/{projectId}") ?? [];
+    }
+
     public async Task<AgentPrompt?> CreatePromptAsync(CreateAgentPromptRequest request)
     {
         var response = await http.PostAsJsonAsync(BaseUrl, request);

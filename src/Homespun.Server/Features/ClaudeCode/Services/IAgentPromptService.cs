@@ -17,9 +17,16 @@ public interface IAgentPromptService
     IReadOnlyList<AgentPrompt> GetProjectPrompts(string projectId);
 
     /// <summary>
-    /// Gets prompts available in a project context: project-specific prompts first, then global prompts.
+    /// Gets prompts available in a project context: project-specific prompts, plus global prompts
+    /// that are not overridden by project prompts (matched by name, case-insensitive).
     /// </summary>
     IReadOnlyList<AgentPrompt> GetPromptsForProject(string projectId);
+
+    /// <summary>
+    /// Gets global prompts that are not overridden by project-specific prompts.
+    /// Useful for showing which global prompts can still be "copied" to project scope.
+    /// </summary>
+    IReadOnlyList<AgentPrompt> GetGlobalPromptsNotOverridden(string projectId);
 
     /// <summary>
     /// Gets an agent prompt by ID.

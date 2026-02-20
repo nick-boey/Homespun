@@ -2,16 +2,42 @@
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h5 class="mb-0">Project Prompts</h5>
-    <button class="btn btn-primary btn-sm" @onclick="ShowAddModal">
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16" class="me-1">
-            <path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z"/>
-        </svg>
-        Add Prompt
-    </button>
+    <div class="d-flex gap-2">
+        @if (_availableGlobalPrompts.Any())
+        {
+            <div class="dropdown">
+                <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16" class="me-1">
+                        <path d="M4.5 3a2.5 2.5 0 0 1 5 0v9a1.5 1.5 0 0 1-3 0V5a.5.5 0 0 1 1 0v7a.5.5 0 0 0 1 0V3a1.5 1.5 0 1 0-3 0v9a2.5 2.5 0 0 0 5 0V5a.5.5 0 0 1 1 0v7a3.5 3.5 0 1 1-7 0z"/>
+                    </svg>
+                    Copy from Global
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    @foreach (var globalPrompt in _availableGlobalPrompts)
+                    {
+                        <li>
+                            <button class="dropdown-item" @onclick="() => CopyFromGlobal(globalPrompt)">
+                                @globalPrompt.Name
+                                <span class="badge @(globalPrompt.Mode == SessionMode.Plan ? "bg-info" : "bg-success") ms-2">
+                                    @globalPrompt.Mode
+                                </span>
+                            </button>
+                        </li>
+                    }
+                </ul>
+            </div>
+        }
+        <button class="btn btn-primary btn-sm" @onclick="ShowAddModal">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16" class="me-1">
+                <path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z"/>
+            </svg>
+            Add Prompt
+        </button>
+    </div>
 </div>
 
 <p class="text-muted small mb-3">
-    Project-specific prompts appear alongside global prompts when starting sessions on this project's issues or pull requests.
+    Project prompts override global prompts with the same name. Use "Copy from Global" to customise an existing global prompt for this project.
 </p>
 
 @if (!_prompts.Any())
@@ -135,6 +161,7 @@ else
     [Parameter] public required string ProjectId { get; set; }
 
     private IReadOnlyList<AgentPrompt> _prompts = [];
+    private IReadOnlyList<AgentPrompt> _availableGlobalPrompts = [];
     private bool _showModal;
     private bool _showDeleteConfirmation;
     private bool _isSaving;
@@ -156,6 +183,17 @@ else
     private async Task RefreshPrompts()
     {
         _prompts = await AgentPromptApi.GetProjectPromptsAsync(ProjectId);
+        _availableGlobalPrompts = await AgentPromptApi.GetAvailableGlobalPromptsAsync(ProjectId);
+    }
+
+    private void CopyFromGlobal(AgentPrompt globalPrompt)
+    {
+        _editingPrompt = null;
+        _modalName = globalPrompt.Name;
+        _modalMode = globalPrompt.Mode;
+        _modalMessage = globalPrompt.InitialMessage ?? string.Empty;
+        _modalError = null;
+        _showModal = true;
     }
 
     private string TruncateMessage(string message)
