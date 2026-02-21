@@ -1271,6 +1271,9 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         AppendAuthEnvironmentVars(dockerArgs);
         AppendCredentialsMount(dockerArgs);
 
+        // Labels for Promtail log discovery
+        dockerArgs.Append("--label logging=promtail ");
+
         dockerArgs.Append($"--network {_options.NetworkName} ");
         dockerArgs.Append(_options.WorkerImage);
 
