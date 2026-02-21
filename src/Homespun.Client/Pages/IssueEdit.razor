@@ -313,10 +313,10 @@ else
             // Load agent prompts
             await AgentPromptApi.EnsureDefaultPromptsAsync();
             _prompts = await AgentPromptApi.GetAllPromptsAsync();
-            var buildPrompt = _prompts.FirstOrDefault(p => p.Name == "Build");
-            if (buildPrompt != null)
+            var planPrompt = _prompts.FirstOrDefault(p => p.Name == "Plan");
+            if (planPrompt != null)
             {
-                _selectedPromptId = buildPrompt.Id;
+                _selectedPromptId = planPrompt.Id;
             }
 
             // Check for existing active session

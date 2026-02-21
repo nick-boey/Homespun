@@ -77,11 +77,11 @@
             _prompts = await AgentPromptApi.GetAllPromptsAsync();
         }
 
-        // Default to "Build" if available
-        var buildPrompt = _prompts.FirstOrDefault(p => p.Name == "Build");
-        if (buildPrompt != null)
+        // Default to "Plan" if available
+        var planPrompt = _prompts.FirstOrDefault(p => p.Name == "Plan");
+        if (planPrompt != null)
         {
-            _selectedPromptId = buildPrompt.Id;
+            _selectedPromptId = planPrompt.Id;
         }
     }
 

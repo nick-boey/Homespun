@@ -147,7 +147,7 @@ else
 
     // Modal form fields
     private string _modalName = string.Empty;
-    private SessionMode _modalMode = SessionMode.Build;
+    private SessionMode _modalMode = SessionMode.Plan;
     private string _modalMessage = string.Empty;
 
     protected override async Task OnInitializedAsync()
@@ -173,7 +173,7 @@ else
     {
         _editingPrompt = null;
         _modalName = string.Empty;
-        _modalMode = SessionMode.Build;
+        _modalMode = SessionMode.Plan;
         _modalMessage = string.Empty;
         _modalError = null;
         _showModal = true;
