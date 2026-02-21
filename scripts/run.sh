@@ -5,8 +5,9 @@ set -e
 # Homespun Docker Compose Runner
 # ============================================================================
 #
-# This script runs Homespun using Docker Compose with optional PLG logging stack.
-# By default, it uses pre-built GHCR images and enables the PLG (Promtail, Loki, Grafana) stack.
+# This script runs Homespun using Docker Compose with optional PLG logging stack
+# and Tailscale sidecar for VPN access.
+# By default, it uses pre-built GHCR images. PLG and Tailscale are enabled via profiles.
 #
 # Usage:
 #   ./run.sh                    # Production: GHCR images with PLG stack
@@ -133,8 +134,8 @@ if [ "$ACTION" = "stop" ]; then
     fi
     docker stop "$CONTAINER_NAME" 2>/dev/null || true
     docker rm "$CONTAINER_NAME" 2>/dev/null || true
-    docker stop homespun-loki homespun-promtail homespun-grafana 2>/dev/null || true
-    docker rm homespun-loki homespun-promtail homespun-grafana 2>/dev/null || true
+    docker stop homespun-loki homespun-promtail homespun-grafana homespun-tailscale 2>/dev/null || true
+    docker rm homespun-loki homespun-promtail homespun-grafana homespun-tailscale 2>/dev/null || true
     log_success "Containers stopped."
     exit 0
 fi
@@ -393,7 +394,7 @@ else
     echo "  Claude:      No authentication (agents will fail)"
 fi
 if [ -n "$TAILSCALE_AUTH_KEY" ]; then
-    echo "  Tailscale:   Enabled (will connect on startup)"
+    echo "  Tailscale:   Enabled (sidecar container)"
 fi
 if [ -n "$EXTERNAL_HOSTNAME" ]; then
     echo "  Agent URLs:  https://$EXTERNAL_HOSTNAME:<port>"
@@ -485,6 +486,11 @@ COMPOSE_CMD="docker compose -f $COMPOSE_FILE --env-file $ENV_FILE"
 # Add PLG profile if not disabled
 if [ "$NO_PLG" = false ]; then
     COMPOSE_CMD="$COMPOSE_CMD --profile plg"
+fi
+
+# Add Tailscale profile if auth key is provided
+if [ -n "$TAILSCALE_AUTH_KEY" ]; then
+    COMPOSE_CMD="$COMPOSE_CMD --profile tailscale"
 fi
 
 if [ "$DETACHED" = true ]; then

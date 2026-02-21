@@ -5,7 +5,9 @@
 # Environment Variables (passed at runtime via scripts/run.sh):
 #   GITHUB_TOKEN              - GitHub personal access token for PR operations
 #   CLAUDE_CODE_OAUTH_TOKEN   - Claude Code OAuth token for authentication
-#   TAILSCALE_AUTH_KEY        - Tailscale auth key for VPN access (optional)
+#
+# Note: Tailscale is now provided by a dedicated sidecar container (homespun-tailscale)
+# configured in docker-compose.yml with the "tailscale" profile.
 
 # ARG before any FROM so it's available in the FROM instruction below
 ARG BASE_IMAGE=homespun-base:local
@@ -69,13 +71,6 @@ RUN dotnet publish src/Homespun.Server/Homespun.Server.csproj \
 # CI override: ghcr.io/<repo>-base:latest (passed via --build-arg)
 FROM ${BASE_IMAGE} AS runtime
 WORKDIR /app
-
-# Install Tailscale for VPN access (main app only)
-RUN curl -fsSL https://pkgs.tailscale.com/stable/debian/bookworm.noarmor.gpg | tee /usr/share/keyrings/tailscale-archive-keyring.gpg >/dev/null \
-    && curl -fsSL https://pkgs.tailscale.com/stable/debian/bookworm.tailscale-keyring.list | tee /etc/apt/sources.list.d/tailscale.list \
-    && apt-get update \
-    && apt-get install -y tailscale \
-    && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user for security
 RUN useradd --create-home --shell /bin/bash homespun
