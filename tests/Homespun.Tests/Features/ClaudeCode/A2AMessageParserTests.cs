@@ -1,3 +1,4 @@
+using System.Text.Json;
 using A2A;
 using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.ClaudeCode.Services;
@@ -439,5 +440,99 @@ public class A2AMessageParserTests
         var result = A2AMessageParser.ConvertToSdkMessage(parsed, "session-1");
 
         Assert.That(result, Is.Null);
+    }
+
+    [Test]
+    public void ConvertToSdkMessage_StatusUpdate_InputRequired_Question_WithQuestionsArrayInMetadata_ReturnsQuestionPendingMessage()
+    {
+        // This test replicates the bug where questions array in metadata
+        // causes InvalidOperationException when consumer tries to access .questions property
+        var questionsArrayJson = """
+        [
+            {
+                "question": "What framework?",
+                "header": "Framework",
+                "options": [{ "label": "React", "description": "React framework" }],
+                "multiSelect": false
+            }
+        ]
+        """;
+
+        var metadata = new Dictionary<string, JsonElement>
+        {
+            ["inputType"] = JsonSerializer.Deserialize<JsonElement>("\"question\""),
+            ["questions"] = JsonSerializer.Deserialize<JsonElement>(questionsArrayJson)
+        };
+
+        var statusUpdate = new TaskStatusUpdateEvent
+        {
+            TaskId = "task-123",
+            ContextId = "context-456",
+            Status = new AgentTaskStatus
+            {
+                State = TaskState.InputRequired,
+                Timestamp = DateTimeOffset.UtcNow
+            },
+            Final = false,
+            Metadata = metadata
+        };
+
+        var result = A2AMessageParser.ConvertToSdkMessage(new ParsedTaskStatusUpdateEvent(statusUpdate), "session-1");
+
+        Assert.That(result, Is.InstanceOf<SdkQuestionPendingMessage>());
+        var questionMsg = (SdkQuestionPendingMessage)result!;
+
+        // The QuestionsJson should be wrapped in an object with "questions" property
+        using var doc = JsonDocument.Parse(questionMsg.QuestionsJson);
+        Assert.That(doc.RootElement.ValueKind, Is.EqualTo(JsonValueKind.Object));
+        Assert.That(doc.RootElement.TryGetProperty("questions", out var questionsProperty), Is.True);
+        Assert.That(questionsProperty.ValueKind, Is.EqualTo(JsonValueKind.Array));
+    }
+
+    [Test]
+    public void ConvertToSdkMessage_StatusUpdate_InputRequired_Question_WithQuestionsObjectInMetadata_ReturnsQuestionPendingMessage()
+    {
+        // Test case where metadata already contains the questions in object format
+        var questionsObjectJson = """
+        {
+            "questions": [
+                {
+                    "question": "What color?",
+                    "header": "Color",
+                    "options": [{ "label": "Red", "description": "The color red" }],
+                    "multiSelect": false
+                }
+            ]
+        }
+        """;
+
+        var metadata = new Dictionary<string, JsonElement>
+        {
+            ["inputType"] = JsonSerializer.Deserialize<JsonElement>("\"question\""),
+            ["questions"] = JsonSerializer.Deserialize<JsonElement>(questionsObjectJson)
+        };
+
+        var statusUpdate = new TaskStatusUpdateEvent
+        {
+            TaskId = "task-123",
+            ContextId = "context-456",
+            Status = new AgentTaskStatus
+            {
+                State = TaskState.InputRequired,
+                Timestamp = DateTimeOffset.UtcNow
+            },
+            Final = false,
+            Metadata = metadata
+        };
+
+        var result = A2AMessageParser.ConvertToSdkMessage(new ParsedTaskStatusUpdateEvent(statusUpdate), "session-1");
+
+        Assert.That(result, Is.InstanceOf<SdkQuestionPendingMessage>());
+        var questionMsg = (SdkQuestionPendingMessage)result!;
+
+        // Should pass through object format unchanged
+        using var doc = JsonDocument.Parse(questionMsg.QuestionsJson);
+        Assert.That(doc.RootElement.ValueKind, Is.EqualTo(JsonValueKind.Object));
+        Assert.That(doc.RootElement.TryGetProperty("questions", out _), Is.True);
     }
 }

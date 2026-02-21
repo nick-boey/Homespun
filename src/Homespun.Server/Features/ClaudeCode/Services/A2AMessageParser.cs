@@ -375,6 +375,13 @@ public static class A2AMessageParser
         if (statusUpdate.Metadata != null &&
             statusUpdate.Metadata.TryGetValue("questions", out var questionsElement))
         {
+            // If metadata contains a raw questions array, wrap it in an object
+            // to match expected format: { "questions": [...] }
+            // This matches the pattern used by ExtractPlanJson
+            if (questionsElement.ValueKind == JsonValueKind.Array)
+            {
+                return JsonSerializer.Serialize(new { questions = questionsElement });
+            }
             return questionsElement.GetRawText();
         }
 

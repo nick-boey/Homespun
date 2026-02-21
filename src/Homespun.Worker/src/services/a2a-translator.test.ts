@@ -242,6 +242,44 @@ describe('A2A Translator', () => {
       expect(status.final).toBe(false);
       expect((status.metadata as any)?.inputType).toBe('plan-approval');
     });
+
+    it('includes questions array directly in metadata for question_pending', () => {
+      const event: ControlEvent = {
+        type: 'question_pending',
+        data: {
+          questions: [{
+            question: 'What framework?',
+            header: 'Framework',
+            options: [{ label: 'React', description: 'React framework' }],
+            multiSelect: false,
+          }],
+        },
+      };
+
+      const status = translateControlEvent(event, ctx);
+
+      // Verify the questions are included directly as an array in metadata
+      expect((status.metadata as any)?.questions).toBeDefined();
+      expect(Array.isArray((status.metadata as any).questions)).toBe(true);
+      expect((status.metadata as any).questions).toHaveLength(1);
+      expect((status.metadata as any).questions[0].question).toBe('What framework?');
+    });
+
+    it('includes plan string directly in metadata for plan_pending', () => {
+      const event: ControlEvent = {
+        type: 'plan_pending',
+        data: {
+          plan: '# My Plan\n\n1. Step one',
+        },
+      };
+
+      const status = translateControlEvent(event, ctx);
+
+      // Verify the plan is included directly as a string in metadata
+      expect((status.metadata as any)?.plan).toBeDefined();
+      expect(typeof (status.metadata as any).plan).toBe('string');
+      expect((status.metadata as any).plan).toBe('# My Plan\n\n1. Step one');
+    });
   });
 
   describe('createErrorStatus', () => {
