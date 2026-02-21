@@ -9,6 +9,7 @@
 @using Homespun.Shared.Hubs
 @using Homespun.Shared.Models.Notifications
 @using Homespun.Shared.Models.PullRequests
+@using Homespun.Shared.Models.Sessions
 @using Homespun.Shared.Requests
 @using Microsoft.AspNetCore.SignalR.Client
 @using Homespun.Client.Services
@@ -105,6 +106,8 @@ else
                     OnPullRequestClick="@SelectPullRequestByNumber"
                     OnIssueClick="@SelectIssue"
                     OnIssueCreated="@HandleInlineIssueCreated"
+                    OnEditClick="@HandleEditIssue"
+                    OnRunAgentClick="@HandleRunAgentOnIssue"
                     SelectedNodeId="@GetSelectedNodeId()" />
             </div>
 
@@ -1026,6 +1029,90 @@ else
 
         // Select the newly created issue
         SelectIssue(newIssueId);
+    }
+
+    private void HandleEditIssue(string issueId)
+    {
+        NavigationManager.NavigateTo($"/projects/{Id}/issues/{issueId}/edit");
+    }
+
+    private async Task HandleRunAgentOnIssue((string IssueId, AgentPrompt? Prompt) args)
+    {
+        var issue = _openIssues?.FirstOrDefault(i => i.Id == args.IssueId)
+                    ?? _inProgressIssues?.FirstOrDefault(i => i.Id == args.IssueId);
+
+        if (issue == null || _project == null) return;
+
+        // Select the issue first
+        SelectIssue(args.IssueId);
+
+        // Get or create clone for the issue's branch
+        var branchName = issue.WorkingBranchId ?? $"issue/{args.IssueId}";
+        var clones = await CloneApi.ListClonesAsync(Id);
+        var existingClone = clones.FirstOrDefault(c => c.Branch == branchName);
+
+        string clonePath;
+        if (existingClone != null)
+        {
+            clonePath = existingClone.Path;
+        }
+        else
+        {
+            // Create clone for the branch
+            var request = new CreateCloneRequest
+            {
+                ProjectId = Id,
+                BranchName = branchName,
+                CreateBranch = true
+            };
+            var createResult = await CloneApi.CreateCloneAsync(request);
+            clonePath = createResult?.Path ?? string.Empty;
+            if (string.IsNullOrEmpty(clonePath))
+            {
+                Logger.LogError("Failed to create clone for branch {Branch}", branchName);
+                return;
+            }
+        }
+
+        // Start the agent session
+        var mode = args.Prompt?.Mode ?? SessionMode.Build;
+        var model = "opus"; // Default model
+
+        // Build system prompt based on issue context
+        string? systemPrompt = null;
+        if (args.Prompt?.InitialMessage != null)
+        {
+            var context = new PromptContext
+            {
+                Title = issue.Title,
+                Id = issue.Id,
+                Description = issue.Description,
+                Branch = branchName,
+                Type = issue.Type.ToString()
+            };
+            systemPrompt = HttpAgentPromptApiService.RenderTemplate(args.Prompt.InitialMessage, context);
+        }
+
+        try
+        {
+            var session = await SessionApi.StartSessionAsync(
+                args.IssueId,
+                Id,
+                clonePath,
+                mode,
+                model,
+                systemPrompt);
+
+            if (session != null)
+            {
+                // Navigate to the session
+                NavigationManager.NavigateTo($"/session/{session.Id}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to start agent session for issue {IssueId}", args.IssueId);
+        }
     }
 
     private async Task SelectPullRequestByNumber(int prNumber)

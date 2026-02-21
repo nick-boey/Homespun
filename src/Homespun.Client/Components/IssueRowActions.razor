@@ -1,0 +1,247 @@
+@using Homespun.Shared.Models.Sessions
+@inject HttpAgentPromptApiService AgentPromptApi
+
+<div class="issue-row-actions @(IsVisible ? "visible" : "")" @onclick:stopPropagation="true">
+    <button type="button"
+            class="issue-row-action-btn"
+            data-testid="edit-issue-button"
+            title="Edit issue"
+            disabled="@Disabled"
+            @onclick="HandleEditClick"
+            @onclick:stopPropagation="true">
+        <i class="bi bi-pencil"></i>
+    </button>
+
+    <div class="issue-row-agent-wrapper">
+        <button type="button"
+                class="issue-row-action-btn"
+                data-testid="run-agent-button"
+                title="Run agent"
+                disabled="@Disabled"
+                @onclick="ToggleDropdown"
+                @onclick:stopPropagation="true">
+            <i class="bi bi-play-fill"></i>
+        </button>
+
+        @if (_showDropdown)
+        {
+            <div class="issue-row-agent-dropdown" @onclick:stopPropagation="true">
+                <div class="dropdown-content">
+                    <label class="dropdown-label">Agent</label>
+                    <select class="form-select form-select-sm" @bind="_selectedPromptId">
+                        <option value="">None (no prompt)</option>
+                        @foreach (var prompt in _prompts)
+                        {
+                            <option value="@prompt.Id">
+                                @prompt.Name (@prompt.Mode)@(prompt.ProjectId != null ? " *" : "")
+                            </option>
+                        }
+                    </select>
+                    <button class="btn btn-sm btn-success mt-2 w-full"
+                            @onclick="HandleStartAgent"
+                            disabled="@_isStarting">
+                        @if (_isStarting)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                        }
+                        <i class="bi bi-play-fill me-1"></i>
+                        Start
+                    </button>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<style>
+    .issue-row-actions {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        opacity: 0;
+        transition: opacity 0.15s ease;
+        flex-shrink: 0;
+        margin-left: auto;
+        padding-left: 8px;
+    }
+
+    .issue-row-actions.visible {
+        opacity: 1;
+    }
+
+    .issue-row-action-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 24px;
+        height: 24px;
+        padding: 0;
+        border: none;
+        border-radius: 4px;
+        background: transparent;
+        color: var(--text-muted, #6c757d);
+        cursor: pointer;
+        transition: background-color 0.15s ease, color 0.15s ease;
+    }
+
+    .issue-row-action-btn:hover:not(:disabled) {
+        background-color: var(--bg-tertiary, rgba(255, 255, 255, 0.1));
+        color: var(--text-primary, #eaeaea);
+    }
+
+    .issue-row-action-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .issue-row-action-btn i {
+        font-size: 12px;
+    }
+
+    .issue-row-agent-wrapper {
+        position: relative;
+    }
+
+    .issue-row-agent-dropdown {
+        position: absolute;
+        top: 100%;
+        right: 0;
+        z-index: 1000;
+        min-width: 200px;
+        margin-top: 4px;
+        background: var(--bg-primary, #1a1a2e);
+        border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+        border-radius: 6px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+
+    .dropdown-content {
+        padding: 12px;
+    }
+
+    .dropdown-label {
+        display: block;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        color: var(--text-muted, #6c757d);
+        margin-bottom: 4px;
+    }
+
+    .dropdown-content .form-select {
+        font-size: 13px;
+    }
+
+    .dropdown-content .btn {
+        font-size: 12px;
+    }
+
+    .w-full {
+        width: 100%;
+    }
+</style>
+
+@code {
+    /// <summary>
+    /// The issue ID this action row is associated with.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public required string IssueId { get; set; }
+
+    /// <summary>
+    /// The project ID for navigation and agent context.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public required string ProjectId { get; set; }
+
+    /// <summary>
+    /// Whether the action buttons are visible.
+    /// Controlled by parent based on hover/selection state.
+    /// </summary>
+    [Parameter]
+    public bool IsVisible { get; set; }
+
+    /// <summary>
+    /// Whether the action buttons are disabled.
+    /// </summary>
+    [Parameter]
+    public bool Disabled { get; set; }
+
+    /// <summary>
+    /// Callback when the edit button is clicked.
+    /// </summary>
+    [Parameter]
+    public EventCallback<string> OnEditClick { get; set; }
+
+    /// <summary>
+    /// Callback when an agent is started.
+    /// Provides the issue ID and selected prompt (null if no prompt selected).
+    /// </summary>
+    [Parameter]
+    public EventCallback<(string IssueId, AgentPrompt? Prompt)> OnRunAgentClick { get; set; }
+
+    private bool _showDropdown;
+    private bool _isStarting;
+    private IReadOnlyList<AgentPrompt> _prompts = [];
+    private string _selectedPromptId = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await AgentPromptApi.EnsureDefaultPromptsAsync();
+
+        // Load prompts for the project
+        if (!string.IsNullOrEmpty(ProjectId))
+        {
+            _prompts = await AgentPromptApi.GetProjectPromptsAsync(ProjectId);
+        }
+        else
+        {
+            _prompts = await AgentPromptApi.GetAllPromptsAsync();
+        }
+
+        // Default to "Build" if available
+        var buildPrompt = _prompts.FirstOrDefault(p => p.Name == "Build");
+        if (buildPrompt != null)
+        {
+            _selectedPromptId = buildPrompt.Id;
+        }
+    }
+
+    private async Task HandleEditClick()
+    {
+        if (Disabled) return;
+        await OnEditClick.InvokeAsync(IssueId);
+    }
+
+    private void ToggleDropdown()
+    {
+        if (Disabled) return;
+        _showDropdown = !_showDropdown;
+    }
+
+    private async Task HandleStartAgent()
+    {
+        if (_isStarting) return;
+
+        _isStarting = true;
+        StateHasChanged();
+
+        try
+        {
+            AgentPrompt? selectedPrompt = null;
+
+            if (!string.IsNullOrEmpty(_selectedPromptId))
+            {
+                selectedPrompt = await AgentPromptApi.GetPromptAsync(_selectedPromptId);
+            }
+
+            _showDropdown = false;
+            await OnRunAgentClick.InvokeAsync((IssueId, selectedPrompt));
+        }
+        finally
+        {
+            _isStarting = false;
+            StateHasChanged();
+        }
+    }
+}

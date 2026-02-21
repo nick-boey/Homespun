@@ -263,6 +263,15 @@ public class ComponentRegistryService : IComponentRegistryService
             Category = "Core",
             ComponentPath = "Components/SplitButton.razor",
             Tags = new() { "button", "dropdown", "action" }
+        },
+        new ComponentMetadata
+        {
+            Id = "issue-row-actions",
+            Name = "IssueRowActions",
+            Description = "Inline action buttons for issue rows, showing edit and run agent controls. Appears on hover or selection.",
+            Category = "Issue",
+            ComponentPath = "Components/IssueRowActions.razor",
+            Tags = new() { "issue", "button", "action", "inline" }
         }
     };
 

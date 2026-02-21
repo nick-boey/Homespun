@@ -1,0 +1,93 @@
+@using Homespun.Shared.Models.Sessions
+
+<div class="showcase-section">
+    <h3>Default State (Hidden)</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Actions are hidden by default (opacity: 0)</div>
+        <div class="showcase-preview" style="background: var(--bg-primary); padding: 1rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem;">
+                <span style="color: var(--text-muted); font-size: 12px;">ISSUE-001</span>
+                <span style="color: var(--text-primary);">Example issue title</span>
+                <IssueRowActions IssueId="ISSUE-001"
+                                 ProjectId="demo-project"
+                                 IsVisible="false" />
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Visible State (Hover/Selected)</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Actions become visible on hover or when issue is selected</div>
+        <div class="showcase-preview" style="background: var(--bg-primary); padding: 1rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: var(--bg-secondary);">
+                <span style="color: var(--text-muted); font-size: 12px;">ISSUE-002</span>
+                <span style="color: var(--text-primary);">Selected issue with visible actions</span>
+                <IssueRowActions IssueId="ISSUE-002"
+                                 ProjectId="demo-project"
+                                 IsVisible="true" />
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Disabled State</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Actions are disabled when an agent is already running on the issue</div>
+        <div class="showcase-preview" style="background: var(--bg-primary); padding: 1rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: var(--bg-secondary);">
+                <span style="color: var(--text-muted); font-size: 12px;">ISSUE-003</span>
+                <span style="color: var(--text-primary);">Issue with active agent</span>
+                <span class="agent-status-badge agent-status-running" style="font-size: 11px; padding: 2px 6px; border-radius: 4px; background: rgba(81, 165, 193, 0.2); color: var(--color-ocean);">
+                    <span class="agent-status-dot agent-status-dot-active" style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--color-ocean); margin-right: 4px;"></span>
+                    Working
+                </span>
+                <IssueRowActions IssueId="ISSUE-003"
+                                 ProjectId="demo-project"
+                                 IsVisible="true"
+                                 Disabled="true" />
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Interactive Demo</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Click the buttons to see callbacks in action</div>
+        <div class="showcase-preview" style="background: var(--bg-primary); padding: 1rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: var(--bg-secondary);">
+                <span style="color: var(--text-muted); font-size: 12px;">DEMO-001</span>
+                <span style="color: var(--text-primary);">Interactive demo issue</span>
+                <IssueRowActions IssueId="DEMO-001"
+                                 ProjectId="demo-project"
+                                 IsVisible="true"
+                                 OnEditClick="HandleEditClick"
+                                 OnRunAgentClick="HandleRunAgentClick" />
+            </div>
+            @if (!string.IsNullOrEmpty(_lastAction))
+            {
+                <div style="margin-top: 0.5rem; padding: 0.5rem; background: var(--bg-tertiary); border-radius: 4px; font-size: 12px; color: var(--text-muted);">
+                    Last action: @_lastAction
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private string? _lastAction;
+
+    private void HandleEditClick(string issueId)
+    {
+        _lastAction = $"Edit clicked for issue: {issueId}";
+    }
+
+    private void HandleRunAgentClick((string IssueId, AgentPrompt? Prompt) args)
+    {
+        var promptName = args.Prompt?.Name ?? "No prompt";
+        _lastAction = $"Run agent clicked for issue: {args.IssueId}, Prompt: {promptName}";
+    }
+}
