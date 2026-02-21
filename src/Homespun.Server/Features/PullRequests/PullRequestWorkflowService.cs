@@ -150,7 +150,7 @@ public class PullRequestWorkflowService(
             foreach (var pr in prs)
             {
                 var prInfo = MapToPullRequestInfo(pr);
-                var status = await DetermineStatusAsync(project.GitHubOwner, project.GitHubRepo, pr);
+                var status = await DetermineStatusAndPopulatePrInfoAsync(project.GitHubOwner, project.GitHubRepo, pr, prInfo);
                 result.Add(new PullRequestWithStatus(prInfo, status, 1)); // All open PRs have t=1
             }
 
@@ -164,8 +164,14 @@ public class PullRequestWorkflowService(
 
     /// <summary>
     /// Determines the status of a PR based on its state, reviews, and CI checks.
+    /// Also populates the ChecksPassing, IsApproved, ApprovalCount, and ChangesRequestedCount
+    /// properties on the PullRequestInfo object.
     /// </summary>
-    private async Task<PullRequestStatus> DetermineStatusAsync(string owner, string repo, Octokit.PullRequest pr)
+    private async Task<PullRequestStatus> DetermineStatusAndPopulatePrInfoAsync(
+        string owner,
+        string repo,
+        Octokit.PullRequest pr,
+        PullRequestInfo prInfo)
     {
         // Draft PRs are always InProgress
         if (pr.Draft)
@@ -184,6 +190,17 @@ public class PullRequestWorkflowService(
             // Ignore errors getting commit status
         }
 
+        // Populate ChecksPassing based on commit status
+        if (commitStatus?.State == CommitState.Success)
+        {
+            prInfo.ChecksPassing = true;
+        }
+        else if (commitStatus?.State == CommitState.Failure || commitStatus?.State == CommitState.Error)
+        {
+            prInfo.ChecksPassing = false;
+        }
+        // If Pending or null, leave ChecksPassing as null (checks are running)
+
         // Check if CI is failing
         if (commitStatus?.State == CommitState.Failure || commitStatus?.State == CommitState.Error)
         {
@@ -201,7 +218,7 @@ public class PullRequestWorkflowService(
             // Ignore errors getting reviews
         }
 
-        // Check review state
+        // Check review state and populate approval/changes requested data
         if (reviews != null && reviews.Count > 0)
         {
             // Get the most recent review from each reviewer
@@ -210,14 +227,23 @@ public class PullRequestWorkflowService(
                 .Select(g => g.OrderByDescending(r => r.SubmittedAt).First())
                 .ToList();
 
+            // Count approvals
+            var approvals = latestReviews.Where(r => r.State.Value == PullRequestReviewState.Approved).ToList();
+            prInfo.ApprovalCount = approvals.Count;
+            prInfo.IsApproved = approvals.Count > 0;
+
+            // Count changes requested
+            var changesRequested = latestReviews.Where(r => r.State.Value == PullRequestReviewState.ChangesRequested).ToList();
+            prInfo.ChangesRequestedCount = changesRequested.Count;
+
             // Check if any reviewer requested changes
-            if (latestReviews.Any(r => r.State.Value == PullRequestReviewState.ChangesRequested))
+            if (changesRequested.Count > 0)
             {
                 return PullRequestStatus.InProgress;
             }
 
             // Check if approved
-            if (latestReviews.Any(r => r.State.Value == PullRequestReviewState.Approved))
+            if (approvals.Count > 0)
             {
                 // Only ready for merging if CI passes
                 if (commitStatus?.State == CommitState.Success)
