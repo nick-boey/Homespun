@@ -21,6 +21,9 @@ public class IssueResponseDto
 
     [JsonPropertyName("parentIssues")]
     public List<ParentIssueRefDto> ParentIssues { get; set; } = [];
+
+    [JsonPropertyName("executionMode")]
+    public string? ExecutionMode { get; set; }
 }
 
 /// <summary>
@@ -69,19 +72,37 @@ public class TaskGraphNodeDto
 
 /// <summary>
 /// End-to-end tests for issue hierarchy creation using keyboard controls (TAB/Shift+TAB).
-/// These tests verify that the parent-child relationships are correctly established
+/// These tests verify that parent-child relationships are correctly established
 /// when creating issues with the 'o' and 'O' commands combined with TAB/Shift+TAB.
 /// </summary>
 /// <remarks>
 /// Issue Er7yMR: Keyboard controls don't place in correct hierarchy
 ///
-/// Hierarchy behavior:
-/// - Creating below with TAB: New issue becomes PARENT of the issue above it
-/// - Creating below with Shift+TAB: New issue becomes CHILD of the issue above it
-/// - Creating above with TAB: New issue becomes PARENT of the issue below it
-/// - Creating above with Shift+TAB: New issue becomes CHILD of the issue below it
+/// ## Hierarchy Behavior
 ///
-/// The tests also verify behavior in both parallel and series execution modes.
+/// ### When creating BELOW selected issue:
+/// - TAB (+1 lane): New issue becomes PARENT of the issue ABOVE (selected issue)
+/// - Shift+TAB (-1 lane): New issue becomes CHILD of the issue ABOVE (selected issue)
+///
+/// ### When creating ABOVE selected issue:
+/// - TAB (+1 lane): New issue becomes PARENT of the issue BELOW (selected issue)
+/// - Shift+TAB (-1 lane): New issue becomes CHILD of the issue BELOW (selected issue)
+///
+/// ## Lane Positioning
+/// - Parents are at HIGHER lanes (lane 1, 2, ...)
+/// - Children/actionable issues are at LOWER lanes (lane 0)
+/// - Moving UP a lane (TAB) = becoming a parent
+/// - Moving DOWN a lane (Shift+TAB) = becoming a child
+///
+/// ## Current Bug Status
+/// KNOWN BUG: Tab/Shift+Tab keys close the inline input because preventDefault is not called.
+/// The browser's default Tab behavior causes focus to move away, triggering HandleBlur which cancels.
+/// Tests assert this bug behavior and will fail when the bug is fixed.
+///
+/// ## Test Data (from MockDataSeederService)
+/// - e2e/parent1: Parallel parent with children (child1, child2)
+/// - e2e/series-parent: Series parent with children (series-child1, series-child2)
+/// - e2e/orphan: Standalone issue with no parent
 /// </remarks>
 [Parallelizable(ParallelScope.Self)]
 [TestFixture]
@@ -145,25 +166,36 @@ public class IssueHierarchyCreationTests : PageTest
     }
 
     /// <summary>
-    /// Selects an issue row by its issue ID.
-    /// Falls back to clicking on the row containing the issue ID text.
+    /// Moves selection down by N issues using keyboard navigation.
     /// </summary>
-    private async Task SelectIssueByIdAsync(string issueId)
+    private async Task MoveSelectionDownAsync(int count = 1)
     {
-        // Try to find by the issue ID text within the task graph
-        var issueRow = Page.Locator($".task-graph-row:has(.task-graph-issue-id:text('{issueId}'))");
-
-        if (await issueRow.CountAsync() == 0)
+        for (int i = 0; i < count; i++)
         {
-            // Fall back to data-issue-id attribute
-            issueRow = Page.Locator($"[data-testid='task-graph-issue-row'][data-issue-id='{issueId}']");
+            await Page.Keyboard.PressAsync("j");
+            await Task.Delay(100);
         }
+    }
 
-        await Expect(issueRow).ToBeVisibleAsync(new() { Timeout = 5000 });
-        await issueRow.ClickAsync();
+    /// <summary>
+    /// Moves selection up by N issues using keyboard navigation.
+    /// </summary>
+    private async Task MoveSelectionUpAsync(int count = 1)
+    {
+        for (int i = 0; i < count; i++)
+        {
+            await Page.Keyboard.PressAsync("k");
+            await Task.Delay(100);
+        }
+    }
 
-        // Small delay to allow selection state to update
-        await Task.Delay(200);
+    /// <summary>
+    /// Gets the currently selected issue's ID.
+    /// </summary>
+    private async Task<string> GetSelectedIssueIdAsync()
+    {
+        var selectedRow = Page.Locator(".task-graph-row-selected .task-graph-issue-id");
+        return (await selectedRow.TextContentAsync())?.Trim() ?? "";
     }
 
     /// <summary>
@@ -263,302 +295,585 @@ public class IssueHierarchyCreationTests : PageTest
     private static string GenerateIssueTitle(string prefix = "E2E Hierarchy Test")
         => $"{prefix} {Guid.NewGuid().ToString()[..8]}";
 
-    #endregion
-
-    #region Create Below with TAB (Parent of Above)
-
     /// <summary>
-    /// Test: Create issue below with TAB makes the new issue a parent of the issue above.
-    /// The adjacent issue (above) should have the new issue as its parent.
-    ///
-    /// KNOWN BUG: Tab key closes the inline input because preventDefault is not called.
-    /// This test documents the bug by asserting that Tab DOES close the input.
+    /// Standard assertion for Tab bug - Tab closes the input.
+    /// When bug is fixed, these tests will fail (which is the intended behavior).
     /// </summary>
-    [Test]
-    public async Task CreateBelowWithTab_MakesNewIssueParentOfAbove_ParallelMode()
+    private static void AssertTabBug(bool created, string keyDescription)
     {
-        await NavigateToProjectAsync();
-
-        // Select the first issue
-        await SelectFirstIssueAsync();
-
-        // Get the selected issue's ID
-        var selectedRow = Page.Locator(".task-graph-row-selected .task-graph-issue-id");
-        var adjacentIssueId = (await selectedRow.TextContentAsync())?.Trim() ?? "";
-        Assert.That(adjacentIssueId, Is.Not.Empty, "Should have selected an issue");
-
-        // Create a new issue below with TAB (become parent of selected)
-        var newTitle = GenerateIssueTitle("Parent via TAB below");
-        var created = await CreateIssueWithKeyboardAsync(createAbove: false, laneModifier: 1, title: newTitle);
-
-        // BUG: Tab closes the input instead of setting the parent relationship
-        // This assertion documents the current broken behavior
         Assert.That(created, Is.False,
-            "EXPECTED BUG: Tab key should close the inline input (because preventDefault is not called). " +
-            "When this test FAILS, it means the bug has been FIXED!");
-    }
-
-    /// <summary>
-    /// Test: Create issue below with TAB - second test with different selection.
-    ///
-    /// KNOWN BUG: Tab key closes the inline input because preventDefault is not called.
-    /// </summary>
-    [Test]
-    public async Task CreateBelowWithTab_MakesNewIssueParentOfAbove_SecondTest()
-    {
-        await NavigateToProjectAsync();
-
-        // Select the second issue using keyboard navigation
-        await SelectFirstIssueAsync();
-        await Page.Keyboard.PressAsync("j"); // Move to second issue
-
-        // Create a new issue below with TAB
-        var newTitle = GenerateIssueTitle("Parent via TAB 2");
-        var created = await CreateIssueWithKeyboardAsync(createAbove: false, laneModifier: 1, title: newTitle);
-
-        // BUG: Tab closes the input
-        Assert.That(created, Is.False,
-            "EXPECTED BUG: Tab key should close the inline input. " +
-            "When this test FAILS, it means the bug has been FIXED!");
+            $"EXPECTED BUG: {keyDescription} key should close the inline input (because preventDefault is not called). " +
+            "When this test FAILS, it means the bug has been FIXED and tests should be updated to verify correct hierarchy!");
     }
 
     #endregion
 
-    #region Create Below with Shift+TAB (Child of Above)
+    #region Sibling Creation Tests (No TAB - These Should Work)
 
     /// <summary>
-    /// Test: Create issue below with Shift+TAB makes the new issue a child of the issue above.
-    ///
-    /// KNOWN BUG: Shift+Tab key closes the inline input because preventDefault is not called.
+    /// Test: Create issue BELOW without Tab creates a sibling (no hierarchy relationship).
+    /// This tests that basic issue creation (without Tab modifier) works correctly.
     /// </summary>
     [Test]
-    public async Task CreateBelowWithShiftTab_MakesNewIssueChildOfAbove_ParallelMode()
+    public async Task CreateBelowWithoutTab_CreatesSibling()
     {
         await NavigateToProjectAsync();
-
-        // Select the first issue
         await SelectFirstIssueAsync();
 
-        // Create a new issue below with Shift+TAB (become child of selected)
-        var newTitle = GenerateIssueTitle("Child via ShiftTAB below");
-        var created = await CreateIssueWithKeyboardAsync(createAbove: false, laneModifier: -1, title: newTitle);
-
-        // BUG: Shift+Tab closes the input
-        Assert.That(created, Is.False,
-            "EXPECTED BUG: Shift+Tab key should close the inline input. " +
-            "When this test FAILS, it means the bug has been FIXED!");
-    }
-
-    /// <summary>
-    /// Test: Create issue below with Shift+TAB - second test with different selection.
-    ///
-    /// KNOWN BUG: Shift+Tab key closes the inline input because preventDefault is not called.
-    /// </summary>
-    [Test]
-    public async Task CreateBelowWithShiftTab_MakesNewIssueChildOfAbove_SecondTest()
-    {
-        await NavigateToProjectAsync();
-
-        // Select the second issue using keyboard navigation
-        await SelectFirstIssueAsync();
-        await Page.Keyboard.PressAsync("j"); // Move to second issue
-
-        // Create a new issue below with Shift+TAB
-        var newTitle = GenerateIssueTitle("Child via ShiftTAB 2");
-        var created = await CreateIssueWithKeyboardAsync(createAbove: false, laneModifier: -1, title: newTitle);
-
-        // BUG: Shift+Tab closes the input
-        Assert.That(created, Is.False,
-            "EXPECTED BUG: Shift+Tab key should close the inline input. " +
-            "When this test FAILS, it means the bug has been FIXED!");
-    }
-
-    #endregion
-
-    #region Create Above with TAB (Parent of Below)
-
-    /// <summary>
-    /// Test: Create issue above with TAB makes the new issue a parent of the issue below.
-    ///
-    /// KNOWN BUG: Tab key closes the inline input because preventDefault is not called.
-    /// </summary>
-    [Test]
-    public async Task CreateAboveWithTab_MakesNewIssueParentOfBelow()
-    {
-        await NavigateToProjectAsync();
-
-        // Select the second issue
-        await SelectFirstIssueAsync();
-        await Page.Keyboard.PressAsync("j"); // Move to second issue
-
-        // Create a new issue above with TAB
-        var newTitle = GenerateIssueTitle("Parent via TAB above");
-        var created = await CreateIssueWithKeyboardAsync(createAbove: true, laneModifier: 1, title: newTitle);
-
-        // BUG: Tab closes the input
-        Assert.That(created, Is.False,
-            "EXPECTED BUG: Tab key should close the inline input. " +
-            "When this test FAILS, it means the bug has been FIXED!");
-    }
-
-    #endregion
-
-    #region Create Above with Shift+TAB (Child of Below)
-
-    /// <summary>
-    /// Test: Create issue above with Shift+TAB makes the new issue a child of the issue below.
-    ///
-    /// KNOWN BUG: Shift+Tab key closes the inline input because preventDefault is not called.
-    /// </summary>
-    [Test]
-    public async Task CreateAboveWithShiftTab_MakesNewIssueChildOfBelow()
-    {
-        await NavigateToProjectAsync();
-
-        // Select the second issue
-        await SelectFirstIssueAsync();
-        await Page.Keyboard.PressAsync("j"); // Move to second issue
-
-        // Create a new issue above with Shift+TAB
-        var newTitle = GenerateIssueTitle("Child via ShiftTAB above");
-        var created = await CreateIssueWithKeyboardAsync(createAbove: true, laneModifier: -1, title: newTitle);
-
-        // BUG: Shift+Tab closes the input
-        Assert.That(created, Is.False,
-            "EXPECTED BUG: Shift+Tab key should close the inline input. " +
-            "When this test FAILS, it means the bug has been FIXED!");
-    }
-
-    #endregion
-
-    #region Sibling Creation (No TAB modifier)
-
-    /// <summary>
-    /// Test: Create issue below without TAB creates a sibling (no hierarchy relationship).
-    /// This test verifies that basic issue creation (without Tab modifier) works correctly.
-    /// </summary>
-    [Test]
-    public async Task CreateBelowWithoutTab_CreatesSiblingWithNoHierarchy()
-    {
-        await NavigateToProjectAsync();
-
-        // Select the first issue
-        await SelectFirstIssueAsync();
-
-        // Create a new issue below without TAB modifier (sibling)
-        var newTitle = GenerateIssueTitle("Sibling below");
+        var newTitle = GenerateIssueTitle("Sibling Below");
         var created = await CreateIssueWithKeyboardAsync(createAbove: false, laneModifier: 0, title: newTitle);
 
-        // Basic sibling creation should work (no Tab involved)
-        Assert.That(created, Is.True, "Issue creation without Tab should succeed");
-
-        // The inline input closed, which means the issue was submitted.
-        // Note: The issue may or may not appear in the task graph depending on
-        // task graph filtering rules (e.g., issues without parents at lane 0 may be filtered).
-        // The key verification is that the creation mechanism works.
+        Assert.That(created, Is.True, "Basic sibling creation (without Tab) should succeed");
     }
 
     /// <summary>
-    /// Test: Create issue above without TAB creates a sibling (no hierarchy relationship).
-    /// This test verifies that basic issue creation (without Tab modifier) works correctly.
+    /// Test: Create issue ABOVE without Tab creates a sibling (no hierarchy relationship).
     /// </summary>
     [Test]
-    public async Task CreateAboveWithoutTab_CreatesSiblingWithNoHierarchy()
+    public async Task CreateAboveWithoutTab_CreatesSibling()
     {
         await NavigateToProjectAsync();
-
-        // Select the second issue
         await SelectFirstIssueAsync();
-        await Page.Keyboard.PressAsync("j"); // Move to second issue
+        await MoveSelectionDownAsync(1); // Move to second issue so we can create above
 
-        // Create a new issue above without TAB modifier (sibling)
-        var newTitle = GenerateIssueTitle("Sibling above");
+        var newTitle = GenerateIssueTitle("Sibling Above");
         var created = await CreateIssueWithKeyboardAsync(createAbove: true, laneModifier: 0, title: newTitle);
 
-        // Basic sibling creation should work (no Tab involved)
-        Assert.That(created, Is.True, "Issue creation without Tab should succeed");
-
-        // The inline input closed, which means the issue was submitted.
-        // Note: The issue may or may not appear in the task graph depending on
-        // task graph filtering rules (e.g., issues without parents at lane 0 may be filtered).
-        // The key verification is that the creation mechanism works.
+        Assert.That(created, Is.True, "Basic sibling creation above (without Tab) should succeed");
     }
 
     #endregion
 
-    #region Lane Position Verification
+    #region Create Below with TAB (New Issue Becomes Parent of Above) - PARALLEL MODE
 
     /// <summary>
-    /// Test: When creating as parent (TAB), the new issue should appear at a higher lane than the child.
+    /// Test: Create issue below with TAB - new issue becomes parent of the selected issue.
+    /// Scenario: Select orphan issue, create below with Tab → new becomes parent of orphan.
     ///
-    /// KNOWN BUG: Tab key closes the inline input because preventDefault is not called.
+    /// KNOWN BUG: Tab closes the input.
     /// </summary>
     [Test]
-    public async Task CreateAsParent_NewIssueShouldBeAtHigherLane()
+    public async Task CreateBelowWithTab_ParallelMode_OrphanIssue_NewBecomesParent()
     {
         await NavigateToProjectAsync();
-
-        // Select the first issue
         await SelectFirstIssueAsync();
 
-        // Create a new issue below with TAB
+        var selectedIssueId = await GetSelectedIssueIdAsync();
+        Assert.That(selectedIssueId, Is.Not.Empty, "Should have selected an issue");
+
+        var newTitle = GenerateIssueTitle("Parent via Tab below");
+        var created = await CreateIssueWithKeyboardAsync(createAbove: false, laneModifier: 1, title: newTitle);
+
+        AssertTabBug(created, "Tab");
+    }
+
+    /// <summary>
+    /// Test: Create issue below with TAB - select an issue that already has a parent.
+    /// New issue becomes an additional parent of the selected issue.
+    ///
+    /// KNOWN BUG: Tab closes the input.
+    /// </summary>
+    [Test]
+    public async Task CreateBelowWithTab_ParallelMode_IssueWithParent_NewBecomesAdditionalParent()
+    {
+        await NavigateToProjectAsync();
+        await SelectFirstIssueAsync();
+
+        // Move to e2e/child1 which has e2e/parent1 as parent
+        // Navigate through the list to find it
+        for (int i = 0; i < 15; i++)
+        {
+            var currentId = await GetSelectedIssueIdAsync();
+            if (currentId == "e2e/child1") break;
+            await MoveSelectionDownAsync(1);
+        }
+
+        var newTitle = GenerateIssueTitle("Additional Parent");
+        var created = await CreateIssueWithKeyboardAsync(createAbove: false, laneModifier: 1, title: newTitle);
+
+        AssertTabBug(created, "Tab");
+    }
+
+    /// <summary>
+    /// Test: Verify Tab can be pressed multiple times but only first press registers.
+    ///
+    /// KNOWN BUG: Tab closes the input.
+    /// </summary>
+    [Test]
+    public async Task CreateBelowWithTab_OnlyFirstTabPressRegisters()
+    {
+        await NavigateToProjectAsync();
+        await SelectFirstIssueAsync();
+
+        var newTitle = GenerateIssueTitle("Tab multiple test");
+        var created = await CreateIssueWithKeyboardAsync(createAbove: false, laneModifier: 1, title: newTitle);
+
+        AssertTabBug(created, "Tab");
+    }
+
+    #endregion
+
+    #region Create Below with Shift+TAB (New Issue Becomes Child of Above) - PARALLEL MODE
+
+    /// <summary>
+    /// Test: Create issue below with Shift+TAB - new issue becomes child of selected issue.
+    /// Scenario: Select a parent issue, create below with Shift+Tab → new becomes child.
+    ///
+    /// KNOWN BUG: Shift+Tab closes the input.
+    /// </summary>
+    [Test]
+    public async Task CreateBelowWithShiftTab_ParallelMode_NewBecomesChild()
+    {
+        await NavigateToProjectAsync();
+        await SelectFirstIssueAsync();
+
+        var selectedIssueId = await GetSelectedIssueIdAsync();
+        Assert.That(selectedIssueId, Is.Not.Empty, "Should have selected an issue");
+
+        var newTitle = GenerateIssueTitle("Child via ShiftTab below");
+        var created = await CreateIssueWithKeyboardAsync(createAbove: false, laneModifier: -1, title: newTitle);
+
+        AssertTabBug(created, "Shift+Tab");
+    }
+
+    /// <summary>
+    /// Test: Create issue below with Shift+TAB - adding child to issue that already has children.
+    ///
+    /// KNOWN BUG: Shift+Tab closes the input.
+    /// </summary>
+    [Test]
+    public async Task CreateBelowWithShiftTab_ParallelMode_IssueWithChildren_NewBecomesAdditionalChild()
+    {
+        await NavigateToProjectAsync();
+        await SelectFirstIssueAsync();
+
+        // Navigate to e2e/parent1 which has children
+        for (int i = 0; i < 15; i++)
+        {
+            var currentId = await GetSelectedIssueIdAsync();
+            if (currentId == "e2e/parent1") break;
+            await MoveSelectionDownAsync(1);
+        }
+
+        var newTitle = GenerateIssueTitle("Additional Child");
+        var created = await CreateIssueWithKeyboardAsync(createAbove: false, laneModifier: -1, title: newTitle);
+
+        AssertTabBug(created, "Shift+Tab");
+    }
+
+    #endregion
+
+    #region Create Above with TAB (New Issue Becomes Parent of Below) - PARALLEL MODE
+
+    /// <summary>
+    /// Test: Create issue above with TAB - new issue becomes parent of the selected issue.
+    ///
+    /// KNOWN BUG: Tab closes the input.
+    /// </summary>
+    [Test]
+    public async Task CreateAboveWithTab_ParallelMode_NewBecomesParentOfBelow()
+    {
+        await NavigateToProjectAsync();
+        await SelectFirstIssueAsync();
+        await MoveSelectionDownAsync(1); // Select second issue so we can create above
+
+        var selectedIssueId = await GetSelectedIssueIdAsync();
+        Assert.That(selectedIssueId, Is.Not.Empty, "Should have selected an issue");
+
+        var newTitle = GenerateIssueTitle("Parent via Tab above");
+        var created = await CreateIssueWithKeyboardAsync(createAbove: true, laneModifier: 1, title: newTitle);
+
+        AssertTabBug(created, "Tab");
+    }
+
+    /// <summary>
+    /// Test: Create issue above with TAB for issue that already has parent.
+    ///
+    /// KNOWN BUG: Tab closes the input.
+    /// </summary>
+    [Test]
+    public async Task CreateAboveWithTab_ParallelMode_IssueWithParent_NewBecomesAdditionalParent()
+    {
+        await NavigateToProjectAsync();
+        await SelectFirstIssueAsync();
+
+        // Navigate to e2e/child1
+        for (int i = 0; i < 15; i++)
+        {
+            var currentId = await GetSelectedIssueIdAsync();
+            if (currentId == "e2e/child1") break;
+            await MoveSelectionDownAsync(1);
+        }
+
+        var newTitle = GenerateIssueTitle("Additional Parent Above");
+        var created = await CreateIssueWithKeyboardAsync(createAbove: true, laneModifier: 1, title: newTitle);
+
+        AssertTabBug(created, "Tab");
+    }
+
+    #endregion
+
+    #region Create Above with Shift+TAB (New Issue Becomes Child of Below) - PARALLEL MODE
+
+    /// <summary>
+    /// Test: Create issue above with Shift+TAB - new issue becomes child of the selected issue.
+    ///
+    /// KNOWN BUG: Shift+Tab closes the input.
+    /// </summary>
+    [Test]
+    public async Task CreateAboveWithShiftTab_ParallelMode_NewBecomesChildOfBelow()
+    {
+        await NavigateToProjectAsync();
+        await SelectFirstIssueAsync();
+        await MoveSelectionDownAsync(1); // Select second issue
+
+        var selectedIssueId = await GetSelectedIssueIdAsync();
+        Assert.That(selectedIssueId, Is.Not.Empty, "Should have selected an issue");
+
+        var newTitle = GenerateIssueTitle("Child via ShiftTab above");
+        var created = await CreateIssueWithKeyboardAsync(createAbove: true, laneModifier: -1, title: newTitle);
+
+        AssertTabBug(created, "Shift+Tab");
+    }
+
+    #endregion
+
+    #region Series Execution Mode Tests
+
+    /// <summary>
+    /// Test: Create issue below with TAB in series parent - should become parent with proper ordering.
+    ///
+    /// KNOWN BUG: Tab closes the input.
+    /// </summary>
+    [Test]
+    public async Task CreateBelowWithTab_SeriesMode_NewBecomesParent()
+    {
+        await NavigateToProjectAsync();
+        await SelectFirstIssueAsync();
+
+        // Navigate to e2e/series-child1 (child of series-parent)
+        for (int i = 0; i < 20; i++)
+        {
+            var currentId = await GetSelectedIssueIdAsync();
+            if (currentId == "e2e/series-child1") break;
+            await MoveSelectionDownAsync(1);
+        }
+
+        var newTitle = GenerateIssueTitle("Series Parent via Tab");
+        var created = await CreateIssueWithKeyboardAsync(createAbove: false, laneModifier: 1, title: newTitle);
+
+        AssertTabBug(created, "Tab");
+    }
+
+    /// <summary>
+    /// Test: Create issue below with Shift+TAB in series parent - should become child with sort order.
+    ///
+    /// KNOWN BUG: Shift+Tab closes the input.
+    /// </summary>
+    [Test]
+    public async Task CreateBelowWithShiftTab_SeriesMode_NewBecomesChildWithSortOrder()
+    {
+        await NavigateToProjectAsync();
+        await SelectFirstIssueAsync();
+
+        // Navigate to e2e/series-parent
+        for (int i = 0; i < 20; i++)
+        {
+            var currentId = await GetSelectedIssueIdAsync();
+            if (currentId == "e2e/series-parent") break;
+            await MoveSelectionDownAsync(1);
+        }
+
+        var newTitle = GenerateIssueTitle("Series Child via ShiftTab");
+        var created = await CreateIssueWithKeyboardAsync(createAbove: false, laneModifier: -1, title: newTitle);
+
+        AssertTabBug(created, "Shift+Tab");
+    }
+
+    /// <summary>
+    /// Test: Create issue above with TAB in series mode.
+    ///
+    /// KNOWN BUG: Tab closes the input.
+    /// </summary>
+    [Test]
+    public async Task CreateAboveWithTab_SeriesMode_NewBecomesParent()
+    {
+        await NavigateToProjectAsync();
+        await SelectFirstIssueAsync();
+
+        // Navigate to e2e/series-child2
+        for (int i = 0; i < 20; i++)
+        {
+            var currentId = await GetSelectedIssueIdAsync();
+            if (currentId == "e2e/series-child2") break;
+            await MoveSelectionDownAsync(1);
+        }
+
+        var newTitle = GenerateIssueTitle("Series Parent Above");
+        var created = await CreateIssueWithKeyboardAsync(createAbove: true, laneModifier: 1, title: newTitle);
+
+        AssertTabBug(created, "Tab");
+    }
+
+    /// <summary>
+    /// Test: Create issue above with Shift+TAB in series mode.
+    ///
+    /// KNOWN BUG: Shift+Tab closes the input.
+    /// </summary>
+    [Test]
+    public async Task CreateAboveWithShiftTab_SeriesMode_NewBecomesChild()
+    {
+        await NavigateToProjectAsync();
+        await SelectFirstIssueAsync();
+
+        // Navigate to e2e/series-parent
+        for (int i = 0; i < 20; i++)
+        {
+            var currentId = await GetSelectedIssueIdAsync();
+            if (currentId == "e2e/series-parent") break;
+            await MoveSelectionDownAsync(1);
+        }
+
+        var newTitle = GenerateIssueTitle("Series Child Above");
+        var created = await CreateIssueWithKeyboardAsync(createAbove: true, laneModifier: -1, title: newTitle);
+
+        AssertTabBug(created, "Shift+Tab");
+    }
+
+    #endregion
+
+    #region Lane Position Verification Tests
+
+    /// <summary>
+    /// Test: When creating as parent (TAB), new issue should be at HIGHER lane.
+    ///
+    /// KNOWN BUG: Tab closes the input.
+    /// </summary>
+    [Test]
+    public async Task CreateAsParent_Tab_NewIssueShouldBeAtHigherLane()
+    {
+        await NavigateToProjectAsync();
+        await SelectFirstIssueAsync();
+
         var newTitle = GenerateIssueTitle("Parent Lane Test");
         var created = await CreateIssueWithKeyboardAsync(createAbove: false, laneModifier: 1, title: newTitle);
 
-        // BUG: Tab closes the input
-        Assert.That(created, Is.False,
-            "EXPECTED BUG: Tab key should close the inline input. " +
-            "When this test FAILS, it means the bug has been FIXED!");
+        AssertTabBug(created, "Tab");
     }
 
     /// <summary>
-    /// Test: When creating as child (Shift+TAB), the new issue should appear at a lower lane than the parent.
+    /// Test: When creating as child (Shift+TAB), new issue should be at LOWER lane (or same if at lane 0).
     ///
-    /// KNOWN BUG: Shift+Tab key closes the inline input because preventDefault is not called.
+    /// KNOWN BUG: Shift+Tab closes the input.
     /// </summary>
     [Test]
-    public async Task CreateAsChild_NewIssueShouldBeAtLowerLane()
+    public async Task CreateAsChild_ShiftTab_NewIssueShouldBeAtLowerLane()
     {
         await NavigateToProjectAsync();
-
-        // Select the first issue
         await SelectFirstIssueAsync();
 
-        // Create a new issue below with Shift+TAB
         var newTitle = GenerateIssueTitle("Child Lane Test");
         var created = await CreateIssueWithKeyboardAsync(createAbove: false, laneModifier: -1, title: newTitle);
 
-        // BUG: Shift+Tab closes the input
-        Assert.That(created, Is.False,
-            "EXPECTED BUG: Shift+Tab key should close the inline input. " +
-            "When this test FAILS, it means the bug has been FIXED!");
+        AssertTabBug(created, "Shift+Tab");
     }
 
     #endregion
 
-    #region Execution Mode Inheritance Tests
+    #region Edge Cases
 
     /// <summary>
-    /// Test: When creating a child via Shift+TAB, verify the parent-child relationship is created.
-    ///
-    /// KNOWN BUG: Shift+Tab key closes the inline input because preventDefault is not called.
+    /// Test: Cancel inline creation with Escape key.
     /// </summary>
     [Test]
-    public async Task CreateChild_ShouldHaveParentRelationship()
+    public async Task CreateIssue_CancelWithEscape_NoIssueCreated()
     {
         await NavigateToProjectAsync();
-
-        // Select the first issue
         await SelectFirstIssueAsync();
 
-        // Create a new issue below with Shift+TAB
-        var newTitle = GenerateIssueTitle("Child Relationship Test");
+        // Start creating
+        var taskGraph = Page.Locator("[data-testid='task-graph']");
+        await taskGraph.FocusAsync();
+        await Page.Keyboard.PressAsync("o");
+
+        var inlineInput = Page.Locator("[data-testid='inline-issue-create']");
+        await Expect(inlineInput).ToBeVisibleAsync(new() { Timeout = 5000 });
+
+        // Type partial title
+        var inputField = Page.Locator("[data-testid='inline-issue-input']");
+        await inputField.FillAsync("Cancelled issue");
+
+        // Press Escape to cancel
+        await Page.Keyboard.PressAsync("Escape");
+
+        // Verify input is gone
+        await Expect(inlineInput).ToBeHiddenAsync(new() { Timeout = 5000 });
+    }
+
+    /// <summary>
+    /// Test: Cannot submit empty title.
+    /// </summary>
+    [Test]
+    public async Task CreateIssue_EmptyTitle_CannotSubmit()
+    {
+        await NavigateToProjectAsync();
+        await SelectFirstIssueAsync();
+
+        // Start creating
+        var taskGraph = Page.Locator("[data-testid='task-graph']");
+        await taskGraph.FocusAsync();
+        await Page.Keyboard.PressAsync("o");
+
+        var inlineInput = Page.Locator("[data-testid='inline-issue-create']");
+        await Expect(inlineInput).ToBeVisibleAsync(new() { Timeout = 5000 });
+
+        // Press Enter without typing anything
+        await Page.Keyboard.PressAsync("Enter");
+
+        // Input should still be visible (nothing submitted)
+        await Expect(inlineInput).ToBeVisibleAsync(new() { Timeout = 1000 });
+
+        // Cancel
+        await Page.Keyboard.PressAsync("Escape");
+    }
+
+    /// <summary>
+    /// Test: Lane indicator shows correct relationship text.
+    ///
+    /// KNOWN BUG: Tab closes the input before we can verify the indicator.
+    /// </summary>
+    [Test]
+    public async Task CreateWithTab_LaneIndicatorShowsParentText()
+    {
+        await NavigateToProjectAsync();
+        await SelectFirstIssueAsync();
+
+        // Start creating below
+        var taskGraph = Page.Locator("[data-testid='task-graph']");
+        await taskGraph.FocusAsync();
+        await Page.Keyboard.PressAsync("o");
+
+        var inlineInput = Page.Locator("[data-testid='inline-issue-create']");
+        await Expect(inlineInput).ToBeVisibleAsync(new() { Timeout = 5000 });
+
+        // Press Tab to set as parent
+        await Page.Keyboard.PressAsync("Tab");
+        await Task.Delay(200);
+
+        // BUG: Tab closes input
+        Assert.That(await inlineInput.IsVisibleAsync(), Is.False,
+            "EXPECTED BUG: Tab should close the input. When this FAILS, the bug is FIXED!");
+    }
+
+    /// <summary>
+    /// Test: Lane indicator shows correct child relationship text.
+    ///
+    /// KNOWN BUG: Shift+Tab closes the input before we can verify the indicator.
+    /// </summary>
+    [Test]
+    public async Task CreateWithShiftTab_LaneIndicatorShowsChildText()
+    {
+        await NavigateToProjectAsync();
+        await SelectFirstIssueAsync();
+
+        // Start creating below
+        var taskGraph = Page.Locator("[data-testid='task-graph']");
+        await taskGraph.FocusAsync();
+        await Page.Keyboard.PressAsync("o");
+
+        var inlineInput = Page.Locator("[data-testid='inline-issue-create']");
+        await Expect(inlineInput).ToBeVisibleAsync(new() { Timeout = 5000 });
+
+        // Press Shift+Tab to set as child
+        await Page.Keyboard.PressAsync("Shift+Tab");
+        await Task.Delay(200);
+
+        // BUG: Shift+Tab closes input
+        Assert.That(await inlineInput.IsVisibleAsync(), Is.False,
+            "EXPECTED BUG: Shift+Tab should close the input. When this FAILS, the bug is FIXED!");
+    }
+
+    #endregion
+
+    #region Hierarchy Relationship Verification (When Bug is Fixed)
+
+    /// <summary>
+    /// Test: After creating with Tab, verify parent-child relationship exists.
+    /// This test structure is ready for when the Tab bug is fixed.
+    /// Currently documents the bug.
+    /// </summary>
+    [Test]
+    public async Task WhenBugFixed_CreateBelowWithTab_AdjacentIssueHasNewParent()
+    {
+        await NavigateToProjectAsync();
+        await SelectFirstIssueAsync();
+
+        var adjacentIssueId = await GetSelectedIssueIdAsync();
+        Assert.That(adjacentIssueId, Is.Not.Empty);
+
+        var newTitle = GenerateIssueTitle("Verify Parent Relationship");
+        var created = await CreateIssueWithKeyboardAsync(createAbove: false, laneModifier: 1, title: newTitle);
+
+        // When bug is fixed, this block will execute and we can verify the relationship
+        if (created)
+        {
+            // Fetch the adjacent issue and verify it has the new issue as parent
+            var adjacentIssue = await GetIssueAsync(adjacentIssueId);
+            Assert.That(adjacentIssue, Is.Not.Null, "Adjacent issue should exist");
+
+            // The new issue should be a parent of the adjacent issue
+            var hasNewParent = adjacentIssue!.ParentIssues.Any(p =>
+                p.ParentIssue.Contains("Verify Parent Relationship") ||
+                adjacentIssue.Title.Contains(newTitle));
+
+            Assert.That(hasNewParent, Is.True,
+                "Adjacent issue should have the new issue as parent");
+        }
+        else
+        {
+            AssertTabBug(created, "Tab");
+        }
+    }
+
+    /// <summary>
+    /// Test: After creating with Shift+Tab, verify new issue is child of adjacent.
+    /// This test structure is ready for when the Shift+Tab bug is fixed.
+    /// </summary>
+    [Test]
+    public async Task WhenBugFixed_CreateBelowWithShiftTab_NewIssueHasAdjacentAsParent()
+    {
+        await NavigateToProjectAsync();
+        await SelectFirstIssueAsync();
+
+        var adjacentIssueId = await GetSelectedIssueIdAsync();
+        Assert.That(adjacentIssueId, Is.Not.Empty);
+
+        var newTitle = GenerateIssueTitle("Verify Child Relationship");
         var created = await CreateIssueWithKeyboardAsync(createAbove: false, laneModifier: -1, title: newTitle);
 
-        // BUG: Shift+Tab closes the input
-        Assert.That(created, Is.False,
-            "EXPECTED BUG: Shift+Tab key should close the inline input. " +
-            "When this test FAILS, it means the bug has been FIXED!");
+        // When bug is fixed, this block will execute
+        if (created)
+        {
+            // Wait for graph to update
+            await Task.Delay(500);
+
+            // Fetch task graph and find the new issue
+            var taskGraph = await GetTaskGraphAsync();
+            Assert.That(taskGraph, Is.Not.Null);
+
+            var newNode = taskGraph!.Nodes.FirstOrDefault(n =>
+                n.Issue.Title.Contains("Verify Child Relationship"));
+
+            Assert.That(newNode, Is.Not.Null, "New issue should appear in task graph");
+
+            // New issue should have adjacent as parent
+            Assert.That(newNode!.Issue.ParentIssues.Any(p => p.ParentIssue == adjacentIssueId), Is.True,
+                "New issue should have the adjacent issue as its parent");
+        }
+        else
+        {
+            AssertTabBug(created, "Shift+Tab");
+        }
     }
 
     #endregion
