@@ -668,6 +668,17 @@ public class DockerAgentExecutionServiceTests
     }
 
     [Test]
+    public void BuildContainerDockerArgs_IncludesPromtailLoggingLabel()
+    {
+        // Act
+        var args = _service.BuildContainerDockerArgs(
+            "test-container", "/data/some/path", useRm: false);
+
+        // Assert - worker containers need the logging=promtail label for Promtail discovery
+        Assert.That(args, Does.Contain("--label logging=promtail"));
+    }
+
+    [Test]
     public void EnsureClaudeDirectoryExists_CreatesSubdirectories_WithExplicitPath()
     {
         // Arrange
