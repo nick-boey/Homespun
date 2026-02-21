@@ -57,6 +57,12 @@ for i in $(seq 1 30); do
     sleep 2
 done
 
+# Clear any stale serve config from persisted state.
+# Old entries (e.g. from hostname changes) can linger and cause the netstack
+# to maintain proxy handlers that resolve Docker hostnames to 127.0.0.1.
+echo "Resetting Tailscale serve config..."
+tailscale serve reset || true
+
 # Resolve Docker hostnames to IPs for tailscale serve.
 # In userspace networking mode, Tailscale's netstack handles DNS independently
 # and cannot resolve Docker DNS hostnames, so we must use IP addresses.
@@ -67,9 +73,10 @@ if [ -z "$HOMESPUN_IP" ]; then
 fi
 echo "Resolved homespun -> $HOMESPUN_IP"
 
-echo "Enabling Tailscale HTTPS serve for Homespun..."
+echo "Enabling Tailscale serve for Homespun..."
 tailscale serve --bg --https=443 http://${HOMESPUN_IP}:8080 || true
-echo "Tailscale HTTPS proxy enabled on port 443 -> ${HOMESPUN_IP}:8080"
+tailscale serve --bg --http=80 http://${HOMESPUN_IP}:8080 || true
+echo "Tailscale proxy enabled -> ${HOMESPUN_IP}:8080 (HTTPS:443, HTTP:80)"
 
 # If Grafana is reachable (PLG stack running), expose it too
 # Check periodically as Grafana may take time to start
