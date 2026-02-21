@@ -159,7 +159,8 @@ describe('POST /sessions', () => {
     expect(res.status).toBe(200);
     const text = await res.text();
     const events = parseSSEEvents(text);
-    expect(events.some((e) => e.event === 'session_started')).toBe(true);
+    // A2A Protocol: session start emits 'task' event instead of 'session_started'
+    expect(events.some((e) => e.event === 'task')).toBe(true);
   });
 
   it('returns STARTUP_ERROR event on create failure', async () => {
