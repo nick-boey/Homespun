@@ -17,9 +17,12 @@ echo "Starting Tailscale sidecar..."
 tailscaled --state="${TS_STATE_DIR:-/var/lib/tailscale}/tailscaled.state" --tun=userspace-networking &
 
 # Wait for tailscaled socket to appear (up to 15 seconds)
+# Note: we check for the socket file rather than using `tailscale status` because
+# status returns non-zero in NeedsLogin state (before authentication).
+TAILSCALE_SOCKET="/var/run/tailscale/tailscaled.sock"
 echo "Waiting for tailscaled to start..."
 for i in $(seq 1 15); do
-    if tailscale status >/dev/null 2>&1; then
+    if [ -S "$TAILSCALE_SOCKET" ]; then
         echo "tailscaled is ready"
         break
     fi
@@ -27,8 +30,8 @@ for i in $(seq 1 15); do
 done
 
 # Verify tailscaled started
-if ! tailscale status >/dev/null 2>&1; then
-    echo "Error: tailscaled not ready after 15 seconds"
+if [ ! -S "$TAILSCALE_SOCKET" ]; then
+    echo "Error: tailscaled socket not found after 15 seconds"
     exit 1
 fi
 
