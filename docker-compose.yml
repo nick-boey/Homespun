@@ -1,7 +1,9 @@
-# Docker Compose for Homespun with PLG Logging Stack
+# Docker Compose for Homespun with PLG Logging Stack and Tailscale
 # Usage:
-#   docker compose up -d                              # Start all services including PLG stack
-#   docker compose up -d homespun                     # Start only Homespun without PLG stack (--no-plg mode)
+#   docker compose up -d                              # Start Homespun only
+#   docker compose --profile plg up -d                # Start with PLG logging stack
+#   docker compose --profile tailscale up -d          # Start with Tailscale sidecar
+#   docker compose --profile plg --profile tailscale up -d  # Start with both
 #   docker compose down                               # Stop all services
 #   docker compose logs -f                            # Follow all logs
 #
@@ -14,9 +16,10 @@
 #   DATA_DIR               - Data directory path
 #   GITHUB_TOKEN           - GitHub personal access token
 #   CLAUDE_CODE_OAUTH_TOKEN - Claude Code OAuth token
+#   TAILSCALE_AUTH_KEY     - Tailscale auth key for VPN access (enables tailscale profile)
+#   TS_HOSTNAME            - Tailscale hostname (default: homespun)
 #   GRAFANA_PORT           - Grafana port (default: 3000)
 #   GRAFANA_ADMIN_PASSWORD - Grafana admin password (default: admin)
-#   NO_PLG                 - Set to "true" to skip PLG services (used by run.sh --no-plg)
 
 services:
   # Main Homespun application
@@ -37,8 +40,6 @@ services:
       - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Production}
       - GITHUB_TOKEN=${GITHUB_TOKEN:-}
       - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
-      - TAILSCALE_AUTH_KEY=${TAILSCALE_AUTH_KEY:-}
-      - TS_HOSTNAME=${TS_HOSTNAME:-homespun-dev}
       - HSP_EXTERNAL_HOSTNAME=${HSP_EXTERNAL_HOSTNAME:-}
       - AgentExecution__Mode=${AGENT_MODE:-Docker}
       - AgentExecution__Docker__WorkerImage=${WORKER_IMAGE:-ghcr.io/nick-boey/homespun-worker:latest}
@@ -61,6 +62,28 @@ services:
       loki:
         condition: service_started
         required: false
+
+  # Tailscale - VPN sidecar for secure remote access
+  # Exposes Homespun via HTTPS on port 443 and Grafana on port 3000 (if PLG enabled)
+  tailscale:
+    image: tailscale/tailscale:latest
+    container_name: homespun-tailscale
+    profiles: ["tailscale"]
+    hostname: ${TS_HOSTNAME:-homespun}
+    environment:
+      - TS_AUTHKEY=${TAILSCALE_AUTH_KEY:-}
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_USERSPACE=true
+    volumes:
+      - tailscale-state:/var/lib/tailscale
+      - ./config/tailscale:/config:ro
+    entrypoint: ["/config/start.sh"]
+    restart: unless-stopped
+    networks:
+      - homespun-net
+    depends_on:
+      homespun:
+        condition: service_healthy
 
   # Loki - Log aggregation
   loki:
@@ -121,5 +144,6 @@ networks:
     name: homespun-net
 
 volumes:
+  tailscale-state:
   loki-data:
   grafana-data:
