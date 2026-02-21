@@ -29,8 +29,11 @@ public class MockFleeceService : IFleeceService
 
         if (_issuesByProject.TryGetValue(projectPath, out var issues))
         {
-            var issue = issues.FirstOrDefault(i => i.Id == issueId);
-            return Task.FromResult(issue);
+            lock (issues)
+            {
+                var issue = issues.FirstOrDefault(i => i.Id == issueId);
+                return Task.FromResult(issue);
+            }
         }
 
         return Task.FromResult<Issue?>(null);
@@ -50,11 +53,24 @@ public class MockFleeceService : IFleeceService
             return Task.FromResult<IReadOnlyList<Issue>>(Array.Empty<Issue>());
         }
 
-        var filtered = issues.AsEnumerable();
+        List<Issue> snapshot;
+        lock (issues)
+        {
+            snapshot = issues.ToList();
+        }
+
+        var filtered = snapshot.AsEnumerable();
 
         if (status.HasValue)
         {
             filtered = filtered.Where(i => i.Status == status.Value);
+        }
+        else
+        {
+            // When no status filter specified, exclude terminal statuses (matching FleeceService behavior)
+            filtered = filtered.Where(i => i.Status is not (
+                IssueStatus.Deleted or IssueStatus.Archived or
+                IssueStatus.Closed or IssueStatus.Complete));
         }
 
         if (type.HasValue)
@@ -79,8 +95,14 @@ public class MockFleeceService : IFleeceService
             return Task.FromResult<IReadOnlyList<Issue>>(Array.Empty<Issue>());
         }
 
+        List<Issue> snapshot;
+        lock (issues)
+        {
+            snapshot = issues.ToList();
+        }
+
         // Ready issues are those in Open or Progress status
-        var readyIssues = issues
+        var readyIssues = snapshot
             .Where(i => i.Status is IssueStatus.Open or IssueStatus.Progress)
             .ToList();
 
@@ -266,6 +288,11 @@ public class MockFleeceService : IFleeceService
                 ExecutionMode = existing.ExecutionMode,
                 WorkingBranchId = existing.WorkingBranchId,
                 ParentIssues = newParentIssues,
+                Tags = existing.Tags,
+                LinkedIssues = existing.LinkedIssues,
+                LinkedPR = existing.LinkedPR,
+                CreatedBy = existing.CreatedBy,
+                AssignedTo = existing.AssignedTo,
                 CreatedAt = existing.CreatedAt,
                 LastUpdate = DateTime.UtcNow
             };
@@ -311,6 +338,11 @@ public class MockFleeceService : IFleeceService
                 ExecutionMode = existing.ExecutionMode,
                 WorkingBranchId = existing.WorkingBranchId,
                 ParentIssues = newParentIssues,
+                Tags = existing.Tags,
+                LinkedIssues = existing.LinkedIssues,
+                LinkedPR = existing.LinkedPR,
+                CreatedBy = existing.CreatedBy,
+                AssignedTo = existing.AssignedTo,
                 CreatedAt = existing.CreatedAt,
                 LastUpdate = DateTime.UtcNow
             };
@@ -349,7 +381,13 @@ public class MockFleeceService : IFleeceService
             return Task.FromResult<TaskGraph?>(null);
         }
 
-        var openIssues = issues
+        List<Issue> snapshot;
+        lock (issues)
+        {
+            snapshot = issues.ToList();
+        }
+
+        var openIssues = snapshot
             .Where(i => i.Status is IssueStatus.Open or IssueStatus.Progress or IssueStatus.Review)
             .ToList();
 
