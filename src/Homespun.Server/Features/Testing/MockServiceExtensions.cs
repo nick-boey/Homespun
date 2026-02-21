@@ -54,6 +54,7 @@ public static class MockServiceExtensions
         // Fleece services (transition service depends on MockFleeceService)
         services.AddScoped<IFleeceIssueTransitionService, MockFleeceIssueTransitionService>();
         services.AddSingleton<IFleeceIssuesSyncService, MockFleeceIssuesSyncService>();
+        services.AddScoped<IIssueBranchResolverService, IssueBranchResolverService>();
 
         // Git services
         services.AddSingleton<IGitCloneService, MockGitCloneService>();
