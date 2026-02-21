@@ -1,4 +1,10 @@
-type LogLevel = 'DEBUG' | 'INFO' | 'WARN' | 'ERROR';
+interface LogEntry {
+  Timestamp: string;
+  Level: string;
+  Message: string;
+  SourceContext: string;
+  Exception?: string;
+}
 
 function getCallerInfo(): { file: string; line: number } {
   const stack = new Error().stack?.split('\n')[3]; // Skip: Error, getCallerInfo, log fn
@@ -11,24 +17,32 @@ function getCallerInfo(): { file: string; line: number } {
   return { file: 'unknown', line: 0 };
 }
 
-function formatLog(level: LogLevel, message: string): string {
-  const { file, line } = getCallerInfo();
-  return `${level} [${file}:${line}] ${message}`;
+function formatLog(level: string, message: string, error?: unknown): string {
+  const { file } = getCallerInfo();
+  const entry: LogEntry = {
+    Timestamp: new Date().toISOString(),
+    Level: level,
+    Message: message,
+    SourceContext: file,
+  };
+  if (error) {
+    entry.Exception = error instanceof Error ? error.message : String(error);
+  }
+  return JSON.stringify(entry);
 }
 
 export function debug(message: string): void {
-  console.debug(formatLog('DEBUG', message));
+  console.debug(formatLog('Debug', message));
 }
 
 export function info(message: string): void {
-  console.log(formatLog('INFO', message));
+  console.log(formatLog('Information', message));
 }
 
 export function warn(message: string): void {
-  console.warn(formatLog('WARN', message));
+  console.warn(formatLog('Warning', message));
 }
 
 export function error(message: string, err?: unknown): void {
-  const suffix = err ? `: ${err instanceof Error ? err.message : String(err)}` : '';
-  console.error(formatLog('ERROR', `${message}${suffix}`));
+  console.error(formatLog('Error', message, err));
 }

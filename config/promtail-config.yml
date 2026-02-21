@@ -38,7 +38,7 @@ scrape_configs:
         target_label: 'job'
         replacement: 'homespun-$1'
     pipeline_stages:
-      # Parse JSON logs from .NET
+      # Parse JSON logs from all components (server, worker, client telemetry)
       - json:
           expressions:
             timestamp: Timestamp
@@ -46,30 +46,23 @@ scrape_configs:
             message: Message
             exception: Exception
             category: SourceContext
-      # Parse plain text logs for containers that don't use JSON
-      - match:
-          selector: '{container=~".+"}'
-          stages:
-            - regex:
-                expression: '^\[(?P<level>\w+)\]'
-            - labels:
-                level:
-      # Special handling for [ClientTelemetry] logs
-      - match:
-          selector: '{container=~".+"} |= "[ClientTelemetry]"'
-          stages:
-            - regex:
-                expression: '\[ClientTelemetry\] Type=(?P<telemetry_type>\w+), Name=(?P<telemetry_name>[^,]+), SessionId=(?P<session_id>[^,]+)'
-            - labels:
-                telemetry_type:
-                telemetry_name:
-                session_id:
+            # Client telemetry fields (optional, present only for telemetry logs)
+            telemetry_type: TelemetryType
+            telemetry_name: TelemetryName
+            session_id: SessionId
       # Set timestamp from log
       - timestamp:
           source: timestamp
           format: RFC3339Nano
           fallback_formats:
             - RFC3339
-      # Map log levels
+      # Extract labels for querying
+      - labels:
+          level:
+          category:
+          telemetry_type:
+          telemetry_name:
+          session_id:
+      # Drop filename label to reduce cardinality
       - labeldrop:
           - filename
