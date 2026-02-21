@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Homespun.Shared.Models.Observability;
 using Microsoft.AspNetCore.Mvc;
 
@@ -6,16 +7,16 @@ namespace Homespun.Features.Observability;
 
 /// <summary>
 /// Controller for receiving client-side telemetry events.
-/// Events are logged to stdout where Promtail can collect them for Loki.
+/// Events are logged to stdout as JSON where Promtail can collect them for Loki.
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
 [Produces("application/json")]
-public class ClientTelemetryController(ILogger<ClientTelemetryController> logger) : ControllerBase
+public class ClientTelemetryController : ControllerBase
 {
     /// <summary>
     /// Receives a batch of telemetry events from the Blazor WASM client.
-    /// Events are logged to stdout where Promtail can collect them.
+    /// Events are logged to stdout as JSON where Promtail can collect them.
     /// </summary>
     /// <param name="batch">The batch of telemetry events.</param>
     /// <returns>202 Accepted on success, 400 Bad Request if batch is invalid.</returns>
@@ -37,35 +38,51 @@ public class ClientTelemetryController(ILogger<ClientTelemetryController> logger
         return Accepted();
     }
 
-    private void LogTelemetryEvent(ClientTelemetryEvent evt, string? sessionId)
+    private static void LogTelemetryEvent(ClientTelemetryEvent evt, string? sessionId)
     {
-        // Log in a structured format that Promtail can parse
-        // Use a special prefix for client telemetry identification
-        var propertiesJson = evt.Properties is not null
-            ? JsonSerializer.Serialize(evt.Properties)
-            : "{}";
-
-        var logMessage = $"[ClientTelemetry] Type={evt.Type}, Name={evt.Name}, " +
-                        $"SessionId={sessionId ?? "unknown"}, " +
-                        $"Properties={propertiesJson}";
-
-        // Add dependency-specific fields if present
-        if (evt.Type == TelemetryEventType.Dependency)
+        // Write JSON directly to stdout for Promtail to parse
+        // This includes dedicated telemetry fields alongside standard log fields
+        var telemetryLog = new ClientTelemetryLogEntry
         {
-            logMessage += $", DurationMs={evt.DurationMs}, Success={evt.Success}, StatusCode={evt.StatusCode}";
-        }
+            Timestamp = evt.Timestamp.ToString("O"),
+            Level = evt.Type == TelemetryEventType.Exception ? "Error" : "Information",
+            Message = $"ClientTelemetry: {evt.Type} - {evt.Name}",
+            SourceContext = "ClientTelemetry",
+            TelemetryType = evt.Type.ToString(),
+            TelemetryName = evt.Name,
+            SessionId = sessionId ?? "unknown",
+            Properties = evt.Properties,
+            DurationMs = evt.DurationMs,
+            Success = evt.Success,
+            StatusCode = evt.StatusCode
+        };
 
-        switch (evt.Type)
-        {
-            case TelemetryEventType.Exception:
-                logger.LogError(logMessage);
-                break;
-            case TelemetryEventType.PageView:
-            case TelemetryEventType.Event:
-            case TelemetryEventType.Dependency:
-            default:
-                logger.LogInformation(logMessage);
-                break;
-        }
+        Console.WriteLine(JsonSerializer.Serialize(telemetryLog, ClientTelemetryLogEntryContext.Default.ClientTelemetryLogEntry));
     }
+}
+
+/// <summary>
+/// Represents a client telemetry log entry with fields for Promtail/Loki.
+/// </summary>
+internal sealed class ClientTelemetryLogEntry
+{
+    public required string Timestamp { get; init; }
+    public required string Level { get; init; }
+    public required string Message { get; init; }
+    public required string SourceContext { get; init; }
+    public required string TelemetryType { get; init; }
+    public required string TelemetryName { get; init; }
+    public required string SessionId { get; init; }
+    public Dictionary<string, string>? Properties { get; init; }
+    public double? DurationMs { get; init; }
+    public bool? Success { get; init; }
+    public int? StatusCode { get; init; }
+}
+
+/// <summary>
+/// Source-generated JSON serialization context for AOT compatibility.
+/// </summary>
+[JsonSerializable(typeof(ClientTelemetryLogEntry))]
+internal sealed partial class ClientTelemetryLogEntryContext : JsonSerializerContext
+{
 }

@@ -39,14 +39,12 @@ if (Environment.GetEnvironmentVariable("HOMESPUN_MOCK_MODE") == "true")
     mockModeOptions.Enabled = true;
 }
 
-// Configure console logging with single-line format
+// Configure console logging with JSON format for Promtail/Loki
 builder.Logging.ClearProviders();
-builder.Logging.AddConsole(options => options.FormatterName = SingleLineConsoleFormatter.FormatterName)
-    .AddConsoleFormatter<SingleLineConsoleFormatter, SingleLineConsoleFormatterOptions>(options =>
+builder.Logging.AddConsole(options => options.FormatterName = JsonConsoleFormatter.FormatterName)
+    .AddConsoleFormatter<JsonConsoleFormatter, PromtailJsonFormatterOptions>(options =>
     {
-        options.TimestampFormat = "yyyy-MM-dd HH:mm:ss.fff";
         options.UseUtcTimestamp = true;
-        options.ColorEnabled = !Console.IsOutputRedirected;
     });
 
 // Resolve data path from configuration or use default (used by production and for data protection keys)

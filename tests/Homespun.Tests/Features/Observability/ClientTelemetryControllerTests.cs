@@ -1,8 +1,7 @@
+using System.Text.Json;
 using Homespun.Features.Observability;
 using Homespun.Shared.Models.Observability;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Logging;
-using Moq;
 
 namespace Homespun.Tests.Features.Observability;
 
@@ -10,13 +9,23 @@ namespace Homespun.Tests.Features.Observability;
 public class ClientTelemetryControllerTests
 {
     private ClientTelemetryController _controller = null!;
-    private Mock<ILogger<ClientTelemetryController>> _loggerMock = null!;
+    private StringWriter _consoleOutput = null!;
+    private TextWriter _originalOutput = null!;
 
     [SetUp]
     public void SetUp()
     {
-        _loggerMock = new Mock<ILogger<ClientTelemetryController>>();
-        _controller = new ClientTelemetryController(_loggerMock.Object);
+        _controller = new ClientTelemetryController();
+        _originalOutput = Console.Out;
+        _consoleOutput = new StringWriter();
+        Console.SetOut(_consoleOutput);
+    }
+
+    [TearDown]
+    public void TearDown()
+    {
+        Console.SetOut(_originalOutput);
+        _consoleOutput.Dispose();
     }
 
     [Test]
@@ -63,7 +72,55 @@ public class ClientTelemetryControllerTests
     }
 
     [Test]
-    public void ReceiveTelemetry_LogsExceptionEventsAsError()
+    public void ReceiveTelemetry_OutputsValidJson()
+    {
+        // Arrange
+        var batch = new ClientTelemetryBatch
+        {
+            SessionId = "test-session",
+            Events =
+            [
+                new ClientTelemetryEvent { Type = TelemetryEventType.PageView, Name = "TestPage" }
+            ]
+        };
+
+        // Act
+        _controller.ReceiveTelemetry(batch);
+
+        // Assert
+        var output = _consoleOutput.ToString().Trim();
+        Assert.DoesNotThrow(() => JsonDocument.Parse(output), "Output should be valid JSON");
+    }
+
+    [Test]
+    public void ReceiveTelemetry_OutputsRequiredJsonFields()
+    {
+        // Arrange
+        var batch = new ClientTelemetryBatch
+        {
+            SessionId = "test-session",
+            Events =
+            [
+                new ClientTelemetryEvent { Type = TelemetryEventType.PageView, Name = "TestPage" }
+            ]
+        };
+
+        // Act
+        _controller.ReceiveTelemetry(batch);
+
+        // Assert
+        var output = _consoleOutput.ToString().Trim();
+        var json = JsonDocument.Parse(output);
+        var root = json.RootElement;
+
+        Assert.That(root.TryGetProperty("Timestamp", out _), Is.True);
+        Assert.That(root.TryGetProperty("Level", out _), Is.True);
+        Assert.That(root.TryGetProperty("Message", out _), Is.True);
+        Assert.That(root.TryGetProperty("SourceContext", out _), Is.True);
+    }
+
+    [Test]
+    public void ReceiveTelemetry_ExceptionEventsHaveErrorLevel()
     {
         // Arrange
         var batch = new ClientTelemetryBatch
@@ -84,18 +141,13 @@ public class ClientTelemetryControllerTests
         _controller.ReceiveTelemetry(batch);
 
         // Assert
-        _loggerMock.Verify(
-            x => x.Log(
-                LogLevel.Error,
-                It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("[ClientTelemetry]")),
-                It.IsAny<Exception>(),
-                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
-            Times.Once);
+        var output = _consoleOutput.ToString().Trim();
+        var json = JsonDocument.Parse(output);
+        Assert.That(json.RootElement.GetProperty("Level").GetString(), Is.EqualTo("Error"));
     }
 
     [Test]
-    public void ReceiveTelemetry_LogsPageViewAsInformation()
+    public void ReceiveTelemetry_PageViewEventsHaveInformationLevel()
     {
         // Arrange
         var batch = new ClientTelemetryBatch
@@ -111,18 +163,13 @@ public class ClientTelemetryControllerTests
         _controller.ReceiveTelemetry(batch);
 
         // Assert
-        _loggerMock.Verify(
-            x => x.Log(
-                LogLevel.Information,
-                It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("[ClientTelemetry]")),
-                It.IsAny<Exception>(),
-                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
-            Times.Once);
+        var output = _consoleOutput.ToString().Trim();
+        var json = JsonDocument.Parse(output);
+        Assert.That(json.RootElement.GetProperty("Level").GetString(), Is.EqualTo("Information"));
     }
 
     [Test]
-    public void ReceiveTelemetry_LogsEventAsInformation()
+    public void ReceiveTelemetry_IncludesTelemetryFields()
     {
         // Arrange
         var batch = new ClientTelemetryBatch
@@ -143,18 +190,17 @@ public class ClientTelemetryControllerTests
         _controller.ReceiveTelemetry(batch);
 
         // Assert
-        _loggerMock.Verify(
-            x => x.Log(
-                LogLevel.Information,
-                It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("[ClientTelemetry]")),
-                It.IsAny<Exception>(),
-                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
-            Times.Once);
+        var output = _consoleOutput.ToString().Trim();
+        var json = JsonDocument.Parse(output);
+        var root = json.RootElement;
+
+        Assert.That(root.GetProperty("TelemetryType").GetString(), Is.EqualTo("Event"));
+        Assert.That(root.GetProperty("TelemetryName").GetString(), Is.EqualTo("ButtonClicked"));
+        Assert.That(root.GetProperty("SessionId").GetString(), Is.EqualTo("test-session"));
     }
 
     [Test]
-    public void ReceiveTelemetry_LogsDependencyAsInformation()
+    public void ReceiveTelemetry_IncludesDependencyFields()
     {
         // Arrange
         var batch = new ClientTelemetryBatch
@@ -178,18 +224,17 @@ public class ClientTelemetryControllerTests
         _controller.ReceiveTelemetry(batch);
 
         // Assert
-        _loggerMock.Verify(
-            x => x.Log(
-                LogLevel.Information,
-                It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("[ClientTelemetry]")),
-                It.IsAny<Exception>(),
-                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
-            Times.Once);
+        var output = _consoleOutput.ToString().Trim();
+        var json = JsonDocument.Parse(output);
+        var root = json.RootElement;
+
+        Assert.That(root.GetProperty("DurationMs").GetDouble(), Is.EqualTo(150.5));
+        Assert.That(root.GetProperty("Success").GetBoolean(), Is.True);
+        Assert.That(root.GetProperty("StatusCode").GetInt32(), Is.EqualTo(200));
     }
 
     [Test]
-    public void ReceiveTelemetry_WithMultipleEvents_LogsEachEvent()
+    public void ReceiveTelemetry_WithMultipleEvents_OutputsMultipleLines()
     {
         // Arrange
         var batch = new ClientTelemetryBatch
@@ -206,28 +251,19 @@ public class ClientTelemetryControllerTests
         // Act
         _controller.ReceiveTelemetry(batch);
 
-        // Assert - Should log 2 info (page views) and 1 error (exception)
-        _loggerMock.Verify(
-            x => x.Log(
-                LogLevel.Information,
-                It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, t) => true),
-                It.IsAny<Exception>(),
-                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
-            Times.Exactly(2));
+        // Assert
+        var lines = _consoleOutput.ToString().Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        Assert.That(lines, Has.Length.EqualTo(3));
 
-        _loggerMock.Verify(
-            x => x.Log(
-                LogLevel.Error,
-                It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, t) => true),
-                It.IsAny<Exception>(),
-                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
-            Times.Once);
+        // Verify each line is valid JSON
+        foreach (var line in lines)
+        {
+            Assert.DoesNotThrow(() => JsonDocument.Parse(line));
+        }
     }
 
     [Test]
-    public void ReceiveTelemetry_WithNullSessionId_LogsAsUnknown()
+    public void ReceiveTelemetry_WithNullSessionId_UsesUnknown()
     {
         // Arrange
         var batch = new ClientTelemetryBatch
@@ -243,18 +279,13 @@ public class ClientTelemetryControllerTests
         _controller.ReceiveTelemetry(batch);
 
         // Assert
-        _loggerMock.Verify(
-            x => x.Log(
-                LogLevel.Information,
-                It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("SessionId=unknown")),
-                It.IsAny<Exception>(),
-                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
-            Times.Once);
+        var output = _consoleOutput.ToString().Trim();
+        var json = JsonDocument.Parse(output);
+        Assert.That(json.RootElement.GetProperty("SessionId").GetString(), Is.EqualTo("unknown"));
     }
 
     [Test]
-    public void ReceiveTelemetry_WithNullProperties_LogsEmptyJson()
+    public void ReceiveTelemetry_SourceContextIsClientTelemetry()
     {
         // Arrange
         var batch = new ClientTelemetryBatch
@@ -262,7 +293,7 @@ public class ClientTelemetryControllerTests
             SessionId = "test-session",
             Events =
             [
-                new ClientTelemetryEvent { Type = TelemetryEventType.PageView, Name = "TestPage", Properties = null }
+                new ClientTelemetryEvent { Type = TelemetryEventType.PageView, Name = "TestPage" }
             ]
         };
 
@@ -270,13 +301,33 @@ public class ClientTelemetryControllerTests
         _controller.ReceiveTelemetry(batch);
 
         // Assert
-        _loggerMock.Verify(
-            x => x.Log(
-                LogLevel.Information,
-                It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Properties={}")),
-                It.IsAny<Exception>(),
-                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
-            Times.Once);
+        var output = _consoleOutput.ToString().Trim();
+        var json = JsonDocument.Parse(output);
+        Assert.That(json.RootElement.GetProperty("SourceContext").GetString(), Is.EqualTo("ClientTelemetry"));
+    }
+
+    [Test]
+    public void ReceiveTelemetry_MessageContainsTelemetryInfo()
+    {
+        // Arrange
+        var batch = new ClientTelemetryBatch
+        {
+            SessionId = "test-session",
+            Events =
+            [
+                new ClientTelemetryEvent { Type = TelemetryEventType.PageView, Name = "HomePage" }
+            ]
+        };
+
+        // Act
+        _controller.ReceiveTelemetry(batch);
+
+        // Assert
+        var output = _consoleOutput.ToString().Trim();
+        var json = JsonDocument.Parse(output);
+        var message = json.RootElement.GetProperty("Message").GetString();
+        Assert.That(message, Does.Contain("ClientTelemetry"));
+        Assert.That(message, Does.Contain("PageView"));
+        Assert.That(message, Does.Contain("HomePage"));
     }
 }
