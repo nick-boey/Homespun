@@ -158,6 +158,7 @@ public class MockFleeceService : IFleeceService
             var existing = issues[existingIndex];
 
             // Create a new issue with updated values (Issue has init-only properties)
+            // Preserve all existing properties not being updated
             var updated = new Issue
             {
                 Id = existing.Id,
@@ -168,6 +169,12 @@ public class MockFleeceService : IFleeceService
                 Priority = priority ?? existing.Priority,
                 ExecutionMode = executionMode ?? existing.ExecutionMode,
                 WorkingBranchId = workingBranchId ?? existing.WorkingBranchId,
+                ParentIssues = existing.ParentIssues,
+                Tags = existing.Tags,
+                LinkedIssues = existing.LinkedIssues,
+                LinkedPR = existing.LinkedPR,
+                CreatedBy = existing.CreatedBy,
+                AssignedTo = existing.AssignedTo,
                 CreatedAt = existing.CreatedAt,
                 LastUpdate = DateTime.UtcNow
             };
@@ -197,6 +204,7 @@ public class MockFleeceService : IFleeceService
             var existing = issues[existingIndex];
 
             // Create a new issue with Deleted status (Issue has init-only properties)
+            // Preserve all existing properties
             var deleted = new Issue
             {
                 Id = existing.Id,
@@ -207,6 +215,12 @@ public class MockFleeceService : IFleeceService
                 Priority = existing.Priority,
                 ExecutionMode = existing.ExecutionMode,
                 WorkingBranchId = existing.WorkingBranchId,
+                ParentIssues = existing.ParentIssues,
+                Tags = existing.Tags,
+                LinkedIssues = existing.LinkedIssues,
+                LinkedPR = existing.LinkedPR,
+                CreatedBy = existing.CreatedBy,
+                AssignedTo = existing.AssignedTo,
                 CreatedAt = existing.CreatedAt,
                 LastUpdate = DateTime.UtcNow
             };
