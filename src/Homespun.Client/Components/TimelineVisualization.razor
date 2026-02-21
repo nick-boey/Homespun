@@ -1,5 +1,6 @@
 @using Microsoft.AspNetCore.SignalR.Client
 @using Homespun.Shared.Models.Fleece
+@using Homespun.Shared.Models.Sessions
 @using Homespun.Client.Services
 @inject HttpGraphApiService GraphApi
 @inject NavigationManager NavigationManager
@@ -30,6 +31,8 @@
                 OnLoadMoreClick="LoadMoreTaskGraphPRs"
                 OnIssueCreated="HandleIssueCreated"
                 OnIssueTypeChanged="HandleIssueChangedAsync"
+                OnEditClick="OnEditClick"
+                OnRunAgentClick="OnRunAgentClick"
                 SelectedNodeId="@GetKeyboardSelectedNodeId()"
                 NavService="@NavService" />
         </div>
@@ -365,6 +368,16 @@
     /// The parent should refresh data and select the new issue.
     /// </summary>
     [Parameter] public EventCallback<string> OnIssueCreated { get; set; }
+
+    /// <summary>
+    /// Called when the edit button is clicked on an issue row.
+    /// </summary>
+    [Parameter] public EventCallback<string> OnEditClick { get; set; }
+
+    /// <summary>
+    /// Called when an agent is started on an issue via the inline run agent button.
+    /// </summary>
+    [Parameter] public EventCallback<(string IssueId, AgentPrompt? Prompt)> OnRunAgentClick { get; set; }
 
     /// <summary>
     /// When true (default), displays issues using task graph mode where actionable items

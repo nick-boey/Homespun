@@ -1,5 +1,6 @@
 @using Homespun.Shared.Models.Fleece
 @using Homespun.Shared.Models.Gitgraph
+@using Homespun.Shared.Models.Sessions
 @using Homespun.Client.Services
 @using Homespun.Shared.Requests
 @using Fleece.Core.Models
@@ -137,6 +138,15 @@
                                 @GetAgentStatusLabel(agentStatus)
                             </span>
                         }
+                        @if (!isEditing && !string.IsNullOrEmpty(ProjectId))
+                        {
+                            <IssueRowActions IssueId="@issueLine.IssueId"
+                                             ProjectId="@ProjectId"
+                                             IsVisible="@isSelected"
+                                             Disabled="@(agentStatus?.IsActive == true)"
+                                             OnEditClick="HandleEditClick"
+                                             OnRunAgentClick="HandleRunAgentClick" />
+                        }
                     </div>
                 </div>
 
@@ -234,6 +244,16 @@
     .task-graph-row-selected .task-graph-graph-cell svg circle[fill]:not([fill="none"]),
     .task-graph-row-selected .task-graph-graph-cell svg path[fill]:not([fill="none"]) {
         filter: drop-shadow(0 0 4px var(--color-ocean, #51A5C1));
+    }
+
+    /* Show issue row actions on hover */
+    .task-graph-row:hover .issue-row-actions {
+        opacity: 1;
+    }
+
+    /* Keep actions visible on selected row */
+    .task-graph-row-selected .issue-row-actions {
+        opacity: 1;
     }
 
     .task-graph-graph-cell {
@@ -559,6 +579,16 @@
     /// </summary>
     [Parameter] public EventCallback<string> OnIssueCreated { get; set; }
 
+    /// <summary>
+    /// Called when the edit button is clicked on an issue row.
+    /// </summary>
+    [Parameter] public EventCallback<string> OnEditClick { get; set; }
+
+    /// <summary>
+    /// Called when an agent is started on an issue via the inline run agent button.
+    /// </summary>
+    [Parameter] public EventCallback<(string IssueId, AgentPrompt? Prompt)> OnRunAgentClick { get; set; }
+
     private List<TaskGraphRenderLine> _renderLines = [];
     private int _maxLane;
     private string? _typeMenuOpenForIssueId;
@@ -866,6 +896,16 @@
     private async Task HandleIssueClick(string issueId)
     {
         await OnIssueClick.InvokeAsync(issueId);
+    }
+
+    private async Task HandleEditClick(string issueId)
+    {
+        await OnEditClick.InvokeAsync(issueId);
+    }
+
+    private async Task HandleRunAgentClick((string IssueId, AgentPrompt? Prompt) args)
+    {
+        await OnRunAgentClick.InvokeAsync(args);
     }
 
     private async Task HandleLoadMoreClick()
