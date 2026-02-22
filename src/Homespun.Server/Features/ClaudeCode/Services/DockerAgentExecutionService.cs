@@ -1280,6 +1280,7 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         dockerArgs.Append("--label logging=promtail ");
 
         dockerArgs.Append($"--network {_options.NetworkName} ");
+
         dockerArgs.Append(_options.WorkerImage);
 
         return dockerArgs.ToString();
