@@ -268,7 +268,8 @@
         align-items: center;
         gap: 0.5rem;
         padding: 0.25rem 0.75rem 0.25rem 0.5rem;
-        overflow: hidden;
+        /* Note: overflow: hidden was removed to allow type change dropdown to display.
+           Text truncation is handled by .task-graph-title's own overflow: hidden. */
     }
 
     .task-graph-issue-id {
