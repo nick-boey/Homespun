@@ -81,6 +81,14 @@
                                         <span class="detail-label">Messages:</span>
                                         <span class="detail-value">@session.MessageCount</span>
                                     </div>
+
+                                    @if (!string.IsNullOrEmpty(session.ContainerId))
+                                    {
+                                        <div class="detail-row">
+                                            <span class="detail-label">Container:</span>
+                                            <code class="detail-value container-id" title="@session.ContainerId">@FormatContainerId(session.ContainerId)</code>
+                                        </div>
+                                    }
                                 </div>
                             </div>
 
@@ -288,6 +296,12 @@
         color: var(--text-primary);
     }
 
+    .detail-value code.container-id {
+        font-family: var(--font-mono);
+        font-size: 0.75rem;
+        color: var(--text-muted);
+    }
+
     .session-card-footer {
         display: flex;
         gap: var(--spacing-sm);
@@ -492,6 +506,12 @@
         // Extract the model name from full ID like "anthropic/claude-sonnet-4-20250514"
         var parts = model.Split('/');
         return parts.Length > 1 ? parts[1] : model;
+    }
+
+    private static string FormatContainerId(string containerId)
+    {
+        // Show first 12 characters of container ID like Docker does
+        return containerId.Length > 12 ? containerId[..12] : containerId;
     }
 
     private async Task SetupSignalRConnectionAsync()
