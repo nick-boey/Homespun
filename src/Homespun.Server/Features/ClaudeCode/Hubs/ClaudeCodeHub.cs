@@ -2,6 +2,7 @@ using System.Text.Json;
 using Homespun.ClaudeAgentSdk;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.ClaudeCode.Settings;
+using Homespun.Shared.Models.Sessions;
 using Homespun.Shared.Requests;
 using Microsoft.AspNetCore.SignalR;
 
@@ -38,7 +39,7 @@ public class ClaudeCodeHub(IClaudeSessionService sessionService, IMessageCacheSt
     /// <summary>
     /// Send a message to a session.
     /// </summary>
-    public async Task SendMessage(string sessionId, string message, PermissionMode permissionMode = PermissionMode.BypassPermissions)
+    public async Task SendMessage(string sessionId, string message, ClaudeAgentSdk.PermissionMode permissionMode = ClaudeAgentSdk.PermissionMode.BypassPermissions)
     {
         await sessionService.SendMessageAsync(sessionId, message, permissionMode);
     }
@@ -378,10 +379,10 @@ public static class ClaudeCodeHubExtensions
     public static async Task BroadcastAGUIRunStarted(
         this IHubContext<ClaudeCodeHub> hubContext,
         string sessionId,
-        Data.RunStartedEvent evt)
+        RunStartedEvent evt)
     {
         await hubContext.Clients.Group($"session-{sessionId}")
-            .SendAsync(Data.AGUIEventType.RunStarted, evt);
+            .SendAsync(AGUIEventType.RunStarted, evt);
     }
 
     /// <summary>
@@ -390,10 +391,10 @@ public static class ClaudeCodeHubExtensions
     public static async Task BroadcastAGUIRunFinished(
         this IHubContext<ClaudeCodeHub> hubContext,
         string sessionId,
-        Data.RunFinishedEvent evt)
+        RunFinishedEvent evt)
     {
         await hubContext.Clients.Group($"session-{sessionId}")
-            .SendAsync(Data.AGUIEventType.RunFinished, evt);
+            .SendAsync(AGUIEventType.RunFinished, evt);
     }
 
     /// <summary>
@@ -402,10 +403,10 @@ public static class ClaudeCodeHubExtensions
     public static async Task BroadcastAGUIRunError(
         this IHubContext<ClaudeCodeHub> hubContext,
         string sessionId,
-        Data.RunErrorEvent evt)
+        RunErrorEvent evt)
     {
         await hubContext.Clients.Group($"session-{sessionId}")
-            .SendAsync(Data.AGUIEventType.RunError, evt);
+            .SendAsync(AGUIEventType.RunError, evt);
     }
 
     /// <summary>
@@ -414,10 +415,10 @@ public static class ClaudeCodeHubExtensions
     public static async Task BroadcastAGUITextMessageStart(
         this IHubContext<ClaudeCodeHub> hubContext,
         string sessionId,
-        Data.TextMessageStartEvent evt)
+        TextMessageStartEvent evt)
     {
         await hubContext.Clients.Group($"session-{sessionId}")
-            .SendAsync(Data.AGUIEventType.TextMessageStart, evt);
+            .SendAsync(AGUIEventType.TextMessageStart, evt);
     }
 
     /// <summary>
@@ -426,10 +427,10 @@ public static class ClaudeCodeHubExtensions
     public static async Task BroadcastAGUITextMessageContent(
         this IHubContext<ClaudeCodeHub> hubContext,
         string sessionId,
-        Data.TextMessageContentEvent evt)
+        TextMessageContentEvent evt)
     {
         await hubContext.Clients.Group($"session-{sessionId}")
-            .SendAsync(Data.AGUIEventType.TextMessageContent, evt);
+            .SendAsync(AGUIEventType.TextMessageContent, evt);
     }
 
     /// <summary>
@@ -438,10 +439,10 @@ public static class ClaudeCodeHubExtensions
     public static async Task BroadcastAGUITextMessageEnd(
         this IHubContext<ClaudeCodeHub> hubContext,
         string sessionId,
-        Data.TextMessageEndEvent evt)
+        TextMessageEndEvent evt)
     {
         await hubContext.Clients.Group($"session-{sessionId}")
-            .SendAsync(Data.AGUIEventType.TextMessageEnd, evt);
+            .SendAsync(AGUIEventType.TextMessageEnd, evt);
     }
 
     /// <summary>
@@ -450,10 +451,10 @@ public static class ClaudeCodeHubExtensions
     public static async Task BroadcastAGUIToolCallStart(
         this IHubContext<ClaudeCodeHub> hubContext,
         string sessionId,
-        Data.ToolCallStartEvent evt)
+        ToolCallStartEvent evt)
     {
         await hubContext.Clients.Group($"session-{sessionId}")
-            .SendAsync(Data.AGUIEventType.ToolCallStart, evt);
+            .SendAsync(AGUIEventType.ToolCallStart, evt);
     }
 
     /// <summary>
@@ -462,10 +463,10 @@ public static class ClaudeCodeHubExtensions
     public static async Task BroadcastAGUIToolCallArgs(
         this IHubContext<ClaudeCodeHub> hubContext,
         string sessionId,
-        Data.ToolCallArgsEvent evt)
+        ToolCallArgsEvent evt)
     {
         await hubContext.Clients.Group($"session-{sessionId}")
-            .SendAsync(Data.AGUIEventType.ToolCallArgs, evt);
+            .SendAsync(AGUIEventType.ToolCallArgs, evt);
     }
 
     /// <summary>
@@ -474,10 +475,10 @@ public static class ClaudeCodeHubExtensions
     public static async Task BroadcastAGUIToolCallEnd(
         this IHubContext<ClaudeCodeHub> hubContext,
         string sessionId,
-        Data.ToolCallEndEvent evt)
+        ToolCallEndEvent evt)
     {
         await hubContext.Clients.Group($"session-{sessionId}")
-            .SendAsync(Data.AGUIEventType.ToolCallEnd, evt);
+            .SendAsync(AGUIEventType.ToolCallEnd, evt);
     }
 
     /// <summary>
@@ -486,10 +487,10 @@ public static class ClaudeCodeHubExtensions
     public static async Task BroadcastAGUIToolCallResult(
         this IHubContext<ClaudeCodeHub> hubContext,
         string sessionId,
-        Data.ToolCallResultEvent evt)
+        ToolCallResultEvent evt)
     {
         await hubContext.Clients.Group($"session-{sessionId}")
-            .SendAsync(Data.AGUIEventType.ToolCallResult, evt);
+            .SendAsync(AGUIEventType.ToolCallResult, evt);
     }
 
     /// <summary>
@@ -498,10 +499,10 @@ public static class ClaudeCodeHubExtensions
     public static async Task BroadcastAGUICustomEvent(
         this IHubContext<ClaudeCodeHub> hubContext,
         string sessionId,
-        Data.CustomEvent evt)
+        CustomEvent evt)
     {
         await hubContext.Clients.Group($"session-{sessionId}")
-            .SendAsync(Data.AGUIEventType.Custom, evt);
+            .SendAsync(AGUIEventType.Custom, evt);
     }
 
     /// <summary>
@@ -510,23 +511,23 @@ public static class ClaudeCodeHubExtensions
     public static async Task BroadcastAGUIEvent(
         this IHubContext<ClaudeCodeHub> hubContext,
         string sessionId,
-        Data.AGUIBaseEvent evt)
+        AGUIBaseEvent evt)
     {
         var eventType = evt switch
         {
-            Data.RunStartedEvent => Data.AGUIEventType.RunStarted,
-            Data.RunFinishedEvent => Data.AGUIEventType.RunFinished,
-            Data.RunErrorEvent => Data.AGUIEventType.RunError,
-            Data.TextMessageStartEvent => Data.AGUIEventType.TextMessageStart,
-            Data.TextMessageContentEvent => Data.AGUIEventType.TextMessageContent,
-            Data.TextMessageEndEvent => Data.AGUIEventType.TextMessageEnd,
-            Data.ToolCallStartEvent => Data.AGUIEventType.ToolCallStart,
-            Data.ToolCallArgsEvent => Data.AGUIEventType.ToolCallArgs,
-            Data.ToolCallEndEvent => Data.AGUIEventType.ToolCallEnd,
-            Data.ToolCallResultEvent => Data.AGUIEventType.ToolCallResult,
-            Data.CustomEvent => Data.AGUIEventType.Custom,
-            Data.StateSnapshotEvent => Data.AGUIEventType.StateSnapshot,
-            Data.StateDeltaEvent => Data.AGUIEventType.StateDelta,
+            RunStartedEvent => AGUIEventType.RunStarted,
+            RunFinishedEvent => AGUIEventType.RunFinished,
+            RunErrorEvent => AGUIEventType.RunError,
+            TextMessageStartEvent => AGUIEventType.TextMessageStart,
+            TextMessageContentEvent => AGUIEventType.TextMessageContent,
+            TextMessageEndEvent => AGUIEventType.TextMessageEnd,
+            ToolCallStartEvent => AGUIEventType.ToolCallStart,
+            ToolCallArgsEvent => AGUIEventType.ToolCallArgs,
+            ToolCallEndEvent => AGUIEventType.ToolCallEnd,
+            ToolCallResultEvent => AGUIEventType.ToolCallResult,
+            CustomEvent => AGUIEventType.Custom,
+            StateSnapshotEvent => AGUIEventType.StateSnapshot,
+            StateDeltaEvent => AGUIEventType.StateDelta,
             _ => "AGUI_Unknown"
         };
 

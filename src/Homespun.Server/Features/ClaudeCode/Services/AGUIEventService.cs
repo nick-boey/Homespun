@@ -1,7 +1,8 @@
 using System.Text.Json;
 using A2A;
-using Homespun.Features.ClaudeCode.Data;
 using Homespun.Shared.Models.Sessions;
+
+// Note: AG-UI event types are defined in Homespun.Shared.Models.Sessions.AGUIEvents
 
 namespace Homespun.Features.ClaudeCode.Services;
 
