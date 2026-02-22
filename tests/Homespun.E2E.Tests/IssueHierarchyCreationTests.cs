@@ -187,13 +187,13 @@ public class IssueHierarchyCreationTests : PageTest
     private async Task NavigateToIssueAsync(string issueId)
     {
         await SelectFirstIssueAsync();
-        for (int i = 0; i < 20; i++)
+        for (int i = 0; i < 40; i++)
         {
             var currentId = await GetSelectedIssueIdAsync();
             if (currentId == issueId) return;
             await MoveSelectionDownAsync(1);
         }
-        Assert.Fail($"Could not navigate to issue '{issueId}' within 20 steps");
+        Assert.Fail($"Could not navigate to issue '{issueId}' within 40 steps");
     }
 
     /// <summary>
