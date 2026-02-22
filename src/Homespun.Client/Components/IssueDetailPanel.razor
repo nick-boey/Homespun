@@ -369,10 +369,14 @@
         _errorMessage = null;
         StateHasChanged();
 
+        // Capture issue data at start to prevent race condition when selection changes
+        // during async operations. All subsequent code uses this snapshot, not the Issue parameter.
+        var issueSnapshot = Issue;
+        var branchName = GenerateBranchName(issueSnapshot);
+
         try
         {
             // Get or create clone for the issue's branch
-            var branchName = GetBranchPreview();
 
             // Check if clone already exists for this branch
             string? clonePath = null;
@@ -417,16 +421,16 @@
                     return;
                 }
 
-                Logger.LogInformation("Created clone at {ClonePath} for issue {IssueId}", clonePath, Issue.Id);
+                Logger.LogInformation("Created clone at {ClonePath} for issue {IssueId}", clonePath, issueSnapshot.Id);
             }
 
             // Use the prompt's mode, or default to Build if no prompt selected
             var mode = prompt?.Mode ?? SessionMode.Build;
 
-            var systemPrompt = GenerateSystemPrompt();
+            var systemPrompt = GenerateSystemPrompt(issueSnapshot, branchName);
             _session = await SessionApi.CreateSessionAsync(new CreateSessionRequest
             {
-                EntityId = Issue.Id,
+                EntityId = issueSnapshot.Id,
                 ProjectId = ProjectId,
                 WorkingDirectory = clonePath,
                 Mode = mode,
@@ -439,11 +443,11 @@
             {
                 var promptContext = new PromptContext
                 {
-                    Title = Issue.Title,
-                    Id = Issue.Id,
-                    Description = Issue.Description,
+                    Title = issueSnapshot.Title,
+                    Id = issueSnapshot.Id,
+                    Description = issueSnapshot.Description,
                     Branch = branchName,
-                    Type = Issue.Type.ToString()
+                    Type = issueSnapshot.Type.ToString()
                 };
                 var renderedMessage = HttpAgentPromptApiService.RenderTemplate(prompt.InitialMessage, promptContext);
 
@@ -460,7 +464,7 @@
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "Failed to start session for issue {IssueId}", Issue.Id);
+            Logger.LogError(ex, "Failed to start session for issue {IssueId}", issueSnapshot.Id);
             _errorMessage = $"Failed to start session: {ex.Message}";
             _session = null;
         }
@@ -471,21 +475,21 @@
         }
     }
 
-    private string? GenerateSystemPrompt()
+    private string? GenerateSystemPrompt(IssueResponse issue, string branchName)
     {
-        // Build a context-aware system prompt based on the issue
+        // Build a context-aware system prompt based on the captured issue snapshot
         var sb = new System.Text.StringBuilder();
-        sb.AppendLine($"You are working on issue {Issue.Id}: {Issue.Title}");
+        sb.AppendLine($"You are working on issue {issue.Id}: {issue.Title}");
 
-        if (!string.IsNullOrEmpty(Issue.Description))
+        if (!string.IsNullOrEmpty(issue.Description))
         {
             sb.AppendLine();
             sb.AppendLine("Issue Description:");
-            sb.AppendLine(Issue.Description);
+            sb.AppendLine(issue.Description);
         }
 
         sb.AppendLine();
-        sb.AppendLine($"Branch: {GetBranchPreview()}");
+        sb.AppendLine($"Branch: {branchName}");
 
         return sb.ToString();
     }
