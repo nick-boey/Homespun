@@ -1,7 +1,9 @@
 @using Homespun.Client.Services
 @using Homespun.Shared.Requests
 @using Fleece.Core.Models
+@using Microsoft.JSInterop
 @inject HttpIssueApiService IssueApi
+@inject IJSRuntime JSRuntime
 
 <div class="inline-issue-create" data-testid="inline-issue-create">
     <div class="inline-issue-lane-indicator">
@@ -159,7 +161,14 @@
     {
         if (firstRender)
         {
-            await _inputElement.FocusAsync();
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("homespunInterop.focusWithCursor", _inputElement, "start", 0);
+            }
+            catch
+            {
+                // Focus might fail if element is not in DOM yet
+            }
         }
     }
 

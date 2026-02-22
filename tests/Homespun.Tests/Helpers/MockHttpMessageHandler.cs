@@ -11,10 +11,16 @@ namespace Homespun.Tests.Helpers;
 public class MockHttpMessageHandler : HttpMessageHandler
 {
     private readonly Dictionary<string, Func<HttpRequestMessage, HttpResponseMessage>> _responses = new();
+    private readonly List<CapturedRequest> _capturedRequests = [];
     private HttpResponseMessage _defaultResponse = new(HttpStatusCode.OK)
     {
         Content = JsonContent.Create(new object())
     };
+
+    /// <summary>
+    /// All captured requests made through this handler.
+    /// </summary>
+    public IReadOnlyList<CapturedRequest> CapturedRequests => _capturedRequests;
 
     /// <summary>
     /// Configure a response for GET requests matching the given URL pattern.
@@ -66,20 +72,39 @@ public class MockHttpMessageHandler : HttpMessageHandler
         return new HttpClient(this) { BaseAddress = new Uri("http://localhost/") };
     }
 
-    protected override Task<HttpResponseMessage> SendAsync(
+    protected override async Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request, CancellationToken cancellationToken)
     {
         var requestUrl = request.RequestUri?.ToString() ?? "";
+        string? body = null;
+        if (request.Content != null)
+        {
+            body = await request.Content.ReadAsStringAsync(cancellationToken);
+        }
+        _capturedRequests.Add(new CapturedRequest(request.Method, requestUrl, body));
 
         // Match longest pattern first to ensure specific URLs take priority over generic ones
         foreach (var (pattern, responseFactory) in _responses.OrderByDescending(r => r.Key.Length))
         {
             if (requestUrl.Contains(pattern, StringComparison.OrdinalIgnoreCase))
             {
-                return Task.FromResult(responseFactory(request));
+                return responseFactory(request);
             }
         }
 
-        return Task.FromResult(_defaultResponse);
+        return _defaultResponse;
     }
+}
+
+/// <summary>
+/// A captured HTTP request with method, URL, and optional body.
+/// </summary>
+public record CapturedRequest(HttpMethod Method, string Url, string? Body)
+{
+    /// <summary>
+    /// Deserializes the captured request body as the specified type.
+    /// </summary>
+    public T? BodyAs<T>() => Body != null
+        ? JsonSerializer.Deserialize<T>(Body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+        : default;
 }
