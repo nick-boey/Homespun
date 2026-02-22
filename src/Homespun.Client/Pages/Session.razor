@@ -2440,6 +2440,29 @@
             });
         });
 
+        // Handle plan received from Claude (ExitPlanMode)
+        _hubConnection.On<string, string?>("PlanReceived", (planContent, planFilePath) =>
+        {
+            _ = InvokeAsync(async () =>
+            {
+                try
+                {
+                    LogDebug("PlanReceived", $"Plan content length: {planContent?.Length ?? 0}");
+                    if (_session != null)
+                    {
+                        _session.PlanContent = planContent;
+                        _session.PlanFilePath = planFilePath;
+                    }
+                    StateHasChanged();
+                    await AutoScrollToBottomIfNearEnd();
+                }
+                catch (Exception ex)
+                {
+                    LogDebug("ERROR", $"PlanReceived: {ex.Message}");
+                }
+            });
+        });
+
         // Handle context cleared event
         _hubConnection.On<string>("ContextCleared", (sessionId) =>
         {

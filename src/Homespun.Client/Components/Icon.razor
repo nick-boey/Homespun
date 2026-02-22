@@ -1,0 +1,9 @@
+<i class="bi bi-@Name @Class" aria-hidden="true" style="@GetStyle()"></i>
+
+@code {
+    [Parameter] public required string Name { get; set; }
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public int Size { get; set; } = 16;
+
+    private string GetStyle() => Size != 16 ? $"font-size: {Size}px;" : "";
+}

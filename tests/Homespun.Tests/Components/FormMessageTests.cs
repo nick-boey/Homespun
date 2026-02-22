@@ -315,7 +315,7 @@ public class FormMessageTests : BunitTestContext
         var cut = Render<FormMessage>(parameters =>
             parameters.Add(p => p.Message, message));
 
-        // Assert
-        Assert.That(cut.FindAll(".form-message-icon svg"), Has.Count.EqualTo(1));
+        // Assert - Bootstrap Icons are rendered as <i> elements with bi class
+        Assert.That(cut.FindAll(".form-message-icon i.bi"), Has.Count.EqualTo(1));
     }
 }

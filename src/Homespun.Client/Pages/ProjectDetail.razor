@@ -2,6 +2,7 @@
 @page "/projects/{Id}/branches"
 @page "/projects/{Id}/agents"
 @page "/projects/{Id}/prompts"
+@page "/projects/{Id}/secrets"
 @page "/projects/{Id}/settings"
 @implements IDisposable
 @implements IAsyncDisposable
@@ -87,6 +88,14 @@ else
             </a>
         </li>
         <li class="nav-item">
+            <a class="nav-link @(_activeTab == "secrets" ? "active" : "")"
+               href="/projects/@Id/secrets"
+               @onclick="SwitchToSecretsTab"
+               @onclick:preventDefault>
+                <i class="bi bi-key me-1"></i>Secrets
+            </a>
+        </li>
+        <li class="nav-item">
             <a class="nav-link @(_activeTab == "settings" ? "active" : "")"
                href="/projects/@Id/settings"
                @onclick="SwitchToSettingsTab"
@@ -161,6 +170,10 @@ else
     else if (_activeTab == "prompts")
     {
         <ProjectPromptsTab ProjectId="@Id" />
+    }
+    else if (_activeTab == "secrets")
+    {
+        <ProjectSecretsTab ProjectId="@Id" />
     }
     else if (_activeTab == "settings")
     {
@@ -384,6 +397,7 @@ else
             // Determine tab from URL
             var uri = NavigationManager.Uri;
             if (uri.Contains("/settings")) _activeTab = "settings";
+            else if (uri.Contains("/secrets")) _activeTab = "secrets";
             else if (uri.Contains("/prompts")) _activeTab = "prompts";
             else if (uri.Contains("/agents")) _activeTab = "agents";
             else if (uri.Contains("/branches")) _activeTab = "branches";
@@ -462,6 +476,8 @@ else
         var uri = NavigationManager.Uri;
         if (uri.Contains("/settings"))
             _activeTab = "settings";
+        else if (uri.Contains("/secrets"))
+            _activeTab = "secrets";
         else if (uri.Contains("/prompts"))
             _activeTab = "prompts";
         else if (uri.Contains("/agents"))
@@ -572,6 +588,7 @@ else
             "branches" => $"/projects/{Id}/branches",
             "agents" => $"/projects/{Id}/agents",
             "prompts" => $"/projects/{Id}/prompts",
+            "secrets" => $"/projects/{Id}/secrets",
             "settings" => $"/projects/{Id}/settings",
             _ => $"/projects/{Id}"
         };
@@ -590,6 +607,7 @@ else
     private void SwitchToBranchesTab() => SwitchTab("branches");
     private void SwitchToAgentsTab() => SwitchTab("agents");
     private void SwitchToPromptsTab() => SwitchTab("prompts");
+    private void SwitchToSecretsTab() => SwitchTab("secrets");
     private void SwitchToSettingsTab() => SwitchTab("settings");
 
     public void Dispose()

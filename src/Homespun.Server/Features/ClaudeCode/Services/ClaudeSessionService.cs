@@ -4,6 +4,7 @@ using Homespun.ClaudeAgentSdk;
 using Homespun.Features.ClaudeCode.Hubs;
 using Microsoft.AspNetCore.SignalR;
 using SharedPermissionMode = Homespun.Shared.Models.Sessions.PermissionMode;
+using AGUIEvents = Homespun.Shared.Models.Sessions;
 
 namespace Homespun.Features.ClaudeCode.Services;
 
@@ -99,8 +100,14 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
     private readonly IHooksService _hooksService;
     private readonly IMessageCacheStore _messageCache;
     private readonly IAgentExecutionService _agentExecutionService;
+    private readonly IAGUIEventService _agUIEventService;
     private readonly ConcurrentDictionary<string, ClaudeAgentOptions> _sessionOptions = new();
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _sessionCts = new();
+
+    /// <summary>
+    /// Maps session ID -> current run ID for AG-UI events.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, string> _sessionRunIds = new();
 
     /// <summary>
     /// Maps session ID -> persistent SDK client for streaming mode interactions.
@@ -133,7 +140,8 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         IToolResultParser toolResultParser,
         IHooksService hooksService,
         IMessageCacheStore messageCache,
-        IAgentExecutionService agentExecutionService)
+        IAgentExecutionService agentExecutionService,
+        IAGUIEventService agUIEventService)
     {
         _sessionStore = sessionStore;
         _optionsFactory = optionsFactory;
@@ -145,6 +153,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         _hooksService = hooksService;
         _messageCache = messageCache;
         _agentExecutionService = agentExecutionService;
+        _agUIEventService = agUIEventService;
     }
 
     /// <inheritdoc />
@@ -253,6 +262,12 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
 
         // Notify clients about the new session
         await _hubContext.BroadcastSessionStarted(session);
+
+        // Broadcast AG-UI run started event
+        var runId = Guid.NewGuid().ToString();
+        _sessionRunIds[sessionId] = runId;
+        var runStartedEvent = _agUIEventService.CreateRunStarted(sessionId, runId);
+        await _hubContext.BroadcastAGUIRunStarted(sessionId, runStartedEvent);
 
         return session;
     }
@@ -606,6 +621,10 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                         resultMsg.Subtype,
                         isRecoverable);
                     await _hubContext.BroadcastSessionStatusChanged(sessionId, session.Status);
+
+                    // Broadcast AG-UI run error event
+                    var runErrorEvent = _agUIEventService.CreateRunError(errorMessage, resultMsg.Subtype);
+                    await _hubContext.BroadcastAGUIRunError(sessionId, runErrorEvent);
                 }
 
                 // Update metadata with the actual Claude session ID if it changed
@@ -625,6 +644,14 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                 }
 
                 await _hubContext.BroadcastSessionResultReceived(sessionId, session.TotalCostUsd, resultMsg.DurationMs);
+
+                // Broadcast AG-UI run finished event (if not an error)
+                if (!resultMsg.IsError)
+                {
+                    var runId = _sessionRunIds.GetValueOrDefault(sessionId) ?? Guid.NewGuid().ToString();
+                    var runFinishedEvent = _agUIEventService.CreateRunFinished(sessionId, runId, resultMsg.Result);
+                    await _hubContext.BroadcastAGUIRunFinished(sessionId, runFinishedEvent);
+                }
                 break;
         }
     }
@@ -651,6 +678,23 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                 if (evt.TryGetProperty("content_block", out var contentBlock))
                 {
                     context.Assembler.StartBlock(index, contentBlock);
+
+                    // Broadcast AG-UI start event
+                    var blockType = contentBlock.TryGetProperty("type", out var blockTypeVal) ? blockTypeVal.GetString() : null;
+                    if (blockType == "tool_use")
+                    {
+                        var toolCallId = contentBlock.TryGetProperty("id", out var idVal) ? idVal.GetString() : Guid.NewGuid().ToString();
+                        var toolName = contentBlock.TryGetProperty("name", out var nameVal) ? nameVal.GetString() : "unknown";
+                        var toolStartEvent = AGUIEvents.AGUIEventFactory.CreateToolCallStart(
+                            toolCallId!, toolName!, context.CurrentAssistantMessage?.Id);
+                        _ = _hubContext.BroadcastAGUIToolCallStart(sessionId, toolStartEvent);
+                    }
+                    else if (blockType == "text" || blockType == "thinking")
+                    {
+                        var msgId = context.CurrentAssistantMessage?.Id ?? Guid.NewGuid().ToString();
+                        var textStartEvent = AGUIEvents.AGUIEventFactory.CreateTextMessageStart(msgId, "assistant");
+                        _ = _hubContext.BroadcastAGUITextMessageStart(sessionId, textStartEvent);
+                    }
                 }
                 break;
             }
@@ -669,6 +713,31 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                         var streamingContent = ConvertBlockStateToContent(sessionId, block);
                         streamingContent.IsStreaming = true;
                         _ = _hubContext.BroadcastContentBlockReceived(sessionId, streamingContent);
+
+                        // Broadcast AG-UI delta events
+                        var deltaType = delta.TryGetProperty("type", out var dt) ? dt.GetString() : null;
+                        switch (deltaType)
+                        {
+                            case "text_delta":
+                            case "thinking_delta":
+                                var textDelta = delta.TryGetProperty("text", out var txt) ? txt.GetString() :
+                                               (delta.TryGetProperty("thinking", out var th) ? th.GetString() : null);
+                                if (!string.IsNullOrEmpty(textDelta))
+                                {
+                                    var messageId = context.CurrentAssistantMessage?.Id ?? Guid.NewGuid().ToString();
+                                    var textContentEvent = AGUIEvents.AGUIEventFactory.CreateTextMessageContent(messageId, textDelta);
+                                    _ = _hubContext.BroadcastAGUITextMessageContent(sessionId, textContentEvent);
+                                }
+                                break;
+                            case "input_json_delta":
+                                var jsonDelta = delta.TryGetProperty("partial_json", out var pj) ? pj.GetString() : null;
+                                if (!string.IsNullOrEmpty(jsonDelta) && block.ToolUseId != null)
+                                {
+                                    var toolArgsEvent = AGUIEvents.AGUIEventFactory.CreateToolCallArgs(block.ToolUseId, jsonDelta);
+                                    _ = _hubContext.BroadcastAGUIToolCallArgs(sessionId, toolArgsEvent);
+                                }
+                                break;
+                        }
                     }
                 }
                 break;
@@ -688,6 +757,19 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                     context.CurrentAssistantMessage.Content.Add(content);
 
                     _ = _hubContext.BroadcastContentBlockReceived(sessionId, content);
+
+                    // Broadcast AG-UI end events
+                    if (block.Type == "tool_use" && block.ToolUseId != null)
+                    {
+                        var toolEndEvent = AGUIEvents.AGUIEventFactory.CreateToolCallEnd(block.ToolUseId);
+                        _ = _hubContext.BroadcastAGUIToolCallEnd(sessionId, toolEndEvent);
+                    }
+                    else if (block.Type == "text" || block.Type == "thinking")
+                    {
+                        var messageId = context.CurrentAssistantMessage?.Id ?? Guid.NewGuid().ToString();
+                        var textEndEvent = AGUIEvents.AGUIEventFactory.CreateTextMessageEnd(messageId);
+                        _ = _hubContext.BroadcastAGUITextMessageEnd(sessionId, textEndEvent);
+                    }
 
                     // Check for AskUserQuestion tool
                     if (content.Type == ClaudeContentType.ToolUse &&
@@ -803,6 +885,19 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             session.Messages.Add(toolResultMessage);
             await _messageCache.AppendMessageAsync(sessionId, toolResultMessage, cancellationToken);
             await _hubContext.BroadcastMessageReceived(sessionId, toolResultMessage);
+
+            // Broadcast AG-UI tool result events
+            foreach (var toolResult in toolResultContents)
+            {
+                if (!string.IsNullOrEmpty(toolResult.ToolUseId))
+                {
+                    var toolResultEvent = AGUIEvents.AGUIEventFactory.CreateToolCallResult(
+                        toolResult.ToolUseId,
+                        toolResult.ToolResult ?? "",
+                        toolResultMessage.Id);
+                    _ = _hubContext.BroadcastAGUIToolCallResult(sessionId, toolResultEvent);
+                }
+            }
 
             // Check tool results for Write (plan capture) and ExitPlanMode
             foreach (var toolResult in toolResultContents)
@@ -1025,6 +1120,10 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             await _hubContext.BroadcastQuestionReceived(sessionId, pendingQuestion);
             await _hubContext.BroadcastSessionStatusChanged(sessionId, ClaudeSessionStatus.WaitingForQuestionAnswer);
 
+            // Broadcast AG-UI custom event for question pending
+            var questionPendingEvent = _agUIEventService.CreateQuestionPending(pendingQuestion);
+            await _hubContext.BroadcastAGUICustomEvent(sessionId, questionPendingEvent);
+
             _logger.LogInformation("Session {SessionId} is now waiting for user to answer {QuestionCount} questions",
                 sessionId, questions.Count);
         }
@@ -1102,6 +1201,10 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             await _hubContext.BroadcastQuestionReceived(sessionId, pendingQuestion);
             await _hubContext.BroadcastSessionStatusChanged(sessionId, ClaudeSessionStatus.WaitingForQuestionAnswer);
 
+            // Broadcast AG-UI custom event for question pending
+            var questionPendingEvent = _agUIEventService.CreateQuestionPending(pendingQuestion);
+            await _hubContext.BroadcastAGUICustomEvent(sessionId, questionPendingEvent);
+
             _logger.LogInformation("Session {SessionId} is now waiting for user to answer {QuestionCount} questions (from worker)",
                 sessionId, questions.Count);
         }
@@ -1177,6 +1280,11 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
 
                 session.Messages.Add(planMessage);
                 await _hubContext.BroadcastMessageReceived(sessionId, planMessage);
+                await _hubContext.BroadcastPlanReceived(sessionId, planContent, session.PlanFilePath);
+
+                // Broadcast AG-UI custom event for plan pending
+                var planPendingEvent = _agUIEventService.CreatePlanPending(planContent, session.PlanFilePath);
+                await _hubContext.BroadcastAGUICustomEvent(sessionId, planPendingEvent);
             }
             else
             {
@@ -1291,6 +1399,11 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
 
             session.Messages.Add(planMessage);
             await _hubContext.BroadcastMessageReceived(sessionId, planMessage);
+            await _hubContext.BroadcastPlanReceived(sessionId, planContent, foundPath);
+
+            // Broadcast AG-UI custom event for plan pending
+            var planPendingEvent = _agUIEventService.CreatePlanPending(planContent, foundPath);
+            await _hubContext.BroadcastAGUICustomEvent(sessionId, planPendingEvent);
 
             // Set status to WaitingForPlanExecution so UI shows the action buttons
             session.Status = ClaudeSessionStatus.WaitingForPlanExecution;

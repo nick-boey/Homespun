@@ -6,6 +6,7 @@ using Homespun.Features.Gitgraph.Services;
 using Homespun.Features.GitHub;
 using Homespun.Features.Projects;
 using Homespun.Features.PullRequests.Data;
+using Homespun.Features.Secrets;
 using Homespun.Features.Testing.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -50,6 +51,9 @@ public static class MockServiceExtensions
 
         // Project service
         services.AddScoped<IProjectService, MockProjectService>();
+
+        // Secrets service
+        services.AddScoped<ISecretsService, MockSecretsService>();
 
         // Fleece services (transition service depends on MockFleeceService)
         services.AddScoped<IFleeceIssueTransitionService, MockFleeceIssueTransitionService>();

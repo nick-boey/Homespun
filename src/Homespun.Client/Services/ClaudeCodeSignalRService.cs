@@ -81,6 +81,49 @@ public class ClaudeCodeSignalRService : IAsyncDisposable
     /// </summary>
     public event Action<string, string, string?, bool>? OnSessionError;
 
+    #region AG-UI Events
+
+    /// <summary>Fired when an agent run starts (AG-UI).</summary>
+    public event Action<RunStartedEvent>? OnAGUIRunStarted;
+
+    /// <summary>Fired when an agent run finishes (AG-UI).</summary>
+    public event Action<RunFinishedEvent>? OnAGUIRunFinished;
+
+    /// <summary>Fired when an agent run encounters an error (AG-UI).</summary>
+    public event Action<RunErrorEvent>? OnAGUIRunError;
+
+    /// <summary>Fired when a text message starts streaming (AG-UI).</summary>
+    public event Action<TextMessageStartEvent>? OnAGUITextMessageStart;
+
+    /// <summary>Fired when streaming text content is received (AG-UI).</summary>
+    public event Action<TextMessageContentEvent>? OnAGUITextMessageContent;
+
+    /// <summary>Fired when a text message finishes streaming (AG-UI).</summary>
+    public event Action<TextMessageEndEvent>? OnAGUITextMessageEnd;
+
+    /// <summary>Fired when a tool call starts (AG-UI).</summary>
+    public event Action<ToolCallStartEvent>? OnAGUIToolCallStart;
+
+    /// <summary>Fired when streaming tool call arguments are received (AG-UI).</summary>
+    public event Action<ToolCallArgsEvent>? OnAGUIToolCallArgs;
+
+    /// <summary>Fired when a tool call finishes (AG-UI).</summary>
+    public event Action<ToolCallEndEvent>? OnAGUIToolCallEnd;
+
+    /// <summary>Fired when a tool call result is available (AG-UI).</summary>
+    public event Action<ToolCallResultEvent>? OnAGUIToolCallResult;
+
+    /// <summary>Fired when a state snapshot is received (AG-UI).</summary>
+    public event Action<StateSnapshotEvent>? OnAGUIStateSnapshot;
+
+    /// <summary>Fired when a state delta is received (AG-UI).</summary>
+    public event Action<StateDeltaEvent>? OnAGUIStateDelta;
+
+    /// <summary>Fired when a custom AG-UI event is received.</summary>
+    public event Action<CustomEvent>? OnAGUICustomEvent;
+
+    #endregion
+
     /// <summary>
     /// Establishes the SignalR connection and registers all message handlers.
     /// </summary>
@@ -264,6 +307,46 @@ public class ClaudeCodeSignalRService : IAsyncDisposable
         connection.On<string, string, string?, bool>("SessionError",
             (sessionId, errorMessage, errorSubtype, isRecoverable) =>
                 OnSessionError?.Invoke(sessionId, errorMessage, errorSubtype, isRecoverable));
+
+        // Register AG-UI event handlers
+        connection.On<RunStartedEvent>(AGUIEventType.RunStarted,
+            evt => OnAGUIRunStarted?.Invoke(evt));
+
+        connection.On<RunFinishedEvent>(AGUIEventType.RunFinished,
+            evt => OnAGUIRunFinished?.Invoke(evt));
+
+        connection.On<RunErrorEvent>(AGUIEventType.RunError,
+            evt => OnAGUIRunError?.Invoke(evt));
+
+        connection.On<TextMessageStartEvent>(AGUIEventType.TextMessageStart,
+            evt => OnAGUITextMessageStart?.Invoke(evt));
+
+        connection.On<TextMessageContentEvent>(AGUIEventType.TextMessageContent,
+            evt => OnAGUITextMessageContent?.Invoke(evt));
+
+        connection.On<TextMessageEndEvent>(AGUIEventType.TextMessageEnd,
+            evt => OnAGUITextMessageEnd?.Invoke(evt));
+
+        connection.On<ToolCallStartEvent>(AGUIEventType.ToolCallStart,
+            evt => OnAGUIToolCallStart?.Invoke(evt));
+
+        connection.On<ToolCallArgsEvent>(AGUIEventType.ToolCallArgs,
+            evt => OnAGUIToolCallArgs?.Invoke(evt));
+
+        connection.On<ToolCallEndEvent>(AGUIEventType.ToolCallEnd,
+            evt => OnAGUIToolCallEnd?.Invoke(evt));
+
+        connection.On<ToolCallResultEvent>(AGUIEventType.ToolCallResult,
+            evt => OnAGUIToolCallResult?.Invoke(evt));
+
+        connection.On<StateSnapshotEvent>(AGUIEventType.StateSnapshot,
+            evt => OnAGUIStateSnapshot?.Invoke(evt));
+
+        connection.On<StateDeltaEvent>(AGUIEventType.StateDelta,
+            evt => OnAGUIStateDelta?.Invoke(evt));
+
+        connection.On<CustomEvent>(AGUIEventType.Custom,
+            evt => OnAGUICustomEvent?.Invoke(evt));
     }
 
     private async Task OnReconnected(string? connectionId)

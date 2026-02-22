@@ -4,7 +4,7 @@
     <nav class="flex flex-col">
         <div class="nav-item text-sm">
             <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Projects
+                <i class="bi bi-list-nested" aria-hidden="true"></i> Projects
             </NavLink>
         </div>
         @if (_projects.Any())
@@ -22,29 +22,29 @@
         }
         <div class="nav-item text-sm">
             <NavLink class="nav-link" href="sessions">
-                <span class="bi bi-chat-dots-nav-menu" aria-hidden="true"></span> Sessions
+                <i class="bi bi-chat-dots" aria-hidden="true"></i> Sessions
             </NavLink>
         </div>
         <div class="nav-item text-sm">
             <NavLink class="nav-link" href="containers">
-                <span class="bi bi-box-nav-menu" aria-hidden="true"></span> Containers
+                <i class="bi bi-box" aria-hidden="true"></i> Containers
             </NavLink>
         </div>
         <div class="nav-item text-sm">
             <NavLink class="nav-link" href="agents">
-                <span class="bi bi-robot-nav-menu" aria-hidden="true"></span> Agents
+                <i class="bi bi-robot" aria-hidden="true"></i> Agents
             </NavLink>
         </div>
         <div class="nav-item text-sm">
             <NavLink class="nav-link" href="settings">
-                <span class="bi bi-gear-nav-menu" aria-hidden="true"></span> Settings
+                <i class="bi bi-gear" aria-hidden="true"></i> Settings
             </NavLink>
         </div>
         @if (_isMockMode)
         {
             <div class="nav-item text-sm mt-2 pt-2" style="border-top: 1px solid var(--border-color);">
                 <NavLink class="nav-link" href="design">
-                    <span class="bi bi-palette-nav-menu" aria-hidden="true"></span> Design
+                    <i class="bi bi-palette" aria-hidden="true"></i> Design
                 </NavLink>
             </div>
         }

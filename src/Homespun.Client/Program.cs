@@ -27,6 +27,7 @@ builder.Services.AddScoped<HttpGraphApiService>();
 builder.Services.AddScoped<HttpSessionCacheApiService>();
 builder.Services.AddScoped<HttpIssuePrStatusApiService>();
 builder.Services.AddScoped<HttpFleeceSyncApiService>();
+builder.Services.AddScoped<HttpSecretsApiService>();
 builder.Services.AddScoped<HttpComponentRegistryService>();
 builder.Services.AddScoped<HttpPlansApiService>();
 
@@ -40,6 +41,7 @@ builder.Services.AddSingleton<IMarkdownRenderingService, MarkdownRenderingServic
 builder.Services.AddSingleton<IAgentStartupTracker, AgentStartupTracker>();
 builder.Services.AddScoped<MessageDisplayService>();
 builder.Services.AddScoped<IKeyboardNavigationService, KeyboardNavigationService>();
+builder.Services.AddScoped<AGUIEventStateService>();
 
 // Register telemetry services
 builder.Services.AddScoped<ConsoleTelemetryService>();

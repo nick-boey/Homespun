@@ -22,8 +22,9 @@ describe('formatSSE', () => {
   });
 });
 
-describe('streamSessionEvents', () => {
-  it('yields SSE error with SESSION_NOT_FOUND for non-existent session', async () => {
+describe('streamSessionEvents (A2A Protocol)', () => {
+  // A2A Protocol: errors are emitted as status-update events with state 'failed'
+  it('yields A2A status-update with failed state for non-existent session', async () => {
     const sm = createMockSessionManager();
     sm.get.mockReturnValue(undefined);
 
@@ -31,14 +32,14 @@ describe('streamSessionEvents', () => {
 
     expect(chunks).toHaveLength(1);
     const events = parseSSEEvents(chunks[0]);
-    expect(events[0].event).toBe('error');
-    expect(events[0].data).toMatchObject({
-      code: 'SESSION_NOT_FOUND',
-      sessionId: 'bad-id',
-    });
+    expect(events[0].event).toBe('status-update');
+    expect(events[0].data.kind).toBe('status-update');
+    expect(events[0].data.status.state).toBe('failed');
+    expect(events[0].data.final).toBe(true);
   });
 
-  it('first yields session_started event with sessionId and conversationId', async () => {
+  // A2A Protocol: session start emits 'task' event with state 'submitted'
+  it('first yields A2A task event with submitted state', async () => {
     const sm = createMockSessionManager();
     sm.get.mockReturnValue({
       id: 'sess-1',
@@ -50,16 +51,17 @@ describe('streamSessionEvents', () => {
 
     expect(chunks.length).toBeGreaterThanOrEqual(1);
     const events = parseSSEEvents(chunks[0]);
-    expect(events[0].event).toBe('session_started');
-    expect(events[0].data).toEqual({
-      sessionId: 'sess-1',
-      conversationId: 'conv-1',
-    });
+    expect(events[0].event).toBe('task');
+    expect(events[0].data.kind).toBe('task');
+    expect(events[0].data.id).toBe('sess-1');
+    expect(events[0].data.contextId).toBe('conv-1');
+    expect(events[0].data.status.state).toBe('submitted');
   });
 
-  it('yields each SDK message with msg.type as event name', async () => {
+  // A2A Protocol: emits task -> status-update(working) -> messages -> status-update(completed)
+  it('yields A2A events for SDK messages', async () => {
     const sm = createMockSessionManager();
-    sm.get.mockReturnValue({ id: 's1', conversationId: undefined });
+    sm.get.mockReturnValue({ id: 's1', conversationId: 's1' });
 
     const assistantMsg = createAssistantMessage();
     const resultMsg = createResultMessage();
@@ -76,14 +78,30 @@ describe('streamSessionEvents', () => {
     const events = parseSSEEvents(allText);
 
     const eventNames = events.map((e) => e.event);
-    expect(eventNames).toContain('session_started');
-    expect(eventNames).toContain('assistant');
-    expect(eventNames).toContain('result');
+    // A2A event sequence: task, status-update(working), message, status-update(completed)
+    expect(eventNames).toContain('task');
+    expect(eventNames).toContain('status-update');
+    expect(eventNames).toContain('message');
+
+    // First event is task with submitted state
+    expect(events[0].event).toBe('task');
+    expect(events[0].data.status.state).toBe('submitted');
+
+    // Second event is status-update with working state
+    expect(events[1].event).toBe('status-update');
+    expect(events[1].data.status.state).toBe('working');
+
+    // Last event should be status-update with completed state
+    const lastEvent = events[events.length - 1];
+    expect(lastEvent.event).toBe('status-update');
+    expect(lastEvent.data.status.state).toBe('completed');
+    expect(lastEvent.data.final).toBe(true);
   });
 
-  it('stops after result message type', async () => {
+  // A2A Protocol: result message triggers status-update with final=true
+  it('stops after result message (emits final status-update)', async () => {
     const sm = createMockSessionManager();
-    sm.get.mockReturnValue({ id: 's1', conversationId: undefined });
+    sm.get.mockReturnValue({ id: 's1', conversationId: 's1' });
 
     const resultMsg = createResultMessage();
     const afterResult = createAssistantMessage({ type: 'assistant' as any });
@@ -101,15 +119,17 @@ describe('streamSessionEvents', () => {
     const allText = chunks.join('');
     const events = parseSSEEvents(allText);
 
-    const eventNames = events.map((e) => e.event);
-    expect(eventNames).toContain('result');
-    // The generator returns after result, so no assistant event after
-    expect(eventNames.filter((n) => n === 'assistant')).toHaveLength(0);
+    // Last event should be status-update with final=true
+    const statusUpdates = events.filter((e) => e.event === 'status-update');
+    const finalUpdate = statusUpdates[statusUpdates.length - 1];
+    expect(finalUpdate.data.final).toBe(true);
+    expect(finalUpdate.data.status.state).toMatch(/completed|failed/);
   });
 
-  it('yields error SSE with AGENT_ERROR code when stream throws', async () => {
+  // A2A Protocol: errors are emitted as status-update with state 'failed'
+  it('yields A2A status-update with failed state when stream throws', async () => {
     const sm = createMockSessionManager();
-    sm.get.mockReturnValue({ id: 's1', conversationId: undefined });
+    sm.get.mockReturnValue({ id: 's1', conversationId: 's1' });
     sm.stream.mockReturnValue(
       (async function* () {
         throw new Error('SDK crashed');
@@ -120,12 +140,10 @@ describe('streamSessionEvents', () => {
     const allText = chunks.join('');
     const events = parseSSEEvents(allText);
 
-    const errorEvent = events.find((e) => e.event === 'error');
+    const errorEvent = events.find(
+      (e) => e.event === 'status-update' && e.data.status?.state === 'failed',
+    );
     expect(errorEvent).toBeDefined();
-    expect(errorEvent!.data).toMatchObject({
-      code: 'AGENT_ERROR',
-      message: 'SDK crashed',
-      sessionId: 's1',
-    });
+    expect(errorEvent!.data.final).toBe(true);
   });
 });

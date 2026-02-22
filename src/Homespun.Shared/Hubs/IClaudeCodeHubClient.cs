@@ -28,6 +28,7 @@ public interface IClaudeCodeHubClient
     Task StreamingContentStopped(ClaudeMessageContent content, int index);
     Task QuestionReceived(PendingQuestion question);
     Task QuestionAnswered();
+    Task PlanReceived(string planContent, string? planFilePath);
     Task ContextCleared(string sessionId);
 
     /// <summary>
@@ -38,4 +39,73 @@ public interface IClaudeCodeHubClient
     /// <param name="errorSubtype">SDK error subtype (e.g., error_max_turns, error_during_execution)</param>
     /// <param name="isRecoverable">Whether the session can be resumed by sending another message</param>
     Task SessionError(string sessionId, string errorMessage, string? errorSubtype, bool isRecoverable);
+
+    #region AG-UI Events
+
+    /// <summary>
+    /// Notifies clients when an agent run starts.
+    /// </summary>
+    Task AGUIRunStarted(RunStartedEvent evt);
+
+    /// <summary>
+    /// Notifies clients when an agent run finishes successfully.
+    /// </summary>
+    Task AGUIRunFinished(RunFinishedEvent evt);
+
+    /// <summary>
+    /// Notifies clients when an agent run encounters an error.
+    /// </summary>
+    Task AGUIRunError(RunErrorEvent evt);
+
+    /// <summary>
+    /// Notifies clients when a text message starts streaming.
+    /// </summary>
+    Task AGUITextMessageStart(TextMessageStartEvent evt);
+
+    /// <summary>
+    /// Notifies clients with streaming text content.
+    /// </summary>
+    Task AGUITextMessageContent(TextMessageContentEvent evt);
+
+    /// <summary>
+    /// Notifies clients when a text message finishes streaming.
+    /// </summary>
+    Task AGUITextMessageEnd(TextMessageEndEvent evt);
+
+    /// <summary>
+    /// Notifies clients when a tool call starts.
+    /// </summary>
+    Task AGUIToolCallStart(ToolCallStartEvent evt);
+
+    /// <summary>
+    /// Notifies clients with streaming tool call arguments.
+    /// </summary>
+    Task AGUIToolCallArgs(ToolCallArgsEvent evt);
+
+    /// <summary>
+    /// Notifies clients when a tool call finishes.
+    /// </summary>
+    Task AGUIToolCallEnd(ToolCallEndEvent evt);
+
+    /// <summary>
+    /// Notifies clients when a tool call result is available.
+    /// </summary>
+    Task AGUIToolCallResult(ToolCallResultEvent evt);
+
+    /// <summary>
+    /// Sends a full state snapshot to clients.
+    /// </summary>
+    Task AGUIStateSnapshot(StateSnapshotEvent evt);
+
+    /// <summary>
+    /// Sends an incremental state delta to clients.
+    /// </summary>
+    Task AGUIStateDelta(StateDeltaEvent evt);
+
+    /// <summary>
+    /// Sends a custom AG-UI event to clients.
+    /// </summary>
+    Task AGUICustomEvent(CustomEvent evt);
+
+    #endregion
 }

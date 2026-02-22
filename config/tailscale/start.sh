@@ -1,80 +1,83 @@
 #!/bin/sh
 # Tailscale Sidecar Startup Script
-# This script starts tailscaled, configures tailscale serve for Homespun,
-# and optionally exposes Grafana if the PLG stack is running.
+# Generates a serve config JSON with resolved Docker IPs, then hands off
+# to containerboot for reliable netstack integration.
 #
 # Environment variables (from docker-compose.yml):
-#   TS_AUTHKEY   - Tailscale auth key for authentication
-#   TS_STATE_DIR - Directory for Tailscale state persistence
-#   TS_USERSPACE - Enable userspace networking (no /dev/net/tun needed)
+#   TS_AUTHKEY       - Tailscale auth key for authentication
+#   TS_STATE_DIR     - Directory for Tailscale state persistence
+#   TS_USERSPACE     - Enable userspace networking (no /dev/net/tun needed)
+#   TS_SERVE_CONFIG  - Path where serve config JSON is written
+#   TS_EXTRA_ARGS    - Extra arguments for tailscale up
 
 set -e
 
 echo "Starting Tailscale sidecar..."
 
-# Start tailscaled in userspace mode (background)
-# The official tailscale image has tailscaled in PATH
-tailscaled --state="${TS_STATE_DIR:-/var/lib/tailscale}/tailscaled.state" --tun=userspace-networking &
-
-# Wait for tailscaled socket to appear (up to 15 seconds)
-echo "Waiting for tailscaled to start..."
-for i in $(seq 1 15); do
-    if tailscale status >/dev/null 2>&1; then
-        echo "tailscaled is ready"
-        break
-    fi
-    sleep 1
-done
-
-# Verify tailscaled started
-if ! tailscale status >/dev/null 2>&1; then
-    echo "Error: tailscaled not ready after 15 seconds"
-    exit 1
-fi
-
-# Authenticate with Tailscale
-# TS_AUTHKEY is set via environment variable from docker-compose
-if [ -n "$TS_AUTHKEY" ]; then
-    echo "Connecting to Tailscale..."
-    tailscale up --authkey="$TS_AUTHKEY" --hostname="${HOSTNAME:-homespun}" --accept-routes --reset
-    echo "Tailscale connected as ${HOSTNAME:-homespun}"
-else
-    echo "Warning: TS_AUTHKEY not set, Tailscale will not connect"
-fi
-
-# Configure tailscale serve for Homespun
-# The depends_on in docker-compose.yml ensures homespun is healthy before we start,
-# but we still check to be safe
-echo "Configuring Tailscale serve for Homespun..."
+# Wait for Homespun health check (safety net alongside depends_on: service_healthy)
+echo "Waiting for Homespun to be healthy..."
 for i in $(seq 1 30); do
     if wget -q --spider http://homespun:8080/health 2>/dev/null; then
+        echo "Homespun is healthy"
         break
     fi
     echo "Waiting for Homespun health check... ($i/30)"
     sleep 2
 done
 
-echo "Enabling Tailscale HTTPS serve for Homespun..."
-tailscale serve --bg --https=443 http://homespun:8080 || true
-echo "Tailscale HTTPS proxy enabled on port 443 -> homespun:8080"
+# Resolve Docker hostnames to IPs.
+# In userspace networking mode, Tailscale's netstack handles DNS independently
+# and cannot resolve Docker DNS hostnames, so we must use IP addresses.
+HOMESPUN_IP=$(getent hosts homespun | awk '{print $1}')
+if [ -z "$HOMESPUN_IP" ]; then
+    echo "Error: Could not resolve homespun hostname to IP"
+    exit 1
+fi
+echo "Resolved homespun -> $HOMESPUN_IP"
 
-# If Grafana is reachable (PLG stack running), expose it too
-# Check periodically as Grafana may take time to start
-(
-    for i in $(seq 1 30); do
-        if wget -q --spider http://homespun-grafana:3000/api/health 2>/dev/null; then
-            echo "Enabling Tailscale HTTPS serve for Grafana..."
-            tailscale serve --bg --https=3000 http://homespun-grafana:3000 || true
-            echo "Tailscale HTTPS proxy enabled on port 3000 -> homespun-grafana:3000"
-            break
-        fi
-        sleep 2
-    done
-) &
+GRAFANA_IP=$(getent hosts homespun-grafana | awk '{print $1}' 2>/dev/null || true)
+if [ -n "$GRAFANA_IP" ]; then
+    echo "Resolved homespun-grafana -> $GRAFANA_IP"
+fi
 
-# Show Tailscale status
-tailscale status || true
+# Generate serve config JSON for containerboot.
+# containerboot substitutes ${TS_CERT_DOMAIN} with the actual Tailscale FQDN.
+# printf is used so ${TS_CERT_DOMAIN} stays literal (inside single-quoted format strings)
+# while resolved IPs are substituted via %s.
+SERVE_DIR=$(dirname "${TS_SERVE_CONFIG:-/tmp/serve/serve-config.json}")
+mkdir -p "$SERVE_DIR"
 
-# Keep container running
-echo "Tailscale sidecar running. Press Ctrl+C to stop."
-wait
+{
+  printf '{\n'
+  printf '  "TCP": {\n'
+  printf '    "443": { "HTTPS": true },\n'
+  printf '    "80": { "HTTP": true }'
+  if [ -n "$GRAFANA_IP" ]; then
+    printf ',\n    "3000": { "HTTPS": true }'
+  fi
+  printf '\n  },\n'
+  printf '  "Web": {\n'
+  printf '    "${TS_CERT_DOMAIN}:443": {\n'
+  printf '      "Handlers": { "/": { "Proxy": "http://%s:8080" } }\n' "$HOMESPUN_IP"
+  printf '    },\n'
+  printf '    "${TS_CERT_DOMAIN}:80": {\n'
+  printf '      "Handlers": { "/": { "Proxy": "http://%s:8080" } }\n' "$HOMESPUN_IP"
+  printf '    }'
+  if [ -n "$GRAFANA_IP" ]; then
+    printf ',\n    "${TS_CERT_DOMAIN}:3000": {\n'
+    printf '      "Handlers": { "/": { "Proxy": "http://%s:3000" } }\n' "$GRAFANA_IP"
+    printf '    }'
+  fi
+  printf '\n  }\n'
+  printf '}\n'
+} > "${TS_SERVE_CONFIG:-/tmp/serve/serve-config.json}"
+
+echo "Generated serve config:"
+cat "${TS_SERVE_CONFIG:-/tmp/serve/serve-config.json}"
+
+# Hand off to containerboot which handles:
+# - Starting tailscaled
+# - Running tailscale up (with TS_AUTHKEY, TS_HOSTNAME, TS_EXTRA_ARGS)
+# - Applying the serve config from TS_SERVE_CONFIG
+echo "Handing off to containerboot..."
+exec /usr/local/bin/containerboot

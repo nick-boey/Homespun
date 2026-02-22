@@ -1,5 +1,6 @@
 using Homespun.Features.ClaudeCode.Exceptions;
 using Homespun.Features.ClaudeCode.Services;
+using Homespun.Features.Secrets;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
@@ -16,12 +17,17 @@ public class DockerAgentExecutionServiceTests
 {
     private DockerAgentExecutionService _service = null!;
     private Mock<ILogger<DockerAgentExecutionService>> _loggerMock = null!;
+    private Mock<ISecretsService> _secretsServiceMock = null!;
     private DockerAgentExecutionOptions _options = null!;
 
     [SetUp]
     public void SetUp()
     {
         _loggerMock = new Mock<ILogger<DockerAgentExecutionService>>();
+        _secretsServiceMock = new Mock<ISecretsService>();
+        _secretsServiceMock
+            .Setup(s => s.GetSecretsForInjectionAsync(It.IsAny<string>()))
+            .ReturnsAsync(new Dictionary<string, string>());
         _options = new DockerAgentExecutionOptions
         {
             WorkerImage = "ghcr.io/nick-boey/homespun-worker:test",
@@ -35,7 +41,8 @@ public class DockerAgentExecutionServiceTests
 
         _service = new DockerAgentExecutionService(
             Options.Create(_options),
-            _loggerMock.Object);
+            _loggerMock.Object,
+            _secretsServiceMock.Object);
     }
 
     [TearDown]
@@ -123,7 +130,8 @@ public class DockerAgentExecutionServiceTests
         };
         var service = new DockerAgentExecutionService(
             Options.Create(options),
-            _loggerMock.Object);
+            _loggerMock.Object,
+            _secretsServiceMock.Object);
 
         // Act
         var result = service.TranslateToHostPath("/data/test-workspace");
@@ -143,7 +151,8 @@ public class DockerAgentExecutionServiceTests
         };
         var service = new DockerAgentExecutionService(
             Options.Create(options),
-            _loggerMock.Object);
+            _loggerMock.Object,
+            _secretsServiceMock.Object);
 
         // Act
         var result = service.TranslateToHostPath("/data/test-workspace");
@@ -163,7 +172,8 @@ public class DockerAgentExecutionServiceTests
         };
         var service = new DockerAgentExecutionService(
             Options.Create(options),
-            _loggerMock.Object);
+            _loggerMock.Object,
+            _secretsServiceMock.Object);
 
         // Act
         var result = service.TranslateToHostPath("/some/other/path");
@@ -183,7 +193,8 @@ public class DockerAgentExecutionServiceTests
         };
         var service = new DockerAgentExecutionService(
             Options.Create(options),
-            _loggerMock.Object);
+            _loggerMock.Object,
+            _secretsServiceMock.Object);
 
         // Act
         var result = service.TranslateToHostPath("/data");
@@ -203,7 +214,8 @@ public class DockerAgentExecutionServiceTests
         };
         var service = new DockerAgentExecutionService(
             Options.Create(options),
-            _loggerMock.Object);
+            _loggerMock.Object,
+            _secretsServiceMock.Object);
 
         // Act
         var result = service.TranslateToHostPath("/data/projects/feature-123/src");
@@ -430,7 +442,7 @@ public class DockerAgentExecutionServiceTests
             NetworkName = "bridge"
         };
         var service = new DockerAgentExecutionService(
-            Options.Create(options), _loggerMock.Object);
+            Options.Create(options), _loggerMock.Object, _secretsServiceMock.Object);
 
         // Act
         var args = service.BuildContainerDockerArgs(
@@ -557,7 +569,7 @@ public class DockerAgentExecutionServiceTests
             NetworkName = "bridge"
         };
         var service = new DockerAgentExecutionService(
-            Options.Create(options), _loggerMock.Object);
+            Options.Create(options), _loggerMock.Object, _secretsServiceMock.Object);
 
         // Act - workingDirectory points to clone/workdir
         var args = service.BuildContainerDockerArgs(
@@ -579,7 +591,7 @@ public class DockerAgentExecutionServiceTests
             NetworkName = "bridge"
         };
         var service = new DockerAgentExecutionService(
-            Options.Create(options), _loggerMock.Object);
+            Options.Create(options), _loggerMock.Object, _secretsServiceMock.Object);
 
         // Act
         var args = service.BuildContainerDockerArgs(
@@ -601,7 +613,7 @@ public class DockerAgentExecutionServiceTests
             NetworkName = "bridge"
         };
         var service = new DockerAgentExecutionService(
-            Options.Create(options), _loggerMock.Object);
+            Options.Create(options), _loggerMock.Object, _secretsServiceMock.Object);
 
         // Act
         var args = service.BuildContainerDockerArgs(
@@ -627,7 +639,7 @@ public class DockerAgentExecutionServiceTests
             NetworkName = "bridge"
         };
         var service = new DockerAgentExecutionService(
-            Options.Create(options), _loggerMock.Object);
+            Options.Create(options), _loggerMock.Object, _secretsServiceMock.Object);
 
         // Act - provide explicit claudePath separate from workingDirectory
         var args = service.BuildContainerDockerArgs(
@@ -652,7 +664,7 @@ public class DockerAgentExecutionServiceTests
             NetworkName = "bridge"
         };
         var service = new DockerAgentExecutionService(
-            Options.Create(options), _loggerMock.Object);
+            Options.Create(options), _loggerMock.Object, _secretsServiceMock.Object);
 
         // Act - provide an explicit claudePath that differs from what would be derived
         var args = service.BuildContainerDockerArgs(
@@ -665,6 +677,17 @@ public class DockerAgentExecutionServiceTests
         Assert.That(args, Does.Contain("-v \"/data/different/issue/.claude:/home/homespun/.claude\""));
         // Should NOT use the derived path
         Assert.That(args, Does.Not.Contain("-v \"/data/some/path/.claude:/home/homespun/.claude\""));
+    }
+
+    [Test]
+    public void BuildContainerDockerArgs_IncludesPromtailLoggingLabel()
+    {
+        // Act
+        var args = _service.BuildContainerDockerArgs(
+            "test-container", "/data/some/path", useRm: false);
+
+        // Assert - worker containers need the logging=promtail label for Promtail discovery
+        Assert.That(args, Does.Contain("--label logging=promtail"));
     }
 
     [Test]
@@ -1058,9 +1081,12 @@ public class AnswerQuestionAsyncTests
     {
         // Arrange
         var loggerMock = new Mock<ILogger<DockerAgentExecutionService>>();
+        var secretsServiceMock = new Mock<ISecretsService>();
+        secretsServiceMock.Setup(s => s.GetSecretsForInjectionAsync(It.IsAny<string>()))
+            .ReturnsAsync(new Dictionary<string, string>());
         var options = new DockerAgentExecutionOptions();
         var service = new DockerAgentExecutionService(
-            Options.Create(options), loggerMock.Object);
+            Options.Create(options), loggerMock.Object, secretsServiceMock.Object);
 
         // Act
         var result = await service.AnswerQuestionAsync("non-existent-session",
@@ -1103,9 +1129,12 @@ public class ApprovePlanAsyncTests
     {
         // Arrange
         var loggerMock = new Mock<ILogger<DockerAgentExecutionService>>();
+        var secretsServiceMock = new Mock<ISecretsService>();
+        secretsServiceMock.Setup(s => s.GetSecretsForInjectionAsync(It.IsAny<string>()))
+            .ReturnsAsync(new Dictionary<string, string>());
         var options = new DockerAgentExecutionOptions();
         var service = new DockerAgentExecutionService(
-            Options.Create(options), loggerMock.Object);
+            Options.Create(options), loggerMock.Object, secretsServiceMock.Object);
 
         // Act
         var result = await service.ApprovePlanAsync("non-existent-session", true, true);

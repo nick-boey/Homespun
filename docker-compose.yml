@@ -69,11 +69,14 @@ services:
     image: tailscale/tailscale:latest
     container_name: homespun-tailscale
     profiles: ["tailscale"]
-    hostname: ${TS_HOSTNAME:-homespun}
+    hostname: homespun-tailscale
     environment:
       - TS_AUTHKEY=${TAILSCALE_AUTH_KEY:-}
+      - TS_HOSTNAME=${TS_HOSTNAME:-homespun}
       - TS_STATE_DIR=/var/lib/tailscale
       - TS_USERSPACE=true
+      - TS_SERVE_CONFIG=/tmp/serve/serve-config.json
+      - TS_EXTRA_ARGS=--accept-routes --reset
     volumes:
       - tailscale-state:/var/lib/tailscale
       - ./config/tailscale:/config:ro
