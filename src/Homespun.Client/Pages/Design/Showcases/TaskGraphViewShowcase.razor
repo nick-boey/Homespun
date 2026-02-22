@@ -92,7 +92,40 @@
     </div>
 </div>
 
+<div class="showcase-section">
+    <h3>Type Change Menu</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Click the type badge (Bug, Task, Feat, Chore) to open dropdown menu for changing issue type</div>
+        <div class="showcase-preview">
+            <TaskGraphView TaskGraph="@_typeChangeDemo" ProjectId="demo-project" OnIssueTypeChanged="HandleTypeChanged" />
+            @if (_typeChangeMessage != null)
+            {
+                <div class="mt-2 text-sm text-green-500">@_typeChangeMessage</div>
+            }
+        </div>
+    </div>
+</div>
+
 @code {
+    private string? _typeChangeMessage;
+
+    private void HandleTypeChanged()
+    {
+        _typeChangeMessage = $"Type changed at {DateTime.Now:HH:mm:ss}";
+        StateHasChanged();
+    }
+
+    private TaskGraphResponse _typeChangeDemo = new()
+    {
+        TotalLanes = 1,
+        Nodes =
+        [
+            new() { Issue = new() { Id = "TYPE-001", Title = "Bug issue - click badge to change type", Status = IssueStatus.Open, Type = IssueType.Bug }, Lane = 0, Row = 0, IsActionable = true },
+            new() { Issue = new() { Id = "TYPE-002", Title = "Task issue - click badge to change type", Status = IssueStatus.Open, Type = IssueType.Task }, Lane = 0, Row = 1, IsActionable = true },
+            new() { Issue = new() { Id = "TYPE-003", Title = "Feature issue - click badge to change type", Status = IssueStatus.Open, Type = IssueType.Feature }, Lane = 0, Row = 2, IsActionable = true },
+            new() { Issue = new() { Id = "TYPE-004", Title = "Chore issue - click badge to change type", Status = IssueStatus.Open, Type = IssueType.Chore }, Lane = 0, Row = 3, IsActionable = true }
+        ]
+    };
     private TaskGraphResponse _singleOrphan = new()
     {
         TotalLanes = 1,
