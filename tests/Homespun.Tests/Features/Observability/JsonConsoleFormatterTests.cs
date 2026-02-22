@@ -265,7 +265,25 @@ public class JsonConsoleFormatterTests
         Assert.That(root.TryGetProperty("Level", out _), Is.True, "Should have Level field");
         Assert.That(root.TryGetProperty("Message", out _), Is.True, "Should have Message field");
         Assert.That(root.TryGetProperty("SourceContext", out _), Is.True, "Should have SourceContext field");
+        Assert.That(root.TryGetProperty("Component", out _), Is.True, "Should have Component field");
         Assert.That(root.TryGetProperty("Exception", out _), Is.True, "Should have Exception field");
+    }
+
+    [Test]
+    public void Write_IncludesComponentFieldSetToServer()
+    {
+        // Arrange
+        var logEntry = CreateLogEntry(
+            LogLevel.Information,
+            "TestCategory",
+            "Test message");
+
+        // Act
+        _formatter.Write(logEntry, null, _output);
+
+        // Assert
+        var json = JsonDocument.Parse(_output.ToString().Trim());
+        Assert.That(json.RootElement.GetProperty("Component").GetString(), Is.EqualTo("Server"));
     }
 
     private static LogEntry<string> CreateLogEntry(

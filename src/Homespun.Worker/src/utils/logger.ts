@@ -3,6 +3,7 @@ interface LogEntry {
   Level: string;
   Message: string;
   SourceContext: string;
+  Component: string;
   Exception?: string;
 }
 
@@ -24,6 +25,7 @@ function formatLog(level: string, message: string, error?: unknown): string {
     Level: level,
     Message: message,
     SourceContext: file,
+    Component: 'Worker',
   };
   if (error) {
     entry.Exception = error instanceof Error ? error.message : String(error);

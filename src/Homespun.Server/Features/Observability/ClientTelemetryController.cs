@@ -48,6 +48,7 @@ public class ClientTelemetryController : ControllerBase
             Level = evt.Type == TelemetryEventType.Exception ? "Error" : "Information",
             Message = $"ClientTelemetry: {evt.Type} - {evt.Name}",
             SourceContext = "ClientTelemetry",
+            Component = "Client",
             TelemetryType = evt.Type.ToString(),
             TelemetryName = evt.Name,
             SessionId = sessionId ?? "unknown",
@@ -70,6 +71,7 @@ internal sealed class ClientTelemetryLogEntry
     public required string Level { get; init; }
     public required string Message { get; init; }
     public required string SourceContext { get; init; }
+    public required string Component { get; init; }
     public required string TelemetryType { get; init; }
     public required string TelemetryName { get; init; }
     public required string SessionId { get; init; }
