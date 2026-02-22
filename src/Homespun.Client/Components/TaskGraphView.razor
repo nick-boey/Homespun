@@ -3,6 +3,7 @@
 @using Homespun.Shared.Models.Sessions
 @using Homespun.Client.Services
 @using Homespun.Shared.Requests
+@using Homespun.Shared.Utilities
 @using Fleece.Core.Models
 @inject HttpIssueApiService IssueApi
 
@@ -81,12 +82,15 @@
                 @* Show inline create above this issue if creating above selected *@
                 @if (_isCreatingInline && _inlineCreateAbove && issueLine.IssueId == _selectedIssueIdForCreate)
                 {
+                    var aboveParentInfo = GetInheritedParentInfo(issueLine.IssueId, insertAbove: true);
                     <InlineIssueCreateInput ProjectId="@ProjectId"
                                             InsertIndex="@index"
                                             InsertAbove="true"
                                             AdjacentIssueId="@GetAdjacentIssueId(index, true)"
                                             CanMoveUp="@CanMoveUp(index, true)"
                                             CanMoveDown="@CanMoveDown(index, true)"
+                                            InheritedParentIssueId="@aboveParentInfo.ParentId"
+                                            InheritedParentSortOrder="@aboveParentInfo.SortOrder"
                                             OnCancel="CancelInlineCreate"
                                             OnCreated="HandleInlineIssueCreated" />
                 }
@@ -153,12 +157,15 @@
                 @* Show inline create below this issue if creating below selected *@
                 @if (_isCreatingInline && !_inlineCreateAbove && issueLine.IssueId == _selectedIssueIdForCreate)
                 {
+                    var belowParentInfo = GetInheritedParentInfo(issueLine.IssueId, insertAbove: false);
                     <InlineIssueCreateInput ProjectId="@ProjectId"
                                             InsertIndex="@(index + 1)"
                                             InsertAbove="false"
                                             AdjacentIssueId="@GetAdjacentIssueId(index, false)"
                                             CanMoveUp="@CanMoveUp(index, false)"
                                             CanMoveDown="@CanMoveDown(index, false)"
+                                            InheritedParentIssueId="@belowParentInfo.ParentId"
+                                            InheritedParentSortOrder="@belowParentInfo.SortOrder"
                                             OnCancel="CancelInlineCreate"
                                             OnCreated="HandleInlineIssueCreated" />
                 }
@@ -665,6 +672,58 @@
 
         // Notify parent to refresh and select the new issue
         await OnIssueCreated.InvokeAsync(newIssueId);
+    }
+
+    /// <summary>
+    /// Gets inherited parent info from the reference issue for sibling creation.
+    /// When the reference issue has a parent, the new sibling should inherit that parent.
+    /// For series-mode parents, computes an appropriate sort order between adjacent siblings.
+    /// </summary>
+    private (string? ParentId, string? SortOrder) GetInheritedParentInfo(string issueId, bool insertAbove)
+    {
+        if (TaskGraph == null) return (null, null);
+
+        // Find the reference issue in the task graph nodes
+        var node = TaskGraph.Nodes.FirstOrDefault(n => n.Issue.Id == issueId);
+        if (node == null || node.Issue.ParentIssues.Count == 0)
+        {
+            return (null, null);
+        }
+
+        // Take the first parent
+        var parentRef = node.Issue.ParentIssues[0];
+        var parentId = parentRef.ParentIssue;
+        var refSortOrder = parentRef.SortOrder;
+
+        // Find all siblings under the same parent, sorted by sort order
+        var siblings = TaskGraph.Nodes
+            .Where(n => n.Issue.ParentIssues.Any(p => p.ParentIssue == parentId))
+            .Select(n => new
+            {
+                n.Issue.Id,
+                SortOrder = n.Issue.ParentIssues.First(p => p.ParentIssue == parentId).SortOrder ?? "0"
+            })
+            .OrderBy(s => s.SortOrder, StringComparer.Ordinal)
+            .ToList();
+
+        var refIndex = siblings.FindIndex(s => s.Id == issueId);
+        if (refIndex < 0) return (parentId, refSortOrder);
+
+        string? sortOrder;
+        if (insertAbove)
+        {
+            // Creating above: midpoint between previous sibling and reference
+            var prevSortOrder = refIndex > 0 ? siblings[refIndex - 1].SortOrder : null;
+            sortOrder = LexOrderUtils.ComputeMidpoint(prevSortOrder, siblings[refIndex].SortOrder);
+        }
+        else
+        {
+            // Creating below: midpoint between reference and next sibling
+            var nextSortOrder = refIndex < siblings.Count - 1 ? siblings[refIndex + 1].SortOrder : null;
+            sortOrder = LexOrderUtils.ComputeMidpoint(siblings[refIndex].SortOrder, nextSortOrder);
+        }
+
+        return (parentId, sortOrder);
     }
 
     /// <summary>

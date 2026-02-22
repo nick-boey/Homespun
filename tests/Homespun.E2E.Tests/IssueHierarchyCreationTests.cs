@@ -23,7 +23,7 @@ public class IssueResponseDto
     public List<ParentIssueRefDto> ParentIssues { get; set; } = [];
 
     [JsonPropertyName("executionMode")]
-    public string? ExecutionMode { get; set; }
+    public int? ExecutionMode { get; set; }
 }
 
 /// <summary>
@@ -913,6 +913,172 @@ public class IssueHierarchyCreationTests : PageTest
         // New issue should have adjacent as parent
         Assert.That(newNode!.Issue.ParentIssues.Any(p => p.ParentIssue == adjacentIssueId), Is.True,
             $"New issue should have '{adjacentIssueId}' as its parent. Actual parents: [{string.Join(", ", newNode.Issue.ParentIssues.Select(p => p.ParentIssue))}]");
+    }
+
+    #endregion
+
+    #region Sibling Inheritance Tests
+
+    /// <summary>
+    /// Test: Create issue BELOW a non-root issue without Tab/Shift+Tab inherits the same parent.
+    /// When pressing 'o' on e2e/child1 (child of e2e/parent1, parallel mode), the new sibling
+    /// should also have e2e/parent1 as its parent.
+    /// </summary>
+    [Test]
+    public async Task CreateBelowWithoutTab_OnNonRootIssue_ParallelMode_InheritsParent()
+    {
+        await NavigateToProjectAsync();
+
+        // Navigate to e2e/child1 which is a child of e2e/parent1 (parallel mode)
+        await NavigateToIssueAsync("e2e/child1");
+
+        var newTitle = GenerateIssueTitle("Sibling Below Child1");
+        await CreateIssueWithKeyboardAsync(createAbove: false, laneModifier: 0, title: newTitle);
+
+        // Verify new issue was created and has e2e/parent1 as parent (inherited from sibling)
+        var newNode = await FindIssueByTitleAsync("Sibling Below Child1");
+        Assert.That(newNode, Is.Not.Null, "New sibling issue should appear in task graph");
+
+        Assert.That(newNode!.Issue.ParentIssues.Any(p => p.ParentIssue == "e2e/parent1"), Is.True,
+            $"New sibling should inherit parent 'e2e/parent1' from adjacent issue. " +
+            $"Actual parents: [{string.Join(", ", newNode.Issue.ParentIssues.Select(p => p.ParentIssue))}]");
+    }
+
+    /// <summary>
+    /// Test: Create issue ABOVE a non-root issue without Tab/Shift+Tab inherits the same parent.
+    /// When pressing Shift+O on e2e/child2 (child of e2e/parent1, parallel mode), the new sibling
+    /// should also have e2e/parent1 as its parent.
+    /// </summary>
+    [Test]
+    public async Task CreateAboveWithoutTab_OnNonRootIssue_ParallelMode_InheritsParent()
+    {
+        await NavigateToProjectAsync();
+
+        // Navigate to e2e/child2 which is a child of e2e/parent1 (parallel mode)
+        await NavigateToIssueAsync("e2e/child2");
+
+        var newTitle = GenerateIssueTitle("Sibling Above Child2");
+        await CreateIssueWithKeyboardAsync(createAbove: true, laneModifier: 0, title: newTitle);
+
+        // Verify new issue was created and has e2e/parent1 as parent (inherited from sibling)
+        var newNode = await FindIssueByTitleAsync("Sibling Above Child2");
+        Assert.That(newNode, Is.Not.Null, "New sibling issue should appear in task graph");
+
+        Assert.That(newNode!.Issue.ParentIssues.Any(p => p.ParentIssue == "e2e/parent1"), Is.True,
+            $"New sibling should inherit parent 'e2e/parent1' from adjacent issue. " +
+            $"Actual parents: [{string.Join(", ", newNode.Issue.ParentIssues.Select(p => p.ParentIssue))}]");
+    }
+
+    /// <summary>
+    /// Test: Create issue BELOW a non-root issue in series mode inherits parent with correct sort order.
+    /// When pressing 'o' on e2e/series-child1 (sort "0", child of e2e/series-parent), the new sibling
+    /// should have e2e/series-parent as parent with sort order between "0" (child1) and "1" (child2).
+    /// </summary>
+    [Test]
+    public async Task CreateBelowWithoutTab_OnNonRootIssue_SeriesMode_InheritsParentWithSortOrder()
+    {
+        await NavigateToProjectAsync();
+
+        // Navigate to e2e/series-child1 (child of e2e/series-parent, sort order "0")
+        await NavigateToIssueAsync("e2e/series-child1");
+
+        var newTitle = GenerateIssueTitle("Series Sibling Below");
+        await CreateIssueWithKeyboardAsync(createAbove: false, laneModifier: 0, title: newTitle);
+
+        // Verify new issue was created and has e2e/series-parent as parent
+        var newNode = await FindIssueByTitleAsync("Series Sibling Below");
+        Assert.That(newNode, Is.Not.Null, "New sibling issue should appear in task graph");
+
+        var parentRef = newNode!.Issue.ParentIssues.FirstOrDefault(p => p.ParentIssue == "e2e/series-parent");
+        Assert.That(parentRef, Is.Not.Null,
+            $"New sibling should inherit parent 'e2e/series-parent' from adjacent issue. " +
+            $"Actual parents: [{string.Join(", ", newNode.Issue.ParentIssues.Select(p => p.ParentIssue))}]");
+
+        // Sort order should be between "0" (series-child1) and "1" (series-child2)
+        Assert.That(string.Compare(parentRef!.SortOrder, "0", StringComparison.Ordinal), Is.GreaterThan(0),
+            $"Sort order '{parentRef.SortOrder}' should be lexicographically after '0' (series-child1)");
+        Assert.That(string.Compare(parentRef.SortOrder, "1", StringComparison.Ordinal), Is.LessThan(0),
+            $"Sort order '{parentRef.SortOrder}' should be lexicographically before '1' (series-child2)");
+    }
+
+    /// <summary>
+    /// Test: Create issue ABOVE a non-root issue in series mode inherits parent with correct sort order.
+    /// When pressing Shift+O on e2e/series-child2 (sort "1", child of e2e/series-parent), the new sibling
+    /// should have e2e/series-parent as parent with sort order between "0" (child1) and "1" (child2).
+    /// </summary>
+    [Test]
+    public async Task CreateAboveWithoutTab_OnNonRootIssue_SeriesMode_InheritsParentWithSortOrder()
+    {
+        await NavigateToProjectAsync();
+
+        // Navigate to e2e/series-child2 (child of e2e/series-parent, sort order "1")
+        await NavigateToIssueAsync("e2e/series-child2");
+
+        var newTitle = GenerateIssueTitle("Series Sibling Above");
+        await CreateIssueWithKeyboardAsync(createAbove: true, laneModifier: 0, title: newTitle);
+
+        // Verify new issue was created and has e2e/series-parent as parent
+        var newNode = await FindIssueByTitleAsync("Series Sibling Above");
+        Assert.That(newNode, Is.Not.Null, "New sibling issue should appear in task graph");
+
+        var parentRef = newNode!.Issue.ParentIssues.FirstOrDefault(p => p.ParentIssue == "e2e/series-parent");
+        Assert.That(parentRef, Is.Not.Null,
+            $"New sibling should inherit parent 'e2e/series-parent' from adjacent issue. " +
+            $"Actual parents: [{string.Join(", ", newNode.Issue.ParentIssues.Select(p => p.ParentIssue))}]");
+
+        // Sort order should be between "0" (series-child1) and "1" (series-child2)
+        Assert.That(string.Compare(parentRef!.SortOrder, "0", StringComparison.Ordinal), Is.GreaterThan(0),
+            $"Sort order '{parentRef.SortOrder}' should be lexicographically after '0' (series-child1)");
+        Assert.That(string.Compare(parentRef.SortOrder, "1", StringComparison.Ordinal), Is.LessThan(0),
+            $"Sort order '{parentRef.SortOrder}' should be lexicographically before '1' (series-child2)");
+    }
+
+    /// <summary>
+    /// Test: Create issue BELOW a root-level issue without Tab/Shift+Tab stays root-level.
+    /// Regression guard: sibling of a root issue should have no parents.
+    /// </summary>
+    [Test]
+    public async Task CreateBelowWithoutTab_OnRootIssue_RemainsRootLevel()
+    {
+        await NavigateToProjectAsync();
+
+        // Navigate to e2e/orphan which has no parents (root issue)
+        await NavigateToIssueAsync("e2e/orphan");
+
+        var newTitle = GenerateIssueTitle("Root Sibling Below");
+        await CreateIssueWithKeyboardAsync(createAbove: false, laneModifier: 0, title: newTitle);
+
+        // Verify new issue was created with no parents (sibling of root stays root)
+        var newNode = await FindIssueByTitleAsync("Root Sibling Below");
+        Assert.That(newNode, Is.Not.Null, "New sibling issue should appear in task graph");
+
+        Assert.That(newNode!.Issue.ParentIssues, Is.Empty,
+            $"Sibling of root issue should have no parents. " +
+            $"Actual parents: [{string.Join(", ", newNode.Issue.ParentIssues.Select(p => p.ParentIssue))}]");
+    }
+
+    /// <summary>
+    /// Test: Create issue BELOW the second child of a parallel parent inherits parent.
+    /// Verifies inheritance works for any child position, not just the first child.
+    /// </summary>
+    [Test]
+    public async Task CreateBelowWithoutTab_OnSecondChild_ParallelMode_InheritsParent()
+    {
+        await NavigateToProjectAsync();
+
+        // Navigate to e2e/child2 (second child of e2e/parent1)
+        await NavigateToIssueAsync("e2e/child2");
+
+        var newTitle = GenerateIssueTitle("Sibling Below Child2");
+        await CreateIssueWithKeyboardAsync(createAbove: false, laneModifier: 0, title: newTitle);
+
+        // Verify new issue was created and has e2e/parent1 as parent (inherited from sibling)
+        var newNode = await FindIssueByTitleAsync("Sibling Below Child2");
+        Assert.That(newNode, Is.Not.Null, "New sibling issue should appear in task graph");
+
+        Assert.That(newNode!.Issue.ParentIssues.Any(p => p.ParentIssue == "e2e/parent1"), Is.True,
+            $"New sibling should inherit parent 'e2e/parent1' from second child. " +
+            $"Actual parents: [{string.Join(", ", newNode.Issue.ParentIssues.Select(p => p.ParentIssue))}]");
     }
 
     #endregion

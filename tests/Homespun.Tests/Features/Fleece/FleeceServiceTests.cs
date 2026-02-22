@@ -475,6 +475,36 @@ public class FleeceServiceTests
         Assert.That(parentIds, Does.Contain(parent2.Id));
     }
 
+    [Test]
+    public async Task AddParentAsync_WithSortOrder_UsesSortOrder()
+    {
+        // Arrange
+        var child = await _service.CreateIssueAsync(_tempDir, "Child Issue", IssueType.Task);
+        var parent = await _service.CreateIssueAsync(_tempDir, "Parent Issue", IssueType.Task);
+
+        // Act
+        var updated = await _service.AddParentAsync(_tempDir, child.Id, parent.Id, sortOrder: "0V");
+
+        // Assert
+        Assert.That(updated.ParentIssues, Has.Count.EqualTo(1));
+        Assert.That(updated.ParentIssues[0].SortOrder, Is.EqualTo("0V"));
+    }
+
+    [Test]
+    public async Task AddParentAsync_WithoutSortOrder_DefaultsToZero()
+    {
+        // Arrange
+        var child = await _service.CreateIssueAsync(_tempDir, "Child Issue", IssueType.Task);
+        var parent = await _service.CreateIssueAsync(_tempDir, "Parent Issue", IssueType.Task);
+
+        // Act
+        var updated = await _service.AddParentAsync(_tempDir, child.Id, parent.Id);
+
+        // Assert
+        Assert.That(updated.ParentIssues, Has.Count.EqualTo(1));
+        Assert.That(updated.ParentIssues[0].SortOrder, Is.EqualTo("0"));
+    }
+
     #endregion
 
     #region RemoveParentAsync Tests

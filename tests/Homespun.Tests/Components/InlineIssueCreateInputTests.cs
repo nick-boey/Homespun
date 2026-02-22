@@ -205,6 +205,63 @@ public class InlineIssueCreateInputTests : BunitTestContext
     }
 
     [Test]
+    public void Submit_WithInheritedParent_NoTab_SetsParentIssueId()
+    {
+        var cut = Render<InlineIssueCreateInput>(DefaultParams(p =>
+        {
+            p.Add(x => x.InheritedParentIssueId, "parent-1");
+            p.Add(x => x.InheritedParentSortOrder, "0V");
+            p.Add(x => x.OnCreated, EventCallback.Factory.Create<string>(this, _ => { }));
+        }));
+
+        var input = cut.Find("[data-testid='inline-issue-input']");
+
+        // Type and submit without Tab/Shift+Tab
+        input.Input("New Sibling Issue");
+        input.KeyDown(Key.Enter);
+
+        cut.WaitForState(() => _mockHandler.CapturedRequests.Any(r => r.Method == HttpMethod.Post));
+
+        var postRequest = _mockHandler.CapturedRequests.First(r => r.Method == HttpMethod.Post);
+        var body = postRequest.BodyAs<CreateIssueRequest>();
+        Assert.That(body, Is.Not.Null);
+        Assert.That(body!.ParentIssueId, Is.EqualTo("parent-1"),
+            "Sibling should inherit parent from reference issue");
+        Assert.That(body.ParentSortOrder, Is.EqualTo("0V"),
+            "Sibling should inherit sort order from reference issue");
+    }
+
+    [Test]
+    public void Submit_WithTab_OverridesInheritedParent()
+    {
+        var cut = Render<InlineIssueCreateInput>(DefaultParams(p =>
+        {
+            p.Add(x => x.InheritedParentIssueId, "parent-1");
+            p.Add(x => x.InheritedParentSortOrder, "0V");
+            p.Add(x => x.OnCreated, EventCallback.Factory.Create<string>(this, _ => { }));
+        }));
+
+        var input = cut.Find("[data-testid='inline-issue-input']");
+
+        // Press Tab to become parent (overrides inheritance)
+        input.KeyDown(new KeyboardEventArgs { Key = "Tab", ShiftKey = false });
+
+        // Type and submit
+        input.Input("New Parent Issue");
+        input.KeyDown(Key.Enter);
+
+        cut.WaitForState(() => _mockHandler.CapturedRequests.Any(r => r.Method == HttpMethod.Post));
+
+        var postRequest = _mockHandler.CapturedRequests.First(r => r.Method == HttpMethod.Post);
+        var body = postRequest.BodyAs<CreateIssueRequest>();
+        Assert.That(body, Is.Not.Null);
+        Assert.That(body!.ChildIssueId, Is.EqualTo("adjacent-123"),
+            "Tab (parent) should set ChildIssueId, not inherited parent");
+        Assert.That(body.ParentIssueId, Is.Null,
+            "Tab (parent) should NOT set ParentIssueId");
+    }
+
+    [Test]
     public void Submit_WithShiftTabPressed_SetsParentIssueId()
     {
         var cut = Render<InlineIssueCreateInput>(DefaultParams(p =>

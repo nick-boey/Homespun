@@ -48,6 +48,11 @@ public class CreateIssueRequest
     public string? ParentIssueId { get; set; }
 
     /// <summary>
+    /// Optional sort order for the parent relationship. Used when creating siblings in series-mode parents.
+    /// </summary>
+    public string? ParentSortOrder { get; set; }
+
+    /// <summary>
     /// Optional child issue ID. If provided, the new issue will become the parent of this issue.
     /// </summary>
     public string? ChildIssueId { get; set; }

@@ -139,7 +139,7 @@ public interface IFleeceService
     /// <param name="ct">Cancellation token</param>
     /// <returns>The updated child issue with the new parent relationship.</returns>
     /// <exception cref="KeyNotFoundException">If the child issue is not found.</exception>
-    Task<Issue> AddParentAsync(string projectPath, string childId, string parentId, CancellationToken ct = default);
+    Task<Issue> AddParentAsync(string projectPath, string childId, string parentId, string? sortOrder = null, CancellationToken ct = default);
 
     /// <summary>
     /// Removes a parent relationship from an issue.

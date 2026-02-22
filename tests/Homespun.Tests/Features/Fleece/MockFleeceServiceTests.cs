@@ -183,6 +183,30 @@ public class MockFleeceServiceTests
         Assert.That(retrieved.AssignedTo, Is.EqualTo("assignee"));
     }
 
+    [Test]
+    public async Task AddParentAsync_WithSortOrder_UsesSortOrder()
+    {
+        var parent = await _service.CreateIssueAsync(ProjectPath, "Parent", IssueType.Feature);
+        var child = await _service.CreateIssueAsync(ProjectPath, "Child", IssueType.Task);
+
+        var updated = await _service.AddParentAsync(ProjectPath, child.Id, parent.Id, sortOrder: "0V");
+
+        Assert.That(updated.ParentIssues, Has.Count.EqualTo(1));
+        Assert.That(updated.ParentIssues[0].SortOrder, Is.EqualTo("0V"));
+    }
+
+    [Test]
+    public async Task AddParentAsync_WithoutSortOrder_DefaultsToZero()
+    {
+        var parent = await _service.CreateIssueAsync(ProjectPath, "Parent", IssueType.Feature);
+        var child = await _service.CreateIssueAsync(ProjectPath, "Child", IssueType.Task);
+
+        var updated = await _service.AddParentAsync(ProjectPath, child.Id, parent.Id);
+
+        Assert.That(updated.ParentIssues, Has.Count.EqualTo(1));
+        Assert.That(updated.ParentIssues[0].SortOrder, Is.EqualTo("0"));
+    }
+
     #endregion
 
     #region RemoveParent Preserves Fields

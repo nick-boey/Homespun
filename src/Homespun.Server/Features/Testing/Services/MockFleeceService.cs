@@ -253,7 +253,7 @@ public class MockFleeceService : IFleeceService
         return Task.FromResult(true);
     }
 
-    public Task<Issue> AddParentAsync(string projectPath, string childId, string parentId, CancellationToken ct = default)
+    public Task<Issue> AddParentAsync(string projectPath, string childId, string parentId, string? sortOrder = null, CancellationToken ct = default)
     {
         _logger.LogDebug("[Mock] AddParent {ParentId} to {ChildId} in {ProjectPath}", parentId, childId, projectPath);
 
@@ -274,7 +274,7 @@ public class MockFleeceService : IFleeceService
 
             // Create a new list with the added parent
             var newParentIssues = existing.ParentIssues.ToList();
-            newParentIssues.Add(new ParentIssueRef { ParentIssue = parentId, SortOrder = "0" });
+            newParentIssues.Add(new ParentIssueRef { ParentIssue = parentId, SortOrder = sortOrder ?? "0" });
 
             // Create a new issue with the updated parent list (Issue has init-only properties)
             var updated = new Issue

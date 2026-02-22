@@ -370,7 +370,7 @@ public sealed class FleeceService : IFleeceService, IDisposable
         return deleted;
     }
 
-    public async Task<Issue> AddParentAsync(string projectPath, string childId, string parentId, CancellationToken ct = default)
+    public async Task<Issue> AddParentAsync(string projectPath, string childId, string parentId, string? sortOrder = null, CancellationToken ct = default)
     {
         var cache = await EnsureCacheLoadedAsync(projectPath, ct);
 
@@ -383,7 +383,7 @@ public sealed class FleeceService : IFleeceService, IDisposable
 
         // Build the new parent issues list with the added parent
         var newParentIssues = existingIssue.ParentIssues.ToList();
-        newParentIssues.Add(new ParentIssueRef { ParentIssue = parentId, SortOrder = "0" });
+        newParentIssues.Add(new ParentIssueRef { ParentIssue = parentId, SortOrder = sortOrder ?? "0" });
 
         // Perform the update via Fleece.Core
         var service = GetOrCreateIssueService(projectPath);
@@ -406,7 +406,7 @@ public sealed class FleeceService : IFleeceService, IDisposable
                     var updatedParents = currentIssue.ParentIssues.ToList();
                     if (!updatedParents.Any(p => p.ParentIssue == parentId))
                     {
-                        updatedParents.Add(new ParentIssueRef { ParentIssue = parentId, SortOrder = "0" });
+                        updatedParents.Add(new ParentIssueRef { ParentIssue = parentId, SortOrder = sortOrder ?? "0" });
                         await svc.UpdateAsync(childId, parentIssues: updatedParents, cancellationToken: innerCt);
                     }
                 }

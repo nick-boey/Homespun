@@ -141,6 +141,18 @@
     [Parameter] public bool CanMoveDown { get; set; }
 
     /// <summary>
+    /// Inherited parent issue ID from the reference issue's parent.
+    /// When creating a sibling (no Tab/Shift+Tab), this parent is inherited.
+    /// </summary>
+    [Parameter] public string? InheritedParentIssueId { get; set; }
+
+    /// <summary>
+    /// Inherited sort order for the parent relationship.
+    /// Used for series-mode parents to position the new sibling between adjacent siblings.
+    /// </summary>
+    [Parameter] public string? InheritedParentSortOrder { get; set; }
+
+    /// <summary>
     /// Called when the user cancels (Escape or blur without submitting).
     /// </summary>
     [Parameter] public EventCallback OnCancel { get; set; }
@@ -251,6 +263,12 @@
             {
                 // New issue becomes child of adjacent issue
                 request.ParentIssueId = AdjacentIssueId;
+            }
+            else if (!string.IsNullOrEmpty(InheritedParentIssueId))
+            {
+                // Sibling case: inherit parent from reference issue
+                request.ParentIssueId = InheritedParentIssueId;
+                request.ParentSortOrder = InheritedParentSortOrder;
             }
 
             var createdIssue = await IssueApi.CreateIssueAsync(request);
