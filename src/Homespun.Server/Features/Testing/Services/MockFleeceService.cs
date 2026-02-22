@@ -344,12 +344,11 @@ public class MockFleeceService : IFleeceService
             return Task.FromResult<TaskGraph?>(null);
         }
 
-        // Build a mock TaskGraph - use a MockIssueService to satisfy the TaskGraphService dependencies
+        // Build a mock TaskGraph using the MockIssueServiceAdapter
+        // Graph methods are now part of IIssueService in Fleece.Core v1.4.0
         var mockIssueService = new MockIssueServiceAdapter(openIssues);
-        var nextService = new NextService(mockIssueService);
-        var taskGraphService = new TaskGraphService(mockIssueService, nextService);
 
-        return taskGraphService.BuildGraphAsync(ct);
+        return mockIssueService.BuildTaskGraphLayoutAsync(ct);
     }
 
     private string GenerateIssueId(IssueType type)
@@ -369,22 +368,32 @@ public class MockFleeceService : IFleeceService
 }
 
 /// <summary>
-/// Adapter to satisfy IIssueService interface for TaskGraphService with a list of in-memory issues.
-/// Only implements the read methods required by TaskGraphService; write methods throw NotImplementedException.
+/// Adapter to satisfy IIssueService interface with a list of in-memory issues.
+/// Uses Fleece.Core's IssueService via IssueServiceFactory with a mock storage service
+/// to provide full graph functionality (BuildTaskGraphLayoutAsync, etc.).
 /// </summary>
-internal class MockIssueServiceAdapter(IReadOnlyList<Issue> issues) : IIssueService
+internal class MockIssueServiceAdapter : IIssueService
 {
+    private readonly IIssueService _innerService;
+
+    public MockIssueServiceAdapter(IReadOnlyList<Issue> issues)
+    {
+        // Create a mock storage service that returns our issues
+        var mockStorage = new InMemoryStorageService(issues);
+        var idGenerator = new Sha256IdGenerator();
+        var gitConfigService = new GitConfigService();
+        _innerService = new IssueService(mockStorage, idGenerator, gitConfigService);
+    }
+
+    // Delegate all methods to the inner IssueService which has full graph implementation
     public Task<IReadOnlyList<Issue>> GetAllAsync(CancellationToken cancellationToken = default)
-        => Task.FromResult(issues);
+        => _innerService.GetAllAsync(cancellationToken);
 
     public Task<Issue?> GetByIdAsync(string id, CancellationToken cancellationToken = default)
-        => Task.FromResult(issues.FirstOrDefault(i => i.Id == id));
+        => _innerService.GetByIdAsync(id, cancellationToken);
 
     public Task<IReadOnlyList<Issue>> ResolveByPartialIdAsync(string partialId, CancellationToken cancellationToken = default)
-    {
-        var matches = issues.Where(i => i.Id.Contains(partialId, StringComparison.OrdinalIgnoreCase)).ToList();
-        return Task.FromResult<IReadOnlyList<Issue>>(matches);
-    }
+        => _innerService.ResolveByPartialIdAsync(partialId, cancellationToken);
 
     public Task<IReadOnlyList<Issue>> FilterAsync(
         IssueStatus? status = null,
@@ -395,24 +404,12 @@ internal class MockIssueServiceAdapter(IReadOnlyList<Issue> issues) : IIssueServ
         int? linkedPr = null,
         bool includeTerminal = false,
         CancellationToken cancellationToken = default)
-    {
-        IEnumerable<Issue> result = issues;
-        if (status.HasValue) result = result.Where(i => i.Status == status.Value);
-        if (type.HasValue) result = result.Where(i => i.Type == type.Value);
-        if (priority.HasValue) result = result.Where(i => i.Priority == priority.Value);
-        if (!includeTerminal) result = result.Where(i => i.Status is not (IssueStatus.Complete or IssueStatus.Closed or IssueStatus.Archived or IssueStatus.Deleted));
-        return Task.FromResult<IReadOnlyList<Issue>>(result.ToList());
-    }
+        => _innerService.FilterAsync(status, type, priority, assignedTo, tags, linkedPr, includeTerminal, cancellationToken);
 
     public Task<IReadOnlyList<Issue>> SearchAsync(string searchTerm, CancellationToken cancellationToken = default)
-    {
-        var results = issues.Where(i =>
-            i.Title.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
-            (i.Description?.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ?? false));
-        return Task.FromResult<IReadOnlyList<Issue>>(results.ToList());
-    }
+        => _innerService.SearchAsync(searchTerm, cancellationToken);
 
-    // Write methods - not needed for TaskGraphService, throw NotImplementedException
+    // Write methods - delegate but these shouldn't be used in mock scenarios
     public Task<Issue> CreateAsync(
         string title,
         IssueType type,
@@ -427,7 +424,7 @@ internal class MockIssueServiceAdapter(IReadOnlyList<Issue> issues) : IIssueServ
         string? workingBranchId = null,
         ExecutionMode? executionMode = null,
         CancellationToken cancellationToken = default)
-        => throw new NotImplementedException("Mock does not support create");
+        => _innerService.CreateAsync(title, type, description, status, priority, linkedPr, linkedIssues, parentIssues, assignedTo, tags, workingBranchId, executionMode, cancellationToken);
 
     public Task<Issue> UpdateAsync(
         string id,
@@ -444,11 +441,91 @@ internal class MockIssueServiceAdapter(IReadOnlyList<Issue> issues) : IIssueServ
         string? workingBranchId = null,
         ExecutionMode? executionMode = null,
         CancellationToken cancellationToken = default)
-        => throw new NotImplementedException("Mock does not support update");
+        => _innerService.UpdateAsync(id, title, description, status, type, priority, linkedPr, linkedIssues, parentIssues, assignedTo, tags, workingBranchId, executionMode, cancellationToken);
 
     public Task<Issue> UpdateQuestionsAsync(string id, IReadOnlyList<Question> questions, CancellationToken cancellationToken = default)
-        => throw new NotImplementedException("Mock does not support UpdateQuestions");
+        => _innerService.UpdateQuestionsAsync(id, questions, cancellationToken);
 
     public Task<bool> DeleteAsync(string id, CancellationToken cancellationToken = default)
-        => throw new NotImplementedException("Mock does not support delete");
+        => _innerService.DeleteAsync(id, cancellationToken);
+
+    // Graph methods - now built into IssueService in Fleece.Core v1.4.0
+    public Task<IssueGraph> BuildGraphAsync(CancellationToken cancellationToken = default)
+        => _innerService.BuildGraphAsync(cancellationToken);
+
+    public Task<IssueGraph> QueryGraphAsync(GraphQuery query, CancellationToken cancellationToken = default)
+        => _innerService.QueryGraphAsync(query, cancellationToken);
+
+    public Task<IReadOnlyList<Issue>> GetNextIssuesAsync(string? parentId = null, CancellationToken cancellationToken = default)
+        => _innerService.GetNextIssuesAsync(parentId, cancellationToken);
+
+    public Task<TaskGraph> BuildTaskGraphLayoutAsync(CancellationToken cancellationToken = default)
+        => _innerService.BuildTaskGraphLayoutAsync(cancellationToken);
+}
+
+/// <summary>
+/// In-memory storage service for testing that returns pre-loaded issues.
+/// Implements IStorageService to work with Fleece.Core's IssueService.
+/// </summary>
+internal class InMemoryStorageService : IStorageService
+{
+    private readonly List<Issue> _issues;
+
+    public InMemoryStorageService(IReadOnlyList<Issue> issues)
+    {
+        _issues = issues.ToList();
+    }
+
+    public Task<IReadOnlyList<Issue>> LoadIssuesAsync(CancellationToken cancellationToken = default)
+        => Task.FromResult<IReadOnlyList<Issue>>(_issues);
+
+    public Task SaveIssuesAsync(IReadOnlyList<Issue> issues, CancellationToken cancellationToken = default)
+    {
+        _issues.Clear();
+        _issues.AddRange(issues);
+        return Task.CompletedTask;
+    }
+
+    public Task AppendIssueAsync(Issue issue, CancellationToken cancellationToken = default)
+    {
+        _issues.Add(issue);
+        return Task.CompletedTask;
+    }
+
+    public Task EnsureDirectoryExistsAsync(CancellationToken cancellationToken = default)
+        => Task.CompletedTask;
+
+    public Task<IReadOnlyList<string>> GetAllIssueFilesAsync(CancellationToken cancellationToken = default)
+        => Task.FromResult<IReadOnlyList<string>>(["mock-issues.jsonl"]);
+
+    public Task<IReadOnlyList<Issue>> LoadIssuesFromFileAsync(string filePath, CancellationToken cancellationToken = default)
+        => Task.FromResult<IReadOnlyList<Issue>>(_issues);
+
+    public Task DeleteIssueFileAsync(string filePath, CancellationToken cancellationToken = default)
+        => Task.CompletedTask;
+
+    public Task<string> SaveIssuesWithHashAsync(IReadOnlyList<Issue> issues, CancellationToken cancellationToken = default)
+    {
+        _issues.Clear();
+        _issues.AddRange(issues);
+        return Task.FromResult("mock-hash");
+    }
+
+    public Task<(bool HasMultiple, string Message)> HasMultipleUnmergedFilesAsync(CancellationToken cancellationToken = default)
+        => Task.FromResult((false, string.Empty));
+
+    public Task<LoadIssuesResult> LoadIssuesWithDiagnosticsAsync(CancellationToken cancellationToken = default)
+        => Task.FromResult(new LoadIssuesResult { Issues = _issues, Diagnostics = [] });
+
+    public Task<IReadOnlyList<Tombstone>> LoadTombstonesAsync(CancellationToken cancellationToken = default)
+        => Task.FromResult<IReadOnlyList<Tombstone>>([]);
+
+    public Task SaveTombstonesAsync(IReadOnlyList<Tombstone> tombstones, CancellationToken cancellationToken = default)
+        => Task.CompletedTask;
+
+    public Task AppendTombstonesAsync(IReadOnlyList<Tombstone> tombstones, CancellationToken cancellationToken = default)
+        => Task.CompletedTask;
+
+    public Task<IReadOnlyList<string>> GetAllTombstoneFilesAsync(CancellationToken cancellationToken = default)
+        => Task.FromResult<IReadOnlyList<string>>([]);
 }

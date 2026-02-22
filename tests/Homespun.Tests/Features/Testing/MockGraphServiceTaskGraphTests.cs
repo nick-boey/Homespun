@@ -53,10 +53,11 @@ public class MockGraphServiceTaskGraphTests
             .ToList();
 
         // ISSUE-003 is Progress status, Fleece.Core does not mark it as actionable
-        // ISSUE-006 is actionable per Fleece.Core's NextService
+        // In Fleece.Core v1.4.0, issues with incomplete parents are NOT actionable
+        // ISSUE-006 has parent ISSUE-005 which is Open, so it's NOT actionable
         Assert.That(actionableNodes, Does.Contain("ISSUE-001"));
         Assert.That(actionableNodes, Does.Contain("ISSUE-002"));
-        Assert.That(actionableNodes, Does.Contain("ISSUE-006"));
+        Assert.That(actionableNodes, Does.Not.Contain("ISSUE-006"), "ISSUE-006 has incomplete parent ISSUE-005");
         Assert.That(actionableNodes, Does.Contain("ISSUE-010"));
     }
 

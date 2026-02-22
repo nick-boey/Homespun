@@ -486,14 +486,10 @@ public sealed class FleeceService : IFleeceService, IDisposable
             return null;
         }
 
-        // Create the IssueService and use the TaskGraphService from Fleece.Core
+        // Use the IssueService directly - graph methods are now part of IIssueService in Fleece.Core v1.4.0
         var issueService = GetOrCreateIssueService(projectPath);
 
-        // Create NextService and TaskGraphService
-        var nextService = new NextService(issueService);
-        var taskGraphService = new TaskGraphService(issueService, nextService);
-
-        var taskGraph = await taskGraphService.BuildGraphAsync(ct);
+        var taskGraph = await issueService.BuildTaskGraphLayoutAsync(ct);
 
         _logger.LogDebug(
             "Built task graph with {NodeCount} nodes and {TotalLanes} lanes for project: {ProjectPath}",
