@@ -1,7 +1,9 @@
 using Fleece.Core.Models;
 using Homespun.Features.ClaudeCode.Services;
+using Homespun.Features.Fleece.Services;
 using Homespun.Features.PullRequests.Data;
 using Homespun.Features.Testing.Services;
+using Homespun.Shared.Models.Projects;
 using Microsoft.Extensions.Logging;
 using Moq;
 
@@ -16,10 +18,41 @@ public class MockGraphServiceTaskGraphTests
     public void SetUp()
     {
         var dataStore = new Mock<IDataStore>();
+        var fleeceService = new Mock<IFleeceService>();
         var sessionStore = new Mock<IClaudeSessionStore>();
         var logger = new Mock<ILogger<MockGraphService>>();
 
-        _service = new MockGraphService(dataStore.Object, sessionStore.Object, logger.Object);
+        // Set up project lookup
+        var project = new Project
+        {
+            Id = "demo-project",
+            Name = "Demo Project",
+            LocalPath = "/tmp/demo-project",
+            DefaultBranch = "main"
+        };
+        dataStore.Setup(d => d.GetProject("demo-project")).Returns(project);
+
+        // Set up issues matching the seeded data
+        var now = DateTimeOffset.UtcNow;
+        var issues = new List<Issue>
+        {
+            new() { Id = "ISSUE-001", Title = "Add dark mode support", Type = IssueType.Feature, Status = IssueStatus.Open, Priority = 2, CreatedAt = now.AddDays(-14), LastUpdate = now.AddDays(-2) },
+            new() { Id = "ISSUE-002", Title = "Improve mobile responsiveness", Type = IssueType.Task, Status = IssueStatus.Open, Priority = 3, CreatedAt = now.AddDays(-12), LastUpdate = now.AddDays(-1) },
+            new() { Id = "ISSUE-003", Title = "Fix login timeout bug", Type = IssueType.Bug, Status = IssueStatus.Progress, Priority = 1, CreatedAt = now.AddDays(-7), LastUpdate = now.AddHours(-6) },
+            new() { Id = "ISSUE-004", Title = "Design API schema", Type = IssueType.Task, Status = IssueStatus.Open, Priority = 2, CreatedAt = now.AddDays(-10), LastUpdate = now.AddDays(-3) },
+            new() { Id = "ISSUE-005", Title = "Implement API endpoints", Type = IssueType.Task, Status = IssueStatus.Open, Priority = 2, ParentIssues = [new ParentIssueRef { ParentIssue = "ISSUE-004", SortOrder = "0" }], CreatedAt = now.AddDays(-9), LastUpdate = now.AddDays(-2) },
+            new() { Id = "ISSUE-006", Title = "Write API documentation", Type = IssueType.Chore, Status = IssueStatus.Open, Priority = 3, ParentIssues = [new ParentIssueRef { ParentIssue = "ISSUE-005", SortOrder = "0" }], CreatedAt = now.AddDays(-8), LastUpdate = now.AddDays(-1) },
+            new() { Id = "ISSUE-007", Title = "Implement GET endpoints", Type = IssueType.Task, Status = IssueStatus.Open, Priority = 2, ParentIssues = [new ParentIssueRef { ParentIssue = "ISSUE-005", SortOrder = "0" }], CreatedAt = now.AddDays(-7), LastUpdate = now.AddDays(-1) },
+            new() { Id = "ISSUE-008", Title = "Implement POST endpoints", Type = IssueType.Task, Status = IssueStatus.Open, Priority = 2, ParentIssues = [new ParentIssueRef { ParentIssue = "ISSUE-007", SortOrder = "0" }], CreatedAt = now.AddDays(-6), LastUpdate = now.AddDays(-1) },
+            new() { Id = "ISSUE-009", Title = "Implement PUT/PATCH endpoints", Type = IssueType.Task, Status = IssueStatus.Open, Priority = 2, ParentIssues = [new ParentIssueRef { ParentIssue = "ISSUE-008", SortOrder = "0" }], CreatedAt = now.AddDays(-5), LastUpdate = now.AddDays(-1) },
+            new() { Id = "ISSUE-010", Title = "Implement DELETE endpoints", Type = IssueType.Task, Status = IssueStatus.Open, Priority = 2, ParentIssues = [new ParentIssueRef { ParentIssue = "ISSUE-009", SortOrder = "0" }], CreatedAt = now.AddDays(-4), LastUpdate = now.AddDays(-1) },
+            new() { Id = "ISSUE-011", Title = "Add request validation", Type = IssueType.Task, Status = IssueStatus.Open, Priority = 3, ParentIssues = [new ParentIssueRef { ParentIssue = "ISSUE-008", SortOrder = "0" }], CreatedAt = now.AddDays(-5), LastUpdate = now.AddDays(-2) },
+            new() { Id = "ISSUE-012", Title = "Add rate limiting", Type = IssueType.Task, Status = IssueStatus.Open, Priority = 3, ParentIssues = [new ParentIssueRef { ParentIssue = "ISSUE-007", SortOrder = "0" }], CreatedAt = now.AddDays(-6), LastUpdate = now.AddDays(-3) },
+            new() { Id = "ISSUE-013", Title = "Set up API monitoring", Type = IssueType.Chore, Status = IssueStatus.Open, Priority = 4, ParentIssues = [new ParentIssueRef { ParentIssue = "ISSUE-005", SortOrder = "0" }], CreatedAt = now.AddDays(-7), LastUpdate = now.AddDays(-2) },
+        };
+        fleeceService.Setup(f => f.ListIssuesAsync("/tmp/demo-project")).ReturnsAsync(issues);
+
+        _service = new MockGraphService(dataStore.Object, fleeceService.Object, sessionStore.Object, logger.Object);
     }
 
     [Test]

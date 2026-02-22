@@ -29,8 +29,11 @@ public class MockFleeceService : IFleeceService
 
         if (_issuesByProject.TryGetValue(projectPath, out var issues))
         {
-            var issue = issues.FirstOrDefault(i => i.Id == issueId);
-            return Task.FromResult(issue);
+            lock (issues)
+            {
+                var issue = issues.FirstOrDefault(i => i.Id == issueId);
+                return Task.FromResult(issue);
+            }
         }
 
         return Task.FromResult<Issue?>(null);
@@ -50,11 +53,24 @@ public class MockFleeceService : IFleeceService
             return Task.FromResult<IReadOnlyList<Issue>>(Array.Empty<Issue>());
         }
 
-        var filtered = issues.AsEnumerable();
+        List<Issue> snapshot;
+        lock (issues)
+        {
+            snapshot = issues.ToList();
+        }
+
+        var filtered = snapshot.AsEnumerable();
 
         if (status.HasValue)
         {
             filtered = filtered.Where(i => i.Status == status.Value);
+        }
+        else
+        {
+            // When no status filter specified, exclude terminal statuses (matching FleeceService behavior)
+            filtered = filtered.Where(i => i.Status is not (
+                IssueStatus.Deleted or IssueStatus.Archived or
+                IssueStatus.Closed or IssueStatus.Complete));
         }
 
         if (type.HasValue)
@@ -79,8 +95,14 @@ public class MockFleeceService : IFleeceService
             return Task.FromResult<IReadOnlyList<Issue>>(Array.Empty<Issue>());
         }
 
+        List<Issue> snapshot;
+        lock (issues)
+        {
+            snapshot = issues.ToList();
+        }
+
         // Ready issues are those in Open or Progress status
-        var readyIssues = issues
+        var readyIssues = snapshot
             .Where(i => i.Status is IssueStatus.Open or IssueStatus.Progress)
             .ToList();
 
@@ -158,6 +180,7 @@ public class MockFleeceService : IFleeceService
             var existing = issues[existingIndex];
 
             // Create a new issue with updated values (Issue has init-only properties)
+            // Preserve all existing properties not being updated
             var updated = new Issue
             {
                 Id = existing.Id,
@@ -168,6 +191,12 @@ public class MockFleeceService : IFleeceService
                 Priority = priority ?? existing.Priority,
                 ExecutionMode = executionMode ?? existing.ExecutionMode,
                 WorkingBranchId = workingBranchId ?? existing.WorkingBranchId,
+                ParentIssues = existing.ParentIssues,
+                Tags = existing.Tags,
+                LinkedIssues = existing.LinkedIssues,
+                LinkedPR = existing.LinkedPR,
+                CreatedBy = existing.CreatedBy,
+                AssignedTo = existing.AssignedTo,
                 CreatedAt = existing.CreatedAt,
                 LastUpdate = DateTime.UtcNow
             };
@@ -197,6 +226,7 @@ public class MockFleeceService : IFleeceService
             var existing = issues[existingIndex];
 
             // Create a new issue with Deleted status (Issue has init-only properties)
+            // Preserve all existing properties
             var deleted = new Issue
             {
                 Id = existing.Id,
@@ -207,6 +237,12 @@ public class MockFleeceService : IFleeceService
                 Priority = existing.Priority,
                 ExecutionMode = existing.ExecutionMode,
                 WorkingBranchId = existing.WorkingBranchId,
+                ParentIssues = existing.ParentIssues,
+                Tags = existing.Tags,
+                LinkedIssues = existing.LinkedIssues,
+                LinkedPR = existing.LinkedPR,
+                CreatedBy = existing.CreatedBy,
+                AssignedTo = existing.AssignedTo,
                 CreatedAt = existing.CreatedAt,
                 LastUpdate = DateTime.UtcNow
             };
@@ -217,7 +253,7 @@ public class MockFleeceService : IFleeceService
         return Task.FromResult(true);
     }
 
-    public Task<Issue> AddParentAsync(string projectPath, string childId, string parentId, CancellationToken ct = default)
+    public Task<Issue> AddParentAsync(string projectPath, string childId, string parentId, string? sortOrder = null, CancellationToken ct = default)
     {
         _logger.LogDebug("[Mock] AddParent {ParentId} to {ChildId} in {ProjectPath}", parentId, childId, projectPath);
 
@@ -238,7 +274,7 @@ public class MockFleeceService : IFleeceService
 
             // Create a new list with the added parent
             var newParentIssues = existing.ParentIssues.ToList();
-            newParentIssues.Add(new ParentIssueRef { ParentIssue = parentId, SortOrder = "0" });
+            newParentIssues.Add(new ParentIssueRef { ParentIssue = parentId, SortOrder = sortOrder ?? "0" });
 
             // Create a new issue with the updated parent list (Issue has init-only properties)
             var updated = new Issue
@@ -252,6 +288,11 @@ public class MockFleeceService : IFleeceService
                 ExecutionMode = existing.ExecutionMode,
                 WorkingBranchId = existing.WorkingBranchId,
                 ParentIssues = newParentIssues,
+                Tags = existing.Tags,
+                LinkedIssues = existing.LinkedIssues,
+                LinkedPR = existing.LinkedPR,
+                CreatedBy = existing.CreatedBy,
+                AssignedTo = existing.AssignedTo,
                 CreatedAt = existing.CreatedAt,
                 LastUpdate = DateTime.UtcNow
             };
@@ -297,6 +338,11 @@ public class MockFleeceService : IFleeceService
                 ExecutionMode = existing.ExecutionMode,
                 WorkingBranchId = existing.WorkingBranchId,
                 ParentIssues = newParentIssues,
+                Tags = existing.Tags,
+                LinkedIssues = existing.LinkedIssues,
+                LinkedPR = existing.LinkedPR,
+                CreatedBy = existing.CreatedBy,
+                AssignedTo = existing.AssignedTo,
                 CreatedAt = existing.CreatedAt,
                 LastUpdate = DateTime.UtcNow
             };
@@ -335,7 +381,13 @@ public class MockFleeceService : IFleeceService
             return Task.FromResult<TaskGraph?>(null);
         }
 
-        var openIssues = issues
+        List<Issue> snapshot;
+        lock (issues)
+        {
+            snapshot = issues.ToList();
+        }
+
+        var openIssues = snapshot
             .Where(i => i.Status is IssueStatus.Open or IssueStatus.Progress or IssueStatus.Review)
             .ToList();
 

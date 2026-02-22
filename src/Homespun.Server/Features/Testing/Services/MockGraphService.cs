@@ -3,6 +3,7 @@ using Fleece.Core.Services;
 using Fleece.Core.Services.Interfaces;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Fleece;
+using Homespun.Features.Fleece.Services;
 using Homespun.Features.Gitgraph.Services;
 using Homespun.Features.PullRequests.Data;
 using Homespun.Shared.Models.Fleece;
@@ -16,6 +17,7 @@ namespace Homespun.Features.Testing.Services;
 public class MockGraphService : IGraphService
 {
     private readonly IDataStore _dataStore;
+    private readonly IFleeceService _fleeceService;
     private readonly IClaudeSessionStore _sessionStore;
     private readonly ILogger<MockGraphService> _logger;
     private readonly GraphBuilder _graphBuilder = new();
@@ -23,15 +25,17 @@ public class MockGraphService : IGraphService
 
     public MockGraphService(
         IDataStore dataStore,
+        IFleeceService fleeceService,
         IClaudeSessionStore sessionStore,
         ILogger<MockGraphService> logger)
     {
         _dataStore = dataStore;
+        _fleeceService = fleeceService;
         _sessionStore = sessionStore;
         _logger = logger;
     }
 
-    public Task<Graph> BuildGraphAsync(string projectId, int? maxPastPRs = 5)
+    public async Task<Graph> BuildGraphAsync(string projectId, int? maxPastPRs = 5)
     {
         _logger.LogDebug("[Mock] BuildGraph for project {ProjectId}", projectId);
 
@@ -39,7 +43,7 @@ public class MockGraphService : IGraphService
         if (project == null)
         {
             _logger.LogWarning("[Mock] Project not found: {ProjectId}", projectId);
-            return Task.FromResult(new Graph([], new Dictionary<string, GraphBranch>()));
+            return new Graph([], new Dictionary<string, GraphBranch>());
         }
 
         // Convert stored PullRequests to PullRequestInfo (these are open PRs)
@@ -50,15 +54,15 @@ public class MockGraphService : IGraphService
         var mergedPrHistory = GetMergedPrHistory();
         var allPrInfos = mergedPrHistory.Concat(openPrInfos).ToList();
 
-        // Add fake issues to test full timeline scope
-        var fakeIssues = GetFakeIssues();
+        // Get issues from the mock fleece service (includes seeded + created issues)
+        var issues = await GetIssuesForProjectAsync(project.LocalPath);
 
         _logger.LogDebug("[Mock] Building graph with {PrCount} PRs ({MergedCount} merged, {OpenCount} open) and {IssueCount} issues",
-            allPrInfos.Count, mergedPrHistory.Count, openPrInfos.Count, fakeIssues.Count);
+            allPrInfos.Count, mergedPrHistory.Count, openPrInfos.Count, issues.Count);
 
         // Use the existing GraphBuilder to construct the graph
-        var graph = _graphBuilder.Build(allPrInfos, fakeIssues, maxPastPRs);
-        return Task.FromResult(graph);
+        var graph = _graphBuilder.Build(allPrInfos, issues, maxPastPRs);
+        return graph;
     }
 
     public async Task<GitgraphJsonData> BuildGraphJsonAsync(string projectId, int? maxPastPRs = 5, bool useCache = true)
@@ -137,10 +141,13 @@ public class MockGraphService : IGraphService
     {
         _logger.LogDebug("[Mock] BuildTaskGraph for project {ProjectId}", projectId);
 
-        var fakeIssues = GetFakeIssues();
+        var project = _dataStore.GetProject(projectId);
+        if (project == null) return null;
+
+        var allIssues = await GetIssuesForProjectAsync(project.LocalPath);
 
         // Filter to open issues (matching real FleeceService.GetTaskGraphAsync behavior)
-        var openIssues = fakeIssues
+        var openIssues = allIssues
             .Where(i => i.Status is IssueStatus.Open or IssueStatus.Progress or IssueStatus.Review)
             .ToList();
 
@@ -219,6 +226,16 @@ public class MockGraphService : IGraphService
             response.Nodes.Count, response.MergedPrs.Count, response.AgentStatuses.Count);
 
         return response;
+    }
+
+    /// <summary>
+    /// Gets all non-terminal issues for a project from the mock fleece service.
+    /// Includes all statuses needed for graph rendering (Open, Progress, Review).
+    /// </summary>
+    private async Task<List<Issue>> GetIssuesForProjectAsync(string projectPath)
+    {
+        var issues = await _fleeceService.ListIssuesAsync(projectPath);
+        return issues.ToList();
     }
 
     private static PullRequestInfo ConvertToPullRequestInfo(PullRequest pr)
@@ -331,183 +348,6 @@ public class MockGraphService : IGraphService
                 MergedAt = now.AddDays(-10),
                 ChecksPassing = true,
                 IsApproved = true
-            }
-        ];
-    }
-
-    /// <summary>
-    /// Returns a list of fake issues to populate the timeline.
-    /// Includes orphan issues (grouped and ungrouped) and issues with dependencies.
-    /// </summary>
-    private static List<Issue> GetFakeIssues()
-    {
-        var now = DateTimeOffset.UtcNow;
-        return
-        [
-            // Orphan issues
-            new Issue
-            {
-                Id = "ISSUE-001",
-                Title = "Add dark mode support",
-                Description = "Implement a dark mode theme option for better accessibility and user preference",
-                Type = IssueType.Feature,
-                Status = IssueStatus.Open,
-                Priority = 2,
-                CreatedAt = now.AddDays(-14),
-                LastUpdate = now.AddDays(-2)
-            },
-            new Issue
-            {
-                Id = "ISSUE-002",
-                Title = "Improve mobile responsiveness",
-                Description = "Ensure all pages display correctly on mobile devices and tablets",
-                Type = IssueType.Task,
-                Status = IssueStatus.Open,
-                Priority = 3,
-                CreatedAt = now.AddDays(-12),
-                LastUpdate = now.AddDays(-1)
-            },
-
-            // Orphan issue
-            new Issue
-            {
-                Id = "ISSUE-003",
-                Title = "Fix login timeout bug",
-                Description = "Users are being logged out unexpectedly after 5 minutes of inactivity",
-                Type = IssueType.Bug,
-                Status = IssueStatus.Progress,
-                Priority = 1,
-                CreatedAt = now.AddDays(-7),
-                LastUpdate = now.AddHours(-6)
-            },
-
-            // Issues with dependencies - forms a chain: ISSUE-004 -> ISSUE-005 -> ISSUE-006
-            new Issue
-            {
-                Id = "ISSUE-004",
-                Title = "Design API schema",
-                Description = "Define the REST API schema for the new feature endpoints",
-                Type = IssueType.Task,
-                Status = IssueStatus.Open,
-                Priority = 2,
-                ParentIssues = [], // Root of the dependency chain
-                CreatedAt = now.AddDays(-10),
-                LastUpdate = now.AddDays(-3)
-            },
-            new Issue
-            {
-                Id = "ISSUE-005",
-                Title = "Implement API endpoints",
-                Description = "Build the REST API endpoints based on the approved schema",
-                Type = IssueType.Task,
-                Status = IssueStatus.Open,
-                Priority = 2,
-                ParentIssues = [new ParentIssueRef { ParentIssue = "ISSUE-004", SortOrder = "0" }], // Depends on ISSUE-004
-                CreatedAt = now.AddDays(-9),
-                LastUpdate = now.AddDays(-2)
-            },
-            new Issue
-            {
-                Id = "ISSUE-006",
-                Title = "Write API documentation",
-                Description = "Document all new API endpoints with examples and usage guidelines",
-                Type = IssueType.Chore,
-                Status = IssueStatus.Open,
-                Priority = 3,
-                ParentIssues = [new ParentIssueRef { ParentIssue = "ISSUE-005", SortOrder = "0" }], // Depends on ISSUE-005
-                CreatedAt = now.AddDays(-8),
-                LastUpdate = now.AddDays(-1)
-            },
-
-            // Extended dependency tree branching from ISSUE-005
-            // ISSUE-005 -> ISSUE-007 -> ISSUE-008 -> ISSUE-009 -> ISSUE-010
-            //                                     -> ISSUE-011
-            //                        -> ISSUE-012
-            // ISSUE-005 -> ISSUE-013
-
-            new Issue
-            {
-                Id = "ISSUE-007",
-                Title = "Implement GET endpoints",
-                Description = "Build GET endpoints for retrieving resources from the API",
-                Type = IssueType.Task,
-                Status = IssueStatus.Open,
-                Priority = 2,
-                ParentIssues = [new ParentIssueRef { ParentIssue = "ISSUE-005", SortOrder = "0" }],
-                CreatedAt = now.AddDays(-7),
-                LastUpdate = now.AddDays(-1)
-            },
-            new Issue
-            {
-                Id = "ISSUE-008",
-                Title = "Implement POST endpoints",
-                Description = "Build POST endpoints for creating new resources",
-                Type = IssueType.Task,
-                Status = IssueStatus.Open,
-                Priority = 2,
-                ParentIssues = [new ParentIssueRef { ParentIssue = "ISSUE-007", SortOrder = "0" }],
-                CreatedAt = now.AddDays(-6),
-                LastUpdate = now.AddDays(-1)
-            },
-            new Issue
-            {
-                Id = "ISSUE-009",
-                Title = "Implement PUT/PATCH endpoints",
-                Description = "Build PUT/PATCH endpoints for updating existing resources",
-                Type = IssueType.Task,
-                Status = IssueStatus.Open,
-                Priority = 2,
-                ParentIssues = [new ParentIssueRef { ParentIssue = "ISSUE-008", SortOrder = "0" }],
-                CreatedAt = now.AddDays(-5),
-                LastUpdate = now.AddDays(-1)
-            },
-            new Issue
-            {
-                Id = "ISSUE-010",
-                Title = "Implement DELETE endpoints",
-                Description = "Build DELETE endpoints for removing resources",
-                Type = IssueType.Task,
-                Status = IssueStatus.Open,
-                Priority = 2,
-                ParentIssues = [new ParentIssueRef { ParentIssue = "ISSUE-009", SortOrder = "0" }],
-                CreatedAt = now.AddDays(-4),
-                LastUpdate = now.AddDays(-1)
-            },
-            new Issue
-            {
-                Id = "ISSUE-011",
-                Title = "Add request validation",
-                Description = "Implement request validation middleware for all API endpoints",
-                Type = IssueType.Task,
-                Status = IssueStatus.Open,
-                Priority = 3,
-                ParentIssues = [new ParentIssueRef { ParentIssue = "ISSUE-008", SortOrder = "0" }],
-                CreatedAt = now.AddDays(-5),
-                LastUpdate = now.AddDays(-2)
-            },
-            new Issue
-            {
-                Id = "ISSUE-012",
-                Title = "Add rate limiting",
-                Description = "Implement rate limiting to prevent API abuse",
-                Type = IssueType.Task,
-                Status = IssueStatus.Open,
-                Priority = 3,
-                ParentIssues = [new ParentIssueRef { ParentIssue = "ISSUE-007", SortOrder = "0" }],
-                CreatedAt = now.AddDays(-6),
-                LastUpdate = now.AddDays(-3)
-            },
-            new Issue
-            {
-                Id = "ISSUE-013",
-                Title = "Set up API monitoring",
-                Description = "Configure monitoring and alerting for API health and performance",
-                Type = IssueType.Chore,
-                Status = IssueStatus.Open,
-                Priority = 4,
-                ParentIssues = [new ParentIssueRef { ParentIssue = "ISSUE-005", SortOrder = "0" }],
-                CreatedAt = now.AddDays(-7),
-                LastUpdate = now.AddDays(-2)
             }
         ];
     }

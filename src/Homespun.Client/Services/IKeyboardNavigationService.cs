@@ -1,4 +1,5 @@
 using Homespun.Client.Components;
+using Homespun.Shared.Models.Fleece;
 
 namespace Homespun.Client.Services;
 
@@ -57,8 +58,11 @@ public record PendingNewIssue
     /// <summary>The title being entered for the new issue.</summary>
     public string Title { get; set; } = "";
 
-    /// <summary>Parent ID set when Tab is pressed to make this a child of the issue above.</summary>
+    /// <summary>Parent ID set when Shift+Tab is pressed to make this a child of the adjacent issue.</summary>
     public string? PendingParentId { get; set; }
+
+    /// <summary>Child ID set when Tab is pressed to make this a parent of the adjacent issue.</summary>
+    public string? PendingChildId { get; set; }
 
     /// <summary>Sort order for series parent positioning.</summary>
     public string? SortOrder { get; set; }
@@ -68,6 +72,12 @@ public record PendingNewIssue
 
     /// <summary>Reference issue ID used to determine placement context.</summary>
     public string? ReferenceIssueId { get; init; }
+
+    /// <summary>Inherited parent issue ID from the reference issue's parent (sibling creation).</summary>
+    public string? InheritedParentIssueId { get; set; }
+
+    /// <summary>Inherited sort order for the parent relationship.</summary>
+    public string? InheritedParentSortOrder { get; set; }
 }
 
 /// <summary>
@@ -153,6 +163,9 @@ public interface IKeyboardNavigationService
 
     /// <summary>Set the project ID for API operations.</summary>
     void SetProjectId(string projectId);
+
+    /// <summary>Set the task graph nodes for parent inheritance computation.</summary>
+    void SetTaskGraphNodes(List<TaskGraphNodeResponse> nodes);
 
     /// <summary>Select the first actionable issue in the list.</summary>
     void SelectFirstActionable();

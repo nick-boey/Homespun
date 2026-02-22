@@ -149,7 +149,8 @@ public class IssuesController(
             issue = await fleeceService.AddParentAsync(
                 project.LocalPath,
                 issue.Id,
-                request.ParentIssueId.Trim());
+                request.ParentIssueId.Trim(),
+                sortOrder: request.ParentSortOrder);
         }
 
         // If a child issue ID was provided, make the new issue the parent of that child

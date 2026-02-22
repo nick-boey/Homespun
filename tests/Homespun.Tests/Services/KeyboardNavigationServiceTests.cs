@@ -443,7 +443,7 @@ public class KeyboardNavigationServiceTests
     #region Indent/Unindent Tests
 
     [Test]
-    public void IndentAsChild_WhileCreatingNew_SetsPendingParentId()
+    public void IndentAsChild_WhileCreatingNew_SetsPendingChildId()
     {
         _service.Initialize(_sampleRenderLines);
         _service.SelectIssue("ISSUE-002");
@@ -451,33 +451,51 @@ public class KeyboardNavigationServiceTests
 
         _service.IndentAsChild();
 
-        Assert.That(_service.PendingNewIssue!.PendingParentId, Is.EqualTo("ISSUE-002"));
-    }
-
-    [Test]
-    public void IndentAsChild_AtFirstPosition_DoesNotSetParent()
-    {
-        _service.Initialize(_sampleRenderLines);
-        _service.SelectFirstActionable();
-        _service.CreateIssueAbove(); // Creating above first issue
-
-        _service.IndentAsChild();
-
-        // No issue above, so no parent should be set
+        // Tab: new issue becomes parent of reference issue (ISSUE-002)
+        Assert.That(_service.PendingNewIssue!.PendingChildId, Is.EqualTo("ISSUE-002"));
         Assert.That(_service.PendingNewIssue!.PendingParentId, Is.Null);
     }
 
     [Test]
-    public void UnindentAsSibling_WhileCreatingNew_ClearsPendingParentId()
+    public void IndentAsChild_ClearsInheritedParent()
     {
         _service.Initialize(_sampleRenderLines);
         _service.SelectIssue("ISSUE-002");
         _service.CreateIssueBelow();
-        _service.IndentAsChild(); // First set a parent
+
+        _service.IndentAsChild();
+
+        // Tab clears inherited parent since new issue is becoming a parent
+        Assert.That(_service.PendingNewIssue!.InheritedParentIssueId, Is.Null);
+        Assert.That(_service.PendingNewIssue!.InheritedParentSortOrder, Is.Null);
+    }
+
+    [Test]
+    public void UnindentAsSibling_WhileCreatingNew_SetsPendingParentId()
+    {
+        _service.Initialize(_sampleRenderLines);
+        _service.SelectIssue("ISSUE-002");
+        _service.CreateIssueBelow();
 
         _service.UnindentAsSibling();
 
-        Assert.That(_service.PendingNewIssue!.PendingParentId, Is.Null);
+        // Shift+Tab: new issue becomes child of reference issue (ISSUE-002)
+        Assert.That(_service.PendingNewIssue!.PendingParentId, Is.EqualTo("ISSUE-002"));
+        Assert.That(_service.PendingNewIssue!.PendingChildId, Is.Null);
+    }
+
+    [Test]
+    public void UnindentAsSibling_AfterIndent_SwitchesToChild()
+    {
+        _service.Initialize(_sampleRenderLines);
+        _service.SelectIssue("ISSUE-002");
+        _service.CreateIssueBelow();
+        _service.IndentAsChild(); // First set as parent (Tab)
+
+        _service.UnindentAsSibling(); // Then set as child (Shift+Tab)
+
+        Assert.That(_service.PendingNewIssue!.PendingParentId, Is.EqualTo("ISSUE-002"));
+        Assert.That(_service.PendingNewIssue!.PendingChildId, Is.Null);
     }
 
     [Test]
@@ -715,6 +733,223 @@ public class KeyboardNavigationServiceTests
 
         // Should still be in CreatingNew mode
         Assert.That(_service.EditMode, Is.EqualTo(KeyboardEditMode.CreatingNew));
+    }
+
+    #endregion
+
+    #region Parent Inheritance Tests
+
+    private List<TaskGraphNodeResponse> CreateTaskGraphNodesWithParent()
+    {
+        return
+        [
+            new TaskGraphNodeResponse
+            {
+                Issue = new IssueResponse
+                {
+                    Id = "PARENT-001",
+                    Title = "Parent issue",
+                    Type = IssueType.Feature,
+                    ParentIssues = []
+                },
+                Lane = 1,
+                Row = 0,
+                IsActionable = false
+            },
+            new TaskGraphNodeResponse
+            {
+                Issue = new IssueResponse
+                {
+                    Id = "ISSUE-001",
+                    Title = "First issue",
+                    Type = IssueType.Task,
+                    ParentIssues = [new ParentIssueRefResponse { ParentIssue = "PARENT-001", SortOrder = "a" }]
+                },
+                Lane = 0,
+                Row = 1,
+                IsActionable = true
+            },
+            new TaskGraphNodeResponse
+            {
+                Issue = new IssueResponse
+                {
+                    Id = "ISSUE-002",
+                    Title = "Second issue",
+                    Type = IssueType.Task,
+                    ParentIssues = [new ParentIssueRefResponse { ParentIssue = "PARENT-001", SortOrder = "b" }]
+                },
+                Lane = 0,
+                Row = 2,
+                IsActionable = false
+            }
+        ];
+    }
+
+    [Test]
+    public void CreateIssueBelow_InheritsParent_WhenReferenceIssueHasParent()
+    {
+        _service.Initialize(_sampleRenderLines);
+        _service.SetTaskGraphNodes(CreateTaskGraphNodesWithParent());
+        _service.SelectFirstActionable();
+
+        _service.CreateIssueBelow();
+
+        Assert.That(_service.PendingNewIssue, Is.Not.Null);
+        Assert.That(_service.PendingNewIssue!.InheritedParentIssueId, Is.EqualTo("PARENT-001"));
+        Assert.That(_service.PendingNewIssue.InheritedParentSortOrder, Is.Not.Null);
+    }
+
+    [Test]
+    public void CreateIssueAbove_InheritsParent_WhenReferenceIssueHasParent()
+    {
+        _service.Initialize(_sampleRenderLines);
+        _service.SetTaskGraphNodes(CreateTaskGraphNodesWithParent());
+        _service.SelectIssue("ISSUE-002");
+
+        _service.CreateIssueAbove();
+
+        Assert.That(_service.PendingNewIssue, Is.Not.Null);
+        Assert.That(_service.PendingNewIssue!.InheritedParentIssueId, Is.EqualTo("PARENT-001"));
+        Assert.That(_service.PendingNewIssue.InheritedParentSortOrder, Is.Not.Null);
+    }
+
+    [Test]
+    public void CreateIssueBelow_NoParent_WhenReferenceIssueIsRoot()
+    {
+        var rootNodes = new List<TaskGraphNodeResponse>
+        {
+            new()
+            {
+                Issue = new IssueResponse
+                {
+                    Id = "ISSUE-001",
+                    Title = "Root issue",
+                    Type = IssueType.Task,
+                    ParentIssues = []
+                },
+                Lane = 0,
+                Row = 0,
+                IsActionable = true
+            }
+        };
+
+        _service.Initialize(_sampleRenderLines);
+        _service.SetTaskGraphNodes(rootNodes);
+        _service.SelectFirstActionable();
+
+        _service.CreateIssueBelow();
+
+        Assert.That(_service.PendingNewIssue, Is.Not.Null);
+        Assert.That(_service.PendingNewIssue!.InheritedParentIssueId, Is.Null);
+        Assert.That(_service.PendingNewIssue.InheritedParentSortOrder, Is.Null);
+    }
+
+    [Test]
+    public async Task AcceptEditAsync_CreatesIssueWithInheritedParent()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.RespondWith("issues", new IssueResponse
+        {
+            Id = "new-issue",
+            Title = "test",
+            Type = IssueType.Task,
+            Status = IssueStatus.Open
+        });
+        var issueApi = new HttpIssueApiService(handler.CreateClient());
+        var service = new KeyboardNavigationService(issueApi);
+
+        service.Initialize(_sampleRenderLines);
+        service.SetProjectId("test-project");
+        service.SetTaskGraphNodes(CreateTaskGraphNodesWithParent());
+        service.SelectFirstActionable();
+        service.CreateIssueBelow();
+        service.UpdateEditTitle("New sibling issue");
+
+        await service.AcceptEditAsync();
+
+        Assert.That(service.EditMode, Is.EqualTo(KeyboardEditMode.Viewing));
+
+        // Verify the request included parent info
+        var createRequest = handler.CapturedRequests
+            .FirstOrDefault(r => r.Method == HttpMethod.Post && r.Url.Contains("issues"));
+        Assert.That(createRequest, Is.Not.Null);
+        var body = createRequest!.BodyAs<CreateIssueRequest>();
+        Assert.That(body, Is.Not.Null);
+        Assert.That(body!.ParentIssueId, Is.EqualTo("PARENT-001"));
+        Assert.That(body.ParentSortOrder, Is.Not.Null);
+    }
+
+    [Test]
+    public async Task AcceptEditAsync_TabSetsChildIssueId()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.RespondWith("issues", new IssueResponse
+        {
+            Id = "new-issue",
+            Title = "test",
+            Type = IssueType.Task,
+            Status = IssueStatus.Open
+        });
+        var issueApi = new HttpIssueApiService(handler.CreateClient());
+        var service = new KeyboardNavigationService(issueApi);
+
+        service.Initialize(_sampleRenderLines);
+        service.SetProjectId("test-project");
+        service.SetTaskGraphNodes(CreateTaskGraphNodesWithParent());
+        service.SelectFirstActionable();
+        service.CreateIssueBelow();
+        service.IndentAsChild(); // Tab sets PendingChildId (new becomes parent)
+        service.UpdateEditTitle("Parent issue");
+
+        await service.AcceptEditAsync();
+
+        Assert.That(service.EditMode, Is.EqualTo(KeyboardEditMode.Viewing));
+
+        // Verify Tab sets ChildIssueId (new issue becomes parent of reference issue)
+        var createRequest = handler.CapturedRequests
+            .FirstOrDefault(r => r.Method == HttpMethod.Post && r.Url.Contains("issues"));
+        Assert.That(createRequest, Is.Not.Null);
+        var body = createRequest!.BodyAs<CreateIssueRequest>();
+        Assert.That(body, Is.Not.Null);
+        // Tab: new issue becomes parent, so ChildIssueId = reference issue
+        Assert.That(body!.ChildIssueId, Is.EqualTo("ISSUE-001"));
+        Assert.That(body.ParentIssueId, Is.Null);
+    }
+
+    [Test]
+    public async Task AcceptEditAsync_ShiftTabSetsParentIssueId()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.RespondWith("issues", new IssueResponse
+        {
+            Id = "new-issue",
+            Title = "test",
+            Type = IssueType.Task,
+            Status = IssueStatus.Open
+        });
+        var issueApi = new HttpIssueApiService(handler.CreateClient());
+        var service = new KeyboardNavigationService(issueApi);
+
+        service.Initialize(_sampleRenderLines);
+        service.SetProjectId("test-project");
+        service.SelectFirstActionable();
+        service.CreateIssueBelow();
+        service.UnindentAsSibling(); // Shift+Tab sets PendingParentId (new becomes child)
+        service.UpdateEditTitle("Child issue");
+
+        await service.AcceptEditAsync();
+
+        Assert.That(service.EditMode, Is.EqualTo(KeyboardEditMode.Viewing));
+
+        // Verify Shift+Tab sets ParentIssueId (new issue becomes child of reference issue)
+        var createRequest = handler.CapturedRequests
+            .FirstOrDefault(r => r.Method == HttpMethod.Post && r.Url.Contains("issues"));
+        Assert.That(createRequest, Is.Not.Null);
+        var body = createRequest!.BodyAs<CreateIssueRequest>();
+        Assert.That(body, Is.Not.Null);
+        // Shift+Tab: new issue becomes child, so ParentIssueId = reference issue
+        Assert.That(body!.ParentIssueId, Is.EqualTo("ISSUE-001"));
+        Assert.That(body.ChildIssueId, Is.Null);
     }
 
     #endregion
