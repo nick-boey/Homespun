@@ -161,10 +161,21 @@
 
     private async Task RefreshStatusAsync()
     {
-        // SessionStoreApi doesn't have GetByEntityId; sessions are looked up by session ID.
-        // For now, we leave _session as null since we can't look up by entity ID via HTTP API.
-        // TODO: Add entity-based session lookup to the API
-        _session = null;
+        if (string.IsNullOrEmpty(EntityId))
+        {
+            _session = null;
+            return;
+        }
+
+        try
+        {
+            _session = await SessionStoreApi.GetSessionByEntityIdAsync(EntityId);
+        }
+        catch
+        {
+            // Session lookup failed, assume no active session
+            _session = null;
+        }
     }
 
     private void OnModelChanged(string modelId)

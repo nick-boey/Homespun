@@ -1,5 +1,8 @@
 using Homespun.Features.ClaudeCode.Services;
+using Homespun.Features.Containers.Services;
 using Homespun.Features.Projects;
+using Homespun.Shared.Models.Containers;
+using Homespun.Shared.Models.Sessions;
 using Homespun.Shared.Requests;
 using Microsoft.AspNetCore.Mvc;
 using SdkPermissionMode = Homespun.ClaudeAgentSdk.PermissionMode;
@@ -14,17 +17,25 @@ namespace Homespun.Features.ClaudeCode.Controllers;
 [Produces("application/json")]
 public class SessionsController(
     IClaudeSessionService sessionService,
-    IProjectService projectService) : ControllerBase
+    IProjectService projectService,
+    IContainerQueryService containerService) : ControllerBase
 {
     /// <summary>
     /// Get all active sessions.
     /// </summary>
     [HttpGet]
     [ProducesResponseType<List<SessionSummary>>(StatusCodes.Status200OK)]
-    public ActionResult<List<SessionSummary>> GetAll()
+    public async Task<ActionResult<List<SessionSummary>>> GetAll(CancellationToken cancellationToken)
     {
         var sessions = sessionService.GetAllSessions();
-        var summaries = sessions.Select(MapToSummary).ToList();
+
+        // Fetch container status to get authoritative session status from workers
+        var containers = await containerService.GetAllContainersAsync(cancellationToken);
+        var containerByEntityId = containers
+            .Where(c => !string.IsNullOrEmpty(c.IssueId))
+            .ToDictionary(c => c.IssueId!, c => c);
+
+        var summaries = sessions.Select(s => MapToSummary(s, containerByEntityId)).ToList();
         return Ok(summaries);
     }
 
@@ -65,10 +76,17 @@ public class SessionsController(
     /// </summary>
     [HttpGet("project/{projectId}")]
     [ProducesResponseType<List<SessionSummary>>(StatusCodes.Status200OK)]
-    public ActionResult<List<SessionSummary>> GetByProject(string projectId)
+    public async Task<ActionResult<List<SessionSummary>>> GetByProject(string projectId, CancellationToken cancellationToken)
     {
         var sessions = sessionService.GetSessionsForProject(projectId);
-        var summaries = sessions.Select(MapToSummary).ToList();
+
+        // Fetch container status to get authoritative session status from workers
+        var containers = await containerService.GetAllContainersAsync(cancellationToken);
+        var containerByEntityId = containers
+            .Where(c => !string.IsNullOrEmpty(c.IssueId))
+            .ToDictionary(c => c.IssueId!, c => c);
+
+        var summaries = sessions.Select(s => MapToSummary(s, containerByEntityId)).ToList();
         return Ok(summaries);
     }
 
@@ -256,37 +274,41 @@ public class SessionsController(
         }
     }
 
-    private static SessionSummary MapToSummary(ClaudeSession session) => new()
+    /// <summary>
+    /// Maps a ClaudeSession to a SessionSummary, using container status as the authoritative source.
+    /// </summary>
+    /// <param name="session">The in-memory session.</param>
+    /// <param name="containerByEntityId">Container lookup by entity/issue ID.</param>
+    /// <returns>A SessionSummary with container-derived status when available.</returns>
+    private static SessionSummary MapToSummary(
+        ClaudeSession session,
+        Dictionary<string, WorkerContainerDto> containerByEntityId)
     {
-        Id = session.Id,
-        EntityId = session.EntityId,
-        ProjectId = session.ProjectId,
-        Model = session.Model,
-        Mode = session.Mode,
-        Status = session.Status,
-        CreatedAt = session.CreatedAt,
-        LastActivityAt = session.LastActivityAt,
-        MessageCount = session.Messages.Count,
-        TotalCostUsd = session.TotalCostUsd
-    };
+        // Try to find the container for this session's entity
+        containerByEntityId.TryGetValue(session.EntityId, out var container);
+
+        // Use container status as authoritative when available
+        var status = container?.SessionStatus ?? session.Status;
+
+        return new SessionSummary
+        {
+            Id = session.Id,
+            EntityId = session.EntityId,
+            ProjectId = session.ProjectId,
+            Model = session.Model,
+            Mode = session.Mode,
+            Status = status,
+            CreatedAt = session.CreatedAt,
+            LastActivityAt = container?.LastActivityAt ?? session.LastActivityAt,
+            MessageCount = session.Messages.Count,
+            TotalCostUsd = session.TotalCostUsd,
+            ContainerId = container?.ContainerId,
+            ContainerName = container?.ContainerName
+        };
+    }
 }
 
-/// <summary>
-/// Summary of a session for listing.
-/// </summary>
-public class SessionSummary
-{
-    public required string Id { get; init; }
-    public required string EntityId { get; init; }
-    public required string ProjectId { get; init; }
-    public required string Model { get; init; }
-    public required SessionMode Mode { get; init; }
-    public ClaudeSessionStatus Status { get; init; }
-    public DateTime CreatedAt { get; init; }
-    public DateTime LastActivityAt { get; init; }
-    public int MessageCount { get; init; }
-    public decimal TotalCostUsd { get; init; }
-}
+// SessionSummary is now defined in Homespun.Shared.Models.Sessions
 
 /// <summary>
 /// Request model for creating a session.

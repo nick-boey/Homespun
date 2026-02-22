@@ -15,4 +15,14 @@ public class SessionSummary
     public DateTime LastActivityAt { get; init; }
     public int MessageCount { get; init; }
     public decimal TotalCostUsd { get; init; }
+
+    /// <summary>
+    /// Container ID hosting this session, if running in a container.
+    /// </summary>
+    public string? ContainerId { get; init; }
+
+    /// <summary>
+    /// Container name hosting this session, if running in a container.
+    /// </summary>
+    public string? ContainerName { get; init; }
 }
