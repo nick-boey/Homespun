@@ -42,6 +42,7 @@ public sealed class JsonConsoleFormatter : ConsoleFormatter
             Level = GetLogLevelString(logEntry.LogLevel),
             Message = message,
             SourceContext = GetShortCategoryName(logEntry.Category),
+            Component = "Server",
             Exception = logEntry.Exception?.ToString()?.Replace(Environment.NewLine, " ")
         };
 

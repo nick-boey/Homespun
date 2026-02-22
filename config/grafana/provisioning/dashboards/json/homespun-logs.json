@@ -187,7 +187,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "{job=~\"homespun.*\"} | json | level=~\"$level\" | line_format \"{{.level}} [{{.category}}] {{.message}}\"",
+          "expr": "{job=~\"homespun.*\"} | json | level=~\"$level\" | component=~\"$component\" | line_format \"[{{.component | default \\\"?\\\"}}] {{if eq .level \\\"Information\\\"}}INFO{{else if eq .level \\\"Warning\\\"}}WARN{{else if eq .level \\\"Error\\\"}}ERR{{else if eq .level \\\"Critical\\\"}}CRIT{{else if eq .level \\\"Debug\\\"}}DEBUG{{else}}{{.level}}{{end}} [{{.category}}] {{.message}}\"",
           "refId": "A"
         }
       ],
@@ -235,7 +235,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "{container=\"homespun\"} | json | level=~\"$level\" | line_format \"{{.level}} [{{.category}}] {{.message}}\"",
+          "expr": "{container=\"homespun\"} | json | level=~\"$level\" | line_format \"{{if eq .level \\\"Information\\\"}}INFO{{else if eq .level \\\"Warning\\\"}}WARN{{else if eq .level \\\"Error\\\"}}ERR{{else if eq .level \\\"Critical\\\"}}CRIT{{else if eq .level \\\"Debug\\\"}}DEBUG{{else}}{{.level}}{{end}} [{{.category}}] {{.message}}\"",
           "refId": "A"
         }
       ],
@@ -270,7 +270,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "{container=~\"homespun-issue-.*\"} | json | level=~\"$level\" | line_format \"{{.level}} [{{.category}}] {{.message}}\"",
+          "expr": "{container=~\"homespun-issue-.*\"} | json | level=~\"$level\" | line_format \"{{if eq .level \\\"Information\\\"}}INFO{{else if eq .level \\\"Warning\\\"}}WARN{{else if eq .level \\\"Error\\\"}}ERR{{else if eq .level \\\"Critical\\\"}}CRIT{{else if eq .level \\\"Debug\\\"}}DEBUG{{else}}{{.level}}{{end}} [{{.category}}] {{.message}}\"",
           "refId": "A"
         }
       ],
@@ -318,7 +318,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "{job=~\"homespun.*\"} | json | level=~\"Error|Warning|Critical\" | line_format \"{{.level}} [{{.category}}] {{.message}} {{if .exception}}\\n{{.exception}}{{end}}\"",
+          "expr": "{job=~\"homespun.*\"} | json | level=~\"Error|Warning|Critical\" | component=~\"$component\" | line_format \"[{{.component | default \\\"?\\\"}}] {{if eq .level \\\"Warning\\\"}}WARN{{else if eq .level \\\"Error\\\"}}ERR{{else if eq .level \\\"Critical\\\"}}CRIT{{else}}{{.level}}{{end}} [{{.category}}] {{.message}} {{if .exception}}\\n{{.exception}}{{end}}\"",
           "refId": "A"
         }
       ],
@@ -714,6 +714,41 @@
           }
         ],
         "query": "Debug,Information,Warning,Error,Critical",
+        "queryValue": "",
+        "skipUrlSync": false,
+        "type": "custom"
+      },
+      {
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": ["All"],
+          "value": ["$__all"]
+        },
+        "description": "Filter logs by component",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Component",
+        "multi": true,
+        "name": "component",
+        "options": [
+          {
+            "selected": false,
+            "text": "Server",
+            "value": "Server"
+          },
+          {
+            "selected": false,
+            "text": "Worker",
+            "value": "Worker"
+          },
+          {
+            "selected": false,
+            "text": "Client",
+            "value": "Client"
+          }
+        ],
+        "query": "Server,Worker,Client",
         "queryValue": "",
         "skipUrlSync": false,
         "type": "custom"

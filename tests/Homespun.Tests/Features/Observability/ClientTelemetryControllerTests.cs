@@ -117,6 +117,29 @@ public class ClientTelemetryControllerTests
         Assert.That(root.TryGetProperty("Level", out _), Is.True);
         Assert.That(root.TryGetProperty("Message", out _), Is.True);
         Assert.That(root.TryGetProperty("SourceContext", out _), Is.True);
+        Assert.That(root.TryGetProperty("Component", out _), Is.True);
+    }
+
+    [Test]
+    public void ReceiveTelemetry_ComponentIsClient()
+    {
+        // Arrange
+        var batch = new ClientTelemetryBatch
+        {
+            SessionId = "test-session",
+            Events =
+            [
+                new ClientTelemetryEvent { Type = TelemetryEventType.PageView, Name = "TestPage" }
+            ]
+        };
+
+        // Act
+        _controller.ReceiveTelemetry(batch);
+
+        // Assert
+        var output = _consoleOutput.ToString().Trim();
+        var json = JsonDocument.Parse(output);
+        Assert.That(json.RootElement.GetProperty("Component").GetString(), Is.EqualTo("Client"));
     }
 
     [Test]

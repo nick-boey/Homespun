@@ -46,6 +46,7 @@ scrape_configs:
             message: Message
             exception: Exception
             category: SourceContext
+            component: Component
             # Client telemetry fields (optional, present only for telemetry logs)
             telemetry_type: TelemetryType
             telemetry_name: TelemetryName
@@ -60,6 +61,7 @@ scrape_configs:
       - labels:
           level:
           category:
+          component:
           telemetry_type:
           telemetry_name:
           session_id:
