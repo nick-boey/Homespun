@@ -34,6 +34,15 @@ export function createSessionsRoute(sessionManager: SessionManager) {
       return c.json({ hasActiveSession: false });
     }
 
+    // Get effective status (source of truth for worker state)
+    const effectiveStatus = sessionManager.getEffectiveStatus(active.sessionId) || 'idle';
+
+    // Derive pending flags from effective status for backwards compatibility
+    const hasPendingQuestion = effectiveStatus === 'question_pending';
+    const hasPendingPlanApproval = effectiveStatus === 'plan_pending';
+
+    info(`/api/sessions/active query: sessionId='${active.sessionId}', effectiveStatus='${effectiveStatus}'`);
+
     return c.json({
       hasActiveSession: true,
       sessionId: active.sessionId,
@@ -41,8 +50,9 @@ export function createSessionsRoute(sessionManager: SessionManager) {
       mode: active.mode,
       model: active.model,
       permissionMode: active.permissionMode,
-      hasPendingQuestion: sessionManager.hasPendingQuestion(active.sessionId),
-      hasPendingPlanApproval: sessionManager.hasPendingPlanApproval(active.sessionId),
+      effectiveStatus,  // NEW: Single source of truth for status
+      hasPendingQuestion,  // Derived from effectiveStatus for backwards compatibility
+      hasPendingPlanApproval,  // Derived from effectiveStatus for backwards compatibility
       lastActivityAt: active.lastActivityAt,
     });
   });

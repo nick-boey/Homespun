@@ -135,6 +135,7 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         bool HasActiveSession,
         string? SessionId,
         string? Status,
+        string? EffectiveStatus,
         string? Mode,
         string? Model,
         string? PermissionMode,
@@ -628,6 +629,15 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
             var json = await response.Content.ReadAsStringAsync(cancellationToken);
             var activeSession = JsonSerializer.Deserialize<ActiveSessionResponse>(json, CamelCaseJsonOptions);
 
+            _logger.LogInformation(
+                "GetCloneContainerStateAsync: workingDirectory='{WorkingDirectory}', hasActiveSession={HasActive}, " +
+                "status='{Status}', effectiveStatus='{EffectiveStatus}', hasPendingPlan={HasPendingPlan}",
+                workingDirectory,
+                activeSession?.HasActiveSession,
+                activeSession?.Status,
+                activeSession?.EffectiveStatus,
+                activeSession?.HasPendingPlanApproval);
+
             if (activeSession?.HasActiveSession != true)
             {
                 return new CloneContainerState(
@@ -811,9 +821,33 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
 
     /// <summary>
     /// Maps worker session status to ClaudeSessionStatus enum.
+    /// Uses EffectiveStatus as the primary source of truth (derived from A2A events on the worker).
+    /// Falls back to legacy hasPending* fields for backwards compatibility.
     /// </summary>
-    private static ClaudeSessionStatus MapWorkerSessionStatus(ActiveSessionResponse activeSession)
+    private ClaudeSessionStatus MapWorkerSessionStatus(ActiveSessionResponse activeSession)
     {
+        // PRIMARY: Use effectiveStatus if available (A2A-derived, source of truth)
+        if (!string.IsNullOrEmpty(activeSession.EffectiveStatus))
+        {
+            var mappedStatus = activeSession.EffectiveStatus switch
+            {
+                "plan_pending" => ClaudeSessionStatus.WaitingForPlanExecution,
+                "question_pending" => ClaudeSessionStatus.WaitingForQuestionAnswer,
+                "working" => ClaudeSessionStatus.Running,
+                "completed" => ClaudeSessionStatus.WaitingForInput,
+                "failed" => ClaudeSessionStatus.Error,
+                "idle" => ClaudeSessionStatus.WaitingForInput,
+                _ => ClaudeSessionStatus.Running
+            };
+
+            _logger.LogInformation(
+                "MapWorkerSessionStatus: effectiveStatus='{EffectiveStatus}' -> ClaudeSessionStatus='{MappedStatus}'",
+                activeSession.EffectiveStatus, mappedStatus);
+
+            return mappedStatus;
+        }
+
+        // FALLBACK: Use legacy hasPending* fields for backwards compatibility
         if (activeSession.HasPendingQuestion == true)
             return ClaudeSessionStatus.WaitingForQuestionAnswer;
 

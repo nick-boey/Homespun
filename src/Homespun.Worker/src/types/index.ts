@@ -61,6 +61,7 @@ export interface SessionInfo {
   model: string;
   permissionMode: string;
   status: 'idle' | 'streaming' | 'closed';
+  effectiveStatus: 'idle' | 'working' | 'plan_pending' | 'question_pending' | 'completed' | 'failed';
   createdAt: string;
   lastActivityAt: string;
 }
@@ -89,6 +90,7 @@ export interface ActiveSessionResponse {
   mode?: string;
   model?: string;
   permissionMode?: string;
+  effectiveStatus?: 'idle' | 'working' | 'plan_pending' | 'question_pending' | 'completed' | 'failed';
   hasPendingQuestion?: boolean;
   hasPendingPlanApproval?: boolean;
   lastActivityAt?: string;

@@ -1114,11 +1114,10 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
 
             // Store the pending question in the session
             session.PendingQuestion = pendingQuestion;
-            session.Status = ClaudeSessionStatus.WaitingForQuestionAnswer;
+            await SetSessionStatusAsync(session, ClaudeSessionStatus.WaitingForQuestionAnswer, "AskUserQuestion tool");
 
             // Broadcast the question to clients
             await _hubContext.BroadcastQuestionReceived(sessionId, pendingQuestion);
-            await _hubContext.BroadcastSessionStatusChanged(sessionId, ClaudeSessionStatus.WaitingForQuestionAnswer);
 
             // Broadcast AG-UI custom event for question pending
             var questionPendingEvent = _agUIEventService.CreateQuestionPending(pendingQuestion);
@@ -1196,10 +1195,9 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             };
 
             session.PendingQuestion = pendingQuestion;
-            session.Status = ClaudeSessionStatus.WaitingForQuestionAnswer;
+            await SetSessionStatusAsync(session, ClaudeSessionStatus.WaitingForQuestionAnswer, "question_pending from worker");
 
             await _hubContext.BroadcastQuestionReceived(sessionId, pendingQuestion);
-            await _hubContext.BroadcastSessionStatusChanged(sessionId, ClaudeSessionStatus.WaitingForQuestionAnswer);
 
             // Broadcast AG-UI custom event for question pending
             var questionPendingEvent = _agUIEventService.CreateQuestionPending(pendingQuestion);
@@ -1292,8 +1290,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             }
 
             // Set status to WaitingForPlanExecution so UI shows the action buttons
-            session.Status = ClaudeSessionStatus.WaitingForPlanExecution;
-            await _hubContext.BroadcastSessionStatusChanged(sessionId, session.Status);
+            await SetSessionStatusAsync(session, ClaudeSessionStatus.WaitingForPlanExecution, "plan_pending from worker");
 
             _logger.LogInformation("Session {SessionId} is now waiting for plan approval (from worker plan_pending)",
                 sessionId);
@@ -1406,8 +1403,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             await _hubContext.BroadcastAGUICustomEvent(sessionId, planPendingEvent);
 
             // Set status to WaitingForPlanExecution so UI shows the action buttons
-            session.Status = ClaudeSessionStatus.WaitingForPlanExecution;
-            await _hubContext.BroadcastSessionStatusChanged(sessionId, session.Status);
+            await SetSessionStatusAsync(session, ClaudeSessionStatus.WaitingForPlanExecution, "ExitPlanMode tool");
 
             _logger.LogInformation("ExitPlanMode: Displayed plan from {FilePath} for session {SessionId} ({Length} chars), awaiting execution",
                 foundPath ?? "stored content", sessionId, planContent.Length);
@@ -1652,11 +1648,10 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
 
         // Clear the pending question and update status
         session.PendingQuestion = null;
-        session.Status = ClaudeSessionStatus.Running;
+        await SetSessionStatusAsync(session, ClaudeSessionStatus.Running, "question answered by user");
 
         // Broadcast that the question was answered
         await _hubContext.BroadcastQuestionAnswered(sessionId);
-        await _hubContext.BroadcastSessionStatusChanged(sessionId, ClaudeSessionStatus.Running);
 
         // Try to route the answer through the agent execution service (Docker workers).
         // When the worker has a pending question, this resolves it via HTTP POST to the worker's
@@ -1740,8 +1735,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         }
 
         // Clear the WaitingForPlanExecution status
-        session.Status = ClaudeSessionStatus.Running;
-        await _hubContext.BroadcastSessionStatusChanged(sessionId, session.Status);
+        await SetSessionStatusAsync(session, ClaudeSessionStatus.Running, "executing plan");
 
         // Send the plan as the next message.
         // Do NOT reference the plan file path - the plan content is provided inline below.
@@ -1775,8 +1769,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             if (keepContext)
             {
                 // Approve with context: tell worker to allow the ExitPlanMode tool, agent continues
-                session.Status = ClaudeSessionStatus.Running;
-                await _hubContext.BroadcastSessionStatusChanged(sessionId, session.Status);
+                await SetSessionStatusAsync(session, ClaudeSessionStatus.Running, "plan approved (keep context)");
 
                 if (_agentSessionIds.TryGetValue(sessionId, out var agentSessionId))
                 {
@@ -1797,8 +1790,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                 // Approve with clear context: tell worker to deny (interrupts), then start fresh
 
                 // Set status to Running immediately for responsive UI
-                session.Status = ClaudeSessionStatus.Running;
-                await _hubContext.BroadcastSessionStatusChanged(sessionId, session.Status);
+                await SetSessionStatusAsync(session, ClaudeSessionStatus.Running, "plan approved (clear context)");
 
                 if (_agentSessionIds.TryGetValue(sessionId, out var agentSessionId))
                 {
@@ -1817,8 +1809,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         else
         {
             // Reject: tell worker to deny (without interrupt), agent revises plan
-            session.Status = ClaudeSessionStatus.Running;
-            await _hubContext.BroadcastSessionStatusChanged(sessionId, session.Status);
+            await SetSessionStatusAsync(session, ClaudeSessionStatus.Running, "plan rejected by user");
 
             if (_agentSessionIds.TryGetValue(sessionId, out var agentSessionId))
             {
@@ -2202,5 +2193,22 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             "error_max_structured_output_retries" => true, // Can retry with different prompt
             _ => true                             // Default to recoverable for unknown errors
         };
+    }
+
+    /// <summary>
+    /// Updates session status and logs the transition at Information level.
+    /// This provides visibility into status changes for debugging plan status issues.
+    /// </summary>
+    private async Task SetSessionStatusAsync(ClaudeSession session, ClaudeSessionStatus newStatus, string reason)
+    {
+        var oldStatus = session.Status;
+        if (oldStatus != newStatus)
+        {
+            session.Status = newStatus;
+            _logger.LogInformation(
+                "Session status changed: sessionId='{SessionId}', from='{OldStatus}', to='{NewStatus}', reason='{Reason}'",
+                session.Id, oldStatus, newStatus, reason);
+            await _hubContext.BroadcastSessionStatusChanged(session.Id, newStatus);
+        }
     }
 }

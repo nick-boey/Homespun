@@ -10,6 +10,18 @@ import { info, error } from '../utils/logger.js';
 
 export type SdkPermissionMode = 'default' | 'acceptEdits' | 'plan' | 'bypassPermissions';
 
+/**
+ * Effective status derived from A2A events emitted.
+ * This is the source of truth for the worker's status, set when A2A events are emitted.
+ */
+export type EffectiveStatus =
+  | 'idle'             // No active streaming, waiting for input
+  | 'working'          // Agent is generating (thinking, tool_use, text)
+  | 'plan_pending'     // ExitPlanMode intercepted, awaiting approval
+  | 'question_pending' // AskUserQuestion intercepted, awaiting answers
+  | 'completed'        // Session completed successfully
+  | 'failed';          // Session failed with error
+
 const PERMISSION_MODE_MAP: Record<string, SdkPermissionMode> = {
   Default: 'default',
   AcceptEdits: 'acceptEdits',
@@ -107,6 +119,8 @@ interface WorkerSession {
   model: string;
   permissionMode: SdkPermissionMode;
   status: 'idle' | 'streaming' | 'closed';
+  effectiveStatus: EffectiveStatus;
+  lastStatusTransition: Date;
   createdAt: Date;
   lastActivityAt: Date;
 }
@@ -222,6 +236,29 @@ export class SessionManager {
   private pendingQuestions = new Map<string, PendingQuestionState>();
   private pendingPlanApprovals = new Map<string, PendingPlanApprovalState>();
 
+  /**
+   * Updates the effective status based on A2A event emission.
+   * Logs the transition at Information level.
+   */
+  setEffectiveStatus(sessionId: string, newStatus: EffectiveStatus): void {
+    const ws = this.sessions.get(sessionId);
+    if (!ws) return;
+
+    const oldStatus = ws.effectiveStatus;
+    if (oldStatus !== newStatus) {
+      ws.effectiveStatus = newStatus;
+      ws.lastStatusTransition = new Date();
+      info(`Worker status changed: sessionId='${sessionId}', from='${oldStatus}', to='${newStatus}'`);
+    }
+  }
+
+  /**
+   * Gets the current effective status for a session.
+   */
+  getEffectiveStatus(sessionId: string): EffectiveStatus | undefined {
+    return this.sessions.get(sessionId)?.effectiveStatus;
+  }
+
   async create(opts: {
     prompt: string;
     model: string;
@@ -286,6 +323,7 @@ export class SessionManager {
 
     const outputChannel = new OutputChannel();
 
+    const now = new Date();
     const workerSession: WorkerSession = {
       id,
       query: q,
@@ -296,8 +334,10 @@ export class SessionManager {
       model: opts.model,
       permissionMode: isPlan ? 'plan' : 'bypassPermissions',
       status: 'streaming',
-      createdAt: new Date(),
-      lastActivityAt: new Date(),
+      effectiveStatus: 'working',
+      lastStatusTransition: now,
+      createdAt: now,
+      lastActivityAt: now,
     };
 
     this.sessions.set(id, workerSession);
@@ -434,6 +474,9 @@ export class SessionManager {
       return false;
     }
 
+    // Update effective status before resolving - agent will resume working
+    this.setEffectiveStatus(sessionId, 'working');
+
     pending.resolve(answers);
     this.pendingQuestions.delete(sessionId);
     info(`resolvePendingQuestion - resolved for session '${sessionId}'`);
@@ -450,6 +493,9 @@ export class SessionManager {
       info(`resolvePendingPlanApproval - no pending approval for session '${sessionId}'`);
       return false;
     }
+
+    // Update effective status before resolving - agent will resume working
+    this.setEffectiveStatus(sessionId, 'working');
 
     let result: PermissionResult;
 
@@ -602,6 +648,7 @@ export class SessionManager {
       model: ws.model,
       permissionMode: ws.permissionMode,
       status: ws.status,
+      effectiveStatus: ws.effectiveStatus,
       createdAt: ws.createdAt.toISOString(),
       lastActivityAt: ws.lastActivityAt.toISOString(),
     }));

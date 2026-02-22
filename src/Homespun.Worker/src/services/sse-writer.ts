@@ -66,10 +66,13 @@ export async function* streamSessionEvents(
 
   // 1. Emit initial task with state 'submitted'
   const initialTask = createInitialTask(ctx.taskId, ctx.contextId);
+  info(`A2A event emitted: kind='${initialTask.kind}', sessionId='${sessionId}'`);
   yield formatSSE(initialTask.kind, initialTask);
 
-  // 2. Emit working status
+  // 2. Emit working status and set effective status to 'working'
   const workingStatus = createWorkingStatus(ctx);
+  sessionManager.setEffectiveStatus(sessionId, 'working');
+  info(`A2A event emitted: kind='${workingStatus.kind}', state='working', sessionId='${sessionId}'`);
   yield formatSSE(workingStatus.kind, workingStatus);
 
   try {
@@ -85,7 +88,11 @@ export async function* streamSessionEvents(
       if (isControlEvent(event)) {
         // Control events (question_pending, plan_pending) -> TaskStatusUpdateEvent with input-required
         const controlEvent = event as ControlEvent;
-        info(`A2A control event: type='${controlEvent.type}'`);
+
+        // Set effective status based on control event type
+        const inputType = controlEvent.type === 'plan_pending' ? 'plan_pending' : 'question_pending';
+        sessionManager.setEffectiveStatus(sessionId, inputType);
+        info(`A2A event emitted: kind='status-update', state='input-required', inputType='${inputType}', sessionId='${sessionId}'`);
 
         const statusUpdate = translateControlEvent(controlEvent, ctx);
         yield formatSSE(statusUpdate.kind, statusUpdate);
@@ -101,7 +108,9 @@ export async function* streamSessionEvents(
       if (msg.type === 'result') {
         // Result -> TaskStatusUpdateEvent with completed/failed, final: true
         const r = msg as any;
-        info(`A2A result: subtype='${r.subtype}', is_error=${r.is_error}`);
+        const finalStatus = r.is_error ? 'failed' : 'completed';
+        sessionManager.setEffectiveStatus(sessionId, finalStatus);
+        info(`A2A event emitted: kind='status-update', state='${finalStatus}', subtype='${r.subtype}', sessionId='${sessionId}'`);
 
         const statusUpdate = translateResultToStatus(msg, ctx);
         yield formatSSE(statusUpdate.kind, statusUpdate);
@@ -111,11 +120,25 @@ export async function* streamSessionEvents(
       // Regular SDK messages -> A2A Message
       const a2aMessage = translateSdkMessage(msg, ctx);
       if (a2aMessage) {
+        // If we're in a pending state and we get a message event, the agent must be working
+        // This handles edge cases where the agent produces content after plan/question
+        const currentStatus = sessionManager.getEffectiveStatus(sessionId);
+        if (currentStatus === 'plan_pending' || currentStatus === 'question_pending') {
+          sessionManager.setEffectiveStatus(sessionId, 'working');
+          info(`A2A: Override pending status to 'working' due to message event, sessionId='${sessionId}'`);
+        }
+        info(`A2A event emitted: kind='${a2aMessage.kind}', sessionId='${sessionId}'`);
         yield formatSSE(a2aMessage.kind, a2aMessage);
       }
     }
+
+    // After stream completes without result message, set to idle
+    sessionManager.setEffectiveStatus(sessionId, 'idle');
+    info(`A2A: Stream completed, setting status to 'idle', sessionId='${sessionId}'`);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    sessionManager.setEffectiveStatus(sessionId, 'failed');
+    info(`A2A event emitted: kind='status-update', state='failed', error='${message}', sessionId='${sessionId}'`);
     const errorEvent = createErrorStatus(ctx, message, 'AGENT_ERROR');
     yield formatSSE(errorEvent.kind, errorEvent);
   }
