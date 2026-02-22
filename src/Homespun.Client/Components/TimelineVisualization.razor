@@ -826,6 +826,10 @@
     {
         // Refresh the task graph to show the new issue
         await LoadTaskGraphAsync();
+
+        // Re-initialize keyboard navigation and select the newly created issue
+        InitializeKeyboardNavigationWithSelection(newIssueId);
+
         StateHasChanged();
 
         // Notify parent component
@@ -911,6 +915,16 @@ if (_notificationHubConnection != null)
 
     private void InitializeKeyboardNavigation()
     {
+        InitializeKeyboardNavigationWithSelection(null);
+    }
+
+    /// <summary>
+    /// Initializes keyboard navigation and optionally selects a specific issue.
+    /// If selectIssueId is null, selects the first actionable issue.
+    /// </summary>
+    /// <param name="selectIssueId">The issue ID to select, or null to select first actionable</param>
+    private void InitializeKeyboardNavigationWithSelection(string? selectIssueId)
+    {
         // Unsubscribe from previous subscriptions if any
         NavService.OnStateChanged -= HandleNavStateChanged;
         NavService.OnStateChanged += HandleNavStateChanged;
@@ -927,15 +941,30 @@ if (_notificationHubConnection != null)
             var allRenderLines = TaskGraphLayoutService.ComputeLayout(_taskGraphData);
             _issueRenderLines = allRenderLines.OfType<TaskGraphIssueRenderLine>().ToList();
             NavService.Initialize(_issueRenderLines);
-            NavService.SelectFirstActionable();
+
+            // Select the specified issue, or fall back to first actionable
+            if (selectIssueId != null)
+            {
+                NavService.SelectIssue(selectIssueId);
+            }
+            else
+            {
+                NavService.SelectFirstActionable();
+            }
         }
     }
 
     private async Task HandleIssueChangedAsync()
     {
+        // Remember current selection before refresh
+        var currentSelection = NavService.SelectedIssueId;
+
         // Refresh the task graph when an issue is created or updated
         await LoadTaskGraphAsync();
-        InitializeKeyboardNavigation();
+
+        // Re-initialize with preserved selection
+        InitializeKeyboardNavigationWithSelection(currentSelection);
+
         StateHasChanged();
     }
 

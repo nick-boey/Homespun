@@ -1040,13 +1040,44 @@ else
                          ?? _inProgressIssues?.FirstOrDefault(i => i.Id == issueId);
     }
 
+    /// <summary>
+    /// Selects an issue by ID, fetching from API if not found in local cache.
+    /// Use this for newly created issues that may not be in the cached list yet.
+    /// </summary>
+    private async Task SelectIssueAsync(string issueId)
+    {
+        // Clear any pull request selection
+        _selectedPullRequestId = null;
+        _selectedPullRequest = null;
+        _selectedMergedPr = null;
+
+        _selectedIssueId = issueId;
+
+        // Try to find in cached lists first
+        _selectedIssue = _openIssues?.FirstOrDefault(i => i.Id == issueId)
+                         ?? _inProgressIssues?.FirstOrDefault(i => i.Id == issueId);
+
+        // If not found locally, fetch from API
+        if (_selectedIssue == null)
+        {
+            try
+            {
+                _selectedIssue = await IssueApi.GetIssueAsync(issueId, Id);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "Failed to fetch issue {IssueId} for selection", issueId);
+            }
+        }
+    }
+
     private async Task HandleInlineIssueCreated(string newIssueId)
     {
         // Refresh data to include the new issue
         await RefreshData();
 
-        // Select the newly created issue
-        SelectIssue(newIssueId);
+        // Select the newly created issue (fetch from API if not in cache)
+        await SelectIssueAsync(newIssueId);
     }
 
     private void HandleEditIssue(string issueId)
