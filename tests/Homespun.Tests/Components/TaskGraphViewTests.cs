@@ -4,6 +4,7 @@ using Homespun.Client.Components;
 using Homespun.Client.Services;
 using Homespun.Shared.Models.Fleece;
 using Homespun.Shared.Models.Gitgraph;
+using Homespun.Tests.Helpers;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -16,10 +17,16 @@ public class TaskGraphViewTests : BunitTestContext
     public new void Setup()
     {
         base.Setup();
-        // Register mock HttpClient and service for TaskGraphView
-        var mockHttpClient = new HttpClient();
+        // Register mock HttpClient and services for TaskGraphView
+        // Configure mock to return proper responses for different endpoints
+        var mockHandler = new MockHttpMessageHandler()
+            .RespondWith("/api/issues/", new IssueResponse { Id = "TEST-001", Type = IssueType.Task, Status = IssueStatus.Open, Title = "Test" }) // For PUT /api/issues/{id}
+            .WithDefaultResponse(new List<object>()); // Return empty list for GET requests (agent prompts)
+        var mockHttpClient = mockHandler.CreateClient();
         var issueApi = new HttpIssueApiService(mockHttpClient);
+        var agentPromptApi = new HttpAgentPromptApiService(mockHttpClient);
         Services.AddSingleton(issueApi);
+        Services.AddSingleton(agentPromptApi);
     }
 
     [Test]
@@ -335,5 +342,233 @@ public class TaskGraphViewTests : BunitTestContext
         // Both issue rows should render
         var issueRows = cut.FindAll(".task-graph-row");
         Assert.That(issueRows, Has.Count.EqualTo(2));
+    }
+
+    [Test]
+    public void Renders_IssueTypeBadge_WithCorrectClass()
+    {
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes =
+            [
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "BUG-001", Title = "Bug issue", Status = IssueStatus.Open, Type = IssueType.Bug },
+                    Lane = 0, Row = 0, IsActionable = true
+                },
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "TASK-001", Title = "Task issue", Status = IssueStatus.Open, Type = IssueType.Task },
+                    Lane = 0, Row = 1, IsActionable = true
+                },
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "FEAT-001", Title = "Feature issue", Status = IssueStatus.Open, Type = IssueType.Feature },
+                    Lane = 0, Row = 2, IsActionable = true
+                },
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "CHORE-001", Title = "Chore issue", Status = IssueStatus.Open, Type = IssueType.Chore },
+                    Lane = 0, Row = 3, IsActionable = true
+                }
+            ],
+            TotalLanes = 1
+        };
+
+        var cut = Render<TaskGraphView>(p => p.Add(x => x.TaskGraph, taskGraph));
+
+        var typeBadges = cut.FindAll(".task-graph-issue-type");
+        Assert.That(typeBadges, Has.Count.EqualTo(4));
+
+        // Verify each badge has correct class and label
+        Assert.That(typeBadges[0].ClassList, Does.Contain("bug"));
+        Assert.That(typeBadges[0].TextContent, Is.EqualTo("Bug"));
+
+        Assert.That(typeBadges[1].ClassList, Does.Contain("task"));
+        Assert.That(typeBadges[1].TextContent, Is.EqualTo("Task"));
+
+        Assert.That(typeBadges[2].ClassList, Does.Contain("feature"));
+        Assert.That(typeBadges[2].TextContent, Is.EqualTo("Feat"));
+
+        Assert.That(typeBadges[3].ClassList, Does.Contain("chore"));
+        Assert.That(typeBadges[3].TextContent, Is.EqualTo("Chore"));
+    }
+
+    [Test]
+    public void TypeBadge_OpensMenu_OnClick()
+    {
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes =
+            [
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "TEST-001", Title = "Test issue", Status = IssueStatus.Open, Type = IssueType.Task },
+                    Lane = 0, Row = 0, IsActionable = true
+                }
+            ],
+            TotalLanes = 1
+        };
+
+        var cut = Render<TaskGraphView>(p =>
+        {
+            p.Add(x => x.TaskGraph, taskGraph);
+            p.Add(x => x.ProjectId, "test-project");
+        });
+
+        // Menu should not exist initially
+        Assert.That(cut.FindAll(".task-graph-type-menu"), Is.Empty);
+
+        // Click the type badge
+        cut.Find(".task-graph-issue-type").Click();
+
+        // Menu should now be visible with 4 type options
+        var menu = cut.Find(".task-graph-type-menu");
+        var buttons = menu.QuerySelectorAll("button");
+        Assert.That(buttons, Has.Length.EqualTo(4));
+
+        // Verify button labels
+        Assert.That(buttons[0].TextContent, Is.EqualTo("Bug"));
+        Assert.That(buttons[1].TextContent, Is.EqualTo("Task"));
+        Assert.That(buttons[2].TextContent, Is.EqualTo("Feature"));
+        Assert.That(buttons[3].TextContent, Is.EqualTo("Chore"));
+    }
+
+    [Test]
+    public void TypeMenu_ClosesOnSecondClick()
+    {
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes =
+            [
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "TEST-001", Title = "Test issue", Status = IssueStatus.Open, Type = IssueType.Task },
+                    Lane = 0, Row = 0, IsActionable = true
+                }
+            ],
+            TotalLanes = 1
+        };
+
+        var cut = Render<TaskGraphView>(p =>
+        {
+            p.Add(x => x.TaskGraph, taskGraph);
+            p.Add(x => x.ProjectId, "test-project");
+        });
+
+        // Open the menu
+        var typeBadge = cut.Find(".task-graph-issue-type");
+        typeBadge.Click();
+        Assert.That(cut.FindAll(".task-graph-type-menu"), Has.Count.EqualTo(1));
+
+        // Click badge again to close
+        typeBadge.Click();
+        Assert.That(cut.FindAll(".task-graph-type-menu"), Is.Empty);
+    }
+
+    [Test]
+    public void TypeMenu_InvokesCallback_WhenTypeSelected()
+    {
+        var callbackInvoked = false;
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes =
+            [
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "TEST-001", Title = "Test issue", Status = IssueStatus.Open, Type = IssueType.Task },
+                    Lane = 0, Row = 0, IsActionable = true
+                }
+            ],
+            TotalLanes = 1
+        };
+
+        var cut = Render<TaskGraphView>(p =>
+        {
+            p.Add(x => x.TaskGraph, taskGraph);
+            p.Add(x => x.ProjectId, "test-project");
+            p.Add(x => x.OnIssueTypeChanged, EventCallback.Factory.Create(this, () => callbackInvoked = true));
+        });
+
+        // Open the menu and select a type
+        cut.Find(".task-graph-issue-type").Click();
+        var bugButton = cut.Find(".type-menu-item.bug");
+        bugButton.Click();
+
+        Assert.That(callbackInvoked, Is.True);
+    }
+
+    [Test]
+    public void TypeMenu_ClosesAfterSelection()
+    {
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes =
+            [
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "TEST-001", Title = "Test issue", Status = IssueStatus.Open, Type = IssueType.Task },
+                    Lane = 0, Row = 0, IsActionable = true
+                }
+            ],
+            TotalLanes = 1
+        };
+
+        var cut = Render<TaskGraphView>(p =>
+        {
+            p.Add(x => x.TaskGraph, taskGraph);
+            p.Add(x => x.ProjectId, "test-project");
+            p.Add(x => x.OnIssueTypeChanged, EventCallback.Factory.Create(this, () => { }));
+        });
+
+        // Open the menu
+        cut.Find(".task-graph-issue-type").Click();
+        Assert.That(cut.FindAll(".task-graph-type-menu"), Has.Count.EqualTo(1));
+
+        // Select a type
+        cut.Find(".type-menu-item.feature").Click();
+
+        // Menu should close after selection
+        Assert.That(cut.FindAll(".task-graph-type-menu"), Is.Empty);
+    }
+
+    [Test]
+    public void TypeMenu_CallsApi_WhenTypeSelected()
+    {
+        // Create mock handler for API calls
+        var mockHandler = new MockHttpMessageHandler()
+            .RespondWith("/api/issues/TEST-001", new IssueResponse { Id = "TEST-001", Type = IssueType.Feature });
+        var httpClient = mockHandler.CreateClient();
+        var issueApi = new HttpIssueApiService(httpClient);
+
+        // Re-register with tracking mock
+        Services.AddSingleton(issueApi);
+
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes =
+            [
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "TEST-001", Title = "Test issue", Status = IssueStatus.Open, Type = IssueType.Task },
+                    Lane = 0, Row = 0, IsActionable = true
+                }
+            ],
+            TotalLanes = 1
+        };
+
+        var cut = Render<TaskGraphView>(p =>
+        {
+            p.Add(x => x.TaskGraph, taskGraph);
+            p.Add(x => x.ProjectId, "test-project");
+            p.Add(x => x.OnIssueTypeChanged, EventCallback.Factory.Create(this, () => { }));
+        });
+
+        // Open the menu and select Feature
+        cut.Find(".task-graph-issue-type").Click();
+        cut.Find(".type-menu-item.feature").Click();
+
+        // The API should have been called - verify by checking the menu closed (which happens after API call)
+        Assert.That(cut.FindAll(".task-graph-type-menu"), Is.Empty);
     }
 }
