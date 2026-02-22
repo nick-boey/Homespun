@@ -1541,15 +1541,6 @@ else
             case "r":
                 NavService.StartReplacingTitle();
                 break;
-            case "o":
-                if (e.ShiftKey)
-                    NavService.CreateIssueAbove();
-                else
-                    NavService.CreateIssueBelow();
-                break;
-            case "O":
-                NavService.CreateIssueAbove();
-                break;
             case "Escape":
                 // Clear selection or close sidebar panel
                 ClearSelection();

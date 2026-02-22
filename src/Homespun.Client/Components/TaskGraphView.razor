@@ -183,8 +183,9 @@
                 </div>
             }
 
-            @* Insert new issue row when creating inline *@
-            @if (NavService?.EditMode == KeyboardEditMode.CreatingNew
+            @* Insert new issue row when creating inline via NavService (not TaskGraphView's own inline creation) *@
+            @if (!_isCreatingInline
+                && NavService?.EditMode == KeyboardEditMode.CreatingNew
                 && NavService?.PendingNewIssue != null
                 && line is TaskGraphIssueRenderLine currentIssue
                 && ShouldInsertNewIssueAfter(currentIssue.IssueId))
@@ -204,8 +205,9 @@
             }
         }
 
-        @* Handle new issue at the end of the list *@
-        @if (NavService?.EditMode == KeyboardEditMode.CreatingNew
+        @* Handle new issue at the end of the list (not TaskGraphView's own inline creation) *@
+        @if (!_isCreatingInline
+            && NavService?.EditMode == KeyboardEditMode.CreatingNew
             && NavService?.PendingNewIssue != null
             && ShouldInsertNewIssueAtEnd())
         {
