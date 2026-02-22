@@ -315,103 +315,173 @@ public class MockDataSeederService : IHostedService
 
     private Task SeedIssuesAsync()
     {
-        var now = DateTime.UtcNow;
+        var now = DateTimeOffset.UtcNow;
 
-        // Issues for Demo Project
+        // Issues for Demo Project - matches the graph dependency tree
         // Note: Issue has init-only properties, so we use object initializers
         var issues = new List<Issue>
         {
+            // Orphan issues (no parents)
             new()
             {
-                Id = "task/abc123",
-                Title = "Create service mocks",
-                Description = "Create mocks for all services with fake data sets to enable testing without production data.",
-                Type = IssueType.Task,
+                Id = "ISSUE-001",
+                Title = "Add dark mode support",
+                Description = "Implement a dark mode theme option for better accessibility and user preference",
+                Type = IssueType.Feature,
                 Status = IssueStatus.Open,
                 Priority = 2,
-                CreatedAt = now.AddDays(-5),
+                CreatedAt = now.AddDays(-14),
+                LastUpdate = now.AddDays(-2)
+            },
+            new()
+            {
+                Id = "ISSUE-002",
+                Title = "Improve mobile responsiveness",
+                Description = "Ensure all pages display correctly on mobile devices and tablets",
+                Type = IssueType.Task,
+                Status = IssueStatus.Open,
+                Priority = 3,
+                CreatedAt = now.AddDays(-12),
                 LastUpdate = now.AddDays(-1)
             },
             new()
             {
-                Id = "feat/def456",
-                Title = "Add dashboard analytics",
-                Description = "Implement analytics dashboard with charts showing project metrics.",
-                Type = IssueType.Feature,
+                Id = "ISSUE-003",
+                Title = "Fix login timeout bug",
+                Description = "Users are being logged out unexpectedly after 5 minutes of inactivity",
+                Type = IssueType.Bug,
+                Status = IssueStatus.Progress,
+                Priority = 1,
+                CreatedAt = now.AddDays(-7),
+                LastUpdate = now.AddHours(-6)
+            },
+
+            // Dependency chain: ISSUE-004 -> ISSUE-005 -> ISSUE-006
+            //                                ISSUE-005 -> ISSUE-007 -> ISSUE-008 -> ISSUE-009 -> ISSUE-010
+            //                                                          ISSUE-008 -> ISSUE-011
+            //                                             ISSUE-007 -> ISSUE-012
+            //                                ISSUE-005 -> ISSUE-013
+            new()
+            {
+                Id = "ISSUE-004",
+                Title = "Design API schema",
+                Description = "Define the REST API schema for the new feature endpoints",
+                Type = IssueType.Task,
                 Status = IssueStatus.Open,
-                Priority = 3,
-                ParentIssues = [new ParentIssueRef { ParentIssue = "task/abc123", SortOrder = "0" }],
+                Priority = 2,
                 CreatedAt = now.AddDays(-10),
                 LastUpdate = now.AddDays(-3)
             },
             new()
             {
-                Id = "bug/ghi789",
-                Title = "Fix navigation breadcrumb",
-                Description = "Breadcrumb shows incorrect path when navigating from issue to PR.",
-                Type = IssueType.Bug,
-                Status = IssueStatus.Progress,
-                Priority = 1,
-                CreatedAt = now.AddDays(-2),
-                LastUpdate = now.AddHours(-12)
-            },
-            new()
-            {
-                Id = "task/jkl012",
-                Title = "Update dependencies",
-                Description = "Update all npm and NuGet dependencies to latest stable versions.",
+                Id = "ISSUE-005",
+                Title = "Implement API endpoints",
+                Description = "Build the REST API endpoints based on the approved schema",
                 Type = IssueType.Task,
-                Status = IssueStatus.Complete,
-                Priority = 4,
-                CreatedAt = now.AddDays(-15),
-                LastUpdate = now.AddDays(-8)
+                Status = IssueStatus.Open,
+                Priority = 2,
+                ParentIssues = [new ParentIssueRef { ParentIssue = "ISSUE-004", SortOrder = "0" }],
+                CreatedAt = now.AddDays(-9),
+                LastUpdate = now.AddDays(-2)
             },
             new()
             {
-                Id = "task/mno345",
-                Title = "Simplify state management",
-                Description = "Refactor component state to use simpler patterns.",
+                Id = "ISSUE-006",
+                Title = "Write API documentation",
+                Description = "Document all new API endpoints with examples and usage guidelines",
+                Type = IssueType.Chore,
+                Status = IssueStatus.Open,
+                Priority = 3,
+                ParentIssues = [new ParentIssueRef { ParentIssue = "ISSUE-005", SortOrder = "0" }],
+                CreatedAt = now.AddDays(-8),
+                LastUpdate = now.AddDays(-1)
+            },
+            new()
+            {
+                Id = "ISSUE-007",
+                Title = "Implement GET endpoints",
+                Description = "Build GET endpoints for retrieving resources from the API",
+                Type = IssueType.Task,
+                Status = IssueStatus.Open,
+                Priority = 2,
+                ParentIssues = [new ParentIssueRef { ParentIssue = "ISSUE-005", SortOrder = "0" }],
+                CreatedAt = now.AddDays(-7),
+                LastUpdate = now.AddDays(-1)
+            },
+            new()
+            {
+                Id = "ISSUE-008",
+                Title = "Implement POST endpoints",
+                Description = "Build POST endpoints for creating new resources",
+                Type = IssueType.Task,
+                Status = IssueStatus.Open,
+                Priority = 2,
+                ParentIssues = [new ParentIssueRef { ParentIssue = "ISSUE-007", SortOrder = "0" }],
+                CreatedAt = now.AddDays(-6),
+                LastUpdate = now.AddDays(-1)
+            },
+            new()
+            {
+                Id = "ISSUE-009",
+                Title = "Implement PUT/PATCH endpoints",
+                Description = "Build PUT/PATCH endpoints for updating existing resources",
+                Type = IssueType.Task,
+                Status = IssueStatus.Open,
+                Priority = 2,
+                ParentIssues = [new ParentIssueRef { ParentIssue = "ISSUE-008", SortOrder = "0" }],
+                CreatedAt = now.AddDays(-5),
+                LastUpdate = now.AddDays(-1)
+            },
+            new()
+            {
+                Id = "ISSUE-010",
+                Title = "Implement DELETE endpoints",
+                Description = "Build DELETE endpoints for removing resources",
+                Type = IssueType.Task,
+                Status = IssueStatus.Open,
+                Priority = 2,
+                ParentIssues = [new ParentIssueRef { ParentIssue = "ISSUE-009", SortOrder = "0" }],
+                CreatedAt = now.AddDays(-4),
+                LastUpdate = now.AddDays(-1)
+            },
+            new()
+            {
+                Id = "ISSUE-011",
+                Title = "Add request validation",
+                Description = "Implement request validation middleware for all API endpoints",
                 Type = IssueType.Task,
                 Status = IssueStatus.Open,
                 Priority = 3,
-                ParentIssues = [new ParentIssueRef { ParentIssue = "feat/def456", SortOrder = "0" }],
+                ParentIssues = [new ParentIssueRef { ParentIssue = "ISSUE-008", SortOrder = "0" }],
+                CreatedAt = now.AddDays(-5),
+                LastUpdate = now.AddDays(-2)
+            },
+            new()
+            {
+                Id = "ISSUE-012",
+                Title = "Add rate limiting",
+                Description = "Implement rate limiting to prevent API abuse",
+                Type = IssueType.Task,
+                Status = IssueStatus.Open,
+                Priority = 3,
+                ParentIssues = [new ParentIssueRef { ParentIssue = "ISSUE-007", SortOrder = "0" }],
+                CreatedAt = now.AddDays(-6),
+                LastUpdate = now.AddDays(-3)
+            },
+            new()
+            {
+                Id = "ISSUE-013",
+                Title = "Set up API monitoring",
+                Description = "Configure monitoring and alerting for API health and performance",
+                Type = IssueType.Chore,
+                Status = IssueStatus.Open,
+                Priority = 4,
+                ParentIssues = [new ParentIssueRef { ParentIssue = "ISSUE-005", SortOrder = "0" }],
                 CreatedAt = now.AddDays(-7),
-                LastUpdate = now.AddDays(-4)
+                LastUpdate = now.AddDays(-2)
             },
-            // Issue X4LlBY - Referenced in issue 1JudQJ
-            // This issue demonstrates the branch naming pattern with custom working branch ID
-            new()
-            {
-                Id = "X4LlBY",
-                Title = "Improve tool output formatting",
-                Description = "Enhance the output formatting for CLI tools to be more readable and include color coding.",
-                Type = IssueType.Feature,
-                Status = IssueStatus.Progress,
-                Priority = 2,
-                WorkingBranchId = "improve-tool-output",
-                CreatedAt = now.AddDays(-3),
-                LastUpdate = now.AddHours(-6)
-            },
-            // Issue demonstrating the bug scenario (1JudQJ):
-            // Originally created as a Feature, then changed to Bug type
-            // The branch name should reflect the current type (Bug), not the original (Feature)
-            new()
-            {
-                Id = "1JudQJ",
-                Title = "Fix issues with clone and branch naming",
-                Description = @"When a new clone is created for an issue, it currently creates the new clone with a default automatically generated branch name. It appears that this is being persisted independent to the {group}/{type}/{branch-id} pattern, so when these details are changed for an issue they are not recalculated and updated prior to creating the branch and clone.
 
-Create an integration test to confirm that this does occur, then fix it - the branch name and clone folder name should always match and should always be recalculated just before creating the branch and clone.",
-                Type = IssueType.Bug, // This was originally Feature, now Bug
-                Status = IssueStatus.Progress,
-                Priority = 1,
-                WorkingBranchId = "fix-issues-with-clone-and-branch-naming",
-                ParentIssues = [new ParentIssueRef { ParentIssue = "X4LlBY", SortOrder = "0" }],
-                CreatedAt = now.AddDays(-1),
-                LastUpdate = now
-            },
             // Issues for testing keyboard hierarchy creation (E2E tests)
-            // Parent issue (lane 1) - this issue will have children below it
             new()
             {
                 Id = "e2e/parent1",
@@ -424,7 +494,6 @@ Create an integration test to confirm that this does occur, then fix it - the br
                 CreatedAt = now.AddDays(-4),
                 LastUpdate = now.AddDays(-1)
             },
-            // Child issue of parent1 (lane 0)
             new()
             {
                 Id = "e2e/child1",
@@ -437,7 +506,6 @@ Create an integration test to confirm that this does occur, then fix it - the br
                 CreatedAt = now.AddDays(-3),
                 LastUpdate = now.AddDays(-1)
             },
-            // Another child of parent1 (lane 0)
             new()
             {
                 Id = "e2e/child2",
@@ -450,7 +518,6 @@ Create an integration test to confirm that this does occur, then fix it - the br
                 CreatedAt = now.AddDays(-2),
                 LastUpdate = now.AddDays(-1)
             },
-            // Standalone issue with no parents (orphan) - for testing creating hierarchy
             new()
             {
                 Id = "e2e/orphan",
@@ -462,7 +529,6 @@ Create an integration test to confirm that this does occur, then fix it - the br
                 CreatedAt = now.AddHours(-12),
                 LastUpdate = now.AddHours(-6)
             },
-            // Series parent - children execute in order
             new()
             {
                 Id = "e2e/series-parent",
@@ -475,7 +541,6 @@ Create an integration test to confirm that this does occur, then fix it - the br
                 CreatedAt = now.AddDays(-4),
                 LastUpdate = now.AddDays(-1)
             },
-            // Series child 1
             new()
             {
                 Id = "e2e/series-child1",
@@ -488,7 +553,6 @@ Create an integration test to confirm that this does occur, then fix it - the br
                 CreatedAt = now.AddDays(-3),
                 LastUpdate = now.AddDays(-1)
             },
-            // Series child 2
             new()
             {
                 Id = "e2e/series-child2",
