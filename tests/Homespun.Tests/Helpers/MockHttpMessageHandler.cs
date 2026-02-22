@@ -11,7 +11,7 @@ namespace Homespun.Tests.Helpers;
 public class MockHttpMessageHandler : HttpMessageHandler
 {
     private readonly Dictionary<string, Func<HttpRequestMessage, HttpResponseMessage>> _responses = new();
-    private HttpResponseMessage _defaultResponse = new(HttpStatusCode.OK)
+    private Func<HttpRequestMessage, HttpResponseMessage> _defaultResponseFactory = _ => new HttpResponseMessage(HttpStatusCode.OK)
     {
         Content = JsonContent.Create(new object())
     };
@@ -51,7 +51,7 @@ public class MockHttpMessageHandler : HttpMessageHandler
     /// </summary>
     public MockHttpMessageHandler WithDefaultResponse<T>(T responseBody)
     {
-        _defaultResponse = new HttpResponseMessage(HttpStatusCode.OK)
+        _defaultResponseFactory = _ => new HttpResponseMessage(HttpStatusCode.OK)
         {
             Content = JsonContent.Create(responseBody)
         };
@@ -80,6 +80,6 @@ public class MockHttpMessageHandler : HttpMessageHandler
             }
         }
 
-        return Task.FromResult(_defaultResponse);
+        return Task.FromResult(_defaultResponseFactory(request));
     }
 }
