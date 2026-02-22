@@ -102,7 +102,10 @@
                                     <span class="message-time">@message.CreatedAt.ToLocalTime().ToString("HH:mm:ss")</span>
                                 </div>
                                 <div class="message-content">
-                                    @foreach (var content in message.Content.ToList())
+                                    @foreach (var content in message.Content
+                                        .OrderBy(c => c.Index >= 0 ? c.Index : int.MaxValue)
+                                        .ThenBy(c => message.Content.IndexOf(c))
+                                        .ToList())
                                     {
                                         <div class="content-block @GetContentBlockClass(content.Type) @(content.IsStreaming ? "streaming" : "")">
                                             @switch (content.Type)
@@ -2082,6 +2085,17 @@
                         {
                             // No existing block, add this complete block
                             content.IsStreaming = false; // Ensure it's not marked as streaming
+
+                            // Collapse all previous thinking blocks when a tool arrives
+                            if (content.Type == ClaudeContentType.ToolUse)
+                            {
+                                foreach (var thinkingBlock in currentMessage.Content
+                                    .Where(c => c.Type == ClaudeContentType.Thinking && c.IsStreaming))
+                                {
+                                    thinkingBlock.IsStreaming = false;
+                                }
+                            }
+
                             currentMessage.Content.Add(content);
                         }
                         else
@@ -2129,6 +2143,17 @@
                         if (existingBlock == null)
                         {
                             content.Index = index;
+
+                            // Collapse all previous thinking blocks when a tool starts
+                            if (content.Type == ClaudeContentType.ToolUse)
+                            {
+                                foreach (var thinkingBlock in currentMessage.Content
+                                    .Where(c => c.Type == ClaudeContentType.Thinking && c.IsStreaming))
+                                {
+                                    thinkingBlock.IsStreaming = false;
+                                }
+                            }
+
                             currentMessage.Content.Add(content);
                         }
                     }
