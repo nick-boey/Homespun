@@ -571,4 +571,99 @@ public class TaskGraphViewTests : BunitTestContext
         // The API should have been called - verify by checking the menu closed (which happens after API call)
         Assert.That(cut.FindAll(".task-graph-type-menu"), Is.Empty);
     }
+
+    [Test]
+    public void AgentStatusBadge_IsClickableLink_WithSessionHref()
+    {
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes =
+            [
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "TEST-001", Title = "With agent", Status = IssueStatus.Open },
+                    Lane = 0, Row = 0, IsActionable = true
+                }
+            ],
+            TotalLanes = 1,
+            AgentStatuses = new Dictionary<string, AgentStatusData>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["TEST-001"] = new AgentStatusData { IsActive = true, Status = "Running", SessionId = "session-abc123" }
+            }
+        };
+
+        var cut = Render<TaskGraphView>(p =>
+        {
+            p.Add(x => x.TaskGraph, taskGraph);
+        });
+
+        // Agent status badge should be an anchor tag with href to the session
+        var badge = cut.Find(".agent-status-badge");
+        Assert.That(badge.TagName.ToLower(), Is.EqualTo("a"), "Agent status badge should be an <a> tag");
+        Assert.That(badge.GetAttribute("href"), Is.EqualTo("/sessions/session-abc123"), "Badge href should link to the session");
+    }
+
+    [Test]
+    public void AgentStatusBadge_HasStopPropagation_ToPreventRowClick()
+    {
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes =
+            [
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "TEST-001", Title = "With agent", Status = IssueStatus.Open },
+                    Lane = 0, Row = 0, IsActionable = true
+                }
+            ],
+            TotalLanes = 1,
+            AgentStatuses = new Dictionary<string, AgentStatusData>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["TEST-001"] = new AgentStatusData { IsActive = true, Status = "Running", SessionId = "session-abc123" }
+            }
+        };
+
+        var cut = Render<TaskGraphView>(p =>
+        {
+            p.Add(x => x.TaskGraph, taskGraph);
+        });
+
+        // Agent status badge should have onclick:stopPropagation to prevent row click
+        var badge = cut.Find(".agent-status-badge");
+        Assert.That(badge.HasAttribute("blazor:onclick:stoppropagation") ||
+                    cut.Markup.Contains("onclick:stoppropagation"),
+            Is.True, "Agent status badge should have stopPropagation to prevent row click bubbling");
+    }
+
+    [Test]
+    public void AgentStatusBadge_OnPrRow_IsClickableLink()
+    {
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes = [],
+            TotalLanes = 1,
+            MergedPrs =
+            [
+                new TaskGraphPrResponse
+                {
+                    Number = 123,
+                    Title = "Test PR",
+                    IsMerged = true,
+                    Url = "https://github.com/test/repo/pull/123",
+                    HasDescription = true,
+                    AgentStatus = new AgentStatusData { IsActive = true, Status = "Running", SessionId = "pr-session-456" }
+                }
+            ]
+        };
+
+        var cut = Render<TaskGraphView>(p =>
+        {
+            p.Add(x => x.TaskGraph, taskGraph);
+        });
+
+        // Agent status badge on PR row should also be an anchor tag
+        var badge = cut.Find(".agent-status-badge");
+        Assert.That(badge.TagName.ToLower(), Is.EqualTo("a"), "Agent status badge on PR should be an <a> tag");
+        Assert.That(badge.GetAttribute("href"), Is.EqualTo("/sessions/pr-session-456"), "Badge href should link to the session");
+    }
 }

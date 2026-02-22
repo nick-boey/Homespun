@@ -523,6 +523,11 @@
                 await InvokeAsync(async () =>
                 {
                     await LoadGraphAsync();
+                    if (UseTaskGraphMode)
+                    {
+                        await LoadTaskGraphAsync();
+                        StateHasChanged();
+                    }
                 });
             });
 
@@ -533,6 +538,11 @@
                     await InvokeAsync(async () =>
                     {
                         await LoadGraphAsync();
+                        if (UseTaskGraphMode)
+                        {
+                            await LoadTaskGraphAsync();
+                            StateHasChanged();
+                        }
                     });
                 }
             });
@@ -542,6 +552,11 @@
                 await InvokeAsync(async () =>
                 {
                     await LoadGraphAsync();
+                    if (UseTaskGraphMode)
+                    {
+                        await LoadTaskGraphAsync();
+                        StateHasChanged();
+                    }
                 });
             });
 

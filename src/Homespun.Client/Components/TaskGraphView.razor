@@ -39,10 +39,12 @@
                         <span class="task-graph-title">@prLine.Title</span>
                         @if (prLine.AgentStatus != null)
                         {
-                            <span class="agent-status-badge @GetAgentStatusClass(prLine.AgentStatus)">
+                            <a href="/sessions/@prLine.AgentStatus.SessionId"
+                               class="agent-status-badge @GetAgentStatusClass(prLine.AgentStatus)"
+                               @onclick:stopPropagation="true">
                                 <span class="agent-status-dot @(prLine.AgentStatus.IsActive ? "agent-status-dot-active" : "")"></span>
                                 @GetAgentStatusLabel(prLine.AgentStatus)
-                            </span>
+                            </a>
                         }
                     </div>
                 </div>
@@ -125,10 +127,12 @@
                         }
                         @if (agentStatus != null && !isEditing)
                         {
-                            <span class="agent-status-badge @GetAgentStatusClass(agentStatus)">
+                            <a href="/sessions/@agentStatus.SessionId"
+                               class="agent-status-badge @GetAgentStatusClass(agentStatus)"
+                               @onclick:stopPropagation="true">
                                 <span class="agent-status-dot @(agentStatus.IsActive ? "agent-status-dot-active" : "")"></span>
                                 @GetAgentStatusLabel(agentStatus)
-                            </span>
+                            </a>
                         }
                         @if (!isEditing && !string.IsNullOrEmpty(ProjectId))
                         {
@@ -390,6 +394,14 @@
         border-radius: 12px;
         font-size: 11px;
         flex-shrink: 0;
+        text-decoration: none;
+        cursor: pointer;
+        transition: filter 0.15s ease;
+    }
+
+    .agent-status-badge:hover {
+        filter: brightness(1.2);
+        text-decoration: none;
     }
 
     .agent-status-dot {
