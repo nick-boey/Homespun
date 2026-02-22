@@ -316,7 +316,7 @@ public class IssueHierarchyCreationTests : PageTest
     public async Task CreateBelowWithoutTab_CreatesSibling()
     {
         await NavigateToProjectAsync();
-        await SelectFirstIssueAsync();
+        await NavigateToIssueAsync("e2e/orphan"); // Navigate to a root-level issue
 
         var newTitle = GenerateIssueTitle("Sibling Below");
         await CreateIssueWithKeyboardAsync(createAbove: false, laneModifier: 0, title: newTitle);
@@ -335,8 +335,7 @@ public class IssueHierarchyCreationTests : PageTest
     public async Task CreateAboveWithoutTab_CreatesSibling()
     {
         await NavigateToProjectAsync();
-        await SelectFirstIssueAsync();
-        await MoveSelectionDownAsync(1); // Move to second issue so we can create above
+        await NavigateToIssueAsync("e2e/orphan"); // Navigate to a root-level issue
 
         var newTitle = GenerateIssueTitle("Sibling Above");
         await CreateIssueWithKeyboardAsync(createAbove: true, laneModifier: 0, title: newTitle);

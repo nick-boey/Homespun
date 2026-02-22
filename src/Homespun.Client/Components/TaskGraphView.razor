@@ -65,6 +65,14 @@
                             <InlineIssueEditor Title="@NavService.PendingNewIssue.Title"
                                                CursorPosition="EditCursorPosition.Start"
                                                Placeholder="Enter new issue title..." />
+                            @if (NavService.PendingNewIssue.PendingChildId != null)
+                            {
+                                <span class="lane-indicator parent">Parent of above</span>
+                            }
+                            else if (NavService.PendingNewIssue.PendingParentId != null)
+                            {
+                                <span class="lane-indicator child">Child of above</span>
+                            }
                         </div>
                     </div>
                 }
@@ -164,6 +172,14 @@
                         <InlineIssueEditor Title="@NavService.PendingNewIssue.Title"
                                            CursorPosition="EditCursorPosition.Start"
                                            Placeholder="Enter new issue title..." />
+                        @if (NavService.PendingNewIssue.PendingChildId != null)
+                        {
+                            <span class="lane-indicator parent">Parent of above</span>
+                        }
+                        else if (NavService.PendingNewIssue.PendingParentId != null)
+                        {
+                            <span class="lane-indicator child">Child of above</span>
+                        }
                     </div>
                 </div>
             }
@@ -184,6 +200,14 @@
                     <InlineIssueEditor Title="@NavService.PendingNewIssue.Title"
                                        CursorPosition="EditCursorPosition.Start"
                                        Placeholder="Enter new issue title..." />
+                    @if (NavService.PendingNewIssue.PendingChildId != null)
+                    {
+                        <span class="lane-indicator parent">Parent of above</span>
+                    }
+                    else if (NavService.PendingNewIssue.PendingParentId != null)
+                    {
+                        <span class="lane-indicator child">Child of above</span>
+                    }
                 </div>
             </div>
         }
@@ -454,6 +478,24 @@
         background-color: rgba(81, 165, 193, 0.2);
         color: var(--color-ocean, #51A5C1);
         border-color: var(--color-ocean, #51A5C1);
+    }
+
+    .lane-indicator {
+        font-size: 11px;
+        padding: 2px 6px;
+        border-radius: 3px;
+        margin-left: 8px;
+        white-space: nowrap;
+    }
+
+    .lane-indicator.parent {
+        background-color: rgba(139, 92, 246, 0.2);
+        color: #a78bfa;
+    }
+
+    .lane-indicator.child {
+        background-color: rgba(59, 130, 246, 0.2);
+        color: #60a5fa;
     }
 
     /* Issue type wrapper for dropdown positioning */

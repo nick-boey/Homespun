@@ -58,8 +58,11 @@ public record PendingNewIssue
     /// <summary>The title being entered for the new issue.</summary>
     public string Title { get; set; } = "";
 
-    /// <summary>Parent ID set when Tab is pressed to make this a child of the issue above.</summary>
+    /// <summary>Parent ID set when Shift+Tab is pressed to make this a child of the adjacent issue.</summary>
     public string? PendingParentId { get; set; }
+
+    /// <summary>Child ID set when Tab is pressed to make this a parent of the adjacent issue.</summary>
+    public string? PendingChildId { get; set; }
 
     /// <summary>Sort order for series parent positioning.</summary>
     public string? SortOrder { get; set; }

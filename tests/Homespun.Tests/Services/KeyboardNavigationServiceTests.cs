@@ -443,7 +443,7 @@ public class KeyboardNavigationServiceTests
     #region Indent/Unindent Tests
 
     [Test]
-    public void IndentAsChild_WhileCreatingNew_SetsPendingParentId()
+    public void IndentAsChild_WhileCreatingNew_SetsPendingChildId()
     {
         _service.Initialize(_sampleRenderLines);
         _service.SelectIssue("ISSUE-002");
@@ -451,33 +451,51 @@ public class KeyboardNavigationServiceTests
 
         _service.IndentAsChild();
 
-        Assert.That(_service.PendingNewIssue!.PendingParentId, Is.EqualTo("ISSUE-002"));
-    }
-
-    [Test]
-    public void IndentAsChild_AtFirstPosition_DoesNotSetParent()
-    {
-        _service.Initialize(_sampleRenderLines);
-        _service.SelectFirstActionable();
-        _service.CreateIssueAbove(); // Creating above first issue
-
-        _service.IndentAsChild();
-
-        // No issue above, so no parent should be set
+        // Tab: new issue becomes parent of reference issue (ISSUE-002)
+        Assert.That(_service.PendingNewIssue!.PendingChildId, Is.EqualTo("ISSUE-002"));
         Assert.That(_service.PendingNewIssue!.PendingParentId, Is.Null);
     }
 
     [Test]
-    public void UnindentAsSibling_WhileCreatingNew_ClearsPendingParentId()
+    public void IndentAsChild_ClearsInheritedParent()
     {
         _service.Initialize(_sampleRenderLines);
         _service.SelectIssue("ISSUE-002");
         _service.CreateIssueBelow();
-        _service.IndentAsChild(); // First set a parent
+
+        _service.IndentAsChild();
+
+        // Tab clears inherited parent since new issue is becoming a parent
+        Assert.That(_service.PendingNewIssue!.InheritedParentIssueId, Is.Null);
+        Assert.That(_service.PendingNewIssue!.InheritedParentSortOrder, Is.Null);
+    }
+
+    [Test]
+    public void UnindentAsSibling_WhileCreatingNew_SetsPendingParentId()
+    {
+        _service.Initialize(_sampleRenderLines);
+        _service.SelectIssue("ISSUE-002");
+        _service.CreateIssueBelow();
 
         _service.UnindentAsSibling();
 
-        Assert.That(_service.PendingNewIssue!.PendingParentId, Is.Null);
+        // Shift+Tab: new issue becomes child of reference issue (ISSUE-002)
+        Assert.That(_service.PendingNewIssue!.PendingParentId, Is.EqualTo("ISSUE-002"));
+        Assert.That(_service.PendingNewIssue!.PendingChildId, Is.Null);
+    }
+
+    [Test]
+    public void UnindentAsSibling_AfterIndent_SwitchesToChild()
+    {
+        _service.Initialize(_sampleRenderLines);
+        _service.SelectIssue("ISSUE-002");
+        _service.CreateIssueBelow();
+        _service.IndentAsChild(); // First set as parent (Tab)
+
+        _service.UnindentAsSibling(); // Then set as child (Shift+Tab)
+
+        Assert.That(_service.PendingNewIssue!.PendingParentId, Is.EqualTo("ISSUE-002"));
+        Assert.That(_service.PendingNewIssue!.PendingChildId, Is.Null);
     }
 
     [Test]
@@ -862,7 +880,7 @@ public class KeyboardNavigationServiceTests
     }
 
     [Test]
-    public async Task AcceptEditAsync_PendingParentOverridesInheritedParent()
+    public async Task AcceptEditAsync_TabSetsChildIssueId()
     {
         var handler = new MockHttpMessageHandler();
         handler.RespondWith("issues", new IssueResponse
@@ -880,22 +898,58 @@ public class KeyboardNavigationServiceTests
         service.SetTaskGraphNodes(CreateTaskGraphNodesWithParent());
         service.SelectFirstActionable();
         service.CreateIssueBelow();
-        service.IndentAsChild(); // Tab sets PendingParentId
+        service.IndentAsChild(); // Tab sets PendingChildId (new becomes parent)
+        service.UpdateEditTitle("Parent issue");
+
+        await service.AcceptEditAsync();
+
+        Assert.That(service.EditMode, Is.EqualTo(KeyboardEditMode.Viewing));
+
+        // Verify Tab sets ChildIssueId (new issue becomes parent of reference issue)
+        var createRequest = handler.CapturedRequests
+            .FirstOrDefault(r => r.Method == HttpMethod.Post && r.Url.Contains("issues"));
+        Assert.That(createRequest, Is.Not.Null);
+        var body = createRequest!.BodyAs<CreateIssueRequest>();
+        Assert.That(body, Is.Not.Null);
+        // Tab: new issue becomes parent, so ChildIssueId = reference issue
+        Assert.That(body!.ChildIssueId, Is.EqualTo("ISSUE-001"));
+        Assert.That(body.ParentIssueId, Is.Null);
+    }
+
+    [Test]
+    public async Task AcceptEditAsync_ShiftTabSetsParentIssueId()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.RespondWith("issues", new IssueResponse
+        {
+            Id = "new-issue",
+            Title = "test",
+            Type = IssueType.Task,
+            Status = IssueStatus.Open
+        });
+        var issueApi = new HttpIssueApiService(handler.CreateClient());
+        var service = new KeyboardNavigationService(issueApi);
+
+        service.Initialize(_sampleRenderLines);
+        service.SetProjectId("test-project");
+        service.SelectFirstActionable();
+        service.CreateIssueBelow();
+        service.UnindentAsSibling(); // Shift+Tab sets PendingParentId (new becomes child)
         service.UpdateEditTitle("Child issue");
 
         await service.AcceptEditAsync();
 
         Assert.That(service.EditMode, Is.EqualTo(KeyboardEditMode.Viewing));
 
-        // Verify PendingParentId took priority over inherited
+        // Verify Shift+Tab sets ParentIssueId (new issue becomes child of reference issue)
         var createRequest = handler.CapturedRequests
             .FirstOrDefault(r => r.Method == HttpMethod.Post && r.Url.Contains("issues"));
         Assert.That(createRequest, Is.Not.Null);
         var body = createRequest!.BodyAs<CreateIssueRequest>();
         Assert.That(body, Is.Not.Null);
-        // PendingParentId comes from IndentAsChild, which sets parent to the issue above
+        // Shift+Tab: new issue becomes child, so ParentIssueId = reference issue
         Assert.That(body!.ParentIssueId, Is.EqualTo("ISSUE-001"));
-        Assert.That(body.ParentSortOrder, Is.Null); // Tab override doesn't set sort order
+        Assert.That(body.ChildIssueId, Is.Null);
     }
 
     #endregion

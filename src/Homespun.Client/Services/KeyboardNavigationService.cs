@@ -234,11 +234,17 @@ public class KeyboardNavigationService : IKeyboardNavigationService
                 Type = IssueType.Task
             };
 
-            // Tab/Shift+Tab overrides inherited parent
-            if (PendingNewIssue.PendingParentId != null)
+            // Tab: new issue becomes parent of the adjacent issue
+            if (PendingNewIssue.PendingChildId != null)
+            {
+                request.ChildIssueId = PendingNewIssue.PendingChildId;
+            }
+            // Shift+Tab: new issue becomes child of the adjacent issue
+            else if (PendingNewIssue.PendingParentId != null)
             {
                 request.ParentIssueId = PendingNewIssue.PendingParentId;
             }
+            // No Tab/Shift+Tab: inherit parent from reference issue (sibling creation)
             else if (PendingNewIssue.InheritedParentIssueId != null)
             {
                 request.ParentIssueId = PendingNewIssue.InheritedParentIssueId;
@@ -314,14 +320,13 @@ public class KeyboardNavigationService : IKeyboardNavigationService
     {
         if (EditMode == KeyboardEditMode.CreatingNew && PendingNewIssue != null)
         {
-            // Find the issue above the insertion point to make it the parent
-            var aboveIndex = PendingNewIssue.IsAbove
-                ? PendingNewIssue.InsertAtIndex - 1
-                : PendingNewIssue.InsertAtIndex - 1;
-
-            if (aboveIndex >= 0 && aboveIndex < _renderLines.Count)
+            // Tab: new issue becomes PARENT of the adjacent (reference) issue
+            if (PendingNewIssue.ReferenceIssueId != null)
             {
-                PendingNewIssue.PendingParentId = _renderLines[aboveIndex].IssueId;
+                PendingNewIssue.PendingChildId = PendingNewIssue.ReferenceIssueId;
+                PendingNewIssue.PendingParentId = null;
+                PendingNewIssue.InheritedParentIssueId = null;
+                PendingNewIssue.InheritedParentSortOrder = null;
             }
         }
         else if (EditMode == KeyboardEditMode.EditingExisting && PendingEdit != null)
@@ -334,7 +339,14 @@ public class KeyboardNavigationService : IKeyboardNavigationService
     {
         if (EditMode == KeyboardEditMode.CreatingNew && PendingNewIssue != null)
         {
-            PendingNewIssue.PendingParentId = null;
+            // Shift+Tab: new issue becomes CHILD of the adjacent (reference) issue
+            if (PendingNewIssue.ReferenceIssueId != null)
+            {
+                PendingNewIssue.PendingParentId = PendingNewIssue.ReferenceIssueId;
+                PendingNewIssue.PendingChildId = null;
+                PendingNewIssue.InheritedParentIssueId = null;
+                PendingNewIssue.InheritedParentSortOrder = null;
+            }
         }
         else if (EditMode == KeyboardEditMode.EditingExisting && PendingEdit != null)
         {
