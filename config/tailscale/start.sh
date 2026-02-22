@@ -57,18 +57,41 @@ for i in $(seq 1 30); do
     sleep 2
 done
 
-echo "Enabling Tailscale HTTPS serve for Homespun..."
-tailscale serve --bg --https=443 http://homespun:8080 || true
-echo "Tailscale HTTPS proxy enabled on port 443 -> homespun:8080"
+# Clear any stale serve config from persisted state.
+# Old entries (e.g. from hostname changes) can linger and cause the netstack
+# to maintain proxy handlers that resolve Docker hostnames to 127.0.0.1.
+echo "Resetting Tailscale serve config..."
+tailscale serve reset || true
+
+# Resolve Docker hostnames to IPs for tailscale serve.
+# In userspace networking mode, Tailscale's netstack handles DNS independently
+# and cannot resolve Docker DNS hostnames, so we must use IP addresses.
+HOMESPUN_IP=$(getent hosts homespun | awk '{print $1}')
+if [ -z "$HOMESPUN_IP" ]; then
+    echo "Error: Could not resolve homespun hostname to IP"
+    exit 1
+fi
+echo "Resolved homespun -> $HOMESPUN_IP"
+
+echo "Enabling Tailscale serve for Homespun..."
+tailscale serve --bg --https=443 http://${HOMESPUN_IP}:8080 || true
+tailscale serve --bg --http=80 http://${HOMESPUN_IP}:8080 || true
+echo "Tailscale proxy enabled -> ${HOMESPUN_IP}:8080 (HTTPS:443, HTTP:80)"
 
 # If Grafana is reachable (PLG stack running), expose it too
 # Check periodically as Grafana may take time to start
 (
     for i in $(seq 1 30); do
         if wget -q --spider http://homespun-grafana:3000/api/health 2>/dev/null; then
-            echo "Enabling Tailscale HTTPS serve for Grafana..."
-            tailscale serve --bg --https=3000 http://homespun-grafana:3000 || true
-            echo "Tailscale HTTPS proxy enabled on port 3000 -> homespun-grafana:3000"
+            GRAFANA_IP=$(getent hosts homespun-grafana | awk '{print $1}')
+            if [ -n "$GRAFANA_IP" ]; then
+                echo "Resolved homespun-grafana -> $GRAFANA_IP"
+                echo "Enabling Tailscale HTTPS serve for Grafana..."
+                tailscale serve --bg --https=3000 http://${GRAFANA_IP}:3000 || true
+                echo "Tailscale HTTPS proxy enabled on port 3000 -> ${GRAFANA_IP}:3000"
+            else
+                echo "Warning: Could not resolve homespun-grafana hostname"
+            fi
             break
         fi
         sleep 2
