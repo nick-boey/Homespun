@@ -25,6 +25,7 @@ public class ClaudeSessionServiceTests
     private IToolResultParser _toolResultParser = null!;
     private Mock<IHooksService> _hooksServiceMock = null!;
     private Mock<IAgentExecutionService> _agentExecutionServiceMock = null!;
+    private Mock<IAGUIEventService> _agUIEventServiceMock = null!;
 
     [SetUp]
     public void SetUp()
@@ -40,6 +41,7 @@ public class ClaudeSessionServiceTests
         _toolResultParser = new ToolResultParser();
         _hooksServiceMock = new Mock<IHooksService>();
         _agentExecutionServiceMock = new Mock<IAgentExecutionService>();
+        _agUIEventServiceMock = new Mock<IAGUIEventService>();
 
         // Setup mock hub clients
         var clientsMock = new Mock<IHubClients>();
@@ -47,6 +49,14 @@ public class ClaudeSessionServiceTests
         clientsMock.Setup(c => c.All).Returns(clientProxyMock.Object);
         clientsMock.Setup(c => c.Group(It.IsAny<string>())).Returns(clientProxyMock.Object);
         _hubContextMock.Setup(h => h.Clients).Returns(clientsMock.Object);
+
+        // Setup mock AGUI event service
+        _agUIEventServiceMock.Setup(s => s.CreateRunStarted(It.IsAny<string>(), It.IsAny<string>()))
+            .Returns((string sessionId, string runId) => new RunStartedEvent { ThreadId = sessionId, RunId = runId });
+        _agUIEventServiceMock.Setup(s => s.CreateRunFinished(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<object?>()))
+            .Returns((string sessionId, string runId, object? result) => new RunFinishedEvent { ThreadId = sessionId, RunId = runId, Result = result });
+        _agUIEventServiceMock.Setup(s => s.CreateRunError(It.IsAny<string>(), It.IsAny<string?>()))
+            .Returns((string message, string? code) => new RunErrorEvent { Message = message, Code = code });
 
         _service = new ClaudeSessionService(
             _sessionStore,
@@ -58,7 +68,8 @@ public class ClaudeSessionServiceTests
             _toolResultParser,
             _hooksServiceMock.Object,
             _messageCacheMock.Object,
-            _agentExecutionServiceMock.Object);
+            _agentExecutionServiceMock.Object,
+            _agUIEventServiceMock.Object);
     }
 
     [Test]
@@ -419,6 +430,7 @@ public class ClaudeSessionServiceMessageTests
     private IToolResultParser _toolResultParser = null!;
     private Mock<IHooksService> _hooksServiceMock = null!;
     private Mock<IAgentExecutionService> _agentExecutionServiceMock = null!;
+    private Mock<IAGUIEventService> _agUIEventServiceMock = null!;
 
     [SetUp]
     public void SetUp()
@@ -434,6 +446,7 @@ public class ClaudeSessionServiceMessageTests
         _toolResultParser = new ToolResultParser();
         _hooksServiceMock = new Mock<IHooksService>();
         _agentExecutionServiceMock = new Mock<IAgentExecutionService>();
+        _agUIEventServiceMock = new Mock<IAGUIEventService>();
 
         var clientsMock = new Mock<IHubClients>();
         var clientProxyMock = new Mock<IClientProxy>();
@@ -451,7 +464,8 @@ public class ClaudeSessionServiceMessageTests
             _toolResultParser,
             _hooksServiceMock.Object,
             _messageCacheMock.Object,
-            _agentExecutionServiceMock.Object);
+            _agentExecutionServiceMock.Object,
+            _agUIEventServiceMock.Object);
     }
 
     [Test]
@@ -533,6 +547,7 @@ public class ClaudeSessionServicePermissionModeTests
     private IToolResultParser _toolResultParser = null!;
     private Mock<IHooksService> _hooksServiceMock = null!;
     private Mock<IAgentExecutionService> _agentExecutionServiceMock = null!;
+    private Mock<IAGUIEventService> _agUIEventServiceMock = null!;
 
     [SetUp]
     public void SetUp()
@@ -548,6 +563,7 @@ public class ClaudeSessionServicePermissionModeTests
         _toolResultParser = new ToolResultParser();
         _hooksServiceMock = new Mock<IHooksService>();
         _agentExecutionServiceMock = new Mock<IAgentExecutionService>();
+        _agUIEventServiceMock = new Mock<IAGUIEventService>();
 
         var clientsMock = new Mock<IHubClients>();
         var clientProxyMock = new Mock<IClientProxy>();
@@ -565,7 +581,8 @@ public class ClaudeSessionServicePermissionModeTests
             _toolResultParser,
             _hooksServiceMock.Object,
             _messageCacheMock.Object,
-            _agentExecutionServiceMock.Object);
+            _agentExecutionServiceMock.Object,
+            _agUIEventServiceMock.Object);
     }
 
     [TestCase(SdkPermissionMode.Default)]
@@ -663,6 +680,7 @@ public class ClaudeSessionServicePlanCaptureTests
     private IToolResultParser _toolResultParser = null!;
     private Mock<IHooksService> _hooksServiceMock = null!;
     private Mock<IAgentExecutionService> _agentExecutionServiceMock = null!;
+    private Mock<IAGUIEventService> _agUIEventServiceMock = null!;
 
     [SetUp]
     public void SetUp()
@@ -678,6 +696,7 @@ public class ClaudeSessionServicePlanCaptureTests
         _toolResultParser = new ToolResultParser();
         _hooksServiceMock = new Mock<IHooksService>();
         _agentExecutionServiceMock = new Mock<IAgentExecutionService>();
+        _agUIEventServiceMock = new Mock<IAGUIEventService>();
 
         var clientsMock = new Mock<IHubClients>();
         var clientProxyMock = new Mock<IClientProxy>();
@@ -695,7 +714,8 @@ public class ClaudeSessionServicePlanCaptureTests
             _toolResultParser,
             _hooksServiceMock.Object,
             _messageCacheMock.Object,
-            _agentExecutionServiceMock.Object);
+            _agentExecutionServiceMock.Object,
+            _agUIEventServiceMock.Object);
     }
 
     [Test]
@@ -787,6 +807,7 @@ public class ClaudeSessionServiceResumeTests
     private IToolResultParser _toolResultParser = null!;
     private Mock<IHooksService> _hooksServiceMock = null!;
     private Mock<IAgentExecutionService> _agentExecutionServiceMock = null!;
+    private Mock<IAGUIEventService> _agUIEventServiceMock = null!;
     private string _testClaudeDir = null!;
 
     [SetUp]
@@ -806,6 +827,7 @@ public class ClaudeSessionServiceResumeTests
         _toolResultParser = new ToolResultParser();
         _hooksServiceMock = new Mock<IHooksService>();
         _agentExecutionServiceMock = new Mock<IAgentExecutionService>();
+        _agUIEventServiceMock = new Mock<IAGUIEventService>();
 
         var clientsMock = new Mock<IHubClients>();
         var clientProxyMock = new Mock<IClientProxy>();
@@ -823,7 +845,8 @@ public class ClaudeSessionServiceResumeTests
             _toolResultParser,
             _hooksServiceMock.Object,
             _messageCacheMock.Object,
-            _agentExecutionServiceMock.Object);
+            _agentExecutionServiceMock.Object,
+            _agUIEventServiceMock.Object);
     }
 
     [TearDown]
@@ -1048,6 +1071,7 @@ public class ClaudeSessionServicePlanExecutionTests
     private IToolResultParser _toolResultParser = null!;
     private Mock<IHooksService> _hooksServiceMock = null!;
     private Mock<IAgentExecutionService> _agentExecutionServiceMock = null!;
+    private Mock<IAGUIEventService> _agUIEventServiceMock = null!;
 
     [SetUp]
     public void SetUp()
@@ -1063,6 +1087,7 @@ public class ClaudeSessionServicePlanExecutionTests
         _toolResultParser = new ToolResultParser();
         _hooksServiceMock = new Mock<IHooksService>();
         _agentExecutionServiceMock = new Mock<IAgentExecutionService>();
+        _agUIEventServiceMock = new Mock<IAGUIEventService>();
 
         var clientsMock = new Mock<IHubClients>();
         var clientProxyMock = new Mock<IClientProxy>();
@@ -1080,7 +1105,8 @@ public class ClaudeSessionServicePlanExecutionTests
             _toolResultParser,
             _hooksServiceMock.Object,
             _messageCacheMock.Object,
-            _agentExecutionServiceMock.Object);
+            _agentExecutionServiceMock.Object,
+            _agUIEventServiceMock.Object);
     }
 
     /// <summary>
@@ -1251,6 +1277,7 @@ public class ClaudeSessionServiceQuestionPendingTests
     private IToolResultParser _toolResultParser = null!;
     private Mock<IHooksService> _hooksServiceMock = null!;
     private Mock<IAgentExecutionService> _agentExecutionServiceMock = null!;
+    private Mock<IAGUIEventService> _agUIEventServiceMock = null!;
 
     [SetUp]
     public void SetUp()
@@ -1266,6 +1293,7 @@ public class ClaudeSessionServiceQuestionPendingTests
         _toolResultParser = new ToolResultParser();
         _hooksServiceMock = new Mock<IHooksService>();
         _agentExecutionServiceMock = new Mock<IAgentExecutionService>();
+        _agUIEventServiceMock = new Mock<IAGUIEventService>();
 
         var clientsMock = new Mock<IHubClients>();
         var clientProxyMock = new Mock<IClientProxy>();
@@ -1283,7 +1311,8 @@ public class ClaudeSessionServiceQuestionPendingTests
             _toolResultParser,
             _hooksServiceMock.Object,
             _messageCacheMock.Object,
-            _agentExecutionServiceMock.Object);
+            _agentExecutionServiceMock.Object,
+            _agUIEventServiceMock.Object);
     }
 
     private static async IAsyncEnumerable<SdkMessage> CreateSdkMessageStream(params SdkMessage[] messages)
@@ -1431,6 +1460,7 @@ public class ClaudeSessionServicePlanApprovalTests
     private IToolResultParser _toolResultParser = null!;
     private Mock<IHooksService> _hooksServiceMock = null!;
     private Mock<IAgentExecutionService> _agentExecutionServiceMock = null!;
+    private Mock<IAGUIEventService> _agUIEventServiceMock = null!;
 
     [SetUp]
     public void SetUp()
@@ -1446,6 +1476,7 @@ public class ClaudeSessionServicePlanApprovalTests
         _toolResultParser = new ToolResultParser();
         _hooksServiceMock = new Mock<IHooksService>();
         _agentExecutionServiceMock = new Mock<IAgentExecutionService>();
+        _agUIEventServiceMock = new Mock<IAGUIEventService>();
 
         var clientsMock = new Mock<IHubClients>();
         var clientProxyMock = new Mock<IClientProxy>();
@@ -1463,7 +1494,8 @@ public class ClaudeSessionServicePlanApprovalTests
             _toolResultParser,
             _hooksServiceMock.Object,
             _messageCacheMock.Object,
-            _agentExecutionServiceMock.Object);
+            _agentExecutionServiceMock.Object,
+            _agUIEventServiceMock.Object);
     }
 
     private static async IAsyncEnumerable<SdkMessage> CreateSdkMessageStream(params SdkMessage[] messages)
@@ -1769,6 +1801,7 @@ public class ClaudeSessionServiceToolResultDetectionTests
     private IToolResultParser _toolResultParser = null!;
     private Mock<IHooksService> _hooksServiceMock = null!;
     private Mock<IAgentExecutionService> _agentExecutionServiceMock = null!;
+    private Mock<IAGUIEventService> _agUIEventServiceMock = null!;
 
     [SetUp]
     public void SetUp()
@@ -1784,6 +1817,7 @@ public class ClaudeSessionServiceToolResultDetectionTests
         _toolResultParser = new ToolResultParser();
         _hooksServiceMock = new Mock<IHooksService>();
         _agentExecutionServiceMock = new Mock<IAgentExecutionService>();
+        _agUIEventServiceMock = new Mock<IAGUIEventService>();
 
         var clientsMock = new Mock<IHubClients>();
         var clientProxyMock = new Mock<IClientProxy>();
@@ -1801,7 +1835,8 @@ public class ClaudeSessionServiceToolResultDetectionTests
             _toolResultParser,
             _hooksServiceMock.Object,
             _messageCacheMock.Object,
-            _agentExecutionServiceMock.Object);
+            _agentExecutionServiceMock.Object,
+            _agUIEventServiceMock.Object);
     }
 
     private static async IAsyncEnumerable<SdkMessage> CreateSdkMessageStream(params SdkMessage[] messages)
@@ -2119,6 +2154,7 @@ public class ClaudeSessionServiceCloneStateTests
     private IToolResultParser _toolResultParser = null!;
     private Mock<IHooksService> _hooksServiceMock = null!;
     private Mock<IAgentExecutionService> _agentExecutionServiceMock = null!;
+    private Mock<IAGUIEventService> _agUIEventServiceMock = null!;
 
     [SetUp]
     public void SetUp()
@@ -2134,6 +2170,7 @@ public class ClaudeSessionServiceCloneStateTests
         _toolResultParser = new ToolResultParser();
         _hooksServiceMock = new Mock<IHooksService>();
         _agentExecutionServiceMock = new Mock<IAgentExecutionService>();
+        _agUIEventServiceMock = new Mock<IAGUIEventService>();
 
         var clientsMock = new Mock<IHubClients>();
         var clientProxyMock = new Mock<IClientProxy>();
@@ -2151,7 +2188,8 @@ public class ClaudeSessionServiceCloneStateTests
             _toolResultParser,
             _hooksServiceMock.Object,
             _messageCacheMock.Object,
-            _agentExecutionServiceMock.Object);
+            _agentExecutionServiceMock.Object,
+            _agUIEventServiceMock.Object);
     }
 
     [Test]
@@ -2413,6 +2451,7 @@ public class ClaudeSessionServiceStatusBroadcastTests
     private IToolResultParser _toolResultParser = null!;
     private Mock<IHooksService> _hooksServiceMock = null!;
     private Mock<IAgentExecutionService> _agentExecutionServiceMock = null!;
+    private Mock<IAGUIEventService> _agUIEventServiceMock = null!;
     private Mock<IClientProxy> _clientProxyMock = null!;
     private List<(string Method, object?[] Args)> _broadcastCalls = null!;
 
@@ -2430,6 +2469,7 @@ public class ClaudeSessionServiceStatusBroadcastTests
         _toolResultParser = new ToolResultParser();
         _hooksServiceMock = new Mock<IHooksService>();
         _agentExecutionServiceMock = new Mock<IAgentExecutionService>();
+        _agUIEventServiceMock = new Mock<IAGUIEventService>();
         _broadcastCalls = new List<(string Method, object?[] Args)>();
 
         var clientsMock = new Mock<IHubClients>();
@@ -2461,7 +2501,8 @@ public class ClaudeSessionServiceStatusBroadcastTests
             _toolResultParser,
             _hooksServiceMock.Object,
             _messageCacheMock.Object,
-            _agentExecutionServiceMock.Object);
+            _agentExecutionServiceMock.Object,
+            _agUIEventServiceMock.Object);
     }
 
     private static async IAsyncEnumerable<SdkMessage> CreateSdkMessageStream(params SdkMessage[] messages)

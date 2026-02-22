@@ -202,6 +202,7 @@ else
 
     builder.Services.AddSingleton<IToolResultParser, ToolResultParser>();
     builder.Services.AddSingleton<IHooksService, HooksService>();
+    builder.Services.AddSingleton<IAGUIEventService, AGUIEventService>();
     builder.Services.AddSingleton<IClaudeSessionService, ClaudeSessionService>();
     builder.Services.AddSingleton<IAgentStartupTracker, AgentStartupTracker>();
     builder.Services.AddSingleton<IAgentPromptService, AgentPromptService>();
