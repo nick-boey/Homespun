@@ -19,10 +19,7 @@
         @if (IsDismissible)
         {
             <button class="notification-dismiss flex items-center justify-center w-6 h-6 p-0 bg-transparent border-none rounded-sm cursor-pointer text-text-muted hover:bg-bg-hover hover:text-text-primary transition-fast focus:outline-none focus:ring-2 focus:ring-ocean/30" title="Dismiss">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <line x1="18" y1="6" x2="6" y2="18"></line>
-                    <line x1="6" y1="6" x2="18" y2="18"></line>
-                </svg>
+                <i class="bi bi-x-lg" aria-hidden="true"></i>
             </button>
         }
     </div>
@@ -46,13 +43,13 @@
 
     private static MarkupString GetIcon(NotificationType type)
     {
-        var svg = type switch
+        var iconClass = type switch
         {
-            NotificationType.Info => """<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>""",
-            NotificationType.Warning => """<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>""",
-            NotificationType.ActionRequired => """<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>""",
-            _ => """<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle></svg>"""
+            NotificationType.Info => "bi-info-circle",
+            NotificationType.Warning => "bi-exclamation-triangle",
+            NotificationType.ActionRequired => "bi-exclamation-circle",
+            _ => "bi-circle"
         };
-        return new MarkupString(svg);
+        return new MarkupString($"""<i class="bi {iconClass}" aria-hidden="true"></i>""");
     }
 }
