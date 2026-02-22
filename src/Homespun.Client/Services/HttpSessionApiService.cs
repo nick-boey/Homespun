@@ -29,7 +29,7 @@ public class HttpSessionApiService(HttpClient http)
 
     public async Task<ClaudeSession?> GetSessionByEntityIdAsync(string entityId)
     {
-        var response = await http.GetAsync($"{ApiRoutes.Sessions}/entity/{entityId}");
+        var response = await http.GetAsync($"{ApiRoutes.Sessions}/entity/{Uri.EscapeDataString(entityId)}");
         if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
             return null;
         response.EnsureSuccessStatusCode();
@@ -108,12 +108,12 @@ public class HttpSessionApiService(HttpClient http)
         string workingDirectory)
     {
         return await http.GetFromJsonAsync<List<ResumableSession>>(
-            $"{ApiRoutes.Sessions}/entity/{entityId}/resumable?workingDirectory={Uri.EscapeDataString(workingDirectory)}") ?? [];
+            $"{ApiRoutes.Sessions}/entity/{Uri.EscapeDataString(entityId)}/resumable?workingDirectory={Uri.EscapeDataString(workingDirectory)}") ?? [];
     }
 
     public async Task<int> StopAllSessionsForEntityAsync(string entityId)
     {
-        var response = await http.DeleteAsync($"{ApiRoutes.Sessions}/entity/{entityId}");
+        var response = await http.DeleteAsync($"{ApiRoutes.Sessions}/entity/{Uri.EscapeDataString(entityId)}");
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<int>();
     }
@@ -129,6 +129,6 @@ public class HttpSessionApiService(HttpClient http)
         string entityId)
     {
         return await http.GetFromJsonAsync<List<SessionCacheSummary>>(
-            $"{ApiRoutes.Sessions}/history/{projectId}/{entityId}") ?? [];
+            $"{ApiRoutes.Sessions}/history/{Uri.EscapeDataString(projectId)}/{Uri.EscapeDataString(entityId)}") ?? [];
     }
 }
