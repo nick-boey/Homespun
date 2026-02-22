@@ -290,13 +290,17 @@ public class IssueHierarchyCreationTests : PageTest
 
     /// <summary>
     /// Verifies that childId has parentId in its parentIssues list.
+    /// Uses task graph data to avoid URL encoding issues with slashes in issue IDs.
     /// </summary>
     private async Task VerifyParentRelationship(string childId, string parentId)
     {
-        var childIssue = await GetIssueAsync(childId);
-        Assert.That(childIssue, Is.Not.Null, $"Child issue '{childId}' should exist");
-        Assert.That(childIssue!.ParentIssues.Any(p => p.ParentIssue == parentId), Is.True,
-            $"Issue '{childId}' should have '{parentId}' as a parent. Actual parents: [{string.Join(", ", childIssue.ParentIssues.Select(p => p.ParentIssue))}]");
+        var taskGraph = await GetTaskGraphAsync();
+        Assert.That(taskGraph, Is.Not.Null, "Task graph should be available");
+
+        var childNode = taskGraph!.Nodes.FirstOrDefault(n => n.Issue.Id == childId);
+        Assert.That(childNode, Is.Not.Null, $"Child issue '{childId}' should exist in task graph");
+        Assert.That(childNode!.Issue.ParentIssues.Any(p => p.ParentIssue == parentId), Is.True,
+            $"Issue '{childId}' should have '{parentId}' as a parent. Actual parents: [{string.Join(", ", childNode.Issue.ParentIssues.Select(p => p.ParentIssue))}]");
     }
 
     /// <summary>
@@ -394,11 +398,13 @@ public class IssueHierarchyCreationTests : PageTest
         var newNode = await FindIssueByTitleAsync("Additional Parent");
         Assert.That(newNode, Is.Not.Null, "New parent issue should appear in task graph");
 
-        var child1 = await GetIssueAsync("e2e/child1");
-        Assert.That(child1, Is.Not.Null);
-        Assert.That(child1!.ParentIssues.Any(p => p.ParentIssue == "e2e/parent1"), Is.True,
+        // Use task graph data to verify (avoids URL encoding issues with slashes in IDs)
+        var taskGraph = await GetTaskGraphAsync();
+        var child1Node = taskGraph?.Nodes.FirstOrDefault(n => n.Issue.Id == "e2e/child1");
+        Assert.That(child1Node, Is.Not.Null);
+        Assert.That(child1Node!.Issue.ParentIssues.Any(p => p.ParentIssue == "e2e/parent1"), Is.True,
             "child1 should still have original parent");
-        Assert.That(child1.ParentIssues.Any(p => p.ParentIssue == newNode!.Issue.Id), Is.True,
+        Assert.That(child1Node.Issue.ParentIssues.Any(p => p.ParentIssue == newNode!.Issue.Id), Is.True,
             "child1 should also have new issue as additional parent");
     }
 
@@ -546,11 +552,13 @@ public class IssueHierarchyCreationTests : PageTest
         var newNode = await FindIssueByTitleAsync("Additional Parent Above");
         Assert.That(newNode, Is.Not.Null, "New parent issue should appear in task graph");
 
-        var child1 = await GetIssueAsync("e2e/child1");
-        Assert.That(child1, Is.Not.Null);
-        Assert.That(child1!.ParentIssues.Any(p => p.ParentIssue == "e2e/parent1"), Is.True,
+        // Use task graph data to verify (avoids URL encoding issues with slashes in IDs)
+        var taskGraph = await GetTaskGraphAsync();
+        var child1Node = taskGraph?.Nodes.FirstOrDefault(n => n.Issue.Id == "e2e/child1");
+        Assert.That(child1Node, Is.Not.Null);
+        Assert.That(child1Node!.Issue.ParentIssues.Any(p => p.ParentIssue == "e2e/parent1"), Is.True,
             "child1 should still have original parent");
-        Assert.That(child1.ParentIssues.Any(p => p.ParentIssue == newNode!.Issue.Id), Is.True,
+        Assert.That(child1Node.Issue.ParentIssues.Any(p => p.ParentIssue == newNode!.Issue.Id), Is.True,
             "child1 should also have new issue as additional parent");
     }
 

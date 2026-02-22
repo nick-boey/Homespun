@@ -327,6 +327,7 @@ public class KeyboardNavigationService : IKeyboardNavigationService
                 PendingNewIssue.PendingParentId = null;
                 PendingNewIssue.InheritedParentIssueId = null;
                 PendingNewIssue.InheritedParentSortOrder = null;
+                NotifyStateChanged();
             }
         }
         else if (EditMode == KeyboardEditMode.EditingExisting && PendingEdit != null)
@@ -346,6 +347,7 @@ public class KeyboardNavigationService : IKeyboardNavigationService
                 PendingNewIssue.PendingChildId = null;
                 PendingNewIssue.InheritedParentIssueId = null;
                 PendingNewIssue.InheritedParentSortOrder = null;
+                NotifyStateChanged();
             }
         }
         else if (EditMode == KeyboardEditMode.EditingExisting && PendingEdit != null)
