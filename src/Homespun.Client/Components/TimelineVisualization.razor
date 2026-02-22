@@ -923,6 +923,7 @@ if (_notificationHubConnection != null)
         // Build issue render lines from task graph data
         if (_taskGraphData != null)
         {
+            NavService.SetTaskGraphNodes(_taskGraphData.Nodes);
             var allRenderLines = TaskGraphLayoutService.ComputeLayout(_taskGraphData);
             _issueRenderLines = allRenderLines.OfType<TaskGraphIssueRenderLine>().ToList();
             NavService.Initialize(_issueRenderLines);

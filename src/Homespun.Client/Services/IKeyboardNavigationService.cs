@@ -1,4 +1,5 @@
 using Homespun.Client.Components;
+using Homespun.Shared.Models.Fleece;
 
 namespace Homespun.Client.Services;
 
@@ -68,6 +69,12 @@ public record PendingNewIssue
 
     /// <summary>Reference issue ID used to determine placement context.</summary>
     public string? ReferenceIssueId { get; init; }
+
+    /// <summary>Inherited parent issue ID from the reference issue's parent (sibling creation).</summary>
+    public string? InheritedParentIssueId { get; set; }
+
+    /// <summary>Inherited sort order for the parent relationship.</summary>
+    public string? InheritedParentSortOrder { get; set; }
 }
 
 /// <summary>
@@ -153,6 +160,9 @@ public interface IKeyboardNavigationService
 
     /// <summary>Set the project ID for API operations.</summary>
     void SetProjectId(string projectId);
+
+    /// <summary>Set the task graph nodes for parent inheritance computation.</summary>
+    void SetTaskGraphNodes(List<TaskGraphNodeResponse> nodes);
 
     /// <summary>Select the first actionable issue in the list.</summary>
     void SelectFirstActionable();

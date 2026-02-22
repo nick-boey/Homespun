@@ -1,6 +1,8 @@
 using Fleece.Core.Models;
 using Homespun.Client.Components;
+using Homespun.Shared.Models.Fleece;
 using Homespun.Shared.Requests;
+using Homespun.Shared.Utilities;
 
 namespace Homespun.Client.Services;
 
@@ -11,6 +13,7 @@ public class KeyboardNavigationService : IKeyboardNavigationService
 {
     private readonly HttpIssueApiService _issueApi;
     private List<TaskGraphIssueRenderLine> _renderLines = [];
+    private List<TaskGraphNodeResponse> _taskGraphNodes = [];
 
     public KeyboardNavigationService(HttpIssueApiService issueApi)
     {
@@ -224,13 +227,25 @@ public class KeyboardNavigationService : IKeyboardNavigationService
             }
 
             // Create the new issue via API
-            // Default to Task type and Open status per requirements
-            var newIssue = await _issueApi.CreateIssueAsync(new CreateIssueRequest
+            var request = new CreateIssueRequest
             {
                 ProjectId = ProjectId,
                 Title = PendingNewIssue.Title.Trim(),
                 Type = IssueType.Task
-            });
+            };
+
+            // Tab/Shift+Tab overrides inherited parent
+            if (PendingNewIssue.PendingParentId != null)
+            {
+                request.ParentIssueId = PendingNewIssue.PendingParentId;
+            }
+            else if (PendingNewIssue.InheritedParentIssueId != null)
+            {
+                request.ParentIssueId = PendingNewIssue.InheritedParentIssueId;
+                request.ParentSortOrder = PendingNewIssue.InheritedParentSortOrder;
+            }
+
+            await _issueApi.CreateIssueAsync(request);
 
             EditMode = KeyboardEditMode.Viewing;
             PendingNewIssue = null;
@@ -252,12 +267,18 @@ public class KeyboardNavigationService : IKeyboardNavigationService
             ? _renderLines[SelectedIndex].IssueId
             : null;
 
+        var inherited = referenceIssueId != null
+            ? GetInheritedParentInfo(referenceIssueId, insertAbove: false)
+            : ((string?)null, (string?)null);
+
         PendingNewIssue = new PendingNewIssue
         {
             InsertAtIndex = SelectedIndex + 1,
             Title = "",
             IsAbove = false,
-            ReferenceIssueId = referenceIssueId
+            ReferenceIssueId = referenceIssueId,
+            InheritedParentIssueId = inherited.Item1,
+            InheritedParentSortOrder = inherited.Item2
         };
         EditMode = KeyboardEditMode.CreatingNew;
         NotifyStateChanged();
@@ -272,12 +293,18 @@ public class KeyboardNavigationService : IKeyboardNavigationService
             ? _renderLines[SelectedIndex].IssueId
             : null;
 
+        var inherited = referenceIssueId != null
+            ? GetInheritedParentInfo(referenceIssueId, insertAbove: true)
+            : ((string?)null, (string?)null);
+
         PendingNewIssue = new PendingNewIssue
         {
             InsertAtIndex = SelectedIndex,
             Title = "",
             IsAbove = true,
-            ReferenceIssueId = referenceIssueId
+            ReferenceIssueId = referenceIssueId,
+            InheritedParentIssueId = inherited.Item1,
+            InheritedParentSortOrder = inherited.Item2
         };
         EditMode = KeyboardEditMode.CreatingNew;
         NotifyStateChanged();
@@ -333,6 +360,11 @@ public class KeyboardNavigationService : IKeyboardNavigationService
         ProjectId = projectId;
     }
 
+    public void SetTaskGraphNodes(List<TaskGraphNodeResponse> nodes)
+    {
+        _taskGraphNodes = nodes;
+    }
+
     public void SelectFirstActionable()
     {
         if (_renderLines.Count == 0) return;
@@ -367,6 +399,53 @@ public class KeyboardNavigationService : IKeyboardNavigationService
     }
 
     #endregion
+
+    /// <summary>
+    /// Gets inherited parent info from the reference issue for sibling creation.
+    /// When the reference issue has a parent, the new sibling should inherit that parent.
+    /// For series-mode parents, computes an appropriate sort order between adjacent siblings.
+    /// </summary>
+    private (string? ParentId, string? SortOrder) GetInheritedParentInfo(string issueId, bool insertAbove)
+    {
+        if (_taskGraphNodes.Count == 0) return (null, null);
+
+        var node = _taskGraphNodes.FirstOrDefault(n => n.Issue.Id == issueId);
+        if (node == null || node.Issue.ParentIssues.Count == 0)
+        {
+            return (null, null);
+        }
+
+        var parentRef = node.Issue.ParentIssues[0];
+        var parentId = parentRef.ParentIssue;
+
+        // Find all siblings under the same parent, sorted by sort order
+        var siblings = _taskGraphNodes
+            .Where(n => n.Issue.ParentIssues.Any(p => p.ParentIssue == parentId))
+            .Select(n => new
+            {
+                n.Issue.Id,
+                SortOrder = n.Issue.ParentIssues.First(p => p.ParentIssue == parentId).SortOrder ?? "0"
+            })
+            .OrderBy(s => s.SortOrder, StringComparer.Ordinal)
+            .ToList();
+
+        var refIndex = siblings.FindIndex(s => s.Id == issueId);
+        if (refIndex < 0) return (parentId, parentRef.SortOrder);
+
+        string? sortOrder;
+        if (insertAbove)
+        {
+            var prevSortOrder = refIndex > 0 ? siblings[refIndex - 1].SortOrder : null;
+            sortOrder = LexOrderUtils.ComputeMidpoint(prevSortOrder, siblings[refIndex].SortOrder);
+        }
+        else
+        {
+            var nextSortOrder = refIndex < siblings.Count - 1 ? siblings[refIndex + 1].SortOrder : null;
+            sortOrder = LexOrderUtils.ComputeMidpoint(siblings[refIndex].SortOrder, nextSortOrder);
+        }
+
+        return (parentId, sortOrder);
+    }
 
     private void NotifyStateChanged()
     {
