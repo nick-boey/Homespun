@@ -28,6 +28,7 @@ public interface IClaudeCodeHubClient
     Task StreamingContentStopped(ClaudeMessageContent content, int index);
     Task QuestionReceived(PendingQuestion question);
     Task QuestionAnswered();
+    Task PlanReceived(string planContent, string? planFilePath);
     Task ContextCleared(string sessionId);
 
     /// <summary>

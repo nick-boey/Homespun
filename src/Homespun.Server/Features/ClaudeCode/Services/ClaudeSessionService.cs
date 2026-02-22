@@ -1177,6 +1177,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
 
                 session.Messages.Add(planMessage);
                 await _hubContext.BroadcastMessageReceived(sessionId, planMessage);
+                await _hubContext.BroadcastPlanReceived(sessionId, planContent, session.PlanFilePath);
             }
             else
             {
@@ -1291,6 +1292,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
 
             session.Messages.Add(planMessage);
             await _hubContext.BroadcastMessageReceived(sessionId, planMessage);
+            await _hubContext.BroadcastPlanReceived(sessionId, planContent, foundPath);
 
             // Set status to WaitingForPlanExecution so UI shows the action buttons
             session.Status = ClaudeSessionStatus.WaitingForPlanExecution;

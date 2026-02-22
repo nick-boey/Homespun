@@ -549,3 +549,6 @@ override.tf.json
 # Ignore CLI configuration files
 .terraformrc
 terraform.rc
+
+# Docker Compose environment files
+.env.compose
