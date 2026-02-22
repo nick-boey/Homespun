@@ -11,10 +11,9 @@ public class TaskGraphTextRendererTests
 {
     private static async Task<TaskGraph> BuildTaskGraph(List<Issue> issues)
     {
+        // Use MockIssueServiceAdapter which implements graph methods via IssueGraphService (Fleece.Core v1.4.0)
         var adapter = new MockIssueServiceAdapter(issues);
-        var nextService = new NextService(adapter);
-        var service = new TaskGraphService(adapter, nextService);
-        return await service.BuildGraphAsync();
+        return await adapter.BuildTaskGraphLayoutAsync();
     }
 
     [Test]
@@ -253,7 +252,8 @@ public class TaskGraphTextRendererTests
         var result = TaskGraphTextRenderer.Render(taskGraph);
 
         // ISSUE-003 is Progress status - Fleece.Core marks it as not actionable (◌)
-        // ISSUE-006 is actionable per Fleece.Core's NextService (○)
+        // In Fleece.Core v1.4.0, issues with incomplete parents are NOT actionable
+        // ISSUE-006 has parent ISSUE-005 which is Open, so it's NOT actionable (◌)
         // All parents default to ExecutionMode.Series, so children render with vertical-only
         // connections and L-shaped └─ transitions connect series children to their parents
         var expected = string.Join("\n", new[]
@@ -266,7 +266,7 @@ public class TaskGraphTextRendererTests
             "  \u2514\u2500\u25CC  ISSUE-008 Implement POST endpoints",
             "    \u25CC  ISSUE-012 Add rate limiting",
             "    \u2514\u2500\u25CC  ISSUE-007 Implement GET endpoints",
-            "      \u25CB  ISSUE-006 Write API documentation",
+            "      \u25CC  ISSUE-006 Write API documentation",
             "      \u25CC  ISSUE-013 Set up API monitoring",
             "      \u2514\u2500\u25CC  ISSUE-005 Implement API endpoints",
             "        \u2514\u2500\u25CC  ISSUE-004 Design API schema",
@@ -285,10 +285,11 @@ public class TaskGraphTextRendererTests
 
         var lines = result.Split('\n');
 
-        // Actionable issues per Fleece.Core's NextService
+        // Actionable issues per Fleece.Core v1.4.0 - issues are actionable only if all parents are complete
+        // ISSUE-001, ISSUE-002, ISSUE-010 are orphans (no parents) and Open status
         // ISSUE-003 is Progress status - Fleece.Core does not mark it as actionable
-        // ISSUE-006 is actionable per Fleece.Core's NextService
-        var nextIssueIds = new[] { "ISSUE-001", "ISSUE-002", "ISSUE-006", "ISSUE-010" };
+        // ISSUE-006 has parent ISSUE-005 which is Open, so it's NOT actionable in v1.4.0
+        var nextIssueIds = new[] { "ISSUE-001", "ISSUE-002", "ISSUE-010" };
         foreach (var issueId in nextIssueIds)
         {
             var line = lines.FirstOrDefault(l => l.Contains(issueId));
@@ -296,8 +297,8 @@ public class TaskGraphTextRendererTests
             Assert.That(line, Does.Contain("\u25CB"), $"{issueId} should use \u25CB (actionable marker)");
         }
 
-        // Non-actionable issues should use ◌
-        var nonNextIssueIds = new[] { "ISSUE-003", "ISSUE-004", "ISSUE-005", "ISSUE-007", "ISSUE-008", "ISSUE-009", "ISSUE-011", "ISSUE-012", "ISSUE-013" };
+        // Non-actionable issues should use ◌ (includes ISSUE-006 which has incomplete parent)
+        var nonNextIssueIds = new[] { "ISSUE-003", "ISSUE-004", "ISSUE-005", "ISSUE-006", "ISSUE-007", "ISSUE-008", "ISSUE-009", "ISSUE-011", "ISSUE-012", "ISSUE-013" };
         foreach (var issueId in nonNextIssueIds)
         {
             var line = lines.FirstOrDefault(l => l.Contains(issueId));
