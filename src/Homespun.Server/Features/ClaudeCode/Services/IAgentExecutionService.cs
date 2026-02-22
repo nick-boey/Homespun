@@ -98,6 +98,7 @@ public record ContainerInfo(
     string ContainerId,
     string ContainerName,
     string WorkingDirectory,
+    string? ProjectId,
     string? IssueId,
     DateTime CreatedAt,
     CloneContainerState? State
