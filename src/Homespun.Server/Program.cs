@@ -13,6 +13,7 @@ using Homespun.Features.Observability;
 using Homespun.Features.Plans;
 using Homespun.Features.Projects;
 using Homespun.Features.PullRequests;
+using Homespun.Features.Secrets;
 using Homespun.Features.PullRequests.Data;
 using Homespun.Features.Shared.Services;
 using Homespun.Features.SignalR;
@@ -99,6 +100,7 @@ else
 
     // Core services
     builder.Services.AddScoped<IProjectService, ProjectService>();
+    builder.Services.AddScoped<ISecretsService, SecretsService>();
     builder.Services.AddScoped<IContainerQueryService, ContainerQueryService>();
     builder.Services.AddSingleton<IGitHubEnvironmentService, GitHubEnvironmentService>();
     builder.Services.AddSingleton<ICommandRunner, CommandRunner>();
