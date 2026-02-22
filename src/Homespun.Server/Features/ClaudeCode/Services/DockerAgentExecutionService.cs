@@ -748,6 +748,7 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
                     container.ContainerId,
                     container.ContainerName,
                     container.WorkingDirectory,
+                    container.ProjectId,
                     container.IssueId,
                     container.CreatedAt,
                     state));
@@ -762,6 +763,7 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
                     container.ContainerId,
                     container.ContainerName,
                     container.WorkingDirectory,
+                    container.ProjectId,
                     container.IssueId,
                     container.CreatedAt,
                     null));
