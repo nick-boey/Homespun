@@ -207,6 +207,9 @@ public static class MockServiceExtensions
         // Hooks service for session startup hooks
         services.AddSingleton<IHooksService, HooksService>();
 
+        // AG-UI event service for translating A2A events
+        services.AddSingleton<IAGUIEventService, AGUIEventService>();
+
         // Use the real ClaudeSessionService
         services.AddSingleton<IClaudeSessionService, ClaudeSessionService>();
 
