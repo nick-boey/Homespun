@@ -2683,4 +2683,73 @@ public class ClaudeSessionServiceStatusBroadcastTests
         });
     }
 
+    [Test]
+    public async Task SendMessageAsync_BroadcastsPlanReceived_WhenWorkerSendsPlanPending()
+    {
+        // Arrange
+        var session = await _service.StartSessionAsync(
+            "entity-1", "project-1", "/test/path", SessionMode.Plan, "sonnet");
+
+        _broadcastCalls.Clear();
+
+        var planJson = """{"plan": "# My Plan\n\n1. Step one\n2. Step two"}""";
+        _agentExecutionServiceMock
+            .Setup(s => s.StartSessionAsync(It.IsAny<AgentStartRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(CreateSdkMessageStream(
+                new SdkSystemMessage("agent-1", null, "session_started", null, null),
+                new SdkPlanPendingMessage("agent-1", planJson),
+                new SdkResultMessage("agent-1", null, null, 0, 0, false, 0, 0, null)));
+
+        // Act
+        await _service.SendMessageAsync(session.Id, "Plan this feature");
+
+        // Assert - Should have broadcast PlanReceived with the plan content
+        var planBroadcasts = _broadcastCalls
+            .Where(c => c.Method == "PlanReceived")
+            .ToList();
+
+        Assert.That(planBroadcasts, Has.Count.GreaterThanOrEqualTo(1),
+            "Should broadcast PlanReceived when worker sends plan_pending");
+
+        var planArgs = planBroadcasts.First().Args;
+        Assert.That(planArgs[0] as string, Does.Contain("Step one"),
+            "PlanReceived should contain the plan content");
+    }
+
+    [Test]
+    public async Task SendMessageAsync_BroadcastsWaitingForPlanExecution_WhenWorkerSendsPlanPending()
+    {
+        // Arrange
+        var session = await _service.StartSessionAsync(
+            "entity-1", "project-1", "/test/path", SessionMode.Plan, "sonnet");
+
+        _broadcastCalls.Clear();
+
+        var planJson = """{"plan": "# My Plan\n\n1. Do something"}""";
+        _agentExecutionServiceMock
+            .Setup(s => s.StartSessionAsync(It.IsAny<AgentStartRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(CreateSdkMessageStream(
+                new SdkSystemMessage("agent-1", null, "session_started", null, null),
+                new SdkPlanPendingMessage("agent-1", planJson),
+                new SdkResultMessage("agent-1", null, null, 0, 0, false, 0, 0, null)));
+
+        // Act
+        await _service.SendMessageAsync(session.Id, "Plan this feature");
+
+        // Assert - PlanReceived should be broadcast before WaitingForPlanExecution status
+        var planReceivedIndex = _broadcastCalls.FindIndex(c => c.Method == "PlanReceived");
+        var statusIndex = _broadcastCalls.FindIndex(c =>
+            c.Method == "SessionStatusChanged" &&
+            c.Args.Length >= 2 &&
+            c.Args[1] is ClaudeSessionStatus status &&
+            status == ClaudeSessionStatus.WaitingForPlanExecution);
+
+        Assert.That(planReceivedIndex, Is.GreaterThanOrEqualTo(0),
+            "Should broadcast PlanReceived");
+        Assert.That(statusIndex, Is.GreaterThanOrEqualTo(0),
+            "Should broadcast WaitingForPlanExecution status");
+        Assert.That(planReceivedIndex, Is.LessThan(statusIndex),
+            "PlanReceived should be broadcast before WaitingForPlanExecution status");
+    }
+
 }

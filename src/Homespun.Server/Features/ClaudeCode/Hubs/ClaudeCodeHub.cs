@@ -302,6 +302,19 @@ public static class ClaudeCodeHubExtensions
     }
 
     /// <summary>
+    /// Broadcasts when a plan is received and ready for user approval.
+    /// </summary>
+    public static async Task BroadcastPlanReceived(
+        this IHubContext<ClaudeCodeHub> hubContext,
+        string sessionId,
+        string planContent,
+        string? planFilePath)
+    {
+        await hubContext.Clients.Group($"session-{sessionId}")
+            .SendAsync("PlanReceived", planContent, planFilePath);
+    }
+
+    /// <summary>
     /// Broadcasts when a question has been answered.
     /// </summary>
     public static async Task BroadcastQuestionAnswered(
