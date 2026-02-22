@@ -134,8 +134,8 @@ if [ "$ACTION" = "stop" ]; then
     fi
     docker stop "$CONTAINER_NAME" 2>/dev/null || true
     docker rm "$CONTAINER_NAME" 2>/dev/null || true
-    docker stop homespun-loki homespun-promtail homespun-grafana homespun-tailscale 2>/dev/null || true
-    docker rm homespun-loki homespun-promtail homespun-grafana homespun-tailscale 2>/dev/null || true
+    docker stop homespun-worker homespun-loki homespun-promtail homespun-grafana homespun-tailscale 2>/dev/null || true
+    docker rm homespun-worker homespun-loki homespun-promtail homespun-grafana homespun-tailscale 2>/dev/null || true
     log_success "Containers stopped."
     exit 0
 fi
@@ -412,6 +412,7 @@ if [ "$USE_LOCAL_AGENTS" = true ]; then
 else
     echo "  Agents:      Docker containers ($WORKER_IMAGE)"
 fi
+echo "  Sidecar:     Worker container (mini-prompts at http://homespun-worker:8080)"
 if [ "$NO_PLG" = false ]; then
     echo "  PLG Stack:   Enabled (Grafana at http://localhost:$GRAFANA_PORT)"
 else
@@ -466,6 +467,9 @@ CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
 TAILSCALE_AUTH_KEY=${TAILSCALE_AUTH_KEY:-}
 TS_HOSTNAME=${TS_HOSTNAME:-homespun-dev}
 HSP_EXTERNAL_HOSTNAME=${EXTERNAL_HOSTNAME:-}
+
+# Mini-prompt sidecar
+MINI_PROMPT_SIDECAR_URL=http://homespun-worker:8080
 
 # Grafana
 GRAFANA_PORT=$GRAFANA_PORT

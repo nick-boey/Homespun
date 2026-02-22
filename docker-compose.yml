@@ -20,6 +20,7 @@
 #   TS_HOSTNAME            - Tailscale hostname (default: homespun)
 #   GRAFANA_PORT           - Grafana port (default: 3000)
 #   GRAFANA_ADMIN_PASSWORD - Grafana admin password (default: admin)
+#   MINI_PROMPT_SIDECAR_URL - URL for mini-prompt sidecar (default: http://homespun-worker:8080)
 
 services:
   # Main Homespun application
@@ -44,6 +45,7 @@ services:
       - AgentExecution__Mode=${AGENT_MODE:-Docker}
       - AgentExecution__Docker__WorkerImage=${WORKER_IMAGE:-ghcr.io/nick-boey/homespun-worker:latest}
       - AgentExecution__Docker__NetworkName=homespun-net
+      - MiniPrompt__SidecarUrl=${MINI_PROMPT_SIDECAR_URL:-http://homespun-worker:8080}
     group_add:
       - ${DOCKER_GID:-999}
     restart: unless-stopped
@@ -58,6 +60,33 @@ services:
     labels:
       - "logging=promtail"
       - "logging_jobname=homespun-server"
+    depends_on:
+      worker:
+        condition: service_healthy
+        required: false
+      loki:
+        condition: service_started
+        required: false
+
+  # Worker - Sidecar container for mini prompts and lightweight AI tasks
+  worker:
+    image: ${WORKER_IMAGE:-ghcr.io/nick-boey/homespun-worker:latest}
+    container_name: homespun-worker
+    restart: unless-stopped
+    networks:
+      - homespun-net
+    environment:
+      - PORT=8080
+      - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    labels:
+      - "logging=promtail"
+      - "logging_jobname=homespun-worker"
     depends_on:
       loki:
         condition: service_started
