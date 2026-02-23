@@ -651,6 +651,115 @@ public class GraphBuilderTests
 
     #endregion
 
+    #region Closed PR Branching
+
+    [Test]
+    public void Build_ClosedPRs_HaveParentIdPointingToPreviousMergedPR()
+    {
+        // Arrange - Merged PR followed by a closed PR
+        var prs = new List<PullRequestInfo>
+        {
+            CreateMergedPR(1, DateTime.UtcNow.AddDays(-3)),  // Merged first
+            CreateClosedPR(2, DateTime.UtcNow.AddDays(-2)),  // Closed second
+        };
+
+        // Act
+        var graph = _builder.Build(prs, []);
+
+        // Assert - Closed PR should have parent ID pointing to the merged PR
+        var prNodes = graph.Nodes.OfType<PullRequestNode>().ToList();
+        var closedNode = prNodes.First(n => n.PullRequest.Number == 2);
+        Assert.That(closedNode.ParentIds, Has.Count.EqualTo(1));
+        Assert.That(closedNode.ParentIds[0], Is.EqualTo("pr-1"));
+    }
+
+    [Test]
+    public void Build_MergedPRs_HaveNoParentIds()
+    {
+        // Arrange - Multiple merged PRs
+        var prs = new List<PullRequestInfo>
+        {
+            CreateMergedPR(1, DateTime.UtcNow.AddDays(-3)),
+            CreateMergedPR(2, DateTime.UtcNow.AddDays(-2)),
+            CreateMergedPR(3, DateTime.UtcNow.AddDays(-1))
+        };
+
+        // Act
+        var graph = _builder.Build(prs, []);
+
+        // Assert - All merged PRs should have no parent IDs (stay on main line)
+        var prNodes = graph.Nodes.OfType<PullRequestNode>().ToList();
+        Assert.That(prNodes.All(n => n.ParentIds.Count == 0), Is.True);
+    }
+
+    [Test]
+    public void Build_ClosedPRs_UseTheirActualBranchName()
+    {
+        // Arrange - Closed PR with a specific branch name
+        var pr = CreateClosedPR(1, DateTime.UtcNow);
+        pr.BranchName = "feature/abandoned-feature";
+
+        // Act
+        var graph = _builder.Build([pr], []);
+
+        // Assert - Closed PR should use its actual branch name (not "main")
+        var prNode = graph.Nodes.OfType<PullRequestNode>().Single();
+        Assert.That(prNode.BranchName, Is.EqualTo("feature/abandoned-feature"));
+    }
+
+    [Test]
+    public void Build_MixedMergedAndClosedPRs_ClosedBranchFromPreviousMerged()
+    {
+        // Arrange - Mixed sequence: Merged, Closed, Merged, Closed
+        var prs = new List<PullRequestInfo>
+        {
+            CreateMergedPR(1, DateTime.UtcNow.AddDays(-4)),  // Merged
+            CreateClosedPR(2, DateTime.UtcNow.AddDays(-3)),  // Closed - should branch from PR 1
+            CreateMergedPR(3, DateTime.UtcNow.AddDays(-2)),  // Merged
+            CreateClosedPR(4, DateTime.UtcNow.AddDays(-1))   // Closed - should branch from PR 3
+        };
+
+        // Act
+        var graph = _builder.Build(prs, []);
+
+        // Assert
+        var prNodes = graph.Nodes.OfType<PullRequestNode>().ToList();
+
+        // PR 1 (merged) - no parent
+        Assert.That(prNodes[0].ParentIds, Is.Empty);
+
+        // PR 2 (closed) - parent is PR 1
+        Assert.That(prNodes[1].ParentIds, Has.Count.EqualTo(1));
+        Assert.That(prNodes[1].ParentIds[0], Is.EqualTo("pr-1"));
+
+        // PR 3 (merged) - no parent
+        Assert.That(prNodes[2].ParentIds, Is.Empty);
+
+        // PR 4 (closed) - parent is PR 3
+        Assert.That(prNodes[3].ParentIds, Has.Count.EqualTo(1));
+        Assert.That(prNodes[3].ParentIds[0], Is.EqualTo("pr-3"));
+    }
+
+    [Test]
+    public void Build_ClosedPRBeforeAnyMerged_HasNoParent()
+    {
+        // Arrange - Closed PR comes before any merged PR
+        var prs = new List<PullRequestInfo>
+        {
+            CreateClosedPR(1, DateTime.UtcNow.AddDays(-2)),  // Closed first
+            CreateMergedPR(2, DateTime.UtcNow.AddDays(-1))   // Merged second
+        };
+
+        // Act
+        var graph = _builder.Build(prs, []);
+
+        // Assert - First closed PR has no parent (nothing to branch from)
+        var prNodes = graph.Nodes.OfType<PullRequestNode>().ToList();
+        Assert.That(prNodes[0].ParentIds, Is.Empty);
+    }
+
+    #endregion
+
     #region Branch Creation
 
     [Test]

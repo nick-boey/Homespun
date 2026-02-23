@@ -42,6 +42,12 @@ public class PullRequestNode : IGraphNode
 
     public IReadOnlyList<string> ParentIds => _parentIds;
 
+    /// <summary>
+    /// Returns the branch name for this PR node.
+    /// - Merged PRs return "main" (they are on the main line)
+    /// - Closed (not merged) PRs return their actual branch name (they branch off)
+    /// - Open PRs return their actual branch name
+    /// </summary>
     public string BranchName => _pr.Status == PullRequestStatus.Merged
         ? "main"
         : _pr.BranchName ?? $"pr-{_pr.Number}";
