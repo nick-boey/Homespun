@@ -39,7 +39,7 @@
                         <span class="task-graph-title">@prLine.Title</span>
                         @if (prLine.AgentStatus != null)
                         {
-                            <a href="/sessions/@prLine.AgentStatus.SessionId"
+                            <a href="/session/@prLine.AgentStatus.SessionId"
                                class="agent-status-badge @GetAgentStatusClass(prLine.AgentStatus)"
                                @onclick:stopPropagation="true">
                                 <span class="agent-status-dot @(prLine.AgentStatus.IsActive ? "agent-status-dot-active" : "")"></span>
@@ -127,7 +127,7 @@
                         }
                         @if (agentStatus != null && !isEditing)
                         {
-                            <a href="/sessions/@agentStatus.SessionId"
+                            <a href="/session/@agentStatus.SessionId"
                                class="agent-status-badge @GetAgentStatusClass(agentStatus)"
                                @onclick:stopPropagation="true">
                                 <span class="agent-status-dot @(agentStatus.IsActive ? "agent-status-dot-active" : "")"></span>

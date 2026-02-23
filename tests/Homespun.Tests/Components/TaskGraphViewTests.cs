@@ -600,7 +600,7 @@ public class TaskGraphViewTests : BunitTestContext
         // Agent status badge should be an anchor tag with href to the session
         var badge = cut.Find(".agent-status-badge");
         Assert.That(badge.TagName.ToLower(), Is.EqualTo("a"), "Agent status badge should be an <a> tag");
-        Assert.That(badge.GetAttribute("href"), Is.EqualTo("/sessions/session-abc123"), "Badge href should link to the session");
+        Assert.That(badge.GetAttribute("href"), Is.EqualTo("/session/session-abc123"), "Badge href should link to the session");
     }
 
     [Test]
@@ -664,7 +664,7 @@ public class TaskGraphViewTests : BunitTestContext
         // Agent status badge on PR row should also be an anchor tag
         var badge = cut.Find(".agent-status-badge");
         Assert.That(badge.TagName.ToLower(), Is.EqualTo("a"), "Agent status badge on PR should be an <a> tag");
-        Assert.That(badge.GetAttribute("href"), Is.EqualTo("/sessions/pr-session-456"), "Badge href should link to the session");
+        Assert.That(badge.GetAttribute("href"), Is.EqualTo("/session/pr-session-456"), "Badge href should link to the session");
     }
 
     #region Inline Issue Editor Bug Tests - Issue I2QGzX
