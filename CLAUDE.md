@@ -90,14 +90,14 @@ The application is containerised and should always be run in a container. Helper
 # Linux
 ./scripts/run.sh                # Production: Runs the latest container on GHCR
 ./scripts/run.sh --local        # Development: Builds a container from source and runs it
-./scripts/mock.sh               # Testing: Builds a container from source using mock services for local UI testing
+./scripts/mock.sh               # Testing: Runs the application with mock services for local UI testing
 
 # Similar PowerShell scripts exist for windows
 ```
 
 There are other various configuration variables that can be passed into the scripts as required. Environment variables are used for auth tokens, review the scripts if required to understand these.
 
-**Do not under any circumstances stop a container called `homespun` or `homespun-prod`.** You may only stop containers named `homespun-mock-{hash}`.
+**Do not under any circumstances stop a container called `homespun` or `homespun-prod`.**
 
 ### Running Tests
 
@@ -165,10 +165,38 @@ The mock mode provides a development environment with:
 ./scripts/mock.ps1      # Windows
 ```
 
-The scripts find an available port between 15000 and 16000 when running in this mode. Review the script output to find the URL to access.
-Use the HTTP URL when accessing the mock container with Playwright.
+The script runs `dotnet run` with the mock launch profile. When running inside a container, it uses `localhost` for the URL. Review the script output to find the URL to access (typically `http://localhost:5095`).
 
-When using Playwright MCP tools in such environments, use the HTTP URL shown in the console output rather than the HTTPS URL from the launch profile.
+### Using Mock Mode with Playwright
+
+When testing the UI with Playwright MCP tools inside the agent container:
+
+1. **Start the mock server as a background process:**
+   ```bash
+   ./scripts/mock.sh &
+   ```
+   Wait for the server to start (look for "Now listening on: http://localhost:5095" in the output).
+
+2. **Access the mock server at localhost:**
+   - Navigate: `browser_navigate` to `http://localhost:5095/projects`
+   - Screenshot: `browser_take_screenshot`
+
+3. **After testing, the mock process will continue running.** To stop it:
+   - Find the process: `ps aux | grep dotnet`
+   - Stop it: `kill <pid>` or use Ctrl+C if running in foreground
+
+### Critical Shell Management Rules
+
+**NEVER use `KillShell` on a shell running `mock.sh` or any `dotnet` process.** Killing these shells can terminate your entire session and crash the agent.
+
+When cleaning up after UI testing:
+- Close the browser using `mcp__playwright__browser_close` - this is safe
+- Leave the mock.sh process running - it will be cleaned up when the session ends
+- Do NOT attempt to kill background shells that are running server processes
+
+If you need to restart the mock server:
+1. Use `pkill -f "dotnet.*mock"` to stop the dotnet process directly
+2. Start a new mock server with `./scripts/mock.sh &`
 
 ### Playwright MCP Tools
 
@@ -181,7 +209,7 @@ Key tools for UI inspection:
 
 ## Container Playwright MCP Usage
 
-Most of the development of Homespun comes from agents running within the application container itself. Consider this when testing a mock container using the Playwright MCP tools. There are important networking considerations when starting and accessing mock containers within the application container.
+Most of the development of Homespun comes from agents running within the application container itself.
 
 ### Browser Installation
 
@@ -189,44 +217,20 @@ Playwright browsers are pre-installed at `/opt/playwright-browsers`. The `PLAYWR
 
 ### Container Networking
 
-**Important:** From inside a Docker container, `localhost` refers to the container itself, not the host machine or sibling containers.
+When running mock.sh inside the agent container, the mock server runs on `localhost` within the container. Use `http://localhost:5095` (or whatever port the script outputs) for Playwright navigation.
 
-#### Accessing Sibling Containers (DooD)
-
-Docker-outside-of-Docker is used to spawn mock containers:
-
-1. **Start a mock container:**
-   ```bash
-   ./scripts/mock.sh
-   ```
-   Note the container name and port from the output (e.g., `homespun-mock-ba1185a8` on port `15633`).
-
-2. **Find the container's Docker network IP:**
-   ```bash
-   docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' homespun-mock-ba1185a8
-   # Returns: 172.17.0.3 (example)
-   ```
-
-3. **Use the IP address with Playwright MCP tools:**
-   - Navigate: `browser_navigate` to `http://172.17.0.3:8080/projects`
-   - Screenshot: `browser_take_screenshot`
-
-**Note:** The port inside the container is always `8080`, regardless of the host-mapped port.
-
-#### Accessing the Host Machine
-
+For accessing other containers or the host machine:
 - **Linux hosts**: Use the Docker bridge IP, typically `172.17.0.1`
 - **Docker Desktop (Mac/Windows)**: Use `host.docker.internal`
-
-**Note: Do not edit any files on the host machine or stop/modify any containers that are not a mock container that you created.**
 
 ### Troubleshooting
 
 | Issue | Solution |
 |-------|----------|
 | "Browser not installed" error | Verify: `ls /opt/playwright-browsers/` |
-| Connection refused to localhost | Use Docker network IP instead of localhost |
+| Connection refused to localhost:5095 | Wait for mock.sh to finish starting, or check if port is different |
 | Permission denied on browser | Check `PLAYWRIGHT_BROWSERS_PATH` is set to `/opt/playwright-browsers` |
+| Session crashed after KillShell | You killed a critical shell - restart the session |
 
 ## Styling with Tailwind CSS
 
