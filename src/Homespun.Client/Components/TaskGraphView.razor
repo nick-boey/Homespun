@@ -5,6 +5,7 @@
 @using Homespun.Shared.Requests
 @using Fleece.Core.Models
 @inject HttpIssueApiService IssueApi
+@inject IJSRuntime JSRuntime
 
 @if (TaskGraph != null && (_renderLines.Count > 0 || TaskGraph.MergedPrs.Count > 0))
 {
@@ -612,6 +613,7 @@
     private List<TaskGraphRenderLine> _renderLines = [];
     private int _maxLane;
     private string? _typeMenuOpenForIssueId;
+    private string? _previousSelectedNodeId;
 
     protected override void OnParametersSet()
     {
@@ -622,6 +624,21 @@
             .Select(l => Math.Max(l.Lane, l.ParentLane ?? 0))
             .DefaultIfEmpty(hasMergedPrs ? 1 : 0)  // Account for lane offset when PRs exist
             .Max();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Scroll the selected issue into view when selection changes
+        if (SelectedNodeId != _previousSelectedNodeId && SelectedNodeId != null)
+        {
+            _previousSelectedNodeId = SelectedNodeId;
+            // Extract issue ID from "issue-{id}" format
+            if (SelectedNodeId.StartsWith("issue-"))
+            {
+                var issueId = SelectedNodeId.Substring(6);
+                await JSRuntime.InvokeVoidAsync("homespunInterop.scrollIssueIntoView", issueId);
+            }
+        }
     }
 
     private string GenerateIssueSvg(int index, TaskGraphIssueRenderLine issueLine, AgentStatusData? agentStatus)

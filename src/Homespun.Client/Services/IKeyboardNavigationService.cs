@@ -124,6 +124,12 @@ public interface IKeyboardNavigationService
     /// <summary>Navigate to child issue (h or ArrowLeft).</summary>
     void MoveToChild();
 
+    /// <summary>Move selection to the first issue (g command).</summary>
+    void MoveToFirst();
+
+    /// <summary>Move selection to the last issue (G command).</summary>
+    void MoveToLast();
+
     // Editing methods
 
     /// <summary>Start editing at the start of the title (i command).</summary>

@@ -5,6 +5,7 @@
 @inject HttpGraphApiService GraphApi
 @inject NavigationManager NavigationManager
 @inject IKeyboardNavigationService NavService
+@inject IJSRuntime JSRuntime
 @implements IAsyncDisposable
 
 <div class="timeline-wrapper" @ref="_timelineWrapper">
@@ -411,6 +412,7 @@
     // Keyboard navigation
     private ElementReference _timelineWrapper;
     private List<TaskGraphIssueRenderLine> _issueRenderLines = [];
+    private string? _previousSelectedIssueId;
 
     private readonly TimelineLaneCalculator _laneCalculator = new();
 
@@ -920,12 +922,29 @@ if (_notificationHubConnection != null)
             case "O":
                 NavService.CreateIssueAbove();
                 break;
+            case "g":
+                NavService.MoveToFirst();
+                break;
+            case "G":
+                NavService.MoveToLast();
+                break;
         }
     }
 
     private void HandleNavStateChanged()
     {
-        InvokeAsync(StateHasChanged);
+        InvokeAsync(async () =>
+        {
+            StateHasChanged();
+
+            // Scroll the selected issue into view when selection changes via keyboard
+            var currentSelectedId = NavService.SelectedIssueId;
+            if (currentSelectedId != null && currentSelectedId != _previousSelectedIssueId)
+            {
+                _previousSelectedIssueId = currentSelectedId;
+                await JSRuntime.InvokeVoidAsync("homespunInterop.scrollIssueIntoView", currentSelectedId);
+            }
+        });
     }
 
     private void InitializeKeyboardNavigation()

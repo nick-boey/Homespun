@@ -111,4 +111,6 @@ public abstract class TestContextWrapper
     }
 
     protected Microsoft.Extensions.DependencyInjection.IServiceCollection Services => Context!.Services;
+
+    protected BunitJSInterop JSInterop => Context!.JSInterop;
 }

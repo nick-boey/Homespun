@@ -210,6 +210,126 @@ public class KeyboardNavigationServiceTests
 
     #endregion
 
+    #region MoveToFirst/MoveToLast Tests
+
+    [Test]
+    public void MoveToFirst_SelectsFirstIssue()
+    {
+        _service.Initialize(_sampleRenderLines);
+        _service.SelectIssue("ISSUE-004"); // Start at last
+
+        _service.MoveToFirst();
+
+        Assert.That(_service.SelectedIndex, Is.EqualTo(0));
+        Assert.That(_service.SelectedIssueId, Is.EqualTo("ISSUE-001"));
+    }
+
+    [Test]
+    public void MoveToFirst_FromMiddle_SelectsFirstIssue()
+    {
+        _service.Initialize(_sampleRenderLines);
+        _service.SelectIssue("ISSUE-002"); // Start in middle
+
+        _service.MoveToFirst();
+
+        Assert.That(_service.SelectedIndex, Is.EqualTo(0));
+        Assert.That(_service.SelectedIssueId, Is.EqualTo("ISSUE-001"));
+    }
+
+    [Test]
+    public void MoveToFirst_EmptyList_DoesNotThrow()
+    {
+        _service.Initialize([]);
+
+        Assert.DoesNotThrow(() => _service.MoveToFirst());
+        Assert.That(_service.SelectedIndex, Is.EqualTo(-1));
+    }
+
+    [Test]
+    public void MoveToFirst_DuringEditMode_IsIgnored()
+    {
+        _service.Initialize(_sampleRenderLines);
+        _service.SelectIssue("ISSUE-003");
+        _service.StartEditingAtStart();
+
+        _service.MoveToFirst();
+
+        Assert.That(_service.SelectedIssueId, Is.EqualTo("ISSUE-003")); // Unchanged
+    }
+
+    [Test]
+    public void MoveToFirst_RaisesOnStateChanged()
+    {
+        _service.Initialize(_sampleRenderLines);
+        _service.SelectIssue("ISSUE-003");
+        var stateChanged = false;
+        _service.OnStateChanged += () => stateChanged = true;
+
+        _service.MoveToFirst();
+
+        Assert.That(stateChanged, Is.True);
+    }
+
+    [Test]
+    public void MoveToLast_SelectsLastIssue()
+    {
+        _service.Initialize(_sampleRenderLines);
+        _service.SelectFirstActionable(); // Start at first
+
+        _service.MoveToLast();
+
+        Assert.That(_service.SelectedIndex, Is.EqualTo(3));
+        Assert.That(_service.SelectedIssueId, Is.EqualTo("ISSUE-004"));
+    }
+
+    [Test]
+    public void MoveToLast_FromMiddle_SelectsLastIssue()
+    {
+        _service.Initialize(_sampleRenderLines);
+        _service.SelectIssue("ISSUE-002"); // Start in middle
+
+        _service.MoveToLast();
+
+        Assert.That(_service.SelectedIndex, Is.EqualTo(3));
+        Assert.That(_service.SelectedIssueId, Is.EqualTo("ISSUE-004"));
+    }
+
+    [Test]
+    public void MoveToLast_EmptyList_DoesNotThrow()
+    {
+        _service.Initialize([]);
+
+        Assert.DoesNotThrow(() => _service.MoveToLast());
+        Assert.That(_service.SelectedIndex, Is.EqualTo(-1));
+    }
+
+    [Test]
+    public void MoveToLast_DuringEditMode_IsIgnored()
+    {
+        _service.Initialize(_sampleRenderLines);
+        _service.SelectFirstActionable();
+        _service.StartEditingAtStart();
+
+        _service.MoveToLast();
+
+        Assert.That(_service.SelectedIssueId, Is.EqualTo("ISSUE-001")); // Unchanged
+    }
+
+    [Test]
+    public void MoveToLast_RaisesOnStateChanged()
+    {
+        _service.Initialize(_sampleRenderLines);
+        _service.SelectFirstActionable();
+        var stateChanged = false;
+        _service.OnStateChanged += () => stateChanged = true;
+
+        _service.MoveToLast();
+
+        Assert.That(stateChanged, Is.True);
+    }
+
+    #endregion
+
     #region Parent/Child Navigation Tests
 
     [Test]
