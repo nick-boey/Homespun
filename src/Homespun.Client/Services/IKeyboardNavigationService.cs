@@ -110,6 +110,9 @@ public interface IKeyboardNavigationService
     /// <summary>Raised when an issue has been created or updated and the graph should be refreshed.</summary>
     event Func<Task>? OnIssueChanged;
 
+    /// <summary>Raised when the user requests to open the full edit page for an issue (Enter key).</summary>
+    event Action<string>? OnOpenEditRequested;
+
     // Navigation methods
 
     /// <summary>Move selection up (k or ArrowUp).</summary>
@@ -178,4 +181,7 @@ public interface IKeyboardNavigationService
 
     /// <summary>Select an issue by its ID.</summary>
     void SelectIssue(string issueId);
+
+    /// <summary>Open the selected issue in the full edit page (Enter key in viewing mode).</summary>
+    void OpenSelectedIssueForEdit();
 }

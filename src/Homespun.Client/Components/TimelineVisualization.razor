@@ -879,6 +879,7 @@ if (_notificationHubConnection != null)
         }
         NavService.OnStateChanged -= HandleNavStateChanged;
         NavService.OnIssueChanged -= HandleIssueChangedAsync;
+        NavService.OnOpenEditRequested -= HandleOpenEditRequested;
     }
 
     private void HandleKeyDown(KeyboardEventArgs e)
@@ -928,6 +929,9 @@ if (_notificationHubConnection != null)
             case "G":
                 NavService.MoveToLast();
                 break;
+            case "Enter":
+                NavService.OpenSelectedIssueForEdit();
+                break;
         }
     }
 
@@ -947,6 +951,11 @@ if (_notificationHubConnection != null)
         });
     }
 
+    private void HandleOpenEditRequested(string issueId)
+    {
+        InvokeAsync(() => OnEditClick.InvokeAsync(issueId));
+    }
+
     private void InitializeKeyboardNavigation()
     {
         InitializeKeyboardNavigationWithSelection(null);
@@ -964,6 +973,8 @@ if (_notificationHubConnection != null)
         NavService.OnStateChanged += HandleNavStateChanged;
         NavService.OnIssueChanged -= HandleIssueChangedAsync;
         NavService.OnIssueChanged += HandleIssueChangedAsync;
+        NavService.OnOpenEditRequested -= HandleOpenEditRequested;
+        NavService.OnOpenEditRequested += HandleOpenEditRequested;
 
         // Set the project ID for API calls
         NavService.SetProjectId(ProjectId);

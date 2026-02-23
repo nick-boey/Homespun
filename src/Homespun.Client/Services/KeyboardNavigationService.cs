@@ -39,6 +39,8 @@ public class KeyboardNavigationService : IKeyboardNavigationService
 
     public event Func<Task>? OnIssueChanged;
 
+    public event Action<string>? OnOpenEditRequested;
+
     #region Navigation
 
     public void MoveUp()
@@ -428,6 +430,14 @@ public class KeyboardNavigationService : IKeyboardNavigationService
                 return;
             }
         }
+    }
+
+    public void OpenSelectedIssueForEdit()
+    {
+        if (EditMode != KeyboardEditMode.Viewing) return;
+        if (SelectedIssueId == null) return;
+
+        OnOpenEditRequested?.Invoke(SelectedIssueId);
     }
 
     #endregion
