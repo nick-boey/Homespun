@@ -737,6 +737,380 @@ public class KeyboardNavigationServiceTests
 
     #endregion
 
+    #region Hierarchy Creation Helper Methods
+
+    /// <summary>
+    /// Creates a hierarchy with three children under one parent.
+    /// Graph: Child1 -> Child2 -> Child3 -> Parent
+    /// Render order (top to bottom): Child1, Child2, Child3, Parent
+    /// </summary>
+    private (List<TaskGraphIssueRenderLine> Lines, List<TaskGraphNodeResponse> Nodes) CreateThreeChildrenWithParent()
+    {
+        var lines = new List<TaskGraphIssueRenderLine>
+        {
+            CreateIssueLine("CHILD-001", "Child issue 1", 0, TaskGraphMarkerType.Actionable, parentLane: 1, isSeriesChild: true),
+            CreateIssueLine("CHILD-002", "Child issue 2", 0, TaskGraphMarkerType.Open, parentLane: 1, isSeriesChild: true),
+            CreateIssueLine("CHILD-003", "Child issue 3", 0, TaskGraphMarkerType.Open, parentLane: 1, isSeriesChild: true, isFirstChild: true),
+            CreateIssueLine("PARENT-001", "Parent issue", 1, TaskGraphMarkerType.Open)
+        };
+
+        var nodes = new List<TaskGraphNodeResponse>
+        {
+            new()
+            {
+                Issue = new IssueResponse
+                {
+                    Id = "CHILD-001",
+                    Title = "Child issue 1",
+                    Type = IssueType.Task,
+                    ParentIssues = [new ParentIssueRefResponse { ParentIssue = "PARENT-001", SortOrder = "a" }]
+                },
+                Lane = 0,
+                Row = 0,
+                IsActionable = true
+            },
+            new()
+            {
+                Issue = new IssueResponse
+                {
+                    Id = "CHILD-002",
+                    Title = "Child issue 2",
+                    Type = IssueType.Task,
+                    ParentIssues = [new ParentIssueRefResponse { ParentIssue = "PARENT-001", SortOrder = "b" }]
+                },
+                Lane = 0,
+                Row = 1,
+                IsActionable = false
+            },
+            new()
+            {
+                Issue = new IssueResponse
+                {
+                    Id = "CHILD-003",
+                    Title = "Child issue 3",
+                    Type = IssueType.Task,
+                    ParentIssues = [new ParentIssueRefResponse { ParentIssue = "PARENT-001", SortOrder = "c" }]
+                },
+                Lane = 0,
+                Row = 2,
+                IsActionable = false
+            },
+            new()
+            {
+                Issue = new IssueResponse
+                {
+                    Id = "PARENT-001",
+                    Title = "Parent issue",
+                    Type = IssueType.Feature,
+                    ParentIssues = []
+                },
+                Lane = 1,
+                Row = 3,
+                IsActionable = false
+            }
+        };
+
+        return (lines, nodes);
+    }
+
+    /// <summary>
+    /// Creates a hierarchy with two children under one parent.
+    /// Graph: Child1 -> Child2 -> Parent
+    /// Render order (top to bottom): Child1, Child2, Parent
+    /// </summary>
+    private (List<TaskGraphIssueRenderLine> Lines, List<TaskGraphNodeResponse> Nodes) CreateTwoChildrenWithParent()
+    {
+        var lines = new List<TaskGraphIssueRenderLine>
+        {
+            CreateIssueLine("CHILD-001", "Child issue 1", 0, TaskGraphMarkerType.Actionable, parentLane: 1, isSeriesChild: true),
+            CreateIssueLine("CHILD-002", "Child issue 2", 0, TaskGraphMarkerType.Open, parentLane: 1, isSeriesChild: true, isFirstChild: true),
+            CreateIssueLine("PARENT-001", "Parent issue", 1, TaskGraphMarkerType.Open)
+        };
+
+        var nodes = new List<TaskGraphNodeResponse>
+        {
+            new()
+            {
+                Issue = new IssueResponse
+                {
+                    Id = "CHILD-001",
+                    Title = "Child issue 1",
+                    Type = IssueType.Task,
+                    ParentIssues = [new ParentIssueRefResponse { ParentIssue = "PARENT-001", SortOrder = "a" }]
+                },
+                Lane = 0,
+                Row = 0,
+                IsActionable = true
+            },
+            new()
+            {
+                Issue = new IssueResponse
+                {
+                    Id = "CHILD-002",
+                    Title = "Child issue 2",
+                    Type = IssueType.Task,
+                    ParentIssues = [new ParentIssueRefResponse { ParentIssue = "PARENT-001", SortOrder = "b" }]
+                },
+                Lane = 0,
+                Row = 1,
+                IsActionable = false
+            },
+            new()
+            {
+                Issue = new IssueResponse
+                {
+                    Id = "PARENT-001",
+                    Title = "Parent issue",
+                    Type = IssueType.Feature,
+                    ParentIssues = []
+                },
+                Lane = 1,
+                Row = 2,
+                IsActionable = false
+            }
+        };
+
+        return (lines, nodes);
+    }
+
+    /// <summary>
+    /// Creates an orphan above a child hierarchy.
+    /// Graph: Orphan (no parent), Child1 -> Child2 -> Parent
+    /// Render order (top to bottom): Orphan, Child1, Child2, Parent
+    /// </summary>
+    private (List<TaskGraphIssueRenderLine> Lines, List<TaskGraphNodeResponse> Nodes) CreateOrphanAboveChildHierarchy()
+    {
+        var lines = new List<TaskGraphIssueRenderLine>
+        {
+            CreateIssueLine("ORPHAN-001", "Next issue (orphan)", 0, TaskGraphMarkerType.Open),
+            CreateIssueLine("CHILD-001", "Child issue 1", 0, TaskGraphMarkerType.Actionable, parentLane: 1, isSeriesChild: true),
+            CreateIssueLine("CHILD-002", "Child issue 2", 0, TaskGraphMarkerType.Open, parentLane: 1, isSeriesChild: true, isFirstChild: true),
+            CreateIssueLine("PARENT-001", "Parent issue", 1, TaskGraphMarkerType.Open)
+        };
+
+        var nodes = new List<TaskGraphNodeResponse>
+        {
+            new()
+            {
+                Issue = new IssueResponse
+                {
+                    Id = "ORPHAN-001",
+                    Title = "Next issue (orphan)",
+                    Type = IssueType.Task,
+                    ParentIssues = []
+                },
+                Lane = 0,
+                Row = 0,
+                IsActionable = false
+            },
+            new()
+            {
+                Issue = new IssueResponse
+                {
+                    Id = "CHILD-001",
+                    Title = "Child issue 1",
+                    Type = IssueType.Task,
+                    ParentIssues = [new ParentIssueRefResponse { ParentIssue = "PARENT-001", SortOrder = "a" }]
+                },
+                Lane = 0,
+                Row = 1,
+                IsActionable = true
+            },
+            new()
+            {
+                Issue = new IssueResponse
+                {
+                    Id = "CHILD-002",
+                    Title = "Child issue 2",
+                    Type = IssueType.Task,
+                    ParentIssues = [new ParentIssueRefResponse { ParentIssue = "PARENT-001", SortOrder = "b" }]
+                },
+                Lane = 0,
+                Row = 2,
+                IsActionable = false
+            },
+            new()
+            {
+                Issue = new IssueResponse
+                {
+                    Id = "PARENT-001",
+                    Title = "Parent issue",
+                    Type = IssueType.Feature,
+                    ParentIssues = []
+                },
+                Lane = 1,
+                Row = 3,
+                IsActionable = false
+            }
+        };
+
+        return (lines, nodes);
+    }
+
+    /// <summary>
+    /// Creates a child hierarchy above an orphan.
+    /// Graph: Child1 -> Child2 -> Parent, Orphan (no parent)
+    /// Render order (top to bottom): Child1, Child2, Parent, Orphan
+    /// </summary>
+    private (List<TaskGraphIssueRenderLine> Lines, List<TaskGraphNodeResponse> Nodes) CreateChildHierarchyAboveOrphan()
+    {
+        var lines = new List<TaskGraphIssueRenderLine>
+        {
+            CreateIssueLine("CHILD-001", "Child issue 1", 0, TaskGraphMarkerType.Actionable, parentLane: 1, isSeriesChild: true),
+            CreateIssueLine("CHILD-002", "Child issue 2", 0, TaskGraphMarkerType.Open, parentLane: 1, isSeriesChild: true, isFirstChild: true),
+            CreateIssueLine("PARENT-001", "Parent issue", 1, TaskGraphMarkerType.Open),
+            CreateIssueLine("ORPHAN-001", "Next issue (orphan)", 0, TaskGraphMarkerType.Open)
+        };
+
+        var nodes = new List<TaskGraphNodeResponse>
+        {
+            new()
+            {
+                Issue = new IssueResponse
+                {
+                    Id = "CHILD-001",
+                    Title = "Child issue 1",
+                    Type = IssueType.Task,
+                    ParentIssues = [new ParentIssueRefResponse { ParentIssue = "PARENT-001", SortOrder = "a" }]
+                },
+                Lane = 0,
+                Row = 0,
+                IsActionable = true
+            },
+            new()
+            {
+                Issue = new IssueResponse
+                {
+                    Id = "CHILD-002",
+                    Title = "Child issue 2",
+                    Type = IssueType.Task,
+                    ParentIssues = [new ParentIssueRefResponse { ParentIssue = "PARENT-001", SortOrder = "b" }]
+                },
+                Lane = 0,
+                Row = 1,
+                IsActionable = false
+            },
+            new()
+            {
+                Issue = new IssueResponse
+                {
+                    Id = "PARENT-001",
+                    Title = "Parent issue",
+                    Type = IssueType.Feature,
+                    ParentIssues = []
+                },
+                Lane = 1,
+                Row = 2,
+                IsActionable = false
+            },
+            new()
+            {
+                Issue = new IssueResponse
+                {
+                    Id = "ORPHAN-001",
+                    Title = "Next issue (orphan)",
+                    Type = IssueType.Task,
+                    ParentIssues = []
+                },
+                Lane = 0,
+                Row = 3,
+                IsActionable = false
+            }
+        };
+
+        return (lines, nodes);
+    }
+
+    /// <summary>
+    /// Creates two adjacent hierarchies.
+    /// Graph: Child1.1 -> Child1.2 -> Parent1, Child2.1 -> Parent2
+    /// Render order (top to bottom): Child1.1, Child1.2, Parent1, Child2.1, Parent2
+    /// </summary>
+    private (List<TaskGraphIssueRenderLine> Lines, List<TaskGraphNodeResponse> Nodes) CreateTwoAdjacentHierarchies()
+    {
+        var lines = new List<TaskGraphIssueRenderLine>
+        {
+            CreateIssueLine("CHILD-1-1", "Child issue 1.1", 0, TaskGraphMarkerType.Actionable, parentLane: 1, isSeriesChild: true),
+            CreateIssueLine("CHILD-1-2", "Child issue 1.2", 0, TaskGraphMarkerType.Open, parentLane: 1, isSeriesChild: true, isFirstChild: true),
+            CreateIssueLine("PARENT-001", "Parent issue 1", 1, TaskGraphMarkerType.Open),
+            CreateIssueLine("CHILD-2-1", "Child issue 2.1", 0, TaskGraphMarkerType.Open, parentLane: 1, isSeriesChild: true, isFirstChild: true),
+            CreateIssueLine("PARENT-002", "Parent issue 2", 1, TaskGraphMarkerType.Open)
+        };
+
+        var nodes = new List<TaskGraphNodeResponse>
+        {
+            new()
+            {
+                Issue = new IssueResponse
+                {
+                    Id = "CHILD-1-1",
+                    Title = "Child issue 1.1",
+                    Type = IssueType.Task,
+                    ParentIssues = [new ParentIssueRefResponse { ParentIssue = "PARENT-001", SortOrder = "a" }]
+                },
+                Lane = 0,
+                Row = 0,
+                IsActionable = true
+            },
+            new()
+            {
+                Issue = new IssueResponse
+                {
+                    Id = "CHILD-1-2",
+                    Title = "Child issue 1.2",
+                    Type = IssueType.Task,
+                    ParentIssues = [new ParentIssueRefResponse { ParentIssue = "PARENT-001", SortOrder = "b" }]
+                },
+                Lane = 0,
+                Row = 1,
+                IsActionable = false
+            },
+            new()
+            {
+                Issue = new IssueResponse
+                {
+                    Id = "PARENT-001",
+                    Title = "Parent issue 1",
+                    Type = IssueType.Feature,
+                    ParentIssues = []
+                },
+                Lane = 1,
+                Row = 2,
+                IsActionable = false
+            },
+            new()
+            {
+                Issue = new IssueResponse
+                {
+                    Id = "CHILD-2-1",
+                    Title = "Child issue 2.1",
+                    Type = IssueType.Task,
+                    ParentIssues = [new ParentIssueRefResponse { ParentIssue = "PARENT-002", SortOrder = "a" }]
+                },
+                Lane = 0,
+                Row = 3,
+                IsActionable = false
+            },
+            new()
+            {
+                Issue = new IssueResponse
+                {
+                    Id = "PARENT-002",
+                    Title = "Parent issue 2",
+                    Type = IssueType.Feature,
+                    ParentIssues = []
+                },
+                Lane = 1,
+                Row = 4,
+                IsActionable = false
+            }
+        };
+
+        return (lines, nodes);
+    }
+
+    #endregion
+
     #region Parent Inheritance Tests
 
     private List<TaskGraphNodeResponse> CreateTaskGraphNodesWithParent()
@@ -949,6 +1323,712 @@ public class KeyboardNavigationServiceTests
         Assert.That(body, Is.Not.Null);
         // Shift+Tab: new issue becomes child, so ParentIssueId = reference issue
         Assert.That(body!.ParentIssueId, Is.EqualTo("ISSUE-001"));
+        Assert.That(body.ChildIssueId, Is.Null);
+    }
+
+    #endregion
+
+    #region Section 1 - Default (Sibling) Creation Tests
+
+    // Section 1.1: Between two children
+    [Test]
+    public void CreateIssueBelow_BetweenTwoChildren_InheritsParentAndComputesMidpointSortOrder()
+    {
+        var (lines, nodes) = CreateThreeChildrenWithParent();
+        _service.Initialize(lines);
+        _service.SetTaskGraphNodes(nodes);
+        _service.SelectIssue("CHILD-001"); // Select first child
+
+        _service.CreateIssueBelow(); // Insert between Child 1 and Child 2
+
+        Assert.That(_service.PendingNewIssue, Is.Not.Null);
+        Assert.That(_service.PendingNewIssue!.InheritedParentIssueId, Is.EqualTo("PARENT-001"));
+        Assert.That(_service.PendingNewIssue.InheritedParentSortOrder, Is.Not.Null);
+        // Sort order should be between "a" (Child 1) and "b" (Child 2)
+        Assert.That(string.Compare(_service.PendingNewIssue.InheritedParentSortOrder, "a", StringComparison.Ordinal), Is.GreaterThan(0));
+        Assert.That(string.Compare(_service.PendingNewIssue.InheritedParentSortOrder, "b", StringComparison.Ordinal), Is.LessThan(0));
+    }
+
+    [Test]
+    public void CreateIssueAbove_BetweenTwoChildren_InheritsParentAndComputesMidpointSortOrder()
+    {
+        var (lines, nodes) = CreateThreeChildrenWithParent();
+        _service.Initialize(lines);
+        _service.SetTaskGraphNodes(nodes);
+        _service.SelectIssue("CHILD-002"); // Select second child
+
+        _service.CreateIssueAbove(); // Insert between Child 1 and Child 2
+
+        Assert.That(_service.PendingNewIssue, Is.Not.Null);
+        Assert.That(_service.PendingNewIssue!.InheritedParentIssueId, Is.EqualTo("PARENT-001"));
+        Assert.That(_service.PendingNewIssue.InheritedParentSortOrder, Is.Not.Null);
+        // Sort order should be between "a" (Child 1) and "b" (Child 2)
+        Assert.That(string.Compare(_service.PendingNewIssue.InheritedParentSortOrder, "a", StringComparison.Ordinal), Is.GreaterThan(0));
+        Assert.That(string.Compare(_service.PendingNewIssue.InheritedParentSortOrder, "b", StringComparison.Ordinal), Is.LessThan(0));
+    }
+
+    // Section 1.2: Between a child and parent
+    [Test]
+    public void CreateIssueBelow_BetweenLastChildAndParent_InheritsParent()
+    {
+        var (lines, nodes) = CreateTwoChildrenWithParent();
+        _service.Initialize(lines);
+        _service.SetTaskGraphNodes(nodes);
+        _service.SelectIssue("CHILD-002"); // Select last child
+
+        _service.CreateIssueBelow(); // Insert between Child 2 and Parent
+
+        Assert.That(_service.PendingNewIssue, Is.Not.Null);
+        Assert.That(_service.PendingNewIssue!.InheritedParentIssueId, Is.EqualTo("PARENT-001"));
+        Assert.That(_service.PendingNewIssue.InheritedParentSortOrder, Is.Not.Null);
+        // Sort order should be after "b" (Child 2)
+        Assert.That(string.Compare(_service.PendingNewIssue.InheritedParentSortOrder, "b", StringComparison.Ordinal), Is.GreaterThan(0));
+    }
+
+    [Test]
+    public void CreateIssueAbove_BetweenLastChildAndParent_InheritsParent()
+    {
+        var (lines, nodes) = CreateTwoChildrenWithParent();
+        _service.Initialize(lines);
+        _service.SetTaskGraphNodes(nodes);
+        _service.SelectIssue("PARENT-001"); // Select parent
+
+        _service.CreateIssueAbove(); // Insert between Child 2 and Parent
+
+        // Reference issue is Parent, which has no parent of its own
+        Assert.That(_service.PendingNewIssue, Is.Not.Null);
+        Assert.That(_service.PendingNewIssue!.InheritedParentIssueId, Is.Null);
+    }
+
+    // Section 1.3: Between an orphan and a child hierarchy
+    [Test]
+    public void CreateIssueAbove_AboveChildInOrphanAboveHierarchy_InheritsParent()
+    {
+        var (lines, nodes) = CreateOrphanAboveChildHierarchy();
+        _service.Initialize(lines);
+        _service.SetTaskGraphNodes(nodes);
+        _service.SelectIssue("CHILD-001"); // Select Child 1 (has Parent)
+
+        _service.CreateIssueAbove(); // Insert above Child 1
+
+        Assert.That(_service.PendingNewIssue, Is.Not.Null);
+        Assert.That(_service.PendingNewIssue!.InheritedParentIssueId, Is.EqualTo("PARENT-001"));
+        Assert.That(_service.PendingNewIssue.InheritedParentSortOrder, Is.Not.Null);
+        // Sort order should be before "a" (Child 1)
+        Assert.That(string.Compare(_service.PendingNewIssue.InheritedParentSortOrder, "a", StringComparison.Ordinal), Is.LessThan(0));
+    }
+
+    [Test]
+    public void CreateIssueBelow_BelowOrphanInOrphanAboveHierarchy_IsOrphan()
+    {
+        var (lines, nodes) = CreateOrphanAboveChildHierarchy();
+        _service.Initialize(lines);
+        _service.SetTaskGraphNodes(nodes);
+        _service.SelectIssue("ORPHAN-001"); // Select Orphan (no parent)
+
+        _service.CreateIssueBelow(); // Insert below Orphan
+
+        Assert.That(_service.PendingNewIssue, Is.Not.Null);
+        Assert.That(_service.PendingNewIssue!.InheritedParentIssueId, Is.Null);
+        Assert.That(_service.PendingNewIssue.InheritedParentSortOrder, Is.Null);
+    }
+
+    // Section 1.4: After a parent and before an orphan
+    [Test]
+    public void CreateIssueBelow_BelowParentBeforeOrphan_IsOrphan()
+    {
+        var (lines, nodes) = CreateChildHierarchyAboveOrphan();
+        _service.Initialize(lines);
+        _service.SetTaskGraphNodes(nodes);
+        _service.SelectIssue("PARENT-001"); // Select Parent (no parent of its own)
+
+        _service.CreateIssueBelow(); // Insert below Parent
+
+        Assert.That(_service.PendingNewIssue, Is.Not.Null);
+        Assert.That(_service.PendingNewIssue!.InheritedParentIssueId, Is.Null);
+        Assert.That(_service.PendingNewIssue.InheritedParentSortOrder, Is.Null);
+    }
+
+    [Test]
+    public void CreateIssueAbove_AboveOrphanAfterParent_IsOrphan()
+    {
+        var (lines, nodes) = CreateChildHierarchyAboveOrphan();
+        _service.Initialize(lines);
+        _service.SetTaskGraphNodes(nodes);
+        _service.SelectIssue("ORPHAN-001"); // Select Orphan (no parent)
+
+        _service.CreateIssueAbove(); // Insert above Orphan
+
+        Assert.That(_service.PendingNewIssue, Is.Not.Null);
+        Assert.That(_service.PendingNewIssue!.InheritedParentIssueId, Is.Null);
+        Assert.That(_service.PendingNewIssue.InheritedParentSortOrder, Is.Null);
+    }
+
+    // Section 1.5: Between two adjacent hierarchies
+    [Test]
+    public void CreateIssueBelow_BelowParent1InAdjacentHierarchies_IsOrphan()
+    {
+        var (lines, nodes) = CreateTwoAdjacentHierarchies();
+        _service.Initialize(lines);
+        _service.SetTaskGraphNodes(nodes);
+        _service.SelectIssue("PARENT-001"); // Select Parent 1 (no parent of its own)
+
+        _service.CreateIssueBelow(); // Insert below Parent 1
+
+        Assert.That(_service.PendingNewIssue, Is.Not.Null);
+        Assert.That(_service.PendingNewIssue!.InheritedParentIssueId, Is.Null);
+        Assert.That(_service.PendingNewIssue.InheritedParentSortOrder, Is.Null);
+    }
+
+    [Test]
+    public void CreateIssueAbove_AboveChild21InAdjacentHierarchies_InheritsParent2()
+    {
+        var (lines, nodes) = CreateTwoAdjacentHierarchies();
+        _service.Initialize(lines);
+        _service.SetTaskGraphNodes(nodes);
+        _service.SelectIssue("CHILD-2-1"); // Select Child 2.1 (has Parent 2)
+
+        _service.CreateIssueAbove(); // Insert above Child 2.1
+
+        Assert.That(_service.PendingNewIssue, Is.Not.Null);
+        Assert.That(_service.PendingNewIssue!.InheritedParentIssueId, Is.EqualTo("PARENT-002"));
+        Assert.That(_service.PendingNewIssue.InheritedParentSortOrder, Is.Not.Null);
+        // Sort order should be before "a" (Child 2.1's sort order)
+        Assert.That(string.Compare(_service.PendingNewIssue.InheritedParentSortOrder, "a", StringComparison.Ordinal), Is.LessThan(0));
+    }
+
+    #endregion
+
+    #region Section 2 - TAB (Become Parent) Tests
+
+    // Section 2.1: Between two children
+    [Test]
+    public void Tab_BetweenTwoChildren_SetsPendingChildId()
+    {
+        var (lines, nodes) = CreateThreeChildrenWithParent();
+        _service.Initialize(lines);
+        _service.SetTaskGraphNodes(nodes);
+        _service.SelectIssue("CHILD-002"); // Select Child 2
+
+        _service.CreateIssueBelow(); // Insert between Child 2 and Child 3
+        _service.IndentAsChild(); // Tab: new issue becomes parent of Child 2
+
+        Assert.That(_service.PendingNewIssue, Is.Not.Null);
+        Assert.That(_service.PendingNewIssue!.PendingChildId, Is.EqualTo("CHILD-002"));
+        Assert.That(_service.PendingNewIssue.PendingParentId, Is.Null);
+        Assert.That(_service.PendingNewIssue.InheritedParentIssueId, Is.Null); // Cleared
+    }
+
+    [Test]
+    public void Tab_AboveChild3_SetsPendingChildIdToChild3()
+    {
+        var (lines, nodes) = CreateThreeChildrenWithParent();
+        _service.Initialize(lines);
+        _service.SetTaskGraphNodes(nodes);
+        _service.SelectIssue("CHILD-003"); // Select Child 3
+
+        _service.CreateIssueAbove(); // Insert above Child 3
+        _service.IndentAsChild(); // Tab: new issue becomes parent of Child 3
+
+        Assert.That(_service.PendingNewIssue, Is.Not.Null);
+        Assert.That(_service.PendingNewIssue!.PendingChildId, Is.EqualTo("CHILD-003"));
+    }
+
+    // Section 2.2: Between a child and parent
+    [Test]
+    public void Tab_BelowLastChild_SetsPendingChildIdToLastChild()
+    {
+        var (lines, nodes) = CreateTwoChildrenWithParent();
+        _service.Initialize(lines);
+        _service.SetTaskGraphNodes(nodes);
+        _service.SelectIssue("CHILD-002"); // Select last child
+
+        _service.CreateIssueBelow(); // Insert between Child 2 and Parent
+        _service.IndentAsChild(); // Tab: new issue becomes parent of Child 2
+
+        Assert.That(_service.PendingNewIssue, Is.Not.Null);
+        Assert.That(_service.PendingNewIssue!.PendingChildId, Is.EqualTo("CHILD-002"));
+        Assert.That(_service.PendingNewIssue.InheritedParentIssueId, Is.Null);
+    }
+
+    [Test]
+    public void Tab_AboveParent_SetsPendingChildIdToParent()
+    {
+        var (lines, nodes) = CreateTwoChildrenWithParent();
+        _service.Initialize(lines);
+        _service.SetTaskGraphNodes(nodes);
+        _service.SelectIssue("PARENT-001"); // Select Parent
+
+        _service.CreateIssueAbove(); // Insert above Parent
+        _service.IndentAsChild(); // Tab: new issue becomes parent of Parent
+
+        Assert.That(_service.PendingNewIssue, Is.Not.Null);
+        Assert.That(_service.PendingNewIssue!.PendingChildId, Is.EqualTo("PARENT-001"));
+    }
+
+    // Section 2.3: Between an orphan and a child hierarchy
+    [Test]
+    public void Tab_BelowOrphan_SetsPendingChildIdToOrphan()
+    {
+        var (lines, nodes) = CreateOrphanAboveChildHierarchy();
+        _service.Initialize(lines);
+        _service.SetTaskGraphNodes(nodes);
+        _service.SelectIssue("ORPHAN-001"); // Select Orphan
+
+        _service.CreateIssueBelow(); // Insert below Orphan
+        _service.IndentAsChild(); // Tab: new issue becomes parent of Orphan
+
+        Assert.That(_service.PendingNewIssue, Is.Not.Null);
+        Assert.That(_service.PendingNewIssue!.PendingChildId, Is.EqualTo("ORPHAN-001"));
+    }
+
+    [Test]
+    [Ignore("NOT YET IMPLEMENTED - blocking validation for Tab above root child pending")]
+    public void Tab_AboveRootChild_ShouldBeBlocked()
+    {
+        var (lines, nodes) = CreateOrphanAboveChildHierarchy();
+        _service.Initialize(lines);
+        _service.SetTaskGraphNodes(nodes);
+        _service.SelectIssue("CHILD-001"); // Select Child 1
+
+        _service.CreateIssueAbove(); // Insert above Child 1 (between Orphan and Child 1)
+        var originalChildId = _service.PendingNewIssue?.PendingChildId;
+
+        _service.IndentAsChild(); // Tab: should be blocked (no-op)
+
+        // Should remain unchanged since Tab should be a no-op
+        Assert.That(_service.PendingNewIssue!.PendingChildId, Is.EqualTo(originalChildId));
+    }
+
+    // Section 2.4: After a parent and before an orphan
+    [Test]
+    public void Tab_BelowParent_SetsPendingChildIdToParent()
+    {
+        var (lines, nodes) = CreateChildHierarchyAboveOrphan();
+        _service.Initialize(lines);
+        _service.SetTaskGraphNodes(nodes);
+        _service.SelectIssue("PARENT-001"); // Select Parent
+
+        _service.CreateIssueBelow(); // Insert below Parent
+        _service.IndentAsChild(); // Tab: new issue becomes parent of Parent
+
+        Assert.That(_service.PendingNewIssue, Is.Not.Null);
+        Assert.That(_service.PendingNewIssue!.PendingChildId, Is.EqualTo("PARENT-001"));
+    }
+
+    [Test]
+    [Ignore("NOT YET IMPLEMENTED - blocking validation for Tab above orphan pending")]
+    public void Tab_AboveOrphan_ShouldBeBlocked()
+    {
+        var (lines, nodes) = CreateChildHierarchyAboveOrphan();
+        _service.Initialize(lines);
+        _service.SetTaskGraphNodes(nodes);
+        _service.SelectIssue("ORPHAN-001"); // Select Orphan
+
+        _service.CreateIssueAbove(); // Insert above Orphan
+        var originalChildId = _service.PendingNewIssue?.PendingChildId;
+
+        _service.IndentAsChild(); // Tab: should be blocked (no-op)
+
+        // Should remain unchanged since Tab should be a no-op
+        Assert.That(_service.PendingNewIssue!.PendingChildId, Is.EqualTo(originalChildId));
+    }
+
+    // Section 2.5: Between two adjacent hierarchies
+    [Test]
+    public void Tab_BelowParent1_InAdjacentHierarchies_SetsPendingChildIdToParent1()
+    {
+        var (lines, nodes) = CreateTwoAdjacentHierarchies();
+        _service.Initialize(lines);
+        _service.SetTaskGraphNodes(nodes);
+        _service.SelectIssue("PARENT-001"); // Select Parent 1
+
+        _service.CreateIssueBelow(); // Insert below Parent 1
+        _service.IndentAsChild(); // Tab: new issue becomes parent of Parent 1
+
+        Assert.That(_service.PendingNewIssue, Is.Not.Null);
+        Assert.That(_service.PendingNewIssue!.PendingChildId, Is.EqualTo("PARENT-001"));
+    }
+
+    [Test]
+    [Ignore("NOT YET IMPLEMENTED - blocking validation for Tab above child in second hierarchy pending")]
+    public void Tab_AboveChild21_InAdjacentHierarchies_ShouldBeBlocked()
+    {
+        var (lines, nodes) = CreateTwoAdjacentHierarchies();
+        _service.Initialize(lines);
+        _service.SetTaskGraphNodes(nodes);
+        _service.SelectIssue("CHILD-2-1"); // Select Child 2.1
+
+        _service.CreateIssueAbove(); // Insert above Child 2.1
+        var originalChildId = _service.PendingNewIssue?.PendingChildId;
+
+        _service.IndentAsChild(); // Tab: should be blocked (no-op)
+
+        // Should remain unchanged since Tab should be a no-op
+        Assert.That(_service.PendingNewIssue!.PendingChildId, Is.EqualTo(originalChildId));
+    }
+
+    #endregion
+
+    #region Section 3 - Shift+TAB (Become Child) Tests
+
+    // Section 3.1: Between two children
+    [Test]
+    public void ShiftTab_BelowChild2_SetsPendingParentIdToChild2()
+    {
+        var (lines, nodes) = CreateThreeChildrenWithParent();
+        _service.Initialize(lines);
+        _service.SetTaskGraphNodes(nodes);
+        _service.SelectIssue("CHILD-002"); // Select Child 2
+
+        _service.CreateIssueBelow(); // Insert between Child 2 and Child 3
+        _service.UnindentAsSibling(); // Shift+Tab: new issue becomes child of Child 2
+
+        Assert.That(_service.PendingNewIssue, Is.Not.Null);
+        Assert.That(_service.PendingNewIssue!.PendingParentId, Is.EqualTo("CHILD-002"));
+        Assert.That(_service.PendingNewIssue.PendingChildId, Is.Null);
+        Assert.That(_service.PendingNewIssue.InheritedParentIssueId, Is.Null); // Cleared
+    }
+
+    [Test]
+    public void ShiftTab_AboveChild3_SetsPendingParentIdToChild3()
+    {
+        var (lines, nodes) = CreateThreeChildrenWithParent();
+        _service.Initialize(lines);
+        _service.SetTaskGraphNodes(nodes);
+        _service.SelectIssue("CHILD-003"); // Select Child 3
+
+        _service.CreateIssueAbove(); // Insert above Child 3
+        _service.UnindentAsSibling(); // Shift+Tab: new issue becomes child of Child 3
+
+        Assert.That(_service.PendingNewIssue, Is.Not.Null);
+        Assert.That(_service.PendingNewIssue!.PendingParentId, Is.EqualTo("CHILD-003"));
+    }
+
+    // Section 3.2: Between a child and parent - BLOCKED
+    [Test]
+    [Ignore("NOT YET IMPLEMENTED - blocking validation for Shift+Tab between child and parent pending")]
+    public void ShiftTab_BetweenChildAndParent_Below_ShouldBeBlocked()
+    {
+        var (lines, nodes) = CreateTwoChildrenWithParent();
+        _service.Initialize(lines);
+        _service.SetTaskGraphNodes(nodes);
+        _service.SelectIssue("CHILD-002"); // Select last child
+
+        _service.CreateIssueBelow(); // Insert between Child 2 and Parent
+        var originalParentId = _service.PendingNewIssue?.PendingParentId;
+
+        _service.UnindentAsSibling(); // Shift+Tab: should be blocked (grandchild not supported)
+
+        // Should remain unchanged since Shift+Tab should be a no-op
+        Assert.That(_service.PendingNewIssue!.PendingParentId, Is.EqualTo(originalParentId));
+    }
+
+    [Test]
+    [Ignore("NOT YET IMPLEMENTED - blocking validation for Shift+Tab between child and parent pending")]
+    public void ShiftTab_BetweenChildAndParent_Above_ShouldBeBlocked()
+    {
+        var (lines, nodes) = CreateTwoChildrenWithParent();
+        _service.Initialize(lines);
+        _service.SetTaskGraphNodes(nodes);
+        _service.SelectIssue("PARENT-001"); // Select Parent
+
+        _service.CreateIssueAbove(); // Insert above Parent
+        var originalParentId = _service.PendingNewIssue?.PendingParentId;
+
+        _service.UnindentAsSibling(); // Shift+Tab: should be blocked (grandchild not supported)
+
+        // Should remain unchanged since Shift+Tab should be a no-op
+        Assert.That(_service.PendingNewIssue!.PendingParentId, Is.EqualTo(originalParentId));
+    }
+
+    // Section 3.3: Between an orphan and a child hierarchy
+    [Test]
+    public void ShiftTab_AboveChild1_SetsPendingParentIdToChild1()
+    {
+        var (lines, nodes) = CreateOrphanAboveChildHierarchy();
+        _service.Initialize(lines);
+        _service.SetTaskGraphNodes(nodes);
+        _service.SelectIssue("CHILD-001"); // Select Child 1
+
+        _service.CreateIssueAbove(); // Insert above Child 1
+        _service.UnindentAsSibling(); // Shift+Tab: new issue becomes child of Child 1
+
+        Assert.That(_service.PendingNewIssue, Is.Not.Null);
+        Assert.That(_service.PendingNewIssue!.PendingParentId, Is.EqualTo("CHILD-001"));
+    }
+
+    [Test]
+    [Ignore("NOT YET IMPLEMENTED - blocking validation for Shift+Tab below orphan pending")]
+    public void ShiftTab_BelowOrphan_ShouldBeBlocked()
+    {
+        var (lines, nodes) = CreateOrphanAboveChildHierarchy();
+        _service.Initialize(lines);
+        _service.SetTaskGraphNodes(nodes);
+        _service.SelectIssue("ORPHAN-001"); // Select Orphan
+
+        _service.CreateIssueBelow(); // Insert below Orphan
+        var originalParentId = _service.PendingNewIssue?.PendingParentId;
+
+        _service.UnindentAsSibling(); // Shift+Tab: should be blocked (ambiguous context)
+
+        // Should remain unchanged since Shift+Tab should be a no-op
+        Assert.That(_service.PendingNewIssue!.PendingParentId, Is.EqualTo(originalParentId));
+    }
+
+    // Section 3.4: After a parent and before an orphan
+    [Test]
+    [Ignore("NOT YET IMPLEMENTED - blocking validation for Shift+Tab below parent pending")]
+    public void ShiftTab_BelowParent_ShouldBeBlocked()
+    {
+        var (lines, nodes) = CreateChildHierarchyAboveOrphan();
+        _service.Initialize(lines);
+        _service.SetTaskGraphNodes(nodes);
+        _service.SelectIssue("PARENT-001"); // Select Parent
+
+        _service.CreateIssueBelow(); // Insert below Parent
+        var originalParentId = _service.PendingNewIssue?.PendingParentId;
+
+        _service.UnindentAsSibling(); // Shift+Tab: should be blocked (many levels to travel down)
+
+        // Should remain unchanged since Shift+Tab should be a no-op
+        Assert.That(_service.PendingNewIssue!.PendingParentId, Is.EqualTo(originalParentId));
+    }
+
+    [Test]
+    public void ShiftTab_AboveOrphan_SetsPendingParentIdToOrphan()
+    {
+        var (lines, nodes) = CreateChildHierarchyAboveOrphan();
+        _service.Initialize(lines);
+        _service.SetTaskGraphNodes(nodes);
+        _service.SelectIssue("ORPHAN-001"); // Select Orphan
+
+        _service.CreateIssueAbove(); // Insert above Orphan
+        _service.UnindentAsSibling(); // Shift+Tab: new issue becomes child of Orphan
+
+        Assert.That(_service.PendingNewIssue, Is.Not.Null);
+        Assert.That(_service.PendingNewIssue!.PendingParentId, Is.EqualTo("ORPHAN-001"));
+    }
+
+    // Section 3.5: Between two adjacent hierarchies
+    [Test]
+    [Ignore("NOT YET IMPLEMENTED - blocking validation for Shift+Tab below parent in adjacent hierarchies pending")]
+    public void ShiftTab_BelowParent1_InAdjacentHierarchies_ShouldBeBlocked()
+    {
+        var (lines, nodes) = CreateTwoAdjacentHierarchies();
+        _service.Initialize(lines);
+        _service.SetTaskGraphNodes(nodes);
+        _service.SelectIssue("PARENT-001"); // Select Parent 1
+
+        _service.CreateIssueBelow(); // Insert below Parent 1
+        var originalParentId = _service.PendingNewIssue?.PendingParentId;
+
+        _service.UnindentAsSibling(); // Shift+Tab: should be blocked (many levels to travel down)
+
+        // Should remain unchanged since Shift+Tab should be a no-op
+        Assert.That(_service.PendingNewIssue!.PendingParentId, Is.EqualTo(originalParentId));
+    }
+
+    [Test]
+    public void ShiftTab_AboveChild21_InAdjacentHierarchies_SetsPendingParentIdToChild21()
+    {
+        var (lines, nodes) = CreateTwoAdjacentHierarchies();
+        _service.Initialize(lines);
+        _service.SetTaskGraphNodes(nodes);
+        _service.SelectIssue("CHILD-2-1"); // Select Child 2.1
+
+        _service.CreateIssueAbove(); // Insert above Child 2.1
+        _service.UnindentAsSibling(); // Shift+Tab: new issue becomes child of Child 2.1
+
+        Assert.That(_service.PendingNewIssue, Is.Not.Null);
+        Assert.That(_service.PendingNewIssue!.PendingParentId, Is.EqualTo("CHILD-2-1"));
+    }
+
+    #endregion
+
+    #region Section 4 - Edge Case Tests
+
+    [Test]
+    public void CreateIssue_EmptyGraph_ReturnsImmediately()
+    {
+        _service.Initialize([]);
+
+        _service.CreateIssueBelow();
+
+        Assert.That(_service.EditMode, Is.EqualTo(KeyboardEditMode.Viewing));
+        Assert.That(_service.PendingNewIssue, Is.Null);
+    }
+
+    [Test]
+    public void CreateIssue_SingleIssue_CreatesCorrectly()
+    {
+        var singleIssue = new List<TaskGraphIssueRenderLine>
+        {
+            CreateIssueLine("SINGLE-001", "Single issue", 0, TaskGraphMarkerType.Actionable)
+        };
+        _service.Initialize(singleIssue);
+        _service.SelectFirstActionable();
+
+        _service.CreateIssueBelow();
+
+        Assert.That(_service.PendingNewIssue, Is.Not.Null);
+        Assert.That(_service.PendingNewIssue!.InsertAtIndex, Is.EqualTo(1));
+        Assert.That(_service.PendingNewIssue.ReferenceIssueId, Is.EqualTo("SINGLE-001"));
+    }
+
+    [Test]
+    public void TabThenShiftTab_OverwritesTabState()
+    {
+        var (lines, nodes) = CreateTwoChildrenWithParent();
+        _service.Initialize(lines);
+        _service.SetTaskGraphNodes(nodes);
+        _service.SelectFirstActionable();
+
+        _service.CreateIssueBelow();
+        _service.IndentAsChild(); // Tab: PendingChildId = CHILD-001
+
+        Assert.That(_service.PendingNewIssue!.PendingChildId, Is.EqualTo("CHILD-001"));
+        Assert.That(_service.PendingNewIssue.PendingParentId, Is.Null);
+
+        _service.UnindentAsSibling(); // Shift+Tab: overwrites to PendingParentId = CHILD-001
+
+        Assert.That(_service.PendingNewIssue.PendingParentId, Is.EqualTo("CHILD-001"));
+        Assert.That(_service.PendingNewIssue.PendingChildId, Is.Null);
+    }
+
+    [Test]
+    public void TabTwice_IsIdempotent()
+    {
+        var (lines, nodes) = CreateTwoChildrenWithParent();
+        _service.Initialize(lines);
+        _service.SetTaskGraphNodes(nodes);
+        _service.SelectFirstActionable();
+
+        _service.CreateIssueBelow();
+        _service.IndentAsChild(); // First Tab
+        var firstChildId = _service.PendingNewIssue!.PendingChildId;
+
+        _service.IndentAsChild(); // Second Tab
+
+        Assert.That(_service.PendingNewIssue!.PendingChildId, Is.EqualTo(firstChildId));
+    }
+
+    [Test]
+    public void Escape_ClearsPendingNewIssue()
+    {
+        var (lines, nodes) = CreateTwoChildrenWithParent();
+        _service.Initialize(lines);
+        _service.SetTaskGraphNodes(nodes);
+        _service.SelectFirstActionable();
+
+        _service.CreateIssueBelow();
+        Assert.That(_service.PendingNewIssue, Is.Not.Null);
+
+        _service.CancelEdit();
+
+        Assert.That(_service.PendingNewIssue, Is.Null);
+        Assert.That(_service.EditMode, Is.EqualTo(KeyboardEditMode.Viewing));
+    }
+
+    [Test]
+    public async Task AcceptEdit_BetweenTwoChildren_SetsCorrectApiFields()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.RespondWith("issues", new IssueResponse
+        {
+            Id = "new-issue",
+            Title = "test",
+            Type = IssueType.Task,
+            Status = IssueStatus.Open
+        });
+        var issueApi = new HttpIssueApiService(handler.CreateClient());
+        var service = new KeyboardNavigationService(issueApi);
+
+        var (lines, nodes) = CreateThreeChildrenWithParent();
+        service.Initialize(lines);
+        service.SetProjectId("test-project");
+        service.SetTaskGraphNodes(nodes);
+        service.SelectIssue("CHILD-001");
+        service.CreateIssueBelow();
+        service.UpdateEditTitle("New sibling");
+
+        await service.AcceptEditAsync();
+
+        var createRequest = handler.CapturedRequests
+            .FirstOrDefault(r => r.Method == HttpMethod.Post && r.Url.Contains("issues"));
+        Assert.That(createRequest, Is.Not.Null);
+        var body = createRequest!.BodyAs<CreateIssueRequest>();
+        Assert.That(body, Is.Not.Null);
+        Assert.That(body!.ParentIssueId, Is.EqualTo("PARENT-001"));
+        Assert.That(body.ParentSortOrder, Is.Not.Null);
+        Assert.That(body.ChildIssueId, Is.Null);
+    }
+
+    [Test]
+    public async Task AcceptEdit_WithTab_SetsChildIssueIdInRequest()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.RespondWith("issues", new IssueResponse
+        {
+            Id = "new-issue",
+            Title = "test",
+            Type = IssueType.Task,
+            Status = IssueStatus.Open
+        });
+        var issueApi = new HttpIssueApiService(handler.CreateClient());
+        var service = new KeyboardNavigationService(issueApi);
+
+        var (lines, nodes) = CreateTwoChildrenWithParent();
+        service.Initialize(lines);
+        service.SetProjectId("test-project");
+        service.SetTaskGraphNodes(nodes);
+        service.SelectIssue("CHILD-002");
+        service.CreateIssueBelow();
+        service.IndentAsChild(); // Tab
+        service.UpdateEditTitle("New parent");
+
+        await service.AcceptEditAsync();
+
+        var createRequest = handler.CapturedRequests
+            .FirstOrDefault(r => r.Method == HttpMethod.Post && r.Url.Contains("issues"));
+        Assert.That(createRequest, Is.Not.Null);
+        var body = createRequest!.BodyAs<CreateIssueRequest>();
+        Assert.That(body, Is.Not.Null);
+        Assert.That(body!.ChildIssueId, Is.EqualTo("CHILD-002"));
+        Assert.That(body.ParentIssueId, Is.Null);
+    }
+
+    [Test]
+    public async Task AcceptEdit_WithShiftTab_SetsParentIssueIdInRequest()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.RespondWith("issues", new IssueResponse
+        {
+            Id = "new-issue",
+            Title = "test",
+            Type = IssueType.Task,
+            Status = IssueStatus.Open
+        });
+        var issueApi = new HttpIssueApiService(handler.CreateClient());
+        var service = new KeyboardNavigationService(issueApi);
+
+        var (lines, nodes) = CreateThreeChildrenWithParent();
+        service.Initialize(lines);
+        service.SetProjectId("test-project");
+        service.SetTaskGraphNodes(nodes);
+        service.SelectIssue("CHILD-002");
+        service.CreateIssueBelow();
+        service.UnindentAsSibling(); // Shift+Tab
+        service.UpdateEditTitle("New child");
+
+        await service.AcceptEditAsync();
+
+        var createRequest = handler.CapturedRequests
+            .FirstOrDefault(r => r.Method == HttpMethod.Post && r.Url.Contains("issues"));
+        Assert.That(createRequest, Is.Not.Null);
+        var body = createRequest!.BodyAs<CreateIssueRequest>();
+        Assert.That(body, Is.Not.Null);
+        Assert.That(body!.ParentIssueId, Is.EqualTo("CHILD-002"));
         Assert.That(body.ChildIssueId, Is.Null);
     }
 
