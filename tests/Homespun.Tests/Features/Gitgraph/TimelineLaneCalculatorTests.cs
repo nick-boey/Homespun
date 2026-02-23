@@ -878,6 +878,64 @@ public class TimelineLaneCalculatorTests
 
     #endregion
 
+    #region Closed PR Branching Tests
+
+    [Test]
+    public void Calculate_ClosedPRWithParentId_BranchesToLaneOne()
+    {
+        // Arrange - Simulating closed PR that branches from a merged PR
+        var nodes = new List<IGraphNode>
+        {
+            CreateClosedPrNode("pr-1", "main", parentIds: null),  // Merged PR on main
+            CreateClosedPrNode("pr-2", "feature/closed", parentIds: ["pr-1"])  // Closed PR branching off
+        };
+
+        // Act
+        var layout = _calculator.Calculate(nodes);
+
+        // Assert - Closed PR should be in lane 1
+        Assert.That(layout.LaneAssignments["pr-1"], Is.EqualTo(0));
+        Assert.That(layout.LaneAssignments["pr-2"], Is.EqualTo(1));
+        Assert.That(layout.RowInfos[1].ConnectorFromLane, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void Calculate_MixedMergedAndClosedPRs_CorrectLaneAssignment()
+    {
+        // Arrange - Mixed sequence: Merged, Closed (branched), Merged, Closed (branched)
+        var nodes = new List<IGraphNode>
+        {
+            CreateClosedPrNode("pr-1", "main", parentIds: null),  // Merged
+            CreateClosedPrNode("pr-2", "feature/a", parentIds: ["pr-1"]),  // Closed - branches from pr-1
+            CreateClosedPrNode("pr-3", "main", parentIds: null),  // Merged (back on main)
+            CreateClosedPrNode("pr-4", "feature/b", parentIds: ["pr-3"])   // Closed - branches from pr-3
+        };
+
+        // Act
+        var layout = _calculator.Calculate(nodes);
+
+        // Assert
+        Assert.That(layout.LaneAssignments["pr-1"], Is.EqualTo(0));  // Main
+        Assert.That(layout.LaneAssignments["pr-2"], Is.EqualTo(1));  // Branched
+        Assert.That(layout.LaneAssignments["pr-3"], Is.EqualTo(0));  // Main
+        Assert.That(layout.LaneAssignments["pr-4"], Is.EqualTo(1));  // Branched (reuses lane 1)
+    }
+
+    private static TestGraphNode CreateClosedPrNode(
+        string id,
+        string branchName,
+        List<string>? parentIds)
+    {
+        return new TestGraphNode
+        {
+            Id = id,
+            BranchName = branchName,
+            ParentIds = parentIds ?? []
+        };
+    }
+
+    #endregion
+
     #region Helper Methods
 
     private static TestGraphNode CreateNode(

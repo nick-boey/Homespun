@@ -120,6 +120,8 @@ public class GraphBuilder
 
     /// <summary>
     /// Adds closed/merged PRs to the graph in chronological order.
+    /// Merged PRs stay on the main line (no parentIds).
+    /// Closed (not merged) PRs branch off from the previous merged PR (with parentIds).
     /// </summary>
     /// <returns>Tuple of (nodes added, total past PRs available, has more PRs to load)</returns>
     private (List<PullRequestNode> nodes, int totalPastPRs, bool hasMorePastPRs) AddClosedPullRequests(
@@ -147,11 +149,35 @@ public class GraphBuilder
         // Calculate time dimensions (negative for past, most recent = 0)
         var timeDimension = -closedPrs.Count + 1;
 
+        // Track the most recent merged PR so closed PRs can branch from it
+        PullRequestNode? mostRecentMergedPr = null;
+
         foreach (var pr in closedPrs)
         {
-            var node = new PullRequestNode(pr, timeDimension++);
+            IReadOnlyList<string> parentIds;
+
+            if (pr.Status == PullRequestStatus.Merged)
+            {
+                // Merged PRs stay on the main line (no parent IDs)
+                parentIds = [];
+            }
+            else
+            {
+                // Closed (not merged) PRs branch from the most recent merged PR
+                parentIds = mostRecentMergedPr != null
+                    ? [mostRecentMergedPr.Id]
+                    : [];
+            }
+
+            var node = new PullRequestNode(pr, timeDimension++, parentIds);
             nodes.Add(node);
             resultNodes.Add(node);
+
+            // Update tracker for merged PRs
+            if (pr.Status == PullRequestStatus.Merged)
+            {
+                mostRecentMergedPr = node;
+            }
         }
 
         return (resultNodes, totalPastPRs, hasMorePastPRs);

@@ -348,6 +348,36 @@ public class MockGraphService : IGraphService
                 MergedAt = now.AddDays(-10),
                 ChecksPassing = true,
                 IsApproved = true
+            },
+            // Closed (not merged) PR - demonstrates branching off main line
+            new PullRequestInfo
+            {
+                Number = 99,
+                Title = "Experimental graph animation (abandoned)",
+                Body = "Attempted graph animation feature but decided against it",
+                Status = PullRequestStatus.Closed,
+                BranchName = "feature/graph-animation",
+                HtmlUrl = "https://github.com/mock-org/mock-repo/pull/99",
+                CreatedAt = now.AddDays(-11),
+                UpdatedAt = now.AddDays(-9),
+                ClosedAt = now.AddDays(-9),
+                ChecksPassing = false,
+                IsApproved = false
+            },
+            // Another merged PR after the closed one
+            new PullRequestInfo
+            {
+                Number = 102,
+                Title = "Add theme persistence to localStorage",
+                Body = "Feature: Theme selection now persists across browser sessions",
+                Status = PullRequestStatus.Merged,
+                BranchName = "feature/theme-persistence",
+                HtmlUrl = "https://github.com/mock-org/mock-repo/pull/102",
+                CreatedAt = now.AddDays(-8),
+                UpdatedAt = now.AddDays(-6),
+                MergedAt = now.AddDays(-6),
+                ChecksPassing = true,
+                IsApproved = true
             }
         ];
     }

@@ -48,9 +48,89 @@ public class MockGitHubService : IGitHubService
     {
         _logger.LogDebug("[Mock] GetClosedPullRequests for project {ProjectId}", projectId);
 
-        // In the real system, closed PRs are fetched from GitHub, not local storage
-        // For mock, we return empty since OpenPullRequestStatus doesn't have closed states
-        return Task.FromResult(new List<PullRequestInfo>());
+        // Return mock merged and closed PRs for visualization testing
+        // This demonstrates how closed PRs branch off from merged PRs
+        var now = DateTime.UtcNow;
+        var closedPrs = new List<PullRequestInfo>
+        {
+            // Merged PR #95 (oldest)
+            new()
+            {
+                Number = 95,
+                Title = "feat: Add initial graph visualization",
+                Body = "Initial implementation of the graph visualization feature",
+                Status = PullRequestStatus.Merged,
+                BranchName = "feature/graph-viz",
+                HtmlUrl = "https://github.com/mock-org/mock-repo/pull/95",
+                CreatedAt = now.AddDays(-30),
+                UpdatedAt = now.AddDays(-28),
+                MergedAt = now.AddDays(-28),
+                ChecksPassing = true,
+                IsApproved = true
+            },
+            // Closed (abandoned) PR #96 - branches off PR 95
+            new()
+            {
+                Number = 96,
+                Title = "feat: Experimental graph animation (abandoned)",
+                Body = "Attempted graph animation but decided against it",
+                Status = PullRequestStatus.Closed,
+                BranchName = "feature/graph-animation",
+                HtmlUrl = "https://github.com/mock-org/mock-repo/pull/96",
+                CreatedAt = now.AddDays(-27),
+                UpdatedAt = now.AddDays(-25),
+                ClosedAt = now.AddDays(-25),
+                ChecksPassing = false,
+                IsApproved = false
+            },
+            // Merged PR #97
+            new()
+            {
+                Number = 97,
+                Title = "fix: Timeline rendering performance",
+                Body = "Optimized rendering for large graphs",
+                Status = PullRequestStatus.Merged,
+                BranchName = "fix/timeline-perf",
+                HtmlUrl = "https://github.com/mock-org/mock-repo/pull/97",
+                CreatedAt = now.AddDays(-20),
+                UpdatedAt = now.AddDays(-18),
+                MergedAt = now.AddDays(-18),
+                ChecksPassing = true,
+                IsApproved = true
+            },
+            // Merged PR #98
+            new()
+            {
+                Number = 98,
+                Title = "feat: Add lane calculator",
+                Body = "Implemented lane calculation algorithm",
+                Status = PullRequestStatus.Merged,
+                BranchName = "feature/lane-calc",
+                HtmlUrl = "https://github.com/mock-org/mock-repo/pull/98",
+                CreatedAt = now.AddDays(-15),
+                UpdatedAt = now.AddDays(-12),
+                MergedAt = now.AddDays(-12),
+                ChecksPassing = true,
+                IsApproved = true
+            },
+            // Closed (abandoned) PR #99 - branches off PR 98
+            new()
+            {
+                Number = 99,
+                Title = "feat: Alternative lane algorithm (superseded)",
+                Body = "Tried different approach but PR 98 was better",
+                Status = PullRequestStatus.Closed,
+                BranchName = "feature/alt-lane-algo",
+                HtmlUrl = "https://github.com/mock-org/mock-repo/pull/99",
+                CreatedAt = now.AddDays(-14),
+                UpdatedAt = now.AddDays(-10),
+                ClosedAt = now.AddDays(-10),
+                ChecksPassing = true,
+                IsApproved = false
+            }
+        };
+
+        return Task.FromResult(closedPrs);
     }
 
     public Task<PullRequestInfo?> GetPullRequestAsync(string projectId, int prNumber)
