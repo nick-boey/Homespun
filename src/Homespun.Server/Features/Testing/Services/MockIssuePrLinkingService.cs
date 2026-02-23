@@ -1,5 +1,6 @@
 using Fleece.Core.Models;
 using Homespun.Features.PullRequests.Data;
+using Homespun.Shared.Models.PullRequests;
 using Microsoft.Extensions.Logging;
 
 namespace Homespun.Features.Testing.Services;
@@ -107,6 +108,53 @@ public class MockIssuePrLinkingService : IIssuePrLinkingService
             pr.BeadsIssueId,
             status: IssueStatus.Complete);
 
+        return true;
+    }
+
+    public async Task<bool> UpdateIssueStatusFromPRAsync(
+        string projectId,
+        string issueId,
+        PullRequestStatus prStatus,
+        int prNumber)
+    {
+        _logger.LogDebug("[Mock] UpdateIssueStatusFromPRAsync Issue:{IssueId} PR#{PrNumber} Status:{Status}",
+            issueId, prNumber, prStatus);
+
+        var project = _dataStore.GetProject(projectId);
+        if (project == null)
+        {
+            _logger.LogWarning("[Mock] Project {ProjectId} not found", projectId);
+            return false;
+        }
+
+        var issue = await _fleeceService.GetIssueAsync(project.LocalPath, issueId);
+        if (issue == null)
+        {
+            _logger.LogWarning("[Mock] Issue {IssueId} not found", issueId);
+            return false;
+        }
+
+        // Map PR status to issue status
+        var targetStatus = prStatus switch
+        {
+            PullRequestStatus.Merged => IssueStatus.Complete,
+            PullRequestStatus.Closed => IssueStatus.Closed,
+            _ => IssueStatus.Review
+        };
+
+        // Idempotency check
+        if (issue.Status == targetStatus)
+        {
+            _logger.LogDebug("[Mock] Issue {IssueId} already in status {Status}", issueId, targetStatus);
+            return false;
+        }
+
+        await _fleeceService.UpdateIssueAsync(
+            project.LocalPath,
+            issueId,
+            status: targetStatus);
+
+        _logger.LogInformation("[Mock] Updated issue {IssueId} to status {Status}", issueId, targetStatus);
         return true;
     }
 }

@@ -1,3 +1,5 @@
+using Homespun.Shared.Models.PullRequests;
+
 namespace Homespun.Features.GitHub;
 
 /// <summary>
@@ -34,4 +36,18 @@ public interface IIssuePrLinkingService
     /// <param name="reason">The reason for closing (e.g., "PR #123 merged").</param>
     /// <returns>True if the issue was closed, false if no linked issue or close failed.</returns>
     Task<bool> CloseLinkedIssueAsync(string projectId, string pullRequestId, string? reason = null);
+
+    /// <summary>
+    /// Updates a Fleece issue status based on the associated PR status.
+    /// Maps PR status to issue status:
+    /// - Open PR (InProgress, ReadyForReview, ChecksFailing, Conflict, ReadyForMerging) → Review
+    /// - Merged PR → Complete
+    /// - Closed PR → Closed
+    /// </summary>
+    /// <param name="projectId">The project ID.</param>
+    /// <param name="issueId">The Fleece issue ID to update.</param>
+    /// <param name="prStatus">The PR status to map from.</param>
+    /// <param name="prNumber">The GitHub PR number.</param>
+    /// <returns>True if the issue was updated, false if already in correct status or update failed.</returns>
+    Task<bool> UpdateIssueStatusFromPRAsync(string projectId, string issueId, PullRequestStatus prStatus, int prNumber);
 }

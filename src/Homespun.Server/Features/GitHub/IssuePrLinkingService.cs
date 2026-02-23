@@ -1,6 +1,7 @@
 using Fleece.Core.Models;
 using Homespun.Features.Fleece.Services;
 using Homespun.Features.PullRequests.Data;
+using Homespun.Shared.Models.PullRequests;
 
 namespace Homespun.Features.GitHub;
 
@@ -148,5 +149,69 @@ public class IssuePrLinkingService(
 
         logger.LogWarning("Failed to close issue {IssueId} linked to PR {PullRequestId}", pullRequest.BeadsIssueId, pullRequestId);
         return false;
+    }
+
+    /// <summary>
+    /// Updates a Fleece issue status based on the associated PR status.
+    /// </summary>
+    public async Task<bool> UpdateIssueStatusFromPRAsync(
+        string projectId,
+        string issueId,
+        PullRequestStatus prStatus,
+        int prNumber)
+    {
+        var project = dataStore.GetProject(projectId);
+        if (project == null)
+        {
+            logger.LogWarning("Cannot update issue status: project {ProjectId} not found", projectId);
+            return false;
+        }
+
+        // Get the current issue to check its status
+        var issue = await fleeceService.GetIssueAsync(project.LocalPath, issueId);
+        if (issue == null)
+        {
+            logger.LogWarning("Cannot update issue status: issue {IssueId} not found", issueId);
+            return false;
+        }
+
+        // Map PR status to issue status
+        var targetIssueStatus = MapPrStatusToIssueStatus(prStatus);
+
+        // Idempotency check - skip if already in the correct status
+        if (issue.Status == targetIssueStatus)
+        {
+            logger.LogDebug("Issue {IssueId} already in status {Status}, skipping update", issueId, targetIssueStatus);
+            return false;
+        }
+
+        // Update the issue status
+        var updated = await fleeceService.UpdateIssueAsync(
+            project.LocalPath,
+            issueId,
+            status: targetIssueStatus);
+
+        if (updated != null)
+        {
+            logger.LogInformation("Updated issue {IssueId} to status {Status} based on PR #{PrNumber}", issueId, targetIssueStatus, prNumber);
+            return true;
+        }
+
+        logger.LogWarning("Failed to update issue {IssueId} to status {Status}", issueId, targetIssueStatus);
+        return false;
+    }
+
+    /// <summary>
+    /// Maps a PR status to the corresponding issue status.
+    /// </summary>
+    private static IssueStatus MapPrStatusToIssueStatus(PullRequestStatus prStatus)
+    {
+        return prStatus switch
+        {
+            PullRequestStatus.Merged => IssueStatus.Complete,
+            PullRequestStatus.Closed => IssueStatus.Closed,
+            // All open PR states map to Review
+            _ => IssueStatus.Review
+        };
     }
 }

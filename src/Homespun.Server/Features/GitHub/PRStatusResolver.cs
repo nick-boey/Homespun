@@ -13,6 +13,7 @@ namespace Homespun.Features.GitHub;
 public class PRStatusResolver(
     IGitHubService gitHubService,
     IGraphCacheService graphCacheService,
+    IIssuePrLinkingService issuePrLinkingService,
     IDataStore dataStore,
     ILogger<PRStatusResolver> logger) : IPRStatusResolver
 {
@@ -66,6 +67,13 @@ public class PRStatusResolver(
                         closedAt: null,
                         issueId: removedPr.BeadsIssueId);
 
+                    // Update linked Fleece issue to Complete
+                    if (!string.IsNullOrEmpty(removedPr.BeadsIssueId))
+                    {
+                        await issuePrLinkingService.UpdateIssueStatusFromPRAsync(
+                            projectId, removedPr.BeadsIssueId, PullRequestStatus.Merged, removedPr.GitHubPrNumber.Value);
+                    }
+
                     logger.LogInformation(
                         "PR #{PrNumber} resolved as Merged (merged at {MergedAt})",
                         removedPr.GitHubPrNumber.Value, prInfo.MergedAt);
@@ -80,6 +88,13 @@ public class PRStatusResolver(
                         mergedAt: null,
                         closedAt: prInfo.ClosedAt,
                         issueId: removedPr.BeadsIssueId);
+
+                    // Update linked Fleece issue to Closed
+                    if (!string.IsNullOrEmpty(removedPr.BeadsIssueId))
+                    {
+                        await issuePrLinkingService.UpdateIssueStatusFromPRAsync(
+                            projectId, removedPr.BeadsIssueId, PullRequestStatus.Closed, removedPr.GitHubPrNumber.Value);
+                    }
 
                     logger.LogInformation(
                         "PR #{PrNumber} resolved as Closed (closed at {ClosedAt})",
