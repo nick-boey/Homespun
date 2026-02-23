@@ -1,5 +1,6 @@
 using Homespun.Features.AgentOrchestration.Services;
 using Homespun.Features.ClaudeCode.Services;
+using Homespun.Features.Containers.Services;
 using Homespun.Features.Design;
 using Homespun.Features.Fleece.Services;
 using Homespun.Features.Gitgraph.Services;
@@ -54,6 +55,9 @@ public static class MockServiceExtensions
 
         // Secrets service
         services.AddScoped<ISecretsService, MockSecretsService>();
+
+        // Container query service
+        services.AddScoped<IContainerQueryService, MockContainerQueryService>();
 
         // Fleece services (transition service depends on MockFleeceService)
         services.AddScoped<IFleeceIssueTransitionService, MockFleeceIssueTransitionService>();
