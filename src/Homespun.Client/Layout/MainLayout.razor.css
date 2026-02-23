@@ -3,18 +3,14 @@
    ========================================================================== */
 
 .page {
-    display: grid;
-    grid-template-rows: auto 1fr;
-    grid-template-columns: 200px 1fr;
-    grid-template-areas:
-        "topbar topbar"
-        "sidebar main";
     min-height: 100vh;
-    transition: grid-template-columns var(--transition-fast);
+    padding-top: 2.5rem; /* Account for fixed top bar */
+    padding-left: 200px; /* Account for fixed sidebar */
+    transition: padding-left var(--transition-fast);
 }
 
 .page.sidebar-closed {
-    grid-template-columns: 0 1fr;
+    padding-left: 0;
 }
 
 /* ==========================================================================
@@ -22,7 +18,10 @@
    ========================================================================== */
 
 .top-bar {
-    grid-area: topbar;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
     display: flex;
     align-items: center;
     gap: var(--spacing-sm);
@@ -186,10 +185,15 @@
    ========================================================================== */
 
 .sidebar {
-    grid-area: sidebar;
+    position: fixed;
+    top: 2.5rem;
+    left: 0;
+    bottom: 0;
+    width: 200px;
     background-color: var(--bg-sidebar);
     overflow-y: auto;
     overflow-x: hidden;
+    z-index: 90;
     transition: transform var(--transition-fast), opacity var(--transition-fast);
 }
 
@@ -204,9 +208,8 @@
    ========================================================================== */
 
 .main-content {
-    grid-area: main;
     background-color: var(--bg-primary);
-    overflow-y: auto;
+    min-height: calc(100vh - 2.5rem);
 }
 
 .content {
@@ -228,26 +231,14 @@
 
 @media (max-width: 768px) {
     .page {
-        grid-template-columns: 0 1fr;
-        grid-template-areas:
-            "topbar topbar"
-            "main main";
+        padding-left: 0; /* No sidebar padding on mobile */
     }
 
     .page.sidebar-open {
-        grid-template-columns: 200px 1fr;
-        grid-template-areas:
-            "topbar topbar"
-            "sidebar main";
+        padding-left: 0;
     }
 
     .sidebar {
-        position: fixed;
-        top: 2.5rem;
-        left: 0;
-        bottom: 0;
-        width: 200px;
-        z-index: 90;
         transform: translateX(-100%);
         opacity: 0;
         pointer-events: none;
