@@ -86,8 +86,11 @@ public static class MockServiceExtensions
         services.AddSingleton<IRebaseAgentService, MockRebaseAgentService>();
         services.AddSingleton<IAgentPromptService, MockAgentPromptService>();
 
-        // Agent Orchestration services - use real implementations
-        // These are lightweight services that work with the Claude SDK
+        // Agent Orchestration services - configure options and HTTP client first
+        services.Configure<MiniPromptOptions>(options => { });  // Empty config - uses defaults
+        services.AddHttpClient("MiniPrompt");  // Register named HTTP client
+
+        // Then register the services
         services.AddSingleton<IMiniPromptService, MiniPromptService>();
         services.AddSingleton<IBranchIdGeneratorService, BranchIdGeneratorService>();
 
