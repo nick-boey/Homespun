@@ -131,4 +131,35 @@ public class KeyboardNavigationTests : PageTest
         // Cancel to avoid persisting changes
         await Page.Keyboard.PressAsync("Escape");
     }
+
+    [Test]
+    public async Task NavigationKeys_StillWork_WithSelectiveKeyboardPrevention()
+    {
+        // Navigate to the demo project page
+        await Page.GotoAsync($"{BaseUrl}/projects/demo-project");
+        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+
+        // Wait for task graph to render
+        var taskGraphRow = Page.Locator(".task-graph-row").First;
+        await Expect(taskGraphRow).ToBeVisibleAsync(new() { Timeout = 10000 });
+
+        // Press j to select the first issue
+        await Page.Keyboard.PressAsync("j");
+
+        // Verify a row is selected
+        var selectedRow = Page.Locator(".task-graph-row-selected");
+        await Expect(selectedRow).ToBeVisibleAsync(new() { Timeout = 5000 });
+
+        // Navigation should still work after setup - press j again to move down
+        await Page.Keyboard.PressAsync("j");
+        await Expect(selectedRow).ToBeVisibleAsync(new() { Timeout = 5000 });
+
+        // Press k to move back up
+        await Page.Keyboard.PressAsync("k");
+        await Expect(selectedRow).ToBeVisibleAsync(new() { Timeout = 5000 });
+
+        // Note: Can't directly test F5/F12 in Playwright as they trigger browser actions
+        // which would navigate away from the page. The key test is that navigation
+        // still works, confirming our selective prevention mechanism is functioning.
+    }
 }

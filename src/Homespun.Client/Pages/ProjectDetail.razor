@@ -33,7 +33,7 @@
 
 <PageTitle>@(_project?.Name ?? "Project")</PageTitle>
 
-<div class="project-detail-page" @onkeydown="HandleKeyDown" @onkeydown:preventDefault="ShouldPreventKeyDefault" tabindex="-1" @ref="_pageContainer">
+<div class="project-detail-page" @onkeydown="HandleKeyDown" tabindex="-1" @ref="_pageContainer">
 @if (_project == null)
 {
     <p>Loading...</p>
@@ -407,10 +407,6 @@ else
     private ElementReference _pageContainer;
     private KeyboardEditMode _previousEditMode = KeyboardEditMode.Viewing;
 
-    // Prevent default for keyboard shortcuts when on issues tab and not editing in a text field
-    // This is computed based on current state so that navigation keys are prevented
-    private bool ShouldPreventKeyDefault =>
-        _activeTab == "issues" && NavService.EditMode == KeyboardEditMode.Viewing;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -560,6 +556,7 @@ else
             if (_activeTab == "issues")
             {
                 await JSRuntime.InvokeVoidAsync("homespunInterop.focusElement", _pageContainer);
+                await JSRuntime.InvokeVoidAsync("homespunInterop.setupKeyboardPrevention", _pageContainer);
             }
 
             NavService.OnStateChanged += OnNavServiceStateChanged;
@@ -640,6 +637,7 @@ else
             _ = InvokeAsync(async () =>
             {
                 await JSRuntime.InvokeVoidAsync("homespunInterop.focusElement", _pageContainer);
+                await JSRuntime.InvokeVoidAsync("homespunInterop.setupKeyboardPrevention", _pageContainer);
             });
         }
     }

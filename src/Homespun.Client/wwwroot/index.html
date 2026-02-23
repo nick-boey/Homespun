@@ -188,6 +188,38 @@
                         element.focus();
                     }
                 });
+            },
+            setupKeyboardPrevention: function(element) {
+                if (!element || element.__keyboardPreventionSetup) return;
+
+                // Keys that should have their default prevented
+                var preventKeys = new Set([
+                    'j', 'k', 'h', 'l',
+                    'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
+                    'i', 'a', 'r',
+                    'o', 'O',
+                    'u',
+                    'Escape'
+                ]);
+
+                element.addEventListener('keydown', function(e) {
+                    // Skip if typing in an input
+                    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+                        return;
+                    }
+
+                    // Function keys (F1-F12) - always pass through
+                    if (e.key.match(/^F([1-9]|1[0-2])$/)) {
+                        return;
+                    }
+
+                    // Prevent default only for keys we handle
+                    if (preventKeys.has(e.key)) {
+                        e.preventDefault();
+                    }
+                });
+
+                element.__keyboardPreventionSetup = true;
             }
         };
     </script>
