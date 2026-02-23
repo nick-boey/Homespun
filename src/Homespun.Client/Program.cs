@@ -18,6 +18,7 @@ builder.Services.AddScoped<HttpContainerApiService>();
 builder.Services.AddScoped<HttpSessionApiService>();
 builder.Services.AddScoped<HttpPullRequestApiService>();
 builder.Services.AddScoped<HttpIssueApiService>();
+builder.Services.AddScoped<HttpIssueHistoryApiService>();
 builder.Services.AddScoped<HttpCloneApiService>();
 builder.Services.AddScoped<HttpNotificationApiService>();
 builder.Services.AddScoped<HttpOrchestrationApiService>();

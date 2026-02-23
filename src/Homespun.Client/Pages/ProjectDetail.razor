@@ -12,11 +12,13 @@
 @using Homespun.Shared.Models.PullRequests
 @using Homespun.Shared.Models.Sessions
 @using Homespun.Shared.Requests
+@using Homespun.Shared.Models.Fleece
 @using Microsoft.AspNetCore.SignalR.Client
 @using Homespun.Client.Services
 @inject HttpProjectApiService ProjectApi
 @inject HttpPullRequestApiService PullRequestApi
 @inject HttpIssueApiService IssueApi
+@inject HttpIssueHistoryApiService IssueHistoryApi
 @inject HttpFleeceSyncApiService FleeceSyncApi
 @inject HttpGitHubInfoApiService GitHubInfoApi
 @inject HttpCloneApiService CloneApi
@@ -107,6 +109,22 @@ else
 
     @if (_activeTab == "issues")
     {
+        @* Undo/Redo Toolbar *@
+        <div class="issue-toolbar mb-2">
+            <div class="flex items-center gap-2">
+                <button class="btn btn-outline btn-sm" @onclick="UndoAsync" disabled="@(!_canUndo || _isUndoRedoing)" title="@(_historyState?.UndoDescription ?? "Undo")">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i>Undo
+                </button>
+                <button class="btn btn-outline btn-sm" @onclick="RedoAsync" disabled="@(!_canRedo || _isUndoRedoing)" title="@(_historyState?.RedoDescription ?? "Redo")">
+                    <i class="bi bi-arrow-clockwise me-1"></i>Redo
+                </button>
+                @if (_historyState != null && _historyState.TotalEntries > 0)
+                {
+                    <span class="text-muted text-sm">@_historyState.TotalEntries history entries</span>
+                }
+            </div>
+        </div>
+
         <div class="project-layout">
             <div class="timeline-column">
                 <TimelineVisualization
@@ -326,6 +344,23 @@ else
     }
 
     /* ==========================================================================
+       Issue Toolbar
+       ========================================================================== */
+    .issue-toolbar {
+        display: flex;
+        justify-content: flex-end;
+        padding: 0.5rem 0;
+    }
+
+    .issue-toolbar .text-muted {
+        color: var(--text-muted, #6c757d);
+    }
+
+    .issue-toolbar .text-sm {
+        font-size: 0.875rem;
+    }
+
+    /* ==========================================================================
        Settings Tab
        ========================================================================== */
     .settings-tab-content {
@@ -355,6 +390,12 @@ else
     private HubConnection? _hubConnection;
     private bool _isRefreshing;
     private bool _isSyncing;
+
+    // Undo/Redo state
+    private IssueHistoryState? _historyState;
+    private bool _canUndo;
+    private bool _canRedo;
+    private bool _isUndoRedoing;
 
     // Tab navigation state
     private string _activeTab = "issues";
@@ -689,6 +730,9 @@ else
 
                 // In-progress issues could be tracked separately if needed
                 _inProgressIssues = [];
+
+                // Load history state for undo/redo
+                await RefreshHistoryStateAsync();
             }
             catch (Exception ex)
             {
@@ -1603,7 +1647,113 @@ else
                 // Clear selection or close sidebar panel
                 ClearSelection();
                 break;
+            case "u":
+                // u for undo (vim-style)
+                _ = UndoAsync();
+                break;
         }
     }
+
+    #region Undo/Redo Operations
+
+    /// <summary>
+    /// Refreshes the history state from the server.
+    /// </summary>
+    private async Task RefreshHistoryStateAsync()
+    {
+        try
+        {
+            _historyState = await IssueHistoryApi.GetStateAsync(Id);
+            _canUndo = _historyState?.CanUndo ?? false;
+            _canRedo = _historyState?.CanRedo ?? false;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to load history state for project {ProjectId}", Id);
+            _historyState = null;
+            _canUndo = false;
+            _canRedo = false;
+        }
+    }
+
+    /// <summary>
+    /// Undoes the last change to issues.
+    /// </summary>
+    private async Task UndoAsync()
+    {
+        if (!_canUndo || _isUndoRedoing)
+            return;
+
+        _isUndoRedoing = true;
+        StateHasChanged();
+
+        try
+        {
+            var result = await IssueHistoryApi.UndoAsync(Id);
+            if (result.Success)
+            {
+                _historyState = result.State;
+                _canUndo = _historyState?.CanUndo ?? false;
+                _canRedo = _historyState?.CanRedo ?? false;
+
+                // Refresh the issues display
+                await RefreshData();
+            }
+            else
+            {
+                Logger.LogWarning("Undo failed: {ErrorMessage}", result.ErrorMessage);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to undo for project {ProjectId}", Id);
+        }
+        finally
+        {
+            _isUndoRedoing = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Redoes a previously undone change.
+    /// </summary>
+    private async Task RedoAsync()
+    {
+        if (!_canRedo || _isUndoRedoing)
+            return;
+
+        _isUndoRedoing = true;
+        StateHasChanged();
+
+        try
+        {
+            var result = await IssueHistoryApi.RedoAsync(Id);
+            if (result.Success)
+            {
+                _historyState = result.State;
+                _canUndo = _historyState?.CanUndo ?? false;
+                _canRedo = _historyState?.CanRedo ?? false;
+
+                // Refresh the issues display
+                await RefreshData();
+            }
+            else
+            {
+                Logger.LogWarning("Redo failed: {ErrorMessage}", result.ErrorMessage);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to redo for project {ProjectId}", Id);
+        }
+        finally
+        {
+            _isUndoRedoing = false;
+            StateHasChanged();
+        }
+    }
+
+    #endregion
 
 }

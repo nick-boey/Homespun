@@ -23,6 +23,7 @@ public class IssuesControllerTests
     private Mock<IProjectService> _projectServiceMock = null!;
     private Mock<IHubContext<NotificationHub>> _notificationHubMock = null!;
     private Mock<IIssueBranchResolverService> _branchResolverServiceMock = null!;
+    private Mock<IIssueHistoryService> _historyServiceMock = null!;
     private Mock<IHubClients> _clientsMock = null!;
     private Mock<IClientProxy> _allClientsMock = null!;
     private Mock<IClientProxy> _groupClientsMock = null!;
@@ -52,6 +53,7 @@ public class IssuesControllerTests
         _projectServiceMock = new Mock<IProjectService>();
         _notificationHubMock = new Mock<IHubContext<NotificationHub>>();
         _branchResolverServiceMock = new Mock<IIssueBranchResolverService>();
+        _historyServiceMock = new Mock<IIssueHistoryService>();
         _clientsMock = new Mock<IHubClients>();
         _allClientsMock = new Mock<IClientProxy>();
         _groupClientsMock = new Mock<IClientProxy>();
@@ -65,6 +67,7 @@ public class IssuesControllerTests
             _projectServiceMock.Object,
             _notificationHubMock.Object,
             _branchResolverServiceMock.Object,
+            _historyServiceMock.Object,
             NullLogger<IssuesController>.Instance);
     }
 
