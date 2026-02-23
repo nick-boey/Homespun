@@ -130,26 +130,28 @@ else
                 <TimelineVisualization
                     @ref="_graphVisualization"
                     ProjectId="@Id"
-                    OnPullRequestClick="@SelectPullRequestByNumber"
-                    OnIssueClick="@SelectIssue"
+                    OnPullRequestClick="@HandlePullRequestClickFromGraph"
+                    OnIssueClick="@HandleIssueClickFromGraph"
                     OnIssueCreated="@HandleInlineIssueCreated"
                     OnEditClick="@HandleEditIssue"
                     OnRunAgentClick="@HandleRunAgentOnIssue"
                     SelectedNodeId="@GetSelectedNodeId()" />
             </div>
+        </div>
 
-        <div class="detail-column">
+        @* Collapsible Detail Sidebar *@
+        <div class="detail-sidebar @(_sidebarOpen ? "open" : "")">
             @if (_selectedPullRequest != null)
             {
                 <CurrentPullRequestDetailPanel PullRequest="_selectedPullRequest"
                                                OnActionCompleted="RefreshData"
-                                               OnClose="ClearSelection"/>
+                                               OnClose="CloseSidebar"/>
             }
             else if (_selectedMergedPr != null)
             {
                 <MergedPullRequestDetailPanel Details="_selectedMergedPr"
                                               ProjectId="@Id"
-                                              OnClose="ClearSelection"/>
+                                              OnClose="CloseSidebar"/>
             }
             else if (_isLoadingMergedPr)
             {
@@ -165,11 +167,9 @@ else
                 <IssueDetailPanel ProjectId="@Id"
                                   Issue="_selectedIssue"
                                   OnActionCompleted="RefreshData"
-                                  OnClose="ClearSelection"/>
+                                  OnClose="CloseSidebar"/>
             }
-            @* No item selected - show nothing *@
         </div>
-    </div>
 
         <QuickIssueCreateBar ProjectId="@Id"
                              LocalPath="@_project.LocalPath"
@@ -318,29 +318,42 @@ else
        ========================================================================== */
     .project-layout {
         display: grid;
-        grid-template-columns: 1fr 300px;
+        grid-template-columns: 1fr;
         gap: var(--spacing-md);
         align-items: start;
         padding-bottom: 70px; /* Space for fixed quick-issue-bar */
-    }
-
-    @@media (max-width: 900px) {
-        .project-layout {
-            grid-template-columns: 1fr;
-        }
-
-        .detail-column {
-            order: -1;
-        }
     }
 
     .timeline-column {
         min-width: 0;
     }
 
-    .detail-column {
-        position: sticky;
-        top: var(--spacing-md);
+    /* ==========================================================================
+       Collapsible Detail Sidebar
+       ========================================================================== */
+    .detail-sidebar {
+        position: fixed;
+        right: 0;
+        top: var(--topbar-height, 48px);
+        height: calc(100vh - var(--topbar-height, 48px));
+        width: 350px;
+        background: var(--bg-primary);
+        border-left: 1px solid var(--border-color);
+        transform: translateX(100%);
+        transition: transform 0.2s ease;
+        overflow-y: auto;
+        z-index: 100;
+        padding: var(--spacing-md);
+    }
+
+    .detail-sidebar.open {
+        transform: translateX(0);
+    }
+
+    @@media (max-width: 600px) {
+        .detail-sidebar {
+            width: 100%;
+        }
     }
 
     /* ==========================================================================
@@ -407,6 +420,9 @@ else
     private ElementReference _pageContainer;
     private KeyboardEditMode _previousEditMode = KeyboardEditMode.Viewing;
 
+    // Collapsible sidebar state - tracks which item was CLICKED (not keyboard-selected)
+    private bool _sidebarOpen = false;  // Collapsed by default
+
 
     protected override async Task OnParametersSetAsync()
     {
@@ -430,6 +446,7 @@ else
             _lastSyncResult = null;
             _syncError = null;
             _activeTab = "issues";
+            _sidebarOpen = false;
 
             // Determine tab from URL
             var uri = NavigationManager.Uri;
@@ -1083,6 +1100,35 @@ else
     }
 
     /// <summary>
+    /// Handles a click event on an issue in the task graph.
+    /// This opens the collapsible sidebar and displays the issue details.
+    /// Distinct from keyboard navigation which only highlights.
+    /// </summary>
+    private void HandleIssueClickFromGraph(string issueId)
+    {
+        SelectIssue(issueId);
+        _sidebarOpen = true;
+    }
+
+    /// <summary>
+    /// Handles a click event on a pull request in the timeline.
+    /// This opens the collapsible sidebar and displays the PR details.
+    /// </summary>
+    private async Task HandlePullRequestClickFromGraph(int prNumber)
+    {
+        await SelectPullRequestByNumber(prNumber);
+        _sidebarOpen = true;
+    }
+
+    /// <summary>
+    /// Closes the collapsible sidebar without clearing the selection.
+    /// </summary>
+    private void CloseSidebar()
+    {
+        _sidebarOpen = false;
+    }
+
+    /// <summary>
     /// Selects an issue by ID, fetching from API if not found in local cache.
     /// Use this for newly created issues that may not be in the cached list yet.
     /// </summary>
@@ -1120,6 +1166,9 @@ else
 
         // Select the newly created issue (fetch from API if not in cache)
         await SelectIssueAsync(newIssueId);
+
+        // Open the sidebar to show the new issue details
+        _sidebarOpen = true;
     }
 
     private void HandleEditIssue(string issueId)
@@ -1272,6 +1321,7 @@ else
         _selectedMergedPr = null;
         _selectedIssueId = null;
         _selectedIssue = null;
+        _sidebarOpen = false;
     }
 
     private int GetTotalCurrentPRCount()
