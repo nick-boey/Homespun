@@ -1699,6 +1699,12 @@ else
                 // u for undo (vim-style)
                 _ = UndoAsync();
                 break;
+            case "g":
+                NavService.MoveToFirst();
+                break;
+            case "G":
+                NavService.MoveToLast();
+                break;
         }
     }
 

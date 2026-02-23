@@ -189,6 +189,14 @@
                     }
                 });
             },
+            scrollIssueIntoView: function(issueId) {
+                requestAnimationFrame(function() {
+                    var element = document.querySelector('[data-issue-id="' + issueId + '"]');
+                    if (element) {
+                        element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    }
+                });
+            },
             setupKeyboardPrevention: function(element) {
                 if (!element || element.__keyboardPreventionSetup) return;
 
@@ -198,6 +206,7 @@
                     'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
                     'i', 'a', 'r',
                     'o', 'O',
+                    'g', 'G',
                     'u',
                     'Escape'
                 ]);

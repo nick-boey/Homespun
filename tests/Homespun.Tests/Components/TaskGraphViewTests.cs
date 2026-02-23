@@ -27,6 +27,9 @@ public class TaskGraphViewTests : BunitTestContext
         var agentPromptApi = new HttpAgentPromptApiService(mockHttpClient);
         Services.AddSingleton(issueApi);
         Services.AddSingleton(agentPromptApi);
+
+        // Setup JS interop mocks for scroll-into-view
+        JSInterop.SetupVoid("homespunInterop.scrollIssueIntoView", _ => true);
     }
 
     [Test]
@@ -908,6 +911,8 @@ public class MockKeyboardNavigationService : IKeyboardNavigationService
     public void MoveDown() { }
     public void MoveToParent() { }
     public void MoveToChild() { }
+    public void MoveToFirst() { }
+    public void MoveToLast() { }
     public void StartEditingAtStart() { }
     public void StartEditingAtEnd() { }
     public void StartReplacingTitle() { }

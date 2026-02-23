@@ -115,6 +115,24 @@ public class KeyboardNavigationService : IKeyboardNavigationService
         return -1;
     }
 
+    public void MoveToFirst()
+    {
+        if (EditMode != KeyboardEditMode.Viewing) return;
+        if (_renderLines.Count == 0) return;
+
+        SelectedIndex = 0;
+        NotifyStateChanged();
+    }
+
+    public void MoveToLast()
+    {
+        if (EditMode != KeyboardEditMode.Viewing) return;
+        if (_renderLines.Count == 0) return;
+
+        SelectedIndex = _renderLines.Count - 1;
+        NotifyStateChanged();
+    }
+
     #endregion
 
     #region Editing
