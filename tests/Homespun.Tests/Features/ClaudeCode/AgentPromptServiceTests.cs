@@ -268,6 +268,62 @@ public class AgentPromptServiceTests
         Assert.That(result, Is.EqualTo("Test and Test and Test"));
     }
 
+    [Test]
+    public void RenderTemplate_WithFullEntityContext_MatchesIssueDetailPanelBehavior()
+    {
+        // This test verifies that AgentControlPanel now renders templates identically
+        // to IssueDetailPanel when provided with full entity context
+        var template = "## Issue: {{title}}\n\n**ID:** {{id}}\n**Type:** {{type}}\n**Branch:** {{branch}}\n\n### Description\n{{description}}";
+
+        // Simulates the full context that IssueDetailPanel passes
+        var context = new PromptContext
+        {
+            Title = "Fix inline agent run panel",
+            Id = "WtnUDM",
+            Description = "When using the inline agent run panel, selecting a prompt and running it successfully creates a new session but it doesn't inject the first prompt.",
+            Branch = "task/fix-inline-agent+WtnUDM",
+            Type = "Task"
+        };
+
+        var result = _service.RenderTemplate(template, context);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Does.Contain("Fix inline agent run panel"));
+            Assert.That(result, Does.Contain("WtnUDM"));
+            Assert.That(result, Does.Contain("Task"));
+            Assert.That(result, Does.Contain("task/fix-inline-agent+WtnUDM"));
+            Assert.That(result, Does.Contain("doesn't inject the first prompt"));
+            Assert.That(result, Does.Not.Contain("{{"));
+        });
+    }
+
+    [Test]
+    public void RenderTemplate_WithPartialContext_HandlesEmptyFields()
+    {
+        // This test verifies that AgentControlPanel handles partial context gracefully
+        // (e.g., when only branch and ID are known, but not title/description/type)
+        var template = "Working on {{title}} ({{id}}) on branch {{branch}}";
+
+        // Simulates context from AgentControlPanel when entity details aren't available
+        var context = new PromptContext
+        {
+            Id = "clone:feature/my-branch",
+            Title = string.Empty,  // Not available
+            Description = null,    // Not available
+            Branch = "feature/my-branch",
+            Type = string.Empty    // Not available
+        };
+
+        var result = _service.RenderTemplate(template, context);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Is.EqualTo("Working on  (clone:feature/my-branch) on branch feature/my-branch"));
+            Assert.That(result, Does.Not.Contain("{{"));
+        });
+    }
+
     #endregion
 
     #region Default Prompts Tests

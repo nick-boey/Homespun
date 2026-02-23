@@ -101,13 +101,38 @@ else
     /// Default model to use for the session.
     /// </summary>
     [Parameter]
-    public string Model { get; set; } = "sonnet";
+    public string Model { get; set; } = "opus";
 
     /// <summary>
     /// Optional system prompt for the session.
     /// </summary>
     [Parameter]
     public string? SystemPrompt { get; set; }
+
+    /// <summary>
+    /// Optional title for prompt template rendering (e.g., issue title).
+    /// </summary>
+    [Parameter]
+    public string? EntityTitle { get; set; }
+
+    /// <summary>
+    /// Optional description for prompt template rendering (e.g., issue description).
+    /// </summary>
+    [Parameter]
+    public string? EntityDescription { get; set; }
+
+    /// <summary>
+    /// Optional type for prompt template rendering (e.g., "Feature", "Bug", "Task").
+    /// </summary>
+    [Parameter]
+    public string? EntityType { get; set; }
+
+    /// <summary>
+    /// Optional branch name for prompt template rendering.
+    /// If not provided, falls back to extracting from ClonePath.
+    /// </summary>
+    [Parameter]
+    public string? BranchName { get; set; }
 
     /// <summary>
     /// Whether to use compact layout (smaller buttons/text).
@@ -242,11 +267,18 @@ else
             // Send initial message if prompt has one
             if (selectedPrompt != null && !string.IsNullOrEmpty(selectedPrompt.InitialMessage))
             {
-                var initialMessage = HttpAgentPromptApiService.RenderTemplate(selectedPrompt.InitialMessage, new PromptContext
+                // Build full prompt context with all available entity information
+                var promptContext = new PromptContext
                 {
                     Id = EntityId,
-                    Branch = Path.GetFileName(ClonePath) ?? ""
-                });
+                    Title = EntityTitle ?? string.Empty,
+                    Description = EntityDescription,
+                    Type = EntityType ?? string.Empty,
+                    Branch = BranchName ?? Path.GetFileName(ClonePath) ?? string.Empty
+                };
+
+                var initialMessage = HttpAgentPromptApiService.RenderTemplate(
+                    selectedPrompt.InitialMessage, promptContext);
 
                 if (!string.IsNullOrEmpty(initialMessage))
                 {
