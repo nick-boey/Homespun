@@ -54,6 +54,8 @@ export interface FileReadRequest {
 
 // Response types
 
+export type LastMessageType = 'system' | 'assistant' | 'user' | 'stream_event' | 'result' | 'question_pending' | 'plan_pending';
+
 export interface SessionInfo {
   sessionId: string;
   conversationId?: string;
@@ -63,6 +65,8 @@ export interface SessionInfo {
   status: 'idle' | 'streaming' | 'closed';
   createdAt: string;
   lastActivityAt: string;
+  lastMessageType?: LastMessageType;
+  lastMessageSubtype?: string;
 }
 
 export interface ContainerInfo {
@@ -92,4 +96,6 @@ export interface ActiveSessionResponse {
   hasPendingQuestion?: boolean;
   hasPendingPlanApproval?: boolean;
   lastActivityAt?: string;
+  lastMessageType?: LastMessageType;
+  lastMessageSubtype?: string;
 }

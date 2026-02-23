@@ -4,7 +4,7 @@ import {
   type Query,
   type PermissionResult,
 } from '@anthropic-ai/claude-agent-sdk';
-import type { SessionInfo, AskUserQuestionInput, ExitPlanModeInput, UserQuestion, ApprovePlanRequest } from '../types/index.js';
+import type { SessionInfo, AskUserQuestionInput, ExitPlanModeInput, UserQuestion, ApprovePlanRequest, LastMessageType } from '../types/index.js';
 import { randomUUID } from 'node:crypto';
 import { info, error } from '../utils/logger.js';
 
@@ -109,6 +109,8 @@ interface WorkerSession {
   status: 'idle' | 'streaming' | 'closed';
   createdAt: Date;
   lastActivityAt: Date;
+  lastMessageType?: LastMessageType;
+  lastMessageSubtype?: string;
 }
 
 /**
@@ -542,15 +544,24 @@ export class SessionManager {
       for await (const event of ws.outputChannel) {
         if (isControlEvent(event)) {
           info(`stream() - control event: type='${event.type}'`);
+          // Track control event as last message type
+          ws.lastMessageType = event.type;
+          ws.lastMessageSubtype = undefined;
+          ws.lastActivityAt = new Date();
           yield event;
           continue;
         }
 
-        // SDK message — capture conversation ID
+        // SDK message — capture conversation ID and track message type
         const msg = event;
         if (msg.session_id) {
           ws.conversationId = msg.session_id;
         }
+
+        // Track SDK message type
+        ws.lastMessageType = msg.type as LastMessageType;
+        ws.lastMessageSubtype = (msg as any).subtype;
+        ws.lastActivityAt = new Date();
 
         if (msg.type === 'system' && (msg as any).subtype === 'init') {
           info(`SDK init: permissionMode='${(msg as any).permissionMode}', model='${(msg as any).model}'`);
@@ -604,6 +615,8 @@ export class SessionManager {
       status: ws.status,
       createdAt: ws.createdAt.toISOString(),
       lastActivityAt: ws.lastActivityAt.toISOString(),
+      lastMessageType: ws.lastMessageType,
+      lastMessageSubtype: ws.lastMessageSubtype,
     }));
   }
 

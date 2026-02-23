@@ -44,6 +44,8 @@ export function createSessionsRoute(sessionManager: SessionManager) {
       hasPendingQuestion: sessionManager.hasPendingQuestion(active.sessionId),
       hasPendingPlanApproval: sessionManager.hasPendingPlanApproval(active.sessionId),
       lastActivityAt: active.lastActivityAt,
+      lastMessageType: active.lastMessageType,
+      lastMessageSubtype: active.lastMessageSubtype,
     });
   });
 

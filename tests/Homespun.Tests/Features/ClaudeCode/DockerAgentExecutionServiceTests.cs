@@ -1,10 +1,12 @@
 using Homespun.Features.ClaudeCode.Exceptions;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Secrets;
+using Homespun.Shared.Models.Sessions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
 using NUnit.Framework;
+using static Homespun.Features.ClaudeCode.Services.DockerAgentExecutionService;
 
 namespace Homespun.Tests.Features.ClaudeCode;
 
@@ -1162,4 +1164,383 @@ public class ApprovePlanAsyncTests
 
         await service.DisposeAsync();
     }
+}
+
+/// <summary>
+/// Tests for MapWorkerSessionStatus based on lastMessageType.
+/// These tests verify that container status is correctly derived from the last SDK message.
+/// </summary>
+[TestFixture]
+public class MapWorkerSessionStatusTests
+{
+    #region LastMessageType-based Status Tests
+
+    [Test]
+    public void MapWorkerSessionStatus_ResultSuccess_ReturnsWaitingForInput()
+    {
+        // Arrange
+        var response = new ActiveSessionResponse(
+            HasActiveSession: true,
+            SessionId: "session-1",
+            Status: "streaming", // Even if streaming, result/success should take precedence
+            Mode: "Build",
+            Model: "sonnet",
+            PermissionMode: "bypassPermissions",
+            HasPendingQuestion: false,
+            HasPendingPlanApproval: false,
+            LastActivityAt: DateTime.UtcNow.ToString("O"),
+            LastMessageType: "result",
+            LastMessageSubtype: "success"
+        );
+
+        // Act
+        var result = MapWorkerSessionStatus(response);
+
+        // Assert
+        Assert.That(result, Is.EqualTo(ClaudeSessionStatus.WaitingForInput));
+    }
+
+    [Test]
+    public void MapWorkerSessionStatus_ResultErrorDuringExecution_ReturnsStopped()
+    {
+        // Arrange
+        var response = new ActiveSessionResponse(
+            HasActiveSession: true,
+            SessionId: "session-1",
+            Status: "idle",
+            Mode: "Build",
+            Model: "sonnet",
+            PermissionMode: "bypassPermissions",
+            HasPendingQuestion: false,
+            HasPendingPlanApproval: false,
+            LastActivityAt: DateTime.UtcNow.ToString("O"),
+            LastMessageType: "result",
+            LastMessageSubtype: "error_during_execution"
+        );
+
+        // Act
+        var result = MapWorkerSessionStatus(response);
+
+        // Assert
+        Assert.That(result, Is.EqualTo(ClaudeSessionStatus.Stopped));
+    }
+
+    [Test]
+    public void MapWorkerSessionStatus_ResultErrorMaxTurns_ReturnsStopped()
+    {
+        // Arrange
+        var response = new ActiveSessionResponse(
+            HasActiveSession: true,
+            SessionId: "session-1",
+            Status: "idle",
+            Mode: "Build",
+            Model: "sonnet",
+            PermissionMode: "bypassPermissions",
+            HasPendingQuestion: false,
+            HasPendingPlanApproval: false,
+            LastActivityAt: DateTime.UtcNow.ToString("O"),
+            LastMessageType: "result",
+            LastMessageSubtype: "error_max_turns"
+        );
+
+        // Act
+        var result = MapWorkerSessionStatus(response);
+
+        // Assert
+        Assert.That(result, Is.EqualTo(ClaudeSessionStatus.Stopped));
+    }
+
+    [Test]
+    public void MapWorkerSessionStatus_AssistantMessage_ReturnsRunning()
+    {
+        // Arrange
+        var response = new ActiveSessionResponse(
+            HasActiveSession: true,
+            SessionId: "session-1",
+            Status: "streaming",
+            Mode: "Build",
+            Model: "sonnet",
+            PermissionMode: "bypassPermissions",
+            HasPendingQuestion: false,
+            HasPendingPlanApproval: false,
+            LastActivityAt: DateTime.UtcNow.ToString("O"),
+            LastMessageType: "assistant",
+            LastMessageSubtype: null
+        );
+
+        // Act
+        var result = MapWorkerSessionStatus(response);
+
+        // Assert
+        Assert.That(result, Is.EqualTo(ClaudeSessionStatus.Running));
+    }
+
+    [Test]
+    public void MapWorkerSessionStatus_StreamEventMessage_ReturnsRunning()
+    {
+        // Arrange
+        var response = new ActiveSessionResponse(
+            HasActiveSession: true,
+            SessionId: "session-1",
+            Status: "streaming",
+            Mode: "Build",
+            Model: "sonnet",
+            PermissionMode: "bypassPermissions",
+            HasPendingQuestion: false,
+            HasPendingPlanApproval: false,
+            LastActivityAt: DateTime.UtcNow.ToString("O"),
+            LastMessageType: "stream_event",
+            LastMessageSubtype: null
+        );
+
+        // Act
+        var result = MapWorkerSessionStatus(response);
+
+        // Assert
+        Assert.That(result, Is.EqualTo(ClaudeSessionStatus.Running));
+    }
+
+    [Test]
+    public void MapWorkerSessionStatus_SystemInit_ReturnsRunning()
+    {
+        // Arrange
+        var response = new ActiveSessionResponse(
+            HasActiveSession: true,
+            SessionId: "session-1",
+            Status: "streaming",
+            Mode: "Build",
+            Model: "sonnet",
+            PermissionMode: "bypassPermissions",
+            HasPendingQuestion: false,
+            HasPendingPlanApproval: false,
+            LastActivityAt: DateTime.UtcNow.ToString("O"),
+            LastMessageType: "system",
+            LastMessageSubtype: "init"
+        );
+
+        // Act
+        var result = MapWorkerSessionStatus(response);
+
+        // Assert
+        Assert.That(result, Is.EqualTo(ClaudeSessionStatus.Running));
+    }
+
+    [Test]
+    public void MapWorkerSessionStatus_QuestionPendingMessageType_ReturnsWaitingForQuestionAnswer()
+    {
+        // Arrange - lastMessageType indicates question pending, but flag not set
+        var response = new ActiveSessionResponse(
+            HasActiveSession: true,
+            SessionId: "session-1",
+            Status: "idle",
+            Mode: "Build",
+            Model: "sonnet",
+            PermissionMode: "bypassPermissions",
+            HasPendingQuestion: false, // Flag not set, but message type is
+            HasPendingPlanApproval: false,
+            LastActivityAt: DateTime.UtcNow.ToString("O"),
+            LastMessageType: "question_pending",
+            LastMessageSubtype: null
+        );
+
+        // Act
+        var result = MapWorkerSessionStatus(response);
+
+        // Assert
+        Assert.That(result, Is.EqualTo(ClaudeSessionStatus.WaitingForQuestionAnswer));
+    }
+
+    [Test]
+    public void MapWorkerSessionStatus_PlanPendingMessageType_ReturnsWaitingForPlanExecution()
+    {
+        // Arrange - lastMessageType indicates plan pending, but flag not set
+        var response = new ActiveSessionResponse(
+            HasActiveSession: true,
+            SessionId: "session-1",
+            Status: "idle",
+            Mode: "Plan",
+            Model: "sonnet",
+            PermissionMode: "plan",
+            HasPendingQuestion: false,
+            HasPendingPlanApproval: false, // Flag not set, but message type is
+            LastActivityAt: DateTime.UtcNow.ToString("O"),
+            LastMessageType: "plan_pending",
+            LastMessageSubtype: null
+        );
+
+        // Act
+        var result = MapWorkerSessionStatus(response);
+
+        // Assert
+        Assert.That(result, Is.EqualTo(ClaudeSessionStatus.WaitingForPlanExecution));
+    }
+
+    #endregion
+
+    #region Pending Flag Priority Tests
+
+    [Test]
+    public void MapWorkerSessionStatus_HasPendingQuestion_TakesPriority()
+    {
+        // Arrange - pending question flag should take priority over lastMessageType
+        var response = new ActiveSessionResponse(
+            HasActiveSession: true,
+            SessionId: "session-1",
+            Status: "streaming",
+            Mode: "Build",
+            Model: "sonnet",
+            PermissionMode: "bypassPermissions",
+            HasPendingQuestion: true, // This should take priority
+            HasPendingPlanApproval: false,
+            LastActivityAt: DateTime.UtcNow.ToString("O"),
+            LastMessageType: "assistant", // Even though last message was assistant
+            LastMessageSubtype: null
+        );
+
+        // Act
+        var result = MapWorkerSessionStatus(response);
+
+        // Assert
+        Assert.That(result, Is.EqualTo(ClaudeSessionStatus.WaitingForQuestionAnswer));
+    }
+
+    [Test]
+    public void MapWorkerSessionStatus_HasPendingPlanApproval_TakesPriority()
+    {
+        // Arrange - pending plan flag should take priority over lastMessageType
+        var response = new ActiveSessionResponse(
+            HasActiveSession: true,
+            SessionId: "session-1",
+            Status: "streaming",
+            Mode: "Plan",
+            Model: "sonnet",
+            PermissionMode: "plan",
+            HasPendingQuestion: false,
+            HasPendingPlanApproval: true, // This should take priority
+            LastActivityAt: DateTime.UtcNow.ToString("O"),
+            LastMessageType: "assistant",
+            LastMessageSubtype: null
+        );
+
+        // Act
+        var result = MapWorkerSessionStatus(response);
+
+        // Assert
+        Assert.That(result, Is.EqualTo(ClaudeSessionStatus.WaitingForPlanExecution));
+    }
+
+    #endregion
+
+    #region Fallback to Status Field Tests
+
+    [Test]
+    public void MapWorkerSessionStatus_NoLastMessageType_FallsBackToStatusField()
+    {
+        // Arrange - no lastMessageType, should fall back to status field
+        var response = new ActiveSessionResponse(
+            HasActiveSession: true,
+            SessionId: "session-1",
+            Status: "idle",
+            Mode: "Build",
+            Model: "sonnet",
+            PermissionMode: "bypassPermissions",
+            HasPendingQuestion: false,
+            HasPendingPlanApproval: false,
+            LastActivityAt: DateTime.UtcNow.ToString("O"),
+            LastMessageType: null, // No message type
+            LastMessageSubtype: null
+        );
+
+        // Act
+        var result = MapWorkerSessionStatus(response);
+
+        // Assert - falls back to status field "idle" -> WaitingForInput
+        Assert.That(result, Is.EqualTo(ClaudeSessionStatus.WaitingForInput));
+    }
+
+    [Test]
+    public void MapWorkerSessionStatus_EmptyLastMessageType_FallsBackToStatusField()
+    {
+        // Arrange
+        var response = new ActiveSessionResponse(
+            HasActiveSession: true,
+            SessionId: "session-1",
+            Status: "streaming",
+            Mode: "Build",
+            Model: "sonnet",
+            PermissionMode: "bypassPermissions",
+            HasPendingQuestion: false,
+            HasPendingPlanApproval: false,
+            LastActivityAt: DateTime.UtcNow.ToString("O"),
+            LastMessageType: "", // Empty string
+            LastMessageSubtype: null
+        );
+
+        // Act
+        var result = MapWorkerSessionStatus(response);
+
+        // Assert - falls back to status field "streaming" -> Running
+        Assert.That(result, Is.EqualTo(ClaudeSessionStatus.Running));
+    }
+
+    [Test]
+    public void MapWorkerSessionStatus_ClosedStatus_ReturnsStopped()
+    {
+        // Arrange
+        var response = new ActiveSessionResponse(
+            HasActiveSession: false,
+            SessionId: "session-1",
+            Status: "closed",
+            Mode: "Build",
+            Model: "sonnet",
+            PermissionMode: "bypassPermissions",
+            HasPendingQuestion: false,
+            HasPendingPlanApproval: false,
+            LastActivityAt: DateTime.UtcNow.ToString("O"),
+            LastMessageType: null,
+            LastMessageSubtype: null
+        );
+
+        // Act
+        var result = MapWorkerSessionStatus(response);
+
+        // Assert
+        Assert.That(result, Is.EqualTo(ClaudeSessionStatus.Stopped));
+    }
+
+    #endregion
+
+    #region MapFromStatus Tests
+
+    [Test]
+    public void MapFromStatus_Streaming_ReturnsRunning()
+    {
+        Assert.That(MapFromStatus("streaming"), Is.EqualTo(ClaudeSessionStatus.Running));
+    }
+
+    [Test]
+    public void MapFromStatus_Idle_ReturnsWaitingForInput()
+    {
+        Assert.That(MapFromStatus("idle"), Is.EqualTo(ClaudeSessionStatus.WaitingForInput));
+    }
+
+    [Test]
+    public void MapFromStatus_Closed_ReturnsStopped()
+    {
+        Assert.That(MapFromStatus("closed"), Is.EqualTo(ClaudeSessionStatus.Stopped));
+    }
+
+    [Test]
+    public void MapFromStatus_Null_ReturnsRunning()
+    {
+        Assert.That(MapFromStatus(null), Is.EqualTo(ClaudeSessionStatus.Running));
+    }
+
+    [Test]
+    public void MapFromStatus_UnknownValue_ReturnsRunning()
+    {
+        Assert.That(MapFromStatus("unknown"), Is.EqualTo(ClaudeSessionStatus.Running));
+    }
+
+    #endregion
 }
