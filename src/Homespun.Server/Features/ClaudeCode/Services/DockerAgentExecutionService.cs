@@ -131,7 +131,7 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
     /// <summary>
     /// Response from the worker's /sessions/active endpoint.
     /// </summary>
-    private record ActiveSessionResponse(
+    internal record ActiveSessionResponse(
         bool HasActiveSession,
         string? SessionId,
         string? Status,
@@ -140,7 +140,9 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         string? PermissionMode,
         bool? HasPendingQuestion,
         bool? HasPendingPlanApproval,
-        string? LastActivityAt);
+        string? LastActivityAt,
+        string? LastMessageType,
+        string? LastMessageSubtype);
 
     public DockerAgentExecutionService(
         IOptions<DockerAgentExecutionOptions> options,
@@ -811,16 +813,52 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
 
     /// <summary>
     /// Maps worker session status to ClaudeSessionStatus enum.
+    /// Uses lastMessageType for more accurate status when available.
     /// </summary>
-    private static ClaudeSessionStatus MapWorkerSessionStatus(ActiveSessionResponse activeSession)
+    internal static ClaudeSessionStatus MapWorkerSessionStatus(ActiveSessionResponse activeSession)
     {
+        // Pending states from canUseTool callbacks take highest priority
         if (activeSession.HasPendingQuestion == true)
             return ClaudeSessionStatus.WaitingForQuestionAnswer;
 
         if (activeSession.HasPendingPlanApproval == true)
             return ClaudeSessionStatus.WaitingForPlanExecution;
 
-        return activeSession.Status switch
+        // Use lastMessageType for more accurate status determination
+        if (!string.IsNullOrEmpty(activeSession.LastMessageType))
+        {
+            return activeSession.LastMessageType switch
+            {
+                // Result messages indicate task completion or error
+                "result" when activeSession.LastMessageSubtype == "success" => ClaudeSessionStatus.WaitingForInput,
+                "result" when activeSession.LastMessageSubtype?.StartsWith("error") == true => ClaudeSessionStatus.Stopped,
+                "result" => ClaudeSessionStatus.WaitingForInput, // Other result subtypes
+
+                // Control events for pending states (backup if flags weren't set)
+                "question_pending" => ClaudeSessionStatus.WaitingForQuestionAnswer,
+                "plan_pending" => ClaudeSessionStatus.WaitingForPlanExecution,
+
+                // Active message types indicate agent is working
+                "assistant" or "stream_event" or "user" => ClaudeSessionStatus.Running,
+
+                // System init message means session just started
+                "system" => ClaudeSessionStatus.Running,
+
+                // Fall through to status-based mapping for unknown types
+                _ => MapFromStatus(activeSession.Status)
+            };
+        }
+
+        // Fallback to basic status field when lastMessageType is not available
+        return MapFromStatus(activeSession.Status);
+    }
+
+    /// <summary>
+    /// Fallback mapping from basic status field.
+    /// </summary>
+    internal static ClaudeSessionStatus MapFromStatus(string? status)
+    {
+        return status switch
         {
             "streaming" => ClaudeSessionStatus.Running,
             "idle" => ClaudeSessionStatus.WaitingForInput,
