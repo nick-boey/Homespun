@@ -19,6 +19,7 @@ public class PRStatusResolverTests
 {
     private Mock<IGitHubService> _mockGitHubService = null!;
     private Mock<IGraphCacheService> _mockGraphCacheService = null!;
+    private Mock<IIssuePrLinkingService> _mockIssuePrLinkingService = null!;
     private MockDataStore _dataStore = null!;
     private PRStatusResolver _resolver = null!;
 
@@ -27,11 +28,13 @@ public class PRStatusResolverTests
     {
         _mockGitHubService = new Mock<IGitHubService>();
         _mockGraphCacheService = new Mock<IGraphCacheService>();
+        _mockIssuePrLinkingService = new Mock<IIssuePrLinkingService>();
         _dataStore = new MockDataStore();
 
         _resolver = new PRStatusResolver(
             _mockGitHubService.Object,
             _mockGraphCacheService.Object,
+            _mockIssuePrLinkingService.Object,
             _dataStore,
             NullLogger<PRStatusResolver>.Instance);
     }
@@ -359,6 +362,132 @@ public class PRStatusResolverTests
                 null,
                 null),
             Times.Once);
+    }
+
+    #endregion
+
+    #region Issue Status Update Tests
+
+    [Test]
+    public async Task ResolveClosedPRStatusesAsync_MergedPR_UpdatesIssueToComplete()
+    {
+        // Arrange
+        var project = await CreateTestProject();
+        var removedPrs = new List<RemovedPrInfo>
+        {
+            new() { PullRequestId = "pr-1", GitHubPrNumber = 42, BeadsIssueId = "issue-123" }
+        };
+
+        _mockGitHubService.Setup(s => s.GetPullRequestAsync(project.Id, 42))
+            .ReturnsAsync(new PullRequestInfo
+            {
+                Number = 42,
+                Title = "PR 42",
+                Status = PullRequestStatus.Merged,
+                MergedAt = DateTime.UtcNow
+            });
+
+        _mockIssuePrLinkingService.Setup(s => s.UpdateIssueStatusFromPRAsync(
+            project.Id, "issue-123", PullRequestStatus.Merged, 42))
+            .ReturnsAsync(true);
+
+        // Act
+        await _resolver.ResolveClosedPRStatusesAsync(project.Id, removedPrs);
+
+        // Assert
+        _mockIssuePrLinkingService.Verify(
+            s => s.UpdateIssueStatusFromPRAsync(project.Id, "issue-123", PullRequestStatus.Merged, 42),
+            Times.Once);
+    }
+
+    [Test]
+    public async Task ResolveClosedPRStatusesAsync_ClosedPR_UpdatesIssueToClosed()
+    {
+        // Arrange
+        var project = await CreateTestProject();
+        var removedPrs = new List<RemovedPrInfo>
+        {
+            new() { PullRequestId = "pr-1", GitHubPrNumber = 42, BeadsIssueId = "issue-123" }
+        };
+
+        _mockGitHubService.Setup(s => s.GetPullRequestAsync(project.Id, 42))
+            .ReturnsAsync(new PullRequestInfo
+            {
+                Number = 42,
+                Title = "PR 42",
+                Status = PullRequestStatus.Closed,
+                ClosedAt = DateTime.UtcNow
+            });
+
+        _mockIssuePrLinkingService.Setup(s => s.UpdateIssueStatusFromPRAsync(
+            project.Id, "issue-123", PullRequestStatus.Closed, 42))
+            .ReturnsAsync(true);
+
+        // Act
+        await _resolver.ResolveClosedPRStatusesAsync(project.Id, removedPrs);
+
+        // Assert
+        _mockIssuePrLinkingService.Verify(
+            s => s.UpdateIssueStatusFromPRAsync(project.Id, "issue-123", PullRequestStatus.Closed, 42),
+            Times.Once);
+    }
+
+    [Test]
+    public async Task ResolveClosedPRStatusesAsync_NoLinkedIssue_SkipsIssueUpdate()
+    {
+        // Arrange
+        var project = await CreateTestProject();
+        var removedPrs = new List<RemovedPrInfo>
+        {
+            new() { PullRequestId = "pr-1", GitHubPrNumber = 42, BeadsIssueId = null }
+        };
+
+        _mockGitHubService.Setup(s => s.GetPullRequestAsync(project.Id, 42))
+            .ReturnsAsync(new PullRequestInfo
+            {
+                Number = 42,
+                Title = "PR 42",
+                Status = PullRequestStatus.Merged,
+                MergedAt = DateTime.UtcNow
+            });
+
+        // Act
+        await _resolver.ResolveClosedPRStatusesAsync(project.Id, removedPrs);
+
+        // Assert - No issue update should be called
+        _mockIssuePrLinkingService.Verify(
+            s => s.UpdateIssueStatusFromPRAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<PullRequestStatus>(), It.IsAny<int>()),
+            Times.Never);
+    }
+
+    [Test]
+    public async Task ResolveClosedPRStatusesAsync_EmptyIssueId_SkipsIssueUpdate()
+    {
+        // Arrange
+        var project = await CreateTestProject();
+        var removedPrs = new List<RemovedPrInfo>
+        {
+            new() { PullRequestId = "pr-1", GitHubPrNumber = 42, BeadsIssueId = "" }
+        };
+
+        _mockGitHubService.Setup(s => s.GetPullRequestAsync(project.Id, 42))
+            .ReturnsAsync(new PullRequestInfo
+            {
+                Number = 42,
+                Title = "PR 42",
+                Status = PullRequestStatus.Merged,
+                MergedAt = DateTime.UtcNow
+            });
+
+        // Act
+        await _resolver.ResolveClosedPRStatusesAsync(project.Id, removedPrs);
+
+        // Assert - No issue update should be called
+        _mockIssuePrLinkingService.Verify(
+            s => s.UpdateIssueStatusFromPRAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<PullRequestStatus>(), It.IsAny<int>()),
+            Times.Never);
     }
 
     #endregion

@@ -2,6 +2,7 @@ using Fleece.Core.Models;
 using Homespun.Features.Fleece.Services;
 using Homespun.Features.PullRequests.Data;
 using Homespun.Features.Testing;
+using Homespun.Shared.Models.PullRequests;
 using Microsoft.Extensions.Logging;
 using Moq;
 
@@ -251,6 +252,160 @@ public class IssuePrLinkingServiceTests
 
         // Assert
         Assert.That(result, Is.False);
+    }
+
+    #endregion
+
+    #region UpdateIssueStatusFromPRAsync Tests
+
+    [Test]
+    public async Task UpdateIssueStatusFromPRAsync_MergedPR_SetsIssueToComplete()
+    {
+        // Arrange
+        var project = await CreateTestProject();
+        var existingIssue = new Issue
+        {
+            Id = "hsp-123",
+            Title = "Test Issue",
+            Status = IssueStatus.Review,
+            Type = IssueType.Task,
+            LastUpdate = DateTimeOffset.UtcNow
+        };
+
+        _mockFleeceService
+            .Setup(f => f.GetIssueAsync(project.LocalPath, "hsp-123", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(existingIssue);
+
+        _mockFleeceService
+            .Setup(f => f.UpdateIssueAsync(project.LocalPath, "hsp-123", null, IssueStatus.Complete, null, null, null, null, null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Issue { Id = "hsp-123", Title = "Test Issue", Status = IssueStatus.Complete, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow });
+
+        // Act
+        var result = await _service.UpdateIssueStatusFromPRAsync(project.Id, "hsp-123", PullRequestStatus.Merged, 42);
+
+        // Assert
+        Assert.That(result, Is.True);
+        _mockFleeceService.Verify(f => f.UpdateIssueAsync(project.LocalPath, "hsp-123", null, IssueStatus.Complete, null, null, null, null, null, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Test]
+    public async Task UpdateIssueStatusFromPRAsync_ClosedPR_SetsIssueToClosed()
+    {
+        // Arrange
+        var project = await CreateTestProject();
+        var existingIssue = new Issue
+        {
+            Id = "hsp-123",
+            Title = "Test Issue",
+            Status = IssueStatus.Review,
+            Type = IssueType.Task,
+            LastUpdate = DateTimeOffset.UtcNow
+        };
+
+        _mockFleeceService
+            .Setup(f => f.GetIssueAsync(project.LocalPath, "hsp-123", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(existingIssue);
+
+        _mockFleeceService
+            .Setup(f => f.UpdateIssueAsync(project.LocalPath, "hsp-123", null, IssueStatus.Closed, null, null, null, null, null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Issue { Id = "hsp-123", Title = "Test Issue", Status = IssueStatus.Closed, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow });
+
+        // Act
+        var result = await _service.UpdateIssueStatusFromPRAsync(project.Id, "hsp-123", PullRequestStatus.Closed, 42);
+
+        // Assert
+        Assert.That(result, Is.True);
+        _mockFleeceService.Verify(f => f.UpdateIssueAsync(project.LocalPath, "hsp-123", null, IssueStatus.Closed, null, null, null, null, null, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Test]
+    [TestCase(PullRequestStatus.InProgress)]
+    [TestCase(PullRequestStatus.ReadyForReview)]
+    [TestCase(PullRequestStatus.ChecksFailing)]
+    [TestCase(PullRequestStatus.Conflict)]
+    [TestCase(PullRequestStatus.ReadyForMerging)]
+    public async Task UpdateIssueStatusFromPRAsync_OpenPR_SetsIssueToReview(PullRequestStatus prStatus)
+    {
+        // Arrange
+        var project = await CreateTestProject();
+        var existingIssue = new Issue
+        {
+            Id = "hsp-123",
+            Title = "Test Issue",
+            Status = IssueStatus.Progress,
+            Type = IssueType.Task,
+            LastUpdate = DateTimeOffset.UtcNow
+        };
+
+        _mockFleeceService
+            .Setup(f => f.GetIssueAsync(project.LocalPath, "hsp-123", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(existingIssue);
+
+        _mockFleeceService
+            .Setup(f => f.UpdateIssueAsync(project.LocalPath, "hsp-123", null, IssueStatus.Review, null, null, null, null, null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Issue { Id = "hsp-123", Title = "Test Issue", Status = IssueStatus.Review, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow });
+
+        // Act
+        var result = await _service.UpdateIssueStatusFromPRAsync(project.Id, "hsp-123", prStatus, 42);
+
+        // Assert
+        Assert.That(result, Is.True);
+        _mockFleeceService.Verify(f => f.UpdateIssueAsync(project.LocalPath, "hsp-123", null, IssueStatus.Review, null, null, null, null, null, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Test]
+    public async Task UpdateIssueStatusFromPRAsync_AlreadyInCorrectStatus_ReturnsFalse()
+    {
+        // Arrange
+        var project = await CreateTestProject();
+        var existingIssue = new Issue
+        {
+            Id = "hsp-123",
+            Title = "Test Issue",
+            Status = IssueStatus.Complete,  // Already Complete
+            Type = IssueType.Task,
+            LastUpdate = DateTimeOffset.UtcNow
+        };
+
+        _mockFleeceService
+            .Setup(f => f.GetIssueAsync(project.LocalPath, "hsp-123", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(existingIssue);
+
+        // Act
+        var result = await _service.UpdateIssueStatusFromPRAsync(project.Id, "hsp-123", PullRequestStatus.Merged, 42);
+
+        // Assert
+        Assert.That(result, Is.False);
+        _mockFleeceService.Verify(f => f.UpdateIssueAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<IssueStatus?>(), It.IsAny<IssueType?>(), It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<ExecutionMode?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Test]
+    public async Task UpdateIssueStatusFromPRAsync_ProjectNotFound_ReturnsFalse()
+    {
+        // Act
+        var result = await _service.UpdateIssueStatusFromPRAsync("nonexistent", "hsp-123", PullRequestStatus.Merged, 42);
+
+        // Assert
+        Assert.That(result, Is.False);
+        _mockFleeceService.Verify(f => f.UpdateIssueAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<IssueStatus?>(), It.IsAny<IssueType?>(), It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<ExecutionMode?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Test]
+    public async Task UpdateIssueStatusFromPRAsync_IssueNotFound_ReturnsFalse()
+    {
+        // Arrange
+        var project = await CreateTestProject();
+
+        _mockFleeceService
+            .Setup(f => f.GetIssueAsync(project.LocalPath, "hsp-123", It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Issue?)null);
+
+        // Act
+        var result = await _service.UpdateIssueStatusFromPRAsync(project.Id, "hsp-123", PullRequestStatus.Merged, 42);
+
+        // Assert
+        Assert.That(result, Is.False);
+        _mockFleeceService.Verify(f => f.UpdateIssueAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<IssueStatus?>(), It.IsAny<IssueType?>(), It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<ExecutionMode?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     #endregion

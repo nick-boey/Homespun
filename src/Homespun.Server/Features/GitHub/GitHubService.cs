@@ -1,4 +1,5 @@
 using Homespun.Features.PullRequests.Data;
+using Homespun.Shared.Models.PullRequests;
 using Octokit;
 
 namespace Homespun.Features.GitHub;
@@ -328,7 +329,20 @@ public class GitHubService(
                     // Try to link to beads issue if not already linked (backfill)
                     if (string.IsNullOrEmpty(pullRequest.BeadsIssueId))
                     {
-                        await issuePrLinkingService.TryLinkByBranchNameAsync(projectId, pullRequest.Id);
+                        var linkedIssueId = await issuePrLinkingService.TryLinkByBranchNameAsync(projectId, pullRequest.Id);
+
+                        // Update issue status to Review for linked open PRs
+                        if (!string.IsNullOrEmpty(linkedIssueId))
+                        {
+                            await issuePrLinkingService.UpdateIssueStatusFromPRAsync(
+                                projectId, linkedIssueId, PullRequestStatus.ReadyForReview, pr.Number);
+                        }
+                    }
+                    else
+                    {
+                        // Update issue status to Review for already-linked open PRs
+                        await issuePrLinkingService.UpdateIssueStatusFromPRAsync(
+                            projectId, pullRequest.BeadsIssueId, PullRequestStatus.ReadyForReview, pr.Number);
                     }
 
                     result.Updated++;
@@ -363,7 +377,14 @@ public class GitHubService(
                     await dataStore.AddPullRequestAsync(pullRequest);
 
                     // Try to link to beads issue by branch name
-                    await issuePrLinkingService.TryLinkByBranchNameAsync(projectId, pullRequest.Id);
+                    var linkedIssueId = await issuePrLinkingService.TryLinkByBranchNameAsync(projectId, pullRequest.Id);
+
+                    // Update issue status to Review for linked open PRs
+                    if (!string.IsNullOrEmpty(linkedIssueId))
+                    {
+                        await issuePrLinkingService.UpdateIssueStatusFromPRAsync(
+                            projectId, linkedIssueId, PullRequestStatus.ReadyForReview, pr.Number);
+                    }
 
                     result.Imported++;
                 }

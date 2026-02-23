@@ -1,5 +1,6 @@
 using Homespun.ClaudeAgentSdk;
 using Homespun.Features.ClaudeCode.Services;
+using Homespun.Features.Fleece.Services;
 using Homespun.Shared.Models.Sessions;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
@@ -26,6 +27,7 @@ public class ClaudeSessionServiceTests
     private Mock<IHooksService> _hooksServiceMock = null!;
     private Mock<IAgentExecutionService> _agentExecutionServiceMock = null!;
     private Mock<IAGUIEventService> _agUIEventServiceMock = null!;
+    private Mock<IFleeceIssueTransitionService> _fleeceTransitionServiceMock = null!;
 
     [SetUp]
     public void SetUp()
@@ -42,6 +44,9 @@ public class ClaudeSessionServiceTests
         _hooksServiceMock = new Mock<IHooksService>();
         _agentExecutionServiceMock = new Mock<IAgentExecutionService>();
         _agUIEventServiceMock = new Mock<IAGUIEventService>();
+        _fleeceTransitionServiceMock = new Mock<IFleeceIssueTransitionService>();
+        _fleeceTransitionServiceMock.Setup(s => s.TransitionToInProgressAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync(new FleeceTransitionResult { Success = true });
 
         // Setup mock hub clients
         var clientsMock = new Mock<IHubClients>();
@@ -69,7 +74,8 @@ public class ClaudeSessionServiceTests
             _hooksServiceMock.Object,
             _messageCacheMock.Object,
             _agentExecutionServiceMock.Object,
-            _agUIEventServiceMock.Object);
+            _agUIEventServiceMock.Object,
+            _fleeceTransitionServiceMock.Object);
     }
 
     [Test]
@@ -431,6 +437,7 @@ public class ClaudeSessionServiceMessageTests
     private Mock<IHooksService> _hooksServiceMock = null!;
     private Mock<IAgentExecutionService> _agentExecutionServiceMock = null!;
     private Mock<IAGUIEventService> _agUIEventServiceMock = null!;
+    private Mock<IFleeceIssueTransitionService> _fleeceTransitionServiceMock = null!;
 
     [SetUp]
     public void SetUp()
@@ -447,6 +454,9 @@ public class ClaudeSessionServiceMessageTests
         _hooksServiceMock = new Mock<IHooksService>();
         _agentExecutionServiceMock = new Mock<IAgentExecutionService>();
         _agUIEventServiceMock = new Mock<IAGUIEventService>();
+        _fleeceTransitionServiceMock = new Mock<IFleeceIssueTransitionService>();
+        _fleeceTransitionServiceMock.Setup(s => s.TransitionToInProgressAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync(new FleeceTransitionResult { Success = true });
 
         var clientsMock = new Mock<IHubClients>();
         var clientProxyMock = new Mock<IClientProxy>();
@@ -465,7 +475,8 @@ public class ClaudeSessionServiceMessageTests
             _hooksServiceMock.Object,
             _messageCacheMock.Object,
             _agentExecutionServiceMock.Object,
-            _agUIEventServiceMock.Object);
+            _agUIEventServiceMock.Object,
+            _fleeceTransitionServiceMock.Object);
     }
 
     [Test]
@@ -527,6 +538,91 @@ public class ClaudeSessionServiceMessageTests
         Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await _service.SendMessageAsync("stopped-session", "Hello", SdkPermissionMode.Plan));
     }
+
+    [Test]
+    public async Task SendMessageAsync_FirstMessage_TransitionsIssueToProgress()
+    {
+        // Arrange - Create session through proper flow
+        var session = await _service.StartSessionAsync(
+            entityId: "issue-456",
+            projectId: "project-789",
+            workingDirectory: "/test/path",
+            mode: SessionMode.Build,
+            model: "opus");
+
+        // Mock SDK to return empty stream for the message
+        _agentExecutionServiceMock
+            .Setup(s => s.StartSessionAsync(It.IsAny<AgentStartRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(CreateEmptySdkMessageStream());
+
+        _fleeceTransitionServiceMock
+            .Setup(s => s.TransitionToInProgressAsync("project-789", "issue-456"))
+            .ReturnsAsync(new FleeceTransitionResult { Success = true });
+
+        // Act
+        await _service.SendMessageAsync(session.Id, "Hello");
+
+        // Assert
+        _fleeceTransitionServiceMock.Verify(
+            s => s.TransitionToInProgressAsync("project-789", "issue-456"),
+            Times.Once);
+    }
+
+    [Test]
+    public async Task SendMessageAsync_NoEntityId_SkipsTransition()
+    {
+        // Arrange - Create session without EntityId
+        var session = await _service.StartSessionAsync(
+            entityId: "",  // Empty entity ID
+            projectId: "project-789",
+            workingDirectory: "/test/path",
+            mode: SessionMode.Build,
+            model: "opus");
+
+        // Mock SDK to return empty stream for the message
+        _agentExecutionServiceMock
+            .Setup(s => s.StartSessionAsync(It.IsAny<AgentStartRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(CreateEmptySdkMessageStream());
+
+        // Act
+        await _service.SendMessageAsync(session.Id, "Hello");
+
+        // Assert - Transition should not be called
+        _fleeceTransitionServiceMock.Verify(
+            s => s.TransitionToInProgressAsync(It.IsAny<string>(), It.IsAny<string>()),
+            Times.Never);
+    }
+
+    [Test]
+    public async Task SendMessageAsync_NoProjectId_SkipsTransition()
+    {
+        // Arrange - Create session without ProjectId
+        var session = await _service.StartSessionAsync(
+            entityId: "issue-456",
+            projectId: "",  // Empty project ID
+            workingDirectory: "/test/path",
+            mode: SessionMode.Build,
+            model: "opus");
+
+        // Mock SDK to return empty stream for the message
+        _agentExecutionServiceMock
+            .Setup(s => s.StartSessionAsync(It.IsAny<AgentStartRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(CreateEmptySdkMessageStream());
+
+        // Act
+        await _service.SendMessageAsync(session.Id, "Hello");
+
+        // Assert - Transition should not be called
+        _fleeceTransitionServiceMock.Verify(
+            s => s.TransitionToInProgressAsync(It.IsAny<string>(), It.IsAny<string>()),
+            Times.Never);
+    }
+
+    private static async IAsyncEnumerable<SdkMessage> CreateEmptySdkMessageStream()
+    {
+        await Task.CompletedTask;
+        yield break;
+    }
 }
 
 /// <summary>
@@ -548,6 +644,7 @@ public class ClaudeSessionServicePermissionModeTests
     private Mock<IHooksService> _hooksServiceMock = null!;
     private Mock<IAgentExecutionService> _agentExecutionServiceMock = null!;
     private Mock<IAGUIEventService> _agUIEventServiceMock = null!;
+    private Mock<IFleeceIssueTransitionService> _fleeceTransitionServiceMock = null!;
 
     [SetUp]
     public void SetUp()
@@ -564,6 +661,9 @@ public class ClaudeSessionServicePermissionModeTests
         _hooksServiceMock = new Mock<IHooksService>();
         _agentExecutionServiceMock = new Mock<IAgentExecutionService>();
         _agUIEventServiceMock = new Mock<IAGUIEventService>();
+        _fleeceTransitionServiceMock = new Mock<IFleeceIssueTransitionService>();
+        _fleeceTransitionServiceMock.Setup(s => s.TransitionToInProgressAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync(new FleeceTransitionResult { Success = true });
 
         var clientsMock = new Mock<IHubClients>();
         var clientProxyMock = new Mock<IClientProxy>();
@@ -582,7 +682,8 @@ public class ClaudeSessionServicePermissionModeTests
             _hooksServiceMock.Object,
             _messageCacheMock.Object,
             _agentExecutionServiceMock.Object,
-            _agUIEventServiceMock.Object);
+            _agUIEventServiceMock.Object,
+            _fleeceTransitionServiceMock.Object);
     }
 
     [TestCase(SdkPermissionMode.Default)]
@@ -681,6 +782,7 @@ public class ClaudeSessionServicePlanCaptureTests
     private Mock<IHooksService> _hooksServiceMock = null!;
     private Mock<IAgentExecutionService> _agentExecutionServiceMock = null!;
     private Mock<IAGUIEventService> _agUIEventServiceMock = null!;
+    private Mock<IFleeceIssueTransitionService> _fleeceTransitionServiceMock = null!;
 
     [SetUp]
     public void SetUp()
@@ -697,6 +799,9 @@ public class ClaudeSessionServicePlanCaptureTests
         _hooksServiceMock = new Mock<IHooksService>();
         _agentExecutionServiceMock = new Mock<IAgentExecutionService>();
         _agUIEventServiceMock = new Mock<IAGUIEventService>();
+        _fleeceTransitionServiceMock = new Mock<IFleeceIssueTransitionService>();
+        _fleeceTransitionServiceMock.Setup(s => s.TransitionToInProgressAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync(new FleeceTransitionResult { Success = true });
 
         var clientsMock = new Mock<IHubClients>();
         var clientProxyMock = new Mock<IClientProxy>();
@@ -715,7 +820,8 @@ public class ClaudeSessionServicePlanCaptureTests
             _hooksServiceMock.Object,
             _messageCacheMock.Object,
             _agentExecutionServiceMock.Object,
-            _agUIEventServiceMock.Object);
+            _agUIEventServiceMock.Object,
+            _fleeceTransitionServiceMock.Object);
     }
 
     [Test]
@@ -808,6 +914,7 @@ public class ClaudeSessionServiceResumeTests
     private Mock<IHooksService> _hooksServiceMock = null!;
     private Mock<IAgentExecutionService> _agentExecutionServiceMock = null!;
     private Mock<IAGUIEventService> _agUIEventServiceMock = null!;
+    private Mock<IFleeceIssueTransitionService> _fleeceTransitionServiceMock = null!;
     private string _testClaudeDir = null!;
 
     [SetUp]
@@ -828,6 +935,9 @@ public class ClaudeSessionServiceResumeTests
         _hooksServiceMock = new Mock<IHooksService>();
         _agentExecutionServiceMock = new Mock<IAgentExecutionService>();
         _agUIEventServiceMock = new Mock<IAGUIEventService>();
+        _fleeceTransitionServiceMock = new Mock<IFleeceIssueTransitionService>();
+        _fleeceTransitionServiceMock.Setup(s => s.TransitionToInProgressAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync(new FleeceTransitionResult { Success = true });
 
         var clientsMock = new Mock<IHubClients>();
         var clientProxyMock = new Mock<IClientProxy>();
@@ -846,7 +956,8 @@ public class ClaudeSessionServiceResumeTests
             _hooksServiceMock.Object,
             _messageCacheMock.Object,
             _agentExecutionServiceMock.Object,
-            _agUIEventServiceMock.Object);
+            _agUIEventServiceMock.Object,
+            _fleeceTransitionServiceMock.Object);
     }
 
     [TearDown]
@@ -1072,6 +1183,7 @@ public class ClaudeSessionServicePlanExecutionTests
     private Mock<IHooksService> _hooksServiceMock = null!;
     private Mock<IAgentExecutionService> _agentExecutionServiceMock = null!;
     private Mock<IAGUIEventService> _agUIEventServiceMock = null!;
+    private Mock<IFleeceIssueTransitionService> _fleeceTransitionServiceMock = null!;
 
     [SetUp]
     public void SetUp()
@@ -1088,6 +1200,9 @@ public class ClaudeSessionServicePlanExecutionTests
         _hooksServiceMock = new Mock<IHooksService>();
         _agentExecutionServiceMock = new Mock<IAgentExecutionService>();
         _agUIEventServiceMock = new Mock<IAGUIEventService>();
+        _fleeceTransitionServiceMock = new Mock<IFleeceIssueTransitionService>();
+        _fleeceTransitionServiceMock.Setup(s => s.TransitionToInProgressAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync(new FleeceTransitionResult { Success = true });
 
         var clientsMock = new Mock<IHubClients>();
         var clientProxyMock = new Mock<IClientProxy>();
@@ -1106,7 +1221,8 @@ public class ClaudeSessionServicePlanExecutionTests
             _hooksServiceMock.Object,
             _messageCacheMock.Object,
             _agentExecutionServiceMock.Object,
-            _agUIEventServiceMock.Object);
+            _agUIEventServiceMock.Object,
+            _fleeceTransitionServiceMock.Object);
     }
 
     /// <summary>
@@ -1278,6 +1394,7 @@ public class ClaudeSessionServiceQuestionPendingTests
     private Mock<IHooksService> _hooksServiceMock = null!;
     private Mock<IAgentExecutionService> _agentExecutionServiceMock = null!;
     private Mock<IAGUIEventService> _agUIEventServiceMock = null!;
+    private Mock<IFleeceIssueTransitionService> _fleeceTransitionServiceMock = null!;
 
     [SetUp]
     public void SetUp()
@@ -1294,6 +1411,9 @@ public class ClaudeSessionServiceQuestionPendingTests
         _hooksServiceMock = new Mock<IHooksService>();
         _agentExecutionServiceMock = new Mock<IAgentExecutionService>();
         _agUIEventServiceMock = new Mock<IAGUIEventService>();
+        _fleeceTransitionServiceMock = new Mock<IFleeceIssueTransitionService>();
+        _fleeceTransitionServiceMock.Setup(s => s.TransitionToInProgressAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync(new FleeceTransitionResult { Success = true });
 
         var clientsMock = new Mock<IHubClients>();
         var clientProxyMock = new Mock<IClientProxy>();
@@ -1312,7 +1432,8 @@ public class ClaudeSessionServiceQuestionPendingTests
             _hooksServiceMock.Object,
             _messageCacheMock.Object,
             _agentExecutionServiceMock.Object,
-            _agUIEventServiceMock.Object);
+            _agUIEventServiceMock.Object,
+            _fleeceTransitionServiceMock.Object);
     }
 
     private static async IAsyncEnumerable<SdkMessage> CreateSdkMessageStream(params SdkMessage[] messages)
@@ -1461,6 +1582,7 @@ public class ClaudeSessionServicePlanApprovalTests
     private Mock<IHooksService> _hooksServiceMock = null!;
     private Mock<IAgentExecutionService> _agentExecutionServiceMock = null!;
     private Mock<IAGUIEventService> _agUIEventServiceMock = null!;
+    private Mock<IFleeceIssueTransitionService> _fleeceTransitionServiceMock = null!;
 
     [SetUp]
     public void SetUp()
@@ -1477,6 +1599,9 @@ public class ClaudeSessionServicePlanApprovalTests
         _hooksServiceMock = new Mock<IHooksService>();
         _agentExecutionServiceMock = new Mock<IAgentExecutionService>();
         _agUIEventServiceMock = new Mock<IAGUIEventService>();
+        _fleeceTransitionServiceMock = new Mock<IFleeceIssueTransitionService>();
+        _fleeceTransitionServiceMock.Setup(s => s.TransitionToInProgressAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync(new FleeceTransitionResult { Success = true });
 
         var clientsMock = new Mock<IHubClients>();
         var clientProxyMock = new Mock<IClientProxy>();
@@ -1495,7 +1620,8 @@ public class ClaudeSessionServicePlanApprovalTests
             _hooksServiceMock.Object,
             _messageCacheMock.Object,
             _agentExecutionServiceMock.Object,
-            _agUIEventServiceMock.Object);
+            _agUIEventServiceMock.Object,
+            _fleeceTransitionServiceMock.Object);
     }
 
     private static async IAsyncEnumerable<SdkMessage> CreateSdkMessageStream(params SdkMessage[] messages)
@@ -1802,6 +1928,7 @@ public class ClaudeSessionServiceToolResultDetectionTests
     private Mock<IHooksService> _hooksServiceMock = null!;
     private Mock<IAgentExecutionService> _agentExecutionServiceMock = null!;
     private Mock<IAGUIEventService> _agUIEventServiceMock = null!;
+    private Mock<IFleeceIssueTransitionService> _fleeceTransitionServiceMock = null!;
 
     [SetUp]
     public void SetUp()
@@ -1818,6 +1945,9 @@ public class ClaudeSessionServiceToolResultDetectionTests
         _hooksServiceMock = new Mock<IHooksService>();
         _agentExecutionServiceMock = new Mock<IAgentExecutionService>();
         _agUIEventServiceMock = new Mock<IAGUIEventService>();
+        _fleeceTransitionServiceMock = new Mock<IFleeceIssueTransitionService>();
+        _fleeceTransitionServiceMock.Setup(s => s.TransitionToInProgressAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync(new FleeceTransitionResult { Success = true });
 
         var clientsMock = new Mock<IHubClients>();
         var clientProxyMock = new Mock<IClientProxy>();
@@ -1836,7 +1966,8 @@ public class ClaudeSessionServiceToolResultDetectionTests
             _hooksServiceMock.Object,
             _messageCacheMock.Object,
             _agentExecutionServiceMock.Object,
-            _agUIEventServiceMock.Object);
+            _agUIEventServiceMock.Object,
+            _fleeceTransitionServiceMock.Object);
     }
 
     private static async IAsyncEnumerable<SdkMessage> CreateSdkMessageStream(params SdkMessage[] messages)
@@ -2155,6 +2286,7 @@ public class ClaudeSessionServiceCloneStateTests
     private Mock<IHooksService> _hooksServiceMock = null!;
     private Mock<IAgentExecutionService> _agentExecutionServiceMock = null!;
     private Mock<IAGUIEventService> _agUIEventServiceMock = null!;
+    private Mock<IFleeceIssueTransitionService> _fleeceTransitionServiceMock = null!;
 
     [SetUp]
     public void SetUp()
@@ -2171,6 +2303,9 @@ public class ClaudeSessionServiceCloneStateTests
         _hooksServiceMock = new Mock<IHooksService>();
         _agentExecutionServiceMock = new Mock<IAgentExecutionService>();
         _agUIEventServiceMock = new Mock<IAGUIEventService>();
+        _fleeceTransitionServiceMock = new Mock<IFleeceIssueTransitionService>();
+        _fleeceTransitionServiceMock.Setup(s => s.TransitionToInProgressAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync(new FleeceTransitionResult { Success = true });
 
         var clientsMock = new Mock<IHubClients>();
         var clientProxyMock = new Mock<IClientProxy>();
@@ -2189,7 +2324,8 @@ public class ClaudeSessionServiceCloneStateTests
             _hooksServiceMock.Object,
             _messageCacheMock.Object,
             _agentExecutionServiceMock.Object,
-            _agUIEventServiceMock.Object);
+            _agUIEventServiceMock.Object,
+            _fleeceTransitionServiceMock.Object);
     }
 
     [Test]
@@ -2452,6 +2588,7 @@ public class ClaudeSessionServiceStatusBroadcastTests
     private Mock<IHooksService> _hooksServiceMock = null!;
     private Mock<IAgentExecutionService> _agentExecutionServiceMock = null!;
     private Mock<IAGUIEventService> _agUIEventServiceMock = null!;
+    private Mock<IFleeceIssueTransitionService> _fleeceTransitionServiceMock = null!;
     private Mock<IClientProxy> _clientProxyMock = null!;
     private List<(string Method, object?[] Args)> _broadcastCalls = null!;
 
@@ -2470,6 +2607,9 @@ public class ClaudeSessionServiceStatusBroadcastTests
         _hooksServiceMock = new Mock<IHooksService>();
         _agentExecutionServiceMock = new Mock<IAgentExecutionService>();
         _agUIEventServiceMock = new Mock<IAGUIEventService>();
+        _fleeceTransitionServiceMock = new Mock<IFleeceIssueTransitionService>();
+        _fleeceTransitionServiceMock.Setup(s => s.TransitionToInProgressAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync(new FleeceTransitionResult { Success = true });
         _broadcastCalls = new List<(string Method, object?[] Args)>();
 
         var clientsMock = new Mock<IHubClients>();
@@ -2502,7 +2642,8 @@ public class ClaudeSessionServiceStatusBroadcastTests
             _hooksServiceMock.Object,
             _messageCacheMock.Object,
             _agentExecutionServiceMock.Object,
-            _agUIEventServiceMock.Object);
+            _agUIEventServiceMock.Object,
+            _fleeceTransitionServiceMock.Object);
     }
 
     private static async IAsyncEnumerable<SdkMessage> CreateSdkMessageStream(params SdkMessage[] messages)

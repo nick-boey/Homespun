@@ -1,5 +1,3 @@
-using Fleece.Core.Models;
-using Homespun.Features.Fleece.Services;
 using Homespun.Features.PullRequests.Data;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Options;
@@ -11,7 +9,7 @@ namespace Homespun.Features.GitHub;
 /// This service:
 /// 1. Syncs PRs from GitHub (detects new PRs, links to issues)
 /// 2. Polls for review status updates
-/// 3. Closes linked issues when PRs are merged/closed
+/// 3. Resolves final PR status (merged/closed) and updates linked issues via PRStatusResolver
 /// </summary>
 public class GitHubSyncPollingService(
     IServiceScopeFactory scopeFactory,
@@ -98,47 +96,13 @@ public class GitHubSyncPollingService(
 
         if (syncResult.Imported > 0 || syncResult.Updated > 0 || syncResult.Removed > 0)
         {
-            // Close linked Fleece issues for removed (merged/closed) PRs
-            using var closeScope = scopeFactory.CreateScope();
-            var fleeceService = closeScope.ServiceProvider.GetRequiredService<IFleeceService>();
-            var prStatusResolver = closeScope.ServiceProvider.GetRequiredService<IPRStatusResolver>();
-
-            foreach (var removedPr in syncResult.RemovedPrs)
-            {
-                if (!string.IsNullOrEmpty(removedPr.BeadsIssueId))
-                {
-                    try
-                    {
-                        var updated = await fleeceService.UpdateIssueAsync(
-                            project.LocalPath,
-                            removedPr.BeadsIssueId,
-                            status: IssueStatus.Closed);
-
-                        if (updated != null)
-                        {
-                            logger.LogInformation(
-                                "Closed issue {IssueId} linked to merged/closed PR #{PrNumber}",
-                                removedPr.BeadsIssueId, removedPr.GitHubPrNumber);
-                        }
-                        else
-                        {
-                            logger.LogWarning(
-                                "Failed to close issue {IssueId} linked to merged/closed PR #{PrNumber}",
-                                removedPr.BeadsIssueId, removedPr.GitHubPrNumber);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        logger.LogError(ex,
-                            "Error closing issue {IssueId} linked to merged/closed PR #{PrNumber}",
-                            removedPr.BeadsIssueId, removedPr.GitHubPrNumber);
-                    }
-                }
-            }
-
-            // Resolve the final status (merged/closed) for removed PRs and update the graph cache
+            // Resolve the final status (merged/closed) for removed PRs, update the graph cache,
+            // and update linked Fleece issues via PRStatusResolver
             if (syncResult.RemovedPrs.Count > 0)
             {
+                using var resolverScope = scopeFactory.CreateScope();
+                var prStatusResolver = resolverScope.ServiceProvider.GetRequiredService<IPRStatusResolver>();
+
                 try
                 {
                     await prStatusResolver.ResolveClosedPRStatusesAsync(project.Id, syncResult.RemovedPrs);

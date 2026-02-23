@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Text.Json;
 using Homespun.ClaudeAgentSdk;
 using Homespun.Features.ClaudeCode.Hubs;
+using Homespun.Features.Fleece.Services;
 using Microsoft.AspNetCore.SignalR;
 using SharedPermissionMode = Homespun.Shared.Models.Sessions.PermissionMode;
 using AGUIEvents = Homespun.Shared.Models.Sessions;
@@ -101,6 +102,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
     private readonly IMessageCacheStore _messageCache;
     private readonly IAgentExecutionService _agentExecutionService;
     private readonly IAGUIEventService _agUIEventService;
+    private readonly IFleeceIssueTransitionService _fleeceTransitionService;
     private readonly ConcurrentDictionary<string, ClaudeAgentOptions> _sessionOptions = new();
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _sessionCts = new();
 
@@ -141,7 +143,8 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         IHooksService hooksService,
         IMessageCacheStore messageCache,
         IAgentExecutionService agentExecutionService,
-        IAGUIEventService agUIEventService)
+        IAGUIEventService agUIEventService,
+        IFleeceIssueTransitionService fleeceTransitionService)
     {
         _sessionStore = sessionStore;
         _optionsFactory = optionsFactory;
@@ -154,6 +157,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         _messageCache = messageCache;
         _agentExecutionService = agentExecutionService;
         _agUIEventService = agUIEventService;
+        _fleeceTransitionService = fleeceTransitionService;
     }
 
     /// <inheritdoc />
@@ -475,6 +479,19 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                     IssueId: session.EntityId,
                     ProjectId: session.ProjectId
                 );
+
+                // Transition the linked issue to Progress status when worker starts
+                if (!string.IsNullOrEmpty(session.EntityId) && !string.IsNullOrEmpty(session.ProjectId))
+                {
+                    var transitionResult = await _fleeceTransitionService.TransitionToInProgressAsync(
+                        session.ProjectId, session.EntityId);
+                    if (transitionResult.Success)
+                    {
+                        _logger.LogInformation("Issue {IssueId} transitioned to Progress for session {SessionId}",
+                            session.EntityId, sessionId);
+                    }
+                }
+
                 messageStream = _agentExecutionService.StartSessionAsync(startRequest, linkedCts.Token);
             }
             else
