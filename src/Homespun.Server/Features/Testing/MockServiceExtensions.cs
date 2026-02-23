@@ -1,5 +1,6 @@
 using Homespun.Features.AgentOrchestration.Services;
 using Homespun.Features.ClaudeCode.Services;
+using Homespun.Features.Containers.Services;
 using Homespun.Features.Design;
 using Homespun.Features.Fleece.Services;
 using Homespun.Features.Gitgraph.Services;
@@ -55,6 +56,9 @@ public static class MockServiceExtensions
         // Secrets service
         services.AddScoped<ISecretsService, MockSecretsService>();
 
+        // Container query service
+        services.AddScoped<IContainerQueryService, MockContainerQueryService>();
+
         // Fleece services (transition service depends on MockFleeceService)
         services.AddScoped<IFleeceIssueTransitionService, MockFleeceIssueTransitionService>();
         services.AddSingleton<IFleeceIssuesSyncService, MockFleeceIssuesSyncService>();
@@ -82,8 +86,11 @@ public static class MockServiceExtensions
         services.AddSingleton<IRebaseAgentService, MockRebaseAgentService>();
         services.AddSingleton<IAgentPromptService, MockAgentPromptService>();
 
-        // Agent Orchestration services - use real implementations
-        // These are lightweight services that work with the Claude SDK
+        // Agent Orchestration services - configure options and HTTP client first
+        services.Configure<MiniPromptOptions>(options => { });  // Empty config - uses defaults
+        services.AddHttpClient("MiniPrompt");  // Register named HTTP client
+
+        // Then register the services
         services.AddSingleton<IMiniPromptService, MiniPromptService>();
         services.AddSingleton<IBranchIdGeneratorService, BranchIdGeneratorService>();
 

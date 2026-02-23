@@ -3,6 +3,7 @@ import { serve } from '@hono/node-server';
 import health from './routes/health.js';
 import { createInfoRoute } from './routes/info.js';
 import { createSessionsRoute } from './routes/sessions.js';
+import { createMiniPromptRoute } from './routes/mini-prompt.js';
 import files from './routes/files.js';
 import { SessionManager } from './services/session-manager.js';
 import { info } from './utils/logger.js';
@@ -15,6 +16,7 @@ const api = new Hono();
 api.route('/health', health);
 api.route('/info', createInfoRoute(sessionManager));
 api.route('/sessions', createSessionsRoute(sessionManager));
+api.route('/mini-prompt', createMiniPromptRoute());
 api.route('/files', files);
 app.route('/api', api);
 

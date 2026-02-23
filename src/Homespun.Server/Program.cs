@@ -211,6 +211,9 @@ else
     builder.Services.AddSingleton<ITodoParser, TodoParser>();
 
     // Agent Orchestration services (mini-prompts, branch ID generation)
+    builder.Services.Configure<MiniPromptOptions>(
+        builder.Configuration.GetSection(MiniPromptOptions.SectionName));
+    builder.Services.AddHttpClient("MiniPrompt");
     builder.Services.AddSingleton<IMiniPromptService, MiniPromptService>();
     builder.Services.AddSingleton<IBranchIdGeneratorService, BranchIdGeneratorService>();
 
