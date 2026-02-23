@@ -153,4 +153,17 @@ public interface IFleeceService
     Task<Issue> RemoveParentAsync(string projectPath, string childId, string parentId, CancellationToken ct = default);
 
     #endregion
+
+    #region History Operations
+
+    /// <summary>
+    /// Applies issues from a history snapshot to the cache and persists to disk.
+    /// Used by undo/redo operations.
+    /// </summary>
+    /// <param name="projectPath">Path to the project.</param>
+    /// <param name="issues">The issues to apply from the snapshot.</param>
+    /// <param name="ct">Cancellation token</param>
+    Task ApplyHistorySnapshotAsync(string projectPath, IReadOnlyList<Issue> issues, CancellationToken ct = default);
+
+    #endregion
 }

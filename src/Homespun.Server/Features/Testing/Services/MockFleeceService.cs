@@ -352,6 +352,20 @@ public class MockFleeceService : IFleeceService
         }
     }
 
+    public Task ApplyHistorySnapshotAsync(string projectPath, IReadOnlyList<Issue> issues, CancellationToken ct = default)
+    {
+        _logger.LogDebug("[Mock] ApplyHistorySnapshot with {Count} issues for {ProjectPath}", issues.Count, projectPath);
+
+        var projectIssues = _issuesByProject.GetOrAdd(projectPath, _ => []);
+        lock (projectIssues)
+        {
+            projectIssues.Clear();
+            projectIssues.AddRange(issues);
+        }
+
+        return Task.CompletedTask;
+    }
+
     /// <summary>
     /// Seeds an issue directly for testing/demo purposes.
     /// </summary>

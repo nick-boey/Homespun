@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Text.Json;
 using Fleece.Core.Models;
 using Fleece.Core.Serialization;
 using Fleece.Core.Services;
@@ -21,12 +22,17 @@ public sealed class FleeceService : IFleeceService, IDisposable
     private readonly IIdGenerator _idGenerator;
     private readonly IGitConfigService _gitConfigService;
     private readonly IIssueSerializationQueue _serializationQueue;
+    private readonly IIssueHistoryService _historyService;
     private readonly ILogger<FleeceService> _logger;
     private bool _disposed;
 
-    public FleeceService(IIssueSerializationQueue serializationQueue, ILogger<FleeceService> logger)
+    public FleeceService(
+        IIssueSerializationQueue serializationQueue,
+        IIssueHistoryService historyService,
+        ILogger<FleeceService> logger)
     {
         _serializationQueue = serializationQueue;
+        _historyService = historyService;
         _logger = logger;
         _serializer = new JsonlSerializer();
         _idGenerator = new Sha256IdGenerator();
@@ -238,6 +244,9 @@ public sealed class FleeceService : IFleeceService, IDisposable
             executionMode.HasValue ? $" [ExecutionMode: {executionMode}]" : "",
             status.HasValue && status.Value != IssueStatus.Open ? $" [Status: {status}]" : "");
 
+        // Record history snapshot after create
+        await RecordHistorySnapshotAsync(projectPath, "Create", issue.Id, $"Created '{title}'", ct);
+
         return issue;
     }
 
@@ -316,6 +325,10 @@ public sealed class FleeceService : IFleeceService, IDisposable
                 issueId,
                 string.Join(", ", changes));
 
+            // Record history snapshot after update
+            var historyDescription = changes.Count > 0 ? $"Updated: {string.Join(", ", changes)}" : "Updated issue";
+            await RecordHistorySnapshotAsync(projectPath, "Update", issueId, historyDescription, ct);
+
             return issue;
         }
         catch (KeyNotFoundException)
@@ -361,6 +374,9 @@ public sealed class FleeceService : IFleeceService, IDisposable
             ), ct);
 
             _logger.LogInformation("Deleted issue '{IssueId}'", issueId);
+
+            // Record history snapshot after delete
+            await RecordHistorySnapshotAsync(projectPath, "Delete", issueId, $"Deleted issue '{issueId}'", ct);
         }
         else
         {
@@ -416,6 +432,9 @@ public sealed class FleeceService : IFleeceService, IDisposable
 
         _logger.LogInformation("Added parent '{ParentId}' to issue '{ChildId}'", parentId, childId);
 
+        // Record history snapshot after adding parent (merge operation)
+        await RecordHistorySnapshotAsync(projectPath, "AddParent", childId, $"Linked '{childId}' to parent '{parentId}'", ct);
+
         return issue;
     }
 
@@ -464,7 +483,81 @@ public sealed class FleeceService : IFleeceService, IDisposable
 
         _logger.LogInformation("Removed parent '{ParentId}' from issue '{ChildId}'", parentId, childId);
 
+        // Record history snapshot after removing parent
+        await RecordHistorySnapshotAsync(projectPath, "RemoveParent", childId, $"Unlinked '{childId}' from parent '{parentId}'", ct);
+
         return issue;
+    }
+
+    #endregion
+
+    #region History Operations
+
+    /// <summary>
+    /// Records a history snapshot of the current issues state.
+    /// </summary>
+    private async Task RecordHistorySnapshotAsync(
+        string projectPath,
+        string operationType,
+        string? issueId,
+        string? description,
+        CancellationToken ct)
+    {
+        try
+        {
+            var cache = await EnsureCacheLoadedAsync(projectPath, ct);
+            var issues = cache.Values.ToList();
+            await _historyService.RecordSnapshotAsync(projectPath, issues, operationType, issueId, description, ct);
+        }
+        catch (Exception ex)
+        {
+            // Don't fail the main operation if history recording fails
+            _logger.LogWarning(ex, "Failed to record history snapshot for {OperationType}", operationType);
+        }
+    }
+
+    /// <summary>
+    /// Applies issues from a history snapshot to the cache and persists to disk.
+    /// Used by undo/redo operations.
+    /// </summary>
+    public async Task ApplyHistorySnapshotAsync(string projectPath, IReadOnlyList<Issue> issues, CancellationToken ct = default)
+    {
+        // Clear and repopulate cache with snapshot issues
+        var cache = _issueCache.GetOrAdd(projectPath, _ => new ConcurrentDictionary<string, Issue>(StringComparer.OrdinalIgnoreCase));
+        cache.Clear();
+        foreach (var issue in issues)
+        {
+            cache[issue.Id] = issue;
+        }
+        _cacheInitialized[projectPath] = true;
+
+        // Write the issues directly to the .fleece/ folder using the serializer
+        var fleeceDir = Path.Combine(projectPath, ".fleece");
+        Directory.CreateDirectory(fleeceDir);
+
+        // Find and delete existing issues file(s)
+        var existingFiles = Directory.GetFiles(fleeceDir, "issues_*.jsonl");
+        foreach (var file in existingFiles)
+        {
+            File.Delete(file);
+        }
+
+        // Write new issues file with a deterministic name based on content hash
+        var issuesFile = Path.Combine(fleeceDir, $"issues_{Guid.NewGuid().ToString()[..6]}.jsonl");
+        var jsonOptions = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+        await using (var writer = new StreamWriter(issuesFile, false))
+        {
+            foreach (var issue in issues)
+            {
+                var json = JsonSerializer.Serialize(issue, jsonOptions);
+                await writer.WriteLineAsync(json);
+            }
+        }
+
+        // Reset the issue service so it reloads from the new file
+        _issueServices.TryRemove(projectPath, out _);
+
+        _logger.LogInformation("Applied history snapshot with {Count} issues to project {ProjectPath}", issues.Count, projectPath);
     }
 
     #endregion

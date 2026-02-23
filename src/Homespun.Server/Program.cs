@@ -116,6 +116,7 @@ else
     builder.Services.AddSingleton<IssueSerializationQueueService>();
     builder.Services.AddSingleton<IIssueSerializationQueue>(sp => sp.GetRequiredService<IssueSerializationQueueService>());
     builder.Services.AddHostedService(sp => sp.GetRequiredService<IssueSerializationQueueService>());
+    builder.Services.AddSingleton<IIssueHistoryService, IssueHistoryService>();
     builder.Services.AddSingleton<IFleeceService, FleeceService>();
     builder.Services.AddScoped<IFleeceIssueTransitionService, FleeceIssueTransitionService>();
     builder.Services.AddSingleton<IFleeceIssuesSyncService, FleeceIssuesSyncService>();

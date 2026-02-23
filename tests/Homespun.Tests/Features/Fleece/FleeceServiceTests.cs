@@ -11,6 +11,7 @@ public class FleeceServiceTests
     private string _tempDir = null!;
     private Mock<ILogger<FleeceService>> _mockLogger = null!;
     private Mock<IIssueSerializationQueue> _mockQueue = null!;
+    private Mock<IIssueHistoryService> _mockHistoryService = null!;
     private FleeceService _service = null!;
 
     [SetUp]
@@ -25,7 +26,18 @@ public class FleeceServiceTests
             .Setup(q => q.EnqueueAsync(It.IsAny<IssueWriteOperation>(), It.IsAny<CancellationToken>()))
             .Returns(ValueTask.CompletedTask);
 
-        _service = new FleeceService(_mockQueue.Object, _mockLogger.Object);
+        _mockHistoryService = new Mock<IIssueHistoryService>();
+        _mockHistoryService
+            .Setup(h => h.RecordSnapshotAsync(
+                It.IsAny<string>(),
+                It.IsAny<IReadOnlyList<Issue>>(),
+                It.IsAny<string>(),
+                It.IsAny<string?>(),
+                It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        _service = new FleeceService(_mockQueue.Object, _mockHistoryService.Object, _mockLogger.Object);
     }
 
     [TearDown]
