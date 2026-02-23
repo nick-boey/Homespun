@@ -699,6 +699,12 @@
         if (!NavService.PendingNewIssue.IsAbove &&
             NavService.PendingNewIssue.ReferenceIssueId == issueId)
         {
+            // Don't render here if this is the last issue - let ShouldInsertNewIssueAtEnd handle it
+            var issueLines = _renderLines.OfType<TaskGraphIssueRenderLine>().ToList();
+            if (issueLines.Count > 0 && issueLines[^1].IssueId == issueId)
+            {
+                return false;
+            }
             return true;
         }
 

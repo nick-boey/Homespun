@@ -666,4 +666,264 @@ public class TaskGraphViewTests : BunitTestContext
         Assert.That(badge.TagName.ToLower(), Is.EqualTo("a"), "Agent status badge on PR should be an <a> tag");
         Assert.That(badge.GetAttribute("href"), Is.EqualTo("/sessions/pr-session-456"), "Badge href should link to the session");
     }
+
+    #region Inline Issue Editor Bug Tests - Issue I2QGzX
+
+    /// <summary>
+    /// Sets up the services needed for inline editor tests (NavService and JSInterop).
+    /// </summary>
+    private void SetupInlineEditorServices(IKeyboardNavigationService navService)
+    {
+        Services.AddSingleton(navService);
+        // Setup bUnit JS interop to handle the focusWithCursor call used by InlineIssueEditor
+        Context!.JSInterop.SetupVoid("homespunInterop.focusWithCursor", _ => true);
+    }
+
+    /// <summary>
+    /// Creates a mock IKeyboardNavigationService with the specified pending new issue state.
+    /// </summary>
+    private static MockKeyboardNavigationService CreateMockNavService(PendingNewIssue? pendingNewIssue)
+    {
+        var mock = new MockKeyboardNavigationService
+        {
+            EditMode = pendingNewIssue != null ? KeyboardEditMode.CreatingNew : KeyboardEditMode.Viewing,
+            PendingNewIssue = pendingNewIssue
+        };
+        return mock;
+    }
+
+    [Test]
+    public void CreatingIssueBelow_LastIssue_ShowsOnlyOneInlineEditor()
+    {
+        // Arrange: Create a task graph with 3 issues
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes =
+            [
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "TEST-001", Title = "First issue", Status = IssueStatus.Open },
+                    Lane = 0, Row = 0, IsActionable = true
+                },
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "TEST-002", Title = "Middle issue", Status = IssueStatus.Open },
+                    Lane = 0, Row = 1, IsActionable = true
+                },
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "TEST-003", Title = "Last issue", Status = IssueStatus.Open },
+                    Lane = 0, Row = 2, IsActionable = true
+                }
+            ],
+            TotalLanes = 1
+        };
+
+        // Set up NavService to simulate pressing 'o' on the LAST issue (TEST-003)
+        var navService = CreateMockNavService(new PendingNewIssue
+        {
+            IsAbove = false, // 'o' command creates below
+            ReferenceIssueId = "TEST-003", // Last issue
+            Title = ""
+        });
+        SetupInlineEditorServices(navService);
+
+        // Act
+        var cut = Render<TaskGraphView>(p =>
+        {
+            p.Add(x => x.TaskGraph, taskGraph);
+            p.Add(x => x.NavService, navService);
+            p.Add(x => x.ProjectId, "test-project");
+        });
+
+        // Assert: Only ONE InlineIssueEditor should be rendered
+        var editors = cut.FindComponents<InlineIssueEditor>();
+        Assert.That(editors, Has.Count.EqualTo(1), "Expected exactly one InlineIssueEditor, but found " + editors.Count);
+
+        // Also verify by checking for the "NEW" badge (should appear only once)
+        var newBadges = cut.FindAll(".task-graph-issue-id-new");
+        Assert.That(newBadges, Has.Count.EqualTo(1), "Expected exactly one 'NEW' badge");
+    }
+
+    [Test]
+    public void CreatingIssueBelow_MiddleIssue_ShowsOnlyOneInlineEditor()
+    {
+        // Arrange: Create a task graph with 3 issues
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes =
+            [
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "TEST-001", Title = "First issue", Status = IssueStatus.Open },
+                    Lane = 0, Row = 0, IsActionable = true
+                },
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "TEST-002", Title = "Middle issue", Status = IssueStatus.Open },
+                    Lane = 0, Row = 1, IsActionable = true
+                },
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "TEST-003", Title = "Last issue", Status = IssueStatus.Open },
+                    Lane = 0, Row = 2, IsActionable = true
+                }
+            ],
+            TotalLanes = 1
+        };
+
+        // Set up NavService to simulate pressing 'o' on the MIDDLE issue (TEST-002)
+        var navService = CreateMockNavService(new PendingNewIssue
+        {
+            IsAbove = false, // 'o' command creates below
+            ReferenceIssueId = "TEST-002", // Middle issue
+            Title = ""
+        });
+        SetupInlineEditorServices(navService);
+
+        // Act
+        var cut = Render<TaskGraphView>(p =>
+        {
+            p.Add(x => x.TaskGraph, taskGraph);
+            p.Add(x => x.NavService, navService);
+            p.Add(x => x.ProjectId, "test-project");
+        });
+
+        // Assert: Only ONE InlineIssueEditor should be rendered
+        var editors = cut.FindComponents<InlineIssueEditor>();
+        Assert.That(editors, Has.Count.EqualTo(1), "Expected exactly one InlineIssueEditor");
+
+        // Verify it appears after TEST-002 but before TEST-003
+        var issueRows = cut.FindAll("[data-testid='task-graph-issue-row']");
+        Assert.That(issueRows, Has.Count.EqualTo(3), "Should still have 3 issue rows");
+    }
+
+    [Test]
+    public void CreatingIssueAbove_FirstIssue_ShowsOnlyOneInlineEditor()
+    {
+        // Arrange: Create a task graph with 3 issues
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes =
+            [
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "TEST-001", Title = "First issue", Status = IssueStatus.Open },
+                    Lane = 0, Row = 0, IsActionable = true
+                },
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "TEST-002", Title = "Middle issue", Status = IssueStatus.Open },
+                    Lane = 0, Row = 1, IsActionable = true
+                },
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "TEST-003", Title = "Last issue", Status = IssueStatus.Open },
+                    Lane = 0, Row = 2, IsActionable = true
+                }
+            ],
+            TotalLanes = 1
+        };
+
+        // Set up NavService to simulate pressing 'O' (Shift+O) on the FIRST issue (TEST-001)
+        var navService = CreateMockNavService(new PendingNewIssue
+        {
+            IsAbove = true, // 'O' command creates above
+            ReferenceIssueId = "TEST-001", // First issue
+            Title = ""
+        });
+        SetupInlineEditorServices(navService);
+
+        // Act
+        var cut = Render<TaskGraphView>(p =>
+        {
+            p.Add(x => x.TaskGraph, taskGraph);
+            p.Add(x => x.NavService, navService);
+            p.Add(x => x.ProjectId, "test-project");
+        });
+
+        // Assert: Only ONE InlineIssueEditor should be rendered
+        var editors = cut.FindComponents<InlineIssueEditor>();
+        Assert.That(editors, Has.Count.EqualTo(1), "Expected exactly one InlineIssueEditor");
+    }
+
+    [Test]
+    public void CreatingIssueBelow_SingleIssue_ShowsOnlyOneInlineEditor()
+    {
+        // Arrange: Create a task graph with only ONE issue (edge case)
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes =
+            [
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "TEST-001", Title = "Only issue", Status = IssueStatus.Open },
+                    Lane = 0, Row = 0, IsActionable = true
+                }
+            ],
+            TotalLanes = 1
+        };
+
+        // Set up NavService to simulate pressing 'o' on the only issue
+        var navService = CreateMockNavService(new PendingNewIssue
+        {
+            IsAbove = false,
+            ReferenceIssueId = "TEST-001",
+            Title = ""
+        });
+        SetupInlineEditorServices(navService);
+
+        // Act
+        var cut = Render<TaskGraphView>(p =>
+        {
+            p.Add(x => x.TaskGraph, taskGraph);
+            p.Add(x => x.NavService, navService);
+            p.Add(x => x.ProjectId, "test-project");
+        });
+
+        // Assert: Only ONE InlineIssueEditor should be rendered
+        var editors = cut.FindComponents<InlineIssueEditor>();
+        Assert.That(editors, Has.Count.EqualTo(1), "Expected exactly one InlineIssueEditor for single-issue case");
+    }
+
+    #endregion
+}
+
+/// <summary>
+/// Mock implementation of IKeyboardNavigationService for testing TaskGraphView rendering.
+/// </summary>
+public class MockKeyboardNavigationService : IKeyboardNavigationService
+{
+    public int SelectedIndex { get; set; }
+    public string? SelectedIssueId { get; set; }
+    public KeyboardEditMode EditMode { get; set; }
+    public InlineEditState? PendingEdit { get; set; }
+    public PendingNewIssue? PendingNewIssue { get; set; }
+    public string? ProjectId { get; set; }
+
+    public event Action? OnStateChanged;
+    public event Func<Task>? OnIssueChanged;
+
+    public void MoveUp() { }
+    public void MoveDown() { }
+    public void MoveToParent() { }
+    public void MoveToChild() { }
+    public void StartEditingAtStart() { }
+    public void StartEditingAtEnd() { }
+    public void StartReplacingTitle() { }
+    public void CreateIssueBelow() { }
+    public void CreateIssueAbove() { }
+    public void IndentAsChild() { }
+    public void UnindentAsSibling() { }
+    public void CancelEdit() { }
+    public Task AcceptEditAsync() => Task.CompletedTask;
+    public void UpdateEditTitle(string title) { }
+    public void Initialize(List<TaskGraphIssueRenderLine> renderLines) { }
+    public void SetProjectId(string projectId) => ProjectId = projectId;
+    public void SetTaskGraphNodes(List<TaskGraphNodeResponse> nodes) { }
+    public void SelectFirstActionable() { }
+    public void SelectIssue(string issueId) => SelectedIssueId = issueId;
+
+    // Helper to trigger state change
+    public void TriggerStateChanged() => OnStateChanged?.Invoke();
 }
