@@ -93,6 +93,16 @@
 </div>
 
 <div class="showcase-section">
+    <h3>Priority Markers (P0-P4)</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Lane 0 connectors colored by priority: P0=Red, P1=Orange, P2=Yellow, P3=Green, P4=Blue, None=Grey</div>
+        <div class="showcase-preview">
+            <TaskGraphView TaskGraph="@_priorityDemo" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
     <h3>Type Change Menu</h3>
     <div class="showcase-item">
         <div class="showcase-label">Click the type badge (Bug, Task, Feat, Chore) to open dropdown menu for changing issue type</div>
@@ -216,6 +226,30 @@
                 ParentIssues = [new() { ParentIssue = "TASK-003" }] }, Lane = 0, Row = 0, IsActionable = true },
             new() { Issue = new() { Id = "TASK-003", Title = "Design system architecture", Status = IssueStatus.Open }, Lane = 1, Row = 1, IsActionable = false },
             new() { Issue = new() { Id = "TASK-002", Title = "Write API tests", Status = IssueStatus.Open }, Lane = 0, Row = 2, IsActionable = true }
+        ]
+    };
+
+    private TaskGraphResponse _priorityDemo = new()
+    {
+        TotalLanes = 2,
+        MergedPrs =
+        [
+            new() { Number = 100, Title = "Initial commit", IsMerged = true, HasDescription = true }
+        ],
+        Nodes =
+        [
+            // P0 - Red (critical)
+            new() { Issue = new() { Id = "P0-001", Title = "P0 Critical: Security vulnerability", Status = IssueStatus.Open, Priority = 0, Type = IssueType.Bug }, Lane = 0, Row = 0, IsActionable = true },
+            // P1 - Orange
+            new() { Issue = new() { Id = "P1-001", Title = "P1 High: Performance regression", Status = IssueStatus.Open, Priority = 1, Type = IssueType.Bug }, Lane = 0, Row = 1, IsActionable = true },
+            // P2 - Yellow
+            new() { Issue = new() { Id = "P2-001", Title = "P2 Medium: UI inconsistency", Status = IssueStatus.Open, Priority = 2, Type = IssueType.Task }, Lane = 0, Row = 2, IsActionable = true },
+            // P3 - Green
+            new() { Issue = new() { Id = "P3-001", Title = "P3 Low: Documentation update", Status = IssueStatus.Open, Priority = 3, Type = IssueType.Chore }, Lane = 0, Row = 3, IsActionable = true },
+            // P4 - Blue
+            new() { Issue = new() { Id = "P4-001", Title = "P4 Lowest: Nice to have feature", Status = IssueStatus.Open, Priority = 4, Type = IssueType.Feature }, Lane = 0, Row = 4, IsActionable = true },
+            // No priority - Grey
+            new() { Issue = new() { Id = "NP-001", Title = "No priority: Unclassified issue", Status = IssueStatus.Open, Priority = null, Type = IssueType.Task }, Lane = 0, Row = 5, IsActionable = true }
         ]
     };
 

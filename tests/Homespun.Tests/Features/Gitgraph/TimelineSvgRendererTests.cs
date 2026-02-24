@@ -810,6 +810,59 @@ public class TimelineSvgRendererTests
 
     #endregion
 
+    #region GetPriorityColor Tests
+
+    [Test]
+    public void GetPriorityColor_Priority0_ReturnsRed()
+    {
+        var result = TimelineSvgRenderer.GetPriorityColor(0);
+        Assert.That(result, Is.EqualTo("#ef4444"));
+    }
+
+    [Test]
+    public void GetPriorityColor_Priority1_ReturnsOrange()
+    {
+        var result = TimelineSvgRenderer.GetPriorityColor(1);
+        Assert.That(result, Is.EqualTo("#f97316"));
+    }
+
+    [Test]
+    public void GetPriorityColor_Priority2_ReturnsYellow()
+    {
+        var result = TimelineSvgRenderer.GetPriorityColor(2);
+        Assert.That(result, Is.EqualTo("#eab308"));
+    }
+
+    [Test]
+    public void GetPriorityColor_Priority3_ReturnsGreen()
+    {
+        var result = TimelineSvgRenderer.GetPriorityColor(3);
+        Assert.That(result, Is.EqualTo("#22c55e"));
+    }
+
+    [Test]
+    public void GetPriorityColor_Priority4_ReturnsBlue()
+    {
+        var result = TimelineSvgRenderer.GetPriorityColor(4);
+        Assert.That(result, Is.EqualTo("#3b82f6"));
+    }
+
+    [Test]
+    public void GetPriorityColor_NullPriority_ReturnsGrey()
+    {
+        var result = TimelineSvgRenderer.GetPriorityColor(null);
+        Assert.That(result, Is.EqualTo("#6b7280"));
+    }
+
+    [Test]
+    public void GetPriorityColor_OutOfRangePriority_ReturnsGrey()
+    {
+        var result = TimelineSvgRenderer.GetPriorityColor(5);
+        Assert.That(result, Is.EqualTo("#6b7280"));
+    }
+
+    #endregion
+
     #region EscapeAttribute Tests (via public methods)
 
     [Test]
@@ -1175,6 +1228,64 @@ public class TimelineSvgRendererTests
         var lane0X = TimelineSvgRenderer.GetLaneCenterX(0); // 12
         Assert.That(svg, Does.Not.Contain($"M {lane0X} 0"),
             "Without lane 0 flags, should not draw anything at lane 0");
+    }
+
+    #endregion
+
+    #region GenerateTaskGraphCircleSvg Lane 0 Color Tests
+
+    [Test]
+    public void GenerateTaskGraphCircleSvg_Lane0PassThrough_WithCustomColor_UsesProvidedColor()
+    {
+        var svg = TimelineSvgRenderer.GenerateTaskGraphCircleSvg(
+            nodeLane: 2, parentLane: null, isFirstChild: false, maxLanes: 3,
+            nodeColor: "#3b82f6", isOutlineOnly: false, isActionable: false,
+            drawLane0PassThrough: true, lane0Color: "#ef4444");
+
+        var lane0X = TimelineSvgRenderer.GetLaneCenterX(0); // 12
+        Assert.That(svg, Does.Contain($"M {lane0X} 0 L {lane0X} {TimelineSvgRenderer.RowHeight}"),
+            "Should draw full vertical line at lane 0");
+        // Should use the provided color, not the default gray
+        Assert.That(svg, Does.Contain("stroke=\"#ef4444\""),
+            "Lane 0 connector should use provided priority color");
+    }
+
+    [Test]
+    public void GenerateTaskGraphCircleSvg_Lane0Connector_WithCustomColor_UsesProvidedColor()
+    {
+        var svg = TimelineSvgRenderer.GenerateTaskGraphCircleSvg(
+            nodeLane: 1, parentLane: null, isFirstChild: false, maxLanes: 2,
+            nodeColor: "#3b82f6", isOutlineOnly: false, isActionable: false,
+            drawLane0Connector: true, isLastLane0Connector: false, lane0Color: "#f97316");
+
+        // Should use the provided orange color
+        Assert.That(svg, Does.Contain("stroke=\"#f97316\""),
+            "Lane 0 connector should use provided priority color");
+    }
+
+    [Test]
+    public void GenerateTaskGraphCircleSvg_Lane0Connector_Last_WithCustomColor_UsesProvidedColor()
+    {
+        var svg = TimelineSvgRenderer.GenerateTaskGraphCircleSvg(
+            nodeLane: 1, parentLane: null, isFirstChild: false, maxLanes: 2,
+            nodeColor: "#3b82f6", isOutlineOnly: false, isActionable: false,
+            drawLane0Connector: true, isLastLane0Connector: true, lane0Color: "#22c55e");
+
+        // Should use the provided green color for the arc path
+        Assert.That(svg, Does.Contain("stroke=\"#22c55e\""),
+            "Last lane 0 connector should use provided priority color");
+    }
+
+    [Test]
+    public void GenerateTaskGraphCircleSvg_Lane0Connector_NullColor_UsesDefaultGrey()
+    {
+        var svg = TimelineSvgRenderer.GenerateTaskGraphCircleSvg(
+            nodeLane: 1, parentLane: null, isFirstChild: false, maxLanes: 2,
+            nodeColor: "#3b82f6", isOutlineOnly: false, isActionable: false,
+            drawLane0Connector: true, isLastLane0Connector: false, lane0Color: null);
+
+        Assert.That(svg, Does.Contain("stroke=\"#6b7280\""),
+            "Lane 0 connector should use default grey when no color provided");
     }
 
     #endregion
