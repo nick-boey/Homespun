@@ -2153,4 +2153,62 @@ public class KeyboardNavigationServiceTests
     }
 
     #endregion
+
+    #region Open Edit Tests
+
+    [Test]
+    public void OpenSelectedIssueForEdit_WithSelection_FiresOnOpenEditRequested()
+    {
+        _service.Initialize(_sampleRenderLines);
+        _service.SelectFirstActionable();
+        string? requestedIssueId = null;
+        _service.OnOpenEditRequested += (issueId) => requestedIssueId = issueId;
+
+        _service.OpenSelectedIssueForEdit();
+
+        Assert.That(requestedIssueId, Is.EqualTo("ISSUE-001"));
+    }
+
+    [Test]
+    public void OpenSelectedIssueForEdit_NoSelection_DoesNotFire()
+    {
+        _service.Initialize(_sampleRenderLines);
+        // No selection made (SelectedIndex = -1)
+        var eventFired = false;
+        _service.OnOpenEditRequested += (_) => eventFired = true;
+
+        _service.OpenSelectedIssueForEdit();
+
+        Assert.That(eventFired, Is.False);
+    }
+
+    [Test]
+    public void OpenSelectedIssueForEdit_DuringEditMode_DoesNotFire()
+    {
+        _service.Initialize(_sampleRenderLines);
+        _service.SelectFirstActionable();
+        _service.StartEditingAtStart(); // Enter edit mode
+        var eventFired = false;
+        _service.OnOpenEditRequested += (_) => eventFired = true;
+
+        _service.OpenSelectedIssueForEdit();
+
+        Assert.That(eventFired, Is.False);
+    }
+
+    [Test]
+    public void OpenSelectedIssueForEdit_DuringCreateMode_DoesNotFire()
+    {
+        _service.Initialize(_sampleRenderLines);
+        _service.SelectFirstActionable();
+        _service.CreateIssueBelow(); // Enter create mode
+        var eventFired = false;
+        _service.OnOpenEditRequested += (_) => eventFired = true;
+
+        _service.OpenSelectedIssueForEdit();
+
+        Assert.That(eventFired, Is.False);
+    }
+
+    #endregion
 }

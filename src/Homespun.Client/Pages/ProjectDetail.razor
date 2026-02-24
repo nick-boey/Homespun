@@ -577,6 +577,7 @@ else
             }
 
             NavService.OnStateChanged += OnNavServiceStateChanged;
+            NavService.OnOpenEditRequested += OnOpenEditRequested;
         }
     }
 
@@ -622,6 +623,11 @@ else
             });
         }
         _previousEditMode = currentMode;
+    }
+
+    private void OnOpenEditRequested(string issueId)
+    {
+        HandleEditIssue(issueId);
     }
 
     private void SwitchTab(string tab)
@@ -670,6 +676,7 @@ else
     {
         StartupTracker.OnStateChanged -= OnStartupStateChanged;
         NavService.OnStateChanged -= OnNavServiceStateChanged;
+        NavService.OnOpenEditRequested -= OnOpenEditRequested;
     }
 
     public async ValueTask DisposeAsync()
@@ -1690,6 +1697,9 @@ else
                 break;
             case "O":
                 NavService.CreateIssueAbove();
+                break;
+            case "Enter":
+                NavService.OpenSelectedIssueForEdit();
                 break;
             case "Escape":
                 // Clear selection or close sidebar panel

@@ -906,6 +906,7 @@ public class MockKeyboardNavigationService : IKeyboardNavigationService
 
     public event Action? OnStateChanged;
     public event Func<Task>? OnIssueChanged;
+    public event Action<string>? OnOpenEditRequested;
 
     public void MoveUp() { }
     public void MoveDown() { }
@@ -928,6 +929,7 @@ public class MockKeyboardNavigationService : IKeyboardNavigationService
     public void SetTaskGraphNodes(List<TaskGraphNodeResponse> nodes) { }
     public void SelectFirstActionable() { }
     public void SelectIssue(string issueId) => SelectedIssueId = issueId;
+    public void OpenSelectedIssueForEdit() => OnOpenEditRequested?.Invoke(SelectedIssueId ?? "");
 
     // Helper to trigger state change
     public void TriggerStateChanged() => OnStateChanged?.Invoke();

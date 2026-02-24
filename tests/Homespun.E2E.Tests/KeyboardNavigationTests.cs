@@ -162,4 +162,29 @@ public class KeyboardNavigationTests : PageTest
         // which would navigate away from the page. The key test is that navigation
         // still works, confirming our selective prevention mechanism is functioning.
     }
+
+    [Test]
+    public async Task EnterKey_WhenIssueSelected_NavigatesToEditPage()
+    {
+        // Navigate to the demo project page
+        await Page.GotoAsync($"{BaseUrl}/projects/demo-project");
+        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+
+        // Wait for task graph to render
+        var taskGraphRow = Page.Locator(".task-graph-row").First;
+        await Expect(taskGraphRow).ToBeVisibleAsync(new() { Timeout = 10000 });
+
+        // Press j to select the first issue
+        await Page.Keyboard.PressAsync("j");
+
+        // Verify a row is selected
+        var selectedRow = Page.Locator(".task-graph-row-selected");
+        await Expect(selectedRow).ToBeVisibleAsync(new() { Timeout = 5000 });
+
+        // Press Enter to open the edit page
+        await Page.Keyboard.PressAsync("Enter");
+
+        // Verify we navigated to the edit page by checking the URL contains /edit
+        await Expect(Page).ToHaveURLAsync(new System.Text.RegularExpressions.Regex("/issues/.+/edit"), new() { Timeout = 5000 });
+    }
 }
