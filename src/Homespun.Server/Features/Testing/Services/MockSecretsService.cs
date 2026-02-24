@@ -133,6 +133,28 @@ public partial class MockSecretsService : ISecretsService
         return Task.FromResult(secrets);
     }
 
+    public Task<Dictionary<string, string>> GetSecretsForInjectionByProjectIdAsync(string projectId)
+    {
+        _logger.LogDebug("[Mock] GetSecretsForInjectionByProjectId for project {ProjectId}", projectId);
+
+        var project = _dataStore.GetProject(projectId);
+        if (project == null)
+        {
+            _logger.LogWarning("[Mock] Project {ProjectId} not found when getting secrets for injection", projectId);
+            return Task.FromResult(new Dictionary<string, string>());
+        }
+
+        if (!_secrets.TryGetValue(projectId, out var projectSecrets))
+        {
+            return Task.FromResult(new Dictionary<string, string>());
+        }
+
+        var secrets = new Dictionary<string, string>(projectSecrets);
+        _logger.LogDebug("[Mock] Loaded {Count} secrets for injection from project {ProjectId}", secrets.Count, projectId);
+
+        return Task.FromResult(secrets);
+    }
+
     /// <summary>
     /// Validates a secret name is a valid environment variable name.
     /// </summary>

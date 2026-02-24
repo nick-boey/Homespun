@@ -1225,7 +1225,7 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
             ? $"{issueBasePath}/.claude"
             : null;
         var (containerId, workerUrl) = await StartContainerAsync(
-            containerName, effectiveWorkingDirectory, useRm: false, claudePath, issueId, projectName, cancellationToken);
+            containerName, effectiveWorkingDirectory, useRm: false, claudePath, issueId, projectName, projectId, cancellationToken);
 
         // Track both by (projectId, issueId) and by workingDirectory
         _issueContainers[key] = new IssueContainer(projectId, issueId, containerId, containerName, workerUrl, DateTime.UtcNow);
@@ -1335,6 +1335,7 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
     /// <param name="claudePath">Explicit path to .claude directory. If null, derived from workingDirectory parent.</param>
     /// <param name="issueId">Optional issue ID for environment variable.</param>
     /// <param name="projectName">Optional project name for environment variable.</param>
+    /// <param name="projectId">Optional project ID for secret injection.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     private async Task<(string containerId, string workerUrl)> StartContainerAsync(
         string containerName,
@@ -1343,6 +1344,7 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         string? claudePath = null,
         string? issueId = null,
         string? projectName = null,
+        string? projectId = null,
         CancellationToken cancellationToken = default)
     {
         EnsureClaudeDirectoryExists(workingDirectory, claudePath);
@@ -1350,7 +1352,7 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
 
         // Append project-specific secrets as environment variables
         var secretsArgs = new StringBuilder();
-        await AppendProjectSecretsAsync(secretsArgs, workingDirectory);
+        await AppendProjectSecretsAsync(secretsArgs, projectId);
         if (secretsArgs.Length > 0)
         {
             // Insert secrets before the image name (at the end of the args)
@@ -1433,12 +1435,18 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
     /// Appends project-specific secrets from secrets.env as environment variables.
     /// </summary>
     /// <param name="dockerArgs">The StringBuilder for Docker arguments.</param>
-    /// <param name="workingDirectory">Working directory to derive project path from.</param>
-    private async Task AppendProjectSecretsAsync(StringBuilder dockerArgs, string workingDirectory)
+    /// <param name="projectId">Project ID to look up secrets. If null, no secrets are injected.</param>
+    private async Task AppendProjectSecretsAsync(StringBuilder dockerArgs, string? projectId)
     {
+        if (string.IsNullOrEmpty(projectId))
+        {
+            _logger.LogDebug("No project ID provided, skipping secret injection");
+            return;
+        }
+
         try
         {
-            var secrets = await _secretsService.GetSecretsForInjectionAsync(workingDirectory);
+            var secrets = await _secretsService.GetSecretsForInjectionByProjectIdAsync(projectId);
             foreach (var (name, value) in secrets)
             {
                 // Escape double quotes and backslashes in the value for shell safety
@@ -1449,12 +1457,12 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
 
             if (secrets.Count > 0)
             {
-                _logger.LogInformation("Injected {Count} project secrets into agent container", secrets.Count);
+                _logger.LogInformation("Injected {Count} project secrets into agent container for project {ProjectId}", secrets.Count, projectId);
             }
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to load project secrets for container, continuing without secrets");
+            _logger.LogWarning(ex, "Failed to load project secrets for container (project {ProjectId}), continuing without secrets", projectId);
         }
     }
 

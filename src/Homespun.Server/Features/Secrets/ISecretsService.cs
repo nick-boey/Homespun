@@ -38,4 +38,11 @@ public interface ISecretsService
     /// <param name="projectPath">Path to project folder (can be branch path, will resolve to project root).</param>
     /// <returns>Dictionary of secret name to value pairs.</returns>
     Task<Dictionary<string, string>> GetSecretsForInjectionAsync(string projectPath);
+
+    /// <summary>
+    /// Gets all secrets as key-value pairs for container injection by project ID.
+    /// </summary>
+    /// <param name="projectId">The project ID.</param>
+    /// <returns>Dictionary of secret name to value pairs, empty if project not found.</returns>
+    Task<Dictionary<string, string>> GetSecretsForInjectionByProjectIdAsync(string projectId);
 }

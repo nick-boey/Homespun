@@ -370,6 +370,72 @@ public class SecretsServiceTests
 
     #endregion
 
+    #region GetSecretsForInjectionByProjectIdAsync Tests
+
+    [Test]
+    public async Task GetSecretsForInjectionByProjectIdAsync_ReturnsKeyValuePairs()
+    {
+        // Arrange
+        var project = CreateTestProject();
+        _mockProjectService.Setup(p => p.GetByIdAsync(project.Id)).ReturnsAsync(project);
+        File.WriteAllText(_testSecretsFilePath, "API_KEY=secret123\nDATABASE_URL=postgres://localhost\n");
+
+        // Act
+        var result = await _service.GetSecretsForInjectionByProjectIdAsync(project.Id);
+
+        // Assert
+        Assert.That(result, Has.Count.EqualTo(2));
+        Assert.That(result["API_KEY"], Is.EqualTo("secret123"));
+        Assert.That(result["DATABASE_URL"], Is.EqualTo("postgres://localhost"));
+    }
+
+    [Test]
+    public async Task GetSecretsForInjectionByProjectIdAsync_ProjectNotFound_ReturnsEmpty()
+    {
+        // Arrange
+        _mockProjectService.Setup(p => p.GetByIdAsync("nonexistent")).ReturnsAsync((Project?)null);
+
+        // Act
+        var result = await _service.GetSecretsForInjectionByProjectIdAsync("nonexistent");
+
+        // Assert
+        Assert.That(result, Is.Empty);
+    }
+
+    [Test]
+    public async Task GetSecretsForInjectionByProjectIdAsync_NoSecretsFile_ReturnsEmpty()
+    {
+        // Arrange
+        var project = CreateTestProject();
+        _mockProjectService.Setup(p => p.GetByIdAsync(project.Id)).ReturnsAsync(project);
+        // Don't create secrets file
+
+        // Act
+        var result = await _service.GetSecretsForInjectionByProjectIdAsync(project.Id);
+
+        // Assert
+        Assert.That(result, Is.Empty);
+    }
+
+    [Test]
+    public async Task GetSecretsForInjectionByProjectIdAsync_WithCommentsAndEmptyLines_ParsesCorrectly()
+    {
+        // Arrange
+        var project = CreateTestProject();
+        _mockProjectService.Setup(p => p.GetByIdAsync(project.Id)).ReturnsAsync(project);
+        File.WriteAllText(_testSecretsFilePath, "# This is a comment\nAPI_KEY=secret123\n\nDATABASE_URL=postgres://localhost\n");
+
+        // Act
+        var result = await _service.GetSecretsForInjectionByProjectIdAsync(project.Id);
+
+        // Assert
+        Assert.That(result, Has.Count.EqualTo(2));
+        Assert.That(result["API_KEY"], Is.EqualTo("secret123"));
+        Assert.That(result["DATABASE_URL"], Is.EqualTo("postgres://localhost"));
+    }
+
+    #endregion
+
     #region Helper Methods
 
     private Project CreateTestProject()
