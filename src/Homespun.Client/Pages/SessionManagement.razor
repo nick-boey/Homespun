@@ -1,17 +1,17 @@
-@page "/sessions"
+@page "/agents"
 @implements IAsyncDisposable
 @inject HttpSessionApiService SessionStoreApi
 @inject IBreadcrumbService BreadcrumbService
 
-<PageTitle>Sessions - Homespun</PageTitle>
+<PageTitle>Agents - Homespun</PageTitle>
 
-<h1>Sessions</h1>
+<h1>Agents</h1>
 
 <div class="agent-management-page">
     @if (_isLoading)
     {
         <div class="py-5">
-            <LoadingSpinner Size="SpinnerSize.Lg" Label="Loading sessions..." Centered="true" />
+            <LoadingSpinner Size="SpinnerSize.Lg" Label="Loading agents..." Centered="true" />
         </div>
     }
     else
@@ -32,7 +32,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        await BreadcrumbService.SetContextAsync(new BreadcrumbContext { PageName = "Sessions" });
+        await BreadcrumbService.SetContextAsync(new BreadcrumbContext { PageName = "Agents" });
         _isLoading = false;
     }
 

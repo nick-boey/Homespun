@@ -3,8 +3,8 @@
 <div class="agent-selector">
     <div class="d-flex gap-2 align-items-end">
         <div class="flex-grow-1">
-            <label class="form-label small mb-1">Agent</label>
-            <select class="form-select form-select-sm" @bind="_selectedPromptId" disabled="@Disabled" aria-label="Select agent prompt">
+            <label class="form-label small mb-1">Prompt</label>
+            <select class="form-select form-select-sm" @bind="_selectedPromptId" disabled="@Disabled" aria-label="Select prompt">
                 <option value="">None (no prompt)</option>
                 @foreach (var prompt in _prompts)
                 {
@@ -14,7 +14,7 @@
                 }
             </select>
         </div>
-        <button class="btn btn-sm btn-success" @onclick="HandleStart" disabled="@(Disabled || IsStarting)" aria-label="Start agent session" aria-busy="@IsStarting">
+        <button class="btn btn-sm btn-success" @onclick="HandleStart" disabled="@(Disabled || IsStarting)" aria-label="Start agent" aria-busy="@IsStarting">
             @if (IsStarting)
             {
                 <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
