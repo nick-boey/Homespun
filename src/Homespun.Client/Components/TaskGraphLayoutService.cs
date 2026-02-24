@@ -99,17 +99,41 @@ public static class TaskGraphLayoutService
 
             if (firstIdx >= 0)
             {
+                // First pass: find the last issue that actually gets a connector
+                // (blocked series siblings don't get connectors)
+                var lastConnectorIdx = -1;
+                for (var i = firstIdx; i <= lastIdx; i++)
+                {
+                    if (result[i] is TaskGraphIssueRenderLine irl && irl.Lane == laneOffset)
+                    {
+                        var isBlockedSeriesSibling = irl.IsSeriesChild && irl.DrawTopLine;
+                        if (!isBlockedSeriesSibling)
+                        {
+                            lastConnectorIdx = i;
+                        }
+                    }
+                }
+
+                // Second pass: apply the flags
                 for (var i = firstIdx; i <= lastIdx; i++)
                 {
                     if (result[i] is TaskGraphIssueRenderLine irl)
                     {
                         if (irl.Lane == laneOffset)
                         {
-                            result[i] = irl with
+                            var isBlockedSeriesSibling = irl.IsSeriesChild && irl.DrawTopLine;
+                            if (isBlockedSeriesSibling)
                             {
-                                DrawLane0Connector = true,
-                                IsLastLane0Connector = i == lastIdx
-                            };
+                                result[i] = irl with { DrawLane0PassThrough = true };
+                            }
+                            else
+                            {
+                                result[i] = irl with
+                                {
+                                    DrawLane0Connector = true,
+                                    IsLastLane0Connector = i == lastConnectorIdx
+                                };
+                            }
                         }
                         else
                         {
