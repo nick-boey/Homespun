@@ -221,8 +221,9 @@
                                         EntityId="@GetCloneEntityId(clone)"
                                         ClonePath="@clone.Path"
                                         ProjectId="@Project.Id"
-                                        Model="@(Project.DefaultModel ?? "sonnet")"
+                                        Model="@(Project.DefaultModel ?? "opus")"
                                         SystemPrompt="@($"You are working on branch: {branchName}")"
+                                        BranchName="@branchName"
                                         Compact="true"
                                         Disabled="@_operationInProgress" />
 
