@@ -929,6 +929,247 @@ public class TaskGraphLayoutServiceTests
         Assert.That(issueLines.First(l => l.IssueId == "ISSUE-002").IsLastLane0Connector, Is.True);
     }
 
+    [Test]
+    public void ComputeLayout_MergedPrs_SeriesSiblingsInLane0_OnlyFirstGetsConnector()
+    {
+        // When series siblings are in lane 0 (offset to lane 1 with PRs),
+        // only the first sibling should get DrawLane0Connector = true.
+        // Subsequent siblings (with DrawTopLine = true) should get DrawLane0PassThrough = true.
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes =
+            [
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "CHILD-A", Title = "First series sibling", Status = IssueStatus.Open,
+                        ParentIssues = [new ParentIssueRefResponse { ParentIssue = "PARENT-001" }] },
+                    Lane = 0, Row = 0, IsActionable = true
+                },
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "CHILD-B", Title = "Second series sibling", Status = IssueStatus.Open,
+                        ParentIssues = [new ParentIssueRefResponse { ParentIssue = "PARENT-001" }] },
+                    Lane = 0, Row = 1, IsActionable = false
+                },
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "CHILD-C", Title = "Third series sibling", Status = IssueStatus.Open,
+                        ParentIssues = [new ParentIssueRefResponse { ParentIssue = "PARENT-001" }] },
+                    Lane = 0, Row = 2, IsActionable = false
+                },
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "PARENT-001", Title = "Series parent", Status = IssueStatus.Open,
+                        ExecutionMode = ExecutionMode.Series },
+                    Lane = 1, Row = 3, IsActionable = false
+                }
+            ],
+            TotalLanes = 2,
+            MergedPrs =
+            [
+                new TaskGraphPrResponse { Number = 100, Title = "PR 100", IsMerged = true }
+            ]
+        };
+
+        var result = TaskGraphLayoutService.ComputeLayout(taskGraph);
+        var issueLines = result.OfType<TaskGraphIssueRenderLine>().ToList();
+
+        // First series sibling: gets connector (is the "next" actionable item)
+        var childA = issueLines.First(l => l.IssueId == "CHILD-A");
+        Assert.That(childA.DrawLane0Connector, Is.True, "First series sibling should get connector");
+        Assert.That(childA.DrawLane0PassThrough, Is.False);
+        Assert.That(childA.IsSeriesChild, Is.True);
+        Assert.That(childA.DrawTopLine, Is.False, "First series sibling has no top line");
+
+        // Second series sibling: gets pass-through only (blocked)
+        var childB = issueLines.First(l => l.IssueId == "CHILD-B");
+        Assert.That(childB.DrawLane0Connector, Is.False, "Blocked series sibling should NOT get connector");
+        Assert.That(childB.DrawLane0PassThrough, Is.True, "Blocked series sibling should get pass-through");
+        Assert.That(childB.IsSeriesChild, Is.True);
+        Assert.That(childB.DrawTopLine, Is.True, "Non-first series sibling has top line");
+
+        // Third series sibling: gets pass-through only (blocked)
+        var childC = issueLines.First(l => l.IssueId == "CHILD-C");
+        Assert.That(childC.DrawLane0Connector, Is.False, "Blocked series sibling should NOT get connector");
+        Assert.That(childC.DrawLane0PassThrough, Is.True, "Blocked series sibling should get pass-through");
+        Assert.That(childC.IsSeriesChild, Is.True);
+        Assert.That(childC.DrawTopLine, Is.True);
+
+        // Parent at lane 2 (offset from 1): no lane 0 flags (it's after all leftmost issues)
+        var parent = issueLines.First(l => l.IssueId == "PARENT-001");
+        Assert.That(parent.DrawLane0Connector, Is.False);
+        Assert.That(parent.DrawLane0PassThrough, Is.False, "Parent is after all leftmost issues, no lane 0 flags");
+    }
+
+    [Test]
+    public void ComputeLayout_MergedPrs_SeriesSiblings_IsLastLane0ConnectorCorrect()
+    {
+        // When blocked series siblings follow the first sibling, IsLastLane0Connector
+        // should be on the first sibling (since it's the only one getting a connector).
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes =
+            [
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "CHILD-A", Title = "First series sibling", Status = IssueStatus.Open,
+                        ParentIssues = [new ParentIssueRefResponse { ParentIssue = "PARENT-001" }] },
+                    Lane = 0, Row = 0, IsActionable = true
+                },
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "CHILD-B", Title = "Second series sibling", Status = IssueStatus.Open,
+                        ParentIssues = [new ParentIssueRefResponse { ParentIssue = "PARENT-001" }] },
+                    Lane = 0, Row = 1, IsActionable = false
+                },
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "PARENT-001", Title = "Series parent", Status = IssueStatus.Open,
+                        ExecutionMode = ExecutionMode.Series },
+                    Lane = 1, Row = 2, IsActionable = false
+                }
+            ],
+            TotalLanes = 2,
+            MergedPrs =
+            [
+                new TaskGraphPrResponse { Number = 100, Title = "PR 100", IsMerged = true }
+            ]
+        };
+
+        var result = TaskGraphLayoutService.ComputeLayout(taskGraph);
+        var issueLines = result.OfType<TaskGraphIssueRenderLine>().ToList();
+
+        // First sibling gets connector AND is last connector (since subsequent siblings are blocked)
+        var childA = issueLines.First(l => l.IssueId == "CHILD-A");
+        Assert.That(childA.DrawLane0Connector, Is.True);
+        Assert.That(childA.IsLastLane0Connector, Is.True, "First sibling should be last connector when others are blocked");
+
+        // Second sibling gets pass-through, NOT marked as last connector
+        var childB = issueLines.First(l => l.IssueId == "CHILD-B");
+        Assert.That(childB.DrawLane0Connector, Is.False);
+        Assert.That(childB.IsLastLane0Connector, Is.False);
+    }
+
+    [Test]
+    public void ComputeLayout_MergedPrs_MixedSeriesAndOrphans_CorrectConnectors()
+    {
+        // Mix of series siblings and orphans - orphans should always get connectors
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes =
+            [
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "ORPHAN-001", Title = "Orphan before", Status = IssueStatus.Open },
+                    Lane = 0, Row = 0, IsActionable = true
+                },
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "CHILD-A", Title = "First series sibling", Status = IssueStatus.Open,
+                        ParentIssues = [new ParentIssueRefResponse { ParentIssue = "PARENT-001" }] },
+                    Lane = 0, Row = 1, IsActionable = true
+                },
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "CHILD-B", Title = "Second series sibling", Status = IssueStatus.Open,
+                        ParentIssues = [new ParentIssueRefResponse { ParentIssue = "PARENT-001" }] },
+                    Lane = 0, Row = 2, IsActionable = false
+                },
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "PARENT-001", Title = "Series parent", Status = IssueStatus.Open,
+                        ExecutionMode = ExecutionMode.Series },
+                    Lane = 1, Row = 3, IsActionable = false
+                },
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "ORPHAN-002", Title = "Orphan after", Status = IssueStatus.Open },
+                    Lane = 0, Row = 4, IsActionable = true
+                }
+            ],
+            TotalLanes = 2,
+            MergedPrs =
+            [
+                new TaskGraphPrResponse { Number = 100, Title = "PR 100", IsMerged = true }
+            ]
+        };
+
+        var result = TaskGraphLayoutService.ComputeLayout(taskGraph);
+        var issueLines = result.OfType<TaskGraphIssueRenderLine>().ToList();
+
+        // Orphan before: connector, not last
+        var orphan1 = issueLines.First(l => l.IssueId == "ORPHAN-001");
+        Assert.That(orphan1.DrawLane0Connector, Is.True);
+        Assert.That(orphan1.IsLastLane0Connector, Is.False);
+
+        // First series sibling: connector, not last
+        var childA = issueLines.First(l => l.IssueId == "CHILD-A");
+        Assert.That(childA.DrawLane0Connector, Is.True);
+        Assert.That(childA.IsLastLane0Connector, Is.False);
+
+        // Second series sibling: pass-through only
+        var childB = issueLines.First(l => l.IssueId == "CHILD-B");
+        Assert.That(childB.DrawLane0Connector, Is.False);
+        Assert.That(childB.DrawLane0PassThrough, Is.True);
+
+        // Parent: pass-through (at lane 2)
+        var parent = issueLines.First(l => l.IssueId == "PARENT-001");
+        Assert.That(parent.DrawLane0PassThrough, Is.True);
+
+        // Orphan after: connector AND last connector
+        var orphan2 = issueLines.First(l => l.IssueId == "ORPHAN-002");
+        Assert.That(orphan2.DrawLane0Connector, Is.True);
+        Assert.That(orphan2.IsLastLane0Connector, Is.True);
+    }
+
+    [Test]
+    public void ComputeLayout_MergedPrs_ParallelSiblingsInLane0_AllGetConnectors()
+    {
+        // Parallel siblings (non-series) should ALL get connectors as before
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes =
+            [
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "CHILD-A", Title = "First parallel sibling", Status = IssueStatus.Open,
+                        ParentIssues = [new ParentIssueRefResponse { ParentIssue = "PARENT-001" }] },
+                    Lane = 0, Row = 0, IsActionable = true
+                },
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "CHILD-B", Title = "Second parallel sibling", Status = IssueStatus.Open,
+                        ParentIssues = [new ParentIssueRefResponse { ParentIssue = "PARENT-001" }] },
+                    Lane = 0, Row = 1, IsActionable = true
+                },
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "PARENT-001", Title = "Parallel parent", Status = IssueStatus.Open,
+                        ExecutionMode = ExecutionMode.Parallel },
+                    Lane = 1, Row = 2, IsActionable = false
+                }
+            ],
+            TotalLanes = 2,
+            MergedPrs =
+            [
+                new TaskGraphPrResponse { Number = 100, Title = "PR 100", IsMerged = true }
+            ]
+        };
+
+        var result = TaskGraphLayoutService.ComputeLayout(taskGraph);
+        var issueLines = result.OfType<TaskGraphIssueRenderLine>().ToList();
+
+        // Both parallel siblings get connectors
+        var childA = issueLines.First(l => l.IssueId == "CHILD-A");
+        Assert.That(childA.DrawLane0Connector, Is.True, "Parallel child A should get connector");
+        Assert.That(childA.IsSeriesChild, Is.False);
+
+        var childB = issueLines.First(l => l.IssueId == "CHILD-B");
+        Assert.That(childB.DrawLane0Connector, Is.True, "Parallel child B should get connector");
+        Assert.That(childB.IsSeriesChild, Is.False);
+        Assert.That(childB.IsLastLane0Connector, Is.True, "Last parallel child is last connector");
+    }
+
     private static TaskGraphResponse BuildFullMockTaskGraph()
     {
         return new TaskGraphResponse
