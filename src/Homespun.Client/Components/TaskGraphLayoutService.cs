@@ -12,7 +12,8 @@ public record TaskGraphIssueRenderLine(
     int? ParentLane, bool IsFirstChild, bool IsSeriesChild,
     bool DrawTopLine, bool DrawBottomLine, int? SeriesConnectorFromLane,
     IssueType IssueType, bool HasDescription, TaskGraphLinkedPr? LinkedPr, AgentStatusData? AgentStatus,
-    bool DrawLane0Connector = false, bool IsLastLane0Connector = false, bool DrawLane0PassThrough = false) : TaskGraphRenderLine;
+    bool DrawLane0Connector = false, bool IsLastLane0Connector = false, bool DrawLane0PassThrough = false,
+    string? Lane0Color = null) : TaskGraphRenderLine;
 public record TaskGraphSeparatorRenderLine : TaskGraphRenderLine;
 public record TaskGraphPrRenderLine(int PrNumber, string Title, string? Url, bool IsMerged, bool HasDescription, AgentStatusData? AgentStatus, bool DrawTopLine, bool DrawBottomLine) : TaskGraphRenderLine;
 public record TaskGraphLoadMoreRenderLine : TaskGraphRenderLine;
@@ -196,6 +197,12 @@ public static class TaskGraphLayoutService
 
         var minLane = group.Min(n => n.Lane);
 
+        // Find the "next" (actionable) issue - the one at lane 0 (before offset)
+        // Its priority determines the lane0Color for the entire group
+        var nextIssue = group.FirstOrDefault(n => n.Lane == minLane);
+        var groupPriority = nextIssue?.Issue.Priority;
+        var groupLane0Color = laneOffset > 0 ? TimelineSvgRenderer.GetPriorityColor(groupPriority) : null;
+
         // Pre-compute parent assignments and children-per-parent counts
         var parentByNode = new Dictionary<string, TaskGraphNodeResponse>(StringComparer.OrdinalIgnoreCase);
         var childrenCountByParent = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
@@ -305,7 +312,8 @@ public static class TaskGraphLayoutService
                 IssueType: node.Issue.Type,
                 HasDescription: !string.IsNullOrWhiteSpace(node.Issue.Description),
                 LinkedPr: linkedPr,
-                AgentStatus: agentStatus
+                AgentStatus: agentStatus,
+                Lane0Color: groupLane0Color
             ));
         }
     }

@@ -1020,4 +1020,187 @@ public class TaskGraphLayoutServiceTests
             ]
         };
     }
+
+    #region Lane0Color Priority Tests
+
+    [Test]
+    public void ComputeLayout_MergedPrs_ActionableWithPriority0_SetsRedLane0Color()
+    {
+        // P0 (critical) priority should produce red color
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes =
+            [
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "ISSUE-001", Title = "Critical issue", Status = IssueStatus.Open, Priority = 0 },
+                    Lane = 0, Row = 0, IsActionable = true
+                }
+            ],
+            TotalLanes = 1,
+            MergedPrs =
+            [
+                new TaskGraphPrResponse { Number = 100, Title = "PR 100", IsMerged = true }
+            ]
+        };
+
+        var result = TaskGraphLayoutService.ComputeLayout(taskGraph);
+        var issueLines = result.OfType<TaskGraphIssueRenderLine>().ToList();
+
+        Assert.That(issueLines[0].Lane0Color, Is.EqualTo("#ef4444"), "P0 priority should produce red color");
+    }
+
+    [Test]
+    public void ComputeLayout_MergedPrs_ActionableWithPriority4_SetsBlueLane0Color()
+    {
+        // P4 (low) priority should produce blue color
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes =
+            [
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "ISSUE-001", Title = "Low priority issue", Status = IssueStatus.Open, Priority = 4 },
+                    Lane = 0, Row = 0, IsActionable = true
+                }
+            ],
+            TotalLanes = 1,
+            MergedPrs =
+            [
+                new TaskGraphPrResponse { Number = 100, Title = "PR 100", IsMerged = true }
+            ]
+        };
+
+        var result = TaskGraphLayoutService.ComputeLayout(taskGraph);
+        var issueLines = result.OfType<TaskGraphIssueRenderLine>().ToList();
+
+        Assert.That(issueLines[0].Lane0Color, Is.EqualTo("#3b82f6"), "P4 priority should produce blue color");
+    }
+
+    [Test]
+    public void ComputeLayout_MergedPrs_NoPriority_SetsGreyLane0Color()
+    {
+        // No priority should produce grey color
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes =
+            [
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "ISSUE-001", Title = "No priority issue", Status = IssueStatus.Open, Priority = null },
+                    Lane = 0, Row = 0, IsActionable = true
+                }
+            ],
+            TotalLanes = 1,
+            MergedPrs =
+            [
+                new TaskGraphPrResponse { Number = 100, Title = "PR 100", IsMerged = true }
+            ]
+        };
+
+        var result = TaskGraphLayoutService.ComputeLayout(taskGraph);
+        var issueLines = result.OfType<TaskGraphIssueRenderLine>().ToList();
+
+        Assert.That(issueLines[0].Lane0Color, Is.EqualTo("#6b7280"), "Null priority should produce grey color");
+    }
+
+    [Test]
+    public void ComputeLayout_MergedPrs_ParentIssuesInheritLane0ColorFromActionable()
+    {
+        // Parent issues in the same group should inherit the lane0Color from the actionable (lane 0) issue
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes =
+            [
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "CHILD-001", Title = "Child", Status = IssueStatus.Open, Priority = 1,
+                        ParentIssues = [new ParentIssueRefResponse { ParentIssue = "PARENT-001" }] },
+                    Lane = 0, Row = 0, IsActionable = true
+                },
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "PARENT-001", Title = "Parent", Status = IssueStatus.Open, Priority = 4 },
+                    Lane = 1, Row = 1, IsActionable = false
+                }
+            ],
+            TotalLanes = 2,
+            MergedPrs =
+            [
+                new TaskGraphPrResponse { Number = 100, Title = "PR 100", IsMerged = true }
+            ]
+        };
+
+        var result = TaskGraphLayoutService.ComputeLayout(taskGraph);
+        var issueLines = result.OfType<TaskGraphIssueRenderLine>().ToList();
+
+        // Child is at lane 0 (becomes 1 with offset) - it determines the group color
+        // Both child and parent should have the same lane0Color based on the child's priority (P1 = orange)
+        Assert.That(issueLines.First(l => l.IssueId == "CHILD-001").Lane0Color, Is.EqualTo("#f97316"),
+            "Child (actionable) should have P1 orange color");
+        Assert.That(issueLines.First(l => l.IssueId == "PARENT-001").Lane0Color, Is.EqualTo("#f97316"),
+            "Parent should inherit lane0Color from actionable child");
+    }
+
+    [Test]
+    public void ComputeLayout_MergedPrs_MultipleGroups_EachHasOwnLane0Color()
+    {
+        // Each group should have its own lane0Color based on its actionable issue's priority
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes =
+            [
+                // Group 1: P0 priority (red)
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "GROUP1-001", Title = "Critical", Status = IssueStatus.Open, Priority = 0 },
+                    Lane = 0, Row = 0, IsActionable = true
+                },
+                // Group 2: P3 priority (green)
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "GROUP2-001", Title = "Normal", Status = IssueStatus.Open, Priority = 3 },
+                    Lane = 0, Row = 1, IsActionable = true
+                }
+            ],
+            TotalLanes = 1,
+            MergedPrs =
+            [
+                new TaskGraphPrResponse { Number = 100, Title = "PR 100", IsMerged = true }
+            ]
+        };
+
+        var result = TaskGraphLayoutService.ComputeLayout(taskGraph);
+        var issueLines = result.OfType<TaskGraphIssueRenderLine>().ToList();
+
+        Assert.That(issueLines.First(l => l.IssueId == "GROUP1-001").Lane0Color, Is.EqualTo("#ef4444"),
+            "Group 1 should have P0 red color");
+        Assert.That(issueLines.First(l => l.IssueId == "GROUP2-001").Lane0Color, Is.EqualTo("#22c55e"),
+            "Group 2 should have P3 green color");
+    }
+
+    [Test]
+    public void ComputeLayout_NoMergedPrs_Lane0ColorIsNull()
+    {
+        // Without merged PRs, there's no lane 0 connector, so Lane0Color should be null
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes =
+            [
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "ISSUE-001", Title = "Issue", Status = IssueStatus.Open, Priority = 0 },
+                    Lane = 0, Row = 0, IsActionable = true
+                }
+            ],
+            TotalLanes = 1
+        };
+
+        var result = TaskGraphLayoutService.ComputeLayout(taskGraph);
+        var issueLines = result.OfType<TaskGraphIssueRenderLine>().ToList();
+
+        Assert.That(issueLines[0].Lane0Color, Is.Null, "Without merged PRs, Lane0Color should be null");
+    }
+
+    #endregion
 }

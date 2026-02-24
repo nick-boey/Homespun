@@ -21,6 +21,21 @@ public static class TimelineSvgRenderer
         return LaneWidth * Math.Max(maxLanes, 1) + LaneWidth / 2;
     }
 
+    /// <summary>
+    /// Maps a priority value (0-4) to a color for the task graph lane 0 vertical line.
+    /// P0 (critical) = Red, P1 = Orange, P2 = Yellow, P3 = Green, P4 (low) = Blue.
+    /// Null or invalid priorities return grey.
+    /// </summary>
+    public static string GetPriorityColor(int? priority) => priority switch
+    {
+        0 => "#ef4444",  // P0: Red (critical)
+        1 => "#f97316",  // P1: Orange
+        2 => "#eab308",  // P2: Yellow
+        3 => "#22c55e",  // P3: Green
+        4 => "#3b82f6",  // P4: Blue (low)
+        _ => "#6b7280"   // Default: Grey (no priority or invalid)
+    };
+
     public static int GetLaneCenterX(int laneIndex)
     {
         return LaneWidth / 2 + laneIndex * LaneWidth;
@@ -374,7 +389,8 @@ public static class TimelineSvgRenderer
         string nodeColor, bool isOutlineOnly, bool isActionable,
         bool drawTopLine = false, bool drawBottomLine = false, bool isSeriesChild = false,
         int? seriesConnectorFromLane = null,
-        bool drawLane0Connector = false, bool isLastLane0Connector = false, bool drawLane0PassThrough = false)
+        bool drawLane0Connector = false, bool isLastLane0Connector = false, bool drawLane0PassThrough = false,
+        string? lane0Color = null)
     {
         var width = CalculateSvgWidth(maxLanes);
         var sb = new StringBuilder();
@@ -382,14 +398,14 @@ public static class TimelineSvgRenderer
 
         var cx = GetLaneCenterX(nodeLane);
         var cy = GetRowCenterY();
-        const string lane0Color = "#6b7280";
+        var effectiveLane0Color = lane0Color ?? "#6b7280";
 
         // Lane 0 merged-PR connector: vertical line at lane 0 with optional branch to this node
         if (drawLane0PassThrough)
         {
             var lane0X = GetLaneCenterX(0);
             sb.Append(
-                $"<path d=\"M {lane0X} 0 L {lane0X} {RowHeight}\" stroke=\"{lane0Color}\" stroke-width=\"{LineStrokeWidth.ToString(CultureInfo.InvariantCulture)}\" fill=\"none\" />");
+                $"<path d=\"M {lane0X} 0 L {lane0X} {RowHeight}\" stroke=\"{effectiveLane0Color}\" stroke-width=\"{LineStrokeWidth.ToString(CultureInfo.InvariantCulture)}\" fill=\"none\" />");
         }
         else if (drawLane0Connector)
         {
@@ -401,15 +417,15 @@ public static class TimelineSvgRenderer
             {
                 // Last connector: vertical from top to junction, arc, horizontal to node
                 sb.Append(
-                    $"<path d=\"M {lane0X} 0 L {lane0X} {cy - r} A {r} {r} 0 0 0 {lane0X + r} {cy} L {nodeEdgeX} {cy}\" stroke=\"{lane0Color}\" stroke-width=\"{LineStrokeWidth.ToString(CultureInfo.InvariantCulture)}\" fill=\"none\" />");
+                    $"<path d=\"M {lane0X} 0 L {lane0X} {cy - r} A {r} {r} 0 0 0 {lane0X + r} {cy} L {nodeEdgeX} {cy}\" stroke=\"{effectiveLane0Color}\" stroke-width=\"{LineStrokeWidth.ToString(CultureInfo.InvariantCulture)}\" fill=\"none\" />");
             }
             else
             {
                 // Non-last connector: full vertical at lane 0 + horizontal branch to node
                 sb.Append(
-                    $"<path d=\"M {lane0X} 0 L {lane0X} {RowHeight}\" stroke=\"{lane0Color}\" stroke-width=\"{LineStrokeWidth.ToString(CultureInfo.InvariantCulture)}\" fill=\"none\" />");
+                    $"<path d=\"M {lane0X} 0 L {lane0X} {RowHeight}\" stroke=\"{effectiveLane0Color}\" stroke-width=\"{LineStrokeWidth.ToString(CultureInfo.InvariantCulture)}\" fill=\"none\" />");
                 sb.Append(
-                    $"<path d=\"M {lane0X} {cy} L {nodeEdgeX} {cy}\" stroke=\"{lane0Color}\" stroke-width=\"{LineStrokeWidth.ToString(CultureInfo.InvariantCulture)}\" fill=\"none\" />");
+                    $"<path d=\"M {lane0X} {cy} L {nodeEdgeX} {cy}\" stroke=\"{effectiveLane0Color}\" stroke-width=\"{LineStrokeWidth.ToString(CultureInfo.InvariantCulture)}\" fill=\"none\" />");
             }
         }
 
