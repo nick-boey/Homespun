@@ -179,7 +179,7 @@ public class JsonConsoleFormatterTests
     }
 
     [Test]
-    public void Write_ExceptionIsNullWhenNotPresent()
+    public void Write_OmitsExceptionWhenNotPresent()
     {
         // Arrange
         var logEntry = CreateLogEntry(
@@ -192,8 +192,7 @@ public class JsonConsoleFormatterTests
 
         // Assert
         var json = JsonDocument.Parse(_output.ToString().Trim());
-        var exceptionElement = json.RootElement.GetProperty("Exception");
-        Assert.That(exceptionElement.ValueKind, Is.EqualTo(JsonValueKind.Null));
+        Assert.That(json.RootElement.TryGetProperty("Exception", out _), Is.False, "Exception should be omitted when not present");
     }
 
     [Test]
@@ -246,6 +245,121 @@ public class JsonConsoleFormatterTests
     }
 
     [Test]
+    public void Write_IncludesIssueIdFromScope_WhenPresent()
+    {
+        // Arrange
+        var logEntry = CreateLogEntry(
+            LogLevel.Information,
+            "TestCategory",
+            "Test message");
+
+        var scopeProvider = new TestScopeProvider();
+        scopeProvider.Push(new Dictionary<string, object?>
+        {
+            [IssueLogScope.IssueIdKey] = "ABC123"
+        });
+
+        // Act
+        _formatter.Write(logEntry, scopeProvider, _output);
+
+        // Assert
+        var json = JsonDocument.Parse(_output.ToString().Trim());
+        Assert.That(json.RootElement.TryGetProperty("IssueId", out var issueIdElement), Is.True, "Should have IssueId field");
+        Assert.That(issueIdElement.GetString(), Is.EqualTo("ABC123"));
+    }
+
+    [Test]
+    public void Write_IncludesProjectNameFromScope_WhenPresent()
+    {
+        // Arrange
+        var logEntry = CreateLogEntry(
+            LogLevel.Information,
+            "TestCategory",
+            "Test message");
+
+        var scopeProvider = new TestScopeProvider();
+        scopeProvider.Push(new Dictionary<string, object?>
+        {
+            [IssueLogScope.ProjectNameKey] = "TestProject"
+        });
+
+        // Act
+        _formatter.Write(logEntry, scopeProvider, _output);
+
+        // Assert
+        var json = JsonDocument.Parse(_output.ToString().Trim());
+        Assert.That(json.RootElement.TryGetProperty("ProjectName", out var projectNameElement), Is.True, "Should have ProjectName field");
+        Assert.That(projectNameElement.GetString(), Is.EqualTo("TestProject"));
+    }
+
+    [Test]
+    public void Write_IncludesBothIssueIdAndProjectName_WhenBothPresent()
+    {
+        // Arrange
+        var logEntry = CreateLogEntry(
+            LogLevel.Information,
+            "TestCategory",
+            "Test message");
+
+        var scopeProvider = new TestScopeProvider();
+        scopeProvider.Push(new Dictionary<string, object?>
+        {
+            [IssueLogScope.IssueIdKey] = "DEF456",
+            [IssueLogScope.ProjectNameKey] = "AnotherProject"
+        });
+
+        // Act
+        _formatter.Write(logEntry, scopeProvider, _output);
+
+        // Assert
+        var json = JsonDocument.Parse(_output.ToString().Trim());
+        Assert.That(json.RootElement.TryGetProperty("IssueId", out var issueIdElement), Is.True);
+        Assert.That(issueIdElement.GetString(), Is.EqualTo("DEF456"));
+        Assert.That(json.RootElement.TryGetProperty("ProjectName", out var projectNameElement), Is.True);
+        Assert.That(projectNameElement.GetString(), Is.EqualTo("AnotherProject"));
+    }
+
+    [Test]
+    public void Write_OmitsIssueId_WhenNotInScope()
+    {
+        // Arrange
+        var logEntry = CreateLogEntry(
+            LogLevel.Information,
+            "TestCategory",
+            "Test message");
+
+        // Act - no scope provider
+        _formatter.Write(logEntry, null, _output);
+
+        // Assert
+        var json = JsonDocument.Parse(_output.ToString().Trim());
+        Assert.That(json.RootElement.TryGetProperty("IssueId", out _), Is.False, "Should not have IssueId field when not in scope");
+    }
+
+    [Test]
+    public void Write_OmitsIssueId_WhenScopeHasEmptyIssueId()
+    {
+        // Arrange
+        var logEntry = CreateLogEntry(
+            LogLevel.Information,
+            "TestCategory",
+            "Test message");
+
+        var scopeProvider = new TestScopeProvider();
+        scopeProvider.Push(new Dictionary<string, object?>
+        {
+            [IssueLogScope.IssueIdKey] = ""
+        });
+
+        // Act
+        _formatter.Write(logEntry, scopeProvider, _output);
+
+        // Assert
+        var json = JsonDocument.Parse(_output.ToString().Trim());
+        Assert.That(json.RootElement.TryGetProperty("IssueId", out _), Is.False, "Should not have IssueId field when empty");
+    }
+
+    [Test]
     public void Write_ContainsAllRequiredFields()
     {
         // Arrange
@@ -266,7 +380,7 @@ public class JsonConsoleFormatterTests
         Assert.That(root.TryGetProperty("Message", out _), Is.True, "Should have Message field");
         Assert.That(root.TryGetProperty("SourceContext", out _), Is.True, "Should have SourceContext field");
         Assert.That(root.TryGetProperty("Component", out _), Is.True, "Should have Component field");
-        Assert.That(root.TryGetProperty("Exception", out _), Is.True, "Should have Exception field");
+        // Note: Exception, IssueId, and ProjectName are optional fields that are only included when present
     }
 
     [Test]
@@ -314,5 +428,37 @@ public class JsonConsoleFormatterTests
         public T Get(string? name) => CurrentValue;
 
         public IDisposable? OnChange(Action<T, string?> listener) => null;
+    }
+
+    private class TestScopeProvider : IExternalScopeProvider
+    {
+        private readonly Stack<object> _scopes = new();
+
+        public void Push(object state)
+        {
+            _scopes.Push(state);
+        }
+
+        public void ForEachScope<TState>(Action<object?, TState> callback, TState state)
+        {
+            foreach (var scope in _scopes)
+            {
+                callback(scope, state);
+            }
+        }
+
+        IDisposable IExternalScopeProvider.Push(object? state)
+        {
+            if (state is not null)
+            {
+                _scopes.Push(state);
+            }
+            return new NoopDisposable();
+        }
+
+        private class NoopDisposable : IDisposable
+        {
+            public void Dispose() { }
+        }
     }
 }

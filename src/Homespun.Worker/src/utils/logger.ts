@@ -5,7 +5,13 @@ interface LogEntry {
   SourceContext: string;
   Component: string;
   Exception?: string;
+  IssueId?: string;
+  ProjectName?: string;
 }
+
+// Cache environment values at startup
+const issueId = process.env.ISSUE_ID || undefined;
+const projectName = process.env.PROJECT_NAME || undefined;
 
 function getCallerInfo(): { file: string; line: number } {
   const stack = new Error().stack?.split('\n')[3]; // Skip: Error, getCallerInfo, log fn
@@ -29,6 +35,12 @@ function formatLog(level: string, message: string, error?: unknown): string {
   };
   if (error) {
     entry.Exception = error instanceof Error ? error.message : String(error);
+  }
+  if (issueId) {
+    entry.IssueId = issueId;
+  }
+  if (projectName) {
+    entry.ProjectName = projectName;
   }
   return JSON.stringify(entry);
 }

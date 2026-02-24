@@ -151,7 +151,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "sum by (level) (count_over_time({job=~\"homespun.*\"} | json | level=~\"$level\" [$__interval]))",
+          "expr": "sum by (level) (count_over_time({job=~\"homespun.*\", issue_id=~\"$issue_id\"} | json | level=~\"$level\" [$__interval]))",
           "legendFormat": "{{level}}",
           "refId": "A"
         }
@@ -187,7 +187,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "{job=~\"homespun.*\"} | json | level=~\"$level\" | component=~\"$component\" | line_format \"[{{.component | default \\\"?\\\"}}] {{if eq .level \\\"Information\\\"}}INFO{{else if eq .level \\\"Warning\\\"}}WARN{{else if eq .level \\\"Error\\\"}}ERR{{else if eq .level \\\"Critical\\\"}}CRIT{{else if eq .level \\\"Debug\\\"}}DEBUG{{else}}{{.level}}{{end}} [{{.category}}] {{.message}}\"",
+          "expr": "{job=~\"homespun.*\", issue_id=~\"$issue_id\"} | json | level=~\"$level\" | component=~\"$component\" | line_format \"{{if .issue_id}}[{{.issue_id}}] {{end}}[{{.component | default \\\"?\\\"}}] {{if eq .level \\\"Information\\\"}}INFO{{else if eq .level \\\"Warning\\\"}}WARN{{else if eq .level \\\"Error\\\"}}ERR{{else if eq .level \\\"Critical\\\"}}CRIT{{else if eq .level \\\"Debug\\\"}}DEBUG{{else}}{{.level}}{{end}} [{{.category}}] {{.message}}\"",
           "refId": "A"
         }
       ],
@@ -235,7 +235,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "{container=\"homespun\"} | json | level=~\"$level\" | line_format \"{{if eq .level \\\"Information\\\"}}INFO{{else if eq .level \\\"Warning\\\"}}WARN{{else if eq .level \\\"Error\\\"}}ERR{{else if eq .level \\\"Critical\\\"}}CRIT{{else if eq .level \\\"Debug\\\"}}DEBUG{{else}}{{.level}}{{end}} [{{.category}}] {{.message}}\"",
+          "expr": "{container=\"homespun\", issue_id=~\"$issue_id\"} | json | level=~\"$level\" | line_format \"{{if .issue_id}}[{{.issue_id}}] {{end}}{{if eq .level \\\"Information\\\"}}INFO{{else if eq .level \\\"Warning\\\"}}WARN{{else if eq .level \\\"Error\\\"}}ERR{{else if eq .level \\\"Critical\\\"}}CRIT{{else if eq .level \\\"Debug\\\"}}DEBUG{{else}}{{.level}}{{end}} [{{.category}}] {{.message}}\"",
           "refId": "A"
         }
       ],
@@ -270,7 +270,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "{container=~\"homespun-issue-.*\"} | json | level=~\"$level\" | line_format \"{{if eq .level \\\"Information\\\"}}INFO{{else if eq .level \\\"Warning\\\"}}WARN{{else if eq .level \\\"Error\\\"}}ERR{{else if eq .level \\\"Critical\\\"}}CRIT{{else if eq .level \\\"Debug\\\"}}DEBUG{{else}}{{.level}}{{end}} [{{.category}}] {{.message}}\"",
+          "expr": "{container=~\"homespun-issue-.*\", issue_id=~\"$issue_id\"} | json | level=~\"$level\" | line_format \"[{{.issue_id}}] {{if eq .level \\\"Information\\\"}}INFO{{else if eq .level \\\"Warning\\\"}}WARN{{else if eq .level \\\"Error\\\"}}ERR{{else if eq .level \\\"Critical\\\"}}CRIT{{else if eq .level \\\"Debug\\\"}}DEBUG{{else}}{{.level}}{{end}} [{{.category}}] {{.message}}\"",
           "refId": "A"
         }
       ],
@@ -318,7 +318,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "{job=~\"homespun.*\"} | json | level=~\"Error|Warning|Critical\" | component=~\"$component\" | line_format \"[{{.component | default \\\"?\\\"}}] {{if eq .level \\\"Warning\\\"}}WARN{{else if eq .level \\\"Error\\\"}}ERR{{else if eq .level \\\"Critical\\\"}}CRIT{{else}}{{.level}}{{end}} [{{.category}}] {{.message}} {{if .exception}}\\n{{.exception}}{{end}}\"",
+          "expr": "{job=~\"homespun.*\", issue_id=~\"$issue_id\"} | json | level=~\"Error|Warning|Critical\" | component=~\"$component\" | line_format \"{{if .issue_id}}[{{.issue_id}}] {{end}}[{{.component | default \\\"?\\\"}}] {{if eq .level \\\"Warning\\\"}}WARN{{else if eq .level \\\"Error\\\"}}ERR{{else if eq .level \\\"Critical\\\"}}CRIT{{else}}{{.level}}{{end}} [{{.category}}] {{.message}} {{if .exception}}\\n{{.exception}}{{end}}\"",
           "refId": "A"
         }
       ],
@@ -752,6 +752,37 @@
         "queryValue": "",
         "skipUrlSync": false,
         "type": "custom"
+      },
+      {
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "loki",
+          "uid": "loki"
+        },
+        "definition": "",
+        "description": "Filter by issue ID",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Issue ID",
+        "multi": false,
+        "name": "issue_id",
+        "options": [],
+        "query": {
+          "label": "issue_id",
+          "refId": "LokiVariableQueryEditor-VariableQuery",
+          "stream": "{job=~\"homespun.*\"}",
+          "type": 1
+        },
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 2,
+        "type": "query"
       },
       {
         "allValue": ".*",

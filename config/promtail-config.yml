@@ -47,6 +47,9 @@ scrape_configs:
             exception: Exception
             category: SourceContext
             component: Component
+            # Issue context fields (present in worker and server logs when processing issues)
+            issue_id: IssueId
+            project_name: ProjectName
             # Client telemetry fields (optional, present only for telemetry logs)
             telemetry_type: TelemetryType
             telemetry_name: TelemetryName
@@ -62,6 +65,8 @@ scrape_configs:
           level:
           category:
           component:
+          issue_id:
+          project_name:
           telemetry_type:
           telemetry_name:
           session_id:

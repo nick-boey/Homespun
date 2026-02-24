@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.ClaudeCode.Exceptions;
+using Homespun.Features.Observability;
 using Homespun.Features.Secrets;
 using Homespun.Shared.Models.Sessions;
 using Microsoft.Extensions.Options;
@@ -231,14 +232,20 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
             ? GetIssueContainerName(request.ProjectId!, request.IssueId!)
             : $"homespun-agent-{sessionId[..8]}";
 
+        using var issueScope = IssueLogScope.BeginIssueScope(_logger, request.IssueId, request.ProjectName);
         _logger.LogInformation(
             "DockerAgentExecutionService: Starting session {SessionId} with worker image {Image}, container {ContainerName}, issue {IssueId}",
             sessionId, _options.WorkerImage, containerName, request.IssueId ?? "(none)");
 
         var channel = System.Threading.Channels.Channel.CreateUnbounded<SdkMessage>();
 
+        // Capture issue context for the background task
+        var issueId = request.IssueId;
+        var projectName = request.ProjectName;
+
         _ = Task.Run(async () =>
         {
+            using var taskIssueScope = IssueLogScope.BeginIssueScope(_logger, issueId, projectName);
             string? containerId = null;
             try
             {
@@ -353,6 +360,10 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         AgentMessageRequest request,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
+        // Get issue ID from session mapping for log context
+        _sessionToIssue.TryGetValue(request.SessionId, out var issueId);
+        using var issueScope = IssueLogScope.BeginIssueScope(_logger, issueId);
+
         _logger.LogInformation("SendMessageAsync called for session {SessionId}", request.SessionId);
 
         if (!_sessions.TryGetValue(request.SessionId, out var session))
@@ -396,6 +407,10 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
     /// <inheritdoc />
     public async Task StopSessionAsync(string sessionId, bool forceStopContainer = false, CancellationToken cancellationToken = default)
     {
+        // Get issue ID from session mapping for log context (before removal)
+        _sessionToIssue.TryGetValue(sessionId, out var issueId);
+        using var issueScope = IssueLogScope.BeginIssueScope(_logger, issueId);
+
         if (_sessions.TryRemove(sessionId, out var session))
         {
             _logger.LogInformation("Stopping Docker session {SessionId}, container {ContainerName}, forceStopContainer={ForceStop}",
@@ -504,6 +519,9 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
     public async Task<bool> AnswerQuestionAsync(string sessionId, Dictionary<string, string> answers,
         CancellationToken cancellationToken = default)
     {
+        _sessionToIssue.TryGetValue(sessionId, out var issueId);
+        using var issueScope = IssueLogScope.BeginIssueScope(_logger, issueId);
+
         if (!_sessions.TryGetValue(sessionId, out var session))
         {
             _logger.LogDebug("AnswerQuestionAsync: Session {SessionId} not found", sessionId);
@@ -549,6 +567,9 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
     public async Task<bool> ApprovePlanAsync(string sessionId, bool approved, bool keepContext, string? feedback = null,
         CancellationToken cancellationToken = default)
     {
+        _sessionToIssue.TryGetValue(sessionId, out var issueId);
+        using var issueScope = IssueLogScope.BeginIssueScope(_logger, issueId);
+
         if (!_sessions.TryGetValue(sessionId, out var session))
         {
             _logger.LogDebug("ApprovePlanAsync: Session {SessionId} not found", sessionId);
