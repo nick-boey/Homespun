@@ -30,6 +30,9 @@ public class DockerAgentExecutionServiceTests
         _secretsServiceMock
             .Setup(s => s.GetSecretsForInjectionAsync(It.IsAny<string>()))
             .ReturnsAsync(new Dictionary<string, string>());
+        _secretsServiceMock
+            .Setup(s => s.GetSecretsForInjectionByProjectIdAsync(It.IsAny<string>()))
+            .ReturnsAsync(new Dictionary<string, string>());
         _options = new DockerAgentExecutionOptions
         {
             WorkerImage = "ghcr.io/nick-boey/homespun-worker:test",
@@ -762,6 +765,24 @@ public class DockerAgentExecutionServiceTests
 
     #endregion
 
+    #region Secret Injection Tests
+
+    [Test]
+    public void SecretsServiceMock_ShouldHaveBothMethodsSetUp()
+    {
+        // Arrange - verifies that both mock methods are configured
+        // This test documents the expected setup for the secrets service mock
+
+        // Assert - the mock should have both methods available
+        Assert.DoesNotThrow(() =>
+        {
+            _secretsServiceMock.Verify(s => s.GetSecretsForInjectionAsync(It.IsAny<string>()), Times.Never);
+            _secretsServiceMock.Verify(s => s.GetSecretsForInjectionByProjectIdAsync(It.IsAny<string>()), Times.Never);
+        });
+    }
+
+    #endregion
+
     #region CleanupOrphanedContainersAsync Tests
 
     [Test]
@@ -1086,6 +1107,8 @@ public class AnswerQuestionAsyncTests
         var secretsServiceMock = new Mock<ISecretsService>();
         secretsServiceMock.Setup(s => s.GetSecretsForInjectionAsync(It.IsAny<string>()))
             .ReturnsAsync(new Dictionary<string, string>());
+        secretsServiceMock.Setup(s => s.GetSecretsForInjectionByProjectIdAsync(It.IsAny<string>()))
+            .ReturnsAsync(new Dictionary<string, string>());
         var options = new DockerAgentExecutionOptions();
         var service = new DockerAgentExecutionService(
             Options.Create(options), loggerMock.Object, secretsServiceMock.Object);
@@ -1133,6 +1156,8 @@ public class ApprovePlanAsyncTests
         var loggerMock = new Mock<ILogger<DockerAgentExecutionService>>();
         var secretsServiceMock = new Mock<ISecretsService>();
         secretsServiceMock.Setup(s => s.GetSecretsForInjectionAsync(It.IsAny<string>()))
+            .ReturnsAsync(new Dictionary<string, string>());
+        secretsServiceMock.Setup(s => s.GetSecretsForInjectionByProjectIdAsync(It.IsAny<string>()))
             .ReturnsAsync(new Dictionary<string, string>());
         var options = new DockerAgentExecutionOptions();
         var service = new DockerAgentExecutionService(

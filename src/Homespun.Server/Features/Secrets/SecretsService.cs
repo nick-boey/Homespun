@@ -168,6 +168,36 @@ public partial class SecretsService(
         return Task.FromResult(secrets);
     }
 
+    public async Task<Dictionary<string, string>> GetSecretsForInjectionByProjectIdAsync(string projectId)
+    {
+        var secrets = new Dictionary<string, string>();
+
+        var project = await projectService.GetByIdAsync(projectId);
+        if (project == null)
+        {
+            logger.LogWarning("Project {ProjectId} not found when getting secrets for injection", projectId);
+            return secrets;
+        }
+
+        var secretsPath = GetSecretsFilePath(project.LocalPath);
+        if (!File.Exists(secretsPath))
+        {
+            return secrets;
+        }
+
+        foreach (var line in await File.ReadAllLinesAsync(secretsPath))
+        {
+            var parsed = ParseEnvLine(line);
+            if (parsed.HasValue)
+            {
+                secrets[parsed.Value.Name] = parsed.Value.Value;
+            }
+        }
+
+        logger.LogDebug("Loaded {Count} secrets from {Path} for project {ProjectId}", secrets.Count, secretsPath, projectId);
+        return secrets;
+    }
+
     /// <summary>
     /// Gets the path to the secrets.env file for a project.
     /// The secrets file is stored at the project root (parent of LocalPath which is the branch folder).
