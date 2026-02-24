@@ -57,7 +57,7 @@
     <div class="showcase-item">
         <div class="showcase-label">Issues with active and inactive agent sessions</div>
         <div class="showcase-preview">
-            <TaskGraphView TaskGraph="@_agentDemo" AgentStatuses="@_agentStatuses" />
+            <TaskGraphView TaskGraph="@_agentDemo" />
         </div>
     </div>
 </div>
@@ -202,13 +202,12 @@
             new() { Issue = new() { Id = "AGT-001", Title = "Issue with active agent", Status = IssueStatus.Progress }, Lane = 0, Row = 0, IsActionable = false },
             new() { Issue = new() { Id = "AGT-002", Title = "Issue with inactive agent", Status = IssueStatus.Open }, Lane = 0, Row = 1, IsActionable = true },
             new() { Issue = new() { Id = "AGT-003", Title = "Issue without agent", Status = IssueStatus.Open }, Lane = 0, Row = 2, IsActionable = true }
-        ]
-    };
-
-    private Dictionary<string, AgentStatusData> _agentStatuses = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ["AGT-001"] = new() { IsActive = true, Status = "Running", SessionId = "session-1" },
-        ["AGT-002"] = new() { IsActive = false, Status = "Stopped", SessionId = "session-2" }
+        ],
+        AgentStatuses = new Dictionary<string, AgentStatusData>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["AGT-001"] = new() { IsActive = true, Status = "Running", SessionId = "session-1" },
+            ["AGT-002"] = new() { IsActive = false, Status = "Stopped", SessionId = "session-2" }
+        }
     };
 
     private TaskGraphResponse _mergedPrConnector = new()
