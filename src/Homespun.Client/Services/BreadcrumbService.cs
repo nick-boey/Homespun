@@ -27,7 +27,7 @@ public class BreadcrumbService(HttpProjectApiService projectApi, HttpIssueApiSer
         { "Projects", "/projects" },
         { "Settings", "/settings" },
         { "Agents", "/agents" },
-        { "Sessions", "/sessions" }
+        { "Prompts", "/prompts" }
     };
 
     public IReadOnlyList<BreadcrumbItem> Breadcrumbs => _breadcrumbs.AsReadOnly();
@@ -117,7 +117,7 @@ public class BreadcrumbService(HttpProjectApiService projectApi, HttpIssueApiSer
 
     private void BuildSessionBreadcrumbs(BreadcrumbContext context)
     {
-        _breadcrumbs.Add(new BreadcrumbItem("Sessions", "/sessions"));
+        _breadcrumbs.Add(new BreadcrumbItem("Agents", "/agents"));
 
         var displayId = context.SessionId!.Length > 8
             ? context.SessionId![..8] + "..."

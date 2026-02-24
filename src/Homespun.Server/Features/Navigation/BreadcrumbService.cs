@@ -21,7 +21,7 @@ public class BreadcrumbService : IBreadcrumbService
         { "Projects", "/projects" },
         { "Settings", "/settings" },
         { "Agents", "/agents" },
-        { "Sessions", "/sessions" }
+        { "Prompts", "/prompts" }
     };
 
     public BreadcrumbService(IProjectService projectService, IFleeceService fleeceService)
@@ -137,8 +137,8 @@ public class BreadcrumbService : IBreadcrumbService
 
     private void BuildSessionBreadcrumbs(BreadcrumbContext context)
     {
-        // Always start with Sessions
-        _breadcrumbs.Add(new BreadcrumbItem("Sessions", "/sessions"));
+        // Always start with Agents
+        _breadcrumbs.Add(new BreadcrumbItem("Agents", "/agents"));
 
         // Add session ID (truncated for display)
         var displayId = context.SessionId!.Length > 8

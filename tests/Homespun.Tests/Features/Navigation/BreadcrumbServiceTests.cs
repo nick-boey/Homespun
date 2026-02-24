@@ -367,8 +367,8 @@ public class BreadcrumbServiceTests
 
         // Assert
         Assert.That(_sut.Breadcrumbs, Has.Count.EqualTo(2));
-        Assert.That(_sut.Breadcrumbs[0].Title, Is.EqualTo("Sessions"));
-        Assert.That(_sut.Breadcrumbs[0].Url, Is.EqualTo("/sessions"));
+        Assert.That(_sut.Breadcrumbs[0].Title, Is.EqualTo("Agents"));
+        Assert.That(_sut.Breadcrumbs[0].Url, Is.EqualTo("/agents"));
         Assert.That(_sut.Breadcrumbs[1].Title, Is.EqualTo("abc12345...")); // Truncated
         Assert.That(_sut.Breadcrumbs[1].Url, Is.Null);
     }
@@ -402,8 +402,8 @@ public class BreadcrumbServiceTests
 
         // Assert
         Assert.That(_sut.Breadcrumbs, Has.Count.EqualTo(3));
-        Assert.That(_sut.Breadcrumbs[0].Title, Is.EqualTo("Sessions"));
-        Assert.That(_sut.Breadcrumbs[0].Url, Is.EqualTo("/sessions"));
+        Assert.That(_sut.Breadcrumbs[0].Title, Is.EqualTo("Agents"));
+        Assert.That(_sut.Breadcrumbs[0].Url, Is.EqualTo("/agents"));
         Assert.That(_sut.Breadcrumbs[1].Title, Is.EqualTo("abc12345..."));
         Assert.That(_sut.Breadcrumbs[1].Url, Is.EqualTo("/session/abc12345-session-id"));
         Assert.That(_sut.Breadcrumbs[2].Title, Is.EqualTo("Archived"));
@@ -411,17 +411,17 @@ public class BreadcrumbServiceTests
     }
 
     [Test]
-    public async Task SetContextAsync_WithSessionsPage_ShowsSessionsBreadcrumb()
+    public async Task SetContextAsync_WithPromptsPage_ShowsPromptsBreadcrumb()
     {
         // Arrange
-        var context = new BreadcrumbContext { PageName = "Sessions" };
+        var context = new BreadcrumbContext { PageName = "Prompts" };
 
         // Act
         await _sut.SetContextAsync(context);
 
         // Assert
         Assert.That(_sut.Breadcrumbs, Has.Count.EqualTo(1));
-        Assert.That(_sut.Breadcrumbs[0].Title, Is.EqualTo("Sessions"));
-        Assert.That(_sut.Breadcrumbs[0].Url, Is.EqualTo("/sessions"));
+        Assert.That(_sut.Breadcrumbs[0].Title, Is.EqualTo("Prompts"));
+        Assert.That(_sut.Breadcrumbs[0].Url, Is.EqualTo("/prompts"));
     }
 }
