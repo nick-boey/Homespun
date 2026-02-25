@@ -94,4 +94,58 @@ public class ClaudeCodeHubTests
     }
 
     #endregion
+
+    #region RestartSession Tests
+
+    [Test]
+    public async Task RestartSession_CallsSessionService()
+    {
+        // Arrange
+        var sessionId = "test-session";
+        var expectedSession = new ClaudeSession
+        {
+            Id = sessionId,
+            EntityId = "entity-1",
+            ProjectId = "project-1",
+            WorkingDirectory = "/test/path",
+            Mode = SessionMode.Build,
+            Model = "sonnet",
+            Status = ClaudeSessionStatus.WaitingForInput
+        };
+        _sessionServiceMock
+            .Setup(x => x.RestartSessionAsync(sessionId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(expectedSession);
+
+        // Act
+        var result = await _hub.RestartSession(sessionId);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.Id, Is.EqualTo(sessionId));
+        Assert.That(result.Status, Is.EqualTo(ClaudeSessionStatus.WaitingForInput));
+        _sessionServiceMock.Verify(
+            x => x.RestartSessionAsync(sessionId, It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Test]
+    public async Task RestartSession_SessionNotFound_ReturnsNull()
+    {
+        // Arrange
+        var sessionId = "nonexistent-session";
+        _sessionServiceMock
+            .Setup(x => x.RestartSessionAsync(sessionId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((ClaudeSession?)null);
+
+        // Act
+        var result = await _hub.RestartSession(sessionId);
+
+        // Assert
+        Assert.That(result, Is.Null);
+        _sessionServiceMock.Verify(
+            x => x.RestartSessionAsync(sessionId, It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    #endregion
 }

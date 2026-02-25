@@ -4,6 +4,7 @@ import health from './routes/health.js';
 import { createInfoRoute } from './routes/info.js';
 import { createSessionsRoute } from './routes/sessions.js';
 import { createMiniPromptRoute } from './routes/mini-prompt.js';
+import { createTestRoute } from './routes/test.js';
 import files from './routes/files.js';
 import { SessionManager } from './services/session-manager.js';
 import { info } from './utils/logger.js';
@@ -18,6 +19,7 @@ api.route('/info', createInfoRoute(sessionManager));
 api.route('/sessions', createSessionsRoute(sessionManager));
 api.route('/mini-prompt', createMiniPromptRoute());
 api.route('/files', files);
+api.route('/test', createTestRoute(sessionManager));
 app.route('/api', api);
 
 const port = parseInt(process.env.PORT || '8080', 10);

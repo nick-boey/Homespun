@@ -183,14 +183,25 @@
                             <div class="error-content">
                                 <div class="error-title">@GetErrorTitle(_errorSubtype)</div>
                                 <div class="error-message">@_session.ErrorMessage</div>
-                                @if (_isRecoverable)
-                                {
-                                    <div class="error-actions">
+                                <div class="error-actions">
+                                    @if (_isRecoverable)
+                                    {
                                         <button class="btn btn-primary btn-sm" @onclick="ContinueSession">
                                             Continue Session
                                         </button>
-                                    </div>
-                                }
+                                    }
+                                    <button class="btn btn-warning btn-sm" @onclick="RestartContainer" disabled="@_isRestartingContainer">
+                                        @if (_isRestartingContainer)
+                                        {
+                                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                            <span>Restarting...</span>
+                                        }
+                                        else
+                                        {
+                                            <span>Restart Container</span>
+                                        }
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     }
@@ -1656,6 +1667,7 @@
     // Session error state
     private string? _errorSubtype;
     private bool _isRecoverable = true;
+    private bool _isRestartingContainer = false;
 
     // Message queue for mid-execution prompts
     private Queue<string> _pendingMessages = new();
@@ -2544,6 +2556,55 @@
             });
         });
 
+        _hubConnection.On<string>("SessionContainerRestarting", (sessionId) =>
+        {
+            _ = InvokeAsync(() =>
+            {
+                try
+                {
+                    LogDebug("SessionContainerRestarting", $"Container restarting for session {sessionId}");
+                    Console.WriteLine($"[SignalR] SessionContainerRestarting for session {sessionId}");
+
+                    if (_session != null && _session.Id == sessionId)
+                    {
+                        _isRestartingContainer = true;
+                        StateHasChanged();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    LogDebug("ERROR", $"SessionContainerRestarting handler: {ex.Message}");
+                    Console.WriteLine($"[SignalR] Error in SessionContainerRestarting handler: {ex.Message}");
+                }
+            });
+        });
+
+        _hubConnection.On<string, ClaudeSession>("SessionContainerRestarted", (sessionId, session) =>
+        {
+            _ = InvokeAsync(() =>
+            {
+                try
+                {
+                    LogDebug("SessionContainerRestarted", $"Container restarted for session {sessionId}");
+                    Console.WriteLine($"[SignalR] SessionContainerRestarted for session {sessionId}");
+
+                    if (_session != null && _session.Id == sessionId)
+                    {
+                        _session = session;
+                        _isRestartingContainer = false;
+                        _errorSubtype = null;
+                        _isRecoverable = true;
+                        StateHasChanged();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    LogDebug("ERROR", $"SessionContainerRestarted handler: {ex.Message}");
+                    Console.WriteLine($"[SignalR] Error in SessionContainerRestarted handler: {ex.Message}");
+                }
+            });
+        });
+
         await _hubConnection.StartAsync();
         await _hubConnection.SendAsync("JoinSession", SessionId);
         // Server sends SessionState after JoinSession, which we now handle above
@@ -2739,6 +2800,36 @@
         _isRecoverable = true;
 
         StateHasChanged();
+    }
+
+    private async Task RestartContainer()
+    {
+        if (_session == null || _hubConnection == null || _isRestartingContainer) return;
+
+        _isRestartingContainer = true;
+        StateHasChanged();
+
+        try
+        {
+            var newSession = await _hubConnection.InvokeAsync<ClaudeSession?>("RestartSession", _session.Id);
+
+            if (newSession != null)
+            {
+                _session = newSession;
+                _errorSubtype = null;
+                _isRecoverable = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error restarting container: {ex.Message}");
+            // Keep showing the error banner - the restart failed
+        }
+        finally
+        {
+            _isRestartingContainer = false;
+            StateHasChanged();
+        }
     }
 
     private string GetInputPlaceholder()

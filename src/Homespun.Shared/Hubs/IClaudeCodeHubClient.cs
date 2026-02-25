@@ -40,6 +40,19 @@ public interface IClaudeCodeHubClient
     /// <param name="isRecoverable">Whether the session can be resumed by sending another message</param>
     Task SessionError(string sessionId, string errorMessage, string? errorSubtype, bool isRecoverable);
 
+    /// <summary>
+    /// Notifies clients when a session's container is being restarted.
+    /// </summary>
+    /// <param name="sessionId">The session ID</param>
+    Task SessionContainerRestarting(string sessionId);
+
+    /// <summary>
+    /// Notifies clients when a session's container has been restarted.
+    /// </summary>
+    /// <param name="sessionId">The session ID</param>
+    /// <param name="session">The updated session with new container info</param>
+    Task SessionContainerRestarted(string sessionId, ClaudeSession session);
+
     #region AG-UI Events
 
     /// <summary>

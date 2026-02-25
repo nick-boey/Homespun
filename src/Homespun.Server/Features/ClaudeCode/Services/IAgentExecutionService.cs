@@ -105,6 +105,18 @@ public record ContainerInfo(
 );
 
 /// <summary>
+/// Result of restarting a container, containing info needed to resume the session.
+/// </summary>
+public record ContainerRestartResult(
+    string WorkingDirectory,
+    string? ConversationId,
+    string? ProjectId,
+    string? IssueId,
+    string NewContainerId,
+    string NewWorkerUrl
+);
+
+/// <summary>
 /// Service for executing Claude agents in various environments (local, Docker).
 /// Returns raw SdkMessage types from the Claude SDK. All content block assembly,
 /// question parsing, and message formatting is handled by the consumer (ClaudeSessionService).
@@ -209,4 +221,13 @@ public interface IAgentExecutionService
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>True if the container was found and stopped, false if not found.</returns>
     Task<bool> StopContainerByIdAsync(string containerId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Restarts the container for a session, preserving the conversation ID for resumption.
+    /// Stops the existing container and starts a new one with the same configuration.
+    /// </summary>
+    /// <param name="sessionId">The session ID whose container should be restarted.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Result containing info needed to resume the session, or null if session not found.</returns>
+    Task<ContainerRestartResult?> RestartContainerAsync(string sessionId, CancellationToken cancellationToken = default);
 }

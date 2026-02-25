@@ -195,4 +195,13 @@ public interface IClaudeSessionService
         bool terminateExisting,
         string? systemPrompt = null,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Restarts the container for a session, preserving the conversation context.
+    /// This stops the existing container, starts a new one, and prepares for session resumption.
+    /// </summary>
+    /// <param name="sessionId">The session ID whose container should be restarted</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>The updated session ready for new messages, or null if session not found</returns>
+    Task<ClaudeSession?> RestartSessionAsync(string sessionId, CancellationToken cancellationToken = default);
 }

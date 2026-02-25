@@ -18,4 +18,11 @@ public interface IClaudeCodeHub
     Task AnswerQuestion(string sessionId, string answersJson);
     Task ExecutePlan(string sessionId, bool clearContext = true);
     Task<int> GetCachedMessageCount(string sessionId);
+
+    /// <summary>
+    /// Restart the container for a session and prepare for resumption.
+    /// </summary>
+    /// <param name="sessionId">The session ID</param>
+    /// <returns>The updated session, or null if not found</returns>
+    Task<ClaudeSession?> RestartSession(string sessionId);
 }
