@@ -11,6 +11,24 @@
 {
     <div class="task-graph"
          data-testid="task-graph">
+        @if (_maxAvailableLane > 0)
+        {
+            <div class="task-graph-level-controls">
+                <button class="level-control-btn"
+                        @onclick="DecreaseLevels"
+                        disabled="@(MaxDepth <= 0)"
+                        title="Decrease levels ([ key)">
+                    −
+                </button>
+                <span class="level-display">@(MaxDepth + 1) levels</span>
+                <button class="level-control-btn"
+                        @onclick="IncreaseLevels"
+                        disabled="@(MaxDepth >= _maxAvailableLane)"
+                        title="Increase levels (] key)">
+                    +
+                </button>
+            </div>
+        }
         @for (var i = 0; i < _renderLines.Count; i++)
         {
             var line = _renderLines[i];
@@ -225,6 +243,46 @@
         flex-direction: column;
         min-width: 0;
         max-width: 100%;
+    }
+
+    .task-graph-level-controls {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 0.75rem;
+        font-size: 12px;
+        color: var(--text-secondary, #a0a0a0);
+    }
+
+    .level-control-btn {
+        width: 24px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid var(--text-muted, #6b7280);
+        border-radius: 4px;
+        background: transparent;
+        color: var(--text-primary, #eaeaea);
+        font-size: 16px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.15s ease;
+    }
+
+    .level-control-btn:hover:not(:disabled) {
+        border-color: var(--color-ocean, #51A5C1);
+        color: var(--color-ocean, #51A5C1);
+    }
+
+    .level-control-btn:disabled {
+        opacity: 0.3;
+        cursor: not-allowed;
+    }
+
+    .level-display {
+        min-width: 60px;
+        text-align: center;
     }
 
     .task-graph-row {
@@ -588,6 +646,47 @@
         background-color: rgba(107, 114, 128, 0.2);
         color: #6b7280;
     }
+
+    /* Level controls */
+    .task-graph-level-controls {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        background: var(--bg-secondary, rgba(255, 255, 255, 0.05));
+        border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+    }
+
+    .level-control-btn {
+        width: 24px;
+        height: 24px;
+        border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+        border-radius: 4px;
+        background: var(--bg-primary, #1a1a2e);
+        color: var(--text-primary, #eaeaea);
+        font-size: 14px;
+        cursor: pointer;
+        transition: background-color 0.15s ease, opacity 0.15s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .level-control-btn:hover:not(:disabled) {
+        background: var(--bg-tertiary, rgba(255, 255, 255, 0.1));
+    }
+
+    .level-control-btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
+
+    .level-display {
+        font-size: 12px;
+        color: var(--text-secondary, #a0a0a0);
+        min-width: 50px;
+        text-align: center;
+    }
 </style>
 
 @code {
@@ -618,14 +717,28 @@
     /// </summary>
     [Parameter] public EventCallback<(string IssueId, AgentPrompt? Prompt)> OnRunAgentClick { get; set; }
 
+    /// <summary>
+    /// Maximum depth (levels) to show in the task graph. Default is 3 (shows lanes 0-3).
+    /// </summary>
+    [Parameter] public int MaxDepth { get; set; } = 3;
+
+    /// <summary>
+    /// Called when the max depth changes via the level controls.
+    /// </summary>
+    [Parameter] public EventCallback<int> MaxDepthChanged { get; set; }
+
     private List<TaskGraphRenderLine> _renderLines = [];
     private int _maxLane;
+    private int _maxAvailableLane;
     private string? _typeMenuOpenForIssueId;
     private string? _previousSelectedNodeId;
 
     protected override void OnParametersSet()
     {
-        _renderLines = TaskGraphLayoutService.ComputeLayout(TaskGraph);
+        // Compute max available lane before filtering
+        _maxAvailableLane = TaskGraph?.Nodes.Count > 0 ? TaskGraph.Nodes.Max(n => n.Lane) : 0;
+
+        _renderLines = TaskGraphLayoutService.ComputeLayout(TaskGraph, MaxDepth);
         var hasMergedPrs = TaskGraph?.MergedPrs.Count > 0;
         _maxLane = _renderLines
             .OfType<TaskGraphIssueRenderLine>()
@@ -668,7 +781,9 @@
             drawLane0Connector: issueLine.DrawLane0Connector,
             isLastLane0Connector: issueLine.IsLastLane0Connector,
             drawLane0PassThrough: issueLine.DrawLane0PassThrough,
-            lane0Color: issueLine.Lane0Color);
+lane0Color: issueLine.Lane0Color,
+            hasHiddenParent: issueLine.HasHiddenParent,
+            hiddenParentIsSeriesMode: issueLine.HiddenParentIsSeriesMode);
     }
 
     private string GeneratePrSvg(TaskGraphPrRenderLine prLine)
@@ -900,5 +1015,21 @@
 
         // Notify parent to refresh data
         await OnIssueTypeChanged.InvokeAsync();
+    }
+
+    private async Task DecreaseLevels()
+    {
+        if (MaxDepth > 0)
+        {
+            await MaxDepthChanged.InvokeAsync(MaxDepth - 1);
+        }
+    }
+
+    private async Task IncreaseLevels()
+    {
+        if (MaxDepth < _maxAvailableLane)
+        {
+            await MaxDepthChanged.InvokeAsync(MaxDepth + 1);
+        }
     }
 }

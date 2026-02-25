@@ -35,7 +35,9 @@
                 OnEditClick="OnEditClick"
                 OnRunAgentClick="OnRunAgentClick"
                 SelectedNodeId="@GetKeyboardSelectedNodeId()"
-                NavService="@NavService" />
+                NavService="@NavService"
+                MaxDepth="@_maxDepth"
+                MaxDepthChanged="HandleMaxDepthChanged" />
         </div>
     }
     else if (_graph != null && _layout != null)
@@ -414,6 +416,10 @@
     private List<TaskGraphIssueRenderLine> _issueRenderLines = [];
     private string? _previousSelectedIssueId;
 
+    // Level depth controls
+    private int _maxDepth = 3;
+    private int _maxAvailableDepth = 0;
+
     private readonly TimelineLaneCalculator _laneCalculator = new();
 
     protected override async Task OnInitializedAsync()
@@ -712,11 +718,22 @@
         try
         {
             _taskGraphData = await GraphApi.GetTaskGraphDataAsync(ProjectId, _currentMaxPastPRs);
+
+            // Compute max available depth from the data
+            if (_taskGraphData?.Nodes.Count > 0)
+            {
+                _maxAvailableDepth = _taskGraphData.Nodes.Max(n => n.Lane);
+            }
+            else
+            {
+                _maxAvailableDepth = 0;
+            }
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Failed to load task graph: {ex.Message}");
             _taskGraphData = null;
+            _maxAvailableDepth = 0;
         }
     }
 
@@ -929,9 +946,51 @@ if (_notificationHubConnection != null)
             case "G":
                 NavService.MoveToLast();
                 break;
-            case "Enter":
+case "Enter":
                 NavService.OpenSelectedIssueForEdit();
                 break;
+            case "[":
+                DecreaseDepth();
+                break;
+            case "]":
+                IncreaseDepth();
+                break;
+        }
+    }
+
+    private void DecreaseDepth()
+    {
+        if (_maxDepth > 0)
+        {
+            _maxDepth--;
+            UpdateRenderLinesForDepth();
+            StateHasChanged();
+        }
+    }
+
+    private void IncreaseDepth()
+    {
+        if (_maxDepth < _maxAvailableDepth)
+        {
+            _maxDepth++;
+            UpdateRenderLinesForDepth();
+            StateHasChanged();
+        }
+    }
+
+    private void HandleMaxDepthChanged(int newDepth)
+    {
+        _maxDepth = newDepth;
+        UpdateRenderLinesForDepth();
+        StateHasChanged();
+    }
+
+    private void UpdateRenderLinesForDepth()
+    {
+        if (_taskGraphData != null)
+        {
+            var allRenderLines = TaskGraphLayoutService.ComputeLayout(_taskGraphData, _maxDepth);
+            _issueRenderLines = allRenderLines.OfType<TaskGraphIssueRenderLine>().ToList();
         }
     }
 
@@ -983,7 +1042,7 @@ if (_notificationHubConnection != null)
         if (_taskGraphData != null)
         {
             NavService.SetTaskGraphNodes(_taskGraphData.Nodes);
-            var allRenderLines = TaskGraphLayoutService.ComputeLayout(_taskGraphData);
+            var allRenderLines = TaskGraphLayoutService.ComputeLayout(_taskGraphData, _maxDepth);
             _issueRenderLines = allRenderLines.OfType<TaskGraphIssueRenderLine>().ToList();
             NavService.Initialize(_issueRenderLines);
 

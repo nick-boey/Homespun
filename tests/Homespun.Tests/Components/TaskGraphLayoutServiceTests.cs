@@ -487,9 +487,10 @@ public class TaskGraphLayoutServiceTests
     public void ComputeLayout_FullMockData_CorrectLineCount()
     {
         // No connector rows, no separators — only issue lines
+        // Use maxDepth=int.MaxValue to show all nodes without filtering
         var taskGraph = BuildFullMockTaskGraph();
 
-        var result = TaskGraphLayoutService.ComputeLayout(taskGraph);
+        var result = TaskGraphLayoutService.ComputeLayout(taskGraph, maxDepth: int.MaxValue);
 
         var issueCount = result.Count(l => l is TaskGraphIssueRenderLine);
         var separatorCount = result.Count(l => l is TaskGraphSeparatorRenderLine);
@@ -929,7 +930,7 @@ public class TaskGraphLayoutServiceTests
         Assert.That(issueLines.First(l => l.IssueId == "ISSUE-002").IsLastLane0Connector, Is.True);
     }
 
-    [Test]
+[Test]
     public void ComputeLayout_MergedPrs_SeriesSiblingsInLane0_OnlyFirstGetsConnector()
     {
         // When series siblings are in lane 0 (offset to lane 1 with PRs),
@@ -971,7 +972,7 @@ public class TaskGraphLayoutServiceTests
             ]
         };
 
-        var result = TaskGraphLayoutService.ComputeLayout(taskGraph);
+        var result = TaskGraphLayoutService.ComputeLayout(taskGraph, maxDepth: int.MaxValue);
         var issueLines = result.OfType<TaskGraphIssueRenderLine>().ToList();
 
         // First series sibling: gets connector (is the "next" actionable item)
@@ -1036,7 +1037,7 @@ public class TaskGraphLayoutServiceTests
             ]
         };
 
-        var result = TaskGraphLayoutService.ComputeLayout(taskGraph);
+        var result = TaskGraphLayoutService.ComputeLayout(taskGraph, maxDepth: int.MaxValue);
         var issueLines = result.OfType<TaskGraphIssueRenderLine>().ToList();
 
         // First sibling gets connector AND is last connector (since subsequent siblings are blocked)
@@ -1094,7 +1095,7 @@ public class TaskGraphLayoutServiceTests
             ]
         };
 
-        var result = TaskGraphLayoutService.ComputeLayout(taskGraph);
+        var result = TaskGraphLayoutService.ComputeLayout(taskGraph, maxDepth: int.MaxValue);
         var issueLines = result.OfType<TaskGraphIssueRenderLine>().ToList();
 
         // Orphan before: connector, not last
@@ -1156,7 +1157,7 @@ public class TaskGraphLayoutServiceTests
             ]
         };
 
-        var result = TaskGraphLayoutService.ComputeLayout(taskGraph);
+        var result = TaskGraphLayoutService.ComputeLayout(taskGraph, maxDepth: int.MaxValue);
         var issueLines = result.OfType<TaskGraphIssueRenderLine>().ToList();
 
         // Both parallel siblings get connectors
@@ -1169,6 +1170,188 @@ public class TaskGraphLayoutServiceTests
         Assert.That(childB.IsSeriesChild, Is.False);
         Assert.That(childB.IsLastLane0Connector, Is.True, "Last parallel child is last connector");
     }
+
+    #region MaxDepth Filtering Tests
+
+    [Test]
+    public void ComputeLayout_MaxDepth_FiltersNodesAboveLimitByLane()
+    {
+        // The full mock has nodes from lane 0 to lane 5
+        // With maxDepth=2, only lanes 0, 1, 2 should be visible
+        var taskGraph = BuildFullMockTaskGraph();
+
+        var result = TaskGraphLayoutService.ComputeLayout(taskGraph, maxDepth: 2);
+        var issueLines = result.OfType<TaskGraphIssueRenderLine>().ToList();
+
+        // All lane 0, 1, 2 nodes should be present
+        Assert.That(issueLines.Any(l => l.IssueId == "ISSUE-003"), Is.True, "Lane 0 orphan should be visible");
+        Assert.That(issueLines.Any(l => l.IssueId == "ISSUE-001"), Is.True, "Lane 0 orphan should be visible");
+        Assert.That(issueLines.Any(l => l.IssueId == "ISSUE-010"), Is.True, "Lane 0 node should be visible");
+        Assert.That(issueLines.Any(l => l.IssueId == "ISSUE-009"), Is.True, "Lane 1 node should be visible");
+        Assert.That(issueLines.Any(l => l.IssueId == "ISSUE-011"), Is.True, "Lane 1 node should be visible");
+        Assert.That(issueLines.Any(l => l.IssueId == "ISSUE-008"), Is.True, "Lane 2 node should be visible");
+        Assert.That(issueLines.Any(l => l.IssueId == "ISSUE-012"), Is.True, "Lane 2 node should be visible");
+        Assert.That(issueLines.Any(l => l.IssueId == "ISSUE-002"), Is.True, "Lane 0 orphan should be visible");
+
+        // Lane 3, 4, 5 nodes should be filtered out
+        Assert.That(issueLines.Any(l => l.IssueId == "ISSUE-007"), Is.False, "Lane 3 node should be filtered");
+        Assert.That(issueLines.Any(l => l.IssueId == "ISSUE-006"), Is.False, "Lane 3 node should be filtered");
+        Assert.That(issueLines.Any(l => l.IssueId == "ISSUE-013"), Is.False, "Lane 3 node should be filtered");
+        Assert.That(issueLines.Any(l => l.IssueId == "ISSUE-005"), Is.False, "Lane 4 node should be filtered");
+        Assert.That(issueLines.Any(l => l.IssueId == "ISSUE-004"), Is.False, "Lane 5 node should be filtered");
+    }
+
+    [Test]
+    public void ComputeLayout_MaxDepth_SetsHasHiddenParent_WhenParentFiltered()
+    {
+        // With maxDepth=2, ISSUE-008 (lane 2) has parent ISSUE-007 (lane 3) which is filtered
+        var taskGraph = BuildFullMockTaskGraph();
+
+        var result = TaskGraphLayoutService.ComputeLayout(taskGraph, maxDepth: 2);
+        var issueLines = result.OfType<TaskGraphIssueRenderLine>().ToList();
+
+        // ISSUE-008 should have HasHiddenParent=true because ISSUE-007 is filtered
+        var issue008 = issueLines.FirstOrDefault(l => l.IssueId == "ISSUE-008");
+        Assert.That(issue008, Is.Not.Null);
+        Assert.That(issue008!.HasHiddenParent, Is.True, "Node with filtered parent should have HasHiddenParent=true");
+
+        // ISSUE-012 also has parent ISSUE-007 which is filtered
+        var issue012 = issueLines.FirstOrDefault(l => l.IssueId == "ISSUE-012");
+        Assert.That(issue012, Is.Not.Null);
+        Assert.That(issue012!.HasHiddenParent, Is.True);
+
+        // ISSUE-009 has parent ISSUE-008 which is NOT filtered
+        var issue009 = issueLines.FirstOrDefault(l => l.IssueId == "ISSUE-009");
+        Assert.That(issue009, Is.Not.Null);
+        Assert.That(issue009!.HasHiddenParent, Is.False, "Node with visible parent should have HasHiddenParent=false");
+    }
+
+    [Test]
+    public void ComputeLayout_MaxDepth_SetsHiddenParentIsSeriesMode_ForSeriesParent()
+    {
+        // ISSUE-008 has parent ISSUE-007 which is a Series execution mode parent
+        var taskGraph = BuildFullMockTaskGraph();
+
+        var result = TaskGraphLayoutService.ComputeLayout(taskGraph, maxDepth: 2);
+        var issueLines = result.OfType<TaskGraphIssueRenderLine>().ToList();
+
+        // ISSUE-008's filtered parent (ISSUE-007) has ExecutionMode.Series
+        var issue008 = issueLines.FirstOrDefault(l => l.IssueId == "ISSUE-008");
+        Assert.That(issue008, Is.Not.Null);
+        Assert.That(issue008!.HiddenParentIsSeriesMode, Is.True, "Hidden parent with Series mode should set flag");
+
+        // ISSUE-012's filtered parent (ISSUE-007) also has ExecutionMode.Series
+        var issue012 = issueLines.FirstOrDefault(l => l.IssueId == "ISSUE-012");
+        Assert.That(issue012, Is.Not.Null);
+        Assert.That(issue012!.HiddenParentIsSeriesMode, Is.True);
+    }
+
+    [Test]
+    public void ComputeLayout_MaxDepth_PreservesConnectionsWithinLimit()
+    {
+        // With maxDepth=2, connections between visible nodes should still work
+        var taskGraph = BuildFullMockTaskGraph();
+
+        var result = TaskGraphLayoutService.ComputeLayout(taskGraph, maxDepth: 2);
+        var issueLines = result.OfType<TaskGraphIssueRenderLine>().ToList();
+
+        // ISSUE-009 (lane 1) should still connect to ISSUE-008 (lane 2)
+        var issue009 = issueLines.FirstOrDefault(l => l.IssueId == "ISSUE-009");
+        Assert.That(issue009, Is.Not.Null);
+        Assert.That(issue009!.ParentLane, Is.EqualTo(2), "Connection to visible parent should be preserved");
+    }
+
+    [Test]
+    public void ComputeLayout_DefaultMaxDepth_IsThree()
+    {
+        // Default maxDepth should be 3 (lanes 0, 1, 2, 3 visible)
+        var taskGraph = BuildFullMockTaskGraph();
+
+        var result = TaskGraphLayoutService.ComputeLayout(taskGraph);
+        var issueLines = result.OfType<TaskGraphIssueRenderLine>().ToList();
+
+        // Lane 3 nodes should be visible with default maxDepth
+        Assert.That(issueLines.Any(l => l.IssueId == "ISSUE-007"), Is.True, "Lane 3 should be visible with default maxDepth=3");
+        Assert.That(issueLines.Any(l => l.IssueId == "ISSUE-006"), Is.True, "Lane 3 should be visible with default maxDepth=3");
+
+        // Lane 4 and 5 nodes should be filtered with default maxDepth
+        Assert.That(issueLines.Any(l => l.IssueId == "ISSUE-005"), Is.False, "Lane 4 should be filtered with default maxDepth=3");
+        Assert.That(issueLines.Any(l => l.IssueId == "ISSUE-004"), Is.False, "Lane 5 should be filtered with default maxDepth=3");
+    }
+
+    [Test]
+    public void ComputeLayout_MaxDepth_One_ShowsOnlyLaneZeroNodes()
+    {
+        var taskGraph = BuildFullMockTaskGraph();
+
+        var result = TaskGraphLayoutService.ComputeLayout(taskGraph, maxDepth: 0);
+        var issueLines = result.OfType<TaskGraphIssueRenderLine>().ToList();
+
+        // Only lane 0 nodes should be visible
+        Assert.That(issueLines.All(l => l.Lane == 0), Is.True, "Only lane 0 nodes should be visible with maxDepth=0");
+        Assert.That(issueLines.Count, Is.EqualTo(4), "Should have 4 lane-0 nodes: ISSUE-003, ISSUE-001, ISSUE-010, ISSUE-002");
+    }
+
+    [Test]
+    public void ComputeLayout_MaxDepth_NoLimit_ShowsAllNodes()
+    {
+        // With very high maxDepth, all nodes should be visible
+        var taskGraph = BuildFullMockTaskGraph();
+
+        var result = TaskGraphLayoutService.ComputeLayout(taskGraph, maxDepth: 100);
+        var issueLines = result.OfType<TaskGraphIssueRenderLine>().ToList();
+
+        Assert.That(issueLines.Count, Is.EqualTo(13), "All 13 nodes should be visible with high maxDepth");
+        Assert.That(issueLines.All(l => !l.HasHiddenParent), Is.True, "No nodes should have hidden parents");
+    }
+
+    [Test]
+    public void ComputeLayout_MaxDepth_WithMergedPrs_StillAppliesOffset()
+    {
+        // When merged PRs exist, lanes are offset by 1, but maxDepth should work on original lanes
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes =
+            [
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "CHILD-001", Title = "Child", Status = IssueStatus.Open,
+                        ParentIssues = [new ParentIssueRefResponse { ParentIssue = "PARENT-001" }] },
+                    Lane = 0, Row = 0, IsActionable = true
+                },
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "PARENT-001", Title = "Parent", Status = IssueStatus.Open,
+                        ParentIssues = [new ParentIssueRefResponse { ParentIssue = "GRANDPARENT" }] },
+                    Lane = 1, Row = 1, IsActionable = false
+                },
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "GRANDPARENT", Title = "Grandparent", Status = IssueStatus.Open },
+                    Lane = 2, Row = 2, IsActionable = false
+                }
+            ],
+            TotalLanes = 3,
+            MergedPrs =
+            [
+                new TaskGraphPrResponse { Number = 100, Title = "PR 100", IsMerged = true }
+            ]
+        };
+
+        // With maxDepth=1, only lanes 0 and 1 should be visible (GRANDPARENT at lane 2 filtered)
+        var result = TaskGraphLayoutService.ComputeLayout(taskGraph, maxDepth: 1);
+        var issueLines = result.OfType<TaskGraphIssueRenderLine>().ToList();
+
+        Assert.That(issueLines.Any(l => l.IssueId == "CHILD-001"), Is.True);
+        Assert.That(issueLines.Any(l => l.IssueId == "PARENT-001"), Is.True);
+        Assert.That(issueLines.Any(l => l.IssueId == "GRANDPARENT"), Is.False, "Lane 2 node should be filtered");
+
+        // PARENT-001 should have HasHiddenParent=true
+        var parent = issueLines.FirstOrDefault(l => l.IssueId == "PARENT-001");
+        Assert.That(parent!.HasHiddenParent, Is.True);
+    }
+
+    #endregion
 
     private static TaskGraphResponse BuildFullMockTaskGraph()
     {
