@@ -8,6 +8,7 @@ namespace Homespun.Client.Services;
 /// <summary>
 /// Client-side SignalR service for real-time Claude Code session communication.
 /// Manages the HubConnection lifecycle and exposes events for server-to-client messages.
+/// Uses AG-UI events for message streaming.
 /// </summary>
 public class ClaudeCodeSignalRService : IAsyncDisposable
 {
@@ -31,7 +32,7 @@ public class ClaudeCodeSignalRService : IAsyncDisposable
     /// </summary>
     public IReadOnlySet<string> JoinedSessions => _joinedSessions;
 
-    // Server-to-client events
+    // Server-to-client events for session lifecycle management
 
     /// <summary>Fired when a new session starts.</summary>
     public event Action<ClaudeSession>? OnSessionStarted;
@@ -42,12 +43,6 @@ public class ClaudeCodeSignalRService : IAsyncDisposable
     /// <summary>Fired when the current session state is received (on join).</summary>
     public event Action<ClaudeSession>? OnSessionState;
 
-    /// <summary>Fired when a complete message is received in a session.</summary>
-    public event Action<ClaudeMessage>? OnMessageReceived;
-
-    /// <summary>Fired when a content block is received in a session.</summary>
-    public event Action<ClaudeMessageContent>? OnContentBlockReceived;
-
     /// <summary>Fired when a session's status changes.</summary>
     public event Action<string, ClaudeSessionStatus, bool>? OnSessionStatusChanged;
 
@@ -56,21 +51,6 @@ public class ClaudeCodeSignalRService : IAsyncDisposable
 
     /// <summary>Fired when session result (cost, duration) is received.</summary>
     public event Action<string, decimal, long>? OnSessionResultReceived;
-
-    /// <summary>Fired when a streaming content block starts.</summary>
-    public event Action<ClaudeMessageContent, int>? OnStreamingContentStarted;
-
-    /// <summary>Fired when a streaming content delta is received.</summary>
-    public event Action<ClaudeMessageContent, string, int>? OnStreamingContentDelta;
-
-    /// <summary>Fired when a streaming content block stops.</summary>
-    public event Action<ClaudeMessageContent, int>? OnStreamingContentStopped;
-
-    /// <summary>Fired when Claude asks a question requiring user input.</summary>
-    public event Action<PendingQuestion>? OnQuestionReceived;
-
-    /// <summary>Fired when a pending question has been answered.</summary>
-    public event Action? OnQuestionAnswered;
 
     /// <summary>Fired when context has been cleared for a session.</summary>
     public event Action<string>? OnContextCleared;
@@ -261,6 +241,7 @@ public class ClaudeCodeSignalRService : IAsyncDisposable
 
     private void RegisterHandlers(HubConnection connection)
     {
+        // Session lifecycle events
         connection.On<ClaudeSession>("SessionStarted",
             session => OnSessionStarted?.Invoke(session));
 
@@ -270,13 +251,7 @@ public class ClaudeCodeSignalRService : IAsyncDisposable
         connection.On<ClaudeSession>("SessionState",
             session => OnSessionState?.Invoke(session));
 
-        connection.On<ClaudeMessage>("MessageReceived",
-            message => OnMessageReceived?.Invoke(message));
-
-        connection.On<ClaudeMessageContent>("ContentBlockReceived",
-            content => OnContentBlockReceived?.Invoke(content));
-
-        connection.On<string, ClaudeSessionStatus, bool>("SessionStatusChanged",
+connection.On<string, ClaudeSessionStatus, bool>("SessionStatusChanged",
             (sessionId, status, hasPendingPlanApproval) => OnSessionStatusChanged?.Invoke(sessionId, status, hasPendingPlanApproval));
 
         connection.On<string, SessionMode, string>("SessionModeModelChanged",
@@ -286,21 +261,6 @@ public class ClaudeCodeSignalRService : IAsyncDisposable
             (sessionId, totalCostUsd, durationMs) =>
                 OnSessionResultReceived?.Invoke(sessionId, totalCostUsd, durationMs));
 
-        connection.On<ClaudeMessageContent, int>("StreamingContentStarted",
-            (content, index) => OnStreamingContentStarted?.Invoke(content, index));
-
-        connection.On<ClaudeMessageContent, string, int>("StreamingContentDelta",
-            (content, delta, index) => OnStreamingContentDelta?.Invoke(content, delta, index));
-
-        connection.On<ClaudeMessageContent, int>("StreamingContentStopped",
-            (content, index) => OnStreamingContentStopped?.Invoke(content, index));
-
-        connection.On<PendingQuestion>("QuestionReceived",
-            question => OnQuestionReceived?.Invoke(question));
-
-        connection.On("QuestionAnswered",
-            () => OnQuestionAnswered?.Invoke());
-
         connection.On<string>("ContextCleared",
             sessionId => OnContextCleared?.Invoke(sessionId));
 
@@ -308,7 +268,7 @@ public class ClaudeCodeSignalRService : IAsyncDisposable
             (sessionId, errorMessage, errorSubtype, isRecoverable) =>
                 OnSessionError?.Invoke(sessionId, errorMessage, errorSubtype, isRecoverable));
 
-        // Register AG-UI event handlers
+        // Register AG-UI event handlers for message streaming
         connection.On<RunStartedEvent>(AGUIEventType.RunStarted,
             evt => OnAGUIRunStarted?.Invoke(evt));
 
