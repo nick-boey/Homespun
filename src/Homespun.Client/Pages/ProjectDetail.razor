@@ -30,6 +30,7 @@
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JSRuntime
 @inject IKeyboardNavigationService NavService
+@inject IPanelService PanelService
 
 <PageTitle>@(_project?.Name ?? "Project")</PageTitle>
 
@@ -142,6 +143,7 @@ else
                     OnIssueCreated="@HandleInlineIssueCreated"
                     OnEditClick="@HandleEditIssue"
                     OnRunAgentClick="@HandleRunAgentOnIssue"
+                    OnOpenPanelClick="@HandleOpenPanelFromGraph"
                     SelectedNodeId="@GetSelectedNodeId()"
                     ActiveSearchTerm="@GetActiveSearchTerm()" />
             </div>
@@ -558,6 +560,15 @@ else
         // Subscribe to agent startup state changes to update UI
         StartupTracker.OnStateChanged += OnStartupStateChanged;
 
+        // Subscribe to panel service state changes
+        PanelService.OnStateChanged += OnPanelServiceStateChanged;
+
+        // Register panel availability for issues tab
+        if (_activeTab == "issues")
+        {
+            PanelService.SetPanelAvailable(true);
+        }
+
         await LoadData();
         await SetupSignalRConnection();
 
@@ -644,6 +655,16 @@ else
         HandleEditIssue(issueId);
     }
 
+    private void OnPanelServiceStateChanged()
+    {
+        // Sync local sidebar state with panel service
+        if (_sidebarOpen != PanelService.IsPanelOpen)
+        {
+            _sidebarOpen = PanelService.IsPanelOpen;
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
     private void SwitchTab(string tab)
     {
         if (_activeTab == tab) return;
@@ -656,6 +677,9 @@ else
 
         _activeTab = tab;
         ClearSelection();
+
+        // Update panel availability based on tab
+        PanelService.SetPanelAvailable(tab == "issues");
 
         // Update the URL without causing a full navigation
         var newUrl = tab switch
@@ -691,6 +715,8 @@ else
         StartupTracker.OnStateChanged -= OnStartupStateChanged;
         NavService.OnStateChanged -= OnNavServiceStateChanged;
         NavService.OnOpenEditRequested -= OnOpenEditRequested;
+        PanelService.OnStateChanged -= OnPanelServiceStateChanged;
+        PanelService.SetPanelAvailable(false);
     }
 
     public async ValueTask DisposeAsync()
@@ -1122,13 +1148,31 @@ else
 
     /// <summary>
     /// Handles a click event on an issue in the task graph.
-    /// This opens the collapsible sidebar and displays the issue details.
+    /// On desktop: Opens the collapsible sidebar and displays the issue details.
+    /// On mobile: Only selects the issue (panel opened via explicit button).
     /// Distinct from keyboard navigation which only highlights.
     /// </summary>
-    private void HandleIssueClickFromGraph(string issueId)
+    private async Task HandleIssueClickFromGraph(string issueId)
+    {
+        SelectIssue(issueId);
+
+        // On mobile, don't auto-open the sidebar - user must use the open panel button
+        var isMobile = await JSRuntime.InvokeAsync<bool>("sidebarManager.isMobile");
+        if (!isMobile)
+        {
+            _sidebarOpen = true;
+            PanelService.SetPanelOpen(true);
+        }
+    }
+
+    /// <summary>
+    /// Handles explicit "Open Panel" button click from issue row (mobile only).
+    /// </summary>
+    private void HandleOpenPanelFromGraph(string issueId)
     {
         SelectIssue(issueId);
         _sidebarOpen = true;
+        PanelService.SetPanelOpen(true);
     }
 
     /// <summary>
@@ -1138,7 +1182,14 @@ else
     private async Task HandlePullRequestClickFromGraph(int prNumber)
     {
         await SelectPullRequestByNumber(prNumber);
-        _sidebarOpen = true;
+
+        // On mobile, don't auto-open the sidebar
+        var isMobile = await JSRuntime.InvokeAsync<bool>("sidebarManager.isMobile");
+        if (!isMobile)
+        {
+            _sidebarOpen = true;
+            PanelService.SetPanelOpen(true);
+        }
     }
 
     /// <summary>
@@ -1147,6 +1198,7 @@ else
     private void CloseSidebar()
     {
         _sidebarOpen = false;
+        PanelService.SetPanelOpen(false);
     }
 
     /// <summary>

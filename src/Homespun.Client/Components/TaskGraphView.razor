@@ -184,7 +184,8 @@
                                              OnRunAgentClick="HandleRunAgentClick"
                                              ShowAgentDropdown="@(NavService?.EditMode == KeyboardEditMode.SelectingAgentPrompt && NavService?.SelectedIssueId == issueLine.IssueId)"
                                              SelectedPromptIndex="@(NavService?.SelectedPromptIndex ?? 0)"
-                                             OnKeyboardAgentStart="HandleKeyboardAgentStart" />
+                                             OnKeyboardAgentStart="HandleKeyboardAgentStart"
+                                             OnOpenPanelClick="HandleOpenPanelClick" />
                         }
                     </div>
                 </div>
@@ -895,6 +896,11 @@
     /// </summary>
     [Parameter] public EventCallback<int> MaxDepthChanged { get; set; }
 
+    /// <summary>
+    /// Called when the open panel button is clicked on an issue row (mobile only).
+    /// </summary>
+    [Parameter] public EventCallback<string> OnOpenPanelClick { get; set; }
+
     private List<TaskGraphRenderLine> _renderLines = [];
     private int _maxLane;
     private int _maxAvailableLane;
@@ -1160,6 +1166,11 @@ lane0Color: issueLine.Lane0Color,
     /// Used by parent components to trigger keyboard actions.
     /// </summary>
     public IssueRowActions? GetActiveIssueRowActions() => _issueRowActionsRef;
+
+    private async Task HandleOpenPanelClick(string issueId)
+    {
+        await OnOpenPanelClick.InvokeAsync(issueId);
+    }
 
     private async Task HandleLoadMoreClick()
     {

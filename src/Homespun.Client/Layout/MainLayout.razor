@@ -3,6 +3,7 @@
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JSRuntime
 @inject IBreadcrumbService BreadcrumbService
+@inject IPanelService PanelService
 @using System.Reflection
 
 <div class="page @(_sidebarOpen ? "sidebar-open" : "sidebar-closed")" @onkeydown="HandleKeyDown" tabindex="-1">
@@ -28,8 +29,11 @@
         <div class="top-bar-spacer"></div>
         <AgentStatusIndicator />
         <span class="version-display" title="Homespun v@_version">v@_version</span>
-        <button class="theme-toggle" @onclick="CycleTheme" title="@GetThemeTooltip()">
-            <span class="theme-icon @_currentTheme"></span>
+        <button class="panel-toggle @(PanelService.IsPanelAvailable ? "" : "disabled")"
+                @onclick="TogglePanel"
+                disabled="@(!PanelService.IsPanelAvailable)"
+                title="@GetPanelToggleTooltip()">
+            <i class="bi @(PanelService.IsPanelOpen ? "bi-layout-sidebar-inset-reverse" : "bi-layout-sidebar-reverse")"></i>
         </button>
     </header>
 
@@ -58,7 +62,6 @@
 
 @code {
     private bool _sidebarOpen = false;
-    private string _currentTheme = "auto";
     private string _version = GetShortVersion();
 
     private static string GetShortVersion()
@@ -75,14 +78,13 @@
     {
         NavigationManager.LocationChanged += OnLocationChanged;
         BreadcrumbService.OnBreadcrumbsChanged += OnBreadcrumbsChanged;
+        PanelService.OnStateChanged += OnPanelStateChanged;
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
         {
-            _currentTheme = await JSRuntime.InvokeAsync<string>("themeManager.getTheme") ?? "auto";
-
             // Set sidebar open for desktop, closed for mobile
             var isMobile = await JSRuntime.InvokeAsync<bool>("sidebarManager.isMobile");
             _sidebarOpen = !isMobile;
@@ -124,28 +126,28 @@
         // The sidebar can be closed via backdrop click or toggle button
     }
 
-    private async Task CycleTheme()
+    private void TogglePanel()
     {
-        _currentTheme = _currentTheme switch
-        {
-            "auto" => "light",
-            "light" => "dark",
-            "dark" => "auto",
-            _ => "auto"
-        };
-        await JSRuntime.InvokeVoidAsync("themeManager.setTheme", _currentTheme);
+        PanelService.TogglePanel();
     }
 
-    private string GetThemeTooltip() => _currentTheme switch
+    private void OnPanelStateChanged()
     {
-        "light" => "Theme: Light (click to switch to Dark)",
-        "dark" => "Theme: Dark (click to switch to Auto)",
-        _ => "Theme: Auto (click to switch to Light)"
-    };
+        InvokeAsync(StateHasChanged);
+    }
+
+    private string GetPanelToggleTooltip()
+    {
+        if (!PanelService.IsPanelAvailable)
+            return "No panel available on this page";
+
+        return PanelService.IsPanelOpen ? "Close detail panel" : "Open detail panel";
+    }
 
     public void Dispose()
     {
         NavigationManager.LocationChanged -= OnLocationChanged;
         BreadcrumbService.OnBreadcrumbsChanged -= OnBreadcrumbsChanged;
+        PanelService.OnStateChanged -= OnPanelStateChanged;
     }
 }

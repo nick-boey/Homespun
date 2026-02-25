@@ -17,6 +17,7 @@
 @inject HttpIssueApiService IssueApi
 @inject HttpProjectApiService ProjectApi
 @inject MessageDisplayService MessageDisplayService
+@inject IPanelService PanelService
 
 <PageTitle>Session - Homespun</PageTitle>
 
@@ -415,7 +416,7 @@
             </div>
         </div>
 
-        <SessionInfoPanel Session="_session" @bind-IsOpen="_sidePanelOpen" IssueTitle="@_issueTitle" />
+        <SessionInfoPanel Session="_session" IsOpen="_sidePanelOpen" IsOpenChanged="OnSessionPanelToggled" IssueTitle="@_issueTitle" />
         </div>
 
         @if (_session.TotalCostUsd > 0)
@@ -2003,6 +2004,10 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // Register panel availability and subscribe to changes
+        PanelService.SetPanelAvailable(true);
+        PanelService.OnStateChanged += OnPanelServiceStateChanged;
+
         try
         {
             await BreadcrumbService.SetContextAsync(new BreadcrumbContext { SessionId = SessionId });
@@ -3236,8 +3241,27 @@
         }
     }
 
+    private void OnPanelServiceStateChanged()
+    {
+        // Sync local panel state with panel service
+        if (_sidePanelOpen != PanelService.IsPanelOpen)
+        {
+            _sidePanelOpen = PanelService.IsPanelOpen;
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void OnSessionPanelToggled(bool isOpen)
+    {
+        _sidePanelOpen = isOpen;
+        PanelService.SetPanelOpen(isOpen);
+    }
+
     public async ValueTask DisposeAsync()
     {
+        PanelService.OnStateChanged -= OnPanelServiceStateChanged;
+        PanelService.SetPanelAvailable(false);
+
         if (_hubConnection != null)
         {
             try

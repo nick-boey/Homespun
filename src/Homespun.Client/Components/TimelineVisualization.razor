@@ -35,6 +35,7 @@
                 OnIssueStatusChanged="HandleIssueChangedAsync"
                 OnEditClick="OnEditClick"
                 OnRunAgentClick="OnRunAgentClick"
+                OnOpenPanelClick="OnOpenPanelClick"
                 SelectedNodeId="@GetKeyboardSelectedNodeId()"
                 NavService="@NavService"
                 MaxDepth="@_maxDepth"
@@ -383,6 +384,11 @@
     /// Called when an agent is started on an issue via the inline run agent button.
     /// </summary>
     [Parameter] public EventCallback<(string IssueId, AgentPrompt? Prompt)> OnRunAgentClick { get; set; }
+
+    /// <summary>
+    /// Called when the open panel button is clicked on an issue row (mobile only).
+    /// </summary>
+    [Parameter] public EventCallback<string> OnOpenPanelClick { get; set; }
 
     /// <summary>
     /// When true (default), displays issues using task graph mode where actionable items
