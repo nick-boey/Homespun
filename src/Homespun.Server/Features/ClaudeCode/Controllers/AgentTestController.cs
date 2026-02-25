@@ -583,13 +583,13 @@ public class AgentTestController : ControllerBase
                 });
             });
 
-            hubConnection.On<string, ClaudeSessionStatus>("SessionStatusChanged", (sessionId, status) =>
+            hubConnection.On<string, ClaudeSessionStatus, bool>("SessionStatusChanged", (sessionId, status, hasPendingPlanApproval) =>
             {
                 clientEvents.Add(new SignalREventRecord
                 {
                     Type = "SessionStatusChanged",
                     Timestamp = DateTime.UtcNow,
-                    Details = $"Status: {status}"
+                    Details = $"Status: {status}, HasPendingPlanApproval: {hasPendingPlanApproval}"
                 });
             });
 

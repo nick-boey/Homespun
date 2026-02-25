@@ -1310,7 +1310,8 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
 
             // Set status to WaitingForPlanExecution so UI shows the action buttons
             session.Status = ClaudeSessionStatus.WaitingForPlanExecution;
-            await _hubContext.BroadcastSessionStatusChanged(sessionId, session.Status);
+            session.HasPendingPlanApproval = true;
+            await _hubContext.BroadcastSessionStatusChanged(sessionId, session.Status, session.HasPendingPlanApproval);
 
             _logger.LogInformation("Session {SessionId} is now waiting for plan approval (from worker plan_pending)",
                 sessionId);
@@ -1424,7 +1425,8 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
 
             // Set status to WaitingForPlanExecution so UI shows the action buttons
             session.Status = ClaudeSessionStatus.WaitingForPlanExecution;
-            await _hubContext.BroadcastSessionStatusChanged(sessionId, session.Status);
+            session.HasPendingPlanApproval = true;
+            await _hubContext.BroadcastSessionStatusChanged(sessionId, session.Status, session.HasPendingPlanApproval);
 
             _logger.LogInformation("ExitPlanMode: Displayed plan from {FilePath} for session {SessionId} ({Length} chars), awaiting execution",
                 foundPath ?? "stored content", sessionId, planContent.Length);
@@ -1464,6 +1466,17 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Clears the plan state from a session after plan approval/rejection.
+    /// This ensures that plan controls won't reappear after the plan has been handled.
+    /// </summary>
+    private static void ClearPlanState(ClaudeSession session)
+    {
+        session.PlanContent = null;
+        session.PlanFilePath = null;
+        session.HasPendingPlanApproval = false;
     }
 
     /// <summary>
@@ -1758,13 +1771,20 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
 
         // Clear the WaitingForPlanExecution status
         session.Status = ClaudeSessionStatus.Running;
-        await _hubContext.BroadcastSessionStatusChanged(sessionId, session.Status);
+        session.HasPendingPlanApproval = false;
+        await _hubContext.BroadcastSessionStatusChanged(sessionId, session.Status, hasPendingPlanApproval: false);
+
+        // Capture plan content before clearing
+        var planContent = session.PlanContent;
+
+        // Clear plan state after capturing content
+        ClearPlanState(session);
 
         // Send the plan as the next message.
         // Do NOT reference the plan file path - the plan content is provided inline below.
         // Referencing the path causes the agent to try to read the file from disk,
         // which fails when running in a new container after context clearing.
-        var executionMessage = $"Please proceed with the implementation of the plan below. The full plan is provided here — do NOT attempt to read or find a plan file on disk.\n\n{session.PlanContent}";
+        var executionMessage = $"Please proceed with the implementation of the plan below. The full plan is provided here — do NOT attempt to read or find a plan file on disk.\n\n{planContent}";
         await SendMessageAsync(sessionId, executionMessage, PermissionMode.BypassPermissions, cancellationToken);
     }
 
@@ -1787,13 +1807,17 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             "Plan approval for session {SessionId}: approved={Approved}, keepContext={KeepContext}, hasFeedback={HasFeedback}",
             sessionId, approved, keepContext, feedback != null);
 
+        // Clear the pending plan approval flag immediately (UI should hide plan controls)
+        // Note: PlanContent/PlanFilePath are preserved for ExecutePlanAsync to use
+        session.HasPendingPlanApproval = false;
+
         if (approved)
         {
             if (keepContext)
             {
                 // Approve with context: tell worker to allow the ExitPlanMode tool, agent continues
                 session.Status = ClaudeSessionStatus.Running;
-                await _hubContext.BroadcastSessionStatusChanged(sessionId, session.Status);
+                await _hubContext.BroadcastSessionStatusChanged(sessionId, session.Status, hasPendingPlanApproval: false);
 
                 if (_agentSessionIds.TryGetValue(sessionId, out var agentSessionId))
                 {
@@ -1815,7 +1839,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
 
                 // Set status to Running immediately for responsive UI
                 session.Status = ClaudeSessionStatus.Running;
-                await _hubContext.BroadcastSessionStatusChanged(sessionId, session.Status);
+                await _hubContext.BroadcastSessionStatusChanged(sessionId, session.Status, hasPendingPlanApproval: false);
 
                 if (_agentSessionIds.TryGetValue(sessionId, out var agentSessionId))
                 {
@@ -1835,7 +1859,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         {
             // Reject: tell worker to deny (without interrupt), agent revises plan
             session.Status = ClaudeSessionStatus.Running;
-            await _hubContext.BroadcastSessionStatusChanged(sessionId, session.Status);
+            await _hubContext.BroadcastSessionStatusChanged(sessionId, session.Status, hasPendingPlanApproval: false);
 
             if (_agentSessionIds.TryGetValue(sessionId, out var agentSessionId))
             {

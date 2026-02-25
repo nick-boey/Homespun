@@ -120,8 +120,8 @@
                 .WithAutomaticReconnect()
                 .Build();
 
-            _hubConnection.On<string, ClaudeSessionStatus>("SessionStatusChanged",
-                (_, _) => InvokeAsync(async () => { await UpdateCountsAsync(); StateHasChanged(); }));
+            _hubConnection.On<string, ClaudeSessionStatus, bool>("SessionStatusChanged",
+                (_, _, _) => InvokeAsync(async () => { await UpdateCountsAsync(); StateHasChanged(); }));
 
             _hubConnection.On<ClaudeSession>("SessionStarted",
                 _ => InvokeAsync(async () => { await UpdateCountsAsync(); StateHasChanged(); }));

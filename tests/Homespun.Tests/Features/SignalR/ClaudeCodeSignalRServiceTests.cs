@@ -53,7 +53,7 @@ public class ClaudeCodeSignalRServiceTests
         Action<ClaudeSession> sessionStateHandler = _ => { };
         Action<ClaudeMessage> messageReceivedHandler = _ => { };
         Action<ClaudeMessageContent> contentBlockHandler = _ => { };
-        Action<string, ClaudeSessionStatus> statusChangedHandler = (_, _) => { };
+        Action<string, ClaudeSessionStatus, bool> statusChangedHandler = (_, _, _) => { };
         Action<string, decimal, long> resultHandler = (_, _, _) => { };
         Action<ClaudeMessageContent, int> streamStartedHandler = (_, _) => { };
         Action<ClaudeMessageContent, string, int> streamDeltaHandler = (_, _, _) => { };

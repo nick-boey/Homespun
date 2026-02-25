@@ -227,13 +227,18 @@ public static class ClaudeCodeHubExtensions
     /// <summary>
     /// Broadcasts session status change.
     /// </summary>
+    /// <param name="hubContext">The hub context</param>
+    /// <param name="sessionId">The session ID</param>
+    /// <param name="status">The new session status</param>
+    /// <param name="hasPendingPlanApproval">Whether there is a pending plan awaiting approval</param>
     public static async Task BroadcastSessionStatusChanged(
         this IHubContext<ClaudeCodeHub> hubContext,
         string sessionId,
-        ClaudeSessionStatus status)
+        ClaudeSessionStatus status,
+        bool hasPendingPlanApproval = false)
     {
-        await hubContext.Clients.All.SendAsync("SessionStatusChanged", sessionId, status);
-        await hubContext.Clients.Group($"session-{sessionId}").SendAsync("SessionStatusChanged", sessionId, status);
+        await hubContext.Clients.All.SendAsync("SessionStatusChanged", sessionId, status, hasPendingPlanApproval);
+        await hubContext.Clients.Group($"session-{sessionId}").SendAsync("SessionStatusChanged", sessionId, status, hasPendingPlanApproval);
     }
 
     /// <summary>

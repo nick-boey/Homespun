@@ -1905,6 +1905,161 @@ public class ClaudeSessionServicePlanApprovalTests
             Assert.That(session.PlanContent, Is.Not.Null.And.Not.Empty);
         });
     }
+
+    [Test]
+    public async Task ProcessSdkMessage_PlanPending_SetsHasPendingPlanApprovalTrue()
+    {
+        // Arrange
+        var session = await _service.StartSessionAsync(
+            "entity-1", "project-1", "/test/path", SessionMode.Plan, "sonnet");
+
+        var planJson = "{\"plan\":\"# My Plan\\n\\n1. Step one\\n2. Step two\"}";
+
+        // Simulate a plan_pending event followed by a result
+        _agentExecutionServiceMock
+            .Setup(s => s.StartSessionAsync(It.IsAny<AgentStartRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(CreateSdkMessageStream(
+                new SdkSystemMessage("agent-1", null, "session_started", null, null),
+                new SdkPlanPendingMessage("agent-1", planJson),
+                new SdkResultMessage("agent-1", null, null, 0, 0, false, 0, 0, null)));
+
+        // Act
+        await _service.SendMessageAsync(session.Id, "Plan this feature");
+
+        // Assert
+        Assert.That(session.HasPendingPlanApproval, Is.True,
+            "HasPendingPlanApproval should be true when a plan is pending");
+    }
+
+    [Test]
+    public async Task ApprovePlanAsync_Approved_SetsHasPendingPlanApprovalFalse()
+    {
+        // Arrange
+        var session = await _service.StartSessionAsync(
+            "entity-1", "project-1", "/test/path", SessionMode.Plan, "sonnet");
+
+        session.PlanContent = "# Test Plan";
+        session.PlanFilePath = "/test/plans/plan.md";
+        session.HasPendingPlanApproval = true;
+        session.Status = ClaudeSessionStatus.WaitingForPlanExecution;
+
+        // Set up agent session mapping
+        _agentExecutionServiceMock
+            .Setup(s => s.StartSessionAsync(It.IsAny<AgentStartRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(CreateSdkMessageStream(
+                new SdkSystemMessage("agent-1", null, "session_started", null, null),
+                new SdkResultMessage("agent-1", null, null, 0, 0, false, 0, 0, null)));
+
+        await _service.SendMessageAsync(session.Id, "Hello");
+        session.Status = ClaudeSessionStatus.WaitingForPlanExecution;
+        session.HasPendingPlanApproval = true;
+
+        _agentExecutionServiceMock
+            .Setup(s => s.ApprovePlanAsync(It.IsAny<string>(), true, true, null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        // Act
+        await _service.ApprovePlanAsync(session.Id, approved: true, keepContext: true);
+
+        // Assert - HasPendingPlanApproval must be false after approval
+        // Note: When worker handles approval, plan content is preserved in worker, not cleared locally
+        Assert.That(session.HasPendingPlanApproval, Is.False,
+            "HasPendingPlanApproval should be false after approval");
+    }
+
+    [Test]
+    public async Task ApprovePlanAsync_Rejected_SetsHasPendingPlanApprovalFalse()
+    {
+        // Arrange
+        var session = await _service.StartSessionAsync(
+            "entity-1", "project-1", "/test/path", SessionMode.Plan, "sonnet");
+
+        session.PlanContent = "# Test Plan";
+        session.PlanFilePath = "/test/plans/plan.md";
+        session.HasPendingPlanApproval = true;
+        session.Status = ClaudeSessionStatus.WaitingForPlanExecution;
+
+        // Set up agent session mapping
+        _agentExecutionServiceMock
+            .Setup(s => s.StartSessionAsync(It.IsAny<AgentStartRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(CreateSdkMessageStream(
+                new SdkSystemMessage("agent-1", null, "session_started", null, null),
+                new SdkResultMessage("agent-1", null, null, 0, 0, false, 0, 0, null)));
+
+        await _service.SendMessageAsync(session.Id, "Hello");
+        session.Status = ClaudeSessionStatus.WaitingForPlanExecution;
+        session.HasPendingPlanApproval = true;
+
+        _agentExecutionServiceMock
+            .Setup(s => s.ApprovePlanAsync(It.IsAny<string>(), false, false, "Please revise", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        // Act
+        await _service.ApprovePlanAsync(session.Id, approved: false, keepContext: false, feedback: "Please revise");
+
+        // Assert - HasPendingPlanApproval must be false after rejection
+        // Note: When worker handles rejection, plan content may be preserved for revision
+        Assert.That(session.HasPendingPlanApproval, Is.False,
+            "HasPendingPlanApproval should be false after rejection");
+    }
+
+    [Test]
+    public async Task ApprovePlanAsync_BroadcastsHasPendingPlanApprovalFalse()
+    {
+        // Arrange
+        var session = await _service.StartSessionAsync(
+            "entity-1", "project-1", "/test/path", SessionMode.Plan, "sonnet");
+
+        session.PlanContent = "# Test Plan";
+        session.HasPendingPlanApproval = true;
+        session.Status = ClaudeSessionStatus.WaitingForPlanExecution;
+
+        // Set up agent session mapping
+        _agentExecutionServiceMock
+            .Setup(s => s.StartSessionAsync(It.IsAny<AgentStartRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(CreateSdkMessageStream(
+                new SdkSystemMessage("agent-1", null, "session_started", null, null),
+                new SdkResultMessage("agent-1", null, null, 0, 0, false, 0, 0, null)));
+
+        await _service.SendMessageAsync(session.Id, "Hello");
+        session.Status = ClaudeSessionStatus.WaitingForPlanExecution;
+        session.HasPendingPlanApproval = true;
+
+        _agentExecutionServiceMock
+            .Setup(s => s.ApprovePlanAsync(It.IsAny<string>(), true, true, null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        // Track the status broadcast calls with HasPendingPlanApproval
+        var statusBroadcasts = new List<(string sessionId, ClaudeSessionStatus status, bool hasPendingPlanApproval)>();
+        _hubContextMock.Setup(h => h.Clients.All.SendCoreAsync(
+            "SessionStatusChanged",
+            It.IsAny<object?[]>(),
+            It.IsAny<CancellationToken>()))
+            .Callback<string, object?[], CancellationToken>((method, args, ct) =>
+            {
+                if (args.Length >= 3 && args[0] is string sid && args[1] is ClaudeSessionStatus st && args[2] is bool flag)
+                {
+                    statusBroadcasts.Add((sid, st, flag));
+                }
+                else if (args.Length >= 2 && args[0] is string sid2 && args[1] is ClaudeSessionStatus st2)
+                {
+                    // Handle backward compatible call without flag (defaults to false)
+                    statusBroadcasts.Add((sid2, st2, false));
+                }
+            })
+            .Returns(Task.CompletedTask);
+
+        // Act
+        await _service.ApprovePlanAsync(session.Id, approved: true, keepContext: true);
+
+        // Assert - verify that HasPendingPlanApproval=false was broadcast
+        Assert.That(statusBroadcasts, Has.Count.GreaterThanOrEqualTo(1),
+            "Should have broadcast at least one status change");
+
+        var lastBroadcast = statusBroadcasts.LastOrDefault(b => b.sessionId == session.Id);
+        Assert.That(lastBroadcast.hasPendingPlanApproval, Is.False,
+            "Should broadcast HasPendingPlanApproval=false after approval");
+    }
 }
 
 /// <summary>

@@ -197,7 +197,7 @@ else
             });
 
             // Subscribe to session status changes - refresh session data
-            _hubConnection.On<string, ClaudeSessionStatus>("SessionStatusChanged", async (sessionId, status) =>
+            _hubConnection.On<string, ClaudeSessionStatus, bool>("SessionStatusChanged", async (sessionId, status, hasPendingPlanApproval) =>
             {
                 // Refresh if the changed session is ours
                 if (_session?.Id == sessionId)

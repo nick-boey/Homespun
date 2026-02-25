@@ -49,7 +49,7 @@ public class ClaudeCodeSignalRService : IAsyncDisposable
     public event Action<ClaudeMessageContent>? OnContentBlockReceived;
 
     /// <summary>Fired when a session's status changes.</summary>
-    public event Action<string, ClaudeSessionStatus>? OnSessionStatusChanged;
+    public event Action<string, ClaudeSessionStatus, bool>? OnSessionStatusChanged;
 
     /// <summary>Fired when a session's mode or model changes.</summary>
     public event Action<string, SessionMode, string>? OnSessionModeModelChanged;
@@ -276,8 +276,8 @@ public class ClaudeCodeSignalRService : IAsyncDisposable
         connection.On<ClaudeMessageContent>("ContentBlockReceived",
             content => OnContentBlockReceived?.Invoke(content));
 
-        connection.On<string, ClaudeSessionStatus>("SessionStatusChanged",
-            (sessionId, status) => OnSessionStatusChanged?.Invoke(sessionId, status));
+        connection.On<string, ClaudeSessionStatus, bool>("SessionStatusChanged",
+            (sessionId, status, hasPendingPlanApproval) => OnSessionStatusChanged?.Invoke(sessionId, status, hasPendingPlanApproval));
 
         connection.On<string, SessionMode, string>("SessionModeModelChanged",
             (sessionId, mode, model) => OnSessionModeModelChanged?.Invoke(sessionId, mode, model));

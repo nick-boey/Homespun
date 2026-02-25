@@ -12,7 +12,7 @@ public interface IClaudeCodeHubClient
     Task SessionState(ClaudeSession session);
     Task MessageReceived(ClaudeMessage message);
     Task ContentBlockReceived(ClaudeMessageContent content);
-    Task SessionStatusChanged(string sessionId, ClaudeSessionStatus status);
+    Task SessionStatusChanged(string sessionId, ClaudeSessionStatus status, bool hasPendingPlanApproval = false);
 
     /// <summary>
     /// Notifies clients when a session's mode or model changes.

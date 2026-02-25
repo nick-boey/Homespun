@@ -263,7 +263,7 @@
                         </div>
                     }
 
-                    @if (_session.Status == ClaudeSessionStatus.WaitingForPlanExecution && !string.IsNullOrEmpty(_session.PlanContent))
+                    @if (_session.HasPendingPlanApproval && !string.IsNullOrEmpty(_session.PlanContent))
                     {
                         <div class="action-panel">
                             <div class="action-panel-header">
@@ -2253,17 +2253,25 @@
             });
         });
 
-        _hubConnection.On<string, ClaudeSessionStatus>("SessionStatusChanged", (sessionId, status) =>
+        _hubConnection.On<string, ClaudeSessionStatus, bool>("SessionStatusChanged", (sessionId, status, hasPendingPlanApproval) =>
         {
             _ = InvokeAsync(async () =>
             {
                 try
                 {
-                    LogDebug("SessionStatusChanged", $"Status: {status}");
+                    LogDebug("SessionStatusChanged", $"Status: {status}, HasPendingPlanApproval: {hasPendingPlanApproval}");
 
                     if (_session != null && _session.Id == sessionId)
                     {
                         _session.Status = status;
+                        _session.HasPendingPlanApproval = hasPendingPlanApproval;
+
+                        // Clear plan state if no longer pending
+                        if (!hasPendingPlanApproval)
+                        {
+                            _session.PlanContent = null;
+                            _session.PlanFilePath = null;
+                        }
 
                         // Reset plan action processing flag when status changes from WaitingForPlanExecution
                         if (status != ClaudeSessionStatus.WaitingForPlanExecution)
@@ -2396,6 +2404,7 @@
                         _session.TotalDurationMs = session.TotalDurationMs;
                         _session.PlanContent = session.PlanContent;
                         _session.PlanFilePath = session.PlanFilePath;
+                        _session.HasPendingPlanApproval = session.HasPendingPlanApproval;
                         _pendingQuestion = session.PendingQuestion;
                         Console.WriteLine($"[SignalR] SessionState received: {session.Messages.Count} messages, status: {session.Status}");
                     }
@@ -2489,6 +2498,7 @@
                     {
                         _session.PlanContent = planContent;
                         _session.PlanFilePath = planFilePath;
+                        _session.HasPendingPlanApproval = true;
                     }
                     StateHasChanged();
                     await AutoScrollToBottomIfNearEnd();

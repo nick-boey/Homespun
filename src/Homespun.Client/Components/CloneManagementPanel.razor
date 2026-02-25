@@ -739,7 +739,7 @@
             });
 
             // Subscribe to session status changes - refresh session data
-            _hubConnection.On<string, ClaudeSessionStatus>("SessionStatusChanged", async (sessionId, status) =>
+            _hubConnection.On<string, ClaudeSessionStatus, bool>("SessionStatusChanged", async (sessionId, status, _) =>
             {
                 // Check if any of our tracked sessions matches
                 var matchingSession = _projectSessions.FirstOrDefault(s => s.Id == sessionId);

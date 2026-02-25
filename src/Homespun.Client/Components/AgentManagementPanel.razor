@@ -534,7 +534,7 @@
             });
 
             // Subscribe to session status changes - refresh to update status indicators
-            _hubConnection.On<string, ClaudeSessionStatus>("SessionStatusChanged", async (_, _) =>
+            _hubConnection.On<string, ClaudeSessionStatus, bool>("SessionStatusChanged", async (_, _, _) =>
             {
                 await InvokeAsync(async () =>
                 {
