@@ -1,0 +1,160 @@
+@*
+    SessionsPanel depends on SignalR and session services.
+    This showcase provides a description of its features.
+*@
+
+<div class="showcase-section">
+    <h3>Component Overview</h3>
+    <div class="showcase-item">
+        <div class="showcase-preview">
+            <div class="alert alert-info mb-0">
+                <strong>SessionsPanel</strong> is a unified panel for managing Claude Code agent sessions.
+                It displays session information with real-time updates via SignalR.
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Key Features</h3>
+    <div class="showcase-item">
+        <div class="showcase-preview">
+            <ul class="list-unstyled mb-0">
+                <li class="mb-2">
+                    <span class="badge bg-primary me-2">Unified</span>
+                    Single component for both global and project-specific views
+                </li>
+                <li class="mb-2">
+                    <span class="badge bg-info me-2">Grouping</span>
+                    Groups by project (global) or by status (project-specific)
+                </li>
+                <li class="mb-2">
+                    <span class="badge bg-success me-2">Real-time</span>
+                    SignalR integration for live status updates
+                </li>
+                <li class="mb-2">
+                    <span class="badge bg-danger me-2">Stop</span>
+                    Ability to stop running sessions
+                </li>
+                <li class="mb-2">
+                    <span class="badge bg-secondary me-2">Navigate</span>
+                    Quick access to session chat interface
+                </li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>View Modes</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Global View (no ProjectId parameter)</div>
+        <div class="showcase-preview">
+            <div class="card" style="max-width: 500px;">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span>Project Alpha</span>
+                    <span class="badge bg-secondary">2 sessions</span>
+                </div>
+                <div class="card-body">
+                    <p class="text-text-muted text-sm mb-0">
+                        Sessions are grouped by project name and sorted by status priority within each group.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="showcase-item">
+        <div class="showcase-label">Project View (with ProjectId parameter)</div>
+        <div class="showcase-preview">
+            <div class="card" style="max-width: 500px;">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="status-dot bg-success"></span>
+                        <span>Working</span>
+                    </div>
+                    <span class="badge bg-secondary">3 sessions</span>
+                </div>
+                <div class="card-body">
+                    <p class="text-text-muted text-sm mb-0">
+                        Sessions are grouped by status (Plan Ready, Question, Waiting, Working, etc.) and sorted by recent activity.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Session Card States</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Session card with full details</div>
+        <div class="showcase-preview">
+            <div class="card" style="max-width: 400px;">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="badge bg-warning text-dark">Issue</span>
+                        <span class="fw-medium">Fix authentication bug</span>
+                    </div>
+                    <span class="status-dot bg-success" style="width: 10px; height: 10px; border-radius: 50%;"></span>
+                </div>
+                <div class="card-body">
+                    <div class="mb-2 small">
+                        <span class="text-text-muted">Mode:</span>
+                        <span class="badge bg-success ms-1">Build</span>
+                    </div>
+                    <div class="mb-2 small">
+                        <span class="text-text-muted">Status:</span>
+                        <span class="badge bg-success ms-1">Working</span>
+                    </div>
+                    <div class="mb-2 small">
+                        <span class="text-text-muted">Started:</span>
+                        <span class="ms-1">15m 30s ago</span>
+                    </div>
+                    <div class="mb-2 small">
+                        <span class="text-text-muted">Messages:</span>
+                        <span class="ms-1">42</span>
+                    </div>
+                </div>
+                <div class="card-footer d-flex gap-2">
+                    <a href="#" class="btn btn-sm btn-outline-primary">
+                        <i class="bi bi-chat-dots me-1"></i>Chat
+                    </a>
+                    <button class="btn btn-sm btn-outline-danger">
+                        <i class="bi bi-stop-circle me-1"></i>Stop
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Status Priority Order</h3>
+    <div class="showcase-item">
+        <div class="showcase-preview">
+            <ol class="mb-0 small">
+                <li><strong>Plan Ready</strong> - Requires user approval to proceed</li>
+                <li><strong>Question</strong> - Waiting for user to answer a question</li>
+                <li><strong>Waiting</strong> - Ready for user input</li>
+                <li><strong>Working</strong> - Actively processing</li>
+                <li><strong>Starting</strong> - Session initializing</li>
+                <li><strong>Running Hooks</strong> - Executing pre/post hooks</li>
+                <li><strong>Stopped</strong> - Session terminated</li>
+                <li><strong>Error</strong> - Session encountered an error</li>
+            </ol>
+        </div>
+    </div>
+</div>
+
+<style>
+    .status-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        display: inline-block;
+    }
+</style>
+
+@code {
+}

@@ -111,12 +111,12 @@ public class ComponentRegistryService : IComponentRegistryService
         },
         new ComponentMetadata
         {
-            Id = "agent-management-panel",
-            Name = "AgentManagementPanel",
-            Description = "Panel for managing Claude Code agent sessions with controls and status display.",
+            Id = "sessions-panel",
+            Name = "SessionsPanel",
+            Description = "Unified panel for managing Claude Code sessions. Groups by project globally, or by status when filtered to a specific project.",
             Category = "Panels",
-            ComponentPath = "Shared/AgentManagementPanel.razor",
-            Tags = new() { "panel", "agent", "management" }
+            ComponentPath = "Shared/SessionsPanel.razor",
+            Tags = new() { "panel", "session", "agent", "management" }
         },
         new ComponentMetadata
         {

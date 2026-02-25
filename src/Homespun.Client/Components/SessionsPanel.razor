@@ -1,0 +1,478 @@
+@using Fleece.Core.Models
+@using Microsoft.AspNetCore.SignalR.Client
+@implements IAsyncDisposable
+
+@inject HttpSessionApiService SessionApi
+@inject HttpProjectApiService ProjectApi
+@inject HttpPullRequestApiService PullRequestApi
+@inject HttpIssueApiService IssueApi
+@inject NavigationManager NavigationManager
+@inject ILogger<SessionsPanel> Logger
+
+<div class="sessions-panel">
+    @if (_sessions.Count == 0)
+    {
+        <div class="empty-state">
+            <div class="empty-icon"><i class="bi bi-cpu"></i></div>
+            <h5>No Active Sessions</h5>
+            <p class="text-text-muted">Start a Claude Code session from an issue or pull request to see it here.</p>
+        </div>
+    }
+    else if (string.IsNullOrEmpty(ProjectId))
+    {
+        @* Global view: group by project *@
+        @foreach (var group in _projectGroups)
+        {
+            <div class="group-container mb-4">
+                <div class="group-header">
+                    <h5>@group.ProjectName</h5>
+                    <span class="badge bg-secondary">@group.Sessions.Count session@(group.Sessions.Count != 1 ? "s" : "")</span>
+                </div>
+
+                <div class="sessions-list">
+                    @foreach (var session in group.Sessions)
+                    {
+                        <SessionCard Session="session"
+                                     EntityInfo="_entityInfoCache.GetValueOrDefault(session.EntityId)"
+                                     IsStopping="_stoppingSessions.Contains(session.Id)"
+                                     OnStop="() => StopSession(session.Id)" />
+                    }
+                </div>
+            </div>
+        }
+    }
+    else
+    {
+        @* Project view: group by status *@
+        @foreach (var group in _statusGroups)
+        {
+            <div class="group-container mb-4">
+                <div class="group-header">
+                    <div class="flex items-center gap-2">
+                        <span class="status-indicator @group.Status.ToIndicatorClass()"></span>
+                        <h5>@group.Status.ToDisplayLabel()</h5>
+                    </div>
+                    <span class="badge bg-secondary">@group.Sessions.Count session@(group.Sessions.Count != 1 ? "s" : "")</span>
+                </div>
+
+                <div class="sessions-list">
+                    @foreach (var session in group.Sessions)
+                    {
+                        <SessionCard Session="session"
+                                     EntityInfo="_entityInfoCache.GetValueOrDefault(session.EntityId)"
+                                     IsStopping="_stoppingSessions.Contains(session.Id)"
+                                     OnStop="() => StopSession(session.Id)" />
+                    }
+                </div>
+            </div>
+        }
+    }
+
+    @if (!string.IsNullOrEmpty(_errorMessage))
+    {
+        <div class="alert alert-danger">@_errorMessage</div>
+    }
+</div>
+
+<style>
+    .sessions-panel {
+        max-width: 1200px;
+    }
+
+    .sessions-panel .empty-state {
+        text-align: center;
+        padding: var(--spacing-xl) var(--spacing-lg);
+        background: var(--bg-secondary);
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--border-color);
+    }
+
+    .sessions-panel .empty-icon {
+        font-size: 3rem;
+        margin-bottom: var(--spacing-md);
+        color: var(--text-muted);
+    }
+
+    .sessions-panel .empty-state h5 {
+        margin-bottom: var(--spacing-sm);
+        color: var(--text-primary);
+    }
+
+    .sessions-panel .group-container {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--border-color);
+        overflow: hidden;
+    }
+
+    .sessions-panel .group-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: var(--spacing-md) var(--spacing-lg);
+        background: var(--bg-tertiary);
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .sessions-panel .group-header h5 {
+        margin: 0;
+        font-size: 1rem;
+        font-weight: 600;
+    }
+
+    .sessions-panel .sessions-list {
+        padding: var(--spacing-md);
+    }
+
+    .sessions-panel .status-indicator {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+
+    .sessions-panel .status-indicator.running {
+        background: var(--status-success);
+        animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    .sessions-panel .status-indicator.processing {
+        background: var(--status-info);
+        animation: pulse 1s ease-in-out infinite;
+    }
+
+    .sessions-panel .status-indicator.waiting {
+        background: var(--status-warning);
+    }
+
+    .sessions-panel .status-indicator.question {
+        background: var(--status-question);
+        animation: pulse 1s ease-in-out infinite;
+    }
+
+    .sessions-panel .status-indicator.plan-ready {
+        background: var(--status-question);
+        animation: pulse 1s ease-in-out infinite;
+    }
+
+    .sessions-panel .status-indicator.starting {
+        background: var(--status-warning);
+        animation: pulse 1s ease-in-out infinite;
+    }
+
+    .sessions-panel .status-indicator.running-hooks {
+        background: var(--status-warning);
+        animation: pulse 1s ease-in-out infinite;
+    }
+
+    .sessions-panel .status-indicator.stopped {
+        background: var(--text-muted);
+    }
+
+    .sessions-panel .status-indicator.error {
+        background: var(--status-error);
+    }
+</style>
+
+@code {
+    /// <summary>
+    /// When set, filters sessions to only those belonging to this project
+    /// and groups them by status instead of by project.
+    /// </summary>
+    [Parameter] public string? ProjectId { get; set; }
+
+    [Parameter] public EventCallback OnSessionStopped { get; set; }
+
+    private List<SessionSummary> _sessions = [];
+    private List<ProjectGroup> _projectGroups = [];
+    private List<StatusGroup> _statusGroups = [];
+    private Dictionary<string, EntityInfo> _entityInfoCache = new();
+    private HashSet<string> _stoppingSessions = new();
+    private string? _errorMessage;
+    private HubConnection? _hubConnection;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshSessions();
+
+        // Set up SignalR connection for real-time updates (non-blocking)
+        _ = SetupSignalRConnectionAsync();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await RefreshSessions();
+    }
+
+    private async Task RefreshSessions()
+    {
+        if (string.IsNullOrEmpty(ProjectId))
+        {
+            _sessions = await SessionApi.GetAllSessionsAsync();
+        }
+        else
+        {
+            _sessions = await SessionApi.GetProjectSessionsAsync(ProjectId);
+        }
+
+        await LoadEntityInformation();
+        GroupSessions();
+    }
+
+    private async Task LoadEntityInformation()
+    {
+        _entityInfoCache.Clear();
+        var projects = await ProjectApi.GetAllProjectsAsync();
+
+        foreach (var session in _sessions)
+        {
+            try
+            {
+                // Try to identify the entity type and load its information
+                // First, try as a PR
+                var pr = await PullRequestApi.GetPullRequestAsync(session.EntityId);
+                if (pr != null)
+                {
+                    _entityInfoCache[session.EntityId] = new EntityInfo
+                    {
+                        EntityType = "PR",
+                        Title = pr.Title,
+                        BranchName = pr.BranchName,
+                        ProjectId = pr.ProjectId,
+                        ProjectName = projects.FirstOrDefault(p => p.Id == pr.ProjectId)?.Name ?? "Unknown Project"
+                    };
+                    continue;
+                }
+
+                // Try as a Fleece issue - check the project this session belongs to
+                var project = projects.FirstOrDefault(p => p.Id == session.ProjectId);
+                if (project != null)
+                {
+                    try
+                    {
+                        var issue = await IssueApi.GetIssueAsync(session.EntityId, project.Id);
+                        if (issue != null)
+                        {
+                            // Build branch name from issue properties
+                            string? branchName = null;
+                            var branchId = !string.IsNullOrEmpty(issue.WorkingBranchId)
+                                ? issue.WorkingBranchId
+                                : issue.Title.ToLowerInvariant()
+                                    .Replace(" ", "-")
+                                    .Replace("_", "-");
+                            branchId = System.Text.RegularExpressions.Regex.Replace(branchId, "[^a-z0-9-]", "");
+                            branchId = System.Text.RegularExpressions.Regex.Replace(branchId, "-+", "-").Trim('-');
+                            branchName = $"{issue.Type.ToString().ToLowerInvariant()}/{branchId}+{issue.Id}";
+
+                            _entityInfoCache[session.EntityId] = new EntityInfo
+                            {
+                                EntityType = "Issue",
+                                Title = issue.Title,
+                                BranchName = branchName,
+                                ProjectId = project.Id,
+                                ProjectName = project.Name
+                            };
+                            continue;
+                        }
+                    }
+                    catch { }
+                }
+
+                // Fallback
+                _entityInfoCache[session.EntityId] = new EntityInfo
+                {
+                    EntityType = "Unknown",
+                    Title = session.EntityId,
+                    BranchName = null,
+                    ProjectId = session.ProjectId,
+                    ProjectName = projects.FirstOrDefault(p => p.Id == session.ProjectId)?.Name ?? "Unknown Project"
+                };
+            }
+            catch
+            {
+                _entityInfoCache[session.EntityId] = new EntityInfo
+                {
+                    EntityType = "Unknown",
+                    Title = session.EntityId,
+                    BranchName = null,
+                    ProjectId = session.ProjectId,
+                    ProjectName = "Unknown Project"
+                };
+            }
+        }
+    }
+
+    private void GroupSessions()
+    {
+        if (string.IsNullOrEmpty(ProjectId))
+        {
+            // Global view: group by project
+            _projectGroups = _sessions
+                .Select(session => new
+                {
+                    Session = session,
+                    EntityInfo = _entityInfoCache.GetValueOrDefault(session.EntityId)
+                })
+                .GroupBy(x => x.EntityInfo?.ProjectName ?? "Unknown Project")
+                .Select(group => new ProjectGroup
+                {
+                    ProjectName = group.Key,
+                    Sessions = group.Select(x => x.Session)
+                        .OrderBy(s => GetStatusSortOrder(s.Status))
+                        .ThenBy(s => _entityInfoCache.GetValueOrDefault(s.EntityId)?.Title ?? s.EntityId)
+                        .ToList()
+                })
+                .OrderBy(g => g.ProjectName)
+                .ToList();
+
+            _statusGroups = [];
+        }
+        else
+        {
+            // Project view: group by status
+            _statusGroups = _sessions
+                .GroupBy(s => s.Status)
+                .Select(group => new StatusGroup
+                {
+                    Status = group.Key,
+                    Sessions = group
+                        .OrderByDescending(s => s.LastActivityAt)
+                        .ToList()
+                })
+                .OrderBy(g => GetStatusSortOrder(g.Status))
+                .ToList();
+
+            _projectGroups = [];
+        }
+    }
+
+    private static int GetStatusSortOrder(ClaudeSessionStatus status) => status switch
+    {
+        ClaudeSessionStatus.WaitingForPlanExecution => 0,   // Plan ready at top (requires user approval)
+        ClaudeSessionStatus.WaitingForQuestionAnswer => 1,  // Question (requires immediate user action)
+        ClaudeSessionStatus.WaitingForInput => 2,           // Waiting
+        ClaudeSessionStatus.Running => 3,                   // Working
+        ClaudeSessionStatus.Starting => 4,
+        ClaudeSessionStatus.RunningHooks => 5,
+        ClaudeSessionStatus.Stopped => 6,
+        ClaudeSessionStatus.Error => 7,
+        _ => 8
+    };
+
+    private async Task StopSession(string sessionId)
+    {
+        _stoppingSessions.Add(sessionId);
+        _errorMessage = null;
+
+        try
+        {
+            await SessionApi.StopSessionAsync(sessionId);
+            await RefreshSessions();
+            await OnSessionStopped.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to stop session: {ex.Message}";
+        }
+        finally
+        {
+            _stoppingSessions.Remove(sessionId);
+        }
+    }
+
+    private async Task SetupSignalRConnectionAsync()
+    {
+        try
+        {
+            _hubConnection = new HubConnectionBuilder()
+                .WithUrl(NavigationManager.ToAbsoluteUri("/hubs/claudecode"))
+                .WithAutomaticReconnect()
+                .Build();
+
+            // Subscribe to session started events - refresh list when a new session appears
+            _hubConnection.On<ClaudeSession>("SessionStarted", async (_) =>
+            {
+                await InvokeAsync(async () =>
+                {
+                    await RefreshSessions();
+                    StateHasChanged();
+                });
+            });
+
+            // Subscribe to session status changes - refresh to update status indicators
+            _hubConnection.On<string, ClaudeSessionStatus, bool>("SessionStatusChanged", async (_, _, _) =>
+            {
+                await InvokeAsync(async () =>
+                {
+                    await RefreshSessions();
+                    StateHasChanged();
+                });
+            });
+
+            // Subscribe to session mode/model changes - refresh to update mode/model display
+            _hubConnection.On<string, SessionMode, string>("SessionModeModelChanged", async (_, _, _) =>
+            {
+                await InvokeAsync(async () =>
+                {
+                    await RefreshSessions();
+                    StateHasChanged();
+                });
+            });
+
+            // Subscribe to session stopped events - refresh list to remove stopped session
+            _hubConnection.On<string>("SessionStopped", async (_) =>
+            {
+                await InvokeAsync(async () =>
+                {
+                    await RefreshSessions();
+                    StateHasChanged();
+                });
+            });
+
+            await _hubConnection.StartAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to set up SignalR connection for SessionsPanel");
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_hubConnection != null)
+        {
+            try
+            {
+                await _hubConnection.DisposeAsync();
+            }
+            catch
+            {
+                // Ignore disposal errors
+            }
+        }
+    }
+
+    private record ProjectGroup
+    {
+        public required string ProjectName { get; init; }
+        public required List<SessionSummary> Sessions { get; init; }
+    }
+
+    private record StatusGroup
+    {
+        public required ClaudeSessionStatus Status { get; init; }
+        public required List<SessionSummary> Sessions { get; init; }
+    }
+
+    /// <summary>
+    /// Information about an entity (PR or Issue) that a session is working on.
+    /// </summary>
+    public record EntityInfo
+    {
+        public required string EntityType { get; init; }
+        public required string Title { get; init; }
+        public string? BranchName { get; init; }
+        public required string ProjectId { get; init; }
+        public required string ProjectName { get; init; }
+    }
+}
