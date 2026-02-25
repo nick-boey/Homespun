@@ -56,6 +56,7 @@ public class KeyboardNavigationServiceTests
             DrawBottomLine: false,
             SeriesConnectorFromLane: null,
             IssueType: issueType,
+            Status: IssueStatus.Open,
             HasDescription: false,
             LinkedPr: null,
             AgentStatus: null

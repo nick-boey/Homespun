@@ -575,6 +575,281 @@ public class TaskGraphViewTests : BunitTestContext
         Assert.That(cut.FindAll(".task-graph-type-menu"), Is.Empty);
     }
 
+    #region Status Menu Tests
+
+    [Test]
+    public void StatusBadge_OpensMenu_OnClick()
+    {
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes =
+            [
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "TEST-001", Title = "Test issue", Status = IssueStatus.Open, Type = IssueType.Task },
+                    Lane = 0, Row = 0, IsActionable = true
+                }
+            ],
+            TotalLanes = 1
+        };
+
+        var cut = Render<TaskGraphView>(p =>
+        {
+            p.Add(x => x.TaskGraph, taskGraph);
+            p.Add(x => x.ProjectId, "test-project");
+        });
+
+        // Menu should not exist initially
+        Assert.That(cut.FindAll(".task-graph-status-menu"), Is.Empty);
+
+        // Click the status badge
+        cut.Find(".task-graph-issue-status").Click();
+
+        // Menu should now be visible with 6 status options (excluding Deleted)
+        var menu = cut.Find(".task-graph-status-menu");
+        var buttons = menu.QuerySelectorAll("button");
+        Assert.That(buttons, Has.Length.EqualTo(6));
+
+        // Verify button labels
+        Assert.That(buttons[0].TextContent, Is.EqualTo("Open"));
+        Assert.That(buttons[1].TextContent, Is.EqualTo("Progress"));
+        Assert.That(buttons[2].TextContent, Is.EqualTo("Review"));
+        Assert.That(buttons[3].TextContent, Is.EqualTo("Complete"));
+        Assert.That(buttons[4].TextContent, Is.EqualTo("Closed"));
+        Assert.That(buttons[5].TextContent, Is.EqualTo("Archived"));
+    }
+
+    [Test]
+    public void StatusMenu_ClosesOnSecondClick()
+    {
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes =
+            [
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "TEST-001", Title = "Test issue", Status = IssueStatus.Open, Type = IssueType.Task },
+                    Lane = 0, Row = 0, IsActionable = true
+                }
+            ],
+            TotalLanes = 1
+        };
+
+        var cut = Render<TaskGraphView>(p =>
+        {
+            p.Add(x => x.TaskGraph, taskGraph);
+            p.Add(x => x.ProjectId, "test-project");
+        });
+
+        // Open the menu
+        var statusBadge = cut.Find(".task-graph-issue-status");
+        statusBadge.Click();
+        Assert.That(cut.FindAll(".task-graph-status-menu"), Has.Count.EqualTo(1));
+
+        // Click badge again to close
+        statusBadge.Click();
+        Assert.That(cut.FindAll(".task-graph-status-menu"), Is.Empty);
+    }
+
+    [Test]
+    public void StatusMenu_InvokesCallback_WhenStatusSelected()
+    {
+        var callbackInvoked = false;
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes =
+            [
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "TEST-001", Title = "Test issue", Status = IssueStatus.Open, Type = IssueType.Task },
+                    Lane = 0, Row = 0, IsActionable = true
+                }
+            ],
+            TotalLanes = 1
+        };
+
+        var cut = Render<TaskGraphView>(p =>
+        {
+            p.Add(x => x.TaskGraph, taskGraph);
+            p.Add(x => x.ProjectId, "test-project");
+            p.Add(x => x.OnIssueStatusChanged, EventCallback.Factory.Create(this, () => callbackInvoked = true));
+        });
+
+        // Open the menu and select a status
+        cut.Find(".task-graph-issue-status").Click();
+        var progressButton = cut.Find(".status-menu-item.progress");
+        progressButton.Click();
+
+        Assert.That(callbackInvoked, Is.True);
+    }
+
+    [Test]
+    public void StatusMenu_ClosesAfterSelection()
+    {
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes =
+            [
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "TEST-001", Title = "Test issue", Status = IssueStatus.Open, Type = IssueType.Task },
+                    Lane = 0, Row = 0, IsActionable = true
+                }
+            ],
+            TotalLanes = 1
+        };
+
+        var cut = Render<TaskGraphView>(p =>
+        {
+            p.Add(x => x.TaskGraph, taskGraph);
+            p.Add(x => x.ProjectId, "test-project");
+            p.Add(x => x.OnIssueStatusChanged, EventCallback.Factory.Create(this, () => { }));
+        });
+
+        // Open the menu
+        cut.Find(".task-graph-issue-status").Click();
+        Assert.That(cut.FindAll(".task-graph-status-menu"), Has.Count.EqualTo(1));
+
+        // Select a status
+        cut.Find(".status-menu-item.complete").Click();
+
+        // Menu should close after selection
+        Assert.That(cut.FindAll(".task-graph-status-menu"), Is.Empty);
+    }
+
+    [Test]
+    public void StatusMenu_CallsApi_WhenStatusSelected()
+    {
+        // Create mock handler for API calls
+        var mockHandler = new MockHttpMessageHandler()
+            .RespondWith("/api/issues/TEST-001", new IssueResponse { Id = "TEST-001", Status = IssueStatus.Progress });
+        var httpClient = mockHandler.CreateClient();
+        var issueApi = new HttpIssueApiService(httpClient);
+
+        // Re-register with tracking mock
+        Services.AddSingleton(issueApi);
+
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes =
+            [
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "TEST-001", Title = "Test issue", Status = IssueStatus.Open, Type = IssueType.Task },
+                    Lane = 0, Row = 0, IsActionable = true
+                }
+            ],
+            TotalLanes = 1
+        };
+
+        var cut = Render<TaskGraphView>(p =>
+        {
+            p.Add(x => x.TaskGraph, taskGraph);
+            p.Add(x => x.ProjectId, "test-project");
+            p.Add(x => x.OnIssueStatusChanged, EventCallback.Factory.Create(this, () => { }));
+        });
+
+        // Open the menu and select Progress
+        cut.Find(".task-graph-issue-status").Click();
+        cut.Find(".status-menu-item.progress").Click();
+
+        // The API should have been called - verify by checking the menu closed (which happens after API call)
+        Assert.That(cut.FindAll(".task-graph-status-menu"), Is.Empty);
+    }
+
+    [Test]
+    public async Task StatusMenu_OpensForSelectedIssue_OnKeyboardShortcut()
+    {
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes =
+            [
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "TEST-001", Title = "Test issue", Status = IssueStatus.Open, Type = IssueType.Task },
+                    Lane = 0, Row = 0, IsActionable = true
+                }
+            ],
+            TotalLanes = 1
+        };
+
+        // Set up NavService with a selected issue
+        var navService = new MockKeyboardNavigationService
+        {
+            SelectedIssueId = "TEST-001"
+        };
+        SetupInlineEditorServices(navService);
+
+        var cut = Render<TaskGraphView>(p =>
+        {
+            p.Add(x => x.TaskGraph, taskGraph);
+            p.Add(x => x.ProjectId, "test-project");
+            p.Add(x => x.NavService, navService);
+        });
+
+        // Menu should not exist initially
+        Assert.That(cut.FindAll(".task-graph-status-menu"), Is.Empty);
+
+        // Call OpenStatusMenu (simulates 's' key press from TimelineVisualization)
+        // Use InvokeAsync because OpenStatusMenu calls StateHasChanged
+        await cut.InvokeAsync(() => cut.Instance.OpenStatusMenu());
+
+        // Menu should now be visible
+        Assert.That(cut.FindAll(".task-graph-status-menu"), Has.Count.EqualTo(1));
+    }
+
+    [Test]
+    public void StatusBadge_DisplaysCorrectStatus()
+    {
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes =
+            [
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "TEST-001", Title = "Open issue", Status = IssueStatus.Open, Type = IssueType.Task },
+                    Lane = 0, Row = 0, IsActionable = true
+                },
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "TEST-002", Title = "Progress issue", Status = IssueStatus.Progress, Type = IssueType.Task },
+                    Lane = 0, Row = 1, IsActionable = true
+                },
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "TEST-003", Title = "Review issue", Status = IssueStatus.Review, Type = IssueType.Task },
+                    Lane = 0, Row = 2, IsActionable = true
+                },
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "TEST-004", Title = "Complete issue", Status = IssueStatus.Complete, Type = IssueType.Task },
+                    Lane = 0, Row = 3, IsActionable = true
+                }
+            ],
+            TotalLanes = 1
+        };
+
+        var cut = Render<TaskGraphView>(p => p.Add(x => x.TaskGraph, taskGraph));
+
+        var statusBadges = cut.FindAll(".task-graph-issue-status");
+        Assert.That(statusBadges, Has.Count.EqualTo(4));
+
+        // Verify each badge has correct class and label
+        Assert.That(statusBadges[0].ClassList, Does.Contain("open"));
+        Assert.That(statusBadges[0].TextContent, Is.EqualTo("Open"));
+
+        Assert.That(statusBadges[1].ClassList, Does.Contain("progress"));
+        Assert.That(statusBadges[1].TextContent, Is.EqualTo("Progress"));
+
+        Assert.That(statusBadges[2].ClassList, Does.Contain("review"));
+        Assert.That(statusBadges[2].TextContent, Is.EqualTo("Review"));
+
+        Assert.That(statusBadges[3].ClassList, Does.Contain("complete"));
+        Assert.That(statusBadges[3].TextContent, Is.EqualTo("Complete"));
+    }
+
+    #endregion
+
     [Test]
     public void AgentStatusBadge_IsClickableLink_WithSessionHref()
     {

@@ -11,9 +11,9 @@ public record TaskGraphIssueRenderLine(
     string IssueId, string Title, int Lane, TaskGraphMarkerType Marker,
     int? ParentLane, bool IsFirstChild, bool IsSeriesChild,
     bool DrawTopLine, bool DrawBottomLine, int? SeriesConnectorFromLane,
-    IssueType IssueType, bool HasDescription, TaskGraphLinkedPr? LinkedPr, AgentStatusData? AgentStatus,
+    IssueType IssueType, IssueStatus Status, bool HasDescription, TaskGraphLinkedPr? LinkedPr, AgentStatusData? AgentStatus,
     bool DrawLane0Connector = false, bool IsLastLane0Connector = false, bool DrawLane0PassThrough = false,
-string? Lane0Color = null, bool HasHiddenParent = false, bool HiddenParentIsSeriesMode = false) : TaskGraphRenderLine;
+    string? Lane0Color = null, bool HasHiddenParent = false, bool HiddenParentIsSeriesMode = false) : TaskGraphRenderLine;
 public record TaskGraphSeparatorRenderLine : TaskGraphRenderLine;
 public record TaskGraphPrRenderLine(int PrNumber, string Title, string? Url, bool IsMerged, bool HasDescription, AgentStatusData? AgentStatus, bool DrawTopLine, bool DrawBottomLine) : TaskGraphRenderLine;
 public record TaskGraphLoadMoreRenderLine : TaskGraphRenderLine;
@@ -405,6 +405,7 @@ public static class TaskGraphLayoutService
                 DrawBottomLine: drawBottomLine,
                 SeriesConnectorFromLane: seriesConnectorFromLane,
                 IssueType: node.Issue.Type,
+                Status: node.Issue.Status,
                 HasDescription: !string.IsNullOrWhiteSpace(node.Issue.Description),
                 LinkedPr: linkedPr,
                 AgentStatus: agentStatus,
