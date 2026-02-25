@@ -77,6 +77,15 @@ public class MockGitHubClientWrapper : IGitHubClientWrapper
         return Task.FromResult<IReadOnlyList<PullRequestReviewComment>>(comments);
     }
 
+    public Task<CheckRunsResponse> GetCheckRunsForReferenceAsync(
+        string owner,
+        string repo,
+        string reference)
+    {
+        // Return empty check runs - MockGitHubService handles status directly
+        return Task.FromResult(new CheckRunsResponse(0, []));
+    }
+
     // Helper methods to create mock Octokit objects
     // Since Octokit types have complex constructors, we use internal APIs or minimal objects
 

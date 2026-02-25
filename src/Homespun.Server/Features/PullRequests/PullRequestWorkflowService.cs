@@ -167,6 +167,11 @@ public class PullRequestWorkflowService(
     /// Also populates the ChecksPassing, IsApproved, ApprovalCount, and ChangesRequestedCount
     /// properties on the PullRequestInfo object.
     /// </summary>
+    /// <remarks>
+    /// This method queries both the Commit Status API (used by older CI systems) and the
+    /// Check Runs API (used by GitHub Actions). GitHub Actions creates Check Runs, not
+    /// Commit Statuses, so we need to check both to get accurate CI status.
+    /// </remarks>
     private async Task<PullRequestStatus> DetermineStatusAndPopulatePrInfoAsync(
         string owner,
         string repo,
@@ -179,7 +184,8 @@ public class PullRequestWorkflowService(
             return PullRequestStatus.InProgress;
         }
 
-        // Get CI check status
+        // Get CI check status from both APIs
+        // 1. Commit Status API (legacy, used by some CI systems)
         CombinedCommitStatus? commitStatus = null;
         try
         {
@@ -190,19 +196,23 @@ public class PullRequestWorkflowService(
             // Ignore errors getting commit status
         }
 
-        // Populate ChecksPassing based on commit status
-        if (commitStatus?.State == CommitState.Success)
+        // 2. Check Runs API (used by GitHub Actions and modern CI systems)
+        CheckRunsResponse? checkRuns = null;
+        try
         {
-            prInfo.ChecksPassing = true;
+            checkRuns = await githubClient.GetCheckRunsForReferenceAsync(owner, repo, pr.Head.Sha);
         }
-        else if (commitStatus?.State == CommitState.Failure || commitStatus?.State == CommitState.Error)
+        catch
         {
-            prInfo.ChecksPassing = false;
+            // Ignore errors getting check runs
         }
-        // If Pending or null, leave ChecksPassing as null (checks are running)
+
+        // Determine combined CI status from both APIs
+        var (checksPassing, checksFailing) = DetermineCheckStatus(commitStatus, checkRuns);
+        prInfo.ChecksPassing = checksPassing;
 
         // Check if CI is failing
-        if (commitStatus?.State == CommitState.Failure || commitStatus?.State == CommitState.Error)
+        if (checksFailing)
         {
             return PullRequestStatus.ChecksFailing;
         }
@@ -246,7 +256,7 @@ public class PullRequestWorkflowService(
             if (approvals.Count > 0)
             {
                 // Only ready for merging if CI passes
-                if (commitStatus?.State == CommitState.Success)
+                if (checksPassing == true)
                 {
                     return PullRequestStatus.ReadyForMerging;
                 }
@@ -254,13 +264,99 @@ public class PullRequestWorkflowService(
         }
 
         // If CI passes and no blocking reviews, ready for review
-        if (commitStatus?.State == CommitState.Success)
+        if (checksPassing == true)
         {
             return PullRequestStatus.ReadyForReview;
         }
 
         // Default to InProgress
         return PullRequestStatus.InProgress;
+    }
+
+    /// <summary>
+    /// Determines the combined check status from both the Commit Status API and Check Runs API.
+    /// </summary>
+    /// <returns>
+    /// A tuple of (checksPassing, checksFailing):
+    /// - checksPassing: true if all checks pass, false if any fail, null if checks are still running
+    /// - checksFailing: true if any check has failed
+    /// </returns>
+    private static (bool? checksPassing, bool checksFailing) DetermineCheckStatus(
+        CombinedCommitStatus? commitStatus,
+        CheckRunsResponse? checkRuns)
+    {
+        // Check Commit Status API results
+        var commitStatusState = commitStatus?.State;
+        var hasCommitStatuses = commitStatus?.Statuses?.Count > 0;
+
+        // Check Runs API results
+        var hasCheckRuns = checkRuns?.CheckRuns?.Count > 0;
+
+        // If we have check runs, use them to determine status
+        if (hasCheckRuns)
+        {
+            var runs = checkRuns!.CheckRuns;
+
+            // Check for any failures
+            var hasFailure = runs.Any(r =>
+                r.Conclusion?.Value == CheckConclusion.Failure ||
+                r.Conclusion?.Value == CheckConclusion.Cancelled ||
+                r.Conclusion?.Value == CheckConclusion.TimedOut);
+
+            if (hasFailure)
+            {
+                return (false, true);
+            }
+
+            // Check if any are still running
+            // Note: CheckStatus is a StringEnum, check using .Value property
+            // Status values: Queued, InProgress, Completed
+            var hasRunning = runs.Any(r =>
+                r.Status.Value == CheckStatus.InProgress ||
+                r.Status.Value == CheckStatus.Queued);
+
+            if (hasRunning)
+            {
+                return (null, false);
+            }
+
+            // All check runs completed successfully (or skipped/neutral)
+            var allSuccessful = runs.All(r =>
+                r.Conclusion?.Value == CheckConclusion.Success ||
+                r.Conclusion?.Value == CheckConclusion.Neutral ||
+                r.Conclusion?.Value == CheckConclusion.Skipped);
+
+            if (allSuccessful)
+            {
+                return (true, false);
+            }
+        }
+
+        // Fall back to Commit Status API if no check runs or as a supplement
+        if (hasCommitStatuses)
+        {
+            if (commitStatusState == CommitState.Success)
+            {
+                return (true, false);
+            }
+            if (commitStatusState == CommitState.Failure || commitStatusState == CommitState.Error)
+            {
+                return (false, true);
+            }
+            if (commitStatusState == CommitState.Pending)
+            {
+                return (null, false);
+            }
+        }
+
+        // No checks configured - consider as passing (no CI configured)
+        if (!hasCheckRuns && !hasCommitStatuses)
+        {
+            return (true, false);
+        }
+
+        // Default: checks are running
+        return (null, false);
     }
 
     #endregion
