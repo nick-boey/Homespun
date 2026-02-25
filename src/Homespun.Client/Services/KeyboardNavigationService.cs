@@ -23,6 +23,13 @@ public class KeyboardNavigationService : IKeyboardNavigationService
     private static readonly IssueType[] TypeCycleOrder =
         [IssueType.Task, IssueType.Bug, IssueType.Feature, IssueType.Chore];
 
+    // Search state
+    private string _searchTerm = "";
+    private bool _isSearching;
+    private bool _isSearchEmbedded;
+    private List<int> _matchingIndices = [];
+    private int _currentMatchIndex = -1;
+
     public KeyboardNavigationService(HttpIssueApiService issueApi)
     {
         _issueApi = issueApi;
@@ -51,11 +58,19 @@ public class KeyboardNavigationService : IKeyboardNavigationService
 
     public event Action<string>? OnOpenEditRequested;
 
+    // Search properties
+    public string SearchTerm => _searchTerm;
+    public bool IsSearching => _isSearching;
+    public bool IsSearchEmbedded => _isSearchEmbedded;
+    public IReadOnlyList<int> MatchingIndices => _matchingIndices;
+    public int CurrentMatchIndex => _currentMatchIndex;
+
     #region Navigation
 
     public void MoveUp()
     {
         if (EditMode != KeyboardEditMode.Viewing) return;
+        if (_isSearching) return; // Ignore navigation while typing in search bar
         if (_renderLines.Count == 0) return;
         if (SelectedIndex <= 0) return;
 
@@ -66,6 +81,7 @@ public class KeyboardNavigationService : IKeyboardNavigationService
     public void MoveDown()
     {
         if (EditMode != KeyboardEditMode.Viewing) return;
+        if (_isSearching) return; // Ignore navigation while typing in search bar
         if (_renderLines.Count == 0) return;
         if (SelectedIndex >= _renderLines.Count - 1) return;
 
@@ -218,6 +234,17 @@ public class KeyboardNavigationService : IKeyboardNavigationService
         PendingEdit = null;
         PendingNewIssue = null;
         SelectedPromptIndex = 0;
+
+        // Also clear search state if searching
+        if (_isSearching || _isSearchEmbedded)
+        {
+            _isSearching = false;
+            _isSearchEmbedded = false;
+            _searchTerm = "";
+            _matchingIndices = [];
+            _currentMatchIndex = -1;
+        }
+
         NotifyStateChanged();
     }
 
@@ -438,6 +465,13 @@ public class KeyboardNavigationService : IKeyboardNavigationService
         EditMode = KeyboardEditMode.Viewing;
         PendingEdit = null;
         PendingNewIssue = null;
+
+        // Reset search state
+        _isSearching = false;
+        _isSearchEmbedded = false;
+        _searchTerm = "";
+        _matchingIndices = [];
+        _currentMatchIndex = -1;
     }
 
     public void SetProjectId(string projectId)
@@ -538,6 +572,96 @@ public class KeyboardNavigationService : IKeyboardNavigationService
         var index = Array.IndexOf(TypeCycleOrder, current);
         if (index < 0) index = 0; // Default to start if unknown type
         return TypeCycleOrder[(index + 1) % TypeCycleOrder.Length];
+    }
+
+    #endregion
+
+    #region Search
+
+    public void StartSearch()
+    {
+        // Only allow starting search in viewing mode
+        if (EditMode != KeyboardEditMode.Viewing) return;
+
+        _isSearching = true;
+        _isSearchEmbedded = false;
+        _searchTerm = "";
+        _matchingIndices = [];
+        _currentMatchIndex = -1;
+        NotifyStateChanged();
+    }
+
+    public void UpdateSearchTerm(string term)
+    {
+        if (!_isSearching) return;
+
+        _searchTerm = term;
+        ComputeMatchingIndices();
+        NotifyStateChanged();
+    }
+
+    public void EmbedSearch()
+    {
+        if (!_isSearching) return;
+
+        _isSearching = false;
+        _isSearchEmbedded = true;
+
+        if (_matchingIndices.Count > 0)
+        {
+            _currentMatchIndex = 0;
+            SelectedIndex = _matchingIndices[0];
+        }
+        // No matches: keep current selection, CurrentMatchIndex stays at -1
+
+        NotifyStateChanged();
+    }
+
+    public void MoveToNextMatch()
+    {
+        if (!_isSearchEmbedded || _matchingIndices.Count == 0) return;
+
+        _currentMatchIndex = (_currentMatchIndex + 1) % _matchingIndices.Count;
+        SelectedIndex = _matchingIndices[_currentMatchIndex];
+        NotifyStateChanged();
+    }
+
+    public void MoveToPreviousMatch()
+    {
+        if (!_isSearchEmbedded || _matchingIndices.Count == 0) return;
+
+        _currentMatchIndex = (_currentMatchIndex - 1 + _matchingIndices.Count) % _matchingIndices.Count;
+        SelectedIndex = _matchingIndices[_currentMatchIndex];
+        NotifyStateChanged();
+    }
+
+    public void ClearSearch()
+    {
+        _isSearching = false;
+        _isSearchEmbedded = false;
+        _searchTerm = "";
+        _matchingIndices = [];
+        _currentMatchIndex = -1;
+        NotifyStateChanged();
+    }
+
+    private void ComputeMatchingIndices()
+    {
+        _matchingIndices = [];
+        _currentMatchIndex = -1;
+
+        if (string.IsNullOrEmpty(_searchTerm))
+        {
+            return;
+        }
+
+        for (var i = 0; i < _renderLines.Count; i++)
+        {
+            if (_renderLines[i].Title.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase))
+            {
+                _matchingIndices.Add(i);
+            }
+        }
     }
 
     #endregion

@@ -937,6 +937,21 @@ public void OpenSelectedIssueForEdit() => OnOpenEditRequested?.Invoke(SelectedIs
     public void AcceptPromptSelection() { }
     public Task CycleIssueTypeAsync() => Task.CompletedTask;
 
+    // Search properties
+    public string SearchTerm { get; set; } = "";
+    public bool IsSearching { get; set; }
+    public bool IsSearchEmbedded { get; set; }
+    public IReadOnlyList<int> MatchingIndices { get; set; } = Array.Empty<int>();
+    public int CurrentMatchIndex { get; set; } = -1;
+
+    // Search methods
+    public void StartSearch() { }
+    public void UpdateSearchTerm(string term) => SearchTerm = term;
+    public void EmbedSearch() { }
+    public void MoveToNextMatch() { }
+    public void MoveToPreviousMatch() { }
+    public void ClearSearch() { }
+
     // Helper to trigger state change
     public void TriggerStateChanged() => OnStateChanged?.Invoke();
 }

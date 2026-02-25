@@ -37,7 +37,8 @@
                 SelectedNodeId="@GetKeyboardSelectedNodeId()"
                 NavService="@NavService"
                 MaxDepth="@_maxDepth"
-                MaxDepthChanged="HandleMaxDepthChanged" />
+                MaxDepthChanged="HandleMaxDepthChanged"
+                ActiveSearchTerm="@ActiveSearchTerm" />
         </div>
     }
     else if (_graph != null && _layout != null)
@@ -388,6 +389,12 @@
     /// When false, uses the traditional timeline visualization.
     /// </summary>
     [Parameter] public bool UseTaskGraphMode { get; set; } = true;
+
+    /// <summary>
+    /// The active search term to highlight in issue titles.
+    /// When set, matching issues get a highlight border and text matches are highlighted.
+    /// </summary>
+    [Parameter] public string? ActiveSearchTerm { get; set; }
 
     private HubConnection? _hubConnection;
     private HubConnection? _notificationHubConnection;

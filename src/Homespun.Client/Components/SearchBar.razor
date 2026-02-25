@@ -1,0 +1,130 @@
+@using Homespun.Client.Services
+
+@inject IJSRuntime JSRuntime
+
+@if (IsVisible)
+{
+    <div class="search-bar" data-testid="search-bar">
+        <span class="search-icon">/</span>
+        <input type="text"
+               class="search-input"
+               data-testid="search-input"
+               value="@SearchTerm"
+               @oninput="HandleInput"
+               @onkeydown="HandleKeyDown"
+               @onkeydown:stopPropagation="true"
+               @ref="_inputElement"
+               placeholder="Search issues..." />
+        @if (!string.IsNullOrEmpty(SearchTerm))
+        {
+            @if (MatchCount > 0)
+            {
+                <span class="match-count" data-testid="search-match-count">@MatchCount match@(MatchCount != 1 ? "es" : "")</span>
+            }
+            else
+            {
+                <span class="match-count no-matches" data-testid="search-no-matches">No matches</span>
+            }
+        }
+    </div>
+}
+
+<style>
+    .search-bar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: var(--bg-secondary, #232340);
+        border: 2px solid var(--color-ocean, #51A5C1);
+        border-radius: 6px;
+        padding: 8px 12px;
+        margin-bottom: 12px;
+        box-shadow: 0 0 12px rgba(81, 165, 193, 0.3);
+    }
+
+    .search-icon {
+        color: var(--color-ocean, #51A5C1);
+        font-weight: 600;
+        font-size: 16px;
+        opacity: 0.8;
+    }
+
+    .search-input {
+        flex: 1;
+        background: transparent;
+        border: none;
+        color: var(--text-primary, #eaeaea);
+        font-size: 14px;
+        outline: none;
+    }
+
+    .search-input::placeholder {
+        color: var(--text-muted, #6c757d);
+    }
+
+    .match-count {
+        color: var(--text-muted, #6c757d);
+        font-size: 12px;
+        white-space: nowrap;
+    }
+
+    .match-count.no-matches {
+        color: var(--color-coral, #E07A5F);
+    }
+</style>
+
+@code {
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public string SearchTerm { get; set; } = "";
+    [Parameter] public int MatchCount { get; set; }
+    [Parameter] public int CurrentMatchIndex { get; set; } = -1;
+    [Parameter] public EventCallback<string> OnSearchTermChanged { get; set; }
+    [Parameter] public EventCallback OnEnter { get; set; }
+    [Parameter] public EventCallback OnEscape { get; set; }
+
+    private ElementReference _inputElement;
+    private bool _shouldFocus;
+
+    protected override void OnParametersSet()
+    {
+        if (IsVisible)
+        {
+            _shouldFocus = true;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_shouldFocus)
+        {
+            _shouldFocus = false;
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("homespunInterop.focusElement", _inputElement);
+            }
+            catch
+            {
+                // Focus might fail if element is not in DOM yet
+            }
+        }
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case "Escape":
+                await OnEscape.InvokeAsync();
+                break;
+            case "Enter":
+                await OnEnter.InvokeAsync();
+                break;
+        }
+    }
+
+    private async Task HandleInput(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString() ?? "";
+        await OnSearchTermChanged.InvokeAsync(value);
+    }
+}

@@ -212,4 +212,41 @@ public interface IKeyboardNavigationService
     /// Order: Task -> Bug -> Feature -> Chore -> Task
     /// </summary>
     Task CycleIssueTypeAsync();
+
+    // Search properties
+
+    /// <summary>The current search term being searched for.</summary>
+    string SearchTerm { get; }
+
+    /// <summary>True when the search bar is open and user is typing.</summary>
+    bool IsSearching { get; }
+
+    /// <summary>True when search is committed and user is navigating results with n/N.</summary>
+    bool IsSearchEmbedded { get; }
+
+    /// <summary>Indices in the render list that match the search term.</summary>
+    IReadOnlyList<int> MatchingIndices { get; }
+
+    /// <summary>Current position in MatchingIndices for n/N navigation.</summary>
+    int CurrentMatchIndex { get; }
+
+    // Search methods
+
+    /// <summary>Open the search bar (/ key).</summary>
+    void StartSearch();
+
+    /// <summary>Update the search term as user types.</summary>
+    void UpdateSearchTerm(string term);
+
+    /// <summary>Commit the search and hide the search bar (Enter key).</summary>
+    void EmbedSearch();
+
+    /// <summary>Navigate to the next matching issue (n key).</summary>
+    void MoveToNextMatch();
+
+    /// <summary>Navigate to the previous matching issue (N key).</summary>
+    void MoveToPreviousMatch();
+
+    /// <summary>Clear all search state and return to normal viewing (Escape key).</summary>
+    void ClearSearch();
 }
