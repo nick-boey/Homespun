@@ -25,7 +25,7 @@
     else if (UseTaskGraphMode && _taskGraphData != null)
     {
         <div class="timeline-container">
-            <TaskGraphView
+            <TaskGraphView @ref="_taskGraphViewRef"
                 TaskGraph="@_taskGraphData"
                 ProjectId="@ProjectId"
                 OnIssueClick="HandleTaskGraphIssueClick"
@@ -415,6 +415,7 @@
     private ElementReference _timelineWrapper;
     private List<TaskGraphIssueRenderLine> _issueRenderLines = [];
     private string? _previousSelectedIssueId;
+    private TaskGraphView? _taskGraphViewRef;
 
     // Level depth controls
     private int _maxDepth = 3;
@@ -854,6 +855,14 @@
             await LoadTaskGraphAsync();
             StateHasChanged();
         }
+    }
+
+    /// <summary>
+    /// Gets the currently active IssueRowActions component for keyboard-driven agent start.
+    /// </summary>
+    public IssueRowActions? GetActiveIssueRowActions()
+    {
+        return _taskGraphViewRef?.GetActiveIssueRowActions();
     }
 
     private async Task HandleIssueCreated(string newIssueId)

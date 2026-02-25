@@ -902,6 +902,7 @@ public class MockKeyboardNavigationService : IKeyboardNavigationService
     public KeyboardEditMode EditMode { get; set; }
     public InlineEditState? PendingEdit { get; set; }
     public PendingNewIssue? PendingNewIssue { get; set; }
+    public int SelectedPromptIndex { get; set; }
     public string? ProjectId { get; set; }
 
     public event Action? OnStateChanged;
@@ -929,7 +930,11 @@ public class MockKeyboardNavigationService : IKeyboardNavigationService
     public void SetTaskGraphNodes(List<TaskGraphNodeResponse> nodes) { }
     public void SelectFirstActionable() { }
     public void SelectIssue(string issueId) => SelectedIssueId = issueId;
-    public void OpenSelectedIssueForEdit() => OnOpenEditRequested?.Invoke(SelectedIssueId ?? "");
+public void OpenSelectedIssueForEdit() => OnOpenEditRequested?.Invoke(SelectedIssueId ?? "");
+    public void StartSelectingPrompt() { }
+    public void MovePromptSelectionDown() { }
+    public void MovePromptSelectionUp() { }
+    public void AcceptPromptSelection() { }
 
     // Helper to trigger state change
     public void TriggerStateChanged() => OnStateChanged?.Invoke();

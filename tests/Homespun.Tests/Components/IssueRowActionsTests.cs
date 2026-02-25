@@ -267,4 +267,116 @@ public class IssueRowActionsTests : BunitTestContext
         // Dropdown should be closed
         Assert.That(cut.FindAll(".issue-row-agent-dropdown"), Is.Empty);
     }
+
+    #region Keyboard Navigation Tests
+
+    [Test]
+    public void ShowsDropdown_WhenShowAgentDropdownIsTrue()
+    {
+        var cut = Render<IssueRowActions>(p =>
+        {
+            p.Add(x => x.IssueId, "TEST-001");
+            p.Add(x => x.ProjectId, "project-1");
+            p.Add(x => x.ShowAgentDropdown, true);
+        });
+
+        // Dropdown should be visible due to ShowAgentDropdown=true
+        var dropdown = cut.Find(".issue-row-agent-dropdown");
+        Assert.That(dropdown, Is.Not.Null);
+    }
+
+    [Test]
+    public void HidesDropdown_WhenShowAgentDropdownIsFalse()
+    {
+        var cut = Render<IssueRowActions>(p =>
+        {
+            p.Add(x => x.IssueId, "TEST-001");
+            p.Add(x => x.ProjectId, "project-1");
+            p.Add(x => x.ShowAgentDropdown, false);
+        });
+
+        // Dropdown should not be visible
+        Assert.That(cut.FindAll(".issue-row-agent-dropdown"), Is.Empty);
+    }
+
+    [Test]
+    public void ShowsDropdown_WhenEitherClickOrKeyboardShowsIt()
+    {
+        var cut = Render<IssueRowActions>(p =>
+        {
+            p.Add(x => x.IssueId, "TEST-001");
+            p.Add(x => x.ProjectId, "project-1");
+            p.Add(x => x.ShowAgentDropdown, false);
+        });
+
+        // Click the button to show dropdown via _showDropdown
+        cut.Find("[data-testid='run-agent-button']").Click();
+
+        // Dropdown should be visible due to _showDropdown
+        var dropdown = cut.Find(".issue-row-agent-dropdown");
+        Assert.That(dropdown, Is.Not.Null);
+    }
+
+    [Test]
+    public async Task InvokesOnKeyboardAgentStart_WhenHandleKeyboardEnterCalled()
+    {
+        AgentPrompt? capturedPrompt = null;
+        var callbackInvoked = false;
+
+        _mockHandler.RespondWith("api/agent-prompts/prompt-1", MockPrompts[0]);
+
+        var cut = Render<IssueRowActions>(p =>
+        {
+            p.Add(x => x.IssueId, "TEST-001");
+            p.Add(x => x.ProjectId, "project-1");
+            p.Add(x => x.ShowAgentDropdown, true);
+            p.Add(x => x.OnKeyboardAgentStart, EventCallback.Factory.Create<AgentPrompt?>(this, prompt =>
+            {
+                callbackInvoked = true;
+                capturedPrompt = prompt;
+            }));
+        });
+
+        // Get the component instance and call HandleKeyboardEnter
+        await cut.InvokeAsync(() => cut.Instance.HandleKeyboardEnterAsync());
+
+        Assert.That(callbackInvoked, Is.True);
+    }
+
+    [Test]
+    public void PromptCount_ReturnsCorrectCount()
+    {
+        var cut = Render<IssueRowActions>(p =>
+        {
+            p.Add(x => x.IssueId, "TEST-001");
+            p.Add(x => x.ProjectId, "project-1");
+        });
+
+        // Wait for prompts to load (we have 2 mock prompts)
+        cut.WaitForState(() => cut.Instance.PromptCount > 0, TimeSpan.FromSeconds(2));
+
+        // Should have 2 prompts from mock
+        Assert.That(cut.Instance.PromptCount, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void SelectsPromptAtIndex_WhenSelectedPromptIndexSet()
+    {
+        var cut = Render<IssueRowActions>(p =>
+        {
+            p.Add(x => x.IssueId, "TEST-001");
+            p.Add(x => x.ProjectId, "project-1");
+            p.Add(x => x.ShowAgentDropdown, true);
+            p.Add(x => x.SelectedPromptIndex, 1);
+        });
+
+        // Wait for prompts to load
+        cut.WaitForState(() => cut.Instance.PromptCount > 0, TimeSpan.FromSeconds(2));
+
+        // Should have the second prompt selected (index 1 = "Plan")
+        var select = cut.Find("select");
+        Assert.That(select.GetAttribute("value"), Is.EqualTo("prompt-2"));
+    }
+
+    #endregion
 }

@@ -13,7 +13,9 @@ public enum KeyboardEditMode
     /// <summary>Editing an existing issue's title.</summary>
     EditingExisting,
     /// <summary>Creating a new issue inline.</summary>
-    CreatingNew
+    CreatingNew,
+    /// <summary>Selecting an agent prompt from the dropdown.</summary>
+    SelectingAgentPrompt
 }
 
 /// <summary>
@@ -101,6 +103,9 @@ public interface IKeyboardNavigationService
     /// <summary>State for a new issue being created, or null if not creating.</summary>
     PendingNewIssue? PendingNewIssue { get; }
 
+    /// <summary>Current selected prompt index in the agent dropdown (0-based).</summary>
+    int SelectedPromptIndex { get; }
+
     /// <summary>The current project ID for API operations.</summary>
     string? ProjectId { get; }
 
@@ -161,6 +166,20 @@ public interface IKeyboardNavigationService
 
     /// <summary>Accept the current edit, persisting changes via API.</summary>
     Task AcceptEditAsync();
+
+    // Agent prompt selection methods
+
+    /// <summary>Start selecting an agent prompt (e command). Transitions to SelectingAgentPrompt mode.</summary>
+    void StartSelectingPrompt();
+
+    /// <summary>Move prompt selection down in the dropdown.</summary>
+    void MovePromptSelectionDown();
+
+    /// <summary>Move prompt selection up in the dropdown.</summary>
+    void MovePromptSelectionUp();
+
+    /// <summary>Accept the current prompt selection and return to Viewing mode.</summary>
+    void AcceptPromptSelection();
 
     /// <summary>Update the title text while editing.</summary>
     void UpdateEditTitle(string title);

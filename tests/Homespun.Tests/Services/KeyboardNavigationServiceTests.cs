@@ -2154,7 +2154,7 @@ public class KeyboardNavigationServiceTests
 
     #endregion
 
-    #region Open Edit Tests
+#region Open Edit Tests
 
     [Test]
     public void OpenSelectedIssueForEdit_WithSelection_FiresOnOpenEditRequested()
@@ -2208,6 +2208,202 @@ public class KeyboardNavigationServiceTests
         _service.OpenSelectedIssueForEdit();
 
         Assert.That(eventFired, Is.False);
+    }
+
+    #endregion
+
+    #region SelectingAgentPrompt Mode Tests
+
+    [Test]
+    public void StartSelectingPrompt_SetsEditModeToSelectingAgentPrompt()
+    {
+        _service.Initialize(_sampleRenderLines);
+        _service.SelectFirstActionable();
+
+        _service.StartSelectingPrompt();
+
+        Assert.That(_service.EditMode, Is.EqualTo(KeyboardEditMode.SelectingAgentPrompt));
+    }
+
+    [Test]
+    public void StartSelectingPrompt_NoSelection_DoesNothing()
+    {
+        _service.Initialize(_sampleRenderLines);
+        // No selection made (SelectedIndex is -1)
+
+        _service.StartSelectingPrompt();
+
+        Assert.That(_service.EditMode, Is.EqualTo(KeyboardEditMode.Viewing));
+    }
+
+    [Test]
+    public void StartSelectingPrompt_DuringEditMode_IsIgnored()
+    {
+        _service.Initialize(_sampleRenderLines);
+        _service.SelectFirstActionable();
+        _service.StartEditingAtStart(); // Enter EditingExisting mode
+
+        _service.StartSelectingPrompt();
+
+        Assert.That(_service.EditMode, Is.EqualTo(KeyboardEditMode.EditingExisting));
+    }
+
+    [Test]
+    public void StartSelectingPrompt_DuringCreatingNewMode_IsIgnored()
+    {
+        _service.Initialize(_sampleRenderLines);
+        _service.SelectFirstActionable();
+        _service.CreateIssueBelow(); // Enter CreatingNew mode
+
+        _service.StartSelectingPrompt();
+
+        Assert.That(_service.EditMode, Is.EqualTo(KeyboardEditMode.CreatingNew));
+    }
+
+    [Test]
+    public void MovePromptSelectionDown_IncrementsIndex()
+    {
+        _service.Initialize(_sampleRenderLines);
+        _service.SelectFirstActionable();
+        _service.StartSelectingPrompt();
+        var initialIndex = _service.SelectedPromptIndex;
+
+        _service.MovePromptSelectionDown();
+
+        Assert.That(_service.SelectedPromptIndex, Is.EqualTo(initialIndex + 1));
+    }
+
+    [Test]
+    public void MovePromptSelectionUp_DecrementsIndex()
+    {
+        _service.Initialize(_sampleRenderLines);
+        _service.SelectFirstActionable();
+        _service.StartSelectingPrompt();
+        _service.MovePromptSelectionDown(); // Move to index 1 first
+        var indexAfterDown = _service.SelectedPromptIndex;
+
+        _service.MovePromptSelectionUp();
+
+        Assert.That(_service.SelectedPromptIndex, Is.EqualTo(indexAfterDown - 1));
+    }
+
+    [Test]
+    public void MovePromptSelectionUp_AtZero_StaysAtZero()
+    {
+        _service.Initialize(_sampleRenderLines);
+        _service.SelectFirstActionable();
+        _service.StartSelectingPrompt();
+        // SelectedPromptIndex starts at 0
+
+        _service.MovePromptSelectionUp();
+
+        Assert.That(_service.SelectedPromptIndex, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void AcceptPromptSelection_ReturnsToViewingMode()
+    {
+        _service.Initialize(_sampleRenderLines);
+        _service.SelectFirstActionable();
+        _service.StartSelectingPrompt();
+
+        _service.AcceptPromptSelection();
+
+        Assert.That(_service.EditMode, Is.EqualTo(KeyboardEditMode.Viewing));
+    }
+
+    [Test]
+    public void AcceptPromptSelection_ResetsSelectedPromptIndex()
+    {
+        _service.Initialize(_sampleRenderLines);
+        _service.SelectFirstActionable();
+        _service.StartSelectingPrompt();
+        _service.MovePromptSelectionDown();
+        _service.MovePromptSelectionDown();
+
+        _service.AcceptPromptSelection();
+
+        Assert.That(_service.SelectedPromptIndex, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void CancelEdit_FromSelectingPrompt_ReturnsToViewingMode()
+    {
+        _service.Initialize(_sampleRenderLines);
+        _service.SelectFirstActionable();
+        _service.StartSelectingPrompt();
+
+        _service.CancelEdit();
+
+        Assert.That(_service.EditMode, Is.EqualTo(KeyboardEditMode.Viewing));
+    }
+
+    [Test]
+    public void CancelEdit_FromSelectingPrompt_ResetsSelectedPromptIndex()
+    {
+        _service.Initialize(_sampleRenderLines);
+        _service.SelectFirstActionable();
+        _service.StartSelectingPrompt();
+        _service.MovePromptSelectionDown();
+
+        _service.CancelEdit();
+
+        Assert.That(_service.SelectedPromptIndex, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void Navigation_DuringSelectingPrompt_IsIgnored()
+    {
+        _service.Initialize(_sampleRenderLines);
+        _service.SelectFirstActionable();
+        var originalIssueId = _service.SelectedIssueId;
+        _service.StartSelectingPrompt();
+
+        _service.MoveDown();
+
+        // Issue selection should not change during SelectingAgentPrompt mode
+        Assert.That(_service.SelectedIssueId, Is.EqualTo(originalIssueId));
+    }
+
+    [Test]
+    public void StartSelectingPrompt_RaisesOnStateChanged()
+    {
+        _service.Initialize(_sampleRenderLines);
+        _service.SelectFirstActionable();
+        var stateChanged = false;
+        _service.OnStateChanged += () => stateChanged = true;
+
+        _service.StartSelectingPrompt();
+
+        Assert.That(stateChanged, Is.True);
+    }
+
+    [Test]
+    public void MovePromptSelectionDown_RaisesOnStateChanged()
+    {
+        _service.Initialize(_sampleRenderLines);
+        _service.SelectFirstActionable();
+        _service.StartSelectingPrompt();
+        var stateChanged = false;
+        _service.OnStateChanged += () => stateChanged = true;
+
+        _service.MovePromptSelectionDown();
+
+        Assert.That(stateChanged, Is.True);
+    }
+
+    [Test]
+    public void AcceptPromptSelection_RaisesOnStateChanged()
+    {
+        _service.Initialize(_sampleRenderLines);
+        _service.SelectFirstActionable();
+        _service.StartSelectingPrompt();
+        var stateChanged = false;
+        _service.OnStateChanged += () => stateChanged = true;
+
+        _service.AcceptPromptSelection();
+
+        Assert.That(stateChanged, Is.True);
     }
 
     #endregion
