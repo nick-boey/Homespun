@@ -15,6 +15,14 @@ public class KeyboardNavigationService : IKeyboardNavigationService
     private List<TaskGraphIssueRenderLine> _renderLines = [];
     private List<TaskGraphNodeResponse> _taskGraphNodes = [];
 
+    // Type cycling debounce: tracks last type change time per issue
+    private readonly Dictionary<string, DateTime> _lastTypeCycleTime = new();
+    private static readonly TimeSpan TypeCycleDebounce = TimeSpan.FromSeconds(3);
+
+    // Type cycling order: Task -> Bug -> Feature -> Chore -> Task
+    private static readonly IssueType[] TypeCycleOrder =
+        [IssueType.Task, IssueType.Bug, IssueType.Feature, IssueType.Chore];
+
     public KeyboardNavigationService(HttpIssueApiService issueApi)
     {
         _issueApi = issueApi;
@@ -481,6 +489,55 @@ public class KeyboardNavigationService : IKeyboardNavigationService
         if (SelectedIssueId == null) return;
 
         OnOpenEditRequested?.Invoke(SelectedIssueId);
+    }
+
+    #endregion
+
+    #region Type Cycling
+
+    /// <inheritdoc />
+    public async Task CycleIssueTypeAsync()
+    {
+        if (EditMode != KeyboardEditMode.Viewing) return;
+        if (string.IsNullOrEmpty(ProjectId)) return;
+        if (SelectedIndex < 0 || SelectedIndex >= _renderLines.Count) return;
+
+        var issueId = _renderLines[SelectedIndex].IssueId;
+
+        // Check debounce - ignore if within 3 seconds of last change for this issue
+        var now = DateTime.UtcNow;
+        if (_lastTypeCycleTime.TryGetValue(issueId, out var lastTime))
+        {
+            if (now - lastTime < TypeCycleDebounce) return;
+        }
+
+        // Get current type and compute next type in cycle
+        var currentType = _renderLines[SelectedIndex].IssueType;
+        var nextType = GetNextType(currentType);
+
+        // Update via API
+        await _issueApi.UpdateIssueAsync(issueId, new UpdateIssueRequest
+        {
+            ProjectId = ProjectId,
+            Type = nextType
+        });
+
+        // Update debounce timestamp
+        _lastTypeCycleTime[issueId] = now;
+
+        // Refresh the graph
+        await NotifyIssueChangedAsync();
+    }
+
+    /// <summary>
+    /// Gets the next issue type in the cycling order.
+    /// Order: Task -> Bug -> Feature -> Chore -> Task
+    /// </summary>
+    private static IssueType GetNextType(IssueType current)
+    {
+        var index = Array.IndexOf(TypeCycleOrder, current);
+        if (index < 0) index = 0; // Default to start if unknown type
+        return TypeCycleOrder[(index + 1) % TypeCycleOrder.Length];
     }
 
     #endregion

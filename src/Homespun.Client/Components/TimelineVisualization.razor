@@ -964,6 +964,10 @@ case "Enter":
             case "]":
                 IncreaseDepth();
                 break;
+            case "Tab":
+                // Cycle issue type when in viewing mode (Tab is used differently in edit mode)
+                _ = NavService.CycleIssueTypeAsync();
+                break;
         }
     }
 

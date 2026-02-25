@@ -2,6 +2,7 @@ using Fleece.Core.Models;
 using Homespun.Client.Components;
 using Homespun.Client.Services;
 using Homespun.Shared.Models.Fleece;
+using Homespun.Shared.Requests;
 using Homespun.Tests.Helpers;
 using Moq;
 
@@ -40,7 +41,8 @@ public class KeyboardNavigationServiceTests
 
     private static TaskGraphIssueRenderLine CreateIssueLine(
         string issueId, string title, int lane, TaskGraphMarkerType marker,
-        int? parentLane = null, bool isFirstChild = false, bool isSeriesChild = false)
+        int? parentLane = null, bool isFirstChild = false, bool isSeriesChild = false,
+        IssueType issueType = IssueType.Task)
     {
         return new TaskGraphIssueRenderLine(
             IssueId: issueId,
@@ -53,7 +55,7 @@ public class KeyboardNavigationServiceTests
             DrawTopLine: false,
             DrawBottomLine: false,
             SeriesConnectorFromLane: null,
-            IssueType: IssueType.Task,
+            IssueType: issueType,
             HasDescription: false,
             LinkedPr: null,
             AgentStatus: null
@@ -2404,6 +2406,280 @@ public class KeyboardNavigationServiceTests
         _service.AcceptPromptSelection();
 
         Assert.That(stateChanged, Is.True);
+    }
+
+    #endregion
+
+    #region CycleIssueTypeAsync Tests
+
+    [Test]
+    public async Task CycleIssueTypeAsync_TaskToBug_CyclesCorrectly()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.RespondWith("issues", new IssueResponse
+        {
+            Id = "ISSUE-001",
+            Title = "Test",
+            Type = IssueType.Bug,
+            Status = IssueStatus.Open
+        });
+        var issueApi = new HttpIssueApiService(handler.CreateClient());
+        var service = new KeyboardNavigationService(issueApi);
+
+        var lines = new List<TaskGraphIssueRenderLine>
+        {
+            CreateIssueLine("ISSUE-001", "Test issue", 0, TaskGraphMarkerType.Actionable, issueType: IssueType.Task)
+        };
+        service.Initialize(lines);
+        service.SetProjectId("test-project");
+        service.SelectFirstActionable();
+
+        await service.CycleIssueTypeAsync();
+
+        // Verify API was called with Bug (next type after Task)
+        var updateRequest = handler.CapturedRequests
+            .FirstOrDefault(r => r.Method == HttpMethod.Put && r.Url.Contains("issues"));
+        Assert.That(updateRequest, Is.Not.Null);
+        var body = updateRequest!.BodyAs<UpdateIssueRequest>();
+        Assert.That(body, Is.Not.Null);
+        Assert.That(body!.Type, Is.EqualTo(IssueType.Bug));
+    }
+
+    [Test]
+    public async Task CycleIssueTypeAsync_BugToFeature_CyclesCorrectly()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.RespondWith("issues", new IssueResponse
+        {
+            Id = "ISSUE-001",
+            Title = "Test",
+            Type = IssueType.Feature,
+            Status = IssueStatus.Open
+        });
+        var issueApi = new HttpIssueApiService(handler.CreateClient());
+        var service = new KeyboardNavigationService(issueApi);
+
+        var lines = new List<TaskGraphIssueRenderLine>
+        {
+            CreateIssueLine("ISSUE-001", "Test issue", 0, TaskGraphMarkerType.Actionable, issueType: IssueType.Bug)
+        };
+        service.Initialize(lines);
+        service.SetProjectId("test-project");
+        service.SelectFirstActionable();
+
+        await service.CycleIssueTypeAsync();
+
+        var updateRequest = handler.CapturedRequests
+            .FirstOrDefault(r => r.Method == HttpMethod.Put && r.Url.Contains("issues"));
+        Assert.That(updateRequest, Is.Not.Null);
+        var body = updateRequest!.BodyAs<UpdateIssueRequest>();
+        Assert.That(body!.Type, Is.EqualTo(IssueType.Feature));
+    }
+
+    [Test]
+    public async Task CycleIssueTypeAsync_FeatureToChore_CyclesCorrectly()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.RespondWith("issues", new IssueResponse
+        {
+            Id = "ISSUE-001",
+            Title = "Test",
+            Type = IssueType.Chore,
+            Status = IssueStatus.Open
+        });
+        var issueApi = new HttpIssueApiService(handler.CreateClient());
+        var service = new KeyboardNavigationService(issueApi);
+
+        var lines = new List<TaskGraphIssueRenderLine>
+        {
+            CreateIssueLine("ISSUE-001", "Test issue", 0, TaskGraphMarkerType.Actionable, issueType: IssueType.Feature)
+        };
+        service.Initialize(lines);
+        service.SetProjectId("test-project");
+        service.SelectFirstActionable();
+
+        await service.CycleIssueTypeAsync();
+
+        var updateRequest = handler.CapturedRequests
+            .FirstOrDefault(r => r.Method == HttpMethod.Put && r.Url.Contains("issues"));
+        Assert.That(updateRequest, Is.Not.Null);
+        var body = updateRequest!.BodyAs<UpdateIssueRequest>();
+        Assert.That(body!.Type, Is.EqualTo(IssueType.Chore));
+    }
+
+    [Test]
+    public async Task CycleIssueTypeAsync_ChoreToTask_WrapsAround()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.RespondWith("issues", new IssueResponse
+        {
+            Id = "ISSUE-001",
+            Title = "Test",
+            Type = IssueType.Task,
+            Status = IssueStatus.Open
+        });
+        var issueApi = new HttpIssueApiService(handler.CreateClient());
+        var service = new KeyboardNavigationService(issueApi);
+
+        var lines = new List<TaskGraphIssueRenderLine>
+        {
+            CreateIssueLine("ISSUE-001", "Test issue", 0, TaskGraphMarkerType.Actionable, issueType: IssueType.Chore)
+        };
+        service.Initialize(lines);
+        service.SetProjectId("test-project");
+        service.SelectFirstActionable();
+
+        await service.CycleIssueTypeAsync();
+
+        var updateRequest = handler.CapturedRequests
+            .FirstOrDefault(r => r.Method == HttpMethod.Put && r.Url.Contains("issues"));
+        Assert.That(updateRequest, Is.Not.Null);
+        var body = updateRequest!.BodyAs<UpdateIssueRequest>();
+        Assert.That(body!.Type, Is.EqualTo(IssueType.Task));
+    }
+
+    [Test]
+    public async Task CycleIssueTypeAsync_InEditMode_IsIgnored()
+    {
+        _service.Initialize(_sampleRenderLines);
+        _service.SetProjectId("test-project");
+        _service.SelectFirstActionable();
+        _service.StartEditingAtStart(); // Enter edit mode
+
+        await _service.CycleIssueTypeAsync();
+
+        // Verify no API calls were made
+        _mockIssueApi.VerifyNoOtherCalls();
+    }
+
+    [Test]
+    public async Task CycleIssueTypeAsync_NoSelection_IsIgnored()
+    {
+        _service.Initialize(_sampleRenderLines);
+        _service.SetProjectId("test-project");
+        // No selection made (SelectedIndex = -1)
+
+        await _service.CycleIssueTypeAsync();
+
+        _mockIssueApi.VerifyNoOtherCalls();
+    }
+
+    [Test]
+    public async Task CycleIssueTypeAsync_NoProjectId_IsIgnored()
+    {
+        _service.Initialize(_sampleRenderLines);
+        // No SetProjectId call
+        _service.SelectFirstActionable();
+
+        await _service.CycleIssueTypeAsync();
+
+        _mockIssueApi.VerifyNoOtherCalls();
+    }
+
+    [Test]
+    public async Task CycleIssueTypeAsync_WithinDebounce_IsIgnored()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.RespondWith("issues", new IssueResponse
+        {
+            Id = "ISSUE-001",
+            Title = "Test",
+            Type = IssueType.Bug,
+            Status = IssueStatus.Open
+        });
+        var issueApi = new HttpIssueApiService(handler.CreateClient());
+        var service = new KeyboardNavigationService(issueApi);
+
+        var lines = new List<TaskGraphIssueRenderLine>
+        {
+            CreateIssueLine("ISSUE-001", "Test issue", 0, TaskGraphMarkerType.Actionable, issueType: IssueType.Task)
+        };
+        service.Initialize(lines);
+        service.SetProjectId("test-project");
+        service.SelectFirstActionable();
+
+        // First call should work
+        await service.CycleIssueTypeAsync();
+
+        // Second call immediately after should be ignored due to debounce
+        await service.CycleIssueTypeAsync();
+
+        // Only one API call should have been made
+        var updateRequests = handler.CapturedRequests
+            .Where(r => r.Method == HttpMethod.Put && r.Url.Contains("issues"))
+            .ToList();
+        Assert.That(updateRequests, Has.Count.EqualTo(1));
+    }
+
+    [Test]
+    public async Task CycleIssueTypeAsync_DifferentIssues_NoDebounceCrossover()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.RespondWith("issues", new IssueResponse
+        {
+            Id = "test",
+            Title = "Test",
+            Type = IssueType.Bug,
+            Status = IssueStatus.Open
+        });
+        var issueApi = new HttpIssueApiService(handler.CreateClient());
+        var service = new KeyboardNavigationService(issueApi);
+
+        var lines = new List<TaskGraphIssueRenderLine>
+        {
+            CreateIssueLine("ISSUE-001", "First", 0, TaskGraphMarkerType.Actionable, issueType: IssueType.Task),
+            CreateIssueLine("ISSUE-002", "Second", 0, TaskGraphMarkerType.Open, issueType: IssueType.Task)
+        };
+        service.Initialize(lines);
+        service.SetProjectId("test-project");
+
+        // Cycle first issue
+        service.SelectIssue("ISSUE-001");
+        await service.CycleIssueTypeAsync();
+
+        // Cycle second issue immediately (should work - different issue)
+        service.SelectIssue("ISSUE-002");
+        await service.CycleIssueTypeAsync();
+
+        // Both calls should have been made
+        var updateRequests = handler.CapturedRequests
+            .Where(r => r.Method == HttpMethod.Put && r.Url.Contains("issues"))
+            .ToList();
+        Assert.That(updateRequests, Has.Count.EqualTo(2));
+    }
+
+    [Test]
+    public async Task CycleIssueTypeAsync_RaisesOnIssueChanged()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.RespondWith("issues", new IssueResponse
+        {
+            Id = "ISSUE-001",
+            Title = "Test",
+            Type = IssueType.Bug,
+            Status = IssueStatus.Open
+        });
+        var issueApi = new HttpIssueApiService(handler.CreateClient());
+        var service = new KeyboardNavigationService(issueApi);
+
+        var lines = new List<TaskGraphIssueRenderLine>
+        {
+            CreateIssueLine("ISSUE-001", "Test issue", 0, TaskGraphMarkerType.Actionable, issueType: IssueType.Task)
+        };
+        service.Initialize(lines);
+        service.SetProjectId("test-project");
+        service.SelectFirstActionable();
+
+        var issueChangedCalled = false;
+        service.OnIssueChanged += () =>
+        {
+            issueChangedCalled = true;
+            return Task.CompletedTask;
+        };
+
+        await service.CycleIssueTypeAsync();
+
+        Assert.That(issueChangedCalled, Is.True);
     }
 
     #endregion
