@@ -76,26 +76,30 @@
                     && NavService.PendingNewIssue.IsAbove
                     && NavService.PendingNewIssue.ReferenceIssueId == issueLine.IssueId)
                 {
-                    <div class="task-graph-row task-graph-row-selected task-graph-row-editing">
-                        <div class="task-graph-graph-cell">
-                            @((MarkupString)GenerateNewIssueSvg(issueLine.Lane))
+                    var draftLineAbove = GetDraftIssueLine();
+                    if (draftLineAbove != null)
+                    {
+                        <div class="task-graph-row task-graph-row-selected task-graph-row-editing">
+                            <div class="task-graph-graph-cell">
+                                @((MarkupString)GenerateNewIssueSvg(draftLineAbove))
+                            </div>
+                            <div class="task-graph-content-cell">
+                                <span class="task-graph-issue-type task">Task</span>
+                                <span class="task-graph-issue-id task-graph-issue-id-new">NEW</span>
+                                <InlineIssueEditor Title="@NavService.PendingNewIssue.Title"
+                                                   CursorPosition="EditCursorPosition.Start"
+                                                   Placeholder="Enter new issue title..." />
+                                @if (NavService.PendingNewIssue.PendingChildId != null)
+                                {
+                                    <span class="lane-indicator parent">Parent of above</span>
+                                }
+                                else if (NavService.PendingNewIssue.PendingParentId != null)
+                                {
+                                    <span class="lane-indicator child">Child of above</span>
+                                }
+                            </div>
                         </div>
-                        <div class="task-graph-content-cell">
-                            <span class="task-graph-issue-type task">Task</span>
-                            <span class="task-graph-issue-id task-graph-issue-id-new">NEW</span>
-                            <InlineIssueEditor Title="@NavService.PendingNewIssue.Title"
-                                               CursorPosition="EditCursorPosition.Start"
-                                               Placeholder="Enter new issue title..." />
-                            @if (NavService.PendingNewIssue.PendingChildId != null)
-                            {
-                                <span class="lane-indicator parent">Parent of above</span>
-                            }
-                            else if (NavService.PendingNewIssue.PendingParentId != null)
-                            {
-                                <span class="lane-indicator child">Child of above</span>
-                            }
-                        </div>
-                    </div>
+                    }
                 }
 
                 var isSelected = SelectedNodeId == $"issue-{issueLine.IssueId}";
@@ -189,9 +193,44 @@
                 && line is TaskGraphIssueRenderLine currentIssue
                 && ShouldInsertNewIssueAfter(currentIssue.IssueId))
             {
+                var draftLineAfter = GetDraftIssueLine();
+                if (draftLineAfter != null)
+                {
+                    <div class="task-graph-row task-graph-row-selected task-graph-row-editing">
+                        <div class="task-graph-graph-cell">
+                            @((MarkupString)GenerateNewIssueSvg(draftLineAfter))
+                        </div>
+                        <div class="task-graph-content-cell">
+                            <span class="task-graph-issue-type task">Task</span>
+                            <span class="task-graph-issue-id task-graph-issue-id-new">NEW</span>
+                            <InlineIssueEditor Title="@NavService.PendingNewIssue.Title"
+                                               CursorPosition="EditCursorPosition.Start"
+                                               Placeholder="Enter new issue title..." />
+                            @if (NavService.PendingNewIssue.PendingChildId != null)
+                            {
+                                <span class="lane-indicator parent">Parent of above</span>
+                            }
+                            else if (NavService.PendingNewIssue.PendingParentId != null)
+                            {
+                                <span class="lane-indicator child">Child of above</span>
+                            }
+                        </div>
+                    </div>
+                }
+            }
+        }
+
+        @* Handle new issue at the end of the list *@
+        @if (NavService?.EditMode == KeyboardEditMode.CreatingNew
+            && NavService?.PendingNewIssue != null
+            && ShouldInsertNewIssueAtEnd())
+        {
+            var draftLineEnd = GetDraftIssueLine();
+            if (draftLineEnd != null)
+            {
                 <div class="task-graph-row task-graph-row-selected task-graph-row-editing">
                     <div class="task-graph-graph-cell">
-                        @((MarkupString)GenerateNewIssueSvg(currentIssue.Lane))
+                        @((MarkupString)GenerateNewIssueSvg(draftLineEnd))
                     </div>
                     <div class="task-graph-content-cell">
                         <span class="task-graph-issue-type task">Task</span>
@@ -210,33 +249,6 @@
                     </div>
                 </div>
             }
-        }
-
-        @* Handle new issue at the end of the list *@
-        @if (NavService?.EditMode == KeyboardEditMode.CreatingNew
-            && NavService?.PendingNewIssue != null
-            && ShouldInsertNewIssueAtEnd())
-        {
-            <div class="task-graph-row task-graph-row-selected task-graph-row-editing">
-                <div class="task-graph-graph-cell">
-                    @((MarkupString)GenerateNewIssueSvg(0))
-                </div>
-                <div class="task-graph-content-cell">
-                    <span class="task-graph-issue-type task">Task</span>
-                    <span class="task-graph-issue-id task-graph-issue-id-new">NEW</span>
-                    <InlineIssueEditor Title="@NavService.PendingNewIssue.Title"
-                                       CursorPosition="EditCursorPosition.Start"
-                                       Placeholder="Enter new issue title..." />
-                    @if (NavService.PendingNewIssue.PendingChildId != null)
-                    {
-                        <span class="lane-indicator parent">Parent of above</span>
-                    }
-                    else if (NavService.PendingNewIssue.PendingParentId != null)
-                    {
-                        <span class="lane-indicator child">Child of above</span>
-                    }
-                </div>
-            </div>
         }
     </div>
 }
@@ -820,21 +832,38 @@ lane0Color: issueLine.Lane0Color,
         return TimelineSvgRenderer.GenerateDividerRowSvg(_maxLane + 1);
     }
 
-    private string GenerateNewIssueSvg(int lane)
+    private string GenerateNewIssueSvg(TaskGraphIssueRenderLine draftLine)
     {
-        // New issue uses task color (blue) and is placed in the same lane as the selected issue
+        // New issue uses task color (blue) with computed edge flags from the layout service
         return TimelineSvgRenderer.GenerateTaskGraphCircleSvg(
-            nodeLane: lane,
-            parentLane: null,
-            isFirstChild: false,
+            nodeLane: draftLine.Lane,
+            parentLane: draftLine.ParentLane,
+            isFirstChild: draftLine.IsFirstChild,
             maxLanes: _maxLane + 1,
             nodeColor: "#3b82f6", // Blue (task color)
             isOutlineOnly: true, // Outline only for new issue
-            isActionable: lane == 0,
-            drawTopLine: true,
-            drawBottomLine: false,
-            isSeriesChild: false,
-            seriesConnectorFromLane: null);
+            isActionable: draftLine.Lane == 0 || (TaskGraph?.MergedPrs.Count > 0 && draftLine.Lane == 1),
+            drawTopLine: draftLine.DrawTopLine,
+            drawBottomLine: draftLine.DrawBottomLine,
+            isSeriesChild: draftLine.IsSeriesChild,
+            seriesConnectorFromLane: draftLine.SeriesConnectorFromLane,
+            drawLane0Connector: draftLine.DrawLane0Connector,
+            isLastLane0Connector: draftLine.IsLastLane0Connector,
+            drawLane0PassThrough: draftLine.DrawLane0PassThrough);
+    }
+
+    private TaskGraphIssueRenderLine? GetDraftIssueLine()
+    {
+        if (NavService?.PendingNewIssue == null) return null;
+
+        var draft = new DraftIssueContext(
+            ReferenceIssueId: NavService.PendingNewIssue.ReferenceIssueId,
+            IsAbove: NavService.PendingNewIssue.IsAbove,
+            PendingParentId: NavService.PendingNewIssue.PendingParentId,
+            PendingChildId: NavService.PendingNewIssue.PendingChildId,
+            InheritedParentId: NavService.PendingNewIssue.InheritedParentIssueId);
+
+        return TaskGraphLayoutService.ComputeDraftIssueLine(TaskGraph, draft, _renderLines);
     }
 
     private bool ShouldInsertNewIssueAfter(string issueId)

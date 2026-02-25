@@ -930,7 +930,7 @@ public class TaskGraphLayoutServiceTests
         Assert.That(issueLines.First(l => l.IssueId == "ISSUE-002").IsLastLane0Connector, Is.True);
     }
 
-[Test]
+    [Test]
     public void ComputeLayout_MergedPrs_SeriesSiblingsInLane0_OnlyFirstGetsConnector()
     {
         // When series siblings are in lane 0 (offset to lane 1 with PRs),
@@ -1624,6 +1624,325 @@ public class TaskGraphLayoutServiceTests
         var issueLines = result.OfType<TaskGraphIssueRenderLine>().ToList();
 
         Assert.That(issueLines[0].Lane0Color, Is.Null, "Without merged PRs, Lane0Color should be null");
+    }
+
+    #endregion
+
+    #region Draft Issue Layout Tests
+
+    [Test]
+    public void ComputeDraftIssueLine_InsertBetweenSiblings_HasTopAndBottomLines()
+    {
+        // Arrange: Three orphan issues (siblings at same lane)
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes =
+            [
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "ISSUE-001", Title = "First", Status = IssueStatus.Open },
+                    Lane = 0, Row = 0, IsActionable = true
+                },
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "ISSUE-002", Title = "Second", Status = IssueStatus.Open },
+                    Lane = 0, Row = 1, IsActionable = true
+                },
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "ISSUE-003", Title = "Third", Status = IssueStatus.Open },
+                    Lane = 0, Row = 2, IsActionable = true
+                }
+            ],
+            TotalLanes = 1
+        };
+
+        var existingLines = TaskGraphLayoutService.ComputeLayout(taskGraph);
+        var draft = new DraftIssueContext(
+            ReferenceIssueId: "ISSUE-002",
+            IsAbove: false, // Insert below ISSUE-002 (between 002 and 003)
+            PendingParentId: null,
+            PendingChildId: null,
+            InheritedParentId: null);
+
+        // Act
+        var draftLine = TaskGraphLayoutService.ComputeDraftIssueLine(taskGraph, draft, existingLines);
+
+        // Assert
+        Assert.That(draftLine, Is.Not.Null);
+        Assert.That(draftLine!.DrawTopLine, Is.True, "Draft between siblings should have top line");
+        Assert.That(draftLine.DrawBottomLine, Is.True, "Draft between siblings should have bottom line");
+        Assert.That(draftLine.Lane, Is.EqualTo(0), "Draft should be in same lane as siblings");
+    }
+
+    [Test]
+    public void ComputeDraftIssueLine_InsertAboveFirst_HasOnlyBottomLine()
+    {
+        // Arrange: Two orphan issues
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes =
+            [
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "ISSUE-001", Title = "First", Status = IssueStatus.Open },
+                    Lane = 0, Row = 0, IsActionable = true
+                },
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "ISSUE-002", Title = "Second", Status = IssueStatus.Open },
+                    Lane = 0, Row = 1, IsActionable = true
+                }
+            ],
+            TotalLanes = 1
+        };
+
+        var existingLines = TaskGraphLayoutService.ComputeLayout(taskGraph);
+        var draft = new DraftIssueContext(
+            ReferenceIssueId: "ISSUE-001",
+            IsAbove: true, // Insert above first issue
+            PendingParentId: null,
+            PendingChildId: null,
+            InheritedParentId: null);
+
+        // Act
+        var draftLine = TaskGraphLayoutService.ComputeDraftIssueLine(taskGraph, draft, existingLines);
+
+        // Assert
+        Assert.That(draftLine, Is.Not.Null);
+        Assert.That(draftLine!.DrawTopLine, Is.False, "Draft above first should not have top line");
+        Assert.That(draftLine.DrawBottomLine, Is.True, "Draft above first should have bottom line to connect to sibling");
+    }
+
+    [Test]
+    public void ComputeDraftIssueLine_InsertBelowLast_HasOnlyTopLine()
+    {
+        // Arrange: Two orphan issues
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes =
+            [
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "ISSUE-001", Title = "First", Status = IssueStatus.Open },
+                    Lane = 0, Row = 0, IsActionable = true
+                },
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "ISSUE-002", Title = "Second", Status = IssueStatus.Open },
+                    Lane = 0, Row = 1, IsActionable = true
+                }
+            ],
+            TotalLanes = 1
+        };
+
+        var existingLines = TaskGraphLayoutService.ComputeLayout(taskGraph);
+        var draft = new DraftIssueContext(
+            ReferenceIssueId: "ISSUE-002",
+            IsAbove: false, // Insert below last issue
+            PendingParentId: null,
+            PendingChildId: null,
+            InheritedParentId: null);
+
+        // Act
+        var draftLine = TaskGraphLayoutService.ComputeDraftIssueLine(taskGraph, draft, existingLines);
+
+        // Assert
+        Assert.That(draftLine, Is.Not.Null);
+        Assert.That(draftLine!.DrawTopLine, Is.True, "Draft below last should have top line");
+        Assert.That(draftLine.DrawBottomLine, Is.False, "Draft below last should not have bottom line");
+    }
+
+    [Test]
+    public void ComputeDraftIssueLine_InsertAsChildOfSeriesParent_IsSeriesChild()
+    {
+        // Arrange: Series parent with existing child
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes =
+            [
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "CHILD-001", Title = "Existing child", Status = IssueStatus.Open,
+                        ParentIssues = [new ParentIssueRefResponse { ParentIssue = "PARENT-001" }] },
+                    Lane = 0, Row = 0, IsActionable = true
+                },
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "PARENT-001", Title = "Series parent", Status = IssueStatus.Open,
+                        ExecutionMode = ExecutionMode.Series },
+                    Lane = 1, Row = 1, IsActionable = false
+                }
+            ],
+            TotalLanes = 2
+        };
+
+        var existingLines = TaskGraphLayoutService.ComputeLayout(taskGraph);
+        var draft = new DraftIssueContext(
+            ReferenceIssueId: "CHILD-001",
+            IsAbove: false, // Insert below existing child
+            PendingParentId: null,
+            PendingChildId: null,
+            InheritedParentId: "PARENT-001"); // Inheriting same parent (sibling creation)
+
+        // Act
+        var draftLine = TaskGraphLayoutService.ComputeDraftIssueLine(taskGraph, draft, existingLines);
+
+        // Assert
+        Assert.That(draftLine, Is.Not.Null);
+        Assert.That(draftLine!.IsSeriesChild, Is.True, "Draft under series parent should be series child");
+        Assert.That(draftLine.DrawBottomLine, Is.True, "Series child should have bottom line");
+        Assert.That(draftLine.DrawTopLine, Is.True, "Draft below existing series child should have top line");
+    }
+
+    [Test]
+    public void ComputeDraftIssueLine_TabPressed_BecomesParent()
+    {
+        // Arrange: Single issue that draft will become parent of
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes =
+            [
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "ISSUE-001", Title = "Will become child", Status = IssueStatus.Open },
+                    Lane = 0, Row = 0, IsActionable = true
+                }
+            ],
+            TotalLanes = 1
+        };
+
+        var existingLines = TaskGraphLayoutService.ComputeLayout(taskGraph);
+        var draft = new DraftIssueContext(
+            ReferenceIssueId: "ISSUE-001",
+            IsAbove: true, // Insert above
+            PendingParentId: null,
+            PendingChildId: "ISSUE-001", // Tab pressed - draft becomes parent of reference
+            InheritedParentId: null);
+
+        // Act
+        var draftLine = TaskGraphLayoutService.ComputeDraftIssueLine(taskGraph, draft, existingLines);
+
+        // Assert
+        Assert.That(draftLine, Is.Not.Null);
+        // Draft becomes parent, so it should be in a higher lane than the child
+        Assert.That(draftLine!.Lane, Is.EqualTo(1), "Draft as parent should be in lane 1 (higher than child at lane 0)");
+    }
+
+    [Test]
+    public void ComputeDraftIssueLine_ShiftTabPressed_BecomesChild()
+    {
+        // Arrange: Single issue that draft will become child of
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes =
+            [
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "ISSUE-001", Title = "Will become parent", Status = IssueStatus.Open },
+                    Lane = 0, Row = 0, IsActionable = true
+                }
+            ],
+            TotalLanes = 1
+        };
+
+        var existingLines = TaskGraphLayoutService.ComputeLayout(taskGraph);
+        var draft = new DraftIssueContext(
+            ReferenceIssueId: "ISSUE-001",
+            IsAbove: false, // Insert below
+            PendingParentId: "ISSUE-001", // Shift+Tab pressed - draft becomes child of reference
+            PendingChildId: null,
+            InheritedParentId: null);
+
+        // Act
+        var draftLine = TaskGraphLayoutService.ComputeDraftIssueLine(taskGraph, draft, existingLines);
+
+        // Assert
+        Assert.That(draftLine, Is.Not.Null);
+        // Draft becomes child, reference becomes parent - draft stays at lane 0, parent moves to lane 1
+        Assert.That(draftLine!.Lane, Is.EqualTo(0), "Draft as child should stay at lane 0");
+        Assert.That(draftLine.ParentLane, Is.EqualTo(1), "Draft should have parent lane pointing to reference");
+    }
+
+    [Test]
+    public void ComputeDraftIssueLine_WithMergedPrs_LanesAreOffset()
+    {
+        // Arrange: Issue with merged PRs (lanes should be offset by 1)
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes =
+            [
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "ISSUE-001", Title = "First", Status = IssueStatus.Open },
+                    Lane = 0, Row = 0, IsActionable = true
+                }
+            ],
+            TotalLanes = 1,
+            MergedPrs =
+            [
+                new TaskGraphPrResponse { Number = 100, Title = "PR 100", IsMerged = true }
+            ]
+        };
+
+        var existingLines = TaskGraphLayoutService.ComputeLayout(taskGraph);
+        var draft = new DraftIssueContext(
+            ReferenceIssueId: "ISSUE-001",
+            IsAbove: false,
+            PendingParentId: null,
+            PendingChildId: null,
+            InheritedParentId: null);
+
+        // Act
+        var draftLine = TaskGraphLayoutService.ComputeDraftIssueLine(taskGraph, draft, existingLines);
+
+        // Assert
+        Assert.That(draftLine, Is.Not.Null);
+        // With merged PRs, lane 0 is reserved for PR connector, so issues start at lane 1
+        Assert.That(draftLine!.Lane, Is.EqualTo(1), "Draft with merged PRs should be at lane 1 (offset)");
+    }
+
+    [Test]
+    public void ComputeDraftIssueLine_NullTaskGraph_ReturnsNull()
+    {
+        var draft = new DraftIssueContext(
+            ReferenceIssueId: "ISSUE-001",
+            IsAbove: false,
+            PendingParentId: null,
+            PendingChildId: null,
+            InheritedParentId: null);
+
+        var draftLine = TaskGraphLayoutService.ComputeDraftIssueLine(null, draft, []);
+
+        Assert.That(draftLine, Is.Null);
+    }
+
+    [Test]
+    public void ComputeDraftIssueLine_NoReferenceIssue_ReturnsDefaultLine()
+    {
+        // Arrange: Empty task graph (creating first issue)
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes = [],
+            TotalLanes = 0
+        };
+
+        var existingLines = TaskGraphLayoutService.ComputeLayout(taskGraph);
+        var draft = new DraftIssueContext(
+            ReferenceIssueId: null,
+            IsAbove: false,
+            PendingParentId: null,
+            PendingChildId: null,
+            InheritedParentId: null);
+
+        // Act
+        var draftLine = TaskGraphLayoutService.ComputeDraftIssueLine(taskGraph, draft, existingLines);
+
+        // Assert
+        Assert.That(draftLine, Is.Not.Null);
+        Assert.That(draftLine!.Lane, Is.EqualTo(0), "First draft issue should be at lane 0");
+        Assert.That(draftLine.DrawTopLine, Is.False);
+        Assert.That(draftLine.DrawBottomLine, Is.False);
     }
 
     #endregion

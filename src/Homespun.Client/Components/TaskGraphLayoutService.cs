@@ -6,6 +6,16 @@ namespace Homespun.Client.Components;
 
 public enum TaskGraphMarkerType { Actionable, Open, Complete, Closed }
 
+/// <summary>
+/// Context for computing a draft issue's render line before it's created.
+/// </summary>
+public record DraftIssueContext(
+    string? ReferenceIssueId,
+    bool IsAbove,
+    string? PendingParentId,
+    string? PendingChildId,
+    string? InheritedParentId);
+
 public abstract record TaskGraphRenderLine;
 public record TaskGraphIssueRenderLine(
     string IssueId, string Title, int Lane, TaskGraphMarkerType Marker,
@@ -423,5 +433,192 @@ public static class TaskGraphLayoutService
             IssueStatus.Closed or IssueStatus.Archived => TaskGraphMarkerType.Closed,
             _ => node.IsActionable ? TaskGraphMarkerType.Actionable : TaskGraphMarkerType.Open
         };
+    }
+
+    /// <summary>
+    /// Computes the render line for a draft issue that hasn't been created yet.
+    /// This allows the graph to render edges correctly during insert mode.
+    /// </summary>
+    public static TaskGraphIssueRenderLine? ComputeDraftIssueLine(
+        TaskGraphResponse? taskGraph,
+        DraftIssueContext draft,
+        List<TaskGraphRenderLine> existingLines)
+    {
+        if (taskGraph == null)
+            return null;
+
+        var issueLines = existingLines.OfType<TaskGraphIssueRenderLine>().ToList();
+        var laneOffset = taskGraph.MergedPrs.Count > 0 ? 1 : 0;
+
+        // Find the reference issue index and line
+        var refIndex = -1;
+        TaskGraphIssueRenderLine? refLine = null;
+        if (!string.IsNullOrEmpty(draft.ReferenceIssueId))
+        {
+            for (var i = 0; i < issueLines.Count; i++)
+            {
+                if (string.Equals(issueLines[i].IssueId, draft.ReferenceIssueId, StringComparison.OrdinalIgnoreCase))
+                {
+                    refIndex = i;
+                    refLine = issueLines[i];
+                    break;
+                }
+            }
+        }
+
+        // Determine insertion position
+        int insertIndex;
+        if (refIndex < 0)
+        {
+            // No reference - inserting first issue
+            insertIndex = 0;
+        }
+        else if (draft.IsAbove)
+        {
+            insertIndex = refIndex;
+        }
+        else
+        {
+            insertIndex = refIndex + 1;
+        }
+
+        // Determine lane and parent relationships
+        int lane;
+        int? parentLane = null;
+        var isSeriesChild = false;
+        var seriesConnectorFromLane = (int?)null;
+
+        if (draft.PendingChildId != null)
+        {
+            // Tab pressed: draft becomes parent of the reference issue
+            // Draft goes to a higher lane, reference stays at its current lane
+            lane = (refLine?.Lane ?? 0) + 1;
+        }
+        else if (draft.PendingParentId != null)
+        {
+            // Shift+Tab pressed: draft becomes child of the reference issue
+            // Draft stays at the reference's lane, reference conceptually moves to higher lane
+            lane = refLine?.Lane ?? laneOffset;
+            parentLane = lane + 1;
+
+            // Check if the reference has Series execution mode
+            var refNode = taskGraph.Nodes.FirstOrDefault(n =>
+                string.Equals(n.Issue.Id, draft.PendingParentId, StringComparison.OrdinalIgnoreCase));
+            if (refNode?.Issue.ExecutionMode == ExecutionMode.Series)
+            {
+                isSeriesChild = true;
+            }
+        }
+        else if (draft.InheritedParentId != null)
+        {
+            // Sibling creation: inheriting parent from reference
+            // Find the parent's execution mode to determine if this is a series child
+            var parentNode = taskGraph.Nodes.FirstOrDefault(n =>
+                string.Equals(n.Issue.Id, draft.InheritedParentId, StringComparison.OrdinalIgnoreCase));
+
+            lane = refLine?.Lane ?? laneOffset;
+            parentLane = refLine?.ParentLane;
+
+            if (parentNode?.Issue.ExecutionMode == ExecutionMode.Series)
+            {
+                isSeriesChild = true;
+            }
+        }
+        else
+        {
+            // No parent relationship - simple sibling insertion
+            lane = refLine?.Lane ?? laneOffset;
+        }
+
+        // Determine DrawTopLine and DrawBottomLine based on adjacent issues
+        var drawTopLine = false;
+        var drawBottomLine = false;
+
+        // Get adjacent issues based on insertion position
+        TaskGraphIssueRenderLine? prevIssue = insertIndex > 0 && insertIndex <= issueLines.Count
+            ? issueLines[insertIndex - 1]
+            : null;
+        TaskGraphIssueRenderLine? nextIssue = insertIndex < issueLines.Count
+            ? issueLines[insertIndex]
+            : null;
+
+        // When inserting above, the "prev" is actually the issue before our reference
+        // When inserting below, nextIssue is the one after our reference
+        if (draft.IsAbove && refIndex >= 0)
+        {
+            prevIssue = refIndex > 0 ? issueLines[refIndex - 1] : null;
+            nextIssue = refLine;
+        }
+        else if (!draft.IsAbove && refIndex >= 0)
+        {
+            prevIssue = refLine;
+            nextIssue = refIndex + 1 < issueLines.Count ? issueLines[refIndex + 1] : null;
+        }
+
+        // Compute edge flags based on context
+        if (isSeriesChild)
+        {
+            // Series children always have bottom lines (connecting down to next sibling or parent)
+            drawBottomLine = true;
+
+            // Has top line if there's a previous sibling at the same lane
+            if (prevIssue != null && prevIssue.Lane == lane && prevIssue.IsSeriesChild)
+            {
+                drawTopLine = true;
+            }
+        }
+        else
+        {
+            // Non-series case: simple vertical lines connecting siblings at the same lane
+            // Has top line if there's a sibling above at the same lane (including inherited siblings)
+            if (prevIssue != null && prevIssue.Lane == lane)
+            {
+                drawTopLine = true;
+            }
+
+            // Has bottom line if there's a sibling below at the same lane
+            if (nextIssue != null && nextIssue.Lane == lane)
+            {
+                drawBottomLine = true;
+            }
+        }
+
+        // Compute lane 0 connector flags for merged PRs
+        var drawLane0Connector = false;
+        var isLastLane0Connector = false;
+        var drawLane0PassThrough = false;
+
+        if (laneOffset > 0 && lane == laneOffset)
+        {
+            drawLane0Connector = true;
+            // Check if this would be the last lane 0 connector
+            var hasMoreLane0IssuesBelow = issueLines.Skip(insertIndex)
+                .Any(l => l.Lane == laneOffset);
+            isLastLane0Connector = !hasMoreLane0IssuesBelow;
+        }
+        else if (laneOffset > 0 && lane > laneOffset)
+        {
+            // Pass-through if there are lane 0 issues
+            drawLane0PassThrough = issueLines.Any(l => l.Lane == laneOffset);
+        }
+
+        return new TaskGraphIssueRenderLine(
+            IssueId: "DRAFT",
+            Title: "",
+            Lane: lane,
+            Marker: TaskGraphMarkerType.Open,
+            ParentLane: parentLane,
+            IsFirstChild: false,
+            IsSeriesChild: isSeriesChild,
+            DrawTopLine: drawTopLine,
+            DrawBottomLine: drawBottomLine,
+            SeriesConnectorFromLane: seriesConnectorFromLane,
+            IssueType: IssueType.Task,
+            HasDescription: false,
+            LinkedPr: null,
+            AgentStatus: null,
+            DrawLane0Connector: drawLane0Connector,
+            IsLastLane0Connector: isLastLane0Connector,
+            DrawLane0PassThrough: drawLane0PassThrough);
     }
 }
