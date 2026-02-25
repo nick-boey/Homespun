@@ -1655,7 +1655,31 @@ else
         // Only handle keyboard shortcuts on the issues tab
         if (_activeTab != "issues") return;
 
-        // Don't handle if in edit mode - let the inline editor handle it
+        // Handle SelectingAgentPrompt mode separately
+        if (NavService.EditMode == KeyboardEditMode.SelectingAgentPrompt)
+        {
+            switch (e.Key)
+            {
+                case "Escape":
+                    NavService.CancelEdit();
+                    break;
+                case "j":
+                case "ArrowDown":
+                    NavService.MovePromptSelectionDown();
+                    break;
+                case "k":
+                case "ArrowUp":
+                    NavService.MovePromptSelectionUp();
+                    break;
+                case "Enter":
+                    // Start the agent with selected prompt
+                    _ = StartAgentFromKeyboardAsync();
+                    break;
+            }
+            return;
+        }
+
+        // Don't handle if in other edit modes - let the inline editor handle it
         if (NavService.EditMode != KeyboardEditMode.Viewing)
         {
             // Handle Escape to cancel edit
@@ -1707,6 +1731,10 @@ else
             case "Enter":
                 NavService.OpenSelectedIssueForEdit();
                 break;
+            case "e":
+                // Start agent prompt selection mode
+                NavService.StartSelectingPrompt();
+                break;
             case "Escape":
                 // Clear selection or close sidebar panel
                 ClearSelection();
@@ -1722,6 +1750,19 @@ else
                 NavService.MoveToLast();
                 break;
         }
+    }
+
+    /// <summary>
+    /// Starts the agent session from keyboard selection (Enter in SelectingAgentPrompt mode).
+    /// </summary>
+    private async Task StartAgentFromKeyboardAsync()
+    {
+        var issueRowActions = _graphVisualization?.GetActiveIssueRowActions();
+        if (issueRowActions != null)
+        {
+            await issueRowActions.HandleKeyboardEnterAsync();
+        }
+        NavService.AcceptPromptSelection();
     }
 
     #region Undo/Redo Operations

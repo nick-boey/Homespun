@@ -155,12 +155,16 @@
                         }
                         @if (!isEditing && !string.IsNullOrEmpty(ProjectId))
                         {
-                            <IssueRowActions IssueId="@issueLine.IssueId"
+                            <IssueRowActions @ref="@_issueRowActionsRef"
+                                             IssueId="@issueLine.IssueId"
                                              ProjectId="@ProjectId"
                                              IsVisible="@isSelected"
                                              Disabled="@(agentStatus?.IsActive == true)"
                                              OnEditClick="HandleEditClick"
-                                             OnRunAgentClick="HandleRunAgentClick" />
+                                             OnRunAgentClick="HandleRunAgentClick"
+                                             ShowAgentDropdown="@(NavService?.EditMode == KeyboardEditMode.SelectingAgentPrompt && NavService?.SelectedIssueId == issueLine.IssueId)"
+                                             SelectedPromptIndex="@(NavService?.SelectedPromptIndex ?? 0)"
+                                             OnKeyboardAgentStart="HandleKeyboardAgentStart" />
                         }
                     </div>
                 </div>
@@ -732,6 +736,7 @@
     private int _maxAvailableLane;
     private string? _typeMenuOpenForIssueId;
     private string? _previousSelectedNodeId;
+    private IssueRowActions? _issueRowActionsRef;
 
     protected override void OnParametersSet()
     {
@@ -975,6 +980,21 @@ lane0Color: issueLine.Lane0Color,
     {
         await OnRunAgentClick.InvokeAsync(args);
     }
+
+    /// <summary>
+    /// Handles keyboard-triggered agent start from IssueRowActions.
+    /// </summary>
+    private async Task HandleKeyboardAgentStart(AgentPrompt? prompt)
+    {
+        if (NavService?.SelectedIssueId == null) return;
+        await OnRunAgentClick.InvokeAsync((NavService.SelectedIssueId, prompt));
+    }
+
+    /// <summary>
+    /// Gets the currently active IssueRowActions component reference.
+    /// Used by parent components to trigger keyboard actions.
+    /// </summary>
+    public IssueRowActions? GetActiveIssueRowActions() => _issueRowActionsRef;
 
     private async Task HandleLoadMoreClick()
     {

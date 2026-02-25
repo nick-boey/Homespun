@@ -23,12 +23,12 @@
             <i class="bi bi-play-fill"></i>
         </button>
 
-        @if (_showDropdown)
+        @if (_showDropdown || ShowAgentDropdown)
         {
             <div class="issue-row-agent-dropdown" @onclick:stopPropagation="true">
                 <div class="dropdown-content">
                     <label class="dropdown-label">Agent</label>
-                    <select class="form-select form-select-sm" @bind="_selectedPromptId">
+                    <select class="form-select form-select-sm" value="@GetEffectiveSelectedPromptId()" @onchange="HandlePromptSelectionChange">
                         <option value="">None (no prompt)</option>
                         @foreach (var prompt in _prompts)
                         {
@@ -180,6 +180,30 @@
     [Parameter]
     public EventCallback<(string IssueId, AgentPrompt? Prompt)> OnRunAgentClick { get; set; }
 
+    /// <summary>
+    /// External control for showing the agent dropdown (keyboard-driven).
+    /// When true, the dropdown is shown regardless of _showDropdown state.
+    /// </summary>
+    [Parameter]
+    public bool ShowAgentDropdown { get; set; }
+
+    /// <summary>
+    /// The index of the selected prompt in the dropdown (keyboard-driven).
+    /// </summary>
+    [Parameter]
+    public int SelectedPromptIndex { get; set; }
+
+    /// <summary>
+    /// Callback when Enter is pressed during keyboard-driven prompt selection.
+    /// </summary>
+    [Parameter]
+    public EventCallback<AgentPrompt?> OnKeyboardAgentStart { get; set; }
+
+    /// <summary>
+    /// The number of available prompts for bounds checking.
+    /// </summary>
+    public int PromptCount => _prompts.Count;
+
     private bool _showDropdown;
     private bool _isStarting;
     private IReadOnlyList<AgentPrompt> _prompts = [];
@@ -243,5 +267,45 @@
             _isStarting = false;
             StateHasChanged();
         }
+    }
+
+    /// <summary>
+    /// Returns the effective selected prompt ID, considering both click and keyboard modes.
+    /// </summary>
+    private string GetEffectiveSelectedPromptId()
+    {
+        // When keyboard-driven (ShowAgentDropdown), sync selection with SelectedPromptIndex
+        if (ShowAgentDropdown && SelectedPromptIndex >= 0 && SelectedPromptIndex < _prompts.Count)
+        {
+            return _prompts[SelectedPromptIndex].Id;
+        }
+        return _selectedPromptId;
+    }
+
+    /// <summary>
+    /// Handles manual prompt selection changes from the dropdown.
+    /// </summary>
+    private void HandlePromptSelectionChange(ChangeEventArgs e)
+    {
+        _selectedPromptId = e.Value?.ToString() ?? string.Empty;
+    }
+
+    /// <summary>
+    /// Handle Enter key press for keyboard-driven selection.
+    /// </summary>
+    public async Task HandleKeyboardEnterAsync()
+    {
+        AgentPrompt? selectedPrompt = null;
+
+        if (ShowAgentDropdown && SelectedPromptIndex >= 0 && SelectedPromptIndex < _prompts.Count)
+        {
+            selectedPrompt = _prompts[SelectedPromptIndex];
+        }
+        else if (!string.IsNullOrEmpty(_selectedPromptId))
+        {
+            selectedPrompt = await AgentPromptApi.GetPromptAsync(_selectedPromptId);
+        }
+
+        await OnKeyboardAgentStart.InvokeAsync(selectedPrompt);
     }
 }

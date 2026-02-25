@@ -33,6 +33,8 @@ public class KeyboardNavigationService : IKeyboardNavigationService
 
     public PendingNewIssue? PendingNewIssue { get; private set; }
 
+    public int SelectedPromptIndex { get; private set; }
+
     public string? ProjectId { get; private set; }
 
     public event Action? OnStateChanged;
@@ -207,6 +209,7 @@ public class KeyboardNavigationService : IKeyboardNavigationService
         EditMode = KeyboardEditMode.Viewing;
         PendingEdit = null;
         PendingNewIssue = null;
+        SelectedPromptIndex = 0;
         NotifyStateChanged();
     }
 
@@ -278,6 +281,46 @@ public class KeyboardNavigationService : IKeyboardNavigationService
             NotifyStateChanged();
             await NotifyIssueChangedAsync();
         }
+    }
+
+    #endregion
+
+    #region Agent Prompt Selection
+
+    public void StartSelectingPrompt()
+    {
+        if (EditMode != KeyboardEditMode.Viewing) return;
+        if (SelectedIndex < 0 || SelectedIndex >= _renderLines.Count) return;
+
+        EditMode = KeyboardEditMode.SelectingAgentPrompt;
+        SelectedPromptIndex = 0;
+        NotifyStateChanged();
+    }
+
+    public void MovePromptSelectionDown()
+    {
+        if (EditMode != KeyboardEditMode.SelectingAgentPrompt) return;
+
+        SelectedPromptIndex++;
+        NotifyStateChanged();
+    }
+
+    public void MovePromptSelectionUp()
+    {
+        if (EditMode != KeyboardEditMode.SelectingAgentPrompt) return;
+        if (SelectedPromptIndex <= 0) return;
+
+        SelectedPromptIndex--;
+        NotifyStateChanged();
+    }
+
+    public void AcceptPromptSelection()
+    {
+        if (EditMode != KeyboardEditMode.SelectingAgentPrompt) return;
+
+        EditMode = KeyboardEditMode.Viewing;
+        SelectedPromptIndex = 0;
+        NotifyStateChanged();
     }
 
     #endregion
