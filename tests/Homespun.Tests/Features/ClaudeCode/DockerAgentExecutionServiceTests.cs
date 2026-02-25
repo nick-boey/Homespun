@@ -808,6 +808,20 @@ public class DockerAgentExecutionServiceTests
     }
 
     #endregion
+
+    #region RestartContainerAsync Tests
+
+    [Test]
+    public async Task RestartContainerAsync_NonExistentSession_ReturnsNull()
+    {
+        // Act
+        var result = await _service.RestartContainerAsync("non-existent-session");
+
+        // Assert
+        Assert.That(result, Is.Null);
+    }
+
+    #endregion
 }
 
 /// <summary>
@@ -897,6 +911,47 @@ public class DockerSessionRecordTests
             Assert.That(request.Message, Is.EqualTo("Hello"));
             Assert.That(request.Model, Is.EqualTo("claude-opus-4"));
         });
+    }
+
+    [Test]
+    public void ContainerRestartResult_Properties_AreSetCorrectly()
+    {
+        // Arrange & Act
+        var result = new ContainerRestartResult(
+            WorkingDirectory: "/data/projects/test",
+            ConversationId: "conv-123",
+            ProjectId: "proj-1",
+            IssueId: "issue-1",
+            NewContainerId: "container-abc",
+            NewWorkerUrl: "http://172.17.0.5:8080"
+        );
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.WorkingDirectory, Is.EqualTo("/data/projects/test"));
+            Assert.That(result.ConversationId, Is.EqualTo("conv-123"));
+            Assert.That(result.ProjectId, Is.EqualTo("proj-1"));
+            Assert.That(result.IssueId, Is.EqualTo("issue-1"));
+            Assert.That(result.NewContainerId, Is.EqualTo("container-abc"));
+            Assert.That(result.NewWorkerUrl, Is.EqualTo("http://172.17.0.5:8080"));
+        });
+    }
+
+    [Test]
+    public void ContainerRestartResult_AllowsNullConversationId()
+    {
+        // A session may not have a ConversationId if it errored before receiving result messages
+        var result = new ContainerRestartResult(
+            WorkingDirectory: "/data/projects/test",
+            ConversationId: null,
+            ProjectId: "proj-1",
+            IssueId: "issue-1",
+            NewContainerId: "container-abc",
+            NewWorkerUrl: "http://172.17.0.5:8080"
+        );
+
+        Assert.That(result.ConversationId, Is.Null);
     }
 
 }

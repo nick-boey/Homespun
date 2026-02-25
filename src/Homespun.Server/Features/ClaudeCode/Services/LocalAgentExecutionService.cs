@@ -476,6 +476,18 @@ public class LocalAgentExecutionService : IAgentExecutionService, IAsyncDisposab
         };
     }
 
+    /// <inheritdoc />
+    /// <remarks>
+    /// RestartContainerAsync is not applicable for local execution mode.
+    /// Local sessions don't run in containers and can be resumed directly.
+    /// </remarks>
+    public Task<ContainerRestartResult?> RestartContainerAsync(string sessionId, CancellationToken cancellationToken = default)
+    {
+        // Local mode doesn't use containers, so restart is not applicable
+        _logger.LogWarning("RestartContainerAsync called on LocalAgentExecutionService - not applicable for local mode");
+        return Task.FromResult<ContainerRestartResult?>(null);
+    }
+
     public async ValueTask DisposeAsync()
     {
         foreach (var session in _sessions.Values)

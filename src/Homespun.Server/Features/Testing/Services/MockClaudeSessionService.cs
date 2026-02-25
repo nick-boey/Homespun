@@ -849,4 +849,22 @@ public class MockClaudeSessionService : IClaudeSessionService
             CreatedAt = DateTime.UtcNow
         });
     }
+
+    /// <inheritdoc />
+    public Task<ClaudeSession?> RestartSessionAsync(string sessionId, CancellationToken cancellationToken = default)
+    {
+        _logger.LogDebug("[Mock] RestartSession for session {SessionId}", sessionId);
+
+        var session = _sessionStore.GetById(sessionId);
+        if (session == null)
+        {
+            return Task.FromResult<ClaudeSession?>(null);
+        }
+
+        // Mock restart: just clear the error state and set to WaitingForInput
+        session.Status = ClaudeSessionStatus.WaitingForInput;
+        session.ErrorMessage = null;
+
+        return Task.FromResult<ClaudeSession?>(session);
+    }
 }

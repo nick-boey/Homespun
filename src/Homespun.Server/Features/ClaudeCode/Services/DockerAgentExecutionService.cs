@@ -832,6 +832,114 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         return true;
     }
 
+    /// <inheritdoc />
+    public async Task<ContainerRestartResult?> RestartContainerAsync(string sessionId, CancellationToken cancellationToken = default)
+    {
+        if (!_sessions.TryGetValue(sessionId, out var session))
+        {
+            _logger.LogDebug("RestartContainerAsync: Session {SessionId} not found", sessionId);
+            return null;
+        }
+
+        _logger.LogInformation(
+            "RestartContainerAsync: Restarting container for session {SessionId}, preserving ConversationId {ConversationId}",
+            sessionId, session.ConversationId);
+
+        // Save the conversation ID and configuration before stopping the container
+        var conversationId = session.ConversationId;
+        var workingDirectory = session.WorkingDirectory;
+        var containerId = session.ContainerId;
+        var containerName = session.ContainerName;
+        var issueId = session.IssueId;
+
+        // Find the project ID from the clone container tracking
+        string? projectId = null;
+        if (_cloneContainers.TryGetValue(workingDirectory, out var cloneContainer))
+        {
+            projectId = cloneContainer.ProjectId;
+        }
+
+        // Stop the existing container
+        try
+        {
+            // Cancel the session's CTS and dispose
+            session.Cts.Cancel();
+            session.Cts.Dispose();
+
+            // Remove from tracking
+            _sessions.TryRemove(sessionId, out _);
+            _sessionToIssue.TryRemove(sessionId, out _);
+
+            // Stop the Docker container
+            await StopContainerAsync(containerId);
+
+            // Remove from container tracking
+            _cloneContainers.TryRemove(workingDirectory, out _);
+
+            // Also remove from issue containers if tracked there
+            if (!string.IsNullOrEmpty(issueId) && !string.IsNullOrEmpty(projectId))
+            {
+                _issueContainers.TryRemove((projectId, issueId), out _);
+            }
+
+            _logger.LogInformation(
+                "RestartContainerAsync: Stopped old container {ContainerId} for session {SessionId}",
+                containerId, sessionId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "RestartContainerAsync: Error stopping old container {ContainerId}", containerId);
+        }
+
+        // Start a new container with the same configuration
+        try
+        {
+            // Determine the claude path based on working directory
+            var lastSlash = workingDirectory.LastIndexOfAny(['/', '\\']);
+            var cloneRoot = lastSlash > 0 ? workingDirectory[..lastSlash] : null;
+            var claudePath = !string.IsNullOrEmpty(cloneRoot) ? $"{cloneRoot}/.claude" : null;
+
+            // Start a new container
+            var (newContainerId, newWorkerUrl) = await StartContainerAsync(
+                containerName,
+                workingDirectory,
+                useRm: string.IsNullOrEmpty(issueId), // Use --rm for non-issue containers
+                claudePath,
+                issueId,
+                null, // projectName - will be resolved from projectId if needed
+                projectId,
+                cancellationToken);
+
+            // Re-track the container
+            _cloneContainers[workingDirectory] = new CloneContainer(
+                workingDirectory, newContainerId, containerName, newWorkerUrl, DateTime.UtcNow, projectId, issueId);
+
+            // Re-track issue container if applicable
+            if (!string.IsNullOrEmpty(issueId) && !string.IsNullOrEmpty(projectId))
+            {
+                _issueContainers[(projectId, issueId)] = new IssueContainer(
+                    projectId, issueId, newContainerId, containerName, newWorkerUrl, DateTime.UtcNow);
+            }
+
+            _logger.LogInformation(
+                "RestartContainerAsync: Started new container {NewContainerId} at {WorkerUrl} for session {SessionId}",
+                newContainerId, newWorkerUrl, sessionId);
+
+            return new ContainerRestartResult(
+                workingDirectory,
+                conversationId,
+                projectId,
+                issueId,
+                newContainerId,
+                newWorkerUrl);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "RestartContainerAsync: Failed to start new container for session {SessionId}", sessionId);
+            throw;
+        }
+    }
+
     /// <summary>
     /// Maps worker session status to ClaudeSessionStatus enum.
     /// Uses lastMessageType for more accurate status when available.

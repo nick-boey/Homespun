@@ -2124,6 +2124,67 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
     }
 
     /// <inheritdoc />
+    public async Task<ClaudeSession?> RestartSessionAsync(string sessionId, CancellationToken cancellationToken = default)
+    {
+        var session = _sessionStore.GetById(sessionId);
+        if (session == null)
+        {
+            _logger.LogWarning("RestartSessionAsync: Session {SessionId} not found", sessionId);
+            return null;
+        }
+
+        _logger.LogInformation(
+            "RestartSessionAsync: Restarting container for session {SessionId}, entity {EntityId}",
+            sessionId, session.EntityId);
+
+        // Get the agent session ID for the container restart
+        if (!_agentSessionIds.TryGetValue(sessionId, out var agentSessionId))
+        {
+            _logger.LogWarning("RestartSessionAsync: No agent session ID found for session {SessionId}", sessionId);
+            return null;
+        }
+
+        // Broadcast that we're restarting the container
+        await _hubContext.Clients.All.SendAsync("SessionContainerRestarting", sessionId, cancellationToken);
+
+        // Restart the container (preserves ConversationId for resumption)
+        var restartResult = await _agentExecutionService.RestartContainerAsync(agentSessionId, cancellationToken);
+        if (restartResult == null)
+        {
+            _logger.LogError("RestartSessionAsync: Failed to restart container for session {SessionId}", sessionId);
+            return null;
+        }
+
+        // Clear any existing CTS and agent session mapping
+        if (_sessionCts.TryRemove(sessionId, out var oldCts))
+        {
+            await oldCts.CancelAsync();
+            oldCts.Dispose();
+        }
+        _agentSessionIds.TryRemove(sessionId, out _);
+
+        // Clear pending question/answer state
+        _questionAnswerSources.TryRemove(sessionId, out _);
+        _sessionToolUses.TryRemove(sessionId, out _);
+
+        // Update the session with the ConversationId for resumption
+        session.ConversationId = restartResult.ConversationId;
+        session.Status = ClaudeSessionStatus.WaitingForInput;
+        session.ErrorMessage = null;
+
+        // Save the conversation ID for potential resume
+        _logger.LogInformation(
+            "RestartSessionAsync: Container restarted. ConversationId={ConversationId} preserved for session {SessionId}",
+            restartResult.ConversationId, sessionId);
+
+        // Broadcast that the container has been restarted
+        await _hubContext.Clients.All.SendAsync("SessionContainerRestarted", sessionId, session, cancellationToken);
+        await _hubContext.BroadcastSessionStatusChanged(sessionId, session.Status);
+
+        return session;
+    }
+
+    /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
         _logger.LogInformation("Disposing ClaudeSessionService");

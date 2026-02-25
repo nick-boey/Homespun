@@ -162,6 +162,18 @@ public class ClaudeCodeHub(IClaudeSessionService sessionService, IMessageCacheSt
         var summary = await messageCacheStore.GetSessionSummaryAsync(sessionId);
         return summary?.MessageCount ?? 0;
     }
+
+    /// <summary>
+    /// Restart the container for a session and prepare for resumption.
+    /// This stops the existing container, starts a new one, and preserves the conversation ID
+    /// so the session can be resumed.
+    /// </summary>
+    /// <param name="sessionId">The session ID</param>
+    /// <returns>The updated session, or null if not found</returns>
+    public async Task<ClaudeSession?> RestartSession(string sessionId)
+    {
+        return await sessionService.RestartSessionAsync(sessionId);
+    }
 }
 
 /// <summary>
@@ -222,6 +234,20 @@ public static class ClaudeCodeHubExtensions
     {
         await hubContext.Clients.All.SendAsync("SessionStatusChanged", sessionId, status);
         await hubContext.Clients.Group($"session-{sessionId}").SendAsync("SessionStatusChanged", sessionId, status);
+    }
+
+    /// <summary>
+    /// Broadcasts session status change with full session info.
+    /// </summary>
+    public static async Task BroadcastSessionStatusChanged(
+        this IHubContext<ClaudeCodeHub> hubContext,
+        string sessionId,
+        ClaudeSession session)
+    {
+        await hubContext.Clients.All.SendAsync("SessionStatusChanged", sessionId, session.Status);
+        await hubContext.Clients.All.SendAsync("SessionState", session);
+        await hubContext.Clients.Group($"session-{sessionId}").SendAsync("SessionStatusChanged", sessionId, session.Status);
+        await hubContext.Clients.Group($"session-{sessionId}").SendAsync("SessionState", session);
     }
 
     /// <summary>
