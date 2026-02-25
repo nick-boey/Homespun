@@ -223,15 +223,19 @@
     .task-graph {
         display: flex;
         flex-direction: column;
+        min-width: 0;
+        max-width: 100%;
     }
 
     .task-graph-row {
         display: grid;
-        grid-template-columns: auto 1fr;
+        grid-template-columns: auto minmax(0, 1fr);
         align-items: center;
         min-height: 40px;
         cursor: pointer;
         transition: background-color 0.15s ease;
+        min-width: 0;
+        max-width: 100%;
     }
 
     .task-graph-row:hover {
@@ -273,6 +277,8 @@
         align-items: center;
         gap: 0.5rem;
         padding: 0.25rem 0.75rem 0.25rem 0.5rem;
+        min-width: 0;
+        max-width: 100%;
         /* Note: overflow: hidden was removed to allow type change dropdown to display.
            Text truncation is handled by .task-graph-title's own overflow: hidden. */
     }
@@ -454,9 +460,11 @@
     /* Divider row */
     .task-graph-divider {
         display: grid;
-        grid-template-columns: auto 1fr;
+        grid-template-columns: auto minmax(0, 1fr);
         align-items: center;
         min-height: 40px;
+        min-width: 0;
+        max-width: 100%;
     }
 
     .task-graph-divider-content {
