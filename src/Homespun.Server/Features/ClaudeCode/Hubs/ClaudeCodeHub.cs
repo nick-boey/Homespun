@@ -178,9 +178,12 @@ public class ClaudeCodeHub(IClaudeSessionService sessionService, IMessageCacheSt
 
 /// <summary>
 /// Extension methods for broadcasting Claude Code events via SignalR.
+/// Uses AG-UI events for message streaming.
 /// </summary>
 public static class ClaudeCodeHubExtensions
 {
+    #region Session Lifecycle Events
+
     /// <summary>
     /// Broadcasts when a new session starts.
     /// </summary>
@@ -200,28 +203,6 @@ public static class ClaudeCodeHubExtensions
     {
         await hubContext.Clients.All.SendAsync("SessionStopped", sessionId);
         await hubContext.Clients.Group($"session-{sessionId}").SendAsync("SessionStopped", sessionId);
-    }
-
-    /// <summary>
-    /// Broadcasts a message to a session group.
-    /// </summary>
-    public static async Task BroadcastMessageReceived(
-        this IHubContext<ClaudeCodeHub> hubContext,
-        string sessionId,
-        ClaudeMessage message)
-    {
-        await hubContext.Clients.Group($"session-{sessionId}").SendAsync("MessageReceived", message);
-    }
-
-    /// <summary>
-    /// Broadcasts a content block to a session group (for streaming).
-    /// </summary>
-    public static async Task BroadcastContentBlockReceived(
-        this IHubContext<ClaudeCodeHub> hubContext,
-        string sessionId,
-        ClaudeMessageContent content)
-    {
-        await hubContext.Clients.Group($"session-{sessionId}").SendAsync("ContentBlockReceived", content);
     }
 
     /// <summary>
@@ -249,9 +230,9 @@ public static class ClaudeCodeHubExtensions
         string sessionId,
         ClaudeSession session)
     {
-        await hubContext.Clients.All.SendAsync("SessionStatusChanged", sessionId, session.Status);
+        await hubContext.Clients.All.SendAsync("SessionStatusChanged", sessionId, session.Status, session.HasPendingPlanApproval);
         await hubContext.Clients.All.SendAsync("SessionState", session);
-        await hubContext.Clients.Group($"session-{sessionId}").SendAsync("SessionStatusChanged", sessionId, session.Status);
+        await hubContext.Clients.Group($"session-{sessionId}").SendAsync("SessionStatusChanged", sessionId, session.Status, session.HasPendingPlanApproval);
         await hubContext.Clients.Group($"session-{sessionId}").SendAsync("SessionState", session);
     }
 
@@ -282,105 +263,6 @@ public static class ClaudeCodeHubExtensions
     }
 
     /// <summary>
-    /// Broadcasts when a new streaming content block starts.
-    /// </summary>
-    public static async Task BroadcastStreamingContentStarted(
-        this IHubContext<ClaudeCodeHub> hubContext,
-        string sessionId,
-        ClaudeMessageContent content,
-        int index = -1)
-    {
-        await hubContext.Clients.Group($"session-{sessionId}")
-            .SendAsync("StreamingContentStarted", content, index);
-    }
-
-    /// <summary>
-    /// Broadcasts a streaming content delta (partial text update).
-    /// </summary>
-    public static async Task BroadcastStreamingContentDelta(
-        this IHubContext<ClaudeCodeHub> hubContext,
-        string sessionId,
-        ClaudeMessageContent content,
-        string delta,
-        int index = -1)
-    {
-        await hubContext.Clients.Group($"session-{sessionId}")
-            .SendAsync("StreamingContentDelta", content, delta, index);
-    }
-
-    /// <summary>
-    /// Broadcasts when a streaming content block finishes.
-    /// </summary>
-    public static async Task BroadcastStreamingContentStopped(
-        this IHubContext<ClaudeCodeHub> hubContext,
-        string sessionId,
-        ClaudeMessageContent content,
-        int index = -1)
-    {
-        await hubContext.Clients.Group($"session-{sessionId}")
-            .SendAsync("StreamingContentStopped", content, index);
-    }
-
-    /// <summary>
-    /// Broadcasts when Claude asks a question that needs user input.
-    /// </summary>
-    public static async Task BroadcastQuestionReceived(
-        this IHubContext<ClaudeCodeHub> hubContext,
-        string sessionId,
-        PendingQuestion question)
-    {
-        await hubContext.Clients.Group($"session-{sessionId}")
-            .SendAsync("QuestionReceived", question);
-    }
-
-    /// <summary>
-    /// Broadcasts when a plan is received and ready for user approval.
-    /// </summary>
-    public static async Task BroadcastPlanReceived(
-        this IHubContext<ClaudeCodeHub> hubContext,
-        string sessionId,
-        string planContent,
-        string? planFilePath)
-    {
-        await hubContext.Clients.Group($"session-{sessionId}")
-            .SendAsync("PlanReceived", planContent, planFilePath);
-    }
-
-    /// <summary>
-    /// Broadcasts when a question has been answered.
-    /// </summary>
-    public static async Task BroadcastQuestionAnswered(
-        this IHubContext<ClaudeCodeHub> hubContext,
-        string sessionId)
-    {
-        await hubContext.Clients.Group($"session-{sessionId}")
-            .SendAsync("QuestionAnswered");
-    }
-
-    /// <summary>
-    /// Broadcasts when a hook has been executed.
-    /// </summary>
-    public static async Task BroadcastHookExecuted(
-        this IHubContext<ClaudeCodeHub> hubContext,
-        string sessionId,
-        HookExecutionResult result)
-    {
-        await hubContext.Clients.Group($"session-{sessionId}")
-            .SendAsync("HookExecuted", result);
-    }
-
-    /// <summary>
-    /// Broadcasts when context has been cleared for a session.
-    /// </summary>
-    public static async Task BroadcastContextCleared(
-        this IHubContext<ClaudeCodeHub> hubContext,
-        string sessionId)
-    {
-        await hubContext.Clients.Group($"session-{sessionId}")
-            .SendAsync("ContextCleared", sessionId);
-    }
-
-    /// <summary>
     /// Broadcasts when a session encounters an error.
     /// </summary>
     /// <param name="hubContext">The hub context</param>
@@ -400,9 +282,10 @@ public static class ClaudeCodeHubExtensions
             .SendAsync("SessionError", sessionId, errorMessage, errorSubtype, isRecoverable);
     }
 
+    #endregion
+
     #region AG-UI Event Broadcasting
-    // These methods broadcast AG-UI protocol events alongside legacy events.
-    // The AG-UI events are prefixed with "AGUI_" to distinguish them.
+    // These methods broadcast AG-UI protocol events for message streaming.
 
     /// <summary>
     /// Broadcasts an AG-UI RunStarted event when a new agent run begins.

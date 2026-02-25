@@ -9,6 +9,7 @@ namespace Homespun.Client.Services;
 /// Client-side state service for AG-UI events.
 /// Maintains state for in-flight messages and tool calls, reconstructs
 /// ClaudeMessage/ClaudeMessageContent objects, and emits events for UI consumption.
+/// Supports real-time streaming for live UI updates.
 /// </summary>
 public class AGUIEventStateService : IDisposable
 {
@@ -19,6 +20,10 @@ public class AGUIEventStateService : IDisposable
     {
         public ConcurrentDictionary<string, InFlightMessage> InFlightMessages { get; } = new();
         public ConcurrentDictionary<string, InFlightToolCall> InFlightToolCalls { get; } = new();
+        /// <summary>Maps tool use ID to tool name for result correlation.</summary>
+        public ConcurrentDictionary<string, string> ToolNames { get; } = new();
+        /// <summary>Tracks the index for content blocks in the current message.</summary>
+        public int ContentBlockIndex { get; set; } = 0;
     }
 
     /// <summary>
@@ -29,6 +34,7 @@ public class AGUIEventStateService : IDisposable
         public string MessageId { get; init; } = "";
         public string Role { get; init; } = "assistant";
         public StringBuilder Content { get; } = new();
+        public int ContentBlockIndex { get; set; } = -1;
     }
 
     /// <summary>
@@ -40,6 +46,7 @@ public class AGUIEventStateService : IDisposable
         public string ToolName { get; init; } = "";
         public string? ParentMessageId { get; init; }
         public StringBuilder Args { get; } = new();
+        public int ContentBlockIndex { get; set; } = -1;
     }
 
     private readonly ConcurrentDictionary<string, SessionState> _sessions = new();
@@ -47,9 +54,33 @@ public class AGUIEventStateService : IDisposable
     #region Events
 
     /// <summary>
+    /// Fired when a text message starts streaming.
+    /// Parameters: sessionId, messageId, role
+    /// </summary>
+    public event Action<string, string, string>? OnTextMessageStarted;
+
+    /// <summary>
+    /// Fired when streaming text content is received.
+    /// Parameters: sessionId, messageId, delta, contentBlockIndex
+    /// </summary>
+    public event Action<string, string, string, int>? OnTextMessageDelta;
+
+    /// <summary>
     /// Fired when a message is completed (TextMessageEnd received).
     /// </summary>
     public event Action<string, ClaudeMessage>? OnMessageCompleted;
+
+    /// <summary>
+    /// Fired when a tool call starts streaming.
+    /// Parameters: sessionId, toolCallId, toolName, contentBlockIndex
+    /// </summary>
+    public event Action<string, string, string, int>? OnToolCallStarted;
+
+    /// <summary>
+    /// Fired when streaming tool call arguments are received.
+    /// Parameters: sessionId, toolCallId, delta, contentBlockIndex
+    /// </summary>
+    public event Action<string, string, string, int>? OnToolCallArgsDelta;
 
     /// <summary>
     /// Fired when a tool call is completed (ToolCallEnd received).
@@ -85,6 +116,11 @@ public class AGUIEventStateService : IDisposable
     /// Fired when a plan is pending (custom event).
     /// </summary>
     public event Action<string, string, string?>? OnPlanPending;
+
+    /// <summary>
+    /// Fired when a question has been answered (custom event).
+    /// </summary>
+    public event Action<string>? OnQuestionAnswered;
 
     #endregion
 
@@ -150,11 +186,15 @@ public class AGUIEventStateService : IDisposable
     public void HandleTextMessageStart(string sessionId, TextMessageStartEvent evt)
     {
         var state = GetOrCreateSessionState(sessionId);
+        var index = state.ContentBlockIndex++;
         state.InFlightMessages[evt.MessageId] = new InFlightMessage
         {
             MessageId = evt.MessageId,
-            Role = evt.Role
+            Role = evt.Role,
+            ContentBlockIndex = index
         };
+
+        OnTextMessageStarted?.Invoke(sessionId, evt.MessageId, evt.Role);
     }
 
     /// <summary>
@@ -166,6 +206,7 @@ public class AGUIEventStateService : IDisposable
             state.InFlightMessages.TryGetValue(evt.MessageId, out var msg))
         {
             msg.Content.Append(evt.Delta);
+            OnTextMessageDelta?.Invoke(sessionId, evt.MessageId, evt.Delta, msg.ContentBlockIndex);
         }
     }
 
@@ -191,7 +232,8 @@ public class AGUIEventStateService : IDisposable
                     new ClaudeMessageContent
                     {
                         Type = ClaudeContentType.Text,
-                        Text = msg.Content.ToString()
+                        Text = msg.Content.ToString(),
+                        Index = msg.ContentBlockIndex
                     }
                 }
             };
@@ -206,12 +248,19 @@ public class AGUIEventStateService : IDisposable
     public void HandleToolCallStart(string sessionId, ToolCallStartEvent evt)
     {
         var state = GetOrCreateSessionState(sessionId);
+        var index = state.ContentBlockIndex++;
         state.InFlightToolCalls[evt.ToolCallId] = new InFlightToolCall
         {
             ToolCallId = evt.ToolCallId,
             ToolName = evt.ToolCallName,
-            ParentMessageId = evt.ParentMessageId
+            ParentMessageId = evt.ParentMessageId,
+            ContentBlockIndex = index
         };
+
+        // Store tool name for result correlation
+        state.ToolNames[evt.ToolCallId] = evt.ToolCallName;
+
+        OnToolCallStarted?.Invoke(sessionId, evt.ToolCallId, evt.ToolCallName, index);
     }
 
     /// <summary>
@@ -223,6 +272,7 @@ public class AGUIEventStateService : IDisposable
             state.InFlightToolCalls.TryGetValue(evt.ToolCallId, out var toolCall))
         {
             toolCall.Args.Append(evt.Delta);
+            OnToolCallArgsDelta?.Invoke(sessionId, evt.ToolCallId, evt.Delta, toolCall.ContentBlockIndex);
         }
     }
 
@@ -239,7 +289,8 @@ public class AGUIEventStateService : IDisposable
                 Type = ClaudeContentType.ToolUse,
                 ToolUseId = toolCall.ToolCallId,
                 ToolName = toolCall.ToolName,
-                ToolInput = toolCall.Args.ToString()
+                ToolInput = toolCall.Args.ToString(),
+                Index = toolCall.ContentBlockIndex
             };
 
             OnToolCallCompleted?.Invoke(sessionId, content);
@@ -251,11 +302,18 @@ public class AGUIEventStateService : IDisposable
     /// </summary>
     public void HandleToolCallResult(string sessionId, ToolCallResultEvent evt)
     {
+        string? toolName = null;
+        if (_sessions.TryGetValue(sessionId, out var state))
+        {
+            state.ToolNames.TryGetValue(evt.ToolCallId, out toolName);
+        }
+
         var content = new ClaudeMessageContent
         {
             Type = ClaudeContentType.ToolResult,
             ToolUseId = evt.ToolCallId,
-            ToolResult = evt.Content
+            ToolResult = evt.Content,
+            ToolName = toolName
         };
 
         OnToolResultReceived?.Invoke(sessionId, content);
@@ -266,8 +324,9 @@ public class AGUIEventStateService : IDisposable
     /// </summary>
     public void HandleRunStarted(string sessionId, RunStartedEvent evt)
     {
-        // Ensure session state exists
-        GetOrCreateSessionState(sessionId);
+        // Ensure session state exists and reset content block index
+        var state = GetOrCreateSessionState(sessionId);
+        state.ContentBlockIndex = 0;
         OnRunStarted?.Invoke(sessionId);
     }
 

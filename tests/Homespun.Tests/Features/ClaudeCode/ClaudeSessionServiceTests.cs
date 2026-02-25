@@ -2762,6 +2762,18 @@ public class ClaudeSessionServiceStatusBroadcastTests
         _hooksServiceMock = new Mock<IHooksService>();
         _agentExecutionServiceMock = new Mock<IAgentExecutionService>();
         _agUIEventServiceMock = new Mock<IAGUIEventService>();
+        _agUIEventServiceMock.Setup(s => s.CreatePlanPending(It.IsAny<string>(), It.IsAny<string?>()))
+            .Returns((string content, string? path) => new CustomEvent
+            {
+                Name = AGUICustomEventName.PlanPending,
+                Value = new AGUIPlanPendingData { PlanContent = content, PlanFilePath = path }
+            });
+        _agUIEventServiceMock.Setup(s => s.CreateQuestionPending(It.IsAny<PendingQuestion>()))
+            .Returns((PendingQuestion q) => new CustomEvent
+            {
+                Name = AGUICustomEventName.QuestionPending,
+                Value = q
+            });
         _fleeceTransitionServiceMock = new Mock<IFleeceIssueTransitionService>();
         _fleeceTransitionServiceMock.Setup(s => s.TransitionToInProgressAsync(It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync(new FleeceTransitionResult { Success = true });
@@ -3021,7 +3033,7 @@ public class ClaudeSessionServiceStatusBroadcastTests
     }
 
     [Test]
-    public async Task SendMessageAsync_BroadcastsPlanReceived_WhenWorkerSendsPlanPending()
+    public async Task SendMessageAsync_BroadcastsAGUIPlanPending_WhenWorkerSendsPlanPending()
     {
         // Arrange
         var session = await _service.StartSessionAsync(
@@ -3040,17 +3052,19 @@ public class ClaudeSessionServiceStatusBroadcastTests
         // Act
         await _service.SendMessageAsync(session.Id, "Plan this feature");
 
-        // Assert - Should have broadcast PlanReceived with the plan content
-        var planBroadcasts = _broadcastCalls
-            .Where(c => c.Method == "PlanReceived")
+        // Assert - Should have broadcast AG-UI CustomEvent with PlanPending
+        var customEventBroadcasts = _broadcastCalls
+            .Where(c => c.Method == AGUIEventType.Custom)
             .ToList();
 
-        Assert.That(planBroadcasts, Has.Count.GreaterThanOrEqualTo(1),
-            "Should broadcast PlanReceived when worker sends plan_pending");
+        Assert.That(customEventBroadcasts, Has.Count.GreaterThanOrEqualTo(1),
+            "Should broadcast AG-UI CustomEvent when worker sends plan_pending");
 
-        var planArgs = planBroadcasts.First().Args;
-        Assert.That(planArgs[0] as string, Does.Contain("Step one"),
-            "PlanReceived should contain the plan content");
+        // Verify the custom event contains plan pending data
+        var customEvent = customEventBroadcasts.First().Args[0] as CustomEvent;
+        Assert.That(customEvent, Is.Not.Null, "Should receive a CustomEvent");
+        Assert.That(customEvent!.Name, Is.EqualTo(AGUICustomEventName.PlanPending),
+            "CustomEvent should be PlanPending type");
     }
 
     [Test]
@@ -3073,20 +3087,24 @@ public class ClaudeSessionServiceStatusBroadcastTests
         // Act
         await _service.SendMessageAsync(session.Id, "Plan this feature");
 
-        // Assert - PlanReceived should be broadcast before WaitingForPlanExecution status
-        var planReceivedIndex = _broadcastCalls.FindIndex(c => c.Method == "PlanReceived");
+        // Assert - AG-UI PlanPending CustomEvent should be broadcast before WaitingForPlanExecution status
+        var planPendingIndex = _broadcastCalls.FindIndex(c =>
+            c.Method == AGUIEventType.Custom &&
+            c.Args.Length > 0 &&
+            c.Args[0] is CustomEvent evt &&
+            evt.Name == AGUICustomEventName.PlanPending);
         var statusIndex = _broadcastCalls.FindIndex(c =>
             c.Method == "SessionStatusChanged" &&
             c.Args.Length >= 2 &&
             c.Args[1] is ClaudeSessionStatus status &&
             status == ClaudeSessionStatus.WaitingForPlanExecution);
 
-        Assert.That(planReceivedIndex, Is.GreaterThanOrEqualTo(0),
-            "Should broadcast PlanReceived");
+        Assert.That(planPendingIndex, Is.GreaterThanOrEqualTo(0),
+            "Should broadcast AG-UI PlanPending CustomEvent");
         Assert.That(statusIndex, Is.GreaterThanOrEqualTo(0),
             "Should broadcast WaitingForPlanExecution status");
-        Assert.That(planReceivedIndex, Is.LessThan(statusIndex),
-            "PlanReceived should be broadcast before WaitingForPlanExecution status");
+        Assert.That(planPendingIndex, Is.LessThan(statusIndex),
+            "PlanPending CustomEvent should be broadcast before WaitingForPlanExecution status");
     }
 
     #region RestartSessionAsync Tests

@@ -203,8 +203,6 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
 
             foreach (var result in hookResults)
             {
-                await _hubContext.BroadcastHookExecuted(sessionId, result);
-
                 // Collect output from successful hooks
                 if (result.Success && !string.IsNullOrWhiteSpace(result.Output))
                 {
@@ -439,9 +437,6 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
 
         // Cache the user message
         await _messageCache.AppendMessageAsync(sessionId, userMessage, cancellationToken);
-
-        // Notify clients about the user message
-        await _hubContext.BroadcastMessageReceived(sessionId, userMessage);
 
         try
         {
@@ -727,10 +722,6 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                     var block = index < context.Assembler.Blocks.Count ? context.Assembler.Blocks[index] : null;
                     if (block != null)
                     {
-                        var streamingContent = ConvertBlockStateToContent(sessionId, block);
-                        streamingContent.IsStreaming = true;
-                        _ = _hubContext.BroadcastContentBlockReceived(sessionId, streamingContent);
-
                         // Broadcast AG-UI delta events
                         var deltaType = delta.TryGetProperty("type", out var dt) ? dt.GetString() : null;
                         switch (deltaType)
@@ -772,8 +763,6 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                     var content = ConvertBlockStateToContent(sessionId, block);
                     content.IsStreaming = false;
                     context.CurrentAssistantMessage.Content.Add(content);
-
-                    _ = _hubContext.BroadcastContentBlockReceived(sessionId, content);
 
                     // Broadcast AG-UI end events
                     if (block.Type == "tool_use" && block.ToolUseId != null)
@@ -863,7 +852,6 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             await _messageCache.AppendMessageAsync(sessionId, context.CurrentAssistantMessage, cancellationToken);
             context.HasCachedCurrentMessage = true;
 
-            await _hubContext.BroadcastMessageReceived(sessionId, context.CurrentAssistantMessage);
         }
 
         // Clear the assembler for the next assistant message
@@ -901,7 +889,6 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             };
             session.Messages.Add(toolResultMessage);
             await _messageCache.AppendMessageAsync(sessionId, toolResultMessage, cancellationToken);
-            await _hubContext.BroadcastMessageReceived(sessionId, toolResultMessage);
 
             // Broadcast AG-UI tool result events
             foreach (var toolResult in toolResultContents)
@@ -1133,13 +1120,10 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             session.PendingQuestion = pendingQuestion;
             session.Status = ClaudeSessionStatus.WaitingForQuestionAnswer;
 
-            // Broadcast the question to clients
-            await _hubContext.BroadcastQuestionReceived(sessionId, pendingQuestion);
-            await _hubContext.BroadcastSessionStatusChanged(sessionId, ClaudeSessionStatus.WaitingForQuestionAnswer);
-
-            // Broadcast AG-UI custom event for question pending
+            // Broadcast the question to clients via AG-UI custom event
             var questionPendingEvent = _agUIEventService.CreateQuestionPending(pendingQuestion);
             await _hubContext.BroadcastAGUICustomEvent(sessionId, questionPendingEvent);
+            await _hubContext.BroadcastSessionStatusChanged(sessionId, ClaudeSessionStatus.WaitingForQuestionAnswer);
 
             _logger.LogInformation("Session {SessionId} is now waiting for user to answer {QuestionCount} questions",
                 sessionId, questions.Count);
@@ -1215,12 +1199,10 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             session.PendingQuestion = pendingQuestion;
             session.Status = ClaudeSessionStatus.WaitingForQuestionAnswer;
 
-            await _hubContext.BroadcastQuestionReceived(sessionId, pendingQuestion);
-            await _hubContext.BroadcastSessionStatusChanged(sessionId, ClaudeSessionStatus.WaitingForQuestionAnswer);
-
-            // Broadcast AG-UI custom event for question pending
+            // Broadcast the question to clients via AG-UI custom event
             var questionPendingEvent = _agUIEventService.CreateQuestionPending(pendingQuestion);
             await _hubContext.BroadcastAGUICustomEvent(sessionId, questionPendingEvent);
+            await _hubContext.BroadcastSessionStatusChanged(sessionId, ClaudeSessionStatus.WaitingForQuestionAnswer);
 
             _logger.LogInformation("Session {SessionId} is now waiting for user to answer {QuestionCount} questions (from worker)",
                 sessionId, questions.Count);
@@ -1296,8 +1278,6 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                 };
 
                 session.Messages.Add(planMessage);
-                await _hubContext.BroadcastMessageReceived(sessionId, planMessage);
-                await _hubContext.BroadcastPlanReceived(sessionId, planContent, session.PlanFilePath);
 
                 // Broadcast AG-UI custom event for plan pending
                 var planPendingEvent = _agUIEventService.CreatePlanPending(planContent, session.PlanFilePath);
@@ -1416,8 +1396,6 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             };
 
             session.Messages.Add(planMessage);
-            await _hubContext.BroadcastMessageReceived(sessionId, planMessage);
-            await _hubContext.BroadcastPlanReceived(sessionId, planContent, foundPath);
 
             // Broadcast AG-UI custom event for plan pending
             var planPendingEvent = _agUIEventService.CreatePlanPending(planContent, foundPath);
@@ -1685,7 +1663,6 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         session.Status = ClaudeSessionStatus.Running;
 
         // Broadcast that the question was answered
-        await _hubContext.BroadcastQuestionAnswered(sessionId);
         await _hubContext.BroadcastSessionStatusChanged(sessionId, ClaudeSessionStatus.Running);
 
         // Try to route the answer through the agent execution service (Docker workers).
@@ -1766,7 +1743,9 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         if (clearContext)
         {
             await ClearContextAsync(sessionId, cancellationToken);
-            await _hubContext.BroadcastContextCleared(sessionId);
+            // Broadcast AG-UI custom event for context cleared
+            var contextClearedEvent = AGUIEventFactory.CreateCustomEvent(AGUICustomEventName.ContextCleared, sessionId);
+            await _hubContext.BroadcastAGUICustomEvent(sessionId, contextClearedEvent);
         }
 
         // Clear the WaitingForPlanExecution status

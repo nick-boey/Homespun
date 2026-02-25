@@ -1,9 +1,10 @@
 using System.Text.Json;
-using Homespun.ClaudeAgentSdk;
 using Homespun.Features.ClaudeCode.Hubs;
 using Homespun.Features.ClaudeCode.Services;
+using Homespun.Shared.Models.Sessions;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
+using PermissionMode = Homespun.ClaudeAgentSdk.PermissionMode;
 
 namespace Homespun.Features.Testing.Services;
 
@@ -190,7 +191,9 @@ public class MockClaudeSessionService : IClaudeSessionService
         if (clearContext)
         {
             await ClearContextAsync(sessionId, cancellationToken);
-            await _hubContext.BroadcastContextCleared(sessionId);
+            // Broadcast AG-UI custom event for context cleared
+            var contextClearedEvent = AGUIEventFactory.CreateCustomEvent(AGUICustomEventName.ContextCleared, sessionId);
+            await _hubContext.BroadcastAGUICustomEvent(sessionId, contextClearedEvent);
         }
 
         // Update status to Running and broadcast
@@ -215,7 +218,6 @@ public class MockClaudeSessionService : IClaudeSessionService
             CreatedAt = DateTime.UtcNow
         };
         session.Messages.Add(userMessage);
-        await _hubContext.BroadcastMessageReceived(sessionId, userMessage);
 
         // Simulate processing delay
         await Task.Delay(300, cancellationToken);
@@ -236,7 +238,6 @@ public class MockClaudeSessionService : IClaudeSessionService
             CreatedAt = DateTime.UtcNow
         };
         session.Messages.Add(assistantMessage);
-        await _hubContext.BroadcastMessageReceived(sessionId, assistantMessage);
 
         session.Status = ClaudeSessionStatus.WaitingForInput;
         session.LastActivityAt = DateTime.UtcNow;
@@ -482,7 +483,6 @@ public class MockClaudeSessionService : IClaudeSessionService
                 CreatedAt = DateTime.UtcNow
             };
             session.Messages.Add(assistantMessage);
-            await _hubContext.BroadcastMessageReceived(sessionId, assistantMessage);
 
             session.Status = ClaudeSessionStatus.WaitingForInput;
             _sessionStore.Update(session);

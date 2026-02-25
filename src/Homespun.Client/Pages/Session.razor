@@ -1,9 +1,11 @@
 @page "/session/{SessionId}"
+@using System.Text.Json
 @using System.Text.RegularExpressions
 @using Fleece.Core.Models
 @using Microsoft.AspNetCore.Components.Web
 @using Microsoft.AspNetCore.SignalR.Client
 @using Microsoft.JSInterop
+@using Homespun.Shared.Models.Sessions
 @using Homespun.Shared.Requests
 @implements IAsyncDisposable
 @inject HttpSessionApiService SessionApi
@@ -1678,6 +1680,31 @@
     private int _cachedMessageCount = 0;
     private bool _isLoadingHistory = false;
 
+    // AG-UI state tracking for assembling messages from streaming events
+    private readonly Dictionary<string, InFlightTextMessage> _inFlightTextMessages = new();
+    private readonly Dictionary<string, InFlightToolCall> _inFlightToolCalls = new();
+
+    /// <summary>
+    /// Tracks an in-flight text message being assembled from AG-UI events.
+    /// </summary>
+    private class InFlightTextMessage
+    {
+        public string MessageId { get; init; } = "";
+        public string Role { get; init; } = "assistant";
+        public System.Text.StringBuilder Content { get; } = new();
+    }
+
+    /// <summary>
+    /// Tracks an in-flight tool call being assembled from AG-UI events.
+    /// </summary>
+    private class InFlightToolCall
+    {
+        public string ToolCallId { get; init; } = "";
+        public string ToolName { get; init; } = "";
+        public string? ParentMessageId { get; init; }
+        public System.Text.StringBuilder Args { get; } = new();
+    }
+
     // Debug log entry class (needs to be accessible in both Debug and Release for Razor compilation)
     private class DebugLogEntry
     {
@@ -1808,6 +1835,80 @@
         // If all content blocks are ToolResult, this is NOT a real user message
         var hasOnlyToolResults = message.Content.All(c => c.Type == ClaudeContentType.ToolResult);
         return !hasOnlyToolResults;
+    }
+
+    /// <summary>
+    /// Handles the AG-UI QuestionPending custom event.
+    /// </summary>
+    private async Task HandleQuestionPendingEvent(CustomEvent evt)
+    {
+        try
+        {
+            // Parse the question from the event value
+            var jsonElement = (JsonElement)evt.Value;
+            var question = JsonSerializer.Deserialize<PendingQuestion>(jsonElement.GetRawText());
+            if (question == null) return;
+
+            LogDebug("QuestionPending", $"Questions: {question.Questions.Count}");
+            Console.WriteLine($"[SignalR] QuestionPending: {question.Questions.Count} questions");
+
+            _pendingQuestion = question;
+            _questionAnswers.Clear();
+            _customAnswers.Clear();
+
+            // Initialize answers with first option for non-multiselect questions
+            foreach (var q in question.Questions)
+            {
+                if (q.Options.Count > 0 && !q.MultiSelect)
+                {
+                    _questionAnswers[q.Question] = q.Options[0].Label;
+                }
+            }
+
+            if (_session != null)
+            {
+                _session.Status = ClaudeSessionStatus.WaitingForQuestionAnswer;
+                _session.PendingQuestion = question;
+            }
+
+            StateHasChanged();
+            await AutoScrollToBottomIfNearEnd();
+        }
+        catch (Exception ex)
+        {
+            LogDebug("ERROR", $"HandleQuestionPendingEvent: {ex.Message}");
+            Console.WriteLine($"[SignalR] Error handling QuestionPending: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Handles the AG-UI PlanPending custom event.
+    /// </summary>
+    private async Task HandlePlanPendingEvent(CustomEvent evt)
+    {
+        try
+        {
+            // Parse the plan data from the event value
+            var jsonElement = (JsonElement)evt.Value;
+            var planData = JsonSerializer.Deserialize<AGUIPlanPendingData>(jsonElement.GetRawText());
+            if (planData == null) return;
+
+            LogDebug("PlanPending", $"Plan content length: {planData.PlanContent?.Length ?? 0}");
+
+            if (_session != null)
+            {
+                _session.PlanContent = planData.PlanContent;
+                _session.PlanFilePath = planData.PlanFilePath;
+            }
+
+            StateHasChanged();
+            await AutoScrollToBottomIfNearEnd();
+        }
+        catch (Exception ex)
+        {
+            LogDebug("ERROR", $"HandlePlanPendingEvent: {ex.Message}");
+            Console.WriteLine($"[SignalR] Error handling PlanPending: {ex.Message}");
+        }
     }
 
     /// <summary>
@@ -1995,260 +2096,306 @@
             .WithAutomaticReconnect()
             .Build();
 
-        _hubConnection.On<ClaudeMessage>("MessageReceived", (message) =>
+        // AG-UI Text Message Events - handles streaming text content from the assistant
+        _hubConnection.On<TextMessageStartEvent>(AGUIEventType.TextMessageStart, (evt) =>
         {
             _ = InvokeAsync(async () =>
             {
                 try
                 {
-                    LogDebug("MessageReceived", $"Role: {message.Role}, ContentBlocks: {message.Content.Count}");
+                    LogDebug("AGUI_TextMessageStart", $"MessageId: {evt.MessageId}, Role: {evt.Role}");
 
-                    if (_session == null) return;
-
-                    // For user messages, check by ID
-                    if (message.Role == ClaudeMessageRole.User)
+                    // Track the in-flight message
+                    _inFlightTextMessages[evt.MessageId] = new InFlightTextMessage
                     {
-                        var existingUser = _session.Messages.FirstOrDefault(m => m.Id == message.Id);
-                        if (existingUser == null)
-                        {
-                            _session.Messages.Add(message);
-                        }
-                    }
-                    else if (message.Role == ClaudeMessageRole.Assistant)
-                    {
-                        // For assistant messages, check if we already have one for this turn
-                        // (created by streaming events). If so, don't add duplicate.
-                        // Note: tool_result messages (role=user but only ToolResult content) are NOT turn boundaries.
-                        var lastUserIndex = -1;
-                        for (int i = _session.Messages.Count - 1; i >= 0; i--)
-                        {
-                            var msg = _session.Messages[i];
-                            if (msg.Role == ClaudeMessageRole.User && IsRealUserMessage(msg))
-                            {
-                                lastUserIndex = i;
-                                break;
-                            }
-                        }
-
-                        ClaudeMessage? existingAssistant = null;
-                        if (lastUserIndex >= 0)
-                        {
-                            for (int i = lastUserIndex + 1; i < _session.Messages.Count; i++)
-                            {
-                                if (_session.Messages[i].Role == ClaudeMessageRole.Assistant)
-                                {
-                                    existingAssistant = _session.Messages[i];
-                                    break;
-                                }
-                            }
-                        }
-
-                        if (existingAssistant == null)
-                        {
-                            // No existing assistant message for this turn, add the new one
-                            _session.Messages.Add(message);
-                        }
-                        else
-                        {
-                            // Assistant message exists from streaming - merge the final content
-                            // This ensures any content that wasn't fully streamed gets updated
-                            foreach (var content in existingAssistant.Content)
-                            {
-                                content.IsStreaming = false; // Mark all as not streaming
-                            }
-                            // Update the message with final content from server
-                            // The server message has the authoritative content blocks
-                            existingAssistant.Content.Clear();
-                            foreach (var content in message.Content)
-                            {
-                                existingAssistant.Content.Add(content);
-                            }
-                        }
-                    }
-                    StateHasChanged();
-                    await AutoScrollToBottomIfNearEnd();
-                }
-                catch (Exception ex)
-                {
-                    LogDebug("ERROR", $"MessageReceived: {ex.Message}");
-                    Console.WriteLine($"[SignalR] Error in MessageReceived: {ex.Message}");
-                }
-            });
-        });
-
-        _hubConnection.On<ClaudeMessageContent>("ContentBlockReceived", (content) =>
-        {
-            _ = InvokeAsync(async () =>
-            {
-                try
-                {
-                    LogDebug("ContentBlockReceived", $"Type: {content.Type}, Index: {content.Index}, TextLen: {content.Text?.Length ?? 0}");
-
-                    // Get the assistant message for the current turn
-                    var currentMessage = GetOrCreateCurrentTurnAssistantMessage();
-                    if (currentMessage != null)
-                    {
-                        // Check if we already have a block with this index
-                        var existingBlock = content.Index >= 0
-                            ? currentMessage.Content.FirstOrDefault(c => c.Index == content.Index)
-                            : null;
-
-                        if (existingBlock == null)
-                        {
-                            // No existing block, add this complete block
-                            content.IsStreaming = false; // Ensure it's not marked as streaming
-
-                            // Collapse all previous thinking blocks when a tool arrives
-                            if (content.Type == ClaudeContentType.ToolUse)
-                            {
-                                foreach (var thinkingBlock in currentMessage.Content
-                                    .Where(c => c.Type == ClaudeContentType.Thinking && c.IsStreaming))
-                                {
-                                    thinkingBlock.IsStreaming = false;
-                                }
-                            }
-
-                            currentMessage.Content.Add(content);
-                        }
-                        else
-                        {
-                            // Block exists - update with complete content
-                            existingBlock.Text = content.Text;
-                            existingBlock.ToolInput = content.ToolInput;
-                            existingBlock.ToolName = content.ToolName;
-                            existingBlock.ToolUseId = content.ToolUseId;
-                            existingBlock.IsStreaming = false;
-                        }
-                    }
-                    StateHasChanged();
-                    await AutoScrollToBottomIfNearEnd();
-                }
-                catch (Exception ex)
-                {
-                    LogDebug("ERROR", $"ContentBlockReceived: {ex.Message}");
-                    Console.WriteLine($"[SignalR] Error in ContentBlockReceived: {ex.Message}");
-                }
-            });
-        });
-
-        // Handle streaming content events - now with index tracking for robust block management
-        _hubConnection.On<ClaudeMessageContent, int>("StreamingContentStarted", (content, index) =>
-        {
-            _ = InvokeAsync(async () =>
-            {
-                try
-                {
-                    LogDebug("StreamingContentStarted", $"Type: {content.Type}, Index: {index}");
-                    Console.WriteLine($"[SignalR] StreamingContentStarted: Type={content.Type}, Index={index}");
+                        MessageId = evt.MessageId,
+                        Role = evt.Role
+                    };
 
                     // Get or create the assistant message for the current turn
                     var currentMessage = GetOrCreateCurrentTurnAssistantMessage();
-
-                    // Add the streaming content block with its index
                     if (currentMessage != null)
                     {
-                        // Check if we already have a block with this index
-                        var existingBlock = index >= 0
-                            ? currentMessage.Content.FirstOrDefault(c => c.Index == index)
-                            : currentMessage.Content.FirstOrDefault(c => c.IsStreaming && c.Type == content.Type);
-
-                        if (existingBlock == null)
+                        // Add a streaming text block
+                        var textBlock = new ClaudeMessageContent
                         {
-                            content.Index = index;
-
-                            // Collapse all previous thinking blocks when a tool starts
-                            if (content.Type == ClaudeContentType.ToolUse)
-                            {
-                                foreach (var thinkingBlock in currentMessage.Content
-                                    .Where(c => c.Type == ClaudeContentType.Thinking && c.IsStreaming))
-                                {
-                                    thinkingBlock.IsStreaming = false;
-                                }
-                            }
-
-                            currentMessage.Content.Add(content);
-                        }
+                            Type = ClaudeContentType.Text,
+                            Text = "",
+                            IsStreaming = true,
+                            Index = currentMessage.Content.Count
+                        };
+                        currentMessage.Content.Add(textBlock);
                     }
+
                     StateHasChanged();
                     await AutoScrollToBottomIfNearEnd();
                 }
                 catch (Exception ex)
                 {
-                    LogDebug("ERROR", $"StreamingContentStarted: {ex.Message}");
-                    Console.WriteLine($"[SignalR] Error in StreamingContentStarted: {ex.Message}");
+                    LogDebug("ERROR", $"AGUI_TextMessageStart: {ex.Message}");
+                    Console.WriteLine($"[SignalR] Error in AGUI_TextMessageStart: {ex.Message}");
                 }
             });
         });
 
-        _hubConnection.On<ClaudeMessageContent, string, int>("StreamingContentDelta", (content, delta, index) =>
+        _hubConnection.On<TextMessageContentEvent>(AGUIEventType.TextMessageContent, (evt) =>
         {
             _ = InvokeAsync(async () =>
             {
                 try
                 {
-                    LogDebug("StreamingContentDelta", $"Type: {content.Type}, Index: {index}, DeltaLen: {delta.Length}");
+                    LogDebug("AGUI_TextMessageContent", $"MessageId: {evt.MessageId}, DeltaLen: {evt.Delta.Length}");
 
-                    // Get the assistant message for the current turn
+                    // Update in-flight message
+                    if (_inFlightTextMessages.TryGetValue(evt.MessageId, out var inFlight))
+                    {
+                        inFlight.Content.Append(evt.Delta);
+                    }
+
+                    // Find the streaming text block and update it
                     var currentMessage = GetOrCreateCurrentTurnAssistantMessage();
-
-                    // Find and update the streaming content block by index (more robust than type matching)
-                    var streamingBlock = index >= 0
-                        ? currentMessage?.Content.FirstOrDefault(c => c.IsStreaming && c.Index == index)
-                        : currentMessage?.Content.LastOrDefault(c => c.IsStreaming && c.Type == content.Type);
-
+                    var streamingBlock = currentMessage?.Content.LastOrDefault(c => c.IsStreaming && c.Type == ClaudeContentType.Text);
                     if (streamingBlock != null)
                     {
-                        // Apply the delta
-                        switch (content.Type)
-                        {
-                            case ClaudeContentType.Text:
-                            case ClaudeContentType.Thinking:
-                                streamingBlock.Text = (streamingBlock.Text ?? "") + delta;
-                                break;
-                            case ClaudeContentType.ToolUse:
-                                streamingBlock.ToolInput = (streamingBlock.ToolInput ?? "") + delta;
-                                break;
-                        }
+                        streamingBlock.Text = (streamingBlock.Text ?? "") + evt.Delta;
                     }
+
                     StateHasChanged();
                     await AutoScrollToBottomIfNearEnd();
                 }
                 catch (Exception ex)
                 {
-                    LogDebug("ERROR", $"StreamingContentDelta: {ex.Message}");
-                    Console.WriteLine($"[SignalR] Error in StreamingContentDelta: {ex.Message}");
+                    LogDebug("ERROR", $"AGUI_TextMessageContent: {ex.Message}");
+                    Console.WriteLine($"[SignalR] Error in AGUI_TextMessageContent: {ex.Message}");
                 }
             });
         });
 
-        _hubConnection.On<ClaudeMessageContent, int>("StreamingContentStopped", (content, index) =>
+        _hubConnection.On<TextMessageEndEvent>(AGUIEventType.TextMessageEnd, (evt) =>
         {
             _ = InvokeAsync(async () =>
             {
                 try
                 {
-                    LogDebug("StreamingContentStopped", $"Type: {content.Type}, Index: {index}");
-                    Console.WriteLine($"[SignalR] StreamingContentStopped: Type={content.Type}, Index={index}");
+                    LogDebug("AGUI_TextMessageEnd", $"MessageId: {evt.MessageId}");
 
-                    // Get the assistant message for the current turn
+                    // Clean up in-flight message
+                    _inFlightTextMessages.Remove(evt.MessageId);
+
+                    // Mark the streaming text block as complete
                     var currentMessage = GetOrCreateCurrentTurnAssistantMessage();
-
-                    // Mark the content block as no longer streaming (find by index for robustness)
-                    var streamingBlock = index >= 0
-                        ? currentMessage?.Content.FirstOrDefault(c => c.IsStreaming && c.Index == index)
-                        : currentMessage?.Content.LastOrDefault(c => c.IsStreaming && c.Type == content.Type);
-
+                    var streamingBlock = currentMessage?.Content.LastOrDefault(c => c.IsStreaming && c.Type == ClaudeContentType.Text);
                     if (streamingBlock != null)
                     {
                         streamingBlock.IsStreaming = false;
                     }
+
                     StateHasChanged();
                     await AutoScrollToBottomIfNearEnd();
                 }
                 catch (Exception ex)
                 {
-                    LogDebug("ERROR", $"StreamingContentStopped: {ex.Message}");
-                    Console.WriteLine($"[SignalR] Error in StreamingContentStopped: {ex.Message}");
+                    LogDebug("ERROR", $"AGUI_TextMessageEnd: {ex.Message}");
+                    Console.WriteLine($"[SignalR] Error in AGUI_TextMessageEnd: {ex.Message}");
+                }
+            });
+        });
+
+        // AG-UI Tool Call Events - handles tool use streaming
+        _hubConnection.On<ToolCallStartEvent>(AGUIEventType.ToolCallStart, (evt) =>
+        {
+            _ = InvokeAsync(async () =>
+            {
+                try
+                {
+                    LogDebug("AGUI_ToolCallStart", $"ToolCallId: {evt.ToolCallId}, ToolName: {evt.ToolCallName}");
+
+                    // Track the in-flight tool call
+                    _inFlightToolCalls[evt.ToolCallId] = new InFlightToolCall
+                    {
+                        ToolCallId = evt.ToolCallId,
+                        ToolName = evt.ToolCallName,
+                        ParentMessageId = evt.ParentMessageId
+                    };
+
+                    // Get or create the assistant message for the current turn
+                    var currentMessage = GetOrCreateCurrentTurnAssistantMessage();
+                    if (currentMessage != null)
+                    {
+                        // Collapse all previous thinking blocks when a tool starts
+                        foreach (var thinkingBlock in currentMessage.Content
+                            .Where(c => c.Type == ClaudeContentType.Thinking && c.IsStreaming))
+                        {
+                            thinkingBlock.IsStreaming = false;
+                        }
+
+                        // Add a streaming tool use block
+                        var toolBlock = new ClaudeMessageContent
+                        {
+                            Type = ClaudeContentType.ToolUse,
+                            ToolUseId = evt.ToolCallId,
+                            ToolName = evt.ToolCallName,
+                            ToolInput = "",
+                            IsStreaming = true,
+                            Index = currentMessage.Content.Count
+                        };
+                        currentMessage.Content.Add(toolBlock);
+                    }
+
+                    StateHasChanged();
+                    await AutoScrollToBottomIfNearEnd();
+                }
+                catch (Exception ex)
+                {
+                    LogDebug("ERROR", $"AGUI_ToolCallStart: {ex.Message}");
+                    Console.WriteLine($"[SignalR] Error in AGUI_ToolCallStart: {ex.Message}");
+                }
+            });
+        });
+
+        _hubConnection.On<ToolCallArgsEvent>(AGUIEventType.ToolCallArgs, (evt) =>
+        {
+            _ = InvokeAsync(async () =>
+            {
+                try
+                {
+                    LogDebug("AGUI_ToolCallArgs", $"ToolCallId: {evt.ToolCallId}, DeltaLen: {evt.Delta.Length}");
+
+                    // Update in-flight tool call
+                    if (_inFlightToolCalls.TryGetValue(evt.ToolCallId, out var inFlight))
+                    {
+                        inFlight.Args.Append(evt.Delta);
+                    }
+
+                    // Find the streaming tool block and update it
+                    var currentMessage = GetOrCreateCurrentTurnAssistantMessage();
+                    var streamingBlock = currentMessage?.Content.FirstOrDefault(c =>
+                        c.IsStreaming && c.Type == ClaudeContentType.ToolUse && c.ToolUseId == evt.ToolCallId);
+                    if (streamingBlock != null)
+                    {
+                        streamingBlock.ToolInput = (streamingBlock.ToolInput ?? "") + evt.Delta;
+                    }
+
+                    StateHasChanged();
+                    await AutoScrollToBottomIfNearEnd();
+                }
+                catch (Exception ex)
+                {
+                    LogDebug("ERROR", $"AGUI_ToolCallArgs: {ex.Message}");
+                    Console.WriteLine($"[SignalR] Error in AGUI_ToolCallArgs: {ex.Message}");
+                }
+            });
+        });
+
+        _hubConnection.On<ToolCallEndEvent>(AGUIEventType.ToolCallEnd, (evt) =>
+        {
+            _ = InvokeAsync(async () =>
+            {
+                try
+                {
+                    LogDebug("AGUI_ToolCallEnd", $"ToolCallId: {evt.ToolCallId}");
+
+                    // Clean up in-flight tool call
+                    _inFlightToolCalls.Remove(evt.ToolCallId);
+
+                    // Mark the streaming tool block as complete
+                    var currentMessage = GetOrCreateCurrentTurnAssistantMessage();
+                    var streamingBlock = currentMessage?.Content.FirstOrDefault(c =>
+                        c.IsStreaming && c.Type == ClaudeContentType.ToolUse && c.ToolUseId == evt.ToolCallId);
+                    if (streamingBlock != null)
+                    {
+                        streamingBlock.IsStreaming = false;
+                    }
+
+                    StateHasChanged();
+                    await AutoScrollToBottomIfNearEnd();
+                }
+                catch (Exception ex)
+                {
+                    LogDebug("ERROR", $"AGUI_ToolCallEnd: {ex.Message}");
+                    Console.WriteLine($"[SignalR] Error in AGUI_ToolCallEnd: {ex.Message}");
+                }
+            });
+        });
+
+        // AG-UI Tool Call Result - handles tool execution results
+        _hubConnection.On<ToolCallResultEvent>(AGUIEventType.ToolCallResult, (evt) =>
+        {
+            _ = InvokeAsync(async () =>
+            {
+                try
+                {
+                    LogDebug("AGUI_ToolCallResult", $"ToolCallId: {evt.ToolCallId}, ContentLen: {evt.Content?.Length ?? 0}");
+
+                    if (_session == null) return;
+
+                    // Create a user message with tool result content
+                    // (This is how tool results are represented in the conversation)
+                    var toolResultMessage = new ClaudeMessage
+                    {
+                        SessionId = SessionId,
+                        Role = ClaudeMessageRole.User,
+                        Content = new List<ClaudeMessageContent>
+                        {
+                            new ClaudeMessageContent
+                            {
+                                Type = ClaudeContentType.ToolResult,
+                                ToolUseId = evt.ToolCallId,
+                                ToolResult = evt.Content,
+                                ToolSuccess = true
+                            }
+                        }
+                    };
+
+                    _session.Messages.Add(toolResultMessage);
+                    StateHasChanged();
+                    await AutoScrollToBottomIfNearEnd();
+                }
+                catch (Exception ex)
+                {
+                    LogDebug("ERROR", $"AGUI_ToolCallResult: {ex.Message}");
+                    Console.WriteLine($"[SignalR] Error in AGUI_ToolCallResult: {ex.Message}");
+                }
+            });
+        });
+
+        // AG-UI Custom Events - handles question pending and plan pending
+        _hubConnection.On<CustomEvent>(AGUIEventType.Custom, (evt) =>
+        {
+            _ = InvokeAsync(async () =>
+            {
+                try
+                {
+                    LogDebug("AGUI_Custom", $"Name: {evt.Name}");
+
+                    switch (evt.Name)
+                    {
+                        case AGUICustomEventName.QuestionPending:
+                            await HandleQuestionPendingEvent(evt);
+                            break;
+
+                        case AGUICustomEventName.PlanPending:
+                            await HandlePlanPendingEvent(evt);
+                            break;
+
+                        case AGUICustomEventName.ContextCleared:
+                            if (_session != null)
+                            {
+                                _session.ContextClearMarkers.Add(DateTime.UtcNow);
+                            }
+                            StateHasChanged();
+                            await AutoScrollToBottomIfNearEnd();
+                            break;
+
+                        default:
+                            LogDebug("AGUI_Custom", $"Unhandled custom event: {evt.Name}");
+                            break;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    LogDebug("ERROR", $"AGUI_Custom: {ex.Message}");
+                    Console.WriteLine($"[SignalR] Error in AGUI_Custom: {ex.Message}");
                 }
             });
         });
@@ -2263,6 +2410,7 @@
 
                     if (_session != null && _session.Id == sessionId)
                     {
+                        var previousStatus = _session.Status;
                         _session.Status = status;
                         _session.HasPendingPlanApproval = hasPendingPlanApproval;
 
@@ -2277,6 +2425,19 @@
                         if (status != ClaudeSessionStatus.WaitingForPlanExecution)
                         {
                             _isProcessingPlanAction = false;
+                        }
+
+                        // Clear pending question when transitioning out of WaitingForQuestionAnswer
+                        if (previousStatus == ClaudeSessionStatus.WaitingForQuestionAnswer &&
+                            status != ClaudeSessionStatus.WaitingForQuestionAnswer)
+                        {
+                            _pendingQuestion = null;
+                            _questionAnswers.Clear();
+                            _customAnswers.Clear();
+                            if (_session != null)
+                            {
+                                _session.PendingQuestion = null;
+                            }
                         }
 
                         // When execution completes and we have queued messages, send the next one
@@ -2414,125 +2575,6 @@
                 {
                     LogDebug("ERROR", $"SessionState: {ex.Message}");
                     Console.WriteLine($"[SignalR] Error in SessionState: {ex.Message}");
-                }
-            });
-        });
-
-        // Handle question received from Claude
-        _hubConnection.On<PendingQuestion>("QuestionReceived", (question) =>
-        {
-            _ = InvokeAsync(async () =>
-            {
-                try
-                {
-                    LogDebug("QuestionReceived", $"Questions: {question.Questions.Count}");
-                    Console.WriteLine($"[SignalR] QuestionReceived: {question.Questions.Count} questions");
-
-                    _pendingQuestion = question;
-                    _questionAnswers.Clear();
-                    _customAnswers.Clear();
-
-                    // Initialize answers with first option for non-multiselect questions
-                    foreach (var q in question.Questions)
-                    {
-                        if (q.Options.Count > 0 && !q.MultiSelect)
-                        {
-                            _questionAnswers[q.Question] = q.Options[0].Label;
-                        }
-                    }
-
-                    if (_session != null)
-                    {
-                        _session.Status = ClaudeSessionStatus.WaitingForQuestionAnswer;
-                        _session.PendingQuestion = question;
-                    }
-
-                    StateHasChanged();
-                    await AutoScrollToBottomIfNearEnd();
-                }
-                catch (Exception ex)
-                {
-                    LogDebug("ERROR", $"QuestionReceived: {ex.Message}");
-                    Console.WriteLine($"[SignalR] Error in QuestionReceived: {ex.Message}");
-                }
-            });
-        });
-
-        // Handle question answered confirmation
-        _hubConnection.On("QuestionAnswered", () =>
-        {
-            _ = InvokeAsync(() =>
-            {
-                try
-                {
-                    LogDebug("QuestionAnswered", "Question was answered");
-                    _pendingQuestion = null;
-                    _questionAnswers.Clear();
-                    _customAnswers.Clear();
-
-                    if (_session != null)
-                    {
-                        _session.PendingQuestion = null;
-                    }
-
-                    StateHasChanged();
-                }
-                catch (Exception ex)
-                {
-                    LogDebug("ERROR", $"QuestionAnswered: {ex.Message}");
-                    Console.WriteLine($"[SignalR] Error in QuestionAnswered: {ex.Message}");
-                }
-                return Task.CompletedTask;
-            });
-        });
-
-        // Handle plan received from Claude (ExitPlanMode)
-        _hubConnection.On<string, string?>("PlanReceived", (planContent, planFilePath) =>
-        {
-            _ = InvokeAsync(async () =>
-            {
-                try
-                {
-                    LogDebug("PlanReceived", $"Plan content length: {planContent?.Length ?? 0}");
-                    if (_session != null)
-                    {
-                        _session.PlanContent = planContent;
-                        _session.PlanFilePath = planFilePath;
-                        _session.HasPendingPlanApproval = true;
-                    }
-                    StateHasChanged();
-                    await AutoScrollToBottomIfNearEnd();
-                }
-                catch (Exception ex)
-                {
-                    LogDebug("ERROR", $"PlanReceived: {ex.Message}");
-                }
-            });
-        });
-
-        // Handle context cleared event
-        _hubConnection.On<string>("ContextCleared", (sessionId) =>
-        {
-            _ = InvokeAsync(async () =>
-            {
-                try
-                {
-                    LogDebug("ContextCleared", $"Context cleared for session {sessionId}");
-                    Console.WriteLine($"[SignalR] ContextCleared for session {sessionId}");
-
-                    if (_session != null)
-                    {
-                        // Add a context clear marker to the session
-                        _session.ContextClearMarkers.Add(DateTime.UtcNow);
-                    }
-
-                    StateHasChanged();
-                    await AutoScrollToBottomIfNearEnd();
-                }
-                catch (Exception ex)
-                {
-                    LogDebug("ERROR", $"ContextCleared: {ex.Message}");
-                    Console.WriteLine($"[SignalR] Error in ContextCleared: {ex.Message}");
                 }
             });
         });
