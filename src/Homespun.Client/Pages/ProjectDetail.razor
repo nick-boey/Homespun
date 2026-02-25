@@ -183,7 +183,7 @@ else
     }
     else if (_activeTab == "agents")
     {
-        <AgentWorkersPanel ProjectId="@Id" OnDataChanged="RefreshData" />
+        <SessionsPanel ProjectId="@Id" OnSessionStopped="RefreshData" />
     }
     else if (_activeTab == "prompts")
     {
