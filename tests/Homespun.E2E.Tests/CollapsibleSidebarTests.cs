@@ -97,9 +97,10 @@ public class CollapsibleSidebarTests : PageTest
         var sidebar = Page.Locator(".detail-sidebar.open");
         await Expect(sidebar).ToBeVisibleAsync(new() { Timeout = 5000 });
 
-        // Click the close button on the panel
-        var closeButton = sidebar.Locator("button[title='Close panel']");
-        await closeButton.ClickAsync();
+        // Click the panel toggle button in the title bar to close the sidebar
+        // (The close button was moved from the panel to the title bar as part of the mobile-friendly redesign)
+        var panelToggle = Page.Locator("button.panel-toggle[title='Close detail panel']");
+        await panelToggle.ClickAsync();
 
         // Verify the sidebar collapses
         await Expect(sidebar).Not.ToBeVisibleAsync(new() { Timeout = 5000 });

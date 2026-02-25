@@ -42,6 +42,7 @@ builder.Services.AddSingleton<IMarkdownRenderingService, MarkdownRenderingServic
 builder.Services.AddSingleton<IAgentStartupTracker, AgentStartupTracker>();
 builder.Services.AddScoped<MessageDisplayService>();
 builder.Services.AddScoped<IKeyboardNavigationService, KeyboardNavigationService>();
+builder.Services.AddScoped<IPanelService, PanelService>();
 builder.Services.AddScoped<AGUIEventStateService>();
 
 // Register telemetry services

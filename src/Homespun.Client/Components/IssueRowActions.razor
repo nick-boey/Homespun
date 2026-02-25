@@ -12,6 +12,16 @@
         <i class="bi bi-pencil"></i>
     </button>
 
+    <button type="button"
+            class="issue-row-action-btn issue-row-open-panel-btn"
+            data-testid="open-panel-button"
+            title="Open panel"
+            disabled="@Disabled"
+            @onclick="HandleOpenPanelClick"
+            @onclick:stopPropagation="true">
+        <i class="bi bi-layout-sidebar-reverse"></i>
+    </button>
+
     <div class="issue-row-agent-wrapper">
         <button type="button"
                 class="issue-row-action-btn"
@@ -139,6 +149,17 @@
     .w-full {
         width: 100%;
     }
+
+    /* Open panel button - only visible on mobile */
+    .issue-row-open-panel-btn {
+        display: none;
+    }
+
+    @@media (max-width: 768px) {
+        .issue-row-open-panel-btn {
+            display: flex;
+        }
+    }
 </style>
 
 @code {
@@ -204,6 +225,12 @@
     /// </summary>
     public int PromptCount => _prompts.Count;
 
+    /// <summary>
+    /// Callback when the open panel button is clicked (mobile only).
+    /// </summary>
+    [Parameter]
+    public EventCallback<string> OnOpenPanelClick { get; set; }
+
     private bool _showDropdown;
     private bool _isStarting;
     private IReadOnlyList<AgentPrompt> _prompts = [];
@@ -235,6 +262,12 @@
     {
         if (Disabled) return;
         await OnEditClick.InvokeAsync(IssueId);
+    }
+
+    private async Task HandleOpenPanelClick()
+    {
+        if (Disabled) return;
+        await OnOpenPanelClick.InvokeAsync(IssueId);
     }
 
     private void ToggleDropdown()
