@@ -103,8 +103,9 @@
                 var index = i;
                 var isEditing = NavService?.EditMode == KeyboardEditMode.EditingExisting
                     && NavService?.PendingEdit?.IssueId == issueLine.IssueId;
+                var isSearchMatch = IsSearchMatch(issueLine.Title);
 
-                <div class="task-graph-row @(isSelected ? "task-graph-row-selected" : "") @(isEditing ? "task-graph-row-editing" : "")"
+                <div class="task-graph-row @(isSelected ? "task-graph-row-selected" : "") @(isEditing ? "task-graph-row-editing" : "") @(isSearchMatch ? "task-graph-row-search-match" : "")"
                      @onclick="() => HandleIssueClick(issueLine.IssueId)"
                      data-testid="task-graph-issue-row"
                      data-issue-id="@issueLine.IssueId">
@@ -136,7 +137,9 @@
                         }
                         else
                         {
-                            <span class="task-graph-title">@issueLine.Title</span>
+                            <span class="task-graph-title">
+                                <HighlightedText Text="@issueLine.Title" SearchTerm="@ActiveSearchTerm" />
+                            </span>
                         }
                         @if (issueLine.LinkedPr != null && !isEditing)
                         {
@@ -311,6 +314,21 @@
     .task-graph-row-selected .task-graph-graph-cell svg circle[fill]:not([fill="none"]),
     .task-graph-row-selected .task-graph-graph-cell svg path[fill]:not([fill="none"]) {
         filter: drop-shadow(0 0 4px var(--color-ocean, #51A5C1));
+    }
+
+    /* Search match highlight */
+    .task-graph-row-search-match {
+        border: 2px solid rgba(251, 191, 36, 0.6);
+        border-radius: 4px;
+        margin: 1px 4px;
+    }
+
+    /* Highlighted search text within titles */
+    .task-graph-title :deep(.search-highlight) {
+        background-color: rgba(251, 191, 36, 0.4);
+        color: inherit;
+        padding: 0 2px;
+        border-radius: 2px;
     }
 
     /* Show issue row actions on hover */
@@ -702,6 +720,12 @@
     [Parameter] public IKeyboardNavigationService? NavService { get; set; }
 
     /// <summary>
+    /// The active search term for highlighting matching text in issue titles.
+    /// When set, matching issues will be highlighted and matching text emphasized.
+    /// </summary>
+    [Parameter] public string? ActiveSearchTerm { get; set; }
+
+    /// <summary>
     /// The project ID for creating issues. Required when EnableKeyboardControls is true.
     /// </summary>
     [Parameter] public string? ProjectId { get; set; }
@@ -1051,5 +1075,11 @@ lane0Color: issueLine.Lane0Color,
         {
             await MaxDepthChanged.InvokeAsync(MaxDepth + 1);
         }
+    }
+
+    private bool IsSearchMatch(string title)
+    {
+        if (string.IsNullOrEmpty(ActiveSearchTerm)) return false;
+        return title.Contains(ActiveSearchTerm, StringComparison.OrdinalIgnoreCase);
     }
 }

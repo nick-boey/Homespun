@@ -127,6 +127,13 @@ else
 
         <div class="project-layout">
             <div class="timeline-column">
+                <SearchBar IsVisible="@NavService.IsSearching"
+                           SearchTerm="@NavService.SearchTerm"
+                           MatchCount="@NavService.MatchingIndices.Count"
+                           CurrentMatchIndex="@NavService.CurrentMatchIndex"
+                           OnSearchTermChanged="HandleSearchTermChanged"
+                           OnEnter="HandleSearchEnter"
+                           OnEscape="HandleSearchEscape" />
                 <TimelineVisualization
                     @ref="_graphVisualization"
                     ProjectId="@Id"
@@ -135,7 +142,8 @@ else
                     OnIssueCreated="@HandleInlineIssueCreated"
                     OnEditClick="@HandleEditIssue"
                     OnRunAgentClick="@HandleRunAgentOnIssue"
-                    SelectedNodeId="@GetSelectedNodeId()" />
+                    SelectedNodeId="@GetSelectedNodeId()"
+                    ActiveSearchTerm="@GetActiveSearchTerm()" />
             </div>
         </div>
 
@@ -1337,6 +1345,31 @@ else
         _sidebarOpen = false;
     }
 
+    #region Search Methods
+
+    private void HandleSearchTermChanged(string term)
+    {
+        NavService.UpdateSearchTerm(term);
+    }
+
+    private void HandleSearchEnter()
+    {
+        NavService.EmbedSearch();
+    }
+
+    private void HandleSearchEscape()
+    {
+        NavService.ClearSearch();
+    }
+
+    private string? GetActiveSearchTerm()
+    {
+        // Return the search term when search is embedded (committed)
+        return NavService.IsSearchEmbedded ? NavService.SearchTerm : null;
+    }
+
+    #endregion
+
     private int GetTotalCurrentPRCount()
     {
         return _flattenedCurrentPRs.Count;
@@ -1655,6 +1688,9 @@ else
         // Only handle keyboard shortcuts on the issues tab
         if (_activeTab != "issues") return;
 
+        // Don't handle when typing in search bar
+        if (NavService.IsSearching) return;
+
         // Handle SelectingAgentPrompt mode separately
         if (NavService.EditMode == KeyboardEditMode.SelectingAgentPrompt)
         {
@@ -1694,6 +1730,24 @@ else
         // Note: preventDefault is handled by ShouldPreventKeyDefault property
         switch (e.Key)
         {
+            case "/":
+                // Start search (Vim-style)
+                NavService.StartSearch();
+                break;
+            case "n":
+                // Navigate to next search match
+                if (NavService.IsSearchEmbedded)
+                {
+                    NavService.MoveToNextMatch();
+                }
+                break;
+            case "N":
+                // Navigate to previous search match
+                if (NavService.IsSearchEmbedded)
+                {
+                    NavService.MoveToPreviousMatch();
+                }
+                break;
             case "j":
             case "ArrowDown":
                 NavService.MoveDown();
@@ -1736,8 +1790,15 @@ else
                 NavService.StartSelectingPrompt();
                 break;
             case "Escape":
-                // Clear selection or close sidebar panel
-                ClearSelection();
+                // Clear search if active, otherwise clear selection or close sidebar panel
+                if (NavService.IsSearchEmbedded)
+                {
+                    NavService.ClearSearch();
+                }
+                else
+                {
+                    ClearSelection();
+                }
                 break;
             case "u":
                 // u for undo (vim-style)
