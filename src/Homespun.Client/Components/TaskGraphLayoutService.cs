@@ -13,7 +13,7 @@ public record TaskGraphIssueRenderLine(
     bool DrawTopLine, bool DrawBottomLine, int? SeriesConnectorFromLane,
     IssueType IssueType, bool HasDescription, TaskGraphLinkedPr? LinkedPr, AgentStatusData? AgentStatus,
     bool DrawLane0Connector = false, bool IsLastLane0Connector = false, bool DrawLane0PassThrough = false,
-    string? Lane0Color = null) : TaskGraphRenderLine;
+string? Lane0Color = null, bool HasHiddenParent = false, bool HiddenParentIsSeriesMode = false) : TaskGraphRenderLine;
 public record TaskGraphSeparatorRenderLine : TaskGraphRenderLine;
 public record TaskGraphPrRenderLine(int PrNumber, string Title, string? Url, bool IsMerged, bool HasDescription, AgentStatusData? AgentStatus, bool DrawTopLine, bool DrawBottomLine) : TaskGraphRenderLine;
 public record TaskGraphLoadMoreRenderLine : TaskGraphRenderLine;
@@ -25,7 +25,14 @@ public record TaskGraphLoadMoreRenderLine : TaskGraphRenderLine;
 /// </summary>
 public static class TaskGraphLayoutService
 {
-    public static List<TaskGraphRenderLine> ComputeLayout(TaskGraphResponse? taskGraph)
+    /// <summary>
+    /// Computes the layout for a task graph, optionally filtering nodes by depth.
+    /// </summary>
+    /// <param name="taskGraph">The task graph response to layout</param>
+    /// <param name="maxDepth">Maximum depth (lane) to display. Default is 3 (shows lanes 0-3).
+    /// Use int.MaxValue to show all levels.</param>
+    /// <returns>List of render lines for the task graph view</returns>
+    public static List<TaskGraphRenderLine> ComputeLayout(TaskGraphResponse? taskGraph, int maxDepth = 3)
     {
         if (taskGraph == null)
             return [];
@@ -77,10 +84,21 @@ public static class TaskGraphLayoutService
         // vertical connector line in lane 0 that connects PRs to issues
         var laneOffset = taskGraph.MergedPrs.Count > 0 ? 1 : 0;
 
+        // Build lookup for hidden parent detection
+        var allNodesByIssueId = taskGraph.Nodes.ToDictionary(n => n.Issue.Id, n => n, StringComparer.OrdinalIgnoreCase);
+
         var groups = GroupNodes(taskGraph.Nodes);
         foreach (var group in groups)
         {
-            RenderGroup(result, group, taskGraph.AgentStatuses, taskGraph.LinkedPrs, laneOffset);
+            // Filter nodes by maxDepth within each group
+            // First compute minLane for this group to normalize lanes
+            var minLane = group.Min(n => n.Lane);
+            var visibleNodes = group.Where(n => n.Lane - minLane <= maxDepth).ToList();
+
+            // Compute hidden parent info: which nodes have parents filtered out
+            var hiddenParentInfo = ComputeHiddenParentInfo(visibleNodes, group, allNodesByIssueId, minLane, maxDepth);
+
+            RenderGroup(result, visibleNodes, taskGraph.AgentStatuses, taskGraph.LinkedPrs, laneOffset, hiddenParentInfo);
         }
 
         // Post-process: connect merged PR vertical line at lane 0 to leftmost issue nodes
@@ -142,6 +160,49 @@ public static class TaskGraphLayoutService
                     }
                 }
             }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Computes which visible nodes have parents that were filtered out due to maxDepth.
+    /// </summary>
+    private static Dictionary<string, (bool HasHiddenParent, bool HiddenParentIsSeriesMode)> ComputeHiddenParentInfo(
+        List<TaskGraphNodeResponse> visibleNodes,
+        List<TaskGraphNodeResponse> allGroupNodes,
+        Dictionary<string, TaskGraphNodeResponse> allNodesByIssueId,
+        int minLane,
+        int maxDepth)
+    {
+        var result = new Dictionary<string, (bool HasHiddenParent, bool HiddenParentIsSeriesMode)>(StringComparer.OrdinalIgnoreCase);
+        var visibleIds = new HashSet<string>(visibleNodes.Select(n => n.Issue.Id), StringComparer.OrdinalIgnoreCase);
+
+        foreach (var node in visibleNodes)
+        {
+            var hasHiddenParent = false;
+            var hiddenParentIsSeriesMode = false;
+
+            // Check each parent reference
+            foreach (var parentRef in node.Issue.ParentIssues)
+            {
+                // Find the parent node in all nodes (not just visible)
+                if (allNodesByIssueId.TryGetValue(parentRef.ParentIssue, out var parentNode))
+                {
+                    // Check if parent is in this group and was filtered out
+                    var parentInGroup = allGroupNodes.Any(n =>
+                        string.Equals(n.Issue.Id, parentRef.ParentIssue, StringComparison.OrdinalIgnoreCase));
+
+                    if (parentInGroup && !visibleIds.Contains(parentRef.ParentIssue))
+                    {
+                        // Parent was filtered out
+                        hasHiddenParent = true;
+                        hiddenParentIsSeriesMode = parentNode.Issue.ExecutionMode == ExecutionMode.Series;
+                    }
+                }
+            }
+
+            result[node.Issue.Id] = (hasHiddenParent, hiddenParentIsSeriesMode);
         }
 
         return result;
@@ -215,7 +276,8 @@ public static class TaskGraphLayoutService
         List<TaskGraphNodeResponse> group,
         Dictionary<string, AgentStatusData> agentStatuses,
         Dictionary<string, TaskGraphLinkedPr> linkedPrs,
-        int laneOffset = 0)
+        int laneOffset = 0,
+        Dictionary<string, (bool HasHiddenParent, bool HiddenParentIsSeriesMode)>? hiddenParentInfo = null)
     {
         if (group.Count == 0) return;
 
@@ -322,6 +384,15 @@ public static class TaskGraphLayoutService
             linkedPrs.TryGetValue(node.Issue.Id, out var linkedPr);
             agentStatuses.TryGetValue(node.Issue.Id, out var agentStatus);
 
+            // Get hidden parent info (defaults to false if not provided)
+            var hasHiddenParent = false;
+            var hiddenParentIsSeriesMode = false;
+            if (hiddenParentInfo != null && hiddenParentInfo.TryGetValue(node.Issue.Id, out var info))
+            {
+                hasHiddenParent = info.HasHiddenParent;
+                hiddenParentIsSeriesMode = info.HiddenParentIsSeriesMode;
+            }
+
             result.Add(new TaskGraphIssueRenderLine(
                 IssueId: node.Issue.Id,
                 Title: node.Issue.Title,
@@ -337,7 +408,9 @@ public static class TaskGraphLayoutService
                 HasDescription: !string.IsNullOrWhiteSpace(node.Issue.Description),
                 LinkedPr: linkedPr,
                 AgentStatus: agentStatus,
-                Lane0Color: groupLane0Color
+                Lane0Color: groupLane0Color,
+                HasHiddenParent: hasHiddenParent,
+                HiddenParentIsSeriesMode: hiddenParentIsSeriesMode
             ));
         }
     }

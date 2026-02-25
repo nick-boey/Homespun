@@ -103,6 +103,24 @@
 </div>
 
 <div class="showcase-section">
+    <h3>Depth Limiting with Hidden Parent Indicators</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">
+            Use [ and ] keys to decrease/increase the number of visible levels.
+            Hidden parent indicators appear as faded dots (below for series mode, right for parallel).
+        </div>
+        <div class="showcase-preview">
+            <div class="showcase-depth-controls">
+                <button class="showcase-depth-btn" @onclick="() => DecreaseDepth()" disabled="@(_depthLevel <= 0)">−</button>
+                <span class="showcase-depth-display">@(_depthLevel + 1) level@(_depthLevel == 0 ? "" : "s")</span>
+                <button class="showcase-depth-btn" @onclick="() => IncreaseDepth()" disabled="@(_depthLevel >= 5)">+</button>
+            </div>
+            <TaskGraphView TaskGraph="@_fullMock" MaxDepth="@_depthLevel" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
     <h3>Type Change Menu</h3>
     <div class="showcase-item">
         <div class="showcase-label">Click the type badge (Bug, Task, Feat, Chore) to open dropdown menu for changing issue type</div>
@@ -116,8 +134,66 @@
     </div>
 </div>
 
+<style>
+    .showcase-depth-controls {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 12px;
+        padding: 8px;
+        background: var(--bg-secondary, rgba(255, 255, 255, 0.05));
+        border-radius: 6px;
+        width: fit-content;
+    }
+
+    .showcase-depth-btn {
+        width: 28px;
+        height: 28px;
+        border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+        border-radius: 4px;
+        background: var(--bg-primary, #1a1a2e);
+        color: var(--text-primary, #eaeaea);
+        font-size: 16px;
+        cursor: pointer;
+        transition: background-color 0.15s ease, opacity 0.15s ease;
+    }
+
+    .showcase-depth-btn:hover:not(:disabled) {
+        background: var(--bg-tertiary, rgba(255, 255, 255, 0.1));
+    }
+
+    .showcase-depth-btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
+
+    .showcase-depth-display {
+        font-size: 13px;
+        color: var(--text-secondary, #a0a0a0);
+        min-width: 60px;
+        text-align: center;
+    }
+</style>
+
 @code {
     private string? _typeChangeMessage;
+    private int _depthLevel = 3;
+
+    private void DecreaseDepth()
+    {
+        if (_depthLevel > 0)
+        {
+            _depthLevel--;
+        }
+    }
+
+    private void IncreaseDepth()
+    {
+        if (_depthLevel < 5)
+        {
+            _depthLevel++;
+        }
+    }
 
     private void HandleTypeChanged()
     {

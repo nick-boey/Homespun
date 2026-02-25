@@ -384,13 +384,16 @@ public static class TimelineSvgRenderer
     /// Generates a circle-based node for the task graph (replacing diamond nodes).
     /// Hollow circles indicate issues without descriptions, solid circles indicate issues with descriptions.
     /// </summary>
+    /// <param name="hasHiddenParent">If true, shows a faded continuation indicator</param>
+    /// <param name="hiddenParentIsSeriesMode">If true, shows dots below (series), otherwise to the right (parallel)</param>
     public static string GenerateTaskGraphCircleSvg(
         int nodeLane, int? parentLane, bool isFirstChild, int maxLanes,
         string nodeColor, bool isOutlineOnly, bool isActionable,
         bool drawTopLine = false, bool drawBottomLine = false, bool isSeriesChild = false,
         int? seriesConnectorFromLane = null,
         bool drawLane0Connector = false, bool isLastLane0Connector = false, bool drawLane0PassThrough = false,
-        string? lane0Color = null)
+string? lane0Color = null,
+        bool hasHiddenParent = false, bool hiddenParentIsSeriesMode = false)
     {
         var width = CalculateSvgWidth(maxLanes);
         var sb = new StringBuilder();
@@ -494,7 +497,51 @@ public static class TimelineSvgRenderer
             sb.Append($"<circle cx=\"{cx}\" cy=\"{cy}\" r=\"{NodeRadius}\" fill=\"{EscapeAttribute(nodeColor)}\" />");
         }
 
+        // Hidden parent continuation indicator (3 small faded dots)
+        if (hasHiddenParent)
+        {
+            sb.Append(GenerateHiddenParentIndicator(nodeLane, nodeColor, hiddenParentIsSeriesMode));
+        }
+
         sb.Append("</svg>");
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Generates a continuation indicator showing there are hidden parent tasks beyond the current depth.
+    /// Renders 3 small faded dots: below the node for series mode, to the right for parallel mode.
+    /// </summary>
+    private static string GenerateHiddenParentIndicator(int nodeLane, string nodeColor, bool isSeriesMode)
+    {
+        var cx = GetLaneCenterX(nodeLane);
+        var cy = GetRowCenterY();
+        var sb = new StringBuilder();
+
+        const int dotRadius = 2;
+        const int dotSpacing = 5;
+        const double opacity = 0.4;
+
+        if (isSeriesMode)
+        {
+            // Series: dots below the node (vertical arrangement)
+            var startY = cy + NodeRadius + 6;
+            for (var i = 0; i < 3; i++)
+            {
+                var dotY = startY + i * dotSpacing;
+                sb.Append($"<circle cx=\"{cx}\" cy=\"{dotY}\" r=\"{dotRadius}\" fill=\"{EscapeAttribute(nodeColor)}\" opacity=\"{opacity.ToString(CultureInfo.InvariantCulture)}\" />");
+            }
+        }
+        else
+        {
+            // Parallel: dots to the right of the node (horizontal arrangement)
+            var startX = cx + NodeRadius + 6;
+            for (var i = 0; i < 3; i++)
+            {
+                var dotX = startX + i * dotSpacing;
+                sb.Append($"<circle cx=\"{dotX}\" cy=\"{cy}\" r=\"{dotRadius}\" fill=\"{EscapeAttribute(nodeColor)}\" opacity=\"{opacity.ToString(CultureInfo.InvariantCulture)}\" />");
+            }
+        }
+
         return sb.ToString();
     }
 
