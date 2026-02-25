@@ -79,4 +79,9 @@ public class GitHubClientWrapper : IGitHubClientWrapper
     {
         return await GetClient().PullRequest.ReviewComment.GetAll(owner, repo, number);
     }
+
+    public async Task<CheckRunsResponse> GetCheckRunsForReferenceAsync(string owner, string repo, string reference)
+    {
+        return await GetClient().Check.Run.GetAllForReference(owner, repo, reference);
+    }
 }

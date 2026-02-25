@@ -271,7 +271,7 @@ public class PullRequestWorkflowTests
     [Test]
     public async Task CurrentPR_ChecksFailing_HasChecksFailingStatus()
     {
-        // Arrange
+        // Arrange - Test legacy CI with failing commit status
         var project = await CreateTestProject();
 
         var mockPr = CreateMockPullRequest(1, "Failing PR", ItemState.Open, "feature/failing");
@@ -287,12 +287,19 @@ public class PullRequestWorkflowTests
             1))
             .ReturnsAsync([]);
 
-        // Checks are failing
+        // Commit status is failing (legacy CI)
         _mockGitHubClient.Setup(c => c.GetCombinedCommitStatusAsync(
             project.GitHubOwner!,
             project.GitHubRepo!,
             It.IsAny<string>()))
-            .ReturnsAsync(CreateMockCombinedStatus(CommitState.Failure));
+            .ReturnsAsync(CreateMockCombinedStatusWithStatuses(CommitState.Failure));
+
+        // No check runs (using legacy CI)
+        _mockGitHubClient.Setup(c => c.GetCheckRunsForReferenceAsync(
+            project.GitHubOwner!,
+            project.GitHubRepo!,
+            It.IsAny<string>()))
+            .ReturnsAsync(new CheckRunsResponse(0, []));
 
         // Act
         var result = await _service.GetOpenPullRequestsWithStatusAsync(project.Id);
@@ -525,11 +532,37 @@ public class PullRequestWorkflowTests
 
     private static CombinedCommitStatus CreateMockCombinedStatus(CommitState state)
     {
+        // Returns a combined status with NO statuses (empty list)
+        return new CombinedCommitStatus(
+            state: state,
+            sha: "abc123",
+            totalCount: 0,
+            statuses: [],
+            repository: null
+        );
+    }
+
+    private static CombinedCommitStatus CreateMockCombinedStatusWithStatuses(CommitState state)
+    {
+        // Returns a combined status WITH a status entry (for legacy CI)
+        var mockStatus = new CommitStatus(
+            createdAt: DateTimeOffset.UtcNow,
+            updatedAt: DateTimeOffset.UtcNow,
+            state: state,
+            targetUrl: "https://ci.example.com/build/1",
+            description: "CI Status",
+            id: 1,
+            nodeId: "status-1",
+            url: "https://api.github.com/repos/owner/repo/statuses/abc123",
+            context: "ci/build",
+            creator: null
+        );
+
         return new CombinedCommitStatus(
             state: state,
             sha: "abc123",
             totalCount: 1,
-            statuses: [],
+            statuses: [mockStatus],
             repository: null
         );
     }

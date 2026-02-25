@@ -170,7 +170,7 @@ public class IssuePrStatusServiceTests
     [Test]
     public async Task GetPullRequestStatusForIssueAsync_ChecksFailing_PopulatesChecksPassing()
     {
-        // Arrange
+        // Arrange - Test legacy CI that uses commit status API with failure state
         var project = await CreateTestProject();
 
         var trackedPr = new PullRequest
@@ -197,12 +197,19 @@ public class IssuePrStatusServiceTests
             99))
             .ReturnsAsync([]);
 
-        // Checks are failing
+        // Commit status is failing (legacy CI)
         _mockGitHubClient.Setup(c => c.GetCombinedCommitStatusAsync(
             project.GitHubOwner!,
             project.GitHubRepo!,
             It.IsAny<string>()))
-            .ReturnsAsync(CreateMockCombinedStatus(CommitState.Failure));
+            .ReturnsAsync(CreateMockCombinedStatusWithStatuses(CommitState.Failure));
+
+        // No check runs (using legacy CI)
+        _mockGitHubClient.Setup(c => c.GetCheckRunsForReferenceAsync(
+            project.GitHubOwner!,
+            project.GitHubRepo!,
+            It.IsAny<string>()))
+            .ReturnsAsync(new CheckRunsResponse(0, []));
 
         // Act
         var result = await _service.GetPullRequestStatusForIssueAsync(project.Id, "issue-456");
@@ -216,7 +223,7 @@ public class IssuePrStatusServiceTests
     [Test]
     public async Task GetPullRequestStatusForIssueAsync_ChecksPending_HasNullChecksPassing()
     {
-        // Arrange
+        // Arrange - Test legacy CI that uses commit status API with pending state
         var project = await CreateTestProject();
 
         var trackedPr = new PullRequest
@@ -243,12 +250,19 @@ public class IssuePrStatusServiceTests
             55))
             .ReturnsAsync([]);
 
-        // Checks are pending
+        // Commit status is pending (legacy CI)
         _mockGitHubClient.Setup(c => c.GetCombinedCommitStatusAsync(
             project.GitHubOwner!,
             project.GitHubRepo!,
             It.IsAny<string>()))
-            .ReturnsAsync(CreateMockCombinedStatus(CommitState.Pending));
+            .ReturnsAsync(CreateMockCombinedStatusWithStatuses(CommitState.Pending));
+
+        // No check runs (using legacy CI)
+        _mockGitHubClient.Setup(c => c.GetCheckRunsForReferenceAsync(
+            project.GitHubOwner!,
+            project.GitHubRepo!,
+            It.IsAny<string>()))
+            .ReturnsAsync(new CheckRunsResponse(0, []));
 
         // Act
         var result = await _service.GetPullRequestStatusForIssueAsync(project.Id, "issue-789");
@@ -358,7 +372,7 @@ public class IssuePrStatusServiceTests
     [Test]
     public async Task GetPullRequestStatusForIssueAsync_ChecksFailing_ReturnsChecksFailingStatus()
     {
-        // Arrange
+        // Arrange - Test legacy CI that uses commit status API with failure state
         var project = await CreateTestProject();
 
         var trackedPr = new PullRequest
@@ -385,12 +399,19 @@ public class IssuePrStatusServiceTests
             99))
             .ReturnsAsync([]);
 
-        // Checks are failing
+        // Commit status is failing (legacy CI)
         _mockGitHubClient.Setup(c => c.GetCombinedCommitStatusAsync(
             project.GitHubOwner!,
             project.GitHubRepo!,
             It.IsAny<string>()))
-            .ReturnsAsync(CreateMockCombinedStatus(CommitState.Failure));
+            .ReturnsAsync(CreateMockCombinedStatusWithStatuses(CommitState.Failure));
+
+        // No check runs (using legacy CI)
+        _mockGitHubClient.Setup(c => c.GetCheckRunsForReferenceAsync(
+            project.GitHubOwner!,
+            project.GitHubRepo!,
+            It.IsAny<string>()))
+            .ReturnsAsync(new CheckRunsResponse(0, []));
 
         // Act
         var result = await _service.GetPullRequestStatusForIssueAsync(project.Id, "issue-456");
@@ -568,11 +589,39 @@ public class IssuePrStatusServiceTests
 
     private static CombinedCommitStatus CreateMockCombinedStatus(CommitState state)
     {
+        // Returns a combined status with NO statuses (empty list)
+        // This simulates the GitHub API response when no legacy CI is configured
+        return new CombinedCommitStatus(
+            state: state,
+            sha: "abc123",
+            totalCount: 0,
+            statuses: [],
+            repository: null
+        );
+    }
+
+    private static CombinedCommitStatus CreateMockCombinedStatusWithStatuses(CommitState state)
+    {
+        // Returns a combined status WITH a status entry
+        // This simulates the GitHub API response when legacy CI is configured
+        var mockStatus = new CommitStatus(
+            createdAt: DateTimeOffset.UtcNow,
+            updatedAt: DateTimeOffset.UtcNow,
+            state: state,
+            targetUrl: "https://ci.example.com/build/1",
+            description: "CI Status",
+            id: 1,
+            nodeId: "status-1",
+            url: "https://api.github.com/repos/owner/repo/statuses/abc123",
+            context: "ci/build",
+            creator: null
+        );
+
         return new CombinedCommitStatus(
             state: state,
             sha: "abc123",
             totalCount: 1,
-            statuses: [],
+            statuses: [mockStatus],
             repository: null
         );
     }
@@ -623,6 +672,248 @@ public class IssuePrStatusServiceTests
             authorAssociation: AuthorAssociation.Contributor,
             submittedAt: DateTimeOffset.UtcNow
         );
+    }
+
+    #endregion
+
+    #region Check Runs API Tests
+
+    [Test]
+    public async Task GetPullRequestStatusForIssueAsync_CheckRunsSuccess_WithNoCommitStatus_SetsChecksPassing()
+    {
+        // Arrange - GitHub Actions uses Check Runs, not Commit Statuses
+        // The combined commit status will be Pending (no statuses) but check runs show success
+        var project = await CreateTestProject();
+
+        var trackedPr = new PullRequest
+        {
+            ProjectId = project.Id,
+            Title = "PR with GitHub Actions",
+            BranchName = "issues/feature/actions+issue-gha",
+            GitHubPRNumber = 100,
+            BeadsIssueId = "issue-gha",
+            Status = OpenPullRequestStatus.InDevelopment
+        };
+        await _dataStore.AddPullRequestAsync(trackedPr);
+
+        var mockPr = CreateMockPullRequest(100, "PR with GitHub Actions", ItemState.Open, "issues/feature/actions+issue-gha");
+        _mockGitHubClient.Setup(c => c.GetPullRequestsAsync(
+            project.GitHubOwner!,
+            project.GitHubRepo!,
+            It.Is<PullRequestRequest>(r => r.State == ItemStateFilter.Open)))
+            .ReturnsAsync([mockPr]);
+
+        _mockGitHubClient.Setup(c => c.GetPullRequestReviewsAsync(
+            project.GitHubOwner!,
+            project.GitHubRepo!,
+            100))
+            .ReturnsAsync([]);
+
+        // Combined commit status is Pending (no statuses exist - common with GitHub Actions)
+        _mockGitHubClient.Setup(c => c.GetCombinedCommitStatusAsync(
+            project.GitHubOwner!,
+            project.GitHubRepo!,
+            It.IsAny<string>()))
+            .ReturnsAsync(CreateMockCombinedStatus(CommitState.Pending));
+
+        // But check runs show success
+        _mockGitHubClient.Setup(c => c.GetCheckRunsForReferenceAsync(
+            project.GitHubOwner!,
+            project.GitHubRepo!,
+            It.IsAny<string>()))
+            .ReturnsAsync(CreateMockCheckRunsResponse(CheckConclusion.Success));
+
+        // Act
+        var result = await _service.GetPullRequestStatusForIssueAsync(project.Id, "issue-gha");
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.ChecksPassing, Is.True, "ChecksPassing should be true when check runs succeed, even if commit status is pending");
+        Assert.That(result.ChecksRunning, Is.False, "ChecksRunning should be false when check runs have completed successfully");
+    }
+
+    [Test]
+    public async Task GetPullRequestStatusForIssueAsync_CheckRunsFailing_WithNoCommitStatus_SetsChecksFailing()
+    {
+        // Arrange
+        var project = await CreateTestProject();
+
+        var trackedPr = new PullRequest
+        {
+            ProjectId = project.Id,
+            Title = "PR with failing checks",
+            BranchName = "issues/feature/failing+issue-fail",
+            GitHubPRNumber = 101,
+            BeadsIssueId = "issue-fail",
+            Status = OpenPullRequestStatus.InDevelopment
+        };
+        await _dataStore.AddPullRequestAsync(trackedPr);
+
+        var mockPr = CreateMockPullRequest(101, "PR with failing checks", ItemState.Open, "issues/feature/failing+issue-fail");
+        _mockGitHubClient.Setup(c => c.GetPullRequestsAsync(
+            project.GitHubOwner!,
+            project.GitHubRepo!,
+            It.Is<PullRequestRequest>(r => r.State == ItemStateFilter.Open)))
+            .ReturnsAsync([mockPr]);
+
+        _mockGitHubClient.Setup(c => c.GetPullRequestReviewsAsync(
+            project.GitHubOwner!,
+            project.GitHubRepo!,
+            101))
+            .ReturnsAsync([]);
+
+        // Combined commit status is Pending (no statuses)
+        _mockGitHubClient.Setup(c => c.GetCombinedCommitStatusAsync(
+            project.GitHubOwner!,
+            project.GitHubRepo!,
+            It.IsAny<string>()))
+            .ReturnsAsync(CreateMockCombinedStatus(CommitState.Pending));
+
+        // Check runs show failure
+        _mockGitHubClient.Setup(c => c.GetCheckRunsForReferenceAsync(
+            project.GitHubOwner!,
+            project.GitHubRepo!,
+            It.IsAny<string>()))
+            .ReturnsAsync(CreateMockCheckRunsResponse(CheckConclusion.Failure));
+
+        // Act
+        var result = await _service.GetPullRequestStatusForIssueAsync(project.Id, "issue-fail");
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.ChecksPassing, Is.False, "ChecksPassing should be false when check runs fail");
+        Assert.That(result.ChecksFailing, Is.True, "ChecksFailing should be true when check runs fail");
+    }
+
+    [Test]
+    public async Task GetPullRequestStatusForIssueAsync_CheckRunsInProgress_SetsChecksRunning()
+    {
+        // Arrange
+        var project = await CreateTestProject();
+
+        var trackedPr = new PullRequest
+        {
+            ProjectId = project.Id,
+            Title = "PR with running checks",
+            BranchName = "issues/feature/running+issue-run",
+            GitHubPRNumber = 102,
+            BeadsIssueId = "issue-run",
+            Status = OpenPullRequestStatus.InDevelopment
+        };
+        await _dataStore.AddPullRequestAsync(trackedPr);
+
+        var mockPr = CreateMockPullRequest(102, "PR with running checks", ItemState.Open, "issues/feature/running+issue-run");
+        _mockGitHubClient.Setup(c => c.GetPullRequestsAsync(
+            project.GitHubOwner!,
+            project.GitHubRepo!,
+            It.Is<PullRequestRequest>(r => r.State == ItemStateFilter.Open)))
+            .ReturnsAsync([mockPr]);
+
+        _mockGitHubClient.Setup(c => c.GetPullRequestReviewsAsync(
+            project.GitHubOwner!,
+            project.GitHubRepo!,
+            102))
+            .ReturnsAsync([]);
+
+        // Combined commit status is Pending
+        _mockGitHubClient.Setup(c => c.GetCombinedCommitStatusAsync(
+            project.GitHubOwner!,
+            project.GitHubRepo!,
+            It.IsAny<string>()))
+            .ReturnsAsync(CreateMockCombinedStatus(CommitState.Pending));
+
+        // Check runs are in progress (no conclusion yet)
+        _mockGitHubClient.Setup(c => c.GetCheckRunsForReferenceAsync(
+            project.GitHubOwner!,
+            project.GitHubRepo!,
+            It.IsAny<string>()))
+            .ReturnsAsync(CreateMockCheckRunsResponse(null, CheckStatus.InProgress));
+
+        // Act
+        var result = await _service.GetPullRequestStatusForIssueAsync(project.Id, "issue-run");
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.ChecksPassing, Is.Null, "ChecksPassing should be null when check runs are in progress");
+        Assert.That(result.ChecksRunning, Is.True, "ChecksRunning should be true when check runs are in progress");
+    }
+
+    [Test]
+    public async Task GetPullRequestStatusForIssueAsync_NoCheckRuns_WithPendingCommitStatus_SetsChecksRunning()
+    {
+        // Arrange - No check runs and pending commit status means checks are truly running/pending
+        var project = await CreateTestProject();
+
+        var trackedPr = new PullRequest
+        {
+            ProjectId = project.Id,
+            Title = "PR with no checks",
+            BranchName = "issues/feature/nochecks+issue-none",
+            GitHubPRNumber = 103,
+            BeadsIssueId = "issue-none",
+            Status = OpenPullRequestStatus.InDevelopment
+        };
+        await _dataStore.AddPullRequestAsync(trackedPr);
+
+        var mockPr = CreateMockPullRequest(103, "PR with no checks", ItemState.Open, "issues/feature/nochecks+issue-none");
+        _mockGitHubClient.Setup(c => c.GetPullRequestsAsync(
+            project.GitHubOwner!,
+            project.GitHubRepo!,
+            It.Is<PullRequestRequest>(r => r.State == ItemStateFilter.Open)))
+            .ReturnsAsync([mockPr]);
+
+        _mockGitHubClient.Setup(c => c.GetPullRequestReviewsAsync(
+            project.GitHubOwner!,
+            project.GitHubRepo!,
+            103))
+            .ReturnsAsync([]);
+
+        // Combined commit status is Pending
+        _mockGitHubClient.Setup(c => c.GetCombinedCommitStatusAsync(
+            project.GitHubOwner!,
+            project.GitHubRepo!,
+            It.IsAny<string>()))
+            .ReturnsAsync(CreateMockCombinedStatus(CommitState.Pending));
+
+        // No check runs (empty response)
+        _mockGitHubClient.Setup(c => c.GetCheckRunsForReferenceAsync(
+            project.GitHubOwner!,
+            project.GitHubRepo!,
+            It.IsAny<string>()))
+            .ReturnsAsync(new CheckRunsResponse(0, []));
+
+        // Act
+        var result = await _service.GetPullRequestStatusForIssueAsync(project.Id, "issue-none");
+
+        // Assert - When there are no check runs and no commit statuses, we assume checks are passing (no CI configured)
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.ChecksPassing, Is.True, "ChecksPassing should be true when no checks are configured");
+        Assert.That(result.ChecksRunning, Is.False, "ChecksRunning should be false when no checks are configured");
+    }
+
+    private static CheckRunsResponse CreateMockCheckRunsResponse(
+        CheckConclusion? conclusion,
+        CheckStatus status = CheckStatus.Completed)
+    {
+        var checkRun = new CheckRun(
+            id: 1,
+            headSha: "abc123",
+            externalId: "ext-1",
+            url: "https://api.github.com/repos/owner/repo/check-runs/1",
+            htmlUrl: "https://github.com/owner/repo/runs/1",
+            detailsUrl: "https://github.com/owner/repo/actions/runs/1",
+            status: status,
+            conclusion: conclusion,
+            startedAt: DateTimeOffset.UtcNow.AddMinutes(-5),
+            completedAt: status == CheckStatus.Completed ? DateTimeOffset.UtcNow : null,
+            output: null!,
+            name: "build",
+            checkSuite: null!,
+            app: null!,
+            pullRequests: []
+        );
+
+        return new CheckRunsResponse(1, [checkRun]);
     }
 
     #endregion
