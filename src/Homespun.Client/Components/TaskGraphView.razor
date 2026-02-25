@@ -129,6 +129,23 @@
                             }
                         </div>
                         <span class="task-graph-issue-id">@issueLine.IssueId</span>
+                        <div class="task-graph-status-wrapper">
+                            <span class="task-graph-issue-status @GetStatusClass(issueLine.Status)"
+                                  @onclick="() => ToggleStatusMenu(issueLine.IssueId)"
+                                  @onclick:stopPropagation="true"
+                                  title="Click to change status">@GetStatusLabel(issueLine.Status)</span>
+                            @if (_statusMenuOpenForIssueId == issueLine.IssueId)
+                            {
+                                <div class="task-graph-status-menu" @onclick:stopPropagation="true">
+                                    <button class="status-menu-item open" @onclick="() => ChangeIssueStatus(issueLine.IssueId, IssueStatus.Open)">Open</button>
+                                    <button class="status-menu-item progress" @onclick="() => ChangeIssueStatus(issueLine.IssueId, IssueStatus.Progress)">Progress</button>
+                                    <button class="status-menu-item review" @onclick="() => ChangeIssueStatus(issueLine.IssueId, IssueStatus.Review)">Review</button>
+                                    <button class="status-menu-item complete" @onclick="() => ChangeIssueStatus(issueLine.IssueId, IssueStatus.Complete)">Complete</button>
+                                    <button class="status-menu-item closed" @onclick="() => ChangeIssueStatus(issueLine.IssueId, IssueStatus.Closed)">Closed</button>
+                                    <button class="status-menu-item archived" @onclick="() => ChangeIssueStatus(issueLine.IssueId, IssueStatus.Archived)">Archived</button>
+                                </div>
+                            }
+                        </div>
                         @if (isEditing && NavService?.PendingEdit != null)
                         {
                             <InlineIssueEditor Title="@NavService.PendingEdit.Title"
@@ -709,6 +726,128 @@
         min-width: 50px;
         text-align: center;
     }
+
+    /* Issue status wrapper for dropdown positioning */
+    .task-graph-status-wrapper {
+        position: relative;
+        flex-shrink: 0;
+    }
+
+    /* Issue status badge */
+    .task-graph-issue-status {
+        flex-shrink: 0;
+        padding: 1px 6px;
+        border-radius: 3px;
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        cursor: pointer;
+        transition: filter 0.15s ease;
+    }
+
+    .task-graph-issue-status:hover {
+        filter: brightness(1.2);
+    }
+
+    .task-graph-issue-status.open {
+        background-color: rgba(59, 130, 246, 0.2);
+        color: #3b82f6;
+        border: 1px solid #3b82f6;
+    }
+
+    .task-graph-issue-status.progress {
+        background-color: rgba(245, 158, 11, 0.2);
+        color: #f59e0b;
+        border: 1px solid #f59e0b;
+    }
+
+    .task-graph-issue-status.review {
+        background-color: rgba(139, 92, 246, 0.2);
+        color: #8b5cf6;
+        border: 1px solid #8b5cf6;
+    }
+
+    .task-graph-issue-status.complete {
+        background-color: rgba(16, 185, 129, 0.2);
+        color: #10b981;
+        border: 1px solid #10b981;
+    }
+
+    .task-graph-issue-status.closed {
+        background-color: rgba(107, 114, 128, 0.2);
+        color: #6b7280;
+        border: 1px solid #6b7280;
+    }
+
+    .task-graph-issue-status.archived {
+        background-color: rgba(156, 163, 175, 0.2);
+        color: #9ca3af;
+        border: 1px solid #9ca3af;
+    }
+
+    /* Status change dropdown menu */
+    .task-graph-status-menu {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        z-index: 100;
+        background: var(--bg-primary, #1a1a2e);
+        border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+        border-radius: 4px;
+        padding: 4px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 90px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        margin-top: 4px;
+    }
+
+    .status-menu-item {
+        padding: 4px 8px;
+        border: none;
+        border-radius: 3px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        cursor: pointer;
+        text-align: left;
+        transition: filter 0.15s ease;
+    }
+
+    .status-menu-item:hover {
+        filter: brightness(1.2);
+    }
+
+    .status-menu-item.open {
+        background-color: rgba(59, 130, 246, 0.2);
+        color: #3b82f6;
+    }
+
+    .status-menu-item.progress {
+        background-color: rgba(245, 158, 11, 0.2);
+        color: #f59e0b;
+    }
+
+    .status-menu-item.review {
+        background-color: rgba(139, 92, 246, 0.2);
+        color: #8b5cf6;
+    }
+
+    .status-menu-item.complete {
+        background-color: rgba(16, 185, 129, 0.2);
+        color: #10b981;
+    }
+
+    .status-menu-item.closed {
+        background-color: rgba(107, 114, 128, 0.2);
+        color: #6b7280;
+    }
+
+    .status-menu-item.archived {
+        background-color: rgba(156, 163, 175, 0.2);
+        color: #9ca3af;
+    }
 </style>
 
 @code {
@@ -716,6 +855,7 @@
     [Parameter] public EventCallback<string> OnIssueClick { get; set; }
     [Parameter] public EventCallback OnLoadMoreClick { get; set; }
     [Parameter] public EventCallback OnIssueTypeChanged { get; set; }
+    [Parameter] public EventCallback OnIssueStatusChanged { get; set; }
     [Parameter] public string? SelectedNodeId { get; set; }
     [Parameter] public IKeyboardNavigationService? NavService { get; set; }
 
@@ -759,6 +899,7 @@
     private int _maxLane;
     private int _maxAvailableLane;
     private string? _typeMenuOpenForIssueId;
+    private string? _statusMenuOpenForIssueId;
     private string? _previousSelectedNodeId;
     private IssueRowActions? _issueRowActionsRef;
 
@@ -1082,4 +1223,75 @@ lane0Color: issueLine.Lane0Color,
         if (string.IsNullOrEmpty(ActiveSearchTerm)) return false;
         return title.Contains(ActiveSearchTerm, StringComparison.OrdinalIgnoreCase);
     }
+
+    private void ToggleStatusMenu(string issueId)
+    {
+        // Close type menu if open
+        _typeMenuOpenForIssueId = null;
+
+        if (_statusMenuOpenForIssueId == issueId)
+        {
+            _statusMenuOpenForIssueId = null;
+        }
+        else
+        {
+            _statusMenuOpenForIssueId = issueId;
+        }
+    }
+
+    private async Task ChangeIssueStatus(string issueId, IssueStatus newStatus)
+    {
+        if (string.IsNullOrEmpty(ProjectId)) return;
+
+        // Close the menu
+        _statusMenuOpenForIssueId = null;
+
+        // Update the issue status via API
+        await IssueApi.UpdateIssueAsync(issueId, new UpdateIssueRequest
+        {
+            ProjectId = ProjectId,
+            Status = newStatus
+        });
+
+        // Notify parent to refresh data
+        await OnIssueStatusChanged.InvokeAsync();
+    }
+
+    /// <summary>
+    /// Opens the status menu for the currently selected issue.
+    /// Called by keyboard shortcut 's' from TimelineVisualization.
+    /// </summary>
+    public void OpenStatusMenu()
+    {
+        var selectedIssueId = NavService?.SelectedIssueId;
+        if (selectedIssueId != null)
+        {
+            // Close type menu if open
+            _typeMenuOpenForIssueId = null;
+            _statusMenuOpenForIssueId = selectedIssueId;
+            StateHasChanged();
+        }
+    }
+
+    private static string GetStatusClass(IssueStatus status) => status switch
+    {
+        IssueStatus.Open => "open",
+        IssueStatus.Progress => "progress",
+        IssueStatus.Review => "review",
+        IssueStatus.Complete => "complete",
+        IssueStatus.Closed => "closed",
+        IssueStatus.Archived => "archived",
+        _ => "open"
+    };
+
+    private static string GetStatusLabel(IssueStatus status) => status switch
+    {
+        IssueStatus.Open => "Open",
+        IssueStatus.Progress => "Progress",
+        IssueStatus.Review => "Review",
+        IssueStatus.Complete => "Complete",
+        IssueStatus.Closed => "Closed",
+        IssueStatus.Archived => "Archived",
+        _ => "Open"
+    };
 }

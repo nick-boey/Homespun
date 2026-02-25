@@ -32,6 +32,7 @@
                 OnLoadMoreClick="LoadMoreTaskGraphPRs"
                 OnIssueCreated="HandleIssueCreated"
                 OnIssueTypeChanged="HandleIssueChangedAsync"
+                OnIssueStatusChanged="HandleIssueChangedAsync"
                 OnEditClick="OnEditClick"
                 OnRunAgentClick="OnRunAgentClick"
                 SelectedNodeId="@GetKeyboardSelectedNodeId()"
@@ -420,9 +421,9 @@
 
     // Keyboard navigation
     private ElementReference _timelineWrapper;
+    private TaskGraphView? _taskGraphViewRef;
     private List<TaskGraphIssueRenderLine> _issueRenderLines = [];
     private string? _previousSelectedIssueId;
-    private TaskGraphView? _taskGraphViewRef;
 
     // Level depth controls
     private int _maxDepth = 3;
@@ -962,7 +963,7 @@ if (_notificationHubConnection != null)
             case "G":
                 NavService.MoveToLast();
                 break;
-case "Enter":
+            case "Enter":
                 NavService.OpenSelectedIssueForEdit();
                 break;
             case "[":
@@ -974,6 +975,9 @@ case "Enter":
             case "Tab":
                 // Cycle issue type when in viewing mode (Tab is used differently in edit mode)
                 _ = NavService.CycleIssueTypeAsync();
+                break;
+            case "s":
+                _taskGraphViewRef?.OpenStatusMenu();
                 break;
         }
     }
