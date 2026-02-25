@@ -99,6 +99,12 @@ public class ClaudeSession
     public string? PlanContent { get; set; }
 
     /// <summary>
+    /// Indicates whether there is a pending plan awaiting user approval.
+    /// This is the authoritative flag for showing plan controls in the UI.
+    /// </summary>
+    public bool HasPendingPlanApproval { get; set; }
+
+    /// <summary>
     /// Timestamps when context was cleared during the session.
     /// Used to display separators between conversation segments.
     /// </summary>

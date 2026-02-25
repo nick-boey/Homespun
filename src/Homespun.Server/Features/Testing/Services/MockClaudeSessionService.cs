@@ -447,6 +447,11 @@ public class MockClaudeSessionService : IClaudeSessionService
             throw new InvalidOperationException($"Session {sessionId} not found");
         }
 
+        // Clear plan state since plan is being approved/rejected
+        session.PlanContent = null;
+        session.PlanFilePath = null;
+        session.HasPendingPlanApproval = false;
+
         if (approved)
         {
             await ExecutePlanAsync(sessionId, clearContext: !keepContext, cancellationToken);

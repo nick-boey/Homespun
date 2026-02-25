@@ -520,7 +520,7 @@
                 .WithAutomaticReconnect()
                 .Build();
 
-            _hubConnection.On<string, ClaudeSessionStatus>("SessionStatusChanged", async (sessionId, status) =>
+            _hubConnection.On<string, ClaudeSessionStatus, bool>("SessionStatusChanged", async (sessionId, status, _) =>
             {
                 await InvokeAsync(async () =>
                 {
