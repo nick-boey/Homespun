@@ -312,6 +312,8 @@ else
 <style>
     .project-detail-page {
         outline: none;
+        max-width: 100%;
+        overflow-x: hidden;
     }
     /* ==========================================================================
        Project Layout Grid
@@ -322,10 +324,14 @@ else
         gap: var(--spacing-md);
         align-items: start;
         padding-bottom: 70px; /* Space for fixed quick-issue-bar */
+        max-width: 100%;
+        min-width: 0;
     }
 
     .timeline-column {
         min-width: 0;
+        max-width: 100%;
+        overflow-x: auto;
     }
 
     /* ==========================================================================

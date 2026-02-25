@@ -7,6 +7,8 @@
     padding-top: 2.5rem; /* Account for fixed top bar */
     padding-left: 200px; /* Account for fixed sidebar */
     transition: padding-left var(--transition-fast);
+    max-width: 100vw;
+    overflow-x: hidden;
 }
 
 .page.sidebar-closed {
@@ -210,11 +212,14 @@
 .main-content {
     background-color: var(--bg-primary);
     min-height: calc(100vh - 2.5rem);
+    max-width: 100%;
+    overflow-x: hidden;
 }
 
 .content {
     padding: var(--spacing-md);
     max-width: 100%;
+    min-width: 0;
 }
 
 /* ==========================================================================
