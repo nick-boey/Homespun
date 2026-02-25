@@ -935,6 +935,7 @@ public void OpenSelectedIssueForEdit() => OnOpenEditRequested?.Invoke(SelectedIs
     public void MovePromptSelectionDown() { }
     public void MovePromptSelectionUp() { }
     public void AcceptPromptSelection() { }
+    public Task CycleIssueTypeAsync() => Task.CompletedTask;
 
     // Helper to trigger state change
     public void TriggerStateChanged() => OnStateChanged?.Invoke();

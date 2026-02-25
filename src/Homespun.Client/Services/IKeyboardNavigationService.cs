@@ -203,4 +203,13 @@ public interface IKeyboardNavigationService
 
     /// <summary>Open the selected issue in the full edit page (Enter key in viewing mode).</summary>
     void OpenSelectedIssueForEdit();
+
+    // Type cycling
+
+    /// <summary>
+    /// Cycle the selected issue's type to the next type in sequence (Tab in viewing mode).
+    /// Has a 3-second debounce to prevent rapid changes.
+    /// Order: Task -> Bug -> Feature -> Chore -> Task
+    /// </summary>
+    Task CycleIssueTypeAsync();
 }
