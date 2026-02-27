@@ -481,7 +481,9 @@ public class PullRequestWorkflowService(
             CreatedAt = pr.CreatedAt.UtcDateTime,
             MergedAt = pr.MergedAt?.UtcDateTime,
             ClosedAt = pr.ClosedAt?.UtcDateTime,
-            UpdatedAt = pr.UpdatedAt.UtcDateTime
+            UpdatedAt = pr.UpdatedAt.UtcDateTime,
+            IsMergeable = pr.Mergeable,
+            MergeableState = pr.MergeableState?.StringValue
         };
     }
 

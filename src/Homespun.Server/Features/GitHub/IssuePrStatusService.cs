@@ -48,7 +48,9 @@ public class IssuePrStatusService(
                     ChecksPassing = prWithStatus.PullRequest.ChecksPassing,
                     IsApproved = prWithStatus.PullRequest.IsApproved,
                     ApprovalCount = prWithStatus.PullRequest.ApprovalCount,
-                    ChangesRequestedCount = prWithStatus.PullRequest.ChangesRequestedCount
+                    ChangesRequestedCount = prWithStatus.PullRequest.ChangesRequestedCount,
+                    IsMergeableByGitHub = prWithStatus.PullRequest.IsMergeable,
+                    MergeableState = prWithStatus.PullRequest.MergeableState
                 };
             }
 

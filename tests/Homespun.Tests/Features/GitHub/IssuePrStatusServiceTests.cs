@@ -525,6 +525,168 @@ public class IssuePrStatusServiceTests
         Assert.That(result, Is.Null);
     }
 
+    [Test]
+    public async Task GetPullRequestStatusForIssueAsync_MergeConflicts_ShowsHasConflicts()
+    {
+        // Arrange
+        var project = await CreateTestProject();
+
+        var trackedPr = new PullRequest
+        {
+            ProjectId = project.Id,
+            Title = "PR with conflicts",
+            BranchName = "issues/feature/conflicts+issue-conflict",
+            GitHubPRNumber = 101,
+            BeadsIssueId = "issue-conflict",
+            Status = OpenPullRequestStatus.InDevelopment
+        };
+        await _dataStore.AddPullRequestAsync(trackedPr);
+
+        // PR has merge conflicts: mergeable=false, mergeableState=dirty
+        var mockPr = CreateMockPullRequest(
+            101,
+            "PR with conflicts",
+            ItemState.Open,
+            "issues/feature/conflicts+issue-conflict",
+            mergeable: false,
+            mergeableState: "dirty");
+
+        _mockGitHubClient.Setup(c => c.GetPullRequestsAsync(
+            project.GitHubOwner!,
+            project.GitHubRepo!,
+            It.Is<PullRequestRequest>(r => r.State == ItemStateFilter.Open)))
+            .ReturnsAsync([mockPr]);
+
+        _mockGitHubClient.Setup(c => c.GetPullRequestReviewsAsync(
+            project.GitHubOwner!,
+            project.GitHubRepo!,
+            101))
+            .ReturnsAsync([]);
+
+        _mockGitHubClient.Setup(c => c.GetCombinedCommitStatusAsync(
+            project.GitHubOwner!,
+            project.GitHubRepo!,
+            It.IsAny<string>()))
+            .ReturnsAsync(CreateMockCombinedStatus(CommitState.Success));
+
+        // Act
+        var result = await _service.GetPullRequestStatusForIssueAsync(project.Id, "issue-conflict");
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.IsMergeableByGitHub, Is.False, "IsMergeableByGitHub should be false when PR has conflicts");
+        Assert.That(result.MergeableState, Is.EqualTo("dirty"), "MergeableState should be 'dirty' when PR has conflicts");
+        Assert.That(result.HasConflicts, Is.True, "HasConflicts should be true when PR has merge conflicts");
+    }
+
+    [Test]
+    public async Task GetPullRequestStatusForIssueAsync_NoMergeConflicts_ShowsNoConflicts()
+    {
+        // Arrange
+        var project = await CreateTestProject();
+
+        var trackedPr = new PullRequest
+        {
+            ProjectId = project.Id,
+            Title = "Clean PR",
+            BranchName = "issues/feature/clean+issue-clean",
+            GitHubPRNumber = 102,
+            BeadsIssueId = "issue-clean",
+            Status = OpenPullRequestStatus.ReadyForReview
+        };
+        await _dataStore.AddPullRequestAsync(trackedPr);
+
+        // PR is clean: mergeable=true, mergeableState=clean
+        var mockPr = CreateMockPullRequest(
+            102,
+            "Clean PR",
+            ItemState.Open,
+            "issues/feature/clean+issue-clean",
+            mergeable: true,
+            mergeableState: "clean");
+
+        _mockGitHubClient.Setup(c => c.GetPullRequestsAsync(
+            project.GitHubOwner!,
+            project.GitHubRepo!,
+            It.Is<PullRequestRequest>(r => r.State == ItemStateFilter.Open)))
+            .ReturnsAsync([mockPr]);
+
+        _mockGitHubClient.Setup(c => c.GetPullRequestReviewsAsync(
+            project.GitHubOwner!,
+            project.GitHubRepo!,
+            102))
+            .ReturnsAsync([]);
+
+        _mockGitHubClient.Setup(c => c.GetCombinedCommitStatusAsync(
+            project.GitHubOwner!,
+            project.GitHubRepo!,
+            It.IsAny<string>()))
+            .ReturnsAsync(CreateMockCombinedStatus(CommitState.Success));
+
+        // Act
+        var result = await _service.GetPullRequestStatusForIssueAsync(project.Id, "issue-clean");
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.IsMergeableByGitHub, Is.True, "IsMergeableByGitHub should be true when PR is clean");
+        Assert.That(result.MergeableState, Is.EqualTo("clean"), "MergeableState should be 'clean' when PR has no conflicts");
+        Assert.That(result.HasConflicts, Is.False, "HasConflicts should be false when PR is clean");
+    }
+
+    [Test]
+    public async Task GetPullRequestStatusForIssueAsync_UnknownMergeState_HandlesGracefully()
+    {
+        // Arrange
+        var project = await CreateTestProject();
+
+        var trackedPr = new PullRequest
+        {
+            ProjectId = project.Id,
+            Title = "Unknown merge state PR",
+            BranchName = "issues/feature/unknown+issue-unknown",
+            GitHubPRNumber = 103,
+            BeadsIssueId = "issue-unknown",
+            Status = OpenPullRequestStatus.InDevelopment
+        };
+        await _dataStore.AddPullRequestAsync(trackedPr);
+
+        // PR merge state not computed yet: mergeable=null, mergeableState=unknown
+        var mockPr = CreateMockPullRequest(
+            103,
+            "Unknown merge state PR",
+            ItemState.Open,
+            "issues/feature/unknown+issue-unknown",
+            mergeable: null,
+            mergeableState: "unknown");
+
+        _mockGitHubClient.Setup(c => c.GetPullRequestsAsync(
+            project.GitHubOwner!,
+            project.GitHubRepo!,
+            It.Is<PullRequestRequest>(r => r.State == ItemStateFilter.Open)))
+            .ReturnsAsync([mockPr]);
+
+        _mockGitHubClient.Setup(c => c.GetPullRequestReviewsAsync(
+            project.GitHubOwner!,
+            project.GitHubRepo!,
+            103))
+            .ReturnsAsync([]);
+
+        _mockGitHubClient.Setup(c => c.GetCombinedCommitStatusAsync(
+            project.GitHubOwner!,
+            project.GitHubRepo!,
+            It.IsAny<string>()))
+            .ReturnsAsync(CreateMockCombinedStatus(CommitState.Pending));
+
+        // Act
+        var result = await _service.GetPullRequestStatusForIssueAsync(project.Id, "issue-unknown");
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.IsMergeableByGitHub, Is.Null, "IsMergeableByGitHub should be null when GitHub hasn't computed it");
+        Assert.That(result.MergeableState, Is.EqualTo("unknown"), "MergeableState should be 'unknown' when not computed");
+        Assert.That(result.HasConflicts, Is.False, "HasConflicts should be false when merge state is unknown");
+    }
+
     #region Helper Methods
 
     private static Octokit.PullRequest CreateMockPullRequest(
@@ -533,7 +695,9 @@ public class IssuePrStatusServiceTests
         ItemState state,
         string branchName,
         bool merged = false,
-        bool draft = false)
+        bool draft = false,
+        bool? mergeable = true,
+        string? mergeableState = null)
     {
         var headRef = new GitReference(
             nodeId: "node1",
@@ -568,8 +732,8 @@ public class IssuePrStatusServiceTests
             assignee: null,
             assignees: null,
             draft: draft,
-            mergeable: true,
-            mergeableState: null,
+            mergeable: mergeable,
+            mergeableState: mergeableState != null ? ParseMergeableState(mergeableState) : null,
             mergedBy: null,
             mergeCommitSha: null,
             comments: 0,
@@ -585,6 +749,19 @@ public class IssuePrStatusServiceTests
             labels: null,
             activeLockReason: null
         );
+    }
+
+    private static MergeableState ParseMergeableState(string state)
+    {
+        return state.ToLowerInvariant() switch
+        {
+            "clean" => MergeableState.Clean,
+            "dirty" => MergeableState.Dirty,
+            "blocked" => MergeableState.Blocked,
+            "unstable" => MergeableState.Unstable,
+            "unknown" => MergeableState.Unknown,
+            _ => MergeableState.Unknown
+        };
     }
 
     private static CombinedCommitStatus CreateMockCombinedStatus(CommitState state)

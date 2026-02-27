@@ -59,6 +59,18 @@ public class PullRequestInfo
     public int ApprovalCount { get; set; }
 
     /// <summary>
+    /// Whether the PR can be merged cleanly (no conflicts). From GitHub API.
+    /// Null means GitHub hasn't computed it yet.
+    /// </summary>
+    public bool? IsMergeable { get; set; }
+
+    /// <summary>
+    /// GitHub's merge state: clean, dirty, blocked, unstable, unknown.
+    /// "dirty" indicates merge conflicts.
+    /// </summary>
+    public string? MergeableState { get; set; }
+
+    /// <summary>
     /// Validates that the PR state is consistent.
     /// </summary>
     public bool IsValid()
