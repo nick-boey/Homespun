@@ -48,6 +48,18 @@ public class IssuePullRequestStatus
     public int ChangesRequestedCount { get; set; }
 
     /// <summary>
+    /// Whether the PR can be merged cleanly (no conflicts). From GitHub API.
+    /// Null means GitHub hasn't computed it yet.
+    /// </summary>
+    public bool? IsMergeableByGitHub { get; set; }
+
+    /// <summary>
+    /// GitHub's merge state: clean, dirty, blocked, unstable, unknown.
+    /// "dirty" indicates merge conflicts.
+    /// </summary>
+    public string? MergeableState { get; set; }
+
+    /// <summary>
     /// Whether the PR is ready to merge (approved, checks passing, no conflicts).
     /// </summary>
     public bool IsMergeable => Status == PullRequestStatus.ReadyForMerging;
@@ -64,6 +76,10 @@ public class IssuePullRequestStatus
 
     /// <summary>
     /// Whether there are merge conflicts.
+    /// Detects conflicts from GitHub's mergeable state OR local status.
     /// </summary>
-    public bool HasConflicts => Status == PullRequestStatus.Conflict;
+    public bool HasConflicts =>
+        Status == PullRequestStatus.Conflict ||
+        IsMergeableByGitHub == false ||
+        MergeableState == "dirty";
 }
