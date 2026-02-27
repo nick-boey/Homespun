@@ -233,6 +233,48 @@ public class IssuesController(
         return NoContent();
     }
 
+    /// <summary>
+    /// Set the parent of an issue.
+    /// Can either replace all existing parents or add to existing parents.
+    /// </summary>
+    [HttpPost("issues/{childId}/set-parent")]
+    [ProducesResponseType<IssueResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<IssueResponse>> SetParent(string childId, [FromBody] SetParentRequest request)
+    {
+        var project = await projectService.GetByIdAsync(request.ProjectId);
+        if (project == null)
+        {
+            return NotFound("Project not found");
+        }
+
+        // Check if the child issue exists
+        var existingIssue = await fleeceService.GetIssueAsync(project.LocalPath, childId);
+        if (existingIssue == null)
+        {
+            return NotFound("Child issue not found");
+        }
+
+        try
+        {
+            var issue = await fleeceService.SetParentAsync(
+                project.LocalPath,
+                childId,
+                request.ParentIssueId,
+                request.AddToExisting);
+
+            // Broadcast issue update to connected clients
+            await notificationHub.BroadcastIssuesChanged(request.ProjectId, IssueChangeType.Updated, childId);
+
+            return Ok(issue.ToResponse());
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("cycle"))
+        {
+            return BadRequest(ex.Message);
+        }
+    }
+
     #region History Operations
 
     /// <summary>

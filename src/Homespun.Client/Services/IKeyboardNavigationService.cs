@@ -15,7 +15,20 @@ public enum KeyboardEditMode
     /// <summary>Creating a new issue inline.</summary>
     CreatingNew,
     /// <summary>Selecting an agent prompt from the dropdown.</summary>
-    SelectingAgentPrompt
+    SelectingAgentPrompt,
+    /// <summary>Selecting a move target (for Make Child Of / Make Parent Of operations).</summary>
+    SelectingMoveTarget
+}
+
+/// <summary>
+/// Enum representing the type of move operation being performed.
+/// </summary>
+public enum MoveOperationType
+{
+    /// <summary>Make the source issue a child of the target issue.</summary>
+    AsChildOf,
+    /// <summary>Make the target issue a child of the source issue.</summary>
+    AsParentOf
 }
 
 /// <summary>
@@ -255,4 +268,32 @@ public interface IKeyboardNavigationService
 
     /// <summary>Clear all search state and return to normal viewing (Escape key).</summary>
     void ClearSearch();
+
+    // Move operation methods
+
+    /// <summary>The current move operation type when in SelectingMoveTarget mode.</summary>
+    MoveOperationType? CurrentMoveOperation { get; }
+
+    /// <summary>The source issue ID when in SelectingMoveTarget mode.</summary>
+    string? MoveSourceIssueId { get; }
+
+    /// <summary>Start a "Make Child Of" operation. Selected issue will become a child of the clicked target.</summary>
+    void StartMakeChildOf();
+
+    /// <summary>Start a "Make Parent Of" operation. Clicked target will become a child of the selected issue.</summary>
+    void StartMakeParentOf();
+
+    /// <summary>Cancel the current move operation and return to Viewing mode.</summary>
+    void CancelMoveOperation();
+
+    /// <summary>Complete the move operation by selecting a target issue.</summary>
+    /// <param name="targetIssueId">The issue ID that was clicked as the target.</param>
+    /// <param name="addToExisting">If true, add to existing parents; if false, replace existing parents.</param>
+    Task CompleteMoveOperationAsync(string targetIssueId, bool addToExisting);
+
+    /// <summary>Raised when a move operation is requested to be completed.</summary>
+    /// <remarks>
+    /// Parameters: sourceIssueId, targetIssueId, operationType, addToExisting
+    /// </remarks>
+    event Func<string, string, MoveOperationType, bool, Task>? OnMoveOperationRequested;
 }

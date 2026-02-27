@@ -682,6 +682,76 @@ public class KeyboardNavigationService : IKeyboardNavigationService
 
     #endregion
 
+    #region Move Operations
+
+    public MoveOperationType? CurrentMoveOperation { get; private set; }
+
+    public string? MoveSourceIssueId { get; private set; }
+
+    public event Func<string, string, MoveOperationType, bool, Task>? OnMoveOperationRequested;
+
+    public void StartMakeChildOf()
+    {
+        if (EditMode != KeyboardEditMode.Viewing) return;
+        if (SelectedIssueId == null) return;
+
+        MoveSourceIssueId = SelectedIssueId;
+        CurrentMoveOperation = MoveOperationType.AsChildOf;
+        EditMode = KeyboardEditMode.SelectingMoveTarget;
+        NotifyStateChanged();
+    }
+
+    public void StartMakeParentOf()
+    {
+        if (EditMode != KeyboardEditMode.Viewing) return;
+        if (SelectedIssueId == null) return;
+
+        MoveSourceIssueId = SelectedIssueId;
+        CurrentMoveOperation = MoveOperationType.AsParentOf;
+        EditMode = KeyboardEditMode.SelectingMoveTarget;
+        NotifyStateChanged();
+    }
+
+    public void CancelMoveOperation()
+    {
+        if (EditMode != KeyboardEditMode.SelectingMoveTarget) return;
+
+        CurrentMoveOperation = null;
+        MoveSourceIssueId = null;
+        EditMode = KeyboardEditMode.Viewing;
+        NotifyStateChanged();
+    }
+
+    public async Task CompleteMoveOperationAsync(string targetIssueId, bool addToExisting)
+    {
+        if (EditMode != KeyboardEditMode.SelectingMoveTarget) return;
+        if (MoveSourceIssueId == null || CurrentMoveOperation == null) return;
+
+        // Clicking on the same issue cancels the operation
+        if (string.Equals(MoveSourceIssueId, targetIssueId, StringComparison.OrdinalIgnoreCase))
+        {
+            CancelMoveOperation();
+            return;
+        }
+
+        var sourceId = MoveSourceIssueId;
+        var operation = CurrentMoveOperation.Value;
+
+        // Clear state before firing event
+        CurrentMoveOperation = null;
+        MoveSourceIssueId = null;
+        EditMode = KeyboardEditMode.Viewing;
+        NotifyStateChanged();
+
+        // Fire the event for the caller to handle the API call
+        if (OnMoveOperationRequested != null)
+        {
+            await OnMoveOperationRequested.Invoke(sourceId, targetIssueId, operation, addToExisting);
+        }
+    }
+
+    #endregion
+
     /// <summary>
     /// Gets inherited parent info from the reference issue for sibling creation.
     /// When the reference issue has a parent, the new sibling should inherit that parent.

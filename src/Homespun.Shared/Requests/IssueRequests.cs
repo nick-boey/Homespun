@@ -109,3 +109,24 @@ public class ResolvedBranchResponse
     /// </summary>
     public string? BranchName { get; set; }
 }
+
+/// <summary>
+/// Request model for setting an issue's parent.
+/// </summary>
+public class SetParentRequest
+{
+    /// <summary>
+    /// The project ID.
+    /// </summary>
+    public required string ProjectId { get; set; }
+
+    /// <summary>
+    /// The ID of the issue that will become the parent.
+    /// </summary>
+    public required string ParentIssueId { get; set; }
+
+    /// <summary>
+    /// If true, adds the parent to existing parents. If false (default), replaces all existing parents.
+    /// </summary>
+    public bool AddToExisting { get; set; } = false;
+}

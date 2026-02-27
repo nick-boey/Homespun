@@ -489,6 +489,124 @@ public sealed class FleeceService : IFleeceService, IDisposable
         return issue;
     }
 
+    public async Task<bool> WouldCreateCycleAsync(string projectPath, string childId, string parentId, CancellationToken ct = default)
+    {
+        // Self-reference is always a cycle
+        if (string.Equals(childId, parentId, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var cache = await EnsureCacheLoadedAsync(projectPath, ct);
+
+        // Use BFS to check if parentId is a descendant of childId
+        // If parentId is a descendant of childId, making parentId the parent of childId would create a cycle
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var queue = new Queue<string>();
+        queue.Enqueue(parentId);
+
+        while (queue.Count > 0)
+        {
+            var currentId = queue.Dequeue();
+
+            if (visited.Contains(currentId))
+                continue;
+
+            visited.Add(currentId);
+
+            // If we reach childId by traversing from parentId, then childId is an ancestor of parentId
+            // This means making parentId the parent of childId would create a cycle
+            if (string.Equals(currentId, childId, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            // Add all parents of the current issue to the queue
+            if (cache.TryGetValue(currentId, out var issue))
+            {
+                foreach (var parentRef in issue.ParentIssues)
+                {
+                    if (!visited.Contains(parentRef.ParentIssue))
+                    {
+                        queue.Enqueue(parentRef.ParentIssue);
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
+    public async Task<Issue> SetParentAsync(string projectPath, string childId, string parentId, bool addToExisting = false, CancellationToken ct = default)
+    {
+        // Check for cycle
+        if (await WouldCreateCycleAsync(projectPath, childId, parentId, ct))
+        {
+            throw new InvalidOperationException($"Setting '{parentId}' as parent of '{childId}' would create a cycle in the issue hierarchy.");
+        }
+
+        var cache = await EnsureCacheLoadedAsync(projectPath, ct);
+
+        // Check if the child issue exists
+        if (!cache.TryGetValue(childId, out var existingIssue))
+        {
+            _logger.LogWarning("Child issue '{ChildId}' not found in project '{ProjectPath}'", childId, projectPath);
+            throw new KeyNotFoundException($"Issue '{childId}' not found");
+        }
+
+        List<ParentIssueRef> newParentIssues;
+        if (addToExisting)
+        {
+            // Add to existing parents (check if already present)
+            newParentIssues = existingIssue.ParentIssues.ToList();
+            if (!newParentIssues.Any(p => string.Equals(p.ParentIssue, parentId, StringComparison.OrdinalIgnoreCase)))
+            {
+                newParentIssues.Add(new ParentIssueRef { ParentIssue = parentId, SortOrder = "0" });
+            }
+        }
+        else
+        {
+            // Replace all existing parents with the new parent
+            newParentIssues = [new ParentIssueRef { ParentIssue = parentId, SortOrder = "0" }];
+        }
+
+        // Perform the update via Fleece.Core
+        var service = GetOrCreateIssueService(projectPath);
+        var issue = await service.UpdateAsync(childId, parentIssues: newParentIssues, cancellationToken: ct);
+
+        // Update the in-memory cache immediately
+        cache[childId] = issue;
+
+        // Queue a background persistence operation for consistency
+        await _serializationQueue.EnqueueAsync(new IssueWriteOperation(
+            ProjectPath: projectPath,
+            IssueId: childId,
+            Type: WriteOperationType.Update,
+            WriteAction: async (innerCt) =>
+            {
+                var svc = GetOrCreateIssueService(projectPath);
+                var currentIssue = await svc.GetByIdAsync(childId, innerCt);
+                if (currentIssue != null)
+                {
+                    await svc.UpdateAsync(childId, parentIssues: newParentIssues, cancellationToken: innerCt);
+                }
+            },
+            QueuedAt: DateTimeOffset.UtcNow
+        ), ct);
+
+        _logger.LogInformation(
+            "Set parent '{ParentId}' for issue '{ChildId}' (addToExisting: {AddToExisting})",
+            parentId, childId, addToExisting);
+
+        // Record history snapshot after setting parent
+        var description = addToExisting
+            ? $"Added '{parentId}' as additional parent of '{childId}'"
+            : $"Set '{parentId}' as sole parent of '{childId}'";
+        await RecordHistorySnapshotAsync(projectPath, "SetParent", childId, description, ct);
+
+        return issue;
+    }
+
     #endregion
 
     #region History Operations

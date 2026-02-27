@@ -1,5 +1,7 @@
+using Homespun.Features.Fleece.Services;
 using Homespun.Features.PullRequests.Data;
 using Homespun.Features.Testing;
+using Homespun.Features.Testing.Services;
 using Homespun.Tests.Helpers;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -21,6 +23,11 @@ public class HomespunWebApplicationFactory : WebApplicationFactory<Program>
     /// </summary>
     public MockDataStore MockDataStore { get; } = new();
 
+    /// <summary>
+    /// The mock Fleece service for issue manipulation in tests.
+    /// </summary>
+    public MockFleeceService MockFleeceService { get; private set; } = null!;
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.ConfigureServices(services =>
@@ -32,6 +39,17 @@ public class HomespunWebApplicationFactory : WebApplicationFactory<Program>
             // Add our test data store as singleton
             services.AddSingleton(MockDataStore);
             services.AddSingleton<IDataStore>(MockDataStore);
+
+            // Remove any existing IFleeceService registrations and add mock
+            services.RemoveAll<IFleeceService>();
+            services.RemoveAll<MockFleeceService>();
+            services.AddSingleton<MockFleeceService>(sp =>
+            {
+                var logger = sp.GetRequiredService<ILogger<MockFleeceService>>();
+                MockFleeceService = new MockFleeceService(logger);
+                return MockFleeceService;
+            });
+            services.AddSingleton<IFleeceService>(sp => sp.GetRequiredService<MockFleeceService>());
         });
 
         // Redirect logging to file instead of console for better test performance

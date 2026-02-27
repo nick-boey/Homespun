@@ -108,8 +108,8 @@
                     && NavService?.PendingEdit?.IssueId == issueLine.IssueId;
                 var isSearchMatch = IsSearchMatch(issueLine.Title);
 
-                <div class="task-graph-row @(isSelected ? "task-graph-row-selected" : "") @(isEditing ? "task-graph-row-editing" : "") @(isSearchMatch ? "task-graph-row-search-match" : "")"
-                     @onclick="() => HandleIssueClick(issueLine.IssueId)"
+                <div class="task-graph-row @(isSelected ? "task-graph-row-selected" : "") @(isEditing ? "task-graph-row-editing" : "") @(isSearchMatch ? "task-graph-row-search-match" : "") @(IsInMoveSelectionMode ? "task-graph-row-move-target" : "")"
+                     @onclick="(e) => HandleIssueClick(issueLine.IssueId, e.ShiftKey)"
                      data-testid="task-graph-issue-row"
                      data-issue-id="@issueLine.IssueId">
                     <div class="task-graph-graph-cell">
@@ -348,6 +348,21 @@
         border: 2px solid rgba(251, 191, 36, 0.6);
         border-radius: 4px;
         margin: 1px 4px;
+    }
+
+    /* Move target selection mode - highlight rows as potential targets */
+    .task-graph-row-move-target:hover {
+        background-color: rgba(59, 130, 246, 0.2);
+        cursor: crosshair;
+    }
+
+    .task-graph-row-move-target:hover::after {
+        content: "Click to select • Shift+Click to add as additional parent";
+        position: absolute;
+        right: 1rem;
+        font-size: 11px;
+        color: var(--text-secondary, #a0a0a0);
+        opacity: 0.8;
     }
 
     /* Highlighted search text within titles */
@@ -1164,8 +1179,19 @@ lane0Color: issueLine.Lane0Color,
         };
     }
 
-    private async Task HandleIssueClick(string issueId)
+    private bool IsInMoveSelectionMode =>
+        NavService?.EditMode == KeyboardEditMode.SelectingMoveTarget;
+
+    private async Task HandleIssueClick(string issueId, bool shiftKey)
     {
+        // If in move selection mode, complete the move operation
+        if (NavService?.EditMode == KeyboardEditMode.SelectingMoveTarget)
+        {
+            await NavService.CompleteMoveOperationAsync(issueId, addToExisting: shiftKey);
+            return;
+        }
+
+        // Normal click - notify parent
         await OnIssueClick.InvokeAsync(issueId);
     }
 

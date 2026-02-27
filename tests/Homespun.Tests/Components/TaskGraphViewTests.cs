@@ -1253,6 +1253,17 @@ public void OpenSelectedIssueForEdit() => OnOpenEditRequested?.Invoke(SelectedIs
     public void MoveToPreviousMatch() { }
     public void ClearSearch() { }
 
+    // Move operation properties
+    public MoveOperationType? CurrentMoveOperation { get; set; }
+    public string? MoveSourceIssueId { get; set; }
+    public event Func<string, string, MoveOperationType, bool, Task>? OnMoveOperationRequested;
+
+    // Move operation methods
+    public void StartMakeChildOf() { }
+    public void StartMakeParentOf() { }
+    public void CancelMoveOperation() { }
+    public Task CompleteMoveOperationAsync(string targetIssueId, bool addToExisting) => Task.CompletedTask;
+
     // Helper to trigger state change
     public void TriggerStateChanged() => OnStateChanged?.Invoke();
 }
