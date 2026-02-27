@@ -1227,6 +1227,48 @@ public class TaskGraphLayoutServiceTests
     }
 
     [Test]
+    public void ComputeLayout_MaxDepth_OnlyDirectChildrenOfHiddenParentsGetIndicator()
+    {
+        // This test verifies the fix for the bug where dotted lines appeared on ALL nodes
+        // with any hidden ancestor, not just the direct children of hidden parents.
+        //
+        // With maxDepth=2:
+        // - Visible: ISSUE-010 (lane 0) -> ISSUE-009 (lane 1) -> ISSUE-008 (lane 2)
+        // - Hidden:  ISSUE-007 (lane 3) -> ISSUE-005 (lane 4) -> ISSUE-004 (lane 5)
+        //
+        // Only ISSUE-008 and ISSUE-012 should have HasHiddenParent=true because
+        // their DIRECT parent (ISSUE-007) is hidden. ISSUE-009, ISSUE-010, and ISSUE-011
+        // should NOT have HasHiddenParent=true even though they have hidden ancestors
+        // (grandparents) in the chain.
+        var taskGraph = BuildFullMockTaskGraph();
+
+        var result = TaskGraphLayoutService.ComputeLayout(taskGraph, maxDepth: 2);
+        var issueLines = result.OfType<TaskGraphIssueRenderLine>().ToList();
+
+        // Direct children of hidden parent ISSUE-007 should have indicator
+        var issue008 = issueLines.First(l => l.IssueId == "ISSUE-008");
+        var issue012 = issueLines.First(l => l.IssueId == "ISSUE-012");
+        Assert.That(issue008.HasHiddenParent, Is.True, "ISSUE-008 is direct child of hidden ISSUE-007");
+        Assert.That(issue012.HasHiddenParent, Is.True, "ISSUE-012 is direct child of hidden ISSUE-007");
+
+        // Nodes with visible parents but hidden grandparents should NOT have indicator
+        var issue009 = issueLines.First(l => l.IssueId == "ISSUE-009");
+        var issue010 = issueLines.First(l => l.IssueId == "ISSUE-010");
+        var issue011 = issueLines.First(l => l.IssueId == "ISSUE-011");
+        Assert.That(issue009.HasHiddenParent, Is.False, "ISSUE-009 has visible parent ISSUE-008, hidden grandparent doesn't count");
+        Assert.That(issue010.HasHiddenParent, Is.False, "ISSUE-010 has visible parent ISSUE-009");
+        Assert.That(issue011.HasHiddenParent, Is.False, "ISSUE-011 has visible parent ISSUE-008");
+
+        // Orphans should never have hidden parent indicator
+        var issue003 = issueLines.First(l => l.IssueId == "ISSUE-003");
+        var issue001 = issueLines.First(l => l.IssueId == "ISSUE-001");
+        var issue002 = issueLines.First(l => l.IssueId == "ISSUE-002");
+        Assert.That(issue003.HasHiddenParent, Is.False, "Orphan ISSUE-003 has no parent");
+        Assert.That(issue001.HasHiddenParent, Is.False, "Orphan ISSUE-001 has no parent");
+        Assert.That(issue002.HasHiddenParent, Is.False, "Orphan ISSUE-002 has no parent");
+    }
+
+    [Test]
     public void ComputeLayout_MaxDepth_SetsHiddenParentIsSeriesMode_ForSeriesParent()
     {
         // ISSUE-008 has parent ISSUE-007 which is a Series execution mode parent
