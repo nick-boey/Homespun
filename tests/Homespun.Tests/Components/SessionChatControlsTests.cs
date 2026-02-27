@@ -203,15 +203,15 @@ public class SessionChatControlsTests
     }
 
     [Test]
-    public void SendMessageRequest_Mode_DefaultsToBuild()
+    public void SendMessageRequest_Mode_DefaultsToNull()
     {
-        // When not specified, should default to Build
+        // When not specified, mode should be null (session's mode will be used)
         var request = new Homespun.Shared.Requests.SendMessageRequest
         {
             Message = "Hello"
         };
 
-        Assert.That(request.Mode, Is.EqualTo(SessionMode.Build));
+        Assert.That(request.Mode, Is.Null);
     }
 
     #endregion

@@ -49,9 +49,9 @@ public class SendMessageRequest
     public required string Message { get; set; }
 
     /// <summary>
-    /// The session mode for this message. Defaults to Build.
+    /// The session mode for this message. When null, the session's existing mode is preserved.
     /// </summary>
-    public SessionMode Mode { get; set; } = SessionMode.Build;
+    public SessionMode? Mode { get; set; }
 }
 
 /// <summary>
