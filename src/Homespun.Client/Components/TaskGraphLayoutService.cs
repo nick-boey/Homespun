@@ -108,7 +108,7 @@ public static class TaskGraphLayoutService
             // Compute hidden parent info: which nodes have parents filtered out
             var hiddenParentInfo = ComputeHiddenParentInfo(visibleNodes, group, allNodesByIssueId, minLane, maxDepth);
 
-            RenderGroup(result, visibleNodes, taskGraph.AgentStatuses, taskGraph.LinkedPrs, laneOffset, hiddenParentInfo);
+            RenderGroup(result, visibleNodes, group, taskGraph.AgentStatuses, taskGraph.LinkedPrs, laneOffset, hiddenParentInfo);
         }
 
         // Post-process: connect merged PR vertical line at lane 0 to leftmost issue nodes
@@ -284,6 +284,7 @@ public static class TaskGraphLayoutService
     private static void RenderGroup(
         List<TaskGraphRenderLine> result,
         List<TaskGraphNodeResponse> group,
+        List<TaskGraphNodeResponse> allGroupNodes,
         Dictionary<string, AgentStatusData> agentStatuses,
         Dictionary<string, TaskGraphLinkedPr> linkedPrs,
         int laneOffset = 0,
@@ -319,6 +320,25 @@ public static class TaskGraphLayoutService
                 parentByNode[node.Issue.Id] = parentNode;
                 childrenCountByParent.TryGetValue(parentNode.Issue.Id, out var count);
                 childrenCountByParent[parentNode.Issue.Id] = count + 1;
+            }
+        }
+
+        // Build lookup for hidden parents (parents in allGroupNodes but not in visible group)
+        var hiddenParentByNode = new Dictionary<string, TaskGraphNodeResponse>(StringComparer.OrdinalIgnoreCase);
+        var visibleNodeIds = new HashSet<string>(group.Select(n => n.Issue.Id), StringComparer.OrdinalIgnoreCase);
+        foreach (var node in group)
+        {
+            foreach (var parentRef in node.Issue.ParentIssues)
+            {
+                // Find parent in allGroupNodes that is NOT in visible nodes
+                var hiddenParent = allGroupNodes.FirstOrDefault(n =>
+                    string.Equals(n.Issue.Id, parentRef.ParentIssue, StringComparison.OrdinalIgnoreCase)
+                    && !visibleNodeIds.Contains(n.Issue.Id));
+                if (hiddenParent != null)
+                {
+                    hiddenParentByNode[node.Issue.Id] = hiddenParent;
+                    break; // Use first found hidden parent
+                }
             }
         }
 
@@ -358,8 +378,10 @@ public static class TaskGraphLayoutService
             }
 
             // Determine if this is a series child (parent has Series execution mode)
-            var isSeriesChild = parentNode != null
-                && parentNode.Issue.ExecutionMode == ExecutionMode.Series;
+            // Also check hidden parent for nodes whose visible parent was filtered out
+            var isSeriesChild = (parentNode != null && parentNode.Issue.ExecutionMode == ExecutionMode.Series)
+                || (hiddenParentByNode.TryGetValue(node.Issue.Id, out var seriesHiddenParent)
+                    && seriesHiddenParent.Issue.ExecutionMode == ExecutionMode.Series);
 
             // Compute DrawTopLine (uses base lanes for calculations)
             var drawTopLine = false;
@@ -369,8 +391,9 @@ public static class TaskGraphLayoutService
                 var prevBaseLane = prevNode.Lane - minLane;
                 parentByNode.TryGetValue(prevNode.Issue.Id, out var prevParentNode);
                 var prevBaseParentLane = prevParentNode != null ? prevParentNode.Lane - minLane : (int?)null;
-                var prevIsSeriesChild = prevParentNode != null
-                    && prevParentNode.Issue.ExecutionMode == ExecutionMode.Series;
+                var prevIsSeriesChild = (prevParentNode != null && prevParentNode.Issue.ExecutionMode == ExecutionMode.Series)
+                    || (hiddenParentByNode.TryGetValue(prevNode.Issue.Id, out var prevHiddenParentCheck)
+                        && prevHiddenParentCheck.Issue.ExecutionMode == ExecutionMode.Series);
 
                 // Previous node is a parallel child whose junction is at this node's lane
                 if (!prevIsSeriesChild && prevBaseParentLane.HasValue && prevBaseParentLane.Value == baseLane && prevBaseParentLane.Value > prevBaseLane)
@@ -380,10 +403,40 @@ public static class TaskGraphLayoutService
                 if (isSeriesChild && prevIsSeriesChild && prevParentNode != null && parentNode != null
                     && string.Equals(prevParentNode.Issue.Id, parentNode.Issue.Id, StringComparison.OrdinalIgnoreCase))
                     drawTopLine = true;
+
+                // Check for series siblings with same hidden parent (when visible parent is filtered out)
+                if (!drawTopLine && hiddenParentByNode.TryGetValue(node.Issue.Id, out var currentHiddenParent)
+                    && currentHiddenParent.Issue.ExecutionMode == ExecutionMode.Series)
+                {
+                    if (hiddenParentByNode.TryGetValue(prevNode.Issue.Id, out var prevHiddenParent)
+                        && string.Equals(currentHiddenParent.Issue.Id, prevHiddenParent.Issue.Id, StringComparison.OrdinalIgnoreCase))
+                    {
+                        drawTopLine = true;
+                    }
+                }
             }
 
-            // Compute DrawBottomLine: true when this node is a series child
-            var drawBottomLine = isSeriesChild;
+            // Compute DrawBottomLine:
+            // - For nodes with visible series parent: always true (connects to the visible parent)
+            // - For nodes with hidden series parent: true only if there's a next sibling with same hidden parent
+            var hasVisibleSeriesParent = parentNode != null && parentNode.Issue.ExecutionMode == ExecutionMode.Series;
+            var drawBottomLine = hasVisibleSeriesParent;
+
+            // For nodes with hidden series parent, check if there's a next sibling
+            if (!drawBottomLine && hiddenParentByNode.TryGetValue(node.Issue.Id, out var bottomLineHiddenParent)
+                && bottomLineHiddenParent.Issue.ExecutionMode == ExecutionMode.Series)
+            {
+                // Check if there's a next sibling with same hidden parent
+                for (var j = i + 1; j < group.Count; j++)
+                {
+                    if (hiddenParentByNode.TryGetValue(group[j].Issue.Id, out var nextHiddenParent)
+                        && string.Equals(bottomLineHiddenParent.Issue.Id, nextHiddenParent.Issue.Id, StringComparison.OrdinalIgnoreCase))
+                    {
+                        drawBottomLine = true;
+                        break;
+                    }
+                }
+            }
 
             // Compute SeriesConnectorFromLane: set when this node is a parent receiving series children
             // Apply lane offset to the series connector lane as well
@@ -401,6 +454,13 @@ public static class TaskGraphLayoutService
             {
                 hasHiddenParent = info.HasHiddenParent;
                 hiddenParentIsSeriesMode = info.HiddenParentIsSeriesMode;
+
+                // For series siblings with hidden parent, only show indicator on last sibling
+                // (the one without a connection to the next sibling)
+                if (hasHiddenParent && hiddenParentIsSeriesMode && drawBottomLine)
+                {
+                    hasHiddenParent = false;
+                }
             }
 
             result.Add(new TaskGraphIssueRenderLine(
