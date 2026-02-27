@@ -5,8 +5,8 @@
 
     Usage:
         <LoadingSpinner />                              - Medium spinner, no label
-        <LoadingSpinner Size="SpinnerSize.Sm" />        - Small spinner
-        <LoadingSpinner Size="SpinnerSize.Lg" />        - Large spinner
+        <LoadingSpinner Size="LoadingSpinnerSize.Sm" />        - Small spinner
+        <LoadingSpinner Size="LoadingSpinnerSize.Lg" />        - Large spinner
         <LoadingSpinner Label="Loading..." />           - With label text
         <LoadingSpinner Label="Loading" Inline="true"/> - Inline with button text
 *@
@@ -28,7 +28,7 @@
     /// Size of the spinner: Sm (small), Md (medium/default), Lg (large)
     /// </summary>
     [Parameter]
-    public SpinnerSize Size { get; set; } = SpinnerSize.Md;
+    public LoadingSpinnerSize Size { get; set; } = LoadingSpinnerSize.Md;
 
     /// <summary>
     /// Optional label text displayed next to the spinner
@@ -82,8 +82,8 @@
     {
         return Size switch
         {
-            SpinnerSize.Sm => "spinner-border spinner-border-sm",
-            SpinnerSize.Lg => "spinner-border spinner-border-lg",
+            LoadingSpinnerSize.Sm => "spinner-border spinner-border-sm",
+            LoadingSpinnerSize.Lg => "spinner-border spinner-border-lg",
             _ => "spinner-border"
         };
     }
@@ -92,8 +92,8 @@
     {
         return Size switch
         {
-            SpinnerSize.Sm => "loading-spinner-label loading-spinner-label-sm",
-            SpinnerSize.Lg => "loading-spinner-label loading-spinner-label-lg",
+            LoadingSpinnerSize.Sm => "loading-spinner-label loading-spinner-label-sm",
+            LoadingSpinnerSize.Lg => "loading-spinner-label loading-spinner-label-lg",
             _ => "loading-spinner-label"
         };
     }

@@ -26,7 +26,7 @@ public class LoadingSpinnerTests : BunitTestContext
     {
         // Act
         var cut = Render<LoadingSpinner>(parameters =>
-            parameters.Add(p => p.Size, SpinnerSize.Sm));
+            parameters.Add(p => p.Size, LoadingSpinnerSize.Sm));
 
         // Assert
         var spinner = cut.Find(".spinner-border");
@@ -38,7 +38,7 @@ public class LoadingSpinnerTests : BunitTestContext
     {
         // Act
         var cut = Render<LoadingSpinner>(parameters =>
-            parameters.Add(p => p.Size, SpinnerSize.Lg));
+            parameters.Add(p => p.Size, LoadingSpinnerSize.Lg));
 
         // Assert
         var spinner = cut.Find(".spinner-border");
@@ -159,7 +159,7 @@ public class LoadingSpinnerTests : BunitTestContext
         // Act
         var cut = Render<LoadingSpinner>(parameters =>
         {
-            parameters.Add(p => p.Size, SpinnerSize.Sm);
+            parameters.Add(p => p.Size, LoadingSpinnerSize.Sm);
             parameters.Add(p => p.Label, "Loading...");
         });
 
@@ -174,7 +174,7 @@ public class LoadingSpinnerTests : BunitTestContext
         // Act
         var cut = Render<LoadingSpinner>(parameters =>
         {
-            parameters.Add(p => p.Size, SpinnerSize.Lg);
+            parameters.Add(p => p.Size, LoadingSpinnerSize.Lg);
             parameters.Add(p => p.Label, "Loading...");
         });
 
@@ -189,7 +189,7 @@ public class LoadingSpinnerTests : BunitTestContext
         // Act
         var cut = Render<LoadingSpinner>(parameters =>
         {
-            parameters.Add(p => p.Size, SpinnerSize.Sm);
+            parameters.Add(p => p.Size, LoadingSpinnerSize.Sm);
             parameters.Add(p => p.Label, "Saving...");
             parameters.Add(p => p.Inline, true);
             parameters.Add(p => p.Class, "me-2");

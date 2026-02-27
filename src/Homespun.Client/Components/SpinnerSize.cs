@@ -3,7 +3,7 @@ namespace Homespun.Client.Components;
 /// <summary>
 /// Size variants for the LoadingSpinner component.
 /// </summary>
-public enum SpinnerSize
+public enum LoadingSpinnerSize
 {
     /// <summary>
     /// Small spinner (12x12px) - for inline button use

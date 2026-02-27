@@ -37,6 +37,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN --mount=type=cache,target=/root/.npm \
     npm install -g @anthropic-ai/claude-code
 
+# Install Blazor Blueprint MCP for Claude Code
+RUN claude mcp add blazorblueprint --transport stdio -- npx -y @blazorblueprint/mcp@latest --scope user
+
 # Install Playwright MCP and Chromium browser with all dependencies
 # Install browsers to /opt/playwright-browsers with world-writable permissions
 # This is required because containers run with --user $HOST_UID:$HOST_GID
