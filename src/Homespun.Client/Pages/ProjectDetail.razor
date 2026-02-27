@@ -120,14 +120,32 @@ else
 
     @if (_activeTab == "issues")
     {
-        @* Undo/Redo Toolbar *@
+        @* Issue Toolbar *@
         <div class="issue-toolbar mb-2">
             <div class="flex items-center gap-2">
-                <button class="btn btn-outline btn-sm" @onclick="UndoAsync" disabled="@(!_canUndo || _isUndoRedoing)" title="@(_historyState?.UndoDescription ?? "Undo")">
-                    <i class="bi bi-arrow-counterclockwise me-1"></i>Undo
+                <button class="btn btn-outline btn-sm"
+                        @onclick="HandleCreateAbove"
+                        disabled="@(!CanCreateIssue())"
+                        title="Create issue above (Shift+O)">
+                    <i class="bi bi-arrow-bar-up" aria-hidden="true"></i>
                 </button>
-                <button class="btn btn-outline btn-sm" @onclick="RedoAsync" disabled="@(!_canRedo || _isUndoRedoing)" title="@(_historyState?.RedoDescription ?? "Redo")">
-                    <i class="bi bi-arrow-clockwise me-1"></i>Redo
+                <button class="btn btn-outline btn-sm"
+                        @onclick="HandleCreateBelow"
+                        disabled="@(!CanCreateIssue())"
+                        title="Create issue below (O)">
+                    <i class="bi bi-arrow-bar-down" aria-hidden="true"></i>
+                </button>
+                <button class="btn btn-outline btn-sm"
+                        @onclick="UndoAsync"
+                        disabled="@(!_canUndo || _isUndoRedoing)"
+                        title="@(_historyState?.UndoDescription ?? "Undo")">
+                    <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i>
+                </button>
+                <button class="btn btn-outline btn-sm"
+                        @onclick="RedoAsync"
+                        disabled="@(!_canRedo || _isUndoRedoing)"
+                        title="@(_historyState?.RedoDescription ?? "Redo")">
+                    <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
                 </button>
                 @if (_historyState != null && _historyState.TotalEntries > 0)
                 {
@@ -1918,6 +1936,27 @@ else
         }
         NavService.AcceptPromptSelection();
     }
+
+    #region Create Issue Operations
+
+    /// <summary>
+    /// Determines if the create above/below buttons should be enabled.
+    /// </summary>
+    private bool CanCreateIssue() =>
+        NavService.SelectedIndex >= 0 &&
+        NavService.EditMode == KeyboardEditMode.Viewing;
+
+    /// <summary>
+    /// Handles the "Create Above" button click.
+    /// </summary>
+    private void HandleCreateAbove() => NavService.CreateIssueAbove();
+
+    /// <summary>
+    /// Handles the "Create Below" button click.
+    /// </summary>
+    private void HandleCreateBelow() => NavService.CreateIssueBelow();
+
+    #endregion
 
     #region Undo/Redo Operations
 
