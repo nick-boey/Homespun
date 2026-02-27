@@ -83,7 +83,7 @@ public class ClaudeSessionServiceTests
         var entityId = "entity-123";
         var projectId = "project-456";
         var workingDirectory = "/test/path";
-        var model = "claude-sonnet-4-20250514";
+        var model = "sonnet";
 
         // Act
         var session = await _service.StartSessionAsync(

@@ -94,7 +94,7 @@ public class ProjectsApiTests
         var project = new Project { Id = "test-id", Name = "TestProject", LocalPath = "/path", DefaultBranch = "main" };
         _factory.MockDataStore.SeedProject(project);
 
-        var updateRequest = new UpdateProjectRequest { DefaultModel = "claude-sonnet-4-20250514" };
+        var updateRequest = new UpdateProjectRequest { DefaultModel = "sonnet" };
 
         // Act
         var response = await _client.PutAsJsonAsync("/api/projects/test-id", updateRequest);
@@ -103,7 +103,7 @@ public class ProjectsApiTests
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         var result = await response.Content.ReadFromJsonAsync<Project>();
         Assert.That(result, Is.Not.Null);
-        Assert.That(result.DefaultModel, Is.EqualTo("claude-sonnet-4-20250514"));
+        Assert.That(result.DefaultModel, Is.EqualTo("sonnet"));
     }
 
     [Test]

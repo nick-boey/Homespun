@@ -149,7 +149,7 @@ public class SessionMetadataStoreTests
             ProjectId: "project-1",
             WorkingDirectory: "/test/path",
             Mode: SessionMode.Build,
-            Model: "claude-sonnet-4",
+            Model: "sonnet",
             SystemPrompt: "Test system prompt",
             CreatedAt: createdAt
         );
@@ -167,7 +167,7 @@ public class SessionMetadataStoreTests
             Assert.That(retrieved.ProjectId, Is.EqualTo("project-1"));
             Assert.That(retrieved.WorkingDirectory, Is.EqualTo("/test/path"));
             Assert.That(retrieved.Mode, Is.EqualTo(SessionMode.Build));
-            Assert.That(retrieved.Model, Is.EqualTo("claude-sonnet-4"));
+            Assert.That(retrieved.Model, Is.EqualTo("sonnet"));
             Assert.That(retrieved.SystemPrompt, Is.EqualTo("Test system prompt"));
             Assert.That(retrieved.CreatedAt, Is.EqualTo(createdAt));
         });

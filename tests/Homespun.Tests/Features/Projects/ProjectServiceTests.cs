@@ -201,11 +201,11 @@ public class ProjectServiceTests
         await _dataStore.AddProjectAsync(project);
 
         // Act
-        var result = await _service.UpdateAsync(project.Id, "anthropic/claude-sonnet-4-5");
+        var result = await _service.UpdateAsync(project.Id, "sonnet");
 
         // Assert
         Assert.That(result, Is.Not.Null);
-        Assert.That(result!.DefaultModel, Is.EqualTo("anthropic/claude-sonnet-4-5"));
+        Assert.That(result!.DefaultModel, Is.EqualTo("sonnet"));
     }
 
     [Test]
