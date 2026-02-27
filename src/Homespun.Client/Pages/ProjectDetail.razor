@@ -34,7 +34,7 @@
 
 <PageTitle>@(_project?.Name ?? "Project")</PageTitle>
 
-<div class="project-detail-page" @onkeydown="HandleKeyDown" tabindex="-1" @ref="_pageContainer">
+<div class="project-detail-page @(_sidebarOpen ? "sidebar-open" : "")" @onkeydown="HandleKeyDown" tabindex="-1" @ref="_pageContainer">
 @if (_project == null)
 {
     <p>Loading...</p>
@@ -350,6 +350,12 @@ else
         outline: none;
         max-width: 100%;
         overflow-x: hidden;
+        transition: margin-right 0.2s ease;
+    }
+
+    /* Desktop: Squash main content when sidebar is open */
+    .project-detail-page.sidebar-open {
+        margin-right: 350px;
     }
 
     /* ==========================================================================
@@ -405,9 +411,17 @@ else
         transform: translateX(0);
     }
 
-    @@media (max-width: 600px) {
+    /* ==========================================================================
+       Mobile: Overlay behavior (sidebar covers content)
+       ========================================================================== */
+    @@media (max-width: 768px) {
         .detail-sidebar {
             width: 100%;
+        }
+
+        /* On mobile, don't squash - let sidebar overlay */
+        .project-detail-page.sidebar-open {
+            margin-right: 0;
         }
     }
 
