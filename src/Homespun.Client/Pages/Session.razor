@@ -330,12 +330,10 @@
             <div class="input-area">
                 <div class="input-controls">
                     <select class="permission-select"
-                            @bind="_selectedPermissionMode"
+                            @bind="_selectedMode"
                             disabled="@(_session.Status == ClaudeSessionStatus.Running || _session.Status == ClaudeSessionStatus.Stopped)">
-                        <option value="@PermissionMode.BypassPermissions">Bypass permissions</option>
-                        <option value="@PermissionMode.AcceptEdits">Accept edits</option>
-                        <option value="@PermissionMode.Plan">Plan</option>
-                        <option value="@PermissionMode.Default">Default</option>
+                        <option value="@SessionMode.Build">Build</option>
+                        <option value="@SessionMode.Plan">Plan</option>
                     </select>
                     <select class="model-select"
                             @bind="_selectedModel"
@@ -1636,7 +1634,7 @@
     private ClaudeSession? _session;
     private bool _isLoading = true;
     private string _inputMessage = string.Empty;
-    private PermissionMode _selectedPermissionMode = PermissionMode.BypassPermissions;
+    private SessionMode _selectedMode = SessionMode.Build;
     private string _selectedModel = "sonnet";
     private string _selectedPromptId = string.Empty;
     private IReadOnlyList<AgentPrompt> _availablePrompts = [];
@@ -2055,6 +2053,9 @@
 
                 // Set initial model from session
                 _selectedModel = _session.Model;
+
+                // Set initial mode from session
+                _selectedMode = _session.Mode;
 
                 // Load issue data for header display and prompt context
                 await LoadIssueAsync();
@@ -2710,7 +2711,7 @@
             await SessionApi.SendMessageAsync(SessionId, new SendMessageRequest
             {
                 Message = message,
-                PermissionMode = _selectedPermissionMode
+                Mode = _selectedMode
             });
         }
         catch (Exception ex)

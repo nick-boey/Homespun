@@ -35,31 +35,23 @@ vi.mock('node:crypto', () => ({
   randomUUID: mockRandomUUID,
 }));
 
-import { SessionManager, mapPermissionMode } from '#src/services/session-manager.js';
+import { SessionManager, mapMode } from '#src/services/session-manager.js';
 
-describe('mapPermissionMode()', () => {
-  it('maps Default to default', () => {
-    expect(mapPermissionMode('Default')).toBe('default');
-  });
-
-  it('maps AcceptEdits to acceptEdits', () => {
-    expect(mapPermissionMode('AcceptEdits')).toBe('acceptEdits');
-  });
-
+describe('mapMode()', () => {
   it('maps Plan to plan', () => {
-    expect(mapPermissionMode('Plan')).toBe('plan');
+    expect(mapMode('Plan')).toBe('plan');
   });
 
-  it('maps BypassPermissions to bypassPermissions', () => {
-    expect(mapPermissionMode('BypassPermissions')).toBe('bypassPermissions');
+  it('maps Build to bypassPermissions', () => {
+    expect(mapMode('Build')).toBe('bypassPermissions');
   });
 
   it('returns bypassPermissions for undefined', () => {
-    expect(mapPermissionMode(undefined)).toBe('bypassPermissions');
+    expect(mapMode(undefined)).toBe('bypassPermissions');
   });
 
   it('returns bypassPermissions for unknown value', () => {
-    expect(mapPermissionMode('SomethingElse')).toBe('bypassPermissions');
+    expect(mapMode('SomethingElse')).toBe('bypassPermissions');
   });
 });
 

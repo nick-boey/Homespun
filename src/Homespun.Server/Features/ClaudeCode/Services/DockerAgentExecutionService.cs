@@ -138,7 +138,6 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         string? Status,
         string? Mode,
         string? Model,
-        string? PermissionMode,
         bool? HasPendingQuestion,
         bool? HasPendingPlanApproval,
         string? LastActivityAt,
@@ -384,7 +383,7 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         {
             Message = request.Message,
             Model = request.Model,
-            PermissionMode = request.PermissionMode.ToString()
+            Mode = request.Mode.ToString()
         };
 
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, session.Cts.Token);
@@ -666,11 +665,11 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
                 lastActivity = parsed;
             }
 
-            // Parse mode from permissionMode
+            // Parse mode from worker response
             SessionMode? sessionMode = null;
-            if (!string.IsNullOrEmpty(activeSession.PermissionMode))
+            if (!string.IsNullOrEmpty(activeSession.Mode))
             {
-                sessionMode = activeSession.PermissionMode.Equals("plan", StringComparison.OrdinalIgnoreCase)
+                sessionMode = activeSession.Mode.Equals("plan", StringComparison.OrdinalIgnoreCase)
                     ? SessionMode.Plan
                     : SessionMode.Build;
             }

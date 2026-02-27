@@ -1,4 +1,4 @@
-using Homespun.ClaudeAgentSdk;
+using Homespun.Shared.Models.Sessions;
 
 namespace Homespun.Features.ClaudeCode.Services;
 
@@ -54,14 +54,14 @@ public interface IClaudeSessionService
     Task SendMessageAsync(string sessionId, string message, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Sends a message to an existing session with a specific permission mode.
+    /// Sends a message to an existing session with a specific mode.
     /// </summary>
-    Task SendMessageAsync(string sessionId, string message, PermissionMode permissionMode, CancellationToken cancellationToken = default);
+    Task SendMessageAsync(string sessionId, string message, SessionMode mode, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Sends a message to an existing session with a specific permission mode and model.
+    /// Sends a message to an existing session with a specific mode and model.
     /// </summary>
-    Task SendMessageAsync(string sessionId, string message, PermissionMode permissionMode, string? model, CancellationToken cancellationToken = default);
+    Task SendMessageAsync(string sessionId, string message, SessionMode mode, string? model, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Clears the conversation context for a session.

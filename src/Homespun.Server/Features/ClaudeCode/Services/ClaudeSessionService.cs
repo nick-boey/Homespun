@@ -4,8 +4,8 @@ using Homespun.ClaudeAgentSdk;
 using Homespun.Features.ClaudeCode.Hubs;
 using Homespun.Features.Fleece.Services;
 using Microsoft.AspNetCore.SignalR;
-using SharedPermissionMode = Homespun.Shared.Models.Sessions.PermissionMode;
 using AGUIEvents = Homespun.Shared.Models.Sessions;
+using SdkPermissionMode = Homespun.ClaudeAgentSdk.PermissionMode;
 
 namespace Homespun.Features.ClaudeCode.Services;
 
@@ -366,17 +366,17 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
     /// <inheritdoc />
     public Task SendMessageAsync(string sessionId, string message, CancellationToken cancellationToken = default)
     {
-        return SendMessageAsync(sessionId, message, PermissionMode.BypassPermissions, null, cancellationToken);
+        return SendMessageAsync(sessionId, message, SessionMode.Build, null, cancellationToken);
     }
 
     /// <inheritdoc />
-    public Task SendMessageAsync(string sessionId, string message, PermissionMode permissionMode, CancellationToken cancellationToken = default)
+    public Task SendMessageAsync(string sessionId, string message, SessionMode mode, CancellationToken cancellationToken = default)
     {
-        return SendMessageAsync(sessionId, message, permissionMode, null, cancellationToken);
+        return SendMessageAsync(sessionId, message, mode, null, cancellationToken);
     }
 
     /// <inheritdoc />
-    public async Task SendMessageAsync(string sessionId, string message, PermissionMode permissionMode, string? model, CancellationToken cancellationToken = default)
+    public async Task SendMessageAsync(string sessionId, string message, SessionMode mode, string? model, CancellationToken cancellationToken = default)
     {
         var session = _sessionStore.GetById(sessionId);
         if (session == null)
@@ -394,19 +394,18 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             throw new InvalidOperationException($"No options found for session {sessionId}");
         }
 
-        _logger.LogInformation("Sending message to session {SessionId} with permission mode {PermissionMode}", sessionId, permissionMode);
+        _logger.LogInformation("Sending message to session {SessionId} with mode {Mode}", sessionId, mode);
 
         // Track if mode or model changed to broadcast updates
         var originalMode = session.Mode;
         var originalModel = session.Model;
 
-        // Update mode based on permission mode
-        var newMode = permissionMode == PermissionMode.Plan ? SessionMode.Plan : SessionMode.Build;
-        if (session.Mode != newMode)
+        // Update session mode if changed
+        if (session.Mode != mode)
         {
-            session.Mode = newMode;
+            session.Mode = mode;
             _logger.LogInformation("Session {SessionId} mode changed from {OldMode} to {NewMode}",
-                sessionId, originalMode, newMode);
+                sessionId, originalMode, mode);
         }
 
         // Update model if specified
@@ -491,11 +490,11 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             }
             else
             {
-                // Subsequent message - send to existing session with permission mode
+                // Subsequent message - send to existing session with mode
                 var messageRequest = new AgentMessageRequest(
                     SessionId: agentSessionId,
                     Message: message,
-                    PermissionMode: MapToSharedPermissionMode(permissionMode),
+                    Mode: mode,
                     Model: effectiveModel
                 );
                 messageStream = _agentExecutionService.SendMessageAsync(messageRequest, linkedCts.Token);
@@ -1700,7 +1699,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
 
         formattedAnswers.AppendLine("Please continue with the task based on my answers above.");
 
-        await SendMessageAsync(sessionId, formattedAnswers.ToString().Trim(), PermissionMode.BypassPermissions, cancellationToken);
+        await SendMessageAsync(sessionId, formattedAnswers.ToString().Trim(), SessionMode.Build, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -1764,7 +1763,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         // Referencing the path causes the agent to try to read the file from disk,
         // which fails when running in a new container after context clearing.
         var executionMessage = $"Please proceed with the implementation of the plan below. The full plan is provided here — do NOT attempt to read or find a plan file on disk.\n\n{planContent}";
-        await SendMessageAsync(sessionId, executionMessage, PermissionMode.BypassPermissions, cancellationToken);
+        await SendMessageAsync(sessionId, executionMessage, SessionMode.Build, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -1856,7 +1855,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                 ? $"I've reviewed your plan and would like changes. Here's my feedback:\n\n{feedback}\n\nPlease revise the plan based on my feedback."
                 : "I've reviewed your plan and would like you to revise it. Please create an updated plan.";
 
-            await SendMessageAsync(sessionId, rejectMessage, PermissionMode.BypassPermissions, cancellationToken);
+            await SendMessageAsync(sessionId, rejectMessage, SessionMode.Build, cancellationToken);
         }
     }
 
@@ -2224,21 +2223,6 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
 
         // Clear agent session ID mappings
         _agentSessionIds.Clear();
-    }
-
-    /// <summary>
-    /// Maps SDK PermissionMode to shared PermissionMode.
-    /// </summary>
-    private static SharedPermissionMode MapToSharedPermissionMode(PermissionMode mode)
-    {
-        return mode switch
-        {
-            PermissionMode.Default => SharedPermissionMode.Default,
-            PermissionMode.AcceptEdits => SharedPermissionMode.AcceptEdits,
-            PermissionMode.Plan => SharedPermissionMode.Plan,
-            PermissionMode.BypassPermissions => SharedPermissionMode.BypassPermissions,
-            _ => SharedPermissionMode.BypassPermissions
-        };
     }
 
     /// <summary>

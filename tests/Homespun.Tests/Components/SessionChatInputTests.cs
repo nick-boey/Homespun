@@ -1,5 +1,5 @@
-using Homespun.ClaudeAgentSdk;
 using Homespun.Features.ClaudeCode.Services;
+using Homespun.Shared.Models.Sessions;
 using Microsoft.AspNetCore.Components.Web;
 using Moq;
 
@@ -146,7 +146,7 @@ public class SessionChatInputTests
         mockService.Setup(s => s.SendMessageAsync(
             It.IsAny<string>(),
             It.IsAny<string>(),
-            It.IsAny<PermissionMode>(),
+            It.IsAny<SessionMode>(),
             It.IsAny<string?>(),
             It.IsAny<CancellationToken>()));
 
@@ -161,14 +161,14 @@ public class SessionChatInputTests
         mockService.Setup(s => s.SendMessageAsync(
             "session-1",
             "test message",
-            PermissionMode.Default,
+            SessionMode.Build,
             null,
             It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
         // Act & Assert - should not throw
         Assert.DoesNotThrowAsync(async () =>
-            await mockService.Object.SendMessageAsync("session-1", "test message", PermissionMode.Default, null));
+            await mockService.Object.SendMessageAsync("session-1", "test message", SessionMode.Build, null, CancellationToken.None));
     }
 
     #endregion

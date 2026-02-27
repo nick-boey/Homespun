@@ -6,8 +6,6 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 using Moq;
 using NUnit.Framework;
-using SdkPermissionMode = Homespun.ClaudeAgentSdk.PermissionMode;
-using SharedPermissionMode = Homespun.Shared.Models.Sessions.PermissionMode;
 
 namespace Homespun.Tests.Features.ClaudeCode;
 
@@ -510,15 +508,15 @@ public class ClaudeSessionServiceMessageTests
     }
 
     [Test]
-    public async Task SendMessageAsync_WithPermissionMode_NonExistentSession_ThrowsInvalidOperationException()
+    public async Task SendMessageAsync_WithMode_NonExistentSession_ThrowsInvalidOperationException()
     {
         // Act & Assert
         Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await _service.SendMessageAsync("non-existent-session", "Hello", SdkPermissionMode.AcceptEdits));
+            await _service.SendMessageAsync("non-existent-session", "Hello", SessionMode.Build));
     }
 
     [Test]
-    public async Task SendMessageAsync_WithPermissionMode_StoppedSession_ThrowsInvalidOperationException()
+    public async Task SendMessageAsync_WithMode_StoppedSession_ThrowsInvalidOperationException()
     {
         // Arrange
         var session = new ClaudeSession
@@ -536,7 +534,7 @@ public class ClaudeSessionServiceMessageTests
 
         // Act & Assert
         Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await _service.SendMessageAsync("stopped-session", "Hello", SdkPermissionMode.Plan));
+            await _service.SendMessageAsync("stopped-session", "Hello", SessionMode.Plan));
     }
 
     [Test]
@@ -626,10 +624,10 @@ public class ClaudeSessionServiceMessageTests
 }
 
 /// <summary>
-/// Tests for permission mode parameter handling in ClaudeSessionService.
+/// Tests for session mode parameter handling in ClaudeSessionService.
 /// </summary>
 [TestFixture]
-public class ClaudeSessionServicePermissionModeTests
+public class ClaudeSessionServiceModeTests
 {
     private ClaudeSessionService _service = null!;
     private IClaudeSessionStore _sessionStore = null!;
@@ -686,13 +684,11 @@ public class ClaudeSessionServicePermissionModeTests
             _fleeceTransitionServiceMock.Object);
     }
 
-    [TestCase(SdkPermissionMode.Default)]
-    [TestCase(SdkPermissionMode.AcceptEdits)]
-    [TestCase(SdkPermissionMode.Plan)]
-    [TestCase(SdkPermissionMode.BypassPermissions)]
-    public void SendMessageAsync_WithPermissionMode_AcceptsAllModes(SdkPermissionMode permissionMode)
+    [TestCase(SessionMode.Plan)]
+    [TestCase(SessionMode.Build)]
+    public void SendMessageAsync_WithMode_AcceptsBothModes(SessionMode mode)
     {
-        // Arrange - session without options will throw, but after permission mode validation
+        // Arrange - session without options will throw, but after mode validation
         var session = new ClaudeSession
         {
             Id = "test-session",
@@ -706,16 +702,16 @@ public class ClaudeSessionServicePermissionModeTests
         };
         _sessionStore.Add(session);
 
-        // Act & Assert - throws because no options, but gets past permission mode validation
+        // Act & Assert - throws because no options, but gets past mode validation
         var ex = Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await _service.SendMessageAsync("test-session", "Hello", permissionMode));
+            await _service.SendMessageAsync("test-session", "Hello", mode));
 
-        // Verify it throws for missing options, not for invalid permission mode
+        // Verify it throws for missing options, not for invalid mode
         Assert.That(ex!.Message, Does.Contain("No options found"));
     }
 
     [Test]
-    public void SendMessageAsync_DefaultOverload_UsesDefaultPermissionMode()
+    public void SendMessageAsync_DefaultOverload_UsesDefaultMode()
     {
         // Arrange
         var session = new ClaudeSession
@@ -731,7 +727,7 @@ public class ClaudeSessionServicePermissionModeTests
         };
         _sessionStore.Add(session);
 
-        // Act & Assert - calling the default overload should work the same as explicit BypassPermissions
+        // Act & Assert - calling the default overload should work the same as explicit Build mode
         var ex = Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await _service.SendMessageAsync("test-session", "Hello"));
 
@@ -740,26 +736,26 @@ public class ClaudeSessionServicePermissionModeTests
     }
 
     [Test]
-    public void AgentMessageRequest_ShouldIncludePermissionMode()
+    public void AgentMessageRequest_ShouldIncludeMode()
     {
-        // Verify that AgentMessageRequest includes a PermissionMode field
+        // Verify that AgentMessageRequest includes a Mode field
         var request = new AgentMessageRequest(
             SessionId: "session-1",
             Message: "Hello",
-            PermissionMode: SharedPermissionMode.AcceptEdits);
+            Mode: SessionMode.Plan);
 
-        Assert.That(request.PermissionMode, Is.EqualTo(SharedPermissionMode.AcceptEdits));
+        Assert.That(request.Mode, Is.EqualTo(SessionMode.Plan));
     }
 
     [Test]
-    public void AgentMessageRequest_PermissionMode_DefaultsBypassPermissions()
+    public void AgentMessageRequest_Mode_DefaultsToBuild()
     {
-        // AgentMessageRequest should default to BypassPermissions when not specified
+        // AgentMessageRequest should default to Build when not specified
         var request = new AgentMessageRequest(
             SessionId: "session-1",
             Message: "Hello");
 
-        Assert.That(request.PermissionMode, Is.EqualTo(SharedPermissionMode.BypassPermissions));
+        Assert.That(request.Mode, Is.EqualTo(SessionMode.Build));
     }
 }
 
@@ -3018,9 +3014,9 @@ public class ClaudeSessionServiceStatusBroadcastTests
                 new SdkSystemMessage("agent-1", null, "session_started", null, null),
                 new SdkResultMessage("agent-1", null, null, 0, 0, false, 0, 0, null)));
 
-        // Act - use PermissionMode.Plan to keep the session in Plan mode
-        // (the session mode is updated based on the permission mode of each message)
-        await _service.SendMessageAsync(session.Id, "test message", SdkPermissionMode.Plan);
+        // Act - use SessionMode.Plan to keep the session in Plan mode
+        // (the session mode is updated based on the mode of each message)
+        await _service.SendMessageAsync(session.Id, "test message", SessionMode.Plan);
 
         // Assert
         Assert.That(capturedRequest, Is.Not.Null, "AgentStartRequest should have been captured");

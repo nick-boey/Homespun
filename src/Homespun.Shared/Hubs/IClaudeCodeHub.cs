@@ -9,7 +9,7 @@ public interface IClaudeCodeHub
 {
     Task JoinSession(string sessionId);
     Task LeaveSession(string sessionId);
-    Task SendMessage(string sessionId, string message, PermissionMode permissionMode = PermissionMode.BypassPermissions);
+    Task SendMessage(string sessionId, string message, SessionMode mode = SessionMode.Build);
     Task StopSession(string sessionId);
     Task InterruptSession(string sessionId);
     IReadOnlyList<ClaudeSession> GetAllSessions();
