@@ -138,15 +138,6 @@ public class ComponentRegistryService : IComponentRegistryService
         },
         new ComponentMetadata
         {
-            Id = "gitgraph-visualization",
-            Name = "GitgraphVisualization",
-            Description = "JavaScript-based git commit graph visualization.",
-            Category = "Panels",
-            ComponentPath = "Shared/GitgraphVisualization.razor",
-            Tags = new() { "git", "graph", "visualization" }
-        },
-        new ComponentMetadata
-        {
             Id = "session-history-list",
             Name = "SessionHistoryList",
             Description = "List of Claude Code session history items.",

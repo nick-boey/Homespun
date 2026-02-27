@@ -22,7 +22,7 @@
             <span>Failed to load timeline: @_error</span>
         </div>
     }
-    else if (UseTaskGraphMode && _taskGraphData != null)
+    else if (_taskGraphData != null)
     {
         <div class="timeline-container">
             <TaskGraphView @ref="_taskGraphViewRef"
@@ -43,70 +43,11 @@
                 ActiveSearchTerm="@ActiveSearchTerm" />
         </div>
     }
-    else if (_graph != null && _layout != null)
-    {
-        <div class="timeline-container">
-            @if (_graph.HasMorePastPRs)
-            {
-                <div class="timeline-load-more" @onclick="LoadMorePastPRs">
-                    <div class="timeline-load-more-graph">
-                        @((MarkupString)GenerateLoadMoreSvg())
-                    </div>
-                    <div class="timeline-load-more-content">
-                        <span class="timeline-load-more-text">Load more past PRs</span>
-                    </div>
-                </div>
-            }
-            @for (var i = 0; i < _graph.Nodes.Count; i++)
-            {
-                var node = _graph.Nodes[i];
-                var laneInfo = _layout.RowInfos[i];
-                var isSelected = node.Id == SelectedNodeId ||
-                                (node.PullRequestNumber.HasValue && $"pr-{node.PullRequestNumber}" == SelectedNodeId) ||
-                                (node.IssueId != null && $"issue-{node.IssueId}" == SelectedNodeId);
-                var agentStatus = GetAgentStatus(node);
-                var isActionable = _layout.LaneAssignments.TryGetValue(node.Id, out var nodeLane) && nodeLane == 0;
-
-                <TimelineRow
-                    Node="node"
-                    LaneInfo="laneInfo"
-                    MaxLanes="_layout.MaxLanes"
-                    IsSelected="isSelected"
-                    AgentStatus="agentStatus"
-                    LaneColors="_laneColors"
-                    OnNodeClick="HandleNodeClick"
-                    OnNodeLeave="HandleNodeLeave"
-                    IsActionable="isActionable" />
-            }
-        </div>
-    }
 </div>
 
 @if (NavService.EditMode != KeyboardEditMode.Viewing)
 {
     <div class="keyboard-mode-indicator">-- INSERT --</div>
-}
-
-@* Tooltip element *@
-@if (_tooltipVisible && _tooltipNode != null)
-{
-    <div class="timeline-tooltip" style="left: @(_tooltipX)px; top: @(_tooltipY)px;">
-        @if (_tooltipNode.PullRequestNumber.HasValue)
-        {
-            <div class="tooltip-header">PR #@_tooltipNode.PullRequestNumber: @_tooltipNode.Title</div>
-            <div class="tooltip-meta">
-                <span class="tooltip-badge" style="background-color: @(_tooltipNode.Color ?? "#6b7280");">@_tooltipNode.Status</span>
-                <span>Branch: <code>@_tooltipNode.BranchName</code></span>
-            </div>
-        }
-        else
-        {
-            <div class="tooltip-header">@_tooltipNode.IssueId: @_tooltipNode.Title</div>
-            <div class="tooltip-meta">
-                <span class="tooltip-badge" style="background-color: @(_tooltipNode.Color ?? "#6b7280");">@_tooltipNode.Tag</span>
-            </div>
-        }
-    </div>
 }
 
 <style>
@@ -132,225 +73,6 @@
 
     .timeline-error {
         color: var(--status-error);
-    }
-
-    /* Row styles */
-    .timeline-row {
-        display: grid;
-        grid-template-columns: auto 1fr;
-        align-items: center;
-        min-height: 40px;
-        cursor: pointer;
-        transition: background-color 0.15s ease;
-    }
-
-    .timeline-row:hover {
-        background-color: var(--bg-secondary, rgba(255, 255, 255, 0.05));
-    }
-
-    .timeline-row-selected {
-        background-color: var(--bg-secondary, rgba(255, 255, 255, 0.1));
-    }
-
-    .timeline-row-selected .timeline-graph-cell svg circle,
-    .timeline-row-selected .timeline-graph-cell svg path[fill]:not([fill="none"]) {
-        filter: drop-shadow(0 0 4px var(--color-ocean, #51A5C1));
-    }
-
-    .timeline-graph-cell {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        flex-shrink: 0;
-    }
-
-    .timeline-graph-cell svg {
-        display: block;
-    }
-
-    .timeline-content-cell {
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        padding: 0.5rem 1rem 0.5rem 0.5rem;
-        overflow: hidden;
-    }
-
-    .timeline-title {
-        color: var(--text-primary, #eaeaea);
-        font-size: 14px;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-    .timeline-tag {
-        flex-shrink: 0;
-        padding: 2px 8px;
-        border-radius: 4px;
-        font-size: 11px;
-        border: 1px solid;
-    }
-
-    /* Section divider styles */
-    .timeline-divider-row {
-        display: grid;
-        grid-template-columns: auto 1fr;
-        align-items: center;
-        min-height: 40px;
-    }
-
-    .timeline-divider-content {
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        padding: 0.5rem 1rem 0.5rem 0.5rem;
-    }
-
-    .timeline-divider-line {
-        flex: 1;
-        border: none;
-        border-top: 1px solid var(--text-muted, #6c757d);
-        margin: 0;
-    }
-
-    .timeline-divider-label {
-        flex-shrink: 0;
-        font-size: 10px;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        color: var(--text-muted, #6c757d);
-        white-space: nowrap;
-    }
-
-    /* Agent status badge */
-    .agent-status-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        padding: 2px 8px;
-        border-radius: 12px;
-        font-size: 11px;
-        flex-shrink: 0;
-    }
-
-    .agent-status-dot {
-        width: 6px;
-        height: 6px;
-        border-radius: 50%;
-        background-color: currentColor;
-    }
-
-    .agent-status-dot-active {
-        animation: agent-pulse 1.5s ease-in-out infinite;
-    }
-
-    @@keyframes agent-pulse {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.4; }
-    }
-
-    .agent-status-running {
-        background-color: rgba(16, 185, 129, 0.2);
-        color: #10b981;
-        border: 1px solid #10b981;
-    }
-
-    .agent-status-waiting {
-        background-color: rgba(59, 130, 246, 0.2);
-        color: #3b82f6;
-        border: 1px solid #3b82f6;
-    }
-
-    .agent-status-starting {
-        background-color: rgba(245, 158, 11, 0.2);
-        color: #f59e0b;
-        border: 1px solid #f59e0b;
-    }
-
-    .agent-status-error {
-        background-color: rgba(239, 68, 68, 0.2);
-        color: #ef4444;
-        border: 1px solid #ef4444;
-    }
-
-    .agent-status-inactive {
-        background-color: rgba(107, 114, 128, 0.2);
-        color: #6b7280;
-        border: 1px solid #6b7280;
-    }
-
-    /* Load more button */
-    .timeline-load-more {
-        display: grid;
-        grid-template-columns: auto 1fr;
-        align-items: center;
-        min-height: 40px;
-        cursor: pointer;
-        transition: background-color 0.15s ease;
-    }
-
-    .timeline-load-more:hover {
-        background-color: var(--bg-secondary, rgba(255, 255, 255, 0.05));
-    }
-
-    .timeline-load-more-graph {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .timeline-load-more-content {
-        padding: 0.5rem 1rem 0.5rem 0.5rem;
-    }
-
-    .timeline-load-more-text {
-        color: var(--color-ocean, #51A5C1);
-        font-weight: 600;
-        font-size: 14px;
-    }
-
-    /* Tooltip */
-    .timeline-tooltip {
-        position: fixed;
-        background: var(--bg-primary, #1a1a2e);
-        border: 1px solid var(--text-muted, #6c757d);
-        border-radius: 8px;
-        padding: 12px;
-        max-width: 350px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-        z-index: 1000;
-        pointer-events: none;
-        font-size: 13px;
-        line-height: 1.4;
-    }
-
-    .tooltip-header {
-        font-weight: 600;
-        margin-bottom: 8px;
-        color: var(--text-primary, #eaeaea);
-    }
-
-    .tooltip-meta {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        color: var(--text-secondary, #a0a0a0);
-    }
-
-    .tooltip-badge {
-        display: inline-block;
-        padding: 2px 8px;
-        border-radius: 4px;
-        color: white;
-        font-size: 11px;
-    }
-
-    .tooltip-meta code {
-        background: var(--bg-secondary, #16213e);
-        padding: 2px 4px;
-        border-radius: 3px;
     }
 
     .keyboard-mode-indicator {
@@ -391,39 +113,21 @@
     [Parameter] public EventCallback<string> OnOpenPanelClick { get; set; }
 
     /// <summary>
-    /// When true (default), displays issues using task graph mode where actionable items
-    /// appear on the left and blocking issues appear on the right.
-    /// When false, uses the traditional timeline visualization.
-    /// </summary>
-    [Parameter] public bool UseTaskGraphMode { get; set; } = true;
-
-    /// <summary>
     /// The active search term to highlight in issue titles.
     /// When set, matching issues get a highlight border and text matches are highlighted.
     /// </summary>
     [Parameter] public string? ActiveSearchTerm { get; set; }
 
+
     private HubConnection? _hubConnection;
     private HubConnection? _notificationHubConnection;
     private bool _isLoading = true;
-    private bool _isRefreshing = false;
     private string? _error;
-    private Graph? _graph;
-    private TimelineLaneLayout? _layout;
     private TaskGraphResponse? _taskGraphData;
-    private Dictionary<string, AgentStatusData> _agentStatusesByIssueId = new(StringComparer.OrdinalIgnoreCase);
-    private Dictionary<int, AgentStatusData> _agentStatusesByPrNumber = [];
-    private Dictionary<int, string> _laneColors = [];
     private int _currentMaxPastPRs = 5;
 
     // Track ProjectId changes for navigation between projects
     private string? _previousProjectId;
-
-    // Tooltip state
-    private bool _tooltipVisible;
-    private IGraphNode? _tooltipNode;
-    private double _tooltipX;
-    private double _tooltipY;
 
     // Keyboard navigation
     private ElementReference _timelineWrapper;
@@ -435,40 +139,14 @@
     private int _maxDepth = 3;
     private int _maxAvailableDepth = 0;
 
-    private readonly TimelineLaneCalculator _laneCalculator = new();
-
     protected override async Task OnInitializedAsync()
     {
-        // PHASE 1: Try immediate render from cache (NO GitHub API calls)
-        // Uses the cache-only endpoint that never hits GitHub
-        var cachedData = await GraphApi.GetCachedGraphDataAsync(ProjectId, _currentMaxPastPRs);
-        if (cachedData != null)
-        {
-            _graph = HttpGraphApiService.ToGraph(cachedData);
-            _layout = _laneCalculator.Calculate(_graph.Nodes);
-
-            // Get agent statuses from cached JSON data
-            ExtractAgentStatuses(cachedData);
-
-            BuildLaneColors();
-            _isLoading = false;
-            StateHasChanged();
-        }
-
-        // Load task graph if task graph mode is enabled
-        if (UseTaskGraphMode)
-        {
-            await LoadTaskGraphAsync();
-            InitializeKeyboardNavigation();
-        }
+        await LoadTaskGraphAsync();
+        InitializeKeyboardNavigation();
 
         // Set up SignalR connections for real-time updates (non-blocking)
         _ = SetupSignalRConnectionAsync();
         _ = SetupNotificationHubConnectionAsync();
-
-        // PHASE 2: Refresh with fresh data in background
-        // This fetches from GitHub and updates the cache for next time
-        _ = RefreshWithFreshDataAsync();
 
         _previousProjectId = ProjectId;
     }
@@ -491,43 +169,17 @@
             }
 
             // Reset all state for new project
-            _graph = null;
-            _layout = null;
             _taskGraphData = null;
-            _agentStatusesByIssueId.Clear();
-            _agentStatusesByPrNumber.Clear();
-            _laneColors.Clear();
             _currentMaxPastPRs = 5;
             _isLoading = true;
-            _isRefreshing = false;
             _error = null;
-            _tooltipVisible = false;
-            _tooltipNode = null;
 
-            // Reload data for the new project (cache-only, no GitHub calls)
-            var cachedData = await GraphApi.GetCachedGraphDataAsync(ProjectId, _currentMaxPastPRs);
-            if (cachedData != null)
-            {
-                _graph = HttpGraphApiService.ToGraph(cachedData);
-                _layout = _laneCalculator.Calculate(_graph.Nodes);
-                ExtractAgentStatuses(cachedData);
-                BuildLaneColors();
-                _isLoading = false;
-            }
-
-            // Load task graph if task graph mode is enabled
-            if (UseTaskGraphMode)
-            {
-                await LoadTaskGraphAsync();
-                InitializeKeyboardNavigation();
-            }
+            await LoadTaskGraphAsync();
+            InitializeKeyboardNavigation();
 
             // Set up new SignalR connections for the new project
             _ = SetupSignalRConnectionAsync();
             _ = SetupNotificationHubConnectionAsync();
-
-            // Refresh with fresh data in background
-            _ = RefreshWithFreshDataAsync();
         }
         _previousProjectId = ProjectId;
     }
@@ -545,12 +197,8 @@
             {
                 await InvokeAsync(async () =>
                 {
-                    await LoadGraphAsync();
-                    if (UseTaskGraphMode)
-                    {
-                        await LoadTaskGraphAsync();
-                        StateHasChanged();
-                    }
+                    await LoadTaskGraphAsync();
+                    StateHasChanged();
                 });
             });
 
@@ -560,12 +208,8 @@
                 {
                     await InvokeAsync(async () =>
                     {
-                        await LoadGraphAsync();
-                        if (UseTaskGraphMode)
-                        {
-                            await LoadTaskGraphAsync();
-                            StateHasChanged();
-                        }
+                        await LoadTaskGraphAsync();
+                        StateHasChanged();
                     });
                 }
             });
@@ -574,12 +218,8 @@
             {
                 await InvokeAsync(async () =>
                 {
-                    await LoadGraphAsync();
-                    if (UseTaskGraphMode)
-                    {
-                        await LoadTaskGraphAsync();
-                        StateHasChanged();
-                    }
+                    await LoadTaskGraphAsync();
+                    StateHasChanged();
                 });
             });
 
@@ -628,103 +268,6 @@
     }
 
     /// <summary>
-    /// Refreshes the timeline with fresh data from GitHub in the background.
-    /// This is called after the initial cached render to update the timeline with latest PR data.
-    /// If no cached data exists, this handles the initial load.
-    /// </summary>
-    private async Task RefreshWithFreshDataAsync()
-    {
-        if (_isRefreshing) return;
-
-        // Track whether we had cached data - affects error handling and UI indicators
-        bool hadCachedData = _graph != null;
-
-        try
-        {
-            // Only show refreshing indicator if we already have data displayed
-            // Otherwise the loading spinner is already showing
-            if (hadCachedData)
-            {
-                _isRefreshing = true;
-                await InvokeAsync(StateHasChanged);
-            }
-
-            // Incremental refresh: only fetches open PRs, detects newly closed ones
-            var freshJsonData = await GraphApi.RefreshGraphDataAsync(ProjectId, _currentMaxPastPRs);
-
-            // Always update if this is initial load, or update the display
-            _graph = freshJsonData != null ? HttpGraphApiService.ToGraph(freshJsonData) : null;
-            if (_graph != null)
-            {
-                _layout = _laneCalculator.Calculate(_graph.Nodes);
-            }
-
-            // Build agent status lookup
-            if (freshJsonData != null)
-            {
-                ExtractAgentStatuses(freshJsonData);
-            }
-
-            BuildLaneColors();
-            _isLoading = false;
-            _error = null;
-        }
-        catch (Exception ex)
-        {
-            // Only show error to user if this was initial load (no cached data to fall back on)
-            if (!hadCachedData)
-            {
-                _error = ex.Message;
-                _isLoading = false;
-            }
-            else
-            {
-                // Log but don't show error - we already have cached data displayed
-                Console.WriteLine($"Failed to refresh timeline with fresh data: {ex.Message}");
-            }
-        }
-        finally
-        {
-            _isRefreshing = false;
-            await InvokeAsync(StateHasChanged);
-        }
-    }
-
-    private async Task LoadGraphAsync()
-    {
-        try
-        {
-            var jsonData = await GraphApi.GetCachedGraphDataAsync(ProjectId, _currentMaxPastPRs);
-            _graph = jsonData != null ? HttpGraphApiService.ToGraph(jsonData) : null;
-
-            // Calculate lane layout
-            if (_graph != null)
-            {
-                _layout = _laneCalculator.Calculate(_graph.Nodes);
-            }
-
-            // Build agent status lookup
-            if (jsonData != null)
-            {
-                ExtractAgentStatuses(jsonData);
-            }
-
-            // Build lane color lookup
-            BuildLaneColors();
-
-            _isLoading = false;
-            _error = null;
-        }
-        catch (Exception ex)
-        {
-            _error = ex.Message;
-            _isLoading = false;
-        }
-
-        StateHasChanged();
-    }
-
-    /// <summary>
     /// Loads the task graph for displaying issues with actionable items on the left
     /// and blocking issues on the right.
     /// </summary>
@@ -743,12 +286,16 @@
             {
                 _maxAvailableDepth = 0;
             }
+            _isLoading = false;
+            _error = null;
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Failed to load task graph: {ex.Message}");
+            _error = ex.Message;
             _taskGraphData = null;
             _maxAvailableDepth = 0;
+            _isLoading = false;
         }
     }
 
@@ -762,113 +309,10 @@
         StateHasChanged();
     }
 
-    private void BuildLaneColors()
-    {
-        _laneColors.Clear();
-
-        if (_graph == null || _layout == null) return;
-
-        // Assign colors to lanes based on first node in each lane
-        foreach (var node in _graph.Nodes)
-        {
-            if (_layout.LaneAssignments.TryGetValue(node.Id, out var lane))
-            {
-                if (!_laneColors.ContainsKey(lane))
-                {
-                    _laneColors[lane] = node.Color ?? "#6b7280";
-                }
-            }
-        }
-
-        // Ensure lane 0 (main) has a color
-        if (!_laneColors.ContainsKey(0))
-        {
-            _laneColors[0] = "#6b7280";
-        }
-    }
-
-    private void ExtractAgentStatuses(GraphApiResponse data)
-    {
-        _agentStatusesByIssueId.Clear();
-        _agentStatusesByPrNumber.Clear();
-        foreach (var commit in data.Commits)
-        {
-            if (commit.AgentStatus != null)
-            {
-                if (commit.IssueId != null)
-                {
-                    _agentStatusesByIssueId[commit.IssueId] = commit.AgentStatus;
-                }
-                if (commit.PullRequestNumber.HasValue)
-                {
-                    _agentStatusesByPrNumber[commit.PullRequestNumber.Value] = commit.AgentStatus;
-                }
-            }
-        }
-    }
-
-    private AgentStatusData? GetAgentStatus(IGraphNode node)
-    {
-        // Check for issue-based agent status
-        if (node.IssueId != null && _agentStatusesByIssueId.TryGetValue(node.IssueId, out var issueStatus))
-        {
-            return issueStatus;
-        }
-        // Check for PR-based agent status
-        if (node.PullRequestNumber.HasValue && _agentStatusesByPrNumber.TryGetValue(node.PullRequestNumber.Value, out var prStatus))
-        {
-            return prStatus;
-        }
-        return null;
-    }
-
-    private async Task HandleNodeClick(IGraphNode node)
-    {
-        if (node.PullRequestNumber.HasValue)
-        {
-            await OnPullRequestClick.InvokeAsync(node.PullRequestNumber.Value);
-        }
-        else if (node.IssueId != null)
-        {
-            await OnIssueClick.InvokeAsync(node.IssueId);
-        }
-    }
-
-    private void HandleNodeLeave()
-    {
-        _tooltipVisible = false;
-        StateHasChanged();
-    }
-
-    private async Task LoadMorePastPRs()
-    {
-        _currentMaxPastPRs += 5;
-        await LoadGraphAsync();
-    }
-
-    private string GenerateLoadMoreSvg()
-    {
-        var maxLanes = _layout?.MaxLanes ?? 1;
-        return TimelineSvgRenderer.GenerateRowSvg(
-            nodeLane: 0,
-            activeLanes: new HashSet<int> { 0 },
-            connectorFromLane: null,
-            maxLanes: maxLanes,
-            nodeColor: "#51A5C1", // ocean color
-            isIssue: false,
-            isLoadMore: true,
-            laneColors: _laneColors
-        );
-    }
-
     public async Task RefreshAsync()
     {
-        await LoadGraphAsync();
-        if (UseTaskGraphMode)
-        {
-            await LoadTaskGraphAsync();
-            StateHasChanged();
-        }
+        await LoadTaskGraphAsync();
+        StateHasChanged();
     }
 
     /// <summary>
@@ -906,7 +350,7 @@
                 // Ignore disposal errors
             }
         }
-if (_notificationHubConnection != null)
+        if (_notificationHubConnection != null)
         {
             try
             {

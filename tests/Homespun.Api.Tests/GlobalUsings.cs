@@ -80,8 +80,6 @@ global using Graph = Homespun.Shared.Models.Gitgraph.Graph;
 global using GraphBranch = Homespun.Shared.Models.Gitgraph.GraphBranch;
 global using GraphNodeType = Homespun.Shared.Models.Gitgraph.GraphNodeType;
 global using GraphNodeStatus = Homespun.Shared.Models.Gitgraph.GraphNodeStatus;
-global using RowLaneInfo = Homespun.Shared.Models.Gitgraph.RowLaneInfo;
-global using TimelineLaneLayout = Homespun.Shared.Models.Gitgraph.TimelineLaneLayout;
 
 // Feature namespaces (for service interfaces and types that remain in these namespaces)
 global using Homespun.Features.ClaudeCode.Data;

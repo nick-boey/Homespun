@@ -312,7 +312,7 @@ public class TaskGraphViewTests : BunitTestContext
         var firstIssueCell = graphCells[0];
         var px = TimelineSvgRenderer.GetLaneCenterX(1); // parent lane center = 36
         var cx = TimelineSvgRenderer.GetLaneCenterX(0); // child lane center = 12
-        var startX = cx + TimelineSvgRenderer.DiamondSize + 2; // 21
+        var startX = cx + TimelineSvgRenderer.NodeRadius + 2; // 20
         Assert.That(firstIssueCell.InnerHtml, Does.Not.Contain($"M {startX} 20 L {px} 20"),
             "Series child should not have horizontal connector path");
     }
