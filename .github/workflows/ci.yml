@@ -12,6 +12,12 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Full clone for Nerdbank.GitVersioning
+
+    - name: Compute version with Nerdbank.GitVersioning
+      uses: dotnet/nbgv@master
+      id: nbgv
 
     - name: Setup .NET
       uses: actions/setup-dotnet@v4

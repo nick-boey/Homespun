@@ -40,6 +40,11 @@ if [ -n "$GRAFANA_IP" ]; then
     echo "Resolved homespun-grafana -> $GRAFANA_IP"
 fi
 
+KOMODO_IP=$(getent hosts homespun-komodo-core | awk '{print $1}' 2>/dev/null || true)
+if [ -n "$KOMODO_IP" ]; then
+    echo "Resolved homespun-komodo-core -> $KOMODO_IP"
+fi
+
 # Generate serve config JSON for containerboot.
 # containerboot substitutes ${TS_CERT_DOMAIN} with the actual Tailscale FQDN.
 # printf is used so ${TS_CERT_DOMAIN} stays literal (inside single-quoted format strings)
@@ -55,6 +60,9 @@ mkdir -p "$SERVE_DIR"
   if [ -n "$GRAFANA_IP" ]; then
     printf ',\n    "3000": { "HTTPS": true }'
   fi
+  if [ -n "$KOMODO_IP" ]; then
+    printf ',\n    "3500": { "HTTPS": true }'
+  fi
   printf '\n  },\n'
   printf '  "Web": {\n'
   printf '    "${TS_CERT_DOMAIN}:443": {\n'
@@ -66,6 +74,11 @@ mkdir -p "$SERVE_DIR"
   if [ -n "$GRAFANA_IP" ]; then
     printf ',\n    "${TS_CERT_DOMAIN}:3000": {\n'
     printf '      "Handlers": { "/": { "Proxy": "http://%s:3000" } }\n' "$GRAFANA_IP"
+    printf '    }'
+  fi
+  if [ -n "$KOMODO_IP" ]; then
+    printf ',\n    "${TS_CERT_DOMAIN}:3500": {\n'
+    printf '      "Handlers": { "/": { "Proxy": "http://%s:9120" } }\n' "$KOMODO_IP"
     printf '    }'
   fi
   printf '\n  }\n'
