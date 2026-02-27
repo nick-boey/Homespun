@@ -160,6 +160,13 @@
             display: flex;
         }
     }
+
+    /* Hide inline actions on mobile - toolbar provides these controls */
+    @@media (max-width: 600px) {
+        .issue-row-actions {
+            display: none !important;
+        }
+    }
 </style>
 
 @code {

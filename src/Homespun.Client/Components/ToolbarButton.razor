@@ -1,0 +1,127 @@
+@if (!string.IsNullOrEmpty(Tooltip))
+{
+    <button type="button"
+            class="toolbar-btn"
+            data-tooltip="@Tooltip"
+            data-testid="@TestId"
+            disabled="@Disabled"
+            @onclick="HandleClick"
+            @onclick:stopPropagation="true">
+        <i class="@Icon"></i>
+    </button>
+}
+else
+{
+    <button type="button"
+            class="toolbar-btn"
+            data-testid="@TestId"
+            disabled="@Disabled"
+            @onclick="HandleClick"
+            @onclick:stopPropagation="true">
+        <i class="@Icon"></i>
+    </button>
+}
+
+<style>
+    .toolbar-btn {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        padding: 0;
+        border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+        border-radius: 4px;
+        background: var(--bg-secondary, #16213e);
+        color: var(--text-muted, #6c757d);
+        cursor: pointer;
+        transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    }
+
+    .toolbar-btn:hover:not(:disabled) {
+        background-color: var(--bg-tertiary, rgba(255, 255, 255, 0.1));
+        color: var(--text-primary, #eaeaea);
+        border-color: var(--text-muted, #6c757d);
+    }
+
+    .toolbar-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .toolbar-btn i {
+        font-size: 14px;
+    }
+
+    /* Tooltip using data-attribute and CSS ::after pseudo-element */
+    .toolbar-btn[data-tooltip]:hover::after {
+        content: attr(data-tooltip);
+        position: absolute;
+        bottom: calc(100% + 6px);
+        left: 50%;
+        transform: translateX(-50%);
+        background: var(--bg-primary, #1a1a2e);
+        border: 1px solid var(--text-muted, #6c757d);
+        border-radius: 6px;
+        padding: 4px 8px;
+        font-size: 11px;
+        font-weight: normal;
+        white-space: nowrap;
+        color: var(--text-primary, #eaeaea);
+        z-index: 200;
+        pointer-events: none;
+    }
+
+    /* Tooltip arrow */
+    .toolbar-btn[data-tooltip]:hover::before {
+        content: '';
+        position: absolute;
+        bottom: calc(100% + 2px);
+        left: 50%;
+        transform: translateX(-50%);
+        border: 4px solid transparent;
+        border-top-color: var(--text-muted, #6c757d);
+        z-index: 201;
+        pointer-events: none;
+    }
+</style>
+
+@code {
+    /// <summary>
+    /// The Bootstrap icon class (e.g., "bi-pencil").
+    /// </summary>
+    [Parameter, EditorRequired]
+    public required string Icon { get; set; }
+
+    /// <summary>
+    /// Tooltip text to display on hover. Should include keyboard shortcut if applicable.
+    /// Example: "Edit issue (i)"
+    /// </summary>
+    [Parameter]
+    public string? Tooltip { get; set; }
+
+    /// <summary>
+    /// Whether the button is disabled.
+    /// </summary>
+    [Parameter]
+    public bool Disabled { get; set; }
+
+    /// <summary>
+    /// Callback when the button is clicked.
+    /// </summary>
+    [Parameter]
+    public EventCallback OnClick { get; set; }
+
+    /// <summary>
+    /// Optional data-testid attribute for testing.
+    /// </summary>
+    [Parameter]
+    public string? TestId { get; set; }
+
+    private async Task HandleClick()
+    {
+        if (Disabled) return;
+        await OnClick.InvokeAsync();
+    }
+}
