@@ -40,7 +40,7 @@
     {
         <div class="session-header">
             <div class="session-info">
-                <h1>@(_issueTitle ?? "Claude Code Session")</h1>
+                <h1>@(_issue?.Title ?? "Claude Code Session")</h1>
                 <div class="session-meta">
                     <span class="badge @GetModeBadgeClass(_session.Mode)">@_session.Mode</span>
                     <span class="badge @GetStatusBadgeClass(_session.Status)">@_session.Status.ToDisplayLabel()</span>
@@ -416,7 +416,7 @@
             </div>
         </div>
 
-        <SessionInfoPanel Session="_session" IsOpen="_sidePanelOpen" IsOpenChanged="OnSessionPanelToggled" IssueTitle="@_issueTitle" />
+        <SessionInfoPanel Session="_session" IsOpen="_sidePanelOpen" IsOpenChanged="OnSessionPanelToggled" IssueTitle="@_issue?.Title" />
         </div>
 
         @if (_session.TotalCostUsd > 0)
@@ -1652,8 +1652,8 @@
     // Side panel state
     private bool _sidePanelOpen = true;
 
-    // Issue title for header display
-    private string? _issueTitle;
+    // Issue data for header display and prompt context injection
+    private IssueResponse? _issue;
 
     // Question handling
     private PendingQuestion? _pendingQuestion;
@@ -1981,7 +1981,7 @@
         }
     }
 
-    private async Task LoadIssueTitleAsync()
+    private async Task LoadIssueAsync()
     {
         if (_session == null || string.IsNullOrEmpty(_session.EntityId) || string.IsNullOrEmpty(_session.ProjectId))
             return;
@@ -1992,13 +1992,12 @@
 
         try
         {
-            var issue = await IssueApi.GetIssueAsync(_session.EntityId, _session.ProjectId);
-            _issueTitle = issue?.Title;
+            _issue = await IssueApi.GetIssueAsync(_session.EntityId, _session.ProjectId);
         }
         catch
         {
             // Silently fail - we'll just show the default header
-            _issueTitle = null;
+            _issue = null;
         }
     }
 
@@ -2057,8 +2056,8 @@
                 // Set initial model from session
                 _selectedModel = _session.Model;
 
-                // Load issue title for header display
-                await LoadIssueTitleAsync();
+                // Load issue data for header display and prompt context
+                await LoadIssueAsync();
 
                 // Trigger render BEFORE SignalR setup to show messages immediately
                 StateHasChanged();
@@ -2916,15 +2915,18 @@
         var prompt = _availablePrompts.FirstOrDefault(p => p.Id == promptId);
         if (prompt == null) return;
 
-        // Render the template with placeholders replaced using session metadata
-        var renderedPrompt = RenderPromptTemplate(prompt.InitialMessage, new Dictionary<string, string>
+        // Build prompt context from loaded issue data (or use fallbacks for clone entities)
+        var promptContext = new PromptContext
         {
-            ["title"] = "Session Task",
-            ["id"] = _session.EntityId ?? string.Empty,
-            ["description"] = string.Empty,
-            ["branch"] = string.Empty,
-            ["type"] = _session.Mode.ToString()
-        });
+            Id = _issue?.Id ?? _session.EntityId ?? string.Empty,
+            Title = _issue?.Title ?? string.Empty,
+            Description = _issue?.Description,
+            Type = _issue?.Type.ToString() ?? string.Empty,
+            Branch = _issue?.WorkingBranchId ?? string.Empty
+        };
+
+        // Render the template using the shared service method
+        var renderedPrompt = HttpAgentPromptApiService.RenderTemplate(prompt.InitialMessage, promptContext);
 
         // Clear and populate the input
         _inputMessage = renderedPrompt ?? string.Empty;
@@ -3182,20 +3184,6 @@
             _isProcessingPlanAction = false;
             StateHasChanged();
         }
-    }
-
-    /// <summary>
-    /// Renders a prompt template by replacing {{placeholder}} tokens with values from the context dictionary.
-    /// </summary>
-    private static string? RenderPromptTemplate(string? template, Dictionary<string, string> context)
-    {
-        if (template == null) return null;
-
-        return Regex.Replace(template, @"\{\{(\w+)\}\}", match =>
-        {
-            var key = match.Groups[1].Value.ToLowerInvariant();
-            return context.TryGetValue(key, out var value) ? value : match.Value;
-        }, RegexOptions.IgnoreCase);
     }
 
     /// <summary>
