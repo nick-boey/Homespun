@@ -566,21 +566,47 @@ public sealed class FleeceService : IFleeceService, IDisposable
 
     public async Task<TaskGraph?> GetTaskGraphAsync(string projectPath, CancellationToken ct = default)
     {
+        return await GetTaskGraphWithAdditionalIssuesAsync(projectPath, additionalIssueIds: null, ct);
+    }
+
+    public async Task<TaskGraph?> GetTaskGraphWithAdditionalIssuesAsync(
+        string projectPath,
+        IEnumerable<string>? additionalIssueIds,
+        CancellationToken ct = default)
+    {
         var cache = await EnsureCacheLoadedAsync(projectPath, ct);
 
-        // Get open issues only (same filter as GetReadyIssuesAsync uses)
-        var openIssues = cache.Values
-            .Where(i => i.Status is IssueStatus.Open or IssueStatus.Progress or IssueStatus.Review)
+        // Build a set of additional issue IDs for case-insensitive lookup
+        var additionalIds = additionalIssueIds?.ToHashSet(StringComparer.OrdinalIgnoreCase) ?? [];
+
+        // Get issues that are either:
+        // 1. In an open status (Open, Progress, Review)
+        // 2. OR in the additionalIssueIds set (regardless of status)
+        var includedIssues = cache.Values
+            .Where(i => i.Status is IssueStatus.Open or IssueStatus.Progress or IssueStatus.Review
+                        || additionalIds.Contains(i.Id))
             .ToList();
 
-        if (openIssues.Count == 0)
+        if (includedIssues.Count == 0)
         {
-            _logger.LogDebug("No open issues found for task graph in project: {ProjectPath}", projectPath);
+            _logger.LogDebug("No issues found for task graph in project: {ProjectPath}", projectPath);
             return null;
         }
 
-        // Use the IssueService directly - graph methods are now part of IIssueService in Fleece.Core v1.4.0
-        var issueService = GetOrCreateIssueService(projectPath);
+        _logger.LogDebug(
+            "Building task graph with {TotalCount} issues ({OpenCount} open, {AdditionalCount} additional) for project: {ProjectPath}",
+            includedIssues.Count,
+            includedIssues.Count(i => i.Status is IssueStatus.Open or IssueStatus.Progress or IssueStatus.Review),
+            includedIssues.Count(i => additionalIds.Contains(i.Id) && i.Status is not (IssueStatus.Open or IssueStatus.Progress or IssueStatus.Review)),
+            projectPath);
+
+        // Create a temporary IssueService with only the included issues
+        // This allows Fleece.Core's BuildTaskGraphLayoutAsync to work correctly
+        var mockStorage = new InMemoryGraphStorageService(includedIssues);
+        var issueService = new global::Fleece.Core.Services.IssueService(
+            mockStorage,
+            _idGenerator,
+            _gitConfigService);
 
         var taskGraph = await issueService.BuildTaskGraphLayoutAsync(ct);
 
@@ -603,4 +629,61 @@ public sealed class FleeceService : IFleeceService, IDisposable
         _issueCache.Clear();
         _cacheInitialized.Clear();
     }
+}
+
+/// <summary>
+/// In-memory storage service for building task graphs with a subset of issues.
+/// This allows us to create a temporary IssueService with only the issues we want
+/// to include in the graph, while using Fleece.Core's graph building logic.
+/// </summary>
+internal class InMemoryGraphStorageService : global::Fleece.Core.Services.Interfaces.IStorageService
+{
+    private readonly IReadOnlyList<Issue> _issues;
+
+    public InMemoryGraphStorageService(IReadOnlyList<Issue> issues)
+    {
+        _issues = issues;
+    }
+
+    public Task<IReadOnlyList<Issue>> LoadIssuesAsync(CancellationToken cancellationToken = default)
+        => Task.FromResult(_issues);
+
+    public Task SaveIssuesAsync(IReadOnlyList<Issue> issues, CancellationToken cancellationToken = default)
+        => Task.CompletedTask;
+
+    public Task AppendIssueAsync(Issue issue, CancellationToken cancellationToken = default)
+        => Task.CompletedTask;
+
+    public Task EnsureDirectoryExistsAsync(CancellationToken cancellationToken = default)
+        => Task.CompletedTask;
+
+    public Task<IReadOnlyList<string>> GetAllIssueFilesAsync(CancellationToken cancellationToken = default)
+        => Task.FromResult<IReadOnlyList<string>>([]);
+
+    public Task<IReadOnlyList<Issue>> LoadIssuesFromFileAsync(string filePath, CancellationToken cancellationToken = default)
+        => Task.FromResult(_issues);
+
+    public Task DeleteIssueFileAsync(string filePath, CancellationToken cancellationToken = default)
+        => Task.CompletedTask;
+
+    public Task<string> SaveIssuesWithHashAsync(IReadOnlyList<Issue> issues, CancellationToken cancellationToken = default)
+        => Task.FromResult(string.Empty);
+
+    public Task<(bool HasMultiple, string Message)> HasMultipleUnmergedFilesAsync(CancellationToken cancellationToken = default)
+        => Task.FromResult((false, string.Empty));
+
+    public Task<LoadIssuesResult> LoadIssuesWithDiagnosticsAsync(CancellationToken cancellationToken = default)
+        => Task.FromResult(new LoadIssuesResult { Issues = _issues.ToList(), Diagnostics = [] });
+
+    public Task<IReadOnlyList<Tombstone>> LoadTombstonesAsync(CancellationToken cancellationToken = default)
+        => Task.FromResult<IReadOnlyList<Tombstone>>([]);
+
+    public Task SaveTombstonesAsync(IReadOnlyList<Tombstone> tombstones, CancellationToken cancellationToken = default)
+        => Task.CompletedTask;
+
+    public Task AppendTombstonesAsync(IReadOnlyList<Tombstone> tombstones, CancellationToken cancellationToken = default)
+        => Task.CompletedTask;
+
+    public Task<IReadOnlyList<string>> GetAllTombstoneFilesAsync(CancellationToken cancellationToken = default)
+        => Task.FromResult<IReadOnlyList<string>>([]);
 }

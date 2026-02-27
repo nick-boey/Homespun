@@ -388,7 +388,15 @@ public class MockFleeceService : IFleeceService
 
     public Task<TaskGraph?> GetTaskGraphAsync(string projectPath, CancellationToken ct = default)
     {
-        _logger.LogDebug("[Mock] GetTaskGraph from {ProjectPath}", projectPath);
+        return GetTaskGraphWithAdditionalIssuesAsync(projectPath, additionalIssueIds: null, ct);
+    }
+
+    public Task<TaskGraph?> GetTaskGraphWithAdditionalIssuesAsync(
+        string projectPath,
+        IEnumerable<string>? additionalIssueIds,
+        CancellationToken ct = default)
+    {
+        _logger.LogDebug("[Mock] GetTaskGraphWithAdditionalIssues from {ProjectPath}", projectPath);
 
         if (!_issuesByProject.TryGetValue(projectPath, out var issues))
         {
@@ -401,18 +409,25 @@ public class MockFleeceService : IFleeceService
             snapshot = issues.ToList();
         }
 
-        var openIssues = snapshot
-            .Where(i => i.Status is IssueStatus.Open or IssueStatus.Progress or IssueStatus.Review)
+        // Build a set of additional issue IDs for case-insensitive lookup
+        var additionalIds = additionalIssueIds?.ToHashSet(StringComparer.OrdinalIgnoreCase) ?? [];
+
+        // Get issues that are either:
+        // 1. In an open status (Open, Progress, Review)
+        // 2. OR in the additionalIssueIds set (regardless of status)
+        var includedIssues = snapshot
+            .Where(i => i.Status is IssueStatus.Open or IssueStatus.Progress or IssueStatus.Review
+                        || additionalIds.Contains(i.Id))
             .ToList();
 
-        if (openIssues.Count == 0)
+        if (includedIssues.Count == 0)
         {
             return Task.FromResult<TaskGraph?>(null);
         }
 
         // Build a mock TaskGraph using the MockIssueServiceAdapter
         // Graph methods are now part of IIssueService in Fleece.Core v1.4.0
-        var mockIssueService = new MockIssueServiceAdapter(openIssues);
+        var mockIssueService = new MockIssueServiceAdapter(includedIssues);
 
         return mockIssueService.BuildTaskGraphLayoutAsync(ct);
     }
