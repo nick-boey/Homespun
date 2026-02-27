@@ -6,7 +6,7 @@ The design system at `/design` provides a catalog of all UI components with mock
 
 Navigate to `http://localhost:{PORT}/design` (in mock mode) to see all registered components organized by category:
 - **Core**: WorkItem, PrStatusBadges, NotificationBanner, etc.
-- **Forms**: ModelSelector, AgentSelector, QuickIssueCreateBar
+- **Forms**: ModelSelector, AgentSelector, FormMessage
 - **Chat**: ChatMessage, ChatInput, ToolUseBlock, ThinkingBlock, etc.
 - **Panels**: IssueDetailPanel, CurrentPullRequestDetailPanel, etc.
 
