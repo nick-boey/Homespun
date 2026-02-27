@@ -144,8 +144,8 @@ public class SessionsPanelTests
     [Test]
     public void GetModelDisplayName_ExtractsModelName()
     {
-        Assert.That(GetModelDisplayName("anthropic/claude-sonnet-4-20250514"), Is.EqualTo("claude-sonnet-4-20250514"));
-        Assert.That(GetModelDisplayName("claude-opus"), Is.EqualTo("claude-opus"));
+        Assert.That(GetModelDisplayName("anthropic/sonnet"), Is.EqualTo("sonnet"));
+        Assert.That(GetModelDisplayName("opus"), Is.EqualTo("opus"));
     }
 
     // Helper methods that mirror the component's static methods
@@ -333,7 +333,7 @@ public class SessionsPanelProjectGroupingTests
             Id = sessionId,
             EntityId = entityId,
             ProjectId = projectId,
-            Model = "claude-sonnet-4-20250514",
+            Model = "sonnet",
             Mode = SessionMode.Build,
             Status = ClaudeSessionStatus.Running,
             CreatedAt = DateTime.UtcNow,
@@ -500,7 +500,7 @@ public class SessionsPanelStatusGroupingTests
             Id = sessionId,
             EntityId = "entity-1",
             ProjectId = "proj-1",
-            Model = "claude-sonnet-4-20250514",
+            Model = "sonnet",
             Mode = SessionMode.Build,
             Status = status,
             CreatedAt = createdAt ?? DateTime.UtcNow,

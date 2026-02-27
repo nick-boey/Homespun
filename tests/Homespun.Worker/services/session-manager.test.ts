@@ -88,7 +88,7 @@ describe('SessionManager', () => {
   describe('create()', () => {
     const baseOpts = {
       prompt: 'Hello agent',
-      model: 'claude-sonnet-4-20250514',
+      model: 'sonnet',
       mode: 'Plan',
     };
 
@@ -225,7 +225,7 @@ describe('SessionManager', () => {
 
   describe('send()', () => {
     it('updates lastActivityAt', async () => {
-      const ws = await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Build' });
+      const ws = await manager.create({ prompt: 'init', model: 'sonnet', mode: 'Build' });
       const beforeActivity = ws.lastActivityAt;
       mockQuery.mockClear(); // Clear the create() call
 
@@ -237,7 +237,7 @@ describe('SessionManager', () => {
     });
 
     it('sets status to streaming', async () => {
-      const ws = await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Build' });
+      const ws = await manager.create({ prompt: 'init', model: 'sonnet', mode: 'Build' });
       ws.status = 'idle';
 
       await manager.send(ws.id, 'msg');
@@ -246,7 +246,7 @@ describe('SessionManager', () => {
     });
 
     it('updates permissionMode when provided', async () => {
-      const ws = await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Plan' });
+      const ws = await manager.create({ prompt: 'init', model: 'sonnet', mode: 'Plan' });
       expect(ws.permissionMode).toBe('plan');
 
       await manager.send(ws.id, 'msg', undefined, 'BypassPermissions');
@@ -255,7 +255,7 @@ describe('SessionManager', () => {
     });
 
     it('preserves permissionMode when not provided', async () => {
-      const ws = await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Build' });
+      const ws = await manager.create({ prompt: 'init', model: 'sonnet', mode: 'Build' });
       expect(ws.permissionMode).toBe('bypassPermissions');
 
       await manager.send(ws.id, 'msg');
@@ -273,7 +273,7 @@ describe('SessionManager', () => {
   describe('stream()', () => {
     it('yields messages from the query async generator', async () => {
       setMockQueryMessages(mockQueryObj, [createAssistantMessage(), createResultMessage()]);
-      const ws = await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Build' });
+      const ws = await manager.create({ prompt: 'init', model: 'sonnet', mode: 'Build' });
 
       const result = await collectAsyncGenerator(manager.stream(ws.id));
 
@@ -284,7 +284,7 @@ describe('SessionManager', () => {
       setMockQueryMessages(mockQueryObj, [
         createSystemMessage({ session_id: 'captured-conv-id' }),
       ]);
-      const ws = await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Build' });
+      const ws = await manager.create({ prompt: 'init', model: 'sonnet', mode: 'Build' });
 
       await collectAsyncGenerator(manager.stream(ws.id));
 
@@ -292,7 +292,7 @@ describe('SessionManager', () => {
     });
 
     it('sets status to idle when stream completes', async () => {
-      const ws = await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Build' });
+      const ws = await manager.create({ prompt: 'init', model: 'sonnet', mode: 'Build' });
       setMockQueryMessages(mockQueryObj, [createAssistantMessage()]);
 
       await collectAsyncGenerator(manager.stream(ws.id));
@@ -308,7 +308,7 @@ describe('SessionManager', () => {
 
   describe('canUseTool callback', () => {
     it('allows non-AskUserQuestion tools immediately', async () => {
-      await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Build' });
+      await manager.create({ prompt: 'init', model: 'sonnet', mode: 'Build' });
 
       const canUseTool = getCapturedCanUseTool();
       expect(canUseTool).toBeDefined();
@@ -322,7 +322,7 @@ describe('SessionManager', () => {
     });
 
     it('pauses on AskUserQuestion and resumes when resolved', async () => {
-      const ws = await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Plan' });
+      const ws = await manager.create({ prompt: 'init', model: 'sonnet', mode: 'Plan' });
 
       const canUseTool = getCapturedCanUseTool();
       expect(canUseTool).toBeDefined();
@@ -366,7 +366,7 @@ describe('SessionManager', () => {
     });
 
     it('pauses on ExitPlanMode and resumes when approved with keepContext', async () => {
-      const ws = await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Plan' });
+      const ws = await manager.create({ prompt: 'init', model: 'sonnet', mode: 'Plan' });
 
       const canUseTool = getCapturedCanUseTool();
       const planInput = { plan: 'The plan content' };
@@ -391,7 +391,7 @@ describe('SessionManager', () => {
     });
 
     it('denies ExitPlanMode when approved without keepContext', async () => {
-      const ws = await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Plan' });
+      const ws = await manager.create({ prompt: 'init', model: 'sonnet', mode: 'Plan' });
 
       const canUseTool = getCapturedCanUseTool();
       const planInput = { plan: 'The plan content' };
@@ -409,7 +409,7 @@ describe('SessionManager', () => {
     });
 
     it('denies ExitPlanMode when rejected', async () => {
-      const ws = await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Plan' });
+      const ws = await manager.create({ prompt: 'init', model: 'sonnet', mode: 'Plan' });
 
       const canUseTool = getCapturedCanUseTool();
       const planInput = { plan: 'The plan content' };
@@ -444,7 +444,7 @@ describe('SessionManager', () => {
 
   describe('close()', () => {
     it('removes session from map and sets status to closed', async () => {
-      const ws = await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Build' });
+      const ws = await manager.create({ prompt: 'init', model: 'sonnet', mode: 'Build' });
 
       await manager.close(ws.id);
 
@@ -453,7 +453,7 @@ describe('SessionManager', () => {
     });
 
     it('rejects pending questions when session is closed', async () => {
-      const ws = await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Plan' });
+      const ws = await manager.create({ prompt: 'init', model: 'sonnet', mode: 'Plan' });
 
       const canUseTool = getCapturedCanUseTool();
       const questionInput = {
@@ -476,7 +476,7 @@ describe('SessionManager', () => {
 
   describe('get()', () => {
     it('returns session when it exists', async () => {
-      const ws = await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Build' });
+      const ws = await manager.create({ prompt: 'init', model: 'sonnet', mode: 'Build' });
 
       expect(manager.get(ws.id)).toBe(ws);
     });
@@ -488,7 +488,7 @@ describe('SessionManager', () => {
 
   describe('list()', () => {
     it('maps all sessions to SessionInfo[] with correct fields', async () => {
-      await manager.create({ prompt: 'init', model: 'claude-sonnet-4-20250514', mode: 'Plan' });
+      await manager.create({ prompt: 'init', model: 'sonnet', mode: 'Plan' });
 
       const list = manager.list();
 
@@ -496,7 +496,7 @@ describe('SessionManager', () => {
       expect(list[0]).toMatchObject({
         sessionId: 'test-uuid-1234',
         mode: 'Plan',
-        model: 'claude-sonnet-4-20250514',
+        model: 'sonnet',
         status: 'streaming',
       });
       expect(list[0].createdAt).toBeDefined();
@@ -516,8 +516,8 @@ describe('SessionManager', () => {
         return `uuid-${uuidCount}`;
       });
 
-      await manager.create({ prompt: 'a', model: 'claude-sonnet-4-20250514', mode: 'Build' });
-      await manager.create({ prompt: 'b', model: 'claude-sonnet-4-20250514', mode: 'Build' });
+      await manager.create({ prompt: 'a', model: 'sonnet', mode: 'Build' });
+      await manager.create({ prompt: 'b', model: 'sonnet', mode: 'Build' });
 
       await manager.closeAll();
 

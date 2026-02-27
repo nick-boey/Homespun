@@ -576,7 +576,7 @@ public class AgentStatusIndicatorTests
             EntityId = "test-entity",
             ProjectId = "test-project",
             WorkingDirectory = "/test",
-            Model = "claude-sonnet-4-20250514",
+            Model = "sonnet",
             Mode = SessionMode.Build,
             Status = status,
             CreatedAt = DateTime.UtcNow

@@ -451,7 +451,7 @@ public class GraphServiceAgentStatusTests
             EntityId = entityId,
             ProjectId = _testProject.Id,
             WorkingDirectory = _testProject.LocalPath,
-            Model = "claude-sonnet-4-20250514",
+            Model = "sonnet",
             Mode = SessionMode.Build,
             Status = status
         };
@@ -465,7 +465,7 @@ public class GraphServiceAgentStatusTests
             EntityId = entityId,
             ProjectId = _testProject.Id,
             WorkingDirectory = _testProject.LocalPath,
-            Model = "claude-sonnet-4-20250514",
+            Model = "sonnet",
             Mode = SessionMode.Build,
             Status = status,
             LastActivityAt = lastActivityAt

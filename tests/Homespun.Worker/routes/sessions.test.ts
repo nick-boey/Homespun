@@ -151,7 +151,7 @@ describe('POST /sessions', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         prompt: 'Hello',
-        model: 'claude-sonnet-4-20250514',
+        model: 'sonnet',
         mode: 'Plan',
       }),
     });
@@ -172,7 +172,7 @@ describe('POST /sessions', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         prompt: 'Hello',
-        model: 'claude-sonnet-4-20250514',
+        model: 'sonnet',
         mode: 'Plan',
       }),
     });
@@ -393,7 +393,7 @@ describe('GET /sessions/:id', () => {
       id: 'sess-1',
       conversationId: 'conv-1',
       mode: 'Plan',
-      model: 'claude-sonnet-4-20250514',
+      model: 'sonnet',
       status: 'idle',
       createdAt: new Date('2025-01-01'),
       lastActivityAt: new Date('2025-01-02'),
