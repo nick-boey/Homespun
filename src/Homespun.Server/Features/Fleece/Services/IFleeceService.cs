@@ -69,6 +69,21 @@ public interface IFleeceService
     /// <returns>The task graph, or null if no issues exist.</returns>
     Task<TaskGraph?> GetTaskGraphAsync(string projectPath, CancellationToken ct = default);
 
+    /// <summary>
+    /// Builds a task graph for the specified project, including additional issues by ID
+    /// regardless of their status. This is used to ensure issues linked to open PRs
+    /// are included in the graph even if they have a terminal status (Complete, Closed, etc.).
+    /// </summary>
+    /// <param name="projectPath">Path to the project containing .fleece/ directory</param>
+    /// <param name="additionalIssueIds">Issue IDs to include regardless of status.
+    /// These issues will be included in the graph even if their status would normally exclude them.</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>The task graph, or null if no issues exist.</returns>
+    Task<TaskGraph?> GetTaskGraphWithAdditionalIssuesAsync(
+        string projectPath,
+        IEnumerable<string>? additionalIssueIds,
+        CancellationToken ct = default);
+
     #endregion
 
     #region Write Operations

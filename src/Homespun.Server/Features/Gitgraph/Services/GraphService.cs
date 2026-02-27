@@ -517,6 +517,19 @@ public class GraphService(
     }
 
     /// <summary>
+    /// Gets issue IDs that are linked to open PRs.
+    /// Tracked PRs in the data store are always open (closed/merged PRs are removed).
+    /// These issues should be included in the task graph regardless of their status.
+    /// </summary>
+    private IEnumerable<string> GetOpenPrLinkedIssueIds(string projectId)
+    {
+        var prs = dataStore.GetPullRequestsByProject(projectId);
+        return prs
+            .Where(pr => !string.IsNullOrEmpty(pr.BeadsIssueId))
+            .Select(pr => pr.BeadsIssueId!);
+    }
+
+    /// <summary>
     /// Gets issues from Fleece.
     /// Returns open issues only (no Complete, Closed, Archived, or Deleted).
     /// </summary>
@@ -557,8 +570,14 @@ public class GraphService(
 
         try
         {
-            // Get task graph from Fleece.Core
-            var taskGraph = await fleeceService.GetTaskGraphAsync(project.LocalPath);
+            // Get issue IDs that are linked to open PRs (tracked PRs are always open)
+            // These issues should be included in the task graph regardless of their status
+            var openPrLinkedIssueIds = GetOpenPrLinkedIssueIds(projectId);
+
+            // Get task graph from Fleece.Core, including issues linked to open PRs
+            var taskGraph = await fleeceService.GetTaskGraphWithAdditionalIssuesAsync(
+                project.LocalPath,
+                openPrLinkedIssueIds);
             if (taskGraph == null)
             {
                 logger.LogDebug("No task graph available for project {ProjectId}", projectId);

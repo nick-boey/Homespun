@@ -55,7 +55,10 @@ public class GraphServiceEnhancedTaskGraphTests
         _mockGitHubService = new Mock<IGitHubService>();
 
         _mockFleeceService = new Mock<IFleeceService>();
-        _mockFleeceService.Setup(s => s.GetTaskGraphAsync(_testProject.LocalPath))
+        _mockFleeceService.Setup(s => s.GetTaskGraphWithAdditionalIssuesAsync(
+                _testProject.LocalPath,
+                It.IsAny<IEnumerable<string>?>(),
+                It.IsAny<CancellationToken>()))
             .ReturnsAsync(new TaskGraph { Nodes = [], TotalLanes = 1 });
 
         _mockSessionStore = new Mock<IClaudeSessionStore>();
