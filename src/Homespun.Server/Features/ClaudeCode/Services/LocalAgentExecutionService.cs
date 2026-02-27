@@ -3,8 +3,8 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Homespun.ClaudeAgentSdk;
 using Homespun.Features.ClaudeCode.Exceptions;
+using Homespun.Shared.Models.Sessions;
 using SdkPermissionMode = Homespun.ClaudeAgentSdk.PermissionMode;
-using SharedPermissionMode = Homespun.Shared.Models.Sessions.PermissionMode;
 
 namespace Homespun.Features.ClaudeCode.Services;
 
@@ -97,10 +97,10 @@ public class LocalAgentExecutionService : IAgentExecutionService, IAsyncDisposab
 
         session.LastActivityAt = DateTime.UtcNow;
 
-        // Create options for this query, using the permission mode from the request
+        // Create options for this query, using the mode from the request
         var queryOptions = _optionsFactory.Create(session.Mode, session.WorkingDirectory,
             request.Model ?? session.Model, session.SystemPrompt);
-        queryOptions.PermissionMode = MapPermissionMode(request.PermissionMode);
+        queryOptions.PermissionMode = MapToSdkPermissionMode(request.Mode);
         queryOptions.IncludePartialMessages = true;
         queryOptions.Resume = session.ConversationId;
 
@@ -462,16 +462,14 @@ public class LocalAgentExecutionService : IAgentExecutionService, IAsyncDisposab
     }
 
     /// <summary>
-    /// Maps shared permission mode to SDK permission mode.
+    /// Maps SessionMode to SDK PermissionMode.
     /// </summary>
-    private static SdkPermissionMode MapPermissionMode(SharedPermissionMode mode)
+    private static SdkPermissionMode MapToSdkPermissionMode(SessionMode mode)
     {
         return mode switch
         {
-            SharedPermissionMode.Default => SdkPermissionMode.Default,
-            SharedPermissionMode.AcceptEdits => SdkPermissionMode.AcceptEdits,
-            SharedPermissionMode.Plan => SdkPermissionMode.Plan,
-            SharedPermissionMode.BypassPermissions => SdkPermissionMode.BypassPermissions,
+            SessionMode.Plan => SdkPermissionMode.Plan,
+            SessionMode.Build => SdkPermissionMode.BypassPermissions,
             _ => SdkPermissionMode.BypassPermissions
         };
     }

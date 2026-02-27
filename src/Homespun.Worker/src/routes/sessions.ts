@@ -88,7 +88,7 @@ export function createSessionsRoute(sessionManager: SessionManager) {
   sessions.post('/:id/message', async (c) => {
     const sessionId = c.req.param('id');
     const body = await c.req.json<SendMessageRequest>();
-    info(`POST /sessions/${sessionId}/message - permissionMode=${body.permissionMode}, messageLength=${body.message?.length}, model=${body.model}`);
+    info(`POST /sessions/${sessionId}/message - mode=${body.mode}, messageLength=${body.message?.length}, model=${body.model}`);
 
     c.header('Content-Type', 'text/event-stream');
     c.header('Cache-Control', 'no-cache');
@@ -96,7 +96,7 @@ export function createSessionsRoute(sessionManager: SessionManager) {
 
     return stream(c, async (s) => {
       try {
-        await sessionManager.send(sessionId, body.message, body.model, body.permissionMode);
+        await sessionManager.send(sessionId, body.message, body.model, body.mode);
 
         for await (const chunk of streamSessionEvents(sessionManager, sessionId)) {
           await s.write(chunk);

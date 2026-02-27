@@ -39,9 +39,9 @@ public class ClaudeCodeHub(IClaudeSessionService sessionService, IMessageCacheSt
     /// <summary>
     /// Send a message to a session.
     /// </summary>
-    public async Task SendMessage(string sessionId, string message, ClaudeAgentSdk.PermissionMode permissionMode = ClaudeAgentSdk.PermissionMode.BypassPermissions)
+    public async Task SendMessage(string sessionId, string message, SessionMode mode = SessionMode.Build)
     {
-        await sessionService.SendMessageAsync(sessionId, message, permissionMode);
+        await sessionService.SendMessageAsync(sessionId, message, mode);
     }
 
     /// <summary>

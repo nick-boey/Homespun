@@ -49,9 +49,9 @@ public class SendMessageRequest
     public required string Message { get; set; }
 
     /// <summary>
-    /// The permission mode for this message. Defaults to BypassPermissions.
+    /// The session mode for this message. Defaults to Build.
     /// </summary>
-    public PermissionMode PermissionMode { get; set; } = PermissionMode.BypassPermissions;
+    public SessionMode Mode { get; set; } = SessionMode.Build;
 }
 
 /// <summary>

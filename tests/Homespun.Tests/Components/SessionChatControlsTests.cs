@@ -1,5 +1,6 @@
 using Homespun.ClaudeAgentSdk;
 using Homespun.Features.ClaudeCode.Services;
+using Homespun.Shared.Models.Sessions;
 using Moq;
 
 namespace Homespun.Tests.Components;
@@ -166,55 +167,51 @@ public class SessionChatControlsTests
 
     #endregion
 
-    #region Permission Mode Selector Tests
+    #region Mode Selector Tests
 
     [Test]
-    public void PermissionSelector_ShouldHaveFourOptions()
+    public void ModeSelector_ShouldHaveTwoOptions()
     {
-        // Permission selector should have: BypassPermissions, AcceptEdits, Plan, Default
-        var modes = Enum.GetValues<PermissionMode>();
+        // Mode selector should have: Build, Plan
+        var modes = Enum.GetValues<SessionMode>();
 
-        Assert.That(modes, Has.Length.EqualTo(4));
-        Assert.That(modes, Contains.Item(PermissionMode.BypassPermissions));
-        Assert.That(modes, Contains.Item(PermissionMode.AcceptEdits));
-        Assert.That(modes, Contains.Item(PermissionMode.Plan));
-        Assert.That(modes, Contains.Item(PermissionMode.Default));
+        Assert.That(modes, Has.Length.EqualTo(2));
+        Assert.That(modes, Contains.Item(SessionMode.Build));
+        Assert.That(modes, Contains.Item(SessionMode.Plan));
     }
 
     [Test]
-    public void PermissionSelector_DefaultShouldBeBypassPermissions()
+    public void ModeSelector_DefaultShouldBeBuild()
     {
-        // The default permission mode should be BypassPermissions
-        var defaultMode = PermissionMode.BypassPermissions;
+        // The default mode should be Build (full access)
+        var defaultMode = SessionMode.Build;
 
-        Assert.That(defaultMode, Is.EqualTo(PermissionMode.BypassPermissions));
+        Assert.That(defaultMode, Is.EqualTo(SessionMode.Build));
     }
 
     [Test]
-    public void SendMessageRequest_ShouldIncludePermissionMode()
+    public void SendMessageRequest_ShouldIncludeMode()
     {
-        // SendMessageRequest must carry the permission mode from the UI to the server
+        // SendMessageRequest must carry the mode from the UI to the server
         var request = new Homespun.Shared.Requests.SendMessageRequest
         {
             Message = "Hello",
-            PermissionMode = Homespun.Shared.Models.Sessions.PermissionMode.AcceptEdits
+            Mode = SessionMode.Plan
         };
 
-        Assert.That(request.PermissionMode,
-            Is.EqualTo(Homespun.Shared.Models.Sessions.PermissionMode.AcceptEdits));
+        Assert.That(request.Mode, Is.EqualTo(SessionMode.Plan));
     }
 
     [Test]
-    public void SendMessageRequest_PermissionMode_DefaultsBypassPermissions()
+    public void SendMessageRequest_Mode_DefaultsToBuild()
     {
-        // When not specified, should default to BypassPermissions
+        // When not specified, should default to Build
         var request = new Homespun.Shared.Requests.SendMessageRequest
         {
             Message = "Hello"
         };
 
-        Assert.That(request.PermissionMode,
-            Is.EqualTo(Homespun.Shared.Models.Sessions.PermissionMode.BypassPermissions));
+        Assert.That(request.Mode, Is.EqualTo(SessionMode.Build));
     }
 
     #endregion

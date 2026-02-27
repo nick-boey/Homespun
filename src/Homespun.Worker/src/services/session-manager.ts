@@ -10,16 +10,14 @@ import { info, error } from '../utils/logger.js';
 
 export type SdkPermissionMode = 'default' | 'acceptEdits' | 'plan' | 'bypassPermissions';
 
-const PERMISSION_MODE_MAP: Record<string, SdkPermissionMode> = {
-  Default: 'default',
-  AcceptEdits: 'acceptEdits',
+const MODE_MAP: Record<string, SdkPermissionMode> = {
   Plan: 'plan',
-  BypassPermissions: 'bypassPermissions',
+  Build: 'bypassPermissions',
 };
 
-export function mapPermissionMode(value: string | undefined): SdkPermissionMode {
+export function mapMode(value: string | undefined): SdkPermissionMode {
   if (!value) return 'bypassPermissions';
-  return PERMISSION_MODE_MAP[value] ?? 'bypassPermissions';
+  return MODE_MAP[value] ?? 'bypassPermissions';
 }
 
 // --- OutputChannel types ---
@@ -502,8 +500,8 @@ export class SessionManager {
     return this.pendingQuestions.get(sessionId)?.questions;
   }
 
-  async send(sessionId: string, message: string, model?: string, permissionMode?: string): Promise<WorkerSession> {
-    info(`send() - sessionId='${sessionId}', messageLength=${message?.length}, model=${model || 'default'}, permissionMode=${permissionMode || 'unchanged'}`);
+  async send(sessionId: string, message: string, model?: string, mode?: string): Promise<WorkerSession> {
+    info(`send() - sessionId='${sessionId}', messageLength=${message?.length}, model=${model || 'default'}, mode=${mode || 'unchanged'}`);
     const ws = this.sessions.get(sessionId);
     if (!ws) {
       throw new Error(`Session ${sessionId} not found`);
@@ -515,9 +513,9 @@ export class SessionManager {
       info(`model updated to '${model}'`);
     }
 
-    if (permissionMode) {
-      ws.permissionMode = mapPermissionMode(permissionMode);
-      // Update the mode string to reflect the permission mode change
+    if (mode) {
+      ws.permissionMode = mapMode(mode);
+      // Update the mode string to reflect the mode change
       ws.mode = ws.permissionMode === 'plan' ? 'Plan' : 'Build';
       info(`mode updated to '${ws.mode}', permissionMode='${ws.permissionMode}'`);
       // Update permission mode on the query if possible

@@ -85,22 +85,22 @@ public class MockClaudeSessionService : IClaudeSessionService
         string message,
         CancellationToken cancellationToken = default)
     {
-        await SendMessageAsync(sessionId, message, PermissionMode.Default, cancellationToken);
+        await SendMessageAsync(sessionId, message, SessionMode.Build, cancellationToken);
     }
 
     public Task SendMessageAsync(
         string sessionId,
         string message,
-        PermissionMode permissionMode,
+        SessionMode mode,
         CancellationToken cancellationToken = default)
     {
-        return SendMessageAsync(sessionId, message, permissionMode, null, cancellationToken);
+        return SendMessageAsync(sessionId, message, mode, null, cancellationToken);
     }
 
     public async Task SendMessageAsync(
         string sessionId,
         string message,
-        PermissionMode permissionMode,
+        SessionMode mode,
         string? model,
         CancellationToken cancellationToken = default)
     {

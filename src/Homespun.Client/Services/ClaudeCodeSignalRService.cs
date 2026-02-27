@@ -165,10 +165,10 @@ public class ClaudeCodeSignalRService : IAsyncDisposable
     /// <summary>
     /// Send a message to a session.
     /// </summary>
-    public async Task SendMessageAsync(string sessionId, string message, PermissionMode permissionMode = PermissionMode.BypassPermissions)
+    public async Task SendMessageAsync(string sessionId, string message, SessionMode mode = SessionMode.Build)
     {
         if (_hubConnection is null) return;
-        await _hubConnection.InvokeAsync("SendMessage", sessionId, message, permissionMode);
+        await _hubConnection.InvokeAsync("SendMessage", sessionId, message, mode);
     }
 
     /// <summary>

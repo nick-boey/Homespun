@@ -1,8 +1,6 @@
 using Homespun.ClaudeAgentSdk;
 using Homespun.Shared.Models.Sessions;
 
-using SharedPermissionMode = Homespun.Shared.Models.Sessions.PermissionMode;
-
 namespace Homespun.Features.ClaudeCode.Services;
 
 /// <summary>
@@ -34,7 +32,7 @@ public record AgentStartRequest(
 public record AgentMessageRequest(
     string SessionId,
     string Message,
-    SharedPermissionMode PermissionMode = SharedPermissionMode.BypassPermissions,
+    SessionMode Mode = SessionMode.Build,
     string? Model = null
 );
 
