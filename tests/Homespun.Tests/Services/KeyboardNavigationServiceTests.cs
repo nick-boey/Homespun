@@ -2157,7 +2157,7 @@ public class KeyboardNavigationServiceTests
 
     #endregion
 
-#region Open Edit Tests
+    #region Open Edit Tests
 
     [Test]
     public void OpenSelectedIssueForEdit_WithSelection_FiresOnOpenEditRequested()
@@ -2681,6 +2681,109 @@ public class KeyboardNavigationServiceTests
         await service.CycleIssueTypeAsync();
 
         Assert.That(issueChangedCalled, Is.True);
+    }
+
+    #endregion
+
+    #region AcceptEditAndOpenDescriptionAsync Tests
+
+    [Test]
+    public async Task AcceptEditAndOpenDescriptionAsync_CreatesIssueAndRaisesEvent()
+    {
+        var service = CreateServiceWithHttpClient();
+        service.Initialize(_sampleRenderLines);
+        service.SetProjectId("test-project");
+        service.SelectFirstActionable();
+        service.CreateIssueBelow();
+        service.UpdateEditTitle("New issue for editing");
+
+        string? receivedIssueId = null;
+        service.OnIssueCreatedForEdit += (issueId) =>
+        {
+            receivedIssueId = issueId;
+            return Task.CompletedTask;
+        };
+
+        await service.AcceptEditAndOpenDescriptionAsync();
+
+        Assert.That(service.EditMode, Is.EqualTo(KeyboardEditMode.Viewing));
+        Assert.That(receivedIssueId, Is.EqualTo("new-issue")); // From mock response
+    }
+
+    [Test]
+    public async Task AcceptEditAndOpenDescriptionAsync_WithEmptyTitle_DoesNotSaveOrRaiseEvent()
+    {
+        _service.Initialize(_sampleRenderLines);
+        _service.SelectFirstActionable();
+        _service.CreateIssueBelow();
+        // Title is empty by default
+
+        var eventRaised = false;
+        _service.OnIssueCreatedForEdit += (issueId) =>
+        {
+            eventRaised = true;
+            return Task.CompletedTask;
+        };
+
+        await _service.AcceptEditAndOpenDescriptionAsync();
+
+        Assert.That(_service.EditMode, Is.EqualTo(KeyboardEditMode.CreatingNew));
+        Assert.That(eventRaised, Is.False);
+    }
+
+    [Test]
+    public async Task AcceptEditAndOpenDescriptionAsync_EditExisting_RaisesEventWithIssueId()
+    {
+        var service = CreateServiceWithHttpClient();
+        service.Initialize(_sampleRenderLines);
+        service.SetProjectId("test-project");
+        service.SelectFirstActionable();
+        service.StartEditingAtStart();
+        service.UpdateEditTitle("Updated title");
+
+        string? receivedIssueId = null;
+        service.OnIssueCreatedForEdit += (issueId) =>
+        {
+            receivedIssueId = issueId;
+            return Task.CompletedTask;
+        };
+
+        await service.AcceptEditAndOpenDescriptionAsync();
+
+        Assert.That(service.EditMode, Is.EqualTo(KeyboardEditMode.Viewing));
+        Assert.That(receivedIssueId, Is.EqualTo("ISSUE-001")); // Existing issue ID
+    }
+
+    [Test]
+    public async Task AcceptEditAndOpenDescriptionAsync_NoEventHandler_DoesNotThrow()
+    {
+        var service = CreateServiceWithHttpClient();
+        service.Initialize(_sampleRenderLines);
+        service.SetProjectId("test-project");
+        service.SelectFirstActionable();
+        service.CreateIssueBelow();
+        service.UpdateEditTitle("New issue");
+        // No event handler registered
+
+        Assert.DoesNotThrowAsync(async () => await service.AcceptEditAndOpenDescriptionAsync());
+        Assert.That(service.EditMode, Is.EqualTo(KeyboardEditMode.Viewing));
+    }
+
+    [Test]
+    public async Task AcceptEditAndOpenDescriptionAsync_RaisesOnStateChanged()
+    {
+        var service = CreateServiceWithHttpClient();
+        service.Initialize(_sampleRenderLines);
+        service.SetProjectId("test-project");
+        service.SelectFirstActionable();
+        service.CreateIssueBelow();
+        service.UpdateEditTitle("New issue");
+        var stateChanged = false;
+        service.OnStateChanged += () => stateChanged = true;
+
+        await service.AcceptEditAndOpenDescriptionAsync();
+
+        Assert.That(stateChanged, Is.True);
     }
 
     #endregion

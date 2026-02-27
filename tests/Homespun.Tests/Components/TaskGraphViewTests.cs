@@ -1199,6 +1199,8 @@ public class MockKeyboardNavigationService : IKeyboardNavigationService
     public void UnindentAsSibling() { }
     public void CancelEdit() { }
     public Task AcceptEditAsync() => Task.CompletedTask;
+    public Task AcceptEditAndOpenDescriptionAsync() => Task.CompletedTask;
+    public event Func<string, Task>? OnIssueCreatedForEdit;
     public void UpdateEditTitle(string title) { }
     public void Initialize(List<TaskGraphIssueRenderLine> renderLines) { }
     public void SetProjectId(string projectId) => ProjectId = projectId;

@@ -272,6 +272,15 @@ public class ComponentRegistryService : IComponentRegistryService
             Category = "Issue",
             ComponentPath = "Components/IssueRowActions.razor",
             Tags = new() { "issue", "button", "action", "inline" }
+        },
+        new ComponentMetadata
+        {
+            Id = "issue-control-panel",
+            Name = "IssueControlPanel",
+            Description = "Sticky control panel for creating new issues above/below the selected issue in the task graph. Provides touch-friendly buttons for mobile users.",
+            Category = "Issue",
+            ComponentPath = "Components/IssueControlPanel.razor",
+            Tags = new() { "issue", "button", "action", "mobile", "sticky" }
         }
     };
 

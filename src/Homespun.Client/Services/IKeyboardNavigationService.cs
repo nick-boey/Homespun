@@ -167,6 +167,12 @@ public interface IKeyboardNavigationService
     /// <summary>Accept the current edit, persisting changes via API.</summary>
     Task AcceptEditAsync();
 
+    /// <summary>Accept the current edit and raise event to open description editor.</summary>
+    Task AcceptEditAndOpenDescriptionAsync();
+
+    /// <summary>Raised when an issue is created/edited and should be opened for description editing.</summary>
+    event Func<string, Task>? OnIssueCreatedForEdit;
+
     // Agent prompt selection methods
 
     /// <summary>Start selecting an agent prompt (e command). Transitions to SelectingAgentPrompt mode.</summary>

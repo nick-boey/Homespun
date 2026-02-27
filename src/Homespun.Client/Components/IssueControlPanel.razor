@@ -1,0 +1,92 @@
+@using Homespun.Client.Services
+
+@inject IKeyboardNavigationService NavService
+
+<div class="issue-control-panel">
+    <button type="button"
+            class="control-panel-btn"
+            data-testid="create-issue-above-btn"
+            title="Create issue above (Shift+O)"
+            disabled="@IsDisabled"
+            @onclick="HandleCreateAbove"
+            @onclick:stopPropagation="true">
+        <i class="bi bi-plus-circle"></i>
+        <span class="btn-label">Above</span>
+    </button>
+
+    <button type="button"
+            class="control-panel-btn"
+            data-testid="create-issue-below-btn"
+            title="Create issue below (o)"
+            disabled="@IsDisabled"
+            @onclick="HandleCreateBelow"
+            @onclick:stopPropagation="true">
+        <i class="bi bi-plus-circle"></i>
+        <span class="btn-label">Below</span>
+    </button>
+</div>
+
+<style>
+    .issue-control-panel {
+        position: sticky;
+        top: calc(2.5rem + 8px);
+        z-index: 99;
+        background: var(--bg-primary);
+        border-bottom: 1px solid var(--border-color);
+        padding: var(--spacing-sm) var(--spacing-md);
+        display: flex;
+        gap: var(--spacing-sm);
+        align-items: center;
+    }
+
+    .control-panel-btn {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-xs);
+        height: 36px;
+        padding: 0 var(--spacing-md);
+        border: none;
+        border-radius: var(--radius-sm);
+        background: var(--color-ocean);
+        color: white;
+        font-size: 0.875rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background-color var(--transition-fast), transform var(--transition-fast);
+    }
+
+    .control-panel-btn:hover:not(:disabled) {
+        background: var(--color-ocean-dark, #2563eb);
+        transform: scale(1.02);
+    }
+
+    .control-panel-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        transform: none;
+    }
+
+    .control-panel-btn i {
+        font-size: 1rem;
+    }
+
+    .btn-label {
+        font-size: 0.875rem;
+    }
+</style>
+
+@code {
+    private bool IsDisabled => NavService.EditMode != KeyboardEditMode.Viewing;
+
+    private void HandleCreateAbove()
+    {
+        if (IsDisabled) return;
+        NavService.CreateIssueAbove();
+    }
+
+    private void HandleCreateBelow()
+    {
+        if (IsDisabled) return;
+        NavService.CreateIssueBelow();
+    }
+}

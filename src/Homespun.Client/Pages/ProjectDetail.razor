@@ -126,6 +126,8 @@ else
             </div>
         </div>
 
+        <IssueControlPanel />
+
         <div class="project-layout">
             <div class="timeline-column">
                 <SearchBar IsVisible="@NavService.IsSearching"
@@ -181,10 +183,6 @@ else
             }
         </div>
 
-        <QuickIssueCreateBar ProjectId="@Id"
-                             LocalPath="@_project.LocalPath"
-                             OnIssueCreated="RefreshData"
-                             OnIssueCreatedForEdit="NavigateToIssueEdit"/>
     }
     else if (_activeTab == "branches")
     {
@@ -333,7 +331,6 @@ else
         grid-template-columns: 1fr;
         gap: var(--spacing-md);
         align-items: start;
-        padding-bottom: 70px; /* Space for fixed quick-issue-bar */
         max-width: 100%;
         min-width: 0;
     }
@@ -603,7 +600,13 @@ else
 
             NavService.OnStateChanged += OnNavServiceStateChanged;
             NavService.OnOpenEditRequested += OnOpenEditRequested;
+            NavService.OnIssueCreatedForEdit += NavigateToIssueEditAsync;
         }
+    }
+
+    private Task NavigateToIssueEditAsync(string issueId)
+    {
+        return NavigateToIssueEdit(issueId);
     }
 
     private async Task HandleHashFragmentAsync()
@@ -715,6 +718,7 @@ else
         StartupTracker.OnStateChanged -= OnStartupStateChanged;
         NavService.OnStateChanged -= OnNavServiceStateChanged;
         NavService.OnOpenEditRequested -= OnOpenEditRequested;
+        NavService.OnIssueCreatedForEdit -= NavigateToIssueEditAsync;
         PanelService.OnStateChanged -= OnPanelServiceStateChanged;
         PanelService.SetPanelAvailable(false);
     }

@@ -147,4 +147,108 @@ public class InlineIssueEditorTests : BunitTestContext
         Assert.That(args[1], Is.EqualTo("end"), "Second arg should be cursor position string");
         Assert.That(args[2], Is.EqualTo(5), "Third arg should be value length (5 for 'Hello')");
     }
+
+    #region Action Button Tests
+
+    [Test]
+    public void Renders_OkButton()
+    {
+        var cut = Render<InlineIssueEditor>(p =>
+            p.Add(x => x.Title, "Test"));
+
+        var okBtn = cut.Find("[data-testid='inline-ok-btn']");
+        Assert.That(okBtn, Is.Not.Null);
+        Assert.That(okBtn.InnerHtml, Does.Contain("bi-check"));
+    }
+
+    [Test]
+    public void Renders_OkEditButton()
+    {
+        var cut = Render<InlineIssueEditor>(p =>
+            p.Add(x => x.Title, "Test"));
+
+        var okEditBtn = cut.Find("[data-testid='inline-ok-edit-btn']");
+        Assert.That(okEditBtn, Is.Not.Null);
+        Assert.That(okEditBtn.InnerHtml, Does.Contain("bi-pencil"));
+    }
+
+    [Test]
+    public void Renders_CancelButton()
+    {
+        var cut = Render<InlineIssueEditor>(p =>
+            p.Add(x => x.Title, "Test"));
+
+        var cancelBtn = cut.Find("[data-testid='inline-cancel-btn']");
+        Assert.That(cancelBtn, Is.Not.Null);
+        Assert.That(cancelBtn.InnerHtml, Does.Contain("bi-x"));
+    }
+
+    [Test]
+    public void OkButton_CallsAcceptEditAsync()
+    {
+        _mockNavService.Setup(s => s.AcceptEditAsync()).Returns(Task.CompletedTask);
+
+        var cut = Render<InlineIssueEditor>(p =>
+            p.Add(x => x.Title, "Test"));
+
+        cut.Find("[data-testid='inline-ok-btn']").Click();
+
+        _mockNavService.Verify(s => s.AcceptEditAsync(), Times.Once);
+    }
+
+    [Test]
+    public void OkEditButton_CallsAcceptEditAndOpenDescriptionAsync()
+    {
+        _mockNavService.Setup(s => s.AcceptEditAndOpenDescriptionAsync()).Returns(Task.CompletedTask);
+
+        var cut = Render<InlineIssueEditor>(p =>
+            p.Add(x => x.Title, "Test"));
+
+        cut.Find("[data-testid='inline-ok-edit-btn']").Click();
+
+        _mockNavService.Verify(s => s.AcceptEditAndOpenDescriptionAsync(), Times.Once);
+    }
+
+    [Test]
+    public void CancelButton_CallsCancelEdit()
+    {
+        var cut = Render<InlineIssueEditor>(p =>
+            p.Add(x => x.Title, "Test"));
+
+        cut.Find("[data-testid='inline-cancel-btn']").Click();
+
+        _mockNavService.Verify(s => s.CancelEdit(), Times.Once);
+    }
+
+    [Test]
+    public void HandleKeyDown_ShiftEnter_CallsAcceptEditAndOpenDescriptionAsync()
+    {
+        _mockNavService.Setup(s => s.AcceptEditAndOpenDescriptionAsync()).Returns(Task.CompletedTask);
+
+        var cut = Render<InlineIssueEditor>(p =>
+            p.Add(x => x.Title, "Test"));
+
+        var input = cut.Find("input.inline-issue-input");
+        input.KeyDown(new KeyboardEventArgs { Key = "Enter", ShiftKey = true });
+
+        _mockNavService.Verify(s => s.AcceptEditAndOpenDescriptionAsync(), Times.Once);
+        _mockNavService.Verify(s => s.AcceptEditAsync(), Times.Never);
+    }
+
+    [Test]
+    public void ActionButtons_HaveCorrectTitles()
+    {
+        var cut = Render<InlineIssueEditor>(p =>
+            p.Add(x => x.Title, "Test"));
+
+        var okBtn = cut.Find("[data-testid='inline-ok-btn']");
+        var okEditBtn = cut.Find("[data-testid='inline-ok-edit-btn']");
+        var cancelBtn = cut.Find("[data-testid='inline-cancel-btn']");
+
+        Assert.That(okBtn.GetAttribute("title"), Does.Contain("Enter"));
+        Assert.That(okEditBtn.GetAttribute("title"), Does.Contain("Shift"));
+        Assert.That(cancelBtn.GetAttribute("title"), Does.Contain("Escape"));
+    }
+
+    #endregion
 }
