@@ -93,10 +93,7 @@ global using Graph = Homespun.Shared.Models.Gitgraph.Graph;
 global using GraphBranch = Homespun.Shared.Models.Gitgraph.GraphBranch;
 global using GraphNodeType = Homespun.Shared.Models.Gitgraph.GraphNodeType;
 global using GraphNodeStatus = Homespun.Shared.Models.Gitgraph.GraphNodeStatus;
-global using RowLaneInfo = Homespun.Shared.Models.Gitgraph.RowLaneInfo;
-global using TimelineLaneLayout = Homespun.Shared.Models.Gitgraph.TimelineLaneLayout;
 global using AgentStatusData = Homespun.Shared.Models.Gitgraph.AgentStatusData;
-global using TimelineLaneCalculator = Homespun.Shared.Models.Gitgraph.TimelineLaneCalculator;
 global using TimelineSvgRenderer = Homespun.Shared.Models.Gitgraph.TimelineSvgRenderer;
 
 // Feature namespaces (for service interfaces and types that remain in these namespaces)
