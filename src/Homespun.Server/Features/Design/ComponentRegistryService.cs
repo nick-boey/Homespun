@@ -272,6 +272,24 @@ public class ComponentRegistryService : IComponentRegistryService
             Category = "Issue",
             ComponentPath = "Components/IssueControlPanel.razor",
             Tags = new() { "issue", "button", "action", "mobile", "sticky" }
+        },
+        new ComponentMetadata
+        {
+            Id = "toolbar-button",
+            Name = "ToolbarButton",
+            Description = "Reusable icon button with CSS tooltip showing action name and keyboard shortcut.",
+            Category = "Core",
+            ComponentPath = "Components/ToolbarButton.razor",
+            Tags = new() { "button", "icon", "tooltip", "toolbar" }
+        },
+        new ComponentMetadata
+        {
+            Id = "project-toolbar",
+            Name = "ProjectToolbar",
+            Description = "Toolbar for the project page containing edit and run agent buttons for the selected issue.",
+            Category = "Core",
+            ComponentPath = "Components/ProjectToolbar.razor",
+            Tags = new() { "toolbar", "issue", "action", "project" }
         }
     };
 

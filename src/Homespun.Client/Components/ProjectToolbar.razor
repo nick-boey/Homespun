@@ -1,0 +1,193 @@
+@using Homespun.Shared.Models.Sessions
+@inject HttpAgentPromptApiService AgentPromptApi
+
+<div class="project-toolbar">
+    <ToolbarButton Icon="bi-pencil"
+                   Tooltip="Edit issue (i)"
+                   TestId="toolbar-edit-button"
+                   Disabled="@(SelectedIssueId == null)"
+                   OnClick="HandleEdit" />
+
+    <div class="toolbar-run-wrapper">
+        <ToolbarButton Icon="bi-play-fill"
+                       Tooltip="Run agent"
+                       TestId="toolbar-run-button"
+                       Disabled="@(SelectedIssueId == null || IsAgentRunning)"
+                       OnClick="ToggleDropdown" />
+
+        @if (_showDropdown)
+        {
+            <div class="toolbar-agent-dropdown" @onclick:stopPropagation="true">
+                <div class="dropdown-content">
+                    <label class="dropdown-label">Agent</label>
+                    <select class="form-select form-select-sm" @bind="_selectedPromptId">
+                        <option value="">None (no prompt)</option>
+                        @foreach (var prompt in _prompts)
+                        {
+                            <option value="@prompt.Id">
+                                @prompt.Name (@prompt.Mode)@(prompt.ProjectId != null ? " *" : "")
+                            </option>
+                        }
+                    </select>
+                    <button class="btn btn-sm btn-success mt-2 w-full"
+                            @onclick="HandleStartAgent"
+                            disabled="@_isStarting">
+                        @if (_isStarting)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                        }
+                        <i class="bi bi-play-fill me-1"></i>
+                        Start
+                    </button>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<style>
+    .project-toolbar {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm, 8px);
+        padding-top: var(--spacing-sm, 8px);
+    }
+
+    .toolbar-run-wrapper {
+        position: relative;
+    }
+
+    .toolbar-agent-dropdown {
+        position: fixed;
+        z-index: 1000;
+        min-width: 200px;
+        margin-top: 4px;
+        background: var(--bg-primary, #1a1a2e);
+        border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+        border-radius: 6px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+
+    .dropdown-content {
+        padding: 12px;
+    }
+
+    .dropdown-label {
+        display: block;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        color: var(--text-muted, #6c757d);
+        margin-bottom: 4px;
+    }
+
+    .dropdown-content .form-select {
+        font-size: 13px;
+    }
+
+    .dropdown-content .btn {
+        font-size: 12px;
+    }
+
+    .w-full {
+        width: 100%;
+    }
+</style>
+
+@code {
+    /// <summary>
+    /// The currently selected issue ID. Null if no issue is selected.
+    /// </summary>
+    [Parameter]
+    public string? SelectedIssueId { get; set; }
+
+    /// <summary>
+    /// The project ID for navigation and agent context.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public required string ProjectId { get; set; }
+
+    /// <summary>
+    /// Whether an agent is currently running on the selected issue.
+    /// </summary>
+    [Parameter]
+    public bool IsAgentRunning { get; set; }
+
+    /// <summary>
+    /// Callback when the edit button is clicked.
+    /// </summary>
+    [Parameter]
+    public EventCallback<string> OnEditClick { get; set; }
+
+    /// <summary>
+    /// Callback when an agent is started.
+    /// Provides the issue ID and selected prompt (null if no prompt selected).
+    /// </summary>
+    [Parameter]
+    public EventCallback<(string IssueId, AgentPrompt? Prompt)> OnRunAgentClick { get; set; }
+
+    private bool _showDropdown;
+    private bool _isStarting;
+    private IReadOnlyList<AgentPrompt> _prompts = [];
+    private string _selectedPromptId = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await AgentPromptApi.EnsureDefaultPromptsAsync();
+
+        // Load prompts for the project
+        if (!string.IsNullOrEmpty(ProjectId))
+        {
+            _prompts = await AgentPromptApi.GetProjectPromptsAsync(ProjectId);
+        }
+        else
+        {
+            _prompts = await AgentPromptApi.GetAllPromptsAsync();
+        }
+
+        // Default to "Build" if available
+        var buildPrompt = _prompts.FirstOrDefault(p => p.Name == "Build");
+        if (buildPrompt != null)
+        {
+            _selectedPromptId = buildPrompt.Id;
+        }
+    }
+
+    private async Task HandleEdit()
+    {
+        if (SelectedIssueId == null) return;
+        await OnEditClick.InvokeAsync(SelectedIssueId);
+    }
+
+    private void ToggleDropdown()
+    {
+        if (SelectedIssueId == null || IsAgentRunning) return;
+        _showDropdown = !_showDropdown;
+    }
+
+    private async Task HandleStartAgent()
+    {
+        if (_isStarting || SelectedIssueId == null) return;
+
+        _isStarting = true;
+        StateHasChanged();
+
+        try
+        {
+            AgentPrompt? selectedPrompt = null;
+
+            if (!string.IsNullOrEmpty(_selectedPromptId))
+            {
+                selectedPrompt = await AgentPromptApi.GetPromptAsync(_selectedPromptId);
+            }
+
+            _showDropdown = false;
+            await OnRunAgentClick.InvokeAsync((SelectedIssueId, selectedPrompt));
+        }
+        finally
+        {
+            _isStarting = false;
+            StateHasChanged();
+        }
+    }
+}

@@ -41,19 +41,29 @@
 }
 else
 {
-    <div class="flex justify-between items-center mb-3">
-        <h1>@_project.Name</h1>
-        <div class="flex items-center gap-2">
-            <SplitButton PrimaryText="Pull"
-                         PrimaryOnClick="PullAsync"
-                         ButtonCssClass="btn-outline btn-sm"
-                         Actions="@_syncActions">
-                <PrimaryIcon>
-                    <i class="bi bi-cloud-arrow-down me-1"></i>
-                </PrimaryIcon>
-            </SplitButton>
-            <a href="projects/@Id/edit" class="btn btn-outline btn-sm">Edit Project</a>
+    <div class="project-sticky-header">
+        <div class="flex justify-between items-center">
+            <h1>@_project.Name</h1>
+            <div class="flex items-center gap-2">
+                <SplitButton PrimaryText="Pull"
+                             PrimaryOnClick="PullAsync"
+                             ButtonCssClass="btn-outline btn-sm"
+                             Actions="@_syncActions">
+                    <PrimaryIcon>
+                        <i class="bi bi-cloud-arrow-down me-1"></i>
+                    </PrimaryIcon>
+                </SplitButton>
+                <a href="projects/@Id/edit" class="btn btn-outline btn-sm">Edit Project</a>
+            </div>
         </div>
+        @if (_activeTab == "issues")
+        {
+            <ProjectToolbar SelectedIssueId="@NavService.SelectedIssueId"
+                            ProjectId="@Id"
+                            IsAgentRunning="@IsSelectedIssueAgentRunning()"
+                            OnEditClick="HandleEditIssue"
+                            OnRunAgentClick="HandleRunAgentOnIssue" />
+        }
     </div>
 
     @* Tab Navigation *@
@@ -323,6 +333,20 @@ else
         max-width: 100%;
         overflow-x: hidden;
     }
+
+    /* ==========================================================================
+       Sticky Header - Title and Toolbar
+       ========================================================================== */
+    .project-sticky-header {
+        position: sticky;
+        top: 0;
+        z-index: 90;
+        background: var(--bg-primary, #1a1a2e);
+        padding-bottom: var(--spacing-sm, 8px);
+        margin-bottom: var(--spacing-md, 16px);
+        border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+    }
+
     /* ==========================================================================
        Project Layout Grid
        ========================================================================== */
@@ -1494,6 +1518,19 @@ else
     {
         var state = StartupTracker.GetState(entityId);
         return state?.Status;
+    }
+
+    /// <summary>
+    /// Checks if the currently selected issue has an agent running.
+    /// Used by the toolbar to disable the run button when agent is active.
+    /// </summary>
+    private bool IsSelectedIssueAgentRunning()
+    {
+        var selectedId = NavService.SelectedIssueId;
+        if (string.IsNullOrEmpty(selectedId)) return false;
+
+        var state = StartupTracker.GetState(selectedId);
+        return state?.Status == AgentStartupStatus.Starting || state?.Status == AgentStartupStatus.Started;
     }
 
     private string? GetStartupErrorMessage(string entityId)

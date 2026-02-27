@@ -1,0 +1,92 @@
+@using Homespun.Shared.Models.Sessions
+
+<div class="showcase-section">
+    <h3>No Issue Selected</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Buttons are disabled when no issue is selected</div>
+        <div class="showcase-preview">
+            <ProjectToolbar ProjectId="demo-project" SelectedIssueId="@null" />
+            <p style="color: var(--text-muted); font-size: 12px; margin-top: 12px;">
+                Both edit and run buttons are disabled.
+            </p>
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Issue Selected</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Buttons are enabled when an issue is selected</div>
+        <div class="showcase-preview">
+            <ProjectToolbar ProjectId="demo-project"
+                            SelectedIssueId="TEST-001"
+                            OnEditClick="HandleEditClick"
+                            OnRunAgentClick="HandleRunAgentClick" />
+            @if (!string.IsNullOrEmpty(_lastAction))
+            {
+                <div style="margin-top: 12px; padding: 0.5rem; background: var(--bg-tertiary); border-radius: 4px; font-size: 12px; color: var(--text-muted);">
+                    Last action: @_lastAction
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Agent Running</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Run button is disabled when agent is running on selected issue</div>
+        <div class="showcase-preview">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <ProjectToolbar ProjectId="demo-project"
+                                SelectedIssueId="TEST-002"
+                                IsAgentRunning="true" />
+                <span class="agent-status-badge" style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: rgba(81, 165, 193, 0.2); color: var(--color-ocean);">
+                    Agent Working
+                </span>
+            </div>
+            <p style="color: var(--text-muted); font-size: 12px; margin-top: 12px;">
+                Edit button remains enabled. Run button is disabled while agent is active.
+            </p>
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>In Context</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Toolbar appearance in the sticky header context</div>
+        <div class="showcase-preview" style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 6px; padding: 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <h2 style="margin: 0; font-size: 20px;">Demo Project</h2>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn btn-outline btn-sm">Pull</button>
+                    <button class="btn btn-outline btn-sm">Edit Project</button>
+                </div>
+            </div>
+            <ProjectToolbar ProjectId="demo-project"
+                            SelectedIssueId="DEMO-001"
+                            OnEditClick="HandleEditClick"
+                            OnRunAgentClick="HandleRunAgentClick" />
+            <div style="border-bottom: 1px solid var(--border-color); margin-top: 8px;"></div>
+            <p style="color: var(--text-muted); font-size: 12px; margin-top: 12px;">
+                This simulates how the toolbar appears in the project page sticky header.
+            </p>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string? _lastAction;
+
+    private void HandleEditClick(string issueId)
+    {
+        _lastAction = $"Edit clicked for issue: {issueId}";
+    }
+
+    private void HandleRunAgentClick((string IssueId, AgentPrompt? Prompt) args)
+    {
+        var promptName = args.Prompt?.Name ?? "No prompt";
+        _lastAction = $"Run agent clicked for issue: {args.IssueId}, Prompt: {promptName}";
+    }
+}

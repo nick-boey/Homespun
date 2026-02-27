@@ -1,0 +1,94 @@
+<div class="showcase-section">
+    <h3>Default State</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Basic button with icon</div>
+        <div class="showcase-preview">
+            <div style="display: flex; gap: 1rem; align-items: center;">
+                <ToolbarButton Icon="bi-pencil" />
+                <ToolbarButton Icon="bi-play-fill" />
+                <ToolbarButton Icon="bi-stop-fill" />
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>With Tooltips</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Buttons showing tooltip on hover with keyboard shortcuts</div>
+        <div class="showcase-preview">
+            <div style="display: flex; gap: 1rem; align-items: center; padding-top: 40px;">
+                <ToolbarButton Icon="bi-pencil" Tooltip="Edit issue (i)" />
+                <ToolbarButton Icon="bi-play-fill" Tooltip="Run agent" />
+                <ToolbarButton Icon="bi-arrow-clockwise" Tooltip="Sync (Ctrl+S)" />
+            </div>
+            <p style="color: var(--text-muted); font-size: 12px; margin-top: 16px;">
+                Hover over the buttons to see the tooltips appear above.
+            </p>
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Disabled State</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Buttons are disabled with reduced opacity and no-click cursor</div>
+        <div class="showcase-preview">
+            <div style="display: flex; gap: 1rem; align-items: center;">
+                <ToolbarButton Icon="bi-pencil" Tooltip="Edit issue (i)" Disabled="true" />
+                <ToolbarButton Icon="bi-play-fill" Tooltip="Run agent" Disabled="true" />
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Various Icons</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Different Bootstrap icons for various actions</div>
+        <div class="showcase-preview">
+            <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+                <ToolbarButton Icon="bi-pencil" Tooltip="Edit" />
+                <ToolbarButton Icon="bi-play-fill" Tooltip="Play" />
+                <ToolbarButton Icon="bi-stop-fill" Tooltip="Stop" />
+                <ToolbarButton Icon="bi-trash" Tooltip="Delete" />
+                <ToolbarButton Icon="bi-plus" Tooltip="Add" />
+                <ToolbarButton Icon="bi-gear" Tooltip="Settings" />
+                <ToolbarButton Icon="bi-arrow-clockwise" Tooltip="Refresh" />
+                <ToolbarButton Icon="bi-download" Tooltip="Download" />
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Interactive Demo</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Click the buttons to see callback invocation</div>
+        <div class="showcase-preview">
+            <div style="display: flex; gap: 1rem; align-items: center;">
+                <ToolbarButton Icon="bi-pencil"
+                               Tooltip="Edit (click me)"
+                               OnClick="@(() => HandleClick("Edit"))" />
+                <ToolbarButton Icon="bi-play-fill"
+                               Tooltip="Run (click me)"
+                               OnClick="@(() => HandleClick("Run"))" />
+            </div>
+            @if (!string.IsNullOrEmpty(_lastAction))
+            {
+                <div style="margin-top: 1rem; padding: 0.5rem; background: var(--bg-tertiary); border-radius: 4px; font-size: 12px; color: var(--text-muted);">
+                    Last action: @_lastAction
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private string? _lastAction;
+
+    private void HandleClick(string action)
+    {
+        _lastAction = $"{action} button clicked at {DateTime.Now:HH:mm:ss}";
+    }
+}
