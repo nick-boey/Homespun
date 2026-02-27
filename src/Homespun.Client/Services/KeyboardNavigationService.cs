@@ -58,6 +58,8 @@ public class KeyboardNavigationService : IKeyboardNavigationService
 
     public event Action<string>? OnOpenEditRequested;
 
+    public event Func<string, Task>? OnIssueCreatedForEdit;
+
     // Search properties
     public string SearchTerm => _searchTerm;
     public bool IsSearching => _isSearching;
@@ -250,41 +252,55 @@ public class KeyboardNavigationService : IKeyboardNavigationService
 
     public async Task AcceptEditAsync()
     {
+        await AcceptEditInternalAsync();
+    }
+
+    public async Task AcceptEditAndOpenDescriptionAsync()
+    {
+        var issueId = await AcceptEditInternalAsync();
+        if (issueId != null && OnIssueCreatedForEdit != null)
+        {
+            await OnIssueCreatedForEdit.Invoke(issueId);
+        }
+    }
+
+    /// <summary>
+    /// Internal method that performs the edit/create and returns the issue ID.
+    /// </summary>
+    private async Task<string?> AcceptEditInternalAsync()
+    {
         if (string.IsNullOrEmpty(ProjectId))
         {
-            // No project ID set, can't make API calls
-            return;
+            return null;
         }
 
         if (EditMode == KeyboardEditMode.EditingExisting && PendingEdit != null)
         {
             if (string.IsNullOrWhiteSpace(PendingEdit.Title))
             {
-                // Don't save empty titles
-                return;
+                return null;
             }
 
-            // Call API to update issue title
             await _issueApi.UpdateIssueAsync(PendingEdit.IssueId, new UpdateIssueRequest
             {
                 ProjectId = ProjectId,
                 Title = PendingEdit.Title.Trim()
             });
 
+            var issueId = PendingEdit.IssueId;
             EditMode = KeyboardEditMode.Viewing;
             PendingEdit = null;
             NotifyStateChanged();
             await NotifyIssueChangedAsync();
+            return issueId;
         }
         else if (EditMode == KeyboardEditMode.CreatingNew && PendingNewIssue != null)
         {
             if (string.IsNullOrWhiteSpace(PendingNewIssue.Title))
             {
-                // Don't save empty titles
-                return;
+                return null;
             }
 
-            // Create the new issue via API
             var request = new CreateIssueRequest
             {
                 ProjectId = ProjectId,
@@ -292,30 +308,30 @@ public class KeyboardNavigationService : IKeyboardNavigationService
                 Type = IssueType.Task
             };
 
-            // Tab: new issue becomes parent of the adjacent issue
             if (PendingNewIssue.PendingChildId != null)
             {
                 request.ChildIssueId = PendingNewIssue.PendingChildId;
             }
-            // Shift+Tab: new issue becomes child of the adjacent issue
             else if (PendingNewIssue.PendingParentId != null)
             {
                 request.ParentIssueId = PendingNewIssue.PendingParentId;
             }
-            // No Tab/Shift+Tab: inherit parent from reference issue (sibling creation)
             else if (PendingNewIssue.InheritedParentIssueId != null)
             {
                 request.ParentIssueId = PendingNewIssue.InheritedParentIssueId;
                 request.ParentSortOrder = PendingNewIssue.InheritedParentSortOrder;
             }
 
-            await _issueApi.CreateIssueAsync(request);
+            var createdIssue = await _issueApi.CreateIssueAsync(request);
 
             EditMode = KeyboardEditMode.Viewing;
             PendingNewIssue = null;
             NotifyStateChanged();
             await NotifyIssueChangedAsync();
+            return createdIssue.Id;
         }
+
+        return null;
     }
 
     #endregion

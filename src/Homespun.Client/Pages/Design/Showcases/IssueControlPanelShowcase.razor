@@ -1,0 +1,114 @@
+@using Homespun.Client.Services
+@inject IKeyboardNavigationService NavService
+
+<div class="showcase-section">
+    <h3>Default State (Enabled)</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Control panel in viewing mode - buttons enabled</div>
+        <div class="showcase-preview" style="background: var(--bg-primary); padding: 1rem;">
+            <IssueControlPanel />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Button States</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Create Above button - creates a new inline issue editor above the selected issue (Shift+O)</div>
+        <div class="showcase-preview" style="background: var(--bg-primary); padding: 1rem;">
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <button type="button" class="btn btn-ocean" style="display: flex; align-items: center; gap: 4px;">
+                    <i class="bi bi-plus-circle"></i>
+                    <span>Above</span>
+                </button>
+                <span style="color: var(--text-muted); font-size: 12px;">Keyboard shortcut: Shift+O</span>
+            </div>
+        </div>
+    </div>
+    <div class="showcase-item">
+        <div class="showcase-label">Create Below button - creates a new inline issue editor below the selected issue (o)</div>
+        <div class="showcase-preview" style="background: var(--bg-primary); padding: 1rem;">
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <button type="button" class="btn btn-ocean" style="display: flex; align-items: center; gap: 4px;">
+                    <i class="bi bi-plus-circle"></i>
+                    <span>Below</span>
+                </button>
+                <span style="color: var(--text-muted); font-size: 12px;">Keyboard shortcut: o</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Disabled State</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Buttons are disabled when already in edit mode</div>
+        <div class="showcase-preview" style="background: var(--bg-primary); padding: 1rem;">
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <button type="button" class="btn btn-ocean" disabled style="display: flex; align-items: center; gap: 4px; opacity: 0.5; cursor: not-allowed;">
+                    <i class="bi bi-plus-circle"></i>
+                    <span>Above</span>
+                </button>
+                <button type="button" class="btn btn-ocean" disabled style="display: flex; align-items: center; gap: 4px; opacity: 0.5; cursor: not-allowed;">
+                    <i class="bi bi-plus-circle"></i>
+                    <span>Below</span>
+                </button>
+                <span style="color: var(--text-muted); font-size: 12px;">Disabled when editing</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Interactive Demo</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Click the buttons to see callbacks in action (note: requires NavService in viewing mode with issues loaded)</div>
+        <div class="showcase-preview" style="background: var(--bg-primary); padding: 1rem;">
+            <IssueControlPanel />
+            @if (!string.IsNullOrEmpty(_lastAction))
+            {
+                <div style="margin-top: 0.5rem; padding: 0.5rem; background: var(--bg-tertiary); border-radius: 4px; font-size: 12px; color: var(--text-muted);">
+                    Last action: @_lastAction
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Sticky Positioning</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">The panel uses position: sticky to stay visible when scrolling the task graph</div>
+        <div class="showcase-preview" style="background: var(--bg-primary); padding: 1rem;">
+            <div style="color: var(--text-secondary); font-size: 0.875rem;">
+                <p>CSS properties:</p>
+                <ul style="margin: 0; padding-left: 1.5rem;">
+                    <li><code>position: sticky</code></li>
+                    <li><code>top: calc(2.5rem + 8px)</code> - Below the top bar</li>
+                    <li><code>z-index: 99</code></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string? _lastAction;
+
+    protected override void OnInitialized()
+    {
+        NavService.OnStateChanged += OnStateChanged;
+    }
+
+    private void OnStateChanged()
+    {
+        var mode = NavService.EditMode;
+        _lastAction = $"Edit mode changed to: {mode}";
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        NavService.OnStateChanged -= OnStateChanged;
+    }
+}
