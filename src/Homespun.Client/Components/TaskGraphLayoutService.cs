@@ -1,6 +1,7 @@
 using Fleece.Core.Models;
 using Homespun.Shared.Models.Fleece;
 using Homespun.Shared.Models.Gitgraph;
+using Homespun.Shared.Models.PullRequests;
 
 namespace Homespun.Client.Components;
 
@@ -18,7 +19,7 @@ public record DraftIssueContext(
 
 public abstract record TaskGraphRenderLine;
 public record TaskGraphIssueRenderLine(
-    string IssueId, string Title, int Lane, TaskGraphMarkerType Marker,
+    string IssueId, string Title, string? Description, string? BranchName, int Lane, TaskGraphMarkerType Marker,
     int? ParentLane, bool IsFirstChild, bool IsSeriesChild,
     bool DrawTopLine, bool DrawBottomLine, int? SeriesConnectorFromLane,
     IssueType IssueType, IssueStatus Status, bool HasDescription, TaskGraphLinkedPr? LinkedPr, AgentStatusData? AgentStatus,
@@ -463,9 +464,14 @@ public static class TaskGraphLayoutService
                 }
             }
 
+            // Generate branch name for the issue
+            var branchName = BranchNameGenerator.GenerateBranchName(node.Issue);
+
             result.Add(new TaskGraphIssueRenderLine(
                 IssueId: node.Issue.Id,
                 Title: node.Issue.Title,
+                Description: node.Issue.Description,
+                BranchName: branchName,
                 Lane: lane,
                 Marker: marker,
                 ParentLane: parentLane,
@@ -666,6 +672,8 @@ public static class TaskGraphLayoutService
         return new TaskGraphIssueRenderLine(
             IssueId: "DRAFT",
             Title: "",
+            Description: null,
+            BranchName: null,
             Lane: lane,
             Marker: TaskGraphMarkerType.Open,
             ParentLane: parentLane,

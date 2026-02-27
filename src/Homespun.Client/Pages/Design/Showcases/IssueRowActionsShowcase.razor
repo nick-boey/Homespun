@@ -10,6 +10,7 @@
                 <span style="color: var(--text-primary);">Example issue title</span>
                 <IssueRowActions IssueId="ISSUE-001"
                                  ProjectId="demo-project"
+                                 BranchName="task/example-issue+ISSUE-001"
                                  IsVisible="false" />
             </div>
         </div>
@@ -26,6 +27,7 @@
                 <span style="color: var(--text-primary);">Selected issue with visible actions</span>
                 <IssueRowActions IssueId="ISSUE-002"
                                  ProjectId="demo-project"
+                                 BranchName="task/selected-issue+ISSUE-002"
                                  IsVisible="true" />
             </div>
         </div>
@@ -46,6 +48,7 @@
                 </span>
                 <IssueRowActions IssueId="ISSUE-003"
                                  ProjectId="demo-project"
+                                 BranchName="task/active-agent+ISSUE-003"
                                  IsVisible="true"
                                  Disabled="true" />
             </div>
@@ -63,9 +66,13 @@
                 <span style="color: var(--text-primary);">Interactive demo issue</span>
                 <IssueRowActions IssueId="DEMO-001"
                                  ProjectId="demo-project"
+                                 IssueTitle="Interactive demo issue"
+                                 IssueDescription="This is a demo issue for testing the IssueRowActions component."
+                                 IssueType="Task"
+                                 BranchName="task/interactive-demo+DEMO-001"
                                  IsVisible="true"
                                  OnEditClick="HandleEditClick"
-                                 OnRunAgentClick="HandleRunAgentClick" />
+                                 OnSessionStarted="HandleSessionStarted" />
             </div>
             @if (!string.IsNullOrEmpty(_lastAction))
             {
@@ -85,9 +92,8 @@
         _lastAction = $"Edit clicked for issue: {issueId}";
     }
 
-    private void HandleRunAgentClick((string IssueId, AgentPrompt? Prompt) args)
+    private void HandleSessionStarted(ClaudeSession session)
     {
-        var promptName = args.Prompt?.Name ?? "No prompt";
-        _lastAction = $"Run agent clicked for issue: {args.IssueId}, Prompt: {promptName}";
+        _lastAction = $"Session started: {session.Id} for entity: {session.EntityId}";
     }
 }

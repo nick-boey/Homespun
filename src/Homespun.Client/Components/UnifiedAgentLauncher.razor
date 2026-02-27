@@ -1,0 +1,437 @@
+@using Homespun.Shared.Models.Sessions
+@using Homespun.Shared.Models.PullRequests
+
+@inject HttpSessionApiService SessionApi
+@inject HttpAgentPromptApiService AgentPromptApi
+@inject HttpCloneApiService CloneApi
+@inject IAgentStartupTracker StartupTracker
+@inject NavigationManager NavigationManager
+@inject ILogger<UnifiedAgentLauncher> Logger
+
+@*
+    Unified component for launching Claude agent sessions.
+    Used in both issue detail panels and inline issue row actions.
+
+    Features:
+    - Prompt selection dropdown with Start button (always visible)
+    - Collapsible "More settings" section with Model and Base Branch options
+    - Handles clone creation, session creation, and initial message sending
+    - Only navigates to session if "no prompt" is selected
+*@
+
+<div class="unified-agent-launcher @(Compact ? "compact" : "")">
+    @if (_isStarting)
+    {
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-warning text-dark">
+                <span class="spinner-border spinner-border-sm me-1" role="status" style="width: 0.6rem; height: 0.6rem;"></span>
+                Starting...
+            </span>
+        </div>
+    }
+    else
+    {
+        <div class="launcher-main">
+            <div class="d-flex gap-2 align-items-end">
+                <div class="flex-grow-1">
+                    <label class="form-label small mb-1">Agent</label>
+                    <select class="form-select form-select-sm"
+                            @bind="_selectedPromptId"
+                            disabled="@Disabled"
+                            aria-label="Select agent prompt">
+                        <option value="">None (no prompt)</option>
+                        @foreach (var prompt in _prompts)
+                        {
+                            <option value="@prompt.Id">
+                                @prompt.Name (@prompt.Mode)@(prompt.ProjectId != null ? " *" : "")
+                            </option>
+                        }
+                    </select>
+                </div>
+                <button class="btn btn-sm btn-success"
+                        @onclick="HandleStartAsync"
+                        disabled="@Disabled"
+                        aria-label="Start agent session">
+                    <i class="bi bi-play-fill me-1" aria-hidden="true"></i>
+                    <span>Start</span>
+                </button>
+            </div>
+
+            @if (_prompts.Any(p => p.ProjectId != null))
+            {
+                <small class="text-muted d-block mt-1">* Project-specific prompt</small>
+            }
+
+            @* More Settings Toggle *@
+            <button type="button"
+                    class="btn btn-link btn-sm p-0 mt-2 more-settings-toggle"
+                    @onclick="ToggleAdvancedSettings">
+                <i class="bi @(_showAdvancedSettings ? "bi-chevron-up" : "bi-chevron-down") me-1"></i>
+                @(_showAdvancedSettings ? "Hide settings" : "More settings")
+            </button>
+
+            @* Collapsible Advanced Settings *@
+            @if (_showAdvancedSettings)
+            {
+                <div class="advanced-settings mt-2">
+                    <div class="mb-2">
+                        <label class="form-label small mb-1">Model</label>
+                        <ModelSelector Id="@($"launcher-model-{EntityId}")"
+                                       SelectedModel="@_selectedModel"
+                                       SelectedModelChanged="@(m => _selectedModel = m)" />
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small mb-1">Base Branch</label>
+                        <BaseBranchSelector Id="@($"launcher-branch-{EntityId}")"
+                                            SelectedBranch="@_selectedBaseBranch"
+                                            SelectedBranchChanged="@(b => _selectedBaseBranch = b)"
+                                            RepoPath="@RepoPath"
+                                            DefaultBranch="@DefaultBranch" />
+                    </div>
+                </div>
+            }
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(_errorMessage))
+    {
+        <div class="alert alert-danger alert-sm mt-2 mb-0 py-1 px-2 small">@_errorMessage</div>
+    }
+</div>
+
+<style>
+    .unified-agent-launcher {
+        width: 100%;
+    }
+
+    .unified-agent-launcher.compact {
+        font-size: 0.875rem;
+    }
+
+    .unified-agent-launcher.compact .btn-sm {
+        padding: 0.2rem 0.5rem;
+        font-size: 0.75rem;
+    }
+
+    .more-settings-toggle {
+        color: var(--text-muted, #6c757d);
+        text-decoration: none;
+        font-size: 0.75rem;
+    }
+
+    .more-settings-toggle:hover {
+        color: var(--text-primary, #eaeaea);
+    }
+
+    .advanced-settings {
+        padding: 0.75rem;
+        background: var(--bg-secondary, rgba(255, 255, 255, 0.03));
+        border-radius: 4px;
+        border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+    }
+
+    .alert-sm {
+        font-size: 0.75rem;
+    }
+</style>
+
+@code {
+    #region Parameters
+
+    /// <summary>
+    /// Unique identifier for the entity (e.g., issue ID).
+    /// </summary>
+    [Parameter, EditorRequired]
+    public required string EntityId { get; set; }
+
+    /// <summary>
+    /// Project identifier.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public required string ProjectId { get; set; }
+
+    /// <summary>
+    /// Title of the entity for prompt template rendering.
+    /// </summary>
+    [Parameter]
+    public string? EntityTitle { get; set; }
+
+    /// <summary>
+    /// Description of the entity for prompt template rendering.
+    /// </summary>
+    [Parameter]
+    public string? EntityDescription { get; set; }
+
+    /// <summary>
+    /// Type of the entity for prompt template rendering (e.g., "Feature", "Bug").
+    /// </summary>
+    [Parameter]
+    public string? EntityType { get; set; }
+
+    /// <summary>
+    /// Branch name for the entity. Used for clone lookup and prompt template rendering.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public required string BranchName { get; set; }
+
+    /// <summary>
+    /// Path to the main repository (for listing branches).
+    /// </summary>
+    [Parameter]
+    public string? RepoPath { get; set; }
+
+    /// <summary>
+    /// Default branch of the project.
+    /// </summary>
+    [Parameter]
+    public string? DefaultBranch { get; set; }
+
+    /// <summary>
+    /// Default model to use. Defaults to "opus".
+    /// </summary>
+    [Parameter]
+    public string DefaultModel { get; set; } = "opus";
+
+    /// <summary>
+    /// Whether to use compact layout (smaller buttons/text).
+    /// </summary>
+    [Parameter]
+    public bool Compact { get; set; }
+
+    /// <summary>
+    /// Whether the controls should be disabled.
+    /// </summary>
+    [Parameter]
+    public bool Disabled { get; set; }
+
+    /// <summary>
+    /// Callback when a session is successfully started.
+    /// </summary>
+    [Parameter]
+    public EventCallback<ClaudeSession> OnSessionStarted { get; set; }
+
+    #endregion
+
+    #region State
+
+    private IReadOnlyList<AgentPrompt> _prompts = [];
+    private string _selectedPromptId = string.Empty;
+    private string _selectedModel = "opus";
+    private string _selectedBaseBranch = "";
+    private bool _showAdvancedSettings;
+    private bool _isStarting;
+    private string? _errorMessage;
+
+    #endregion
+
+    protected override async Task OnInitializedAsync()
+    {
+        _selectedModel = DefaultModel;
+        _selectedBaseBranch = DefaultBranch ?? "";
+
+        // Ensure default prompts exist
+        await AgentPromptApi.EnsureDefaultPromptsAsync();
+
+        // Load prompts for the project
+        if (!string.IsNullOrEmpty(ProjectId))
+        {
+            _prompts = await AgentPromptApi.GetProjectPromptsAsync(ProjectId);
+        }
+        else
+        {
+            _prompts = await AgentPromptApi.GetAllPromptsAsync();
+        }
+
+        // Default to "Plan" if available
+        var planPrompt = _prompts.FirstOrDefault(p => p.Name == "Plan");
+        if (planPrompt != null)
+        {
+            _selectedPromptId = planPrompt.Id;
+        }
+    }
+
+    protected override void OnParametersSet()
+    {
+        // Update default model if changed
+        if (!string.IsNullOrEmpty(DefaultModel) && _selectedModel != DefaultModel)
+        {
+            _selectedModel = DefaultModel;
+        }
+
+        // Update base branch if changed and no selection made
+        if (!string.IsNullOrEmpty(DefaultBranch) && string.IsNullOrEmpty(_selectedBaseBranch))
+        {
+            _selectedBaseBranch = DefaultBranch;
+        }
+    }
+
+    private void ToggleAdvancedSettings()
+    {
+        _showAdvancedSettings = !_showAdvancedSettings;
+    }
+
+    private async Task HandleStartAsync()
+    {
+        if (_isStarting) return;
+
+        _errorMessage = null;
+
+        if (!StartupTracker.TryMarkAsStarting(EntityId))
+        {
+            _errorMessage = "Session is already starting.";
+            return;
+        }
+
+        _isStarting = true;
+        StateHasChanged();
+
+        try
+        {
+            // Get selected prompt if any
+            AgentPrompt? selectedPrompt = null;
+            if (!string.IsNullOrEmpty(_selectedPromptId))
+            {
+                selectedPrompt = await AgentPromptApi.GetPromptAsync(_selectedPromptId);
+            }
+
+            // Get or create clone for the branch
+            var clonePath = await GetOrCreateCloneAsync();
+            if (string.IsNullOrEmpty(clonePath))
+            {
+                _errorMessage = "Failed to create or find clone for branch.";
+                StartupTracker.MarkAsFailed(EntityId, _errorMessage);
+                StartupTracker.Clear(EntityId);
+                return;
+            }
+
+            // Determine session mode
+            var mode = selectedPrompt?.Mode ?? SessionMode.Build;
+
+            // Generate system prompt based on entity context
+            var systemPrompt = GenerateSystemPrompt();
+
+            // Create the session
+            var session = await SessionApi.StartSessionAsync(
+                EntityId,
+                ProjectId,
+                clonePath,
+                mode,
+                _selectedModel,
+                systemPrompt);
+
+            StartupTracker.MarkAsStarted(EntityId);
+
+            // Send initial message if prompt has one
+            if (selectedPrompt != null && !string.IsNullOrEmpty(selectedPrompt.InitialMessage))
+            {
+                var promptContext = new PromptContext
+                {
+                    Id = EntityId,
+                    Title = EntityTitle ?? string.Empty,
+                    Description = EntityDescription,
+                    Type = EntityType ?? string.Empty,
+                    Branch = BranchName
+                };
+
+                var initialMessage = HttpAgentPromptApiService.RenderTemplate(
+                    selectedPrompt.InitialMessage, promptContext);
+
+                if (!string.IsNullOrEmpty(initialMessage))
+                {
+                    await SessionApi.SendMessageAsync(session.Id, initialMessage);
+                }
+            }
+
+            await OnSessionStarted.InvokeAsync(session);
+
+            // Only navigate to session page if no prompt is selected
+            if (selectedPrompt == null)
+            {
+                NavigationManager.NavigateTo($"/session/{session.Id}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to start session for entity {EntityId}", EntityId);
+            StartupTracker.MarkAsFailed(EntityId, ex.Message);
+            StartupTracker.Clear(EntityId);
+            _errorMessage = $"Failed to start: {ex.Message}";
+        }
+        finally
+        {
+            _isStarting = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task<string?> GetOrCreateCloneAsync()
+    {
+        try
+        {
+            // Check if clone already exists for this branch
+            var cloneExistsResult = await CloneApi.CheckCloneExistsAsync(ProjectId, BranchName);
+
+            if (cloneExistsResult?.Exists == true)
+            {
+                // Find the clone path from the clones list
+                var clones = await CloneApi.ListClonesAsync(ProjectId);
+                var existingClone = clones.FirstOrDefault(c =>
+                    c.Branch?.Replace("refs/heads/", "") == BranchName);
+
+                if (!string.IsNullOrEmpty(existingClone?.Path))
+                {
+                    Logger.LogInformation("Found existing clone at {ClonePath} for branch {BranchName}",
+                        existingClone.Path, BranchName);
+                    return existingClone.Path;
+                }
+            }
+
+            // Create new clone for the branch
+            var baseBranch = !string.IsNullOrEmpty(_selectedBaseBranch)
+                ? _selectedBaseBranch
+                : DefaultBranch;
+
+            Logger.LogInformation("Creating clone for branch {BranchName} from base {BaseBranch}",
+                BranchName, baseBranch);
+
+            var createResult = await CloneApi.CreateCloneAsync(new CreateCloneRequest
+            {
+                ProjectId = ProjectId,
+                BranchName = BranchName,
+                CreateBranch = true,
+                BaseBranch = baseBranch
+            });
+
+            if (!string.IsNullOrEmpty(createResult?.Path))
+            {
+                Logger.LogInformation("Created clone at {ClonePath} for entity {EntityId}",
+                    createResult.Path, EntityId);
+            }
+
+            return createResult?.Path;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to get or create clone for branch {BranchName}", BranchName);
+            return null;
+        }
+    }
+
+    private string? GenerateSystemPrompt()
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"You are working on issue {EntityId}: {EntityTitle}");
+
+        if (!string.IsNullOrEmpty(EntityDescription))
+        {
+            sb.AppendLine();
+            sb.AppendLine("Issue Description:");
+            sb.AppendLine(EntityDescription);
+        }
+
+        sb.AppendLine();
+        sb.AppendLine($"Branch: {BranchName}");
+
+        return sb.ToString();
+    }
+}

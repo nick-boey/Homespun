@@ -38,6 +38,8 @@ public class KeyboardNavigationServiceMoveTests
         return new TaskGraphIssueRenderLine(
             IssueId: issueId,
             Title: title,
+            Description: null,
+            BranchName: null,
             Lane: lane,
             Marker: TaskGraphMarkerType.Open,
             ParentLane: parentLane,

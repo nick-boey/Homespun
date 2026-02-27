@@ -4,7 +4,6 @@
 
 @inject HttpSessionApiService SessionStoreApi
 @inject HttpSessionApiService SessionApi
-@inject HttpAgentPromptApiService AgentPromptApi
 @inject HttpIssueApiService IssueApi
 @inject HttpCloneApiService CloneApi
 @inject HttpIssuePrStatusApiService IssuePrStatusApi
@@ -35,14 +34,7 @@
                 {
                     <span class="badge @GetPriorityBadgeClass() ml-1">P@Issue.Priority</span>
                 }
-                @if (_isStarting)
-                {
-                    <span class="badge bg-status-warning text-text-primary ml-1">
-                        <span class="spinner-border spinner-border-sm mr-1" role="status" style="width: 0.6rem; height: 0.6rem;"></span>
-                        Starting...
-                    </span>
-                }
-                else if (_session != null)
+                @if (_session != null)
                 {
                     <span class="badge bg-status-success ml-1">Session Active</span>
                 }
@@ -113,34 +105,9 @@
                 ShowEmptyState="false" />
         </div>
         <div class="card-footer">
-            @if (_session == null && !_isStarting)
+            @if (_session != null)
             {
-                <div class="mb-2">
-                    <label class="form-label text-sm mb-1">Model</label>
-                    <ModelSelector Id="@($"issue-model-{Issue.Id}")"
-                                   SelectedModel="@_selectedModel"
-                                   SelectedModelChanged="@(m => _selectedModel = m)" />
-                </div>
-                <div class="mb-2">
-                    <label class="form-label text-sm mb-1">Base Branch</label>
-                    <BaseBranchSelector Id="@($"issue-base-branch-{Issue.Id}")"
-                                        SelectedBranch="@_selectedBaseBranch"
-                                        SelectedBranchChanged="@(b => _selectedBaseBranch = b)"
-                                        RepoPath="@_project?.LocalPath"
-                                        DefaultBranch="@_project?.DefaultBranch" />
-                </div>
-            }
-
-            <div class="flex flex-wrap gap-2">
-                @if (_isStarting)
-                {
-                    <button class="btn btn-sm btn-secondary" disabled>
-                        <span class="spinner-border spinner-border-sm mr-1" role="status"></span>
-                        Starting Session...
-                    </button>
-                }
-                else if (_session != null)
-                {
+                <div class="flex flex-wrap gap-2">
                     <a href="/session/@_session.Id" class="btn btn-sm btn-primary">
                         Open Chat
                     </a>
@@ -151,31 +118,37 @@
                         }
                         Stop Session
                     </button>
-                }
-                else if (Issue.Status is IssueStatus.Open or IssueStatus.Progress or IssueStatus.Review)
-                {
-                    <div class="mb-2 w-full">
-                        <AgentSelector
-                            ProjectId="@ProjectId"
-                            Disabled="@(_session != null)"
-                            IsStarting="@_isStarting"
-                            OnStart="HandleAgentStart" />
-                    </div>
+                </div>
+            }
+            else if (Issue.Status is IssueStatus.Open or IssueStatus.Progress or IssueStatus.Review)
+            {
+                <div class="mb-2">
+                    <UnifiedAgentLauncher
+                        EntityId="@Issue.Id"
+                        ProjectId="@ProjectId"
+                        EntityTitle="@Issue.Title"
+                        EntityDescription="@Issue.Description"
+                        EntityType="@Issue.Type.ToString()"
+                        BranchName="@GetBranchPreview()"
+                        RepoPath="@_project?.LocalPath"
+                        DefaultBranch="@_project?.DefaultBranch"
+                        DefaultModel="@(_project?.DefaultModel ?? "opus")"
+                        OnSessionStarted="HandleSessionStarted" />
+                </div>
 
-                    @if (_cloneInfo != null && _branchInfo?.BehindCount > 0)
-                    {
-                        <button class="btn btn-sm btn-outline-warning w-full mb-2"
-                                @onclick="StartRebaseAsync"
-                                disabled="@(_isRebasing || _isStarting)">
-                            @if (_isRebasing)
-                            {
-                                <span class="spinner-border spinner-border-sm mr-1" role="status"></span>
-                            }
-                            Rebase onto @(!string.IsNullOrEmpty(_selectedBaseBranch) ? _selectedBaseBranch : _project?.DefaultBranch) (@_branchInfo.BehindCount behind)
-                        </button>
-                    }
+                @if (_cloneInfo != null && _branchInfo?.BehindCount > 0)
+                {
+                    <button class="btn btn-sm btn-outline-warning w-full mb-2"
+                            @onclick="StartRebaseAsync"
+                            disabled="@_isRebasing">
+                        @if (_isRebasing)
+                        {
+                            <span class="spinner-border spinner-border-sm mr-1" role="status"></span>
+                        }
+                        Rebase onto @(_project?.DefaultBranch) (@_branchInfo.BehindCount behind)
+                    </button>
                 }
-            </div>
+            }
 
             <div class="flex flex-wrap gap-2">
                 @if (Issue.Status is IssueStatus.Open or IssueStatus.Progress or IssueStatus.Review)
@@ -241,12 +214,9 @@
     private string? _errorMessage;
     private ClaudeSession? _session;
     private Project? _project;
-    private string _selectedModel = "opus";
-    private string _selectedBaseBranch = "";
     private CloneInfo? _cloneInfo;
     private BranchInfo? _branchInfo;
     private bool _isRebasing;
-    private bool _isStarting;
     private IssuePullRequestStatus? _prStatus;
     private bool _isLoadingPrStatus;
     private HubConnection? _hubConnection;
@@ -255,18 +225,6 @@
     {
         // Load project info
         _project = await ProjectApi.GetProjectAsync(ProjectId);
-
-        // Set default model from project if available
-        if (_project?.DefaultModel != null)
-        {
-            _selectedModel = _project.DefaultModel;
-        }
-
-        // Default base branch to the project's default branch
-        if (_project?.DefaultBranch != null)
-        {
-            _selectedBaseBranch = _project.DefaultBranch;
-        }
 
         // Set up SignalR connection for real-time updates (non-blocking)
         _ = SetupSignalRConnectionAsync();
@@ -348,147 +306,10 @@
         return GenerateBranchName(Issue);
     }
 
-    private async Task HandleAgentStart(AgentPrompt? selectedPrompt)
+    private void HandleSessionStarted(ClaudeSession session)
     {
-        await StartSession(selectedPrompt);
-    }
-
-    private async Task StartSession(AgentPrompt? prompt)
-    {
-        if (_project == null)
-        {
-            _errorMessage = "Project not available.";
-            return;
-        }
-
-        if (_isStarting) return;
-        _isStarting = true;
-        _errorMessage = null;
+        _session = session;
         StateHasChanged();
-
-        // Capture issue data at start to prevent race condition when selection changes
-        // during async operations. All subsequent code uses this snapshot, not the Issue parameter.
-        var issueSnapshot = Issue;
-        var branchName = GenerateBranchName(issueSnapshot);
-
-        try
-        {
-            // Get or create clone for the issue's branch
-
-            // Check if clone already exists for this branch
-            string? clonePath = null;
-            var cloneExistsResult = await CloneApi.CheckCloneExistsAsync(ProjectId, branchName);
-
-            if (cloneExistsResult?.Exists == true)
-            {
-                // Find the clone path from the clones list
-                var clones = await CloneApi.ListClonesAsync(ProjectId);
-                var existingClone = clones.FirstOrDefault(c =>
-                    c.Branch?.Replace("refs/heads/", "") == branchName);
-                clonePath = existingClone?.Path;
-
-                if (!string.IsNullOrEmpty(clonePath))
-                {
-                    Logger.LogInformation("Found existing clone at {ClonePath} for branch {BranchName}", clonePath, branchName);
-                }
-            }
-
-            if (string.IsNullOrEmpty(clonePath))
-            {
-                // Use selected base branch, falling back to project default
-                var baseBranch = !string.IsNullOrEmpty(_selectedBaseBranch)
-                    ? _selectedBaseBranch
-                    : _project.DefaultBranch;
-
-                // Create new clone for the issue's branch
-                Logger.LogInformation("Creating clone for branch {BranchName} from base {BaseBranch}", branchName, baseBranch);
-
-                var createResult = await CloneApi.CreateCloneAsync(new CreateCloneRequest
-                {
-                    ProjectId = ProjectId,
-                    BranchName = branchName,
-                    CreateBranch = true,
-                    BaseBranch = baseBranch
-                });
-                clonePath = createResult?.Path;
-
-                if (string.IsNullOrEmpty(clonePath))
-                {
-                    _errorMessage = "Failed to create clone for issue branch.";
-                    return;
-                }
-
-                Logger.LogInformation("Created clone at {ClonePath} for issue {IssueId}", clonePath, issueSnapshot.Id);
-            }
-
-            // Use the prompt's mode, or default to Build if no prompt selected
-            var mode = prompt?.Mode ?? SessionMode.Build;
-
-            var systemPrompt = GenerateSystemPrompt(issueSnapshot, branchName);
-            _session = await SessionApi.CreateSessionAsync(new CreateSessionRequest
-            {
-                EntityId = issueSnapshot.Id,
-                ProjectId = ProjectId,
-                WorkingDirectory = clonePath,
-                Mode = mode,
-                Model = _selectedModel,
-                SystemPrompt = systemPrompt
-            });
-
-            // Send an initial message to start the agent working (if a prompt is selected)
-            if (_session != null && prompt != null && !string.IsNullOrEmpty(prompt.InitialMessage))
-            {
-                var promptContext = new PromptContext
-                {
-                    Title = issueSnapshot.Title,
-                    Id = issueSnapshot.Id,
-                    Description = issueSnapshot.Description,
-                    Branch = branchName,
-                    Type = issueSnapshot.Type.ToString()
-                };
-                var renderedMessage = HttpAgentPromptApiService.RenderTemplate(prompt.InitialMessage, promptContext);
-
-                if (!string.IsNullOrEmpty(renderedMessage))
-                {
-                    await SessionApi.SendMessageAsync(_session.Id, new SendMessageRequest
-                    {
-                        Message = renderedMessage
-                    });
-                }
-            }
-
-            // Agent started - user stays on current page and can monitor via status indicator
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, "Failed to start session for issue {IssueId}", issueSnapshot.Id);
-            _errorMessage = $"Failed to start session: {ex.Message}";
-            _session = null;
-        }
-        finally
-        {
-            _isStarting = false;
-            StateHasChanged();
-        }
-    }
-
-    private string? GenerateSystemPrompt(IssueResponse issue, string branchName)
-    {
-        // Build a context-aware system prompt based on the captured issue snapshot
-        var sb = new System.Text.StringBuilder();
-        sb.AppendLine($"You are working on issue {issue.Id}: {issue.Title}");
-
-        if (!string.IsNullOrEmpty(issue.Description))
-        {
-            sb.AppendLine();
-            sb.AppendLine("Issue Description:");
-            sb.AppendLine(issue.Description);
-        }
-
-        sb.AppendLine();
-        sb.AppendLine($"Branch: {branchName}");
-
-        return sb.ToString();
     }
 
     private async Task StopSession()
@@ -671,7 +492,6 @@
                     await InvokeAsync(() =>
                     {
                         _session = session;
-                        _isStarting = false;
                         StateHasChanged();
                     });
                 }

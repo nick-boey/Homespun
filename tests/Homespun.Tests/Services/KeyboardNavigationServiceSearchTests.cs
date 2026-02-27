@@ -36,6 +36,8 @@ public class KeyboardNavigationServiceSearchTests
         return new TaskGraphIssueRenderLine(
             IssueId: issueId,
             Title: title,
+            Description: null,
+            BranchName: null,
             Lane: lane,
             Marker: marker,
             ParentLane: parentLane,
