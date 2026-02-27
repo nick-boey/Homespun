@@ -205,7 +205,7 @@ describe('POST /sessions/:id/message', () => {
     expect(sm.send).toHaveBeenCalledWith('sess-1', 'Follow up', undefined, undefined);
   });
 
-  it('passes permissionMode to send()', async () => {
+  it('passes mode to send()', async () => {
     const { sm, app } = createApp();
     sm.send.mockResolvedValue(undefined);
     sm.get.mockReturnValue({ id: 'sess-1', conversationId: 'c1' });
@@ -214,13 +214,13 @@ describe('POST /sessions/:id/message', () => {
     await app.request('/sess-1/message', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: 'Follow up', permissionMode: 'BypassPermissions' }),
+      body: JSON.stringify({ message: 'Follow up', mode: 'Build' }),
     });
 
-    expect(sm.send).toHaveBeenCalledWith('sess-1', 'Follow up', undefined, 'BypassPermissions');
+    expect(sm.send).toHaveBeenCalledWith('sess-1', 'Follow up', undefined, 'Build');
   });
 
-  it('passes undefined permissionMode when not provided', async () => {
+  it('passes undefined mode when not provided', async () => {
     const { sm, app } = createApp();
     sm.send.mockResolvedValue(undefined);
     sm.get.mockReturnValue({ id: 'sess-1', conversationId: 'c1' });
