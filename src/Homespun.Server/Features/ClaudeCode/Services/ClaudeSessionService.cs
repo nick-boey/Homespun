@@ -233,7 +233,8 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
 
         // Create and store the SDK options with combined system prompt
         var options = _optionsFactory.Create(mode, workingDirectory, model, combinedSystemPrompt);
-        options.PermissionMode = PermissionMode.BypassPermissions; // Allow all tools without prompting
+        // Map session mode to SDK permission mode: Plan -> Plan, Build -> BypassPermissions
+        options.PermissionMode = mode == SessionMode.Plan ? PermissionMode.Plan : PermissionMode.BypassPermissions;
         options.IncludePartialMessages = true; // Enable streaming with --print mode
         _sessionOptions[sessionId] = options;
 
@@ -311,7 +312,8 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             workingDirectory,
             session.Model,
             session.SystemPrompt);
-        options.PermissionMode = PermissionMode.BypassPermissions;
+        // Map session mode to SDK permission mode: Plan -> Plan, Build -> BypassPermissions
+        options.PermissionMode = session.Mode == SessionMode.Plan ? PermissionMode.Plan : PermissionMode.BypassPermissions;
         options.IncludePartialMessages = true;
         options.Resume = sessionId; // THIS IS THE KEY - tells Claude CLI to resume
 
