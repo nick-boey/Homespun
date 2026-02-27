@@ -1,5 +1,6 @@
 using Homespun.Client.Components;
 using Homespun.Shared.Models.Fleece;
+using Homespun.Shared.Requests;
 
 namespace Homespun.Client.Services;
 
@@ -296,4 +297,28 @@ public interface IKeyboardNavigationService
     /// Parameters: sourceIssueId, targetIssueId, operationType, addToExisting
     /// </remarks>
     event Func<string, string, MoveOperationType, bool, Task>? OnMoveOperationRequested;
+
+    // Sibling move operations
+
+    /// <summary>
+    /// Raised when a sibling move operation (up/down) is requested.
+    /// Parameters: issueId, direction
+    /// </summary>
+    event Func<string, MoveDirection, Task>? OnSiblingMoveRequested;
+
+    /// <summary>
+    /// Gets move availability information for the currently selected issue.
+    /// Returns (CanMoveUp, CanMoveDown, HasSingleParent) tuple.
+    /// </summary>
+    (bool CanMoveUp, bool CanMoveDown, bool HasSingleParent) GetSiblingMoveInfo();
+
+    /// <summary>
+    /// Moves the currently selected issue up in the sibling order.
+    /// </summary>
+    Task MoveSelectedUpAsync();
+
+    /// <summary>
+    /// Moves the currently selected issue down in the sibling order.
+    /// </summary>
+    Task MoveSelectedDownAsync();
 }

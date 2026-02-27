@@ -668,6 +668,7 @@ else
             NavService.OnOpenEditRequested += OnOpenEditRequested;
             NavService.OnIssueCreatedForEdit += NavigateToIssueEditAsync;
             NavService.OnMoveOperationRequested += OnMoveOperationRequested;
+            NavService.OnSiblingMoveRequested += OnSiblingMoveRequested;
         }
     }
 
@@ -763,6 +764,28 @@ else
         }
     }
 
+    private async Task OnSiblingMoveRequested(string issueId, MoveDirection direction)
+    {
+        try
+        {
+            var request = new MoveSeriesSiblingRequest
+            {
+                ProjectId = Id,
+                Direction = direction
+            };
+
+            await IssueApi.MoveSeriesSiblingAsync(issueId, request);
+
+            // Refresh the task graph
+            await RefreshData();
+        }
+        catch (InvalidOperationException ex)
+        {
+            Logger.LogWarning("Sibling move operation failed: {Message}", ex.Message);
+            // TODO: Show a toast notification to the user
+        }
+    }
+
     private void OnPanelServiceStateChanged()
     {
         // Sync local sidebar state with panel service
@@ -825,6 +848,7 @@ else
         NavService.OnOpenEditRequested -= OnOpenEditRequested;
         NavService.OnIssueCreatedForEdit -= NavigateToIssueEditAsync;
         NavService.OnMoveOperationRequested -= OnMoveOperationRequested;
+        NavService.OnSiblingMoveRequested -= OnSiblingMoveRequested;
         PanelService.OnStateChanged -= OnPanelServiceStateChanged;
         PanelService.SetPanelAvailable(false);
     }
@@ -1944,6 +1968,12 @@ else
                 break;
             case "O":
                 NavService.CreateIssueAbove();
+                break;
+            case "J": // Shift+J - move sibling down
+                _ = NavService.MoveSelectedDownAsync();
+                break;
+            case "K": // Shift+K - move sibling up
+                _ = NavService.MoveSelectedUpAsync();
                 break;
             case "Enter":
                 NavService.OpenSelectedIssueForEdit();

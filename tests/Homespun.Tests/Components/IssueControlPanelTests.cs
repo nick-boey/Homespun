@@ -294,4 +294,184 @@ public class IssueControlPanelTests : BunitTestContext
     }
 
     #endregion
+
+    #region Move Up/Down Button Tests
+
+    [Test]
+    public void Renders_MoveUpButton()
+    {
+        var cut = Render<IssueControlPanel>();
+
+        var moveUpBtn = cut.Find("[data-testid='move-up-btn']");
+        Assert.That(moveUpBtn, Is.Not.Null);
+    }
+
+    [Test]
+    public void Renders_MoveDownButton()
+    {
+        var cut = Render<IssueControlPanel>();
+
+        var moveDownBtn = cut.Find("[data-testid='move-down-btn']");
+        Assert.That(moveDownBtn, Is.Not.Null);
+    }
+
+    [Test]
+    public void MoveUpButton_Disabled_WhenNoIssueSelected()
+    {
+        _mockNavService.Setup(s => s.SelectedIndex).Returns(-1);
+        _mockNavService.Setup(s => s.GetSiblingMoveInfo()).Returns((false, false, false));
+
+        var cut = Render<IssueControlPanel>();
+
+        var moveUpBtn = cut.Find("[data-testid='move-up-btn']");
+        Assert.That(moveUpBtn.HasAttribute("disabled"), Is.True);
+    }
+
+    [Test]
+    public void MoveDownButton_Disabled_WhenNoIssueSelected()
+    {
+        _mockNavService.Setup(s => s.SelectedIndex).Returns(-1);
+        _mockNavService.Setup(s => s.GetSiblingMoveInfo()).Returns((false, false, false));
+
+        var cut = Render<IssueControlPanel>();
+
+        var moveDownBtn = cut.Find("[data-testid='move-down-btn']");
+        Assert.That(moveDownBtn.HasAttribute("disabled"), Is.True);
+    }
+
+    [Test]
+    public void MoveUpButton_Disabled_WhenInEditMode()
+    {
+        _mockNavService.Setup(s => s.SelectedIndex).Returns(0);
+        _mockNavService.Setup(s => s.EditMode).Returns(KeyboardEditMode.EditingExisting);
+        _mockNavService.Setup(s => s.GetSiblingMoveInfo()).Returns((true, true, true));
+
+        var cut = Render<IssueControlPanel>();
+
+        var moveUpBtn = cut.Find("[data-testid='move-up-btn']");
+        Assert.That(moveUpBtn.HasAttribute("disabled"), Is.True);
+    }
+
+    [Test]
+    public void MoveDownButton_Disabled_WhenInEditMode()
+    {
+        _mockNavService.Setup(s => s.SelectedIndex).Returns(0);
+        _mockNavService.Setup(s => s.EditMode).Returns(KeyboardEditMode.EditingExisting);
+        _mockNavService.Setup(s => s.GetSiblingMoveInfo()).Returns((true, true, true));
+
+        var cut = Render<IssueControlPanel>();
+
+        var moveDownBtn = cut.Find("[data-testid='move-down-btn']");
+        Assert.That(moveDownBtn.HasAttribute("disabled"), Is.True);
+    }
+
+    [Test]
+    public void MoveUpButton_Disabled_WhenIssueHasNoParent()
+    {
+        _mockNavService.Setup(s => s.SelectedIndex).Returns(0);
+        _mockNavService.Setup(s => s.EditMode).Returns(KeyboardEditMode.Viewing);
+        _mockNavService.Setup(s => s.GetSiblingMoveInfo()).Returns((false, false, false)); // No single parent
+
+        var cut = Render<IssueControlPanel>();
+
+        var moveUpBtn = cut.Find("[data-testid='move-up-btn']");
+        Assert.That(moveUpBtn.HasAttribute("disabled"), Is.True);
+    }
+
+    [Test]
+    public void MoveDownButton_Disabled_WhenIssueHasNoParent()
+    {
+        _mockNavService.Setup(s => s.SelectedIndex).Returns(0);
+        _mockNavService.Setup(s => s.EditMode).Returns(KeyboardEditMode.Viewing);
+        _mockNavService.Setup(s => s.GetSiblingMoveInfo()).Returns((false, false, false)); // No single parent
+
+        var cut = Render<IssueControlPanel>();
+
+        var moveDownBtn = cut.Find("[data-testid='move-down-btn']");
+        Assert.That(moveDownBtn.HasAttribute("disabled"), Is.True);
+    }
+
+    [Test]
+    public void MoveUpButton_Disabled_WhenAlreadyFirst()
+    {
+        _mockNavService.Setup(s => s.SelectedIndex).Returns(0);
+        _mockNavService.Setup(s => s.EditMode).Returns(KeyboardEditMode.Viewing);
+        _mockNavService.Setup(s => s.GetSiblingMoveInfo()).Returns((false, true, true)); // Can't move up, can move down
+
+        var cut = Render<IssueControlPanel>();
+
+        var moveUpBtn = cut.Find("[data-testid='move-up-btn']");
+        Assert.That(moveUpBtn.HasAttribute("disabled"), Is.True);
+    }
+
+    [Test]
+    public void MoveDownButton_Disabled_WhenAlreadyLast()
+    {
+        _mockNavService.Setup(s => s.SelectedIndex).Returns(0);
+        _mockNavService.Setup(s => s.EditMode).Returns(KeyboardEditMode.Viewing);
+        _mockNavService.Setup(s => s.GetSiblingMoveInfo()).Returns((true, false, true)); // Can move up, can't move down
+
+        var cut = Render<IssueControlPanel>();
+
+        var moveDownBtn = cut.Find("[data-testid='move-down-btn']");
+        Assert.That(moveDownBtn.HasAttribute("disabled"), Is.True);
+    }
+
+    [Test]
+    public void MoveUpButton_Enabled_WhenCanMoveUp()
+    {
+        _mockNavService.Setup(s => s.SelectedIndex).Returns(0);
+        _mockNavService.Setup(s => s.EditMode).Returns(KeyboardEditMode.Viewing);
+        _mockNavService.Setup(s => s.GetSiblingMoveInfo()).Returns((true, true, true)); // Can move both ways
+
+        var cut = Render<IssueControlPanel>();
+
+        var moveUpBtn = cut.Find("[data-testid='move-up-btn']");
+        Assert.That(moveUpBtn.HasAttribute("disabled"), Is.False);
+    }
+
+    [Test]
+    public void MoveDownButton_Enabled_WhenCanMoveDown()
+    {
+        _mockNavService.Setup(s => s.SelectedIndex).Returns(0);
+        _mockNavService.Setup(s => s.EditMode).Returns(KeyboardEditMode.Viewing);
+        _mockNavService.Setup(s => s.GetSiblingMoveInfo()).Returns((true, true, true)); // Can move both ways
+
+        var cut = Render<IssueControlPanel>();
+
+        var moveDownBtn = cut.Find("[data-testid='move-down-btn']");
+        Assert.That(moveDownBtn.HasAttribute("disabled"), Is.False);
+    }
+
+    [Test]
+    public void MoveUpButton_CallsMoveSelectedUpAsync()
+    {
+        _mockNavService.Setup(s => s.SelectedIndex).Returns(0);
+        _mockNavService.Setup(s => s.EditMode).Returns(KeyboardEditMode.Viewing);
+        _mockNavService.Setup(s => s.GetSiblingMoveInfo()).Returns((true, true, true));
+        _mockNavService.Setup(s => s.MoveSelectedUpAsync()).Returns(Task.CompletedTask);
+
+        var cut = Render<IssueControlPanel>();
+
+        cut.Find("[data-testid='move-up-btn']").Click();
+
+        _mockNavService.Verify(s => s.MoveSelectedUpAsync(), Times.Once);
+    }
+
+    [Test]
+    public void MoveDownButton_CallsMoveSelectedDownAsync()
+    {
+        _mockNavService.Setup(s => s.SelectedIndex).Returns(0);
+        _mockNavService.Setup(s => s.EditMode).Returns(KeyboardEditMode.Viewing);
+        _mockNavService.Setup(s => s.GetSiblingMoveInfo()).Returns((true, true, true));
+        _mockNavService.Setup(s => s.MoveSelectedDownAsync()).Returns(Task.CompletedTask);
+
+        var cut = Render<IssueControlPanel>();
+
+        cut.Find("[data-testid='move-down-btn']").Click();
+
+        _mockNavService.Verify(s => s.MoveSelectedDownAsync(), Times.Once);
+    }
+
+    #endregion
 }

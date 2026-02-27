@@ -4,6 +4,7 @@ using Fleece.Core.Models;
 using Fleece.Core.Serialization;
 using Fleece.Core.Services;
 using Fleece.Core.Services.Interfaces;
+using Homespun.Shared.Requests;
 
 namespace Homespun.Features.Fleece.Services;
 
@@ -605,6 +606,127 @@ public sealed class FleeceService : IFleeceService, IDisposable
         await RecordHistorySnapshotAsync(projectPath, "SetParent", childId, description, ct);
 
         return issue;
+    }
+
+    public async Task<Issue> MoveSeriesSiblingAsync(string projectPath, string issueId, MoveDirection direction, CancellationToken ct = default)
+    {
+        var cache = await EnsureCacheLoadedAsync(projectPath, ct);
+
+        // Check if the issue exists
+        if (!cache.TryGetValue(issueId, out var issue))
+        {
+            _logger.LogWarning("Issue '{IssueId}' not found in project '{ProjectPath}'", issueId, projectPath);
+            throw new KeyNotFoundException($"Issue '{issueId}' not found");
+        }
+
+        // Validate the issue has exactly one parent
+        if (issue.ParentIssues.Count == 0)
+        {
+            throw new InvalidOperationException($"Issue '{issueId}' has no parent. Cannot move siblings without a parent issue.");
+        }
+
+        if (issue.ParentIssues.Count > 1)
+        {
+            throw new InvalidOperationException($"Issue '{issueId}' has multiple parents. Move sibling operation requires exactly one parent.");
+        }
+
+        var parentRef = issue.ParentIssues[0];
+        var parentId = parentRef.ParentIssue;
+
+        // Find all siblings under the same parent, sorted by sort order
+        var siblings = cache.Values
+            .Where(i => i.ParentIssues.Any(p => p.ParentIssue == parentId))
+            .Select(i => new
+            {
+                Issue = i,
+                SortOrder = i.ParentIssues.First(p => p.ParentIssue == parentId).SortOrder ?? "0"
+            })
+            .OrderBy(s => s.SortOrder, StringComparer.Ordinal)
+            .ToList();
+
+        // Find the current issue's position
+        var currentIndex = siblings.FindIndex(s => s.Issue.Id == issueId);
+        if (currentIndex < 0)
+        {
+            throw new InvalidOperationException($"Issue '{issueId}' not found among siblings of parent '{parentId}'");
+        }
+
+        // Validate movement boundaries
+        if (direction == MoveDirection.Up && currentIndex == 0)
+        {
+            throw new InvalidOperationException($"Issue '{issueId}' is already first among siblings. Cannot move up.");
+        }
+
+        if (direction == MoveDirection.Down && currentIndex == siblings.Count - 1)
+        {
+            throw new InvalidOperationException($"Issue '{issueId}' is already last among siblings. Cannot move down.");
+        }
+
+        // Get the target sibling to swap with
+        var targetIndex = direction == MoveDirection.Up ? currentIndex - 1 : currentIndex + 1;
+        var targetSibling = siblings[targetIndex];
+
+        // Swap sort orders
+        var currentSortOrder = siblings[currentIndex].SortOrder;
+        var targetSortOrder = targetSibling.SortOrder;
+
+        // Update the current issue's parent ref with the target's sort order
+        var service = GetOrCreateIssueService(projectPath);
+
+        var updatedCurrentParents = issue.ParentIssues
+            .Select(p => p.ParentIssue == parentId
+                ? new ParentIssueRef { ParentIssue = p.ParentIssue, SortOrder = targetSortOrder }
+                : p)
+            .ToList();
+
+        var updatedTargetParents = targetSibling.Issue.ParentIssues
+            .Select(p => p.ParentIssue == parentId
+                ? new ParentIssueRef { ParentIssue = p.ParentIssue, SortOrder = currentSortOrder }
+                : p)
+            .ToList();
+
+        // Update both issues via Fleece.Core
+        var updatedCurrent = await service.UpdateAsync(issueId, parentIssues: updatedCurrentParents, cancellationToken: ct);
+        var updatedTarget = await service.UpdateAsync(targetSibling.Issue.Id, parentIssues: updatedTargetParents, cancellationToken: ct);
+
+        // Update the in-memory cache immediately
+        cache[issueId] = updatedCurrent;
+        cache[targetSibling.Issue.Id] = updatedTarget;
+
+        // Queue background persistence for both issues
+        await _serializationQueue.EnqueueAsync(new IssueWriteOperation(
+            ProjectPath: projectPath,
+            IssueId: issueId,
+            Type: WriteOperationType.Update,
+            WriteAction: async (innerCt) =>
+            {
+                var svc = GetOrCreateIssueService(projectPath);
+                await svc.UpdateAsync(issueId, parentIssues: updatedCurrentParents, cancellationToken: innerCt);
+            },
+            QueuedAt: DateTimeOffset.UtcNow
+        ), ct);
+
+        await _serializationQueue.EnqueueAsync(new IssueWriteOperation(
+            ProjectPath: projectPath,
+            IssueId: targetSibling.Issue.Id,
+            Type: WriteOperationType.Update,
+            WriteAction: async (innerCt) =>
+            {
+                var svc = GetOrCreateIssueService(projectPath);
+                await svc.UpdateAsync(targetSibling.Issue.Id, parentIssues: updatedTargetParents, cancellationToken: innerCt);
+            },
+            QueuedAt: DateTimeOffset.UtcNow
+        ), ct);
+
+        _logger.LogInformation(
+            "Moved issue '{IssueId}' {Direction} by swapping with '{TargetId}' under parent '{ParentId}'",
+            issueId, direction, targetSibling.Issue.Id, parentId);
+
+        // Record history snapshot
+        await RecordHistorySnapshotAsync(projectPath, "MoveSeriesSibling", issueId,
+            $"Moved '{issue.Title}' {direction.ToString().ToLower()} in sibling order", ct);
+
+        return updatedCurrent;
     }
 
     #endregion

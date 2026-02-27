@@ -381,4 +381,184 @@ public class IssuesApiTests
     }
 
     #endregion
+
+    #region MoveSeriesSibling Tests
+
+    [Test]
+    public async Task MoveSeriesSibling_ReturnsNotFound_WhenProjectNotExists()
+    {
+        // Arrange
+        var request = new MoveSeriesSiblingRequest
+        {
+            ProjectId = "nonexistent",
+            Direction = MoveDirection.Up
+        };
+
+        // Act
+        var response = await _client.PostAsJsonAsync("/api/issues/issue-123/move-sibling", request);
+
+        // Assert
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+    }
+
+    [Test]
+    public async Task MoveSeriesSibling_ReturnsNotFound_WhenIssueNotExists()
+    {
+        // Arrange
+        var project = new Project { Id = "proj1", Name = "TestProject", LocalPath = "/tmp/test-project", DefaultBranch = "main" };
+        _factory.MockDataStore.SeedProject(project);
+
+        var request = new MoveSeriesSiblingRequest
+        {
+            ProjectId = "proj1",
+            Direction = MoveDirection.Up
+        };
+
+        // Act
+        var response = await _client.PostAsJsonAsync("/api/issues/nonexistent/move-sibling", request);
+
+        // Assert
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+    }
+
+    [Test]
+    public async Task MoveSeriesSibling_ReturnsBadRequest_WhenNoParent()
+    {
+        // Arrange
+        var project = new Project { Id = "proj1", Name = "TestProject", LocalPath = "/tmp/test-project", DefaultBranch = "main" };
+        _factory.MockDataStore.SeedProject(project);
+
+        var issue = new Issue
+        {
+            Id = "issue-123",
+            Title = "Test Issue",
+            Type = IssueType.Task,
+            Status = IssueStatus.Open,
+            LastUpdate = DateTime.UtcNow,
+            ParentIssues = [] // No parent
+        };
+        _factory.MockFleeceService.SeedIssue(project.LocalPath, issue);
+
+        var request = new MoveSeriesSiblingRequest
+        {
+            ProjectId = "proj1",
+            Direction = MoveDirection.Up
+        };
+
+        // Act
+        var response = await _client.PostAsJsonAsync("/api/issues/issue-123/move-sibling", request);
+
+        // Assert
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+    }
+
+    [Test]
+    public async Task MoveSeriesSibling_ReturnsOk_WhenValidMoveUp()
+    {
+        // Arrange
+        var project = new Project { Id = "proj1", Name = "TestProject", LocalPath = "/tmp/test-project", DefaultBranch = "main" };
+        _factory.MockDataStore.SeedProject(project);
+
+        var parent = new Issue
+        {
+            Id = "parent-1",
+            Title = "Parent Issue",
+            Type = IssueType.Feature,
+            Status = IssueStatus.Open,
+            LastUpdate = DateTime.UtcNow
+        };
+        var child1 = new Issue
+        {
+            Id = "child-1",
+            Title = "Child 1",
+            Type = IssueType.Task,
+            Status = IssueStatus.Open,
+            LastUpdate = DateTime.UtcNow,
+            ParentIssues = [new ParentIssueRef { ParentIssue = "parent-1", SortOrder = "0" }]
+        };
+        var child2 = new Issue
+        {
+            Id = "child-2",
+            Title = "Child 2",
+            Type = IssueType.Task,
+            Status = IssueStatus.Open,
+            LastUpdate = DateTime.UtcNow,
+            ParentIssues = [new ParentIssueRef { ParentIssue = "parent-1", SortOrder = "1" }]
+        };
+
+        _factory.MockFleeceService.SeedIssue(project.LocalPath, parent);
+        _factory.MockFleeceService.SeedIssue(project.LocalPath, child1);
+        _factory.MockFleeceService.SeedIssue(project.LocalPath, child2);
+
+        var request = new MoveSeriesSiblingRequest
+        {
+            ProjectId = "proj1",
+            Direction = MoveDirection.Up
+        };
+
+        // Act - move child2 up
+        var response = await _client.PostAsJsonAsync("/api/issues/child-2/move-sibling", request);
+
+        // Assert
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var result = await response.Content.ReadFromJsonAsync<IssueResponse>();
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.Id, Is.EqualTo("child-2"));
+    }
+
+    [Test]
+    public async Task MoveSeriesSibling_ReturnsOk_WhenValidMoveDown()
+    {
+        // Arrange
+        var project = new Project { Id = "proj1", Name = "TestProject", LocalPath = "/tmp/test-project", DefaultBranch = "main" };
+        _factory.MockDataStore.SeedProject(project);
+
+        var parent = new Issue
+        {
+            Id = "parent-1",
+            Title = "Parent Issue",
+            Type = IssueType.Feature,
+            Status = IssueStatus.Open,
+            LastUpdate = DateTime.UtcNow
+        };
+        var child1 = new Issue
+        {
+            Id = "child-1",
+            Title = "Child 1",
+            Type = IssueType.Task,
+            Status = IssueStatus.Open,
+            LastUpdate = DateTime.UtcNow,
+            ParentIssues = [new ParentIssueRef { ParentIssue = "parent-1", SortOrder = "0" }]
+        };
+        var child2 = new Issue
+        {
+            Id = "child-2",
+            Title = "Child 2",
+            Type = IssueType.Task,
+            Status = IssueStatus.Open,
+            LastUpdate = DateTime.UtcNow,
+            ParentIssues = [new ParentIssueRef { ParentIssue = "parent-1", SortOrder = "1" }]
+        };
+
+        _factory.MockFleeceService.SeedIssue(project.LocalPath, parent);
+        _factory.MockFleeceService.SeedIssue(project.LocalPath, child1);
+        _factory.MockFleeceService.SeedIssue(project.LocalPath, child2);
+
+        var request = new MoveSeriesSiblingRequest
+        {
+            ProjectId = "proj1",
+            Direction = MoveDirection.Down
+        };
+
+        // Act - move child1 down
+        var response = await _client.PostAsJsonAsync("/api/issues/child-1/move-sibling", request);
+
+        // Assert
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var result = await response.Content.ReadFromJsonAsync<IssueResponse>();
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.Id, Is.EqualTo("child-1"));
+    }
+
+    #endregion
 }

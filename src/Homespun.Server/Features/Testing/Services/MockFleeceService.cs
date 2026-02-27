@@ -3,6 +3,7 @@ using Fleece.Core.Models;
 using Fleece.Core.Services;
 using Fleece.Core.Services.Interfaces;
 using Homespun.Features.Fleece.Services;
+using Homespun.Shared.Requests;
 using Microsoft.Extensions.Logging;
 
 namespace Homespun.Features.Testing.Services;
@@ -471,6 +472,136 @@ public class MockFleeceService : IFleeceService
 
             issues[existingIndex] = updated;
             return updated;
+        }
+    }
+
+    public Task<Issue> MoveSeriesSiblingAsync(string projectPath, string issueId, MoveDirection direction, CancellationToken ct = default)
+    {
+        _logger.LogDebug("[Mock] MoveSeriesSibling: issueId={IssueId}, direction={Direction} in {ProjectPath}", issueId, direction, projectPath);
+
+        if (!_issuesByProject.TryGetValue(projectPath, out var issues))
+        {
+            throw new KeyNotFoundException($"Issue '{issueId}' not found");
+        }
+
+        lock (issues)
+        {
+            var existingIndex = issues.FindIndex(i => i.Id == issueId);
+            if (existingIndex < 0)
+            {
+                throw new KeyNotFoundException($"Issue '{issueId}' not found");
+            }
+
+            var existing = issues[existingIndex];
+
+            // Validate the issue has exactly one parent
+            if (existing.ParentIssues.Count == 0)
+            {
+                throw new InvalidOperationException($"Issue '{issueId}' has no parent. Cannot move siblings without a parent issue.");
+            }
+
+            if (existing.ParentIssues.Count > 1)
+            {
+                throw new InvalidOperationException($"Issue '{issueId}' has multiple parents. Move sibling operation requires exactly one parent.");
+            }
+
+            var parentRef = existing.ParentIssues[0];
+            var parentId = parentRef.ParentIssue;
+
+            // Find all siblings under the same parent
+            var siblings = issues
+                .Where(i => i.ParentIssues.Any(p => p.ParentIssue == parentId))
+                .Select(i => new
+                {
+                    Issue = i,
+                    SortOrder = i.ParentIssues.First(p => p.ParentIssue == parentId).SortOrder ?? "0"
+                })
+                .OrderBy(s => s.SortOrder, StringComparer.Ordinal)
+                .ToList();
+
+            var currentIdx = siblings.FindIndex(s => s.Issue.Id == issueId);
+            if (currentIdx < 0)
+            {
+                throw new InvalidOperationException($"Issue '{issueId}' not found among siblings");
+            }
+
+            if (direction == MoveDirection.Up && currentIdx == 0)
+            {
+                throw new InvalidOperationException($"Issue '{issueId}' is already first among siblings. Cannot move up.");
+            }
+
+            if (direction == MoveDirection.Down && currentIdx == siblings.Count - 1)
+            {
+                throw new InvalidOperationException($"Issue '{issueId}' is already last among siblings. Cannot move down.");
+            }
+
+            var targetIdx = direction == MoveDirection.Up ? currentIdx - 1 : currentIdx + 1;
+            var targetSibling = siblings[targetIdx];
+
+            var currentSortOrder = siblings[currentIdx].SortOrder;
+            var targetSortOrder = targetSibling.SortOrder;
+
+            // Update current issue
+            var currentIssueIdx = issues.FindIndex(i => i.Id == issueId);
+            var currentIssue = issues[currentIssueIdx];
+            var newCurrentParents = currentIssue.ParentIssues
+                .Select(p => p.ParentIssue == parentId
+                    ? new ParentIssueRef { ParentIssue = p.ParentIssue, SortOrder = targetSortOrder }
+                    : p)
+                .ToList();
+
+            var updatedCurrent = new Issue
+            {
+                Id = currentIssue.Id,
+                Title = currentIssue.Title,
+                Description = currentIssue.Description,
+                Type = currentIssue.Type,
+                Status = currentIssue.Status,
+                Priority = currentIssue.Priority,
+                ExecutionMode = currentIssue.ExecutionMode,
+                WorkingBranchId = currentIssue.WorkingBranchId,
+                ParentIssues = newCurrentParents,
+                Tags = currentIssue.Tags,
+                LinkedIssues = currentIssue.LinkedIssues,
+                LinkedPR = currentIssue.LinkedPR,
+                CreatedBy = currentIssue.CreatedBy,
+                AssignedTo = currentIssue.AssignedTo,
+                CreatedAt = currentIssue.CreatedAt,
+                LastUpdate = DateTime.UtcNow
+            };
+            issues[currentIssueIdx] = updatedCurrent;
+
+            // Update target issue
+            var targetIssueIdx = issues.FindIndex(i => i.Id == targetSibling.Issue.Id);
+            var targetIssue = issues[targetIssueIdx];
+            var newTargetParents = targetIssue.ParentIssues
+                .Select(p => p.ParentIssue == parentId
+                    ? new ParentIssueRef { ParentIssue = p.ParentIssue, SortOrder = currentSortOrder }
+                    : p)
+                .ToList();
+
+            var updatedTarget = new Issue
+            {
+                Id = targetIssue.Id,
+                Title = targetIssue.Title,
+                Description = targetIssue.Description,
+                Type = targetIssue.Type,
+                Status = targetIssue.Status,
+                Priority = targetIssue.Priority,
+                ExecutionMode = targetIssue.ExecutionMode,
+                WorkingBranchId = targetIssue.WorkingBranchId,
+                ParentIssues = newTargetParents,
+                Tags = targetIssue.Tags,
+                LinkedIssues = targetIssue.LinkedIssues,
+                LinkedPR = targetIssue.LinkedPR,
+                CreatedBy = targetIssue.CreatedBy,
+                AssignedTo = targetIssue.AssignedTo,
+                CreatedAt = targetIssue.CreatedAt,
+                LastUpdate = DateTime.UtcNow
+            };
+            issues[targetIssueIdx] = updatedTarget;
+
+            return Task.FromResult(updatedCurrent);
         }
     }
 

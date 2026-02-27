@@ -28,6 +28,30 @@
     <div class="control-panel-separator"></div>
 
     <button type="button"
+            class="control-panel-btn"
+            data-testid="move-up-btn"
+            title="Move issue up in sibling order (Shift+K)"
+            disabled="@IsMoveUpDownDisabled(isUp: true)"
+            @onclick="HandleMoveUp"
+            @onclick:stopPropagation="true">
+        <i class="bi bi-arrow-up"></i>
+        <span class="btn-label">Up</span>
+    </button>
+
+    <button type="button"
+            class="control-panel-btn"
+            data-testid="move-down-btn"
+            title="Move issue down in sibling order (Shift+J)"
+            disabled="@IsMoveUpDownDisabled(isUp: false)"
+            @onclick="HandleMoveDown"
+            @onclick:stopPropagation="true">
+        <i class="bi bi-arrow-down"></i>
+        <span class="btn-label">Down</span>
+    </button>
+
+    <div class="control-panel-separator"></div>
+
+    <button type="button"
             class="control-panel-btn @(IsMakeChildOfActive ? "ring-2 ring-offset-2 ring-blue-500" : "")"
             data-testid="make-child-of-btn"
             title="Make this issue a child of another (click to select target)"
@@ -159,5 +183,32 @@
     {
         if (IsMoveButtonDisabled(MoveOperationType.AsParentOf)) return;
         NavService.StartMakeParentOf();
+    }
+
+    private bool IsMoveUpDownDisabled(bool isUp)
+    {
+        // Disabled if not in viewing mode
+        if (NavService.EditMode != KeyboardEditMode.Viewing) return true;
+
+        // Disabled if no issue selected
+        if (NavService.SelectedIndex < 0) return true;
+
+        // Check sibling move info
+        var moveInfo = NavService.GetSiblingMoveInfo();
+        if (!moveInfo.HasSingleParent) return true;
+
+        return isUp ? !moveInfo.CanMoveUp : !moveInfo.CanMoveDown;
+    }
+
+    private async Task HandleMoveUp()
+    {
+        if (IsMoveUpDownDisabled(isUp: true)) return;
+        await NavService.MoveSelectedUpAsync();
+    }
+
+    private async Task HandleMoveDown()
+    {
+        if (IsMoveUpDownDisabled(isUp: false)) return;
+        await NavService.MoveSelectedDownAsync();
     }
 }

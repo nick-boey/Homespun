@@ -275,6 +275,46 @@ public class IssuesController(
         }
     }
 
+    /// <summary>
+    /// Move a sibling issue up or down in the series order.
+    /// </summary>
+    [HttpPost("issues/{issueId}/move-sibling")]
+    [ProducesResponseType<IssueResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<IssueResponse>> MoveSeriesSibling(string issueId, [FromBody] MoveSeriesSiblingRequest request)
+    {
+        var project = await projectService.GetByIdAsync(request.ProjectId);
+        if (project == null)
+        {
+            return NotFound("Project not found");
+        }
+
+        // Check if the issue exists
+        var existingIssue = await fleeceService.GetIssueAsync(project.LocalPath, issueId);
+        if (existingIssue == null)
+        {
+            return NotFound("Issue not found");
+        }
+
+        try
+        {
+            var issue = await fleeceService.MoveSeriesSiblingAsync(
+                project.LocalPath,
+                issueId,
+                request.Direction);
+
+            // Broadcast issue update to connected clients
+            await notificationHub.BroadcastIssuesChanged(request.ProjectId, IssueChangeType.Updated, issueId);
+
+            return Ok(issue.ToResponse());
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+    }
+
     #region History Operations
 
     /// <summary>
