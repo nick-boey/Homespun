@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
+using BlazorBlueprint.Components;
 using Homespun.Client;
 using Homespun.Client.Services;
 using Homespun.Client.Services.Observability;
@@ -44,6 +45,9 @@ builder.Services.AddScoped<MessageDisplayService>();
 builder.Services.AddScoped<IKeyboardNavigationService, KeyboardNavigationService>();
 builder.Services.AddScoped<IPanelService, PanelService>();
 builder.Services.AddScoped<AGUIEventStateService>();
+
+// Register Blazor Blueprint components
+builder.Services.AddBlazorBlueprintComponents();
 
 // Register telemetry services
 builder.Services.AddScoped<ConsoleTelemetryService>();

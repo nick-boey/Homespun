@@ -16,15 +16,26 @@
     <link rel="stylesheet" href="css/tailwind.min.css" />
     <link rel="stylesheet" href="app.css" />
     <link href="Homespun.Client.styles.css" rel="stylesheet" />
+    <!-- Blazor Blueprint Theme (must load before component styles) -->
+    <link rel="stylesheet" href="css/theme.css" />
+    <link href="_content/BlazorBlueprint.Components/blazorblueprint.css" rel="stylesheet" />
     <link rel="icon" type="image/png" href="favicon.png" />
     <!-- Apply theme before render to prevent flash -->
     <script>
         (function() {
             var theme = localStorage.getItem('homespun-theme') || 'auto';
+            var isDark = theme === 'dark' ||
+                (theme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+
             if (theme === 'auto') {
                 document.documentElement.removeAttribute('data-theme');
             } else {
                 document.documentElement.setAttribute('data-theme', theme);
+            }
+
+            // Toggle .dark class for Blazor Blueprint
+            if (isDark) {
+                document.documentElement.classList.add('dark');
             }
         })();
     </script>
@@ -146,11 +157,17 @@
             },
             setTheme: function(theme) {
                 localStorage.setItem('homespun-theme', theme);
+                var isDark = theme === 'dark' ||
+                    (theme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+
                 if (theme === 'auto') {
                     document.documentElement.removeAttribute('data-theme');
                 } else {
                     document.documentElement.setAttribute('data-theme', theme);
                 }
+
+                // Toggle .dark class for Blazor Blueprint
+                document.documentElement.classList.toggle('dark', isDark);
             }
         };
         window.sidebarManager = {
