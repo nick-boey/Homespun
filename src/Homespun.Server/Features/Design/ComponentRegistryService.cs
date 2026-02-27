@@ -71,16 +71,6 @@ public class ComponentRegistryService : IComponentRegistryService
             ComponentPath = "Shared/InfoList.razor",
             Tags = new() { "list", "info", "display" }
         },
-        new ComponentMetadata
-        {
-            Id = "quick-issue-create-bar",
-            Name = "QuickIssueCreateBar",
-            Description = "Fixed bottom bar for quickly creating issues with type selector, group, and title inputs.",
-            Category = "Forms",
-            ComponentPath = "Shared/QuickIssueCreateBar.razor",
-            Tags = new() { "form", "issue", "create", "quick" }
-        },
-
         // Panel Components
         new ComponentMetadata
         {
