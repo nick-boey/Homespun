@@ -2157,8 +2157,7 @@ public class KeyboardNavigationServiceTests
 
     #endregion
 
-<<<<<<< HEAD
-#region Open Edit Tests
+    #region Open Edit Tests
 
     [Test]
     public void OpenSelectedIssueForEdit_WithSelection_FiresOnOpenEditRequested()

@@ -615,6 +615,7 @@ public static class TaskGraphLayoutService
             DrawBottomLine: drawBottomLine,
             SeriesConnectorFromLane: seriesConnectorFromLane,
             IssueType: IssueType.Task,
+            Status: IssueStatus.Open,
             HasDescription: false,
             LinkedPr: null,
             AgentStatus: null,
