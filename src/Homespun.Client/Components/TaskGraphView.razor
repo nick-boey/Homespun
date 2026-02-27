@@ -85,7 +85,6 @@
                             </div>
                             <div class="task-graph-content-cell">
                                 <span class="task-graph-issue-type task">Task</span>
-                                <span class="task-graph-issue-id task-graph-issue-id-new">NEW</span>
                                 <InlineIssueEditor Title="@NavService.PendingNewIssue.Title"
                                                    CursorPosition="EditCursorPosition.Start"
                                                    Placeholder="Enter new issue title..." />
@@ -223,7 +222,6 @@
                         </div>
                         <div class="task-graph-content-cell">
                             <span class="task-graph-issue-type task">Task</span>
-                            <span class="task-graph-issue-id task-graph-issue-id-new">NEW</span>
                             <InlineIssueEditor Title="@NavService.PendingNewIssue.Title"
                                                CursorPosition="EditCursorPosition.Start"
                                                Placeholder="Enter new issue title..." />
@@ -255,7 +253,6 @@
                     </div>
                     <div class="task-graph-content-cell">
                         <span class="task-graph-issue-type task">Task</span>
-                        <span class="task-graph-issue-id task-graph-issue-id-new">NEW</span>
                         <InlineIssueEditor Title="@NavService.PendingNewIssue.Title"
                                            CursorPosition="EditCursorPosition.Start"
                                            Placeholder="Enter new issue title..." />
@@ -606,12 +603,6 @@
         background-color: var(--bg-secondary, rgba(255, 255, 255, 0.1));
     }
 
-    .task-graph-issue-id-new {
-        background-color: rgba(81, 165, 193, 0.2);
-        color: var(--color-ocean, #51A5C1);
-        border-color: var(--color-ocean, #51A5C1);
-    }
-
     .lane-indicator {
         font-size: 11px;
         padding: 2px 6px;
@@ -699,7 +690,7 @@
         color: #6b7280;
     }
 
-    /* Level controls */
+/* Level controls */
     .task-graph-level-controls {
         display: flex;
         align-items: center;
@@ -860,6 +851,13 @@
     .status-menu-item.archived {
         background-color: rgba(156, 163, 175, 0.2);
         color: #9ca3af;
+    }
+
+    /* Hide issue ID on mobile to save space */
+    @@media (max-width: 600px) {
+        .task-graph-issue-id {
+            display: none;
+        }
     }
 </style>
 

@@ -74,6 +74,34 @@ public class TaskGraphViewTests : BunitTestContext
     }
 
     [Test]
+    public void Renders_IssueId_WithMobileHidingCssClass()
+    {
+        var taskGraph = new TaskGraphResponse
+        {
+            Nodes =
+            [
+                new TaskGraphNodeResponse
+                {
+                    Issue = new IssueResponse { Id = "TEST-001", Title = "Test issue", Status = IssueStatus.Open },
+                    Lane = 0, Row = 0, IsActionable = true
+                }
+            ],
+            TotalLanes = 1
+        };
+
+        var cut = Render<TaskGraphView>(p => p.Add(x => x.TaskGraph, taskGraph));
+
+        // Verify issue ID element exists with class that gets hidden on mobile
+        var issueIdElement = cut.Find(".task-graph-issue-id");
+        Assert.That(issueIdElement.TextContent, Is.EqualTo("TEST-001"));
+
+        // Verify the component's embedded styles contain the mobile media query
+        Assert.That(cut.Markup, Does.Contain("@media (max-width: 600px)"));
+        Assert.That(cut.Markup, Does.Contain(".task-graph-issue-id"));
+        Assert.That(cut.Markup, Does.Contain("display: none"));
+    }
+
+    [Test]
     public void Renders_ActionableMarker_WithSvgGlowRing()
     {
         var taskGraph = new TaskGraphResponse
@@ -1017,10 +1045,6 @@ public class TaskGraphViewTests : BunitTestContext
         // Assert: Only ONE InlineIssueEditor should be rendered
         var editors = cut.FindComponents<InlineIssueEditor>();
         Assert.That(editors, Has.Count.EqualTo(1), "Expected exactly one InlineIssueEditor, but found " + editors.Count);
-
-        // Also verify by checking for the "NEW" badge (should appear only once)
-        var newBadges = cut.FindAll(".task-graph-issue-id-new");
-        Assert.That(newBadges, Has.Count.EqualTo(1), "Expected exactly one 'NEW' badge");
     }
 
     [Test]
