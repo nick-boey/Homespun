@@ -24,6 +24,30 @@
         <i class="bi bi-plus-circle"></i>
         <span class="btn-label">Below</span>
     </button>
+
+    <div class="control-panel-separator"></div>
+
+    <button type="button"
+            class="control-panel-btn @(IsMakeChildOfActive ? "ring-2 ring-offset-2 ring-blue-500" : "")"
+            data-testid="make-child-of-btn"
+            title="Make this issue a child of another (click to select target)"
+            disabled="@IsMoveButtonDisabled(MoveOperationType.AsChildOf)"
+            @onclick="HandleMakeChildOf"
+            @onclick:stopPropagation="true">
+        <i class="bi bi-box-arrow-in-up-right"></i>
+        <span class="btn-label">Child Of</span>
+    </button>
+
+    <button type="button"
+            class="control-panel-btn @(IsMakeParentOfActive ? "ring-2 ring-offset-2 ring-blue-500" : "")"
+            data-testid="make-parent-of-btn"
+            title="Make another issue a child of this issue (click to select target)"
+            disabled="@IsMoveButtonDisabled(MoveOperationType.AsParentOf)"
+            @onclick="HandleMakeParentOf"
+            @onclick:stopPropagation="true">
+        <i class="bi bi-box-arrow-in-down-left"></i>
+        <span class="btn-label">Parent Of</span>
+    </button>
 </div>
 
 <style>
@@ -73,10 +97,45 @@
     .btn-label {
         font-size: 0.875rem;
     }
+
+    .control-panel-separator {
+        width: 1px;
+        height: 24px;
+        background: var(--border-color);
+        margin: 0 var(--spacing-xs);
+    }
+
+    .control-panel-btn.btn-active,
+    .control-panel-btn.ring-2 {
+        box-shadow: 0 0 0 2px white, 0 0 0 4px var(--color-ocean);
+    }
 </style>
 
 @code {
     private bool IsDisabled => NavService.EditMode != KeyboardEditMode.Viewing;
+
+    private bool IsInSelectionMode => NavService.EditMode == KeyboardEditMode.SelectingMoveTarget;
+
+    private bool IsMakeChildOfActive =>
+        IsInSelectionMode && NavService.CurrentMoveOperation == MoveOperationType.AsChildOf;
+
+    private bool IsMakeParentOfActive =>
+        IsInSelectionMode && NavService.CurrentMoveOperation == MoveOperationType.AsParentOf;
+
+    private bool IsMoveButtonDisabled(MoveOperationType operationType)
+    {
+        // Disabled if no issue selected
+        if (NavService.SelectedIndex < 0) return true;
+
+        // In selection mode, disable the button that's not active
+        if (IsInSelectionMode)
+        {
+            return NavService.CurrentMoveOperation != operationType;
+        }
+
+        // Disabled if in any other edit mode
+        return NavService.EditMode != KeyboardEditMode.Viewing;
+    }
 
     private void HandleCreateAbove()
     {
@@ -88,5 +147,17 @@
     {
         if (IsDisabled) return;
         NavService.CreateIssueBelow();
+    }
+
+    private void HandleMakeChildOf()
+    {
+        if (IsMoveButtonDisabled(MoveOperationType.AsChildOf)) return;
+        NavService.StartMakeChildOf();
+    }
+
+    private void HandleMakeParentOf()
+    {
+        if (IsMoveButtonDisabled(MoveOperationType.AsParentOf)) return;
+        NavService.StartMakeParentOf();
     }
 }

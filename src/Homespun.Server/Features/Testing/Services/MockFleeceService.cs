@@ -352,6 +352,128 @@ public class MockFleeceService : IFleeceService
         }
     }
 
+    public Task<bool> WouldCreateCycleAsync(string projectPath, string childId, string parentId, CancellationToken ct = default)
+    {
+        _logger.LogDebug("[Mock] WouldCreateCycle check: childId={ChildId}, parentId={ParentId} in {ProjectPath}", childId, parentId, projectPath);
+
+        // Self-reference is always a cycle
+        if (string.Equals(childId, parentId, StringComparison.OrdinalIgnoreCase))
+        {
+            return Task.FromResult(true);
+        }
+
+        if (!_issuesByProject.TryGetValue(projectPath, out var issues))
+        {
+            return Task.FromResult(false);
+        }
+
+        List<Issue> snapshot;
+        lock (issues)
+        {
+            snapshot = issues.ToList();
+        }
+
+        var issueMap = snapshot.ToDictionary(i => i.Id, StringComparer.OrdinalIgnoreCase);
+
+        // Use BFS to check if parentId is a descendant of childId
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var queue = new Queue<string>();
+        queue.Enqueue(parentId);
+
+        while (queue.Count > 0)
+        {
+            var currentId = queue.Dequeue();
+
+            if (visited.Contains(currentId))
+                continue;
+
+            visited.Add(currentId);
+
+            if (string.Equals(currentId, childId, StringComparison.OrdinalIgnoreCase))
+            {
+                return Task.FromResult(true);
+            }
+
+            if (issueMap.TryGetValue(currentId, out var issue))
+            {
+                foreach (var parentRef in issue.ParentIssues)
+                {
+                    if (!visited.Contains(parentRef.ParentIssue))
+                    {
+                        queue.Enqueue(parentRef.ParentIssue);
+                    }
+                }
+            }
+        }
+
+        return Task.FromResult(false);
+    }
+
+    public async Task<Issue> SetParentAsync(string projectPath, string childId, string parentId, bool addToExisting = false, CancellationToken ct = default)
+    {
+        _logger.LogDebug("[Mock] SetParent: childId={ChildId}, parentId={ParentId}, addToExisting={AddToExisting} in {ProjectPath}",
+            childId, parentId, addToExisting, projectPath);
+
+        // Check for cycle
+        if (await WouldCreateCycleAsync(projectPath, childId, parentId, ct))
+        {
+            throw new InvalidOperationException($"Setting '{parentId}' as parent of '{childId}' would create a cycle in the issue hierarchy.");
+        }
+
+        if (!_issuesByProject.TryGetValue(projectPath, out var issues))
+        {
+            throw new KeyNotFoundException($"Issue '{childId}' not found");
+        }
+
+        lock (issues)
+        {
+            var existingIndex = issues.FindIndex(i => i.Id == childId);
+            if (existingIndex < 0)
+            {
+                throw new KeyNotFoundException($"Issue '{childId}' not found");
+            }
+
+            var existing = issues[existingIndex];
+
+            List<ParentIssueRef> newParentIssues;
+            if (addToExisting)
+            {
+                newParentIssues = existing.ParentIssues.ToList();
+                if (!newParentIssues.Any(p => string.Equals(p.ParentIssue, parentId, StringComparison.OrdinalIgnoreCase)))
+                {
+                    newParentIssues.Add(new ParentIssueRef { ParentIssue = parentId, SortOrder = "0" });
+                }
+            }
+            else
+            {
+                newParentIssues = [new ParentIssueRef { ParentIssue = parentId, SortOrder = "0" }];
+            }
+
+            var updated = new Issue
+            {
+                Id = existing.Id,
+                Title = existing.Title,
+                Description = existing.Description,
+                Type = existing.Type,
+                Status = existing.Status,
+                Priority = existing.Priority,
+                ExecutionMode = existing.ExecutionMode,
+                WorkingBranchId = existing.WorkingBranchId,
+                ParentIssues = newParentIssues,
+                Tags = existing.Tags,
+                LinkedIssues = existing.LinkedIssues,
+                LinkedPR = existing.LinkedPR,
+                CreatedBy = existing.CreatedBy,
+                AssignedTo = existing.AssignedTo,
+                CreatedAt = existing.CreatedAt,
+                LastUpdate = DateTime.UtcNow
+            };
+
+            issues[existingIndex] = updated;
+            return updated;
+        }
+    }
+
     public Task ApplyHistorySnapshotAsync(string projectPath, IReadOnlyList<Issue> issues, CancellationToken ct = default)
     {
         _logger.LogDebug("[Mock] ApplyHistorySnapshot with {Count} issues for {ProjectPath}", issues.Count, projectPath);

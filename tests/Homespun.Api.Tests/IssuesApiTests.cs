@@ -1,5 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
+using Fleece.Core.Models;
+using Homespun.Shared.Models.Fleece;
 using Homespun.Shared.Requests;
 
 namespace Homespun.Api.Tests;
@@ -132,4 +134,251 @@ public class IssuesApiTests
         // No matching clone either, so null is returned
         Assert.That(result!.BranchName, Is.Null);
     }
+
+    #region SetParent Tests
+
+    [Test]
+    public async Task SetParent_ReturnsNotFound_WhenProjectNotExists()
+    {
+        // Arrange
+        var request = new SetParentRequest
+        {
+            ProjectId = "nonexistent",
+            ParentIssueId = "parent-123"
+        };
+
+        // Act
+        var response = await _client.PostAsJsonAsync("/api/issues/child-456/set-parent", request);
+
+        // Assert
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+    }
+
+    [Test]
+    public async Task SetParent_ReturnsNotFound_WhenChildIssueNotExists()
+    {
+        // Arrange
+        var project = new Project { Id = "proj1", Name = "TestProject", LocalPath = "/tmp/test-project", DefaultBranch = "main" };
+        _factory.MockDataStore.SeedProject(project);
+        _factory.MockFleeceService.SeedIssue(project.LocalPath, new Issue
+        {
+            Id = "parent-123",
+            Title = "Parent Issue",
+            Type = IssueType.Task,
+            Status = IssueStatus.Open,
+            LastUpdate = DateTime.UtcNow
+        });
+
+        var request = new SetParentRequest
+        {
+            ProjectId = "proj1",
+            ParentIssueId = "parent-123"
+        };
+
+        // Act
+        var response = await _client.PostAsJsonAsync("/api/issues/nonexistent/set-parent", request);
+
+        // Assert
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+    }
+
+    [Test]
+    public async Task SetParent_ReturnsBadRequest_WhenCycleDetected()
+    {
+        // Arrange - create A -> B hierarchy where B is child of A
+        var project = new Project { Id = "proj1", Name = "TestProject", LocalPath = "/tmp/test-project", DefaultBranch = "main" };
+        _factory.MockDataStore.SeedProject(project);
+
+        var issueA = new Issue
+        {
+            Id = "issue-A",
+            Title = "Issue A",
+            Type = IssueType.Task,
+            Status = IssueStatus.Open,
+            LastUpdate = DateTime.UtcNow
+        };
+        var issueB = new Issue
+        {
+            Id = "issue-B",
+            Title = "Issue B",
+            Type = IssueType.Task,
+            Status = IssueStatus.Open,
+            LastUpdate = DateTime.UtcNow,
+            ParentIssues = [new ParentIssueRef { ParentIssue = "issue-A", SortOrder = "0" }]
+        };
+
+        _factory.MockFleeceService.SeedIssue(project.LocalPath, issueA);
+        _factory.MockFleeceService.SeedIssue(project.LocalPath, issueB);
+
+        // Try to make A a child of B (would create cycle)
+        var request = new SetParentRequest
+        {
+            ProjectId = "proj1",
+            ParentIssueId = "issue-B"
+        };
+
+        // Act
+        var response = await _client.PostAsJsonAsync("/api/issues/issue-A/set-parent", request);
+
+        // Assert
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+    }
+
+    [Test]
+    public async Task SetParent_ReturnsOk_WhenValidRequest()
+    {
+        // Arrange
+        var project = new Project { Id = "proj1", Name = "TestProject", LocalPath = "/tmp/test-project", DefaultBranch = "main" };
+        _factory.MockDataStore.SeedProject(project);
+
+        var parentIssue = new Issue
+        {
+            Id = "parent-123",
+            Title = "Parent Issue",
+            Type = IssueType.Task,
+            Status = IssueStatus.Open,
+            LastUpdate = DateTime.UtcNow
+        };
+        var childIssue = new Issue
+        {
+            Id = "child-456",
+            Title = "Child Issue",
+            Type = IssueType.Task,
+            Status = IssueStatus.Open,
+            LastUpdate = DateTime.UtcNow
+        };
+
+        _factory.MockFleeceService.SeedIssue(project.LocalPath, parentIssue);
+        _factory.MockFleeceService.SeedIssue(project.LocalPath, childIssue);
+
+        var request = new SetParentRequest
+        {
+            ProjectId = "proj1",
+            ParentIssueId = "parent-123"
+        };
+
+        // Act
+        var response = await _client.PostAsJsonAsync("/api/issues/child-456/set-parent", request);
+
+        // Assert
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var result = await response.Content.ReadFromJsonAsync<IssueResponse>();
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.ParentIssues, Has.Count.EqualTo(1));
+        Assert.That(result.ParentIssues[0].ParentIssue, Is.EqualTo("parent-123"));
+    }
+
+    [Test]
+    public async Task SetParent_AddsToExisting_WhenAddToExistingTrue()
+    {
+        // Arrange - child already has parentA, we want to add parentB
+        var project = new Project { Id = "proj1", Name = "TestProject", LocalPath = "/tmp/test-project", DefaultBranch = "main" };
+        _factory.MockDataStore.SeedProject(project);
+
+        var parentA = new Issue
+        {
+            Id = "parent-A",
+            Title = "Parent A",
+            Type = IssueType.Task,
+            Status = IssueStatus.Open,
+            LastUpdate = DateTime.UtcNow
+        };
+        var parentB = new Issue
+        {
+            Id = "parent-B",
+            Title = "Parent B",
+            Type = IssueType.Task,
+            Status = IssueStatus.Open,
+            LastUpdate = DateTime.UtcNow
+        };
+        var childIssue = new Issue
+        {
+            Id = "child-456",
+            Title = "Child Issue",
+            Type = IssueType.Task,
+            Status = IssueStatus.Open,
+            LastUpdate = DateTime.UtcNow,
+            ParentIssues = [new ParentIssueRef { ParentIssue = "parent-A", SortOrder = "0" }]
+        };
+
+        _factory.MockFleeceService.SeedIssue(project.LocalPath, parentA);
+        _factory.MockFleeceService.SeedIssue(project.LocalPath, parentB);
+        _factory.MockFleeceService.SeedIssue(project.LocalPath, childIssue);
+
+        var request = new SetParentRequest
+        {
+            ProjectId = "proj1",
+            ParentIssueId = "parent-B",
+            AddToExisting = true
+        };
+
+        // Act
+        var response = await _client.PostAsJsonAsync("/api/issues/child-456/set-parent", request);
+
+        // Assert
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var result = await response.Content.ReadFromJsonAsync<IssueResponse>();
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.ParentIssues, Has.Count.EqualTo(2));
+        var parentIds = result.ParentIssues.Select(p => p.ParentIssue).ToList();
+        Assert.That(parentIds, Does.Contain("parent-A"));
+        Assert.That(parentIds, Does.Contain("parent-B"));
+    }
+
+    [Test]
+    public async Task SetParent_ReplacesExisting_WhenAddToExistingFalse()
+    {
+        // Arrange - child already has parentA, we want to replace with parentB
+        var project = new Project { Id = "proj1", Name = "TestProject", LocalPath = "/tmp/test-project", DefaultBranch = "main" };
+        _factory.MockDataStore.SeedProject(project);
+
+        var parentA = new Issue
+        {
+            Id = "parent-A",
+            Title = "Parent A",
+            Type = IssueType.Task,
+            Status = IssueStatus.Open,
+            LastUpdate = DateTime.UtcNow
+        };
+        var parentB = new Issue
+        {
+            Id = "parent-B",
+            Title = "Parent B",
+            Type = IssueType.Task,
+            Status = IssueStatus.Open,
+            LastUpdate = DateTime.UtcNow
+        };
+        var childIssue = new Issue
+        {
+            Id = "child-456",
+            Title = "Child Issue",
+            Type = IssueType.Task,
+            Status = IssueStatus.Open,
+            LastUpdate = DateTime.UtcNow,
+            ParentIssues = [new ParentIssueRef { ParentIssue = "parent-A", SortOrder = "0" }]
+        };
+
+        _factory.MockFleeceService.SeedIssue(project.LocalPath, parentA);
+        _factory.MockFleeceService.SeedIssue(project.LocalPath, parentB);
+        _factory.MockFleeceService.SeedIssue(project.LocalPath, childIssue);
+
+        var request = new SetParentRequest
+        {
+            ProjectId = "proj1",
+            ParentIssueId = "parent-B",
+            AddToExisting = false
+        };
+
+        // Act
+        var response = await _client.PostAsJsonAsync("/api/issues/child-456/set-parent", request);
+
+        // Assert
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var result = await response.Content.ReadFromJsonAsync<IssueResponse>();
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.ParentIssues, Has.Count.EqualTo(1));
+        Assert.That(result.ParentIssues[0].ParentIssue, Is.EqualTo("parent-B"));
+    }
+
+    #endregion
 }

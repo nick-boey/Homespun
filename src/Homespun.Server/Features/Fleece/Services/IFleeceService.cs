@@ -167,6 +167,29 @@ public interface IFleeceService
     /// <exception cref="KeyNotFoundException">If the child issue is not found.</exception>
     Task<Issue> RemoveParentAsync(string projectPath, string childId, string parentId, CancellationToken ct = default);
 
+    /// <summary>
+    /// Checks whether setting a parent relationship would create a cycle.
+    /// </summary>
+    /// <param name="projectPath">Path to the project.</param>
+    /// <param name="childId">The ID of the issue that would become the child.</param>
+    /// <param name="parentId">The ID of the issue that would become the parent.</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>True if the relationship would create a cycle, false otherwise.</returns>
+    Task<bool> WouldCreateCycleAsync(string projectPath, string childId, string parentId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Sets the parent of an issue, optionally replacing all existing parents.
+    /// </summary>
+    /// <param name="projectPath">Path to the project.</param>
+    /// <param name="childId">The ID of the child issue.</param>
+    /// <param name="parentId">The ID of the new parent issue.</param>
+    /// <param name="addToExisting">If true, adds to existing parents; if false, replaces all existing parents.</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>The updated child issue.</returns>
+    /// <exception cref="KeyNotFoundException">If the child issue is not found.</exception>
+    /// <exception cref="InvalidOperationException">If the relationship would create a cycle.</exception>
+    Task<Issue> SetParentAsync(string projectPath, string childId, string parentId, bool addToExisting = false, CancellationToken ct = default);
+
     #endregion
 
     #region History Operations

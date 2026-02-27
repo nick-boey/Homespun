@@ -77,6 +77,27 @@ public class HttpIssueApiService(HttpClient http)
         var result = await response.Content.ReadFromJsonAsync<ResolvedBranchResponse>();
         return result?.BranchName;
     }
+
+    /// <summary>
+    /// Sets the parent of an issue.
+    /// </summary>
+    /// <param name="childId">The issue ID of the child issue</param>
+    /// <param name="request">The request containing the parent issue ID and options</param>
+    /// <returns>The updated issue, or null if not found</returns>
+    public async Task<IssueResponse?> SetParentAsync(string childId, SetParentRequest request)
+    {
+        var response = await http.PostAsJsonAsync($"{ApiRoutes.Issues}/{childId}/set-parent", request);
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            return null;
+        if (response.StatusCode == System.Net.HttpStatusCode.BadRequest)
+        {
+            // Cycle detection error
+            var errorMessage = await response.Content.ReadAsStringAsync();
+            throw new InvalidOperationException(errorMessage);
+        }
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<IssueResponse>();
+    }
 }
 
 /// <summary>

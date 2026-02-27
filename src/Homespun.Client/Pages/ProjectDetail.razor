@@ -657,6 +657,7 @@ else
             NavService.OnStateChanged += OnNavServiceStateChanged;
             NavService.OnOpenEditRequested += OnOpenEditRequested;
             NavService.OnIssueCreatedForEdit += NavigateToIssueEditAsync;
+            NavService.OnMoveOperationRequested += OnMoveOperationRequested;
         }
     }
 
@@ -712,6 +713,44 @@ else
     private void OnOpenEditRequested(string issueId)
     {
         HandleEditIssue(issueId);
+    }
+
+    private async Task OnMoveOperationRequested(string sourceIssueId, string targetIssueId, MoveOperationType operation, bool addToExisting)
+    {
+        try
+        {
+            string childId, parentId;
+            if (operation == MoveOperationType.AsChildOf)
+            {
+                // Source becomes child of target
+                childId = sourceIssueId;
+                parentId = targetIssueId;
+            }
+            else // AsParentOf
+            {
+                // Target becomes child of source
+                childId = targetIssueId;
+                parentId = sourceIssueId;
+            }
+
+            var request = new SetParentRequest
+            {
+                ProjectId = Id,
+                ParentIssueId = parentId,
+                AddToExisting = addToExisting
+            };
+
+            await IssueApi.SetParentAsync(childId, request);
+
+            // Refresh the task graph
+            await RefreshData();
+        }
+        catch (InvalidOperationException ex)
+        {
+            // Cycle detected - log the error
+            Logger.LogWarning("Move operation would create cycle: {Message}", ex.Message);
+            // TODO: Show a toast notification to the user
+        }
     }
 
     private void OnPanelServiceStateChanged()
@@ -775,6 +814,7 @@ else
         NavService.OnStateChanged -= OnNavServiceStateChanged;
         NavService.OnOpenEditRequested -= OnOpenEditRequested;
         NavService.OnIssueCreatedForEdit -= NavigateToIssueEditAsync;
+        NavService.OnMoveOperationRequested -= OnMoveOperationRequested;
         PanelService.OnStateChanged -= OnPanelServiceStateChanged;
         PanelService.SetPanelAvailable(false);
     }
@@ -1836,6 +1876,16 @@ else
                     // Start the agent with selected prompt
                     _ = StartAgentFromKeyboardAsync();
                     break;
+            }
+            return;
+        }
+
+        // Handle SelectingMoveTarget mode
+        if (NavService.EditMode == KeyboardEditMode.SelectingMoveTarget)
+        {
+            if (e.Key == "Escape")
+            {
+                NavService.CancelMoveOperation();
             }
             return;
         }
