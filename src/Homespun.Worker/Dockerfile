@@ -33,6 +33,9 @@ ENV DOTNET_PRINT_TELEMETRY_MESSAGE=false
 # Install Fleece CLI for issue tracking
 RUN dotnet tool install Fleece.Cli --tool-path /usr/local/bin
 
+# Install C# Language Server for LSP support
+RUN dotnet tool install csharp-ls --tool-path /usr/local/bin
+
 # GitHub CLI
 RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
       | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
@@ -42,6 +45,10 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
 
 # Claude Code CLI
 RUN npm install -g @anthropic-ai/claude-code
+
+# Install C# LSP plugin from official marketplace
+RUN claude plugin marketplace add anthropics/claude-plugins-official \
+    && claude plugin install csharp-lsp@claude-plugins-official
 
 # Playwright MCP + Chromium
 # Install browsers to /opt/playwright-browsers with world-writable permissions
@@ -78,6 +85,7 @@ RUN userdel node \
     && mkdir -p /home/homespun/.claude/todos /home/homespun/.claude/debug /home/homespun/.claude/projects /home/homespun/.claude/statsig /home/homespun/.claude/plans \
     && mkdir -p /home/homespun/.local/share /home/homespun/.config /home/homespun/.cache \
     && mkdir -p /workdir \
+    && cp -r /root/.claude/plugins /home/homespun/.claude/plugins 2>/dev/null || true \
     && chown -R homespun:homespun /home/homespun /workdir /app \
     && chmod -R 777 /home/homespun/.local /home/homespun/.config /home/homespun/.cache /home/homespun/.claude
 
