@@ -49,7 +49,7 @@ public class LocalAgentExecutionService : IAgentExecutionService, IAsyncDisposab
         var sessionId = Guid.NewGuid().ToString();
 
         var options = _optionsFactory.Create(request.Mode, request.WorkingDirectory, request.Model, request.SystemPrompt);
-        options.PermissionMode = PermissionMode.BypassPermissions;
+        options.PermissionMode = MapToSdkPermissionMode(request.Mode);
         options.IncludePartialMessages = true;
 
         if (!string.IsNullOrEmpty(request.ResumeSessionId))
