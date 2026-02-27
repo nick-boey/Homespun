@@ -21,7 +21,7 @@
                 title="Save (Enter)"
                 @onclick="HandleOkClick"
                 @onclick:stopPropagation="true">
-            <i class="bi bi-check-lg"></i>
+            <LucideIcon Name="check" Size="14" />
         </button>
         <button type="button"
                 class="inline-action-btn inline-action-ok-edit"
@@ -29,7 +29,7 @@
                 title="Save and edit description (Shift+Enter)"
                 @onclick="HandleOkEditClick"
                 @onclick:stopPropagation="true">
-            <i class="bi bi-pencil"></i>
+            <LucideIcon Name="pencil" Size="14" />
         </button>
         <button type="button"
                 class="inline-action-btn inline-action-cancel"
@@ -37,7 +37,7 @@
                 title="Cancel (Escape)"
                 @onclick="HandleCancelClick"
                 @onclick:stopPropagation="true">
-            <i class="bi bi-x-lg"></i>
+            <LucideIcon Name="x" Size="14" />
         </button>
     </div>
 </div>
@@ -97,8 +97,9 @@
         transform: scale(1.05);
     }
 
-    .inline-action-btn i {
-        font-size: 14px;
+    .inline-action-btn :deep(svg) {
+        width: 14px;
+        height: 14px;
     }
 
     .inline-action-ok {

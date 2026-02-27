@@ -18,23 +18,23 @@
             <button class="btn btn-outline-secondary btn-sm" @onclick="RefreshDataAsync" disabled="@_isLoading">
                 @if (_isLoading)
                 {
-                    <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                    <BbSpinner Size="SpinnerSize.Small" Class="me-1" />
                 }
-                <i class="bi bi-arrow-clockwise"></i> Refresh
+                <LucideIcon Name="refresh-cw" Size="14" /> Refresh
             </button>
             <button class="btn btn-outline-secondary btn-sm" @onclick="FetchAllAsync" disabled="@_isFetching">
                 @if (_isFetching)
                 {
-                    <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                    <BbSpinner Size="SpinnerSize.Small" Class="me-1" />
                 }
-                <i class="bi bi-cloud-download"></i> Fetch
+                <LucideIcon Name="cloud-download" Size="14" /> Fetch
             </button>
             <button class="btn btn-outline-secondary btn-sm" @onclick="PruneClonesAsync" disabled="@_isPruning" title="Clean up stale clone references">
                 @if (_isPruning)
                 {
-                    <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                    <BbSpinner Size="SpinnerSize.Small" Class="me-1" />
                 }
-                <i class="bi bi-trash"></i> Prune
+                <LucideIcon Name="trash-2" Size="14" /> Prune
             </button>
         </div>
     </div>
@@ -140,7 +140,7 @@
                             @if (false) @* StartupTracker not available in WASM *@
                             {
                                 <span class="badge bg-warning text-dark">
-                                    <span class="spinner-border spinner-border-sm me-1" role="status" style="width: 0.6rem; height: 0.6rem;"></span>
+                                    <BbSpinner Size="SpinnerSize.Small" Class="me-1" />
                                     Starting...
                                 </span>
                             }
@@ -187,7 +187,7 @@
                                                 @onclick="() => StartMainBranchSessionAsync(clone)"
                                                 disabled="@_operationInProgress"
                                                 title="Start a new agent session on the main branch">
-                                            <i class="bi bi-robot me-1"></i>Run Agent
+                                            <LucideIcon Name="bot" Size="14" Class="me-1" />Run Agent
                                         </button>
                                     }
 
@@ -199,9 +199,9 @@
                                                 title="Pull latest changes and sync fleece issues (@branchInfo.BehindCount commits behind)">
                                             @if (_isUpdatingMain)
                                             {
-                                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                                <BbSpinner Size="SpinnerSize.Small" Class="me-1" />
                                             }
-                                            <i class="bi bi-cloud-download me-1"></i>Update
+                                            <LucideIcon Name="cloud-download" Size="14" Class="me-1" />Update
                                         </button>
                                     }
                                 }
@@ -239,7 +239,7 @@
                                                 @onclick="() => StartRebaseAgentAsync(clone)"
                                                 disabled="@(_operationInProgress || session != null)"
                                                 title="Start rebase agent to rebase onto @Project.DefaultBranch">
-                                            <i class="bi bi-arrow-repeat"></i> Rebase
+                                            <LucideIcon Name="refresh-cw" Size="14" /> Rebase
                                         </button>
                                     }
 
@@ -281,7 +281,7 @@
                                                 disabled="@_operationInProgress">
                                             @if (_operationInProgress)
                                             {
-                                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                                <BbSpinner Size="SpinnerSize.Small" Class="me-1" />
                                             }
                                             Confirm
                                         </button>
@@ -303,7 +303,7 @@
     @if (_lostClones.Any())
     {
         <div class="section-header d-flex justify-content-between align-items-center bg-warning bg-opacity-25">
-            <span><i class="bi bi-exclamation-triangle me-1"></i> Lost Clones</span>
+            <span><LucideIcon Name="alert-triangle" Size="14" Class="me-1" /> Lost Clones</span>
             <span class="badge bg-warning text-dark">@_lostClones.Count</span>
         </div>
         <table class="table table-sm wt-table">
@@ -328,7 +328,7 @@
                                 @if (lost.CanRepair)
                                 {
                                     <span class="badge bg-info" title="Can be repaired to branch: @lost.MatchingBranchName">
-                                        <i class="bi bi-arrow-right"></i> @lost.MatchingBranchName
+                                        <LucideIcon Name="arrow-right" Size="10" /> @lost.MatchingBranchName
                                     </span>
                                 }
                                 @if (lost.Status != null && lost.Status.HasChanges)
@@ -388,7 +388,7 @@
                                                 disabled="@_operationInProgress">
                                             @if (_operationInProgress)
                                             {
-                                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                                <BbSpinner Size="SpinnerSize.Small" Class="me-1" />
                                             }
                                             Confirm
                                         </button>
@@ -493,7 +493,7 @@
                                                 disabled="@_operationInProgress">
                                             @if (_operationInProgress)
                                             {
-                                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                                <BbSpinner Size="SpinnerSize.Small" Class="me-1" />
                                             }
                                             Confirm
                                         </button>

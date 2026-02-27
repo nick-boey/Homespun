@@ -18,19 +18,19 @@
                 <button class="theme-option @(_currentTheme == "auto" ? "active" : "")"
                         @onclick='() => SetTheme("auto")'
                         title="Use system preference">
-                    <i class="bi bi-circle-half"></i>
+                    <LucideIcon Name="sun-moon" Size="20" />
                     <span>Auto</span>
                 </button>
                 <button class="theme-option @(_currentTheme == "light" ? "active" : "")"
                         @onclick='() => SetTheme("light")'
                         title="Light mode">
-                    <i class="bi bi-sun"></i>
+                    <LucideIcon Name="sun" Size="20" />
                     <span>Light</span>
                 </button>
                 <button class="theme-option @(_currentTheme == "dark" ? "active" : "")"
                         @onclick='() => SetTheme("dark")'
                         title="Dark mode">
-                    <i class="bi bi-moon"></i>
+                    <LucideIcon Name="moon" Size="20" />
                     <span>Dark</span>
                 </button>
             </div>
@@ -52,14 +52,14 @@
                     @if (_authStatus?.IsAuthenticated == true)
                     {
                         <span class="status-badge status-ok">
-                            <i class="bi bi-check-circle-fill" aria-hidden="true"></i>
+                            <LucideIcon Name="check-circle" Size="16" />
                             Authenticated
                         </span>
                     }
                     else
                     {
                         <span class="status-badge status-error">
-                            <i class="bi bi-x-circle-fill" aria-hidden="true"></i>
+                            <LucideIcon Name="x-circle" Size="16" />
                             Not Authenticated
                         </span>
                     }
@@ -189,8 +189,9 @@
         background: rgba(81, 165, 193, 0.1);
     }
 
-    .theme-option i {
-        font-size: 1.25rem;
+    .theme-option :deep(svg) {
+        width: 1.25rem;
+        height: 1.25rem;
     }
 
     .theme-option span {

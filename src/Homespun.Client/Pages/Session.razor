@@ -66,7 +66,7 @@
                                 disabled="@_isLoadingHistory">
                             @if (_isLoadingHistory)
                             {
-                                <span class="spinner-border spinner-border-sm" role="status"></span>
+                                <BbSpinner Size="SpinnerSize.Small" />
                                 <span>Loading...</span>
                             }
                             else
@@ -174,7 +174,7 @@
                     @if (_session.Status == ClaudeSessionStatus.Running)
                     {
                         <div class="processing-indicator">
-                            <div class="spinner-border spinner-border-sm" role="status"></div>
+                            <BbSpinner Size="SpinnerSize.Small" />
                             <span>Processing...</span>
                         </div>
                     }
@@ -196,7 +196,7 @@
                                     <button class="btn btn-warning btn-sm" @onclick="RestartContainer" disabled="@_isRestartingContainer">
                                         @if (_isRestartingContainer)
                                         {
-                                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                            <BbSpinner Size="SpinnerSize.Small" Class="me-1" />
                                             <span>Restarting...</span>
                                         }
                                         else
@@ -376,7 +376,7 @@
                                     title="Interrupt the current execution (Escape)">
                                 @if (_isInterrupting)
                                 {
-                                    <span class="spinner-border spinner-border-sm" role="status"></span>
+                                    <BbSpinner Size="SpinnerSize.Small" />
                                 }
                                 else
                                 {

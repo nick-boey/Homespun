@@ -50,7 +50,7 @@ else
                              ButtonCssClass="btn-outline btn-sm"
                              Actions="@_syncActions">
                     <PrimaryIcon>
-                        <i class="bi bi-cloud-arrow-down me-1"></i>
+                        <LucideIcon Name="cloud-download" Size="14" Class="me-1" />
                     </PrimaryIcon>
                 </SplitButton>
                 <a href="projects/@Id/edit" class="btn btn-outline btn-sm">Edit Project</a>
@@ -80,7 +80,7 @@ else
                href="/projects/@Id"
                @onclick="SwitchToIssuesTab"
                @onclick:preventDefault>
-                <i class="bi bi-kanban me-1"></i>Issues
+                <LucideIcon Name="layout-list" Size="14" Class="me-1" />Issues
             </a>
         </li>
         <li class="nav-item">
@@ -88,7 +88,7 @@ else
                href="/projects/@Id/branches"
                @onclick="SwitchToBranchesTab"
                @onclick:preventDefault>
-                <i class="bi bi-diagram-2 me-1"></i>Branches
+                <LucideIcon Name="git-branch" Size="14" Class="me-1" />Branches
             </a>
         </li>
         <li class="nav-item">
@@ -96,7 +96,7 @@ else
                href="/projects/@Id/agents"
                @onclick="SwitchToAgentsTab"
                @onclick:preventDefault>
-                <i class="bi bi-cpu me-1"></i>Agents
+                <LucideIcon Name="bot" Size="14" Class="me-1" />Agents
             </a>
         </li>
         <li class="nav-item">
@@ -104,7 +104,7 @@ else
                href="/projects/@Id/prompts"
                @onclick="SwitchToPromptsTab"
                @onclick:preventDefault>
-                <i class="bi bi-chat-square-text me-1"></i>Prompts
+                <LucideIcon Name="message-square-text" Size="14" Class="me-1" />Prompts
             </a>
         </li>
         <li class="nav-item">
@@ -112,7 +112,7 @@ else
                href="/projects/@Id/secrets"
                @onclick="SwitchToSecretsTab"
                @onclick:preventDefault>
-                <i class="bi bi-key me-1"></i>Secrets
+                <LucideIcon Name="key-round" Size="14" Class="me-1" />Secrets
             </a>
         </li>
         <li class="nav-item">
@@ -120,7 +120,7 @@ else
                href="/projects/@Id/settings"
                @onclick="SwitchToSettingsTab"
                @onclick:preventDefault>
-                <i class="bi bi-gear me-1"></i>Settings
+                <LucideIcon Name="settings" Size="14" Class="me-1" />Settings
             </a>
         </li>
     </ul>
@@ -134,25 +134,25 @@ else
                         @onclick="HandleCreateAbove"
                         disabled="@(!CanCreateIssue())"
                         title="Create issue above (Shift+O)">
-                    <i class="bi bi-arrow-bar-up" aria-hidden="true"></i>
+                    <LucideIcon Name="arrow-up-from-line" Size="14" />
                 </button>
                 <button class="btn btn-outline btn-sm"
                         @onclick="HandleCreateBelow"
                         disabled="@(!CanCreateIssue())"
                         title="Create issue below (O)">
-                    <i class="bi bi-arrow-bar-down" aria-hidden="true"></i>
+                    <LucideIcon Name="arrow-down-from-line" Size="14" />
                 </button>
                 <button class="btn btn-outline btn-sm"
                         @onclick="UndoAsync"
                         disabled="@(!_canUndo || _isUndoRedoing)"
                         title="@(_historyState?.UndoDescription ?? "Undo")">
-                    <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i>
+                    <LucideIcon Name="undo" Size="14" />
                 </button>
                 <button class="btn btn-outline btn-sm"
                         @onclick="RedoAsync"
                         disabled="@(!_canRedo || _isUndoRedoing)"
                         title="@(_historyState?.RedoDescription ?? "Redo")">
-                    <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
+                    <LucideIcon Name="redo" Size="14" />
                 </button>
                 @if (_historyState != null && _historyState.TotalEntries > 0)
                 {
@@ -207,7 +207,7 @@ else
             {
                 <div class="card">
                     <div class="card-body text-center">
-                        <span class="spinner-border spinner-border-sm mr-2" role="status"></span>
+                        <BbSpinner Size="SpinnerSize.Small" Class="mr-2" />
                         Loading pull request details...
                     </div>
                 </div>
@@ -590,9 +590,10 @@ else
                 Text: "Sync",
                 Icon: (RenderFragment)(builder =>
                 {
-                    builder.OpenElement(0, "i");
-                    builder.AddAttribute(1, "class", "bi bi-cloud-arrow-up");
-                    builder.CloseElement();
+                    builder.OpenComponent<LucideIcon>(0);
+                    builder.AddAttribute(1, "Name", "cloud-upload");
+                    builder.AddAttribute(2, "Size", 14);
+                    builder.CloseComponent();
                 }),
                 OnClick: EventCallback.Factory.Create(this, SyncAllAsync))
         ];

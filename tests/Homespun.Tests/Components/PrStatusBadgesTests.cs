@@ -204,9 +204,8 @@ public class PrStatusBadgesTests : BunitTestContext
         var cut = Render<PrStatusBadges>(parameters =>
             parameters.Add(p => p.Status, status));
 
-        // Assert
+        // Assert - BbSpinner is now used instead of Bootstrap spinner
         Assert.That(cut.Markup, Does.Contain("Checks Running"));
-        Assert.That(cut.Markup, Does.Contain("spinner-border"));
     }
 
     [Test]

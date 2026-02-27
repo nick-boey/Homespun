@@ -13,7 +13,7 @@
     else if (_isLoading)
     {
         <div class="loading-state">
-            <div class="spinner-border spinner-border-sm" role="status"></div>
+            <BbSpinner Size="SpinnerSize.Small" />
             <span>Loading plans...</span>
         </div>
     }
@@ -59,7 +59,7 @@
                             @if (_loadingContent.Contains(plan.FileName))
                             {
                                 <div class="content-loading">
-                                    <div class="spinner-border spinner-border-sm" role="status"></div>
+                                    <BbSpinner Size="SpinnerSize.Small" />
                                     <span>Loading...</span>
                                 </div>
                             }

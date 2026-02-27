@@ -4,7 +4,7 @@
     <nav class="flex flex-col">
         <div class="nav-item text-sm">
             <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                <i class="bi bi-list-nested" aria-hidden="true"></i> Projects
+                <LucideIcon Name="list" Size="16" /> Projects
             </NavLink>
         </div>
         @if (_projects.Any())
@@ -22,24 +22,24 @@
         }
         <div class="nav-item text-sm">
             <NavLink class="nav-link" href="agents">
-                <i class="bi bi-robot" aria-hidden="true"></i> Agents
+                <LucideIcon Name="bot" Size="16" /> Agents
             </NavLink>
         </div>
         <div class="nav-item text-sm">
             <NavLink class="nav-link" href="prompts">
-                <i class="bi bi-chat-dots" aria-hidden="true"></i> Prompts
+                <LucideIcon Name="message-circle" Size="16" /> Prompts
             </NavLink>
         </div>
         <div class="nav-item text-sm">
             <NavLink class="nav-link" href="settings">
-                <i class="bi bi-gear" aria-hidden="true"></i> Settings
+                <LucideIcon Name="settings" Size="16" /> Settings
             </NavLink>
         </div>
         @if (_isMockMode)
         {
             <div class="nav-item text-sm mt-2 pt-2" style="border-top: 1px solid var(--border-color);">
                 <NavLink class="nav-link" href="design">
-                    <i class="bi bi-palette" aria-hidden="true"></i> Design
+                    <LucideIcon Name="palette" Size="16" /> Design
                 </NavLink>
             </div>
         }

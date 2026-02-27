@@ -24,7 +24,7 @@
             @onclick="HandlePrimaryClick">
         @if (IsLoading && _activeAction == null)
         {
-            <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+            <BbSpinner Size="SpinnerSize.Small" Class="me-1" />
             @if (!string.IsNullOrEmpty(PrimaryLoadingText))
             {
                 <span>@PrimaryLoadingText</span>
@@ -50,7 +50,7 @@
             disabled="@(IsLoading || Disabled)"
             @onclick="ToggleDropdown"
             @onclick:stopPropagation="true">
-        <i class="bi bi-caret-down-fill"></i>
+        <LucideIcon Name="chevron-down" Size="14" />
     </button>
 
     @* Dropdown menu *@
@@ -65,7 +65,7 @@
                         @onclick="() => HandleActionClick(action)">
                     @if (IsLoading && _activeAction == action.Key)
                     {
-                        <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                        <BbSpinner Size="SpinnerSize.Small" Class="me-2" />
                     }
                     else if (action.Icon != null)
                     {

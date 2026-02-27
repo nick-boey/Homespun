@@ -36,7 +36,7 @@
             @if (_isStarting)
             {
                 <span class="badge bg-status-warning text-text-primary ml-1">
-                    <span class="spinner-border spinner-border-sm mr-1" role="status" style="width: 0.6rem; height: 0.6rem;"></span>
+                    <BbSpinner Size="SpinnerSize.Small" Class="mr-1" />
                     Starting...
                 </span>
             }
@@ -147,7 +147,7 @@
                 <button class="btn btn-sm btn-outline-warning" @onclick="SkipReview" disabled="@_isLoading">
                     @if (_isLoading)
                     {
-                        <span class="spinner-border spinner-border-sm mr-1" role="status"></span>
+                        <BbSpinner Size="SpinnerSize.Small" Class="mr-1" />
                     }
                     Skip Review
                 </button>
@@ -157,7 +157,7 @@
             @if (_isStarting)
             {
                 <button class="btn btn-sm btn-secondary" disabled>
-                    <span class="spinner-border spinner-border-sm mr-1" role="status"></span>
+                    <BbSpinner Size="SpinnerSize.Small" Class="mr-1" />
                     Starting Session...
                 </button>
             }
@@ -169,7 +169,7 @@
                 <button class="btn btn-sm btn-outline-danger" @onclick="StopSession" disabled="@_isSessionLoading">
                     @if (_isSessionLoading)
                     {
-                        <span class="spinner-border spinner-border-sm mr-1" role="status"></span>
+                        <BbSpinner Size="SpinnerSize.Small" Class="mr-1" />
                     }
                     Stop Session
                 </button>
@@ -195,7 +195,7 @@
                                 disabled="@(_isRebasing || _isStarting)">
                             @if (_isRebasing)
                             {
-                                <span class="spinner-border spinner-border-sm mr-1" role="status"></span>
+                                <BbSpinner Size="SpinnerSize.Small" Class="mr-1" />
                             }
                             Rebase onto @_project?.DefaultBranch (@_branchInfo.BehindCount behind)
                         </button>
@@ -218,7 +218,7 @@
                 <button class="btn btn-sm btn-primary" @onclick="MergePullRequest" disabled="@_isLoading">
                     @if (_isLoading)
                     {
-                        <span class="spinner-border spinner-border-sm mr-1" role="status"></span>
+                        <BbSpinner Size="SpinnerSize.Small" Class="mr-1" />
                     }
                     Merge
                 </button>

@@ -10,7 +10,7 @@
             disabled="@IsDisabled"
             @onclick="HandleCreateAbove"
             @onclick:stopPropagation="true">
-        <i class="bi bi-plus-circle"></i>
+        <LucideIcon Name="plus-circle" Size="16" />
         <span class="btn-label">Above</span>
     </button>
 
@@ -21,7 +21,7 @@
             disabled="@IsDisabled"
             @onclick="HandleCreateBelow"
             @onclick:stopPropagation="true">
-        <i class="bi bi-plus-circle"></i>
+        <LucideIcon Name="plus-circle" Size="16" />
         <span class="btn-label">Below</span>
     </button>
 
@@ -58,7 +58,7 @@
             disabled="@IsMoveButtonDisabled(MoveOperationType.AsChildOf)"
             @onclick="HandleMakeChildOf"
             @onclick:stopPropagation="true">
-        <i class="bi bi-box-arrow-in-up-right"></i>
+        <LucideIcon Name="corner-right-up" Size="16" />
         <span class="btn-label">Child Of</span>
     </button>
 
@@ -69,7 +69,7 @@
             disabled="@IsMoveButtonDisabled(MoveOperationType.AsParentOf)"
             @onclick="HandleMakeParentOf"
             @onclick:stopPropagation="true">
-        <i class="bi bi-box-arrow-in-down-left"></i>
+        <LucideIcon Name="corner-left-down" Size="16" />
         <span class="btn-label">Parent Of</span>
     </button>
 </div>
@@ -114,8 +114,9 @@
         transform: none;
     }
 
-    .control-panel-btn i {
-        font-size: 1rem;
+    .control-panel-btn :deep(svg) {
+        width: 1rem;
+        height: 1rem;
     }
 
     .btn-label {

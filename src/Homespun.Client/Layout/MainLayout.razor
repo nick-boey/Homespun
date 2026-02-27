@@ -6,6 +6,9 @@
 @inject IPanelService PanelService
 @using System.Reflection
 
+<BbTooltipProvider />
+<BbDialogProvider />
+
 <div class="page @(_sidebarOpen ? "sidebar-open" : "sidebar-closed")" @onkeydown="HandleKeyDown" tabindex="-1">
     <header class="top-bar">
         <button class="sidebar-toggle" @onclick="ToggleSidebar" title="Toggle sidebar">
@@ -33,7 +36,14 @@
                 @onclick="TogglePanel"
                 disabled="@(!PanelService.IsPanelAvailable)"
                 title="@GetPanelToggleTooltip()">
-            <i class="bi @(PanelService.IsPanelOpen ? "bi-layout-sidebar-inset-reverse" : "bi-layout-sidebar-reverse")"></i>
+            @if (PanelService.IsPanelOpen)
+            {
+                <LucideIcon Name="panel-right-close" Size="18" />
+            }
+            else
+            {
+                <LucideIcon Name="panel-right" Size="18" />
+            }
         </button>
     </header>
 

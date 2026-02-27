@@ -1,4 +1,5 @@
 using Bunit;
+using BlazorBlueprint.Components;
 using Homespun.Client.Components;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
@@ -78,6 +79,7 @@ public class ModelSelectorTests : BunitTestContext
 
 /// <summary>
 /// Base test context for bUnit tests.
+/// Registers Blazor Blueprint services for components using BbDialog, BbTooltip, etc.
 /// </summary>
 public class BunitTestContext : TestContextWrapper
 {
@@ -85,6 +87,8 @@ public class BunitTestContext : TestContextWrapper
     public void Setup()
     {
         Context = new Bunit.BunitContext();
+        // Register Blazor Blueprint services for components using Dialog, Tooltip, etc.
+        Context.Services.AddBlazorBlueprintComponents();
     }
 
     [TearDown]

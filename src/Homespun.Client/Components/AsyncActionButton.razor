@@ -18,7 +18,7 @@
         @attributes="AdditionalAttributes">
     @if (IsLoading)
     {
-        <span class="spinner-border spinner-border-sm @(string.IsNullOrEmpty(LoadingText) && string.IsNullOrEmpty(Text) ? "" : SpinnerMarginClass)" role="status" aria-hidden="true"></span>
+        <BbSpinner Size="SpinnerSize.Small" Class="@(string.IsNullOrEmpty(LoadingText) && string.IsNullOrEmpty(Text) ? "" : SpinnerMarginClass)" />
         @if (!string.IsNullOrEmpty(LoadingText))
         {
             <span>@LoadingText</span>

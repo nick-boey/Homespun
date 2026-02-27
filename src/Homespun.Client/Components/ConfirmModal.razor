@@ -17,16 +17,12 @@
         }
     </Body>
     <Footer>
-        <button type="button" class="btn btn-secondary" @onclick="OnCancel" disabled="@IsProcessing">
+        <BbButton Variant="ButtonVariant.Outline" OnClick="OnCancel" Disabled="@IsProcessing">
             @CancelText
-        </button>
-        <button type="button" class="btn @GetConfirmButtonClass()" @onclick="HandleConfirm" disabled="@IsProcessing">
-            @if (IsProcessing)
-            {
-                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-            }
+        </BbButton>
+        <BbButton Variant="@GetConfirmButtonVariant()" OnClick="HandleConfirm" Disabled="@IsProcessing" Loading="@IsProcessing">
             @ConfirmText
-        </button>
+        </BbButton>
     </Footer>
 </Modal>
 
@@ -103,12 +99,12 @@
     [Parameter]
     public bool CloseOnBackdropClick { get; set; } = true;
 
-    private string GetConfirmButtonClass() => ConfirmVariant switch
+    private ButtonVariant GetConfirmButtonVariant() => ConfirmVariant switch
     {
-        ConfirmButtonVariant.Danger => "btn-danger",
-        ConfirmButtonVariant.Warning => "btn-warning",
-        ConfirmButtonVariant.Success => "btn-success",
-        _ => "btn-primary"
+        ConfirmButtonVariant.Danger => ButtonVariant.Destructive,
+        ConfirmButtonVariant.Warning => ButtonVariant.Secondary,
+        ConfirmButtonVariant.Success => ButtonVariant.Default,
+        _ => ButtonVariant.Default
     };
 
     private async Task HandleConfirm()

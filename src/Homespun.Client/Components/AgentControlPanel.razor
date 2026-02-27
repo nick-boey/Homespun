@@ -20,7 +20,7 @@
 {
     <div class="agent-control-panel @(Compact ? "compact" : "")">
         <span class="badge bg-warning text-dark">
-            <span class="spinner-border spinner-border-sm me-1" role="status" style="width: 0.6rem; height: 0.6rem;"></span>
+            <BbSpinner Size="SpinnerSize.Small" Class="me-1" />
             Starting...
         </span>
     </div>
@@ -39,7 +39,7 @@ else if (_session != null)
                 disabled="@_isLoading">
             @if (_isLoading)
             {
-                <span class="spinner-border spinner-border-sm" role="status" style="width: 0.6rem; height: 0.6rem;"></span>
+                <BbSpinner Size="SpinnerSize.Small" />
             }
             else
             {

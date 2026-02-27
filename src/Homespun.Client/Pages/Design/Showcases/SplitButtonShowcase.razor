@@ -10,7 +10,7 @@
                          ButtonCssClass="btn-primary"
                          Actions="@_defaultActions">
                 <PrimaryIcon>
-                    <i class="bi bi-cloud-arrow-down me-1"></i>
+                    <LucideIcon Name="cloud-download" Size="14" Class="me-1" />
                 </PrimaryIcon>
             </SplitButton>
         </div>
@@ -27,7 +27,7 @@
                          ButtonCssClass="btn-outline"
                          Actions="@_defaultActions">
                 <PrimaryIcon>
-                    <i class="bi bi-cloud-arrow-down me-1"></i>
+                    <LucideIcon Name="cloud-download" Size="14" Class="me-1" />
                 </PrimaryIcon>
             </SplitButton>
         </div>
@@ -40,7 +40,7 @@
                          ButtonCssClass="btn-secondary"
                          Actions="@_defaultActions">
                 <PrimaryIcon>
-                    <i class="bi bi-cloud-arrow-down me-1"></i>
+                    <LucideIcon Name="cloud-download" Size="14" Class="me-1" />
                 </PrimaryIcon>
             </SplitButton>
         </div>
@@ -57,7 +57,7 @@
                          ButtonCssClass="btn-outline btn-sm"
                          Actions="@_defaultActions">
                 <PrimaryIcon>
-                    <i class="bi bi-cloud-arrow-down me-1"></i>
+                    <LucideIcon Name="cloud-download" Size="14" Class="me-1" />
                 </PrimaryIcon>
             </SplitButton>
         </div>
@@ -70,7 +70,7 @@
                          ButtonCssClass="btn-outline"
                          Actions="@_defaultActions">
                 <PrimaryIcon>
-                    <i class="bi bi-cloud-arrow-down me-1"></i>
+                    <LucideIcon Name="cloud-download" Size="14" Class="me-1" />
                 </PrimaryIcon>
             </SplitButton>
         </div>
@@ -89,7 +89,7 @@
                          IsLoadingExternal="@_isLoading"
                          Actions="@_defaultActions">
                 <PrimaryIcon>
-                    <i class="bi bi-cloud-arrow-down me-1"></i>
+                    <LucideIcon Name="cloud-download" Size="14" Class="me-1" />
                 </PrimaryIcon>
             </SplitButton>
             <button class="btn btn-sm btn-secondary ms-3" @onclick="ToggleLoading">
@@ -110,7 +110,7 @@
                          Disabled="true"
                          Actions="@_defaultActions">
                 <PrimaryIcon>
-                    <i class="bi bi-cloud-arrow-down me-1"></i>
+                    <LucideIcon Name="cloud-download" Size="14" Class="me-1" />
                 </PrimaryIcon>
             </SplitButton>
         </div>
@@ -127,7 +127,7 @@
                          ButtonCssClass="btn-primary"
                          Actions="@_multipleActions">
                 <PrimaryIcon>
-                    <i class="bi bi-floppy me-1"></i>
+                    <LucideIcon Name="save" Size="14" Class="me-1" />
                 </PrimaryIcon>
             </SplitButton>
         </div>
@@ -149,9 +149,10 @@
                 Text: "Sync",
                 Icon: (RenderFragment)(builder =>
                 {
-                    builder.OpenElement(0, "i");
-                    builder.AddAttribute(1, "class", "bi bi-cloud-arrow-up");
-                    builder.CloseElement();
+                    builder.OpenComponent<LucideIcon>(0);
+                    builder.AddAttribute(1, "Name", "cloud-upload");
+                    builder.AddAttribute(2, "Size", 14);
+                    builder.CloseComponent();
                 }),
                 OnClick: EventCallback.Factory.Create(this, HandleSyncClick))
         ];
@@ -163,9 +164,10 @@
                 Text: "Save as Draft",
                 Icon: (RenderFragment)(builder =>
                 {
-                    builder.OpenElement(0, "i");
-                    builder.AddAttribute(1, "class", "bi bi-file-earmark");
-                    builder.CloseElement();
+                    builder.OpenComponent<LucideIcon>(0);
+                    builder.AddAttribute(1, "Name", "file");
+                    builder.AddAttribute(2, "Size", 14);
+                    builder.CloseComponent();
                 }),
                 OnClick: EventCallback.Factory.Create(this, HandleSaveClick)),
             new SplitButtonAction(
@@ -173,9 +175,10 @@
                 Text: "Save and Publish",
                 Icon: (RenderFragment)(builder =>
                 {
-                    builder.OpenElement(0, "i");
-                    builder.AddAttribute(1, "class", "bi bi-send");
-                    builder.CloseElement();
+                    builder.OpenComponent<LucideIcon>(0);
+                    builder.AddAttribute(1, "Name", "send");
+                    builder.AddAttribute(2, "Size", 14);
+                    builder.CloseComponent();
                 }),
                 OnClick: EventCallback.Factory.Create(this, HandleSaveClick)),
             new SplitButtonAction(
@@ -183,9 +186,10 @@
                 Text: "Export",
                 Icon: (RenderFragment)(builder =>
                 {
-                    builder.OpenElement(0, "i");
-                    builder.AddAttribute(1, "class", "bi bi-download");
-                    builder.CloseElement();
+                    builder.OpenComponent<LucideIcon>(0);
+                    builder.AddAttribute(1, "Name", "download");
+                    builder.AddAttribute(2, "Size", 14);
+                    builder.CloseComponent();
                 }),
                 OnClick: EventCallback.Factory.Create(this, HandleSaveClick))
         ];

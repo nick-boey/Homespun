@@ -4,9 +4,9 @@
         <div class="showcase-label">Basic button with icon</div>
         <div class="showcase-preview">
             <div style="display: flex; gap: 1rem; align-items: center;">
-                <ToolbarButton Icon="bi-pencil" />
-                <ToolbarButton Icon="bi-play-fill" />
-                <ToolbarButton Icon="bi-stop-fill" />
+                <ToolbarButton Icon="pencil" />
+                <ToolbarButton Icon="play" />
+                <ToolbarButton Icon="square" />
             </div>
         </div>
     </div>
@@ -18,9 +18,9 @@
         <div class="showcase-label">Buttons showing tooltip on hover with keyboard shortcuts</div>
         <div class="showcase-preview">
             <div style="display: flex; gap: 1rem; align-items: center; padding-top: 40px;">
-                <ToolbarButton Icon="bi-pencil" Tooltip="Edit issue (i)" />
-                <ToolbarButton Icon="bi-play-fill" Tooltip="Run agent" />
-                <ToolbarButton Icon="bi-arrow-clockwise" Tooltip="Sync (Ctrl+S)" />
+                <ToolbarButton Icon="pencil" Tooltip="Edit issue (i)" />
+                <ToolbarButton Icon="play" Tooltip="Run agent" />
+                <ToolbarButton Icon="refresh-cw" Tooltip="Sync (Ctrl+S)" />
             </div>
             <p style="color: var(--text-muted); font-size: 12px; margin-top: 16px;">
                 Hover over the buttons to see the tooltips appear above.
@@ -35,8 +35,8 @@
         <div class="showcase-label">Buttons are disabled with reduced opacity and no-click cursor</div>
         <div class="showcase-preview">
             <div style="display: flex; gap: 1rem; align-items: center;">
-                <ToolbarButton Icon="bi-pencil" Tooltip="Edit issue (i)" Disabled="true" />
-                <ToolbarButton Icon="bi-play-fill" Tooltip="Run agent" Disabled="true" />
+                <ToolbarButton Icon="pencil" Tooltip="Edit issue (i)" Disabled="true" />
+                <ToolbarButton Icon="play" Tooltip="Run agent" Disabled="true" />
             </div>
         </div>
     </div>
@@ -45,17 +45,17 @@
 <div class="showcase-section">
     <h3>Various Icons</h3>
     <div class="showcase-item">
-        <div class="showcase-label">Different Bootstrap icons for various actions</div>
+        <div class="showcase-label">Different Lucide icons for various actions</div>
         <div class="showcase-preview">
             <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
-                <ToolbarButton Icon="bi-pencil" Tooltip="Edit" />
-                <ToolbarButton Icon="bi-play-fill" Tooltip="Play" />
-                <ToolbarButton Icon="bi-stop-fill" Tooltip="Stop" />
-                <ToolbarButton Icon="bi-trash" Tooltip="Delete" />
-                <ToolbarButton Icon="bi-plus" Tooltip="Add" />
-                <ToolbarButton Icon="bi-gear" Tooltip="Settings" />
-                <ToolbarButton Icon="bi-arrow-clockwise" Tooltip="Refresh" />
-                <ToolbarButton Icon="bi-download" Tooltip="Download" />
+                <ToolbarButton Icon="pencil" Tooltip="Edit" />
+                <ToolbarButton Icon="play" Tooltip="Play" />
+                <ToolbarButton Icon="square" Tooltip="Stop" />
+                <ToolbarButton Icon="trash-2" Tooltip="Delete" />
+                <ToolbarButton Icon="plus" Tooltip="Add" />
+                <ToolbarButton Icon="settings" Tooltip="Settings" />
+                <ToolbarButton Icon="refresh-cw" Tooltip="Refresh" />
+                <ToolbarButton Icon="download" Tooltip="Download" />
             </div>
         </div>
     </div>
@@ -67,10 +67,10 @@
         <div class="showcase-label">Click the buttons to see callback invocation</div>
         <div class="showcase-preview">
             <div style="display: flex; gap: 1rem; align-items: center;">
-                <ToolbarButton Icon="bi-pencil"
+                <ToolbarButton Icon="pencil"
                                Tooltip="Edit (click me)"
                                OnClick="@(() => HandleClick("Edit"))" />
-                <ToolbarButton Icon="bi-play-fill"
+                <ToolbarButton Icon="play"
                                Tooltip="Run (click me)"
                                OnClick="@(() => HandleClick("Run"))" />
             </div>
