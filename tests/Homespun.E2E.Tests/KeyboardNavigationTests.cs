@@ -187,4 +187,126 @@ public class KeyboardNavigationTests : PageTest
         // Verify we navigated to the edit page by checking the URL contains /edit
         await Expect(Page).ToHaveURLAsync(new System.Text.RegularExpressions.Regex("/issues/.+/edit"), new() { Timeout = 5000 });
     }
+
+    [Test]
+    public async Task Search_HighlightsMatchingIssues_WhileTyping()
+    {
+        // Navigate to the demo project page
+        await Page.GotoAsync($"{BaseUrl}/projects/demo-project");
+        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+
+        // Wait for task graph to render
+        var taskGraphRow = Page.Locator(".task-graph-row").First;
+        await Expect(taskGraphRow).ToBeVisibleAsync(new() { Timeout = 10000 });
+
+        // Press / to start search
+        await Page.Keyboard.PressAsync("/");
+
+        // Verify the search bar appears
+        var searchBar = Page.Locator("[data-testid='search-bar']");
+        await Expect(searchBar).ToBeVisibleAsync(new() { Timeout = 5000 });
+
+        // Type a search term that should match some issues
+        await Page.Keyboard.TypeAsync("issue");
+
+        // Verify that matching issues are highlighted while typing (before pressing Enter)
+        var highlightedRows = Page.Locator(".task-graph-row-search-match");
+        await Expect(highlightedRows.First).ToBeVisibleAsync(new() { Timeout = 5000 });
+
+        // Press Escape to cancel search
+        await Page.Keyboard.PressAsync("Escape");
+    }
+
+    [Test]
+    public async Task Search_EnterSelectsFirstMatch_AndRestoresFocus()
+    {
+        // Navigate to the demo project page
+        await Page.GotoAsync($"{BaseUrl}/projects/demo-project");
+        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+
+        // Wait for task graph to render
+        var taskGraphRow = Page.Locator(".task-graph-row").First;
+        await Expect(taskGraphRow).ToBeVisibleAsync(new() { Timeout = 10000 });
+
+        // Press / to start search
+        await Page.Keyboard.PressAsync("/");
+
+        // Verify the search bar appears
+        var searchBar = Page.Locator("[data-testid='search-bar']");
+        await Expect(searchBar).ToBeVisibleAsync(new() { Timeout = 5000 });
+
+        // Type a search term
+        await Page.Keyboard.TypeAsync("issue");
+
+        // Press Enter to embed search and select first match
+        await Page.Keyboard.PressAsync("Enter");
+
+        // Verify the search bar is hidden after embedding
+        await Expect(searchBar).Not.ToBeVisibleAsync(new() { Timeout = 5000 });
+
+        // Verify a row is selected (first match)
+        var selectedRow = Page.Locator(".task-graph-row-selected");
+        await Expect(selectedRow).ToBeVisibleAsync(new() { Timeout = 5000 });
+
+        // Verify highlighting is still visible after embedding
+        var highlightedRows = Page.Locator(".task-graph-row-search-match");
+        await Expect(highlightedRows.First).ToBeVisibleAsync(new() { Timeout = 5000 });
+
+        // Verify keyboard navigation works after embedding (focus was restored)
+        // Press j to move down - should work because focus is restored to page container
+        await Page.Keyboard.PressAsync("j");
+
+        // Selection should have changed (focus is working)
+        await Expect(selectedRow).ToBeVisibleAsync(new() { Timeout = 5000 });
+
+        // Press Escape to clear search
+        await Page.Keyboard.PressAsync("Escape");
+
+        // Verify highlights are cleared
+        await Expect(highlightedRows).Not.ToBeVisibleAsync(new() { Timeout = 5000 });
+    }
+
+    [Test]
+    public async Task Search_NextAndPreviousMatch_Navigation()
+    {
+        // Navigate to the demo project page
+        await Page.GotoAsync($"{BaseUrl}/projects/demo-project");
+        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+
+        // Wait for task graph to render
+        var taskGraphRow = Page.Locator(".task-graph-row").First;
+        await Expect(taskGraphRow).ToBeVisibleAsync(new() { Timeout = 10000 });
+
+        // Press / to start search, type term, and embed
+        await Page.Keyboard.PressAsync("/");
+        await Page.Keyboard.TypeAsync("issue");
+        await Page.Keyboard.PressAsync("Enter");
+
+        // Verify search bar is hidden
+        var searchBar = Page.Locator("[data-testid='search-bar']");
+        await Expect(searchBar).Not.ToBeVisibleAsync(new() { Timeout = 5000 });
+
+        // Verify a match is selected
+        var selectedRow = Page.Locator(".task-graph-row-selected");
+        await Expect(selectedRow).ToBeVisibleAsync(new() { Timeout = 5000 });
+
+        // Get the ID of the first selected issue
+        var firstSelectedId = await selectedRow.GetAttributeAsync("data-issue-id");
+
+        // Press n to go to next match
+        await Page.Keyboard.PressAsync("n");
+
+        // Verify the selected row still exists (navigation worked)
+        await Expect(selectedRow).ToBeVisibleAsync(new() { Timeout = 5000 });
+
+        // Press Shift+N (capital N) to go to previous match
+        await Page.Keyboard.PressAsync("N");
+
+        // Verify we're back to the first match
+        var backToFirst = await selectedRow.GetAttributeAsync("data-issue-id");
+        Assert.That(backToFirst, Is.EqualTo(firstSelectedId));
+
+        // Press Escape to clear search
+        await Page.Keyboard.PressAsync("Escape");
+    }
 }

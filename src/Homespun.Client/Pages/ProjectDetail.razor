@@ -1464,9 +1464,11 @@ else
         NavService.UpdateSearchTerm(term);
     }
 
-    private void HandleSearchEnter()
+    private async Task HandleSearchEnter()
     {
         NavService.EmbedSearch();
+        // Restore focus to page container for keyboard navigation after search bar closes
+        await JSRuntime.InvokeVoidAsync("homespunInterop.focusElement", _pageContainer);
     }
 
     private void HandleSearchEscape()
@@ -1476,8 +1478,9 @@ else
 
     private string? GetActiveSearchTerm()
     {
-        // Return the search term when search is embedded (committed)
-        return NavService.IsSearchEmbedded ? NavService.SearchTerm : null;
+        // Return the search term when searching (typing) OR when embedded (committed)
+        // This enables real-time highlighting as the user types
+        return (NavService.IsSearching || NavService.IsSearchEmbedded) ? NavService.SearchTerm : null;
     }
 
     #endregion
