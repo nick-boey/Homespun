@@ -28,13 +28,16 @@
             <TaskGraphView @ref="_taskGraphViewRef"
                 TaskGraph="@_taskGraphData"
                 ProjectId="@ProjectId"
+                RepoPath="@RepoPath"
+                DefaultBranch="@DefaultBranch"
+                DefaultModel="@DefaultModel"
                 OnIssueClick="HandleTaskGraphIssueClick"
                 OnLoadMoreClick="LoadMoreTaskGraphPRs"
                 OnIssueCreated="HandleIssueCreated"
                 OnIssueTypeChanged="HandleIssueChangedAsync"
                 OnIssueStatusChanged="HandleIssueChangedAsync"
                 OnEditClick="OnEditClick"
-                OnRunAgentClick="OnRunAgentClick"
+                OnSessionStarted="OnSessionStarted"
                 OnOpenPanelClick="OnOpenPanelClick"
                 SelectedNodeId="@GetKeyboardSelectedNodeId()"
                 NavService="@NavService"
@@ -92,6 +95,21 @@
     [Parameter] public string? SelectedNodeId { get; set; }
 
     /// <summary>
+    /// Path to the main repository (for listing branches in agent launcher).
+    /// </summary>
+    [Parameter] public string? RepoPath { get; set; }
+
+    /// <summary>
+    /// Default branch of the project.
+    /// </summary>
+    [Parameter] public string? DefaultBranch { get; set; }
+
+    /// <summary>
+    /// Default model to use for agent sessions.
+    /// </summary>
+    [Parameter] public string DefaultModel { get; set; } = "opus";
+
+    /// <summary>
     /// Called when an issue is created via inline keyboard controls.
     /// The parent should refresh data and select the new issue.
     /// </summary>
@@ -103,9 +121,9 @@
     [Parameter] public EventCallback<string> OnEditClick { get; set; }
 
     /// <summary>
-    /// Called when an agent is started on an issue via the inline run agent button.
+    /// Called when an agent session is successfully started.
     /// </summary>
-    [Parameter] public EventCallback<(string IssueId, AgentPrompt? Prompt)> OnRunAgentClick { get; set; }
+    [Parameter] public EventCallback<ClaudeSession> OnSessionStarted { get; set; }
 
     /// <summary>
     /// Called when the open panel button is clicked on an issue row (mobile only).
@@ -313,14 +331,6 @@
     {
         await LoadTaskGraphAsync();
         StateHasChanged();
-    }
-
-    /// <summary>
-    /// Gets the currently active IssueRowActions component for keyboard-driven agent start.
-    /// </summary>
-    public IssueRowActions? GetActiveIssueRowActions()
-    {
-        return _taskGraphViewRef?.GetActiveIssueRowActions();
     }
 
     private async Task HandleIssueCreated(string newIssueId)

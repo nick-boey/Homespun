@@ -62,7 +62,14 @@ else
                             ProjectId="@Id"
                             IsAgentRunning="@IsSelectedIssueAgentRunning()"
                             OnEditClick="HandleEditIssue"
-                            OnRunAgentClick="HandleRunAgentOnIssue" />
+                            OnSessionStarted="HandleSessionStarted"
+                            IssueTitle="@GetSelectedIssueTitle()"
+                            IssueDescription="@GetSelectedIssueDescription()"
+                            IssueType="@GetSelectedIssueType()"
+                            BranchName="@GetSelectedIssueBranchName()"
+                            RepoPath="@_project?.LocalPath"
+                            DefaultBranch="@_project?.DefaultBranch"
+                            DefaultModel="@(_project?.DefaultModel ?? "opus")" />
         }
     </div>
 
@@ -168,11 +175,14 @@ else
                 <TimelineVisualization
                     @ref="_graphVisualization"
                     ProjectId="@Id"
+                    RepoPath="@_project?.LocalPath"
+                    DefaultBranch="@_project?.DefaultBranch"
+                    DefaultModel="@(_project?.DefaultModel ?? "opus")"
                     OnPullRequestClick="@HandlePullRequestClickFromGraph"
                     OnIssueClick="@HandleIssueClickFromGraph"
                     OnIssueCreated="@HandleInlineIssueCreated"
                     OnEditClick="@HandleEditIssue"
-                    OnRunAgentClick="@HandleRunAgentOnIssue"
+                    OnSessionStarted="@HandleSessionStarted"
                     OnOpenPanelClick="@HandleOpenPanelFromGraph"
                     SelectedNodeId="@GetSelectedNodeId()"
                     ActiveSearchTerm="@GetActiveSearchTerm()" />
@@ -1349,83 +1359,16 @@ else
         NavigationManager.NavigateTo($"/projects/{Id}/issues/{issueId}/edit");
     }
 
-    private async Task HandleRunAgentOnIssue((string IssueId, AgentPrompt? Prompt) args)
+    private void HandleSessionStarted(ClaudeSession session)
     {
-        var issue = _openIssues?.FirstOrDefault(i => i.Id == args.IssueId)
-                    ?? _inProgressIssues?.FirstOrDefault(i => i.Id == args.IssueId);
-
-        if (issue == null || _project == null) return;
-
-        // Select the issue first
-        SelectIssue(args.IssueId);
-
-        // Get or create clone for the issue's branch
-        var branchName = issue.WorkingBranchId ?? $"issue/{args.IssueId}";
-        var clones = await CloneApi.ListClonesAsync(Id);
-        var existingClone = clones.FirstOrDefault(c => c.Branch == branchName);
-
-        string clonePath;
-        if (existingClone != null)
+        // Select the issue that the session was started for
+        if (!string.IsNullOrEmpty(session.EntityId))
         {
-            clonePath = existingClone.Path;
-        }
-        else
-        {
-            // Create clone for the branch
-            var request = new CreateCloneRequest
-            {
-                ProjectId = Id,
-                BranchName = branchName,
-                CreateBranch = true
-            };
-            var createResult = await CloneApi.CreateCloneAsync(request);
-            clonePath = createResult?.Path ?? string.Empty;
-            if (string.IsNullOrEmpty(clonePath))
-            {
-                Logger.LogError("Failed to create clone for branch {Branch}", branchName);
-                return;
-            }
+            SelectIssue(session.EntityId);
         }
 
-        // Start the agent session
-        var mode = args.Prompt?.Mode ?? SessionMode.Build;
-        var model = "opus"; // Default model
-
-        // Build system prompt based on issue context
-        string? systemPrompt = null;
-        if (args.Prompt?.InitialMessage != null)
-        {
-            var context = new PromptContext
-            {
-                Title = issue.Title,
-                Id = issue.Id,
-                Description = issue.Description,
-                Branch = branchName,
-                Type = issue.Type.ToString()
-            };
-            systemPrompt = HttpAgentPromptApiService.RenderTemplate(args.Prompt.InitialMessage, context);
-        }
-
-        try
-        {
-            var session = await SessionApi.StartSessionAsync(
-                args.IssueId,
-                Id,
-                clonePath,
-                mode,
-                model,
-                systemPrompt);
-
-            if (session != null)
-            {
-                // Navigate to the session
-                NavigationManager.NavigateTo($"/session/{session.Id}");
-            }
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, "Failed to start agent session for issue {IssueId}", args.IssueId);
-        }
+        // The UnifiedAgentLauncher handles navigation when no prompt is selected
+        // Otherwise, the user stays on the current page to monitor the session
     }
 
     private async Task SelectPullRequestByNumber(int prNumber)
@@ -1603,6 +1546,48 @@ else
 
         var state = StartupTracker.GetState(selectedId);
         return state?.Status == AgentStartupStatus.Starting || state?.Status == AgentStartupStatus.Started;
+    }
+
+    /// <summary>
+    /// Gets the title of the currently selected issue for the toolbar.
+    /// </summary>
+    private string? GetSelectedIssueTitle()
+    {
+        var selectedId = NavService.SelectedIssueId;
+        if (string.IsNullOrEmpty(selectedId)) return null;
+        return _openIssues?.FirstOrDefault(i => i.Id == selectedId)?.Title;
+    }
+
+    /// <summary>
+    /// Gets the description of the currently selected issue for the toolbar.
+    /// </summary>
+    private string? GetSelectedIssueDescription()
+    {
+        var selectedId = NavService.SelectedIssueId;
+        if (string.IsNullOrEmpty(selectedId)) return null;
+        return _openIssues?.FirstOrDefault(i => i.Id == selectedId)?.Description;
+    }
+
+    /// <summary>
+    /// Gets the type of the currently selected issue for the toolbar.
+    /// </summary>
+    private string? GetSelectedIssueType()
+    {
+        var selectedId = NavService.SelectedIssueId;
+        if (string.IsNullOrEmpty(selectedId)) return null;
+        var issue = _openIssues?.FirstOrDefault(i => i.Id == selectedId);
+        return issue?.Type.ToString();
+    }
+
+    /// <summary>
+    /// Gets the branch name for the currently selected issue.
+    /// </summary>
+    private string? GetSelectedIssueBranchName()
+    {
+        var selectedId = NavService.SelectedIssueId;
+        if (string.IsNullOrEmpty(selectedId)) return null;
+        var issue = _openIssues?.FirstOrDefault(i => i.Id == selectedId);
+        return issue != null ? BranchNameGenerator.GenerateBranchName(issue) : null;
     }
 
     private string? GetStartupErrorMessage(string entityId)
@@ -1873,8 +1858,8 @@ else
                     NavService.MovePromptSelectionUp();
                     break;
                 case "Enter":
-                    // Start the agent with selected prompt
-                    _ = StartAgentFromKeyboardAsync();
+                    // Accept the prompt selection (closes selection mode)
+                    NavService.AcceptPromptSelection();
                     break;
             }
             return;
@@ -1986,19 +1971,6 @@ else
                 NavService.MoveToLast();
                 break;
         }
-    }
-
-    /// <summary>
-    /// Starts the agent session from keyboard selection (Enter in SelectingAgentPrompt mode).
-    /// </summary>
-    private async Task StartAgentFromKeyboardAsync()
-    {
-        var issueRowActions = _graphVisualization?.GetActiveIssueRowActions();
-        if (issueRowActions != null)
-        {
-            await issueRowActions.HandleKeyboardEnterAsync();
-        }
-        NavService.AcceptPromptSelection();
     }
 
     #region Create Issue Operations

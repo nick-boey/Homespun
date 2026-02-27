@@ -47,6 +47,8 @@ public class KeyboardNavigationServiceTests
         return new TaskGraphIssueRenderLine(
             IssueId: issueId,
             Title: title,
+            Description: null,
+            BranchName: $"task/{issueId}",
             Lane: lane,
             Marker: marker,
             ParentLane: parentLane,

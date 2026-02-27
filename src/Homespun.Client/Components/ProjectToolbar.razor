@@ -1,5 +1,4 @@
 @using Homespun.Shared.Models.Sessions
-@inject HttpAgentPromptApiService AgentPromptApi
 
 <div class="project-toolbar">
     <ToolbarButton Icon="bi-pencil"
@@ -15,30 +14,22 @@
                        Disabled="@(SelectedIssueId == null || IsAgentRunning)"
                        OnClick="ToggleDropdown" />
 
-        @if (_showDropdown)
+        @if (_showDropdown && SelectedIssueId != null)
         {
             <div class="toolbar-agent-dropdown" @onclick:stopPropagation="true">
                 <div class="dropdown-content">
-                    <label class="dropdown-label">Agent</label>
-                    <select class="form-select form-select-sm" @bind="_selectedPromptId">
-                        <option value="">None (no prompt)</option>
-                        @foreach (var prompt in _prompts)
-                        {
-                            <option value="@prompt.Id">
-                                @prompt.Name (@prompt.Mode)@(prompt.ProjectId != null ? " *" : "")
-                            </option>
-                        }
-                    </select>
-                    <button class="btn btn-sm btn-success mt-2 w-full"
-                            @onclick="HandleStartAgent"
-                            disabled="@_isStarting">
-                        @if (_isStarting)
-                        {
-                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                        }
-                        <i class="bi bi-play-fill me-1"></i>
-                        Start
-                    </button>
+                    <UnifiedAgentLauncher
+                        EntityId="@SelectedIssueId"
+                        ProjectId="@ProjectId"
+                        EntityTitle="@IssueTitle"
+                        EntityDescription="@IssueDescription"
+                        EntityType="@IssueType"
+                        BranchName="@BranchName"
+                        RepoPath="@RepoPath"
+                        DefaultBranch="@DefaultBranch"
+                        DefaultModel="@DefaultModel"
+                        Compact="true"
+                        OnSessionStarted="HandleSessionStarted" />
                 </div>
             </div>
         }
@@ -60,7 +51,7 @@
     .toolbar-agent-dropdown {
         position: fixed;
         z-index: 1000;
-        min-width: 200px;
+        min-width: 240px;
         margin-top: 4px;
         background: var(--bg-primary, #1a1a2e);
         border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
@@ -70,27 +61,6 @@
 
     .dropdown-content {
         padding: 12px;
-    }
-
-    .dropdown-label {
-        display: block;
-        font-size: 11px;
-        font-weight: 600;
-        text-transform: uppercase;
-        color: var(--text-muted, #6c757d);
-        margin-bottom: 4px;
-    }
-
-    .dropdown-content .form-select {
-        font-size: 13px;
-    }
-
-    .dropdown-content .btn {
-        font-size: 12px;
-    }
-
-    .w-full {
-        width: 100%;
     }
 </style>
 
@@ -120,38 +90,54 @@
     public EventCallback<string> OnEditClick { get; set; }
 
     /// <summary>
-    /// Callback when an agent is started.
-    /// Provides the issue ID and selected prompt (null if no prompt selected).
+    /// Callback when a session is successfully started.
     /// </summary>
     [Parameter]
-    public EventCallback<(string IssueId, AgentPrompt? Prompt)> OnRunAgentClick { get; set; }
+    public EventCallback<ClaudeSession> OnSessionStarted { get; set; }
+
+    /// <summary>
+    /// The issue title for prompt template rendering.
+    /// </summary>
+    [Parameter]
+    public string? IssueTitle { get; set; }
+
+    /// <summary>
+    /// The issue description for prompt template rendering.
+    /// </summary>
+    [Parameter]
+    public string? IssueDescription { get; set; }
+
+    /// <summary>
+    /// The issue type for prompt template rendering (e.g., "Feature", "Bug").
+    /// </summary>
+    [Parameter]
+    public string? IssueType { get; set; }
+
+    /// <summary>
+    /// The branch name for the issue.
+    /// </summary>
+    [Parameter]
+    public string? BranchName { get; set; }
+
+    /// <summary>
+    /// Path to the main repository (for listing branches).
+    /// </summary>
+    [Parameter]
+    public string? RepoPath { get; set; }
+
+    /// <summary>
+    /// Default branch of the project.
+    /// </summary>
+    [Parameter]
+    public string? DefaultBranch { get; set; }
+
+    /// <summary>
+    /// Default model to use.
+    /// </summary>
+    [Parameter]
+    public string DefaultModel { get; set; } = "opus";
 
     private bool _showDropdown;
-    private bool _isStarting;
-    private IReadOnlyList<AgentPrompt> _prompts = [];
-    private string _selectedPromptId = string.Empty;
-
-    protected override async Task OnInitializedAsync()
-    {
-        await AgentPromptApi.EnsureDefaultPromptsAsync();
-
-        // Load prompts for the project
-        if (!string.IsNullOrEmpty(ProjectId))
-        {
-            _prompts = await AgentPromptApi.GetProjectPromptsAsync(ProjectId);
-        }
-        else
-        {
-            _prompts = await AgentPromptApi.GetAllPromptsAsync();
-        }
-
-        // Default to "Build" if available
-        var buildPrompt = _prompts.FirstOrDefault(p => p.Name == "Build");
-        if (buildPrompt != null)
-        {
-            _selectedPromptId = buildPrompt.Id;
-        }
-    }
 
     private async Task HandleEdit()
     {
@@ -165,29 +151,9 @@
         _showDropdown = !_showDropdown;
     }
 
-    private async Task HandleStartAgent()
+    private async Task HandleSessionStarted(ClaudeSession session)
     {
-        if (_isStarting || SelectedIssueId == null) return;
-
-        _isStarting = true;
-        StateHasChanged();
-
-        try
-        {
-            AgentPrompt? selectedPrompt = null;
-
-            if (!string.IsNullOrEmpty(_selectedPromptId))
-            {
-                selectedPrompt = await AgentPromptApi.GetPromptAsync(_selectedPromptId);
-            }
-
-            _showDropdown = false;
-            await OnRunAgentClick.InvokeAsync((SelectedIssueId, selectedPrompt));
-        }
-        finally
-        {
-            _isStarting = false;
-            StateHasChanged();
-        }
+        _showDropdown = false;
+        await OnSessionStarted.InvokeAsync(session);
     }
 }

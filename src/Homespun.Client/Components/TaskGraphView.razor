@@ -178,16 +178,21 @@
                         }
                         @if (!isEditing && !string.IsNullOrEmpty(ProjectId))
                         {
-                            <IssueRowActions @ref="@_issueRowActionsRef"
+                            <IssueRowActions
                                              IssueId="@issueLine.IssueId"
                                              ProjectId="@ProjectId"
+                                             IssueTitle="@issueLine.Title"
+                                             IssueDescription="@issueLine.Description"
+                                             IssueType="@issueLine.IssueType.ToString()"
+                                             BranchName="@(issueLine.BranchName ?? "")"
+                                             RepoPath="@RepoPath"
+                                             DefaultBranch="@DefaultBranch"
+                                             DefaultModel="@DefaultModel"
                                              IsVisible="@isSelected"
                                              Disabled="@(agentStatus?.IsActive == true)"
                                              OnEditClick="HandleEditClick"
-                                             OnRunAgentClick="HandleRunAgentClick"
+                                             OnSessionStarted="HandleSessionStarted"
                                              ShowAgentDropdown="@(NavService?.EditMode == KeyboardEditMode.SelectingAgentPrompt && NavService?.SelectedIssueId == issueLine.IssueId)"
-                                             SelectedPromptIndex="@(NavService?.SelectedPromptIndex ?? 0)"
-                                             OnKeyboardAgentStart="HandleKeyboardAgentStart"
                                              OnOpenPanelClick="HandleOpenPanelClick" />
                         }
                     </div>
@@ -897,6 +902,21 @@
     [Parameter] public string? ProjectId { get; set; }
 
     /// <summary>
+    /// Path to the main repository (for listing branches in agent launcher).
+    /// </summary>
+    [Parameter] public string? RepoPath { get; set; }
+
+    /// <summary>
+    /// Default branch of the project.
+    /// </summary>
+    [Parameter] public string? DefaultBranch { get; set; }
+
+    /// <summary>
+    /// Default model to use for agent sessions.
+    /// </summary>
+    [Parameter] public string DefaultModel { get; set; } = "opus";
+
+    /// <summary>
     /// Called when an issue is created via inline keyboard creation.
     /// </summary>
     [Parameter] public EventCallback<string> OnIssueCreated { get; set; }
@@ -907,9 +927,9 @@
     [Parameter] public EventCallback<string> OnEditClick { get; set; }
 
     /// <summary>
-    /// Called when an agent is started on an issue via the inline run agent button.
+    /// Called when an agent session is successfully started.
     /// </summary>
-    [Parameter] public EventCallback<(string IssueId, AgentPrompt? Prompt)> OnRunAgentClick { get; set; }
+    [Parameter] public EventCallback<ClaudeSession> OnSessionStarted { get; set; }
 
     /// <summary>
     /// Maximum depth (levels) to show in the task graph. Default is 3 (shows lanes 0-3).
@@ -932,7 +952,6 @@
     private string? _typeMenuOpenForIssueId;
     private string? _statusMenuOpenForIssueId;
     private string? _previousSelectedNodeId;
-    private IssueRowActions? _issueRowActionsRef;
 
     protected override void OnParametersSet()
     {
@@ -1200,25 +1219,11 @@ lane0Color: issueLine.Lane0Color,
         await OnEditClick.InvokeAsync(issueId);
     }
 
-    private async Task HandleRunAgentClick((string IssueId, AgentPrompt? Prompt) args)
+    private async Task HandleSessionStarted(ClaudeSession session)
     {
-        await OnRunAgentClick.InvokeAsync(args);
+        await OnSessionStarted.InvokeAsync(session);
     }
 
-    /// <summary>
-    /// Handles keyboard-triggered agent start from IssueRowActions.
-    /// </summary>
-    private async Task HandleKeyboardAgentStart(AgentPrompt? prompt)
-    {
-        if (NavService?.SelectedIssueId == null) return;
-        await OnRunAgentClick.InvokeAsync((NavService.SelectedIssueId, prompt));
-    }
-
-    /// <summary>
-    /// Gets the currently active IssueRowActions component reference.
-    /// Used by parent components to trigger keyboard actions.
-    /// </summary>
-    public IssueRowActions? GetActiveIssueRowActions() => _issueRowActionsRef;
 
     private async Task HandleOpenPanelClick(string issueId)
     {
