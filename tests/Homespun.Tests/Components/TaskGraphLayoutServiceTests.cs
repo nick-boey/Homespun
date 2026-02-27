@@ -1205,20 +1205,26 @@ public class TaskGraphLayoutServiceTests
     public void ComputeLayout_MaxDepth_SetsHasHiddenParent_WhenParentFiltered()
     {
         // With maxDepth=2, ISSUE-008 (lane 2) has parent ISSUE-007 (lane 3) which is filtered
+        // ISSUE-007 has ExecutionMode.Series, so ISSUE-008 and ISSUE-012 are series siblings
+        // For series siblings with hidden parent, only the LAST sibling shows the indicator
         var taskGraph = BuildFullMockTaskGraph();
 
         var result = TaskGraphLayoutService.ComputeLayout(taskGraph, maxDepth: 2);
         var issueLines = result.OfType<TaskGraphIssueRenderLine>().ToList();
 
-        // ISSUE-008 should have HasHiddenParent=true because ISSUE-007 is filtered
+        // ISSUE-008 has hidden parent ISSUE-007, but it connects to ISSUE-012 (next sibling)
+        // so it should NOT show the hidden parent indicator (but IsSeriesChild should be true)
         var issue008 = issueLines.FirstOrDefault(l => l.IssueId == "ISSUE-008");
         Assert.That(issue008, Is.Not.Null);
-        Assert.That(issue008!.HasHiddenParent, Is.True, "Node with filtered parent should have HasHiddenParent=true");
+        Assert.That(issue008!.HasHiddenParent, Is.False, "First series sibling should not show indicator (connects to next sibling)");
+        Assert.That(issue008.IsSeriesChild, Is.True, "Should be series child via hidden parent");
 
-        // ISSUE-012 also has parent ISSUE-007 which is filtered
+        // ISSUE-012 is the last sibling with hidden parent ISSUE-007
+        // It should show the hidden parent indicator
         var issue012 = issueLines.FirstOrDefault(l => l.IssueId == "ISSUE-012");
         Assert.That(issue012, Is.Not.Null);
-        Assert.That(issue012!.HasHiddenParent, Is.True);
+        Assert.That(issue012!.HasHiddenParent, Is.True, "Last series sibling should show hidden parent indicator");
+        Assert.That(issue012.IsSeriesChild, Is.True, "Should be series child via hidden parent");
 
         // ISSUE-009 has parent ISSUE-008 which is NOT filtered
         var issue009 = issueLines.FirstOrDefault(l => l.IssueId == "ISSUE-009");
@@ -1245,11 +1251,12 @@ public class TaskGraphLayoutServiceTests
         var result = TaskGraphLayoutService.ComputeLayout(taskGraph, maxDepth: 2);
         var issueLines = result.OfType<TaskGraphIssueRenderLine>().ToList();
 
-        // Direct children of hidden parent ISSUE-007 should have indicator
+        // Direct children of hidden parent ISSUE-007 (ExecutionMode.Series) should show indicator
+        // only on the LAST sibling (ISSUE-012), not on earlier siblings that connect to next sibling
         var issue008 = issueLines.First(l => l.IssueId == "ISSUE-008");
         var issue012 = issueLines.First(l => l.IssueId == "ISSUE-012");
-        Assert.That(issue008.HasHiddenParent, Is.True, "ISSUE-008 is direct child of hidden ISSUE-007");
-        Assert.That(issue012.HasHiddenParent, Is.True, "ISSUE-012 is direct child of hidden ISSUE-007");
+        Assert.That(issue008.HasHiddenParent, Is.False, "ISSUE-008 has connection to next sibling, no indicator");
+        Assert.That(issue012.HasHiddenParent, Is.True, "ISSUE-012 is last sibling, should show indicator");
 
         // Nodes with visible parents but hidden grandparents should NOT have indicator
         var issue009 = issueLines.First(l => l.IssueId == "ISSUE-009");
@@ -1391,6 +1398,49 @@ public class TaskGraphLayoutServiceTests
         // PARENT-001 should have HasHiddenParent=true
         var parent = issueLines.FirstOrDefault(l => l.IssueId == "PARENT-001");
         Assert.That(parent!.HasHiddenParent, Is.True);
+    }
+
+    [Test]
+    public void ComputeLayout_MaxDepth_SeriesSiblingsWithHiddenParent_HaveVerticalConnections()
+    {
+        // ISSUE-008 and ISSUE-012 are children of hidden ISSUE-007 (ExecutionMode.Series)
+        // They should have drawTopLine/drawBottomLine to connect vertically as series siblings
+        var taskGraph = BuildFullMockTaskGraph();
+        var result = TaskGraphLayoutService.ComputeLayout(taskGraph, maxDepth: 2);
+        var issueLines = result.OfType<TaskGraphIssueRenderLine>().ToList();
+
+        var issue008 = issueLines.First(l => l.IssueId == "ISSUE-008");
+        var issue012 = issueLines.First(l => l.IssueId == "ISSUE-012");
+
+        // ISSUE-008 is first series sibling - should have drawBottomLine to connect to ISSUE-012
+        Assert.That(issue008.DrawBottomLine, Is.True, "First series sibling with hidden parent should have bottom line");
+        Assert.That(issue008.IsSeriesChild, Is.True, "Should be detected as series child via hidden parent");
+
+        // ISSUE-012 is last series sibling - should have drawTopLine to connect from ISSUE-008
+        Assert.That(issue012.DrawTopLine, Is.True, "Last series sibling should have top line connecting from previous sibling");
+        Assert.That(issue012.IsSeriesChild, Is.True, "Should be detected as series child via hidden parent");
+    }
+
+    [Test]
+    public void ComputeLayout_MaxDepth_OnlyLastSeriesSiblingWithHiddenParent_ShowsDottedIndicator()
+    {
+        // ISSUE-008 and ISSUE-012 are children of hidden ISSUE-007 (ExecutionMode.Series)
+        // Only ISSUE-012 (last sibling) should have HasHiddenParent=true because ISSUE-008
+        // has a connection to the next sibling (drawBottomLine=true)
+        var taskGraph = BuildFullMockTaskGraph();
+        var result = TaskGraphLayoutService.ComputeLayout(taskGraph, maxDepth: 2);
+        var issueLines = result.OfType<TaskGraphIssueRenderLine>().ToList();
+
+        var issue008 = issueLines.First(l => l.IssueId == "ISSUE-008");
+        var issue012 = issueLines.First(l => l.IssueId == "ISSUE-012");
+
+        // ISSUE-008 has a connection to ISSUE-012 (drawBottomLine=true), so no dotted indicator
+        Assert.That(issue008.HasHiddenParent, Is.False, "First sibling should not show indicator (has connection to next sibling)");
+        Assert.That(issue008.HiddenParentIsSeriesMode, Is.True, "Flag should still indicate series mode");
+
+        // ISSUE-012 is the last sibling (no next series sibling), should show dotted indicator
+        Assert.That(issue012.HasHiddenParent, Is.True, "Last sibling should show dotted indicator");
+        Assert.That(issue012.HiddenParentIsSeriesMode, Is.True, "Should indicate series mode for vertical dots");
     }
 
     #endregion
