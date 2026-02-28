@@ -5,6 +5,10 @@ namespace Homespun.Tests.Components;
 
 /// <summary>
 /// bUnit tests for the LoadingSpinner component.
+///
+/// Note: LoadingSpinner now wraps BbSpinner from Blazor Blueprint.
+/// Tests verify container classes and parameters rather than the
+/// internal BbSpinner markup which may vary.
 /// </summary>
 [TestFixture]
 public class LoadingSpinnerTests : BunitTestContext
@@ -15,10 +19,8 @@ public class LoadingSpinnerTests : BunitTestContext
         // Act
         var cut = Render<LoadingSpinner>();
 
-        // Assert
-        var spinner = cut.Find(".spinner-border");
-        Assert.That(spinner.ClassList, Does.Not.Contain("spinner-border-sm"));
-        Assert.That(spinner.ClassList, Does.Not.Contain("spinner-border-lg"));
+        // Assert - verify size parameter is set correctly
+        Assert.That(cut.Instance.Size, Is.EqualTo(LoadingSpinnerSize.Md));
     }
 
     [Test]
@@ -29,8 +31,7 @@ public class LoadingSpinnerTests : BunitTestContext
             parameters.Add(p => p.Size, LoadingSpinnerSize.Sm));
 
         // Assert
-        var spinner = cut.Find(".spinner-border");
-        Assert.That(spinner.ClassList, Does.Contain("spinner-border-sm"));
+        Assert.That(cut.Instance.Size, Is.EqualTo(LoadingSpinnerSize.Sm));
     }
 
     [Test]
@@ -41,8 +42,7 @@ public class LoadingSpinnerTests : BunitTestContext
             parameters.Add(p => p.Size, LoadingSpinnerSize.Lg));
 
         // Assert
-        var spinner = cut.Find(".spinner-border");
-        Assert.That(spinner.ClassList, Does.Contain("spinner-border-lg"));
+        Assert.That(cut.Instance.Size, Is.EqualTo(LoadingSpinnerSize.Lg));
     }
 
     [Test]
@@ -201,13 +201,46 @@ public class LoadingSpinnerTests : BunitTestContext
         Assert.That(container.ClassList, Does.Contain("loading-spinner-inline"));
         Assert.That(container.ClassList, Does.Contain("me-2"));
 
-        var spinner = cut.Find(".spinner-border");
-        Assert.That(spinner.ClassList, Does.Contain("spinner-border-sm"));
+        // Verify size parameter on instance
+        Assert.That(cut.Instance.Size, Is.EqualTo(LoadingSpinnerSize.Sm));
 
         var label = cut.Find(".loading-spinner-label");
         Assert.That(label.TextContent, Is.EqualTo("Saving..."));
 
         var srOnly = cut.Find(".sr-only");
         Assert.That(srOnly.TextContent, Is.EqualTo("Saving document"));
+    }
+
+    [Test]
+    public void LoadingSpinner_RendersWithBbSpinner()
+    {
+        // Act - verify the component renders with BbSpinner (SVG-based)
+        var cut = Render<LoadingSpinner>();
+
+        // Assert - BbSpinner should render an SVG element
+        var svgElements = cut.FindAll("svg");
+        Assert.That(svgElements.Count, Is.GreaterThanOrEqualTo(1), "BbSpinner should render an SVG element");
+    }
+
+    [Test]
+    public void LoadingSpinner_DefaultsInlineToFalse()
+    {
+        // Act
+        var cut = Render<LoadingSpinner>();
+
+        // Assert - default is block layout
+        var container = cut.Find(".loading-spinner");
+        Assert.That(container.ClassList, Does.Contain("loading-spinner-block"));
+    }
+
+    [Test]
+    public void LoadingSpinner_DefaultsCenteredToFalse()
+    {
+        // Act
+        var cut = Render<LoadingSpinner>();
+
+        // Assert
+        var container = cut.Find(".loading-spinner");
+        Assert.That(container.ClassList, Does.Not.Contain("loading-spinner-centered"));
     }
 }

@@ -92,9 +92,12 @@ public class BunitTestContext : TestContextWrapper
     }
 
     [TearDown]
-    public void TearDown()
+    public async Task TearDown()
     {
-        Context?.Dispose();
+        if (Context != null)
+        {
+            await Context.DisposeAsync();
+        }
     }
 }
 

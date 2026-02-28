@@ -1,14 +1,14 @@
 @using Homespun.Shared.Models.Sessions
 
 <div class="project-toolbar">
-    <ToolbarButton Name="pencil"
+    <ToolbarButton Icon="pencil"
                    Tooltip="Edit issue (i)"
                    TestId="toolbar-edit-button"
                    Disabled="@(SelectedIssueId == null)"
                    OnClick="HandleEdit" />
 
     <div class="toolbar-run-wrapper">
-        <ToolbarButton Name="play"
+        <ToolbarButton Icon="play"
                        Tooltip="Run agent"
                        TestId="toolbar-run-button"
                        Disabled="@(SelectedIssueId == null || IsAgentRunning)"

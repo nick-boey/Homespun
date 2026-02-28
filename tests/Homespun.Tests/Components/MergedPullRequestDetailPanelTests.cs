@@ -157,10 +157,9 @@ public class MergedPullRequestDetailPanelTests : BunitTestContext
                 .Add(p => p.Details, details)
                 .Add(p => p.ProjectId, "project-1"));
 
-        // Assert
-        var editLink = cut.Find("a.btn-outline-primary");
+        // Assert - BbButton with Href renders as an anchor element
+        var editLink = cut.Find("a[href='/projects/project-1/issues/abc123/edit']");
         Assert.That(editLink.TextContent, Does.Contain("Edit"));
-        Assert.That(editLink.GetAttribute("href"), Is.EqualTo("/projects/project-1/issues/abc123/edit"));
     }
 
     [Test]
