@@ -182,8 +182,8 @@ KOMODO_HOST=https://homespun:3500
 # Browser title
 KOMODO_TITLE=Homespun Komodo
 
-# First server is automatically added (localhost)
-KOMODO_FIRST_SERVER=https://host.docker.internal:8443
+# First server is automatically added (periphery on Docker network)
+KOMODO_FIRST_SERVER=https://homespun-komodo-periphery:8120
 
 # Monitoring intervals
 KOMODO_MONITORING_INTERVAL=15-sec
