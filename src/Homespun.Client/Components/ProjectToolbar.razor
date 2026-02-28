@@ -1,12 +1,64 @@
 @using Homespun.Shared.Models.Sessions
+@using Homespun.Client.Services
+
+@inject IKeyboardNavigationService NavService
 
 <div class="project-toolbar">
+    @* Creation buttons *@
+    <ToolbarButton Icon="arrow-up-from-line"
+                   Tooltip="Create issue above (Shift+O)"
+                   TestId="toolbar-create-above-button"
+                   Disabled="@CreateDisabled"
+                   OnClick="HandleCreateAbove" />
+
+    <ToolbarButton Icon="arrow-down-from-line"
+                   Tooltip="Create issue below (O)"
+                   TestId="toolbar-create-below-button"
+                   Disabled="@CreateDisabled"
+                   OnClick="HandleCreateBelow" />
+
+    <ToolbarSeparator />
+
+    @* Hierarchy buttons *@
+    <ToolbarButton Icon="corner-right-up"
+                   Tooltip="Make child of another (click to select target)"
+                   TestId="toolbar-child-of-button"
+                   Disabled="@ChildOfDisabled"
+                   Active="@ChildOfActive"
+                   OnClick="HandleMakeChildOf" />
+
+    <ToolbarButton Icon="corner-left-down"
+                   Tooltip="Make parent of another (click to select target)"
+                   TestId="toolbar-parent-of-button"
+                   Disabled="@ParentOfDisabled"
+                   Active="@ParentOfActive"
+                   OnClick="HandleMakeParentOf" />
+
+    <ToolbarSeparator />
+
+    @* Undo/Redo buttons *@
+    <ToolbarButton Icon="undo"
+                   Tooltip="@(UndoTooltip ?? "Undo")"
+                   TestId="toolbar-undo-button"
+                   Disabled="@UndoDisabled"
+                   OnClick="HandleUndo" />
+
+    <ToolbarButton Icon="redo"
+                   Tooltip="@(RedoTooltip ?? "Redo")"
+                   TestId="toolbar-redo-button"
+                   Disabled="@RedoDisabled"
+                   OnClick="HandleRedo" />
+
+    <ToolbarSeparator />
+
+    @* Edit button *@
     <ToolbarButton Icon="pencil"
                    Tooltip="Edit issue (i)"
                    TestId="toolbar-edit-button"
                    Disabled="@(SelectedIssueId == null)"
                    OnClick="HandleEdit" />
 
+    @* Run button with dropdown *@
     <div class="toolbar-run-wrapper">
         <ToolbarButton Icon="play"
                        Tooltip="Run agent"
@@ -137,6 +189,102 @@
     [Parameter]
     public string DefaultModel { get; set; } = "opus";
 
+    // Creation button parameters
+
+    /// <summary>
+    /// Whether the create above/below buttons are disabled.
+    /// </summary>
+    [Parameter]
+    public bool CreateDisabled { get; set; }
+
+    /// <summary>
+    /// Callback when the create above button is clicked.
+    /// </summary>
+    [Parameter]
+    public EventCallback OnCreateAbove { get; set; }
+
+    /// <summary>
+    /// Callback when the create below button is clicked.
+    /// </summary>
+    [Parameter]
+    public EventCallback OnCreateBelow { get; set; }
+
+    // Hierarchy button parameters
+
+    /// <summary>
+    /// Whether the "Make Child Of" button is disabled.
+    /// </summary>
+    [Parameter]
+    public bool ChildOfDisabled { get; set; }
+
+    /// <summary>
+    /// Whether the "Make Parent Of" button is disabled.
+    /// </summary>
+    [Parameter]
+    public bool ParentOfDisabled { get; set; }
+
+    /// <summary>
+    /// Whether the "Make Child Of" button is in active selection mode.
+    /// </summary>
+    [Parameter]
+    public bool ChildOfActive { get; set; }
+
+    /// <summary>
+    /// Whether the "Make Parent Of" button is in active selection mode.
+    /// </summary>
+    [Parameter]
+    public bool ParentOfActive { get; set; }
+
+    /// <summary>
+    /// Callback when the "Make Child Of" button is clicked.
+    /// </summary>
+    [Parameter]
+    public EventCallback OnMakeChildOf { get; set; }
+
+    /// <summary>
+    /// Callback when the "Make Parent Of" button is clicked.
+    /// </summary>
+    [Parameter]
+    public EventCallback OnMakeParentOf { get; set; }
+
+    // Undo/Redo button parameters
+
+    /// <summary>
+    /// Whether the undo button is disabled.
+    /// </summary>
+    [Parameter]
+    public bool UndoDisabled { get; set; }
+
+    /// <summary>
+    /// Whether the redo button is disabled.
+    /// </summary>
+    [Parameter]
+    public bool RedoDisabled { get; set; }
+
+    /// <summary>
+    /// Tooltip text for the undo button (can include the action description).
+    /// </summary>
+    [Parameter]
+    public string? UndoTooltip { get; set; }
+
+    /// <summary>
+    /// Tooltip text for the redo button (can include the action description).
+    /// </summary>
+    [Parameter]
+    public string? RedoTooltip { get; set; }
+
+    /// <summary>
+    /// Callback when the undo button is clicked.
+    /// </summary>
+    [Parameter]
+    public EventCallback OnUndo { get; set; }
+
+    /// <summary>
+    /// Callback when the redo button is clicked.
+    /// </summary>
+    [Parameter]
+    public EventCallback OnRedo { get; set; }
+
     private bool _showDropdown;
 
     private async Task HandleEdit()
@@ -155,5 +303,73 @@
     {
         _showDropdown = false;
         await OnSessionStarted.InvokeAsync(session);
+    }
+
+    private async Task HandleCreateAbove()
+    {
+        if (CreateDisabled) return;
+
+        if (OnCreateAbove.HasDelegate)
+        {
+            await OnCreateAbove.InvokeAsync();
+        }
+        else
+        {
+            NavService.CreateIssueAbove();
+        }
+    }
+
+    private async Task HandleCreateBelow()
+    {
+        if (CreateDisabled) return;
+
+        if (OnCreateBelow.HasDelegate)
+        {
+            await OnCreateBelow.InvokeAsync();
+        }
+        else
+        {
+            NavService.CreateIssueBelow();
+        }
+    }
+
+    private async Task HandleMakeChildOf()
+    {
+        if (ChildOfDisabled) return;
+
+        if (OnMakeChildOf.HasDelegate)
+        {
+            await OnMakeChildOf.InvokeAsync();
+        }
+        else
+        {
+            NavService.StartMakeChildOf();
+        }
+    }
+
+    private async Task HandleMakeParentOf()
+    {
+        if (ParentOfDisabled) return;
+
+        if (OnMakeParentOf.HasDelegate)
+        {
+            await OnMakeParentOf.InvokeAsync();
+        }
+        else
+        {
+            NavService.StartMakeParentOf();
+        }
+    }
+
+    private async Task HandleUndo()
+    {
+        if (UndoDisabled) return;
+        await OnUndo.InvokeAsync();
+    }
+
+    private async Task HandleRedo()
+    {
+        if (RedoDisabled) return;
+        await OnRedo.InvokeAsync();
     }
 }

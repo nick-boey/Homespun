@@ -4,7 +4,7 @@
         <BbTooltipTrigger>
             <span @onclick:stopPropagation="true">
                 <BbButton Variant="ButtonVariant.Ghost"
-                          Class="toolbar-btn"
+                          Class="@GetButtonClass()"
                           Disabled="@Disabled"
                           OnClick="HandleClick"
                           data-testid="@TestId">
@@ -21,7 +21,7 @@ else
 {
     <span @onclick:stopPropagation="true">
         <BbButton Variant="ButtonVariant.Ghost"
-                  Class="toolbar-btn"
+                  Class="@GetButtonClass()"
                   Disabled="@Disabled"
                   OnClick="HandleClick"
                   data-testid="@TestId">
@@ -58,6 +58,11 @@ else
         cursor: not-allowed;
     }
 
+    .toolbar-btn-active {
+        box-shadow: 0 0 0 2px var(--bg-primary, #1a1a2e), 0 0 0 4px var(--color-ocean, #51a5c1);
+        border-color: var(--color-ocean, #51a5c1);
+    }
+
     .toolbar-btn :deep(svg) {
         width: 14px;
         height: 14px;
@@ -86,6 +91,13 @@ else
     public bool Disabled { get; set; }
 
     /// <summary>
+    /// Whether the button is in an active state (e.g., selection mode).
+    /// Shows a ring highlight around the button.
+    /// </summary>
+    [Parameter]
+    public bool Active { get; set; }
+
+    /// <summary>
     /// Callback when the button is clicked.
     /// </summary>
     [Parameter]
@@ -96,6 +108,8 @@ else
     /// </summary>
     [Parameter]
     public string? TestId { get; set; }
+
+    private string GetButtonClass() => Active ? "toolbar-btn toolbar-btn-active" : "toolbar-btn";
 
     private async Task HandleClick()
     {
