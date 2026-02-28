@@ -70,7 +70,7 @@
 
     @if (!string.IsNullOrEmpty(_errorMessage))
     {
-        <div class="alert alert-danger">@_errorMessage</div>
+        <FormMessage Type="FormMessageType.Error" Message="@_errorMessage" />
     }
 </div>
 

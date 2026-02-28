@@ -36,15 +36,15 @@ else if (_sessions.Count > 0)
                             </small>
                         }
                     </div>
-                    <button class="btn btn-sm btn-outline-primary"
-                            @onclick="() => ResumeSession(session.SessionId)"
-                            disabled="@_isResuming">
+                    <BbButton Variant="ButtonVariant.Default" Size="ButtonSize.Small"
+                            OnClick="() => ResumeSession(session.SessionId)"
+                            Disabled="@_isResuming">
                         @if (_resumingSessionId == session.SessionId)
                         {
                             <BbSpinner Size="SpinnerSize.Small" Class="me-1" />
                         }
                         Resume
-                    </button>
+                    </BbButton>
                 </div>
             }
         </div>
@@ -53,7 +53,7 @@ else if (_sessions.Count > 0)
 
 @if (!string.IsNullOrEmpty(_errorMessage))
 {
-    <div class="alert alert-danger mt-2 py-1 px-2 small">@_errorMessage</div>
+    <FormMessage Type="FormMessageType.Error" Message="@_errorMessage" Class="mt-2" />
 }
 
 @code {

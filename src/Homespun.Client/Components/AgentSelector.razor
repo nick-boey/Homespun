@@ -14,7 +14,7 @@
                 }
             </select>
         </div>
-        <button class="btn btn-sm btn-success" @onclick="HandleStart" disabled="@(Disabled || IsStarting)" aria-label="Start agent" aria-busy="@IsStarting">
+        <BbButton Variant="ButtonVariant.Default" Size="ButtonSize.Small" OnClick="HandleStart" Disabled="@(Disabled || IsStarting)" aria-label="Start agent" aria-busy="@IsStarting">
             @if (IsStarting)
             {
                 <BbSpinner Size="SpinnerSize.Small" Class="me-1" />
@@ -25,7 +25,7 @@
                 <LucideIcon Name="play" Size="14" Class="me-1" />
                 <span>Start</span>
             }
-        </button>
+        </BbButton>
     </div>
     @if (_prompts.Any(p => p.ProjectId != null))
     {

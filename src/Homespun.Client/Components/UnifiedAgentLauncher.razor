@@ -48,13 +48,13 @@
                         }
                     </select>
                 </div>
-                <button class="btn btn-sm btn-success"
-                        @onclick="HandleStartAsync"
-                        disabled="@Disabled"
+                <BbButton Variant="ButtonVariant.Default" Size="ButtonSize.Small"
+                        OnClick="HandleStartAsync"
+                        Disabled="@Disabled"
                         aria-label="Start agent session">
                     <LucideIcon Name="play" Size="14" Class="me-1" />
                     <span>Start</span>
-                </button>
+                </BbButton>
             </div>
 
             @if (_prompts.Any(p => p.ProjectId != null))
@@ -95,7 +95,7 @@
 
     @if (!string.IsNullOrEmpty(_errorMessage))
     {
-        <div class="alert alert-danger alert-sm mt-2 mb-0 py-1 px-2 small">@_errorMessage</div>
+        <FormMessage Type="FormMessageType.Error" Message="@_errorMessage" Class="mt-2 mb-0" />
     }
 </div>
 

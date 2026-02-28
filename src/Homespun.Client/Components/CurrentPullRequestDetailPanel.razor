@@ -111,9 +111,9 @@
                 <h6>Claude Code Session</h6>
                 <div class="mb-2">
                     <span class="badge @GetSessionStatusBadgeClass()">@_session.Status</span>
-                    <a href="/session/@_session.Id" class="btn btn-sm btn-outline-primary ml-2">
+                    <BbButton Variant="ButtonVariant.Outline" Size="ButtonSize.Small" Class="ml-2" Href="@($"/session/{_session.Id}")">
                         Open Chat
-                    </a>
+                    </BbButton>
                 </div>
                 <div class="mb-2">
                     <small class="text-text-muted">
@@ -126,7 +126,7 @@
                 </div>
                 @if (!string.IsNullOrEmpty(_sessionErrorMessage))
                 {
-                    <div class="alert alert-danger mt-2 mb-0 py-1 px-2 text-sm">@_sessionErrorMessage</div>
+                    <FormMessage Type="FormMessageType.Error" Message="@_sessionErrorMessage" Class="mt-2 mb-0" />
                 }
             </div>
         }
@@ -144,35 +144,35 @@
             @* Skip review - only when Ready for Review *@
             @if (PullRequest.Status == OpenPullRequestStatus.ReadyForReview)
             {
-                <button class="btn btn-sm btn-outline-warning" @onclick="SkipReview" disabled="@_isLoading">
+                <BbButton Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" OnClick="SkipReview" Disabled="@_isLoading">
                     @if (_isLoading)
                     {
                         <BbSpinner Size="SpinnerSize.Small" Class="mr-1" />
                     }
                     Skip Review
-                </button>
+                </BbButton>
             }
 
             @* Start/Stop Session - available for all statuses *@
             @if (_isStarting)
             {
-                <button class="btn btn-sm btn-secondary" disabled>
+                <BbButton Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" Disabled="true">
                     <BbSpinner Size="SpinnerSize.Small" Class="mr-1" />
                     Starting Session...
-                </button>
+                </BbButton>
             }
             else if (_session != null)
             {
-                <a href="/session/@_session.Id" class="btn btn-sm btn-primary">
+                <BbButton Variant="ButtonVariant.Default" Size="ButtonSize.Small" Href="@($"/session/{_session.Id}")">
                     Open Chat
-                </a>
-                <button class="btn btn-sm btn-outline-danger" @onclick="StopSession" disabled="@_isSessionLoading">
+                </BbButton>
+                <BbButton Variant="ButtonVariant.Destructive" Size="ButtonSize.Small" OnClick="StopSession" Disabled="@_isSessionLoading">
                     @if (_isSessionLoading)
                     {
                         <BbSpinner Size="SpinnerSize.Small" Class="mr-1" />
                     }
                     Stop Session
-                </button>
+                </BbButton>
             }
             else
             {
@@ -190,15 +190,15 @@
 
                     @if (_cloneInfo != null && _branchInfo?.BehindCount > 0)
                     {
-                        <button class="btn btn-sm btn-outline-warning w-full"
-                                @onclick="StartRebaseAsync"
-                                disabled="@(_isRebasing || _isStarting)">
+                        <BbButton Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" Class="w-full"
+                                OnClick="StartRebaseAsync"
+                                Disabled="@(_isRebasing || _isStarting)">
                             @if (_isRebasing)
                             {
                                 <BbSpinner Size="SpinnerSize.Small" Class="mr-1" />
                             }
                             Rebase onto @_project?.DefaultBranch (@_branchInfo.BehindCount behind)
-                        </button>
+                        </BbButton>
                     }
                 </div>
 
@@ -215,30 +215,27 @@
             @* Merge - only when Approved *@
             @if (PullRequest is { Status: OpenPullRequestStatus.Approved, GitHubPRNumber: not null })
             {
-                <button class="btn btn-sm btn-primary" @onclick="MergePullRequest" disabled="@_isLoading">
+                <BbButton Variant="ButtonVariant.Default" Size="ButtonSize.Small" OnClick="MergePullRequest" Disabled="@_isLoading">
                     @if (_isLoading)
                     {
                         <BbSpinner Size="SpinnerSize.Small" Class="mr-1" />
                     }
                     Merge
-                </button>
+                </BbButton>
             }
         </div>
 
         @if (!string.IsNullOrEmpty(_startupError))
         {
-            <div class="alert alert-danger mt-2 mb-0 py-1 px-2 text-sm">
-                @_startupError
-                <button class="btn btn-link btn-sm p-0 ml-2" @onclick="ClearStartupError">Dismiss</button>
-            </div>
+            <FormMessage Type="FormMessageType.Error" Message="@_startupError" Class="mt-2 mb-0" IsDismissible="true" OnDismiss="ClearStartupError" />
         }
         else if (!string.IsNullOrEmpty(_errorMessage))
         {
-            <div class="alert alert-danger mt-2 mb-0 py-1 px-2 text-sm">@_errorMessage</div>
+            <FormMessage Type="FormMessageType.Error" Message="@_errorMessage" Class="mt-2 mb-0" />
         }
         else if (!string.IsNullOrEmpty(_sessionErrorMessage))
         {
-            <div class="alert alert-danger mt-2 mb-0 py-1 px-2 text-sm">@_sessionErrorMessage</div>
+            <FormMessage Type="FormMessageType.Error" Message="@_sessionErrorMessage" Class="mt-2 mb-0" />
         }
     </div>
 </div>

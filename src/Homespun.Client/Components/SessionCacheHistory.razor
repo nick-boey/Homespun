@@ -38,14 +38,14 @@ else if (_sessions.Count > 0)
                         </small>
                     </div>
                     <div class="btn-group btn-group-sm">
-                        <button class="btn btn-outline-secondary"
-                                @onclick="() => ViewArchivedSession(session.SessionId)"
+                        <BbButton Variant="ButtonVariant.Outline" Size="ButtonSize.Small"
+                                OnClick="() => ViewArchivedSession(session.SessionId)"
                                 title="View messages">
                             <LucideIcon Name="eye" Size="14" />
-                        </button>
-                        <button class="btn btn-outline-primary"
-                                @onclick="() => ResumeSession(session)"
-                                disabled="@_isResuming"
+                        </BbButton>
+                        <BbButton Variant="ButtonVariant.Default" Size="ButtonSize.Small"
+                                OnClick="() => ResumeSession(session)"
+                                Disabled="@_isResuming"
                                 title="Resume session">
                             @if (_resumingSessionId == session.SessionId)
                             {
@@ -55,7 +55,7 @@ else if (_sessions.Count > 0)
                             {
                                 <LucideIcon Name="play" Size="14" />
                             }
-                        </button>
+                        </BbButton>
                     </div>
                 </div>
             }
@@ -72,7 +72,7 @@ else if (ShowEmptyState)
 
 @if (!string.IsNullOrEmpty(_errorMessage))
 {
-    <div class="alert alert-danger mt-2 py-1 px-2 small">@_errorMessage</div>
+    <FormMessage Type="FormMessageType.Error" Message="@_errorMessage" Class="mt-2" />
 }
 
 @code {

@@ -31,12 +31,12 @@ else if (_session != null)
         <span class="badge @_session.Status.ToBadgeClass()">
             @_session.Status.ToDisplayLabel()
         </span>
-        <a href="/session/@_session.Id" class="btn btn-sm btn-primary">
+        <BbButton Variant="ButtonVariant.Default" Size="ButtonSize.Small" Href="@($"/session/{_session.Id}")">
             Chat
-        </a>
-        <button class="btn btn-sm btn-outline-danger"
-                @onclick="StopSessionAsync"
-                disabled="@_isLoading">
+        </BbButton>
+        <BbButton Variant="ButtonVariant.Destructive" Size="ButtonSize.Small"
+                OnClick="StopSessionAsync"
+                Disabled="@_isLoading">
             @if (_isLoading)
             {
                 <BbSpinner Size="SpinnerSize.Small" />
@@ -45,7 +45,7 @@ else if (_session != null)
             {
                 <span>Stop</span>
             }
-        </button>
+        </BbButton>
     </div>
 }
 else
@@ -60,7 +60,7 @@ else
 
 @if (!string.IsNullOrEmpty(_errorMessage))
 {
-    <div class="alert alert-danger alert-sm mt-1 mb-0 py-1 px-2 small">@_errorMessage</div>
+    <FormMessage Type="FormMessageType.Error" Message="@_errorMessage" Class="mt-1 mb-0" />
 }
 
 <style>
