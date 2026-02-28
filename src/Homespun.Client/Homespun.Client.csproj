@@ -19,15 +19,4 @@
     <ProjectReference Include="..\Homespun.Shared\Homespun.Shared.csproj" />
   </ItemGroup>
 
-  <!-- Tailwind CSS Build -->
-  <Target Name="CheckNodeModules" BeforeTargets="BuildTailwindCSS">
-    <Message Importance="high" Text="Checking for node_modules..." />
-    <Exec Command="npm install" WorkingDirectory="$(ProjectDir)" Condition="!Exists('$(ProjectDir)node_modules')" />
-  </Target>
-
-  <Target Name="BuildTailwindCSS" BeforeTargets="Compile">
-    <Message Importance="high" Text="Building Tailwind CSS..." />
-    <Exec Command="npx tailwindcss -i ./wwwroot/css/tailwind.css -o ./wwwroot/css/tailwind.min.css --minify" WorkingDirectory="$(ProjectDir)" />
-  </Target>
-
 </Project>
