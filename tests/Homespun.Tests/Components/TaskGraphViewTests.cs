@@ -4,6 +4,7 @@ using Homespun.Client.Components;
 using Homespun.Client.Services;
 using Homespun.Shared.Models.Fleece;
 using Homespun.Shared.Models.Gitgraph;
+using Homespun.Shared.Requests;
 using Homespun.Tests.Helpers;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
@@ -1263,6 +1264,12 @@ public void OpenSelectedIssueForEdit() => OnOpenEditRequested?.Invoke(SelectedIs
     public void StartMakeParentOf() { }
     public void CancelMoveOperation() { }
     public Task CompleteMoveOperationAsync(string targetIssueId, bool addToExisting) => Task.CompletedTask;
+
+    // Sibling move operations
+    public event Func<string, MoveDirection, Task>? OnSiblingMoveRequested;
+    public (bool CanMoveUp, bool CanMoveDown, bool HasSingleParent) GetSiblingMoveInfo() => (false, false, false);
+    public Task MoveSelectedUpAsync() => Task.CompletedTask;
+    public Task MoveSelectedDownAsync() => Task.CompletedTask;
 
     // Helper to trigger state change
     public void TriggerStateChanged() => OnStateChanged?.Invoke();

@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Homespun.Api.Tests;
 
@@ -26,7 +27,7 @@ public class HomespunWebApplicationFactory : WebApplicationFactory<Program>
     /// <summary>
     /// The mock Fleece service for issue manipulation in tests.
     /// </summary>
-    public MockFleeceService MockFleeceService { get; private set; } = null!;
+    public MockFleeceService MockFleeceService { get; } = new(NullLogger<MockFleeceService>.Instance);
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -43,13 +44,8 @@ public class HomespunWebApplicationFactory : WebApplicationFactory<Program>
             // Remove any existing IFleeceService registrations and add mock
             services.RemoveAll<IFleeceService>();
             services.RemoveAll<MockFleeceService>();
-            services.AddSingleton<MockFleeceService>(sp =>
-            {
-                var logger = sp.GetRequiredService<ILogger<MockFleeceService>>();
-                MockFleeceService = new MockFleeceService(logger);
-                return MockFleeceService;
-            });
-            services.AddSingleton<IFleeceService>(sp => sp.GetRequiredService<MockFleeceService>());
+            services.AddSingleton(MockFleeceService);
+            services.AddSingleton<IFleeceService>(MockFleeceService);
         });
 
         // Redirect logging to file instead of console for better test performance

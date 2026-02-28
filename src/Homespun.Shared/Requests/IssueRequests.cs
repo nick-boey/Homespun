@@ -130,3 +130,30 @@ public class SetParentRequest
     /// </summary>
     public bool AddToExisting { get; set; } = false;
 }
+
+/// <summary>
+/// Direction for moving a sibling issue within a series.
+/// </summary>
+public enum MoveDirection
+{
+    /// <summary>Move the issue up (lower sort order / earlier in series).</summary>
+    Up,
+    /// <summary>Move the issue down (higher sort order / later in series).</summary>
+    Down
+}
+
+/// <summary>
+/// Request model for moving a sibling issue up or down in the series order.
+/// </summary>
+public class MoveSeriesSiblingRequest
+{
+    /// <summary>
+    /// The project ID.
+    /// </summary>
+    public required string ProjectId { get; set; }
+
+    /// <summary>
+    /// Direction to move the issue (Up or Down).
+    /// </summary>
+    public MoveDirection Direction { get; set; }
+}

@@ -98,6 +98,26 @@ public class HttpIssueApiService(HttpClient http)
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<IssueResponse>();
     }
+
+    /// <summary>
+    /// Moves a sibling issue up or down in the series order.
+    /// </summary>
+    /// <param name="issueId">The issue ID to move</param>
+    /// <param name="request">The request containing the project ID and direction</param>
+    /// <returns>The updated issue, or null if not found</returns>
+    public async Task<IssueResponse?> MoveSeriesSiblingAsync(string issueId, MoveSeriesSiblingRequest request)
+    {
+        var response = await http.PostAsJsonAsync($"{ApiRoutes.Issues}/{issueId}/move-sibling", request);
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            return null;
+        if (response.StatusCode == System.Net.HttpStatusCode.BadRequest)
+        {
+            var errorMessage = await response.Content.ReadAsStringAsync();
+            throw new InvalidOperationException(errorMessage);
+        }
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<IssueResponse>();
+    }
 }
 
 /// <summary>

@@ -1,6 +1,5 @@
 using Fleece.Core.Models;
-
-namespace Homespun.Features.Fleece.Services;
+using Homespun.Shared.Requests;
 
 /// <summary>
 /// Project-aware service interface for Fleece issue tracking.
@@ -189,6 +188,18 @@ public interface IFleeceService
     /// <exception cref="KeyNotFoundException">If the child issue is not found.</exception>
     /// <exception cref="InvalidOperationException">If the relationship would create a cycle.</exception>
     Task<Issue> SetParentAsync(string projectPath, string childId, string parentId, bool addToExisting = false, CancellationToken ct = default);
+
+    /// <summary>
+    /// Moves a series sibling issue up or down by swapping its sort order with the adjacent sibling.
+    /// </summary>
+    /// <param name="projectPath">Path to the project.</param>
+    /// <param name="issueId">The issue ID to move.</param>
+    /// <param name="direction">Direction to move (Up or Down).</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>The updated issue with its new sort order.</returns>
+    /// <exception cref="KeyNotFoundException">If the issue is not found.</exception>
+    /// <exception cref="InvalidOperationException">If the issue has no parent, multiple parents, or is already first/last.</exception>
+    Task<Issue> MoveSeriesSiblingAsync(string projectPath, string issueId, MoveDirection direction, CancellationToken ct = default);
 
     #endregion
 

@@ -4,6 +4,8 @@ using Homespun.Shared.Models.Fleece;
 using Homespun.Shared.Requests;
 using Homespun.Shared.Utilities;
 
+// Import the MoveDirection from shared requests (not the Fleece.Core enum)
+
 namespace Homespun.Client.Services;
 
 /// <summary>
@@ -747,6 +749,81 @@ public class KeyboardNavigationService : IKeyboardNavigationService
         if (OnMoveOperationRequested != null)
         {
             await OnMoveOperationRequested.Invoke(sourceId, targetIssueId, operation, addToExisting);
+        }
+    }
+
+    #endregion
+
+    #region Sibling Move Operations
+
+    public event Func<string, MoveDirection, Task>? OnSiblingMoveRequested;
+
+    public (bool CanMoveUp, bool CanMoveDown, bool HasSingleParent) GetSiblingMoveInfo()
+    {
+        if (SelectedIndex < 0 || SelectedIndex >= _renderLines.Count || _taskGraphNodes.Count == 0)
+        {
+            return (false, false, false);
+        }
+
+        var issueId = _renderLines[SelectedIndex].IssueId;
+        var node = _taskGraphNodes.FirstOrDefault(n => n.Issue.Id == issueId);
+
+        if (node == null || node.Issue.ParentIssues.Count != 1)
+        {
+            return (false, false, false);
+        }
+
+        var parentRef = node.Issue.ParentIssues[0];
+        var parentId = parentRef.ParentIssue;
+
+        // Find all siblings under the same parent, sorted by sort order
+        var siblings = _taskGraphNodes
+            .Where(n => n.Issue.ParentIssues.Any(p => p.ParentIssue == parentId))
+            .Select(n => new
+            {
+                n.Issue.Id,
+                SortOrder = n.Issue.ParentIssues.First(p => p.ParentIssue == parentId).SortOrder ?? "0"
+            })
+            .OrderBy(s => s.SortOrder, StringComparer.Ordinal)
+            .ToList();
+
+        var currentIndex = siblings.FindIndex(s => s.Id == issueId);
+        if (currentIndex < 0)
+        {
+            return (false, false, true);
+        }
+
+        var canMoveUp = currentIndex > 0;
+        var canMoveDown = currentIndex < siblings.Count - 1;
+
+        return (canMoveUp, canMoveDown, true);
+    }
+
+    public async Task MoveSelectedUpAsync()
+    {
+        if (EditMode != KeyboardEditMode.Viewing) return;
+        if (SelectedIssueId == null || ProjectId == null) return;
+
+        var moveInfo = GetSiblingMoveInfo();
+        if (!moveInfo.CanMoveUp) return;
+
+        if (OnSiblingMoveRequested != null)
+        {
+            await OnSiblingMoveRequested.Invoke(SelectedIssueId, MoveDirection.Up);
+        }
+    }
+
+    public async Task MoveSelectedDownAsync()
+    {
+        if (EditMode != KeyboardEditMode.Viewing) return;
+        if (SelectedIssueId == null || ProjectId == null) return;
+
+        var moveInfo = GetSiblingMoveInfo();
+        if (!moveInfo.CanMoveDown) return;
+
+        if (OnSiblingMoveRequested != null)
+        {
+            await OnSiblingMoveRequested.Invoke(SelectedIssueId, MoveDirection.Down);
         }
     }
 
