@@ -2,14 +2,15 @@
 {
     <BbTooltip>
         <BbTooltipTrigger>
-            <button type="button"
-                    class="toolbar-btn"
-                    data-testid="@TestId"
-                    disabled="@Disabled"
-                    @onclick="HandleClick"
-                    @onclick:stopPropagation="true">
-                <LucideIcon Name="@Icon" Size="14" />
-            </button>
+            <span @onclick:stopPropagation="true">
+                <BbButton Variant="ButtonVariant.Ghost"
+                          Class="toolbar-btn"
+                          Disabled="@Disabled"
+                          OnClick="HandleClick"
+                          data-testid="@TestId">
+                    <LucideIcon Name="@Icon" Size="14" />
+                </BbButton>
+            </span>
         </BbTooltipTrigger>
         <BbTooltipContent>
             @Tooltip
@@ -18,14 +19,15 @@
 }
 else
 {
-    <button type="button"
-            class="toolbar-btn"
-            data-testid="@TestId"
-            disabled="@Disabled"
-            @onclick="HandleClick"
-            @onclick:stopPropagation="true">
-        <LucideIcon Name="@Icon" Size="14" />
-    </button>
+    <span @onclick:stopPropagation="true">
+        <BbButton Variant="ButtonVariant.Ghost"
+                  Class="toolbar-btn"
+                  Disabled="@Disabled"
+                  OnClick="HandleClick"
+                  data-testid="@TestId">
+            <LucideIcon Name="@Icon" Size="14" />
+        </BbButton>
+    </span>
 }
 
 <style>

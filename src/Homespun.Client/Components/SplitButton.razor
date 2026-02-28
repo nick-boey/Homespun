@@ -6,7 +6,7 @@
     Usage:
     <SplitButton PrimaryText="Pull"
                  PrimaryOnClick="HandlePullAsync"
-                 CssClass="btn-primary"
+                 Variant="ButtonVariant.Default"
                  Actions="@_actions" />
 *@
 
@@ -18,20 +18,21 @@
     }
 
     @* Primary button *@
-    <button type="button"
-            class="btn @ButtonCssClass split-button-primary"
-            disabled="@(IsLoading || Disabled)"
-            @onclick="HandlePrimaryClick">
+    <BbButton Variant="@Variant"
+              Size="@GetSize()"
+              Class="split-button-primary"
+              Disabled="@(IsLoading || Disabled)"
+              Loading="@(IsLoading && _activeAction == null)"
+              OnClick="HandlePrimaryClick">
         @if (IsLoading && _activeAction == null)
         {
-            <BbSpinner Size="SpinnerSize.Small" Class="me-1" />
             @if (!string.IsNullOrEmpty(PrimaryLoadingText))
             {
-                <span>@PrimaryLoadingText</span>
+                @PrimaryLoadingText
             }
             else
             {
-                <span>@PrimaryText</span>
+                @PrimaryText
             }
         }
         else
@@ -40,18 +41,20 @@
             {
                 @PrimaryIcon
             }
-            <span>@PrimaryText</span>
+            @PrimaryText
         }
-    </button>
+    </BbButton>
 
     @* Dropdown toggle button *@
-    <button type="button"
-            class="btn @ButtonCssClass split-button-toggle"
-            disabled="@(IsLoading || Disabled)"
-            @onclick="ToggleDropdown"
-            @onclick:stopPropagation="true">
-        <LucideIcon Name="chevron-down" Size="14" />
-    </button>
+    <span @onclick:stopPropagation="true">
+        <BbButton Variant="@Variant"
+                  Size="@GetSize()"
+                  Class="split-button-toggle"
+                  Disabled="@(IsLoading || Disabled)"
+                  OnClick="ToggleDropdown">
+            <LucideIcon Name="chevron-down" Size="14" />
+        </BbButton>
+    </span>
 
     @* Dropdown menu *@
     @if (_isDropdownOpen)
@@ -59,20 +62,17 @@
         <div class="split-button-menu">
             @foreach (var action in Actions)
             {
-                <button type="button"
-                        class="split-button-item"
-                        disabled="@IsLoading"
-                        @onclick="() => HandleActionClick(action)">
-                    @if (IsLoading && _activeAction == action.Key)
-                    {
-                        <BbSpinner Size="SpinnerSize.Small" Class="me-2" />
-                    }
-                    else if (action.Icon != null)
+                <BbButton Variant="ButtonVariant.Ghost"
+                          Class="split-button-item"
+                          Disabled="@IsLoading"
+                          Loading="@(IsLoading && _activeAction == action.Key)"
+                          OnClick="() => HandleActionClick(action)">
+                    @if (!(IsLoading && _activeAction == action.Key) && action.Icon != null)
                     {
                         <span class="me-2">@action.Icon</span>
                     }
-                    <span>@action.Text</span>
-                </button>
+                    @action.Text
+                </BbButton>
             }
         </div>
     }
@@ -116,10 +116,16 @@
     public string CssClass { get; set; } = "";
 
     /// <summary>
-    /// CSS class for the buttons (e.g., "btn-primary", "btn-secondary").
+    /// Button variant style.
     /// </summary>
     [Parameter]
-    public string ButtonCssClass { get; set; } = "btn-primary";
+    public ButtonVariant Variant { get; set; } = ButtonVariant.Default;
+
+    /// <summary>
+    /// Button size.
+    /// </summary>
+    [Parameter]
+    public ButtonSize? Size { get; set; }
 
     /// <summary>
     /// Whether the button is in loading state (externally controlled).
@@ -138,6 +144,8 @@
     private string? _activeAction;
 
     private bool IsLoading => IsLoadingExternal ?? _isLoadingInternal;
+
+    private ButtonSize GetSize() => Size ?? ButtonSize.Default;
 
     private void ToggleDropdown()
     {

@@ -7,7 +7,7 @@
         <div class="showcase-preview">
             <SplitButton PrimaryText="Pull"
                          PrimaryOnClick="HandlePrimaryClick"
-                         ButtonCssClass="btn-primary"
+                         Variant="ButtonVariant.Default"
                          Actions="@_defaultActions">
                 <PrimaryIcon>
                     <LucideIcon Name="cloud-download" Size="14" Class="me-1" />
@@ -24,7 +24,7 @@
         <div class="showcase-preview">
             <SplitButton PrimaryText="Pull"
                          PrimaryOnClick="HandlePrimaryClick"
-                         ButtonCssClass="btn-outline"
+                         Variant="ButtonVariant.Outline"
                          Actions="@_defaultActions">
                 <PrimaryIcon>
                     <LucideIcon Name="cloud-download" Size="14" Class="me-1" />
@@ -37,7 +37,7 @@
         <div class="showcase-preview">
             <SplitButton PrimaryText="Pull"
                          PrimaryOnClick="HandlePrimaryClick"
-                         ButtonCssClass="btn-secondary"
+                         Variant="ButtonVariant.Secondary"
                          Actions="@_defaultActions">
                 <PrimaryIcon>
                     <LucideIcon Name="cloud-download" Size="14" Class="me-1" />
@@ -54,7 +54,8 @@
         <div class="showcase-preview">
             <SplitButton PrimaryText="Pull"
                          PrimaryOnClick="HandlePrimaryClick"
-                         ButtonCssClass="btn-outline btn-sm"
+                         Variant="ButtonVariant.Outline"
+                         Size="ButtonSize.Small"
                          Actions="@_defaultActions">
                 <PrimaryIcon>
                     <LucideIcon Name="cloud-download" Size="14" Class="me-1" />
@@ -67,7 +68,7 @@
         <div class="showcase-preview">
             <SplitButton PrimaryText="Pull"
                          PrimaryOnClick="HandlePrimaryClick"
-                         ButtonCssClass="btn-outline"
+                         Variant="ButtonVariant.Outline"
                          Actions="@_defaultActions">
                 <PrimaryIcon>
                     <LucideIcon Name="cloud-download" Size="14" Class="me-1" />
@@ -85,16 +86,16 @@
             <SplitButton PrimaryText="Pull"
                          PrimaryLoadingText="Pulling..."
                          PrimaryOnClick="HandlePrimaryClick"
-                         ButtonCssClass="btn-outline"
+                         Variant="ButtonVariant.Outline"
                          IsLoadingExternal="@_isLoading"
                          Actions="@_defaultActions">
                 <PrimaryIcon>
                     <LucideIcon Name="cloud-download" Size="14" Class="me-1" />
                 </PrimaryIcon>
             </SplitButton>
-            <button class="btn btn-sm btn-secondary ms-3" @onclick="ToggleLoading">
+            <BbButton Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" Class="ms-3" OnClick="ToggleLoading">
                 Toggle Loading
-            </button>
+            </BbButton>
         </div>
     </div>
 </div>
@@ -106,7 +107,7 @@
         <div class="showcase-preview">
             <SplitButton PrimaryText="Pull"
                          PrimaryOnClick="HandlePrimaryClick"
-                         ButtonCssClass="btn-outline"
+                         Variant="ButtonVariant.Outline"
                          Disabled="true"
                          Actions="@_defaultActions">
                 <PrimaryIcon>
@@ -124,7 +125,7 @@
         <div class="showcase-preview">
             <SplitButton PrimaryText="Save"
                          PrimaryOnClick="HandlePrimaryClick"
-                         ButtonCssClass="btn-primary"
+                         Variant="ButtonVariant.Default"
                          Actions="@_multipleActions">
                 <PrimaryIcon>
                     <LucideIcon Name="save" Size="14" Class="me-1" />
