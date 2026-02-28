@@ -1,7 +1,6 @@
 using System.Net.Http.Json;
 using System.Timers;
 using Homespun.Shared.Models.Observability;
-using Microsoft.Extensions.Logging;
 
 namespace Homespun.Client.Services.Observability;
 

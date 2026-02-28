@@ -1,12 +1,6 @@
 @page "/session/{SessionId}"
 @using System.Text.Json
-@using System.Text.RegularExpressions
-@using Fleece.Core.Models
-@using Microsoft.AspNetCore.Components.Web
 @using Microsoft.AspNetCore.SignalR.Client
-@using Microsoft.JSInterop
-@using Homespun.Shared.Models.Sessions
-@using Homespun.Shared.Requests
 @implements IAsyncDisposable
 @inject HttpSessionApiService SessionApi
 @inject NavigationManager NavigationManager

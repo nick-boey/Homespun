@@ -6,15 +6,7 @@
 @page "/projects/{Id}/settings"
 @implements IDisposable
 @implements IAsyncDisposable
-@using Fleece.Core.Models
-@using Homespun.Shared.Hubs
-@using Homespun.Shared.Models.Notifications
-@using Homespun.Shared.Models.PullRequests
-@using Homespun.Shared.Models.Sessions
-@using Homespun.Shared.Requests
-@using Homespun.Shared.Models.Fleece
 @using Microsoft.AspNetCore.SignalR.Client
-@using Homespun.Client.Services
 @inject HttpProjectApiService ProjectApi
 @inject HttpPullRequestApiService PullRequestApi
 @inject HttpIssueApiService IssueApi

@@ -1,6 +1,3 @@
-@using Homespun.Shared.Models.Sessions
-@using Homespun.Client.Services
-
 @inject IKeyboardNavigationService NavService
 
 <div class="project-toolbar">
@@ -9,15 +6,15 @@
                    Tooltip="Create issue above (Shift+O)"
                    TestId="toolbar-create-above-button"
                    Disabled="@CreateDisabled"
-                   OnClick="HandleCreateAbove" />
+                   OnClick="HandleCreateAbove"/>
 
     <ToolbarButton Icon="arrow-down-from-line"
                    Tooltip="Create issue below (O)"
                    TestId="toolbar-create-below-button"
                    Disabled="@CreateDisabled"
-                   OnClick="HandleCreateBelow" />
+                   OnClick="HandleCreateBelow"/>
 
-    <ToolbarSeparator />
+    <ToolbarSeparator/>
 
     @* Hierarchy buttons *@
     <ToolbarButton Icon="corner-right-up"
@@ -25,38 +22,38 @@
                    TestId="toolbar-child-of-button"
                    Disabled="@ChildOfDisabled"
                    Active="@ChildOfActive"
-                   OnClick="HandleMakeChildOf" />
+                   OnClick="HandleMakeChildOf"/>
 
     <ToolbarButton Icon="corner-left-down"
                    Tooltip="Make parent of another (click to select target)"
                    TestId="toolbar-parent-of-button"
                    Disabled="@ParentOfDisabled"
                    Active="@ParentOfActive"
-                   OnClick="HandleMakeParentOf" />
+                   OnClick="HandleMakeParentOf"/>
 
-    <ToolbarSeparator />
+    <ToolbarSeparator/>
 
     @* Undo/Redo buttons *@
     <ToolbarButton Icon="undo"
                    Tooltip="@(UndoTooltip ?? "Undo")"
                    TestId="toolbar-undo-button"
                    Disabled="@UndoDisabled"
-                   OnClick="HandleUndo" />
+                   OnClick="HandleUndo"/>
 
     <ToolbarButton Icon="redo"
                    Tooltip="@(RedoTooltip ?? "Redo")"
                    TestId="toolbar-redo-button"
                    Disabled="@RedoDisabled"
-                   OnClick="HandleRedo" />
+                   OnClick="HandleRedo"/>
 
-    <ToolbarSeparator />
+    <ToolbarSeparator/>
 
     @* Edit button *@
     <ToolbarButton Icon="pencil"
                    Tooltip="Edit issue (i)"
                    TestId="toolbar-edit-button"
                    Disabled="@(SelectedIssueId == null)"
-                   OnClick="HandleEdit" />
+                   OnClick="HandleEdit"/>
 
     @* Run button with dropdown *@
     <div class="toolbar-run-wrapper">
@@ -64,7 +61,7 @@
                        Tooltip="Run agent"
                        TestId="toolbar-run-button"
                        Disabled="@(SelectedIssueId == null || IsAgentRunning)"
-                       OnClick="ToggleDropdown" />
+                       OnClick="ToggleDropdown"/>
 
         @if (_showDropdown && SelectedIssueId != null)
         {
@@ -81,7 +78,7 @@
                         DefaultBranch="@DefaultBranch"
                         DefaultModel="@DefaultModel"
                         Compact="true"
-                        OnSessionStarted="HandleSessionStarted" />
+                        OnSessionStarted="HandleSessionStarted"/>
                 </div>
             </div>
         }
@@ -117,6 +114,7 @@
 </style>
 
 @code {
+
     /// <summary>
     /// The currently selected issue ID. Null if no issue is selected.
     /// </summary>
@@ -372,4 +370,5 @@
         if (RedoDisabled) return;
         await OnRedo.InvokeAsync();
     }
+
 }
