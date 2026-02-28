@@ -235,6 +235,15 @@ else
     exit 1
 fi
 
+# Verify Tailscale config exists (used by run-komodo.sh at runtime)
+TAILSCALE_CONFIG_DIR="$REPO_ROOT/config/tailscale"
+if [ -f "$TAILSCALE_CONFIG_DIR/start.sh" ]; then
+    log_success "      Tailscale config found: $TAILSCALE_CONFIG_DIR"
+else
+    log_warn "      Tailscale config not found at $TAILSCALE_CONFIG_DIR"
+    log_warn "      Tailscale sidecar will not be available."
+fi
+
 echo
 log_info "======================================"
 log_info "  Komodo Installation Complete"

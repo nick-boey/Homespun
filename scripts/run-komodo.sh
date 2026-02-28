@@ -8,21 +8,26 @@ set -e
 # This script starts/stops the Komodo container management system.
 #
 # Usage:
-#   ./scripts/run-komodo.sh              # Start Komodo
+#   ./scripts/run-komodo.sh              # Start Komodo with Tailscale
 #   ./scripts/run-komodo.sh --stop       # Stop Komodo
 #   ./scripts/run-komodo.sh --logs       # View logs
 #   ./scripts/run-komodo.sh --status     # Check status
+#   ./scripts/run-komodo.sh --no-tailscale  # Start without Tailscale
 #
 # Options:
-#   --stop          Stop all Komodo containers
-#   --logs          Follow Komodo logs
-#   --status        Show container status
-#   -it             Run in foreground (interactive mode)
-#   -d, --detach    Run in background (default)
+#   --stop            Stop all Komodo containers
+#   --logs            Follow Komodo logs
+#   --status          Show container status
+#   --no-tailscale    Disable Tailscale sidecar
+#   -it               Run in foreground (interactive mode)
+#   -d, --detach      Run in background (default)
+#
+# Environment Variables:
+#   HSP_TAILSCALE_AUTH_KEY    Tailscale auth key (preferred for VM secrets)
+#   TAILSCALE_AUTH_KEY        Tailscale auth key (fallback)
 #
 # Prerequisites:
 #   - Run ./scripts/install-komodo.sh first
-#   - Tailscale auth key configured for VPN access
 
 # Colors
 CYAN='\033[0;36m'
@@ -48,6 +53,7 @@ ENV_FILE="$KOMODO_DIR/compose.env"
 # Default values
 ACTION="start"
 DETACHED=true
+NO_TAILSCALE=false
 
 # Parse arguments
 while [[ "$#" -gt 0 ]]; do
@@ -55,6 +61,7 @@ while [[ "$#" -gt 0 ]]; do
         --stop) ACTION="stop" ;;
         --logs) ACTION="logs" ;;
         --status) ACTION="status" ;;
+        --no-tailscale) NO_TAILSCALE=true ;;
         -it|--interactive) DETACHED=false ;;
         -d|--detach) DETACHED=true ;;
         -h|--help)
@@ -87,39 +94,102 @@ fi
 case "$ACTION" in
     stop)
         log_info "Stopping Komodo containers..."
-        docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" down
+        sudo docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" --profile tailscale down
         log_success "Komodo stopped."
         exit 0
         ;;
     logs)
         log_info "Following Komodo logs (Ctrl+C to exit)..."
-        docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs -f
+        sudo docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" logs -f
         exit 0
         ;;
     status)
         log_info "Komodo container status:"
         echo
-        docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" ps
+        sudo docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" ps
         exit 0
         ;;
 esac
 
 # Start Komodo
-log_info "[1/3] Validating Docker..."
+log_info "[1/4] Validating Docker..."
 if ! docker version >/dev/null 2>&1; then
     log_error "Docker is not running."
     exit 1
 fi
 log_success "      Docker is available."
 
-log_info "[2/3] Checking configuration..."
+log_info "[2/4] Checking configuration..."
 log_success "      Compose file: $COMPOSE_FILE"
 log_success "      Environment:  $ENV_FILE"
 
-log_info "[3/3] Starting Komodo..."
+# Step 3: Read Tailscale credentials
+log_info "[3/4] Reading Tailscale credentials..."
 
-# Build compose command
-COMPOSE_CMD="docker compose -f $COMPOSE_FILE --env-file $ENV_FILE"
+if [ "$NO_TAILSCALE" = true ]; then
+    TAILSCALE_AUTH_KEY=""
+    log_info "      Tailscale disabled (--no-tailscale flag)"
+else
+    # Source ~/.homespun/env if it exists
+    HOMESPUN_ENV_FILE="$HOME/.homespun/env"
+    if [ -f "$HOMESPUN_ENV_FILE" ]; then
+        source "$HOMESPUN_ENV_FILE"
+    fi
+
+    # 1. HSP_TAILSCALE_AUTH_KEY (for VM secrets)
+    # 2. TAILSCALE_AUTH_KEY (standard)
+    TAILSCALE_AUTH_KEY="${HSP_TAILSCALE_AUTH_KEY:-${TAILSCALE_AUTH_KEY:-}}"
+
+    # Try reading from .env file in repo root
+    if [ -z "$TAILSCALE_AUTH_KEY" ] && [ -f "$REPO_ROOT/.env" ]; then
+        TAILSCALE_AUTH_KEY=$(grep -E "^TAILSCALE_AUTH_KEY=" "$REPO_ROOT/.env" 2>/dev/null | cut -d'=' -f2- | tr -d '"' | tr -d "'" || true)
+    fi
+
+    if [ -z "$TAILSCALE_AUTH_KEY" ]; then
+        log_warn "      Tailscale auth key not found (Tailscale will be disabled)."
+        log_warn "      Set TAILSCALE_AUTH_KEY in ~/.homespun/env for VPN access."
+    else
+        # Check if Homespun's Tailscale sidecar is already running
+        if docker ps --format '{{.Names}}' | grep -q '^homespun-tailscale$'; then
+            log_warn "      Tailscale container (homespun-tailscale) is already running."
+            log_warn "      Skipping Tailscale sidecar to avoid conflict."
+            log_warn "      The existing sidecar will serve Komodo if it's on the same network."
+            TAILSCALE_AUTH_KEY=""
+        else
+            MASKED_TS_KEY="${TAILSCALE_AUTH_KEY:0:15}..."
+            log_success "      Tailscale auth key found: $MASKED_TS_KEY"
+        fi
+    fi
+fi
+
+log_info "[4/4] Starting Komodo..."
+
+# Build compose command (sudo required: compose.env is root-owned)
+# Pass Tailscale env vars through sudo if available
+SUDO_ENV_ARGS=""
+if [ -n "$TAILSCALE_AUTH_KEY" ]; then
+    SUDO_ENV_ARGS="TAILSCALE_AUTH_KEY=$TAILSCALE_AUTH_KEY TAILSCALE_CONFIG_DIR=$REPO_ROOT/config/tailscale"
+fi
+
+COMPOSE_CMD="sudo $SUDO_ENV_ARGS docker compose -f $COMPOSE_FILE --env-file $ENV_FILE"
+
+# Add Tailscale profile if auth key is provided
+if [ -n "$TAILSCALE_AUTH_KEY" ]; then
+    COMPOSE_CMD="$COMPOSE_CMD --profile tailscale"
+fi
+
+echo
+log_info "======================================"
+log_info "  Komodo Configuration"
+log_info "======================================"
+echo "  Core API:     http://localhost:9120 (local only)"
+if [ -n "$TAILSCALE_AUTH_KEY" ]; then
+    echo "  Tailscale:    Enabled (Komodo at https://<tailscale-hostname>:3500)"
+else
+    echo "  Tailscale:    Disabled"
+fi
+log_info "======================================"
+echo
 
 if [ "$DETACHED" = true ]; then
     eval "$COMPOSE_CMD up -d"
@@ -128,7 +198,9 @@ if [ "$DETACHED" = true ]; then
     log_success "Komodo started successfully!"
     echo
     echo "Access URLs:"
-    echo "  Komodo UI:    https://<tailscale-hostname>:3500"
+    if [ -n "$TAILSCALE_AUTH_KEY" ]; then
+        echo "  Komodo UI:    https://<tailscale-hostname>:3500"
+    fi
     echo "  Core API:     http://localhost:9120 (local only)"
     echo
     echo "Useful commands:"
