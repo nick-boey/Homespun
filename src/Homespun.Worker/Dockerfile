@@ -13,6 +13,10 @@ RUN npm run build
 FROM node:22-bookworm-slim
 WORKDIR /app
 
+# Build argument for version (set by CD workflow via Nerdbank.GitVersioning)
+ARG VERSION=0.0.0-dev
+ENV APP_VERSION=${VERSION}
+
 # Install git, curl, and other essentials (including .NET runtime dependencies)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git curl ca-certificates gnupg sudo \
