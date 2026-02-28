@@ -1,44 +1,15 @@
 name: CD
 
 on:
-  push:
-    branches: [main]
+  release:
+    types: [published]
 
 env:
   REGISTRY: ghcr.io
 
 jobs:
-  compute-version:
-    name: Compute Version
-    runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.nbgv.outputs.SemVer2 }}
-      version_simple: ${{ steps.nbgv.outputs.SimpleVersion }}
-      npm_version: ${{ steps.nbgv.outputs.NpmPackageVersion }}
-
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0  # Full clone for Nerdbank.GitVersioning
-
-    - name: Compute version with nbgv
-      uses: dotnet/nbgv@master
-      id: nbgv
-      with:
-        setAllVars: true
-        stamp: src/Homespun.Worker/package.json
-
-    - name: Display version
-      run: |
-        echo "SemVer2: ${{ steps.nbgv.outputs.SemVer2 }}"
-        echo "SimpleVersion: ${{ steps.nbgv.outputs.SimpleVersion }}"
-        echo "NpmPackageVersion: ${{ steps.nbgv.outputs.NpmPackageVersion }}"
-        echo "GitCommitIdShort: ${{ steps.nbgv.outputs.GitCommitIdShort }}"
-
   build-base-image:
     name: Build and Push Base Image
-    needs: compute-version
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -67,7 +38,7 @@ jobs:
       with:
         images: ${{ env.BASE_IMAGE }}
         tags: |
-          type=raw,value=${{ needs.compute-version.outputs.version }}
+          type=semver,pattern={{version}}
           type=raw,value=latest
 
     - name: Build and push base image
@@ -83,7 +54,7 @@ jobs:
 
   build-and-push-image:
     name: Build and Push ${{ matrix.name }}
-    needs: [compute-version, build-base-image]
+    needs: build-base-image
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -126,8 +97,13 @@ jobs:
       with:
         images: ${{ env.IMAGE_NAME }}
         tags: |
-          type=raw,value=${{ needs.compute-version.outputs.version }}
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
           type=raw,value=latest
+
+    - name: Extract version
+      id: get_version
+      run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
     - name: Build and push Docker image
       uses: docker/build-push-action@v6
@@ -139,27 +115,6 @@ jobs:
         labels: ${{ steps.meta.outputs.labels }}
         build-args: |
           BASE_IMAGE=${{ env.BASE_IMAGE }}:latest
-          VERSION=${{ needs.compute-version.outputs.version }}
+          VERSION=${{ steps.get_version.outputs.VERSION }}
         cache-from: type=gha,scope=${{ matrix.name }}
         cache-to: type=gha,mode=max,scope=${{ matrix.name }}
-
-  tag-commit:
-    name: Tag Commit with Version
-    needs: [compute-version, build-and-push-image]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-
-    - name: Create and push tag
-      run: |
-        VERSION="v${{ needs.compute-version.outputs.version_simple }}"
-        git config user.name "github-actions[bot]"
-        git config user.email "github-actions[bot]@users.noreply.github.com"
-        git tag -a "$VERSION" -m "Release $VERSION"
-        git push origin "$VERSION"
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
