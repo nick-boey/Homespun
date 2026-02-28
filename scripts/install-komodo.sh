@@ -177,7 +177,7 @@ KOMODO_WEBHOOK_SECRET=$KOMODO_WEBHOOK_SECRET
 # Core Settings
 # ============================================================================
 # Host URL (set to your Tailscale hostname)
-KOMODO_HOST=https://homespun:3500
+KOMODO_HOST=https://homespun-dev:3500
 
 # Browser title
 KOMODO_TITLE=Homespun Komodo
@@ -196,8 +196,8 @@ KOMODO_RESOURCE_POLL_INTERVAL=1-hr
 KOMODO_LOCAL_AUTH=true
 
 # Initial admin account
-KOMODO_LOCAL_AUTH_INITIAL_ADMIN_USERNAME=$ADMIN_USER
-KOMODO_LOCAL_AUTH_INITIAL_ADMIN_PASSWORD=$ADMIN_PASS
+KOMODO_INIT_ADMIN_USERNAME=$ADMIN_USER
+KOMODO_INIT_ADMIN_PASSWORD=$ADMIN_PASS
 
 # Disable signup (admin manages users)
 KOMODO_DISABLE_USER_REGISTRATION=true
@@ -209,6 +209,11 @@ KOMODO_DISABLE_NON_ADMIN_CREATE=true
 PERIPHERY_ROOT_DIRECTORY=$KOMODO_DIR
 PERIPHERY_PASSKEYS=$KOMODO_PASSKEY
 PERIPHERY_INCLUDE_DISK_MOUNTS=/
+
+# ============================================================================
+# Tailscale
+# ============================================================================
+TS_HOSTNAME=homespun-dev
 
 # ============================================================================
 # Timezone

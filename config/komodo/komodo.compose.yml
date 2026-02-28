@@ -104,20 +104,22 @@ services:
 
   # Tailscale - VPN sidecar for secure remote access
   # Exposes Komodo via HTTPS on port 3500
+  # Uses a separate container name and state volume from the main Homespun
+  # Tailscale sidecar to allow both to run simultaneously.
   tailscale:
     image: tailscale/tailscale:latest
-    container_name: homespun-tailscale
+    container_name: homespun-komodo-tailscale
     profiles: ["tailscale"]
-    hostname: homespun-tailscale
+    hostname: homespun-komodo-tailscale
     environment:
       - TS_AUTHKEY=${TAILSCALE_AUTH_KEY:-}
-      - TS_HOSTNAME=${TS_HOSTNAME:-homespun}
+      - TS_HOSTNAME=${TS_HOSTNAME:-homespun-dev}
       - TS_STATE_DIR=/var/lib/tailscale
       - TS_USERSPACE=true
       - TS_SERVE_CONFIG=/tmp/serve/serve-config.json
       - TS_EXTRA_ARGS=--accept-routes --reset
     volumes:
-      - tailscale-state:/var/lib/tailscale
+      - komodo-tailscale-state:/var/lib/tailscale
       - ${TAILSCALE_CONFIG_DIR:-./tailscale}:/config:ro
     entrypoint: ["/config/start.sh"]
     restart: unless-stopped
@@ -134,4 +136,4 @@ networks:
 volumes:
   komodo-mongo-data:
   komodo-mongo-config:
-  tailscale-state:
+  komodo-tailscale-state:

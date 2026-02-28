@@ -149,11 +149,10 @@ else
         log_warn "      Tailscale auth key not found (Tailscale will be disabled)."
         log_warn "      Set TAILSCALE_AUTH_KEY in ~/.homespun/env for VPN access."
     else
-        # Check if Homespun's Tailscale sidecar is already running
-        if docker ps --format '{{.Names}}' | grep -q '^homespun-tailscale$'; then
-            log_warn "      Tailscale container (homespun-tailscale) is already running."
-            log_warn "      Skipping Tailscale sidecar to avoid conflict."
-            log_warn "      The existing sidecar will serve Komodo if it's on the same network."
+        # Check if Komodo's Tailscale sidecar is already running
+        if docker ps --format '{{.Names}}' | grep -q '^homespun-komodo-tailscale$'; then
+            log_warn "      Komodo Tailscale container is already running."
+            log_warn "      Skipping Tailscale sidecar launch."
             TAILSCALE_AUTH_KEY=""
         else
             MASKED_TS_KEY="${TAILSCALE_AUTH_KEY:0:15}..."
