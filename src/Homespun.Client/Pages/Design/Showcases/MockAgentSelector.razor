@@ -14,12 +14,12 @@
         <button class="btn btn-sm btn-success" disabled="@(Disabled || IsStarting)">
             @if (IsStarting)
             {
-                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                <BbSpinner Size="SpinnerSize.Small" Class="me-1" />
                 <span>Starting...</span>
             }
             else
             {
-                <i class="bi bi-play-fill me-1" aria-hidden="true"></i>
+                <LucideIcon Name="play" Size="14" Class="me-1" />
                 <span>Start</span>
             }
         </button>

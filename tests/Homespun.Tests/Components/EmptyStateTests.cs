@@ -61,12 +61,13 @@ public class EmptyStateTests : BunitTestContext
                 .Add(p => p.ActionLabel, "Create New")
                 .Add(p => p.ActionHref, "/create"));
 
-        // Assert
-        var link = cut.Find(".empty-state-action a");
-        Assert.That(link.TextContent, Is.EqualTo("Create New"));
-        Assert.That(link.GetAttribute("href"), Is.EqualTo("/create"));
-        Assert.That(link.ClassList, Does.Contain("btn"));
-        Assert.That(link.ClassList, Does.Contain("btn-primary"));
+        // Assert - BbButton with Href renders a link
+        var actionContainer = cut.Find(".empty-state-action");
+        Assert.That(actionContainer.TextContent, Does.Contain("Create New"));
+        // BbButton renders as an <a> when Href is provided
+        var link = actionContainer.QuerySelector("a");
+        Assert.That(link, Is.Not.Null);
+        Assert.That(link!.GetAttribute("href"), Is.EqualTo("/create"));
     }
 
     [Test]

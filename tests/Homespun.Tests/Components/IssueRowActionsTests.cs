@@ -56,7 +56,8 @@ public class IssueRowActionsTests : BunitTestContext
 
         var editButton = cut.Find("[data-testid='edit-issue-button']");
         Assert.That(editButton, Is.Not.Null);
-        Assert.That(editButton.InnerHtml, Does.Contain("bi-pencil"));
+        // ToolbarButton uses LucideIcon which renders as SVG
+        Assert.That(editButton.QuerySelector("svg"), Is.Not.Null);
     }
 
     [Test]
@@ -71,7 +72,8 @@ public class IssueRowActionsTests : BunitTestContext
 
         var runButton = cut.Find("[data-testid='run-agent-button']");
         Assert.That(runButton, Is.Not.Null);
-        Assert.That(runButton.InnerHtml, Does.Contain("bi-play"));
+        // ToolbarButton uses LucideIcon which renders as SVG
+        Assert.That(runButton.QuerySelector("svg"), Is.Not.Null);
     }
 
     [Test]

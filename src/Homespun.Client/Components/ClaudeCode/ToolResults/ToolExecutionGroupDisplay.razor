@@ -16,7 +16,7 @@
             @if (Group.Executions.Any(e => e.IsRunning))
             {
                 <span class="tool-group-streaming">
-                    <span class="spinner-border spinner-border-sm" role="status"></span>
+                    <BbSpinner Size="SpinnerSize.Small" />
                 </span>
             }
             @if (Group.Executions.Count > 2)
@@ -57,7 +57,7 @@
                             <span class="tool-icon">@GetToolIcon(execution.ToolUse.ToolName ?? "Tool")</span>
                             <span class="tool-name">@(execution.ToolUse.ToolName ?? "Tool")</span>
                             <span class="tool-summary">
-                                <span class="spinner-border spinner-border-sm" role="status"></span>
+                                <BbSpinner Size="SpinnerSize.Small" />
                                 Running...
                             </span>
                         </div>

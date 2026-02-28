@@ -6,10 +6,10 @@
         @if (_availableGlobalPrompts.Any())
         {
             <div class="dropdown">
-                <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                    <i class="bi bi-files me-1" aria-hidden="true"></i>
+                <BbButton Variant="ButtonVariant.Outline" Size="ButtonSize.Small" data-bs-toggle="dropdown" aria-expanded="false">
+                    <LucideIcon Name="files" Size="14" Class="me-1" />
                     Copy from Global
-                </button>
+                </BbButton>
                 <ul class="dropdown-menu dropdown-menu-end">
                     @foreach (var globalPrompt in _availableGlobalPrompts)
                     {
@@ -25,10 +25,10 @@
                 </ul>
             </div>
         }
-        <button class="btn btn-primary btn-sm" @onclick="ShowAddModal">
-            <i class="bi bi-plus-lg me-1" aria-hidden="true"></i>
+        <BbButton Variant="ButtonVariant.Default" Size="ButtonSize.Small" OnClick="ShowAddModal">
+            <LucideIcon Name="plus" Size="14" Class="me-1" />
             Add Prompt
-        </button>
+        </BbButton>
     </div>
 </div>
 
@@ -44,7 +44,7 @@
         ActionLabel="Add Prompt"
         ActionClick="ShowAddModal">
         <Icon>
-            <i class="bi bi-stars" aria-hidden="true" style="font-size: 48px;"></i>
+            <LucideIcon Name="sparkles" Size="48" />
         </Icon>
     </EmptyState>
 }
@@ -72,12 +72,12 @@ else
                         }
                     </div>
                     <div class="card-footer d-flex justify-content-end gap-2">
-                        <button class="btn btn-sm btn-outline-secondary" @onclick="() => ShowEditModal(prompt)">
+                        <BbButton Variant="ButtonVariant.Outline" Size="ButtonSize.Small" OnClick="() => ShowEditModal(prompt)">
                             Edit
-                        </button>
-                        <button class="btn btn-sm btn-outline-danger" @onclick="() => ShowDeleteConfirmation(prompt)">
+                        </BbButton>
+                        <BbButton Variant="ButtonVariant.Destructive" Size="ButtonSize.Small" OnClick="() => ShowDeleteConfirmation(prompt)">
                             Delete
-                        </button>
+                        </BbButton>
                     </div>
                 </div>
             </div>
@@ -119,10 +119,10 @@ else
         {
             <div class="text-danger me-auto">@_modalError</div>
         }
-        <button type="button" class="btn btn-secondary" @onclick="HideModal">Cancel</button>
+        <BbButton Variant="ButtonVariant.Secondary" OnClick="HideModal">Cancel</BbButton>
         <AsyncActionButton OnClick="SavePrompt"
                            IsLoadingExternal="_isSaving"
-                           CssClass="btn-primary"
+                           Variant="ButtonVariant.Default"
                            Text="Save" />
     </Footer>
 </Modal>

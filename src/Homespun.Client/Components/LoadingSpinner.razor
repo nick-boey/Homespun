@@ -2,6 +2,7 @@
     LoadingSpinner Component
 
     A reusable loading spinner with size variants and optional label.
+    Wraps BbSpinner from Blazor Blueprint.
 
     Usage:
         <LoadingSpinner />                              - Medium spinner, no label
@@ -12,7 +13,7 @@
 *@
 
 <div class="@GetContainerClass()" role="status">
-    <div class="@GetSpinnerClass()"></div>
+    <BbSpinner Size="@GetBlueprintSize()" />
     @if (!string.IsNullOrEmpty(Label))
     {
         <span class="@GetLabelClass()">@Label</span>
@@ -78,13 +79,13 @@
         return string.Join(" ", classes);
     }
 
-    private string GetSpinnerClass()
+    private SpinnerSize GetBlueprintSize()
     {
         return Size switch
         {
-            LoadingSpinnerSize.Sm => "spinner-border spinner-border-sm",
-            LoadingSpinnerSize.Lg => "spinner-border spinner-border-lg",
-            _ => "spinner-border"
+            LoadingSpinnerSize.Sm => SpinnerSize.Small,
+            LoadingSpinnerSize.Lg => SpinnerSize.Large,
+            _ => SpinnerSize.Default
         };
     }
 

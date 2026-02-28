@@ -152,7 +152,8 @@ public class ProjectToolbarTests : BunitTestContext
         });
 
         var editButton = cut.Find("[data-testid='toolbar-edit-button']");
-        Assert.That(editButton.InnerHtml, Does.Contain("bi-pencil"));
+        // ToolbarButton uses LucideIcon which renders as SVG
+        Assert.That(editButton.QuerySelector("svg"), Is.Not.Null);
     }
 
     [Test]
@@ -164,7 +165,8 @@ public class ProjectToolbarTests : BunitTestContext
         });
 
         var runButton = cut.Find("[data-testid='toolbar-run-button']");
-        Assert.That(runButton.InnerHtml, Does.Contain("bi-play-fill"));
+        // ToolbarButton uses LucideIcon which renders as SVG
+        Assert.That(runButton.QuerySelector("svg"), Is.Not.Null);
     }
 
     [Test]

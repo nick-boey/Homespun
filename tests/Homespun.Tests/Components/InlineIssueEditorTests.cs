@@ -158,7 +158,8 @@ public class InlineIssueEditorTests : BunitTestContext
 
         var okBtn = cut.Find("[data-testid='inline-ok-btn']");
         Assert.That(okBtn, Is.Not.Null);
-        Assert.That(okBtn.InnerHtml, Does.Contain("bi-check"));
+        // LucideIcon renders as SVG
+        Assert.That(okBtn.QuerySelector("svg"), Is.Not.Null);
     }
 
     [Test]
@@ -169,7 +170,8 @@ public class InlineIssueEditorTests : BunitTestContext
 
         var okEditBtn = cut.Find("[data-testid='inline-ok-edit-btn']");
         Assert.That(okEditBtn, Is.Not.Null);
-        Assert.That(okEditBtn.InnerHtml, Does.Contain("bi-pencil"));
+        // LucideIcon renders as SVG
+        Assert.That(okEditBtn.QuerySelector("svg"), Is.Not.Null);
     }
 
     [Test]
@@ -180,7 +182,8 @@ public class InlineIssueEditorTests : BunitTestContext
 
         var cancelBtn = cut.Find("[data-testid='inline-cancel-btn']");
         Assert.That(cancelBtn, Is.Not.Null);
-        Assert.That(cancelBtn.InnerHtml, Does.Contain("bi-x"));
+        // LucideIcon renders as SVG
+        Assert.That(cancelBtn.QuerySelector("svg"), Is.Not.Null);
     }
 
     [Test]

@@ -17,9 +17,7 @@
     {
         <div class="panel-body">
             <div class="flex justify-center py-3">
-                <div class="spinner-border spinner-border-sm" role="status">
-                    <span class="sr-only">Loading...</span>
-                </div>
+                <BbSpinner Size="SpinnerSize.Small" />
             </div>
         </div>
     }
@@ -46,12 +44,12 @@
             }
         </div>
         <div class="panel-footer">
-            <a href="/session/@_session.Id" class="btn btn-sm btn-outline-primary mr-2">
+            <BbButton Variant="ButtonVariant.Outline" Size="ButtonSize.Small" Class="mr-2" Href="@($"/session/{_session.Id}")">
                 Open Chat
-            </a>
-            <button class="btn btn-sm btn-outline-danger" @onclick="StopSession" disabled="@IsLoading">
+            </BbButton>
+            <BbButton Variant="ButtonVariant.Destructive" Size="ButtonSize.Small" OnClick="StopSession" Disabled="@IsLoading">
                 Stop Session
-            </button>
+            </BbButton>
         </div>
     }
     else
@@ -68,12 +66,12 @@
                                  SelectedModelChanged="OnModelChanged" />
                 </div>
                 <div class="flex gap-2">
-                    <button class="btn btn-sm btn-outline-primary" @onclick="StartPlanning" disabled="@IsLoading" title="Read-only planning session">
+                    <BbButton Variant="ButtonVariant.Outline" Size="ButtonSize.Small" OnClick="StartPlanning" Disabled="@IsLoading" title="Read-only planning session">
                         Plan
-                    </button>
-                    <button class="btn btn-sm btn-success" @onclick="StartBuilding" disabled="@IsLoading" title="Full code editing session">
+                    </BbButton>
+                    <BbButton Variant="ButtonVariant.Default" Size="ButtonSize.Small" OnClick="StartBuilding" Disabled="@IsLoading" title="Full code editing session">
                         Build
-                    </button>
+                    </BbButton>
                 </div>
             </div>
         }
@@ -81,7 +79,7 @@
 
     @if (!string.IsNullOrEmpty(ErrorMessage))
     {
-        <div class="alert alert-danger m-2 py-1 px-2 text-sm mb-0">@ErrorMessage</div>
+        <FormMessage Type="FormMessageType.Error" Message="@ErrorMessage" Class="m-2 mb-0" />
     }
 </div>
 

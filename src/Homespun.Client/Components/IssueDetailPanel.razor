@@ -17,9 +17,9 @@
     <div class="card-header flex justify-between items-center">
         <span>Issue Details</span>
         <div class="flex gap-1">
-            <a href="projects/@ProjectId/issues/@Issue.Id/edit" class="btn btn-sm btn-outline-secondary" title="Edit issue">
-                <i class="bi bi-pencil" aria-hidden="true"></i>
-            </a>
+            <BbButton Variant="ButtonVariant.Outline" Size="ButtonSize.Small" Href="@($"projects/{ProjectId}/issues/{Issue.Id}/edit")" title="Edit issue">
+                <LucideIcon Name="pencil" Size="14" />
+            </BbButton>
         </div>
     </div>
 
@@ -52,7 +52,7 @@
             @if (_isLoadingPrStatus)
             {
                 <div class="text-text-muted text-sm mb-3">
-                    <span class="spinner-border spinner-border-sm mr-1" role="status" style="width: 0.6rem; height: 0.6rem;"></span>
+                    <BbSpinner Size="SpinnerSize.Small" Class="mr-1" />
                     Loading PR status...
                 </div>
             }
@@ -80,9 +80,9 @@
                     <h6>Claude Code Session</h6>
                     <div class="mb-2">
                         <span class="badge @GetSessionStatusBadgeClass()">@_session.Status</span>
-                        <a href="/session/@_session.Id" class="btn btn-sm btn-outline-primary ml-2">
+                        <BbButton Variant="ButtonVariant.Outline" Size="ButtonSize.Small" Class="ml-2" Href="@($"/session/{_session.Id}")">
                             Open Chat
-                        </a>
+                        </BbButton>
                     </div>
                     <div class="mb-2">
                         <small class="text-text-muted">
@@ -108,16 +108,16 @@
             @if (_session != null)
             {
                 <div class="flex flex-wrap gap-2">
-                    <a href="/session/@_session.Id" class="btn btn-sm btn-primary">
+                    <BbButton Variant="ButtonVariant.Default" Size="ButtonSize.Small" Href="@($"/session/{_session.Id}")">
                         Open Chat
-                    </a>
-                    <button class="btn btn-sm btn-outline-danger" @onclick="StopSession" disabled="@_isLoading">
+                    </BbButton>
+                    <BbButton Variant="ButtonVariant.Destructive" Size="ButtonSize.Small" OnClick="StopSession" Disabled="@_isLoading">
                         @if (_isLoading)
                         {
-                            <span class="spinner-border spinner-border-sm mr-1" role="status"></span>
+                            <BbSpinner Size="SpinnerSize.Small" Class="mr-1" />
                         }
                         Stop Session
-                    </button>
+                    </BbButton>
                 </div>
             }
             else if (Issue.Status is IssueStatus.Open or IssueStatus.Progress or IssueStatus.Review)
@@ -138,34 +138,34 @@
 
                 @if (_cloneInfo != null && _branchInfo?.BehindCount > 0)
                 {
-                    <button class="btn btn-sm btn-outline-warning w-full mb-2"
-                            @onclick="StartRebaseAsync"
-                            disabled="@_isRebasing">
+                    <BbButton Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" Class="w-full mb-2"
+                            OnClick="StartRebaseAsync"
+                            Disabled="@_isRebasing">
                         @if (_isRebasing)
                         {
-                            <span class="spinner-border spinner-border-sm mr-1" role="status"></span>
+                            <BbSpinner Size="SpinnerSize.Small" Class="mr-1" />
                         }
                         Rebase onto @(_project?.DefaultBranch) (@_branchInfo.BehindCount behind)
-                    </button>
+                    </BbButton>
                 }
             }
 
             <div class="flex flex-wrap gap-2">
                 @if (Issue.Status is IssueStatus.Open or IssueStatus.Progress or IssueStatus.Review)
                 {
-                    <button class="btn btn-sm btn-outline-primary" @onclick="CloseIssue" disabled="@_isLoading" title="Mark issue as completed">
+                    <BbButton Variant="ButtonVariant.Outline" Size="ButtonSize.Small" OnClick="CloseIssue" Disabled="@_isLoading" title="Mark issue as completed">
                         Close Issue
-                    </button>
+                    </BbButton>
                 }
 
-                <button class="btn btn-sm btn-outline-danger" @onclick="ShowDeleteConfirmation" disabled="@_isLoading" title="Delete issue permanently">
+                <BbButton Variant="ButtonVariant.Destructive" Size="ButtonSize.Small" OnClick="ShowDeleteConfirmation" Disabled="@_isLoading" title="Delete issue permanently">
                     Delete
-                </button>
+                </BbButton>
             </div>
 
             @if (!string.IsNullOrEmpty(_errorMessage))
             {
-                <div class="alert alert-danger mt-2 mb-0 py-1 px-2 text-sm">@_errorMessage</div>
+                <FormMessage Type="FormMessageType.Error" Message="@_errorMessage" Class="mt-2 mb-0" />
             }
         </div>
 
@@ -184,14 +184,14 @@
                             <p class="mb-0">This action cannot be undone.</p>
                         </div>
                         <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" @onclick="HideDeleteConfirmation">Cancel</button>
-                            <button type="button" class="btn btn-danger" @onclick="DeleteIssue" disabled="@_isLoading">
+                            <BbButton Variant="ButtonVariant.Secondary" OnClick="HideDeleteConfirmation">Cancel</BbButton>
+                            <BbButton Variant="ButtonVariant.Destructive" OnClick="DeleteIssue" Disabled="@_isLoading">
                                 @if (_isLoading)
                                 {
-                                    <span class="spinner-border spinner-border-sm mr-1" role="status"></span>
+                                    <BbSpinner Size="SpinnerSize.Small" Class="mr-1" />
                                 }
                                 Delete Issue
-                            </button>
+                            </BbButton>
                         </div>
                     </div>
                 </div>

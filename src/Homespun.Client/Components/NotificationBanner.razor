@@ -8,7 +8,7 @@
             <div class="notification-banner notification-@notification.Type.ToString().ToLower()">
                 <div class="notification-content flex items-center gap-sm flex-1 min-w-0">
                     <div class="notification-icon flex-shrink-0 flex items-center justify-center">
-                        @GetIcon(notification.Type)
+                        <LucideIcon Name="@GetIcon(notification.Type)" Size="16" />
                     </div>
                     <div class="notification-text flex items-baseline gap-sm flex-wrap min-w-0">
                         <span class="notification-title font-semibold whitespace-nowrap">@notification.Title</span>
@@ -19,7 +19,7 @@
                     @if (notification.IsDismissible)
                     {
                         <button class="notification-dismiss flex items-center justify-center w-6 h-6 p-0 bg-transparent border-none rounded-sm cursor-pointer text-text-muted hover:bg-bg-hover hover:text-text-primary transition-fast focus:outline-none focus-visible:ring-2 focus-visible:ring-ocean/30" @onclick="() => Dismiss(notification.Id)" title="Dismiss">
-                            <i class="bi bi-x-lg" aria-hidden="true"></i>
+                            <LucideIcon Name="x" Size="14" />
                         </button>
                     }
                 </div>
@@ -58,15 +58,14 @@
         await LoadNotificationsAsync();
     }
 
-    private static MarkupString GetIcon(NotificationType type)
+    private static string GetIcon(NotificationType type)
     {
-        var iconClass = type switch
+        return type switch
         {
-            NotificationType.Info => "bi-info-circle",
-            NotificationType.Warning => "bi-exclamation-triangle",
-            NotificationType.ActionRequired => "bi-exclamation-circle",
-            _ => "bi-circle"
+            NotificationType.Info => "info",
+            NotificationType.Warning => "alert-triangle",
+            NotificationType.ActionRequired => "alert-circle",
+            _ => "circle"
         };
-        return new MarkupString($"""<i class="bi {iconClass}" aria-hidden="true"></i>""");
     }
 }

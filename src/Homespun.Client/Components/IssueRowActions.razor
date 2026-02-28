@@ -8,7 +8,7 @@
             disabled="@Disabled"
             @onclick="HandleEditClick"
             @onclick:stopPropagation="true">
-        <i class="bi bi-pencil"></i>
+        <LucideIcon Name="pencil" Size="12" />
     </button>
 
     <button type="button"
@@ -18,7 +18,7 @@
             disabled="@Disabled"
             @onclick="HandleOpenPanelClick"
             @onclick:stopPropagation="true">
-        <i class="bi bi-layout-sidebar-reverse"></i>
+        <LucideIcon Name="panel-right" Size="12" />
     </button>
 
     <div class="issue-row-agent-wrapper">
@@ -29,7 +29,7 @@
                 disabled="@Disabled"
                 @onclick="ToggleDropdown"
                 @onclick:stopPropagation="true">
-            <i class="bi bi-play-fill"></i>
+            <LucideIcon Name="play" Size="12" />
         </button>
 
         @if (_showDropdown || ShowAgentDropdown)
@@ -95,8 +95,9 @@
         cursor: not-allowed;
     }
 
-    .issue-row-action-btn i {
-        font-size: 12px;
+    .issue-row-action-btn :deep(svg) {
+        width: 12px;
+        height: 12px;
     }
 
     .issue-row-agent-wrapper {

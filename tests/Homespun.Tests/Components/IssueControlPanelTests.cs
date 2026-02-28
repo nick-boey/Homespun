@@ -31,7 +31,8 @@ public class IssueControlPanelTests : BunitTestContext
 
         var createAboveBtn = cut.Find("[data-testid='create-issue-above-btn']");
         Assert.That(createAboveBtn, Is.Not.Null);
-        Assert.That(createAboveBtn.InnerHtml, Does.Contain("bi-plus"));
+        // LucideIcon renders SVG or placeholder - verify button has label text
+        Assert.That(createAboveBtn.InnerHtml, Does.Contain("Above"));
     }
 
     [Test]
@@ -41,7 +42,8 @@ public class IssueControlPanelTests : BunitTestContext
 
         var createBelowBtn = cut.Find("[data-testid='create-issue-below-btn']");
         Assert.That(createBelowBtn, Is.Not.Null);
-        Assert.That(createBelowBtn.InnerHtml, Does.Contain("bi-plus"));
+        // LucideIcon renders SVG or placeholder - verify button has label text
+        Assert.That(createBelowBtn.InnerHtml, Does.Contain("Below"));
     }
 
     [Test]

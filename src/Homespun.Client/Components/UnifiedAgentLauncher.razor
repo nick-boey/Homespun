@@ -24,7 +24,7 @@
     {
         <div class="d-flex align-items-center gap-2">
             <span class="badge bg-warning text-dark">
-                <span class="spinner-border spinner-border-sm me-1" role="status" style="width: 0.6rem; height: 0.6rem;"></span>
+                <BbSpinner Size="SpinnerSize.Small" Class="me-1" />
                 Starting...
             </span>
         </div>
@@ -48,13 +48,13 @@
                         }
                     </select>
                 </div>
-                <button class="btn btn-sm btn-success"
-                        @onclick="HandleStartAsync"
-                        disabled="@Disabled"
+                <BbButton Variant="ButtonVariant.Default" Size="ButtonSize.Small"
+                        OnClick="HandleStartAsync"
+                        Disabled="@Disabled"
                         aria-label="Start agent session">
-                    <i class="bi bi-play-fill me-1" aria-hidden="true"></i>
+                    <LucideIcon Name="play" Size="14" Class="me-1" />
                     <span>Start</span>
-                </button>
+                </BbButton>
             </div>
 
             @if (_prompts.Any(p => p.ProjectId != null))
@@ -66,7 +66,7 @@
             <button type="button"
                     class="btn btn-link btn-sm p-0 mt-2 more-settings-toggle"
                     @onclick="ToggleAdvancedSettings">
-                <i class="bi @(_showAdvancedSettings ? "bi-chevron-up" : "bi-chevron-down") me-1"></i>
+                <LucideIcon Name="@(_showAdvancedSettings ? "chevron-up" : "chevron-down")" Size="14" Class="me-1" />
                 @(_showAdvancedSettings ? "Hide settings" : "More settings")
             </button>
 
@@ -95,7 +95,7 @@
 
     @if (!string.IsNullOrEmpty(_errorMessage))
     {
-        <div class="alert alert-danger alert-sm mt-2 mb-0 py-1 px-2 small">@_errorMessage</div>
+        <FormMessage Type="FormMessageType.Error" Message="@_errorMessage" Class="mt-2 mb-0" />
     }
 </div>
 

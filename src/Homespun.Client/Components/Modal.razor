@@ -1,53 +1,41 @@
-@* Modal.razor - Reusable modal component with backdrop, header, body, and footer slots *@
+@* Modal.razor - Reusable modal component using Blazor Blueprint's BbDialog *@
 
-@if (IsOpen)
-{
-    <div class="modal-backdrop fade show" @onclick="HandleBackdropClick" @onclick:stopPropagation="true"></div>
-    <div class="modal fade show d-block" tabindex="-1" role="dialog" aria-modal="true">
-        <div class="modal-dialog @GetDialogClasses()" @onclick:stopPropagation="true">
-            <div class="modal-content">
-                @if (Header != null)
-                {
-                    <div class="modal-header">
-                        @Header
-                        @if (ShowCloseButton)
-                        {
-                            <button type="button" class="btn-close" @onclick="OnClose" aria-label="Close"></button>
-                        }
-                    </div>
-                }
-                else if (!string.IsNullOrEmpty(Title))
-                {
-                    <div class="modal-header">
-                        <h5 class="modal-title">@Title</h5>
-                        @if (ShowCloseButton)
-                        {
-                            <button type="button" class="btn-close" @onclick="OnClose" aria-label="Close"></button>
-                        }
-                    </div>
-                }
-                @if (Body != null)
-                {
-                    <div class="modal-body">
-                        @Body
-                    </div>
-                }
-                else if (ChildContent != null)
-                {
-                    <div class="modal-body">
-                        @ChildContent
-                    </div>
-                }
-                @if (Footer != null)
-                {
-                    <div class="modal-footer">
-                        @Footer
-                    </div>
-                }
-            </div>
-        </div>
-    </div>
-}
+<BbDialog Open="@IsOpen" OnOpenChange="HandleOpenChange">
+    <BbDialogContent Class="@GetDialogClasses()">
+        @if (Header != null)
+        {
+            <BbDialogHeader>
+                @Header
+            </BbDialogHeader>
+        }
+        else if (!string.IsNullOrEmpty(Title))
+        {
+            <BbDialogHeader>
+                <BbDialogTitle>@Title</BbDialogTitle>
+            </BbDialogHeader>
+        }
+
+        @if (Body != null)
+        {
+            <BbDialogBody>
+                @Body
+            </BbDialogBody>
+        }
+        else if (ChildContent != null)
+        {
+            <BbDialogBody>
+                @ChildContent
+            </BbDialogBody>
+        }
+
+        @if (Footer != null)
+        {
+            <BbDialogFooter>
+                @Footer
+            </BbDialogFooter>
+        }
+    </BbDialogContent>
+</BbDialog>
 
 @code {
     /// <summary>
@@ -127,14 +115,18 @@
     {
         var classes = new List<string>();
 
-        if (Size != ModalSize.Default)
+        // Map ModalSize to CSS classes
+        if (Size == ModalSize.Sm)
         {
-            classes.Add($"modal-{Size.ToString().ToLower()}");
+            classes.Add("sm:max-w-sm");
         }
-
-        if (Centered)
+        else if (Size == ModalSize.Lg)
         {
-            classes.Add("modal-dialog-centered");
+            classes.Add("sm:max-w-2xl");
+        }
+        else if (Size == ModalSize.Xl)
+        {
+            classes.Add("sm:max-w-4xl");
         }
 
         if (!string.IsNullOrEmpty(DialogClass))
@@ -145,9 +137,9 @@
         return string.Join(" ", classes);
     }
 
-    private async Task HandleBackdropClick()
+    private async Task HandleOpenChange(bool open)
     {
-        if (CloseOnBackdropClick)
+        if (!open && OnClose.HasDelegate)
         {
             await OnClose.InvokeAsync();
         }

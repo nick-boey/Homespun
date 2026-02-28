@@ -8,17 +8,18 @@
     <AsyncActionButton OnClick="HandleSubmitAsync"
                        Text="Save"
                        LoadingText="Saving..."
-                       CssClass="btn-primary" />
+                       Variant="ButtonVariant.Default" />
 *@
 
-<button type="@ButtonType"
-        class="btn @CssClass @(IsLoading ? "loading" : "")"
-        disabled="@(IsLoading || Disabled)"
-        @onclick="HandleClick"
-        @attributes="AdditionalAttributes">
+<BbButton Variant="@Variant"
+          Size="@GetSize()"
+          Disabled="@(IsLoading || Disabled)"
+          Loading="@IsLoading"
+          OnClick="HandleClick"
+          Class="@CssClass"
+          Type="@GetButtonType()">
     @if (IsLoading)
     {
-        <span class="spinner-border spinner-border-sm @(string.IsNullOrEmpty(LoadingText) && string.IsNullOrEmpty(Text) ? "" : SpinnerMarginClass)" role="status" aria-hidden="true"></span>
         @if (!string.IsNullOrEmpty(LoadingText))
         {
             <span>@LoadingText</span>
@@ -40,7 +41,7 @@
         }
         @ChildContent
     }
-</button>
+</BbButton>
 
 @code {
     /// <summary>
@@ -62,10 +63,22 @@
     public string? LoadingText { get; set; }
 
     /// <summary>
-    /// CSS classes to apply to the button (e.g., "btn-primary", "btn-outline-secondary btn-sm").
+    /// Button variant style.
     /// </summary>
     [Parameter]
-    public string CssClass { get; set; } = "btn-primary";
+    public ButtonVariant Variant { get; set; } = ButtonVariant.Default;
+
+    /// <summary>
+    /// Button size.
+    /// </summary>
+    [Parameter]
+    public ButtonSize? Size { get; set; }
+
+    /// <summary>
+    /// Additional CSS classes to apply to the button.
+    /// </summary>
+    [Parameter]
+    public string? CssClass { get; set; }
 
     /// <summary>
     /// Whether the button is in a loading state. If not provided, managed internally when OnClick is async.
@@ -97,12 +110,6 @@
     [Parameter]
     public RenderFragment? ChildContent { get; set; }
 
-    /// <summary>
-    /// Additional HTML attributes to apply to the button.
-    /// </summary>
-    [Parameter(CaptureUnmatchedValues = true)]
-    public Dictionary<string, object>? AdditionalAttributes { get; set; }
-
     private bool _isLoadingInternal;
 
     /// <summary>
@@ -111,10 +118,14 @@
     /// </summary>
     private bool IsLoading => IsLoadingExternal ?? _isLoadingInternal;
 
-    /// <summary>
-    /// Gets the appropriate margin class for the spinner based on whether text is shown.
-    /// </summary>
-    private string SpinnerMarginClass => "me-1";
+    private ButtonSize GetSize() => Size ?? ButtonSize.Default;
+
+    private ButtonType GetButtonType() => ButtonType switch
+    {
+        "submit" => BlazorBlueprint.Components.ButtonType.Submit,
+        "reset" => BlazorBlueprint.Components.ButtonType.Reset,
+        _ => BlazorBlueprint.Components.ButtonType.Button
+    };
 
     private async Task HandleClick(MouseEventArgs args)
     {

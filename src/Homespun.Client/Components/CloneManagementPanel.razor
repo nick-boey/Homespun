@@ -15,44 +15,38 @@
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h4 class="mb-0">Branches</h4>
         <div class="btn-group">
-            <button class="btn btn-outline-secondary btn-sm" @onclick="RefreshDataAsync" disabled="@_isLoading">
+            <BbButton Variant="ButtonVariant.Outline" Size="ButtonSize.Small" OnClick="RefreshDataAsync" Disabled="@_isLoading">
                 @if (_isLoading)
                 {
-                    <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                    <BbSpinner Size="SpinnerSize.Small" Class="me-1" />
                 }
-                <i class="bi bi-arrow-clockwise"></i> Refresh
-            </button>
-            <button class="btn btn-outline-secondary btn-sm" @onclick="FetchAllAsync" disabled="@_isFetching">
+                <LucideIcon Name="refresh-cw" Size="14" /> Refresh
+            </BbButton>
+            <BbButton Variant="ButtonVariant.Outline" Size="ButtonSize.Small" OnClick="FetchAllAsync" Disabled="@_isFetching">
                 @if (_isFetching)
                 {
-                    <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                    <BbSpinner Size="SpinnerSize.Small" Class="me-1" />
                 }
-                <i class="bi bi-cloud-download"></i> Fetch
-            </button>
-            <button class="btn btn-outline-secondary btn-sm" @onclick="PruneClonesAsync" disabled="@_isPruning" title="Clean up stale clone references">
+                <LucideIcon Name="cloud-download" Size="14" /> Fetch
+            </BbButton>
+            <BbButton Variant="ButtonVariant.Outline" Size="ButtonSize.Small" OnClick="PruneClonesAsync" Disabled="@_isPruning" title="Clean up stale clone references">
                 @if (_isPruning)
                 {
-                    <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                    <BbSpinner Size="SpinnerSize.Small" Class="me-1" />
                 }
-                <i class="bi bi-trash"></i> Prune
-            </button>
+                <LucideIcon Name="trash-2" Size="14" /> Prune
+            </BbButton>
         </div>
     </div>
 
     @if (!string.IsNullOrEmpty(_errorMessage))
     {
-        <div class="alert alert-danger alert-dismissible fade show" role="alert">
-            @_errorMessage
-            <button type="button" class="btn-close" @onclick="() => _errorMessage = null"></button>
-        </div>
+        <FormMessage Type="FormMessageType.Error" Message="@_errorMessage" IsDismissible="true" OnDismiss="() => _errorMessage = null" />
     }
 
     @if (!string.IsNullOrEmpty(_successMessage))
     {
-        <div class="alert alert-success alert-dismissible fade show" role="alert">
-            @_successMessage
-            <button type="button" class="btn-close" @onclick="() => _successMessage = null"></button>
-        </div>
+        <FormMessage Type="FormMessageType.Success" Message="@_successMessage" IsDismissible="true" OnDismiss="() => _successMessage = null" />
     }
 
     @* Active Branches Section *@
@@ -140,7 +134,7 @@
                             @if (false) @* StartupTracker not available in WASM *@
                             {
                                 <span class="badge bg-warning text-dark">
-                                    <span class="spinner-border spinner-border-sm me-1" role="status" style="width: 0.6rem; height: 0.6rem;"></span>
+                                    <BbSpinner Size="SpinnerSize.Small" Class="me-1" />
                                     Starting...
                                 </span>
                             }
@@ -171,50 +165,50 @@
                                 {
                                     @if (session != null)
                                     {
-                                        <a href="/session/@session.Id" class="btn btn-sm btn-primary me-1" title="Open chat">
+                                        <BbButton Variant="ButtonVariant.Default" Size="ButtonSize.Small" Class="me-1" Href="@($"/session/{session.Id}")" title="Open chat">
                                             Chat
-                                        </a>
-                                        <button class="btn btn-sm btn-outline-danger me-1"
-                                                @onclick="() => StopSessionAsync(session)"
-                                                disabled="@_operationInProgress"
+                                        </BbButton>
+                                        <BbButton Variant="ButtonVariant.Destructive" Size="ButtonSize.Small" Class="me-1"
+                                                OnClick="() => StopSessionAsync(session)"
+                                                Disabled="@_operationInProgress"
                                                 title="Stop session">
                                             Stop
-                                        </button>
+                                        </BbButton>
                                     }
                                     else @* StartupTracker not available in WASM *@
                                     {
-                                        <button class="btn btn-sm btn-success me-1"
-                                                @onclick="() => StartMainBranchSessionAsync(clone)"
-                                                disabled="@_operationInProgress"
+                                        <BbButton Variant="ButtonVariant.Default" Size="ButtonSize.Small" Class="me-1"
+                                                OnClick="() => StartMainBranchSessionAsync(clone)"
+                                                Disabled="@_operationInProgress"
                                                 title="Start a new agent session on the main branch">
-                                            <i class="bi bi-robot me-1"></i>Run Agent
-                                        </button>
+                                            <LucideIcon Name="bot" Size="14" Class="me-1" />Run Agent
+                                        </BbButton>
                                     }
 
                                     @if (branchInfo?.BehindCount > 0)
                                     {
-                                        <button class="btn btn-sm btn-outline-info"
-                                                @onclick="() => UpdateMainBranchAsync(clone)"
-                                                disabled="@(_operationInProgress || _isUpdatingMain)"
-                                                title="Pull latest changes and sync fleece issues (@branchInfo.BehindCount commits behind)">
+                                        <BbButton Variant="ButtonVariant.Secondary" Size="ButtonSize.Small"
+                                                OnClick="() => UpdateMainBranchAsync(clone)"
+                                                Disabled="@(_operationInProgress || _isUpdatingMain)"
+                                                title="@($"Pull latest changes and sync fleece issues ({branchInfo?.BehindCount} commits behind)")">
                                             @if (_isUpdatingMain)
                                             {
-                                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                                <BbSpinner Size="SpinnerSize.Small" Class="me-1" />
                                             }
-                                            <i class="bi bi-cloud-download me-1"></i>Update
-                                        </button>
+                                            <LucideIcon Name="cloud-download" Size="14" Class="me-1" />Update
+                                        </BbButton>
                                     }
                                 }
                                 else
                                 {
                                     @if (!clone.IsOnCorrectBranch)
                                     {
-                                        <button class="btn btn-sm btn-warning me-1"
-                                                @onclick="() => FixBranchAsync(clone)"
-                                                disabled="@_operationInProgress"
-                                                title="Checkout the correct branch: @clone.ExpectedBranch">
+                                        <BbButton Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" Class="me-1"
+                                                OnClick="() => FixBranchAsync(clone)"
+                                                Disabled="@_operationInProgress"
+                                                title="@($"Checkout the correct branch: {clone.ExpectedBranch}")">
                                             Fix Branch
-                                        </button>
+                                        </BbButton>
                                     }
 
                                     <AgentControlPanel
@@ -229,26 +223,26 @@
 
                                     @if (branchInfo?.BehindCount > 0)
                                     {
-                                        <button class="btn btn-sm btn-outline-secondary me-1"
-                                                @onclick="() => PullLatestAsync(clone)"
-                                                disabled="@_operationInProgress"
+                                        <BbButton Variant="ButtonVariant.Outline" Size="ButtonSize.Small" Class="me-1"
+                                                OnClick="() => PullLatestAsync(clone)"
+                                                Disabled="@_operationInProgress"
                                                 title="Pull latest changes">
                                             Pull
-                                        </button>
-                                        <button class="btn btn-sm btn-outline-warning me-1"
-                                                @onclick="() => StartRebaseAgentAsync(clone)"
-                                                disabled="@(_operationInProgress || session != null)"
-                                                title="Start rebase agent to rebase onto @Project.DefaultBranch">
-                                            <i class="bi bi-arrow-repeat"></i> Rebase
-                                        </button>
+                                        </BbButton>
+                                        <BbButton Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" Class="me-1"
+                                                OnClick="() => StartRebaseAgentAsync(clone)"
+                                                Disabled="@(_operationInProgress || session != null)"
+                                                title="@($"Start rebase agent to rebase onto {Project.DefaultBranch}")">
+                                            <LucideIcon Name="refresh-cw" Size="14" /> Rebase
+                                        </BbButton>
                                     }
 
-                                    <button class="btn btn-sm btn-outline-danger"
-                                            @onclick="() => ShowDeleteCloneConfirmation(clone, branchInfo)"
-                                            disabled="@_operationInProgress"
+                                    <BbButton Variant="ButtonVariant.Destructive" Size="ButtonSize.Small"
+                                            OnClick="() => ShowDeleteCloneConfirmation(clone, branchInfo)"
+                                            Disabled="@_operationInProgress"
                                             title="Delete clone">
                                         Delete
-                                    </button>
+                                    </BbButton>
                                 }
                             }
                             else
@@ -276,19 +270,19 @@
                                         {
                                             <span class="badge bg-warning text-dark me-1" title="This branch has not been merged">unmerged</span>
                                         }
-                                        <button class="btn btn-sm btn-danger me-1"
-                                                @onclick="ExecuteDeleteAsync"
-                                                disabled="@_operationInProgress">
+                                        <BbButton Variant="ButtonVariant.Destructive" Size="ButtonSize.Small" Class="me-1"
+                                                OnClick="ExecuteDeleteAsync"
+                                                Disabled="@_operationInProgress">
                                             @if (_operationInProgress)
                                             {
-                                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                                <BbSpinner Size="SpinnerSize.Small" Class="me-1" />
                                             }
                                             Confirm
-                                        </button>
-                                        <button class="btn btn-sm btn-outline-secondary"
-                                                @onclick="HideDeleteConfirmation">
+                                        </BbButton>
+                                        <BbButton Variant="ButtonVariant.Outline" Size="ButtonSize.Small"
+                                                OnClick="HideDeleteConfirmation">
                                             Cancel
-                                        </button>
+                                        </BbButton>
                                     </div>
                                 </div>
                             }
@@ -303,7 +297,7 @@
     @if (_lostClones.Any())
     {
         <div class="section-header d-flex justify-content-between align-items-center bg-warning bg-opacity-25">
-            <span><i class="bi bi-exclamation-triangle me-1"></i> Lost Clones</span>
+            <span><LucideIcon Name="alert-triangle" Size="14" Class="me-1" /> Lost Clones</span>
             <span class="badge bg-warning text-dark">@_lostClones.Count</span>
         </div>
         <table class="table table-sm wt-table">
@@ -328,7 +322,7 @@
                                 @if (lost.CanRepair)
                                 {
                                     <span class="badge bg-info" title="Can be repaired to branch: @lost.MatchingBranchName">
-                                        <i class="bi bi-arrow-right"></i> @lost.MatchingBranchName
+                                        <LucideIcon Name="arrow-right" Size="10" /> @lost.MatchingBranchName
                                     </span>
                                 }
                                 @if (lost.Status != null && lost.Status.HasChanges)
@@ -360,19 +354,19 @@
                             {
                                 @if (lost.CanRepair)
                                 {
-                                    <button class="btn btn-sm btn-outline-success me-1"
-                                            @onclick="() => RepairLostCloneAsync(lost)"
-                                            disabled="@_operationInProgress"
-                                            title="Reattach to branch @lost.MatchingBranchName">
+                                    <BbButton Variant="ButtonVariant.Default" Size="ButtonSize.Small" Class="me-1"
+                                            OnClick="() => RepairLostCloneAsync(lost)"
+                                            Disabled="@_operationInProgress"
+                                            title="@($"Reattach to branch {lost.MatchingBranchName}")">
                                         Repair
-                                    </button>
+                                    </BbButton>
                                 }
-                                <button class="btn btn-sm btn-outline-danger"
-                                        @onclick="() => ShowDeleteLostCloneConfirmation(lost)"
-                                        disabled="@_operationInProgress"
+                                <BbButton Variant="ButtonVariant.Destructive" Size="ButtonSize.Small"
+                                        OnClick="() => ShowDeleteLostCloneConfirmation(lost)"
+                                        Disabled="@_operationInProgress"
                                         title="Delete folder permanently">
                                     Delete
-                                </button>
+                                </BbButton>
                             }
                             else
                             {
@@ -383,19 +377,19 @@
                                         {
                                             <span class="badge bg-danger me-1" title="Has uncommitted changes">has changes</span>
                                         }
-                                        <button class="btn btn-sm btn-danger me-1"
-                                                @onclick="ExecuteDeleteAsync"
-                                                disabled="@_operationInProgress">
+                                        <BbButton Variant="ButtonVariant.Destructive" Size="ButtonSize.Small" Class="me-1"
+                                                OnClick="ExecuteDeleteAsync"
+                                                Disabled="@_operationInProgress">
                                             @if (_operationInProgress)
                                             {
-                                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                                <BbSpinner Size="SpinnerSize.Small" Class="me-1" />
                                             }
                                             Confirm
-                                        </button>
-                                        <button class="btn btn-sm btn-outline-secondary"
-                                                @onclick="HideDeleteConfirmation">
+                                        </BbButton>
+                                        <BbButton Variant="ButtonVariant.Outline" Size="ButtonSize.Small"
+                                                OnClick="HideDeleteConfirmation">
                                             Cancel
-                                        </button>
+                                        </BbButton>
                                     </div>
                                 </div>
                             }
@@ -457,18 +451,18 @@
                         <td class="actions-col">
                             @if (!IsDeleteTarget(deleteKey))
                             {
-                                <button class="btn btn-sm btn-outline-primary me-1"
-                                        @onclick="() => CreateCloneForBranchAsync(branch.ShortName)"
-                                        disabled="@_operationInProgress"
+                                <BbButton Variant="ButtonVariant.Default" Size="ButtonSize.Small" Class="me-1"
+                                        OnClick="() => CreateCloneForBranchAsync(branch.ShortName)"
+                                        Disabled="@_operationInProgress"
                                         title="Create branch clone">
                                     Start
-                                </button>
-                                <button class="btn btn-sm btn-outline-danger"
-                                        @onclick="() => ShowDeleteBranchConfirmation(branch)"
-                                        disabled="@_operationInProgress"
+                                </BbButton>
+                                <BbButton Variant="ButtonVariant.Destructive" Size="ButtonSize.Small"
+                                        OnClick="() => ShowDeleteBranchConfirmation(branch)"
+                                        Disabled="@_operationInProgress"
                                         title="Delete branch">
                                     Delete
-                                </button>
+                                </BbButton>
                             }
                             else
                             {
@@ -488,19 +482,19 @@
                                         {
                                             <span class="badge bg-warning text-dark me-1" title="This branch has not been merged">unmerged</span>
                                         }
-                                        <button class="btn btn-sm btn-danger me-1"
-                                                @onclick="ExecuteDeleteAsync"
-                                                disabled="@_operationInProgress">
+                                        <BbButton Variant="ButtonVariant.Destructive" Size="ButtonSize.Small" Class="me-1"
+                                                OnClick="ExecuteDeleteAsync"
+                                                Disabled="@_operationInProgress">
                                             @if (_operationInProgress)
                                             {
-                                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                                <BbSpinner Size="SpinnerSize.Small" Class="me-1" />
                                             }
                                             Confirm
-                                        </button>
-                                        <button class="btn btn-sm btn-outline-secondary"
-                                                @onclick="HideDeleteConfirmation">
+                                        </BbButton>
+                                        <BbButton Variant="ButtonVariant.Outline" Size="ButtonSize.Small"
+                                                OnClick="HideDeleteConfirmation">
                                             Cancel
-                                        </button>
+                                        </BbButton>
                                     </div>
                                 </div>
                             }
@@ -531,18 +525,18 @@
                     <tr>
                         <td><strong class="branch-name">origin/@remoteBranch</strong></td>
                         <td class="actions-col">
-                            <button class="btn btn-sm btn-outline-primary me-1"
-                                    @onclick="() => CreateCloneFromRemoteAsync(remoteBranch)"
-                                    disabled="@_operationInProgress"
+                            <BbButton Variant="ButtonVariant.Default" Size="ButtonSize.Small" Class="me-1"
+                                    OnClick="() => CreateCloneFromRemoteAsync(remoteBranch)"
+                                    Disabled="@_operationInProgress"
                                     title="Create local clone from remote branch">
                                 Checkout
-                            </button>
-                            <button class="btn btn-sm btn-outline-danger"
-                                    @onclick="() => DeleteRemoteBranchAsync(remoteBranch)"
-                                    disabled="@_operationInProgress"
+                            </BbButton>
+                            <BbButton Variant="ButtonVariant.Destructive" Size="ButtonSize.Small"
+                                    OnClick="() => DeleteRemoteBranchAsync(remoteBranch)"
+                                    Disabled="@_operationInProgress"
                                     title="Delete remote branch">
                                 Delete
-                            </button>
+                            </BbButton>
                         </td>
                     </tr>
                 }

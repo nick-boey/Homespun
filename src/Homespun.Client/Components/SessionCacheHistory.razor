@@ -4,16 +4,14 @@
 @if (_isLoading)
 {
     <div class="d-flex justify-content-center py-3">
-        <div class="spinner-border spinner-border-sm text-secondary" role="status">
-            <span class="visually-hidden">Loading session history...</span>
-        </div>
+        <BbSpinner Size="SpinnerSize.Small" />
     </div>
 }
 else if (_sessions.Count > 0)
 {
     <div class="session-cache-history mt-3 @(ShowBorder ? "border-top pt-3" : "")">
         <h6 class="text-muted small mb-2">
-            <i class="bi bi-clock-history me-1"></i>
+            <LucideIcon Name="history" Size="14" Class="me-1" />
             Session History
             <span class="badge bg-secondary ms-1">@_sessions.Count</span>
         </h6>
@@ -40,24 +38,24 @@ else if (_sessions.Count > 0)
                         </small>
                     </div>
                     <div class="btn-group btn-group-sm">
-                        <button class="btn btn-outline-secondary"
-                                @onclick="() => ViewArchivedSession(session.SessionId)"
+                        <BbButton Variant="ButtonVariant.Outline" Size="ButtonSize.Small"
+                                OnClick="() => ViewArchivedSession(session.SessionId)"
                                 title="View messages">
-                            <i class="bi bi-eye"></i>
-                        </button>
-                        <button class="btn btn-outline-primary"
-                                @onclick="() => ResumeSession(session)"
-                                disabled="@_isResuming"
+                            <LucideIcon Name="eye" Size="14" />
+                        </BbButton>
+                        <BbButton Variant="ButtonVariant.Default" Size="ButtonSize.Small"
+                                OnClick="() => ResumeSession(session)"
+                                Disabled="@_isResuming"
                                 title="Resume session">
                             @if (_resumingSessionId == session.SessionId)
                             {
-                                <span class="spinner-border spinner-border-sm" role="status"></span>
+                                <BbSpinner Size="SpinnerSize.Small" />
                             }
                             else
                             {
-                                <i class="bi bi-play-fill"></i>
+                                <LucideIcon Name="play" Size="14" />
                             }
-                        </button>
+                        </BbButton>
                     </div>
                 </div>
             }
@@ -67,14 +65,14 @@ else if (_sessions.Count > 0)
 else if (ShowEmptyState)
 {
     <div class="text-muted small py-2">
-        <i class="bi bi-info-circle me-1"></i>
+        <LucideIcon Name="info" Size="14" Class="me-1" />
         No previous sessions found for this entity.
     </div>
 }
 
 @if (!string.IsNullOrEmpty(_errorMessage))
 {
-    <div class="alert alert-danger mt-2 py-1 px-2 small">@_errorMessage</div>
+    <FormMessage Type="FormMessageType.Error" Message="@_errorMessage" Class="mt-2" />
 }
 
 @code {

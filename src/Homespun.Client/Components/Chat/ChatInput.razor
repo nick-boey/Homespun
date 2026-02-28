@@ -9,12 +9,12 @@
               disabled="@Disabled"
               aria-label="Chat message input">
     </textarea>
-    <button class="btn btn-primary chat-send-button"
-            @onclick="HandleSend"
-            disabled="@(string.IsNullOrWhiteSpace(Value) || Disabled)"
+    <BbButton Variant="ButtonVariant.Default" Class="chat-send-button"
+            OnClick="HandleSend"
+            Disabled="@(string.IsNullOrWhiteSpace(Value) || Disabled)"
             aria-label="Send message">
         Send
-    </button>
+    </BbButton>
 </div>
 
 @code {

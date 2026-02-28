@@ -113,7 +113,7 @@ else
                                         title="Suggest branch ID using AI">
                                     @if (_isSuggestingBranchId)
                                     {
-                                        <span class="spinner-border spinner-border-sm" role="status"></span>
+                                        <BbSpinner Size="SpinnerSize.Small" />
                                     }
                                     else
                                     {
@@ -180,7 +180,8 @@ else
                             </div>
                             <AsyncActionButton OnClick="HandleSaveAndRunAgent"
                                                IsLoadingExternal="_isSavingAndRunning"
-                                               CssClass="btn-success w-full"
+                                               Variant="ButtonVariant.Default"
+                                               CssClass="w-full"
                                                Text="Save & Run Agent"
                                                LoadingText="Saving & Starting..."
                                                Disabled="@(_isSaving)" />
@@ -196,7 +197,7 @@ else
             <div>
                 <AsyncActionButton ButtonType="submit"
                                    IsLoadingExternal="_isSaving"
-                                   CssClass="btn-primary"
+                                   Variant="ButtonVariant.Default"
                                    Text="Save Changes" />
                 <a href="projects/@ProjectId" class="btn btn-secondary">Cancel</a>
             </div>

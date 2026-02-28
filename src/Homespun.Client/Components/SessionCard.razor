@@ -63,19 +63,19 @@
     </div>
 
     <div class="session-card-footer">
-        <a href="/session/@Session.Id" class="btn btn-sm btn-outline-primary">
-            <i class="bi bi-chat-dots me-1"></i>Chat
-        </a>
+        <BbButton Variant="ButtonVariant.Outline" Size="ButtonSize.Small" Href="@($"/session/{Session.Id}")">
+            <LucideIcon Name="message-circle" Size="14" Class="me-1" />Chat
+        </BbButton>
 
-        <button class="btn btn-sm btn-outline-danger"
-                @onclick="OnStop"
-                disabled="@IsStopping">
+        <BbButton Variant="ButtonVariant.Destructive" Size="ButtonSize.Small"
+                OnClick="OnStop"
+                Disabled="@IsStopping">
             @if (IsStopping)
             {
-                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                <BbSpinner Size="SpinnerSize.Small" Class="me-1" />
             }
-            <i class="bi bi-stop-circle me-1"></i>Stop
-        </button>
+            <LucideIcon Name="stop-circle" Size="14" Class="me-1" />Stop
+        </BbButton>
     </div>
 </div>
 

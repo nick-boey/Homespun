@@ -1,25 +1,24 @@
 @if (!string.IsNullOrEmpty(Message))
 {
-    <div class="form-message form-message-@Type.ToString().ToLower() @Class" role="@GetRole()">
-        <div class="form-message-content">
-            <div class="form-message-icon">
-                @GetIcon(Type)
-            </div>
-            <div class="form-message-text">
-                @if (!string.IsNullOrEmpty(Title))
-                {
-                    <span class="form-message-title">@Title</span>
-                }
-                <span class="form-message-body">@Message</span>
-            </div>
-        </div>
+    <BbAlert Variant="@GetAlertVariant()" Class="@Class">
+        <BbAlertTitle>
+            @if (!string.IsNullOrEmpty(Title))
+            {
+                @Title
+            }
+        </BbAlertTitle>
+        <BbAlertDescription>
+            @Message
+        </BbAlertDescription>
         @if (IsDismissible && OnDismiss.HasDelegate)
         {
-            <button class="form-message-dismiss" @onclick="HandleDismiss" title="Dismiss" type="button">
-                <i class="bi bi-x-lg" aria-hidden="true"></i>
-            </button>
+            <BbAlertAction>
+                <BbButton Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" OnClick="HandleDismiss">
+                    <LucideIcon Name="x" Size="14" />
+                </BbButton>
+            </BbAlertAction>
         }
-    </div>
+    </BbAlert>
 }
 
 @code {
@@ -67,26 +66,15 @@
         }
     }
 
-    private string GetRole()
+    private AlertVariant GetAlertVariant()
     {
         return Type switch
         {
-            FormMessageType.Error => "alert",
-            FormMessageType.Warning => "alert",
-            _ => "status"
+            FormMessageType.Error => AlertVariant.Danger,
+            FormMessageType.Success => AlertVariant.Success,
+            FormMessageType.Warning => AlertVariant.Warning,
+            FormMessageType.Info => AlertVariant.Info,
+            _ => AlertVariant.Default
         };
-    }
-
-    private static MarkupString GetIcon(FormMessageType type)
-    {
-        var iconClass = type switch
-        {
-            FormMessageType.Error => "bi-x-circle",
-            FormMessageType.Success => "bi-check-circle",
-            FormMessageType.Warning => "bi-exclamation-triangle",
-            FormMessageType.Info => "bi-info-circle",
-            _ => "bi-circle"
-        };
-        return new MarkupString($"""<i class="bi {iconClass}" aria-hidden="true"></i>""");
     }
 }

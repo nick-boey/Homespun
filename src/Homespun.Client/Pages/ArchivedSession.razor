@@ -14,9 +14,7 @@
     @if (_isLoading)
     {
         <div class="d-flex justify-content-center align-items-center py-5">
-            <div class="spinner-border text-primary" role="status">
-                <span class="visually-hidden">Loading session...</span>
-            </div>
+            <BbSpinner Size="SpinnerSize.Default" />
         </div>
     }
     else if (_summary == null)
@@ -25,7 +23,7 @@
             <h2>Session Not Found</h2>
             <p class="text-muted">The archived session you're looking for doesn't exist or has been deleted.</p>
             <button class="btn btn-primary" @onclick="GoBack">
-                <i class="bi bi-arrow-left me-1"></i>
+                <LucideIcon Name="arrow-left" Size="14" Class="me-1" />
                 Go Back
             </button>
         </div>
@@ -36,7 +34,7 @@
             <div class="d-flex justify-content-between align-items-start">
                 <div>
                     <h1 class="h4 mb-2">
-                        <i class="bi bi-archive me-2"></i>
+                        <LucideIcon Name="archive" Size="20" Class="me-2" />
                         Archived Session
                     </h1>
                     <div class="d-flex gap-2 align-items-center flex-wrap">
@@ -63,7 +61,7 @@
                 </div>
                 <div class="btn-group">
                     <button class="btn btn-outline-secondary btn-sm" @onclick="GoBack">
-                        <i class="bi bi-arrow-left me-1"></i>
+                        <LucideIcon Name="arrow-left" Size="14" Class="me-1" />
                         Back
                     </button>
                     @if (!string.IsNullOrEmpty(_workingDirectory))
@@ -71,11 +69,11 @@
                         <button class="btn btn-primary btn-sm" @onclick="ResumeSession" disabled="@_isResuming">
                             @if (_isResuming)
                             {
-                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                <BbSpinner Size="SpinnerSize.Small" Class="me-1" />
                             }
                             else
                             {
-                                <i class="bi bi-play-fill me-1"></i>
+                                <LucideIcon Name="play" Size="14" Class="me-1" />
                             }
                             Resume
                         </button>
@@ -93,7 +91,7 @@
             @if (_messages.Count == 0)
             {
                 <div class="text-center text-muted py-4">
-                    <i class="bi bi-chat-square-text fs-1 d-block mb-2"></i>
+                    <LucideIcon Name="message-square" Size="48" Class="d-block mb-2 mx-auto" />
                     No messages in this session.
                 </div>
             }
@@ -126,7 +124,7 @@
                                             case ClaudeContentType.Thinking:
                                                 <details class="thinking-details">
                                                     <summary>
-                                                        <i class="bi bi-lightbulb me-1"></i>
+                                                        <LucideIcon Name="lightbulb" Size="14" Class="me-1" />
                                                         Thinking (@GetTextPreview(content.Text))
                                                     </summary>
                                                     <div class="thinking-content markdown-content">

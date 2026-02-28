@@ -4,11 +4,11 @@
     <div class="pr-status-section border rounded p-2 @CssClass">
         <div class="d-flex justify-content-between align-items-center mb-2">
             <h6 class="mb-0">
-                <i class="bi bi-git me-1" aria-hidden="true"></i>
+                <LucideIcon Name="git-branch" Size="14" Class="me-1" />
                 Pull Request
             </h6>
             <a href="@Status.PrUrl" target="_blank" class="badge bg-secondary text-decoration-none">
-                PR #@Status.PrNumber <i class="bi bi-box-arrow-up-right" aria-hidden="true" style="font-size: 10px;"></i>
+                PR #@Status.PrNumber <LucideIcon Name="external-link" Size="10" Class="ms-1" />
             </a>
         </div>
         <div class="d-flex flex-wrap gap-1 align-items-center">
@@ -18,12 +18,12 @@
                 <span class="badge @(Status.ChecksPassing.Value ? "bg-success" : "bg-danger")">
                     @if (Status.ChecksPassing.Value)
                     {
-                        <i class="bi bi-check-lg me-1" aria-hidden="true" style="font-size: 10px;"></i>
+                        <LucideIcon Name="check" Size="10" Class="me-1" />
                         <text>Checks Passing</text>
                     }
                     else
                     {
-                        <i class="bi bi-x-lg me-1" aria-hidden="true" style="font-size: 10px;"></i>
+                        <LucideIcon Name="x" Size="10" Class="me-1" />
                         <text>Checks Failing</text>
                     }
                 </span>
@@ -31,35 +31,35 @@
             else if (Status.ChecksRunning)
             {
                 <span class="badge bg-warning text-dark">
-                    <span class="spinner-border spinner-border-sm me-1" role="status" style="width: 0.5rem; height: 0.5rem;"></span>
+                    <BbSpinner Size="SpinnerSize.Small" Class="me-1" />
                     Checks Running
                 </span>
             }
             @if (Status.IsApproved == true)
             {
                 <span class="badge bg-success">
-                    <i class="bi bi-check-lg me-1" aria-hidden="true" style="font-size: 10px;"></i>
+                    <LucideIcon Name="check" Size="10" Class="me-1" />
                     Approved (@Status.ApprovalCount)
                 </span>
             }
             else if (Status.ChangesRequestedCount > 0)
             {
                 <span class="badge bg-warning text-dark">
-                    <i class="bi bi-exclamation-lg me-1" aria-hidden="true" style="font-size: 10px;"></i>
+                    <LucideIcon Name="alert-circle" Size="10" Class="me-1" />
                     Changes Requested (@Status.ChangesRequestedCount)
                 </span>
             }
             @if (Status.IsMergeable)
             {
                 <span class="badge bg-success">
-                    <i class="bi bi-check-circle-fill me-1" aria-hidden="true" style="font-size: 10px;"></i>
+                    <LucideIcon Name="check-circle" Size="10" Class="me-1" />
                     Ready to Merge
                 </span>
             }
             @if (Status.HasConflicts)
             {
                 <span class="badge bg-danger">
-                    <i class="bi bi-exclamation-triangle-fill me-1" aria-hidden="true" style="font-size: 10px;"></i>
+                    <LucideIcon Name="alert-triangle" Size="10" Class="me-1" />
                     Merge Conflicts
                 </span>
             }
