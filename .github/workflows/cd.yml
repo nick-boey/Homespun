@@ -2,15 +2,51 @@ name: CD
 
 on:
   push:
+    branches: [main]
     tags:
-      - v**
+      - "v[0-9]+.[0-9]+.[0-9]+"
 
 env:
   REGISTRY: ghcr.io
 
 jobs:
+  compute-version:
+    name: Compute Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      major_minor: ${{ steps.version.outputs.major_minor }}
+      is_release: ${{ steps.version.outputs.is_release }}
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 10.0.x
+
+    - name: Install MinVer CLI
+      run: dotnet tool install --global minver-cli
+
+    - name: Compute version
+      id: version
+      run: |
+        if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          MAJOR_MINOR="${VERSION%.*}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "major_minor=$MAJOR_MINOR" >> $GITHUB_OUTPUT
+          echo "is_release=true" >> $GITHUB_OUTPUT
+        else
+          VERSION=$(minver --tag-prefix v)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "is_release=false" >> $GITHUB_OUTPUT
+        fi
+
   build-base-image:
     name: Build and Push Base Image
+    needs: compute-version
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -39,8 +75,8 @@ jobs:
       with:
         images: ${{ env.BASE_IMAGE }}
         tags: |
-          type=semver,pattern={{version}}
-          type=raw,value=latest
+          type=raw,value=${{ needs.compute-version.outputs.version }}
+          ${{ needs.compute-version.outputs.is_release == 'true' && 'type=raw,value=latest' || '' }}
 
     - name: Build and push base image
       uses: docker/build-push-action@v6
@@ -55,7 +91,7 @@ jobs:
 
   build-and-push-image:
     name: Build and Push ${{ matrix.name }}
-    needs: build-base-image
+    needs: [compute-version, build-base-image]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -98,13 +134,9 @@ jobs:
       with:
         images: ${{ env.IMAGE_NAME }}
         tags: |
-          type=semver,pattern={{version}}
-          type=semver,pattern={{major}}.{{minor}}
-          type=raw,value=latest
-
-    - name: Extract version
-      id: get_version
-      run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+          type=raw,value=${{ needs.compute-version.outputs.version }}
+          ${{ needs.compute-version.outputs.is_release == 'true' && format('type=raw,value={0}', needs.compute-version.outputs.major_minor) || '' }}
+          ${{ needs.compute-version.outputs.is_release == 'true' && 'type=raw,value=latest' || '' }}
 
     - name: Build and push Docker image
       uses: docker/build-push-action@v6
@@ -115,7 +147,7 @@ jobs:
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
         build-args: |
-          BASE_IMAGE=${{ env.BASE_IMAGE }}:latest
-          VERSION=${{ steps.get_version.outputs.VERSION }}
+          BASE_IMAGE=${{ env.BASE_IMAGE }}:${{ needs.compute-version.outputs.version }}
+          VERSION=${{ needs.compute-version.outputs.version }}
         cache-from: type=gha,scope=${{ matrix.name }}
         cache-to: type=gha,mode=max,scope=${{ matrix.name }}
