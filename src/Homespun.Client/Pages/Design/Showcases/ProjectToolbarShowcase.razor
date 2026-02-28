@@ -1,33 +1,98 @@
 @using Homespun.Shared.Models.Sessions
 
 <div class="showcase-section">
-    <h3>No Issue Selected</h3>
+    <h3>Full Toolbar</h3>
     <div class="showcase-item">
-        <div class="showcase-label">Buttons are disabled when no issue is selected</div>
-        <div class="showcase-preview">
-            <ProjectToolbar ProjectId="demo-project" SelectedIssueId="@null" />
-            <p style="color: var(--text-muted); font-size: 12px; margin-top: 12px;">
-                Both edit and run buttons are disabled.
-            </p>
-        </div>
-    </div>
-</div>
-
-<div class="showcase-section">
-    <h3>Issue Selected</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">Buttons are enabled when an issue is selected</div>
+        <div class="showcase-label">All button groups: Create | Hierarchy | Undo/Redo | Edit/Run</div>
         <div class="showcase-preview">
             <ProjectToolbar ProjectId="demo-project"
                             SelectedIssueId="TEST-001"
                             OnEditClick="HandleEditClick"
-                            OnRunAgentClick="HandleRunAgentClick" />
+                            OnUndo="HandleUndo"
+                            OnRedo="HandleRedo" />
             @if (!string.IsNullOrEmpty(_lastAction))
             {
                 <div style="margin-top: 12px; padding: 0.5rem; background: var(--bg-tertiary); border-radius: 4px; font-size: 12px; color: var(--text-muted);">
                     Last action: @_lastAction
                 </div>
             }
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>No Issue Selected</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Most buttons are disabled when no issue is selected</div>
+        <div class="showcase-preview">
+            <ProjectToolbar ProjectId="demo-project"
+                            SelectedIssueId="@null"
+                            CreateDisabled="true"
+                            ChildOfDisabled="true"
+                            ParentOfDisabled="true" />
+            <p style="color: var(--text-muted); font-size: 12px; margin-top: 12px;">
+                Create, hierarchy, edit, and run buttons are disabled.
+            </p>
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Child Of Selection Mode</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">The "Make Child Of" button shows active state with ring highlight</div>
+        <div class="showcase-preview">
+            <ProjectToolbar ProjectId="demo-project"
+                            SelectedIssueId="TEST-001"
+                            ChildOfActive="true"
+                            ParentOfDisabled="true" />
+            <p style="color: var(--text-muted); font-size: 12px; margin-top: 12px;">
+                Click another issue to make the selected issue a child of it.
+            </p>
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Parent Of Selection Mode</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">The "Make Parent Of" button shows active state with ring highlight</div>
+        <div class="showcase-preview">
+            <ProjectToolbar ProjectId="demo-project"
+                            SelectedIssueId="TEST-001"
+                            ParentOfActive="true"
+                            ChildOfDisabled="true" />
+            <p style="color: var(--text-muted); font-size: 12px; margin-top: 12px;">
+                Click another issue to make it a child of the selected issue.
+            </p>
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Undo/Redo Available</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Undo and redo buttons with custom tooltips</div>
+        <div class="showcase-preview">
+            <ProjectToolbar ProjectId="demo-project"
+                            SelectedIssueId="TEST-001"
+                            UndoTooltip="Undo: Create issue 'Add dark mode'"
+                            RedoTooltip="Redo: Delete issue 'Fix bug'"
+                            OnUndo="HandleUndo"
+                            OnRedo="HandleRedo" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Undo/Redo Disabled</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">When there's nothing to undo or redo</div>
+        <div class="showcase-preview">
+            <ProjectToolbar ProjectId="demo-project"
+                            SelectedIssueId="TEST-001"
+                            UndoDisabled="true"
+                            RedoDisabled="true" />
         </div>
     </div>
 </div>
@@ -46,7 +111,7 @@
                 </span>
             </div>
             <p style="color: var(--text-muted); font-size: 12px; margin-top: 12px;">
-                Edit button remains enabled. Run button is disabled while agent is active.
+                All other buttons remain enabled. Run button is disabled while agent is active.
             </p>
         </div>
     </div>
@@ -67,7 +132,8 @@
             <ProjectToolbar ProjectId="demo-project"
                             SelectedIssueId="DEMO-001"
                             OnEditClick="HandleEditClick"
-                            OnRunAgentClick="HandleRunAgentClick" />
+                            OnUndo="HandleUndo"
+                            OnRedo="HandleRedo" />
             <div style="border-bottom: 1px solid var(--border-color); margin-top: 8px;"></div>
             <p style="color: var(--text-muted); font-size: 12px; margin-top: 12px;">
                 This simulates how the toolbar appears in the project page sticky header.
@@ -84,9 +150,13 @@
         _lastAction = $"Edit clicked for issue: {issueId}";
     }
 
-    private void HandleRunAgentClick((string IssueId, AgentPrompt? Prompt) args)
+    private void HandleUndo()
     {
-        var promptName = args.Prompt?.Name ?? "No prompt";
-        _lastAction = $"Run agent clicked for issue: {args.IssueId}, Prompt: {promptName}";
+        _lastAction = "Undo clicked";
+    }
+
+    private void HandleRedo()
+    {
+        _lastAction = "Redo clicked";
     }
 }

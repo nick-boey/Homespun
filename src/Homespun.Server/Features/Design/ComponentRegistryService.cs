@@ -256,15 +256,6 @@ public class ComponentRegistryService : IComponentRegistryService
         },
         new ComponentMetadata
         {
-            Id = "issue-control-panel",
-            Name = "IssueControlPanel",
-            Description = "Sticky control panel for creating new issues above/below the selected issue in the task graph. Provides touch-friendly buttons for mobile users.",
-            Category = "Issue",
-            ComponentPath = "Components/IssueControlPanel.razor",
-            Tags = new() { "issue", "button", "action", "mobile", "sticky" }
-        },
-        new ComponentMetadata
-        {
             Id = "toolbar-button",
             Name = "ToolbarButton",
             Description = "Reusable icon button with CSS tooltip showing action name and keyboard shortcut.",
@@ -276,10 +267,10 @@ public class ComponentRegistryService : IComponentRegistryService
         {
             Id = "project-toolbar",
             Name = "ProjectToolbar",
-            Description = "Toolbar for the project page containing edit and run agent buttons for the selected issue.",
+            Description = "Consolidated toolbar for the project page containing create, hierarchy, undo/redo, edit and run buttons for issue management.",
             Category = "Core",
             ComponentPath = "Components/ProjectToolbar.razor",
-            Tags = new() { "toolbar", "issue", "action", "project" }
+            Tags = new() { "toolbar", "issue", "action", "project", "create", "undo", "redo" }
         }
     };
 

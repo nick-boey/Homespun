@@ -70,7 +70,18 @@ else
                             BranchName="@GetSelectedIssueBranchName()"
                             RepoPath="@_project?.LocalPath"
                             DefaultBranch="@_project?.DefaultBranch"
-                            DefaultModel="@(_project?.DefaultModel ?? "opus")" />
+                            DefaultModel="@(_project?.DefaultModel ?? "opus")"
+                            CreateDisabled="@(!CanCreateIssue())"
+                            ChildOfDisabled="@IsMoveButtonDisabled(MoveOperationType.AsChildOf)"
+                            ParentOfDisabled="@IsMoveButtonDisabled(MoveOperationType.AsParentOf)"
+                            ChildOfActive="@IsMakeChildOfActive()"
+                            ParentOfActive="@IsMakeParentOfActive()"
+                            UndoDisabled="@(!_canUndo || _isUndoRedoing)"
+                            RedoDisabled="@(!_canRedo || _isUndoRedoing)"
+                            UndoTooltip="@(_historyState?.UndoDescription ?? "Undo")"
+                            RedoTooltip="@(_historyState?.RedoDescription ?? "Redo")"
+                            OnUndo="UndoAsync"
+                            OnRedo="RedoAsync" />
         }
     </div>
 
@@ -128,42 +139,6 @@ else
 
     @if (_activeTab == "issues")
     {
-        @* Issue Toolbar *@
-        <div class="issue-toolbar mb-2">
-            <div class="flex items-center gap-2">
-                <button class="btn btn-outline btn-sm"
-                        @onclick="HandleCreateAbove"
-                        disabled="@(!CanCreateIssue())"
-                        title="Create issue above (Shift+O)">
-                    <LucideIcon Name="arrow-up-from-line" Size="14" />
-                </button>
-                <button class="btn btn-outline btn-sm"
-                        @onclick="HandleCreateBelow"
-                        disabled="@(!CanCreateIssue())"
-                        title="Create issue below (O)">
-                    <LucideIcon Name="arrow-down-from-line" Size="14" />
-                </button>
-                <button class="btn btn-outline btn-sm"
-                        @onclick="UndoAsync"
-                        disabled="@(!_canUndo || _isUndoRedoing)"
-                        title="@(_historyState?.UndoDescription ?? "Undo")">
-                    <LucideIcon Name="undo" Size="14" />
-                </button>
-                <button class="btn btn-outline btn-sm"
-                        @onclick="RedoAsync"
-                        disabled="@(!_canRedo || _isUndoRedoing)"
-                        title="@(_historyState?.RedoDescription ?? "Redo")">
-                    <LucideIcon Name="redo" Size="14" />
-                </button>
-                @if (_historyState != null && _historyState.TotalEntries > 0)
-                {
-                    <span class="text-muted text-sm">@_historyState.TotalEntries history entries</span>
-                }
-            </div>
-        </div>
-
-        <IssueControlPanel />
-
         <div class="project-layout">
             <div class="timeline-column">
                 <SearchBar IsVisible="@NavService.IsSearching"
@@ -435,23 +410,6 @@ else
         .project-detail-page.sidebar-open {
             margin-right: 0;
         }
-    }
-
-    /* ==========================================================================
-       Issue Toolbar
-       ========================================================================== */
-    .issue-toolbar {
-        display: flex;
-        justify-content: flex-end;
-        padding: 0.5rem 0;
-    }
-
-    .issue-toolbar .text-muted {
-        color: var(--text-muted, #6c757d);
-    }
-
-    .issue-toolbar .text-sm {
-        font-size: 0.875rem;
     }
 
     /* ==========================================================================
@@ -2018,15 +1976,41 @@ else
         NavService.SelectedIndex >= 0 &&
         NavService.EditMode == KeyboardEditMode.Viewing;
 
-    /// <summary>
-    /// Handles the "Create Above" button click.
-    /// </summary>
-    private void HandleCreateAbove() => NavService.CreateIssueAbove();
+    #endregion
+
+    #region Hierarchy Operations
 
     /// <summary>
-    /// Handles the "Create Below" button click.
+    /// Determines if a move button should be disabled.
     /// </summary>
-    private void HandleCreateBelow() => NavService.CreateIssueBelow();
+    private bool IsMoveButtonDisabled(MoveOperationType operationType)
+    {
+        // Disabled if no issue selected
+        if (NavService.SelectedIndex < 0) return true;
+
+        // In selection mode, disable the button that's not active
+        if (NavService.EditMode == KeyboardEditMode.SelectingMoveTarget)
+        {
+            return NavService.CurrentMoveOperation != operationType;
+        }
+
+        // Disabled if in any other edit mode
+        return NavService.EditMode != KeyboardEditMode.Viewing;
+    }
+
+    /// <summary>
+    /// Determines if the "Make Child Of" button is in active selection mode.
+    /// </summary>
+    private bool IsMakeChildOfActive() =>
+        NavService.EditMode == KeyboardEditMode.SelectingMoveTarget &&
+        NavService.CurrentMoveOperation == MoveOperationType.AsChildOf;
+
+    /// <summary>
+    /// Determines if the "Make Parent Of" button is in active selection mode.
+    /// </summary>
+    private bool IsMakeParentOfActive() =>
+        NavService.EditMode == KeyboardEditMode.SelectingMoveTarget &&
+        NavService.CurrentMoveOperation == MoveOperationType.AsParentOf;
 
     #endregion
 
