@@ -177,13 +177,13 @@ KOMODO_WEBHOOK_SECRET=$KOMODO_WEBHOOK_SECRET
 # Core Settings
 # ============================================================================
 # Host URL (set to your Tailscale hostname)
-KOMODO_HOST=https://homespun:3500
+KOMODO_HOST=https://homespun-dev:3500
 
 # Browser title
 KOMODO_TITLE=Homespun Komodo
 
-# First server is automatically added (localhost)
-KOMODO_FIRST_SERVER=https://host.docker.internal:8443
+# First server is automatically added (periphery on Docker network)
+KOMODO_FIRST_SERVER=https://homespun-komodo-periphery:8120
 
 # Monitoring intervals
 KOMODO_MONITORING_INTERVAL=15-sec
@@ -196,8 +196,8 @@ KOMODO_RESOURCE_POLL_INTERVAL=1-hr
 KOMODO_LOCAL_AUTH=true
 
 # Initial admin account
-KOMODO_LOCAL_AUTH_INITIAL_ADMIN_USERNAME=$ADMIN_USER
-KOMODO_LOCAL_AUTH_INITIAL_ADMIN_PASSWORD=$ADMIN_PASS
+KOMODO_INIT_ADMIN_USERNAME=$ADMIN_USER
+KOMODO_INIT_ADMIN_PASSWORD=$ADMIN_PASS
 
 # Disable signup (admin manages users)
 KOMODO_DISABLE_USER_REGISTRATION=true
@@ -209,6 +209,11 @@ KOMODO_DISABLE_NON_ADMIN_CREATE=true
 PERIPHERY_ROOT_DIRECTORY=$KOMODO_DIR
 PERIPHERY_PASSKEYS=$KOMODO_PASSKEY
 PERIPHERY_INCLUDE_DISK_MOUNTS=/
+
+# ============================================================================
+# Tailscale
+# ============================================================================
+TS_HOSTNAME=homespun-dev
 
 # ============================================================================
 # Timezone
@@ -233,6 +238,15 @@ else
     log_error "      Compose file not found at $KOMODO_CONFIG_DIR/komodo.compose.yml"
     log_error "      Please ensure config/komodo/komodo.compose.yml exists."
     exit 1
+fi
+
+# Verify Tailscale config exists (used by run-komodo.sh at runtime)
+TAILSCALE_CONFIG_DIR="$REPO_ROOT/config/tailscale"
+if [ -f "$TAILSCALE_CONFIG_DIR/start.sh" ]; then
+    log_success "      Tailscale config found: $TAILSCALE_CONFIG_DIR"
+else
+    log_warn "      Tailscale config not found at $TAILSCALE_CONFIG_DIR"
+    log_warn "      Tailscale sidecar will not be available."
 fi
 
 echo
