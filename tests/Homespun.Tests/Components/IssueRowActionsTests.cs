@@ -15,7 +15,7 @@ namespace Homespun.Tests.Components;
 /// bUnit tests for the IssueRowActions component.
 /// Tests basic rendering and the edit button functionality.
 /// Note: Agent launching tests are covered in integration tests since
-/// the component now uses UnifiedAgentLauncher which has many dependencies.
+/// the component now uses AgentLauncher which has many dependencies.
 /// </summary>
 [TestFixture]
 public class IssueRowActionsTests : BunitTestContext

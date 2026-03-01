@@ -85,18 +85,20 @@
     </BbButtonGroup>
 
     @* Run button with popover *@
-    <BbPopover @bind-Open="_showDropdown">
-        <BbPopoverTrigger CustomClickHandling="true">
-            <ToolbarButton Icon="play"
-                           Tooltip="Run agent"
-                           TestId="toolbar-run-button"
-                           Disabled="@(SelectedIssueId == null || IsAgentRunning)"
-                           OnClick="ToggleDropdown"/>
+    <BbPopover>
+        <BbPopoverTrigger>
+            <BbButton Variant="ButtonVariant.Outline"
+                      Size="ButtonSize.Icon"
+                      Disabled="@(SelectedIssueId == null || IsAgentRunning)"
+                      AriaLabel="Run agent"
+                      data-testid="toolbar-run-button">
+                <LucideIcon Name="play" class="h-4 w-4"/>
+            </BbButton>
         </BbPopoverTrigger>
         <BbPopoverContent Side="PopoverSide.Bottom"
                           Align="PopoverAlign.End"
                           Class="w-72 p-3">
-            <UnifiedAgentLauncher
+            <AgentLauncher
                 EntityId="@SelectedIssueId"
                 ProjectId="@ProjectId"
                 EntityTitle="@IssueTitle"
@@ -393,12 +395,6 @@
         await OnEditClick.InvokeAsync(SelectedIssueId);
     }
 
-    private void ToggleDropdown()
-    {
-        if (SelectedIssueId == null || IsAgentRunning) return;
-        _showDropdown = !_showDropdown;
-    }
-
     private async Task HandleSessionStarted(ClaudeSession session)
     {
         _showDropdown = false;
@@ -503,6 +499,7 @@
                 }
                 catch
                 {
+                    // ignored
                 }
 
                 break;
@@ -514,6 +511,7 @@
                 }
                 catch
                 {
+                    // ignored
                 }
 
                 break;

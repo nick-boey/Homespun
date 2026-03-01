@@ -3,7 +3,7 @@
 @inject HttpCloneApiService CloneApi
 @inject IAgentStartupTracker StartupTracker
 @inject NavigationManager NavigationManager
-@inject ILogger<UnifiedAgentLauncher> Logger
+@inject ILogger<AgentLauncher> Logger
 
 @*
     Unified component for launching Claude agent sessions.
@@ -21,7 +21,7 @@
     {
         <div class="d-flex align-items-center gap-2">
             <BbBadge Class="bg-amber-500 text-white border-transparent">
-                <BbSpinner Size="SpinnerSize.Small" Class="me-1" />
+                <BbSpinner Size="SpinnerSize.Small" Class="me-1"/>
                 Starting...
             </BbBadge>
         </div>
@@ -33,13 +33,13 @@
                 <div class="flex-grow-1">
                     <BbLabel Class="small mb-1">Agent</BbLabel>
                     <BbSelect TValue="string" @bind-Value="_selectedPromptId" Options="_promptOptions"
-                              Disabled="@Disabled" Placeholder="None (no prompt)" />
+                              Disabled="@Disabled" Placeholder="None (no prompt)"/>
                 </div>
                 <BbButton Variant="ButtonVariant.Default" Size="ButtonSize.Small"
-                        OnClick="HandleStartAsync"
-                        Disabled="@Disabled"
-                        aria-label="Start agent session">
-                    <LucideIcon Name="play" Size="14" Class="me-1" />
+                          OnClick="HandleStartAsync"
+                          Disabled="@Disabled"
+                          aria-label="Start agent session">
+                    <LucideIcon Name="play" Size="14" Class="me-1"/>
                     <span>Start</span>
                 </BbButton>
             </div>
@@ -53,7 +53,7 @@
             <BbButton Variant="ButtonVariant.Link" Size="ButtonSize.Small"
                       Class="p-0 mt-2 text-xs"
                       OnClick="ToggleAdvancedSettings">
-                <LucideIcon Name="@(_showAdvancedSettings ? "chevron-up" : "chevron-down")" Size="14" Class="me-1" />
+                <LucideIcon Name="@(_showAdvancedSettings ? "chevron-up" : "chevron-down")" Size="14" Class="me-1"/>
                 @(_showAdvancedSettings ? "Hide settings" : "More settings")
             </BbButton>
 
@@ -65,7 +65,7 @@
                         <BbLabel Class="small mb-1">Model</BbLabel>
                         <ModelSelector Id="@($"launcher-model-{EntityId}")"
                                        SelectedModel="@_selectedModel"
-                                       SelectedModelChanged="@(m => _selectedModel = m)" />
+                                       SelectedModelChanged="@(m => _selectedModel = m)"/>
                     </div>
                     <div class="mb-2">
                         <BbLabel Class="small mb-1">Base Branch</BbLabel>
@@ -73,7 +73,7 @@
                                             SelectedBranch="@_selectedBaseBranch"
                                             SelectedBranchChanged="@(b => _selectedBaseBranch = b)"
                                             RepoPath="@RepoPath"
-                                            DefaultBranch="@DefaultBranch" />
+                                            DefaultBranch="@DefaultBranch"/>
                     </div>
                 </div>
             }
@@ -89,6 +89,7 @@
 </div>
 
 @code {
+
     #region Parameters
 
     /// <summary>
@@ -391,4 +392,5 @@
 
         return sb.ToString();
     }
+
 }
