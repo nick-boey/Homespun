@@ -8,30 +8,20 @@
 
 <h1>New Project</h1>
 
-<ul class="nav nav-tabs mb-3">
-    <li class="nav-item">
-        <button class="nav-link @(_mode == "github" ? "active" : "")" 
-                type="button"
-                @onclick="@(() => _mode = "github")">
-            GitHub Repository
-        </button>
-    </li>
-    <li class="nav-item">
-        <button class="nav-link @(_mode == "local" ? "active" : "")" 
-                type="button"
-                @onclick="@(() => _mode = "local")">
-            Local Repository
-        </button>
-    </li>
-</ul>
+<BbTabs @bind-Value="_mode" ActivationMode="BlazorBlueprint.Primitives.Tabs.TabsActivationMode.Manual" Class="mb-3">
+    <BbTabsList>
+        <BbTabsTrigger Value="github">GitHub Repository</BbTabsTrigger>
+        <BbTabsTrigger Value="local">Local Repository</BbTabsTrigger>
+    </BbTabsList>
+</BbTabs>
 
 <form @onsubmit="HandleSubmit">
     @if (_mode == "github")
     {
         <div class="mb-3">
-            <label for="ownerRepo" class="form-label">GitHub Repository</label>
-            <input type="text" class="form-control" id="ownerRepo" @bind="_ownerRepo" required
-                   placeholder="owner/repository" />
+            <BbLabel For="ownerRepo">GitHub Repository</BbLabel>
+            <BbInput Id="ownerRepo" @bind-Value="_ownerRepo" Required="true"
+                     Placeholder="owner/repository" />
             <div class="form-text">
                 Enter the GitHub repository in owner/repository format (e.g., microsoft/vscode).
                 The repository will be cloned to ~/.homespun/src/&lt;repository&gt;/&lt;default-branch&gt;.
@@ -41,18 +31,18 @@
     else
     {
         <div class="mb-3">
-            <label for="projectName" class="form-label">Project Name</label>
-            <input type="text" class="form-control" id="projectName" @bind="_projectName" required
-                   placeholder="my-project" />
+            <BbLabel For="projectName">Project Name</BbLabel>
+            <BbInput Id="projectName" @bind-Value="_projectName" Required="true"
+                     Placeholder="my-project" />
             <div class="form-text">
                 Use only letters, numbers, hyphens, and underscores.
                 A new git repository will be created at ~/.homespun/src/&lt;name&gt;/&lt;branch&gt;.
             </div>
         </div>
         <div class="mb-3">
-            <label for="defaultBranch" class="form-label">Default Branch</label>
-            <input type="text" class="form-control" id="defaultBranch" @bind="_defaultBranch"
-                   placeholder="main" />
+            <BbLabel For="defaultBranch">Default Branch</BbLabel>
+            <BbInput Id="defaultBranch" @bind-Value="_defaultBranch"
+                     Placeholder="main" />
             <div class="form-text">
                 Leave blank to use "main" as the default branch.
             </div>
@@ -61,13 +51,13 @@
 
     @if (!string.IsNullOrEmpty(_errorMessage))
     {
-        <div class="alert alert-danger" role="alert">
-            @_errorMessage
-        </div>
+        <BbAlert Variant="AlertVariant.Danger">
+            <BbAlertDescription>@_errorMessage</BbAlertDescription>
+        </BbAlert>
     }
 
     <BbButton Type="ButtonType.Submit" Loading="@_isSubmitting" LoadingText="Creating...">Create</BbButton>
-    <a href="projects" class="btn btn-secondary">Cancel</a>
+    <BbButton Variant="ButtonVariant.Secondary" Href="projects">Cancel</BbButton>
 </form>
 
 @code {

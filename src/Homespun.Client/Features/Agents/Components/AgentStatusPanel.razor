@@ -25,7 +25,7 @@
         <div class="panel-body">
             <div class="status-info">
                 <small class="text-text-muted">
-                    Mode: <span class="badge @(_session.Mode == SessionMode.Plan ? "bg-status-info" : "bg-status-success") ml-1">@_session.Mode</span>
+                    Mode: <BbBadge Class="@(_session.Mode == SessionMode.Plan ? "bg-blue-500 text-white border-transparent ml-1" : "bg-green-600 text-white border-transparent ml-1")">@_session.Mode</BbBadge>
                 </small>
                 <small class="text-text-muted block">
                     Model: <code>@GetModelDisplayName(_session.Model)</code>

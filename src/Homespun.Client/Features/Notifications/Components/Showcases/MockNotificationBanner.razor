@@ -12,9 +12,9 @@
     <div class="notification-actions flex items-center gap-sm flex-shrink-0">
         @if (!string.IsNullOrEmpty(ActionLabel))
         {
-            <button class="btn btn-sm notification-action-btn whitespace-nowrap">
+            <BbButton Size="ButtonSize.Small" Class="notification-action-btn whitespace-nowrap">
                 @ActionLabel
-            </button>
+            </BbButton>
         }
         @if (IsDismissible)
         {

@@ -7,10 +7,12 @@
     <h3>Component Overview</h3>
     <div class="showcase-item">
         <div class="showcase-preview">
-            <div class="alert alert-info mb-0">
-                <strong>CloneManagementPanel</strong> provides controls for managing git branch clones.
-                Clones allow working on multiple branches simultaneously without switching.
-            </div>
+            <BbAlert Variant="AlertVariant.Info">
+                <BbAlertDescription>
+                    <strong>CloneManagementPanel</strong> provides controls for managing git branch clones.
+                    Clones allow working on multiple branches simultaneously without switching.
+                </BbAlertDescription>
+            </BbAlert>
         </div>
     </div>
 </div>
@@ -21,19 +23,19 @@
         <div class="showcase-preview">
             <ul class="list-unstyled mb-0">
                 <li class="mb-2">
-                    <span class="badge bg-success me-2">Create</span>
+                    <BbBadge Class="bg-green-600 text-white border-transparent me-2">Create</BbBadge>
                     Create new clones for branches
                 </li>
                 <li class="mb-2">
-                    <span class="badge bg-danger me-2">Delete</span>
+                    <BbBadge Variant="BadgeVariant.Destructive" Class="me-2">Delete</BbBadge>
                     Remove clones when no longer needed
                 </li>
                 <li class="mb-2">
-                    <span class="badge bg-info me-2">List</span>
+                    <BbBadge Class="bg-blue-500 text-white border-transparent me-2">List</BbBadge>
                     View all active clones with their paths
                 </li>
                 <li class="mb-2">
-                    <span class="badge bg-warning text-dark me-2">Status</span>
+                    <BbBadge Class="bg-amber-500 text-white border-transparent me-2">Status</BbBadge>
                     Show branch ahead/behind counts
                 </li>
             </ul>
@@ -46,37 +48,37 @@
     <div class="showcase-item">
         <div class="showcase-label">Active clones</div>
         <div class="showcase-preview">
-            <div class="card" style="max-width: 500px;">
-                <div class="card-header">Branch Clones</div>
-                <div class="card-body p-0">
+            <BbCard style="max-width: 500px;">
+                <BbCardHeader><BbCardTitle>Branch Clones</BbCardTitle></BbCardHeader>
+                <BbCardContent Class="p-0">
                     <div class="list-group list-group-flush">
                         <div class="list-group-item d-flex justify-content-between align-items-start">
                             <div>
                                 <div class="fw-semibold">feature/auth/login</div>
                                 <small class="text-text-muted">/home/user/projects/app/.clones/feature-auth-login</small>
                                 <div class="mt-1">
-                                    <span class="badge bg-success">2 ahead</span>
-                                    <span class="badge bg-warning text-dark ms-1">1 behind</span>
+                                    <BbBadge Class="bg-green-600 text-white border-transparent">2 ahead</BbBadge>
+                                    <BbBadge Class="bg-amber-500 text-white border-transparent ms-1">1 behind</BbBadge>
                                 </div>
                             </div>
-                            <button class="btn btn-sm btn-outline-danger">Delete</button>
+                            <BbButton Variant="ButtonVariant.Destructive" Size="ButtonSize.Small">Delete</BbButton>
                         </div>
                         <div class="list-group-item d-flex justify-content-between align-items-start">
                             <div>
                                 <div class="fw-semibold">fix/api/timeout</div>
                                 <small class="text-text-muted">/home/user/projects/app/.clones/fix-api-timeout</small>
                                 <div class="mt-1">
-                                    <span class="badge bg-success">5 ahead</span>
+                                    <BbBadge Class="bg-green-600 text-white border-transparent">5 ahead</BbBadge>
                                 </div>
                             </div>
-                            <button class="btn btn-sm btn-outline-danger">Delete</button>
+                            <BbButton Variant="ButtonVariant.Destructive" Size="ButtonSize.Small">Delete</BbButton>
                         </div>
                     </div>
-                </div>
-                <div class="card-footer">
-                    <button class="btn btn-sm btn-primary">Create Branch</button>
-                </div>
-            </div>
+                </BbCardContent>
+                <BbCardFooter>
+                    <BbButton Size="ButtonSize.Small">Create Branch</BbButton>
+                </BbCardFooter>
+            </BbCard>
         </div>
     </div>
 </div>

@@ -19,97 +19,79 @@
 }
 else if (_notFound)
 {
-    <div class="alert alert-warning">
-        <h4>Issue Not Found</h4>
-        <p>The issue "@IssueId" could not be found in project "@ProjectId".</p>
-        <a href="projects/@ProjectId" class="btn btn-secondary">Back to Project</a>
-    </div>
+    <BbAlert Variant="AlertVariant.Warning">
+        <BbAlertTitle>Issue Not Found</BbAlertTitle>
+        <BbAlertDescription>
+            <p>The issue "@IssueId" could not be found in project "@ProjectId".</p>
+            <BbButton Variant="ButtonVariant.Secondary" Href="@($"projects/{ProjectId}")">Back to Project</BbButton>
+        </BbAlertDescription>
+    </BbAlert>
 }
 else if (_project == null)
 {
-    <div class="alert alert-warning">
-        <h4>Project Not Found</h4>
-        <p>The project "@ProjectId" could not be found.</p>
-        <a href="projects" class="btn btn-secondary">Back to Projects</a>
-    </div>
+    <BbAlert Variant="AlertVariant.Warning">
+        <BbAlertTitle>Project Not Found</BbAlertTitle>
+        <BbAlertDescription>
+            <p>The project "@ProjectId" could not be found.</p>
+            <BbButton Variant="ButtonVariant.Secondary" Href="projects">Back to Projects</BbButton>
+        </BbAlertDescription>
+    </BbAlert>
 }
 else
 {
     <div class="flex justify-between items-center mb-3">
         <h1>Edit Issue</h1>
-        <span class="badge bg-secondary">@IssueId</span>
+        <BbBadge Variant="BadgeVariant.Secondary">@IssueId</BbBadge>
     </div>
 
     <form @onsubmit="HandleSubmit" @onkeydown="HandleKeyDown">
         <div class="grid grid-cols-12">
             <div class="col-span-8">
-                <div class="card mb-3">
-                    <div class="card-header">Issue Details</div>
-                    <div class="card-body">
+                <BbCard Class="mb-3">
+                    <BbCardHeader><BbCardTitle>Issue Details</BbCardTitle></BbCardHeader>
+                    <BbCardContent>
                         <div class="mb-3">
-                            <label for="title" class="form-label">Title <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" id="title"
-                                   @bind="_title" @bind:event="oninput" required />
+                            <BbLabel For="title">Title <span class="text-danger">*</span></BbLabel>
+                            <BbInput Id="title" @bind-Value="_title" Required="true" />
                         </div>
 
                         <div class="mb-3">
-                            <label for="description" class="form-label">Description</label>
-                            <textarea class="form-control" id="description" rows="6"
-                                      @bind="_description" @bind:event="oninput"
-                                      placeholder="Implementation details, acceptance criteria..."></textarea>
+                            <BbLabel For="description">Description</BbLabel>
+                            <BbTextarea Id="description" @bind-Value="_description"
+                                        Placeholder="Implementation details, acceptance criteria..." />
                         </div>
 
                         <div class="grid grid-cols-12 mb-3">
                             <div class="col-span-4">
-                                <label for="type" class="form-label">Type</label>
-                                <select class="form-select" id="type" @bind="_type">
-                                    @foreach (var type in Enum.GetValues<IssueType>())
-                                    {
-                                        <option value="@type">@type</option>
-                                    }
-                                </select>
+                                <BbLabel>Type</BbLabel>
+                                <BbSelect TValue="IssueType" @bind-Value="_type" Options="_typeOptions" />
                             </div>
                             <div class="col-span-4">
-                                <label for="status" class="form-label">Status</label>
-                                <select class="form-select" id="status" @bind="_status">
-                                    @foreach (var status in Enum.GetValues<IssueStatus>().Where(s => s != IssueStatus.Deleted))
-                                    {
-                                        <option value="@status">@status</option>
-                                    }
-                                </select>
+                                <BbLabel>Status</BbLabel>
+                                <BbSelect TValue="IssueStatus" @bind-Value="_status" Options="_statusOptions" />
                             </div>
                             <div class="col-span-4">
-                                <label for="priority" class="form-label">Priority</label>
-                                <select class="form-select" id="priority" @bind="_priority">
-                                    <option value="">Not set</option>
-                                    <option value="0">P0 - Critical</option>
-                                    <option value="1">P1 - High</option>
-                                    <option value="2">P2 - Medium</option>
-                                    <option value="3">P3 - Low</option>
-                                    <option value="4">P4 - Backlog</option>
-                                </select>
+                                <BbLabel>Priority</BbLabel>
+                                <BbSelect TValue="string" @bind-Value="_priority" Options="_priorityOptions" Placeholder="Not set" />
                             </div>
                         </div>
 
-                    </div>
-                </div>
+                    </BbCardContent>
+                </BbCard>
             </div>
 
             <div class="col-span-4">
-                <div class="card mb-3">
-                    <div class="card-header">Branch Information</div>
-                    <div class="card-body">
+                <BbCard Class="mb-3">
+                    <BbCardHeader><BbCardTitle>Branch Information</BbCardTitle></BbCardHeader>
+                    <BbCardContent>
                         <div class="mb-3">
-                            <label for="workingBranchId" class="form-label">Working Branch ID</label>
-                            <div class="input-group">
-                                <input type="text" class="form-control" id="workingBranchId"
-                                       @bind="_workingBranchId"
-                                       @bind:event="oninput"
-                                       placeholder="Custom branch identifier" />
-                                <button type="button" class="btn btn-outline-secondary"
-                                        @onclick="SuggestBranchId"
-                                        disabled="@_isSuggestingBranchId"
-                                        title="Suggest branch ID using AI">
+                            <BbLabel For="workingBranchId">Working Branch ID</BbLabel>
+                            <div class="flex gap-2">
+                                <BbInput Id="workingBranchId" @bind-Value="_workingBranchId"
+                                         Placeholder="Custom branch identifier" Class="flex-1" />
+                                <BbButton Variant="ButtonVariant.Outline"
+                                          OnClick="SuggestBranchId"
+                                          Disabled="@_isSuggestingBranchId">
                                     @if (_isSuggestingBranchId)
                                     {
                                         <BbSpinner Size="SpinnerSize.Small" />
@@ -118,7 +100,7 @@ else
                                     {
                                         <span>Suggest</span>
                                     }
-                                </button>
+                                </BbButton>
                             </div>
                             <div class="form-text">AI-suggested or auto-generated from title</div>
                         </div>
@@ -126,41 +108,41 @@ else
                             <strong>Branch Preview:</strong><br/>
                             <code>@GetBranchPreview()</code>
                         </div>
-                    </div>
-                </div>
+                    </BbCardContent>
+                </BbCard>
 
-                <div class="card">
-                    <div class="card-header">Metadata</div>
-                    <div class="card-body">
+                <BbCard>
+                    <BbCardHeader><BbCardTitle>Metadata</BbCardTitle></BbCardHeader>
+                    <BbCardContent>
                         <dl class="grid grid-cols-12 text-sm mb-0">
                             <dt class="col-span-5 text-text-muted">Created</dt>
                             <dd class="col-span-7">@_issue?.CreatedAt.ToString("g")</dd>
                         </dl>
-                    </div>
-                </div>
+                    </BbCardContent>
+                </BbCard>
 
-                <div class="card mt-3">
-                    <div class="card-header">Run Agent</div>
-                    <div class="card-body">
+                <BbCard Class="mt-3">
+                    <BbCardHeader><BbCardTitle>Run Agent</BbCardTitle></BbCardHeader>
+                    <BbCardContent>
                         @if (_existingSession != null)
                         {
                             <div class="mb-2">
-                                <span class="badge bg-status-success">Session Active</span>
+                                <BbBadge Class="bg-green-600 text-white border-transparent">Session Active</BbBadge>
                             </div>
-                            <a href="/session/@_existingSession.Id" class="btn btn-sm btn-primary w-full">
+                            <BbButton Size="ButtonSize.Small" Href="@($"/session/{_existingSession.Id}")" Class="w-full">
                                 Open Existing Session
-                            </a>
+                            </BbButton>
                         }
                         else
                         {
                             <div class="mb-2">
-                                <label class="form-label text-sm mb-1">Model</label>
+                                <BbLabel Class="text-sm mb-1">Model</BbLabel>
                                 <ModelSelector Id="edit-model"
                                                SelectedModel="@_selectedModel"
                                                SelectedModelChanged="@(m => _selectedModel = m)" />
                             </div>
                             <div class="mb-2">
-                                <label class="form-label text-sm mb-1">Base Branch</label>
+                                <BbLabel Class="text-sm mb-1">Base Branch</BbLabel>
                                 <BaseBranchSelector Id="edit-base-branch"
                                                     SelectedBranch="@_selectedBaseBranch"
                                                     SelectedBranchChanged="@(b => _selectedBaseBranch = b)"
@@ -168,19 +150,13 @@ else
                                                     DefaultBranch="@_project?.DefaultBranch" />
                             </div>
                             <div class="mb-2">
-                                <label class="form-label text-sm mb-1">Agent</label>
-                                <select class="form-select form-select-sm" @bind="_selectedPromptId">
-                                    <option value="">None (no prompt)</option>
-                                    @foreach (var prompt in _prompts)
-                                    {
-                                        <option value="@prompt.Id">@prompt.Name (@prompt.Mode)</option>
-                                    }
-                                </select>
+                                <BbLabel Class="text-sm mb-1">Agent</BbLabel>
+                                <BbSelect TValue="string" @bind-Value="_selectedPromptId" Options="_promptOptions" Placeholder="None (no prompt)" />
                             </div>
                             <BbButton OnClick="HandleSaveAndRunAgent" Loading="@_isSavingAndRunning" LoadingText="Saving & Starting..." Class="w-full" Disabled="@_isSaving">Save & Run Agent</BbButton>
                         }
-                    </div>
-                </div>
+                    </BbCardContent>
+                </BbCard>
             </div>
         </div>
 
@@ -189,7 +165,7 @@ else
         <div class="flex justify-between items-center">
             <div>
                 <BbButton Type="ButtonType.Submit" Loading="@_isSaving">Save Changes</BbButton>
-                <a href="projects/@ProjectId" class="btn btn-secondary">Cancel</a>
+                <BbButton Variant="ButtonVariant.Secondary" Href="@($"projects/{ProjectId}")">Cancel</BbButton>
             </div>
             <div class="text-text-muted text-sm">
                 Press <kbd>Ctrl</kbd>+<kbd>Enter</kbd> to save
@@ -198,12 +174,16 @@ else
 
         @if (!string.IsNullOrEmpty(_errorMessage))
         {
-            <div class="alert alert-danger mt-3">@_errorMessage</div>
+            <BbAlert Variant="AlertVariant.Danger" Class="mt-3">
+                <BbAlertDescription>@_errorMessage</BbAlertDescription>
+            </BbAlert>
         }
 
         @if (!string.IsNullOrEmpty(_successMessage))
         {
-            <div class="alert alert-success mt-3">@_successMessage</div>
+            <BbAlert Variant="AlertVariant.Success" Class="mt-3">
+                <BbAlertDescription>@_successMessage</BbAlertDescription>
+            </BbAlert>
         }
     </form>
 }
@@ -246,8 +226,26 @@ else
     private string _selectedBaseBranch = "";
     private string _selectedPromptId = "";
     private IReadOnlyList<AgentPrompt> _prompts = [];
+    private List<SelectOption<string>> _promptOptions = [];
     private bool _isSavingAndRunning;
     private ClaudeSession? _existingSession;
+
+    // Static select options
+    private static readonly List<SelectOption<IssueType>> _typeOptions =
+        Enum.GetValues<IssueType>().Select(t => new SelectOption<IssueType>(t, t.ToString())).ToList();
+
+    private static readonly List<SelectOption<IssueStatus>> _statusOptions =
+        Enum.GetValues<IssueStatus>().Where(s => s != IssueStatus.Deleted)
+            .Select(s => new SelectOption<IssueStatus>(s, s.ToString())).ToList();
+
+    private static readonly List<SelectOption<string>> _priorityOptions =
+    [
+        new("0", "P0 - Critical"),
+        new("1", "P1 - High"),
+        new("2", "P2 - Medium"),
+        new("3", "P3 - Low"),
+        new("4", "P4 - Backlog"),
+    ];
 
     protected override async Task OnInitializedAsync()
     {
@@ -304,6 +302,8 @@ else
             // Load agent prompts
             await AgentPromptApi.EnsureDefaultPromptsAsync();
             _prompts = await AgentPromptApi.GetAllPromptsAsync();
+            _promptOptions = _prompts.Select(p =>
+                new SelectOption<string>(p.Id, $"{p.Name} ({p.Mode})")).ToList();
             var planPrompt = _prompts.FirstOrDefault(p => p.Name == "Plan");
             if (planPrompt != null)
             {

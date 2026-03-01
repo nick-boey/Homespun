@@ -7,15 +7,17 @@
                 <LucideIcon Name="git-branch" Size="14" Class="me-1" />
                 Pull Request
             </h6>
-            <a href="@Status.PrUrl" target="_blank" class="badge bg-secondary text-decoration-none">
-                PR #@Status.PrNumber <LucideIcon Name="external-link" Size="10" Class="ms-1" />
+            <a href="@Status.PrUrl" target="_blank" style="text-decoration: none;">
+                <BbBadge Variant="BadgeVariant.Secondary">
+                    PR #@Status.PrNumber <LucideIcon Name="external-link" Size="10" Class="ms-1" />
+                </BbBadge>
             </a>
         </div>
         <div class="d-flex flex-wrap gap-1 align-items-center">
-            <span class="badge @GetPrStatusBadgeClass()">@GetPrStatusDisplay()</span>
+            <BbBadge Class="@GetPrStatusBadgeClass()">@GetPrStatusDisplay()</BbBadge>
             @if (Status.ChecksPassing.HasValue)
             {
-                <span class="badge @(Status.ChecksPassing.Value ? "bg-success" : "bg-danger")">
+                <BbBadge Class="@(Status.ChecksPassing.Value ? "bg-green-600 text-white border-transparent" : "bg-destructive text-destructive-foreground border-transparent")">
                     @if (Status.ChecksPassing.Value)
                     {
                         <LucideIcon Name="check" Size="10" Class="me-1" />
@@ -26,42 +28,42 @@
                         <LucideIcon Name="x" Size="10" Class="me-1" />
                         <text>Checks Failing</text>
                     }
-                </span>
+                </BbBadge>
             }
             else if (Status.ChecksRunning)
             {
-                <span class="badge bg-warning text-dark">
+                <BbBadge Class="bg-amber-500 text-white border-transparent">
                     <BbSpinner Size="SpinnerSize.Small" Class="me-1" />
                     Checks Running
-                </span>
+                </BbBadge>
             }
             @if (Status.IsApproved == true)
             {
-                <span class="badge bg-success">
+                <BbBadge Class="bg-green-600 text-white border-transparent">
                     <LucideIcon Name="check" Size="10" Class="me-1" />
                     Approved (@Status.ApprovalCount)
-                </span>
+                </BbBadge>
             }
             else if (Status.ChangesRequestedCount > 0)
             {
-                <span class="badge bg-warning text-dark">
+                <BbBadge Class="bg-amber-500 text-white border-transparent">
                     <LucideIcon Name="alert-circle" Size="10" Class="me-1" />
                     Changes Requested (@Status.ChangesRequestedCount)
-                </span>
+                </BbBadge>
             }
             @if (Status.IsMergeable)
             {
-                <span class="badge bg-success">
+                <BbBadge Class="bg-green-600 text-white border-transparent">
                     <LucideIcon Name="check-circle" Size="10" Class="me-1" />
                     Ready to Merge
-                </span>
+                </BbBadge>
             }
             @if (Status.HasConflicts)
             {
-                <span class="badge bg-danger">
+                <BbBadge Variant="BadgeVariant.Destructive">
                     <LucideIcon Name="alert-triangle" Size="10" Class="me-1" />
                     Merge Conflicts
-                </span>
+                </BbBadge>
             }
         </div>
     </div>
@@ -82,14 +84,14 @@
 
     private string GetPrStatusBadgeClass() => Status?.Status switch
     {
-        PullRequestStatus.InProgress => "bg-primary",
-        PullRequestStatus.ReadyForReview => "bg-warning text-dark",
-        PullRequestStatus.ChecksFailing => "bg-danger",
-        PullRequestStatus.Conflict => "bg-danger",
-        PullRequestStatus.ReadyForMerging => "bg-success",
-        PullRequestStatus.Merged => "bg-purple",
-        PullRequestStatus.Closed => "bg-secondary",
-        _ => "bg-secondary"
+        PullRequestStatus.InProgress => "bg-primary text-primary-foreground border-transparent",
+        PullRequestStatus.ReadyForReview => "bg-amber-500 text-white border-transparent",
+        PullRequestStatus.ChecksFailing => "bg-destructive text-destructive-foreground border-transparent",
+        PullRequestStatus.Conflict => "bg-destructive text-destructive-foreground border-transparent",
+        PullRequestStatus.ReadyForMerging => "bg-green-600 text-white border-transparent",
+        PullRequestStatus.Merged => "bg-purple-500 text-white border-transparent",
+        PullRequestStatus.Closed => "bg-secondary text-secondary-foreground border-transparent",
+        _ => "bg-secondary text-secondary-foreground border-transparent"
     };
 
     private string GetPrStatusDisplay() => Status?.Status switch

@@ -56,7 +56,7 @@
     @* Active Branches Section *@
     <div class="section-header d-flex justify-content-between align-items-center">
         <span>Active Branches</span>
-        <span class="badge bg-secondary">@_clones.Count(w => !w.IsBare)</span>
+        <BbBadge Variant="BadgeVariant.Secondary">@_clones.Count(w => !w.IsBare)</BbBadge>
     </div>
     @if (_clones.Count(w => !w.IsBare) == 0)
     {
@@ -90,39 +90,41 @@
                             <span class="badges">
                                 @if (IsDefaultBranch(branchName))
                                 {
-                                    <span class="badge bg-primary">default</span>
+                                    <BbBadge Variant="BadgeVariant.Default">default</BbBadge>
                                 }
                                 @if (branchInfo?.IsMerged == true)
                                 {
-                                    <span class="badge bg-success">merged</span>
+                                    <BbBadge Class="bg-green-600 text-white border-transparent">merged</BbBadge>
                                 }
                                 @if (prInfo != null)
                                 {
                                     <a href="https://github.com/@Project.GitHubOwner/@Project.GitHubRepo/pull/@prInfo.GitHubPRNumber"
                                        target="_blank"
-                                       class="badge bg-info text-decoration-none">
-                                        PR #@prInfo.GitHubPRNumber
+                                       style="text-decoration: none;">
+                                        <BbBadge Class="bg-blue-500 text-white border-transparent">
+                                            PR #@prInfo.GitHubPRNumber
+                                        </BbBadge>
                                     </a>
                                 }
                                 @if (!clone.IsOnCorrectBranch)
                                 {
-                                    <span class="badge bg-danger" title="Expected branch: @clone.ExpectedBranch">
+                                    <BbBadge Variant="BadgeVariant.Destructive" title="@($"Expected branch: {clone.ExpectedBranch}")">
                                         Wrong Branch
-                                    </span>
+                                    </BbBadge>
                                 }
                                 @if (status != null && status.HasChanges)
                                 {
                                     @if (status.ModifiedCount > 0)
                                     {
-                                        <span class="badge bg-warning text-dark" title="Modified files">M: @status.ModifiedCount</span>
+                                        <BbBadge Class="bg-amber-500 text-white border-transparent" title="Modified files">M: @status.ModifiedCount</BbBadge>
                                     }
                                     @if (status.StagedCount > 0)
                                     {
-                                        <span class="badge bg-success" title="Staged files">S: @status.StagedCount</span>
+                                        <BbBadge Class="bg-green-600 text-white border-transparent" title="Staged files">S: @status.StagedCount</BbBadge>
                                     }
                                     @if (status.UntrackedCount > 0)
                                     {
-                                        <span class="badge bg-secondary" title="Untracked files">U: @status.UntrackedCount</span>
+                                        <BbBadge Variant="BadgeVariant.Secondary" title="Untracked files">U: @status.UntrackedCount</BbBadge>
                                     }
                                 }
                             </span>
@@ -131,16 +133,16 @@
                         <td class="status-col">
                             @if (session != null)
                             {
-                                <span class="badge @GetSessionStatusBadgeClass(session.Status)">
+                                <BbBadge Class="@GetSessionStatusBadgeClass(session.Status)">
                                     @session.Status
-                                </span>
+                                </BbBadge>
                             }
                             @if (false) @* StartupTracker not available in WASM *@
                             {
-                                <span class="badge bg-warning text-dark">
+                                <BbBadge Class="bg-amber-500 text-white border-transparent">
                                     <BbSpinner Size="SpinnerSize.Small" Class="me-1" />
                                     Starting...
-                                </span>
+                                </BbBadge>
                             }
                             @if (branchInfo != null && (branchInfo.AheadCount > 0 || branchInfo.BehindCount > 0))
                             {
@@ -256,23 +258,23 @@
                                     <div class="inline-confirm-options">
                                         @if (_deleteIncludesClone)
                                         {
-                                            <label class="form-check form-check-inline">
-                                                <input class="form-check-input" type="checkbox" @bind="_deleteCloneOnly">
-                                                <span class="form-check-label">Keep branch</span>
-                                            </label>
+                                            <div class="flex items-center gap-1">
+                                                <BbCheckbox @bind-Checked="_deleteCloneOnly" Id="keep-branch" />
+                                                <BbLabel For="keep-branch" Class="text-sm mb-0">Keep branch</BbLabel>
+                                            </div>
                                         }
                                         @if (_hasRemoteBranch && !_deleteCloneOnly)
                                         {
-                                            <label class="form-check form-check-inline">
-                                                <input class="form-check-input" type="checkbox" @bind="_deleteRemoteBranch">
-                                                <span class="form-check-label">Delete remote</span>
-                                            </label>
+                                            <div class="flex items-center gap-1">
+                                                <BbCheckbox @bind-Checked="_deleteRemoteBranch" Id="delete-remote" />
+                                                <BbLabel For="delete-remote" Class="text-sm mb-0">Delete remote</BbLabel>
+                                            </div>
                                         }
                                     </div>
                                     <div class="inline-confirm-actions">
                                         @if (!_deleteTargetIsMerged)
                                         {
-                                            <span class="badge bg-warning text-dark me-1" title="This branch has not been merged">unmerged</span>
+                                            <BbBadge Class="bg-amber-500 text-white border-transparent me-1" title="This branch has not been merged">unmerged</BbBadge>
                                         }
                                         <BbButton Variant="ButtonVariant.Destructive" Size="ButtonSize.Small" Class="me-1"
                                                 OnClick="ExecuteDeleteAsync"
@@ -302,7 +304,7 @@
     {
         <div class="section-header d-flex justify-content-between align-items-center bg-warning bg-opacity-25">
             <span><LucideIcon Name="alert-triangle" Size="14" Class="me-1" /> Lost Clones</span>
-            <span class="badge bg-warning text-dark">@_lostClones.Count</span>
+            <BbBadge Class="bg-amber-500 text-white border-transparent">@_lostClones.Count</BbBadge>
         </div>
         <table class="table table-sm wt-table">
             <thead>
@@ -322,26 +324,26 @@
                         <td>
                             <strong class="branch-name">@lost.FolderName</strong>
                             <span class="badges">
-                                <span class="badge bg-warning text-dark">Lost</span>
+                                <BbBadge Class="bg-amber-500 text-white border-transparent">Lost</BbBadge>
                                 @if (lost.CanRepair)
                                 {
-                                    <span class="badge bg-info" title="Can be repaired to branch: @lost.MatchingBranchName">
+                                    <BbBadge Class="bg-blue-500 text-white border-transparent" title="@($"Can be repaired to branch: {lost.MatchingBranchName}")">
                                         <LucideIcon Name="arrow-right" Size="10" /> @lost.MatchingBranchName
-                                    </span>
+                                    </BbBadge>
                                 }
                                 @if (lost.Status != null && lost.Status.HasChanges)
                                 {
                                     @if (lost.Status.ModifiedCount > 0)
                                     {
-                                        <span class="badge bg-danger" title="Modified files - may lose work!">M: @lost.Status.ModifiedCount</span>
+                                        <BbBadge Variant="BadgeVariant.Destructive" title="Modified files - may lose work!">M: @lost.Status.ModifiedCount</BbBadge>
                                     }
                                     @if (lost.Status.StagedCount > 0)
                                     {
-                                        <span class="badge bg-success" title="Staged files">S: @lost.Status.StagedCount</span>
+                                        <BbBadge Class="bg-green-600 text-white border-transparent" title="Staged files">S: @lost.Status.StagedCount</BbBadge>
                                     }
                                     @if (lost.Status.UntrackedCount > 0)
                                     {
-                                        <span class="badge bg-secondary" title="Untracked files">U: @lost.Status.UntrackedCount</span>
+                                        <BbBadge Variant="BadgeVariant.Secondary" title="Untracked files">U: @lost.Status.UntrackedCount</BbBadge>
                                     }
                                 }
                             </span>
@@ -350,7 +352,7 @@
                         <td class="status-col">
                             @if (lost.Status != null && lost.Status.HasChanges)
                             {
-                                <span class="badge bg-danger">Has changes</span>
+                                <BbBadge Variant="BadgeVariant.Destructive">Has changes</BbBadge>
                             }
                         </td>
                         <td class="actions-col">
@@ -379,7 +381,7 @@
                                     <div class="inline-confirm-actions">
                                         @if (_deleteLostCloneHasChanges)
                                         {
-                                            <span class="badge bg-danger me-1" title="Has uncommitted changes">has changes</span>
+                                            <BbBadge Variant="BadgeVariant.Destructive" Class="me-1" title="Has uncommitted changes">has changes</BbBadge>
                                         }
                                         <BbButton Variant="ButtonVariant.Destructive" Size="ButtonSize.Small" Class="me-1"
                                                 OnClick="ExecuteDeleteAsync"
@@ -412,7 +414,7 @@
     {
         <div class="section-header d-flex justify-content-between align-items-center">
             <span>Local Branches (No Clone)</span>
-            <span class="badge bg-secondary">@branchesWithoutClones.Count</span>
+            <BbBadge Variant="BadgeVariant.Secondary">@branchesWithoutClones.Count</BbBadge>
         </div>
         <table class="table table-sm wt-table">
             <thead>
@@ -434,14 +436,16 @@
                             <span class="badges">
                                 @if (branch.IsMerged)
                                 {
-                                    <span class="badge bg-success">merged</span>
+                                    <BbBadge Class="bg-green-600 text-white border-transparent">merged</BbBadge>
                                 }
                                 @if (prInfo != null)
                                 {
                                     <a href="https://github.com/@Project.GitHubOwner/@Project.GitHubRepo/pull/@prInfo.GitHubPRNumber"
                                        target="_blank"
-                                       class="badge bg-info text-decoration-none">
-                                        PR #@prInfo.GitHubPRNumber
+                                       style="text-decoration: none;">
+                                        <BbBadge Class="bg-blue-500 text-white border-transparent">
+                                            PR #@prInfo.GitHubPRNumber
+                                        </BbBadge>
                                     </a>
                                 }
                             </span>
@@ -475,16 +479,16 @@
                                     <div class="inline-confirm-options">
                                         @if (_hasRemoteBranch)
                                         {
-                                            <label class="form-check form-check-inline">
-                                                <input class="form-check-input" type="checkbox" @bind="_deleteRemoteBranch">
-                                                <span class="form-check-label">Delete remote</span>
-                                            </label>
+                                            <div class="flex items-center gap-1">
+                                                <BbCheckbox @bind-Checked="_deleteRemoteBranch" Id="delete-remote-2" />
+                                                <BbLabel For="delete-remote-2" Class="text-sm mb-0">Delete remote</BbLabel>
+                                            </div>
                                         }
                                     </div>
                                     <div class="inline-confirm-actions">
                                         @if (!_deleteTargetIsMerged)
                                         {
-                                            <span class="badge bg-warning text-dark me-1" title="This branch has not been merged">unmerged</span>
+                                            <BbBadge Class="bg-amber-500 text-white border-transparent me-1" title="This branch has not been merged">unmerged</BbBadge>
                                         }
                                         <BbButton Variant="ButtonVariant.Destructive" Size="ButtonSize.Small" Class="me-1"
                                                 OnClick="ExecuteDeleteAsync"
@@ -514,7 +518,7 @@
     {
         <div class="section-header d-flex justify-content-between align-items-center">
             <span>Remote Branches (Not Local)</span>
-            <span class="badge bg-secondary">@_remoteBranches.Count</span>
+            <BbBadge Variant="BadgeVariant.Secondary">@_remoteBranches.Count</BbBadge>
         </div>
         <table class="table table-sm wt-table">
             <thead>
@@ -658,8 +662,7 @@
         gap: 0.25rem;
     }
 
-    .inline-confirm-options .form-check {
-        margin-bottom: 0;
+    .inline-confirm-options {
         font-size: 0.8rem;
     }
 
@@ -1383,15 +1386,7 @@
         return message.Length <= maxLength ? message : message[..(maxLength - 3)] + "...";
     }
 
-    private static string GetSessionStatusBadgeClass(ClaudeSessionStatus status) => status switch
-    {
-        ClaudeSessionStatus.Running => "bg-success",
-        ClaudeSessionStatus.WaitingForInput => "bg-info",
-        ClaudeSessionStatus.Starting => "bg-warning text-dark",
-        ClaudeSessionStatus.Stopped => "bg-secondary",
-        ClaudeSessionStatus.Error => "bg-danger",
-        _ => "bg-secondary"
-    };
+    private static string GetSessionStatusBadgeClass(ClaudeSessionStatus status) => status.ToBbBadgeClass();
 
     public async ValueTask DisposeAsync()
     {

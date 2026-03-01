@@ -1,5 +1,4 @@
 using Bunit;
-using Homespun.Client.Components;
 using Homespun.Client.Features.Issues.Components;
 
 namespace Homespun.Tests.Components;
@@ -77,7 +76,7 @@ public class PrStatusBadgesTests : BunitTestContext
 
         // Assert
         Assert.That(cut.Markup, Does.Contain("Ready for Review"));
-        Assert.That(cut.Markup, Does.Contain("bg-warning"));
+        Assert.That(cut.Markup, Does.Contain("bg-amber-500"));
     }
 
     [Test]
@@ -92,7 +91,7 @@ public class PrStatusBadgesTests : BunitTestContext
 
         // Assert
         Assert.That(cut.Markup, Does.Contain("Checks Failing"));
-        Assert.That(cut.Markup, Does.Contain("bg-danger"));
+        Assert.That(cut.Markup, Does.Contain("bg-destructive"));
     }
 
     [Test]
@@ -107,7 +106,7 @@ public class PrStatusBadgesTests : BunitTestContext
 
         // Assert
         Assert.That(cut.Markup, Does.Contain("Ready to Merge"));
-        Assert.That(cut.Markup, Does.Contain("bg-success"));
+        Assert.That(cut.Markup, Does.Contain("bg-green-600"));
     }
 
     [Test]

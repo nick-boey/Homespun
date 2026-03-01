@@ -25,7 +25,7 @@
             <div class="group-container mb-4">
                 <div class="group-header">
                     <h5>@group.ProjectName</h5>
-                    <span class="badge bg-secondary">@group.Sessions.Count session@(group.Sessions.Count != 1 ? "s" : "")</span>
+                    <BbBadge Variant="BadgeVariant.Secondary">@group.Sessions.Count session@(group.Sessions.Count != 1 ? "s" : "")</BbBadge>
                 </div>
 
                 <div class="sessions-list">
@@ -51,7 +51,7 @@
                         <span class="status-indicator @group.Status.ToIndicatorClass()"></span>
                         <h5>@group.Status.ToDisplayLabel()</h5>
                     </div>
-                    <span class="badge bg-secondary">@group.Sessions.Count session@(group.Sessions.Count != 1 ? "s" : "")</span>
+                    <BbBadge Variant="BadgeVariant.Secondary">@group.Sessions.Count session@(group.Sessions.Count != 1 ? "s" : "")</BbBadge>
                 </div>
 
                 <div class="sessions-list">

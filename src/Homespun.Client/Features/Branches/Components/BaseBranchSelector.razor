@@ -1,18 +1,8 @@
 
 @inject HttpCloneApiService CloneApi
 
-<div class="relative">
-    <select class="form-select form-select-sm"
-            id="@($"base-branch-selector-{Id}")"
-            value="@SelectedBranch"
-            @onchange="OnBranchChanged"
-            disabled="@Disabled">
-        @foreach (var branch in _branches)
-        {
-            <option value="@branch">@branch</option>
-        }
-    </select>
-</div>
+<BbSelect TValue="string" Value="@SelectedBranch" ValueChanged="OnBranchChanged"
+          Options="_branchOptions" Disabled="@Disabled" Placeholder="Select branch..." />
 
 @code {
     [Parameter]
@@ -40,6 +30,7 @@
     public string? DefaultBranch { get; set; }
 
     private List<string> _branches = [];
+    private List<SelectOption<string>> _branchOptions = [];
     private string? _lastRepoPath;
 
     protected override async Task OnParametersSetAsync()
@@ -63,6 +54,8 @@
             _branches.Insert(0, DefaultBranch);
         }
 
+        _branchOptions = _branches.Select(b => new SelectOption<string>(b, b)).ToList();
+
         // Auto-select default branch if nothing is selected yet
         if (string.IsNullOrEmpty(SelectedBranch) && _branches.Count > 0)
         {
@@ -71,9 +64,9 @@
         }
     }
 
-    private async Task OnBranchChanged(ChangeEventArgs e)
+    private async Task OnBranchChanged(string? value)
     {
-        var newBranch = e.Value?.ToString() ?? "";
+        var newBranch = value ?? "";
         SelectedBranch = newBranch;
         await SelectedBranchChanged.InvokeAsync(newBranch);
     }

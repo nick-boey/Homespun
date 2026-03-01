@@ -1,22 +1,24 @@
 @inject NavigationManager NavigationManager
 @inject IMarkdownRenderingService MarkdownService
 
-<div class="card merged-pull-request-detail-panel">
-    <div class="card-header flex justify-between items-center">
-        <span>Merged Pull Request</span>
+<BbCard Class="merged-pull-request-detail-panel">
+    <BbCardHeader Class="flex justify-between items-center">
+        <BbCardTitle>Merged Pull Request</BbCardTitle>
         <button type="button" class="btn-close" @onclick="OnClose"></button>
-    </div>
-    <div class="card-body">
-        <h5 class="card-title">@Details.PullRequest.Title</h5>
+    </BbCardHeader>
+    <BbCardContent>
+        <h5>@Details.PullRequest.Title</h5>
 
         <div class="mb-3">
-            <span class="badge bg-purple">Merged</span>
+            <BbBadge Class="bg-purple-500 text-white border-transparent">Merged</BbBadge>
             @if (!string.IsNullOrEmpty(Details.PullRequest.HtmlUrl))
             {
                 <a href="@Details.PullRequest.HtmlUrl"
                    target="_blank"
-                   class="badge bg-secondary text-decoration-none ml-1">
-                    PR #@Details.PullRequest.Number
+                   style="text-decoration: none;">
+                    <BbBadge Variant="BadgeVariant.Secondary" Class="ml-1">
+                        PR #@Details.PullRequest.Number
+                    </BbBadge>
                 </a>
             }
         </div>
@@ -34,7 +36,7 @@
             <div class="border rounded p-2 mb-3 bg-surface-secondary">
                 <div class="flex justify-between items-start">
                     <h6 class="mb-2">
-                        <span class="badge bg-status-info text-text-primary mr-1">@Details.LinkedIssue.Id</span>
+                        <BbBadge Class="bg-blue-500 text-white border-transparent mr-1">@Details.LinkedIssue.Id</BbBadge>
                         Linked Issue
                     </h6>
                     <BbButton Variant="ButtonVariant.Outline" Size="ButtonSize.Small" Href="@($"/projects/{ProjectId}/issues/{Details.LinkedIssue.Id}/edit")">
@@ -43,11 +45,11 @@
                 </div>
                 <p class="mb-1 font-bold">@Details.LinkedIssue.Title</p>
                 <div class="mb-1">
-                    <span class="badge @GetIssueTypeBadgeClass(Details.LinkedIssue.Type)">@Details.LinkedIssue.Type</span>
-                    <span class="badge @GetIssueStatusBadgeClass(Details.LinkedIssue.Status)">@Details.LinkedIssue.Status</span>
+                    <BbBadge Class="@GetIssueTypeBadgeClass(Details.LinkedIssue.Type)">@Details.LinkedIssue.Type</BbBadge>
+                    <BbBadge Class="@GetIssueStatusBadgeClass(Details.LinkedIssue.Status)">@Details.LinkedIssue.Status</BbBadge>
                     @if (Details.LinkedIssue.Priority.HasValue)
                     {
-                        <span class="badge bg-secondary">P@Details.LinkedIssue.Priority</span>
+                        <BbBadge Variant="BadgeVariant.Secondary">P@Details.LinkedIssue.Priority</BbBadge>
                     }
                 </div>
                 @if (!string.IsNullOrEmpty(Details.LinkedIssue.Description))
@@ -60,7 +62,7 @@
         {
             <div class="border rounded p-2 mb-3 bg-surface-secondary">
                 <h6 class="mb-2">
-                    <span class="badge bg-status-info text-text-primary mr-1">@Details.LinkedIssueId</span>
+                    <BbBadge Class="bg-blue-500 text-white border-transparent mr-1">@Details.LinkedIssueId</BbBadge>
                     Linked Issue
                     <span class="text-text-muted text-sm">(not found)</span>
                 </h6>
@@ -81,8 +83,8 @@
             <dt class="col-span-4">Created</dt>
             <dd class="col-span-8">@Details.PullRequest.CreatedAt.ToLocalTime().ToString("g")</dd>
         </dl>
-    </div>
-</div>
+    </BbCardContent>
+</BbCard>
 
 @code {
     [Parameter, EditorRequired]
@@ -103,21 +105,21 @@
 
     private static string GetIssueTypeBadgeClass(IssueType type) => type switch
     {
-        IssueType.Bug => "bg-danger",
-        IssueType.Feature => "bg-primary",
-        IssueType.Chore => "bg-secondary",
-        IssueType.Task => "bg-info",
-        _ => "bg-secondary"
+        IssueType.Bug => "bg-destructive text-destructive-foreground border-transparent",
+        IssueType.Feature => "bg-primary text-primary-foreground border-transparent",
+        IssueType.Chore => "bg-secondary text-secondary-foreground border-transparent",
+        IssueType.Task => "bg-blue-500 text-white border-transparent",
+        _ => "bg-secondary text-secondary-foreground border-transparent"
     };
 
     private static string GetIssueStatusBadgeClass(IssueStatus status) => status switch
     {
-        IssueStatus.Open => "bg-status-info",
-        IssueStatus.Progress => "bg-primary",
-        IssueStatus.Review => "bg-warning",
-        IssueStatus.Complete => "bg-success",
-        IssueStatus.Closed => "bg-secondary",
-        IssueStatus.Archived => "bg-secondary",
-        _ => "bg-secondary"
+        IssueStatus.Open => "bg-blue-500 text-white border-transparent",
+        IssueStatus.Progress => "bg-primary text-primary-foreground border-transparent",
+        IssueStatus.Review => "bg-amber-500 text-white border-transparent",
+        IssueStatus.Complete => "bg-green-600 text-white border-transparent",
+        IssueStatus.Closed => "bg-secondary text-secondary-foreground border-transparent",
+        IssueStatus.Archived => "bg-secondary text-secondary-foreground border-transparent",
+        _ => "bg-secondary text-secondary-foreground border-transparent"
     };
 }

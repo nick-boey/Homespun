@@ -19,18 +19,18 @@
 @if (_isStarting)
 {
     <div class="agent-control-panel @(Compact ? "compact" : "")">
-        <span class="badge bg-warning text-dark">
+        <BbBadge Class="bg-amber-500 text-white border-transparent">
             <BbSpinner Size="SpinnerSize.Small" Class="me-1" />
             Starting...
-        </span>
+        </BbBadge>
     </div>
 }
 else if (_session != null)
 {
     <div class="agent-control-panel @(Compact ? "compact" : "") d-flex align-items-center gap-2">
-        <span class="badge @_session.Status.ToBadgeClass()">
+        <BbBadge Class="@_session.Status.ToBbBadgeClass()">
             @_session.Status.ToDisplayLabel()
-        </span>
+        </BbBadge>
         <BbButton Variant="ButtonVariant.Default" Size="ButtonSize.Small" Href="@($"/session/{_session.Id}")">
             Chat
         </BbButton>

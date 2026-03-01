@@ -20,10 +20,10 @@
     @if (_isStarting)
     {
         <div class="d-flex align-items-center gap-2">
-            <span class="badge bg-warning text-dark">
+            <BbBadge Class="bg-amber-500 text-white border-transparent">
                 <BbSpinner Size="SpinnerSize.Small" Class="me-1" />
                 Starting...
-            </span>
+            </BbBadge>
         </div>
     }
     else
@@ -31,19 +31,9 @@
         <div class="launcher-main">
             <div class="d-flex gap-2 align-items-end">
                 <div class="flex-grow-1">
-                    <label class="form-label small mb-1">Agent</label>
-                    <select class="form-select form-select-sm"
-                            @bind="_selectedPromptId"
-                            disabled="@Disabled"
-                            aria-label="Select agent prompt">
-                        <option value="">None (no prompt)</option>
-                        @foreach (var prompt in _prompts)
-                        {
-                            <option value="@prompt.Id">
-                                @prompt.Name (@prompt.Mode)@(prompt.ProjectId != null ? " *" : "")
-                            </option>
-                        }
-                    </select>
+                    <BbLabel Class="small mb-1">Agent</BbLabel>
+                    <BbSelect TValue="string" @bind-Value="_selectedPromptId" Options="_promptOptions"
+                              Disabled="@Disabled" Placeholder="None (no prompt)" />
                 </div>
                 <BbButton Variant="ButtonVariant.Default" Size="ButtonSize.Small"
                         OnClick="HandleStartAsync"
@@ -60,25 +50,25 @@
             }
 
             @* More Settings Toggle *@
-            <button type="button"
-                    class="btn btn-link btn-sm p-0 mt-2 more-settings-toggle"
-                    @onclick="ToggleAdvancedSettings">
+            <BbButton Variant="ButtonVariant.Link" Size="ButtonSize.Small"
+                      Class="p-0 mt-2 more-settings-toggle"
+                      OnClick="ToggleAdvancedSettings">
                 <LucideIcon Name="@(_showAdvancedSettings ? "chevron-up" : "chevron-down")" Size="14" Class="me-1" />
                 @(_showAdvancedSettings ? "Hide settings" : "More settings")
-            </button>
+            </BbButton>
 
             @* Collapsible Advanced Settings *@
             @if (_showAdvancedSettings)
             {
                 <div class="advanced-settings mt-2">
                     <div class="mb-2">
-                        <label class="form-label small mb-1">Model</label>
+                        <BbLabel Class="small mb-1">Model</BbLabel>
                         <ModelSelector Id="@($"launcher-model-{EntityId}")"
                                        SelectedModel="@_selectedModel"
                                        SelectedModelChanged="@(m => _selectedModel = m)" />
                     </div>
                     <div class="mb-2">
-                        <label class="form-label small mb-1">Base Branch</label>
+                        <BbLabel Class="small mb-1">Base Branch</BbLabel>
                         <BaseBranchSelector Id="@($"launcher-branch-{EntityId}")"
                                             SelectedBranch="@_selectedBaseBranch"
                                             SelectedBranchChanged="@(b => _selectedBaseBranch = b)"
@@ -214,6 +204,7 @@
     #region State
 
     private IReadOnlyList<AgentPrompt> _prompts = [];
+    private List<SelectOption<string>> _promptOptions = [];
     private string _selectedPromptId = string.Empty;
     private string _selectedModel = "opus";
     private string _selectedBaseBranch = "";
@@ -240,6 +231,9 @@
         {
             _prompts = await AgentPromptApi.GetAllPromptsAsync();
         }
+
+        _promptOptions = _prompts.Select(p =>
+            new SelectOption<string>(p.Id, $"{p.Name} ({p.Mode}){(p.ProjectId != null ? " *" : "")}")).ToList();
 
         // Default to "Plan" if available
         var planPrompt = _prompts.FirstOrDefault(p => p.Name == "Plan");

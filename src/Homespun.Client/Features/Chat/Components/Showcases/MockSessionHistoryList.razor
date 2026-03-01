@@ -18,13 +18,13 @@ else if (Sessions.Count > 0)
                     <div class="d-flex align-items-center gap-2">
                         @if (session.Mode.HasValue)
                         {
-                            <span class="badge @(session.Mode == SessionMode.Plan ? "bg-info" : "bg-success")">
+                            <BbBadge Class="@(session.Mode == SessionMode.Plan ? "bg-blue-500 text-white border-transparent" : "bg-green-600 text-white border-transparent")">
                                 @session.Mode
-                            </span>
+                            </BbBadge>
                         }
                         else
                         {
-                            <span class="badge bg-secondary">Unknown</span>
+                            <BbBadge Variant="BadgeVariant.Secondary">Unknown</BbBadge>
                         }
                         <small class="text-muted">
                             @FormatDate(session.LastActivityAt)
@@ -36,14 +36,14 @@ else if (Sessions.Count > 0)
                             </small>
                         }
                     </div>
-                    <button class="btn btn-sm btn-outline-primary"
-                            disabled="@(ResumingSessionId == session.SessionId)">
+                    <BbButton Variant="ButtonVariant.Outline" Size="ButtonSize.Small"
+                            Disabled="@(ResumingSessionId == session.SessionId)">
                         @if (ResumingSessionId == session.SessionId)
                         {
                             <BbSpinner Size="SpinnerSize.Small" Class="me-1" />
                         }
                         Resume
-                    </button>
+                    </BbButton>
                 </div>
             }
         </div>

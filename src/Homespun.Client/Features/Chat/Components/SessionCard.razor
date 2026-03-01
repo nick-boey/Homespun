@@ -22,9 +22,9 @@
         <div class="session-details">
             <div class="detail-row">
                 <span class="detail-label">Mode:</span>
-                <span class="badge @(Session.Mode == SessionMode.Plan ? "bg-status-info" : "bg-status-success")">
+                <BbBadge Class="@(Session.Mode == SessionMode.Plan ? "bg-blue-500 text-white border-transparent" : "bg-green-600 text-white border-transparent")">
                     @Session.Mode
-                </span>
+                </BbBadge>
             </div>
 
             <div class="detail-row">
@@ -34,7 +34,7 @@
 
             <div class="detail-row">
                 <span class="detail-label">Status:</span>
-                <span class="badge @Session.Status.ToBadgeClass()">@Session.Status.ToDisplayLabel()</span>
+                <BbBadge Class="@Session.Status.ToBbBadgeClass()">@Session.Status.ToDisplayLabel()</BbBadge>
             </div>
 
             <div class="detail-row">

@@ -2,11 +2,13 @@
     <h3>Component Overview</h3>
     <div class="showcase-item">
         <div class="showcase-preview">
-            <div class="alert alert-info mb-0">
-                <strong>MergedPullRequestDetailPanel</strong> displays details for merged pull requests including
-                linked issue information. This allows users to view the PR that resolved an issue and potentially
-                re-open the issue if needed.
-            </div>
+            <BbAlert Variant="AlertVariant.Info">
+                <BbAlertDescription>
+                    <strong>MergedPullRequestDetailPanel</strong> displays details for merged pull requests including
+                    linked issue information. This allows users to view the PR that resolved an issue and potentially
+                    re-open the issue if needed.
+                </BbAlertDescription>
+            </BbAlert>
         </div>
     </div>
 </div>
@@ -17,23 +19,23 @@
         <div class="showcase-preview">
             <ul class="list-unstyled mb-0">
                 <li class="mb-2">
-                    <span class="badge bg-purple me-2">Merged</span>
+                    <BbBadge Class="bg-purple-500 text-white border-transparent me-2">Merged</BbBadge>
                     Displays merged status with purple badge
                 </li>
                 <li class="mb-2">
-                    <span class="badge bg-info me-2">PR Link</span>
+                    <BbBadge Class="bg-blue-500 text-white border-transparent me-2">PR Link</BbBadge>
                     Links to GitHub PR for full details
                 </li>
                 <li class="mb-2">
-                    <span class="badge bg-success me-2">Issue Link</span>
+                    <BbBadge Class="bg-green-600 text-white border-transparent me-2">Issue Link</BbBadge>
                     Shows linked Fleece issue if present
                 </li>
                 <li class="mb-2">
-                    <span class="badge bg-primary me-2">Edit</span>
+                    <BbBadge Variant="BadgeVariant.Default" Class="me-2">Edit</BbBadge>
                     Button to edit linked issue (re-open if needed)
                 </li>
                 <li class="mb-2">
-                    <span class="badge bg-secondary me-2">Info</span>
+                    <BbBadge Variant="BadgeVariant.Secondary" Class="me-2">Info</BbBadge>
                     Branch name and merge timestamp
                 </li>
             </ul>
@@ -76,13 +78,6 @@
         </div>
     </div>
 </div>
-
-<style>
-    .bg-purple {
-        background-color: #6f42c1;
-        color: white;
-    }
-</style>
 
 @code {
     private MergedPullRequestDetails _detailsWithIssue = new()

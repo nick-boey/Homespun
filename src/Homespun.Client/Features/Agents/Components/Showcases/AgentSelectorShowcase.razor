@@ -38,16 +38,16 @@
     <div class="showcase-item">
         <div class="showcase-label">How it appears in issue/PR detail panels</div>
         <div class="showcase-preview">
-            <div class="card" style="max-width: 400px;">
-                <div class="card-header">Issue Details</div>
-                <div class="card-body">
-                    <h5 class="card-title">Implement user authentication</h5>
+            <BbCard style="max-width: 400px;">
+                <BbCardHeader><BbCardTitle>Issue Details</BbCardTitle></BbCardHeader>
+                <BbCardContent>
+                    <h5>Implement user authentication</h5>
                     <p class="text-text-muted text-sm">Start an agent to work on this issue</p>
-                </div>
-                <div class="card-footer">
+                </BbCardContent>
+                <BbCardFooter>
                     <MockAgentSelector />
-                </div>
-            </div>
+                </BbCardFooter>
+            </BbCard>
         </div>
     </div>
 </div>

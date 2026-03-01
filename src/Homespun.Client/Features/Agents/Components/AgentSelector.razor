@@ -3,16 +3,9 @@
 <div class="agent-selector">
     <div class="d-flex gap-2 align-items-end">
         <div class="flex-grow-1">
-            <label class="form-label small mb-1">Prompt</label>
-            <select class="form-select form-select-sm" @bind="_selectedPromptId" disabled="@Disabled" aria-label="Select prompt">
-                <option value="">None (no prompt)</option>
-                @foreach (var prompt in _prompts)
-                {
-                    <option value="@prompt.Id">
-                        @prompt.Name (@prompt.Mode)@(prompt.ProjectId != null ? " *" : "")
-                    </option>
-                }
-            </select>
+            <BbLabel Class="small mb-1">Prompt</BbLabel>
+            <BbSelect TValue="string" @bind-Value="_selectedPromptId" Options="_promptOptions"
+                      Disabled="@Disabled" Placeholder="None (no prompt)" />
         </div>
         <BbButton Variant="ButtonVariant.Default" Size="ButtonSize.Small" OnClick="HandleStart" Disabled="@(Disabled || IsStarting)" aria-label="Start agent" aria-busy="@IsStarting">
             @if (IsStarting)
@@ -57,6 +50,7 @@
     [Parameter] public EventCallback<AgentPrompt?> OnStart { get; set; }
 
     private IReadOnlyList<AgentPrompt> _prompts = [];
+    private List<SelectOption<string>> _promptOptions = [];
     private string _selectedPromptId = string.Empty;
 
     protected override async Task OnInitializedAsync()
@@ -74,6 +68,9 @@
         {
             _prompts = await AgentPromptApi.GetAllPromptsAsync();
         }
+
+        _promptOptions = _prompts.Select(p =>
+            new SelectOption<string>(p.Id, $"{p.Name} ({p.Mode}){(p.ProjectId != null ? " *" : "")}")).ToList();
 
         // Default to "Plan" if available
         var planPrompt = _prompts.FirstOrDefault(p => p.Name == "Plan");

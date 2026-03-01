@@ -12,30 +12,30 @@
 @inject ILogger<IssueDetailPanel> Logger
 @inject IMarkdownRenderingService MarkdownService
 
-<div class="card issue-detail-panel">
-    <div class="card-header flex justify-between items-center">
-        <span>Issue Details</span>
+<BbCard Class="issue-detail-panel">
+    <BbCardHeader Class="flex justify-between items-center">
+        <BbCardTitle>Issue Details</BbCardTitle>
         <div class="flex gap-1">
             <BbButton Variant="ButtonVariant.Outline" Size="ButtonSize.Small" Href="@($"projects/{ProjectId}/issues/{Issue.Id}/edit")" title="Edit issue">
                 <LucideIcon Name="pencil" Size="14" />
             </BbButton>
         </div>
-    </div>
+    </BbCardHeader>
 
-    <div class="card-body">
-            <h5 class="card-title">@Issue.Title</h5>
+    <BbCardContent>
+            <h5>@Issue.Title</h5>
 
             <div class="mb-3">
-                <span class="badge bg-secondary">@Issue.Id</span>
-                <span class="badge @GetTypeBadgeClass() ml-1">@Issue.Type</span>
-                <span class="badge @GetStatusBadgeClass() ml-1">@GetStatusDisplay()</span>
+                <BbBadge Variant="BadgeVariant.Secondary">@Issue.Id</BbBadge>
+                <BbBadge Class="@($"{GetTypeBadgeClass()} ml-1")">@Issue.Type</BbBadge>
+                <BbBadge Class="@($"{GetStatusBadgeClass()} ml-1")">@GetStatusDisplay()</BbBadge>
                 @if (Issue.Priority.HasValue)
                 {
-                    <span class="badge @GetPriorityBadgeClass() ml-1">P@Issue.Priority</span>
+                    <BbBadge Class="@($"{GetPriorityBadgeClass()} ml-1")">P@Issue.Priority</BbBadge>
                 }
                 @if (_session != null)
                 {
-                    <span class="badge bg-status-success ml-1">Session Active</span>
+                    <BbBadge Class="bg-green-600 text-white border-transparent ml-1">Session Active</BbBadge>
                 }
             </div>
 
@@ -78,7 +78,7 @@
                 <div class="border-top pt-3 mt-3">
                     <h6>Claude Code Session</h6>
                     <div class="mb-2">
-                        <span class="badge @GetSessionStatusBadgeClass()">@_session.Status</span>
+                        <BbBadge Class="@GetSessionStatusBadgeClass()">@_session.Status</BbBadge>
                         <BbButton Variant="ButtonVariant.Outline" Size="ButtonSize.Small" Class="ml-2" Href="@($"/session/{_session.Id}")">
                             Open Chat
                         </BbButton>
@@ -102,8 +102,8 @@
                 WorkingDirectory="@_cloneInfo?.Path"
                 ShowBorder="true"
                 ShowEmptyState="false" />
-        </div>
-        <div class="card-footer">
+        </BbCardContent>
+        <BbCardFooter>
             @if (_session != null)
             {
                 <div class="flex flex-wrap gap-2">
@@ -168,37 +168,28 @@
                     <BbAlertDescription>@_errorMessage</BbAlertDescription>
                 </BbAlert>
             }
-        </div>
+        </BbCardFooter>
 
-        @if (_showDeleteConfirmation)
-        {
-            <div class="modal-backdrop fade show" style="background-color: rgba(0,0,0,0.5);"></div>
-            <div class="modal fade show block" tabindex="-1">
-                <div class="modal-dialog modal-dialog-centered">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h5 class="modal-title">Delete Issue</h5>
-                            <button type="button" class="btn-close" @onclick="HideDeleteConfirmation"></button>
-                        </div>
-                        <div class="modal-body">
-                            <p>Are you sure you want to delete issue <strong>@Issue.Id</strong>?</p>
-                            <p class="mb-0">This action cannot be undone.</p>
-                        </div>
-                        <div class="modal-footer">
-                            <BbButton Variant="ButtonVariant.Secondary" OnClick="HideDeleteConfirmation">Cancel</BbButton>
-                            <BbButton Variant="ButtonVariant.Destructive" OnClick="DeleteIssue" Disabled="@_isLoading">
-                                @if (_isLoading)
-                                {
-                                    <BbSpinner Size="SpinnerSize.Small" Class="mr-1" />
-                                }
-                                Delete Issue
-                            </BbButton>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        }
-</div>
+        <BbAlertDialog Open="@_showDeleteConfirmation" OnOpenChange="v => { if (!v) HideDeleteConfirmation(); }">
+            <BbAlertDialogContent>
+                <BbAlertDialogHeader>
+                    <BbAlertDialogTitle>Delete Issue</BbAlertDialogTitle>
+                    <BbAlertDialogDescription>
+                        <p>Are you sure you want to delete issue <strong>@Issue.Id</strong>?</p>
+                        <p class="mb-0">This action cannot be undone.</p>
+                    </BbAlertDialogDescription>
+                </BbAlertDialogHeader>
+                <BbAlertDialogFooter>
+                    <BbAlertDialogCancel>
+                        <BbButton Variant="ButtonVariant.Outline" Disabled="@_isLoading">Cancel</BbButton>
+                    </BbAlertDialogCancel>
+                    <BbButton Variant="ButtonVariant.Destructive" OnClick="DeleteIssue" Loading="@_isLoading">
+                        Delete Issue
+                    </BbButton>
+                </BbAlertDialogFooter>
+            </BbAlertDialogContent>
+        </BbAlertDialog>
+</BbCard>
 
 
 @code {
@@ -444,36 +435,36 @@
 
     private string GetTypeBadgeClass() => Issue.Type switch
     {
-        IssueType.Feature => "bg-primary",
-        IssueType.Bug => "bg-danger",
-        IssueType.Task => "bg-info",
-        IssueType.Chore => "bg-dark",
-        _ => "bg-secondary"
+        IssueType.Feature => "bg-primary text-primary-foreground border-transparent",
+        IssueType.Bug => "bg-destructive text-destructive-foreground border-transparent",
+        IssueType.Task => "bg-blue-500 text-white border-transparent",
+        IssueType.Chore => "bg-secondary text-secondary-foreground border-transparent",
+        _ => "bg-secondary text-secondary-foreground border-transparent"
     };
 
     private string GetStatusBadgeClass() => Issue.Status switch
     {
-        IssueStatus.Open => "bg-info",
-        IssueStatus.Progress => "bg-primary",
-        IssueStatus.Review => "bg-info",
-        IssueStatus.Complete => "bg-success",
-        IssueStatus.Closed => "bg-success",
-        IssueStatus.Archived => "bg-light text-dark",
-        IssueStatus.Deleted => "bg-danger",
-        _ => "bg-secondary"
+        IssueStatus.Open => "bg-blue-500 text-white border-transparent",
+        IssueStatus.Progress => "bg-primary text-primary-foreground border-transparent",
+        IssueStatus.Review => "bg-blue-500 text-white border-transparent",
+        IssueStatus.Complete => "bg-green-600 text-white border-transparent",
+        IssueStatus.Closed => "bg-green-600 text-white border-transparent",
+        IssueStatus.Archived => "bg-secondary text-secondary-foreground border-transparent",
+        IssueStatus.Deleted => "bg-destructive text-destructive-foreground border-transparent",
+        _ => "bg-secondary text-secondary-foreground border-transparent"
     };
 
     private string GetPriorityBadgeClass() => Issue.Priority switch
     {
-        0 => "bg-danger",
-        1 => "bg-warning text-dark",
-        2 => "bg-info",
-        3 => "bg-secondary",
-        4 => "bg-light text-dark",
-        _ => "bg-secondary"
+        0 => "bg-destructive text-destructive-foreground border-transparent",
+        1 => "bg-amber-500 text-white border-transparent",
+        2 => "bg-blue-500 text-white border-transparent",
+        3 => "bg-secondary text-secondary-foreground border-transparent",
+        4 => "bg-secondary text-secondary-foreground border-transparent",
+        _ => "bg-secondary text-secondary-foreground border-transparent"
     };
 
-    private string GetSessionStatusBadgeClass() => _session?.Status.ToBadgeClass() ?? "bg-secondary";
+    private string GetSessionStatusBadgeClass() => _session?.Status.ToBbBadgeClass() ?? "bg-secondary text-secondary-foreground border-transparent";
 
     private async Task SetupSignalRConnectionAsync()
     {

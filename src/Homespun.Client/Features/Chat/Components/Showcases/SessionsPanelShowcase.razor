@@ -7,10 +7,12 @@
     <h3>Component Overview</h3>
     <div class="showcase-item">
         <div class="showcase-preview">
-            <div class="alert alert-info mb-0">
-                <strong>SessionsPanel</strong> is a unified panel for managing Claude Code agent sessions.
-                It displays session information with real-time updates via SignalR.
-            </div>
+            <BbAlert Variant="AlertVariant.Info">
+                <BbAlertDescription>
+                    <strong>SessionsPanel</strong> is a unified panel for managing Claude Code agent sessions.
+                    It displays session information with real-time updates via SignalR.
+                </BbAlertDescription>
+            </BbAlert>
         </div>
     </div>
 </div>
@@ -21,23 +23,23 @@
         <div class="showcase-preview">
             <ul class="list-unstyled mb-0">
                 <li class="mb-2">
-                    <span class="badge bg-primary me-2">Unified</span>
+                    <BbBadge Variant="BadgeVariant.Default" Class="me-2">Unified</BbBadge>
                     Single component for both global and project-specific views
                 </li>
                 <li class="mb-2">
-                    <span class="badge bg-info me-2">Grouping</span>
+                    <BbBadge Class="bg-blue-500 text-white border-transparent me-2">Grouping</BbBadge>
                     Groups by project (global) or by status (project-specific)
                 </li>
                 <li class="mb-2">
-                    <span class="badge bg-success me-2">Real-time</span>
+                    <BbBadge Class="bg-green-600 text-white border-transparent me-2">Real-time</BbBadge>
                     SignalR integration for live status updates
                 </li>
                 <li class="mb-2">
-                    <span class="badge bg-danger me-2">Stop</span>
+                    <BbBadge Variant="BadgeVariant.Destructive" Class="me-2">Stop</BbBadge>
                     Ability to stop running sessions
                 </li>
                 <li class="mb-2">
-                    <span class="badge bg-secondary me-2">Navigate</span>
+                    <BbBadge Variant="BadgeVariant.Secondary" Class="me-2">Navigate</BbBadge>
                     Quick access to session chat interface
                 </li>
             </ul>
@@ -50,37 +52,37 @@
     <div class="showcase-item">
         <div class="showcase-label">Global View (no ProjectId parameter)</div>
         <div class="showcase-preview">
-            <div class="card" style="max-width: 500px;">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <span>Project Alpha</span>
-                    <span class="badge bg-secondary">2 sessions</span>
-                </div>
-                <div class="card-body">
+            <BbCard style="max-width: 500px;">
+                <BbCardHeader Class="d-flex justify-content-between align-items-center">
+                    <BbCardTitle>Project Alpha</BbCardTitle>
+                    <BbBadge Variant="BadgeVariant.Secondary">2 sessions</BbBadge>
+                </BbCardHeader>
+                <BbCardContent>
                     <p class="text-text-muted text-sm mb-0">
                         Sessions are grouped by project name and sorted by status priority within each group.
                     </p>
-                </div>
-            </div>
+                </BbCardContent>
+            </BbCard>
         </div>
     </div>
 
     <div class="showcase-item">
         <div class="showcase-label">Project View (with ProjectId parameter)</div>
         <div class="showcase-preview">
-            <div class="card" style="max-width: 500px;">
-                <div class="card-header d-flex justify-content-between align-items-center">
+            <BbCard style="max-width: 500px;">
+                <BbCardHeader Class="d-flex justify-content-between align-items-center">
                     <div class="d-flex align-items-center gap-2">
                         <span class="status-dot bg-success"></span>
-                        <span>Working</span>
+                        <BbCardTitle>Working</BbCardTitle>
                     </div>
-                    <span class="badge bg-secondary">3 sessions</span>
-                </div>
-                <div class="card-body">
+                    <BbBadge Variant="BadgeVariant.Secondary">3 sessions</BbBadge>
+                </BbCardHeader>
+                <BbCardContent>
                     <p class="text-text-muted text-sm mb-0">
                         Sessions are grouped by status (Plan Ready, Question, Waiting, Working, etc.) and sorted by recent activity.
                     </p>
-                </div>
-            </div>
+                </BbCardContent>
+            </BbCard>
         </div>
     </div>
 </div>
@@ -90,22 +92,22 @@
     <div class="showcase-item">
         <div class="showcase-label">Session card with full details</div>
         <div class="showcase-preview">
-            <div class="card" style="max-width: 400px;">
-                <div class="card-header d-flex justify-content-between align-items-center">
+            <BbCard style="max-width: 400px;">
+                <BbCardHeader Class="d-flex justify-content-between align-items-center">
                     <div class="d-flex align-items-center gap-2">
-                        <span class="badge bg-warning text-dark">Issue</span>
-                        <span class="fw-medium">Fix authentication bug</span>
+                        <BbBadge Class="bg-amber-500 text-white border-transparent">Issue</BbBadge>
+                        <BbCardTitle>Fix authentication bug</BbCardTitle>
                     </div>
                     <span class="status-dot bg-success" style="width: 10px; height: 10px; border-radius: 50%;"></span>
-                </div>
-                <div class="card-body">
+                </BbCardHeader>
+                <BbCardContent>
                     <div class="mb-2 small">
                         <span class="text-text-muted">Mode:</span>
-                        <span class="badge bg-success ms-1">Build</span>
+                        <BbBadge Class="bg-green-600 text-white border-transparent ms-1">Build</BbBadge>
                     </div>
                     <div class="mb-2 small">
                         <span class="text-text-muted">Status:</span>
-                        <span class="badge bg-success ms-1">Working</span>
+                        <BbBadge Class="bg-green-600 text-white border-transparent ms-1">Working</BbBadge>
                     </div>
                     <div class="mb-2 small">
                         <span class="text-text-muted">Started:</span>
@@ -115,16 +117,16 @@
                         <span class="text-text-muted">Messages:</span>
                         <span class="ms-1">42</span>
                     </div>
-                </div>
-                <div class="card-footer d-flex gap-2">
-                    <a href="#" class="btn btn-sm btn-outline-primary">
+                </BbCardContent>
+                <BbCardFooter Class="d-flex gap-2">
+                    <BbButton Variant="ButtonVariant.Outline" Size="ButtonSize.Small" Href="#">
                         <LucideIcon Name="message-circle" Size="14" Class="me-1" />Chat
-                    </a>
-                    <button class="btn btn-sm btn-outline-danger">
+                    </BbButton>
+                    <BbButton Variant="ButtonVariant.Destructive" Size="ButtonSize.Small">
                         <LucideIcon Name="stop-circle" Size="14" Class="me-1" />Stop
-                    </button>
-                </div>
-            </div>
+                    </BbButton>
+                </BbCardFooter>
+            </BbCard>
         </div>
     </div>
 </div>

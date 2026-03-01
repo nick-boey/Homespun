@@ -3,15 +3,11 @@
 <div class="agent-selector">
     <div class="d-flex gap-2 align-items-end">
         <div class="flex-grow-1">
-            <label class="form-label small mb-1">Agent</label>
-            <select class="form-select form-select-sm" disabled="@Disabled">
-                <option value="">None (no prompt)</option>
-                <option value="build" selected>Build (Build)</option>
-                <option value="plan">Plan (Plan)</option>
-                <option value="review">Review (Build)</option>
-            </select>
+            <BbLabel Class="small mb-1">Agent</BbLabel>
+            <BbSelect TValue="string" @bind-Value="_selected" Options="_options"
+                      Disabled="@Disabled" Placeholder="None (no prompt)" />
         </div>
-        <button class="btn btn-sm btn-success" disabled="@(Disabled || IsStarting)">
+        <BbButton Variant="ButtonVariant.Default" Size="ButtonSize.Small" Disabled="@(Disabled || IsStarting)">
             @if (IsStarting)
             {
                 <BbSpinner Size="SpinnerSize.Small" Class="me-1" />
@@ -22,7 +18,7 @@
                 <LucideIcon Name="play" Size="14" Class="me-1" />
                 <span>Start</span>
             }
-        </button>
+        </BbButton>
     </div>
 </div>
 
@@ -32,4 +28,13 @@
 
     [Parameter]
     public bool IsStarting { get; set; }
+
+    private string _selected = "build";
+
+    private static readonly List<SelectOption<string>> _options =
+    [
+        new("build", "Build (Build)"),
+        new("plan", "Plan (Plan)"),
+        new("review", "Review (Build)"),
+    ];
 }

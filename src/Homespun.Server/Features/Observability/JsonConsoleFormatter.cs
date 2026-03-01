@@ -64,7 +64,7 @@ public sealed class JsonConsoleFormatter : ConsoleFormatter
 
         if (logEntry.Exception is not null)
         {
-            logObject["Exception"] = logEntry.Exception.ToString()?.Replace(Environment.NewLine, " ");
+            logObject["Exception"] = logEntry.Exception.ToString()?.Replace("\r\n", " ").Replace("\n", " ");
         }
 
         textWriter.WriteLine(JsonSerializer.Serialize(logObject));

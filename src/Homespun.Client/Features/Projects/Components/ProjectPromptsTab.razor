@@ -5,25 +5,25 @@
     <div class="d-flex gap-2">
         @if (_availableGlobalPrompts.Any())
         {
-            <div class="dropdown">
-                <BbButton Variant="ButtonVariant.Outline" Size="ButtonSize.Small" data-bs-toggle="dropdown" aria-expanded="false">
-                    <LucideIcon Name="files" Size="14" Class="me-1" />
-                    Copy from Global
-                </BbButton>
-                <ul class="dropdown-menu dropdown-menu-end">
+            <BbDropdownMenu>
+                <BbDropdownMenuTrigger>
+                    <BbButton Variant="ButtonVariant.Outline" Size="ButtonSize.Small">
+                        <LucideIcon Name="files" Size="14" Class="me-1" />
+                        Copy from Global
+                    </BbButton>
+                </BbDropdownMenuTrigger>
+                <BbDropdownMenuContent Align="BlazorBlueprint.Primitives.PopoverAlign.End">
                     @foreach (var globalPrompt in _availableGlobalPrompts)
                     {
-                        <li>
-                            <button class="dropdown-item" @onclick="() => CopyFromGlobal(globalPrompt)">
-                                @globalPrompt.Name
-                                <span class="badge @(globalPrompt.Mode == SessionMode.Plan ? "bg-info" : "bg-success") ms-2">
-                                    @globalPrompt.Mode
-                                </span>
-                            </button>
-                        </li>
+                        <BbDropdownMenuItem OnClick="() => CopyFromGlobal(globalPrompt)">
+                            @globalPrompt.Name
+                            <BbBadge Class="@(globalPrompt.Mode == SessionMode.Plan ? "bg-blue-500 text-white border-transparent ms-2" : "bg-green-600 text-white border-transparent ms-2")">
+                                @globalPrompt.Mode
+                            </BbBadge>
+                        </BbDropdownMenuItem>
                     }
-                </ul>
-            </div>
+                </BbDropdownMenuContent>
+            </BbDropdownMenu>
         }
         <BbButton Variant="ButtonVariant.Default" Size="ButtonSize.Small" OnClick="ShowAddModal">
             <LucideIcon Name="plus" Size="14" Class="me-1" />
@@ -53,14 +53,14 @@ else
         @foreach (var prompt in _prompts)
         {
             <div class="col-md-6 col-lg-4 mb-3">
-                <div class="card h-100">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <span class="fw-bold">@prompt.Name</span>
-                        <span class="badge @(prompt.Mode == SessionMode.Plan ? "bg-info" : "bg-success")">
+                <BbCard Class="h-100">
+                    <BbCardHeader Class="d-flex justify-content-between align-items-center">
+                        <BbCardTitle>@prompt.Name</BbCardTitle>
+                        <BbBadge Class="@(prompt.Mode == SessionMode.Plan ? "bg-blue-500 text-white border-transparent" : "bg-green-600 text-white border-transparent")">
                             @prompt.Mode
-                        </span>
-                    </div>
-                    <div class="card-body">
+                        </BbBadge>
+                    </BbCardHeader>
+                    <BbCardContent>
                         @if (!string.IsNullOrEmpty(prompt.InitialMessage))
                         {
                             <pre class="prompt-preview mb-0">@TruncateMessage(prompt.InitialMessage)</pre>
@@ -69,16 +69,16 @@ else
                         {
                             <p class="text-muted mb-0"><em>No initial message configured</em></p>
                         }
-                    </div>
-                    <div class="card-footer d-flex justify-content-end gap-2">
+                    </BbCardContent>
+                    <BbCardFooter Class="d-flex justify-content-end gap-2">
                         <BbButton Variant="ButtonVariant.Outline" Size="ButtonSize.Small" OnClick="() => ShowEditModal(prompt)">
                             Edit
                         </BbButton>
                         <BbButton Variant="ButtonVariant.Destructive" Size="ButtonSize.Small" OnClick="() => ShowDeleteConfirmation(prompt)">
                             Delete
                         </BbButton>
-                    </div>
-                </div>
+                    </BbCardFooter>
+                </BbCard>
             </div>
         }
     </div>
@@ -91,23 +91,20 @@ else
         </BbDialogHeader>
         <BbDialogBody>
             <div class="mb-3">
-                <label class="form-label">Name</label>
-                <input type="text" class="form-control" @bind="_modalName" placeholder="e.g., Plan, Build, Review" />
+                <BbLabel>Name</BbLabel>
+                <BbInput @bind-Value="_modalName" Placeholder="e.g., Plan, Build, Review" />
             </div>
             <div class="mb-3">
-                <label class="form-label">Mode</label>
-                <select class="form-select" @bind="_modalMode">
-                    <option value="@SessionMode.Plan">Plan (Read-only tools)</option>
-                    <option value="@SessionMode.Build">Build (Full access)</option>
-                </select>
+                <BbLabel>Mode</BbLabel>
+                <BbSelect TValue="SessionMode" @bind-Value="_modalMode" Options="_modeOptions" />
                 <div class="form-text">
                     Plan mode restricts the agent to read-only tools. Build mode allows code editing.
                 </div>
             </div>
             <div class="mb-3">
-                <label class="form-label">Initial Message Template</label>
-                <textarea class="form-control font-monospace" rows="12" @bind="_modalMessage"
-                    placeholder="Enter the initial message to send to the agent..."></textarea>
+                <BbLabel>Initial Message Template</BbLabel>
+                <BbTextarea Class="font-monospace" @bind-Value="_modalMessage"
+                            Placeholder="Enter the initial message to send to the agent..." />
                 <div class="form-text">
                     Available placeholders: <code>@("{{title}}")</code>, <code>@("{{id}}")</code>,
                     <code>@("{{type}}")</code>, <code>@("{{branch}}")</code>, <code>@("{{description}}")</code>
@@ -173,6 +170,12 @@ else
     private string _modalName = string.Empty;
     private SessionMode _modalMode = SessionMode.Build;
     private string _modalMessage = string.Empty;
+
+    private static readonly List<SelectOption<SessionMode>> _modeOptions =
+    [
+        new(SessionMode.Plan, "Plan (Read-only tools)"),
+        new(SessionMode.Build, "Build (Full access)"),
+    ];
 
     protected override async Task OnInitializedAsync()
     {

@@ -47,17 +47,17 @@
         <div class="showcase-preview">
             <div class="max-w-md">
                 <div class="mb-3">
-                    <label class="form-label text-sm mb-1">Agent Name</label>
-                    <input type="text" class="form-control form-control-sm" value="Build Agent" readonly />
+                    <BbLabel Class="text-sm mb-1">Agent Name</BbLabel>
+                    <BbInput @bind-Value="_agentName" Disabled="true" />
                 </div>
                 <div class="mb-3">
-                    <label class="form-label text-sm mb-1">Model</label>
+                    <BbLabel Class="text-sm mb-1">Model</BbLabel>
                     <ModelSelector
                         Id="form-context"
                         SelectedModel="@_selectedModel4"
                         SelectedModelChanged="@(m => _selectedModel4 = m)" />
                 </div>
-                <button class="btn btn-primary btn-sm">Start Session</button>
+                <BbButton Size="ButtonSize.Small">Start Session</BbButton>
             </div>
         </div>
     </div>
@@ -68,4 +68,5 @@
     private string _selectedModel2 = "sonnet";
     private string _selectedModel3 = "haiku";
     private string _selectedModel4 = "opus";
+    private string _agentName = "Build Agent";
 }

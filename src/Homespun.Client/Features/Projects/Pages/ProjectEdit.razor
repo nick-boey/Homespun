@@ -24,17 +24,17 @@ else
                 <h5>Project Information</h5>
 
                 <div class="mb-3">
-                    <label class="form-label">Repository</label>
+                    <BbLabel>Repository</BbLabel>
                     <p class="form-control-plaintext">@_gitHubOwner/@_gitHubRepo</p>
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label">Default Branch</label>
+                    <BbLabel>Default Branch</BbLabel>
                     <p class="form-control-plaintext">@_defaultBranch</p>
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label">Local Path</label>
+                    <BbLabel>Local Path</BbLabel>
                     <p class="form-control-plaintext text-text-muted" style="font-size: 0.9em;">@_localPath</p>
                 </div>
             </div>
@@ -44,10 +44,9 @@ else
                 <p class="text-text-muted text-sm">Configure the default settings for Claude Code sessions in this project.</p>
 
                 <div class="mb-3">
-                    <label for="defaultModel" class="form-label">Default Model</label>
-                    <input type="text" class="form-control" id="defaultModel"
-                           @bind="_defaultModel"
-                           placeholder="sonnet" />
+                    <BbLabel For="defaultModel">Default Model</BbLabel>
+                    <BbInput Id="defaultModel" @bind-Value="_defaultModel"
+                             Placeholder="sonnet" />
                     <div class="form-text">
                         Model identifier (e.g., <code>opus</code>, <code>sonnet</code>, <code>haiku</code>).
                         Leave empty to use global default.
@@ -58,8 +57,8 @@ else
 
         <hr />
 
-        <button type="submit" class="btn btn-primary">Save</button>
-        <a href="projects" class="btn btn-secondary">Cancel</a>
+        <BbButton Type="ButtonType.Submit">Save</BbButton>
+        <BbButton Variant="ButtonVariant.Secondary" Href="projects">Cancel</BbButton>
     </form>
 }
 

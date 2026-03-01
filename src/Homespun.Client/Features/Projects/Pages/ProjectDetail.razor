@@ -45,62 +45,34 @@
         </div>
 
         @* Tab Navigation *@
-        <ul class="nav nav-tabs mb-3">
-            <li class="nav-item">
-                <a class="nav-link @(_activeTab == "issues" ? "active" : "")"
-                   href="/projects/@Id"
-                   @onclick="SwitchToIssuesTab"
-                   @onclick:preventDefault>
+        <BbTabs Value="@_activeTab" ValueChanged="HandleTabChange" ActivationMode="BlazorBlueprint.Primitives.Tabs.TabsActivationMode.Manual" Class="mb-3">
+            <BbTabsList>
+                <BbTabsTrigger Value="issues">
                     <LucideIcon Name="layout-list" Size="14" Class="me-1"/>
                     Issues
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link @(_activeTab == "branches" ? "active" : "")"
-                   href="/projects/@Id/branches"
-                   @onclick="SwitchToBranchesTab"
-                   @onclick:preventDefault>
+                </BbTabsTrigger>
+                <BbTabsTrigger Value="branches">
                     <LucideIcon Name="git-branch" Size="14" Class="me-1"/>
                     Branches
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link @(_activeTab == "agents" ? "active" : "")"
-                   href="/projects/@Id/agents"
-                   @onclick="SwitchToAgentsTab"
-                   @onclick:preventDefault>
+                </BbTabsTrigger>
+                <BbTabsTrigger Value="agents">
                     <LucideIcon Name="bot" Size="14" Class="me-1"/>
                     Agents
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link @(_activeTab == "prompts" ? "active" : "")"
-                   href="/projects/@Id/prompts"
-                   @onclick="SwitchToPromptsTab"
-                   @onclick:preventDefault>
+                </BbTabsTrigger>
+                <BbTabsTrigger Value="prompts">
                     <LucideIcon Name="message-square-text" Size="14" Class="me-1"/>
                     Prompts
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link @(_activeTab == "secrets" ? "active" : "")"
-                   href="/projects/@Id/secrets"
-                   @onclick="SwitchToSecretsTab"
-                   @onclick:preventDefault>
+                </BbTabsTrigger>
+                <BbTabsTrigger Value="secrets">
                     <LucideIcon Name="key-round" Size="14" Class="me-1"/>
                     Secrets
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link @(_activeTab == "settings" ? "active" : "")"
-                   href="/projects/@Id/settings"
-                   @onclick="SwitchToSettingsTab"
-                   @onclick:preventDefault>
+                </BbTabsTrigger>
+                <BbTabsTrigger Value="settings">
                     <LucideIcon Name="settings" Size="14" Class="me-1"/>
                     Settings
-                </a>
-            </li>
-        </ul>
+                </BbTabsTrigger>
+            </BbTabsList>
+        </BbTabs>
 
         @if (_activeTab == "issues")
         {
@@ -138,9 +110,9 @@
                     <BbDialogTitle>Sync Conflict</BbDialogTitle>
                 </BbDialogHeader>
                 <BbDialogBody>
-                    <div class="alert alert-warning">
-                        <strong>Unable to pull changes from @_project?.DefaultBranch</strong>
-                    </div>
+                    <BbAlert Variant="AlertVariant.Warning">
+                        <BbAlertDescription><strong>Unable to pull changes from @_project?.DefaultBranch</strong></BbAlertDescription>
+                    </BbAlert>
                     <p class="small text-muted">@_fleecePullConflict?.ErrorMessage</p>
                     <p>Choose how to resolve this conflict:</p>
                 </BbDialogBody>
@@ -159,9 +131,9 @@
                     <BbDialogTitle>Non-Fleece Changes Detected</BbDialogTitle>
                 </BbDialogHeader>
                 <BbDialogBody>
-                    <div class="alert alert-warning">
-                        <strong>Your local branch is behind the remote</strong>
-                    </div>
+                    <BbAlert Variant="AlertVariant.Warning">
+                        <BbAlertDescription><strong>Your local branch is behind the remote</strong></BbAlertDescription>
+                    </BbAlert>
                     <p>
                         The sync cannot complete because your local branch needs to pull changes from the remote,
                         but you have uncommitted changes outside the <code>.fleece/</code> folder that may cause conflicts.
@@ -339,12 +311,11 @@
         NavigationManager.NavigateTo(newUrl, forceLoad: false, replace: true);
     }
 
-    private void SwitchToIssuesTab() => SwitchTab("issues");
-    private void SwitchToBranchesTab() => SwitchTab("branches");
-    private void SwitchToAgentsTab() => SwitchTab("agents");
-    private void SwitchToPromptsTab() => SwitchTab("prompts");
-    private void SwitchToSecretsTab() => SwitchTab("secrets");
-    private void SwitchToSettingsTab() => SwitchTab("settings");
+    private void HandleTabChange(string? tab)
+    {
+        if (!string.IsNullOrEmpty(tab))
+            SwitchTab(tab);
+    }
 
     #endregion
 

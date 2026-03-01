@@ -20,10 +20,10 @@
         <div class="session-not-found py-5 text-center">
             <h2>Session Not Found</h2>
             <p class="text-muted">The archived session you're looking for doesn't exist or has been deleted.</p>
-            <button class="btn btn-primary" @onclick="GoBack">
+            <BbButton OnClick="GoBack">
                 <LucideIcon Name="arrow-left" Size="14" Class="me-1" />
                 Go Back
-            </button>
+            </BbButton>
         </div>
     }
     else
@@ -38,9 +38,9 @@
                     <div class="d-flex gap-2 align-items-center flex-wrap">
                         @if (_summary.Mode.HasValue)
                         {
-                            <span class="badge @(_summary.Mode == SessionMode.Plan ? "bg-info" : "bg-success")">
+                            <BbBadge Class="@(_summary.Mode == SessionMode.Plan ? "bg-blue-500 text-white border-transparent" : "bg-green-600 text-white border-transparent")">
                                 @_summary.Mode
-                            </span>
+                            </BbBadge>
                         }
                         @if (!string.IsNullOrEmpty(_summary.Model))
                         {
@@ -58,13 +58,13 @@
                     </div>
                 </div>
                 <div class="btn-group">
-                    <button class="btn btn-outline-secondary btn-sm" @onclick="GoBack">
+                    <BbButton Variant="ButtonVariant.Outline" Size="ButtonSize.Small" OnClick="GoBack">
                         <LucideIcon Name="arrow-left" Size="14" Class="me-1" />
                         Back
-                    </button>
+                    </BbButton>
                     @if (!string.IsNullOrEmpty(_workingDirectory))
                     {
-                        <button class="btn btn-primary btn-sm" @onclick="ResumeSession" disabled="@_isResuming">
+                        <BbButton Size="ButtonSize.Small" OnClick="ResumeSession" Disabled="@_isResuming">
                             @if (_isResuming)
                             {
                                 <BbSpinner Size="SpinnerSize.Small" Class="me-1" />
@@ -74,7 +74,7 @@
                                 <LucideIcon Name="play" Size="14" Class="me-1" />
                             }
                             Resume
-                        </button>
+                        </BbButton>
                     }
                 </div>
             </div>
@@ -82,7 +82,9 @@
 
         @if (!string.IsNullOrEmpty(_errorMessage))
         {
-            <div class="alert alert-danger">@_errorMessage</div>
+            <BbAlert Variant="AlertVariant.Danger">
+                <BbAlertDescription>@_errorMessage</BbAlertDescription>
+            </BbAlert>
         }
 
         <div class="messages-container">

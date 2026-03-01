@@ -30,7 +30,7 @@
         <div class="session-not-found">
             <h2>Session Not Found</h2>
             <p>The session you're looking for doesn't exist or has ended.</p>
-            <a href="/agents" class="btn btn-primary">Back to Agents</a>
+            <BbButton Href="/agents">Back to Agents</BbButton>
         </div>
     }
     else
@@ -39,16 +39,16 @@
             <div class="session-info">
                 <h1>@(_issue?.Title ?? "Claude Code Session")</h1>
                 <div class="session-meta">
-                    <span class="badge @GetModeBadgeClass(_session.Mode)">@_session.Mode</span>
-                    <span class="badge @GetStatusBadgeClass(_session.Status)">@_session.Status.ToDisplayLabel()</span>
+                    <BbBadge Class="@GetModeBadgeClass(_session.Mode)">@_session.Mode</BbBadge>
+                    <BbBadge Class="@GetStatusBadgeClass(_session.Status)">@_session.Status.ToDisplayLabel()</BbBadge>
                     <code class="model-name">@_session.Model</code>
                 </div>
             </div>
             <div class="session-actions">
-                <button class="btn btn-outline-danger btn-sm" @onclick="StopSession"
-                        disabled="@(_session.Status == ClaudeSessionStatus.Stopped)">
+                <BbButton Variant="ButtonVariant.Destructive" Size="ButtonSize.Small" OnClick="StopSession"
+                        Disabled="@(_session.Status == ClaudeSessionStatus.Stopped)">
                     Stop Session
-                </button>
+                </BbButton>
             </div>
         </div>
 
@@ -58,9 +58,9 @@
                     @if (_showLoadHistoryButton)
                     {
                         <div class="load-history-banner">
-                            <button class="btn btn-outline btn-sm"
-                                    @onclick="LoadHistoryAsync"
-                                    disabled="@_isLoadingHistory">
+                            <BbButton Variant="ButtonVariant.Outline" Size="ButtonSize.Small"
+                                    OnClick="LoadHistoryAsync"
+                                    Disabled="@_isLoadingHistory">
                                 @if (_isLoadingHistory)
                                 {
                                     <BbSpinner Size="SpinnerSize.Small"/>
@@ -70,7 +70,7 @@
                                 {
                                     <span>Load @(_cachedMessageCount - _session.Messages.Count) previous messages</span>
                                 }
-                            </button>
+                            </BbButton>
                         </div>
                     }
                     @if (_session.Messages.Count == 0 && _session.Status != ClaudeSessionStatus.Running)
@@ -191,12 +191,12 @@
                                     <div class="error-actions">
                                         @if (_isRecoverable)
                                         {
-                                            <button class="btn btn-primary btn-sm" @onclick="ContinueSession">
+                                            <BbButton Size="ButtonSize.Small" OnClick="ContinueSession">
                                                 Continue Session
-                                            </button>
+                                            </BbButton>
                                         }
-                                        <button class="btn btn-warning btn-sm" @onclick="RestartContainer"
-                                                disabled="@_isRestartingContainer">
+                                        <BbButton Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" OnClick="RestartContainer"
+                                                Disabled="@_isRestartingContainer">
                                             @if (_isRestartingContainer)
                                             {
                                                 <BbSpinner Size="SpinnerSize.Small" Class="me-1"/>
@@ -206,7 +206,7 @@
                                             {
                                                 <span>Restart Container</span>
                                             }
-                                        </button>
+                                        </BbButton>
                                     </div>
                                 </div>
                             </div>
@@ -263,10 +263,10 @@
                                     </div>
                                 }
                                 <div class="question-actions">
-                                    <button class="btn btn-primary" @onclick="SubmitAnswers"
-                                            disabled="@(!CanSubmitAnswers())">
+                                    <BbButton OnClick="SubmitAnswers"
+                                            Disabled="@(!CanSubmitAnswers())">
                                         Submit Answers
-                                    </button>
+                                    </BbButton>
                                 </div>
                             </div>
                         }
@@ -357,12 +357,12 @@
                                 <option value="@prompt.Id">@prompt.Name</option>
                             }
                         </select>
-                        <button class="btn btn-outline-secondary btn-sm clear-context-btn"
-                                @onclick="ClearContext"
-                                disabled="@(_session.Status == ClaudeSessionStatus.Running || _session.Status == ClaudeSessionStatus.Stopped || _session.Messages.Count == 0)"
+                        <BbButton Variant="ButtonVariant.Outline" Size="ButtonSize.Small" Class="clear-context-btn"
+                                OnClick="ClearContext"
+                                Disabled="@(_session.Status == ClaudeSessionStatus.Running || _session.Status == ClaudeSessionStatus.Stopped || _session.Messages.Count == 0)"
                                 title="Clear context and start fresh (keeps message history)">
                             Clear Context
-                        </button>
+                        </BbButton>
                     </div>
                     <div class="input-row">
                     <textarea @bind="_inputMessage"
@@ -375,9 +375,9 @@
                         <div class="button-group">
                             @if (_session.Status == ClaudeSessionStatus.Running)
                             {
-                                <button class="btn btn-danger stop-button"
-                                        @onclick="InterruptSession"
-                                        disabled="@_isInterrupting"
+                                <BbButton Variant="ButtonVariant.Destructive" Class="stop-button"
+                                        OnClick="InterruptSession"
+                                        Disabled="@_isInterrupting"
                                         title="Interrupt the current execution (Escape)">
                                     @if (_isInterrupting)
                                     {
@@ -388,33 +388,32 @@
                                         <span class="stop-icon">&#9632;</span>
                                     }
                                     Interrupt
-                                </button>
+                                </BbButton>
                                 @if (!string.IsNullOrWhiteSpace(_inputMessage))
                                 {
-                                    <button class="btn btn-secondary queue-button"
-                                            @onclick="QueueMessage"
-                                            disabled="@(_pendingMessages.Count >= MaxQueuedMessages)"
+                                    <BbButton Variant="ButtonVariant.Secondary" Class="queue-button"
+                                            OnClick="QueueMessage"
+                                            Disabled="@(_pendingMessages.Count >= MaxQueuedMessages)"
                                             title="Queue this message to send after current processing completes">
                                         Queue @(_pendingMessages.Count > 0 ? $"({_pendingMessages.Count + 1})" : "")
-                                    </button>
+                                    </BbButton>
                                 }
                             }
                             else
                             {
-                                <button class="btn btn-primary send-button"
-                                        @onclick="SendMessage"
-                                        disabled="@(string.IsNullOrWhiteSpace(_inputMessage) || _session.Status == ClaudeSessionStatus.Stopped)">
+                                <BbButton Class="send-button"
+                                        OnClick="SendMessage"
+                                        Disabled="@(string.IsNullOrWhiteSpace(_inputMessage) || _session.Status == ClaudeSessionStatus.Stopped)">
                                     Send
-                                </button>
+                                </BbButton>
                             }
                         </div>
                     </div>
                     @if (_pendingMessages.Count > 0)
                     {
                         <div class="queued-messages-indicator">
-                            <span
-                                class="badge bg-secondary">@_pendingMessages.Count message@(_pendingMessages.Count > 1 ? "s" : "") queued</span>
-                            <button class="btn btn-link btn-sm" @onclick="ClearQueue">Clear queue</button>
+                            <BbBadge Variant="BadgeVariant.Secondary">@_pendingMessages.Count message@(_pendingMessages.Count > 1 ? "s" : "") queued</BbBadge>
+                            <BbButton Variant="ButtonVariant.Link" Size="ButtonSize.Small" OnClick="ClearQueue">Clear queue</BbButton>
                         </div>
                     }
                 </div>
@@ -446,7 +445,7 @@
                 @if (_debugMode)
                 {
                     <div class="debug-controls">
-                        <button class="btn btn-outline-secondary btn-sm" @onclick="ClearDebugLog">Clear Log</button>
+                        <BbButton Variant="ButtonVariant.Outline" Size="ButtonSize.Small" OnClick="ClearDebugLog">Clear Log</BbButton>
                     </div>
                     <div class="debug-log">
                         @if (_debugLog.Count == 0)
@@ -3030,12 +3029,12 @@
 
     private static string GetModeBadgeClass(SessionMode mode) => mode switch
     {
-        SessionMode.Plan => "bg-status-info",
-        SessionMode.Build => "bg-status-success",
-        _ => "bg-basalt-light"
+        SessionMode.Plan => "bg-blue-500 text-white border-transparent",
+        SessionMode.Build => "bg-green-600 text-white border-transparent",
+        _ => "bg-secondary text-secondary-foreground border-transparent"
     };
 
-    private static string GetStatusBadgeClass(ClaudeSessionStatus status) => status.ToBadgeClass();
+    private static string GetStatusBadgeClass(ClaudeSessionStatus status) => status.ToBbBadgeClass();
 
     private static string GetContentBlockClass(ClaudeContentType type) => type switch
     {

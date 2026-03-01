@@ -7,10 +7,12 @@
     <h3>Component Overview</h3>
     <div class="showcase-item">
         <div class="showcase-preview">
-            <div class="alert alert-info mb-0">
-                <strong>AgentStatusPanel</strong> displays the current status of a Claude Code agent session,
-                showing whether it's running, waiting for input, or has completed.
-            </div>
+            <BbAlert Variant="AlertVariant.Info">
+                <BbAlertDescription>
+                    <strong>AgentStatusPanel</strong> displays the current status of a Claude Code agent session,
+                    showing whether it's running, waiting for input, or has completed.
+                </BbAlertDescription>
+            </BbAlert>
         </div>
     </div>
 </div>
@@ -22,23 +24,23 @@
         <div class="showcase-preview">
             <div class="d-flex flex-column gap-3">
                 <div class="d-flex align-items-center gap-2">
-                    <span class="badge bg-success" style="min-width: 120px;">Running</span>
+                    <BbBadge Class="bg-green-600 text-white border-transparent" style="min-width: 120px;">Running</BbBadge>
                     <span class="text-text-muted text-sm">Agent is actively working</span>
                 </div>
                 <div class="d-flex align-items-center gap-2">
-                    <span class="badge bg-warning text-dark" style="min-width: 120px;">WaitingForInput</span>
+                    <BbBadge Class="bg-amber-500 text-white border-transparent" style="min-width: 120px;">WaitingForInput</BbBadge>
                     <span class="text-text-muted text-sm">Agent needs user response</span>
                 </div>
                 <div class="d-flex align-items-center gap-2">
-                    <span class="badge bg-secondary" style="min-width: 120px;">Completed</span>
+                    <BbBadge Variant="BadgeVariant.Secondary" style="min-width: 120px;">Completed</BbBadge>
                     <span class="text-text-muted text-sm">Session has finished</span>
                 </div>
                 <div class="d-flex align-items-center gap-2">
-                    <span class="badge bg-danger" style="min-width: 120px;">Error</span>
+                    <BbBadge Variant="BadgeVariant.Destructive" style="min-width: 120px;">Error</BbBadge>
                     <span class="text-text-muted text-sm">Session encountered an error</span>
                 </div>
                 <div class="d-flex align-items-center gap-2">
-                    <span class="badge bg-info" style="min-width: 120px;">Starting</span>
+                    <BbBadge Class="bg-blue-500 text-white border-transparent" style="min-width: 120px;">Starting</BbBadge>
                     <span class="text-text-muted text-sm">Session is initializing</span>
                 </div>
             </div>
@@ -51,22 +53,22 @@
     <div class="showcase-item">
         <div class="showcase-label">Status panel with session info</div>
         <div class="showcase-preview">
-            <div class="card" style="max-width: 300px;">
-                <div class="card-header">Session Status</div>
-                <div class="card-body">
+            <BbCard style="max-width: 300px;">
+                <BbCardHeader><BbCardTitle>Session Status</BbCardTitle></BbCardHeader>
+                <BbCardContent>
                     <div class="mb-2">
-                        <span class="badge bg-success">Running</span>
+                        <BbBadge Class="bg-green-600 text-white border-transparent">Running</BbBadge>
                     </div>
                     <dl class="text-sm mb-0">
                         <dt>Mode</dt>
-                        <dd><span class="badge bg-success">Build</span></dd>
+                        <dd><BbBadge Class="bg-green-600 text-white border-transparent">Build</BbBadge></dd>
                         <dt>Model</dt>
                         <dd><code>claude-3-opus</code></dd>
                         <dt>Started</dt>
                         <dd>10 minutes ago</dd>
                     </dl>
-                </div>
-            </div>
+                </BbCardContent>
+            </BbCard>
         </div>
     </div>
 </div>

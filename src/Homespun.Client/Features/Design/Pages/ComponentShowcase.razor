@@ -14,11 +14,13 @@
 
 @if (_component == null)
 {
-    <div class="alert alert-warning">
-        <h4>Component Not Found</h4>
-        <p>The component "@ComponentId" was not found in the registry.</p>
-        <a href="/design" class="btn btn-primary">Back to Design System</a>
-    </div>
+    <BbAlert Variant="AlertVariant.Warning">
+        <BbAlertTitle>Component Not Found</BbAlertTitle>
+        <BbAlertDescription>
+            <p>The component "@ComponentId" was not found in the registry.</p>
+            <BbButton Href="/design">Back to Design System</BbButton>
+        </BbAlertDescription>
+    </BbAlert>
 }
 else
 {
@@ -30,10 +32,10 @@ else
         <h1>@_component.Name</h1>
         <p class="text-text-secondary">@_component.Description</p>
         <div class="flex gap-2 mt-2">
-            <span class="badge bg-secondary">@_component.Category</span>
+            <BbBadge Variant="BadgeVariant.Secondary">@_component.Category</BbBadge>
             @foreach (var tag in _component.Tags)
             {
-                <span class="badge bg-tertiary">@tag</span>
+                <BbBadge Variant="BadgeVariant.Outline">@tag</BbBadge>
             }
         </div>
     </div>
@@ -120,10 +122,12 @@ else
                 break;
 
             default:
-                <div class="alert alert-info">
-                    <p>This component does not have a showcase implementation yet.</p>
-                    <p class="text-text-muted mt-2">Component path: <code>@_component.ComponentPath</code></p>
-                </div>
+                <BbAlert Variant="AlertVariant.Info">
+                    <BbAlertDescription>
+                        <p>This component does not have a showcase implementation yet.</p>
+                        <p class="text-text-muted mt-2">Component path: <code>@_component.ComponentPath</code></p>
+                    </BbAlertDescription>
+                </BbAlert>
                 break;
         }
     </div>

@@ -1,13 +1,4 @@
-<div class="relative">
-    <select class="form-select form-select-sm"
-            id="@($"model-selector-{Id}")"
-            value="@SelectedModel"
-            @onchange="OnModelChanged">
-        <option value="opus">Opus</option>
-        <option value="sonnet">Sonnet</option>
-        <option value="haiku">Haiku</option>
-    </select>
-</div>
+<BbSelect TValue="string" Value="@SelectedModel" ValueChanged="OnModelChanged" Options="_modelOptions" />
 
 @code {
     [Parameter]
@@ -19,9 +10,16 @@
     [Parameter]
     public string Id { get; set; } = "default";
 
-    private async Task OnModelChanged(ChangeEventArgs e)
+    private static readonly List<SelectOption<string>> _modelOptions =
+    [
+        new("opus", "Opus"),
+        new("sonnet", "Sonnet"),
+        new("haiku", "Haiku"),
+    ];
+
+    private async Task OnModelChanged(string? value)
     {
-        var newModel = e.Value?.ToString() ?? "opus";
+        var newModel = value ?? "opus";
         SelectedModel = newModel;
         await SelectedModelChanged.InvokeAsync(newModel);
     }
