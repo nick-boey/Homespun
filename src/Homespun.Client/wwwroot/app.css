@@ -1,4 +1,4 @@
-/* ==========================================================================
+﻿/* ==========================================================================
    Homespun Custom Styles
    
    Color Palette:
@@ -72,7 +72,7 @@
 :root,
 [data-theme="light"] {
     color-scheme: light;
-    
+
     /* Background Colors */
     --bg-primary: var(--color-white);
     --bg-secondary: var(--color-sand);
@@ -82,7 +82,7 @@
     --bg-hover: rgba(0, 0, 0, 0.05);
     --bg-selected: rgba(54, 163, 144, 0.15);
     --bg-card: var(--color-white);
-    
+
     /* Text Colors */
     --text-primary: var(--color-black);
     --text-secondary: var(--color-basalt-light);
@@ -101,12 +101,12 @@
     --border-color: #dee2e6;
     --border-color-light: #e9ecef;
     --border-selected: var(--color-lagoon);
-    
+
     /* Interactive Colors */
     --link-color: var(--color-ocean);
     --link-hover: var(--color-lagoon);
     --focus-ring: var(--color-ocean);
-    
+
     /* Button Colors */
     --btn-primary-bg: var(--color-lagoon);
     --btn-primary-text: var(--color-white);
@@ -117,7 +117,7 @@
     --btn-danger-bg: var(--color-red);
     --btn-danger-text: var(--color-white);
     --btn-danger-hover: var(--color-outback);
-    
+
     /* Status Colors */
     --status-success: var(--color-lagoon);
     --status-warning: var(--color-wattle);
@@ -138,13 +138,13 @@
     --section-past-bg: #e9ecef;
     --section-current-bg: rgba(255, 234, 118, 0.3);
     --section-future-bg: rgba(194, 255, 239, 0.3);
-    
+
     /* Form Colors */
     --input-bg: var(--color-white);
     --input-border: var(--border-color);
     --input-focus-border: var(--color-ocean);
     --input-placeholder: var(--color-basalt-light);
-    
+
     /* Misc */
     --scrollbar-thumb: var(--color-basalt-light);
     --scrollbar-track: var(--bg-tertiary);
@@ -159,7 +159,7 @@
 @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
         color-scheme: dark;
-        
+
         /* Background Colors */
         --bg-primary: var(--color-dark-background);
         --bg-secondary: var(--color-basalt);
@@ -169,7 +169,7 @@
         --bg-hover: rgba(255, 255, 255, 0.08);
         --bg-selected: rgba(54, 163, 144, 0.25);
         --bg-card: var(--color-basalt);
-        
+
         /* Text Colors */
         --text-primary: var(--color-white);
         --text-secondary: rgba(255, 255, 255, 0.7);
@@ -247,7 +247,7 @@
 
 [data-theme="dark"] {
     color-scheme: dark;
-    
+
     /* Background Colors */
     --bg-primary: var(--color-dark-background);
     --bg-secondary: var(--color-basalt);
@@ -257,7 +257,7 @@
     --bg-hover: rgba(255, 255, 255, 0.08);
     --bg-selected: rgba(54, 163, 144, 0.25);
     --bg-card: var(--color-basalt);
-    
+
     /* Text Colors */
     --text-primary: var(--color-white);
     --text-secondary: rgba(255, 255, 255, 0.7);
@@ -371,12 +371,29 @@ h1, h2, h3, h4, h5, h6 {
     color: var(--text-primary);
 }
 
-h1 { font-size: 1.5rem; }
-h2 { font-size: 1.25rem; }
-h3 { font-size: 1.125rem; }
-h4 { font-size: 1rem; }
-h5 { font-size: 0.9375rem; }
-h6 { font-size: 0.875rem; }
+h1 {
+    font-size: 1.5rem;
+}
+
+h2 {
+    font-size: 1.25rem;
+}
+
+h3 {
+    font-size: 1.125rem;
+}
+
+h4 {
+    font-size: 1rem;
+}
+
+h5 {
+    font-size: 0.9375rem;
+}
+
+h6 {
+    font-size: 0.875rem;
+}
 
 p {
     margin-top: 0;
@@ -387,569 +404,6 @@ small {
     font-size: 0.875rem;
 }
 
-/* ==========================================================================
-   Links
-   ========================================================================== */
-
-a {
-    color: var(--link-color);
-    text-decoration: none;
-    transition: color var(--transition-fast);
-}
-
-a:hover {
-    color: var(--link-hover);
-    text-decoration: underline;
-}
-
-/* ==========================================================================
-   Buttons
-   ========================================================================== */
-
-.btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--spacing-xs);
-    padding: var(--spacing-sm) var(--spacing-md);
-    font-family: var(--font-family-base);
-    font-size: 0.875rem;
-    font-weight: var(--font-weight-medium);
-    line-height: 1.5;
-    text-decoration: none;
-    border: 1px solid transparent;
-    border-radius: var(--radius-md);
-    cursor: pointer;
-    transition: all var(--transition-fast);
-}
-
-.btn:focus {
-    outline: none;
-    box-shadow: 0 0 0 3px rgba(81, 165, 193, 0.3);
-}
-
-.btn:focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 2px var(--focus-ring);
-}
-
-.btn-primary {
-    background-color: var(--btn-primary-bg);
-    color: var(--btn-primary-text);
-    border-color: var(--btn-primary-bg);
-}
-
-.btn-primary:hover {
-    background-color: var(--btn-primary-hover);
-    border-color: var(--btn-primary-hover);
-    color: var(--btn-primary-text);
-    text-decoration: none;
-}
-
-.btn-secondary {
-    background-color: var(--btn-secondary-bg);
-    color: var(--btn-secondary-text);
-    border-color: var(--btn-secondary-bg);
-}
-
-.btn-secondary:hover {
-    background-color: var(--btn-secondary-hover);
-    border-color: var(--btn-secondary-hover);
-    color: var(--btn-secondary-text);
-    text-decoration: none;
-}
-
-.btn-danger {
-    background-color: var(--btn-danger-bg);
-    color: var(--btn-danger-text);
-    border-color: var(--btn-danger-bg);
-}
-
-.btn-danger:hover {
-    background-color: var(--btn-danger-hover);
-    border-color: var(--btn-danger-hover);
-    color: var(--btn-danger-text);
-    text-decoration: none;
-}
-
-.btn-outline {
-    background-color: transparent;
-    color: var(--text-primary);
-    border-color: var(--border-color);
-}
-
-.btn-outline:hover {
-    background-color: var(--bg-hover);
-    text-decoration: none;
-}
-
-.btn-link {
-    background-color: transparent;
-    color: var(--link-color);
-    border-color: transparent;
-    padding: 0;
-}
-
-.btn-link:hover {
-    color: var(--link-hover);
-    text-decoration: underline;
-}
-
-.btn-sm {
-    padding: var(--spacing-xs) var(--spacing-sm);
-    font-size: 0.8125rem;
-}
-
-.btn-lg {
-    padding: var(--spacing-md) var(--spacing-lg);
-    font-size: 1rem;
-}
-
-/* ==========================================================================
-   Forms
-   ========================================================================== */
-
-.form-control {
-    display: block;
-    width: 100%;
-    padding: var(--spacing-sm) var(--spacing-md);
-    font-family: var(--font-family-base);
-    font-size: 0.875rem;
-    font-weight: var(--font-weight-normal);
-    line-height: 1.5;
-    color: var(--text-primary);
-    background-color: var(--input-bg);
-    border: 1px solid var(--input-border);
-    border-radius: var(--radius-md);
-    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
-}
-
-.form-control::placeholder {
-    color: var(--input-placeholder);
-}
-
-.form-control:focus,
-.form-select:focus {
-    outline: none;
-    border-color: var(--border-color-light);
-    box-shadow: none;
-}
-
-.form-control:focus-visible,
-.form-select:focus-visible {
-    outline: none;
-    border-color: var(--input-focus-border);
-    box-shadow: 0 0 0 2px var(--focus-ring);
-}
-
-.form-select {
-    display: block;
-    width: 100%;
-    padding: var(--spacing-sm) var(--spacing-md);
-    padding-right: calc(var(--spacing-md) + 1rem);
-    font-family: var(--font-family-base);
-    font-size: 0.875rem;
-    font-weight: var(--font-weight-normal);
-    line-height: 1.5;
-    color: var(--text-primary);
-    background-color: var(--input-bg);
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath fill='%23767676' d='M4.5 5.5L8 9l3.5-3.5'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right var(--spacing-sm) center;
-    border: 1px solid var(--input-border);
-    border-radius: var(--radius-md);
-    appearance: none;
-    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
-}
-
-.form-select:focus {
-    outline: none;
-    border-color: var(--border-color-light);
-    box-shadow: none;
-}
-
-.form-select:disabled {
-    background-color: var(--bg-tertiary);
-    cursor: not-allowed;
-    opacity: 0.6;
-}
-
-.form-control:disabled {
-    background-color: var(--bg-tertiary);
-    cursor: not-allowed;
-    opacity: 0.6;
-}
-
-.form-label {
-    display: block;
-    margin-bottom: var(--spacing-xs);
-    font-size: 0.8125rem;
-    font-weight: var(--font-weight-bold);
-    color: var(--text-primary);
-}
-
-.form-text {
-    display: block;
-    margin-top: var(--spacing-xs);
-    font-size: 0.8125rem;
-    color: var(--text-muted);
-}
-
-.form-check {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-sm);
-}
-
-.form-check-input {
-    width: 1rem;
-    height: 1rem;
-    margin: 0;
-    cursor: pointer;
-    accent-color: var(--color-lagoon);
-}
-
-.form-check-label {
-    cursor: pointer;
-}
-
-select.form-control {
-    appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath fill='%23767676' d='M4.5 5.5L8 9l3.5-3.5'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right var(--spacing-sm) center;
-    padding-right: calc(var(--spacing-md) + 1rem);
-}
-
-textarea.form-control {
-    min-height: 6rem;
-    resize: vertical;
-}
-
-/* Floating labels */
-.form-floating {
-    position: relative;
-}
-
-.form-floating > .form-control {
-    padding-top: 1.625rem;
-    padding-bottom: var(--spacing-xs);
-}
-
-.form-floating > .form-label {
-    position: absolute;
-    top: 0;
-    left: 0;
-    padding: var(--spacing-md);
-    pointer-events: none;
-    transform-origin: 0 0;
-    transition: opacity var(--transition-fast), transform var(--transition-fast);
-    color: var(--input-placeholder);
-    margin-bottom: 0;
-}
-
-.form-floating > .form-control:focus ~ .form-label,
-.form-floating > .form-control:not(:placeholder-shown) ~ .form-label {
-    transform: scale(0.85) translateY(-0.5rem);
-    opacity: 0.8;
-}
-
-.form-floating > .form-control-plaintext::placeholder,
-.form-floating > .form-control::placeholder {
-    color: transparent;
-}
-
-/* Validation states */
-.valid {
-    border-color: var(--status-success) !important;
-}
-
-.invalid {
-    border-color: var(--status-error) !important;
-}
-
-.validation-message {
-    color: var(--status-error);
-    font-size: 0.8125rem;
-    margin-top: var(--spacing-xs);
-}
-
-/* ==========================================================================
-   Cards
-   ========================================================================== */
-
-.card {
-    background-color: var(--bg-card);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-sm);
-}
-
-.card-header {
-    padding: var(--spacing-md);
-    border-bottom: 1px solid var(--border-color);
-    background-color: var(--bg-tertiary);
-    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-}
-
-.card-body {
-    padding: var(--spacing-md);
-}
-
-.card-footer {
-    padding: var(--spacing-md);
-    border-top: 1px solid var(--border-color);
-    background-color: var(--bg-tertiary);
-    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
-}
-
-/* ==========================================================================
-   Modals
-   ========================================================================== */
-
-.modal-backdrop {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.5);
-    z-index: 1040;
-}
-
-.modal {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    z-index: 1050;
-    overflow-x: hidden;
-    overflow-y: auto;
-    outline: 0;
-}
-
-.modal-dialog {
-    position: relative;
-    width: auto;
-    margin: 1.75rem auto;
-    max-width: 500px;
-    pointer-events: none;
-}
-
-.modal-dialog.modal-sm {
-    max-width: 300px;
-}
-
-.modal-dialog.modal-lg {
-    max-width: 800px;
-}
-
-.modal-dialog.modal-xl {
-    max-width: 1140px;
-}
-
-.modal-dialog.modal-dialog-centered {
-    display: flex;
-    align-items: center;
-    min-height: calc(100% - 3.5rem);
-}
-
-.modal-content {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    width: 100%;
-    pointer-events: auto;
-    background-color: var(--bg-card);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-lg);
-    outline: 0;
-}
-
-.modal-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: var(--spacing-md) var(--spacing-lg);
-    border-bottom: 1px solid var(--border-color);
-}
-
-.modal-title {
-    margin: 0;
-    font-size: 1.125rem;
-    font-weight: var(--font-weight-semibold);
-    line-height: 1.5;
-    color: var(--text-primary);
-}
-
-.modal-body {
-    position: relative;
-    flex: 1 1 auto;
-    padding: var(--spacing-lg);
-    color: var(--text-primary);
-}
-
-.modal-footer {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: var(--spacing-sm);
-    padding: var(--spacing-md) var(--spacing-lg);
-    border-top: 1px solid var(--border-color);
-}
-
-.btn-close {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 1.5rem;
-    height: 1.5rem;
-    padding: 0;
-    background: transparent;
-    border: 0;
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    color: var(--text-muted);
-    font-size: 1.25rem;
-    line-height: 1;
-    transition: color var(--transition-fast), background-color var(--transition-fast);
-}
-
-.btn-close::before {
-    content: '\00D7';
-}
-
-.btn-close:hover {
-    color: var(--text-primary);
-    background-color: var(--bg-hover);
-}
-
-.btn-close:focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 2px var(--focus-ring);
-}
-
-/* Modal visibility utilities */
-.fade {
-    opacity: 0;
-    transition: opacity var(--transition-normal);
-}
-
-.fade.show {
-    opacity: 1;
-}
-
-.d-block {
-    display: block;
-}
-
-/* ==========================================================================
-   Tables
-   ========================================================================== */
-
-.table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.875rem;
-}
-
-.table th,
-.table td {
-    padding: var(--spacing-sm) var(--spacing-md);
-    text-align: left;
-    border-bottom: 1px solid var(--border-color);
-}
-
-.table th {
-    font-weight: var(--font-weight-semibold);
-    background-color: var(--bg-tertiary);
-    color: var(--text-secondary);
-}
-
-.table tbody tr:hover {
-    background-color: var(--bg-hover);
-}
-
-/* ==========================================================================
-   Badges
-   ========================================================================== */
-
-.badge {
-    display: inline-flex;
-    align-items: center;
-    padding: var(--spacing-xs) var(--spacing-sm);
-    font-size: 0.75rem;
-    font-weight: var(--font-weight-medium);
-    line-height: 1;
-    border-radius: var(--radius-full);
-}
-
-.badge-primary {
-    background-color: var(--color-lagoon);
-    color: var(--color-white);
-}
-
-.badge-secondary {
-    background-color: var(--color-basalt-light);
-    color: var(--color-white);
-}
-
-.badge-success {
-    background-color: var(--status-success);
-    color: var(--color-white);
-}
-
-.badge-warning {
-    background-color: var(--status-warning);
-    color: var(--color-black);
-}
-
-.badge-danger {
-    background-color: var(--status-error);
-    color: var(--color-white);
-}
-
-.badge-info {
-    background-color: var(--status-info);
-    color: var(--color-white);
-}
-
-/* ==========================================================================
-   Alerts
-   ========================================================================== */
-
-.alert {
-    padding: var(--spacing-md);
-    border-radius: var(--radius-md);
-    border: 1px solid transparent;
-    margin-bottom: var(--spacing-md);
-}
-
-.alert-success {
-    background-color: rgba(54, 163, 144, 0.1);
-    border-color: var(--status-success);
-    color: var(--status-success);
-}
-
-.alert-warning {
-    background-color: rgba(255, 234, 118, 0.2);
-    border-color: var(--status-warning);
-    color: var(--color-basalt);
-}
-
-.alert-danger {
-    background-color: rgba(218, 26, 50, 0.1);
-    border-color: var(--status-error);
-    color: var(--status-error);
-}
-
-.alert-info {
-    background-color: rgba(81, 165, 193, 0.1);
-    border-color: var(--status-info);
-    color: var(--status-info);
-}
 
 /* ==========================================================================
    Layout Utilities
@@ -1010,31 +464,6 @@ h1:focus {
 }
 
 /* ==========================================================================
-   Utility Classes
-   ========================================================================== */
-
-.text-primary { color: var(--text-primary); }
-.text-secondary { color: var(--text-secondary); }
-.text-muted { color: var(--text-muted); }
-.text-success { color: var(--status-success); }
-.text-warning { color: var(--status-warning); }
-.text-danger { color: var(--status-error); }
-.text-info { color: var(--status-info); }
-
-.bg-primary { background-color: var(--bg-primary); }
-.bg-secondary { background-color: var(--bg-secondary); }
-.bg-tertiary { background-color: var(--bg-tertiary); }
-
-.fw-normal { font-weight: var(--font-weight-normal); }
-.fw-medium { font-weight: var(--font-weight-medium); }
-.fw-semibold { font-weight: var(--font-weight-semibold); }
-
-.rounded-sm { border-radius: var(--radius-sm); }
-.rounded-md { border-radius: var(--radius-md); }
-.rounded-lg { border-radius: var(--radius-lg); }
-.rounded-full { border-radius: var(--radius-full); }
-
-/* ==========================================================================
    Status Indicators
    ========================================================================== */
 
@@ -1045,17 +474,38 @@ h1:focus {
     flex-shrink: 0;
 }
 
-.status-indicator.status-future { background-color: var(--status-muted); }
-.status-indicator.status-in-development { background-color: var(--status-warning); }
-.status-indicator.status-ready-for-review { 
+.status-indicator.status-future {
+    background-color: var(--status-muted);
+}
+
+.status-indicator.status-in-development {
+    background-color: var(--status-warning);
+}
+
+.status-indicator.status-ready-for-review {
     background-color: var(--status-warning);
     animation: pulse 1.5s ease-in-out infinite;
 }
-.status-indicator.status-merged { background-color: var(--status-merged); }
-.status-indicator.status-cancelled { background-color: var(--status-error); }
-.status-indicator.status-checks-failing { background-color: var(--status-error); }
-.status-indicator.status-conflict { background-color: var(--status-conflict); }
-.status-indicator.status-ready-for-merging { background-color: var(--status-success); }
+
+.status-indicator.status-merged {
+    background-color: var(--status-merged);
+}
+
+.status-indicator.status-cancelled {
+    background-color: var(--status-error);
+}
+
+.status-indicator.status-checks-failing {
+    background-color: var(--status-error);
+}
+
+.status-indicator.status-conflict {
+    background-color: var(--status-conflict);
+}
+
+.status-indicator.status-ready-for-merging {
+    background-color: var(--status-success);
+}
 
 /* ==========================================================================
    Global Keyframes Animations
@@ -1159,12 +609,29 @@ pre code {
     margin-top: 0;
 }
 
-.markdown-content h1 { font-size: 1.5rem; }
-.markdown-content h2 { font-size: 1.25rem; }
-.markdown-content h3 { font-size: 1.125rem; }
-.markdown-content h4 { font-size: 1rem; }
-.markdown-content h5 { font-size: 0.9375rem; }
-.markdown-content h6 { font-size: 0.875rem; }
+.markdown-content h1 {
+    font-size: 1.5rem;
+}
+
+.markdown-content h2 {
+    font-size: 1.25rem;
+}
+
+.markdown-content h3 {
+    font-size: 1.125rem;
+}
+
+.markdown-content h4 {
+    font-size: 1rem;
+}
+
+.markdown-content h5 {
+    font-size: 0.9375rem;
+}
+
+.markdown-content h6 {
+    font-size: 0.875rem;
+}
 
 /* Markdown Paragraphs */
 .markdown-content p {
