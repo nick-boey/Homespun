@@ -1,0 +1,165 @@
+@*
+    SessionsPanel depends on SignalR and session services.
+    This showcase provides a description of its features.
+*@
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Component Overview</BbCardTitle>
+    </BbCardHeader>
+    <BbCardContent>
+        <BbAlert Variant="AlertVariant.Info">
+            <BbAlertDescription>
+                <strong>SessionsPanel</strong> is a unified panel for managing Claude Code agent sessions.
+                It displays session information with real-time updates via SignalR.
+            </BbAlertDescription>
+        </BbAlert>
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Key Features</BbCardTitle>
+    </BbCardHeader>
+    <BbCardContent>
+        <ul class="list-unstyled mb-0">
+            <li class="mb-2">
+                <BbBadge Variant="BadgeVariant.Default" Class="me-2">Unified</BbBadge>
+                Single component for both global and project-specific views
+            </li>
+            <li class="mb-2">
+                <BbBadge Class="bg-blue-500 text-white border-transparent me-2">Grouping</BbBadge>
+                Groups by project (global) or by status (project-specific)
+            </li>
+            <li class="mb-2">
+                <BbBadge Class="bg-green-600 text-white border-transparent me-2">Real-time</BbBadge>
+                SignalR integration for live status updates
+            </li>
+            <li class="mb-2">
+                <BbBadge Variant="BadgeVariant.Destructive" Class="me-2">Stop</BbBadge>
+                Ability to stop running sessions
+            </li>
+            <li class="mb-2">
+                <BbBadge Variant="BadgeVariant.Secondary" Class="me-2">Navigate</BbBadge>
+                Quick access to session chat interface
+            </li>
+        </ul>
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>View Modes</BbCardTitle>
+        <BbCardDescription>Global View (no ProjectId parameter)</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <BbCard style="max-width: 500px;">
+            <BbCardHeader Class="d-flex justify-content-between align-items-center">
+                <BbCardTitle>Project Alpha</BbCardTitle>
+                <BbBadge Variant="BadgeVariant.Secondary">2 sessions</BbBadge>
+            </BbCardHeader>
+            <BbCardContent>
+                <p class="text-text-muted text-sm mb-0">
+                    Sessions are grouped by project name and sorted by status priority within each group.
+                </p>
+            </BbCardContent>
+        </BbCard>
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>View Modes</BbCardTitle>
+        <BbCardDescription>Project View (with ProjectId parameter)</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <BbCard style="max-width: 500px;">
+            <BbCardHeader Class="d-flex justify-content-between align-items-center">
+                <div class="d-flex align-items-center gap-2">
+                    <span class="status-dot bg-success"></span>
+                    <BbCardTitle>Working</BbCardTitle>
+                </div>
+                <BbBadge Variant="BadgeVariant.Secondary">3 sessions</BbBadge>
+            </BbCardHeader>
+            <BbCardContent>
+                <p class="text-text-muted text-sm mb-0">
+                    Sessions are grouped by status (Plan Ready, Question, Waiting, Working, etc.) and sorted by recent activity.
+                </p>
+            </BbCardContent>
+        </BbCard>
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Session Card States</BbCardTitle>
+        <BbCardDescription>Session card with full details</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <BbCard style="max-width: 400px;">
+            <BbCardHeader Class="d-flex justify-content-between align-items-center">
+                <div class="d-flex align-items-center gap-2">
+                    <BbBadge Class="bg-amber-500 text-white border-transparent">Issue</BbBadge>
+                    <BbCardTitle>Fix authentication bug</BbCardTitle>
+                </div>
+                <span class="status-dot bg-success" style="width: 10px; height: 10px; border-radius: 50%;"></span>
+            </BbCardHeader>
+            <BbCardContent>
+                <div class="mb-2 small">
+                    <span class="text-text-muted">Mode:</span>
+                    <BbBadge Class="bg-green-600 text-white border-transparent ms-1">Build</BbBadge>
+                </div>
+                <div class="mb-2 small">
+                    <span class="text-text-muted">Status:</span>
+                    <BbBadge Class="bg-green-600 text-white border-transparent ms-1">Working</BbBadge>
+                </div>
+                <div class="mb-2 small">
+                    <span class="text-text-muted">Started:</span>
+                    <span class="ms-1">15m 30s ago</span>
+                </div>
+                <div class="mb-2 small">
+                    <span class="text-text-muted">Messages:</span>
+                    <span class="ms-1">42</span>
+                </div>
+            </BbCardContent>
+            <BbCardFooter Class="d-flex gap-2">
+                <BbButton Variant="ButtonVariant.Outline" Size="ButtonSize.Small" Href="#">
+                    <LucideIcon Name="message-circle" Size="14" Class="me-1" />Chat
+                </BbButton>
+                <BbButton Variant="ButtonVariant.Destructive" Size="ButtonSize.Small">
+                    <LucideIcon Name="stop-circle" Size="14" Class="me-1" />Stop
+                </BbButton>
+            </BbCardFooter>
+        </BbCard>
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Status Priority Order</BbCardTitle>
+    </BbCardHeader>
+    <BbCardContent>
+        <ol class="mb-0 small">
+            <li><strong>Plan Ready</strong> - Requires user approval to proceed</li>
+            <li><strong>Question</strong> - Waiting for user to answer a question</li>
+            <li><strong>Waiting</strong> - Ready for user input</li>
+            <li><strong>Working</strong> - Actively processing</li>
+            <li><strong>Starting</strong> - Session initializing</li>
+            <li><strong>Running Hooks</strong> - Executing pre/post hooks</li>
+            <li><strong>Stopped</strong> - Session terminated</li>
+            <li><strong>Error</strong> - Session encountered an error</li>
+        </ol>
+    </BbCardContent>
+</BbCard>
+
+<style>
+    .status-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        display: inline-block;
+    }
+</style>
+
+@code {
+}

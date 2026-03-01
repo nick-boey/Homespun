@@ -1,0 +1,94 @@
+@inject HttpAgentPromptApiService AgentPromptApi
+
+<div class="agent-selector">
+    <div class="d-flex gap-2 align-items-end">
+        <div class="flex-grow-1">
+            <BbLabel Class="small mb-1">Prompt</BbLabel>
+            <BbSelect TValue="string" @bind-Value="_selectedPromptId" Options="_promptOptions"
+                      Disabled="@Disabled" Placeholder="None (no prompt)" />
+        </div>
+        <BbButton Variant="ButtonVariant.Default" Size="ButtonSize.Small" OnClick="HandleStart" Disabled="@(Disabled || IsStarting)" aria-label="Start agent" aria-busy="@IsStarting">
+            @if (IsStarting)
+            {
+                <BbSpinner Size="SpinnerSize.Small" Class="me-1" />
+                <span>Starting...</span>
+            }
+            else
+            {
+                <LucideIcon Name="play" Size="14" Class="me-1" />
+                <span>Start</span>
+            }
+        </BbButton>
+    </div>
+    @if (_prompts.Any(p => p.ProjectId != null))
+    {
+        <small class="text-muted d-block mt-1">* Project-specific prompt</small>
+    }
+</div>
+
+@code {
+    /// <summary>
+    /// Whether the selector is disabled.
+    /// </summary>
+    [Parameter] public bool Disabled { get; set; }
+
+    /// <summary>
+    /// Whether a session is currently starting.
+    /// </summary>
+    [Parameter] public bool IsStarting { get; set; }
+
+    /// <summary>
+    /// Optional project ID to scope prompt loading.
+    /// When set, project-specific prompts are shown alongside global prompts.
+    /// </summary>
+    [Parameter] public string? ProjectId { get; set; }
+
+    /// <summary>
+    /// Callback when the Start button is clicked.
+    /// Passes the selected AgentPrompt (null if "None" is selected).
+    /// </summary>
+    [Parameter] public EventCallback<AgentPrompt?> OnStart { get; set; }
+
+    private IReadOnlyList<AgentPrompt> _prompts = [];
+    private List<SelectOption<string>> _promptOptions = [];
+    private string _selectedPromptId = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Ensure default prompts exist
+        await AgentPromptApi.EnsureDefaultPromptsAsync();
+
+        // Load prompts - GetProjectPromptsAsync returns combined project + global prompts
+        // with project prompts overriding global prompts of the same name
+        if (!string.IsNullOrEmpty(ProjectId))
+        {
+            _prompts = await AgentPromptApi.GetProjectPromptsAsync(ProjectId);
+        }
+        else
+        {
+            _prompts = await AgentPromptApi.GetAllPromptsAsync();
+        }
+
+        _promptOptions = _prompts.Select(p =>
+            new SelectOption<string>(p.Id, $"{p.Name} ({p.Mode}){(p.ProjectId != null ? " *" : "")}")).ToList();
+
+        // Default to "Plan" if available
+        var planPrompt = _prompts.FirstOrDefault(p => p.Name == "Plan");
+        if (planPrompt != null)
+        {
+            _selectedPromptId = planPrompt.Id;
+        }
+    }
+
+    private async Task HandleStart()
+    {
+        AgentPrompt? selectedPrompt = null;
+
+        if (!string.IsNullOrEmpty(_selectedPromptId))
+        {
+            selectedPrompt = await AgentPromptApi.GetPromptAsync(_selectedPromptId);
+        }
+
+        await OnStart.InvokeAsync(selectedPrompt);
+    }
+}

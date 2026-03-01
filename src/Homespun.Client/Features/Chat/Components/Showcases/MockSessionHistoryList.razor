@@ -1,0 +1,90 @@
+
+@* Mock version of SessionHistoryList that doesn't depend on services *@
+
+@if (IsLoading)
+{
+    <div class="flex justify-center py-3">
+        <BbSpinner Size="SpinnerSize.Small" />
+    </div>
+}
+else if (Sessions.Count > 0)
+{
+    <div class="session-history mt-3 border-t pt-3">
+        <h6 class="text-muted-foreground text-sm mb-2">Previous Sessions</h6>
+        <div class="flex flex-col">
+            @foreach (var session in Sessions)
+            {
+                <div class="flex justify-between items-center py-2">
+                    <div class="flex items-center gap-2">
+                        @if (session.Mode.HasValue)
+                        {
+                            <BbBadge Class="@(session.Mode == SessionMode.Plan ? "bg-blue-500 text-white border-transparent" : "bg-green-600 text-white border-transparent")">
+                                @session.Mode
+                            </BbBadge>
+                        }
+                        else
+                        {
+                            <BbBadge Variant="BadgeVariant.Secondary">Unknown</BbBadge>
+                        }
+                        <small class="text-muted-foreground">
+                            @FormatDate(session.LastActivityAt)
+                        </small>
+                        @if (session.MessageCount.HasValue)
+                        {
+                            <small class="text-muted-foreground">
+                                (@session.MessageCount msgs)
+                            </small>
+                        }
+                    </div>
+                    <BbButton Variant="ButtonVariant.Outline" Size="ButtonSize.Small"
+                            Disabled="@(ResumingSessionId == session.SessionId)">
+                        @if (ResumingSessionId == session.SessionId)
+                        {
+                            <BbSpinner Size="SpinnerSize.Small" Class="mr-1" />
+                        }
+                        Resume
+                    </BbButton>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public List<MockSession> Sessions { get; set; } = new();
+
+    [Parameter]
+    public bool IsLoading { get; set; }
+
+    [Parameter]
+    public string? ResumingSessionId { get; set; }
+
+    public class MockSession
+    {
+        public string SessionId { get; set; } = "";
+        public SessionMode? Mode { get; set; }
+        public DateTime LastActivityAt { get; set; }
+        public int? MessageCount { get; set; }
+    }
+
+    private static string FormatDate(DateTime date)
+    {
+        var local = date.ToLocalTime();
+        var now = DateTime.Now;
+
+        if (local.Date == now.Date)
+        {
+            return $"Today {local:HH:mm}";
+        }
+        if (local.Date == now.Date.AddDays(-1))
+        {
+            return $"Yesterday {local:HH:mm}";
+        }
+        if (local > now.AddDays(-7))
+        {
+            return local.ToString("ddd HH:mm");
+        }
+        return local.ToString("MMM d, HH:mm");
+    }
+}

@@ -1,0 +1,181 @@
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>User Message</BbCardTitle>
+        <BbCardDescription>Message from the user</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ChatMessage Message="@_userMessage" />
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Assistant Text Message</BbCardTitle>
+        <BbCardDescription>Simple text response from Claude</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ChatMessage Message="@_assistantTextMessage" />
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Message with Tool Use</BbCardTitle>
+        <BbCardDescription>Claude invoking a tool</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ChatMessage Message="@_toolUseMessage" />
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Message with Tool Result</BbCardTitle>
+        <BbCardDescription>Result from a tool invocation</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ChatMessage Message="@_toolResultMessage" />
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Message with Thinking</BbCardTitle>
+        <BbCardDescription>Claude's thinking process</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ChatMessage Message="@_thinkingMessage" />
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Conversation Flow</BbCardTitle>
+        <BbCardDescription>Multiple messages in sequence</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ChatMessage Message="@_conversationUser" />
+        <ChatMessage Message="@_conversationAssistant" />
+    </BbCardContent>
+</BbCard>
+
+@code {
+    private ClaudeMessage _userMessage = new()
+    {
+        SessionId = "demo",
+        Role = ClaudeMessageRole.User,
+        Content = new()
+        {
+            new ClaudeMessageContent
+            {
+                Type = ClaudeContentType.Text,
+                Text = "Can you help me implement a login form with email and password validation?"
+            }
+        },
+        CreatedAt = DateTime.UtcNow.AddMinutes(-5)
+    };
+
+    private ClaudeMessage _assistantTextMessage = new()
+    {
+        SessionId = "demo",
+        Role = ClaudeMessageRole.Assistant,
+        Content = new()
+        {
+            new ClaudeMessageContent
+            {
+                Type = ClaudeContentType.Text,
+                Text = "I'd be happy to help you implement a login form! Let me create a form component with proper email and password validation.\n\nHere's what I'll include:\n- Email format validation\n- Password minimum length check\n- Error message display\n- Submit handling"
+            }
+        },
+        CreatedAt = DateTime.UtcNow.AddMinutes(-4)
+    };
+
+    private ClaudeMessage _toolUseMessage = new()
+    {
+        SessionId = "demo",
+        Role = ClaudeMessageRole.Assistant,
+        Content = new()
+        {
+            new ClaudeMessageContent
+            {
+                Type = ClaudeContentType.Text,
+                Text = "Let me read the existing authentication service to understand the API:"
+            },
+            new ClaudeMessageContent
+            {
+                Type = ClaudeContentType.ToolUse,
+                ToolName = "Read",
+                ToolInput = """{"file_path": "/src/services/auth.ts"}""",
+                ToolUseId = "tool_01"
+            }
+        },
+        CreatedAt = DateTime.UtcNow.AddMinutes(-3)
+    };
+
+    private ClaudeMessage _toolResultMessage = new()
+    {
+        SessionId = "demo",
+        Role = ClaudeMessageRole.User,
+        Content = new()
+        {
+            new ClaudeMessageContent
+            {
+                Type = ClaudeContentType.ToolResult,
+                ToolUseId = "tool_01",
+                ToolResult = "export const login = async (email: string, password: string) => {\n  const response = await fetch('/api/auth/login', {\n    method: 'POST',\n    body: JSON.stringify({ email, password })\n  });\n  return response.json();\n};",
+                ToolSuccess = true
+            }
+        },
+        CreatedAt = DateTime.UtcNow.AddMinutes(-2)
+    };
+
+    private ClaudeMessage _thinkingMessage = new()
+    {
+        SessionId = "demo",
+        Role = ClaudeMessageRole.Assistant,
+        Content = new()
+        {
+            new ClaudeMessageContent
+            {
+                Type = ClaudeContentType.Thinking,
+                Thinking = "Looking at the existing auth service, I can see it expects email and password parameters. I should create a form that validates the email format using a regex pattern and ensures the password meets minimum length requirements before calling the login function."
+            },
+            new ClaudeMessageContent
+            {
+                Type = ClaudeContentType.Text,
+                Text = "I've analyzed the authentication service and I'll now create the login form component."
+            }
+        },
+        CreatedAt = DateTime.UtcNow.AddMinutes(-1)
+    };
+
+    private ClaudeMessage _conversationUser = new()
+    {
+        SessionId = "demo",
+        Role = ClaudeMessageRole.User,
+        Content = new()
+        {
+            new ClaudeMessageContent
+            {
+                Type = ClaudeContentType.Text,
+                Text = "Add a \"Remember me\" checkbox to the login form"
+            }
+        },
+        CreatedAt = DateTime.UtcNow.AddSeconds(-30)
+    };
+
+    private ClaudeMessage _conversationAssistant = new()
+    {
+        SessionId = "demo",
+        Role = ClaudeMessageRole.Assistant,
+        Content = new()
+        {
+            new ClaudeMessageContent
+            {
+                Type = ClaudeContentType.Text,
+                Text = "I'll add a \"Remember me\" checkbox that stores the user's preference in local storage. This will keep the user logged in across browser sessions."
+            }
+        },
+        CreatedAt = DateTime.UtcNow
+    };
+}

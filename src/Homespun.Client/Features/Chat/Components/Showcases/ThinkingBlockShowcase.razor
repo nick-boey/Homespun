@@ -1,0 +1,65 @@
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Collapsed Thinking</BbCardTitle>
+        <BbCardDescription>Completed thinking process (expandable)</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ThinkingBlock Text="Looking at the existing auth service, I can see it expects email and password parameters. The login function makes a POST request to /api/auth/login. I should create a form that validates the email format using a regex pattern and ensures the password meets minimum length requirements before calling the login function." />
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Streaming Thinking</BbCardTitle>
+        <BbCardDescription>Claude currently thinking (expanded by default)</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ThinkingBlock
+            Text="Analyzing the codebase structure to understand the authentication flow"
+            IsStreaming="true" />
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Long Thinking Process</BbCardTitle>
+        <BbCardDescription>Extended reasoning with multiple considerations</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ThinkingBlock Text="@_longThinking" />
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Short Thinking</BbCardTitle>
+        <BbCardDescription>Brief consideration</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ThinkingBlock Text="This is a simple change - I just need to update the button text." />
+    </BbCardContent>
+</BbCard>
+
+@code {
+    private string _longThinking = """
+        Let me analyze the requirements for this feature:
+
+        1. First, I need to understand the current authentication flow. The app uses JWT tokens stored in localStorage, with refresh tokens handled server-side.
+
+        2. For the "Remember me" checkbox:
+           - If checked: Set token expiry to 30 days
+           - If unchecked: Set token expiry to session only
+
+        3. I should also consider:
+           - Security implications of longer token lifetimes
+           - The UX of the checkbox placement in the form
+           - Whether to persist the checkbox preference itself
+
+        4. Implementation approach:
+           - Add a boolean parameter to the login API
+           - Store the user preference in localStorage
+           - Update the token refresh logic accordingly
+
+        I'll start by modifying the login form component, then update the auth service.
+        """;
+}

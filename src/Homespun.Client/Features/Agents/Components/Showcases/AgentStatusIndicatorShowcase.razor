@@ -1,0 +1,82 @@
+@*
+    AgentStatusIndicator depends on SignalR and IClaudeSessionStoreApi.
+    This showcase renders a static mock version of the component.
+*@
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Working Agents Only</BbCardTitle>
+        <BbCardDescription>Shows active working agents</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <MockAgentStatusIndicator WorkingCount="2" WaitingCount="0" />
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Waiting Agents Only</BbCardTitle>
+        <BbCardDescription>Shows agents waiting for input</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <MockAgentStatusIndicator WorkingCount="0" WaitingCount="3" />
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Question &amp; Plan Ready</BbCardTitle>
+        <BbCardDescription>Shows agents awaiting response and with plan ready</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <MockAgentStatusIndicator WorkingCount="0" QuestionCount="1" PlanReadyCount="2" WaitingCount="0" />
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Mixed Status</BbCardTitle>
+        <BbCardDescription>Working, question, plan ready, and waiting agents</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <MockAgentStatusIndicator WorkingCount="1" QuestionCount="1" PlanReadyCount="1" WaitingCount="2" />
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>No Active Agents</BbCardTitle>
+        <BbCardDescription>Nothing shown when no agents are active</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <MockAgentStatusIndicator WorkingCount="0" WaitingCount="0" />
+        <span class="text-text-muted text-sm">(indicator is hidden when no agents are active)</span>
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>In Nav Context</BbCardTitle>
+        <BbCardDescription>How it appears in the navigation header</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <div class="d-flex align-items-center gap-3 p-2 bg-bg-secondary rounded">
+            <span class="text-text-primary font-semibold">Homespun</span>
+            <div class="ms-auto d-flex align-items-center gap-2">
+                <MockAgentStatusIndicator WorkingCount="2" QuestionCount="1" PlanReadyCount="1" WaitingCount="1" />
+                <span class="text-text-muted">|</span>
+                <span class="text-text-secondary text-sm">Settings</span>
+            </div>
+        </div>
+    </BbCardContent>
+</BbCard>
+
+<style>
+    .showcase-preview-dark {
+        background: var(--bg-tertiary);
+        padding: var(--spacing-md);
+    }
+</style>
+
+@code {
+}

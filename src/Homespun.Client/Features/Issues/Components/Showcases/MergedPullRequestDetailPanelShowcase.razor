@@ -1,0 +1,146 @@
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Component Overview</BbCardTitle>
+    </BbCardHeader>
+    <BbCardContent>
+        <BbAlert Variant="AlertVariant.Info">
+            <BbAlertDescription>
+                <strong>MergedPullRequestDetailPanel</strong> displays details for merged pull requests including
+                linked issue information. This allows users to view the PR that resolved an issue and potentially
+                re-open the issue if needed.
+            </BbAlertDescription>
+        </BbAlert>
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Key Features</BbCardTitle>
+    </BbCardHeader>
+    <BbCardContent>
+        <ul class="list-unstyled mb-0">
+            <li class="mb-2">
+                <BbBadge Class="bg-purple-500 text-white border-transparent me-2">Merged</BbBadge>
+                Displays merged status with purple badge
+            </li>
+            <li class="mb-2">
+                <BbBadge Class="bg-blue-500 text-white border-transparent me-2">PR Link</BbBadge>
+                Links to GitHub PR for full details
+            </li>
+            <li class="mb-2">
+                <BbBadge Class="bg-green-600 text-white border-transparent me-2">Issue Link</BbBadge>
+                Shows linked Fleece issue if present
+            </li>
+            <li class="mb-2">
+                <BbBadge Variant="BadgeVariant.Default" Class="me-2">Edit</BbBadge>
+                Button to edit linked issue (re-open if needed)
+            </li>
+            <li class="mb-2">
+                <BbBadge Variant="BadgeVariant.Secondary" Class="me-2">Info</BbBadge>
+                Branch name and merge timestamp
+            </li>
+        </ul>
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>With Linked Issue</BbCardTitle>
+        <BbCardDescription>Merged PR with linked issue (complete)</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <MergedPullRequestDetailPanel Details="@_detailsWithIssue"
+                                      ProjectId="showcase-project"
+                                      OnClose="() => { }" />
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Without Linked Issue</BbCardTitle>
+        <BbCardDescription>Merged PR without linked issue</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <MergedPullRequestDetailPanel Details="@_detailsWithoutIssue"
+                                      ProjectId="showcase-project"
+                                      OnClose="() => { }" />
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Linked Issue Not Found</BbCardTitle>
+        <BbCardDescription>PR has issue ID in branch but issue not found</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <MergedPullRequestDetailPanel Details="@_detailsWithMissingIssue"
+                                      ProjectId="showcase-project"
+                                      OnClose="() => { }" />
+    </BbCardContent>
+</BbCard>
+
+@code {
+    private MergedPullRequestDetails _detailsWithIssue = new()
+    {
+        PullRequest = new PullRequestInfo
+        {
+            Number = 42,
+            Title = "Add user authentication feature",
+            Body = "This PR implements JWT-based authentication with login and registration endpoints.",
+            Status = PullRequestStatus.Merged,
+            BranchName = "feature/auth+gUu123",
+            HtmlUrl = "https://github.com/example/repo/pull/42",
+            CreatedAt = DateTime.UtcNow.AddDays(-7),
+            MergedAt = DateTime.UtcNow.AddDays(-1),
+            UpdatedAt = DateTime.UtcNow.AddDays(-1)
+        },
+        LinkedIssueId = "gUu123",
+        LinkedIssue = new IssueResponse
+        {
+            Id = "gUu123",
+            Title = "Implement user authentication",
+            Description = "Add login and registration functionality with JWT tokens.",
+            Type = IssueType.Feature,
+            Status = IssueStatus.Complete,
+            Priority = 1,
+            LastUpdate = DateTimeOffset.UtcNow.AddDays(-1),
+            CreatedAt = DateTimeOffset.UtcNow.AddDays(-10)
+        }
+    };
+
+    private MergedPullRequestDetails _detailsWithoutIssue = new()
+    {
+        PullRequest = new PullRequestInfo
+        {
+            Number = 38,
+            Title = "Update dependencies",
+            Body = "Bumped all NuGet packages to latest versions.",
+            Status = PullRequestStatus.Merged,
+            BranchName = "chore/update-deps",
+            HtmlUrl = "https://github.com/example/repo/pull/38",
+            CreatedAt = DateTime.UtcNow.AddDays(-14),
+            MergedAt = DateTime.UtcNow.AddDays(-12),
+            UpdatedAt = DateTime.UtcNow.AddDays(-12)
+        },
+        LinkedIssueId = null,
+        LinkedIssue = null
+    };
+
+    private MergedPullRequestDetails _detailsWithMissingIssue = new()
+    {
+        PullRequest = new PullRequestInfo
+        {
+            Number = 35,
+            Title = "Fix database connection issue",
+            Body = "Resolved connection pooling bug that caused timeouts.",
+            Status = PullRequestStatus.Merged,
+            BranchName = "bugfix/db-connection+xyz789",
+            HtmlUrl = "https://github.com/example/repo/pull/35",
+            CreatedAt = DateTime.UtcNow.AddDays(-21),
+            MergedAt = DateTime.UtcNow.AddDays(-20),
+            UpdatedAt = DateTime.UtcNow.AddDays(-20)
+        },
+        LinkedIssueId = "xyz789",
+        LinkedIssue = null
+    };
+}

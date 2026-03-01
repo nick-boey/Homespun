@@ -1,0 +1,156 @@
+@page "/design/{ComponentId}"
+@using Homespun.Client.Features.Agents.Components.Showcases
+@using Homespun.Client.Features.Branches.Components.Showcases
+@using Homespun.Client.Features.Chat.Components.Showcases
+@using Homespun.Client.Features.Issues.Components.Showcases
+@using Homespun.Client.Features.Notifications.Components.Showcases
+@using Homespun.Client.Features.Projects.Components.Showcases
+@using Homespun.Client.Features.Toolbar.Components.Showcases
+@inject HttpComponentRegistryService ComponentRegistry
+@inject IBreadcrumbService BreadcrumbService
+@inject NavigationManager NavigationManager
+
+<PageTitle>@(_component?.Name ?? "Component") - Design System - Homespun</PageTitle>
+
+@if (_component == null)
+{
+    <BbAlert Variant="AlertVariant.Warning">
+        <BbAlertTitle>Component Not Found</BbAlertTitle>
+        <BbAlertDescription>
+            <p>The component "@ComponentId" was not found in the registry.</p>
+            <BbButton Href="/design">Back to Design System</BbButton>
+        </BbAlertDescription>
+    </BbAlert>
+}
+else
+{
+    <nav class="mb-4">
+        <a href="/design" class="text-link">&larr; Back to Design System</a>
+    </nav>
+
+    <div class="mb-6">
+        <h1>@_component.Name</h1>
+        <p class="text-text-secondary">@_component.Description</p>
+        <div class="flex gap-2 mt-2">
+            <BbBadge Variant="BadgeVariant.Secondary">@_component.Category</BbBadge>
+            @foreach (var tag in _component.Tags)
+            {
+                <BbBadge Variant="BadgeVariant.Outline">@tag</BbBadge>
+            }
+        </div>
+    </div>
+
+    <div class="flex flex-col gap-4 mt-4">
+        @* Render the component based on its ID *@
+        @switch (_component.Id)
+        {
+            // Core UI Components
+            case "work-item":
+                <WorkItemShowcase/>
+                break;
+            case "pr-status-badges":
+                <PrStatusBadgesShowcase/>
+                break;
+            case "agent-status-indicator":
+                <AgentStatusIndicatorShowcase/>
+                break;
+            case "notification-banner":
+                <NotificationBannerShowcase/>
+                break;
+            case "model-selector":
+                <ModelSelectorShowcase/>
+                break;
+            // Panel Components
+            case "issue-detail-panel":
+                <IssueDetailPanelShowcase/>
+                break;
+            case "current-pull-request-detail-panel":
+                <CurrentPullRequestDetailPanelShowcase/>
+                break;
+            case "merged-pull-request-detail-panel":
+                <MergedPullRequestDetailPanelShowcase/>
+                break;
+            case "sessions-panel":
+                <SessionsPanelShowcase/>
+                break;
+            case "agent-status-panel":
+                <AgentStatusPanelShowcase/>
+                break;
+            case "clone-management-panel":
+                <CloneManagementPanelShowcase/>
+                break;
+            case "session-history-list":
+                <SessionHistoryListShowcase/>
+                break;
+            case "agent-selector":
+                <AgentSelectorShowcase/>
+                break;
+
+            // Chat Components
+            case "chat-message":
+                <ChatMessageShowcase/>
+                break;
+            case "chat-input":
+                <ChatInputShowcase/>
+                break;
+            case "content-block":
+                <ContentBlockShowcase/>
+                break;
+            case "text-block":
+                <TextBlockShowcase/>
+                break;
+            case "tool-use-block":
+                <ToolUseBlockShowcase/>
+                break;
+            case "tool-result-block":
+                <ToolResultBlockShowcase/>
+                break;
+            case "thinking-block":
+                <ThinkingBlockShowcase/>
+                break;
+            case "processing-indicator":
+                <ProcessingIndicatorShowcase/>
+                break;
+            case "task-graph-view":
+                <TaskGraphViewShowcase/>
+                break;
+            case "issue-row-actions":
+                <IssueRowActionsShowcase/>
+                break;
+            case "project-toolbar":
+                <ProjectToolbarShowcase/>
+                break;
+
+            default:
+                <BbAlert Variant="AlertVariant.Info">
+                    <BbAlertDescription>
+                        <p>This component does not have a showcase implementation yet.</p>
+                        <p class="text-text-muted mt-2">Component path: <code>@_component.ComponentPath</code></p>
+                    </BbAlertDescription>
+                </BbAlert>
+                break;
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public string ComponentId { get; set; } = "";
+
+    private ComponentMetadata? _component;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ComponentRegistry.InitializeAsync();
+        _component = ComponentRegistry.GetComponent(ComponentId);
+        await BreadcrumbService.SetContextAsync(new BreadcrumbContext
+        {
+            PageName = _component?.Name ?? "Component"
+        });
+    }
+
+    protected override void OnParametersSet()
+    {
+        _component = ComponentRegistry.GetComponent(ComponentId);
+    }
+
+}

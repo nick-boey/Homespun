@@ -1,0 +1,77 @@
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Read Tool</BbCardTitle>
+        <BbCardDescription>Reading a file</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ToolUseBlock
+            ToolName="Read"
+            ToolInput="@_readInput"/>
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Edit Tool</BbCardTitle>
+        <BbCardDescription>Editing a file</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ToolUseBlock
+            ToolName="Edit"
+            ToolInput="@_editInput"/>
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Bash Tool</BbCardTitle>
+        <BbCardDescription>Running a command</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ToolUseBlock
+            ToolName="Bash"
+            ToolInput="@_bashInput"/>
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Streaming Tool Use</BbCardTitle>
+        <BbCardDescription>Tool currently executing (shows spinner)</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ToolUseBlock
+            ToolName="Glob"
+            ToolInput="@_globInput"
+            IsStreaming="true"/>
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Complex Tool Input</BbCardTitle>
+        <BbCardDescription>Tool with longer input</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ToolUseBlock
+            ToolName="Write"
+            ToolInput="@_complexInput"/>
+    </BbCardContent>
+</BbCard>
+
+@code {
+    private string _readInput = """{"file_path": "/src/services/auth.ts"}""";
+
+    private string _editInput = """{"file_path": "/src/components/Button.tsx", "old_string": "onClick={() => {}", "new_string": "onClick={handleClick}"}""";
+
+    private string _bashInput = """{"command": "npm run test -- --coverage"}""";
+
+    private string _globInput = """{"pattern": "**/*.tsx"}""";
+
+    private string _complexInput = """
+        {
+          "file_path": "/src/components/UserProfile.tsx",
+          "content": "import React from 'react';\n\nexport const UserProfile = ({ name, email }) => (\n  <div className=\"user-profile\">\n    <h2>{name}</h2>\n    <p>{email}</p>\n  </div>\n);"
+        }
+        """;
+}

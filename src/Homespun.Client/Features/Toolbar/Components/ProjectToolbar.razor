@@ -1,0 +1,554 @@
+@inject IKeyboardNavigationService NavService
+@inject IJSRuntime JSRuntime
+
+<div class="flex flex-wrap items-center gap-2 p-2 border rounded-lg bg-background">
+    @* Creation buttons *@
+    <BbButtonGroup>
+        <ToolbarButton Icon="arrow-up-from-line"
+                       Tooltip="Create issue above (Shift+O)"
+                       TestId="toolbar-create-above-button"
+                       Disabled="@CreateDisabled"
+                       OnClick="HandleCreateAbove"/>
+
+        <ToolbarButton Icon="arrow-down-from-line"
+                       Tooltip="Create issue below (O)"
+                       TestId="toolbar-create-below-button"
+                       Disabled="@CreateDisabled"
+                       OnClick="HandleCreateBelow"/>
+    </BbButtonGroup>
+
+    <BbSeparator Orientation="SeparatorOrientation.Vertical" class="h-6"/>
+
+    @* Hierarchy buttons *@
+    <BbButtonGroup>
+        <ToolbarButton Icon="corner-right-up"
+                       Tooltip="Make child of another (click to select target)"
+                       TestId="toolbar-child-of-button"
+                       Disabled="@ChildOfDisabled"
+                       Active="@ChildOfActive"
+                       OnClick="HandleMakeChildOf"/>
+
+        <ToolbarButton Icon="corner-left-down"
+                       Tooltip="Make parent of another (click to select target)"
+                       TestId="toolbar-parent-of-button"
+                       Disabled="@ParentOfDisabled"
+                       Active="@ParentOfActive"
+                       OnClick="HandleMakeParentOf"/>
+    </BbButtonGroup>
+
+    <BbSeparator Orientation="SeparatorOrientation.Vertical" class="h-6"/>
+
+    @* Undo/Redo buttons *@
+    <BbButtonGroup>
+        <ToolbarButton Icon="undo"
+                       Tooltip="@(UndoTooltip ?? "Undo")"
+                       TestId="toolbar-undo-button"
+                       Disabled="@UndoDisabled"
+                       OnClick="HandleUndo"/>
+
+        <ToolbarButton Icon="redo"
+                       Tooltip="@(RedoTooltip ?? "Redo")"
+                       TestId="toolbar-redo-button"
+                       Disabled="@RedoDisabled"
+                       OnClick="HandleRedo"/>
+    </BbButtonGroup>
+
+    <BbSeparator Orientation="SeparatorOrientation.Vertical" class="h-6"/>
+    @* Level controls *@
+    @if (MaxAvailableDepth > 0)
+    {
+        <BbButtonGroup>
+            <ToolbarButton Icon="minus"
+                           Tooltip="Decrease levels ([ key)"
+                           TestId="toolbar-decrease-levels-button"
+                           Disabled="@(MaxDepth <= 0)"
+                           OnClick="HandleDecreaseDepth"/>
+
+            <BbButton Variant="ButtonVariant.Outline"
+                      Size="ButtonSize.Small"
+                      Disabled="true"
+                      Class="px-2 min-w-[4rem] cursor-default"
+                      data-testid="toolbar-level-display">
+                @(MaxDepth + 1) levels
+            </BbButton>
+
+            <ToolbarButton Icon="plus"
+                           Tooltip="Increase levels (] key)"
+                           TestId="toolbar-increase-levels-button"
+                           Disabled="@(MaxDepth >= MaxAvailableDepth)"
+                           OnClick="HandleIncreaseDepth"/>
+        </BbButtonGroup>
+
+        <BbSeparator Orientation="SeparatorOrientation.Vertical" class="h-6"/>
+    }
+
+    @* Edit button *@
+    <BbButtonGroup>
+        <ToolbarButton Icon="pencil"
+                       Tooltip="Edit issue (i)"
+                       TestId="toolbar-edit-button"
+                       Disabled="@(SelectedIssueId == null)"
+                       OnClick="HandleEdit"/>
+
+        @* Run button with dropdown *@
+        <div class="toolbar-run-wrapper">
+            <ToolbarButton Icon="play"
+                           Tooltip="Run agent"
+                           TestId="toolbar-run-button"
+                           Disabled="@(SelectedIssueId == null || IsAgentRunning)"
+                           OnClick="ToggleDropdown"/>
+
+
+            @if (_showDropdown && SelectedIssueId != null)
+            {
+                <div class="toolbar-agent-dropdown" @onclick:stopPropagation="true">
+                    <div class="dropdown-content">
+                        <UnifiedAgentLauncher
+                            EntityId="@SelectedIssueId"
+                            ProjectId="@ProjectId"
+                            EntityTitle="@IssueTitle"
+                            EntityDescription="@IssueDescription"
+                            EntityType="@IssueType"
+                            BranchName="@BranchName"
+                            RepoPath="@RepoPath"
+                            DefaultBranch="@DefaultBranch"
+                            DefaultModel="@DefaultModel"
+                            Compact="true"
+                            OnSessionStarted="HandleSessionStarted"/>
+                    </div>
+                </div>
+            }
+        </div>
+    </BbButtonGroup>
+
+    @* Search input — right-aligned *@
+    <div class="ml-auto flex items-center gap-2">
+        <div class="toolbar-search-wrapper">
+            <input type="search"
+                   class="toolbar-search-input"
+                   data-testid="toolbar-search-input"
+                   value="@SearchTerm"
+                   @oninput="HandleSearchInput"
+                   @onkeydown="HandleSearchKeyDown"
+                   @onkeydown:stopPropagation="true"
+                   @onfocus="HandleSearchFocus"
+                   @ref="_searchInput"
+                   placeholder="Search... (/)" />
+            @if (!string.IsNullOrEmpty(SearchTerm))
+            {
+                @if (SearchMatchCount > 0)
+                {
+                    <span data-testid="toolbar-search-match-count">
+                        <BbBadge Variant="BadgeVariant.Secondary" Class="toolbar-search-badge">
+                            @SearchMatchCount
+                        </BbBadge>
+                    </span>
+                }
+                else
+                {
+                    <span data-testid="toolbar-search-no-matches">
+                        <BbBadge Variant="BadgeVariant.Outline" Class="toolbar-search-badge text-destructive">
+                            0
+                        </BbBadge>
+                    </span>
+                }
+            }
+        </div>
+    </div>
+</div>
+
+<style>
+    .toolbar-search-wrapper {
+        position: relative;
+        display: flex;
+        align-items: center;
+    }
+
+    .toolbar-search-input {
+        width: 180px;
+        padding: 4px 8px;
+        border: 1px solid var(--border-color, hsl(var(--border)));
+        border-radius: var(--radius-sm, 4px);
+        background: transparent;
+        color: var(--text-primary, hsl(var(--foreground)));
+        font-size: 0.8125rem;
+        outline: none;
+        transition: border-color 0.15s ease, width 0.15s ease;
+    }
+
+    .toolbar-search-input:focus {
+        border-color: var(--ring, hsl(var(--ring)));
+        width: 240px;
+    }
+
+    .toolbar-search-input::placeholder {
+        color: var(--text-muted, hsl(var(--muted-foreground)));
+    }
+
+    /* Hide the browser's default clear button on search inputs */
+    .toolbar-search-input::-webkit-search-cancel-button {
+        display: none;
+    }
+
+    .toolbar-search-badge {
+        position: absolute;
+        right: 6px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 0.6875rem;
+        pointer-events: none;
+    }
+</style>
+
+@code {
+
+    /// <summary>
+    /// The currently selected issue ID. Null if no issue is selected.
+    /// </summary>
+    [Parameter]
+    public string? SelectedIssueId { get; set; }
+
+    /// <summary>
+    /// The project ID for navigation and agent context.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public required string ProjectId { get; set; }
+
+    /// <summary>
+    /// Whether an agent is currently running on the selected issue.
+    /// </summary>
+    [Parameter]
+    public bool IsAgentRunning { get; set; }
+
+    /// <summary>
+    /// Callback when the edit button is clicked.
+    /// </summary>
+    [Parameter]
+    public EventCallback<string> OnEditClick { get; set; }
+
+    /// <summary>
+    /// Callback when a session is successfully started.
+    /// </summary>
+    [Parameter]
+    public EventCallback<ClaudeSession> OnSessionStarted { get; set; }
+
+    /// <summary>
+    /// The issue title for prompt template rendering.
+    /// </summary>
+    [Parameter]
+    public string? IssueTitle { get; set; }
+
+    /// <summary>
+    /// The issue description for prompt template rendering.
+    /// </summary>
+    [Parameter]
+    public string? IssueDescription { get; set; }
+
+    /// <summary>
+    /// The issue type for prompt template rendering (e.g., "Feature", "Bug").
+    /// </summary>
+    [Parameter]
+    public string? IssueType { get; set; }
+
+    /// <summary>
+    /// The branch name for the issue.
+    /// </summary>
+    [Parameter]
+    public string? BranchName { get; set; }
+
+    /// <summary>
+    /// Path to the main repository (for listing branches).
+    /// </summary>
+    [Parameter]
+    public string? RepoPath { get; set; }
+
+    /// <summary>
+    /// Default branch of the project.
+    /// </summary>
+    [Parameter]
+    public string? DefaultBranch { get; set; }
+
+    /// <summary>
+    /// Default model to use.
+    /// </summary>
+    [Parameter]
+    public string DefaultModel { get; set; } = "opus";
+
+    // Level control parameters
+
+    [Parameter]
+    public int MaxDepth { get; set; }
+
+    [Parameter]
+    public int MaxAvailableDepth { get; set; }
+
+    [Parameter]
+    public EventCallback OnDecreaseDepth { get; set; }
+
+    [Parameter]
+    public EventCallback OnIncreaseDepth { get; set; }
+
+    // Search parameters
+
+    [Parameter]
+    public string SearchTerm { get; set; } = "";
+
+    [Parameter]
+    public EventCallback<string> OnSearchTermChanged { get; set; }
+
+    [Parameter]
+    public int SearchMatchCount { get; set; }
+
+    [Parameter]
+    public EventCallback OnSearchEnter { get; set; }
+
+    [Parameter]
+    public EventCallback OnSearchEscape { get; set; }
+
+    [Parameter]
+    public EventCallback OnSearchFocused { get; set; }
+
+    // Creation button parameters
+
+    /// <summary>
+    /// Whether the create above/below buttons are disabled.
+    /// </summary>
+    [Parameter]
+    public bool CreateDisabled { get; set; }
+
+    /// <summary>
+    /// Callback when the create above button is clicked.
+    /// </summary>
+    [Parameter]
+    public EventCallback OnCreateAbove { get; set; }
+
+    /// <summary>
+    /// Callback when the create below button is clicked.
+    /// </summary>
+    [Parameter]
+    public EventCallback OnCreateBelow { get; set; }
+
+    // Hierarchy button parameters
+
+    /// <summary>
+    /// Whether the "Make Child Of" button is disabled.
+    /// </summary>
+    [Parameter]
+    public bool ChildOfDisabled { get; set; }
+
+    /// <summary>
+    /// Whether the "Make Parent Of" button is disabled.
+    /// </summary>
+    [Parameter]
+    public bool ParentOfDisabled { get; set; }
+
+    /// <summary>
+    /// Whether the "Make Child Of" button is in active selection mode.
+    /// </summary>
+    [Parameter]
+    public bool ChildOfActive { get; set; }
+
+    /// <summary>
+    /// Whether the "Make Parent Of" button is in active selection mode.
+    /// </summary>
+    [Parameter]
+    public bool ParentOfActive { get; set; }
+
+    /// <summary>
+    /// Callback when the "Make Child Of" button is clicked.
+    /// </summary>
+    [Parameter]
+    public EventCallback OnMakeChildOf { get; set; }
+
+    /// <summary>
+    /// Callback when the "Make Parent Of" button is clicked.
+    /// </summary>
+    [Parameter]
+    public EventCallback OnMakeParentOf { get; set; }
+
+    // Undo/Redo button parameters
+
+    /// <summary>
+    /// Whether the undo button is disabled.
+    /// </summary>
+    [Parameter]
+    public bool UndoDisabled { get; set; }
+
+    /// <summary>
+    /// Whether the redo button is disabled.
+    /// </summary>
+    [Parameter]
+    public bool RedoDisabled { get; set; }
+
+    /// <summary>
+    /// Tooltip text for the undo button (can include the action description).
+    /// </summary>
+    [Parameter]
+    public string? UndoTooltip { get; set; }
+
+    /// <summary>
+    /// Tooltip text for the redo button (can include the action description).
+    /// </summary>
+    [Parameter]
+    public string? RedoTooltip { get; set; }
+
+    /// <summary>
+    /// Callback when the undo button is clicked.
+    /// </summary>
+    [Parameter]
+    public EventCallback OnUndo { get; set; }
+
+    /// <summary>
+    /// Callback when the redo button is clicked.
+    /// </summary>
+    [Parameter]
+    public EventCallback OnRedo { get; set; }
+
+    private bool _showDropdown;
+    private ElementReference _searchInput;
+
+    private async Task HandleEdit()
+    {
+        if (SelectedIssueId == null) return;
+        await OnEditClick.InvokeAsync(SelectedIssueId);
+    }
+
+    private void ToggleDropdown()
+    {
+        if (SelectedIssueId == null || IsAgentRunning) return;
+        _showDropdown = !_showDropdown;
+    }
+
+    private async Task HandleSessionStarted(ClaudeSession session)
+    {
+        _showDropdown = false;
+        await OnSessionStarted.InvokeAsync(session);
+    }
+
+    private async Task HandleCreateAbove()
+    {
+        if (CreateDisabled) return;
+
+        if (OnCreateAbove.HasDelegate)
+        {
+            await OnCreateAbove.InvokeAsync();
+        }
+        else
+        {
+            NavService.CreateIssueAbove();
+        }
+    }
+
+    private async Task HandleCreateBelow()
+    {
+        if (CreateDisabled) return;
+
+        if (OnCreateBelow.HasDelegate)
+        {
+            await OnCreateBelow.InvokeAsync();
+        }
+        else
+        {
+            NavService.CreateIssueBelow();
+        }
+    }
+
+    private async Task HandleMakeChildOf()
+    {
+        if (ChildOfDisabled) return;
+
+        if (OnMakeChildOf.HasDelegate)
+        {
+            await OnMakeChildOf.InvokeAsync();
+        }
+        else
+        {
+            NavService.StartMakeChildOf();
+        }
+    }
+
+    private async Task HandleMakeParentOf()
+    {
+        if (ParentOfDisabled) return;
+
+        if (OnMakeParentOf.HasDelegate)
+        {
+            await OnMakeParentOf.InvokeAsync();
+        }
+        else
+        {
+            NavService.StartMakeParentOf();
+        }
+    }
+
+    private async Task HandleUndo()
+    {
+        if (UndoDisabled) return;
+        await OnUndo.InvokeAsync();
+    }
+
+    private async Task HandleRedo()
+    {
+        if (RedoDisabled) return;
+        await OnRedo.InvokeAsync();
+    }
+
+    public async Task FocusSearchAsync()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("homespunInterop.focusElement", _searchInput);
+        }
+        catch
+        {
+            // Focus might fail if element is not yet rendered
+        }
+    }
+
+    private async Task HandleSearchInput(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString() ?? "";
+        await OnSearchTermChanged.InvokeAsync(value);
+    }
+
+    private async Task HandleSearchKeyDown(KeyboardEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case "Escape":
+                await OnSearchEscape.InvokeAsync();
+                try
+                {
+                    await JSRuntime.InvokeVoidAsync("homespunInterop.blurElement", _searchInput);
+                }
+                catch { }
+                break;
+            case "Enter":
+                await OnSearchEnter.InvokeAsync();
+                try
+                {
+                    await JSRuntime.InvokeVoidAsync("homespunInterop.blurElement", _searchInput);
+                }
+                catch { }
+                break;
+        }
+    }
+
+    private async Task HandleSearchFocus()
+    {
+        await OnSearchFocused.InvokeAsync();
+    }
+
+    private async Task HandleDecreaseDepth()
+    {
+        if (MaxDepth <= 0) return;
+        await OnDecreaseDepth.InvokeAsync();
+    }
+
+    private async Task HandleIncreaseDepth()
+    {
+        if (MaxDepth >= MaxAvailableDepth) return;
+        await OnIncreaseDepth.InvokeAsync();
+    }
+
+}

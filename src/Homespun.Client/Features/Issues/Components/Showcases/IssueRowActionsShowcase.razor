@@ -1,0 +1,105 @@
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Default State (Hidden)</BbCardTitle>
+        <BbCardDescription>Actions are hidden by default (opacity: 0)</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <div style="background: var(--bg-primary); padding: 1rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem;">
+                <span style="color: var(--text-muted); font-size: 12px;">ISSUE-001</span>
+                <span style="color: var(--text-primary);">Example issue title</span>
+                <IssueRowActions IssueId="ISSUE-001"
+                                 ProjectId="demo-project"
+                                 BranchName="task/example-issue+ISSUE-001"
+                                 IsVisible="false" />
+            </div>
+        </div>
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Visible State (Hover/Selected)</BbCardTitle>
+        <BbCardDescription>Actions become visible on hover or when issue is selected</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <div style="background: var(--bg-primary); padding: 1rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: var(--bg-secondary);">
+                <span style="color: var(--text-muted); font-size: 12px;">ISSUE-002</span>
+                <span style="color: var(--text-primary);">Selected issue with visible actions</span>
+                <IssueRowActions IssueId="ISSUE-002"
+                                 ProjectId="demo-project"
+                                 BranchName="task/selected-issue+ISSUE-002"
+                                 IsVisible="true" />
+            </div>
+        </div>
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Disabled State</BbCardTitle>
+        <BbCardDescription>Actions are disabled when an agent is already running on the issue</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <div style="background: var(--bg-primary); padding: 1rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: var(--bg-secondary);">
+                <span style="color: var(--text-muted); font-size: 12px;">ISSUE-003</span>
+                <span style="color: var(--text-primary);">Issue with active agent</span>
+                <span class="agent-status-badge agent-status-running" style="font-size: 11px; padding: 2px 6px; border-radius: 4px; background: rgba(81, 165, 193, 0.2); color: var(--color-ocean);">
+                    <span class="agent-status-dot agent-status-dot-active" style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--color-ocean); margin-right: 4px;"></span>
+                    Working
+                </span>
+                <IssueRowActions IssueId="ISSUE-003"
+                                 ProjectId="demo-project"
+                                 BranchName="task/active-agent+ISSUE-003"
+                                 IsVisible="true"
+                                 Disabled="true" />
+            </div>
+        </div>
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Interactive Demo</BbCardTitle>
+        <BbCardDescription>Click the buttons to see callbacks in action</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <div style="background: var(--bg-primary); padding: 1rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: var(--bg-secondary);">
+                <span style="color: var(--text-muted); font-size: 12px;">DEMO-001</span>
+                <span style="color: var(--text-primary);">Interactive demo issue</span>
+                <IssueRowActions IssueId="DEMO-001"
+                                 ProjectId="demo-project"
+                                 IssueTitle="Interactive demo issue"
+                                 IssueDescription="This is a demo issue for testing the IssueRowActions component."
+                                 IssueType="Task"
+                                 BranchName="task/interactive-demo+DEMO-001"
+                                 IsVisible="true"
+                                 OnEditClick="HandleEditClick"
+                                 OnSessionStarted="HandleSessionStarted" />
+            </div>
+            @if (!string.IsNullOrEmpty(_lastAction))
+            {
+                <div style="margin-top: 0.5rem; padding: 0.5rem; background: var(--bg-tertiary); border-radius: 4px; font-size: 12px; color: var(--text-muted);">
+                    Last action: @_lastAction
+                </div>
+            }
+        </div>
+    </BbCardContent>
+</BbCard>
+
+@code {
+    private string? _lastAction;
+
+    private void HandleEditClick(string issueId)
+    {
+        _lastAction = $"Edit clicked for issue: {issueId}";
+    }
+
+    private void HandleSessionStarted(ClaudeSession session)
+    {
+        _lastAction = $"Session started: {session.Id} for entity: {session.EntityId}";
+    }
+}

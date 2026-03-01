@@ -1,4 +1,5 @@
 using Homespun.Client.Components;
+using Homespun.Client.Features.Branches.Components;
 using NUnit.Framework;
 
 namespace Homespun.Tests.Components;

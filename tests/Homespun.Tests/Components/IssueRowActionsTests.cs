@@ -1,5 +1,6 @@
 using Bunit;
 using Homespun.Client.Components;
+using Homespun.Client.Features.Issues.Components;
 using Homespun.Client.Services;
 using Homespun.Shared.Models.Sessions;
 using Homespun.Tests.Helpers;

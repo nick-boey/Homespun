@@ -1,0 +1,56 @@
+@*
+    AgentSelector depends on IAgentPromptApi.
+    This showcase renders a static mock version of the component.
+*@
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Default State</BbCardTitle>
+        <BbCardDescription>Ready to select and start an agent</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <MockAgentSelector />
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Starting State</BbCardTitle>
+        <BbCardDescription>Agent session is being started</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <MockAgentSelector IsStarting="true" />
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Disabled State</BbCardTitle>
+        <BbCardDescription>When a session is already running</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <MockAgentSelector Disabled="true" />
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>In Panel Context</BbCardTitle>
+        <BbCardDescription>How it appears in issue/PR detail panels</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <BbCard style="max-width: 400px;">
+            <BbCardHeader><BbCardTitle>Issue Details</BbCardTitle></BbCardHeader>
+            <BbCardContent>
+                <h5>Implement user authentication</h5>
+                <p class="text-text-muted text-sm">Start an agent to work on this issue</p>
+            </BbCardContent>
+            <BbCardFooter>
+                <MockAgentSelector />
+            </BbCardFooter>
+        </BbCard>
+    </BbCardContent>
+</BbCard>
+
+@code {
+}

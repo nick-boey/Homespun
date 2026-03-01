@@ -1,0 +1,683 @@
+@page "/projects/{ProjectId}/issues/{IssueId}/edit"
+@inject HttpProjectApiService ProjectApi
+@inject HttpIssueApiService IssueApi
+@inject HttpOrchestrationApiService OrchestrationApi
+@inject IBreadcrumbService BreadcrumbService
+@inject HttpSessionApiService SessionStoreApi
+@inject HttpSessionApiService SessionApi
+@inject HttpAgentPromptApiService AgentPromptApi
+@inject HttpCloneApiService CloneApi
+@inject IAgentStartupTracker StartupTracker
+@inject NavigationManager Navigation
+@inject ILogger<IssueEdit> Logger
+
+<PageTitle>Edit Issue - @(_issue?.Title ?? "Loading...")</PageTitle>
+
+@if (_loading)
+{
+    <p>Loading...</p>
+}
+else if (_notFound)
+{
+    <BbAlert Variant="AlertVariant.Warning">
+        <BbAlertTitle>Issue Not Found</BbAlertTitle>
+        <BbAlertDescription>
+            <p>The issue "@IssueId" could not be found in project "@ProjectId".</p>
+            <BbButton Variant="ButtonVariant.Secondary" Href="@($"projects/{ProjectId}")">Back to Project</BbButton>
+        </BbAlertDescription>
+    </BbAlert>
+}
+else if (_project == null)
+{
+    <BbAlert Variant="AlertVariant.Warning">
+        <BbAlertTitle>Project Not Found</BbAlertTitle>
+        <BbAlertDescription>
+            <p>The project "@ProjectId" could not be found.</p>
+            <BbButton Variant="ButtonVariant.Secondary" Href="projects">Back to Projects</BbButton>
+        </BbAlertDescription>
+    </BbAlert>
+}
+else
+{
+    <div class="flex justify-between items-center mb-3">
+        <h1>Edit Issue</h1>
+        <BbBadge Variant="BadgeVariant.Secondary">@IssueId</BbBadge>
+    </div>
+
+    <form @onsubmit="HandleSubmit" @onkeydown="HandleKeyDown">
+        <div class="grid grid-cols-12">
+            <div class="col-span-8">
+                <BbCard Class="mb-3">
+                    <BbCardHeader><BbCardTitle>Issue Details</BbCardTitle></BbCardHeader>
+                    <BbCardContent>
+                        <div class="mb-3">
+                            <BbLabel For="title">Title <span class="text-danger">*</span></BbLabel>
+                            <BbInput Id="title" @bind-Value="_title" Required="true" />
+                        </div>
+
+                        <div class="mb-3">
+                            <BbLabel For="description">Description</BbLabel>
+                            <BbTextarea Id="description" @bind-Value="_description"
+                                        Placeholder="Implementation details, acceptance criteria..." />
+                        </div>
+
+                        <div class="grid grid-cols-12 mb-3">
+                            <div class="col-span-4">
+                                <BbLabel>Type</BbLabel>
+                                <BbSelect TValue="IssueType" @bind-Value="_type" Options="_typeOptions" />
+                            </div>
+                            <div class="col-span-4">
+                                <BbLabel>Status</BbLabel>
+                                <BbSelect TValue="IssueStatus" @bind-Value="_status" Options="_statusOptions" />
+                            </div>
+                            <div class="col-span-4">
+                                <BbLabel>Priority</BbLabel>
+                                <BbSelect TValue="string" @bind-Value="_priority" Options="_priorityOptions" Placeholder="Not set" />
+                            </div>
+                        </div>
+
+                    </BbCardContent>
+                </BbCard>
+            </div>
+
+            <div class="col-span-4">
+                <BbCard Class="mb-3">
+                    <BbCardHeader><BbCardTitle>Branch Information</BbCardTitle></BbCardHeader>
+                    <BbCardContent>
+                        <div class="mb-3">
+                            <BbLabel For="workingBranchId">Working Branch ID</BbLabel>
+                            <div class="flex gap-2">
+                                <BbInput Id="workingBranchId" @bind-Value="_workingBranchId"
+                                         Placeholder="Custom branch identifier" Class="flex-1" />
+                                <BbButton Variant="ButtonVariant.Outline"
+                                          OnClick="SuggestBranchId"
+                                          Disabled="@_isSuggestingBranchId">
+                                    @if (_isSuggestingBranchId)
+                                    {
+                                        <BbSpinner Size="SpinnerSize.Small" />
+                                    }
+                                    else
+                                    {
+                                        <span>Suggest</span>
+                                    }
+                                </BbButton>
+                            </div>
+                            <div class="form-text">AI-suggested or auto-generated from title</div>
+                        </div>
+                        <div class="p-2 bg-bg-tertiary rounded text-sm">
+                            <strong>Branch Preview:</strong><br/>
+                            <code>@GetBranchPreview()</code>
+                        </div>
+                    </BbCardContent>
+                </BbCard>
+
+                <BbCard>
+                    <BbCardHeader><BbCardTitle>Metadata</BbCardTitle></BbCardHeader>
+                    <BbCardContent>
+                        <dl class="grid grid-cols-12 text-sm mb-0">
+                            <dt class="col-span-5 text-text-muted">Created</dt>
+                            <dd class="col-span-7">@_issue?.CreatedAt.ToString("g")</dd>
+                        </dl>
+                    </BbCardContent>
+                </BbCard>
+
+                <BbCard Class="mt-3">
+                    <BbCardHeader><BbCardTitle>Run Agent</BbCardTitle></BbCardHeader>
+                    <BbCardContent>
+                        @if (_existingSession != null)
+                        {
+                            <div class="mb-2">
+                                <BbBadge Class="bg-green-600 text-white border-transparent">Session Active</BbBadge>
+                            </div>
+                            <BbButton Size="ButtonSize.Small" Href="@($"/session/{_existingSession.Id}")" Class="w-full">
+                                Open Existing Session
+                            </BbButton>
+                        }
+                        else
+                        {
+                            <div class="mb-2">
+                                <BbLabel Class="text-sm mb-1">Model</BbLabel>
+                                <ModelSelector Id="edit-model"
+                                               SelectedModel="@_selectedModel"
+                                               SelectedModelChanged="@(m => _selectedModel = m)" />
+                            </div>
+                            <div class="mb-2">
+                                <BbLabel Class="text-sm mb-1">Base Branch</BbLabel>
+                                <BaseBranchSelector Id="edit-base-branch"
+                                                    SelectedBranch="@_selectedBaseBranch"
+                                                    SelectedBranchChanged="@(b => _selectedBaseBranch = b)"
+                                                    RepoPath="@_project?.LocalPath"
+                                                    DefaultBranch="@_project?.DefaultBranch" />
+                            </div>
+                            <div class="mb-2">
+                                <BbLabel Class="text-sm mb-1">Agent</BbLabel>
+                                <BbSelect TValue="string" @bind-Value="_selectedPromptId" Options="_promptOptions" Placeholder="None (no prompt)" />
+                            </div>
+                            <BbButton OnClick="HandleSaveAndRunAgent" Loading="@_isSavingAndRunning" LoadingText="Saving & Starting..." Class="w-full" Disabled="@_isSaving">Save & Run Agent</BbButton>
+                        }
+                    </BbCardContent>
+                </BbCard>
+            </div>
+        </div>
+
+        <hr />
+
+        <div class="flex justify-between items-center">
+            <div>
+                <BbButton Type="ButtonType.Submit" Loading="@_isSaving">Save Changes</BbButton>
+                <BbButton Variant="ButtonVariant.Secondary" Href="@($"projects/{ProjectId}")">Cancel</BbButton>
+            </div>
+            <div class="text-text-muted text-sm">
+                Press <kbd>Ctrl</kbd>+<kbd>Enter</kbd> to save
+            </div>
+        </div>
+
+        @if (!string.IsNullOrEmpty(_errorMessage))
+        {
+            <BbAlert Variant="AlertVariant.Danger" Class="mt-3">
+                <BbAlertDescription>@_errorMessage</BbAlertDescription>
+            </BbAlert>
+        }
+
+        @if (!string.IsNullOrEmpty(_successMessage))
+        {
+            <BbAlert Variant="AlertVariant.Success" Class="mt-3">
+                <BbAlertDescription>@_successMessage</BbAlertDescription>
+            </BbAlert>
+        }
+    </form>
+}
+
+<style>
+    kbd {
+        background-color: var(--bg-tertiary, #e9ecef);
+        border: 1px solid var(--border-color);
+        border-radius: 3px;
+        padding: 0.1rem 0.3rem;
+        font-size: 0.75rem;
+    }
+</style>
+
+@code {
+    [Parameter] public string ProjectId { get; set; } = "";
+    [Parameter] public string IssueId { get; set; } = "";
+    [SupplyParameterFromQuery] public bool AutoSuggest { get; set; }
+
+    private bool _loading = true;
+    private bool _notFound;
+    private bool _isSaving;
+    private bool _isSuggestingBranchId;
+    private string? _errorMessage;
+    private string? _successMessage;
+
+    private Project? _project;
+    private IssueResponse? _issue;
+
+    // Form fields
+    private string _title = "";
+    private string _description = "";
+    private IssueType _type = IssueType.Feature;
+    private IssueStatus _status = IssueStatus.Open;
+    private string _priority = "";
+    private string _workingBranchId = "";
+
+    // Agent run state
+    private string _selectedModel = "opus";
+    private string _selectedBaseBranch = "";
+    private string _selectedPromptId = "";
+    private IReadOnlyList<AgentPrompt> _prompts = [];
+    private List<SelectOption<string>> _promptOptions = [];
+    private bool _isSavingAndRunning;
+    private ClaudeSession? _existingSession;
+
+    // Static select options
+    private static readonly List<SelectOption<IssueType>> _typeOptions =
+        Enum.GetValues<IssueType>().Select(t => new SelectOption<IssueType>(t, t.ToString())).ToList();
+
+    private static readonly List<SelectOption<IssueStatus>> _statusOptions =
+        Enum.GetValues<IssueStatus>().Where(s => s != IssueStatus.Deleted)
+            .Select(s => new SelectOption<IssueStatus>(s, s.ToString())).ToList();
+
+    private static readonly List<SelectOption<string>> _priorityOptions =
+    [
+        new("0", "P0 - Critical"),
+        new("1", "P1 - High"),
+        new("2", "P2 - Medium"),
+        new("3", "P3 - Low"),
+        new("4", "P4 - Backlog"),
+    ];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        _loading = true;
+        _notFound = false;
+        StateHasChanged();
+
+        try
+        {
+            // Load project
+            _project = await ProjectApi.GetProjectAsync(ProjectId);
+            if (_project == null)
+            {
+                _loading = false;
+                return;
+            }
+
+            // Load issue from Fleece
+            _issue = await IssueApi.GetIssueAsync(IssueId, ProjectId);
+            if (_issue == null)
+            {
+                _notFound = true;
+                _loading = false;
+                return;
+            }
+
+            // Set breadcrumb context with project, issue, and page info
+            await BreadcrumbService.SetContextAsync(new BreadcrumbContext
+            {
+                ProjectId = ProjectId,
+                IssueId = IssueId,
+                PageName = "Edit"
+            });
+
+            // Initialize form fields
+            InitializeFormFromIssue();
+
+            // Initialize agent run state
+            if (_project.DefaultModel != null)
+            {
+                _selectedModel = _project.DefaultModel;
+            }
+
+            if (_project.DefaultBranch != null)
+            {
+                _selectedBaseBranch = _project.DefaultBranch;
+            }
+
+            // Load agent prompts
+            await AgentPromptApi.EnsureDefaultPromptsAsync();
+            _prompts = await AgentPromptApi.GetAllPromptsAsync();
+            _promptOptions = _prompts.Select(p =>
+                new SelectOption<string>(p.Id, $"{p.Name} ({p.Mode})")).ToList();
+            var planPrompt = _prompts.FirstOrDefault(p => p.Name == "Plan");
+            if (planPrompt != null)
+            {
+                _selectedPromptId = planPrompt.Id;
+            }
+
+            // Check for existing active session
+            _existingSession = await SessionStoreApi.GetSessionByEntityIdAsync(IssueId);
+
+            // Auto-trigger branch ID suggestion if requested and no branch ID exists
+            if (AutoSuggest && string.IsNullOrWhiteSpace(_workingBranchId))
+            {
+                // Fire-and-forget - don't await to allow page to render immediately
+                _ = SuggestBranchId();
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to load issue {IssueId} for project {ProjectId}", IssueId, ProjectId);
+            _errorMessage = $"Failed to load issue: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void InitializeFormFromIssue()
+    {
+        if (_issue == null) return;
+
+        _title = _issue.Title;
+        _description = _issue.Description ?? "";
+        _type = _issue.Type;
+        _status = _issue.Status;
+        _priority = _issue.Priority?.ToString() ?? "";
+        _workingBranchId = _issue.WorkingBranchId ?? "";
+    }
+
+    /// <summary>
+    /// Saves issue changes and returns the updated issue, or null on failure.
+    /// Sets _errorMessage on validation or save failure.
+    /// </summary>
+    private async Task<IssueResponse?> SaveChangesAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_title))
+        {
+            _errorMessage = "Title is required.";
+            return null;
+        }
+
+        if (_project == null || _issue == null)
+        {
+            _errorMessage = "Project or issue not available.";
+            return null;
+        }
+
+        try
+        {
+            // Parse priority
+            int? priority = null;
+            if (int.TryParse(_priority, out var priorityValue))
+            {
+                priority = priorityValue;
+            }
+
+            // Only pass changed values
+            var titleToUpdate = _title.Trim() != _issue.Title ? _title.Trim() : null;
+            var descToUpdate = _description.Trim() != (_issue.Description ?? "") ? _description.Trim() : null;
+            var typeToUpdate = _type != _issue.Type ? _type : (IssueType?)null;
+            var statusToUpdate = _status != _issue.Status ? _status : (IssueStatus?)null;
+            var priorityToUpdate = priority != _issue.Priority ? priority : null;
+            var branchIdToUpdate = _workingBranchId.Trim() != (_issue.WorkingBranchId ?? "")
+                ? _workingBranchId.Trim()
+                : null;
+
+            // Perform update
+            var updated = await IssueApi.UpdateIssueAsync(_issue.Id, new UpdateIssueRequest
+            {
+                ProjectId = ProjectId,
+                Title = titleToUpdate,
+                Status = statusToUpdate,
+                Type = typeToUpdate,
+                Description = descToUpdate,
+                Priority = priorityToUpdate,
+                WorkingBranchId = branchIdToUpdate
+            });
+
+            if (updated == null)
+            {
+                _errorMessage = "Failed to update issue.";
+                return null;
+            }
+
+            Logger.LogInformation("Successfully updated issue {IssueId}", IssueId);
+            return updated;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to save issue {IssueId}", IssueId);
+            _errorMessage = $"Failed to save: {ex.Message}";
+            return null;
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        _isSaving = true;
+        _errorMessage = null;
+        _successMessage = null;
+
+        try
+        {
+            var updated = await SaveChangesAsync();
+            if (updated != null)
+            {
+                // Navigate back to project detail
+                Navigation.NavigateTo($"projects/{ProjectId}");
+            }
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    /// <summary>
+    /// Saves changes and starts an agent session asynchronously, then navigates to the project page.
+    /// The agent startup happens in the background - the user is returned to the project page immediately.
+    /// </summary>
+    private async Task HandleSaveAndRunAgent()
+    {
+        _isSavingAndRunning = true;
+        _errorMessage = null;
+        _successMessage = null;
+
+        try
+        {
+            // 1. Save changes first - agent must work with latest data
+            var updated = await SaveChangesAsync();
+            if (updated == null) return; // Save failed, _errorMessage already set
+
+            // 2. Refresh _issue with saved data so agent sees latest state
+            _issue = updated;
+
+            // 3. Start agent session in background (fire-and-forget)
+            // Error handling is done via StartupTracker which persists error state
+            _ = StartAgentSessionAsync();
+
+            // 4. Navigate immediately to project page
+            // User can monitor agent startup via IssueDetailPanel on the project page
+            Navigation.NavigateTo($"projects/{ProjectId}");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to save and run agent for issue {IssueId}", IssueId);
+            _errorMessage = $"Failed to start agent: {ex.Message}";
+        }
+        finally
+        {
+            _isSavingAndRunning = false;
+        }
+    }
+
+    /// <summary>
+    /// Starts an agent session for the current issue asynchronously.
+    /// Creates or finds a clone and starts the Claude session.
+    /// This method is designed to be called fire-and-forget from HandleSaveAndRunAgent.
+    /// Errors are tracked via StartupTracker.
+    /// </summary>
+    private async Task StartAgentSessionAsync()
+    {
+        if (_project == null)
+        {
+            _errorMessage = "Project not available.";
+            return;
+        }
+
+        StartupTracker.MarkAsStarting(IssueId);
+        StateHasChanged();
+
+        try
+        {
+            // Try to resolve an existing branch from linked PR or existing clone
+            var resolvedBranch = await IssueApi.GetResolvedBranchAsync(IssueId, ProjectId);
+            var branchName = resolvedBranch ?? GetBranchPreview();
+
+            if (resolvedBranch != null)
+            {
+                Logger.LogInformation("Using resolved branch {BranchName} for issue {IssueId}", branchName, IssueId);
+            }
+
+            // Get or create clone for the issue's branch
+            string? clonePath = null;
+            var cloneExistsResult = await CloneApi.CheckCloneExistsAsync(ProjectId, branchName);
+
+            if (cloneExistsResult?.Exists == true)
+            {
+                // Find the clone path from the clones list
+                var clones = await CloneApi.ListClonesAsync(ProjectId);
+                var existingClone = clones.FirstOrDefault(c =>
+                    c.Branch?.Replace("refs/heads/", "") == branchName);
+                clonePath = existingClone?.Path;
+
+                if (!string.IsNullOrEmpty(clonePath))
+                {
+                    Logger.LogInformation("Found existing clone at {ClonePath} for branch {BranchName}", clonePath, branchName);
+                }
+            }
+
+            if (string.IsNullOrEmpty(clonePath))
+            {
+                // Use selected base branch, falling back to project default
+                var baseBranch = !string.IsNullOrEmpty(_selectedBaseBranch)
+                    ? _selectedBaseBranch
+                    : _project.DefaultBranch;
+
+                // Create new clone for the issue's branch
+                Logger.LogInformation("Creating clone for branch {BranchName} from base {BaseBranch}", branchName, baseBranch);
+
+                var createResult = await CloneApi.CreateCloneAsync(new CreateCloneRequest
+                {
+                    ProjectId = ProjectId,
+                    BranchName = branchName,
+                    CreateBranch = true,
+                    BaseBranch = baseBranch
+                });
+                clonePath = createResult?.Path;
+
+                if (string.IsNullOrEmpty(clonePath))
+                {
+                    _errorMessage = "Failed to create clone for issue branch.";
+                    StartupTracker.MarkAsFailed(IssueId, _errorMessage);
+                    return;
+                }
+
+                Logger.LogInformation("Created clone at {ClonePath} for issue {IssueId}", clonePath, IssueId);
+            }
+
+            // Resolve selected prompt
+            AgentPrompt? selectedPrompt = null;
+            if (!string.IsNullOrEmpty(_selectedPromptId))
+            {
+                selectedPrompt = await AgentPromptApi.GetPromptAsync(_selectedPromptId);
+            }
+
+            // Use the prompt's mode, or default to Build if no prompt selected
+            var mode = selectedPrompt?.Mode ?? SessionMode.Build;
+            var systemPrompt = GenerateSystemPrompt();
+
+            var session = await SessionApi.StartSessionAsync(
+                IssueId,
+                ProjectId,
+                clonePath,
+                mode,
+                _selectedModel,
+                systemPrompt);
+
+            StartupTracker.MarkAsStarted(IssueId);
+
+            // Send an initial message to start the agent working (if a prompt is selected)
+            if (selectedPrompt != null && !string.IsNullOrEmpty(selectedPrompt.InitialMessage))
+            {
+                var context = new PromptContext
+                {
+                    Title = _issue!.Title,
+                    Id = _issue.Id,
+                    Description = _issue.Description,
+                    Branch = branchName,
+                    Type = _issue.Type.ToString()
+                };
+                var initialMessage = HttpAgentPromptApiService.RenderTemplate(selectedPrompt.InitialMessage, context);
+                if (!string.IsNullOrEmpty(initialMessage))
+                {
+                    await SessionApi.SendMessageAsync(session.Id, initialMessage);
+                }
+            }
+
+            // Agent started successfully - user has already been navigated to project page
+            // They can monitor agent progress via IssueDetailPanel which receives SignalR updates
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to start session for issue {IssueId}", IssueId);
+            StartupTracker.MarkAsFailed(IssueId, ex.Message);
+            throw; // Re-throw to be caught by HandleSaveAndRunAgent
+        }
+    }
+
+    /// <summary>
+    /// Generates a context-aware system prompt for the agent session.
+    /// </summary>
+    private string? GenerateSystemPrompt()
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"You are working on issue {_issue!.Id}: {_title}");
+
+        if (!string.IsNullOrEmpty(_description))
+        {
+            sb.AppendLine();
+            sb.AppendLine("Issue Description:");
+            sb.AppendLine(_description);
+        }
+
+        sb.AppendLine();
+        sb.AppendLine($"Branch: {GetBranchPreview()}");
+
+        return sb.ToString();
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && (e.CtrlKey || e.MetaKey))
+        {
+            await HandleSubmit();
+        }
+    }
+
+    /// <summary>
+    /// Gets the branch name preview based on current form values.
+    /// Uses the shared BranchNameGenerator to ensure consistency with IssueDetailPanel.
+    /// </summary>
+    private string GetBranchPreview()
+    {
+        // Use the shared generator to ensure branch name calculation is consistent
+        // across the application (edit form preview matches what will be created)
+        return GenerateBranchNamePreview(IssueId, _type, _title, workingBranchId: _workingBranchId);
+    }
+
+    /// <summary>
+    /// Suggests a branch ID using AI based on the current title.
+    /// </summary>
+    private async Task SuggestBranchId()
+    {
+        if (string.IsNullOrWhiteSpace(_title))
+        {
+            _errorMessage = "Please enter a title first to generate a branch ID suggestion.";
+            return;
+        }
+
+        // Prevent duplicate calls (race condition guard)
+        if (_isSuggestingBranchId)
+        {
+            return;
+        }
+
+        _isSuggestingBranchId = true;
+        _errorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            var result = await OrchestrationApi.GenerateBranchIdAsync(new GenerateBranchIdRequest(_title));
+            if (result.Success && !string.IsNullOrWhiteSpace(result.BranchId))
+            {
+                _workingBranchId = result.BranchId;
+                Logger.LogInformation(
+                    "Suggested branch ID '{BranchId}' for title '{Title}' (AI: {WasAiGenerated})",
+                    result.BranchId, _title, result.WasAiGenerated);
+            }
+            else
+            {
+                _errorMessage = result.Error ?? "Failed to generate branch ID suggestion.";
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to suggest branch ID for title '{Title}'", _title);
+            _errorMessage = $"Failed to suggest branch ID: {ex.Message}";
+        }
+        finally
+        {
+            _isSuggestingBranchId = false;
+            StateHasChanged();
+        }
+    }
+}

@@ -1,0 +1,90 @@
+
+<div class="glob-result">
+    @if (!string.IsNullOrEmpty(Data.Pattern))
+    {
+        <div class="glob-pattern">
+            <span class="label">Pattern:</span>
+            <code>@Data.Pattern</code>
+        </div>
+    }
+    <div class="file-count">
+        Found @Data.TotalFiles file@(Data.TotalFiles == 1 ? "" : "s")
+    </div>
+    @if (Data.Files.Count > 0)
+    {
+        <div class="files-list">
+            @foreach (var file in Data.Files.Take(100))
+            {
+                <div class="file-item">
+                    <code>@file</code>
+                </div>
+            }
+            @if (Data.Files.Count > 100)
+            {
+                <div class="more-files">
+                    ... and @(Data.Files.Count - 100) more files
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<style>
+    .glob-result {
+        font-family: var(--font-mono, monospace);
+        font-size: 0.75rem;
+    }
+
+    .glob-pattern {
+        display: flex;
+        align-items: baseline;
+        gap: var(--spacing-sm);
+        margin-bottom: var(--spacing-xs);
+    }
+
+    .glob-pattern .label {
+        color: var(--text-muted);
+        font-size: 0.6875rem;
+        flex-shrink: 0;
+    }
+
+    .glob-pattern code {
+        color: var(--text-primary);
+        background: var(--code-bg);
+        padding: 1px 4px;
+        border-radius: var(--radius-sm);
+    }
+
+    .file-count {
+        color: var(--text-muted);
+        font-size: 0.6875rem;
+        margin-bottom: var(--spacing-sm);
+    }
+
+    .files-list {
+        max-height: 250px;
+        overflow-y: auto;
+    }
+
+    .file-item {
+        padding: 1px 0;
+        line-height: 1.4;
+    }
+
+    .file-item code {
+        color: var(--text-primary);
+        font-size: 0.75rem;
+    }
+
+    .more-files {
+        color: var(--text-muted);
+        font-style: italic;
+        padding-top: var(--spacing-xs);
+        font-size: 0.6875rem;
+    }
+</style>
+
+@code {
+    [Parameter]
+    public required GlobToolData Data { get; set; }
+}

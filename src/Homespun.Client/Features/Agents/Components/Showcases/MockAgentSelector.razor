@@ -1,0 +1,40 @@
+@* Mock version of AgentSelector that doesn't depend on services *@
+
+<div class="agent-selector">
+    <div class="d-flex gap-2 align-items-end">
+        <div class="flex-grow-1">
+            <BbLabel Class="small mb-1">Agent</BbLabel>
+            <BbSelect TValue="string" @bind-Value="_selected" Options="_options"
+                      Disabled="@Disabled" Placeholder="None (no prompt)" />
+        </div>
+        <BbButton Variant="ButtonVariant.Default" Size="ButtonSize.Small" Disabled="@(Disabled || IsStarting)">
+            @if (IsStarting)
+            {
+                <BbSpinner Size="SpinnerSize.Small" Class="me-1" />
+                <span>Starting...</span>
+            }
+            else
+            {
+                <LucideIcon Name="play" Size="14" Class="me-1" />
+                <span>Start</span>
+            }
+        </BbButton>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public bool Disabled { get; set; }
+
+    [Parameter]
+    public bool IsStarting { get; set; }
+
+    private string _selected = "build";
+
+    private static readonly List<SelectOption<string>> _options =
+    [
+        new("build", "Build (Build)"),
+        new("plan", "Plan (Plan)"),
+        new("review", "Review (Build)"),
+    ];
+}

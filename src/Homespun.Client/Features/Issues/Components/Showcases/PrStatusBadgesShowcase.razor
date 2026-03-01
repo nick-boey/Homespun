@@ -1,0 +1,191 @@
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>In Progress</BbCardTitle>
+        <BbCardDescription>PR with checks running</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <PrStatusBadges Status="@_inProgressStatus" />
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Ready for Review</BbCardTitle>
+        <BbCardDescription>PR awaiting review with passing checks</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <PrStatusBadges Status="@_readyForReviewStatus" />
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Checks Failing</BbCardTitle>
+        <BbCardDescription>PR with failing CI checks</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <PrStatusBadges Status="@_checksFailingStatus" />
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Changes Requested</BbCardTitle>
+        <BbCardDescription>PR with review feedback</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <PrStatusBadges Status="@_changesRequestedStatus" />
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Approved</BbCardTitle>
+        <BbCardDescription>PR approved by reviewers</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <PrStatusBadges Status="@_approvedStatus" />
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Ready to Merge</BbCardTitle>
+        <BbCardDescription>PR ready for merging - all checks passed and approved</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <PrStatusBadges Status="@_readyToMergeStatus" />
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Merge Conflicts</BbCardTitle>
+        <BbCardDescription>PR with merge conflicts</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <PrStatusBadges Status="@_conflictStatus" />
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Merged</BbCardTitle>
+        <BbCardDescription>PR that has been merged</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <PrStatusBadges Status="@_mergedStatus" />
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Closed</BbCardTitle>
+        <BbCardDescription>PR closed without merging</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <PrStatusBadges Status="@_closedStatus" />
+    </BbCardContent>
+</BbCard>
+
+@code {
+    private IssuePullRequestStatus _inProgressStatus = new()
+    {
+        PrNumber = 42,
+        PrUrl = "https://github.com/example/repo/pull/42",
+        BranchName = "feature/add-auth",
+        Status = PullRequestStatus.InProgress,
+        ChecksPassing = null,
+        IsApproved = false,
+        ApprovalCount = 0
+    };
+
+    private IssuePullRequestStatus _readyForReviewStatus = new()
+    {
+        PrNumber = 43,
+        PrUrl = "https://github.com/example/repo/pull/43",
+        BranchName = "feature/dashboard",
+        Status = PullRequestStatus.ReadyForReview,
+        ChecksPassing = true,
+        IsApproved = false,
+        ApprovalCount = 0
+    };
+
+    private IssuePullRequestStatus _checksFailingStatus = new()
+    {
+        PrNumber = 44,
+        PrUrl = "https://github.com/example/repo/pull/44",
+        BranchName = "fix/login-bug",
+        Status = PullRequestStatus.ChecksFailing,
+        ChecksPassing = false,
+        IsApproved = false,
+        ApprovalCount = 0
+    };
+
+    private IssuePullRequestStatus _changesRequestedStatus = new()
+    {
+        PrNumber = 45,
+        PrUrl = "https://github.com/example/repo/pull/45",
+        BranchName = "feature/settings",
+        Status = PullRequestStatus.ReadyForReview,
+        ChecksPassing = true,
+        IsApproved = false,
+        ApprovalCount = 0,
+        ChangesRequestedCount = 2
+    };
+
+    private IssuePullRequestStatus _approvedStatus = new()
+    {
+        PrNumber = 46,
+        PrUrl = "https://github.com/example/repo/pull/46",
+        BranchName = "feature/notifications",
+        Status = PullRequestStatus.ReadyForReview,
+        ChecksPassing = true,
+        IsApproved = true,
+        ApprovalCount = 2
+    };
+
+    private IssuePullRequestStatus _readyToMergeStatus = new()
+    {
+        PrNumber = 47,
+        PrUrl = "https://github.com/example/repo/pull/47",
+        BranchName = "feature/search",
+        Status = PullRequestStatus.ReadyForMerging,
+        ChecksPassing = true,
+        IsApproved = true,
+        ApprovalCount = 2
+    };
+
+    private IssuePullRequestStatus _conflictStatus = new()
+    {
+        PrNumber = 48,
+        PrUrl = "https://github.com/example/repo/pull/48",
+        BranchName = "feature/api-v2",
+        Status = PullRequestStatus.Conflict,
+        ChecksPassing = true,
+        IsApproved = true,
+        ApprovalCount = 1
+    };
+
+    private IssuePullRequestStatus _mergedStatus = new()
+    {
+        PrNumber = 49,
+        PrUrl = "https://github.com/example/repo/pull/49",
+        BranchName = "feature/dark-mode",
+        Status = PullRequestStatus.Merged,
+        ChecksPassing = true,
+        IsApproved = true,
+        ApprovalCount = 2
+    };
+
+    private IssuePullRequestStatus _closedStatus = new()
+    {
+        PrNumber = 50,
+        PrUrl = "https://github.com/example/repo/pull/50",
+        BranchName = "feature/abandoned",
+        Status = PullRequestStatus.Closed,
+        ChecksPassing = null,
+        IsApproved = false,
+        ApprovalCount = 0
+    };
+}

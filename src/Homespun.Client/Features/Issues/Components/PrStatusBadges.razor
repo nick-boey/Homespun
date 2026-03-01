@@ -1,0 +1,108 @@
+
+@if (Status != null)
+{
+    <div class="pr-status-section border rounded p-2 @CssClass">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <h6 class="mb-0">
+                <LucideIcon Name="git-branch" Size="14" Class="me-1" />
+                Pull Request
+            </h6>
+            <a href="@Status.PrUrl" target="_blank" style="text-decoration: none;">
+                <BbBadge Variant="BadgeVariant.Secondary">
+                    PR #@Status.PrNumber <LucideIcon Name="external-link" Size="10" Class="ms-1" />
+                </BbBadge>
+            </a>
+        </div>
+        <div class="d-flex flex-wrap gap-1 align-items-center">
+            <BbBadge Class="@GetPrStatusBadgeClass()">@GetPrStatusDisplay()</BbBadge>
+            @if (Status.ChecksPassing.HasValue)
+            {
+                <BbBadge Class="@(Status.ChecksPassing.Value ? "bg-green-600 text-white border-transparent" : "bg-destructive text-destructive-foreground border-transparent")">
+                    @if (Status.ChecksPassing.Value)
+                    {
+                        <LucideIcon Name="check" Size="10" Class="me-1" />
+                        <text>Checks Passing</text>
+                    }
+                    else
+                    {
+                        <LucideIcon Name="x" Size="10" Class="me-1" />
+                        <text>Checks Failing</text>
+                    }
+                </BbBadge>
+            }
+            else if (Status.ChecksRunning)
+            {
+                <BbBadge Class="bg-amber-500 text-white border-transparent">
+                    <BbSpinner Size="SpinnerSize.Small" Class="me-1" />
+                    Checks Running
+                </BbBadge>
+            }
+            @if (Status.IsApproved == true)
+            {
+                <BbBadge Class="bg-green-600 text-white border-transparent">
+                    <LucideIcon Name="check" Size="10" Class="me-1" />
+                    Approved (@Status.ApprovalCount)
+                </BbBadge>
+            }
+            else if (Status.ChangesRequestedCount > 0)
+            {
+                <BbBadge Class="bg-amber-500 text-white border-transparent">
+                    <LucideIcon Name="alert-circle" Size="10" Class="me-1" />
+                    Changes Requested (@Status.ChangesRequestedCount)
+                </BbBadge>
+            }
+            @if (Status.IsMergeable)
+            {
+                <BbBadge Class="bg-green-600 text-white border-transparent">
+                    <LucideIcon Name="check-circle" Size="10" Class="me-1" />
+                    Ready to Merge
+                </BbBadge>
+            }
+            @if (Status.HasConflicts)
+            {
+                <BbBadge Variant="BadgeVariant.Destructive">
+                    <LucideIcon Name="alert-triangle" Size="10" Class="me-1" />
+                    Merge Conflicts
+                </BbBadge>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    /// <summary>
+    /// The PR status to display.
+    /// </summary>
+    [Parameter]
+    public IssuePullRequestStatus? Status { get; set; }
+
+    /// <summary>
+    /// Optional additional CSS classes for the container.
+    /// </summary>
+    [Parameter]
+    public string? CssClass { get; set; }
+
+    private string GetPrStatusBadgeClass() => Status?.Status switch
+    {
+        PullRequestStatus.InProgress => "bg-primary text-primary-foreground border-transparent",
+        PullRequestStatus.ReadyForReview => "bg-amber-500 text-white border-transparent",
+        PullRequestStatus.ChecksFailing => "bg-destructive text-destructive-foreground border-transparent",
+        PullRequestStatus.Conflict => "bg-destructive text-destructive-foreground border-transparent",
+        PullRequestStatus.ReadyForMerging => "bg-green-600 text-white border-transparent",
+        PullRequestStatus.Merged => "bg-purple-500 text-white border-transparent",
+        PullRequestStatus.Closed => "bg-secondary text-secondary-foreground border-transparent",
+        _ => "bg-secondary text-secondary-foreground border-transparent"
+    };
+
+    private string GetPrStatusDisplay() => Status?.Status switch
+    {
+        PullRequestStatus.InProgress => "In Progress",
+        PullRequestStatus.ReadyForReview => "Ready for Review",
+        PullRequestStatus.ChecksFailing => "Checks Failing",
+        PullRequestStatus.Conflict => "Has Conflicts",
+        PullRequestStatus.ReadyForMerging => "Ready to Merge",
+        PullRequestStatus.Merged => "Merged",
+        PullRequestStatus.Closed => "Closed",
+        _ => "Unknown"
+    };
+}

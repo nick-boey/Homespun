@@ -1,0 +1,88 @@
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Text Content Block</BbCardTitle>
+        <BbCardDescription>Renders text with the TextBlock component</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ContentBlock Content="_textContent" />
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Thinking Content Block</BbCardTitle>
+        <BbCardDescription>Renders thinking with the ThinkingBlock component</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ContentBlock Content="_thinkingContent" />
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Tool Use Content Block</BbCardTitle>
+        <BbCardDescription>Renders tool invocation with the ToolUseBlock component</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ContentBlock Content="_toolUseContent" />
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Tool Result Content Block</BbCardTitle>
+        <BbCardDescription>Renders tool result with the ToolResultBlock component</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ContentBlock Content="_toolResultContent" />
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Streaming Content Block</BbCardTitle>
+        <BbCardDescription>Content currently being streamed</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ContentBlock Content="_streamingContent" />
+    </BbCardContent>
+</BbCard>
+
+@code {
+    private ClaudeMessageContent _textContent = new()
+    {
+        Type = ClaudeContentType.Text,
+        Text = "I'll help you implement the login form with validation."
+    };
+
+    private ClaudeMessageContent _thinkingContent = new()
+    {
+        Type = ClaudeContentType.Thinking,
+        Text = "I need to check the existing form structure before making changes.",
+        Thinking = "I need to check the existing form structure before making changes."
+    };
+
+    private ClaudeMessageContent _toolUseContent = new()
+    {
+        Type = ClaudeContentType.ToolUse,
+        ToolName = "Read",
+        ToolInput = """{"file_path": "/src/components/LoginForm.tsx"}""",
+        ToolUseId = "tool_123"
+    };
+
+    private ClaudeMessageContent _toolResultContent = new()
+    {
+        Type = ClaudeContentType.ToolResult,
+        Text = "export const LoginForm = () => { return <form>...</form>; }",
+        ToolUseId = "tool_123",
+        ToolResult = "export const LoginForm = () => { return <form>...</form>; }",
+        ToolSuccess = true
+    };
+
+    private ClaudeMessageContent _streamingContent = new()
+    {
+        Type = ClaudeContentType.Text,
+        Text = "Analyzing the current implementation",
+        IsStreaming = true
+    };
+}

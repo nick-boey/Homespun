@@ -1,0 +1,225 @@
+@inject IKeyboardNavigationService NavService
+@inject IJSRuntime JSRuntime
+
+<div class="inline-issue-editor" data-testid="inline-issue-create">
+    <input type="text"
+           class="inline-issue-input"
+           data-testid="inline-issue-input"
+           value="@Title"
+           @oninput="HandleInput"
+           @onkeydown="HandleKeyDown"
+           @onkeydown:stopPropagation="true"
+           @onblur="HandleBlur"
+           @ref="_inputElement"
+           placeholder="@Placeholder" />
+    <div class="inline-issue-actions">
+        <button type="button"
+                class="inline-action-btn inline-action-ok"
+                data-testid="inline-ok-btn"
+                title="Save (Enter)"
+                @onclick="HandleOkClick"
+                @onclick:stopPropagation="true">
+            <LucideIcon Name="check" Size="14" />
+        </button>
+        <button type="button"
+                class="inline-action-btn inline-action-ok-edit"
+                data-testid="inline-ok-edit-btn"
+                title="Save and edit description (Shift+Enter)"
+                @onclick="HandleOkEditClick"
+                @onclick:stopPropagation="true">
+            <LucideIcon Name="pencil" Size="14" />
+        </button>
+        <button type="button"
+                class="inline-action-btn inline-action-cancel"
+                data-testid="inline-cancel-btn"
+                title="Cancel (Escape)"
+                @onclick="HandleCancelClick"
+                @onclick:stopPropagation="true">
+            <LucideIcon Name="x" Size="14" />
+        </button>
+    </div>
+</div>
+
+<style>
+    .inline-issue-editor {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm, 4px);
+    }
+
+    .inline-issue-input {
+        flex: 1;
+        min-width: 0;
+        background: var(--bg-primary, #1a1a2e);
+        border: 2px solid var(--color-ocean, #51A5C1);
+        border-radius: 4px;
+        padding: 4px 8px;
+        color: var(--text-primary, #eaeaea);
+        font-size: 14px;
+        outline: none;
+        box-shadow: 0 0 8px rgba(81, 165, 193, 0.3);
+    }
+
+    .inline-issue-input:focus {
+        border-color: var(--color-ocean, #51A5C1);
+        box-shadow: 0 0 12px rgba(81, 165, 193, 0.5);
+    }
+
+    .inline-issue-input::placeholder {
+        color: var(--text-muted, #6c757d);
+    }
+
+    .inline-issue-actions {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        flex-shrink: 0;
+    }
+
+    .inline-action-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        padding: 0;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background-color var(--transition-fast, 0.15s), transform var(--transition-fast, 0.15s);
+    }
+
+    .inline-action-btn:hover {
+        transform: scale(1.05);
+    }
+
+    .inline-action-btn :deep(svg) {
+        width: 14px;
+        height: 14px;
+    }
+
+    .inline-action-ok {
+        background: var(--color-ocean, #51A5C1);
+        color: white;
+    }
+
+    .inline-action-ok:hover {
+        background: var(--color-ocean-dark, #2563eb);
+    }
+
+    .inline-action-ok-edit {
+        background: var(--color-forest, #10b981);
+        color: white;
+    }
+
+    .inline-action-ok-edit:hover {
+        background: var(--color-forest-dark, #059669);
+    }
+
+    .inline-action-cancel {
+        background: var(--bg-tertiary, rgba(255, 255, 255, 0.1));
+        color: var(--text-muted, #6c757d);
+    }
+
+    .inline-action-cancel:hover {
+        background: var(--color-danger, #ef4444);
+        color: white;
+    }
+</style>
+
+@code {
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public EventCallback<string> TitleChanged { get; set; }
+    [Parameter] public string Placeholder { get; set; } = "Enter issue title...";
+    [Parameter] public EditCursorPosition CursorPosition { get; set; } = EditCursorPosition.End;
+
+    private ElementReference _inputElement;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await FocusInputAsync();
+        }
+    }
+
+    private async Task FocusInputAsync()
+    {
+        try
+        {
+            var cursorPos = CursorPosition switch
+            {
+                EditCursorPosition.Start => "start",
+                EditCursorPosition.End => "end",
+                EditCursorPosition.Replace => "replace",
+                _ => "end"
+            };
+            await JSRuntime.InvokeVoidAsync("homespunInterop.focusWithCursor", _inputElement, cursorPos, Title.Length);
+        }
+        catch
+        {
+            // Focus might fail if element is not in DOM yet
+        }
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case "Escape":
+                NavService.CancelEdit();
+                break;
+            case "Enter":
+                if (e.ShiftKey)
+                {
+                    await NavService.AcceptEditAndOpenDescriptionAsync();
+                }
+                else
+                {
+                    await NavService.AcceptEditAsync();
+                }
+                break;
+            case "Tab":
+                // Tab default is prevented via JS in focusWithCursor
+                if (e.ShiftKey)
+                {
+                    NavService.UnindentAsSibling();
+                }
+                else
+                {
+                    NavService.IndentAsChild();
+                }
+                break;
+        }
+    }
+
+    private async Task HandleOkClick()
+    {
+        await NavService.AcceptEditAsync();
+    }
+
+    private async Task HandleOkEditClick()
+    {
+        await NavService.AcceptEditAndOpenDescriptionAsync();
+    }
+
+    private void HandleCancelClick()
+    {
+        NavService.CancelEdit();
+    }
+
+    private async Task HandleInput(ChangeEventArgs e)
+    {
+        Title = e.Value?.ToString() ?? "";
+        await TitleChanged.InvokeAsync(Title);
+        NavService.UpdateEditTitle(Title);
+    }
+
+    private void HandleBlur()
+    {
+        // Don't cancel on blur - let user click elsewhere while editing
+        // The user must explicitly press Escape to cancel or Enter to save
+    }
+}

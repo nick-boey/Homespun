@@ -1,0 +1,160 @@
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Basic Usage</BbCardTitle>
+        <BbCardDescription>Simple work item</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <WorkItem
+            Title="Implement user authentication"
+            Number="42"
+            StatusColor="status-progress"
+            StatusTooltip="In Progress"
+            IsFirst="true"
+            IsLast="true" />
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>With URL Link</BbCardTitle>
+        <BbCardDescription>Clickable work item with external link</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <WorkItem
+            Title="Add dark mode support"
+            Number="123"
+            Url="https://github.com/example/repo/issues/123"
+            StatusColor="status-next"
+            StatusTooltip="Ready for development"
+            IsFirst="true"
+            IsLast="true" />
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Status Colors</BbCardTitle>
+        <BbCardDescription>Different status indicators</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <WorkItem
+            Title="Feature: Add search functionality"
+            Number="1"
+            StatusColor="status-idea"
+            StatusTooltip="Idea"
+            Subtitle="Feature"
+            IsFirst="true"
+            IsLast="false" />
+        <WorkItem
+            Title="Bug: Fix login redirect"
+            Number="2"
+            StatusColor="status-progress"
+            StatusTooltip="In Progress"
+            Subtitle="Bug"
+            IsFirst="false"
+            IsLast="false" />
+        <WorkItem
+            Title="Task: Update dependencies"
+            Number="3"
+            StatusColor="status-review"
+            StatusTooltip="In Review"
+            Subtitle="Task"
+            IsFirst="false"
+            IsLast="false" />
+        <WorkItem
+            Title="Feature: Dashboard redesign"
+            Number="4"
+            StatusColor="status-complete"
+            StatusTooltip="Complete"
+            Subtitle="Feature"
+            IsFirst="false"
+            IsLast="true" />
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>With Indentation</BbCardTitle>
+        <BbCardDescription>Hierarchical display</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <WorkItem
+            Title="Epic: User Management"
+            Number="10"
+            StatusColor="status-progress"
+            IndentLevel="0"
+            IsFirst="true"
+            IsLast="false" />
+        <WorkItem
+            Title="Feature: User registration"
+            Number="11"
+            StatusColor="status-complete"
+            IndentLevel="1"
+            IsFirst="false"
+            IsLast="false" />
+        <WorkItem
+            Title="Feature: User profile"
+            Number="12"
+            StatusColor="status-progress"
+            IndentLevel="1"
+            IsFirst="false"
+            IsLast="false" />
+        <WorkItem
+            Title="Task: Add avatar upload"
+            Number="13"
+            StatusColor="status-next"
+            IndentLevel="2"
+            IsFirst="false"
+            IsLast="true" />
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Clickable & Selected States</BbCardTitle>
+        <BbCardDescription>Interactive work items</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <WorkItem
+            Title="Clickable item (hover me)"
+            Number="20"
+            StatusColor="status-next"
+            IsClickable="true"
+            OnClick="@(() => { })"
+            IsFirst="true"
+            IsLast="false" />
+        <WorkItem
+            Title="Selected item"
+            Number="21"
+            StatusColor="status-progress"
+            IsSelected="true"
+            IsClickable="true"
+            OnClick="@(() => { })"
+            IsFirst="false"
+            IsLast="true" />
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Agent Startup States</BbCardTitle>
+        <BbCardDescription>Work items with agent status</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <WorkItem
+            Title="Starting agent session..."
+            Number="30"
+            StatusColor="status-progress"
+            StartupState="AgentStartupStatus.Starting"
+            IsFirst="true"
+            IsLast="false" />
+        <WorkItem
+            Title="Agent failed to start"
+            Number="31"
+            StatusColor="status-failed"
+            StartupState="AgentStartupStatus.Failed"
+            StartupErrorMessage="Connection timeout"
+            IsFirst="false"
+            IsLast="true" />
+    </BbCardContent>
+</BbCard>

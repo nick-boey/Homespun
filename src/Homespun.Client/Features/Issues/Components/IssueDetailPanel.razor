@@ -1,0 +1,542 @@
+@using Microsoft.AspNetCore.SignalR.Client
+@implements IAsyncDisposable
+
+@inject HttpSessionApiService SessionStoreApi
+@inject HttpSessionApiService SessionApi
+@inject HttpIssueApiService IssueApi
+@inject HttpCloneApiService CloneApi
+@inject HttpIssuePrStatusApiService IssuePrStatusApi
+@inject HttpPullRequestApiService PullRequestWorkflowApi
+@inject HttpProjectApiService ProjectApi
+@inject NavigationManager NavigationManager
+@inject ILogger<IssueDetailPanel> Logger
+@inject IMarkdownRenderingService MarkdownService
+
+<BbCard Class="issue-detail-panel">
+    <BbCardHeader Class="flex justify-between items-center">
+        <BbCardTitle>Issue Details</BbCardTitle>
+        <div class="flex gap-1">
+            <BbButton Variant="ButtonVariant.Outline" Size="ButtonSize.Small" Href="@($"projects/{ProjectId}/issues/{Issue.Id}/edit")" title="Edit issue">
+                <LucideIcon Name="pencil" Size="14" />
+            </BbButton>
+        </div>
+    </BbCardHeader>
+
+    <BbCardContent>
+            <h5>@Issue.Title</h5>
+
+            <div class="mb-3">
+                <BbBadge Variant="BadgeVariant.Secondary">@Issue.Id</BbBadge>
+                <BbBadge Class="@($"{GetTypeBadgeClass()} ml-1")">@Issue.Type</BbBadge>
+                <BbBadge Class="@($"{GetStatusBadgeClass()} ml-1")">@GetStatusDisplay()</BbBadge>
+                @if (Issue.Priority.HasValue)
+                {
+                    <BbBadge Class="@($"{GetPriorityBadgeClass()} ml-1")">P@Issue.Priority</BbBadge>
+                }
+                @if (_session != null)
+                {
+                    <BbBadge Class="bg-green-600 text-white border-transparent ml-1">Session Active</BbBadge>
+                }
+            </div>
+
+            @if (!string.IsNullOrEmpty(Issue.Description))
+            {
+                <div class="description-content markdown-content mb-3">
+                    @((MarkupString)MarkdownService.RenderToHtml(Issue.Description))
+                </div>
+            }
+
+            @* Pull Request Status Section *@
+            <PrStatusBadges Status="_prStatus" CssClass="mb-3" />
+            @if (_isLoadingPrStatus)
+            {
+                <div class="text-text-muted text-sm mb-3">
+                    <BbSpinner Size="SpinnerSize.Small" Class="mr-1" />
+                    Loading PR status...
+                </div>
+            }
+
+            <dl class="grid grid-cols-12 text-sm">
+                <dt class="col-span-4">Branch Preview</dt>
+                <dd class="col-span-8"><code>@GetBranchPreview()</code></dd>
+
+                @if (Issue.ParentIssues.Count > 0)
+                {
+                    <dt class="col-span-4">Parent Issues</dt>
+                    <dd class="col-span-8">
+                        @foreach (var parentRef in Issue.ParentIssues)
+                        {
+                            <code class="mr-1">@parentRef.ParentIssue</code>
+                        }
+                    </dd>
+                }
+            </dl>
+
+            @* Session Status Display *@
+            @if (_session != null)
+            {
+                <div class="border-top pt-3 mt-3">
+                    <h6>Claude Code Session</h6>
+                    <div class="mb-2">
+                        <BbBadge Class="@GetSessionStatusBadgeClass()">@_session.Status</BbBadge>
+                        <BbButton Variant="ButtonVariant.Outline" Size="ButtonSize.Small" Class="ml-2" Href="@($"/session/{_session.Id}")">
+                            Open Chat
+                        </BbButton>
+                    </div>
+                    <div class="mb-2">
+                        <small class="text-text-muted">
+                            Mode: <code>@_session.Mode</code>
+                        </small>
+                        <br/>
+                        <small class="text-text-muted">
+                            Model: <code>@_session.Model</code>
+                        </small>
+                    </div>
+                </div>
+            }
+
+            @* Session History *@
+            <SessionCacheHistory
+                EntityId="@Issue.Id"
+                ProjectId="@ProjectId"
+                WorkingDirectory="@_cloneInfo?.Path"
+                ShowBorder="true"
+                ShowEmptyState="false" />
+        </BbCardContent>
+        <BbCardFooter>
+            @if (_session != null)
+            {
+                <div class="flex flex-wrap gap-2">
+                    <BbButton Variant="ButtonVariant.Default" Size="ButtonSize.Small" Href="@($"/session/{_session.Id}")">
+                        Open Chat
+                    </BbButton>
+                    <BbButton Variant="ButtonVariant.Destructive" Size="ButtonSize.Small" OnClick="StopSession" Disabled="@_isLoading">
+                        @if (_isLoading)
+                        {
+                            <BbSpinner Size="SpinnerSize.Small" Class="mr-1" />
+                        }
+                        Stop Session
+                    </BbButton>
+                </div>
+            }
+            else if (Issue.Status is IssueStatus.Open or IssueStatus.Progress or IssueStatus.Review)
+            {
+                <div class="mb-2">
+                    <UnifiedAgentLauncher
+                        EntityId="@Issue.Id"
+                        ProjectId="@ProjectId"
+                        EntityTitle="@Issue.Title"
+                        EntityDescription="@Issue.Description"
+                        EntityType="@Issue.Type.ToString()"
+                        BranchName="@GetBranchPreview()"
+                        RepoPath="@_project?.LocalPath"
+                        DefaultBranch="@_project?.DefaultBranch"
+                        DefaultModel="@(_project?.DefaultModel ?? "opus")"
+                        OnSessionStarted="HandleSessionStarted" />
+                </div>
+
+                @if (_cloneInfo != null && _branchInfo?.BehindCount > 0)
+                {
+                    <BbButton Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" Class="w-full mb-2"
+                            OnClick="StartRebaseAsync"
+                            Disabled="@_isRebasing">
+                        @if (_isRebasing)
+                        {
+                            <BbSpinner Size="SpinnerSize.Small" Class="mr-1" />
+                        }
+                        Rebase onto @(_project?.DefaultBranch) (@_branchInfo.BehindCount behind)
+                    </BbButton>
+                }
+            }
+
+            <div class="flex flex-wrap gap-2">
+                @if (Issue.Status is IssueStatus.Open or IssueStatus.Progress or IssueStatus.Review)
+                {
+                    <BbButton Variant="ButtonVariant.Outline" Size="ButtonSize.Small" OnClick="CloseIssue" Disabled="@_isLoading" title="Mark issue as completed">
+                        Close Issue
+                    </BbButton>
+                }
+
+                <BbButton Variant="ButtonVariant.Destructive" Size="ButtonSize.Small" OnClick="ShowDeleteConfirmation" Disabled="@_isLoading" title="Delete issue permanently">
+                    Delete
+                </BbButton>
+            </div>
+
+            @if (!string.IsNullOrEmpty(_errorMessage))
+            {
+                <BbAlert Variant="AlertVariant.Danger" Class="mt-2 mb-0">
+                    <BbAlertDescription>@_errorMessage</BbAlertDescription>
+                </BbAlert>
+            }
+        </BbCardFooter>
+
+        <BbAlertDialog Open="@_showDeleteConfirmation" OnOpenChange="v => { if (!v) HideDeleteConfirmation(); }">
+            <BbAlertDialogContent>
+                <BbAlertDialogHeader>
+                    <BbAlertDialogTitle>Delete Issue</BbAlertDialogTitle>
+                    <BbAlertDialogDescription>
+                        <p>Are you sure you want to delete issue <strong>@Issue.Id</strong>?</p>
+                        <p class="mb-0">This action cannot be undone.</p>
+                    </BbAlertDialogDescription>
+                </BbAlertDialogHeader>
+                <BbAlertDialogFooter>
+                    <BbAlertDialogCancel>
+                        <BbButton Variant="ButtonVariant.Outline" Disabled="@_isLoading">Cancel</BbButton>
+                    </BbAlertDialogCancel>
+                    <BbButton Variant="ButtonVariant.Destructive" OnClick="DeleteIssue" Loading="@_isLoading">
+                        Delete Issue
+                    </BbButton>
+                </BbAlertDialogFooter>
+            </BbAlertDialogContent>
+        </BbAlertDialog>
+</BbCard>
+
+
+@code {
+    [Parameter] public required string ProjectId { get; set; }
+
+    [Parameter] public required IssueResponse Issue { get; set; }
+
+    [Parameter] public EventCallback OnActionCompleted { get; set; }
+
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private bool _isLoading;
+    private bool _showDeleteConfirmation;
+    private string? _errorMessage;
+    private ClaudeSession? _session;
+    private Project? _project;
+    private CloneInfo? _cloneInfo;
+    private BranchInfo? _branchInfo;
+    private bool _isRebasing;
+    private IssuePullRequestStatus? _prStatus;
+    private bool _isLoadingPrStatus;
+    private HubConnection? _hubConnection;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Load project info
+        _project = await ProjectApi.GetProjectAsync(ProjectId);
+
+        // Set up SignalR connection for real-time updates (non-blocking)
+        _ = SetupSignalRConnectionAsync();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _session = null;
+        _errorMessage = null;
+        _cloneInfo = null;
+        _branchInfo = null;
+        _prStatus = null;
+
+        // Check for existing session
+        _session = await SessionStoreApi.GetSessionByEntityIdAsync(Issue.Id);
+
+        // Load clone and branch info if project is available
+        if (_project != null)
+        {
+            await LoadCloneInfoAsync();
+            // Load PR status in background to not block UI
+            _ = LoadPrStatusAsync();
+        }
+    }
+
+    private async Task LoadPrStatusAsync()
+    {
+        _isLoadingPrStatus = true;
+        StateHasChanged();
+
+        try
+        {
+            _prStatus = await IssuePrStatusApi.GetStatusAsync(ProjectId, Issue.Id);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to load PR status for issue {IssueId}", Issue.Id);
+        }
+        finally
+        {
+            _isLoadingPrStatus = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadCloneInfoAsync()
+    {
+        if (_project == null) return;
+
+        try
+        {
+            var branchName = GetBranchPreview();
+            var clones = await CloneApi.ListClonesAsync(ProjectId);
+            _cloneInfo = clones.FirstOrDefault(w =>
+                w.Branch?.Replace("refs/heads/", "") == branchName);
+
+            // BranchInfo is not available via the clone HTTP API; leave _branchInfo null
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to load clone info for issue {IssueId}", Issue.Id);
+        }
+    }
+
+    private void HandleClose()
+    {
+        OnClose.InvokeAsync();
+    }
+
+    /// <summary>
+    /// Gets the branch name for this issue by recalculating from current issue properties.
+    /// This ensures the branch name always reflects the current state of the issue,
+    /// including any changes to type, title, or working branch ID.
+    /// </summary>
+    private string GetBranchPreview()
+    {
+        // Always recalculate from current issue data to ensure consistency
+        // This fixes the bug where branch names were cached/stale after issue edits
+        return GenerateBranchName(Issue);
+    }
+
+    private void HandleSessionStarted(ClaudeSession session)
+    {
+        _session = session;
+        StateHasChanged();
+    }
+
+    private async Task StopSession()
+    {
+        if (_session == null) return;
+
+        _isLoading = true;
+        _errorMessage = null;
+        try
+        {
+            await SessionApi.StopSessionAsync(_session.Id);
+            _session = null;
+            await OnActionCompleted.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task StartRebaseAsync()
+    {
+        if (_project == null || _cloneInfo == null)
+        {
+            _errorMessage = "Project or clone not available.";
+            return;
+        }
+
+        _isRebasing = true;
+        _errorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            // Rebase agent is not available in WASM client
+            _errorMessage = "Rebase agent is not available in the browser client. Please use the server application.";
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to start rebase agent for issue {IssueId}", Issue.Id);
+            _errorMessage = $"Failed to start rebase agent: {ex.Message}";
+        }
+        finally
+        {
+            _isRebasing = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task CloseIssue()
+    {
+        if (_project == null)
+        {
+            _errorMessage = "Project not available.";
+            return;
+        }
+
+        _isLoading = true;
+        _errorMessage = null;
+
+        try
+        {
+            var updated = await IssueApi.UpdateIssueAsync(Issue.Id, new UpdateIssueRequest
+            {
+                ProjectId = ProjectId,
+                Status = IssueStatus.Closed
+            });
+
+            if (updated == null)
+            {
+                _errorMessage = "Failed to close issue.";
+                return;
+            }
+            await OnActionCompleted.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to close issue: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void ShowDeleteConfirmation()
+    {
+        _showDeleteConfirmation = true;
+    }
+
+    private void HideDeleteConfirmation()
+    {
+        _showDeleteConfirmation = false;
+    }
+
+    private async Task DeleteIssue()
+    {
+        if (_project == null)
+        {
+            _errorMessage = "Project not available.";
+            return;
+        }
+
+        _isLoading = true;
+        _errorMessage = null;
+
+        try
+        {
+            await IssueApi.DeleteIssueAsync(Issue.Id, ProjectId);
+
+            _showDeleteConfirmation = false;
+            await OnActionCompleted.InvokeAsync();
+            await OnClose.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to delete issue: {ex.Message}";
+            _showDeleteConfirmation = false;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private string GetStatusDisplay() => Issue.Status.ToString();
+
+    private string GetTypeBadgeClass() => Issue.Type switch
+    {
+        IssueType.Feature => "bg-primary text-primary-foreground border-transparent",
+        IssueType.Bug => "bg-destructive text-destructive-foreground border-transparent",
+        IssueType.Task => "bg-blue-500 text-white border-transparent",
+        IssueType.Chore => "bg-secondary text-secondary-foreground border-transparent",
+        _ => "bg-secondary text-secondary-foreground border-transparent"
+    };
+
+    private string GetStatusBadgeClass() => Issue.Status switch
+    {
+        IssueStatus.Open => "bg-blue-500 text-white border-transparent",
+        IssueStatus.Progress => "bg-primary text-primary-foreground border-transparent",
+        IssueStatus.Review => "bg-blue-500 text-white border-transparent",
+        IssueStatus.Complete => "bg-green-600 text-white border-transparent",
+        IssueStatus.Closed => "bg-green-600 text-white border-transparent",
+        IssueStatus.Archived => "bg-secondary text-secondary-foreground border-transparent",
+        IssueStatus.Deleted => "bg-destructive text-destructive-foreground border-transparent",
+        _ => "bg-secondary text-secondary-foreground border-transparent"
+    };
+
+    private string GetPriorityBadgeClass() => Issue.Priority switch
+    {
+        0 => "bg-destructive text-destructive-foreground border-transparent",
+        1 => "bg-amber-500 text-white border-transparent",
+        2 => "bg-blue-500 text-white border-transparent",
+        3 => "bg-secondary text-secondary-foreground border-transparent",
+        4 => "bg-secondary text-secondary-foreground border-transparent",
+        _ => "bg-secondary text-secondary-foreground border-transparent"
+    };
+
+    private string GetSessionStatusBadgeClass() => _session?.Status.ToBbBadgeClass() ?? "bg-secondary text-secondary-foreground border-transparent";
+
+    private async Task SetupSignalRConnectionAsync()
+    {
+        try
+        {
+            _hubConnection = new HubConnectionBuilder()
+                .WithUrl(NavigationManager.ToAbsoluteUri("/hubs/claudecode"))
+                .WithAutomaticReconnect()
+                .Build();
+
+            // Subscribe to session started events - update UI when session becomes active
+            _hubConnection.On<ClaudeSession>("SessionStarted", async (session) =>
+            {
+                // Only handle events for this specific issue
+                if (session.EntityId == Issue.Id)
+                {
+                    await InvokeAsync(() =>
+                    {
+                        _session = session;
+                        StateHasChanged();
+                    });
+                }
+            });
+
+            // Subscribe to session status changes - refresh session data
+            _hubConnection.On<string, ClaudeSessionStatus, bool>("SessionStatusChanged", async (sessionId, status, _) =>
+            {
+                // Refresh if the changed session is ours
+                if (_session?.Id == sessionId)
+                {
+                    await InvokeAsync(async () =>
+                    {
+                        _session = await SessionStoreApi.GetSessionByEntityIdAsync(Issue.Id);
+                        StateHasChanged();
+                    });
+                }
+            });
+
+            // Subscribe to session stopped events - clear the session
+            _hubConnection.On<string>("SessionStopped", async (sessionId) =>
+            {
+                // Clear session if it was ours
+                if (_session?.Id == sessionId)
+                {
+                    await InvokeAsync(() =>
+                    {
+                        _session = null;
+                        StateHasChanged();
+                    });
+                }
+            });
+
+            await _hubConnection.StartAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to set up SignalR connection for IssueDetailPanel");
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_hubConnection != null)
+        {
+            try
+            {
+                await _hubConnection.DisposeAsync();
+            }
+            catch
+            {
+                // Ignore disposal errors
+            }
+        }
+    }
+}

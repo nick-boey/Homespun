@@ -1,0 +1,165 @@
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Full Toolbar</BbCardTitle>
+        <BbCardDescription>All button groups: Create | Hierarchy | Undo/Redo | Edit/Run</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ProjectToolbar ProjectId="demo-project"
+                        SelectedIssueId="TEST-001"
+                        OnEditClick="HandleEditClick"
+                        OnUndo="HandleUndo"
+                        OnRedo="HandleRedo"/>
+        @if (!string.IsNullOrEmpty(_lastAction))
+        {
+            <div
+                style="margin-top: 12px; padding: 0.5rem; background: var(--bg-tertiary); border-radius: 4px; font-size: 12px; color: var(--text-muted);">
+                Last action: @_lastAction
+            </div>
+        }
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>No Issue Selected</BbCardTitle>
+        <BbCardDescription>Most buttons are disabled when no issue is selected</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ProjectToolbar ProjectId="demo-project"
+                        SelectedIssueId="@null"
+                        CreateDisabled="true"
+                        ChildOfDisabled="true"
+                        ParentOfDisabled="true"/>
+        <p style="color: var(--text-muted); font-size: 12px; margin-top: 12px;">
+            Create, hierarchy, edit, and run buttons are disabled.
+        </p>
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Child Of Selection Mode</BbCardTitle>
+        <BbCardDescription>The "Make Child Of" button shows active state with ring highlight</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ProjectToolbar ProjectId="demo-project"
+                        SelectedIssueId="TEST-001"
+                        ChildOfActive="true"
+                        ParentOfDisabled="true"/>
+        <p style="color: var(--text-muted); font-size: 12px; margin-top: 12px;">
+            Click another issue to make the selected issue a child of it.
+        </p>
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Parent Of Selection Mode</BbCardTitle>
+        <BbCardDescription>The "Make Parent Of" button shows active state with ring highlight</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ProjectToolbar ProjectId="demo-project"
+                        SelectedIssueId="TEST-001"
+                        ParentOfActive="true"
+                        ChildOfDisabled="true"/>
+        <p style="color: var(--text-muted); font-size: 12px; margin-top: 12px;">
+            Click another issue to make it a child of the selected issue.
+        </p>
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Undo/Redo Available</BbCardTitle>
+        <BbCardDescription>Undo and redo buttons with custom tooltips</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ProjectToolbar ProjectId="demo-project"
+                        SelectedIssueId="TEST-001"
+                        UndoTooltip="Undo: Create issue 'Add dark mode'"
+                        RedoTooltip="Redo: Delete issue 'Fix bug'"
+                        OnUndo="HandleUndo"
+                        OnRedo="HandleRedo"/>
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Undo/Redo Disabled</BbCardTitle>
+        <BbCardDescription>When there's nothing to undo or redo</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ProjectToolbar ProjectId="demo-project"
+                        SelectedIssueId="TEST-001"
+                        UndoDisabled="true"
+                        RedoDisabled="true"/>
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Agent Running</BbCardTitle>
+        <BbCardDescription>Run button is disabled when agent is running on selected issue</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <ProjectToolbar ProjectId="demo-project"
+                            SelectedIssueId="TEST-002"
+                            IsAgentRunning="true"/>
+            <span class="agent-status-badge"
+                  style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: rgba(81, 165, 193, 0.2); color: var(--color-ocean);">
+                Agent Working
+            </span>
+        </div>
+        <p style="color: var(--text-muted); font-size: 12px; margin-top: 12px;">
+            All other buttons remain enabled. Run button is disabled while agent is active.
+        </p>
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>In Context</BbCardTitle>
+        <BbCardDescription>Toolbar appearance in the sticky header context</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 6px; padding: 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <h2 style="margin: 0; font-size: 20px;">Demo Project</h2>
+                <div style="display: flex; gap: 8px;">
+                    <BbButton Variant="ButtonVariant.Outline" Size="ButtonSize.Small">Pull</BbButton>
+                    <BbButton Variant="ButtonVariant.Outline" Size="ButtonSize.Small">Edit Project</BbButton>
+                </div>
+            </div>
+            <ProjectToolbar ProjectId="demo-project"
+                            SelectedIssueId="DEMO-001"
+                            OnEditClick="HandleEditClick"
+                            OnUndo="HandleUndo"
+                            OnRedo="HandleRedo"/>
+            <div style="border-bottom: 1px solid var(--border-color); margin-top: 8px;"></div>
+            <p style="color: var(--text-muted); font-size: 12px; margin-top: 12px;">
+                This simulates how the toolbar appears in the project page sticky header.
+            </p>
+        </div>
+    </BbCardContent>
+</BbCard>
+
+@code {
+    private string? _lastAction;
+
+    private void HandleEditClick(string issueId)
+    {
+        _lastAction = $"Edit clicked for issue: {issueId}";
+    }
+
+    private void HandleUndo()
+    {
+        _lastAction = "Undo clicked";
+    }
+
+    private void HandleRedo()
+    {
+        _lastAction = "Redo clicked";
+    }
+
+}

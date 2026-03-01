@@ -1,0 +1,78 @@
+@page "/projects"
+@inject HttpProjectApiService ProjectApi
+@inject IBreadcrumbService BreadcrumbService
+
+<PageTitle>Projects</PageTitle>
+
+<h1>Projects</h1>
+
+@if (_projects == null)
+{
+    <p>Loading...</p>
+}
+else if (_projects.Count == 0)
+{
+    <BbEmpty Title="No Projects Yet" Description="Create one to get started.">
+        <Icon>
+            <LucideIcon Name="folder-open" Size="48"/>
+        </Icon>
+        <ChildContent>
+            <BbButton Href="projects/create">New Project</BbButton>
+        </ChildContent>
+    </BbEmpty>
+}
+else
+{
+    <BbDataTable TData="Project" Data="@_projects" ShowPagination="false">
+        <Columns>
+            <BbDataTableColumn TData="Project" TValue="string" Property="@(t => t.Name)" Header="Name" Sortable/>
+            <BbDataTableColumn TData="Project" TValue="string" Property="@(t => t.LocalPath)" Header="Path" Sortable/>
+            <BbDataTableColumn TData="Project" TValue="string" Property="@(t => t.GitHubOwner + "/" + t.GitHubRepo)"
+                               Header="GitHub" Sortable>
+                <CellTemplate Context="project">
+                    <a href="https://github.com/@project.GitHubOwner/@project.GitHubRepo" target="_blank">
+                        @project.GitHubOwner/@project.GitHubRepo
+                    </a>
+                </CellTemplate>
+            </BbDataTableColumn>
+
+
+            <BbDataTableColumn TData="Project" TValue="string" Property="@(t => t.Name)" Header="Actions">
+                <CellTemplate Context="projectAction">
+                    <div class="flex gap-2">
+                        <BbButton Variant="ButtonVariant.Outline" Size="ButtonSize.Small"
+                                  Href="@($"projects/{projectAction.Id}")">View
+                        </BbButton>
+                        <BbButton Variant="ButtonVariant.Destructive" Size="ButtonSize.Small"
+                                  OnClick="() => DeleteProject(projectAction.Id)">Delete
+                        </BbButton>
+                    </div>
+                </CellTemplate>
+            </BbDataTableColumn>
+        </Columns>
+    </BbDataTable>
+
+    <BbButton Class="mt-4" Href="projects/create">New Project</BbButton>
+}
+
+@code {
+    private List<Project>? _projects;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await BreadcrumbService.SetContextAsync(new BreadcrumbContext { PageName = "Projects" });
+        await LoadProjects();
+    }
+
+    private async Task LoadProjects()
+    {
+        _projects = await ProjectApi.GetAllProjectsAsync();
+    }
+
+    private async Task DeleteProject(string id)
+    {
+        await ProjectApi.DeleteProjectAsync(id);
+        await LoadProjects();
+    }
+
+}

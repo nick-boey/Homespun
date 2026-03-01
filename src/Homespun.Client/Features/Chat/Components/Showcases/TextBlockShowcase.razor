@@ -1,0 +1,53 @@
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Simple Text</BbCardTitle>
+        <BbCardDescription>Basic text content</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <TextBlock Text="This is a simple text message from the assistant." />
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Multi-line Text</BbCardTitle>
+        <BbCardDescription>Text with line breaks</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <TextBlock Text="@_multilineText" />
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Streaming State</BbCardTitle>
+        <BbCardDescription>Text currently being streamed (shows cursor)</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <TextBlock Text="I'm analyzing your codebase and will provide recommendations" IsStreaming="true" />
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Long Text</BbCardTitle>
+        <BbCardDescription>Extended text content</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <TextBlock Text="@_longText" />
+    </BbCardContent>
+</BbCard>
+
+@code {
+    private string _multilineText = """
+        Here's what I found in your codebase:
+
+        1. The authentication module is well-structured
+        2. There are some unused imports in the utils folder
+        3. The API endpoints follow RESTful conventions
+
+        Let me know if you'd like me to address any of these.
+        """;
+
+    private string _longText = "I've analyzed the entire codebase and found several opportunities for improvement. The main areas include code organization, where some modules could benefit from better separation of concerns; performance optimization, particularly in the data fetching layer where we could implement caching; and test coverage, which is currently at 65% but could be improved to meet the 80% target. I recommend starting with the authentication module as it's the most critical component and has the least coverage.";
+}

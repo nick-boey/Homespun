@@ -44,7 +44,10 @@
         <div class="auth-status-card">
             @if (_isLoading)
             {
-                <LoadingSpinner Size="LoadingSpinnerSize.Sm" Label="Checking authentication status..." ScreenReaderText="Checking" />
+                <div class="flex items-center gap-2">
+                    <BbSpinner Size="SpinnerSize.Small" />
+                    <span>Checking authentication status...</span>
+                </div>
             }
             else
             {
@@ -103,12 +106,7 @@
                     }
                 </dl>
 
-                <AsyncActionButton OnClick="RefreshStatus"
-                                   IsLoadingExternal="_isLoading"
-                                   Variant="ButtonVariant.Outline"
-                                   Size="ButtonSize.Small"
-                                   CssClass="mt-3"
-                                   Text="Refresh Status" />
+                <BbButton OnClick="RefreshStatus" Loading="@_isLoading" Variant="ButtonVariant.Outline" Size="ButtonSize.Small" Class="mt-3">Refresh Status</BbButton>
             }
         </div>
 

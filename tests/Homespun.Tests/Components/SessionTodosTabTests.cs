@@ -1,5 +1,5 @@
 using Bunit;
-using Homespun.Client.Components.ClaudeCode.SessionInfoPanel;
+using Homespun.Client.Features.Chat.Components.SessionInfoPanel;
 using System.Text.Json;
 
 namespace Homespun.Tests.Components;

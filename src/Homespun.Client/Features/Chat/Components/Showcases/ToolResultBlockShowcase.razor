@@ -1,0 +1,87 @@
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>File Content Result</BbCardTitle>
+        <BbCardDescription>Result from reading a file</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ToolResultBlock Text="@_fileContent" />
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Command Output</BbCardTitle>
+        <BbCardDescription>Result from a bash command</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ToolResultBlock Text="@_commandOutput" />
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Short Result</BbCardTitle>
+        <BbCardDescription>Simple success message</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ToolResultBlock Text="File successfully written to /src/components/Button.tsx" />
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Error Result</BbCardTitle>
+        <BbCardDescription>Error output from a failed command</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ToolResultBlock Text="@_errorOutput" />
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Search Results</BbCardTitle>
+        <BbCardDescription>Result from a grep/search operation</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ToolResultBlock Text="@_searchResults" />
+    </BbCardContent>
+</BbCard>
+
+@code {
+    private string _fileContent = """
+        export const login = async (email: string, password: string) => {
+          const response = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password })
+          });
+          return response.json();
+        };
+        """;
+
+    private string _commandOutput = """
+        > npm run test -- --coverage
+
+        PASS  src/components/Button.test.tsx
+        PASS  src/utils/format.test.ts
+        PASS  src/services/auth.test.ts
+
+        Test Suites: 3 passed, 3 total
+        Tests:       12 passed, 12 total
+        Coverage:    87.5%
+        """;
+
+    private string _errorOutput = """
+        error: ENOENT: no such file or directory, open '/src/missing-file.ts'
+        at Object.openSync (node:fs:603:3)
+        at Object.readFileSync (node:fs:471:35)
+        """;
+
+    private string _searchResults = """
+        src/components/Login.tsx:15:    const handleSubmit = async (e: FormEvent) => {
+        src/components/Login.tsx:23:    await login(email, password);
+        src/services/auth.ts:8:         export const login = async (email: string, password: string) => {
+        src/hooks/useAuth.ts:12:        const { login, logout } = useContext(AuthContext);
+        """;
+}

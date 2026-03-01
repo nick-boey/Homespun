@@ -1,0 +1,259 @@
+<div class="issue-row-actions @(IsVisible ? "visible" : "")" @onclick:stopPropagation="true">
+    <button type="button"
+            class="issue-row-action-btn"
+            data-testid="edit-issue-button"
+            title="Edit issue"
+            disabled="@Disabled"
+            @onclick="HandleEditClick"
+            @onclick:stopPropagation="true">
+        <LucideIcon Name="pencil" Size="12" />
+    </button>
+
+    <button type="button"
+            class="issue-row-action-btn issue-row-open-panel-btn"
+            data-testid="open-panel-button"
+            title="Open panel"
+            disabled="@Disabled"
+            @onclick="HandleOpenPanelClick"
+            @onclick:stopPropagation="true">
+        <LucideIcon Name="panel-right" Size="12" />
+    </button>
+
+    <div class="issue-row-agent-wrapper">
+        <button type="button"
+                class="issue-row-action-btn"
+                data-testid="run-agent-button"
+                title="Run agent"
+                disabled="@Disabled"
+                @onclick="ToggleDropdown"
+                @onclick:stopPropagation="true">
+            <LucideIcon Name="play" Size="12" />
+        </button>
+
+        @if (_showDropdown || ShowAgentDropdown)
+        {
+            <div class="issue-row-agent-dropdown" @onclick:stopPropagation="true">
+                <div class="dropdown-content">
+                    <UnifiedAgentLauncher
+                        EntityId="@IssueId"
+                        ProjectId="@ProjectId"
+                        EntityTitle="@IssueTitle"
+                        EntityDescription="@IssueDescription"
+                        EntityType="@IssueType"
+                        BranchName="@BranchName"
+                        RepoPath="@RepoPath"
+                        DefaultBranch="@DefaultBranch"
+                        DefaultModel="@DefaultModel"
+                        Compact="true"
+                        OnSessionStarted="HandleSessionStarted" />
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<style>
+    .issue-row-actions {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        opacity: 0;
+        transition: opacity 0.15s ease;
+        flex-shrink: 0;
+        margin-left: auto;
+        padding-left: 8px;
+    }
+
+    .issue-row-actions.visible {
+        opacity: 1;
+    }
+
+    .issue-row-action-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 24px;
+        height: 24px;
+        padding: 0;
+        border: none;
+        border-radius: 4px;
+        background: transparent;
+        color: var(--text-muted, #6c757d);
+        cursor: pointer;
+        transition: background-color 0.15s ease, color 0.15s ease;
+    }
+
+    .issue-row-action-btn:hover:not(:disabled) {
+        background-color: var(--bg-tertiary, rgba(255, 255, 255, 0.1));
+        color: var(--text-primary, #eaeaea);
+    }
+
+    .issue-row-action-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .issue-row-action-btn :deep(svg) {
+        width: 12px;
+        height: 12px;
+    }
+
+    .issue-row-agent-wrapper {
+        position: relative;
+    }
+
+    .issue-row-agent-dropdown {
+        position: absolute;
+        top: 100%;
+        right: 0;
+        z-index: 1000;
+        min-width: 240px;
+        margin-top: 4px;
+        background: var(--bg-primary, #1a1a2e);
+        border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+        border-radius: 6px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+
+    .dropdown-content {
+        padding: 12px;
+    }
+
+    /* Open panel button - only visible on mobile */
+    .issue-row-open-panel-btn {
+        display: none;
+    }
+
+    @@media (max-width: 768px) {
+        .issue-row-open-panel-btn {
+            display: flex;
+        }
+    }
+
+    /* Hide inline actions on mobile - toolbar provides these controls */
+    @@media (max-width: 600px) {
+        .issue-row-actions {
+            display: none !important;
+        }
+    }
+</style>
+
+@code {
+    /// <summary>
+    /// The issue ID this action row is associated with.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public required string IssueId { get; set; }
+
+    /// <summary>
+    /// The project ID for navigation and agent context.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public required string ProjectId { get; set; }
+
+    /// <summary>
+    /// The issue title for prompt template rendering.
+    /// </summary>
+    [Parameter]
+    public string? IssueTitle { get; set; }
+
+    /// <summary>
+    /// The issue description for prompt template rendering.
+    /// </summary>
+    [Parameter]
+    public string? IssueDescription { get; set; }
+
+    /// <summary>
+    /// The issue type for prompt template rendering (e.g., "Feature", "Bug").
+    /// </summary>
+    [Parameter]
+    public string? IssueType { get; set; }
+
+    /// <summary>
+    /// The branch name for the issue.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public required string BranchName { get; set; }
+
+    /// <summary>
+    /// Path to the main repository (for listing branches).
+    /// </summary>
+    [Parameter]
+    public string? RepoPath { get; set; }
+
+    /// <summary>
+    /// Default branch of the project.
+    /// </summary>
+    [Parameter]
+    public string? DefaultBranch { get; set; }
+
+    /// <summary>
+    /// Default model to use.
+    /// </summary>
+    [Parameter]
+    public string DefaultModel { get; set; } = "opus";
+
+    /// <summary>
+    /// Whether the action buttons are visible.
+    /// Controlled by parent based on hover/selection state.
+    /// </summary>
+    [Parameter]
+    public bool IsVisible { get; set; }
+
+    /// <summary>
+    /// Whether the action buttons are disabled.
+    /// </summary>
+    [Parameter]
+    public bool Disabled { get; set; }
+
+    /// <summary>
+    /// Callback when the edit button is clicked.
+    /// </summary>
+    [Parameter]
+    public EventCallback<string> OnEditClick { get; set; }
+
+    /// <summary>
+    /// Callback when a session is successfully started.
+    /// </summary>
+    [Parameter]
+    public EventCallback<ClaudeSession> OnSessionStarted { get; set; }
+
+    /// <summary>
+    /// External control for showing the agent dropdown (keyboard-driven).
+    /// When true, the dropdown is shown regardless of _showDropdown state.
+    /// </summary>
+    [Parameter]
+    public bool ShowAgentDropdown { get; set; }
+
+    /// <summary>
+    /// Callback when the open panel button is clicked (mobile only).
+    /// </summary>
+    [Parameter]
+    public EventCallback<string> OnOpenPanelClick { get; set; }
+
+    private bool _showDropdown;
+
+    private async Task HandleEditClick()
+    {
+        if (Disabled) return;
+        await OnEditClick.InvokeAsync(IssueId);
+    }
+
+    private async Task HandleOpenPanelClick()
+    {
+        if (Disabled) return;
+        await OnOpenPanelClick.InvokeAsync(IssueId);
+    }
+
+    private void ToggleDropdown()
+    {
+        if (Disabled) return;
+        _showDropdown = !_showDropdown;
+    }
+
+    private async Task HandleSessionStarted(ClaudeSession session)
+    {
+        _showDropdown = false;
+        await OnSessionStarted.InvokeAsync(session);
+    }
+}

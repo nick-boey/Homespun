@@ -1,0 +1,3304 @@
+@page "/session/{SessionId}"
+@using System.Text.Json
+@using Microsoft.AspNetCore.SignalR.Client
+@implements IAsyncDisposable
+@inject HttpSessionApiService SessionApi
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
+@inject IMarkdownRenderingService MarkdownService
+@inject HttpAgentPromptApiService AgentPromptApi
+@inject IBreadcrumbService BreadcrumbService
+@inject HttpIssueApiService IssueApi
+@inject HttpProjectApiService ProjectApi
+@inject MessageDisplayService MessageDisplayService
+@inject IPanelService PanelService
+
+<PageTitle>Session - Homespun</PageTitle>
+
+<div class="session-page">
+    @if (_isLoading)
+    {
+        <div class="session-loading">
+            <div class="flex items-center justify-center gap-2">
+                <BbSpinner Size="SpinnerSize.Large" />
+                <span>Loading session...</span>
+            </div>
+        </div>
+    }
+    else if (_session == null)
+    {
+        <div class="session-not-found">
+            <h2>Session Not Found</h2>
+            <p>The session you're looking for doesn't exist or has ended.</p>
+            <BbButton Href="/agents">Back to Agents</BbButton>
+        </div>
+    }
+    else
+    {
+        <div class="session-header">
+            <div class="session-info">
+                <h1>@(_issue?.Title ?? "Claude Code Session")</h1>
+                <div class="session-meta">
+                    <BbBadge Class="@GetModeBadgeClass(_session.Mode)">@_session.Mode</BbBadge>
+                    <BbBadge Class="@GetStatusBadgeClass(_session.Status)">@_session.Status.ToDisplayLabel()</BbBadge>
+                    <code class="model-name">@_session.Model</code>
+                </div>
+            </div>
+            <div class="session-actions">
+                <BbButton Variant="ButtonVariant.Destructive" Size="ButtonSize.Small" OnClick="StopSession"
+                        Disabled="@(_session.Status == ClaudeSessionStatus.Stopped)">
+                    Stop Session
+                </BbButton>
+            </div>
+        </div>
+
+        <div class="session-content">
+            <div class="chat-container @(_sidePanelOpen ? "" : "expanded")">
+                <div class="messages-area" @ref="_messagesContainer" @onscroll="HandleScroll">
+                    @if (_showLoadHistoryButton)
+                    {
+                        <div class="load-history-banner">
+                            <BbButton Variant="ButtonVariant.Outline" Size="ButtonSize.Small"
+                                    OnClick="LoadHistoryAsync"
+                                    Disabled="@_isLoadingHistory">
+                                @if (_isLoadingHistory)
+                                {
+                                    <BbSpinner Size="SpinnerSize.Small"/>
+                                    <span>Loading...</span>
+                                }
+                                else
+                                {
+                                    <span>Load @(_cachedMessageCount - _session.Messages.Count) previous messages</span>
+                                }
+                            </BbButton>
+                        </div>
+                    }
+                    @if (_session.Messages.Count == 0 && _session.Status != ClaudeSessionStatus.Running)
+                    {
+                        <div class="empty-state">
+                            <p>Start the conversation by typing a message below.</p>
+                        </div>
+                    }
+                    else
+                    {
+                        @foreach (var displayItem in GetDisplayItems())
+                        {
+                            @if (displayItem is ClaudeMessage message)
+                            {
+                                @* Check if context was cleared before this message *@
+                                @if (ShouldShowContextSeparator(message))
+                                {
+                                    var separatorTime = GetContextSeparatorTime(message);
+                                    <div class="context-separator">
+                                        <span class="separator-text">Context Cleared</span>
+                                        <span
+                                            class="separator-time">@separatorTime.ToLocalTime().ToString("HH:mm:ss")</span>
+                                    </div>
+                                }
+
+                                var messageClass = message.Role == ClaudeMessageRole.User ? "user-message" : "assistant-message";
+                                <div class="message @messageClass">
+                                    <div class="message-header">
+                                        <span
+                                            class="message-role">@(message.Role == ClaudeMessageRole.User ? "You" : "Claude")</span>
+                                        <span
+                                            class="message-time">@message.CreatedAt.ToLocalTime().ToString("HH:mm:ss")</span>
+                                    </div>
+                                    <div class="message-content">
+                                        @foreach (var content in message.Content
+                                                          .OrderBy(c => c.Index >= 0 ? c.Index : int.MaxValue)
+                                                          .ThenBy(c => message.Content.IndexOf(c))
+                                                          .ToList())
+                                        {
+                                            <div
+                                                class="content-block @GetContentBlockClass(content.Type) @(content.IsStreaming ? "streaming" : "")">
+                                                @switch (content.Type)
+                                                {
+                                                    case ClaudeContentType.Text:
+                                                        <div class="text-content markdown-content">
+                                                            @((MarkupString)MarkdownService.RenderToHtml(content.Text))
+                                                            @if (content.IsStreaming)
+                                                            {
+                                                                <span class="streaming-cursor">▌</span>
+                                                            }
+                                                        </div>
+                                                        break;
+
+                                                    case ClaudeContentType.Thinking:
+                                                        <details class="thinking-block" open="@content.IsStreaming">
+                                                            <summary>
+                                                                @if (content.IsStreaming)
+                                                                {
+                                                                    <span>Thinking</span>
+                                                                    <span class="streaming-dots">...</span>
+                                                                }
+                                                                else
+                                                                {
+                                                                    <span>Thinking...</span>
+                                                                }
+                                                            </summary>
+                                                            <div class="thinking-content">
+                                                                @content.Text
+                                                                @if (content.IsStreaming)
+                                                                {
+                                                                    <span class="streaming-cursor">▌</span>
+                                                                }
+                                                            </div>
+                                                        </details>
+                                                        break;
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                            else if (displayItem is ToolExecutionGroup toolGroup)
+                            {
+                                @* Check if context was cleared before any message in this group *@
+                                @foreach (var originalMsg in toolGroup.OriginalMessages)
+                                {
+                                    @if (ShouldShowContextSeparator(originalMsg))
+                                    {
+                                        var separatorTime = GetContextSeparatorTime(originalMsg);
+                                        <div class="context-separator">
+                                            <span class="separator-text">Context Cleared</span>
+                                            <span
+                                                class="separator-time">@separatorTime.ToLocalTime().ToString("HH:mm:ss")</span>
+                                        </div>
+                                        break; @* Only show one separator per group *@
+                                    }
+                                }
+
+                                <ToolExecutionGroupDisplay Group="toolGroup"/>
+                            }
+                        }
+
+                        @if (_session.Status == ClaudeSessionStatus.Running)
+                        {
+                            <div class="processing-indicator">
+                                <BbSpinner Size="SpinnerSize.Small"/>
+                                <span>Processing...</span>
+                            </div>
+                        }
+
+                        @if (_session.Status == ClaudeSessionStatus.Error && !string.IsNullOrEmpty(_session.ErrorMessage))
+                        {
+                            <div class="session-error-banner">
+                                <div class="error-icon">⚠️</div>
+                                <div class="error-content">
+                                    <div class="error-title">@GetErrorTitle(_errorSubtype)</div>
+                                    <div class="error-message">@_session.ErrorMessage</div>
+                                    <div class="error-actions">
+                                        @if (_isRecoverable)
+                                        {
+                                            <BbButton Size="ButtonSize.Small" OnClick="ContinueSession">
+                                                Continue Session
+                                            </BbButton>
+                                        }
+                                        <BbButton Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" OnClick="RestartContainer"
+                                                Disabled="@_isRestartingContainer">
+                                            @if (_isRestartingContainer)
+                                            {
+                                                <BbSpinner Size="SpinnerSize.Small" Class="me-1"/>
+                                                <span>Restarting...</span>
+                                            }
+                                            else
+                                            {
+                                                <span>Restart Container</span>
+                                            }
+                                        </BbButton>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+
+                        @if (_pendingQuestion != null)
+                        {
+                            <div class="question-container">
+                                <div class="question-header">
+                                    <span class="question-icon">❓</span>
+                                    <span class="question-title">Claude has a question for you</span>
+                                </div>
+                                @foreach (var question in _pendingQuestion.Questions)
+                                {
+                                    <div class="question-item">
+                                        <div class="question-text">
+                                            <span class="question-header-tag">@question.Header</span>
+                                            @question.Question
+                                        </div>
+                                        <div class="question-options">
+                                            @foreach (var option in question.Options)
+                                            {
+                                                var isSelected = _questionAnswers.TryGetValue(question.Question, out var answer) &&
+                                                                     (question.MultiSelect
+                                                                         ? answer.Split(", ").Contains(option.Label)
+                                                                         : answer == option.Label);
+                                                <button class="question-option @(isSelected ? "selected" : "")"
+                                                        @onclick="() => SelectOption(question, option)"
+                                                        title="@option.Description">
+                                                    @if (question.MultiSelect)
+                                                    {
+                                                        <span class="option-checkbox">@(isSelected ? "☑" : "☐")</span>
+                                                    }
+                                                    @option.Label
+                                                </button>
+                                            }
+                                            @* Other option for custom input *@
+                                            <button
+                                                class="question-option other-option @(IsOtherSelected(question.Question) ? "selected" : "")"
+                                                @onclick="() => SelectOther(question)">
+                                                Other...
+                                            </button>
+                                        </div>
+                                        @if (IsOtherSelected(question.Question))
+                                        {
+                                            var questionKey = question.Question;
+                                            <div class="custom-answer-input">
+                                                <input type="text"
+                                                       placeholder="Enter your custom answer..."
+                                                       value="@GetCustomAnswer(questionKey)"
+                                                       @oninput="@(e => UpdateCustomAnswer(questionKey, e.Value?.ToString() ?? string.Empty))"/>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                                <div class="question-actions">
+                                    <BbButton OnClick="SubmitAnswers"
+                                            Disabled="@(!CanSubmitAnswers())">
+                                        Submit Answers
+                                    </BbButton>
+                                </div>
+                            </div>
+                        }
+
+                        @if (_session.HasPendingPlanApproval && !string.IsNullOrEmpty(_session.PlanContent))
+                        {
+                            <div class="action-panel">
+                                <div class="action-panel-header">
+                                    <span class="action-panel-header-icon">📋</span>
+                                    <span class="action-panel-header-title">Plan Ready for Implementation</span>
+                                </div>
+                                <div class="action-panel-description">
+                                    Choose how to proceed with the implementation:
+                                </div>
+                                <div class="action-panel-options">
+                                    <button class="action-panel-btn action-panel-btn-primary"
+                                            @onclick="ApprovePlanClearContext"
+                                            disabled="@_isProcessingPlanAction"
+                                            title="Clear conversation context and start fresh implementation">
+                                        <span class="action-panel-btn-icon">🔄</span>
+                                        Clear Context & Start Implementation
+                                    </button>
+                                    <button class="action-panel-btn"
+                                            @onclick="ApprovePlanKeepContext"
+                                            disabled="@_isProcessingPlanAction"
+                                            title="Continue with existing conversation context">
+                                        <span class="action-panel-btn-icon">▶️</span>
+                                        Continue with Context
+                                    </button>
+                                    <button class="action-panel-btn action-panel-btn-danger"
+                                            @onclick="() => _showPlanRejectFeedback = !_showPlanRejectFeedback"
+                                            disabled="@_isProcessingPlanAction"
+                                            title="Reject the plan and provide feedback">
+                                        <span class="action-panel-btn-icon">✏️</span>
+                                        Reject & Modify
+                                    </button>
+                                </div>
+                                @if (_showPlanRejectFeedback)
+                                {
+                                    <div class="action-panel-feedback">
+                                    <textarea class="action-panel-textarea"
+                                              @bind="_planRejectFeedback"
+                                              placeholder="Describe what changes you'd like to the plan..."
+                                              rows="3"></textarea>
+                                        <button class="action-panel-btn action-panel-btn-danger"
+                                                @onclick="RejectPlan"
+                                                disabled="@_isProcessingPlanAction"
+                                                title="Send feedback to revise the plan">
+                                            Send Feedback
+                                        </button>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    }
+
+                    @* Scroll to bottom button *@
+                    @if (_showScrollToBottomButton)
+                    {
+                        <button class="scroll-to-bottom-btn" @onclick="ScrollToBottomClick" title="Scroll to bottom">
+                            <span class="scroll-arrow">↓</span>
+                        </button>
+                    }
+                </div>
+
+                <div class="input-area">
+                    <div class="input-controls">
+                        <select class="permission-select"
+                                @bind="_selectedMode"
+                                disabled="@(_session.Status == ClaudeSessionStatus.Running || _session.Status == ClaudeSessionStatus.Stopped)">
+                            <option value="@SessionMode.Build">Build</option>
+                            <option value="@SessionMode.Plan">Plan</option>
+                        </select>
+                        <select class="model-select"
+                                @bind="_selectedModel"
+                                disabled="@(_session.Status == ClaudeSessionStatus.Running || _session.Status == ClaudeSessionStatus.Stopped)">
+                            <option value="opus">Opus</option>
+                            <option value="sonnet">Sonnet</option>
+                            <option value="haiku">Haiku</option>
+                        </select>
+                        <select class="prompt-select"
+                                value="@_selectedPromptId"
+                                @onchange="OnPromptSelected"
+                                disabled="@(_session.Status == ClaudeSessionStatus.Running || _session.Status == ClaudeSessionStatus.Stopped)">
+                            <option value="">(Select a prompt...)</option>
+                            @foreach (var prompt in _availablePrompts)
+                            {
+                                <option value="@prompt.Id">@prompt.Name</option>
+                            }
+                        </select>
+                        <BbButton Variant="ButtonVariant.Outline" Size="ButtonSize.Small" Class="clear-context-btn"
+                                OnClick="ClearContext"
+                                Disabled="@(_session.Status == ClaudeSessionStatus.Running || _session.Status == ClaudeSessionStatus.Stopped || _session.Messages.Count == 0)"
+                                title="Clear context and start fresh (keeps message history)">
+                            Clear Context
+                        </BbButton>
+                    </div>
+                    <div class="input-row">
+                    <textarea @bind="_inputMessage"
+                              @bind:event="oninput"
+                              @onkeydown="HandleKeyDown"
+                              placeholder="@GetInputPlaceholder()"
+                              rows="3"
+                              disabled="@(_session.Status == ClaudeSessionStatus.Stopped)">
+                    </textarea>
+                        <div class="button-group">
+                            @if (_session.Status == ClaudeSessionStatus.Running)
+                            {
+                                <BbButton Variant="ButtonVariant.Destructive" Class="stop-button"
+                                        OnClick="InterruptSession"
+                                        Disabled="@_isInterrupting"
+                                        title="Interrupt the current execution (Escape)">
+                                    @if (_isInterrupting)
+                                    {
+                                        <BbSpinner Size="SpinnerSize.Small"/>
+                                    }
+                                    else
+                                    {
+                                        <span class="stop-icon">&#9632;</span>
+                                    }
+                                    Interrupt
+                                </BbButton>
+                                @if (!string.IsNullOrWhiteSpace(_inputMessage))
+                                {
+                                    <BbButton Variant="ButtonVariant.Secondary" Class="queue-button"
+                                            OnClick="QueueMessage"
+                                            Disabled="@(_pendingMessages.Count >= MaxQueuedMessages)"
+                                            title="Queue this message to send after current processing completes">
+                                        Queue @(_pendingMessages.Count > 0 ? $"({_pendingMessages.Count + 1})" : "")
+                                    </BbButton>
+                                }
+                            }
+                            else
+                            {
+                                <BbButton Class="send-button"
+                                        OnClick="SendMessage"
+                                        Disabled="@(string.IsNullOrWhiteSpace(_inputMessage) || _session.Status == ClaudeSessionStatus.Stopped)">
+                                    Send
+                                </BbButton>
+                            }
+                        </div>
+                    </div>
+                    @if (_pendingMessages.Count > 0)
+                    {
+                        <div class="queued-messages-indicator">
+                            <BbBadge Variant="BadgeVariant.Secondary">@_pendingMessages.Count message@(_pendingMessages.Count > 1 ? "s" : "") queued</BbBadge>
+                            <BbButton Variant="ButtonVariant.Link" Size="ButtonSize.Small" OnClick="ClearQueue">Clear queue</BbButton>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <SessionInfoPanel Session="_session" IsOpen="_sidePanelOpen" IsOpenChanged="OnSessionPanelToggled"
+                              IssueTitle="@_issue?.Title"/>
+        </div>
+
+        @if (_session.TotalCostUsd > 0)
+        {
+            <div class="session-stats">
+                <span>Cost: $@_session.TotalCostUsd.ToString("F6")</span>
+                <span>Duration: @FormatDuration(_session.TotalDurationMs)</span>
+            </div>
+        }
+
+        @if (IsDebugBuild)
+        {
+            <!-- Debug Panel -->
+            <details class="debug-panel">
+                <summary @onclick="ToggleDebugMode" @onclick:preventDefault @onclick:stopPropagation>
+                    <span>Debug SignalR Events</span>
+                    @if (_debugMode)
+                    {
+                        <span class="debug-count">(@_debugLog.Count events)</span>
+                    }
+                </summary>
+                @if (_debugMode)
+                {
+                    <div class="debug-controls">
+                        <BbButton Variant="ButtonVariant.Outline" Size="ButtonSize.Small" OnClick="ClearDebugLog">Clear Log</BbButton>
+                    </div>
+                    <div class="debug-log">
+                        @if (_debugLog.Count == 0)
+                        {
+                            <div class="debug-empty">No events logged yet. Interact with the session to see SignalR
+                                events.
+                            </div>
+                        }
+                        else
+                        {
+                            @foreach (var entry in _debugLog.ToList().AsEnumerable().Reverse().Take(50))
+                            {
+                                <div class="debug-entry @(entry.EventType == "ERROR" ? "error" : "")">
+                                    <span class="debug-time">@entry.Timestamp.ToString("HH:mm:ss.fff")</span>
+                                    <span class="debug-type">@entry.EventType</span>
+                                    <span class="debug-message">@entry.Message</span>
+                                </div>
+                            }
+                        }
+                    </div>
+                }
+            </details>
+        }
+    }
+</div>
+
+<style>
+    .session-page {
+        display: flex;
+        flex-direction: column;
+        height: calc(100vh - 100px);
+        max-width: 1600px;
+        margin: 0 auto;
+        padding: var(--spacing-lg);
+    }
+
+    .session-loading {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 50vh;
+    }
+
+    .session-not-found {
+        text-align: center;
+        padding: var(--spacing-xl);
+    }
+
+    .session-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: var(--spacing-lg);
+        padding-bottom: var(--spacing-md);
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .session-info h1 {
+        margin: 0 0 var(--spacing-sm) 0;
+        font-size: 1.5rem;
+    }
+
+    .session-meta {
+        display: flex;
+        gap: var(--spacing-sm);
+        align-items: center;
+    }
+
+    .model-name {
+        font-size: 0.875rem;
+        padding: 0.25rem 0.5rem;
+        background: var(--bg-tertiary);
+        border-radius: var(--radius-sm);
+    }
+
+    .session-content {
+        display: flex;
+        flex: 1;
+        gap: var(--spacing-md);
+        overflow: hidden;
+        position: relative;
+    }
+
+    .chat-container {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        background: var(--bg-secondary);
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--border-color);
+        overflow: hidden;
+        min-width: 0;
+    }
+
+    .chat-container.expanded {
+        max-width: 100%;
+    }
+
+    .messages-area {
+        flex: 1;
+        overflow-y: auto;
+        padding: var(--spacing-md);
+    }
+
+    .empty-state {
+        text-align: center;
+        color: var(--text-muted);
+        padding: var(--spacing-xl);
+    }
+
+    .message {
+        margin-bottom: var(--spacing-md);
+        padding: var(--spacing-md);
+        border-radius: var(--radius-md);
+    }
+
+    .user-message {
+        background: var(--bg-tertiary);
+        margin-left: 20%;
+    }
+
+    .assistant-message {
+        background: var(--bg-tool-group);
+        margin-right: 10%;
+        border: 1px solid var(--border-color-light);
+    }
+
+    /* Tool execution group - consolidated bubble for grouped tool calls */
+    .tool-group {
+        background: var(--bg-tool-group);
+        margin-right: 10%;
+        margin-bottom: var(--spacing-md);
+        border: 1px solid var(--border-color-light);
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+    }
+
+    .tool-group-header {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+        padding: var(--spacing-sm) var(--spacing-md);
+        background: var(--bg-secondary);
+        border-bottom: 1px solid var(--border-color);
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+    }
+
+    .tool-group-icon {
+        font-size: 1rem;
+    }
+
+    .tool-execution-list {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .tool-execution-row {
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .tool-execution-row:last-child {
+        border-bottom: none;
+    }
+
+    .tool-execution-row.error {
+        border-left: 3px solid var(--status-error);
+    }
+
+    .tool-execution-row .running-summary {
+        cursor: default;
+    }
+
+    .tool-execution-row .running-summary .tool-summary {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-xs);
+        color: var(--text-muted);
+        font-style: italic;
+    }
+
+    .message-header {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: var(--spacing-sm);
+        font-size: 0.875rem;
+    }
+
+    .message-role {
+        font-weight: 600;
+    }
+
+    .message-time {
+        color: var(--text-muted);
+    }
+
+    .content-block {
+        margin-bottom: var(--spacing-sm);
+    }
+
+    .content-block:last-child {
+        margin-bottom: 0;
+    }
+
+    .text-content {
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+
+    .thinking-block {
+        background: var(--bg-secondary);
+        padding: var(--spacing-sm);
+        border-radius: var(--radius-sm);
+        font-size: 0.875rem;
+    }
+
+    .thinking-block summary {
+        cursor: pointer;
+        color: var(--text-muted);
+    }
+
+    .thinking-content {
+        margin-top: var(--spacing-sm);
+        white-space: pre-wrap;
+        color: var(--text-secondary);
+    }
+
+    .tool-use-block {
+        background: var(--bg-tertiary);
+        padding: var(--spacing-xs) var(--spacing-sm);
+        border-radius: var(--radius-sm);
+        font-size: 0.875rem;
+    }
+
+    .tool-header {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-xs);
+    }
+
+    .tool-header .tool-icon {
+        font-size: 1rem;
+    }
+
+    .tool-header .tool-name {
+        font-weight: 500;
+        color: var(--text-secondary);
+    }
+
+    .tool-header .tool-streaming-indicator {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-xs);
+        margin-left: var(--spacing-sm);
+    }
+
+    .tool-header .tool-status {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+    }
+
+    /* Tool Result Block Styles */
+    .tool-result-block {
+        background: var(--bg-tertiary);
+        border-radius: var(--radius-sm);
+        font-family: monospace;
+        font-size: 0.875rem;
+        overflow: hidden;
+    }
+
+    .tool-result-block.error {
+        border-left: 3px solid var(--status-error);
+    }
+
+    .tool-result-block details {
+        margin: 0;
+    }
+
+    .tool-result-summary {
+        padding: var(--spacing-sm) var(--spacing-md);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+        background: var(--bg-tertiary);
+        user-select: none;
+        list-style: none;
+    }
+
+    .tool-result-summary::-webkit-details-marker {
+        display: none;
+    }
+
+    .tool-result-summary:hover {
+        background: var(--bg-secondary);
+    }
+
+    .tool-result-summary .tool-icon {
+        font-size: 1rem;
+        flex-shrink: 0;
+    }
+
+    .tool-result-summary .tool-name {
+        font-weight: 600;
+        color: var(--text-primary);
+        flex-shrink: 0;
+    }
+
+    .tool-result-summary .tool-summary {
+        flex: 1;
+        color: var(--text-secondary);
+        font-size: 0.8125rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .tool-result-summary .error-badge {
+        background: var(--status-error);
+        color: white;
+        padding: 0.125rem 0.375rem;
+        border-radius: var(--radius-sm);
+        font-size: 0.6875rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        flex-shrink: 0;
+    }
+
+    .tool-result-details {
+        border-top: 1px solid var(--border-color);
+        background: var(--bg-tool-group);
+        max-height: 400px;
+        overflow-y: auto;
+    }
+
+    .tool-result-block details[open] .tool-result-summary {
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    /* Read Tool Styles */
+    .read-result .file-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: var(--spacing-xs) var(--spacing-sm);
+        background: var(--bg-tertiary);
+        font-size: 0.8125rem;
+    }
+
+    .read-result .file-path {
+        font-family: monospace;
+        color: var(--text-primary);
+    }
+
+    .read-result .line-count {
+        color: var(--text-muted);
+    }
+
+    .read-result .code-content {
+        max-height: 350px;
+        overflow: auto;
+    }
+
+    .read-result .code-block {
+        margin: 0;
+        padding: var(--spacing-sm);
+        font-size: 0.8125rem;
+        line-height: 1.5;
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+
+    /* Write Tool Styles */
+    .write-result {
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-xs);
+        padding: var(--spacing-sm);
+    }
+
+    .write-result .operation-icon {
+        font-size: 1.25rem;
+    }
+
+    .write-result .operation-details {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+    }
+
+    .write-result .file-path {
+        font-family: monospace;
+        font-size: 0.875rem;
+    }
+
+    .write-result .lines-written {
+        color: var(--text-muted);
+        font-size: 0.8125rem;
+    }
+
+    .write-result .operation-message pre {
+        margin: var(--spacing-xs) 0 0;
+        padding: var(--spacing-sm);
+        background: var(--bg-tertiary);
+        border-radius: var(--radius-sm);
+        font-size: 0.75rem;
+        max-height: 150px;
+        overflow: auto;
+    }
+
+    .write-result.created {
+        border-left: 3px solid var(--status-success);
+        padding-left: calc(var(--spacing-sm) - 3px);
+    }
+
+    .write-result.updated, .write-result.edited, .write-result.written {
+        border-left: 3px solid var(--status-info);
+        padding-left: calc(var(--spacing-sm) - 3px);
+    }
+
+    .write-result.deleted {
+        border-left: 3px solid var(--status-error);
+        padding-left: calc(var(--spacing-sm) - 3px);
+    }
+
+    /* Bash Tool Styles */
+    .bash-result .command-line {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-xs);
+        padding: var(--spacing-xs) var(--spacing-sm);
+        background: var(--bg-tertiary);
+        font-family: monospace;
+        font-size: 0.8125rem;
+    }
+
+    .bash-result .prompt {
+        color: var(--status-success);
+        font-weight: bold;
+    }
+
+    .bash-result .output {
+        margin: 0;
+        padding: var(--spacing-sm);
+        font-size: 0.8125rem;
+        max-height: 300px;
+        overflow: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+
+    .bash-result .error-output {
+        color: var(--status-error);
+        background: rgba(218, 26, 50, 0.1);
+    }
+
+    .bash-result .exit-code {
+        padding: var(--spacing-xs) var(--spacing-sm);
+        background: var(--bg-tertiary);
+        font-size: 0.75rem;
+        color: var(--text-muted);
+    }
+
+    /* Agent Tool Styles */
+    .agent-result {
+        padding: var(--spacing-sm);
+    }
+
+    .agent-result h6 {
+        margin: 0 0 var(--spacing-xs);
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        text-transform: uppercase;
+    }
+
+    .agent-result .summary-section p {
+        margin: 0;
+        font-size: 0.875rem;
+    }
+
+    .agent-result .detailed-output {
+        margin-top: var(--spacing-sm);
+    }
+
+    .agent-result .detailed-output summary {
+        cursor: pointer;
+        font-size: 0.8125rem;
+        color: var(--text-muted);
+    }
+
+    .agent-result .detailed-output pre {
+        margin: var(--spacing-xs) 0 0;
+        padding: var(--spacing-sm);
+        background: var(--bg-tertiary);
+        border-radius: var(--radius-sm);
+        font-size: 0.75rem;
+        max-height: 250px;
+        overflow: auto;
+    }
+
+    .agent-result .files-affected {
+        margin-top: var(--spacing-sm);
+    }
+
+    .agent-result .files-affected ul {
+        margin: 0;
+        padding-left: var(--spacing-lg);
+    }
+
+    .agent-result .files-affected li {
+        font-size: 0.8125rem;
+    }
+
+    /* Grep Tool Styles */
+    .grep-result {
+        padding: var(--spacing-sm);
+    }
+
+    .grep-result .search-pattern {
+        margin-bottom: var(--spacing-xs);
+        font-size: 0.8125rem;
+    }
+
+    .grep-result .search-pattern .label {
+        color: var(--text-muted);
+        margin-right: var(--spacing-xs);
+    }
+
+    .grep-result .match-count {
+        font-size: 0.8125rem;
+        color: var(--text-secondary);
+        margin-bottom: var(--spacing-sm);
+    }
+
+    .grep-result .matches-list {
+        max-height: 250px;
+        overflow-y: auto;
+    }
+
+    .grep-result .match-item {
+        padding: var(--spacing-xs) 0;
+        border-bottom: 1px solid var(--border-color);
+        font-size: 0.8125rem;
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--spacing-xs);
+    }
+
+    .grep-result .match-item:last-child {
+        border-bottom: none;
+    }
+
+    .grep-result .match-file {
+        color: var(--color-lagoon);
+    }
+
+    .grep-result .match-line {
+        color: var(--text-muted);
+    }
+
+    .grep-result .match-content {
+        color: var(--text-secondary);
+        flex-basis: 100%;
+        padding-left: var(--spacing-sm);
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+
+    .grep-result .more-matches {
+        padding: var(--spacing-xs);
+        color: var(--text-muted);
+        font-size: 0.75rem;
+        font-style: italic;
+    }
+
+    /* Glob Tool Styles */
+    .glob-result {
+        padding: var(--spacing-sm);
+    }
+
+    .glob-result .glob-pattern {
+        margin-bottom: var(--spacing-xs);
+        font-size: 0.8125rem;
+    }
+
+    .glob-result .glob-pattern .label {
+        color: var(--text-muted);
+        margin-right: var(--spacing-xs);
+    }
+
+    .glob-result .file-count {
+        font-size: 0.8125rem;
+        color: var(--text-secondary);
+        margin-bottom: var(--spacing-sm);
+    }
+
+    .glob-result .files-list {
+        max-height: 250px;
+        overflow-y: auto;
+    }
+
+    .glob-result .file-item {
+        padding: var(--spacing-xs) 0;
+        font-size: 0.8125rem;
+    }
+
+    .glob-result .more-files {
+        padding: var(--spacing-xs);
+        color: var(--text-muted);
+        font-size: 0.75rem;
+        font-style: italic;
+    }
+
+    /* Web Tool Styles */
+    .web-result {
+        padding: var(--spacing-sm);
+    }
+
+    .web-result .web-url {
+        margin-bottom: var(--spacing-sm);
+        font-size: 0.8125rem;
+    }
+
+    .web-result .web-url .label {
+        color: var(--text-muted);
+        margin-right: var(--spacing-xs);
+    }
+
+    .web-result .web-url a {
+        color: var(--color-lagoon);
+        word-break: break-all;
+    }
+
+    .web-result .web-content pre {
+        margin: 0;
+        padding: var(--spacing-sm);
+        background: var(--bg-tertiary);
+        border-radius: var(--radius-sm);
+        font-size: 0.75rem;
+        max-height: 300px;
+        overflow: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+
+    .web-result.error .web-content pre {
+        color: var(--status-error);
+    }
+
+    /* Generic Result Styles */
+    .generic-result {
+        margin: 0;
+        padding: var(--spacing-sm);
+        font-size: 0.8125rem;
+        max-height: 300px;
+        overflow: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+
+    .processing-indicator {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+        padding: var(--spacing-md);
+        color: var(--text-muted);
+    }
+
+    /* Session error banner */
+    .session-error-banner {
+        display: flex;
+        gap: var(--spacing-md);
+        padding: var(--spacing-md);
+        margin: var(--spacing-md);
+        background: rgba(218, 26, 50, 0.1);
+        border: 1px solid var(--status-error);
+        border-radius: var(--radius-md);
+    }
+
+    .session-error-banner .error-icon {
+        font-size: 1.5rem;
+        flex-shrink: 0;
+    }
+
+    .session-error-banner .error-content {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-sm);
+    }
+
+    .session-error-banner .error-title {
+        font-weight: 600;
+        color: var(--status-error);
+        font-size: 1rem;
+    }
+
+    .session-error-banner .error-message {
+        color: var(--text-secondary);
+        font-size: 0.875rem;
+        white-space: pre-wrap;
+    }
+
+    .session-error-banner .error-actions {
+        margin-top: var(--spacing-sm);
+    }
+
+    /* Streaming content indicators */
+    .streaming-cursor {
+        animation: blink 1s step-end infinite;
+        color: var(--color-lagoon);
+    }
+
+    .streaming-dots {
+        animation: dots 1.5s ease-in-out infinite;
+    }
+
+    .content-block.streaming {
+        border-left: 2px solid var(--color-lagoon);
+        padding-left: var(--spacing-sm);
+    }
+
+    @@keyframes blink {
+        0%, 100% {
+            opacity: 1;
+        }
+        50% {
+            opacity: 0;
+        }
+    }
+
+    @@keyframes dots {
+        0%, 20% {
+            content: '.';
+        }
+        40% {
+            content: '..';
+        }
+        60%, 100% {
+            content: '...';
+        }
+    }
+
+    .input-area {
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-sm);
+        padding: var(--spacing-md);
+        border-top: 1px solid var(--border-color);
+        background: var(--bg-primary);
+    }
+
+    .input-controls {
+        display: flex;
+        gap: var(--spacing-sm);
+        flex-wrap: wrap;
+        align-items: center;
+    }
+
+    .input-row {
+        display: flex;
+        gap: var(--spacing-sm);
+        align-items: flex-start;
+    }
+
+    .permission-select,
+    .model-select,
+    .prompt-select {
+        flex-shrink: 0;
+        padding: var(--spacing-sm);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        font-family: inherit;
+        font-size: 0.875rem;
+        cursor: pointer;
+    }
+
+    .permission-select {
+        min-width: 140px;
+    }
+
+    .model-select {
+        min-width: 100px;
+    }
+
+    .prompt-select {
+        min-width: 160px;
+    }
+
+    .permission-select:focus,
+    .model-select:focus,
+    .prompt-select:focus {
+        outline: none;
+        border-color: var(--primary);
+    }
+
+    .permission-select:disabled,
+    .model-select:disabled,
+    .prompt-select:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .clear-context-btn {
+        margin-left: auto;
+    }
+
+    .input-row textarea {
+        flex: 1;
+        resize: none;
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        padding: var(--spacing-sm);
+        font-family: inherit;
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+    }
+
+    .input-row textarea:focus {
+        outline: none;
+        border-color: var(--color-lagoon);
+    }
+
+    .button-group {
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-xs);
+        align-self: flex-end;
+    }
+
+    .send-button,
+    .stop-button,
+    .queue-button {
+        min-width: 80px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: var(--spacing-xs);
+    }
+
+    .stop-button {
+        animation: pulse-glow 1.5s ease-in-out infinite;
+    }
+
+    .stop-button .stop-icon {
+        font-size: 0.75rem;
+    }
+
+    .stop-button:disabled {
+        animation: none;
+    }
+
+    @@keyframes pulse-glow {
+        0%, 100% {
+            box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.4);
+        }
+        50% {
+            box-shadow: 0 0 0 4px rgba(220, 53, 69, 0);
+        }
+    }
+
+    .queue-button {
+        font-size: 0.8125rem;
+    }
+
+    .queued-messages-indicator {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+        padding: var(--spacing-xs) 0;
+        font-size: 0.875rem;
+    }
+
+    .queued-messages-indicator .btn-link {
+        padding: 0;
+        font-size: 0.8125rem;
+    }
+
+    /* Context separator styles */
+    .context-separator {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-md);
+        padding: var(--spacing-md);
+        margin: var(--spacing-md) 0;
+        color: var(--text-muted);
+        font-size: 0.875rem;
+    }
+
+    .context-separator::before,
+    .context-separator::after {
+        content: '';
+        flex: 1;
+        height: 1px;
+        background: var(--border-color);
+    }
+
+    .context-separator .separator-text {
+        font-weight: 500;
+        color: var(--text-secondary);
+    }
+
+    .context-separator .separator-time {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+    }
+
+    /* Load history banner */
+    .load-history-banner {
+        display: flex;
+        justify-content: center;
+        padding: var(--spacing-sm) var(--spacing-md);
+        background: var(--bg-tertiary);
+        border-bottom: 1px solid var(--border-color);
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+
+    .load-history-banner .btn {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-xs);
+    }
+
+    /* Scroll to bottom button */
+    .messages-area {
+        position: relative;
+    }
+
+    .scroll-to-bottom-btn {
+        position: sticky;
+        bottom: var(--spacing-md);
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 10;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        border: 1px solid var(--border-color);
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        transition: all 0.2s ease;
+    }
+
+    .scroll-to-bottom-btn:hover {
+        background: var(--bg-tertiary);
+        border-color: var(--color-lagoon);
+    }
+
+    .scroll-to-bottom-btn .scroll-arrow {
+        font-size: 1.25rem;
+        line-height: 1;
+    }
+
+    .session-stats {
+        display: flex;
+        gap: var(--spacing-lg);
+        padding: var(--spacing-sm) 0;
+        font-size: 0.875rem;
+        color: var(--text-muted);
+    }
+
+    /* Question Container Styles */
+    .question-container {
+        background: var(--bg-tertiary);
+        border: 2px solid var(--status-question);
+        border-radius: var(--radius-lg);
+        padding: var(--spacing-lg);
+        margin: var(--spacing-md) 0;
+    }
+
+    .question-header {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+        margin-bottom: var(--spacing-md);
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    .question-icon {
+        font-size: 1.25rem;
+    }
+
+    .question-title {
+        color: var(--status-question);
+    }
+
+    .question-item {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-md);
+        padding: var(--spacing-md);
+        margin-bottom: var(--spacing-md);
+    }
+
+    .question-item:last-child {
+        margin-bottom: 0;
+    }
+
+    .question-text {
+        font-size: 0.9375rem;
+        margin-bottom: var(--spacing-sm);
+        color: var(--text-primary);
+    }
+
+    .question-header-tag {
+        display: inline-block;
+        background: var(--status-question);
+        color: white;
+        padding: 0.125rem 0.5rem;
+        border-radius: var(--radius-sm);
+        font-size: 0.75rem;
+        font-weight: 600;
+        margin-right: var(--spacing-xs);
+        text-transform: uppercase;
+    }
+
+    .question-options {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--spacing-sm);
+        margin-top: var(--spacing-sm);
+    }
+
+    .question-option {
+        padding: var(--spacing-sm) var(--spacing-md);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        cursor: pointer;
+        font-size: 0.875rem;
+        transition: all 0.15s ease;
+    }
+
+    .question-option:hover {
+        border-color: var(--status-question);
+        background: var(--bg-tertiary);
+    }
+
+    .question-option.selected {
+        border-color: var(--status-question);
+        background: var(--status-question);
+        color: white;
+    }
+
+    .question-option.other-option {
+        border-style: dashed;
+        font-style: italic;
+    }
+
+    .option-checkbox {
+        margin-right: var(--spacing-xs);
+    }
+
+    .custom-answer-input {
+        margin-top: var(--spacing-sm);
+    }
+
+    .custom-answer-input input {
+        width: 100%;
+        padding: var(--spacing-sm);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        font-size: 0.875rem;
+    }
+
+    .custom-answer-input input:focus {
+        outline: none;
+        border-color: var(--status-question);
+    }
+
+    .question-actions {
+        margin-top: var(--spacing-md);
+        display: flex;
+        justify-content: flex-end;
+    }
+
+    /* Debug Panel Styles */
+    .debug-panel {
+        margin-top: var(--spacing-md);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        background: var(--bg-secondary);
+    }
+
+    .debug-panel summary {
+        padding: var(--spacing-sm) var(--spacing-md);
+        cursor: pointer;
+        font-size: 0.875rem;
+        color: var(--text-muted);
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+    }
+
+    .debug-panel summary:hover {
+        color: var(--text-primary);
+    }
+
+    .debug-count {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+    }
+
+    .debug-controls {
+        padding: var(--spacing-sm) var(--spacing-md);
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .debug-log {
+        max-height: 300px;
+        overflow-y: auto;
+        font-family: monospace;
+        font-size: 0.75rem;
+    }
+
+    .debug-empty {
+        padding: var(--spacing-md);
+        color: var(--text-muted);
+        text-align: center;
+    }
+
+    .debug-entry {
+        padding: var(--spacing-xs) var(--spacing-md);
+        border-bottom: 1px solid var(--border-color);
+        display: flex;
+        gap: var(--spacing-sm);
+    }
+
+    .debug-entry:last-child {
+        border-bottom: none;
+    }
+
+    .debug-entry.error {
+        background: rgba(220, 53, 69, 0.1);
+        color: var(--status-error);
+    }
+
+    .debug-time {
+        color: var(--text-muted);
+        min-width: 100px;
+    }
+
+    .debug-type {
+        font-weight: 600;
+        min-width: 180px;
+        color: var(--color-lagoon);
+    }
+
+    .debug-entry.error .debug-type {
+        color: var(--status-error);
+    }
+
+    .debug-message {
+        flex: 1;
+        word-break: break-word;
+    }
+
+    /* ===== Mobile responsive styles ===== */
+    @@media (max-width: 768px) {
+        .session-page {
+            padding: var(--spacing-sm);
+            height: calc(100vh - 80px);
+        }
+
+        .session-header {
+            margin-bottom: var(--spacing-sm);
+            padding-bottom: var(--spacing-sm);
+        }
+
+        .session-info h1 {
+            font-size: 1.125rem;
+            line-height: 1.3;
+        }
+
+        .session-content {
+            flex-direction: column;
+            gap: var(--spacing-sm);
+        }
+
+        .user-message {
+            margin-left: 5%;
+        }
+
+        .assistant-message,
+        .tool-result-message {
+            margin-right: 2%;
+        }
+    }
+</style>
+
+@code {
+    [Parameter] public string SessionId { get; set; } = string.Empty;
+
+    private ClaudeSession? _session;
+    private bool _isLoading = true;
+    private string _inputMessage = string.Empty;
+    private SessionMode _selectedMode = SessionMode.Build;
+    private string _selectedModel = "sonnet";
+    private string _selectedPromptId = string.Empty;
+    private IReadOnlyList<AgentPrompt> _availablePrompts = [];
+    private bool _showScrollToBottomButton = false;
+    private bool _isNearBottom = true;
+    private bool _hasScrolledInitially = false;
+    private bool _showPlanRejectFeedback = false;
+    private string _planRejectFeedback = string.Empty;
+    private ElementReference _messagesContainer;
+    private HubConnection? _hubConnection;
+    private string? _signalRError;
+
+    // Side panel state
+    private bool _sidePanelOpen = true;
+
+    // Issue data for header display and prompt context injection
+    private IssueResponse? _issue;
+
+    // Question handling
+    private PendingQuestion? _pendingQuestion;
+    private Dictionary<string, string> _questionAnswers = new();
+    private Dictionary<string, string> _customAnswers = new(); // For "Other" text input
+
+    // Stop/interrupt button state
+    private bool _isStopping = false;
+    private bool _isInterrupting = false;
+
+    // Plan action button state (prevents double-click)
+    private bool _isProcessingPlanAction = false;
+
+    // Session error state
+    private string? _errorSubtype;
+    private bool _isRecoverable = true;
+    private bool _isRestartingContainer = false;
+
+    // Message queue for mid-execution prompts
+    private Queue<string> _pendingMessages = new();
+    private const int MaxQueuedMessages = 5;
+
+    // Load history state
+    private bool _showLoadHistoryButton = false;
+    private int _cachedMessageCount = 0;
+    private bool _isLoadingHistory = false;
+
+    // AG-UI state tracking for assembling messages from streaming events
+    private readonly Dictionary<string, InFlightTextMessage> _inFlightTextMessages = new();
+    private readonly Dictionary<string, InFlightToolCall> _inFlightToolCalls = new();
+
+    /// <summary>
+    /// Tracks an in-flight text message being assembled from AG-UI events.
+    /// </summary>
+    private class InFlightTextMessage
+    {
+        public string MessageId { get; init; } = "";
+        public string Role { get; init; } = "assistant";
+        public System.Text.StringBuilder Content { get; } = new();
+    }
+
+    /// <summary>
+    /// Tracks an in-flight tool call being assembled from AG-UI events.
+    /// </summary>
+    private class InFlightToolCall
+    {
+        public string ToolCallId { get; init; } = "";
+        public string ToolName { get; init; } = "";
+        public string? ParentMessageId { get; init; }
+        public System.Text.StringBuilder Args { get; } = new();
+    }
+
+    // Debug log entry class (needs to be accessible in both Debug and Release for Razor compilation)
+    private class DebugLogEntry
+    {
+        public DateTime Timestamp { get; init; }
+        public required string EventType { get; init; }
+        public required string Message { get; init; }
+    }
+
+    // IsDebugBuild property for conditional rendering
+#if DEBUG
+    private static bool IsDebugBuild => true;
+
+    // Debug mode for SignalR event logging
+    private bool _debugMode = false;
+    private List<DebugLogEntry> _debugLog = new();
+    private const int MaxDebugLogEntries = 100;
+
+    private void LogDebug(string eventType, string message)
+    {
+        if (_debugMode)
+        {
+            _debugLog.Add(new DebugLogEntry
+            {
+                Timestamp = DateTime.Now,
+                EventType = eventType,
+                Message = message
+            });
+            // Keep log size bounded
+            while (_debugLog.Count > MaxDebugLogEntries)
+            {
+                _debugLog.RemoveAt(0);
+            }
+        }
+    }
+
+    private void ToggleDebugMode()
+    {
+        _debugMode = !_debugMode;
+        if (!_debugMode)
+        {
+            _debugLog.Clear();
+        }
+
+        StateHasChanged();
+    }
+
+    private void ClearDebugLog()
+    {
+        _debugLog.Clear();
+        StateHasChanged();
+    }
+#else
+    private static bool IsDebugBuild => false;
+    // Stubs for Release builds (never used since IsDebugBuild is false)
+    private bool _debugMode => false;
+    private List<DebugLogEntry> _debugLog => new();
+    private static void LogDebug(string eventType, string message) { }
+    private void ToggleDebugMode() { }
+    private void ClearDebugLog() { }
+#endif
+
+    /// <summary>
+    /// Gets the assistant message for the current turn (the one that comes after the last real user message).
+    /// Creates a new assistant message if one doesn't exist for the current turn.
+    /// Note: Tool result messages (role=user but only ToolResult content) are NOT turn boundaries.
+    /// </summary>
+    private ClaudeMessage? GetOrCreateCurrentTurnAssistantMessage()
+    {
+        if (_session == null) return null;
+
+        // Find the index of the last REAL user message (not a tool_result message)
+        // A real user message has text content, while tool_result messages only have ToolResult content
+        var lastUserMessageIndex = -1;
+        for (int i = _session.Messages.Count - 1; i >= 0; i--)
+        {
+            var msg = _session.Messages[i];
+            if (msg.Role == ClaudeMessageRole.User && IsRealUserMessage(msg))
+            {
+                lastUserMessageIndex = i;
+                break;
+            }
+        }
+
+        // Look for an assistant message AFTER the last real user message
+        ClaudeMessage? currentAssistantMessage = null;
+        if (lastUserMessageIndex >= 0)
+        {
+            for (int i = lastUserMessageIndex + 1; i < _session.Messages.Count; i++)
+            {
+                if (_session.Messages[i].Role == ClaudeMessageRole.Assistant)
+                {
+                    currentAssistantMessage = _session.Messages[i];
+                    break;
+                }
+            }
+        }
+        else
+        {
+            // No user message yet, so any assistant message is for the current turn (initial response)
+            currentAssistantMessage = _session.Messages.LastOrDefault(m => m.Role == ClaudeMessageRole.Assistant);
+        }
+
+        // If no assistant message for this turn exists, create one
+        if (currentAssistantMessage == null)
+        {
+            currentAssistantMessage = new ClaudeMessage
+            {
+                SessionId = SessionId,
+                Role = ClaudeMessageRole.Assistant,
+                Content = []
+            };
+            _session.Messages.Add(currentAssistantMessage);
+            LogDebug("CreateMessage", "Created new assistant message for current turn");
+        }
+
+        return currentAssistantMessage;
+    }
+
+    /// <summary>
+    /// Determines if a user message is a "real" user message (with text input) vs a tool_result message.
+    /// Tool result messages have role=user but only contain ToolResult content blocks.
+    /// </summary>
+    private static bool IsRealUserMessage(ClaudeMessage message)
+    {
+        if (message.Role != ClaudeMessageRole.User) return false;
+
+        // If the message has no content, treat it as a real user message (edge case)
+        if (message.Content.Count == 0) return true;
+
+        // If all content blocks are ToolResult, this is NOT a real user message
+        var hasOnlyToolResults = message.Content.All(c => c.Type == ClaudeContentType.ToolResult);
+        return !hasOnlyToolResults;
+    }
+
+    /// <summary>
+    /// Handles the AG-UI QuestionPending custom event.
+    /// </summary>
+    private async Task HandleQuestionPendingEvent(CustomEvent evt)
+    {
+        try
+        {
+            // Parse the question from the event value
+            var jsonElement = (JsonElement)evt.Value;
+            var question = JsonSerializer.Deserialize<PendingQuestion>(jsonElement.GetRawText());
+            if (question == null) return;
+
+            LogDebug("QuestionPending", $"Questions: {question.Questions.Count}");
+            Console.WriteLine($"[SignalR] QuestionPending: {question.Questions.Count} questions");
+
+            _pendingQuestion = question;
+            _questionAnswers.Clear();
+            _customAnswers.Clear();
+
+            // Initialize answers with first option for non-multiselect questions
+            foreach (var q in question.Questions)
+            {
+                if (q.Options.Count > 0 && !q.MultiSelect)
+                {
+                    _questionAnswers[q.Question] = q.Options[0].Label;
+                }
+            }
+
+            if (_session != null)
+            {
+                _session.Status = ClaudeSessionStatus.WaitingForQuestionAnswer;
+                _session.PendingQuestion = question;
+            }
+
+            StateHasChanged();
+            await AutoScrollToBottomIfNearEnd();
+        }
+        catch (Exception ex)
+        {
+            LogDebug("ERROR", $"HandleQuestionPendingEvent: {ex.Message}");
+            Console.WriteLine($"[SignalR] Error handling QuestionPending: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Handles the AG-UI PlanPending custom event.
+    /// </summary>
+    private async Task HandlePlanPendingEvent(CustomEvent evt)
+    {
+        try
+        {
+            // Parse the plan data from the event value
+            var jsonElement = (JsonElement)evt.Value;
+            var planData = JsonSerializer.Deserialize<AGUIPlanPendingData>(jsonElement.GetRawText());
+            if (planData == null) return;
+
+            LogDebug("PlanPending", $"Plan content length: {planData.PlanContent?.Length ?? 0}");
+
+            if (_session != null)
+            {
+                _session.PlanContent = planData.PlanContent;
+                _session.PlanFilePath = planData.PlanFilePath;
+            }
+
+            StateHasChanged();
+            await AutoScrollToBottomIfNearEnd();
+        }
+        catch (Exception ex)
+        {
+            LogDebug("ERROR", $"HandlePlanPendingEvent: {ex.Message}");
+            Console.WriteLine($"[SignalR] Error handling PlanPending: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Transforms the flat message list into a list of display items (ClaudeMessage or ToolExecutionGroup).
+    /// Groups consecutive tool use/result message pairs into consolidated ToolExecutionGroup objects.
+    /// Non-tool content (text, thinking) from assistant messages with tools is split into a separate message.
+    /// </summary>
+    private List<object> GetDisplayItems()
+    {
+        if (_session == null) return [];
+        return MessageDisplayService.GetDisplayItems(_session.Messages);
+    }
+
+    /// <summary>
+    /// Scrolls the messages container to the bottom.
+    /// </summary>
+    private async Task ScrollToBottom()
+    {
+        try
+        {
+            // Fixed: Use correct CSS selector (.messages-area instead of .messages-container)
+            await JSRuntime.InvokeVoidAsync("eval",
+                $"document.querySelector('.messages-area')?.scrollTo({{ top: document.querySelector('.messages-area')?.scrollHeight || 0, behavior: 'smooth' }})");
+        }
+        catch
+        {
+            // Ignore scroll errors
+        }
+    }
+
+    /// <summary>
+    /// Scrolls to bottom when button is clicked.
+    /// </summary>
+    private async Task ScrollToBottomClick()
+    {
+        await ScrollToBottom();
+        _showScrollToBottomButton = false;
+        _isNearBottom = true;
+    }
+
+    /// <summary>
+    /// Handles scroll events to show/hide the scroll-to-bottom button.
+    /// </summary>
+    private async Task HandleScroll()
+    {
+        try
+        {
+            // Check if user is near the bottom (within 100px threshold)
+            var isNear = await JSRuntime.InvokeAsync<bool>("eval",
+                "(function() { var el = document.querySelector('.messages-area'); return el ? (el.scrollHeight - el.scrollTop - el.clientHeight < 100) : true; })()");
+
+            _isNearBottom = isNear;
+            _showScrollToBottomButton = !isNear;
+        }
+        catch
+        {
+            // Ignore scroll tracking errors
+        }
+    }
+
+    /// <summary>
+    /// Scrolls to bottom only if user is near the bottom (auto-scroll behavior).
+    /// </summary>
+    private async Task AutoScrollToBottomIfNearEnd()
+    {
+        if (_isNearBottom)
+        {
+            await ScrollToBottom();
+        }
+    }
+
+    private async Task LoadIssueAsync()
+    {
+        if (_session == null || string.IsNullOrEmpty(_session.EntityId) || string.IsNullOrEmpty(_session.ProjectId))
+            return;
+
+        // Don't try to load issue for clone entities
+        if (_session.EntityId.StartsWith("clone:"))
+            return;
+
+        try
+        {
+            _issue = await IssueApi.GetIssueAsync(_session.EntityId, _session.ProjectId);
+        }
+        catch
+        {
+            // Silently fail - we'll just show the default header
+            _issue = null;
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Register panel availability and subscribe to changes
+        PanelService.SetPanelAvailable(true);
+        PanelService.OnStateChanged += OnPanelServiceStateChanged;
+
+        try
+        {
+            await BreadcrumbService.SetContextAsync(new BreadcrumbContext { SessionId = SessionId });
+
+            _session = await SessionApi.GetSessionAsync(SessionId);
+
+            // Load available prompts (project-specific + global if session has a project)
+            if (_session != null && !string.IsNullOrEmpty(_session.ProjectId))
+            {
+                var projectPrompts = await AgentPromptApi.GetProjectPromptsAsync(_session.ProjectId);
+                var globalPrompts = await AgentPromptApi.GetAllPromptsAsync();
+                _availablePrompts = projectPrompts.Concat(globalPrompts).ToList();
+            }
+            else
+            {
+                _availablePrompts = await AgentPromptApi.GetAllPromptsAsync();
+            }
+
+            if (_session != null)
+            {
+                // CRITICAL: Ensure all content is marked as not streaming for immediate display
+                // This is essential for JSONL-loaded sessions and for sessions where we want
+                // complete messages to display without streaming artifacts
+                foreach (var message in _session.Messages)
+                {
+                    message.IsStreaming = false;
+                    foreach (var content in message.Content)
+                    {
+                        content.IsStreaming = false;
+                    }
+                }
+
+                // Initialize pending question from session if present
+                _pendingQuestion = _session.PendingQuestion;
+                if (_pendingQuestion != null)
+                {
+                    // Initialize answers with first option for non-multiselect questions
+                    foreach (var q in _pendingQuestion.Questions)
+                    {
+                        if (q.Options.Count > 0 && !q.MultiSelect)
+                        {
+                            _questionAnswers[q.Question] = q.Options[0].Label;
+                        }
+                    }
+                }
+
+                // Set initial model from session
+                _selectedModel = _session.Model;
+
+                // Set initial mode from session
+                _selectedMode = _session.Mode;
+
+                // Load issue data for header display and prompt context
+                await LoadIssueAsync();
+
+                // Trigger render BEFORE SignalR setup to show messages immediately
+                StateHasChanged();
+
+                try
+                {
+                    await SetupSignalR();
+                }
+                catch (Exception ex)
+                {
+                    // SignalR connection failed - this can happen when accessing via external hostname
+                    // that the container can't resolve. Continue without real-time updates.
+                    _signalRError = $"Real-time updates unavailable: {ex.Message}";
+                    Console.WriteLine($"SignalR connection failed: {ex.Message}");
+                }
+            }
+        }
+        finally
+        {
+            _isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Scroll to bottom after initial load completes
+        // This ensures the chat opens at the bottom so users see the latest messages
+        if (!_hasScrolledInitially && _session != null && !_isLoading)
+        {
+            _hasScrolledInitially = true;
+            await ScrollToBottom();
+        }
+    }
+
+    private async Task SetupSignalR()
+    {
+        _hubConnection = new HubConnectionBuilder()
+            .WithUrl(NavigationManager.ToAbsoluteUri("/hubs/claudecode"))
+            .WithAutomaticReconnect()
+            .Build();
+
+        // AG-UI Text Message Events - handles streaming text content from the assistant
+        _hubConnection.On<TextMessageStartEvent>(AGUIEventType.TextMessageStart, (evt) =>
+        {
+            _ = InvokeAsync(async () =>
+            {
+                try
+                {
+                    LogDebug("AGUI_TextMessageStart", $"MessageId: {evt.MessageId}, Role: {evt.Role}");
+
+                    // Track the in-flight message
+                    _inFlightTextMessages[evt.MessageId] = new InFlightTextMessage
+                    {
+                        MessageId = evt.MessageId,
+                        Role = evt.Role
+                    };
+
+                    // Get or create the assistant message for the current turn
+                    var currentMessage = GetOrCreateCurrentTurnAssistantMessage();
+                    if (currentMessage != null)
+                    {
+                        // Add a streaming text block
+                        var textBlock = new ClaudeMessageContent
+                        {
+                            Type = ClaudeContentType.Text,
+                            Text = "",
+                            IsStreaming = true,
+                            Index = currentMessage.Content.Count
+                        };
+                        currentMessage.Content.Add(textBlock);
+                    }
+
+                    StateHasChanged();
+                    await AutoScrollToBottomIfNearEnd();
+                }
+                catch (Exception ex)
+                {
+                    LogDebug("ERROR", $"AGUI_TextMessageStart: {ex.Message}");
+                    Console.WriteLine($"[SignalR] Error in AGUI_TextMessageStart: {ex.Message}");
+                }
+            });
+        });
+
+        _hubConnection.On<TextMessageContentEvent>(AGUIEventType.TextMessageContent, (evt) =>
+        {
+            _ = InvokeAsync(async () =>
+            {
+                try
+                {
+                    LogDebug("AGUI_TextMessageContent", $"MessageId: {evt.MessageId}, DeltaLen: {evt.Delta.Length}");
+
+                    // Update in-flight message
+                    if (_inFlightTextMessages.TryGetValue(evt.MessageId, out var inFlight))
+                    {
+                        inFlight.Content.Append(evt.Delta);
+                    }
+
+                    // Find the streaming text block and update it
+                    var currentMessage = GetOrCreateCurrentTurnAssistantMessage();
+                    var streamingBlock = currentMessage?.Content.LastOrDefault(c => c.IsStreaming && c.Type == ClaudeContentType.Text);
+                    if (streamingBlock != null)
+                    {
+                        streamingBlock.Text = (streamingBlock.Text ?? "") + evt.Delta;
+                    }
+
+                    StateHasChanged();
+                    await AutoScrollToBottomIfNearEnd();
+                }
+                catch (Exception ex)
+                {
+                    LogDebug("ERROR", $"AGUI_TextMessageContent: {ex.Message}");
+                    Console.WriteLine($"[SignalR] Error in AGUI_TextMessageContent: {ex.Message}");
+                }
+            });
+        });
+
+        _hubConnection.On<TextMessageEndEvent>(AGUIEventType.TextMessageEnd, (evt) =>
+        {
+            _ = InvokeAsync(async () =>
+            {
+                try
+                {
+                    LogDebug("AGUI_TextMessageEnd", $"MessageId: {evt.MessageId}");
+
+                    // Clean up in-flight message
+                    _inFlightTextMessages.Remove(evt.MessageId);
+
+                    // Mark the streaming text block as complete
+                    var currentMessage = GetOrCreateCurrentTurnAssistantMessage();
+                    var streamingBlock = currentMessage?.Content.LastOrDefault(c => c.IsStreaming && c.Type == ClaudeContentType.Text);
+                    if (streamingBlock != null)
+                    {
+                        streamingBlock.IsStreaming = false;
+                    }
+
+                    StateHasChanged();
+                    await AutoScrollToBottomIfNearEnd();
+                }
+                catch (Exception ex)
+                {
+                    LogDebug("ERROR", $"AGUI_TextMessageEnd: {ex.Message}");
+                    Console.WriteLine($"[SignalR] Error in AGUI_TextMessageEnd: {ex.Message}");
+                }
+            });
+        });
+
+        // AG-UI Tool Call Events - handles tool use streaming
+        _hubConnection.On<ToolCallStartEvent>(AGUIEventType.ToolCallStart, (evt) =>
+        {
+            _ = InvokeAsync(async () =>
+            {
+                try
+                {
+                    LogDebug("AGUI_ToolCallStart", $"ToolCallId: {evt.ToolCallId}, ToolName: {evt.ToolCallName}");
+
+                    // Track the in-flight tool call
+                    _inFlightToolCalls[evt.ToolCallId] = new InFlightToolCall
+                    {
+                        ToolCallId = evt.ToolCallId,
+                        ToolName = evt.ToolCallName,
+                        ParentMessageId = evt.ParentMessageId
+                    };
+
+                    // Get or create the assistant message for the current turn
+                    var currentMessage = GetOrCreateCurrentTurnAssistantMessage();
+                    if (currentMessage != null)
+                    {
+                        // Collapse all previous thinking blocks when a tool starts
+                        foreach (var thinkingBlock in currentMessage.Content
+                                     .Where(c => c.Type == ClaudeContentType.Thinking && c.IsStreaming))
+                        {
+                            thinkingBlock.IsStreaming = false;
+                        }
+
+                        // Add a streaming tool use block
+                        var toolBlock = new ClaudeMessageContent
+                        {
+                            Type = ClaudeContentType.ToolUse,
+                            ToolUseId = evt.ToolCallId,
+                            ToolName = evt.ToolCallName,
+                            ToolInput = "",
+                            IsStreaming = true,
+                            Index = currentMessage.Content.Count
+                        };
+                        currentMessage.Content.Add(toolBlock);
+                    }
+
+                    StateHasChanged();
+                    await AutoScrollToBottomIfNearEnd();
+                }
+                catch (Exception ex)
+                {
+                    LogDebug("ERROR", $"AGUI_ToolCallStart: {ex.Message}");
+                    Console.WriteLine($"[SignalR] Error in AGUI_ToolCallStart: {ex.Message}");
+                }
+            });
+        });
+
+        _hubConnection.On<ToolCallArgsEvent>(AGUIEventType.ToolCallArgs, (evt) =>
+        {
+            _ = InvokeAsync(async () =>
+            {
+                try
+                {
+                    LogDebug("AGUI_ToolCallArgs", $"ToolCallId: {evt.ToolCallId}, DeltaLen: {evt.Delta.Length}");
+
+                    // Update in-flight tool call
+                    if (_inFlightToolCalls.TryGetValue(evt.ToolCallId, out var inFlight))
+                    {
+                        inFlight.Args.Append(evt.Delta);
+                    }
+
+                    // Find the streaming tool block and update it
+                    var currentMessage = GetOrCreateCurrentTurnAssistantMessage();
+                    var streamingBlock = currentMessage?.Content.FirstOrDefault(c =>
+                        c.IsStreaming && c.Type == ClaudeContentType.ToolUse && c.ToolUseId == evt.ToolCallId);
+                    if (streamingBlock != null)
+                    {
+                        streamingBlock.ToolInput = (streamingBlock.ToolInput ?? "") + evt.Delta;
+                    }
+
+                    StateHasChanged();
+                    await AutoScrollToBottomIfNearEnd();
+                }
+                catch (Exception ex)
+                {
+                    LogDebug("ERROR", $"AGUI_ToolCallArgs: {ex.Message}");
+                    Console.WriteLine($"[SignalR] Error in AGUI_ToolCallArgs: {ex.Message}");
+                }
+            });
+        });
+
+        _hubConnection.On<ToolCallEndEvent>(AGUIEventType.ToolCallEnd, (evt) =>
+        {
+            _ = InvokeAsync(async () =>
+            {
+                try
+                {
+                    LogDebug("AGUI_ToolCallEnd", $"ToolCallId: {evt.ToolCallId}");
+
+                    // Clean up in-flight tool call
+                    _inFlightToolCalls.Remove(evt.ToolCallId);
+
+                    // Mark the streaming tool block as complete
+                    var currentMessage = GetOrCreateCurrentTurnAssistantMessage();
+                    var streamingBlock = currentMessage?.Content.FirstOrDefault(c =>
+                        c.IsStreaming && c.Type == ClaudeContentType.ToolUse && c.ToolUseId == evt.ToolCallId);
+                    if (streamingBlock != null)
+                    {
+                        streamingBlock.IsStreaming = false;
+                    }
+
+                    StateHasChanged();
+                    await AutoScrollToBottomIfNearEnd();
+                }
+                catch (Exception ex)
+                {
+                    LogDebug("ERROR", $"AGUI_ToolCallEnd: {ex.Message}");
+                    Console.WriteLine($"[SignalR] Error in AGUI_ToolCallEnd: {ex.Message}");
+                }
+            });
+        });
+
+        // AG-UI Tool Call Result - handles tool execution results
+        _hubConnection.On<ToolCallResultEvent>(AGUIEventType.ToolCallResult, (evt) =>
+        {
+            _ = InvokeAsync(async () =>
+            {
+                try
+                {
+                    LogDebug("AGUI_ToolCallResult", $"ToolCallId: {evt.ToolCallId}, ContentLen: {evt.Content?.Length ?? 0}");
+
+                    if (_session == null) return;
+
+                    // Create a user message with tool result content
+                    // (This is how tool results are represented in the conversation)
+                    var toolResultMessage = new ClaudeMessage
+                    {
+                        SessionId = SessionId,
+                        Role = ClaudeMessageRole.User,
+                        Content = new List<ClaudeMessageContent>
+                        {
+                            new ClaudeMessageContent
+                            {
+                                Type = ClaudeContentType.ToolResult,
+                                ToolUseId = evt.ToolCallId,
+                                ToolResult = evt.Content,
+                                ToolSuccess = true
+                            }
+                        }
+                    };
+
+                    _session.Messages.Add(toolResultMessage);
+                    StateHasChanged();
+                    await AutoScrollToBottomIfNearEnd();
+                }
+                catch (Exception ex)
+                {
+                    LogDebug("ERROR", $"AGUI_ToolCallResult: {ex.Message}");
+                    Console.WriteLine($"[SignalR] Error in AGUI_ToolCallResult: {ex.Message}");
+                }
+            });
+        });
+
+        // AG-UI Custom Events - handles question pending and plan pending
+        _hubConnection.On<CustomEvent>(AGUIEventType.Custom, (evt) =>
+        {
+            _ = InvokeAsync(async () =>
+            {
+                try
+                {
+                    LogDebug("AGUI_Custom", $"Name: {evt.Name}");
+
+                    switch (evt.Name)
+                    {
+                        case AGUICustomEventName.QuestionPending:
+                            await HandleQuestionPendingEvent(evt);
+                            break;
+
+                        case AGUICustomEventName.PlanPending:
+                            await HandlePlanPendingEvent(evt);
+                            break;
+
+                        case AGUICustomEventName.ContextCleared:
+                            if (_session != null)
+                            {
+                                _session.ContextClearMarkers.Add(DateTime.UtcNow);
+                            }
+
+                            StateHasChanged();
+                            await AutoScrollToBottomIfNearEnd();
+                            break;
+
+                        default:
+                            LogDebug("AGUI_Custom", $"Unhandled custom event: {evt.Name}");
+                            break;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    LogDebug("ERROR", $"AGUI_Custom: {ex.Message}");
+                    Console.WriteLine($"[SignalR] Error in AGUI_Custom: {ex.Message}");
+                }
+            });
+        });
+
+        _hubConnection.On<string, ClaudeSessionStatus, bool>("SessionStatusChanged", (sessionId, status, hasPendingPlanApproval) =>
+        {
+            _ = InvokeAsync(async () =>
+            {
+                try
+                {
+                    LogDebug("SessionStatusChanged", $"Status: {status}, HasPendingPlanApproval: {hasPendingPlanApproval}");
+
+                    if (_session != null && _session.Id == sessionId)
+                    {
+                        var previousStatus = _session.Status;
+                        _session.Status = status;
+                        _session.HasPendingPlanApproval = hasPendingPlanApproval;
+
+                        // Clear plan state if no longer pending
+                        if (!hasPendingPlanApproval)
+                        {
+                            _session.PlanContent = null;
+                            _session.PlanFilePath = null;
+                        }
+
+                        // Reset plan action processing flag when status changes from WaitingForPlanExecution
+                        if (status != ClaudeSessionStatus.WaitingForPlanExecution)
+                        {
+                            _isProcessingPlanAction = false;
+                        }
+
+                        // Clear pending question when transitioning out of WaitingForQuestionAnswer
+                        if (previousStatus == ClaudeSessionStatus.WaitingForQuestionAnswer &&
+                            status != ClaudeSessionStatus.WaitingForQuestionAnswer)
+                        {
+                            _pendingQuestion = null;
+                            _questionAnswers.Clear();
+                            _customAnswers.Clear();
+                            if (_session != null)
+                            {
+                                _session.PendingQuestion = null;
+                            }
+                        }
+
+                        // When execution completes and we have queued messages, send the next one
+                        if (status == ClaudeSessionStatus.WaitingForInput && _pendingMessages.Count > 0)
+                        {
+                            var nextMessage = _pendingMessages.Dequeue();
+                            _inputMessage = nextMessage;
+                            StateHasChanged();
+                            // Small delay to ensure UI updates, then send
+                            await Task.Delay(100);
+                            await SendMessage();
+                        }
+                        else
+                        {
+                            StateHasChanged();
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    LogDebug("ERROR", $"SessionStatusChanged: {ex.Message}");
+                    Console.WriteLine($"[SignalR] Error in SessionStatusChanged: {ex.Message}");
+                }
+            });
+        });
+
+        _hubConnection.On<string>("SessionStopped", (sessionId) =>
+        {
+            _ = InvokeAsync(async () =>
+            {
+                try
+                {
+                    LogDebug("SessionStopped", $"SessionId: {sessionId}");
+
+                    if (_session != null && _session.Id == sessionId)
+                    {
+                        _session.Status = ClaudeSessionStatus.Stopped;
+                        StateHasChanged();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    LogDebug("ERROR", $"SessionStopped: {ex.Message}");
+                    Console.WriteLine($"[SignalR] Error in SessionStopped: {ex.Message}");
+                }
+            });
+        });
+
+        _hubConnection.On<string, SessionMode, string>("SessionModeModelChanged", (sessionId, mode, model) =>
+        {
+            _ = InvokeAsync(() =>
+            {
+                try
+                {
+                    LogDebug("SessionModeModelChanged", $"Mode: {mode}, Model: {model}");
+
+                    if (_session != null && _session.Id == sessionId)
+                    {
+                        _session.Mode = mode;
+                        _session.Model = model;
+                        StateHasChanged();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    LogDebug("ERROR", $"SessionModeModelChanged: {ex.Message}");
+                    Console.WriteLine($"[SignalR] Error in SessionModeModelChanged: {ex.Message}");
+                }
+
+                return Task.CompletedTask;
+            });
+        });
+
+        _hubConnection.On<string, decimal, long>("SessionResultReceived", (sessionId, cost, duration) =>
+        {
+            _ = InvokeAsync(async () =>
+            {
+                try
+                {
+                    LogDebug("SessionResultReceived", $"Cost: ${cost:F6}, Duration: {duration}ms");
+
+                    if (_session != null && _session.Id == sessionId)
+                    {
+                        _session.TotalCostUsd = cost;
+                        _session.TotalDurationMs = duration;
+                        StateHasChanged();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    LogDebug("ERROR", $"SessionResultReceived: {ex.Message}");
+                    Console.WriteLine($"[SignalR] Error in SessionResultReceived: {ex.Message}");
+                }
+            });
+        });
+
+        // Handle session state sync - sent when joining a session to catch up on any missed events
+        _hubConnection.On<ClaudeSession>("SessionState", (session) =>
+        {
+            _ = InvokeAsync(async () =>
+            {
+                try
+                {
+                    LogDebug("SessionState", $"Messages: {session.Messages.Count}, Status: {session.Status}");
+
+                    if (_session != null && session.Id == _session.Id)
+                    {
+                        // Only replace messages if server has more than we do
+                        // This avoids a flash for JSONL-loaded sessions that already have messages
+                        if (session.Messages.Count > _session.Messages.Count)
+                        {
+                            _session.Messages.Clear();
+                            foreach (var msg in session.Messages)
+                            {
+                                // Ensure loaded messages are not marked as streaming
+                                msg.IsStreaming = false;
+                                foreach (var content in msg.Content)
+                                {
+                                    content.IsStreaming = false;
+                                }
+
+                                _session.Messages.Add(msg);
+                            }
+                        }
+
+                        _session.Status = session.Status;
+                        _session.TotalCostUsd = session.TotalCostUsd;
+                        _session.TotalDurationMs = session.TotalDurationMs;
+                        _session.PlanContent = session.PlanContent;
+                        _session.PlanFilePath = session.PlanFilePath;
+                        _session.HasPendingPlanApproval = session.HasPendingPlanApproval;
+                        _pendingQuestion = session.PendingQuestion;
+                        Console.WriteLine($"[SignalR] SessionState received: {session.Messages.Count} messages, status: {session.Status}");
+                    }
+
+                    StateHasChanged();
+                }
+                catch (Exception ex)
+                {
+                    LogDebug("ERROR", $"SessionState: {ex.Message}");
+                    Console.WriteLine($"[SignalR] Error in SessionState: {ex.Message}");
+                }
+            });
+        });
+
+        // Handle session error (max turns, execution errors, etc.)
+        _hubConnection.On<string, string, string?, bool>("SessionError", (sessionId, errorMessage, errorSubtype, isRecoverable) =>
+        {
+            _ = InvokeAsync(async () =>
+            {
+                try
+                {
+                    LogDebug("SessionError", $"Error in session {sessionId}: {errorSubtype} - {errorMessage} (recoverable: {isRecoverable})");
+                    Console.WriteLine($"[SignalR] SessionError for session {sessionId}: {errorSubtype}");
+
+                    if (_session != null && _session.Id == sessionId)
+                    {
+                        _session.ErrorMessage = errorMessage;
+                        _session.Status = ClaudeSessionStatus.Error;
+                        _errorSubtype = errorSubtype;
+                        _isRecoverable = isRecoverable;
+
+                        StateHasChanged();
+                        await AutoScrollToBottomIfNearEnd();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    LogDebug("ERROR", $"SessionError handler: {ex.Message}");
+                    Console.WriteLine($"[SignalR] Error in SessionError handler: {ex.Message}");
+                }
+            });
+        });
+
+        _hubConnection.On<string>("SessionContainerRestarting", (sessionId) =>
+        {
+            _ = InvokeAsync(() =>
+            {
+                try
+                {
+                    LogDebug("SessionContainerRestarting", $"Container restarting for session {sessionId}");
+                    Console.WriteLine($"[SignalR] SessionContainerRestarting for session {sessionId}");
+
+                    if (_session != null && _session.Id == sessionId)
+                    {
+                        _isRestartingContainer = true;
+                        StateHasChanged();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    LogDebug("ERROR", $"SessionContainerRestarting handler: {ex.Message}");
+                    Console.WriteLine($"[SignalR] Error in SessionContainerRestarting handler: {ex.Message}");
+                }
+            });
+        });
+
+        _hubConnection.On<string, ClaudeSession>("SessionContainerRestarted", (sessionId, session) =>
+        {
+            _ = InvokeAsync(() =>
+            {
+                try
+                {
+                    LogDebug("SessionContainerRestarted", $"Container restarted for session {sessionId}");
+                    Console.WriteLine($"[SignalR] SessionContainerRestarted for session {sessionId}");
+
+                    if (_session != null && _session.Id == sessionId)
+                    {
+                        _session = session;
+                        _isRestartingContainer = false;
+                        _errorSubtype = null;
+                        _isRecoverable = true;
+                        StateHasChanged();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    LogDebug("ERROR", $"SessionContainerRestarted handler: {ex.Message}");
+                    Console.WriteLine($"[SignalR] Error in SessionContainerRestarted handler: {ex.Message}");
+                }
+            });
+        });
+
+        await _hubConnection.StartAsync();
+        await _hubConnection.SendAsync("JoinSession", SessionId);
+        // Server sends SessionState after JoinSession, which we now handle above
+
+        // Check for historical messages available in the cache
+        await CheckForHistoricalMessages();
+    }
+
+    /// <summary>
+    /// Checks if there are more messages in the server cache than currently loaded.
+    /// Shows the "Load previous messages" button if the session is actively processing
+    /// and more cached messages exist.
+    /// </summary>
+    private async Task CheckForHistoricalMessages()
+    {
+        if (_hubConnection == null || _session == null) return;
+
+        try
+        {
+            var cachedCount = await _hubConnection.InvokeAsync<int>("GetCachedMessageCount", SessionId);
+            _cachedMessageCount = cachedCount;
+
+            var isActivelyProcessing = _session.Status is
+                ClaudeSessionStatus.Starting or
+                ClaudeSessionStatus.RunningHooks or
+                ClaudeSessionStatus.Running;
+
+            _showLoadHistoryButton = isActivelyProcessing && cachedCount > _session.Messages.Count;
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Session] Error checking cached message count: {ex.Message}");
+        }
+    }
+
+    private async Task SendMessage()
+    {
+        if (string.IsNullOrWhiteSpace(_inputMessage) || _session == null)
+            return;
+
+        var message = _inputMessage;
+        _inputMessage = string.Empty;
+
+        try
+        {
+            await SessionApi.SendMessageAsync(SessionId, new SendMessageRequest
+            {
+                Message = message,
+                Mode = _selectedMode
+            });
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error sending message: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Handles keyboard events in the textarea.
+    /// Enter creates a newline (default behavior).
+    /// Ctrl+Enter or Meta+Enter (Cmd on Mac) submits the message or queues it when running.
+    /// Escape interrupts the current execution when running.
+    /// </summary>
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (_session == null) return;
+
+        // Escape key interrupts the current execution (session stays alive for resume)
+        if (e.Key == "Escape" && _session.Status == ClaudeSessionStatus.Running)
+        {
+            await InterruptSession();
+            return;
+        }
+
+        // Ctrl+Enter or Meta+Enter (Cmd+Enter on Mac)
+        if (e.Key == "Enter" && (e.CtrlKey || e.MetaKey))
+        {
+            if (_session.Status == ClaudeSessionStatus.Running)
+            {
+                // When running, queue the message instead of sending
+                QueueMessage();
+            }
+            else
+            {
+                await SendMessage();
+            }
+        }
+    }
+
+    private async Task StopSession()
+    {
+        if (_session == null || _isStopping) return;
+
+        _isStopping = true;
+        StateHasChanged();
+
+        try
+        {
+            await SessionApi.StopSessionAsync(SessionId);
+            _session.Status = ClaudeSessionStatus.Stopped;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error stopping session: {ex.Message}");
+        }
+        finally
+        {
+            _isStopping = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Interrupts the current execution without stopping the session.
+    /// The session remains alive in WaitingForInput state so the user can send another message to resume.
+    /// </summary>
+    private async Task InterruptSession()
+    {
+        if (_session == null || _isInterrupting) return;
+
+        _isInterrupting = true;
+        StateHasChanged();
+
+        try
+        {
+            await SessionApi.InterruptSessionAsync(SessionId);
+            // Status will be updated via SessionStatusChanged SignalR event to WaitingForInput
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error interrupting session: {ex.Message}");
+        }
+        finally
+        {
+            _isInterrupting = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Queues a message to be sent after the current execution completes.
+    /// </summary>
+    private void QueueMessage()
+    {
+        if (string.IsNullOrWhiteSpace(_inputMessage) || _pendingMessages.Count >= MaxQueuedMessages)
+            return;
+
+        _pendingMessages.Enqueue(_inputMessage);
+        _inputMessage = string.Empty;
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Clears all queued messages.
+    /// </summary>
+    private void ClearQueue()
+    {
+        _pendingMessages.Clear();
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Gets the appropriate placeholder text based on session state.
+    /// </summary>
+    /// <summary>
+    /// Gets a user-friendly error title based on the SDK error subtype.
+    /// </summary>
+    private static string GetErrorTitle(string? errorSubtype)
+    {
+        return errorSubtype switch
+        {
+            "error_max_turns" => "Maximum Turns Reached",
+            "error_during_execution" => "Execution Error",
+            "error_max_budget_usd" => "Budget Limit Reached",
+            "error_max_structured_output_retries" => "Output Generation Failed",
+            _ => "Session Error"
+        };
+    }
+
+    /// <summary>
+    /// Continues a session after a recoverable error by clearing the error state.
+    /// The session remains in place so the user can send a new message.
+    /// </summary>
+    private async Task ContinueSession()
+    {
+        if (_session == null) return;
+
+        // Clear the error state
+        _session.Status = ClaudeSessionStatus.WaitingForInput;
+        _session.ErrorMessage = null;
+        _errorSubtype = null;
+        _isRecoverable = true;
+
+        StateHasChanged();
+    }
+
+    private async Task RestartContainer()
+    {
+        if (_session == null || _hubConnection == null || _isRestartingContainer) return;
+
+        _isRestartingContainer = true;
+        StateHasChanged();
+
+        try
+        {
+            var newSession = await _hubConnection.InvokeAsync<ClaudeSession?>("RestartSession", _session.Id);
+
+            if (newSession != null)
+            {
+                _session = newSession;
+                _errorSubtype = null;
+                _isRecoverable = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error restarting container: {ex.Message}");
+            // Keep showing the error banner - the restart failed
+        }
+        finally
+        {
+            _isRestartingContainer = false;
+            StateHasChanged();
+        }
+    }
+
+    private string GetInputPlaceholder()
+    {
+        if (_session?.Status == ClaudeSessionStatus.Running)
+        {
+            return "Type a message to queue... (Ctrl+Enter to queue, Escape to interrupt)";
+        }
+
+        return "Type a message... (Ctrl+Enter to send)";
+    }
+
+    /// <summary>
+    /// Handles prompt selection from the dropdown.
+    /// Clears the current input and populates with the rendered prompt template.
+    /// </summary>
+    private void OnPromptSelected(ChangeEventArgs e)
+    {
+        if (_session == null) return;
+
+        var promptId = e.Value?.ToString();
+        if (string.IsNullOrEmpty(promptId))
+        {
+            _selectedPromptId = string.Empty;
+            return;
+        }
+
+        var prompt = _availablePrompts.FirstOrDefault(p => p.Id == promptId);
+        if (prompt == null) return;
+
+        // Build prompt context from loaded issue data (or use fallbacks for clone entities)
+        var promptContext = new PromptContext
+        {
+            Id = _issue?.Id ?? _session.EntityId ?? string.Empty,
+            Title = _issue?.Title ?? string.Empty,
+            Description = _issue?.Description,
+            Type = _issue?.Type.ToString() ?? string.Empty,
+            Branch = _issue?.WorkingBranchId ?? string.Empty
+        };
+
+        // Render the template using the shared service method
+        var renderedPrompt = HttpAgentPromptApiService.RenderTemplate(prompt.InitialMessage, promptContext);
+
+        // Clear and populate the input
+        _inputMessage = renderedPrompt ?? string.Empty;
+
+        // Reset the dropdown to the default option
+        _selectedPromptId = string.Empty;
+    }
+
+    /// <summary>
+    /// Clears the conversation context and adds a separator.
+    /// Old messages remain visible but the AI will start fresh.
+    /// </summary>
+    private async Task ClearContext()
+    {
+        if (_session == null || _session.Messages.Count == 0) return;
+
+        // Add a context clear marker
+        _session.ContextClearMarkers.Add(DateTime.UtcNow);
+
+        // Notify the backend to clear context via SignalR
+        try
+        {
+            if (_hubConnection is { State: HubConnectionState.Connected })
+            {
+                await _hubConnection.SendAsync("ClearContext", SessionId);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error clearing context: {ex.Message}");
+            // Continue anyway - the UI will show the separator
+        }
+
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Determines if a context separator should be shown before a message.
+    /// </summary>
+    private bool ShouldShowContextSeparator(ClaudeMessage message)
+    {
+        if (_session == null || _session.ContextClearMarkers.Count == 0) return false;
+
+        // Get the message index
+        var messageIndex = _session.Messages.IndexOf(message);
+        if (messageIndex <= 0) return false;
+
+        // Check if any context clear marker falls between the previous message and this one
+        var prevMessage = _session.Messages[messageIndex - 1];
+        return _session.ContextClearMarkers.Any(marker =>
+            marker > prevMessage.CreatedAt && marker <= message.CreatedAt);
+    }
+
+    /// <summary>
+    /// Gets the context separator timestamp for display.
+    /// </summary>
+    private DateTime GetContextSeparatorTime(ClaudeMessage message)
+    {
+        if (_session == null) return DateTime.UtcNow;
+
+        var messageIndex = _session.Messages.IndexOf(message);
+        if (messageIndex <= 0) return DateTime.UtcNow;
+
+        var prevMessage = _session.Messages[messageIndex - 1];
+        return _session.ContextClearMarkers
+            .Where(marker => marker > prevMessage.CreatedAt && marker <= message.CreatedAt)
+            .FirstOrDefault();
+    }
+
+    private static string GetModeBadgeClass(SessionMode mode) => mode switch
+    {
+        SessionMode.Plan => "bg-blue-500 text-white border-transparent",
+        SessionMode.Build => "bg-green-600 text-white border-transparent",
+        _ => "bg-secondary text-secondary-foreground border-transparent"
+    };
+
+    private static string GetStatusBadgeClass(ClaudeSessionStatus status) => status.ToBbBadgeClass();
+
+    private static string GetContentBlockClass(ClaudeContentType type) => type switch
+    {
+        ClaudeContentType.Text => "text-block",
+        ClaudeContentType.Thinking => "thinking-block",
+        ClaudeContentType.ToolUse => "tool-use-block",
+        ClaudeContentType.ToolResult => "tool-result-block",
+        _ => ""
+    };
+
+    private static string GetToolIcon(string toolName) => toolName.ToLowerInvariant() switch
+    {
+        "read" => "📖",
+        "write" => "✏️",
+        "edit" => "📝",
+        "bash" => "💻",
+        "task" => "🤖",
+        "explore" => "🔭",
+        "grep" => "🔍",
+        "glob" => "📁",
+        "webfetch" => "🌐",
+        "websearch" => "🔎",
+        _ => "🔧"
+    };
+
+    private static string FormatDuration(long ms)
+    {
+        if (ms < 1000) return $"{ms}ms";
+        if (ms < 60000) return $"{ms / 1000.0:F1}s";
+        return $"{ms / 60000.0:F1}m";
+    }
+
+    // Question handling methods
+    private void SelectOption(UserQuestion question, QuestionOption option)
+    {
+        // Clear custom answer if selecting a regular option
+        _customAnswers.Remove(question.Question);
+
+        if (question.MultiSelect)
+        {
+            // Toggle selection for multi-select
+            var current = _questionAnswers.GetValueOrDefault(question.Question, "");
+            var selected = current.Split(", ", StringSplitOptions.RemoveEmptyEntries).ToList();
+
+            if (selected.Contains(option.Label))
+            {
+                selected.Remove(option.Label);
+            }
+            else
+            {
+                selected.Add(option.Label);
+            }
+
+            _questionAnswers[question.Question] = string.Join(", ", selected);
+        }
+        else
+        {
+            // Single select - replace
+            _questionAnswers[question.Question] = option.Label;
+        }
+    }
+
+    private void SelectOther(UserQuestion question)
+    {
+        // Mark this question as using "Other"
+        _customAnswers[question.Question] = _customAnswers.GetValueOrDefault(question.Question, "");
+        // Clear regular selection for single-select
+        if (!question.MultiSelect)
+        {
+            _questionAnswers.Remove(question.Question);
+        }
+    }
+
+    private bool IsOtherSelected(string question)
+    {
+        return _customAnswers.ContainsKey(question);
+    }
+
+    private string GetCustomAnswer(string question)
+    {
+        return _customAnswers.GetValueOrDefault(question, "");
+    }
+
+    private void UpdateCustomAnswer(string question, string value)
+    {
+        _customAnswers[question] = value;
+        // Update the actual answer
+        _questionAnswers[question] = value;
+    }
+
+    private bool CanSubmitAnswers()
+    {
+        if (_pendingQuestion == null) return false;
+
+        foreach (var question in _pendingQuestion.Questions)
+        {
+            if (!_questionAnswers.TryGetValue(question.Question, out var answer) || string.IsNullOrWhiteSpace(answer))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private async Task SubmitAnswers()
+    {
+        if (_pendingQuestion == null || _hubConnection == null || !CanSubmitAnswers())
+            return;
+
+        try
+        {
+            var answersJson = System.Text.Json.JsonSerializer.Serialize(_questionAnswers);
+            await _hubConnection.SendAsync("AnswerQuestion", SessionId, answersJson);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error submitting answers: {ex.Message}");
+        }
+    }
+
+    private async Task ApprovePlanClearContext()
+    {
+        if (_session == null || _hubConnection == null || _isProcessingPlanAction) return;
+
+        try
+        {
+            _isProcessingPlanAction = true;
+            _showPlanRejectFeedback = false;
+            StateHasChanged();
+
+            await _hubConnection.SendAsync("ApprovePlan", SessionId, true, false, null);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error approving plan: {ex.Message}");
+            _isProcessingPlanAction = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ApprovePlanKeepContext()
+    {
+        if (_session == null || _hubConnection == null || _isProcessingPlanAction) return;
+
+        try
+        {
+            _isProcessingPlanAction = true;
+            _showPlanRejectFeedback = false;
+            StateHasChanged();
+
+            await _hubConnection.SendAsync("ApprovePlan", SessionId, true, true, null);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error approving plan: {ex.Message}");
+            _isProcessingPlanAction = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task RejectPlan()
+    {
+        if (_session == null || _hubConnection == null || _isProcessingPlanAction) return;
+
+        try
+        {
+            _isProcessingPlanAction = true;
+            var feedback = string.IsNullOrWhiteSpace(_planRejectFeedback) ? null : _planRejectFeedback.Trim();
+            _showPlanRejectFeedback = false;
+            _planRejectFeedback = string.Empty;
+            StateHasChanged();
+
+            await _hubConnection.SendAsync("ApprovePlan", SessionId, false, false, feedback);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error rejecting plan: {ex.Message}");
+            _isProcessingPlanAction = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Loads all historical messages from the server cache and merges them with current messages.
+    /// </summary>
+    private async Task LoadHistoryAsync()
+    {
+        if (_session == null || _isLoadingHistory) return;
+
+        _isLoadingHistory = true;
+        StateHasChanged();
+
+        try
+        {
+            // Get all cached messages from server
+            var cachedMessages = await SessionApi.GetCachedMessagesAsync(SessionId);
+
+            // Clear and rebuild message list with cached messages
+            _session.Messages.Clear();
+
+            foreach (var msg in cachedMessages)
+            {
+                // Ensure all messages are marked as not streaming
+                msg.IsStreaming = false;
+                foreach (var content in msg.Content)
+                {
+                    content.IsStreaming = false;
+                }
+
+                _session.Messages.Add(msg);
+            }
+
+            // Hide the button after loading
+            _showLoadHistoryButton = false;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading history: {ex.Message}");
+        }
+        finally
+        {
+            _isLoadingHistory = false;
+            StateHasChanged();
+        }
+    }
+
+    private void OnPanelServiceStateChanged()
+    {
+        // Sync local panel state with panel service
+        if (_sidePanelOpen != PanelService.IsPanelOpen)
+        {
+            _sidePanelOpen = PanelService.IsPanelOpen;
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void OnSessionPanelToggled(bool isOpen)
+    {
+        _sidePanelOpen = isOpen;
+        PanelService.SetPanelOpen(isOpen);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        PanelService.OnStateChanged -= OnPanelServiceStateChanged;
+        PanelService.SetPanelAvailable(false);
+
+        if (_hubConnection != null)
+        {
+            try
+            {
+                if (_hubConnection.State == HubConnectionState.Connected)
+                {
+                    await _hubConnection.SendAsync("LeaveSession", SessionId);
+                }
+            }
+            catch
+            {
+                // Ignore errors when leaving session - connection may already be closed
+            }
+
+            await _hubConnection.DisposeAsync();
+        }
+    }
+
+}

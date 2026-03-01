@@ -1,0 +1,26 @@
+<BbSelect TValue="string" Value="@SelectedModel" ValueChanged="OnModelChanged" Options="_modelOptions" />
+
+@code {
+    [Parameter]
+    public string SelectedModel { get; set; } = "opus";
+
+    [Parameter]
+    public EventCallback<string> SelectedModelChanged { get; set; }
+
+    [Parameter]
+    public string Id { get; set; } = "default";
+
+    private static readonly List<SelectOption<string>> _modelOptions =
+    [
+        new("opus", "Opus"),
+        new("sonnet", "Sonnet"),
+        new("haiku", "Haiku"),
+    ];
+
+    private async Task OnModelChanged(string? value)
+    {
+        var newModel = value ?? "opus";
+        SelectedModel = newModel;
+        await SelectedModelChanged.InvokeAsync(newModel);
+    }
+}

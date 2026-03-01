@@ -1,5 +1,5 @@
 using Bunit;
-using Homespun.Client.Components;
+using Homespun.Client.Features.Toolbar.Components;
 using Homespun.Client.Services;
 using Homespun.Shared.Models.Sessions;
 using Homespun.Tests.Helpers;
@@ -57,7 +57,7 @@ public class ProjectToolbarTests : BunitTestContext
             p.Add(x => x.ProjectId, "project-1");
         });
 
-        var toolbar = cut.Find(".project-toolbar");
+        var toolbar = cut.Find(".border.rounded-lg");
         Assert.That(toolbar, Is.Not.Null);
     }
 
@@ -69,7 +69,7 @@ public class ProjectToolbarTests : BunitTestContext
             p.Add(x => x.ProjectId, "project-1");
         });
 
-        var separators = cut.FindAll("[data-testid='toolbar-separator']");
+        var separators = cut.FindAll("[role='none']");
         Assert.That(separators, Has.Count.EqualTo(3), "Should have 3 separators between 4 button groups");
     }
 
@@ -388,7 +388,7 @@ public class ProjectToolbarTests : BunitTestContext
         });
 
         var makeChildOfBtn = cut.Find("[data-testid='toolbar-child-of-button']");
-        Assert.That(makeChildOfBtn.ClassList.Contains("toolbar-btn-active"), Is.True,
+        Assert.That(makeChildOfBtn.ClassList.Contains("ring-2"), Is.True,
             "Make Child Of button should be highlighted when active");
     }
 
@@ -402,7 +402,7 @@ public class ProjectToolbarTests : BunitTestContext
         });
 
         var makeParentOfBtn = cut.Find("[data-testid='toolbar-parent-of-button']");
-        Assert.That(makeParentOfBtn.ClassList.Contains("toolbar-btn-active"), Is.True,
+        Assert.That(makeParentOfBtn.ClassList.Contains("ring-2"), Is.True,
             "Make Parent Of button should be highlighted when active");
     }
 
@@ -623,6 +623,195 @@ public class ProjectToolbarTests : BunitTestContext
         var redoBtn = cut.Find("[data-testid='toolbar-redo-button']");
         Assert.That(redoBtn.HasAttribute("disabled"), Is.True);
         Assert.That(callbackInvoked, Is.False);
+    }
+
+    #endregion
+
+    #region Level Control Tests
+
+    [Test]
+    public void LevelControls_NotRendered_WhenMaxAvailableDepthIsZero()
+    {
+        var cut = Render<ProjectToolbar>(p =>
+        {
+            p.Add(x => x.ProjectId, "project-1");
+            p.Add(x => x.MaxAvailableDepth, 0);
+        });
+
+        Assert.That(cut.FindAll("[data-testid='toolbar-decrease-levels-button']"), Is.Empty);
+        Assert.That(cut.FindAll("[data-testid='toolbar-increase-levels-button']"), Is.Empty);
+    }
+
+    [Test]
+    public void LevelControls_Rendered_WhenMaxAvailableDepthGreaterThanZero()
+    {
+        var cut = Render<ProjectToolbar>(p =>
+        {
+            p.Add(x => x.ProjectId, "project-1");
+            p.Add(x => x.MaxAvailableDepth, 3);
+            p.Add(x => x.MaxDepth, 2);
+        });
+
+        var decreaseBtn = cut.Find("[data-testid='toolbar-decrease-levels-button']");
+        var increaseBtn = cut.Find("[data-testid='toolbar-increase-levels-button']");
+        var display = cut.Find("[data-testid='toolbar-level-display']");
+
+        Assert.That(decreaseBtn, Is.Not.Null);
+        Assert.That(increaseBtn, Is.Not.Null);
+        Assert.That(display.TextContent.Trim(), Is.EqualTo("3 levels"));
+    }
+
+    [Test]
+    public void DecreaseButton_Disabled_WhenMaxDepthIsZero()
+    {
+        var cut = Render<ProjectToolbar>(p =>
+        {
+            p.Add(x => x.ProjectId, "project-1");
+            p.Add(x => x.MaxAvailableDepth, 3);
+            p.Add(x => x.MaxDepth, 0);
+        });
+
+        var decreaseBtn = cut.Find("[data-testid='toolbar-decrease-levels-button']");
+        Assert.That(decreaseBtn.HasAttribute("disabled"), Is.True);
+    }
+
+    [Test]
+    public void IncreaseButton_Disabled_WhenMaxDepthEqualsMaxAvailable()
+    {
+        var cut = Render<ProjectToolbar>(p =>
+        {
+            p.Add(x => x.ProjectId, "project-1");
+            p.Add(x => x.MaxAvailableDepth, 3);
+            p.Add(x => x.MaxDepth, 3);
+        });
+
+        var increaseBtn = cut.Find("[data-testid='toolbar-increase-levels-button']");
+        Assert.That(increaseBtn.HasAttribute("disabled"), Is.True);
+    }
+
+    [Test]
+    public void DecreaseButton_InvokesCallback()
+    {
+        var callbackInvoked = false;
+        var cut = Render<ProjectToolbar>(p =>
+        {
+            p.Add(x => x.ProjectId, "project-1");
+            p.Add(x => x.MaxAvailableDepth, 3);
+            p.Add(x => x.MaxDepth, 2);
+            p.Add(x => x.OnDecreaseDepth, EventCallback.Factory.Create(this, () => callbackInvoked = true));
+        });
+
+        cut.Find("[data-testid='toolbar-decrease-levels-button']").Click();
+
+        Assert.That(callbackInvoked, Is.True);
+    }
+
+    [Test]
+    public void IncreaseButton_InvokesCallback()
+    {
+        var callbackInvoked = false;
+        var cut = Render<ProjectToolbar>(p =>
+        {
+            p.Add(x => x.ProjectId, "project-1");
+            p.Add(x => x.MaxAvailableDepth, 3);
+            p.Add(x => x.MaxDepth, 2);
+            p.Add(x => x.OnIncreaseDepth, EventCallback.Factory.Create(this, () => callbackInvoked = true));
+        });
+
+        cut.Find("[data-testid='toolbar-increase-levels-button']").Click();
+
+        Assert.That(callbackInvoked, Is.True);
+    }
+
+    #endregion
+
+    #region Search Tests
+
+    [Test]
+    public void SearchInput_AlwaysRendered()
+    {
+        var cut = Render<ProjectToolbar>(p =>
+        {
+            p.Add(x => x.ProjectId, "project-1");
+        });
+
+        var searchInput = cut.Find("[data-testid='toolbar-search-input']");
+        Assert.That(searchInput, Is.Not.Null);
+    }
+
+    [Test]
+    public void SearchInput_ShowsMatchCount_WhenSearchTermHasMatches()
+    {
+        var cut = Render<ProjectToolbar>(p =>
+        {
+            p.Add(x => x.ProjectId, "project-1");
+            p.Add(x => x.SearchTerm, "test");
+            p.Add(x => x.SearchMatchCount, 5);
+        });
+
+        var matchCount = cut.Find("[data-testid='toolbar-search-match-count']");
+        Assert.That(matchCount.TextContent.Trim(), Is.EqualTo("5"));
+    }
+
+    [Test]
+    public void SearchInput_ShowsNoMatches_WhenSearchTermHasZeroMatches()
+    {
+        var cut = Render<ProjectToolbar>(p =>
+        {
+            p.Add(x => x.ProjectId, "project-1");
+            p.Add(x => x.SearchTerm, "nonexistent");
+            p.Add(x => x.SearchMatchCount, 0);
+        });
+
+        var noMatches = cut.Find("[data-testid='toolbar-search-no-matches']");
+        Assert.That(noMatches.TextContent.Trim(), Is.EqualTo("0"));
+    }
+
+    [Test]
+    public void SearchInput_HidesBadges_WhenSearchTermEmpty()
+    {
+        var cut = Render<ProjectToolbar>(p =>
+        {
+            p.Add(x => x.ProjectId, "project-1");
+            p.Add(x => x.SearchTerm, "");
+        });
+
+        Assert.That(cut.FindAll("[data-testid='toolbar-search-match-count']"), Is.Empty);
+        Assert.That(cut.FindAll("[data-testid='toolbar-search-no-matches']"), Is.Empty);
+    }
+
+    [Test]
+    public void SearchInput_InvokesOnSearchTermChanged_OnInput()
+    {
+        string? receivedTerm = null;
+        var cut = Render<ProjectToolbar>(p =>
+        {
+            p.Add(x => x.ProjectId, "project-1");
+            p.Add(x => x.OnSearchTermChanged,
+                EventCallback.Factory.Create<string>(this, term => receivedTerm = term));
+        });
+
+        var searchInput = cut.Find("[data-testid='toolbar-search-input']");
+        searchInput.Input("hello");
+
+        Assert.That(receivedTerm, Is.EqualTo("hello"));
+    }
+
+    [Test]
+    public void SearchInput_InvokesOnSearchFocused_OnFocus()
+    {
+        var focusCalled = false;
+        var cut = Render<ProjectToolbar>(p =>
+        {
+            p.Add(x => x.ProjectId, "project-1");
+            p.Add(x => x.OnSearchFocused,
+                EventCallback.Factory.Create(this, () => focusCalled = true));
+        });
+
+        var searchInput = cut.Find("[data-testid='toolbar-search-input']");
+        searchInput.Focus();
+
+        Assert.That(focusCalled, Is.True);
     }
 
     #endregion

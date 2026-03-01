@@ -1,0 +1,73 @@
+
+@inject HttpCloneApiService CloneApi
+
+<BbSelect TValue="string" Value="@SelectedBranch" ValueChanged="OnBranchChanged"
+          Options="_branchOptions" Disabled="@Disabled" Placeholder="Select branch..." />
+
+@code {
+    [Parameter]
+    public string SelectedBranch { get; set; } = "";
+
+    [Parameter]
+    public EventCallback<string> SelectedBranchChanged { get; set; }
+
+    [Parameter]
+    public string Id { get; set; } = "default";
+
+    [Parameter]
+    public bool Disabled { get; set; }
+
+    /// <summary>
+    /// The path to the git repository used to list local branches.
+    /// </summary>
+    [Parameter]
+    public string? RepoPath { get; set; }
+
+    /// <summary>
+    /// The project's default branch. Will be placed first in the list and auto-selected if no branch is selected.
+    /// </summary>
+    [Parameter]
+    public string? DefaultBranch { get; set; }
+
+    private List<string> _branches = [];
+    private List<SelectOption<string>> _branchOptions = [];
+    private string? _lastRepoPath;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Only reload branches when RepoPath changes
+        if (!string.IsNullOrEmpty(RepoPath) && RepoPath != _lastRepoPath)
+        {
+            _lastRepoPath = RepoPath;
+            await LoadBranchesAsync();
+        }
+    }
+
+    private async Task LoadBranchesAsync()
+    {
+        var branchInfos = await CloneApi.ListLocalBranchesAsync(RepoPath!);
+        _branches = branchInfos.Select(b => b.ShortName).OrderBy(b => b).ToList();
+
+        // Ensure the default branch is first in the list
+        if (!string.IsNullOrEmpty(DefaultBranch) && _branches.Remove(DefaultBranch))
+        {
+            _branches.Insert(0, DefaultBranch);
+        }
+
+        _branchOptions = _branches.Select(b => new SelectOption<string>(b, b)).ToList();
+
+        // Auto-select default branch if nothing is selected yet
+        if (string.IsNullOrEmpty(SelectedBranch) && _branches.Count > 0)
+        {
+            SelectedBranch = _branches[0];
+            await SelectedBranchChanged.InvokeAsync(SelectedBranch);
+        }
+    }
+
+    private async Task OnBranchChanged(string? value)
+    {
+        var newBranch = value ?? "";
+        SelectedBranch = newBranch;
+        await SelectedBranchChanged.InvokeAsync(newBranch);
+    }
+}

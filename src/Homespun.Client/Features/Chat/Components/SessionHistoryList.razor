@@ -1,0 +1,153 @@
+@inject HttpSessionApiService SessionApi
+@inject NavigationManager NavigationManager
+
+@if (_isLoading)
+{
+    <div class="flex justify-center py-3">
+        <BbSpinner Size="SpinnerSize.Small" />
+    </div>
+}
+else if (_sessions.Count > 0)
+{
+    <div class="session-history mt-3 border-t pt-3">
+        <h6 class="text-muted-foreground text-sm mb-2">Previous Sessions</h6>
+        <div class="flex flex-col">
+            @foreach (var session in _sessions)
+            {
+                <div class="flex justify-between items-center py-2">
+                    <div class="flex items-center gap-2">
+                        @if (session.Mode.HasValue)
+                        {
+                            <BbBadge Class="@(session.Mode == SessionMode.Plan ? "bg-blue-500 text-white border-transparent" : "bg-green-600 text-white border-transparent")">
+                                @session.Mode
+                            </BbBadge>
+                        }
+                        else
+                        {
+                            <BbBadge Variant="BadgeVariant.Secondary">Unknown</BbBadge>
+                        }
+                        <small class="text-muted-foreground">
+                            @FormatDate(session.LastActivityAt)
+                        </small>
+                        @if (session.MessageCount.HasValue)
+                        {
+                            <small class="text-muted-foreground">
+                                (@session.MessageCount msgs)
+                            </small>
+                        }
+                    </div>
+                    <BbButton Variant="ButtonVariant.Default" Size="ButtonSize.Small"
+                            OnClick="() => ResumeSession(session.SessionId)"
+                            Disabled="@_isResuming">
+                        @if (_resumingSessionId == session.SessionId)
+                        {
+                            <BbSpinner Size="SpinnerSize.Small" Class="mr-1" />
+                        }
+                        Resume
+                    </BbButton>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(_errorMessage))
+{
+    <BbAlert Variant="AlertVariant.Danger" Class="mt-2">
+        <BbAlertDescription>@_errorMessage</BbAlertDescription>
+    </BbAlert>
+}
+
+@code {
+    [Parameter] public string EntityId { get; set; } = "";
+    [Parameter] public string ProjectId { get; set; } = "";
+    [Parameter] public string WorkingDirectory { get; set; } = "";
+
+    private IReadOnlyList<ResumableSession> _sessions = [];
+    private bool _isLoading = true;
+    private bool _isResuming;
+    private string? _resumingSessionId;
+    private string? _errorMessage;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!string.IsNullOrEmpty(WorkingDirectory))
+        {
+            await LoadSessionsAsync();
+        }
+        else
+        {
+            _sessions = [];
+            _isLoading = false;
+        }
+    }
+
+    private async Task LoadSessionsAsync()
+    {
+        _isLoading = true;
+        _errorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            _sessions = await SessionApi.GetResumableSessionsAsync(EntityId, WorkingDirectory);
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to load sessions: {ex.Message}";
+            _sessions = [];
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task ResumeSession(string sessionId)
+    {
+        _isResuming = true;
+        _resumingSessionId = sessionId;
+        _errorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            var session = await SessionApi.ResumeSessionAsync(
+                sessionId,
+                EntityId,
+                ProjectId,
+                WorkingDirectory);
+
+            NavigationManager.NavigateTo($"/session/{session.Id}");
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to resume session: {ex.Message}";
+        }
+        finally
+        {
+            _isResuming = false;
+            _resumingSessionId = null;
+        }
+    }
+
+    private static string FormatDate(DateTime date)
+    {
+        var local = date.ToLocalTime();
+        var now = DateTime.Now;
+
+        if (local.Date == now.Date)
+        {
+            return $"Today {local:HH:mm}";
+        }
+        if (local.Date == now.Date.AddDays(-1))
+        {
+            return $"Yesterday {local:HH:mm}";
+        }
+        if (local > now.AddDays(-7))
+        {
+            return local.ToString("ddd HH:mm");
+        }
+        return local.ToString("MMM d, HH:mm");
+    }
+}

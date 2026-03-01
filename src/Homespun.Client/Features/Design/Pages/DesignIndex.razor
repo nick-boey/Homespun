@@ -1,0 +1,52 @@
+@page "/design"
+@inject HttpComponentRegistryService ComponentRegistry
+@inject IBreadcrumbService BreadcrumbService
+
+<PageTitle>Design System - Homespun</PageTitle>
+
+<h1>Design System</h1>
+<p class="text-text-muted mb-4">
+    Browse and test UI components with mock data. This page is only available in mock mode.
+</p>
+
+@foreach (var category in ComponentRegistry.GetCategories())
+{
+    <section class="mt-4">
+        <h2 class="text-lg font-semibold">@category</h2>
+        <div class="flex flex-wrap gap-2 mt-4">
+            @foreach (var component in ComponentRegistry.GetComponentsByCategory(category))
+            {
+                <BbCard class="w-[300px]">
+                    <BbCardHeader>
+                        <BbCardTitle><a href="@($"/design/{component.Id}")">@component.Name</a></BbCardTitle>
+                        @if (component.Tags.Count > 0)
+                        {
+                            <BbCardDescription>
+                                <div class="flex flex-row gap-2">
+                                    @foreach (var tag in component.Tags.Take(3))
+                                    {
+                                        <BbBadge>@tag</BbBadge>
+                                    }
+                                </div>
+                            </BbCardDescription>
+                        }
+                    </BbCardHeader>
+                    @if (!string.IsNullOrEmpty(component.Description))
+                    {
+                        <BbCardContent>@component.Description</BbCardContent>
+                    }
+                </BbCard>
+            }
+        </div>
+    </section>
+}
+
+@code {
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ComponentRegistry.InitializeAsync();
+        await BreadcrumbService.SetContextAsync(new BreadcrumbContext { PageName = "Design System" });
+    }
+
+}

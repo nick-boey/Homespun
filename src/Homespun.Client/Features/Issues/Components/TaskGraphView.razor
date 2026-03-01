@@ -1,0 +1,1301 @@
+@inject HttpIssueApiService IssueApi
+@inject IJSRuntime JSRuntime
+
+@if (TaskGraph != null && (_renderLines.Count > 0 || TaskGraph.MergedPrs.Count > 0))
+{
+    <div class="task-graph"
+         data-testid="task-graph">
+        @for (var i = 0; i < _renderLines.Count; i++)
+        {
+            var line = _renderLines[i];
+            @if (line is TaskGraphLoadMoreRenderLine)
+            {
+                <div class="task-graph-row task-graph-load-more" @onclick="HandleLoadMoreClick">
+                    <div class="task-graph-graph-cell">
+                        @((MarkupString)GenerateLoadMoreSvg())
+                    </div>
+                    <div class="task-graph-content-cell">
+                        <span class="task-graph-load-more-text">Load more PRs</span>
+                    </div>
+                </div>
+            }
+            else if (line is TaskGraphPrRenderLine prLine)
+            {
+                var isSelected = SelectedNodeId == $"pr-{prLine.PrNumber}";
+                <div class="task-graph-row @(isSelected ? "task-graph-row-selected" : "")"
+                     @onclick="() => HandlePrClick(prLine.Url)">
+                    <div class="task-graph-graph-cell">
+                        @((MarkupString)GeneratePrSvg(prLine))
+                    </div>
+                    <div class="task-graph-content-cell">
+                        <span class="task-graph-pr-badge @(prLine.IsMerged ? "merged" : "closed")">
+                            #@prLine.PrNumber
+                        </span>
+                        <span class="task-graph-title">@prLine.Title</span>
+                        @if (prLine.AgentStatus != null)
+                        {
+                            <a href="/session/@prLine.AgentStatus.SessionId"
+                               class="agent-status-badge @GetAgentStatusClass(prLine.AgentStatus)"
+                               @onclick:stopPropagation="true">
+                                <span class="agent-status-dot @(prLine.AgentStatus.IsActive ? "agent-status-dot-active" : "")"></span>
+                                @GetAgentStatusLabel(prLine.AgentStatus)
+                            </a>
+                        }
+                    </div>
+                </div>
+            }
+            else if (line is TaskGraphIssueRenderLine issueLine)
+            {
+                @* Insert new issue before this issue if needed (for inserting above first issue) *@
+                @if (NavService?.EditMode == KeyboardEditMode.CreatingNew
+                    && NavService?.PendingNewIssue != null
+                    && NavService.PendingNewIssue.IsAbove
+                    && NavService.PendingNewIssue.ReferenceIssueId == issueLine.IssueId)
+                {
+                    var draftLineAbove = GetDraftIssueLine();
+                    if (draftLineAbove != null)
+                    {
+                        <div class="task-graph-row task-graph-row-selected task-graph-row-editing">
+                            <div class="task-graph-graph-cell">
+                                @((MarkupString)GenerateNewIssueSvg(draftLineAbove))
+                            </div>
+                            <div class="task-graph-content-cell">
+                                <span class="task-graph-issue-type task">Task</span>
+                                <InlineIssueEditor Title="@NavService.PendingNewIssue.Title"
+                                                   CursorPosition="EditCursorPosition.Start"
+                                                   Placeholder="Enter new issue title..." />
+                                @if (NavService.PendingNewIssue.PendingChildId != null)
+                                {
+                                    <span class="lane-indicator parent">Parent of above</span>
+                                }
+                                else if (NavService.PendingNewIssue.PendingParentId != null)
+                                {
+                                    <span class="lane-indicator child">Child of above</span>
+                                }
+                            </div>
+                        </div>
+                    }
+                }
+
+                var isSelected = SelectedNodeId == $"issue-{issueLine.IssueId}";
+                var agentStatus = issueLine.AgentStatus;
+                var index = i;
+                var isEditing = NavService?.EditMode == KeyboardEditMode.EditingExisting
+                    && NavService?.PendingEdit?.IssueId == issueLine.IssueId;
+                var isSearchMatch = IsSearchMatch(issueLine.Title);
+
+                <div class="task-graph-row @(isSelected ? "task-graph-row-selected" : "") @(isEditing ? "task-graph-row-editing" : "") @(isSearchMatch ? "task-graph-row-search-match" : "") @(IsInMoveSelectionMode ? "task-graph-row-move-target" : "")"
+                     @onclick="(e) => HandleIssueClick(issueLine.IssueId, e.ShiftKey)"
+                     data-testid="task-graph-issue-row"
+                     data-issue-id="@issueLine.IssueId">
+                    <div class="task-graph-graph-cell">
+                        @((MarkupString)GenerateIssueSvg(index, issueLine, agentStatus))
+                    </div>
+                    <div class="task-graph-content-cell">
+                        <div class="task-graph-issue-type-wrapper">
+                            <span class="task-graph-issue-type @GetIssueTypeClass(issueLine.IssueType)"
+                                  @onclick="() => ToggleTypeMenu(issueLine.IssueId)"
+                                  @onclick:stopPropagation="true"
+                                  title="Click to change type">@GetIssueTypeLabel(issueLine.IssueType)</span>
+                            @if (_typeMenuOpenForIssueId == issueLine.IssueId)
+                            {
+                                <div class="task-graph-type-menu" @onclick:stopPropagation="true">
+                                    <button class="type-menu-item bug" @onclick="() => ChangeIssueType(issueLine.IssueId, IssueType.Bug)">Bug</button>
+                                    <button class="type-menu-item task" @onclick="() => ChangeIssueType(issueLine.IssueId, IssueType.Task)">Task</button>
+                                    <button class="type-menu-item feature" @onclick="() => ChangeIssueType(issueLine.IssueId, IssueType.Feature)">Feature</button>
+                                    <button class="type-menu-item chore" @onclick="() => ChangeIssueType(issueLine.IssueId, IssueType.Chore)">Chore</button>
+                                </div>
+                            }
+                        </div>
+                        <span class="task-graph-issue-id">@issueLine.IssueId</span>
+                        <div class="task-graph-status-wrapper">
+                            <span class="task-graph-issue-status @GetStatusClass(issueLine.Status)"
+                                  @onclick="() => ToggleStatusMenu(issueLine.IssueId)"
+                                  @onclick:stopPropagation="true"
+                                  title="Click to change status">@GetStatusLabel(issueLine.Status)</span>
+                            @if (_statusMenuOpenForIssueId == issueLine.IssueId)
+                            {
+                                <div class="task-graph-status-menu" @onclick:stopPropagation="true">
+                                    <button class="status-menu-item open" @onclick="() => ChangeIssueStatus(issueLine.IssueId, IssueStatus.Open)">Open</button>
+                                    <button class="status-menu-item progress" @onclick="() => ChangeIssueStatus(issueLine.IssueId, IssueStatus.Progress)">Progress</button>
+                                    <button class="status-menu-item review" @onclick="() => ChangeIssueStatus(issueLine.IssueId, IssueStatus.Review)">Review</button>
+                                    <button class="status-menu-item complete" @onclick="() => ChangeIssueStatus(issueLine.IssueId, IssueStatus.Complete)">Complete</button>
+                                    <button class="status-menu-item closed" @onclick="() => ChangeIssueStatus(issueLine.IssueId, IssueStatus.Closed)">Closed</button>
+                                    <button class="status-menu-item archived" @onclick="() => ChangeIssueStatus(issueLine.IssueId, IssueStatus.Archived)">Archived</button>
+                                </div>
+                            }
+                        </div>
+                        @if (isEditing && NavService?.PendingEdit != null)
+                        {
+                            <InlineIssueEditor Title="@NavService.PendingEdit.Title"
+                                               CursorPosition="@NavService.PendingEdit.CursorPosition"
+                                               Placeholder="Enter issue title..." />
+                        }
+                        else
+                        {
+                            <span class="task-graph-title">
+                                <HighlightedText Text="@issueLine.Title" SearchTerm="@ActiveSearchTerm" />
+                            </span>
+                        }
+                        @if (issueLine.LinkedPr != null && !isEditing)
+                        {
+                            <a class="task-graph-pr-link" href="@issueLine.LinkedPr.Url" target="_blank" @onclick:stopPropagation="true">
+                                #@issueLine.LinkedPr.Number
+                            </a>
+                        }
+                        @if (agentStatus != null && !isEditing)
+                        {
+                            <a href="/session/@agentStatus.SessionId"
+                               class="agent-status-badge @GetAgentStatusClass(agentStatus)"
+                               @onclick:stopPropagation="true">
+                                <span class="agent-status-dot @(agentStatus.IsActive ? "agent-status-dot-active" : "")"></span>
+                                @GetAgentStatusLabel(agentStatus)
+                            </a>
+                        }
+                        @if (!isEditing && !string.IsNullOrEmpty(ProjectId))
+                        {
+                            <IssueRowActions
+                                             IssueId="@issueLine.IssueId"
+                                             ProjectId="@ProjectId"
+                                             IssueTitle="@issueLine.Title"
+                                             IssueDescription="@issueLine.Description"
+                                             IssueType="@issueLine.IssueType.ToString()"
+                                             BranchName="@(issueLine.BranchName ?? "")"
+                                             RepoPath="@RepoPath"
+                                             DefaultBranch="@DefaultBranch"
+                                             DefaultModel="@DefaultModel"
+                                             IsVisible="@isSelected"
+                                             Disabled="@(agentStatus?.IsActive == true)"
+                                             OnEditClick="HandleEditClick"
+                                             OnSessionStarted="HandleSessionStarted"
+                                             ShowAgentDropdown="@(NavService?.EditMode == KeyboardEditMode.SelectingAgentPrompt && NavService?.SelectedIssueId == issueLine.IssueId)"
+                                             OnOpenPanelClick="HandleOpenPanelClick" />
+                        }
+                    </div>
+                </div>
+
+            }
+            else if (line is TaskGraphSeparatorRenderLine)
+            {
+                <div class="task-graph-divider">
+                    <div class="task-graph-graph-cell">
+                        @((MarkupString)GenerateDividerSvg())
+                    </div>
+                    <div class="task-graph-divider-content">
+                        <hr class="task-graph-divider-line" />
+                        <span class="task-graph-divider-label">Issues</span>
+                    </div>
+                </div>
+            }
+
+            @* Insert new issue row when creating inline via NavService *@
+            @if (NavService?.EditMode == KeyboardEditMode.CreatingNew
+                && NavService?.PendingNewIssue != null
+                && line is TaskGraphIssueRenderLine currentIssue
+                && ShouldInsertNewIssueAfter(currentIssue.IssueId))
+            {
+                var draftLineAfter = GetDraftIssueLine();
+                if (draftLineAfter != null)
+                {
+                    <div class="task-graph-row task-graph-row-selected task-graph-row-editing">
+                        <div class="task-graph-graph-cell">
+                            @((MarkupString)GenerateNewIssueSvg(draftLineAfter))
+                        </div>
+                        <div class="task-graph-content-cell">
+                            <span class="task-graph-issue-type task">Task</span>
+                            <InlineIssueEditor Title="@NavService.PendingNewIssue.Title"
+                                               CursorPosition="EditCursorPosition.Start"
+                                               Placeholder="Enter new issue title..." />
+                            @if (NavService.PendingNewIssue.PendingChildId != null)
+                            {
+                                <span class="lane-indicator parent">Parent of above</span>
+                            }
+                            else if (NavService.PendingNewIssue.PendingParentId != null)
+                            {
+                                <span class="lane-indicator child">Child of above</span>
+                            }
+                        </div>
+                    </div>
+                }
+            }
+        }
+
+        @* Handle new issue at the end of the list *@
+        @if (NavService?.EditMode == KeyboardEditMode.CreatingNew
+            && NavService?.PendingNewIssue != null
+            && ShouldInsertNewIssueAtEnd())
+        {
+            var draftLineEnd = GetDraftIssueLine();
+            if (draftLineEnd != null)
+            {
+                <div class="task-graph-row task-graph-row-selected task-graph-row-editing">
+                    <div class="task-graph-graph-cell">
+                        @((MarkupString)GenerateNewIssueSvg(draftLineEnd))
+                    </div>
+                    <div class="task-graph-content-cell">
+                        <span class="task-graph-issue-type task">Task</span>
+                        <InlineIssueEditor Title="@NavService.PendingNewIssue.Title"
+                                           CursorPosition="EditCursorPosition.Start"
+                                           Placeholder="Enter new issue title..." />
+                        @if (NavService.PendingNewIssue.PendingChildId != null)
+                        {
+                            <span class="lane-indicator parent">Parent of above</span>
+                        }
+                        else if (NavService.PendingNewIssue.PendingParentId != null)
+                        {
+                            <span class="lane-indicator child">Child of above</span>
+                        }
+                    </div>
+                </div>
+            }
+        }
+    </div>
+}
+
+<style>
+    .task-graph {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    .task-graph-level-controls {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 0.75rem;
+        font-size: 12px;
+        color: var(--text-secondary, #a0a0a0);
+    }
+
+    .level-control-btn {
+        width: 24px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid var(--text-muted, #6b7280);
+        border-radius: 4px;
+        background: transparent;
+        color: var(--text-primary, #eaeaea);
+        font-size: 16px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.15s ease;
+    }
+
+    .level-control-btn:hover:not(:disabled) {
+        border-color: var(--color-ocean, #51A5C1);
+        color: var(--color-ocean, #51A5C1);
+    }
+
+    .level-control-btn:disabled {
+        opacity: 0.3;
+        cursor: not-allowed;
+    }
+
+    .level-display {
+        min-width: 60px;
+        text-align: center;
+    }
+
+    .task-graph-row {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        align-items: center;
+        min-height: 40px;
+        cursor: pointer;
+        transition: background-color 0.15s ease;
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    .task-graph-row:hover {
+        background-color: var(--bg-secondary, rgba(255, 255, 255, 0.05));
+    }
+
+    .task-graph-row-selected {
+        background-color: var(--bg-secondary, rgba(255, 255, 255, 0.1));
+    }
+
+    .task-graph-row-selected .task-graph-graph-cell svg circle[fill]:not([fill="none"]),
+    .task-graph-row-selected .task-graph-graph-cell svg path[fill]:not([fill="none"]) {
+        filter: drop-shadow(0 0 4px var(--color-ocean, #51A5C1));
+    }
+
+    /* Search match highlight */
+    .task-graph-row-search-match {
+        border: 2px solid rgba(251, 191, 36, 0.6);
+        border-radius: 4px;
+        margin: 1px 4px;
+    }
+
+    /* Move target selection mode - highlight rows as potential targets */
+    .task-graph-row-move-target:hover {
+        background-color: rgba(59, 130, 246, 0.2);
+        cursor: crosshair;
+    }
+
+    .task-graph-row-move-target:hover::after {
+        content: "Click to select • Shift+Click to add as additional parent";
+        position: absolute;
+        right: 1rem;
+        font-size: 11px;
+        color: var(--text-secondary, #a0a0a0);
+        opacity: 0.8;
+    }
+
+    /* Highlighted search text within titles */
+    .task-graph-title :deep(.search-highlight) {
+        background-color: rgba(251, 191, 36, 0.4);
+        color: inherit;
+        padding: 0 2px;
+        border-radius: 2px;
+    }
+
+    /* Show issue row actions on hover */
+    .task-graph-row:hover .issue-row-actions {
+        opacity: 1;
+    }
+
+    /* Keep actions visible on selected row */
+    .task-graph-row-selected .issue-row-actions {
+        opacity: 1;
+    }
+
+    .task-graph-graph-cell {
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+        flex-shrink: 0;
+    }
+
+    .task-graph-graph-cell svg {
+        display: block;
+    }
+
+    .task-graph-content-cell {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.25rem 0.75rem 0.25rem 0.5rem;
+        min-width: 0;
+        max-width: 100%;
+        /* Note: overflow: hidden was removed to allow type change dropdown to display.
+           Text truncation is handled by .task-graph-title's own overflow: hidden. */
+    }
+
+    .task-graph-issue-id {
+        flex-shrink: 0;
+        padding: 1px 6px;
+        border-radius: 3px;
+        font-size: 11px;
+        font-family: var(--font-mono, monospace);
+        background-color: var(--bg-tertiary, rgba(255, 255, 255, 0.08));
+        color: var(--text-secondary, #a0a0a0);
+        border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+    }
+
+    .task-graph-title {
+        color: var(--text-primary, #eaeaea);
+        font-size: 14px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        flex: 1;
+        min-width: 0;
+    }
+
+    .task-graph-separator {
+        height: 8px;
+    }
+
+    /* Issue type badge */
+    .task-graph-issue-type {
+        flex-shrink: 0;
+        padding: 1px 6px;
+        border-radius: 3px;
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    .task-graph-issue-type.bug {
+        background-color: rgba(239, 68, 68, 0.2);
+        color: #ef4444;
+        border: 1px solid #ef4444;
+    }
+
+    .task-graph-issue-type.task {
+        background-color: rgba(59, 130, 246, 0.2);
+        color: #3b82f6;
+        border: 1px solid #3b82f6;
+    }
+
+    .task-graph-issue-type.feature {
+        background-color: rgba(16, 185, 129, 0.2);
+        color: #10b981;
+        border: 1px solid #10b981;
+    }
+
+    .task-graph-issue-type.chore {
+        background-color: rgba(107, 114, 128, 0.2);
+        color: #6b7280;
+        border: 1px solid #6b7280;
+    }
+
+    /* PR badge */
+    .task-graph-pr-badge {
+        flex-shrink: 0;
+        padding: 1px 6px;
+        border-radius: 3px;
+        font-size: 11px;
+        font-family: var(--font-mono, monospace);
+    }
+
+    .task-graph-pr-badge.merged {
+        background-color: rgba(139, 92, 246, 0.2);
+        color: #8b5cf6;
+        border: 1px solid #8b5cf6;
+    }
+
+    .task-graph-pr-badge.closed {
+        background-color: rgba(239, 68, 68, 0.2);
+        color: #ef4444;
+        border: 1px solid #ef4444;
+    }
+
+    /* PR link on issues */
+    .task-graph-pr-link {
+        flex-shrink: 0;
+        padding: 1px 6px;
+        border-radius: 3px;
+        font-size: 11px;
+        font-family: var(--font-mono, monospace);
+        background-color: rgba(59, 130, 246, 0.2);
+        color: #3b82f6;
+        border: 1px solid #3b82f6;
+        text-decoration: none;
+        transition: background-color 0.15s ease;
+    }
+
+    .task-graph-pr-link:hover {
+        background-color: rgba(59, 130, 246, 0.4);
+    }
+
+    /* Load more button */
+    .task-graph-load-more {
+        cursor: pointer;
+    }
+
+    .task-graph-load-more-text {
+        color: var(--color-ocean, #51A5C1);
+        font-weight: 600;
+        font-size: 14px;
+    }
+
+    /* Agent status badge */
+    .agent-status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 11px;
+        flex-shrink: 0;
+        text-decoration: none;
+        cursor: pointer;
+        transition: filter 0.15s ease;
+    }
+
+    .agent-status-badge:hover {
+        filter: brightness(1.2);
+        text-decoration: none;
+    }
+
+    .agent-status-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background-color: currentColor;
+    }
+
+    .agent-status-dot-active {
+        animation: agent-pulse 1.5s ease-in-out infinite;
+    }
+
+    @@keyframes agent-pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.4; }
+    }
+
+    .agent-status-running {
+        background-color: rgba(16, 185, 129, 0.2);
+        color: #10b981;
+        border: 1px solid #10b981;
+    }
+
+    .agent-status-waiting {
+        background-color: rgba(59, 130, 246, 0.2);
+        color: #3b82f6;
+        border: 1px solid #3b82f6;
+    }
+
+    .agent-status-starting {
+        background-color: rgba(245, 158, 11, 0.2);
+        color: #f59e0b;
+        border: 1px solid #f59e0b;
+    }
+
+    .agent-status-error {
+        background-color: rgba(239, 68, 68, 0.2);
+        color: #ef4444;
+        border: 1px solid #ef4444;
+    }
+
+    .agent-status-inactive {
+        background-color: rgba(107, 114, 128, 0.2);
+        color: #6b7280;
+        border: 1px solid #6b7280;
+    }
+
+    /* Divider row */
+    .task-graph-divider {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        align-items: center;
+        min-height: 40px;
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    .task-graph-divider-content {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.5rem 1rem 0.5rem 0.5rem;
+    }
+
+    .task-graph-divider-line {
+        flex: 1;
+        border: none;
+        border-top: 1px solid var(--text-muted, #6c757d);
+        margin: 0;
+    }
+
+    .task-graph-divider-label {
+        flex-shrink: 0;
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--text-muted, #6c757d);
+        white-space: nowrap;
+    }
+
+    /* Editing row styles */
+    .task-graph-row-editing {
+        background-color: var(--bg-secondary, rgba(255, 255, 255, 0.1));
+    }
+
+    .lane-indicator {
+        font-size: 11px;
+        padding: 2px 6px;
+        border-radius: 3px;
+        margin-left: 8px;
+        white-space: nowrap;
+    }
+
+    .lane-indicator.parent {
+        background-color: rgba(139, 92, 246, 0.2);
+        color: #a78bfa;
+    }
+
+    .lane-indicator.child {
+        background-color: rgba(59, 130, 246, 0.2);
+        color: #60a5fa;
+    }
+
+    /* Issue type wrapper for dropdown positioning */
+    .task-graph-issue-type-wrapper {
+        position: relative;
+        flex-shrink: 0;
+    }
+
+    .task-graph-issue-type {
+        cursor: pointer;
+        transition: filter 0.15s ease;
+    }
+
+    .task-graph-issue-type:hover {
+        filter: brightness(1.2);
+    }
+
+    /* Type change dropdown menu */
+    .task-graph-type-menu {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        z-index: 100;
+        background: var(--bg-primary, #1a1a2e);
+        border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+        border-radius: 4px;
+        padding: 4px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 80px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        margin-top: 4px;
+    }
+
+    .type-menu-item {
+        padding: 4px 8px;
+        border: none;
+        border-radius: 3px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        cursor: pointer;
+        text-align: left;
+        transition: filter 0.15s ease;
+    }
+
+    .type-menu-item:hover {
+        filter: brightness(1.2);
+    }
+
+    .type-menu-item.bug {
+        background-color: rgba(239, 68, 68, 0.2);
+        color: #ef4444;
+    }
+
+    .type-menu-item.task {
+        background-color: rgba(59, 130, 246, 0.2);
+        color: #3b82f6;
+    }
+
+    .type-menu-item.feature {
+        background-color: rgba(16, 185, 129, 0.2);
+        color: #10b981;
+    }
+
+    .type-menu-item.chore {
+        background-color: rgba(107, 114, 128, 0.2);
+        color: #6b7280;
+    }
+
+    /* Issue status wrapper for dropdown positioning */
+    .task-graph-status-wrapper {
+        position: relative;
+        flex-shrink: 0;
+    }
+
+    /* Issue status badge */
+    .task-graph-issue-status {
+        flex-shrink: 0;
+        padding: 1px 6px;
+        border-radius: 3px;
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        cursor: pointer;
+        transition: filter 0.15s ease;
+    }
+
+    .task-graph-issue-status:hover {
+        filter: brightness(1.2);
+    }
+
+    .task-graph-issue-status.open {
+        background-color: rgba(59, 130, 246, 0.2);
+        color: #3b82f6;
+        border: 1px solid #3b82f6;
+    }
+
+    .task-graph-issue-status.progress {
+        background-color: rgba(245, 158, 11, 0.2);
+        color: #f59e0b;
+        border: 1px solid #f59e0b;
+    }
+
+    .task-graph-issue-status.review {
+        background-color: rgba(139, 92, 246, 0.2);
+        color: #8b5cf6;
+        border: 1px solid #8b5cf6;
+    }
+
+    .task-graph-issue-status.complete {
+        background-color: rgba(16, 185, 129, 0.2);
+        color: #10b981;
+        border: 1px solid #10b981;
+    }
+
+    .task-graph-issue-status.closed {
+        background-color: rgba(107, 114, 128, 0.2);
+        color: #6b7280;
+        border: 1px solid #6b7280;
+    }
+
+    .task-graph-issue-status.archived {
+        background-color: rgba(156, 163, 175, 0.2);
+        color: #9ca3af;
+        border: 1px solid #9ca3af;
+    }
+
+    /* Status change dropdown menu */
+    .task-graph-status-menu {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        z-index: 100;
+        background: var(--bg-primary, #1a1a2e);
+        border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+        border-radius: 4px;
+        padding: 4px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 90px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        margin-top: 4px;
+    }
+
+    .status-menu-item {
+        padding: 4px 8px;
+        border: none;
+        border-radius: 3px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        cursor: pointer;
+        text-align: left;
+        transition: filter 0.15s ease;
+    }
+
+    .status-menu-item:hover {
+        filter: brightness(1.2);
+    }
+
+    .status-menu-item.open {
+        background-color: rgba(59, 130, 246, 0.2);
+        color: #3b82f6;
+    }
+
+    .status-menu-item.progress {
+        background-color: rgba(245, 158, 11, 0.2);
+        color: #f59e0b;
+    }
+
+    .status-menu-item.review {
+        background-color: rgba(139, 92, 246, 0.2);
+        color: #8b5cf6;
+    }
+
+    .status-menu-item.complete {
+        background-color: rgba(16, 185, 129, 0.2);
+        color: #10b981;
+    }
+
+    .status-menu-item.closed {
+        background-color: rgba(107, 114, 128, 0.2);
+        color: #6b7280;
+    }
+
+    .status-menu-item.archived {
+        background-color: rgba(156, 163, 175, 0.2);
+        color: #9ca3af;
+    }
+
+    /* Hide issue ID on mobile to save space */
+    @@media (max-width: 600px) {
+        .task-graph-issue-id {
+            display: none;
+        }
+    }
+</style>
+
+@code {
+    [Parameter] public TaskGraphResponse? TaskGraph { get; set; }
+    [Parameter] public EventCallback<string> OnIssueClick { get; set; }
+    [Parameter] public EventCallback OnLoadMoreClick { get; set; }
+    [Parameter] public EventCallback OnIssueTypeChanged { get; set; }
+    [Parameter] public EventCallback OnIssueStatusChanged { get; set; }
+    [Parameter] public string? SelectedNodeId { get; set; }
+    [Parameter] public IKeyboardNavigationService? NavService { get; set; }
+
+    /// <summary>
+    /// The active search term for highlighting matching text in issue titles.
+    /// When set, matching issues will be highlighted and matching text emphasized.
+    /// </summary>
+    [Parameter] public string? ActiveSearchTerm { get; set; }
+
+    /// <summary>
+    /// The project ID for creating issues. Required when EnableKeyboardControls is true.
+    /// </summary>
+    [Parameter] public string? ProjectId { get; set; }
+
+    /// <summary>
+    /// Path to the main repository (for listing branches in agent launcher).
+    /// </summary>
+    [Parameter] public string? RepoPath { get; set; }
+
+    /// <summary>
+    /// Default branch of the project.
+    /// </summary>
+    [Parameter] public string? DefaultBranch { get; set; }
+
+    /// <summary>
+    /// Default model to use for agent sessions.
+    /// </summary>
+    [Parameter] public string DefaultModel { get; set; } = "opus";
+
+    /// <summary>
+    /// Called when an issue is created via inline keyboard creation.
+    /// </summary>
+    [Parameter] public EventCallback<string> OnIssueCreated { get; set; }
+
+    /// <summary>
+    /// Called when the edit button is clicked on an issue row.
+    /// </summary>
+    [Parameter] public EventCallback<string> OnEditClick { get; set; }
+
+    /// <summary>
+    /// Called when an agent session is successfully started.
+    /// </summary>
+    [Parameter] public EventCallback<ClaudeSession> OnSessionStarted { get; set; }
+
+    /// <summary>
+    /// Maximum depth (levels) to show in the task graph. Default is 3 (shows lanes 0-3).
+    /// </summary>
+    [Parameter] public int MaxDepth { get; set; } = 3;
+
+    /// <summary>
+    /// Called when the max depth changes via the level controls.
+    /// </summary>
+    [Parameter] public EventCallback<int> MaxDepthChanged { get; set; }
+
+    /// <summary>
+    /// Called when the open panel button is clicked on an issue row (mobile only).
+    /// </summary>
+    [Parameter] public EventCallback<string> OnOpenPanelClick { get; set; }
+
+    private List<TaskGraphRenderLine> _renderLines = [];
+    private int _maxLane;
+    private int _maxAvailableLane;
+    private string? _typeMenuOpenForIssueId;
+    private string? _statusMenuOpenForIssueId;
+    private string? _previousSelectedNodeId;
+
+    protected override void OnParametersSet()
+    {
+        // Compute max available lane before filtering
+        _maxAvailableLane = TaskGraph?.Nodes.Count > 0 ? TaskGraph.Nodes.Max(n => n.Lane) : 0;
+
+        _renderLines = TaskGraphLayoutService.ComputeLayout(TaskGraph, MaxDepth);
+        var hasMergedPrs = TaskGraph?.MergedPrs.Count > 0;
+        _maxLane = _renderLines
+            .OfType<TaskGraphIssueRenderLine>()
+            .Select(l => Math.Max(l.Lane, l.ParentLane ?? 0))
+            .DefaultIfEmpty(hasMergedPrs ? 1 : 0)  // Account for lane offset when PRs exist
+            .Max();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Scroll the selected issue into view when selection changes
+        if (SelectedNodeId != _previousSelectedNodeId && SelectedNodeId != null)
+        {
+            _previousSelectedNodeId = SelectedNodeId;
+            // Extract issue ID from "issue-{id}" format
+            if (SelectedNodeId.StartsWith("issue-"))
+            {
+                var issueId = SelectedNodeId.Substring(6);
+                await JSRuntime.InvokeVoidAsync("homespunInterop.scrollIssueIntoView", issueId);
+            }
+        }
+    }
+
+    private string GenerateIssueSvg(int index, TaskGraphIssueRenderLine issueLine, AgentStatusData? agentStatus)
+    {
+        var (color, isOutlineOnly) = ComputeTaskGraphNodeStyle(issueLine, agentStatus);
+
+        return TimelineSvgRenderer.GenerateTaskGraphCircleSvg(
+            nodeLane: issueLine.Lane,
+            parentLane: issueLine.ParentLane,
+            isFirstChild: issueLine.IsFirstChild,
+            maxLanes: _maxLane + 1,
+            nodeColor: color,
+            isOutlineOnly: isOutlineOnly,
+            isActionable: issueLine.Marker == TaskGraphMarkerType.Actionable,
+            drawTopLine: issueLine.DrawTopLine,
+            drawBottomLine: issueLine.DrawBottomLine,
+            isSeriesChild: issueLine.IsSeriesChild,
+            seriesConnectorFromLane: issueLine.SeriesConnectorFromLane,
+            drawLane0Connector: issueLine.DrawLane0Connector,
+            isLastLane0Connector: issueLine.IsLastLane0Connector,
+            drawLane0PassThrough: issueLine.DrawLane0PassThrough,
+lane0Color: issueLine.Lane0Color,
+            hasHiddenParent: issueLine.HasHiddenParent,
+            hiddenParentIsSeriesMode: issueLine.HiddenParentIsSeriesMode);
+    }
+
+    private string GeneratePrSvg(TaskGraphPrRenderLine prLine)
+    {
+        var color = prLine.IsMerged ? "#8b5cf6" : "#ef4444"; // purple for merged, red for closed
+        var isOutlineOnly = !prLine.HasDescription;
+
+        return TimelineSvgRenderer.GenerateTaskGraphCircleSvg(
+            nodeLane: 0,
+            parentLane: null,
+            isFirstChild: false,
+            maxLanes: _maxLane + 1,
+            nodeColor: color,
+            isOutlineOnly: isOutlineOnly,
+            isActionable: false,
+            drawTopLine: prLine.DrawTopLine,
+            drawBottomLine: prLine.DrawBottomLine,
+            isSeriesChild: false,
+            seriesConnectorFromLane: null);
+    }
+
+    private string GenerateLoadMoreSvg()
+    {
+        return TimelineSvgRenderer.GenerateTaskGraphLoadMoreSvg(_maxLane + 1);
+    }
+
+    private string GenerateDividerSvg()
+    {
+        return TimelineSvgRenderer.GenerateDividerRowSvg(_maxLane + 1);
+    }
+
+    private string GenerateNewIssueSvg(TaskGraphIssueRenderLine draftLine)
+    {
+        // New issue uses task color (blue) with computed edge flags from the layout service
+        return TimelineSvgRenderer.GenerateTaskGraphCircleSvg(
+            nodeLane: draftLine.Lane,
+            parentLane: draftLine.ParentLane,
+            isFirstChild: draftLine.IsFirstChild,
+            maxLanes: _maxLane + 1,
+            nodeColor: "#3b82f6", // Blue (task color)
+            isOutlineOnly: true, // Outline only for new issue
+            isActionable: draftLine.Lane == 0 || (TaskGraph?.MergedPrs.Count > 0 && draftLine.Lane == 1),
+            drawTopLine: draftLine.DrawTopLine,
+            drawBottomLine: draftLine.DrawBottomLine,
+            isSeriesChild: draftLine.IsSeriesChild,
+            seriesConnectorFromLane: draftLine.SeriesConnectorFromLane,
+            drawLane0Connector: draftLine.DrawLane0Connector,
+            isLastLane0Connector: draftLine.IsLastLane0Connector,
+            drawLane0PassThrough: draftLine.DrawLane0PassThrough);
+    }
+
+    private TaskGraphIssueRenderLine? GetDraftIssueLine()
+    {
+        if (NavService?.PendingNewIssue == null) return null;
+
+        var draft = new DraftIssueContext(
+            ReferenceIssueId: NavService.PendingNewIssue.ReferenceIssueId,
+            IsAbove: NavService.PendingNewIssue.IsAbove,
+            PendingParentId: NavService.PendingNewIssue.PendingParentId,
+            PendingChildId: NavService.PendingNewIssue.PendingChildId,
+            InheritedParentId: NavService.PendingNewIssue.InheritedParentIssueId);
+
+        return TaskGraphLayoutService.ComputeDraftIssueLine(TaskGraph, draft, _renderLines);
+    }
+
+    private bool ShouldInsertNewIssueAfter(string issueId)
+    {
+        if (NavService?.PendingNewIssue == null) return false;
+
+        // Only check for inserting below (above case is handled separately in the render loop)
+        if (!NavService.PendingNewIssue.IsAbove &&
+            NavService.PendingNewIssue.ReferenceIssueId == issueId)
+        {
+            // Don't render here if this is the last issue - let ShouldInsertNewIssueAtEnd handle it
+            var issueLines = _renderLines.OfType<TaskGraphIssueRenderLine>().ToList();
+            if (issueLines.Count > 0 && issueLines[^1].IssueId == issueId)
+            {
+                return false;
+            }
+            return true;
+        }
+
+        return false;
+    }
+
+    private bool ShouldInsertNewIssueAtEnd()
+    {
+        if (NavService?.PendingNewIssue == null) return false;
+
+        // Check if we should insert at the start (above first issue)
+        if (NavService.PendingNewIssue.IsAbove)
+        {
+            var issueLines = _renderLines.OfType<TaskGraphIssueRenderLine>().ToList();
+            if (issueLines.Count > 0 &&
+                issueLines[0].IssueId == NavService.PendingNewIssue.ReferenceIssueId)
+            {
+                // Need to insert at the beginning, but there's no issue before it
+                // This case is handled specially in the render loop
+                return false;
+            }
+        }
+
+        // Insert at end if reference issue is the last one and we're inserting below
+        if (!NavService.PendingNewIssue.IsAbove)
+        {
+            var issueLines = _renderLines.OfType<TaskGraphIssueRenderLine>().ToList();
+            if (issueLines.Count > 0 &&
+                issueLines[^1].IssueId == NavService.PendingNewIssue.ReferenceIssueId)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static (string color, bool isOutlineOnly) ComputeTaskGraphNodeStyle(
+        TaskGraphIssueRenderLine issueLine, AgentStatusData? agentStatus)
+    {
+        // Default color based on issue type
+        var color = GetIssueTypeColor(issueLine.IssueType);
+        var isOutlineOnly = !issueLine.HasDescription;
+
+        // Agent status overrides color when active
+        if (agentStatus is { IsActive: true })
+        {
+            color = agentStatus.Status switch
+            {
+                "Running" or "Starting" or "RunningHooks" => "#22c55e",       // Green - working
+                "WaitingForInput" or "WaitingForPlanExecution" => "#eab308",   // Yellow - waiting
+                "WaitingForQuestionAnswer" => "#f97316",                       // Orange - question
+                "Error" => "#ef4444",                                          // Red - error
+                _ => color                                                     // Use issue type color for unknown statuses
+            };
+            isOutlineOnly = false; // Active agents always have filled circles
+        }
+
+        return (color, isOutlineOnly);
+    }
+
+    private static string GetIssueTypeColor(IssueType type) => type switch
+    {
+        IssueType.Bug => "#ef4444",     // Red
+        IssueType.Feature => "#10b981", // Green
+        IssueType.Task => "#3b82f6",    // Blue
+        IssueType.Chore => "#6b7280",   // Gray
+        _ => "#6b7280"
+    };
+
+    private static string GetIssueTypeClass(IssueType type) => type switch
+    {
+        IssueType.Bug => "bug",
+        IssueType.Feature => "feature",
+        IssueType.Task => "task",
+        IssueType.Chore => "chore",
+        _ => "task"
+    };
+
+    private static string GetIssueTypeLabel(IssueType type) => type switch
+    {
+        IssueType.Bug => "Bug",
+        IssueType.Feature => "Feat",
+        IssueType.Task => "Task",
+        IssueType.Chore => "Chore",
+        _ => "Task"
+    };
+
+    private static string GetAgentStatusClass(AgentStatusData agentStatus)
+    {
+        if (!agentStatus.IsActive) return "agent-status-inactive";
+
+        return agentStatus.Status switch
+        {
+            "Running" => "agent-status-running",
+            "WaitingForInput" => "agent-status-waiting",
+            "Starting" => "agent-status-starting",
+            "Error" => "agent-status-error",
+            _ => "agent-status-inactive"
+        };
+    }
+
+    private static string GetAgentStatusLabel(AgentStatusData agentStatus)
+    {
+        return agentStatus.Status switch
+        {
+            "Running" => "Working",
+            "WaitingForInput" => "Waiting",
+            "Starting" => "Starting",
+            "Error" => "Error",
+            "Stopped" => "Stopped",
+            _ => agentStatus.Status
+        };
+    }
+
+    private bool IsInMoveSelectionMode =>
+        NavService?.EditMode == KeyboardEditMode.SelectingMoveTarget;
+
+    private async Task HandleIssueClick(string issueId, bool shiftKey)
+    {
+        // If in move selection mode, complete the move operation
+        if (NavService?.EditMode == KeyboardEditMode.SelectingMoveTarget)
+        {
+            await NavService.CompleteMoveOperationAsync(issueId, addToExisting: shiftKey);
+            return;
+        }
+
+        // Normal click - notify parent
+        await OnIssueClick.InvokeAsync(issueId);
+    }
+
+    private async Task HandleEditClick(string issueId)
+    {
+        await OnEditClick.InvokeAsync(issueId);
+    }
+
+    private async Task HandleSessionStarted(ClaudeSession session)
+    {
+        await OnSessionStarted.InvokeAsync(session);
+    }
+
+
+    private async Task HandleOpenPanelClick(string issueId)
+    {
+        await OnOpenPanelClick.InvokeAsync(issueId);
+    }
+
+    private async Task HandleLoadMoreClick()
+    {
+        await OnLoadMoreClick.InvokeAsync();
+    }
+
+    private void HandlePrClick(string? url)
+    {
+        // PR clicks navigate to GitHub - handled by href on the row
+        // This is a no-op but could be extended for internal PR handling
+    }
+
+    private void ToggleTypeMenu(string issueId)
+    {
+        if (_typeMenuOpenForIssueId == issueId)
+        {
+            _typeMenuOpenForIssueId = null;
+        }
+        else
+        {
+            _typeMenuOpenForIssueId = issueId;
+        }
+    }
+
+    private async Task ChangeIssueType(string issueId, IssueType newType)
+    {
+        if (string.IsNullOrEmpty(ProjectId)) return;
+
+        // Close the menu
+        _typeMenuOpenForIssueId = null;
+
+        // Update the issue type via API
+        await IssueApi.UpdateIssueAsync(issueId, new UpdateIssueRequest
+        {
+            ProjectId = ProjectId,
+            Type = newType
+        });
+
+        // Notify parent to refresh data
+        await OnIssueTypeChanged.InvokeAsync();
+    }
+
+    private async Task DecreaseLevels()
+    {
+        if (MaxDepth > 0)
+        {
+            await MaxDepthChanged.InvokeAsync(MaxDepth - 1);
+        }
+    }
+
+    private async Task IncreaseLevels()
+    {
+        if (MaxDepth < _maxAvailableLane)
+        {
+            await MaxDepthChanged.InvokeAsync(MaxDepth + 1);
+        }
+    }
+
+    private bool IsSearchMatch(string title)
+    {
+        if (string.IsNullOrEmpty(ActiveSearchTerm)) return false;
+        return title.Contains(ActiveSearchTerm, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void ToggleStatusMenu(string issueId)
+    {
+        // Close type menu if open
+        _typeMenuOpenForIssueId = null;
+
+        if (_statusMenuOpenForIssueId == issueId)
+        {
+            _statusMenuOpenForIssueId = null;
+        }
+        else
+        {
+            _statusMenuOpenForIssueId = issueId;
+        }
+    }
+
+    private async Task ChangeIssueStatus(string issueId, IssueStatus newStatus)
+    {
+        if (string.IsNullOrEmpty(ProjectId)) return;
+
+        // Close the menu
+        _statusMenuOpenForIssueId = null;
+
+        // Update the issue status via API
+        await IssueApi.UpdateIssueAsync(issueId, new UpdateIssueRequest
+        {
+            ProjectId = ProjectId,
+            Status = newStatus
+        });
+
+        // Notify parent to refresh data
+        await OnIssueStatusChanged.InvokeAsync();
+    }
+
+    /// <summary>
+    /// Opens the status menu for the currently selected issue.
+    /// Called by keyboard shortcut 's' from TimelineVisualization.
+    /// </summary>
+    public void OpenStatusMenu()
+    {
+        var selectedIssueId = NavService?.SelectedIssueId;
+        if (selectedIssueId != null)
+        {
+            // Close type menu if open
+            _typeMenuOpenForIssueId = null;
+            _statusMenuOpenForIssueId = selectedIssueId;
+            StateHasChanged();
+        }
+    }
+
+    private static string GetStatusClass(IssueStatus status) => status switch
+    {
+        IssueStatus.Open => "open",
+        IssueStatus.Progress => "progress",
+        IssueStatus.Review => "review",
+        IssueStatus.Complete => "complete",
+        IssueStatus.Closed => "closed",
+        IssueStatus.Archived => "archived",
+        _ => "open"
+    };
+
+    private static string GetStatusLabel(IssueStatus status) => status switch
+    {
+        IssueStatus.Open => "Open",
+        IssueStatus.Progress => "Progress",
+        IssueStatus.Review => "Review",
+        IssueStatus.Complete => "Complete",
+        IssueStatus.Closed => "Closed",
+        IssueStatus.Archived => "Archived",
+        _ => "Open"
+    };
+}
