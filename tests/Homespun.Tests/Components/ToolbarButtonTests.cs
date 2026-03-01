@@ -1,5 +1,6 @@
 using Bunit;
 using Homespun.Client.Components;
+using Homespun.Client.Features.Toolbar.Components;
 using Homespun.Tests.Components;
 using Microsoft.AspNetCore.Components;
 

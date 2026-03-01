@@ -1,6 +1,7 @@
 using Bunit;
 using BlazorBlueprint.Components;
 using Homespun.Client.Components;
+using Homespun.Client.Features.Projects.Components;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 

@@ -1,0 +1,73 @@
+
+@*
+    SessionHistoryList depends on IClaudeSessionApi.
+    This showcase renders a static mock version of the component.
+*@
+
+<div class="showcase-section">
+    <h3>With Sessions</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">List of resumable sessions</div>
+        <div class="showcase-preview">
+            <MockSessionHistoryList Sessions="_sessions" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Empty State</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">No previous sessions</div>
+        <div class="showcase-preview">
+            <MockSessionHistoryList Sessions="[]" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Loading State</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Sessions being loaded</div>
+        <div class="showcase-preview">
+            <MockSessionHistoryList IsLoading="true" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Resuming Session</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Session being resumed</div>
+        <div class="showcase-preview">
+            <MockSessionHistoryList Sessions="_sessions" ResumingSessionId="session-2" />
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<MockSessionHistoryList.MockSession> _sessions = new()
+    {
+        new MockSessionHistoryList.MockSession
+        {
+            SessionId = "session-1",
+            Mode = SessionMode.Build,
+            LastActivityAt = DateTime.Now.AddHours(-2),
+            MessageCount = 15
+        },
+        new MockSessionHistoryList.MockSession
+        {
+            SessionId = "session-2",
+            Mode = SessionMode.Plan,
+            LastActivityAt = DateTime.Now.AddDays(-1),
+            MessageCount = 8
+        },
+        new MockSessionHistoryList.MockSession
+        {
+            SessionId = "session-3",
+            Mode = SessionMode.Build,
+            LastActivityAt = DateTime.Now.AddDays(-3),
+            MessageCount = 42
+        }
+    };
+
+}

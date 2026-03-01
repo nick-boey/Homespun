@@ -1,6 +1,7 @@
 using System.Net;
 using Bunit;
 using Homespun.Client.Components;
+using Homespun.Client.Features.Notifications.Components;
 using Homespun.Client.Services;
 using Homespun.Tests.Helpers;
 using Microsoft.Extensions.DependencyInjection;
