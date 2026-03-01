@@ -1,77 +1,119 @@
 @inherits LayoutComponentBase
 @implements IDisposable
-@inject NavigationManager NavigationManager
-@inject IJSRuntime JSRuntime
 @inject IBreadcrumbService BreadcrumbService
 @inject IPanelService PanelService
 @using System.Reflection
 
-<BbTooltipProvider />
-<BbDialogProvider />
+@inject HttpProjectApiService ProjectApi
 
-<div class="page @(_sidebarOpen ? "sidebar-open" : "sidebar-closed")" @onkeydown="HandleKeyDown" tabindex="-1">
-    <header class="top-bar">
-        <button class="sidebar-toggle" @onclick="ToggleSidebar" title="Toggle sidebar">
-            <span class="toggle-icon"></span>
-        </button>
-        <nav class="breadcrumbs" aria-label="Breadcrumb">
-            <a href="" class="brand">Homespun</a>
-            @foreach (var crumb in BreadcrumbService.Breadcrumbs)
-            {
-                <span class="separator">/</span>
-                @if (crumb.Url != null)
+<BbTooltipProvider/>
+<BbDialogProvider/>
+
+<BbResponsiveNavProvider>
+    <div class="flex items-center justify-between">
+        <div class="flex items-center gap-4">
+            <BbResponsiveNavTrigger/>
+            <nav class="breadcrumbs" aria-label="Breadcrumb">
+                <a href="" class="brand">Homespun</a>
+                @foreach (var crumb in BreadcrumbService.Breadcrumbs)
                 {
-                    <a href="@crumb.Url">@crumb.Title</a>
+                    <span class="separator">/</span>
+                    @if (crumb.Url != null)
+                    {
+                        <a href="@crumb.Url">@crumb.Title</a>
+                    }
+                    else
+                    {
+                        <span class="current">@crumb.Title</span>
+                    }
                 }
-                else
-                {
-                    <span class="current">@crumb.Title</span>
-                }
-            }
+            </nav>
+        </div>
+    </div>
+    <BbResponsiveNavContent>
+        <nav class="flex flex-col gap-4">
+            <a href="#">Home</a>
+            <a href="#">About</a>
+            <a href="#">Contact</a>
         </nav>
-        <div class="top-bar-spacer"></div>
-        <AgentStatusIndicator />
-        <span class="version-display" title="Homespun v@_version">v@_version</span>
-        <button class="panel-toggle @(PanelService.IsPanelAvailable ? "" : "disabled")"
-                @onclick="TogglePanel"
-                disabled="@(!PanelService.IsPanelAvailable)"
-                title="@GetPanelToggleTooltip()">
-            @if (PanelService.IsPanelOpen)
-            {
-                <LucideIcon Name="panel-right-close" Size="18" />
-            }
-            else
-            {
-                <LucideIcon Name="panel-right" Size="18" />
-            }
-        </button>
-    </header>
+    </BbResponsiveNavContent>
 
-    <aside class="sidebar">
-        <NavMenu />
-    </aside>
+    <div class="top-bar-spacer"></div>
+    <AgentStatusIndicator/>
+    <span class="version-display" title="Homespun v@_version">v@_version</span>
+    <button class="panel-toggle @(PanelService.IsPanelAvailable ? "" : "disabled")"
+            @onclick="TogglePanel"
+            disabled="@(!PanelService.IsPanelAvailable)"
+            title="@GetPanelToggleTooltip()">
+        @if (PanelService.IsPanelOpen)
+        {
+            <LucideIcon Name="panel-right-close" Size="18"/>
+        }
+        else
+        {
+            <LucideIcon Name="panel-right" Size="18"/>
+        }
+    </button>
+</BbResponsiveNavProvider>
+<BbSidebarProvider>
+    <BbSidebar>
+        <BbSidebarHeader>
+            <div class="flex items-center gap-2">
+                <span class="font-semibold">Homespun</span>
+            </div>
+        </BbSidebarHeader>
+        <BbSidebarContent>
+            <BbSidebarMenu>
+                <BbSidebarGroup>
+                    <BbSidebarGroupLabel>Projects</BbSidebarGroupLabel>
+                    <BbSidebarMenuItem>
+                        <BbSidebarMenuButton IsActive="true" Match="NavLinkMatch.All" Href="projects">
+                            <LucideIcon Name="list"/>
+                            All
+                        </BbSidebarMenuButton>
+                    </BbSidebarMenuItem>
 
-    @if (_sidebarOpen)
-    {
-        <div class="sidebar-backdrop" @onclick="CloseSidebar"></div>
-    }
-
+                    @foreach (var project in _projects)
+                    {
+                        <BbSidebarMenuItem>
+                            <BbSidebarMenuButton Href="@($"projects/{project.Id}")">
+                                @project.Name
+                            </BbSidebarMenuButton>
+                        </BbSidebarMenuItem>
+                    }
+                </BbSidebarGroup>
+                <BbSidebarMenuItem>
+                    <BbSidebarMenuButton Href="agents">
+                        <LucideIcon Name="bot"/>
+                        Agents
+                    </BbSidebarMenuButton>
+                </BbSidebarMenuItem>
+                <BbSidebarMenuItem>
+                    <BbSidebarMenuButton Href="prompts">
+                        <LucideIcon Name="message-circle"/>
+                        Prompts
+                    </BbSidebarMenuButton>
+                </BbSidebarMenuItem>
+                <BbSidebarMenuItem>
+                    <BbSidebarMenuButton Href="settings">
+                        <LucideIcon Name="settings"/>
+                        Settings
+                    </BbSidebarMenuButton>
+                </BbSidebarMenuItem>
+            </BbSidebarMenu>
+        </BbSidebarContent>
+    </BbSidebar>
     <main class="main-content">
         <article class="content">
-            <NotificationBanner />
+            <NotificationBanner/>
             @Body
         </article>
     </main>
-</div>
-
-<div id="blazor-error-ui" data-nosnippet>
-    An unhandled error has occurred.
-    <a href="." class="reload">Reload</a>
-    <span class="dismiss">X</span>
-</div>
+</BbSidebarProvider>
 
 @code {
-    private bool _sidebarOpen = false;
+    private List<Project> _projects = [];
+
     private string _version = GetShortVersion();
 
     private static string GetShortVersion()
@@ -86,54 +128,18 @@
 
     protected override void OnInitialized()
     {
-        NavigationManager.LocationChanged += OnLocationChanged;
         BreadcrumbService.OnBreadcrumbsChanged += OnBreadcrumbsChanged;
         PanelService.OnStateChanged += OnPanelStateChanged;
     }
 
-    protected override async Task OnAfterRenderAsync(bool firstRender)
+    protected override async Task OnInitializedAsync()
     {
-        if (firstRender)
-        {
-            // Set sidebar open for desktop, closed for mobile
-            var isMobile = await JSRuntime.InvokeAsync<bool>("sidebarManager.isMobile");
-            _sidebarOpen = !isMobile;
-
-            StateHasChanged();
-        }
-    }
-
-    private async void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
-    {
-        // Close sidebar on mobile when navigating
-        var isMobile = await JSRuntime.InvokeAsync<bool>("sidebarManager.isMobile");
-        if (isMobile && _sidebarOpen)
-        {
-            _sidebarOpen = false;
-        }
-
-        StateHasChanged();
+        _projects = await ProjectApi.GetAllProjectsAsync();
     }
 
     private void OnBreadcrumbsChanged()
     {
         InvokeAsync(StateHasChanged);
-    }
-
-    private void ToggleSidebar()
-    {
-        _sidebarOpen = !_sidebarOpen;
-    }
-
-    private void CloseSidebar()
-    {
-        _sidebarOpen = false;
-    }
-
-    private void HandleKeyDown(KeyboardEventArgs e)
-    {
-        // Don't close sidebar on Escape - let page components handle Escape
-        // The sidebar can be closed via backdrop click or toggle button
     }
 
     private void TogglePanel()
@@ -156,8 +162,8 @@
 
     public void Dispose()
     {
-        NavigationManager.LocationChanged -= OnLocationChanged;
         BreadcrumbService.OnBreadcrumbsChanged -= OnBreadcrumbsChanged;
         PanelService.OnStateChanged -= OnPanelStateChanged;
     }
+
 }
