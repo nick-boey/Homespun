@@ -76,6 +76,7 @@ jobs:
         images: ${{ env.BASE_IMAGE }}
         tags: |
           type=raw,value=${{ needs.compute-version.outputs.version }}
+          ${{ needs.compute-version.outputs.is_release != 'true' && 'type=raw,value=alpha' || '' }}
           ${{ needs.compute-version.outputs.is_release == 'true' && 'type=raw,value=latest' || '' }}
 
     - name: Build and push base image
@@ -135,6 +136,7 @@ jobs:
         images: ${{ env.IMAGE_NAME }}
         tags: |
           type=raw,value=${{ needs.compute-version.outputs.version }}
+          ${{ needs.compute-version.outputs.is_release != 'true' && 'type=raw,value=alpha' || '' }}
           ${{ needs.compute-version.outputs.is_release == 'true' && format('type=raw,value={0}', needs.compute-version.outputs.major_minor) || '' }}
           ${{ needs.compute-version.outputs.is_release == 'true' && 'type=raw,value=latest' || '' }}
 

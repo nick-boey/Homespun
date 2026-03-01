@@ -16,7 +16,10 @@
 #   - Komodo installed and running (scripts/install-komodo.sh + scripts/run-komodo.sh)
 #   - Git account "nick-boey" configured in Komodo with GitHub repo read access
 #   - Komodo variables/secrets set: GITHUB_TOKEN, CLAUDE_CODE_OAUTH_TOKEN,
-#     TAILSCALE_AUTH_KEY, GRAFANA_ADMIN_PASSWORD
+#     TAILSCALE_AUTH_KEY, GRAFANA_ADMIN_PASSWORD, HOMESPUN_TAG
+#   - HOMESPUN_TAG controls which image tag to deploy:
+#       "latest" = stable releases, "alpha" = latest alpha build,
+#       or a specific version like "0.5.2-alpha.0.4.1.1.1.1"
 
 ## ── Resource Sync (self-referential) ─────────────────────────────────
 # After the one-time manual setup, this entry keeps the sync self-managing.
@@ -46,6 +49,8 @@ file_paths = ["docker-compose.yml"]
 auto_update = true
 poll_for_updates = true
 environment = """
+HOMESPUN_IMAGE=ghcr.io/nick-boey/homespun:[[HOMESPUN_TAG]]
+WORKER_IMAGE=ghcr.io/nick-boey/homespun-worker:[[HOMESPUN_TAG]]
 COMPOSE_PROFILES=plg
 CONTAINER_NAME=homespun
 HOST_PORT=8080
