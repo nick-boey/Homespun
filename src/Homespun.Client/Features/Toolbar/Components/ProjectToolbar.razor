@@ -19,71 +19,78 @@
     <BbSeparator Orientation="SeparatorOrientation.Vertical" class="h-6"/>
 
     @* Hierarchy buttons *@
-    <ToolbarButton Icon="corner-right-up"
-                   Tooltip="Make child of another (click to select target)"
-                   TestId="toolbar-child-of-button"
-                   Disabled="@ChildOfDisabled"
-                   Active="@ChildOfActive"
-                   OnClick="HandleMakeChildOf"/>
+    <BbButtonGroup>
+        <ToolbarButton Icon="corner-right-up"
+                       Tooltip="Make child of another (click to select target)"
+                       TestId="toolbar-child-of-button"
+                       Disabled="@ChildOfDisabled"
+                       Active="@ChildOfActive"
+                       OnClick="HandleMakeChildOf"/>
 
-    <ToolbarButton Icon="corner-left-down"
-                   Tooltip="Make parent of another (click to select target)"
-                   TestId="toolbar-parent-of-button"
-                   Disabled="@ParentOfDisabled"
-                   Active="@ParentOfActive"
-                   OnClick="HandleMakeParentOf"/>
+        <ToolbarButton Icon="corner-left-down"
+                       Tooltip="Make parent of another (click to select target)"
+                       TestId="toolbar-parent-of-button"
+                       Disabled="@ParentOfDisabled"
+                       Active="@ParentOfActive"
+                       OnClick="HandleMakeParentOf"/>
+    </BbButtonGroup>
 
     <BbSeparator Orientation="SeparatorOrientation.Vertical" class="h-6"/>
 
     @* Undo/Redo buttons *@
-    <ToolbarButton Icon="undo"
-                   Tooltip="@(UndoTooltip ?? "Undo")"
-                   TestId="toolbar-undo-button"
-                   Disabled="@UndoDisabled"
-                   OnClick="HandleUndo"/>
+    <BbButtonGroup>
+        <ToolbarButton Icon="undo"
+                       Tooltip="@(UndoTooltip ?? "Undo")"
+                       TestId="toolbar-undo-button"
+                       Disabled="@UndoDisabled"
+                       OnClick="HandleUndo"/>
 
-    <ToolbarButton Icon="redo"
-                   Tooltip="@(RedoTooltip ?? "Redo")"
-                   TestId="toolbar-redo-button"
-                   Disabled="@RedoDisabled"
-                   OnClick="HandleRedo"/>
+        <ToolbarButton Icon="redo"
+                       Tooltip="@(RedoTooltip ?? "Redo")"
+                       TestId="toolbar-redo-button"
+                       Disabled="@RedoDisabled"
+                       OnClick="HandleRedo"/>
+    </BbButtonGroup>
 
     <BbSeparator Orientation="SeparatorOrientation.Vertical" class="h-6"/>
     @* Edit button *@
-    <ToolbarButton Icon="pencil"
-                   Tooltip="Edit issue (i)"
-                   TestId="toolbar-edit-button"
-                   Disabled="@(SelectedIssueId == null)"
-                   OnClick="HandleEdit"/>
+    <BbButtonGroup>
+        <ToolbarButton Icon="pencil"
+                       Tooltip="Edit issue (i)"
+                       TestId="toolbar-edit-button"
+                       Disabled="@(SelectedIssueId == null)"
+                       OnClick="HandleEdit"/>
 
-    @* Run button with dropdown *@
-    <div class="toolbar-run-wrapper">
-        <ToolbarButton Icon="play"
-                       Tooltip="Run agent"
-                       TestId="toolbar-run-button"
-                       Disabled="@(SelectedIssueId == null || IsAgentRunning)"
-                       OnClick="ToggleDropdown"/>
+        @* Run button with dropdown *@
+        <div class="toolbar-run-wrapper">
+            <ToolbarButton Icon="play"
+                           Tooltip="Run agent"
+                           TestId="toolbar-run-button"
+                           Disabled="@(SelectedIssueId == null || IsAgentRunning)"
+                           OnClick="ToggleDropdown"/>
 
-        @if (_showDropdown && SelectedIssueId != null)
-        {
-            <div class="toolbar-agent-dropdown" @onclick:stopPropagation="true">
-                <div class="dropdown-content">
-                    <UnifiedAgentLauncher
-                        EntityId="@SelectedIssueId"
-                        ProjectId="@ProjectId"
-                        EntityTitle="@IssueTitle"
-                        EntityDescription="@IssueDescription"
-                        EntityType="@IssueType"
-                        BranchName="@BranchName"
-                        RepoPath="@RepoPath"
-                        DefaultBranch="@DefaultBranch"
-                        DefaultModel="@DefaultModel"
-                        Compact="true"
-                        OnSessionStarted="HandleSessionStarted"/>
+
+            @if (_showDropdown && SelectedIssueId != null)
+            {
+                <div class="toolbar-agent-dropdown" @onclick:stopPropagation="true">
+                    <div class="dropdown-content">
+                        <UnifiedAgentLauncher
+                            EntityId="@SelectedIssueId"
+                            ProjectId="@ProjectId"
+                            EntityTitle="@IssueTitle"
+                            EntityDescription="@IssueDescription"
+                            EntityType="@IssueType"
+                            BranchName="@BranchName"
+                            RepoPath="@RepoPath"
+                            DefaultBranch="@DefaultBranch"
+                            DefaultModel="@DefaultModel"
+                            Compact="true"
+                            OnSessionStarted="HandleSessionStarted"/>
+                    </div>
                 </div>
-            </div>
-        }
-    </div>
+            }
+        </div>
+    </BbButtonGroup>
 </div>
 
 @code {
