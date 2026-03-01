@@ -11,7 +11,7 @@
 <BbDialogProvider/>
 
 <BbResponsiveNavProvider>
-    <div class="flex items-center justify-between">
+    <div class="flex items-center justify-between h-12 p-2 border-b">
         <div class="flex items-center gap-4">
             <BbResponsiveNavTrigger/>
             <span class="font-semibold">Homespun</span>
@@ -37,9 +37,9 @@
             </BbBreadcrumb>
         </div>
 
-        <div class="hidden md:flex items-center gap-6">
+        <div class="hidden md:flex items-center gap-4 mr-2">
             <AgentStatusMonitor/>
-            <span class="version-display" title="Homespun v@_version">v@_version</span>
+            <span class="text-gray-500 text-xs" title="Homespun v@_version">v@_version</span>
         </div>
     </div>
 
@@ -54,11 +54,6 @@
 </BbResponsiveNavProvider>
 <BbSidebarProvider>
     <BbSidebar>
-        <BbSidebarHeader>
-            <div class="flex items-center gap-2">
-                <span class="font-semibold">Homespun</span>
-            </div>
-        </BbSidebarHeader>
         <BbSidebarContent>
             <BbSidebarMenu>
                 <BbSidebarGroup>
