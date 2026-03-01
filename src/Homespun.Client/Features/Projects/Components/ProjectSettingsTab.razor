@@ -26,6 +26,26 @@
     .settings-tab-content {
         max-width: 800px;
     }
+
+    .info-list {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: var(--spacing-sm) var(--spacing-lg);
+        align-items: baseline;
+    }
+
+    .info-list dt {
+        font-weight: 600;
+        color: var(--text-muted);
+        font-size: 0.875rem;
+        white-space: nowrap;
+    }
+
+    .info-list dd {
+        margin: 0;
+        color: var(--text-primary);
+        font-size: 0.875rem;
+    }
 </style>
 
 @code {

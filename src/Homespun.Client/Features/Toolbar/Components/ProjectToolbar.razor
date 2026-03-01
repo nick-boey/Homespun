@@ -1,4 +1,5 @@
 @inject IKeyboardNavigationService NavService
+@inject IJSRuntime JSRuntime
 
 <div class="flex flex-wrap items-center gap-2 p-2 border rounded-lg bg-background">
     @* Creation buttons *@
@@ -53,6 +54,34 @@
     </BbButtonGroup>
 
     <BbSeparator Orientation="SeparatorOrientation.Vertical" class="h-6"/>
+    @* Level controls *@
+    @if (MaxAvailableDepth > 0)
+    {
+        <BbButtonGroup>
+            <ToolbarButton Icon="minus"
+                           Tooltip="Decrease levels ([ key)"
+                           TestId="toolbar-decrease-levels-button"
+                           Disabled="@(MaxDepth <= 0)"
+                           OnClick="HandleDecreaseDepth"/>
+
+            <BbButton Variant="ButtonVariant.Outline"
+                      Size="ButtonSize.Small"
+                      Disabled="true"
+                      Class="px-2 min-w-[4rem] cursor-default"
+                      data-testid="toolbar-level-display">
+                @(MaxDepth + 1) levels
+            </BbButton>
+
+            <ToolbarButton Icon="plus"
+                           Tooltip="Increase levels (] key)"
+                           TestId="toolbar-increase-levels-button"
+                           Disabled="@(MaxDepth >= MaxAvailableDepth)"
+                           OnClick="HandleIncreaseDepth"/>
+        </BbButtonGroup>
+
+        <BbSeparator Orientation="SeparatorOrientation.Vertical" class="h-6"/>
+    }
+
     @* Edit button *@
     <BbButtonGroup>
         <ToolbarButton Icon="pencil"
@@ -91,7 +120,85 @@
             }
         </div>
     </BbButtonGroup>
+
+    @* Search input — right-aligned *@
+    <div class="ml-auto flex items-center gap-2">
+        <div class="toolbar-search-wrapper">
+            <input type="search"
+                   class="toolbar-search-input"
+                   data-testid="toolbar-search-input"
+                   value="@SearchTerm"
+                   @oninput="HandleSearchInput"
+                   @onkeydown="HandleSearchKeyDown"
+                   @onkeydown:stopPropagation="true"
+                   @onfocus="HandleSearchFocus"
+                   @ref="_searchInput"
+                   placeholder="Search... (/)" />
+            @if (!string.IsNullOrEmpty(SearchTerm))
+            {
+                @if (SearchMatchCount > 0)
+                {
+                    <span data-testid="toolbar-search-match-count">
+                        <BbBadge Variant="BadgeVariant.Secondary" Class="toolbar-search-badge">
+                            @SearchMatchCount
+                        </BbBadge>
+                    </span>
+                }
+                else
+                {
+                    <span data-testid="toolbar-search-no-matches">
+                        <BbBadge Variant="BadgeVariant.Outline" Class="toolbar-search-badge text-destructive">
+                            0
+                        </BbBadge>
+                    </span>
+                }
+            }
+        </div>
+    </div>
 </div>
+
+<style>
+    .toolbar-search-wrapper {
+        position: relative;
+        display: flex;
+        align-items: center;
+    }
+
+    .toolbar-search-input {
+        width: 180px;
+        padding: 4px 8px;
+        border: 1px solid var(--border-color, hsl(var(--border)));
+        border-radius: var(--radius-sm, 4px);
+        background: transparent;
+        color: var(--text-primary, hsl(var(--foreground)));
+        font-size: 0.8125rem;
+        outline: none;
+        transition: border-color 0.15s ease, width 0.15s ease;
+    }
+
+    .toolbar-search-input:focus {
+        border-color: var(--ring, hsl(var(--ring)));
+        width: 240px;
+    }
+
+    .toolbar-search-input::placeholder {
+        color: var(--text-muted, hsl(var(--muted-foreground)));
+    }
+
+    /* Hide the browser's default clear button on search inputs */
+    .toolbar-search-input::-webkit-search-cancel-button {
+        display: none;
+    }
+
+    .toolbar-search-badge {
+        position: absolute;
+        right: 6px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 0.6875rem;
+        pointer-events: none;
+    }
+</style>
 
 @code {
 
@@ -166,6 +273,40 @@
     /// </summary>
     [Parameter]
     public string DefaultModel { get; set; } = "opus";
+
+    // Level control parameters
+
+    [Parameter]
+    public int MaxDepth { get; set; }
+
+    [Parameter]
+    public int MaxAvailableDepth { get; set; }
+
+    [Parameter]
+    public EventCallback OnDecreaseDepth { get; set; }
+
+    [Parameter]
+    public EventCallback OnIncreaseDepth { get; set; }
+
+    // Search parameters
+
+    [Parameter]
+    public string SearchTerm { get; set; } = "";
+
+    [Parameter]
+    public EventCallback<string> OnSearchTermChanged { get; set; }
+
+    [Parameter]
+    public int SearchMatchCount { get; set; }
+
+    [Parameter]
+    public EventCallback OnSearchEnter { get; set; }
+
+    [Parameter]
+    public EventCallback OnSearchEscape { get; set; }
+
+    [Parameter]
+    public EventCallback OnSearchFocused { get; set; }
 
     // Creation button parameters
 
@@ -264,6 +405,7 @@
     public EventCallback OnRedo { get; set; }
 
     private bool _showDropdown;
+    private ElementReference _searchInput;
 
     private async Task HandleEdit()
     {
@@ -349,6 +491,64 @@
     {
         if (RedoDisabled) return;
         await OnRedo.InvokeAsync();
+    }
+
+    public async Task FocusSearchAsync()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("homespunInterop.focusElement", _searchInput);
+        }
+        catch
+        {
+            // Focus might fail if element is not yet rendered
+        }
+    }
+
+    private async Task HandleSearchInput(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString() ?? "";
+        await OnSearchTermChanged.InvokeAsync(value);
+    }
+
+    private async Task HandleSearchKeyDown(KeyboardEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case "Escape":
+                await OnSearchEscape.InvokeAsync();
+                try
+                {
+                    await JSRuntime.InvokeVoidAsync("homespunInterop.blurElement", _searchInput);
+                }
+                catch { }
+                break;
+            case "Enter":
+                await OnSearchEnter.InvokeAsync();
+                try
+                {
+                    await JSRuntime.InvokeVoidAsync("homespunInterop.blurElement", _searchInput);
+                }
+                catch { }
+                break;
+        }
+    }
+
+    private async Task HandleSearchFocus()
+    {
+        await OnSearchFocused.InvokeAsync();
+    }
+
+    private async Task HandleDecreaseDepth()
+    {
+        if (MaxDepth <= 0) return;
+        await OnDecreaseDepth.InvokeAsync();
+    }
+
+    private async Task HandleIncreaseDepth()
+    {
+        if (MaxDepth >= MaxAvailableDepth) return;
+        await OnIncreaseDepth.InvokeAsync();
     }
 
 }

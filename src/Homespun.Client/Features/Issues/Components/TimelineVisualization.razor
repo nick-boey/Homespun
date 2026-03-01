@@ -38,7 +38,7 @@
                 OnOpenPanelClick="OnOpenPanelClick"
                 SelectedNodeId="@GetKeyboardSelectedNodeId()"
                 NavService="@NavService"
-                MaxDepth="@_maxDepth"
+                MaxDepth="@MaxDepth"
                 MaxDepthChanged="HandleMaxDepthChanged"
                 ActiveSearchTerm="@ActiveSearchTerm" />
         </div>
@@ -133,6 +133,21 @@
     /// </summary>
     [Parameter] public string? ActiveSearchTerm { get; set; }
 
+    /// <summary>
+    /// The maximum depth to display. Controlled externally by ProjectIssuesTab.
+    /// </summary>
+    [Parameter] public int MaxDepth { get; set; } = 3;
+
+    /// <summary>
+    /// Called when the max depth changes (e.g., from TaskGraphView's level controls).
+    /// </summary>
+    [Parameter] public EventCallback<int> MaxDepthChanged { get; set; }
+
+    /// <summary>
+    /// Called when the max available depth changes after data loads.
+    /// </summary>
+    [Parameter] public EventCallback<int> MaxAvailableDepthChanged { get; set; }
+
 
     private HubConnection? _hubConnection;
     private HubConnection? _notificationHubConnection;
@@ -151,7 +166,6 @@
     private string? _previousSelectedIssueId;
 
     // Level depth controls
-    private int _maxDepth = 3;
     private int _maxAvailableDepth = 0;
 
     protected override async Task OnInitializedAsync()
@@ -293,13 +307,13 @@
             _taskGraphData = await GraphApi.GetTaskGraphDataAsync(ProjectId, _currentMaxPastPRs);
 
             // Compute max available depth from the data
-            if (_taskGraphData?.Nodes.Count > 0)
+            var newMaxAvailableDepth = _taskGraphData?.Nodes.Count > 0
+                ? _taskGraphData.Nodes.Max(n => n.Lane)
+                : 0;
+            if (newMaxAvailableDepth != _maxAvailableDepth)
             {
-                _maxAvailableDepth = _taskGraphData.Nodes.Max(n => n.Lane);
-            }
-            else
-            {
-                _maxAvailableDepth = 0;
+                _maxAvailableDepth = newMaxAvailableDepth;
+                await MaxAvailableDepthChanged.InvokeAsync(_maxAvailableDepth);
             }
             _isLoading = false;
             _error = null;
@@ -309,7 +323,11 @@
             Console.WriteLine($"Failed to load task graph: {ex.Message}");
             _error = ex.Message;
             _taskGraphData = null;
-            _maxAvailableDepth = 0;
+            if (_maxAvailableDepth != 0)
+            {
+                _maxAvailableDepth = 0;
+                await MaxAvailableDepthChanged.InvokeAsync(0);
+            }
             _isLoading = false;
         }
     }
@@ -439,29 +457,29 @@
         }
     }
 
-    private void DecreaseDepth()
+    private async Task DecreaseDepth()
     {
-        if (_maxDepth > 0)
+        if (MaxDepth > 0)
         {
-            _maxDepth--;
+            await MaxDepthChanged.InvokeAsync(MaxDepth - 1);
             UpdateRenderLinesForDepth();
             StateHasChanged();
         }
     }
 
-    private void IncreaseDepth()
+    private async Task IncreaseDepth()
     {
-        if (_maxDepth < _maxAvailableDepth)
+        if (MaxDepth < _maxAvailableDepth)
         {
-            _maxDepth++;
+            await MaxDepthChanged.InvokeAsync(MaxDepth + 1);
             UpdateRenderLinesForDepth();
             StateHasChanged();
         }
     }
 
-    private void HandleMaxDepthChanged(int newDepth)
+    private async Task HandleMaxDepthChanged(int newDepth)
     {
-        _maxDepth = newDepth;
+        await MaxDepthChanged.InvokeAsync(newDepth);
         UpdateRenderLinesForDepth();
         StateHasChanged();
     }
@@ -470,7 +488,7 @@
     {
         if (_taskGraphData != null)
         {
-            var allRenderLines = TaskGraphLayoutService.ComputeLayout(_taskGraphData, _maxDepth);
+            var allRenderLines = TaskGraphLayoutService.ComputeLayout(_taskGraphData, MaxDepth);
             _issueRenderLines = allRenderLines.OfType<TaskGraphIssueRenderLine>().ToList();
         }
     }
@@ -523,7 +541,7 @@
         if (_taskGraphData != null)
         {
             NavService.SetTaskGraphNodes(_taskGraphData.Nodes);
-            var allRenderLines = TaskGraphLayoutService.ComputeLayout(_taskGraphData, _maxDepth);
+            var allRenderLines = TaskGraphLayoutService.ComputeLayout(_taskGraphData, MaxDepth);
             _issueRenderLines = allRenderLines.OfType<TaskGraphIssueRenderLine>().ToList();
             NavService.Initialize(_issueRenderLines);
 

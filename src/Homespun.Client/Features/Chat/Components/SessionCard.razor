@@ -22,7 +22,7 @@
         <div class="session-details">
             <div class="detail-row">
                 <span class="detail-label">Mode:</span>
-                <BbBadge Class="@(Session.Mode == SessionMode.Plan ? "bg-blue-500 text-white border-transparent" : "bg-green-600 text-white border-transparent")">
+                <BbBadge Variant="BadgeVariant.Outline" Class="@(Session.Mode == SessionMode.Plan ? "bg-blue-500 text-white border-transparent" : "bg-green-600 text-white border-transparent")">
                     @Session.Mode
                 </BbBadge>
             </div>

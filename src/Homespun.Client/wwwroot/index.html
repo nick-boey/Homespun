@@ -205,6 +205,11 @@
                 }
             });
         },
+        blurElement: function (element) {
+            if (element) {
+                element.blur();
+            }
+        },
         scrollIssueIntoView: function (issueId) {
             requestAnimationFrame(function () {
                 var element = document.querySelector('[data-issue-id="' + issueId + '"]');

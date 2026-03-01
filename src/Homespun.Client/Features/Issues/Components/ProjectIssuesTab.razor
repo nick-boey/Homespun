@@ -12,7 +12,8 @@
 <div class="project-issues-tab @(_sidebarOpen ? "sidebar-open" : "")" @onkeydown="HandleKeyDown" tabindex="-1"
      @ref="_pageContainer">
 
-    <ProjectToolbar SelectedIssueId="@NavService.SelectedIssueId"
+    <ProjectToolbar @ref="_toolbar"
+                    SelectedIssueId="@NavService.SelectedIssueId"
                     ProjectId="@ProjectId"
                     IsAgentRunning="@IsSelectedIssueAgentRunning()"
                     OnEditClick="HandleEditIssue"
@@ -34,17 +35,20 @@
                     UndoTooltip="@(_historyState?.UndoDescription ?? "Undo")"
                     RedoTooltip="@(_historyState?.RedoDescription ?? "Redo")"
                     OnUndo="UndoAsync"
-                    OnRedo="RedoAsync"/>
+                    OnRedo="RedoAsync"
+                    MaxDepth="@_maxDepth"
+                    MaxAvailableDepth="@_maxAvailableDepth"
+                    OnDecreaseDepth="HandleDecreaseDepth"
+                    OnIncreaseDepth="HandleIncreaseDepth"
+                    SearchTerm="@NavService.SearchTerm"
+                    OnSearchTermChanged="HandleSearchTermChanged"
+                    SearchMatchCount="@NavService.MatchingIndices.Count"
+                    OnSearchEnter="HandleSearchEnter"
+                    OnSearchEscape="HandleSearchEscape"
+                    OnSearchFocused="HandleSearchFocused"/>
 
     <div class="project-layout">
         <div class="timeline-column">
-            <SearchBar IsVisible="@NavService.IsSearching"
-                       SearchTerm="@NavService.SearchTerm"
-                       MatchCount="@NavService.MatchingIndices.Count"
-                       CurrentMatchIndex="@NavService.CurrentMatchIndex"
-                       OnSearchTermChanged="HandleSearchTermChanged"
-                       OnEnter="HandleSearchEnter"
-                       OnEscape="HandleSearchEscape"/>
             <TimelineVisualization
                 @ref="_graphVisualization"
                 ProjectId="@ProjectId"
@@ -58,7 +62,10 @@
                 OnSessionStarted="@HandleSessionStarted"
                 OnOpenPanelClick="@HandleOpenPanelFromGraph"
                 SelectedNodeId="@GetSelectedNodeId()"
-                ActiveSearchTerm="@GetActiveSearchTerm()"/>
+                ActiveSearchTerm="@GetActiveSearchTerm()"
+                MaxDepth="@_maxDepth"
+                MaxDepthChanged="HandleMaxDepthChanged"
+                MaxAvailableDepthChanged="HandleMaxAvailableDepthChanged"/>
         </div>
     </div>
 
@@ -158,6 +165,11 @@
 
     // Graph ref
     private TimelineVisualization? _graphVisualization;
+    private ProjectToolbar? _toolbar;
+
+    // Level depth state
+    private int _maxDepth = 3;
+    private int _maxAvailableDepth;
 
     // Undo/Redo state
     private IssueHistoryState? _historyState;
@@ -619,14 +631,54 @@
         await JSRuntime.InvokeVoidAsync("homespunInterop.focusElement", _pageContainer);
     }
 
-    private void HandleSearchEscape()
+    private async Task HandleSearchEscape()
     {
         NavService.ClearSearch();
+        await JSRuntime.InvokeVoidAsync("homespunInterop.focusElement", _pageContainer);
     }
 
     private string? GetActiveSearchTerm()
     {
         return (NavService.IsSearching || NavService.IsSearchEmbedded) ? NavService.SearchTerm : null;
+    }
+
+    private void HandleSearchFocused()
+    {
+        NavService.StartSearch();
+    }
+
+    #endregion
+
+    #region Depth Controls
+
+    private void HandleMaxDepthChanged(int newDepth)
+    {
+        _maxDepth = newDepth;
+        StateHasChanged();
+    }
+
+    private void HandleMaxAvailableDepthChanged(int newMaxAvailable)
+    {
+        _maxAvailableDepth = newMaxAvailable;
+        StateHasChanged();
+    }
+
+    private void HandleDecreaseDepth()
+    {
+        if (_maxDepth > 0)
+        {
+            _maxDepth--;
+            StateHasChanged();
+        }
+    }
+
+    private void HandleIncreaseDepth()
+    {
+        if (_maxDepth < _maxAvailableDepth)
+        {
+            _maxDepth++;
+            StateHasChanged();
+        }
     }
 
     #endregion
@@ -846,7 +898,7 @@
         switch (e.Key)
         {
             case "/":
-                NavService.StartSearch();
+                _ = _toolbar?.FocusSearchAsync();
                 break;
             case "n":
                 if (NavService.IsSearchEmbedded)
@@ -918,6 +970,12 @@
                     ClearSelection();
                 }
 
+                break;
+            case "[":
+                HandleDecreaseDepth();
+                break;
+            case "]":
+                HandleIncreaseDepth();
                 break;
             case "u":
                 _ = UndoAsync();

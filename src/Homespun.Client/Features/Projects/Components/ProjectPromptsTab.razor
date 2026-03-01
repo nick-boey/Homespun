@@ -17,7 +17,7 @@
                     {
                         <BbDropdownMenuItem OnClick="() => CopyFromGlobal(globalPrompt)">
                             @globalPrompt.Name
-                            <BbBadge Class="@(globalPrompt.Mode == SessionMode.Plan ? "bg-blue-500 text-white border-transparent ms-2" : "bg-green-600 text-white border-transparent ms-2")">
+                            <BbBadge Variant="BadgeVariant.Outline" Class="@(globalPrompt.Mode == SessionMode.Plan ? "bg-blue-500 text-white border-transparent ms-2" : "bg-green-600 text-white border-transparent ms-2")">
                                 @globalPrompt.Mode
                             </BbBadge>
                         </BbDropdownMenuItem>
@@ -56,7 +56,7 @@ else
                 <BbCard Class="h-100">
                     <BbCardHeader Class="d-flex justify-content-between align-items-center">
                         <BbCardTitle>@prompt.Name</BbCardTitle>
-                        <BbBadge Class="@(prompt.Mode == SessionMode.Plan ? "bg-blue-500 text-white border-transparent" : "bg-green-600 text-white border-transparent")">
+                        <BbBadge Variant="BadgeVariant.Outline" Class="@(prompt.Mode == SessionMode.Plan ? "bg-blue-500 text-white border-transparent" : "bg-green-600 text-white border-transparent")">
                             @prompt.Mode
                         </BbBadge>
                     </BbCardHeader>
