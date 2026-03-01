@@ -25,6 +25,9 @@ set -e
 #   - Run ./scripts/run-komodo.sh to start Komodo
 #   - Access Komodo at https://<tailscale-hostname>:3500
 #
+# Options:
+#   --clean   Remove existing MongoDB volumes before install (fixes auth issues)
+#
 # Environment Variables (optional):
 #   KOMODO_ADMIN_USER   - Initial admin username (default: admin)
 #   KOMODO_ADMIN_PASS   - Initial admin password (auto-generated if not set)
@@ -45,6 +48,22 @@ log_error() { echo -e "${RED}$1${NC}"; }
 generate_secret() {
     openssl rand -base64 32 | tr -dc 'a-zA-Z0-9' | head -c 32
 }
+
+# Default values
+CLEAN_INSTALL=false
+
+# Parse arguments
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        --clean) CLEAN_INSTALL=true ;;
+        -h|--help)
+            head -35 "$0" | tail -30
+            exit 0
+            ;;
+        *) log_error "Unknown parameter: $1"; exit 1 ;;
+    esac
+    shift
+done
 
 echo
 log_info "=== Komodo Installation Script ==="
@@ -67,6 +86,24 @@ if ! docker version >/dev/null 2>&1; then
     exit 1
 fi
 log_success "      Docker is available."
+
+# Clean existing MongoDB volumes if requested
+if [ "$CLEAN_INSTALL" = true ]; then
+    log_warn "      --clean flag set: removing existing Komodo containers and MongoDB volumes..."
+
+    # Stop existing Komodo containers
+    if [ -f "$KOMODO_DIR/komodo.compose.yml" ] && [ -f "$KOMODO_DIR/compose.env" ]; then
+        sudo docker compose -f "$KOMODO_DIR/komodo.compose.yml" --env-file "$KOMODO_DIR/compose.env" --profile tailscale down 2>/dev/null || true
+    fi
+
+    # Remove MongoDB volumes
+    for vol in komodo_komodo-mongo-data komodo_komodo-mongo-config; do
+        if docker volume inspect "$vol" >/dev/null 2>&1; then
+            docker volume rm "$vol"
+            log_success "      Removed volume: $vol"
+        fi
+    done
+fi
 
 if ! command -v openssl &>/dev/null; then
     log_error "openssl is required for secret generation."
