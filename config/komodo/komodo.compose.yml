@@ -1,19 +1,18 @@
 # Komodo Docker Compose for Homespun
 # This compose file runs Komodo with MongoDB for container management.
+# Tailscale is managed separately via config/tailscale/compose.yml.
 #
 # Usage:
 #   docker compose -f komodo.compose.yml --env-file compose.env up -d
-#   docker compose -f komodo.compose.yml --env-file compose.env --profile tailscale up -d
 #
 # Services:
 #   - mongo: MongoDB database
 #   - core: Komodo Core API and UI (port 9120)
 #   - periphery: Komodo agent for executing Docker commands
-#   - tailscale: VPN sidecar for secure remote access (profile: tailscale)
 #
 # Integration:
 #   - Logs are collected by Promtail (labels: logging=promtail)
-#   - Access via Tailscale on port 3500 (when tailscale profile is enabled)
+#   - Access via Tailscale on port 3500 (when Tailscale sidecar is running)
 
 services:
   # MongoDB - Database for Komodo
@@ -99,33 +98,6 @@ services:
     networks:
       - homespun-net
 
-  # Tailscale - VPN sidecar for secure remote access
-  # Exposes Komodo via HTTPS on port 3500
-  # Uses a separate container name and state volume from the main Homespun
-  # Tailscale sidecar to allow both to run simultaneously.
-  tailscale:
-    image: tailscale/tailscale:latest
-    container_name: homespun-komodo-tailscale
-    profiles: ["tailscale"]
-    hostname: homespun-komodo-tailscale
-    environment:
-      - TS_AUTHKEY=${TAILSCALE_AUTH_KEY:-}
-      - TS_HOSTNAME=${TS_HOSTNAME:-homespun-dev}
-      - TS_STATE_DIR=/var/lib/tailscale
-      - TS_USERSPACE=true
-      - TS_SERVE_CONFIG=/tmp/serve/serve-config.json
-      - TS_EXTRA_ARGS=--accept-routes --reset
-    volumes:
-      - komodo-tailscale-state:/var/lib/tailscale
-      - ${TAILSCALE_CONFIG_DIR:-./tailscale}:/config:ro
-    entrypoint: ["/config/start.sh"]
-    restart: unless-stopped
-    networks:
-      - homespun-net
-    depends_on:
-      core:
-        condition: service_healthy
-
 networks:
   homespun-net:
     external: true
@@ -133,4 +105,3 @@ networks:
 volumes:
   komodo-mongo-data:
   komodo-mongo-config:
-  komodo-tailscale-state:

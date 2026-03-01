@@ -49,6 +49,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 KOMODO_DIR="/etc/komodo"
 COMPOSE_FILE="$KOMODO_DIR/komodo.compose.yml"
 ENV_FILE="$KOMODO_DIR/compose.env"
+TAILSCALE_COMPOSE_FILE="$REPO_ROOT/config/tailscale/compose.yml"
 
 # Default values
 ACTION="start"
@@ -94,7 +95,8 @@ fi
 case "$ACTION" in
     stop)
         log_info "Stopping Komodo containers..."
-        sudo docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" --profile tailscale down
+        sudo docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" down
+        docker compose -f "$TAILSCALE_COMPOSE_FILE" down 2>/dev/null || true
         log_success "Komodo stopped."
         exit 0
         ;;
@@ -149,10 +151,10 @@ else
         log_warn "      Tailscale auth key not found (Tailscale will be disabled)."
         log_warn "      Set TAILSCALE_AUTH_KEY in ~/.homespun/env for VPN access."
     else
-        # Check if Komodo's Tailscale sidecar is already running
-        if docker ps --format '{{.Names}}' | grep -q '^homespun-komodo-tailscale$'; then
-            log_warn "      Komodo Tailscale container is already running."
-            log_warn "      Skipping Tailscale sidecar launch."
+        # Check if the shared Tailscale sidecar is already running
+        if docker ps --format '{{.Names}}' | grep -q '^homespun-tailscale$'; then
+            log_warn "      Tailscale sidecar already running."
+            log_warn "      Skipping Tailscale launch."
             TAILSCALE_AUTH_KEY=""
         else
             MASKED_TS_KEY="${TAILSCALE_AUTH_KEY:0:15}..."
@@ -164,18 +166,7 @@ fi
 log_info "[4/4] Starting Komodo..."
 
 # Build compose command (sudo required: compose.env is root-owned)
-# Pass Tailscale env vars through sudo if available
-SUDO_ENV_ARGS=""
-if [ -n "$TAILSCALE_AUTH_KEY" ]; then
-    SUDO_ENV_ARGS="TAILSCALE_AUTH_KEY=$TAILSCALE_AUTH_KEY TAILSCALE_CONFIG_DIR=$REPO_ROOT/config/tailscale"
-fi
-
-COMPOSE_CMD="sudo $SUDO_ENV_ARGS docker compose -f $COMPOSE_FILE --env-file $ENV_FILE"
-
-# Add Tailscale profile if auth key is provided
-if [ -n "$TAILSCALE_AUTH_KEY" ]; then
-    COMPOSE_CMD="$COMPOSE_CMD --profile tailscale"
-fi
+COMPOSE_CMD="sudo docker compose -f $COMPOSE_FILE --env-file $ENV_FILE"
 
 echo
 log_info "======================================"
@@ -192,6 +183,17 @@ echo
 
 if [ "$DETACHED" = true ]; then
     eval "$COMPOSE_CMD up -d"
+
+    # Start Tailscale sidecar if auth key is available and not already running
+    if [ -n "$TAILSCALE_AUTH_KEY" ]; then
+        if ! docker ps --format '{{.Names}}' | grep -q '^homespun-tailscale$'; then
+            log_info "Starting Tailscale sidecar..."
+            TAILSCALE_AUTH_KEY="$TAILSCALE_AUTH_KEY" TS_HOSTNAME="${TS_HOSTNAME:-homespun-dev}" \
+                docker compose -f "$TAILSCALE_COMPOSE_FILE" up -d
+        else
+            log_info "Tailscale sidecar already running."
+        fi
+    fi
 
     echo
     log_success "Komodo started successfully!"

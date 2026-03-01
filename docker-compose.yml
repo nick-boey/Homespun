@@ -1,11 +1,10 @@
-# Docker Compose for Homespun with PLG Logging Stack and Tailscale
+# Docker Compose for Homespun with PLG Logging Stack
+# Tailscale is managed separately via config/tailscale/compose.yml
 # Usage:
-#   docker compose up -d                              # Start Homespun only
-#   docker compose --profile plg up -d                # Start with PLG logging stack
-#   docker compose --profile tailscale up -d          # Start with Tailscale sidecar
-#   docker compose --profile plg --profile tailscale up -d  # Start with both
-#   docker compose down                               # Stop all services
-#   docker compose logs -f                            # Follow all logs
+#   docker compose up -d                  # Start Homespun only
+#   docker compose --profile plg up -d    # Start with PLG logging stack
+#   docker compose down                   # Stop all services
+#   docker compose logs -f                # Follow all logs
 #
 # Environment variables (set via .env.compose or export):
 #   HOMESPUN_IMAGE         - Main Homespun image (default: ghcr.io/nick-boey/homespun:latest)
@@ -16,8 +15,6 @@
 #   DATA_DIR               - Data directory path
 #   GITHUB_TOKEN           - GitHub personal access token
 #   CLAUDE_CODE_OAUTH_TOKEN - Claude Code OAuth token
-#   TAILSCALE_AUTH_KEY     - Tailscale auth key for VPN access (enables tailscale profile)
-#   TS_HOSTNAME            - Tailscale hostname (default: homespun)
 #   GRAFANA_PORT           - Grafana port (default: 3000)
 #   GRAFANA_ADMIN_PASSWORD - Grafana admin password (default: admin)
 #   MINI_PROMPT_SIDECAR_URL - URL for mini-prompt sidecar (default: http://homespun-worker:8080)
@@ -92,31 +89,6 @@ services:
         condition: service_started
         required: false
 
-  # Tailscale - VPN sidecar for secure remote access
-  # Exposes Homespun via HTTPS on port 443 and Grafana on port 3000 (if PLG enabled)
-  tailscale:
-    image: tailscale/tailscale:latest
-    container_name: homespun-tailscale
-    profiles: ["tailscale"]
-    hostname: homespun-tailscale
-    environment:
-      - TS_AUTHKEY=${TAILSCALE_AUTH_KEY:-}
-      - TS_HOSTNAME=${TS_HOSTNAME:-homespun}
-      - TS_STATE_DIR=/var/lib/tailscale
-      - TS_USERSPACE=true
-      - TS_SERVE_CONFIG=/tmp/serve/serve-config.json
-      - TS_EXTRA_ARGS=--accept-routes --reset
-    volumes:
-      - tailscale-state:/var/lib/tailscale
-      - ./config/tailscale:/config:ro
-    entrypoint: ["/config/start.sh"]
-    restart: unless-stopped
-    networks:
-      - homespun-net
-    depends_on:
-      homespun:
-        condition: service_healthy
-
   # Loki - Log aggregation
   loki:
     image: grafana/loki:3.6.6
@@ -176,6 +148,5 @@ networks:
     name: homespun-net
 
 volumes:
-  tailscale-state:
   loki-data:
   grafana-data:

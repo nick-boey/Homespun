@@ -1,9 +1,12 @@
 #!/bin/sh
-# Tailscale Sidecar Startup Script
-# Generates a serve config JSON with resolved Docker IPs, then hands off
-# to containerboot for reliable netstack integration.
+# Tailscale Sidecar Startup Script — Dynamic Service Discovery
 #
-# Environment variables (from docker-compose.yml):
+# Starts containerboot in the background, then polls for Docker service
+# hostnames every 15 seconds. When the set of available services changes,
+# the serve-config JSON is regenerated and containerboot picks up the
+# change via inotify.
+#
+# Environment variables (from compose.yml):
 #   TS_AUTHKEY       - Tailscale auth key for authentication
 #   TS_STATE_DIR     - Directory for Tailscale state persistence
 #   TS_USERSPACE     - Enable userspace networking (no /dev/net/tun needed)
@@ -12,97 +15,129 @@
 
 set -e
 
-echo "Starting Tailscale sidecar..."
+SERVE_CONFIG="${TS_SERVE_CONFIG:-/tmp/serve/serve-config.json}"
+SERVE_DIR="$(dirname "$SERVE_CONFIG")"
+POLL_INTERVAL=15
 
-# Resolve Docker hostnames to IPs.
-# In userspace networking mode, Tailscale's netstack handles DNS independently
-# and cannot resolve Docker DNS hostnames, so we must use IP addresses.
-# All services are optional - the script serves whichever are available.
-echo "Resolving service hostnames..."
+# Track the last-known set of resolved services so we only rewrite when
+# something actually changes.
+PREV_STATE=""
 
-HOMESPUN_IP=$(getent hosts homespun | awk '{print $1}' 2>/dev/null || true)
-if [ -n "$HOMESPUN_IP" ]; then
-    echo "Resolved homespun -> $HOMESPUN_IP"
+# ── helpers ──────────────────────────────────────────────────────────
+
+resolve() {
+    # Resolve a hostname, return the IP or empty string
+    getent hosts "$1" 2>/dev/null | awk '{print $1}' || true
+}
+
+generate_config() {
+    # Resolve all known service hostnames
+    HOMESPUN_IP=$(resolve homespun)
+    GRAFANA_IP=$(resolve homespun-grafana)
+    KOMODO_IP=$(resolve homespun-komodo-core)
+
+    # Build a comparable state string
+    STATE="homespun=$HOMESPUN_IP grafana=$GRAFANA_IP komodo=$KOMODO_IP"
+
+    # Short-circuit if nothing changed
+    if [ "$STATE" = "$PREV_STATE" ]; then
+        return 1  # no change
+    fi
+    PREV_STATE="$STATE"
+
+    [ -n "$HOMESPUN_IP" ] && echo "  resolved homespun -> $HOMESPUN_IP"
+    [ -n "$GRAFANA_IP" ]  && echo "  resolved homespun-grafana -> $GRAFANA_IP"
+    [ -n "$KOMODO_IP" ]   && echo "  resolved homespun-komodo-core -> $KOMODO_IP"
+
+    # Write the serve-config JSON
+    mkdir -p "$SERVE_DIR"
+    {
+        printf '{\n'
+
+        # TCP section
+        printf '  "TCP": {\n'
+        TCP_ENTRIES=""
+        if [ -n "$HOMESPUN_IP" ]; then
+            TCP_ENTRIES='    "443": { "HTTPS": true },\n    "80": { "HTTP": true }'
+        fi
+        if [ -n "$GRAFANA_IP" ]; then
+            [ -n "$TCP_ENTRIES" ] && TCP_ENTRIES="$TCP_ENTRIES,"
+            TCP_ENTRIES="$TCP_ENTRIES"'\n    "3000": { "HTTPS": true }'
+        fi
+        if [ -n "$KOMODO_IP" ]; then
+            [ -n "$TCP_ENTRIES" ] && TCP_ENTRIES="$TCP_ENTRIES,"
+            TCP_ENTRIES="$TCP_ENTRIES"'\n    "3500": { "HTTPS": true }'
+        fi
+        printf "$TCP_ENTRIES"
+        printf '\n  },\n'
+
+        # Web section
+        printf '  "Web": {\n'
+        WEB_FIRST=true
+        if [ -n "$HOMESPUN_IP" ]; then
+            printf '    "${TS_CERT_DOMAIN}:443": {\n'
+            printf '      "Handlers": { "/": { "Proxy": "http://%s:8080" } }\n' "$HOMESPUN_IP"
+            printf '    },\n'
+            printf '    "${TS_CERT_DOMAIN}:80": {\n'
+            printf '      "Handlers": { "/": { "Proxy": "http://%s:8080" } }\n' "$HOMESPUN_IP"
+            printf '    }'
+            WEB_FIRST=false
+        fi
+        if [ -n "$GRAFANA_IP" ]; then
+            [ "$WEB_FIRST" = false ] && printf ','
+            printf '\n    "${TS_CERT_DOMAIN}:3000": {\n'
+            printf '      "Handlers": { "/": { "Proxy": "http://%s:3000" } }\n' "$GRAFANA_IP"
+            printf '    }'
+            WEB_FIRST=false
+        fi
+        if [ -n "$KOMODO_IP" ]; then
+            [ "$WEB_FIRST" = false ] && printf ','
+            printf '\n    "${TS_CERT_DOMAIN}:3500": {\n'
+            printf '      "Handlers": { "/": { "Proxy": "http://%s:9120" } }\n' "$KOMODO_IP"
+            printf '    }'
+        fi
+        printf '\n  }\n'
+        printf '}\n'
+    } > "$SERVE_CONFIG"
+
+    return 0  # changed
+}
+
+# ── main ─────────────────────────────────────────────────────────────
+
+echo "Starting Tailscale sidecar (dynamic mode)..."
+
+# Generate initial config (may be empty TCP/Web if no services yet)
+if generate_config; then
+    echo "Initial serve config:"
+    cat "$SERVE_CONFIG"
+else
+    # Even on first run we need a valid file for containerboot
+    mkdir -p "$SERVE_DIR"
+    printf '{ "TCP": {}, "Web": {} }\n' > "$SERVE_CONFIG"
+    echo "No services found yet — wrote empty serve config."
 fi
 
-GRAFANA_IP=$(getent hosts homespun-grafana | awk '{print $1}' 2>/dev/null || true)
-if [ -n "$GRAFANA_IP" ]; then
-    echo "Resolved homespun-grafana -> $GRAFANA_IP"
-fi
+# Start containerboot in the background
+echo "Starting containerboot..."
+/usr/local/bin/containerboot &
+BOOT_PID=$!
 
-KOMODO_IP=$(getent hosts homespun-komodo-core | awk '{print $1}' 2>/dev/null || true)
-if [ -n "$KOMODO_IP" ]; then
-    echo "Resolved homespun-komodo-core -> $KOMODO_IP"
-fi
+# Forward termination signals to containerboot
+trap 'kill $BOOT_PID 2>/dev/null; wait $BOOT_PID 2>/dev/null; exit 0' TERM INT
 
-# Require at least one service to be resolvable
-if [ -z "$HOMESPUN_IP" ] && [ -z "$GRAFANA_IP" ] && [ -z "$KOMODO_IP" ]; then
-    echo "Error: Could not resolve any service hostnames"
-    exit 1
-fi
+# Poll loop — re-resolve services and regenerate config on change
+echo "Entering service discovery loop (every ${POLL_INTERVAL}s)..."
+while kill -0 $BOOT_PID 2>/dev/null; do
+    sleep "$POLL_INTERVAL" &
+    SLEEP_PID=$!
+    wait $SLEEP_PID 2>/dev/null || true
 
-# Generate serve config JSON for containerboot.
-# containerboot substitutes ${TS_CERT_DOMAIN} with the actual Tailscale FQDN.
-# printf is used so ${TS_CERT_DOMAIN} stays literal (inside single-quoted format strings)
-# while resolved IPs are substituted via %s.
-SERVE_DIR=$(dirname "${TS_SERVE_CONFIG:-/tmp/serve/serve-config.json}")
-mkdir -p "$SERVE_DIR"
+    if generate_config; then
+        echo "Service change detected — updated serve config:"
+        cat "$SERVE_CONFIG"
+    fi
+done
 
-{
-  printf '{\n'
-
-  # Build TCP section - collect entries, then join with commas
-  printf '  "TCP": {\n'
-  TCP_ENTRIES=""
-  if [ -n "$HOMESPUN_IP" ]; then
-    TCP_ENTRIES='    "443": { "HTTPS": true },\n    "80": { "HTTP": true }'
-  fi
-  if [ -n "$GRAFANA_IP" ]; then
-    [ -n "$TCP_ENTRIES" ] && TCP_ENTRIES="$TCP_ENTRIES,"
-    TCP_ENTRIES="$TCP_ENTRIES"'\n    "3000": { "HTTPS": true }'
-  fi
-  if [ -n "$KOMODO_IP" ]; then
-    [ -n "$TCP_ENTRIES" ] && TCP_ENTRIES="$TCP_ENTRIES,"
-    TCP_ENTRIES="$TCP_ENTRIES"'\n    "3500": { "HTTPS": true }'
-  fi
-  printf "$TCP_ENTRIES"
-  printf '\n  },\n'
-
-  # Build Web section - collect entries, then join with commas
-  printf '  "Web": {\n'
-  WEB_FIRST=true
-  if [ -n "$HOMESPUN_IP" ]; then
-    printf '    "${TS_CERT_DOMAIN}:443": {\n'
-    printf '      "Handlers": { "/": { "Proxy": "http://%s:8080" } }\n' "$HOMESPUN_IP"
-    printf '    },\n'
-    printf '    "${TS_CERT_DOMAIN}:80": {\n'
-    printf '      "Handlers": { "/": { "Proxy": "http://%s:8080" } }\n' "$HOMESPUN_IP"
-    printf '    }'
-    WEB_FIRST=false
-  fi
-  if [ -n "$GRAFANA_IP" ]; then
-    [ "$WEB_FIRST" = false ] && printf ','
-    printf '\n    "${TS_CERT_DOMAIN}:3000": {\n'
-    printf '      "Handlers": { "/": { "Proxy": "http://%s:3000" } }\n' "$GRAFANA_IP"
-    printf '    }'
-    WEB_FIRST=false
-  fi
-  if [ -n "$KOMODO_IP" ]; then
-    [ "$WEB_FIRST" = false ] && printf ','
-    printf '\n    "${TS_CERT_DOMAIN}:3500": {\n'
-    printf '      "Handlers": { "/": { "Proxy": "http://%s:9120" } }\n' "$KOMODO_IP"
-    printf '    }'
-  fi
-  printf '\n  }\n'
-  printf '}\n'
-} > "${TS_SERVE_CONFIG:-/tmp/serve/serve-config.json}"
-
-echo "Generated serve config:"
-cat "${TS_SERVE_CONFIG:-/tmp/serve/serve-config.json}"
-
-# Hand off to containerboot which handles:
-# - Starting tailscaled
-# - Running tailscale up (with TS_AUTHKEY, TS_HOSTNAME, TS_EXTRA_ARGS)
-# - Applying the serve config from TS_SERVE_CONFIG
-echo "Handing off to containerboot..."
-exec /usr/local/bin/containerboot
+# containerboot exited on its own
+wait $BOOT_PID

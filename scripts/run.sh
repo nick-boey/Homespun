@@ -7,7 +7,8 @@ set -e
 #
 # This script runs Homespun using Docker Compose with optional PLG logging stack
 # and Tailscale sidecar for VPN access.
-# By default, it uses pre-built GHCR images. PLG and Tailscale are enabled via profiles.
+# By default, it uses pre-built GHCR images. PLG is enabled via compose profile.
+# Tailscale runs as a standalone sidecar (config/tailscale/compose.yml).
 #
 # Usage:
 #   ./run.sh                    # Production: GHCR images with PLG stack
@@ -126,12 +127,16 @@ echo
 COMPOSE_FILE="$REPO_ROOT/docker-compose.yml"
 ENV_FILE="$REPO_ROOT/.env.compose"
 
+# Tailscale compose file (standalone sidecar)
+TAILSCALE_COMPOSE_FILE="$REPO_ROOT/config/tailscale/compose.yml"
+
 # Handle stop action
 if [ "$ACTION" = "stop" ]; then
     log_info "Stopping containers..."
     if [ -f "$ENV_FILE" ]; then
         docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" down 2>/dev/null || true
     fi
+    docker compose -f "$TAILSCALE_COMPOSE_FILE" down 2>/dev/null || true
     docker stop "$CONTAINER_NAME" 2>/dev/null || true
     docker rm "$CONTAINER_NAME" 2>/dev/null || true
     docker stop homespun-worker homespun-loki homespun-promtail homespun-grafana homespun-tailscale 2>/dev/null || true
@@ -464,8 +469,6 @@ AGENT_MODE=$AGENT_MODE
 # Credentials
 GITHUB_TOKEN=${GITHUB_TOKEN:-}
 CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
-TAILSCALE_AUTH_KEY=${TAILSCALE_AUTH_KEY:-}
-TS_HOSTNAME=${TS_HOSTNAME:-homespun-dev}
 HSP_EXTERNAL_HOSTNAME=${EXTERNAL_HOSTNAME:-}
 
 # Mini-prompt sidecar
@@ -492,14 +495,20 @@ if [ "$NO_PLG" = false ]; then
     COMPOSE_CMD="$COMPOSE_CMD --profile plg"
 fi
 
-# Add Tailscale profile if auth key is provided
-if [ -n "$TAILSCALE_AUTH_KEY" ]; then
-    COMPOSE_CMD="$COMPOSE_CMD --profile tailscale"
-fi
-
 if [ "$DETACHED" = true ]; then
     log_info "Starting containers in detached mode..."
     eval "$COMPOSE_CMD up -d"
+
+    # Start Tailscale sidecar if auth key is available and not already running
+    if [ -n "$TAILSCALE_AUTH_KEY" ]; then
+        if ! docker ps --format '{{.Names}}' | grep -q '^homespun-tailscale$'; then
+            log_info "Starting Tailscale sidecar..."
+            TAILSCALE_AUTH_KEY="$TAILSCALE_AUTH_KEY" TS_HOSTNAME="${TS_HOSTNAME:-homespun-dev}" \
+                docker compose -f "$TAILSCALE_COMPOSE_FILE" up -d
+        else
+            log_info "Tailscale sidecar already running."
+        fi
+    fi
 
     echo
     log_success "Containers started successfully!"
