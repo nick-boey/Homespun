@@ -4,45 +4,45 @@
     This showcase renders a static mock version of the component.
 *@
 
-<div class="showcase-section">
-    <h3>With Sessions</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">List of resumable sessions</div>
-        <div class="showcase-preview">
-            <MockSessionHistoryList Sessions="_sessions" />
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>With Sessions</BbCardTitle>
+        <BbCardDescription>List of resumable sessions</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <MockSessionHistoryList Sessions="_sessions" />
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>Empty State</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">No previous sessions</div>
-        <div class="showcase-preview">
-            <MockSessionHistoryList Sessions="[]" />
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Empty State</BbCardTitle>
+        <BbCardDescription>No previous sessions</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <MockSessionHistoryList Sessions="[]" />
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>Loading State</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">Sessions being loaded</div>
-        <div class="showcase-preview">
-            <MockSessionHistoryList IsLoading="true" />
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Loading State</BbCardTitle>
+        <BbCardDescription>Sessions being loaded</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <MockSessionHistoryList IsLoading="true" />
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>Resuming Session</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">Session being resumed</div>
-        <div class="showcase-preview">
-            <MockSessionHistoryList Sessions="_sessions" ResumingSessionId="session-2" />
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Resuming Session</BbCardTitle>
+        <BbCardDescription>Session being resumed</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <MockSessionHistoryList Sessions="_sessions" ResumingSessionId="session-2" />
+    </BbCardContent>
+</BbCard>
 
 @code {
     private List<MockSessionHistoryList.MockSession> _sessions = new()

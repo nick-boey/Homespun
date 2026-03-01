@@ -3,73 +3,73 @@
     This showcase renders a static mock version of the component.
 *@
 
-<div class="showcase-section">
-    <h3>Working Agents Only</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">Shows active working agents</div>
-        <div class="showcase-preview showcase-preview-dark">
-            <MockAgentStatusIndicator WorkingCount="2" WaitingCount="0" />
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Working Agents Only</BbCardTitle>
+        <BbCardDescription>Shows active working agents</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <MockAgentStatusIndicator WorkingCount="2" WaitingCount="0" />
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>Waiting Agents Only</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">Shows agents waiting for input</div>
-        <div class="showcase-preview showcase-preview-dark">
-            <MockAgentStatusIndicator WorkingCount="0" WaitingCount="3" />
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Waiting Agents Only</BbCardTitle>
+        <BbCardDescription>Shows agents waiting for input</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <MockAgentStatusIndicator WorkingCount="0" WaitingCount="3" />
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>Question &amp; Plan Ready</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">Shows agents awaiting response and with plan ready</div>
-        <div class="showcase-preview showcase-preview-dark">
-            <MockAgentStatusIndicator WorkingCount="0" QuestionCount="1" PlanReadyCount="2" WaitingCount="0" />
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Question &amp; Plan Ready</BbCardTitle>
+        <BbCardDescription>Shows agents awaiting response and with plan ready</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <MockAgentStatusIndicator WorkingCount="0" QuestionCount="1" PlanReadyCount="2" WaitingCount="0" />
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>Mixed Status</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">Working, question, plan ready, and waiting agents</div>
-        <div class="showcase-preview showcase-preview-dark">
-            <MockAgentStatusIndicator WorkingCount="1" QuestionCount="1" PlanReadyCount="1" WaitingCount="2" />
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Mixed Status</BbCardTitle>
+        <BbCardDescription>Working, question, plan ready, and waiting agents</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <MockAgentStatusIndicator WorkingCount="1" QuestionCount="1" PlanReadyCount="1" WaitingCount="2" />
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>No Active Agents</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">Nothing shown when no agents are active</div>
-        <div class="showcase-preview showcase-preview-dark">
-            <MockAgentStatusIndicator WorkingCount="0" WaitingCount="0" />
-            <span class="text-text-muted text-sm">(indicator is hidden when no agents are active)</span>
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>No Active Agents</BbCardTitle>
+        <BbCardDescription>Nothing shown when no agents are active</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <MockAgentStatusIndicator WorkingCount="0" WaitingCount="0" />
+        <span class="text-text-muted text-sm">(indicator is hidden when no agents are active)</span>
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>In Nav Context</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">How it appears in the navigation header</div>
-        <div class="showcase-preview showcase-preview-dark">
-            <div class="d-flex align-items-center gap-3 p-2 bg-bg-secondary rounded">
-                <span class="text-text-primary font-semibold">Homespun</span>
-                <div class="ms-auto d-flex align-items-center gap-2">
-                    <MockAgentStatusIndicator WorkingCount="2" QuestionCount="1" PlanReadyCount="1" WaitingCount="1" />
-                    <span class="text-text-muted">|</span>
-                    <span class="text-text-secondary text-sm">Settings</span>
-                </div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>In Nav Context</BbCardTitle>
+        <BbCardDescription>How it appears in the navigation header</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <div class="d-flex align-items-center gap-3 p-2 bg-bg-secondary rounded">
+            <span class="text-text-primary font-semibold">Homespun</span>
+            <div class="ms-auto d-flex align-items-center gap-2">
+                <MockAgentStatusIndicator WorkingCount="2" QuestionCount="1" PlanReadyCount="1" WaitingCount="1" />
+                <span class="text-text-muted">|</span>
+                <span class="text-text-secondary text-sm">Settings</span>
             </div>
         </div>
-    </div>
-</div>
+    </BbCardContent>
+</BbCard>
 
 <style>
     .showcase-preview-dark {

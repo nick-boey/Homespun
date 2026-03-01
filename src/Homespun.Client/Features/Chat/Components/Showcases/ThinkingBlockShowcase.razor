@@ -1,44 +1,44 @@
-<div class="showcase-section">
-    <h3>Collapsed Thinking</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">Completed thinking process (expandable)</div>
-        <div class="showcase-preview">
-            <ThinkingBlock Text="Looking at the existing auth service, I can see it expects email and password parameters. The login function makes a POST request to /api/auth/login. I should create a form that validates the email format using a regex pattern and ensures the password meets minimum length requirements before calling the login function." />
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Collapsed Thinking</BbCardTitle>
+        <BbCardDescription>Completed thinking process (expandable)</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ThinkingBlock Text="Looking at the existing auth service, I can see it expects email and password parameters. The login function makes a POST request to /api/auth/login. I should create a form that validates the email format using a regex pattern and ensures the password meets minimum length requirements before calling the login function." />
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>Streaming Thinking</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">Claude currently thinking (expanded by default)</div>
-        <div class="showcase-preview">
-            <ThinkingBlock
-                Text="Analyzing the codebase structure to understand the authentication flow"
-                IsStreaming="true" />
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Streaming Thinking</BbCardTitle>
+        <BbCardDescription>Claude currently thinking (expanded by default)</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ThinkingBlock
+            Text="Analyzing the codebase structure to understand the authentication flow"
+            IsStreaming="true" />
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>Long Thinking Process</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">Extended reasoning with multiple considerations</div>
-        <div class="showcase-preview">
-            <ThinkingBlock Text="@_longThinking" />
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Long Thinking Process</BbCardTitle>
+        <BbCardDescription>Extended reasoning with multiple considerations</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ThinkingBlock Text="@_longThinking" />
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>Short Thinking</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">Brief consideration</div>
-        <div class="showcase-preview">
-            <ThinkingBlock Text="This is a simple change - I just need to update the button text." />
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Short Thinking</BbCardTitle>
+        <BbCardDescription>Brief consideration</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ThinkingBlock Text="This is a simple change - I just need to update the button text." />
+    </BbCardContent>
+</BbCard>
 
 @code {
     private string _longThinking = """

@@ -1,8 +1,10 @@
-<div class="showcase-section">
-    <h3>Default State (Hidden)</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">Actions are hidden by default (opacity: 0)</div>
-        <div class="showcase-preview" style="background: var(--bg-primary); padding: 1rem;">
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Default State (Hidden)</BbCardTitle>
+        <BbCardDescription>Actions are hidden by default (opacity: 0)</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <div style="background: var(--bg-primary); padding: 1rem;">
             <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem;">
                 <span style="color: var(--text-muted); font-size: 12px;">ISSUE-001</span>
                 <span style="color: var(--text-primary);">Example issue title</span>
@@ -12,14 +14,16 @@
                                  IsVisible="false" />
             </div>
         </div>
-    </div>
-</div>
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>Visible State (Hover/Selected)</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">Actions become visible on hover or when issue is selected</div>
-        <div class="showcase-preview" style="background: var(--bg-primary); padding: 1rem;">
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Visible State (Hover/Selected)</BbCardTitle>
+        <BbCardDescription>Actions become visible on hover or when issue is selected</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <div style="background: var(--bg-primary); padding: 1rem;">
             <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: var(--bg-secondary);">
                 <span style="color: var(--text-muted); font-size: 12px;">ISSUE-002</span>
                 <span style="color: var(--text-primary);">Selected issue with visible actions</span>
@@ -29,14 +33,16 @@
                                  IsVisible="true" />
             </div>
         </div>
-    </div>
-</div>
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>Disabled State</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">Actions are disabled when an agent is already running on the issue</div>
-        <div class="showcase-preview" style="background: var(--bg-primary); padding: 1rem;">
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Disabled State</BbCardTitle>
+        <BbCardDescription>Actions are disabled when an agent is already running on the issue</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <div style="background: var(--bg-primary); padding: 1rem;">
             <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: var(--bg-secondary);">
                 <span style="color: var(--text-muted); font-size: 12px;">ISSUE-003</span>
                 <span style="color: var(--text-primary);">Issue with active agent</span>
@@ -51,14 +57,16 @@
                                  Disabled="true" />
             </div>
         </div>
-    </div>
-</div>
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>Interactive Demo</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">Click the buttons to see callbacks in action</div>
-        <div class="showcase-preview" style="background: var(--bg-primary); padding: 1rem;">
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Interactive Demo</BbCardTitle>
+        <BbCardDescription>Click the buttons to see callbacks in action</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <div style="background: var(--bg-primary); padding: 1rem;">
             <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: var(--bg-secondary);">
                 <span style="color: var(--text-muted); font-size: 12px;">DEMO-001</span>
                 <span style="color: var(--text-primary);">Interactive demo issue</span>
@@ -79,8 +87,8 @@
                 </div>
             }
         </div>
-    </div>
-</div>
+    </BbCardContent>
+</BbCard>
 
 @code {
     private string? _lastAction;

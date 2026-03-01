@@ -1,134 +1,134 @@
-<div class="showcase-section">
-    <h3>Single Orphan Issue (Actionable)</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">A standalone actionable issue with accent-colored border marker</div>
-        <div class="showcase-preview">
-            <TaskGraphView TaskGraph="@_singleOrphan" />
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Single Orphan Issue (Actionable)</BbCardTitle>
+        <BbCardDescription>A standalone actionable issue with accent-colored border marker</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <TaskGraphView TaskGraph="@_singleOrphan" />
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>Parent-Child with Connector</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">Child at lane 0 connects to parent at lane 1 with horizontal line and vertical connector</div>
-        <div class="showcase-preview">
-            <TaskGraphView TaskGraph="@_parentChild" />
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Parent-Child with Connector</BbCardTitle>
+        <BbCardDescription>Child at lane 0 connects to parent at lane 1 with horizontal line and vertical connector</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <TaskGraphView TaskGraph="@_parentChild" />
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>Multiple Siblings Sharing Parent</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">First child uses top-right junction, subsequent siblings use right-tee junction</div>
-        <div class="showcase-preview">
-            <TaskGraphView TaskGraph="@_siblings" />
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Multiple Siblings Sharing Parent</BbCardTitle>
+        <BbCardDescription>First child uses top-right junction, subsequent siblings use right-tee junction</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <TaskGraphView TaskGraph="@_siblings" />
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>All Marker Types</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">Actionable (accent border), Open (muted border), Complete (green filled), Closed (gray filled)</div>
-        <div class="showcase-preview">
-            <TaskGraphView TaskGraph="@_allMarkers" />
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>All Marker Types</BbCardTitle>
+        <BbCardDescription>Actionable (accent border), Open (muted border), Complete (green filled), Closed (gray filled)</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <TaskGraphView TaskGraph="@_allMarkers" />
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>Selected Issue</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">Second issue is selected with highlight background and marker glow</div>
-        <div class="showcase-preview">
-            <TaskGraphView TaskGraph="@_selectedDemo" SelectedNodeId="issue-DEMO-002" />
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Selected Issue</BbCardTitle>
+        <BbCardDescription>Second issue is selected with highlight background and marker glow</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <TaskGraphView TaskGraph="@_selectedDemo" SelectedNodeId="issue-DEMO-002" />
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>With Agent Status Badges</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">Issues with active and inactive agent sessions</div>
-        <div class="showcase-preview">
-            <TaskGraphView TaskGraph="@_agentDemo" />
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>With Agent Status Badges</BbCardTitle>
+        <BbCardDescription>Issues with active and inactive agent sessions</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <TaskGraphView TaskGraph="@_agentDemo" />
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>Merged PRs with Issue Connector</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">Merged PRs connect via lane 0 vertical line to leftmost issue nodes with horizontal branches</div>
-        <div class="showcase-preview">
-            <TaskGraphView TaskGraph="@_mergedPrConnector" />
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Merged PRs with Issue Connector</BbCardTitle>
+        <BbCardDescription>Merged PRs connect via lane 0 vertical line to leftmost issue nodes with horizontal branches</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <TaskGraphView TaskGraph="@_mergedPrConnector" />
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>Full Mock Graph (13 Issues)</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">Complete task graph with orphans, chains, siblings, and multiple disconnected groups</div>
-        <div class="showcase-preview">
-            <TaskGraphView TaskGraph="@_fullMock" />
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Full Mock Graph (13 Issues)</BbCardTitle>
+        <BbCardDescription>Complete task graph with orphans, chains, siblings, and multiple disconnected groups</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <TaskGraphView TaskGraph="@_fullMock" />
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>Full Mock with Merged PRs</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">Complete graph with merged PRs connecting to leftmost issue nodes via lane 0 spine</div>
-        <div class="showcase-preview">
-            <TaskGraphView TaskGraph="@_fullMockWithPrs" />
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Full Mock with Merged PRs</BbCardTitle>
+        <BbCardDescription>Complete graph with merged PRs connecting to leftmost issue nodes via lane 0 spine</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <TaskGraphView TaskGraph="@_fullMockWithPrs" />
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>Priority Markers (P0-P4)</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">Lane 0 connectors colored by priority: P0=Red, P1=Orange, P2=Yellow, P3=Green, P4=Blue, None=Grey</div>
-        <div class="showcase-preview">
-            <TaskGraphView TaskGraph="@_priorityDemo" />
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Priority Markers (P0-P4)</BbCardTitle>
+        <BbCardDescription>Lane 0 connectors colored by priority: P0=Red, P1=Orange, P2=Yellow, P3=Green, P4=Blue, None=Grey</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <TaskGraphView TaskGraph="@_priorityDemo" />
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>Depth Limiting with Hidden Parent Indicators</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Depth Limiting with Hidden Parent Indicators</BbCardTitle>
+        <BbCardDescription>
             Use [ and ] keys to decrease/increase the number of visible levels.
             Hidden parent indicators appear as faded dots (below for series mode, right for parallel).
+        </BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <div class="showcase-depth-controls">
+            <button class="showcase-depth-btn" @onclick="() => DecreaseDepth()" disabled="@(_depthLevel <= 0)">−</button>
+            <span class="showcase-depth-display">@(_depthLevel + 1) level@(_depthLevel == 0 ? "" : "s")</span>
+            <button class="showcase-depth-btn" @onclick="() => IncreaseDepth()" disabled="@(_depthLevel >= 5)">+</button>
         </div>
-        <div class="showcase-preview">
-            <div class="showcase-depth-controls">
-                <button class="showcase-depth-btn" @onclick="() => DecreaseDepth()" disabled="@(_depthLevel <= 0)">−</button>
-                <span class="showcase-depth-display">@(_depthLevel + 1) level@(_depthLevel == 0 ? "" : "s")</span>
-                <button class="showcase-depth-btn" @onclick="() => IncreaseDepth()" disabled="@(_depthLevel >= 5)">+</button>
-            </div>
-            <TaskGraphView TaskGraph="@_fullMock" MaxDepth="@_depthLevel" />
-        </div>
-    </div>
-</div>
+        <TaskGraphView TaskGraph="@_fullMock" MaxDepth="@_depthLevel" />
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>Type Change Menu</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">Click the type badge (Bug, Task, Feat, Chore) to open dropdown menu for changing issue type</div>
-        <div class="showcase-preview">
-            <TaskGraphView TaskGraph="@_typeChangeDemo" ProjectId="demo-project" OnIssueTypeChanged="HandleTypeChanged" />
-            @if (_typeChangeMessage != null)
-            {
-                <div class="mt-2 text-sm text-green-500">@_typeChangeMessage</div>
-            }
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Type Change Menu</BbCardTitle>
+        <BbCardDescription>Click the type badge (Bug, Task, Feat, Chore) to open dropdown menu for changing issue type</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <TaskGraphView TaskGraph="@_typeChangeDemo" ProjectId="demo-project" OnIssueTypeChanged="HandleTypeChanged" />
+        @if (_typeChangeMessage != null)
+        {
+            <div class="mt-2 text-sm text-green-500">@_typeChangeMessage</div>
+        }
+    </BbCardContent>
+</BbCard>
 
 <style>
     .showcase-depth-controls {

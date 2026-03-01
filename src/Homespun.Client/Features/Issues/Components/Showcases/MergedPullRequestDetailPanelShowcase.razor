@@ -1,83 +1,83 @@
-<div class="showcase-section">
-    <h3>Component Overview</h3>
-    <div class="showcase-item">
-        <div class="showcase-preview">
-            <BbAlert Variant="AlertVariant.Info">
-                <BbAlertDescription>
-                    <strong>MergedPullRequestDetailPanel</strong> displays details for merged pull requests including
-                    linked issue information. This allows users to view the PR that resolved an issue and potentially
-                    re-open the issue if needed.
-                </BbAlertDescription>
-            </BbAlert>
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Component Overview</BbCardTitle>
+    </BbCardHeader>
+    <BbCardContent>
+        <BbAlert Variant="AlertVariant.Info">
+            <BbAlertDescription>
+                <strong>MergedPullRequestDetailPanel</strong> displays details for merged pull requests including
+                linked issue information. This allows users to view the PR that resolved an issue and potentially
+                re-open the issue if needed.
+            </BbAlertDescription>
+        </BbAlert>
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>Key Features</h3>
-    <div class="showcase-item">
-        <div class="showcase-preview">
-            <ul class="list-unstyled mb-0">
-                <li class="mb-2">
-                    <BbBadge Class="bg-purple-500 text-white border-transparent me-2">Merged</BbBadge>
-                    Displays merged status with purple badge
-                </li>
-                <li class="mb-2">
-                    <BbBadge Class="bg-blue-500 text-white border-transparent me-2">PR Link</BbBadge>
-                    Links to GitHub PR for full details
-                </li>
-                <li class="mb-2">
-                    <BbBadge Class="bg-green-600 text-white border-transparent me-2">Issue Link</BbBadge>
-                    Shows linked Fleece issue if present
-                </li>
-                <li class="mb-2">
-                    <BbBadge Variant="BadgeVariant.Default" Class="me-2">Edit</BbBadge>
-                    Button to edit linked issue (re-open if needed)
-                </li>
-                <li class="mb-2">
-                    <BbBadge Variant="BadgeVariant.Secondary" Class="me-2">Info</BbBadge>
-                    Branch name and merge timestamp
-                </li>
-            </ul>
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Key Features</BbCardTitle>
+    </BbCardHeader>
+    <BbCardContent>
+        <ul class="list-unstyled mb-0">
+            <li class="mb-2">
+                <BbBadge Class="bg-purple-500 text-white border-transparent me-2">Merged</BbBadge>
+                Displays merged status with purple badge
+            </li>
+            <li class="mb-2">
+                <BbBadge Class="bg-blue-500 text-white border-transparent me-2">PR Link</BbBadge>
+                Links to GitHub PR for full details
+            </li>
+            <li class="mb-2">
+                <BbBadge Class="bg-green-600 text-white border-transparent me-2">Issue Link</BbBadge>
+                Shows linked Fleece issue if present
+            </li>
+            <li class="mb-2">
+                <BbBadge Variant="BadgeVariant.Default" Class="me-2">Edit</BbBadge>
+                Button to edit linked issue (re-open if needed)
+            </li>
+            <li class="mb-2">
+                <BbBadge Variant="BadgeVariant.Secondary" Class="me-2">Info</BbBadge>
+                Branch name and merge timestamp
+            </li>
+        </ul>
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>With Linked Issue</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">Merged PR with linked issue (complete)</div>
-        <div class="showcase-preview">
-            <MergedPullRequestDetailPanel Details="@_detailsWithIssue"
-                                          ProjectId="showcase-project"
-                                          OnClose="() => { }" />
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>With Linked Issue</BbCardTitle>
+        <BbCardDescription>Merged PR with linked issue (complete)</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <MergedPullRequestDetailPanel Details="@_detailsWithIssue"
+                                      ProjectId="showcase-project"
+                                      OnClose="() => { }" />
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>Without Linked Issue</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">Merged PR without linked issue</div>
-        <div class="showcase-preview">
-            <MergedPullRequestDetailPanel Details="@_detailsWithoutIssue"
-                                          ProjectId="showcase-project"
-                                          OnClose="() => { }" />
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Without Linked Issue</BbCardTitle>
+        <BbCardDescription>Merged PR without linked issue</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <MergedPullRequestDetailPanel Details="@_detailsWithoutIssue"
+                                      ProjectId="showcase-project"
+                                      OnClose="() => { }" />
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>Linked Issue Not Found</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">PR has issue ID in branch but issue not found</div>
-        <div class="showcase-preview">
-            <MergedPullRequestDetailPanel Details="@_detailsWithMissingIssue"
-                                          ProjectId="showcase-project"
-                                          OnClose="() => { }" />
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Linked Issue Not Found</BbCardTitle>
+        <BbCardDescription>PR has issue ID in branch but issue not found</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <MergedPullRequestDetailPanel Details="@_detailsWithMissingIssue"
+                                      ProjectId="showcase-project"
+                                      OnClose="() => { }" />
+    </BbCardContent>
+</BbCard>
 
 @code {
     private MergedPullRequestDetails _detailsWithIssue = new()

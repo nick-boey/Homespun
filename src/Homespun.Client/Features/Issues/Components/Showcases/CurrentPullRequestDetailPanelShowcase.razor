@@ -1,116 +1,115 @@
-
 @*
     CurrentPullRequestDetailPanel is a complex component with many service dependencies.
     This showcase provides a description and static examples of its key features.
 *@
 
-<div class="showcase-section">
-    <h3>Component Overview</h3>
-    <div class="showcase-item">
-        <div class="showcase-preview">
-            <BbAlert Variant="AlertVariant.Info">
-                <BbAlertDescription>
-                    <strong>CurrentPullRequestDetailPanel</strong> displays detailed information about a pull request
-                    and provides actions to manage it. This component has extensive service dependencies and is best
-                    viewed in the full application context.
-                </BbAlertDescription>
-            </BbAlert>
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Component Overview</BbCardTitle>
+    </BbCardHeader>
+    <BbCardContent>
+        <BbAlert Variant="AlertVariant.Info">
+            <BbAlertDescription>
+                <strong>CurrentPullRequestDetailPanel</strong> displays detailed information about a pull request
+                and provides actions to manage it. This component has extensive service dependencies and is best
+                viewed in the full application context.
+            </BbAlertDescription>
+        </BbAlert>
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>Key Features</h3>
-    <div class="showcase-item">
-        <div class="showcase-preview">
-            <ul class="list-unstyled mb-0">
-                <li class="mb-2">
-                    <BbBadge Variant="BadgeVariant.Default" Class="me-2">Display</BbBadge>
-                    PR title, description, branch, clone path, and timestamps
-                </li>
-                <li class="mb-2">
-                    <BbBadge Class="bg-green-600 text-white border-transparent me-2">Session</BbBadge>
-                    Start, stop, and resume Claude Code sessions
-                </li>
-                <li class="mb-2">
-                    <BbBadge Class="bg-blue-500 text-white border-transparent me-2">Linked Issue</BbBadge>
-                    Show linked Beads issue details when available
-                </li>
-                <li class="mb-2">
-                    <BbBadge Class="bg-amber-500 text-white border-transparent me-2">Rebase</BbBadge>
-                    Start rebase agent when branch is behind
-                </li>
-                <li class="mb-2">
-                    <BbBadge Variant="BadgeVariant.Destructive" Class="me-2">Actions</BbBadge>
-                    Skip review, merge PR, view on GitHub
-                </li>
-            </ul>
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Key Features</BbCardTitle>
+    </BbCardHeader>
+    <BbCardContent>
+        <ul class="list-unstyled mb-0">
+            <li class="mb-2">
+                <BbBadge Variant="BadgeVariant.Default" Class="me-2">Display</BbBadge>
+                PR title, description, branch, clone path, and timestamps
+            </li>
+            <li class="mb-2">
+                <BbBadge Class="bg-green-600 text-white border-transparent me-2">Session</BbBadge>
+                Start, stop, and resume Claude Code sessions
+            </li>
+            <li class="mb-2">
+                <BbBadge Class="bg-blue-500 text-white border-transparent me-2">Linked Issue</BbBadge>
+                Show linked Beads issue details when available
+            </li>
+            <li class="mb-2">
+                <BbBadge Class="bg-amber-500 text-white border-transparent me-2">Rebase</BbBadge>
+                Start rebase agent when branch is behind
+            </li>
+            <li class="mb-2">
+                <BbBadge Variant="BadgeVariant.Destructive" Class="me-2">Actions</BbBadge>
+                Skip review, merge PR, view on GitHub
+            </li>
+        </ul>
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>Status Badges</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">Pull request status indicators</div>
-        <div class="showcase-preview">
-            <div class="d-flex gap-2 flex-wrap">
-                <BbBadge Variant="BadgeVariant.Default">InDevelopment</BbBadge>
-                <BbBadge Class="bg-amber-500 text-white border-transparent">ReadyForReview</BbBadge>
-                <BbBadge Variant="BadgeVariant.Destructive">HasReviewComments</BbBadge>
-                <BbBadge Class="bg-green-600 text-white border-transparent">Approved</BbBadge>
-            </div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Status Badges</BbCardTitle>
+        <BbCardDescription>Pull request status indicators</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <div class="d-flex gap-2 flex-wrap">
+            <BbBadge Variant="BadgeVariant.Default">InDevelopment</BbBadge>
+            <BbBadge Class="bg-amber-500 text-white border-transparent">ReadyForReview</BbBadge>
+            <BbBadge Variant="BadgeVariant.Destructive">HasReviewComments</BbBadge>
+            <BbBadge Class="bg-green-600 text-white border-transparent">Approved</BbBadge>
         </div>
-    </div>
-</div>
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>Static Preview</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">Simplified panel layout</div>
-        <div class="showcase-preview">
-            <BbCard style="max-width: 450px;">
-                <BbCardHeader Class="d-flex justify-content-between align-items-center">
-                    <BbCardTitle>Pull Request Details</BbCardTitle>
-                    <button type="button" class="btn-close btn-sm"></button>
-                </BbCardHeader>
-                <BbCardContent>
-                    <h5>Add user authentication</h5>
-                    <div class="mb-3">
-                        <BbBadge Variant="BadgeVariant.Default">InDevelopment</BbBadge>
-                        <a href="#" style="text-decoration: none;" class="ms-1"><BbBadge Variant="BadgeVariant.Secondary">PR #42</BbBadge></a>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Static Preview</BbCardTitle>
+        <BbCardDescription>Simplified panel layout</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <BbCard style="max-width: 450px;">
+            <BbCardHeader Class="d-flex justify-content-between align-items-center">
+                <BbCardTitle>Pull Request Details</BbCardTitle>
+                <button type="button" class="btn-close btn-sm"></button>
+            </BbCardHeader>
+            <BbCardContent>
+                <h5>Add user authentication</h5>
+                <div class="mb-3">
+                    <BbBadge Variant="BadgeVariant.Default">InDevelopment</BbBadge>
+                    <a href="#" style="text-decoration: none;" class="ms-1"><BbBadge Variant="BadgeVariant.Secondary">PR #42</BbBadge></a>
+                </div>
+                <p class="text-text-secondary text-sm">Implements login and registration with JWT tokens.</p>
+
+                <div class="border rounded p-2 mb-3 bg-surface-secondary">
+                    <h6 class="mb-2">
+                        <BbBadge Class="bg-blue-500 text-white border-transparent me-1">auth/login</BbBadge>
+                        Linked Issue
+                    </h6>
+                    <p class="mb-1 font-bold">Implement user authentication</p>
+                    <div class="mb-1">
+                        <BbBadge Variant="BadgeVariant.Default">Feature</BbBadge>
+                        <BbBadge Variant="BadgeVariant.Default" Class="ms-1">Progress</BbBadge>
                     </div>
-                    <p class="text-text-secondary text-sm">Implements login and registration with JWT tokens.</p>
+                </div>
 
-                    <div class="border rounded p-2 mb-3 bg-surface-secondary">
-                        <h6 class="mb-2">
-                            <BbBadge Class="bg-blue-500 text-white border-transparent me-1">auth/login</BbBadge>
-                            Linked Issue
-                        </h6>
-                        <p class="mb-1 font-bold">Implement user authentication</p>
-                        <div class="mb-1">
-                            <BbBadge Variant="BadgeVariant.Default">Feature</BbBadge>
-                            <BbBadge Variant="BadgeVariant.Default" Class="ms-1">Progress</BbBadge>
-                        </div>
-                    </div>
-
-                    <dl class="grid grid-cols-12 text-sm">
-                        <dt class="col-span-4">Branch</dt>
-                        <dd class="col-span-8"><code>feature/auth/login</code></dd>
-                        <dt class="col-span-4">Created</dt>
-                        <dd class="col-span-8">Jan 15, 2024 10:30 AM</dd>
-                    </dl>
-                </BbCardContent>
-                <BbCardFooter>
-                    <div class="d-flex gap-2 flex-wrap">
-                        <BbButton Variant="ButtonVariant.Secondary" Size="ButtonSize.Small">Skip Review</BbButton>
-                        <MockAgentSelector />
-                    </div>
-                </BbCardFooter>
-            </BbCard>
-        </div>
-    </div>
-</div>
+                <dl class="grid grid-cols-12 text-sm">
+                    <dt class="col-span-4">Branch</dt>
+                    <dd class="col-span-8"><code>feature/auth/login</code></dd>
+                    <dt class="col-span-4">Created</dt>
+                    <dd class="col-span-8">Jan 15, 2024 10:30 AM</dd>
+                </dl>
+            </BbCardContent>
+            <BbCardFooter>
+                <div class="d-flex gap-2 flex-wrap">
+                    <BbButton Variant="ButtonVariant.Secondary" Size="ButtonSize.Small">Skip Review</BbButton>
+                    <MockAgentSelector />
+                </div>
+            </BbCardFooter>
+        </BbCard>
+    </BbCardContent>
+</BbCard>
 
 @code {
 }

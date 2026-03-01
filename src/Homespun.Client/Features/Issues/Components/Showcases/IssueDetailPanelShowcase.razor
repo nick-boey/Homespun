@@ -3,138 +3,144 @@
     This showcase provides a description and static examples of its key features.
 *@
 
-<div class="showcase-section">
-    <h3>Component Overview</h3>
-    <div class="showcase-item">
-        <div class="showcase-preview">
-            <BbAlert Variant="AlertVariant.Info">
-                <BbAlertDescription>
-                    <strong>IssueDetailPanel</strong> displays detailed information about an issue and provides actions
-                    to manage it. This component has extensive service dependencies and is best viewed in the full
-                    application context.
-                </BbAlertDescription>
-            </BbAlert>
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Component Overview</BbCardTitle>
+    </BbCardHeader>
+    <BbCardContent>
+        <BbAlert Variant="AlertVariant.Info">
+            <BbAlertDescription>
+                <strong>IssueDetailPanel</strong> displays detailed information about an issue and provides actions
+                to manage it. This component has extensive service dependencies and is best viewed in the full
+                application context.
+            </BbAlertDescription>
+        </BbAlert>
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>Key Features</h3>
-    <div class="showcase-item">
-        <div class="showcase-preview">
-            <ul class="list-unstyled mb-0">
-                <li class="mb-2">
-                    <BbBadge Variant="BadgeVariant.Default" Class="me-2">Display</BbBadge>
-                    Issue title, description, type, status, and priority badges
-                </li>
-                <li class="mb-2">
-                    <BbBadge Class="bg-green-600 text-white border-transparent me-2">Session</BbBadge>
-                    Start, stop, and monitor Claude Code sessions
-                </li>
-                <li class="mb-2">
-                    <BbBadge Class="bg-blue-500 text-white border-transparent me-2">PR Status</BbBadge>
-                    Show linked pull request status with PrStatusBadges
-                </li>
-                <li class="mb-2">
-                    <BbBadge Class="bg-amber-500 text-white border-transparent me-2">Rebase</BbBadge>
-                    Start rebase agent when branch is behind
-                </li>
-                <li class="mb-2">
-                    <BbBadge Variant="BadgeVariant.Destructive" Class="me-2">Actions</BbBadge>
-                    Close issue, delete issue, navigate to edit
-                </li>
-            </ul>
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Key Features</BbCardTitle>
+    </BbCardHeader>
+    <BbCardContent>
+        <ul class="list-unstyled mb-0">
+            <li class="mb-2">
+                <BbBadge Variant="BadgeVariant.Default" Class="me-2">Display</BbBadge>
+                Issue title, description, type, status, and priority badges
+            </li>
+            <li class="mb-2">
+                <BbBadge Class="bg-green-600 text-white border-transparent me-2">Session</BbBadge>
+                Start, stop, and monitor Claude Code sessions
+            </li>
+            <li class="mb-2">
+                <BbBadge Class="bg-blue-500 text-white border-transparent me-2">PR Status</BbBadge>
+                Show linked pull request status with PrStatusBadges
+            </li>
+            <li class="mb-2">
+                <BbBadge Class="bg-amber-500 text-white border-transparent me-2">Rebase</BbBadge>
+                Start rebase agent when branch is behind
+            </li>
+            <li class="mb-2">
+                <BbBadge Variant="BadgeVariant.Destructive" Class="me-2">Actions</BbBadge>
+                Close issue, delete issue, navigate to edit
+            </li>
+        </ul>
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>Status Badges</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">Type badges</div>
-        <div class="showcase-preview">
-            <div class="d-flex gap-2 flex-wrap">
-                <BbBadge Variant="BadgeVariant.Default">Feature</BbBadge>
-                <BbBadge Variant="BadgeVariant.Destructive">Bug</BbBadge>
-                <BbBadge Class="bg-blue-500 text-white border-transparent">Task</BbBadge>
-                <BbBadge Variant="BadgeVariant.Secondary">Chore</BbBadge>
-            </div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Status Badges</BbCardTitle>
+        <BbCardDescription>Type badges</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <div class="d-flex gap-2 flex-wrap">
+            <BbBadge Variant="BadgeVariant.Default">Feature</BbBadge>
+            <BbBadge Variant="BadgeVariant.Destructive">Bug</BbBadge>
+            <BbBadge Class="bg-blue-500 text-white border-transparent">Task</BbBadge>
+            <BbBadge Variant="BadgeVariant.Secondary">Chore</BbBadge>
         </div>
-    </div>
-    <div class="showcase-item mt-3">
-        <div class="showcase-label">Status badges</div>
-        <div class="showcase-preview">
-            <div class="d-flex gap-2 flex-wrap">
-                <BbBadge Class="bg-purple-500 text-white border-transparent">Idea</BbBadge>
-                <BbBadge Class="bg-blue-500 text-white border-transparent">Spec</BbBadge>
-                <BbBadge Class="bg-amber-500 text-white border-transparent">Next</BbBadge>
-                <BbBadge Variant="BadgeVariant.Default">Progress</BbBadge>
-                <BbBadge Class="bg-blue-500 text-white border-transparent">Review</BbBadge>
-                <BbBadge Class="bg-green-600 text-white border-transparent">Complete</BbBadge>
-            </div>
-        </div>
-    </div>
-    <div class="showcase-item mt-3">
-        <div class="showcase-label">Priority badges</div>
-        <div class="showcase-preview">
-            <div class="d-flex gap-2 flex-wrap">
-                <BbBadge Variant="BadgeVariant.Destructive">P0</BbBadge>
-                <BbBadge Class="bg-amber-500 text-white border-transparent">P1</BbBadge>
-                <BbBadge Class="bg-blue-500 text-white border-transparent">P2</BbBadge>
-                <BbBadge Variant="BadgeVariant.Secondary">P3</BbBadge>
-                <BbBadge Variant="BadgeVariant.Outline">P4</BbBadge>
-            </div>
-        </div>
-    </div>
-</div>
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>Session States</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">Session status indicators</div>
-        <div class="showcase-preview">
-            <div class="d-flex gap-2 flex-wrap">
-                <BbBadge Class="bg-amber-500 text-white border-transparent">
-                    <BbSpinner Size="SpinnerSize.Small" Class="mr-1" />
-                    Starting...
-                </BbBadge>
-                <BbBadge Class="bg-green-600 text-white border-transparent">Session Active</BbBadge>
-            </div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardDescription>Status badges</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <div class="d-flex gap-2 flex-wrap">
+            <BbBadge Class="bg-purple-500 text-white border-transparent">Idea</BbBadge>
+            <BbBadge Class="bg-blue-500 text-white border-transparent">Spec</BbBadge>
+            <BbBadge Class="bg-amber-500 text-white border-transparent">Next</BbBadge>
+            <BbBadge Variant="BadgeVariant.Default">Progress</BbBadge>
+            <BbBadge Class="bg-blue-500 text-white border-transparent">Review</BbBadge>
+            <BbBadge Class="bg-green-600 text-white border-transparent">Complete</BbBadge>
         </div>
-    </div>
-</div>
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>Static Preview</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">Simplified panel layout</div>
-        <div class="showcase-preview">
-            <BbCard style="max-width: 400px;">
-                <BbCardHeader Class="d-flex justify-content-between align-items-center">
-                    <BbCardTitle>Issue Details</BbCardTitle>
-                    <button type="button" class="btn-close btn-sm"></button>
-                </BbCardHeader>
-                <BbCardContent>
-                    <h5>Implement user authentication</h5>
-                    <div class="mb-3">
-                        <BbBadge Variant="BadgeVariant.Secondary">auth/login</BbBadge>
-                        <BbBadge Variant="BadgeVariant.Default" Class="ms-1">Feature</BbBadge>
-                        <BbBadge Variant="BadgeVariant.Default" Class="ms-1">Progress</BbBadge>
-                        <BbBadge Class="bg-amber-500 text-white border-transparent ms-1">P1</BbBadge>
-                    </div>
-                    <p class="text-text-secondary text-sm">Add login and registration functionality with JWT tokens.</p>
-                    <dl class="grid grid-cols-12 text-sm">
-                        <dt class="col-span-4">Branch Preview</dt>
-                        <dd class="col-span-8"><code>feature/auth/login</code></dd>
-                    </dl>
-                </BbCardContent>
-                <BbCardFooter>
-                    <MockAgentSelector />
-                </BbCardFooter>
-            </BbCard>
+<BbCard>
+    <BbCardHeader>
+        <BbCardDescription>Priority badges</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <div class="d-flex gap-2 flex-wrap">
+            <BbBadge Variant="BadgeVariant.Destructive">P0</BbBadge>
+            <BbBadge Class="bg-amber-500 text-white border-transparent">P1</BbBadge>
+            <BbBadge Class="bg-blue-500 text-white border-transparent">P2</BbBadge>
+            <BbBadge Variant="BadgeVariant.Secondary">P3</BbBadge>
+            <BbBadge Variant="BadgeVariant.Outline">P4</BbBadge>
         </div>
-    </div>
-</div>
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Session States</BbCardTitle>
+        <BbCardDescription>Session status indicators</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <div class="d-flex gap-2 flex-wrap">
+            <BbBadge Class="bg-amber-500 text-white border-transparent">
+                <BbSpinner Size="SpinnerSize.Small" Class="mr-1" />
+                Starting...
+            </BbBadge>
+            <BbBadge Class="bg-green-600 text-white border-transparent">Session Active</BbBadge>
+        </div>
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Static Preview</BbCardTitle>
+        <BbCardDescription>Simplified panel layout</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <BbCard style="max-width: 400px;">
+            <BbCardHeader Class="d-flex justify-content-between align-items-center">
+                <BbCardTitle>Issue Details</BbCardTitle>
+                <button type="button" class="btn-close btn-sm"></button>
+            </BbCardHeader>
+            <BbCardContent>
+                <h5>Implement user authentication</h5>
+                <div class="mb-3">
+                    <BbBadge Variant="BadgeVariant.Secondary">auth/login</BbBadge>
+                    <BbBadge Variant="BadgeVariant.Default" Class="ms-1">Feature</BbBadge>
+                    <BbBadge Variant="BadgeVariant.Default" Class="ms-1">Progress</BbBadge>
+                    <BbBadge Class="bg-amber-500 text-white border-transparent ms-1">P1</BbBadge>
+                </div>
+                <p class="text-text-secondary text-sm">Add login and registration functionality with JWT tokens.</p>
+                <dl class="grid grid-cols-12 text-sm">
+                    <dt class="col-span-4">Branch Preview</dt>
+                    <dd class="col-span-8"><code>feature/auth/login</code></dd>
+                </dl>
+            </BbCardContent>
+            <BbCardFooter>
+                <MockAgentSelector />
+            </BbCardFooter>
+        </BbCard>
+    </BbCardContent>
+</BbCard>
 
 @code {
 }

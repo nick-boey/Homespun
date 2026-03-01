@@ -1,92 +1,92 @@
-<div class="showcase-section">
-    <h3>In Progress</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">PR with checks running</div>
-        <div class="showcase-preview">
-            <PrStatusBadges Status="@_inProgressStatus" />
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>In Progress</BbCardTitle>
+        <BbCardDescription>PR with checks running</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <PrStatusBadges Status="@_inProgressStatus" />
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>Ready for Review</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">PR awaiting review with passing checks</div>
-        <div class="showcase-preview">
-            <PrStatusBadges Status="@_readyForReviewStatus" />
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Ready for Review</BbCardTitle>
+        <BbCardDescription>PR awaiting review with passing checks</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <PrStatusBadges Status="@_readyForReviewStatus" />
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>Checks Failing</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">PR with failing CI checks</div>
-        <div class="showcase-preview">
-            <PrStatusBadges Status="@_checksFailingStatus" />
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Checks Failing</BbCardTitle>
+        <BbCardDescription>PR with failing CI checks</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <PrStatusBadges Status="@_checksFailingStatus" />
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>Changes Requested</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">PR with review feedback</div>
-        <div class="showcase-preview">
-            <PrStatusBadges Status="@_changesRequestedStatus" />
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Changes Requested</BbCardTitle>
+        <BbCardDescription>PR with review feedback</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <PrStatusBadges Status="@_changesRequestedStatus" />
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>Approved</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">PR approved by reviewers</div>
-        <div class="showcase-preview">
-            <PrStatusBadges Status="@_approvedStatus" />
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Approved</BbCardTitle>
+        <BbCardDescription>PR approved by reviewers</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <PrStatusBadges Status="@_approvedStatus" />
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>Ready to Merge</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">PR ready for merging - all checks passed and approved</div>
-        <div class="showcase-preview">
-            <PrStatusBadges Status="@_readyToMergeStatus" />
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Ready to Merge</BbCardTitle>
+        <BbCardDescription>PR ready for merging - all checks passed and approved</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <PrStatusBadges Status="@_readyToMergeStatus" />
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>Merge Conflicts</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">PR with merge conflicts</div>
-        <div class="showcase-preview">
-            <PrStatusBadges Status="@_conflictStatus" />
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Merge Conflicts</BbCardTitle>
+        <BbCardDescription>PR with merge conflicts</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <PrStatusBadges Status="@_conflictStatus" />
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>Merged</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">PR that has been merged</div>
-        <div class="showcase-preview">
-            <PrStatusBadges Status="@_mergedStatus" />
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Merged</BbCardTitle>
+        <BbCardDescription>PR that has been merged</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <PrStatusBadges Status="@_mergedStatus" />
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>Closed</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">PR closed without merging</div>
-        <div class="showcase-preview">
-            <PrStatusBadges Status="@_closedStatus" />
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Closed</BbCardTitle>
+        <BbCardDescription>PR closed without merging</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <PrStatusBadges Status="@_closedStatus" />
+    </BbCardContent>
+</BbCard>
 
 @code {
     private IssuePullRequestStatus _inProgressStatus = new()

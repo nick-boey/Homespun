@@ -1,63 +1,63 @@
-<div class="showcase-section">
-    <h3>Read Tool</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">Reading a file</div>
-        <div class="showcase-preview">
-            <ToolUseBlock
-                ToolName="Read"
-                ToolInput="@_readInput"/>
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Read Tool</BbCardTitle>
+        <BbCardDescription>Reading a file</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ToolUseBlock
+            ToolName="Read"
+            ToolInput="@_readInput"/>
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>Edit Tool</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">Editing a file</div>
-        <div class="showcase-preview">
-            <ToolUseBlock
-                ToolName="Edit"
-                ToolInput="@_editInput"/>
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Edit Tool</BbCardTitle>
+        <BbCardDescription>Editing a file</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ToolUseBlock
+            ToolName="Edit"
+            ToolInput="@_editInput"/>
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>Bash Tool</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">Running a command</div>
-        <div class="showcase-preview">
-            <ToolUseBlock
-                ToolName="Bash"
-                ToolInput="@_bashInput"/>
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Bash Tool</BbCardTitle>
+        <BbCardDescription>Running a command</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ToolUseBlock
+            ToolName="Bash"
+            ToolInput="@_bashInput"/>
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>Streaming Tool Use</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">Tool currently executing (shows spinner)</div>
-        <div class="showcase-preview">
-            <ToolUseBlock
-                ToolName="Glob"
-                ToolInput="@_globInput"
-                IsStreaming="true"/>
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Streaming Tool Use</BbCardTitle>
+        <BbCardDescription>Tool currently executing (shows spinner)</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ToolUseBlock
+            ToolName="Glob"
+            ToolInput="@_globInput"
+            IsStreaming="true"/>
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>Complex Tool Input</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">Tool with longer input</div>
-        <div class="showcase-preview">
-            <ToolUseBlock
-                ToolName="Write"
-                ToolInput="@_complexInput"/>
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Complex Tool Input</BbCardTitle>
+        <BbCardDescription>Tool with longer input</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ToolUseBlock
+            ToolName="Write"
+            ToolInput="@_complexInput"/>
+    </BbCardContent>
+</BbCard>
 
 @code {
     private string _readInput = """{"file_path": "/src/services/auth.ts"}""";

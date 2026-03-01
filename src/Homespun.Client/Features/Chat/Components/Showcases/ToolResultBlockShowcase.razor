@@ -1,52 +1,52 @@
-<div class="showcase-section">
-    <h3>File Content Result</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">Result from reading a file</div>
-        <div class="showcase-preview">
-            <ToolResultBlock Text="@_fileContent" />
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>File Content Result</BbCardTitle>
+        <BbCardDescription>Result from reading a file</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ToolResultBlock Text="@_fileContent" />
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>Command Output</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">Result from a bash command</div>
-        <div class="showcase-preview">
-            <ToolResultBlock Text="@_commandOutput" />
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Command Output</BbCardTitle>
+        <BbCardDescription>Result from a bash command</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ToolResultBlock Text="@_commandOutput" />
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>Short Result</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">Simple success message</div>
-        <div class="showcase-preview">
-            <ToolResultBlock Text="File successfully written to /src/components/Button.tsx" />
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Short Result</BbCardTitle>
+        <BbCardDescription>Simple success message</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ToolResultBlock Text="File successfully written to /src/components/Button.tsx" />
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>Error Result</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">Error output from a failed command</div>
-        <div class="showcase-preview">
-            <ToolResultBlock Text="@_errorOutput" />
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Error Result</BbCardTitle>
+        <BbCardDescription>Error output from a failed command</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ToolResultBlock Text="@_errorOutput" />
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>Search Results</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">Result from a grep/search operation</div>
-        <div class="showcase-preview">
-            <ToolResultBlock Text="@_searchResults" />
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Search Results</BbCardTitle>
+        <BbCardDescription>Result from a grep/search operation</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ToolResultBlock Text="@_searchResults" />
+    </BbCardContent>
+</BbCard>
 
 @code {
     private string _fileContent = """

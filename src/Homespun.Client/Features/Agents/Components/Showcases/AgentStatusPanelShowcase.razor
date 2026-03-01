@@ -3,75 +3,75 @@
     This showcase provides a description and static examples.
 *@
 
-<div class="showcase-section">
-    <h3>Component Overview</h3>
-    <div class="showcase-item">
-        <div class="showcase-preview">
-            <BbAlert Variant="AlertVariant.Info">
-                <BbAlertDescription>
-                    <strong>AgentStatusPanel</strong> displays the current status of a Claude Code agent session,
-                    showing whether it's running, waiting for input, or has completed.
-                </BbAlertDescription>
-            </BbAlert>
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Component Overview</BbCardTitle>
+    </BbCardHeader>
+    <BbCardContent>
+        <BbAlert Variant="AlertVariant.Info">
+            <BbAlertDescription>
+                <strong>AgentStatusPanel</strong> displays the current status of a Claude Code agent session,
+                showing whether it's running, waiting for input, or has completed.
+            </BbAlertDescription>
+        </BbAlert>
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>Session Status Badges</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">Different session states</div>
-        <div class="showcase-preview">
-            <div class="d-flex flex-column gap-3">
-                <div class="d-flex align-items-center gap-2">
-                    <BbBadge Class="bg-green-600 text-white border-transparent" style="min-width: 120px;">Running</BbBadge>
-                    <span class="text-text-muted text-sm">Agent is actively working</span>
-                </div>
-                <div class="d-flex align-items-center gap-2">
-                    <BbBadge Class="bg-amber-500 text-white border-transparent" style="min-width: 120px;">WaitingForInput</BbBadge>
-                    <span class="text-text-muted text-sm">Agent needs user response</span>
-                </div>
-                <div class="d-flex align-items-center gap-2">
-                    <BbBadge Variant="BadgeVariant.Secondary" style="min-width: 120px;">Completed</BbBadge>
-                    <span class="text-text-muted text-sm">Session has finished</span>
-                </div>
-                <div class="d-flex align-items-center gap-2">
-                    <BbBadge Variant="BadgeVariant.Destructive" style="min-width: 120px;">Error</BbBadge>
-                    <span class="text-text-muted text-sm">Session encountered an error</span>
-                </div>
-                <div class="d-flex align-items-center gap-2">
-                    <BbBadge Class="bg-blue-500 text-white border-transparent" style="min-width: 120px;">Starting</BbBadge>
-                    <span class="text-text-muted text-sm">Session is initializing</span>
-                </div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Session Status Badges</BbCardTitle>
+        <BbCardDescription>Different session states</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <div class="d-flex flex-column gap-3">
+            <div class="d-flex align-items-center gap-2">
+                <BbBadge Class="bg-green-600 text-white border-transparent" style="min-width: 120px;">Running</BbBadge>
+                <span class="text-text-muted text-sm">Agent is actively working</span>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <BbBadge Class="bg-amber-500 text-white border-transparent" style="min-width: 120px;">WaitingForInput</BbBadge>
+                <span class="text-text-muted text-sm">Agent needs user response</span>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <BbBadge Variant="BadgeVariant.Secondary" style="min-width: 120px;">Completed</BbBadge>
+                <span class="text-text-muted text-sm">Session has finished</span>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <BbBadge Variant="BadgeVariant.Destructive" style="min-width: 120px;">Error</BbBadge>
+                <span class="text-text-muted text-sm">Session encountered an error</span>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <BbBadge Class="bg-blue-500 text-white border-transparent" style="min-width: 120px;">Starting</BbBadge>
+                <span class="text-text-muted text-sm">Session is initializing</span>
             </div>
         </div>
-    </div>
-</div>
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>Panel Example</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">Status panel with session info</div>
-        <div class="showcase-preview">
-            <BbCard style="max-width: 300px;">
-                <BbCardHeader><BbCardTitle>Session Status</BbCardTitle></BbCardHeader>
-                <BbCardContent>
-                    <div class="mb-2">
-                        <BbBadge Class="bg-green-600 text-white border-transparent">Running</BbBadge>
-                    </div>
-                    <dl class="text-sm mb-0">
-                        <dt>Mode</dt>
-                        <dd><BbBadge Class="bg-green-600 text-white border-transparent">Build</BbBadge></dd>
-                        <dt>Model</dt>
-                        <dd><code>claude-3-opus</code></dd>
-                        <dt>Started</dt>
-                        <dd>10 minutes ago</dd>
-                    </dl>
-                </BbCardContent>
-            </BbCard>
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Panel Example</BbCardTitle>
+        <BbCardDescription>Status panel with session info</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <BbCard style="max-width: 300px;">
+            <BbCardHeader><BbCardTitle>Session Status</BbCardTitle></BbCardHeader>
+            <BbCardContent>
+                <div class="mb-2">
+                    <BbBadge Class="bg-green-600 text-white border-transparent">Running</BbBadge>
+                </div>
+                <dl class="text-sm mb-0">
+                    <dt>Mode</dt>
+                    <dd><BbBadge Class="bg-green-600 text-white border-transparent">Build</BbBadge></dd>
+                    <dt>Model</dt>
+                    <dd><code>claude-3-opus</code></dd>
+                    <dt>Started</dt>
+                    <dd>10 minutes ago</dd>
+                </dl>
+            </BbCardContent>
+        </BbCard>
+    </BbCardContent>
+</BbCard>
 
 @code {
 }

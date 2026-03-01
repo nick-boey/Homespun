@@ -1,63 +1,63 @@
-<div class="showcase-section">
-    <h3>User Message</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">Message from the user</div>
-        <div class="showcase-preview">
-            <ChatMessage Message="@_userMessage" />
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>User Message</BbCardTitle>
+        <BbCardDescription>Message from the user</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ChatMessage Message="@_userMessage" />
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>Assistant Text Message</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">Simple text response from Claude</div>
-        <div class="showcase-preview">
-            <ChatMessage Message="@_assistantTextMessage" />
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Assistant Text Message</BbCardTitle>
+        <BbCardDescription>Simple text response from Claude</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ChatMessage Message="@_assistantTextMessage" />
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>Message with Tool Use</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">Claude invoking a tool</div>
-        <div class="showcase-preview">
-            <ChatMessage Message="@_toolUseMessage" />
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Message with Tool Use</BbCardTitle>
+        <BbCardDescription>Claude invoking a tool</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ChatMessage Message="@_toolUseMessage" />
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>Message with Tool Result</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">Result from a tool invocation</div>
-        <div class="showcase-preview">
-            <ChatMessage Message="@_toolResultMessage" />
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Message with Tool Result</BbCardTitle>
+        <BbCardDescription>Result from a tool invocation</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ChatMessage Message="@_toolResultMessage" />
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>Message with Thinking</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">Claude's thinking process</div>
-        <div class="showcase-preview">
-            <ChatMessage Message="@_thinkingMessage" />
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Message with Thinking</BbCardTitle>
+        <BbCardDescription>Claude's thinking process</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ChatMessage Message="@_thinkingMessage" />
+    </BbCardContent>
+</BbCard>
 
-<div class="showcase-section">
-    <h3>Conversation Flow</h3>
-    <div class="showcase-item">
-        <div class="showcase-label">Multiple messages in sequence</div>
-        <div class="showcase-preview">
-            <ChatMessage Message="@_conversationUser" />
-            <ChatMessage Message="@_conversationAssistant" />
-        </div>
-    </div>
-</div>
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Conversation Flow</BbCardTitle>
+        <BbCardDescription>Multiple messages in sequence</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ChatMessage Message="@_conversationUser" />
+        <ChatMessage Message="@_conversationAssistant" />
+    </BbCardContent>
+</BbCard>
 
 @code {
     private ClaudeMessage _userMessage = new()

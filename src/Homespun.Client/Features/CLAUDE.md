@@ -31,25 +31,25 @@ When creating a new shared component, add it to the design system for visual tes
 
 2. **Create a showcase file** at `Features/{Feature}/Components/Showcases/MyComponentShowcase.razor`:
    ```razor
-   <div class="showcase-section">
-       <h3>Default State</h3>
-       <div class="showcase-item">
-           <div class="showcase-label">Description of this variant</div>
-           <div class="showcase-preview">
-               <MyComponent Prop1="value1" />
-           </div>
-       </div>
-   </div>
+   <BbCard>
+       <BbCardHeader>
+           <BbCardTitle>Default State</BbCardTitle>
+           <BbCardDescription>Description of this variant</BbCardDescription>
+       </BbCardHeader>
+       <BbCardContent>
+           <MyComponent Prop1="value1" />
+       </BbCardContent>
+   </BbCard>
 
-   <div class="showcase-section">
-       <h3>Loading State</h3>
-       <div class="showcase-item">
-           <div class="showcase-label">When loading data</div>
-           <div class="showcase-preview">
-               <MyComponent IsLoading="true" />
-           </div>
-       </div>
-   </div>
+   <BbCard>
+       <BbCardHeader>
+           <BbCardTitle>Loading State</BbCardTitle>
+           <BbCardDescription>When loading data</BbCardDescription>
+       </BbCardHeader>
+       <BbCardContent>
+           <MyComponent IsLoading="true" />
+       </BbCardContent>
+   </BbCard>
 
    @code {
        // Add any mock data needed for the showcase
@@ -71,4 +71,4 @@ When creating a new shared component, add it to the design system for visual tes
 - Use realistic mock data that demonstrates the component's purpose
 - Include edge cases: long text, missing data, extreme values
 - For interactive components, show both enabled and disabled states
-- Group related variations under descriptive `<h3>` headings
+- Group related variations under descriptive `<BbCardTitle>` headings inside `<BbCard>` components
