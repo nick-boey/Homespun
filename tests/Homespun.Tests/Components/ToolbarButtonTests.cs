@@ -1,7 +1,5 @@
 using Bunit;
-using Homespun.Client.Components;
 using Homespun.Client.Features.Toolbar.Components;
-using Homespun.Tests.Components;
 using Microsoft.AspNetCore.Components;
 
 namespace Homespun.Tests.Components;
@@ -23,7 +21,7 @@ public class ToolbarButtonTests : BunitTestContext
         });
 
         // LucideIcon renders an SVG element
-        var icon = cut.Find("button.toolbar-btn svg");
+        var icon = cut.Find("button svg");
         Assert.That(icon, Is.Not.Null);
     }
 
@@ -39,7 +37,7 @@ public class ToolbarButtonTests : BunitTestContext
         });
 
         // Without tooltip, there should be no BbTooltip wrapper
-        var button = cut.Find("button.toolbar-btn");
+        var button = cut.Find("button");
         Assert.That(button, Is.Not.Null);
     }
 
@@ -52,7 +50,7 @@ public class ToolbarButtonTests : BunitTestContext
             p.Add(x => x.Disabled, true);
         });
 
-        var button = cut.Find("button.toolbar-btn");
+        var button = cut.Find("button");
         Assert.That(button.HasAttribute("disabled"), Is.True);
     }
 
@@ -65,7 +63,7 @@ public class ToolbarButtonTests : BunitTestContext
             p.Add(x => x.Disabled, false);
         });
 
-        var button = cut.Find("button.toolbar-btn");
+        var button = cut.Find("button");
         Assert.That(button.HasAttribute("disabled"), Is.False);
     }
 
@@ -79,7 +77,7 @@ public class ToolbarButtonTests : BunitTestContext
             p.Add(x => x.OnClick, EventCallback.Factory.Create(this, () => wasClicked = true));
         });
 
-        cut.Find("button.toolbar-btn").Click();
+        cut.Find("button").Click();
 
         Assert.That(wasClicked, Is.True);
     }
@@ -97,21 +95,9 @@ public class ToolbarButtonTests : BunitTestContext
 
         // Clicking a disabled button should not invoke the callback
         // bUnit will throw an exception if we try to click a disabled element
-        var button = cut.Find("button.toolbar-btn");
+        var button = cut.Find("button");
         Assert.That(button.HasAttribute("disabled"), Is.True);
         // We cannot directly click a disabled button in real DOM, so just verify it's disabled
-    }
-
-    [Test]
-    public void HasCorrectButtonClass()
-    {
-        var cut = Render<ToolbarButton>(p =>
-        {
-            p.Add(x => x.Icon, "play");
-        });
-
-        var button = cut.Find("button");
-        Assert.That(button.ClassList, Does.Contain("toolbar-btn"));
     }
 
     [Test]
@@ -125,5 +111,32 @@ public class ToolbarButtonTests : BunitTestContext
 
         var button = cut.Find("[data-testid='edit-button']");
         Assert.That(button, Is.Not.Null);
+    }
+
+    [Test]
+    public void HasActiveClass_WhenActive()
+    {
+        var cut = Render<ToolbarButton>(p =>
+        {
+            p.Add(x => x.Icon, "play");
+            p.Add(x => x.Active, true);
+        });
+
+        var button = cut.Find("button");
+        Assert.That(button.ClassList, Does.Contain("ring-2"));
+        Assert.That(button.ClassList, Does.Contain("ring-ring"));
+    }
+
+    [Test]
+    public void DoesNotHaveActiveClass_WhenNotActive()
+    {
+        var cut = Render<ToolbarButton>(p =>
+        {
+            p.Add(x => x.Icon, "play");
+            p.Add(x => x.Active, false);
+        });
+
+        var button = cut.Find("button");
+        Assert.That(button.ClassList, Does.Not.Contain("ring-2"));
     }
 }

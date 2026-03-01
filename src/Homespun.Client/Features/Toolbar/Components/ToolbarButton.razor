@@ -2,9 +2,11 @@
     <BbTooltip DelayDuration="0">
         <BbTooltipTrigger>
             <BbButton Variant="ButtonVariant.Outline"
+                      Size="ButtonSize.Icon"
                       Class="@GetButtonClass()"
                       Disabled="@Disabled"
-                      OnClick="HandleClick"
+                      OnClick="OnClick"
+                      AriaLabel="@Tooltip"
                       data-testid="@TestId">
                 <LucideIcon Name="@Icon" class="h-4 w-4"/>
             </BbButton>
@@ -55,11 +57,5 @@
     [Parameter]
     public string? TestId { get; set; }
 
-    private string GetButtonClass() => Active ? "toolbar-btn toolbar-btn-active" : "toolbar-btn";
-
-    private async Task HandleClick()
-    {
-        if (Disabled) return;
-        await OnClick.InvokeAsync();
-    }
+    private string? GetButtonClass() => Active ? "ring-2 ring-ring" : null;
 }

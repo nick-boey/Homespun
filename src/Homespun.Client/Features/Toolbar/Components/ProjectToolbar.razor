@@ -1,20 +1,22 @@
 @inject IKeyboardNavigationService NavService
 
-<div class="project-toolbar">
+<div class="flex flex-wrap items-center gap-2 p-2 border rounded-lg bg-background">
     @* Creation buttons *@
-    <ToolbarButton Icon="arrow-up-from-line"
-                   Tooltip="Create issue above (Shift+O)"
-                   TestId="toolbar-create-above-button"
-                   Disabled="@CreateDisabled"
-                   OnClick="HandleCreateAbove"/>
+    <BbButtonGroup>
+        <ToolbarButton Icon="arrow-up-from-line"
+                       Tooltip="Create issue above (Shift+O)"
+                       TestId="toolbar-create-above-button"
+                       Disabled="@CreateDisabled"
+                       OnClick="HandleCreateAbove"/>
 
-    <ToolbarButton Icon="arrow-down-from-line"
-                   Tooltip="Create issue below (O)"
-                   TestId="toolbar-create-below-button"
-                   Disabled="@CreateDisabled"
-                   OnClick="HandleCreateBelow"/>
+        <ToolbarButton Icon="arrow-down-from-line"
+                       Tooltip="Create issue below (O)"
+                       TestId="toolbar-create-below-button"
+                       Disabled="@CreateDisabled"
+                       OnClick="HandleCreateBelow"/>
+    </BbButtonGroup>
 
-    <ToolbarSeparator/>
+    <BbSeparator Orientation="SeparatorOrientation.Vertical" class="h-6"/>
 
     @* Hierarchy buttons *@
     <ToolbarButton Icon="corner-right-up"
@@ -31,7 +33,7 @@
                    Active="@ParentOfActive"
                    OnClick="HandleMakeParentOf"/>
 
-    <ToolbarSeparator/>
+    <BbSeparator Orientation="SeparatorOrientation.Vertical" class="h-6"/>
 
     @* Undo/Redo buttons *@
     <ToolbarButton Icon="undo"
@@ -46,8 +48,7 @@
                    Disabled="@RedoDisabled"
                    OnClick="HandleRedo"/>
 
-    <ToolbarSeparator/>
-
+    <BbSeparator Orientation="SeparatorOrientation.Vertical" class="h-6"/>
     @* Edit button *@
     <ToolbarButton Icon="pencil"
                    Tooltip="Edit issue (i)"
@@ -84,34 +85,6 @@
         }
     </div>
 </div>
-
-<style>
-    .project-toolbar {
-        display: flex;
-        align-items: center;
-        gap: var(--spacing-sm, 8px);
-        padding-top: var(--spacing-sm, 8px);
-    }
-
-    .toolbar-run-wrapper {
-        position: relative;
-    }
-
-    .toolbar-agent-dropdown {
-        position: fixed;
-        z-index: 1000;
-        min-width: 240px;
-        margin-top: 4px;
-        background: var(--bg-primary, #1a1a2e);
-        border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
-        border-radius: 6px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-    }
-
-    .dropdown-content {
-        padding: 12px;
-    }
-</style>
 
 @code {
 

@@ -44,82 +44,79 @@ else
         {
             // Core UI Components
             case "work-item":
-                <WorkItemShowcase />
+                <WorkItemShowcase/>
                 break;
             case "pr-status-badges":
-                <PrStatusBadgesShowcase />
+                <PrStatusBadgesShowcase/>
                 break;
             case "agent-status-indicator":
-                <AgentStatusIndicatorShowcase />
+                <AgentStatusIndicatorShowcase/>
                 break;
             case "notification-banner":
-                <NotificationBannerShowcase />
+                <NotificationBannerShowcase/>
                 break;
-case "model-selector":
-                <ModelSelectorShowcase />
+            case "model-selector":
+                <ModelSelectorShowcase/>
                 break;
             // Panel Components
             case "issue-detail-panel":
-                <IssueDetailPanelShowcase />
+                <IssueDetailPanelShowcase/>
                 break;
             case "current-pull-request-detail-panel":
-                <CurrentPullRequestDetailPanelShowcase />
+                <CurrentPullRequestDetailPanelShowcase/>
                 break;
             case "merged-pull-request-detail-panel":
-                <MergedPullRequestDetailPanelShowcase />
+                <MergedPullRequestDetailPanelShowcase/>
                 break;
             case "sessions-panel":
-                <SessionsPanelShowcase />
+                <SessionsPanelShowcase/>
                 break;
             case "agent-status-panel":
-                <AgentStatusPanelShowcase />
+                <AgentStatusPanelShowcase/>
                 break;
             case "clone-management-panel":
-                <CloneManagementPanelShowcase />
+                <CloneManagementPanelShowcase/>
                 break;
             case "session-history-list":
-                <SessionHistoryListShowcase />
+                <SessionHistoryListShowcase/>
                 break;
             case "agent-selector":
-                <AgentSelectorShowcase />
+                <AgentSelectorShowcase/>
                 break;
 
             // Chat Components
             case "chat-message":
-                <ChatMessageShowcase />
+                <ChatMessageShowcase/>
                 break;
             case "chat-input":
-                <ChatInputShowcase />
+                <ChatInputShowcase/>
                 break;
             case "content-block":
-                <ContentBlockShowcase />
+                <ContentBlockShowcase/>
                 break;
             case "text-block":
-                <TextBlockShowcase />
+                <TextBlockShowcase/>
                 break;
             case "tool-use-block":
-                <ToolUseBlockShowcase />
+                <ToolUseBlockShowcase/>
                 break;
             case "tool-result-block":
-                <ToolResultBlockShowcase />
+                <ToolResultBlockShowcase/>
                 break;
             case "thinking-block":
-                <ThinkingBlockShowcase />
+                <ThinkingBlockShowcase/>
                 break;
             case "processing-indicator":
-                <ProcessingIndicatorShowcase />
+                <ProcessingIndicatorShowcase/>
                 break;
-case "task-graph-view":
-                <TaskGraphViewShowcase />
+            case "task-graph-view":
+                <TaskGraphViewShowcase/>
                 break;
             case "issue-row-actions":
-                <IssueRowActionsShowcase />
-                break;
-            case "toolbar-button":
-                <ToolbarButtonShowcase />
+                <IssueRowActionsShowcase/>
                 break;
             case "project-toolbar":
-                <ProjectToolbarShowcase />
+                <ProjectToolbarShowcase/>
                 break;
 
             default:
@@ -144,14 +141,6 @@ case "task-graph-view":
         padding: var(--spacing-lg);
     }
 
-    .showcase-section {
-        margin-bottom: var(--spacing-xl);
-    }
-
-    .showcase-section:last-child {
-        margin-bottom: 0;
-    }
-
     .showcase-section h3 {
         font-size: 0.875rem;
         font-weight: 600;
@@ -163,27 +152,6 @@ case "task-graph-view":
         border-bottom: 1px solid var(--border-color);
     }
 
-    .showcase-item {
-        margin-bottom: var(--spacing-md);
-    }
-
-    .showcase-item:last-child {
-        margin-bottom: 0;
-    }
-
-    .showcase-label {
-        font-size: 0.75rem;
-        color: var(--text-muted);
-        margin-bottom: var(--spacing-xs);
-    }
-
-    .showcase-preview {
-        background: var(--bg-primary);
-        border: 1px dashed var(--border-color);
-        border-radius: var(--radius-sm);
-        padding: var(--spacing-md);
-    }
-
     .badge.bg-tertiary {
         background: var(--bg-tertiary);
         color: var(--text-secondary);
@@ -191,8 +159,7 @@ case "task-graph-view":
 </style>
 
 @code {
-    [Parameter]
-    public string ComponentId { get; set; } = "";
+    [Parameter] public string ComponentId { get; set; } = "";
 
     private ComponentMetadata? _component;
 
@@ -210,4 +177,5 @@ case "task-graph-view":
     {
         _component = ComponentRegistry.GetComponent(ComponentId);
     }
+
 }

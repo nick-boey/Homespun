@@ -57,7 +57,7 @@ public class ProjectToolbarTests : BunitTestContext
             p.Add(x => x.ProjectId, "project-1");
         });
 
-        var toolbar = cut.Find(".project-toolbar");
+        var toolbar = cut.Find(".border.rounded-lg");
         Assert.That(toolbar, Is.Not.Null);
     }
 
@@ -69,7 +69,7 @@ public class ProjectToolbarTests : BunitTestContext
             p.Add(x => x.ProjectId, "project-1");
         });
 
-        var separators = cut.FindAll("[data-testid='toolbar-separator']");
+        var separators = cut.FindAll("[role='none']");
         Assert.That(separators, Has.Count.EqualTo(3), "Should have 3 separators between 4 button groups");
     }
 
@@ -388,7 +388,7 @@ public class ProjectToolbarTests : BunitTestContext
         });
 
         var makeChildOfBtn = cut.Find("[data-testid='toolbar-child-of-button']");
-        Assert.That(makeChildOfBtn.ClassList.Contains("toolbar-btn-active"), Is.True,
+        Assert.That(makeChildOfBtn.ClassList.Contains("ring-2"), Is.True,
             "Make Child Of button should be highlighted when active");
     }
 
@@ -402,7 +402,7 @@ public class ProjectToolbarTests : BunitTestContext
         });
 
         var makeParentOfBtn = cut.Find("[data-testid='toolbar-parent-of-button']");
-        Assert.That(makeParentOfBtn.ClassList.Contains("toolbar-btn-active"), Is.True,
+        Assert.That(makeParentOfBtn.ClassList.Contains("ring-2"), Is.True,
             "Make Parent Of button should be highlighted when active");
     }
 
