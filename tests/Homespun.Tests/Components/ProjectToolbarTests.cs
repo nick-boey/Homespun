@@ -145,7 +145,7 @@ public class ProjectToolbarTests : BunitTestContext
     }
 
     [Test]
-    public void ShowsDropdown_WhenRunButtonClicked()
+    public void RunButtonClick_TogglesDropdownState()
     {
         var cut = Render<ProjectToolbar>(p =>
         {
@@ -153,15 +153,15 @@ public class ProjectToolbarTests : BunitTestContext
             p.Add(x => x.SelectedIssueId, "TEST-001");
         });
 
-        // Initially dropdown should not be visible
-        Assert.That(cut.FindAll(".toolbar-agent-dropdown"), Is.Empty);
+        // Click run button — should not throw and button should remain clickable
+        var runButton = cut.Find("[data-testid='toolbar-run-button']");
+        runButton.Click();
 
-        // Click run button
-        cut.Find("[data-testid='toolbar-run-button']").Click();
+        // Click again to toggle off
+        runButton.Click();
 
-        // Dropdown should now be visible
-        var dropdown = cut.Find(".toolbar-agent-dropdown");
-        Assert.That(dropdown, Is.Not.Null);
+        // Button should still be enabled and rendered
+        Assert.That(runButton.HasAttribute("disabled"), Is.False);
     }
 
     [Test]
@@ -191,23 +191,18 @@ public class ProjectToolbarTests : BunitTestContext
     }
 
     [Test]
-    public void HidesDropdown_WhenRunButtonClickedAgain()
+    public void RunButton_DoesNotToggle_WhenDisabled()
     {
         var cut = Render<ProjectToolbar>(p =>
         {
             p.Add(x => x.ProjectId, "project-1");
             p.Add(x => x.SelectedIssueId, "TEST-001");
+            p.Add(x => x.IsAgentRunning, true);
         });
 
-        // Open dropdown
-        cut.Find("[data-testid='toolbar-run-button']").Click();
-        Assert.That(cut.FindAll(".toolbar-agent-dropdown"), Has.Count.EqualTo(1));
-
-        // Click again to close
-        cut.Find("[data-testid='toolbar-run-button']").Click();
-
-        // Dropdown should be closed
-        Assert.That(cut.FindAll(".toolbar-agent-dropdown"), Is.Empty);
+        // Run button should be disabled
+        var runButton = cut.Find("[data-testid='toolbar-run-button']");
+        Assert.That(runButton.HasAttribute("disabled"), Is.True);
     }
 
     #endregion

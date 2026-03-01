@@ -63,20 +63,12 @@
                            TestId="toolbar-decrease-levels-button"
                            Disabled="@(MaxDepth <= 0)"
                            OnClick="HandleDecreaseDepth"/>
-
-            <BbButton Variant="ButtonVariant.Outline"
-                      Size="ButtonSize.Small"
-                      Disabled="true"
-                      Class="px-2 min-w-[4rem] cursor-default"
-                      data-testid="toolbar-level-display">
-                @(MaxDepth + 1) levels
-            </BbButton>
-
             <ToolbarButton Icon="plus"
                            Tooltip="Increase levels (] key)"
                            TestId="toolbar-increase-levels-button"
                            Disabled="@(MaxDepth >= MaxAvailableDepth)"
                            OnClick="HandleIncreaseDepth"/>
+            <p class="text-sm mx-2">@(MaxDepth + 1)</p>
         </BbButtonGroup>
 
         <BbSeparator Orientation="SeparatorOrientation.Vertical" class="h-6"/>
@@ -90,36 +82,34 @@
                        Disabled="@(SelectedIssueId == null)"
                        OnClick="HandleEdit"/>
 
-        @* Run button with dropdown *@
-        <div class="toolbar-run-wrapper">
+    </BbButtonGroup>
+
+    @* Run button with popover *@
+    <BbPopover @bind-Open="_showDropdown">
+        <BbPopoverTrigger CustomClickHandling="true">
             <ToolbarButton Icon="play"
                            Tooltip="Run agent"
                            TestId="toolbar-run-button"
                            Disabled="@(SelectedIssueId == null || IsAgentRunning)"
                            OnClick="ToggleDropdown"/>
-
-
-            @if (_showDropdown && SelectedIssueId != null)
-            {
-                <div class="toolbar-agent-dropdown" @onclick:stopPropagation="true">
-                    <div class="dropdown-content">
-                        <UnifiedAgentLauncher
-                            EntityId="@SelectedIssueId"
-                            ProjectId="@ProjectId"
-                            EntityTitle="@IssueTitle"
-                            EntityDescription="@IssueDescription"
-                            EntityType="@IssueType"
-                            BranchName="@BranchName"
-                            RepoPath="@RepoPath"
-                            DefaultBranch="@DefaultBranch"
-                            DefaultModel="@DefaultModel"
-                            Compact="true"
-                            OnSessionStarted="HandleSessionStarted"/>
-                    </div>
-                </div>
-            }
-        </div>
-    </BbButtonGroup>
+        </BbPopoverTrigger>
+        <BbPopoverContent Side="PopoverSide.Bottom"
+                          Align="PopoverAlign.End"
+                          Class="w-72 p-3">
+            <UnifiedAgentLauncher
+                EntityId="@SelectedIssueId"
+                ProjectId="@ProjectId"
+                EntityTitle="@IssueTitle"
+                EntityDescription="@IssueDescription"
+                EntityType="@IssueType"
+                BranchName="@BranchName"
+                RepoPath="@RepoPath"
+                DefaultBranch="@DefaultBranch"
+                DefaultModel="@DefaultModel"
+                Compact="true"
+                OnSessionStarted="HandleSessionStarted"/>
+        </BbPopoverContent>
+    </BbPopover>
 
     @* Search input — right-aligned *@
     <div class="ml-auto flex items-center gap-2">
@@ -133,7 +123,7 @@
                    @onkeydown:stopPropagation="true"
                    @onfocus="HandleSearchFocus"
                    @ref="_searchInput"
-                   placeholder="Search... (/)" />
+                   placeholder="Search... (/)"/>
             @if (!string.IsNullOrEmpty(SearchTerm))
             {
                 @if (SearchMatchCount > 0)
@@ -276,37 +266,27 @@
 
     // Level control parameters
 
-    [Parameter]
-    public int MaxDepth { get; set; }
+    [Parameter] public int MaxDepth { get; set; }
 
-    [Parameter]
-    public int MaxAvailableDepth { get; set; }
+    [Parameter] public int MaxAvailableDepth { get; set; }
 
-    [Parameter]
-    public EventCallback OnDecreaseDepth { get; set; }
+    [Parameter] public EventCallback OnDecreaseDepth { get; set; }
 
-    [Parameter]
-    public EventCallback OnIncreaseDepth { get; set; }
+    [Parameter] public EventCallback OnIncreaseDepth { get; set; }
 
     // Search parameters
 
-    [Parameter]
-    public string SearchTerm { get; set; } = "";
+    [Parameter] public string SearchTerm { get; set; } = "";
 
-    [Parameter]
-    public EventCallback<string> OnSearchTermChanged { get; set; }
+    [Parameter] public EventCallback<string> OnSearchTermChanged { get; set; }
 
-    [Parameter]
-    public int SearchMatchCount { get; set; }
+    [Parameter] public int SearchMatchCount { get; set; }
 
-    [Parameter]
-    public EventCallback OnSearchEnter { get; set; }
+    [Parameter] public EventCallback OnSearchEnter { get; set; }
 
-    [Parameter]
-    public EventCallback OnSearchEscape { get; set; }
+    [Parameter] public EventCallback OnSearchEscape { get; set; }
 
-    [Parameter]
-    public EventCallback OnSearchFocused { get; set; }
+    [Parameter] public EventCallback OnSearchFocused { get; set; }
 
     // Creation button parameters
 
@@ -521,7 +501,10 @@
                 {
                     await JSRuntime.InvokeVoidAsync("homespunInterop.blurElement", _searchInput);
                 }
-                catch { }
+                catch
+                {
+                }
+
                 break;
             case "Enter":
                 await OnSearchEnter.InvokeAsync();
@@ -529,7 +512,10 @@
                 {
                     await JSRuntime.InvokeVoidAsync("homespunInterop.blurElement", _searchInput);
                 }
-                catch { }
+                catch
+                {
+                }
+
                 break;
         }
     }
