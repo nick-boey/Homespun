@@ -89,7 +89,6 @@ services:
       PERIPHERY_SSL_ENABLED: true
       PERIPHERY_DISABLE_TERMINALS: false
       PERIPHERY_INCLUDE_DISK_MOUNTS: ${PERIPHERY_INCLUDE_DISK_MOUNTS:-/etc/hostname}
-      DOCKER_CONFIG: /etc/komodo/docker
     volumes:
       # Docker socket for container management
       - /var/run/docker.sock:/var/run/docker.sock
@@ -97,8 +96,6 @@ services:
       - /proc:/proc
       # Komodo data directory (must be same path inside and outside container)
       - ${PERIPHERY_ROOT_DIRECTORY:-/etc/komodo}:${PERIPHERY_ROOT_DIRECTORY:-/etc/komodo}
-      # Docker config for registry auth (GHCR)
-      - /etc/komodo/docker:/etc/komodo/docker:ro
     networks:
       - homespun-net
 

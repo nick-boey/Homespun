@@ -14,7 +14,6 @@
 #
 # Prerequisites:
 #   - Komodo installed and running (scripts/install-komodo.sh + scripts/run-komodo.sh)
-#   - Periphery has GHCR auth mounted at /etc/komodo/docker
 #   - Git account "nick-boey" configured in Komodo with GitHub repo read access
 #   - Komodo variables/secrets set: GITHUB_TOKEN, CLAUDE_CODE_OAUTH_TOKEN,
 #     TAILSCALE_AUTH_KEY, GRAFANA_ADMIN_PASSWORD
