@@ -1,4 +1,4 @@
-<BbSelect TValue="string" Value="@SelectedModel" ValueChanged="OnModelChanged" Options="_modelOptions" />
+<BbSelect TValue="string" Value="@SelectedModel" ValueChanged="OnModelChanged" Options="ModelOptions" />
 
 @code {
     [Parameter]
@@ -10,7 +10,7 @@
     [Parameter]
     public string Id { get; set; } = "default";
 
-    private static readonly List<SelectOption<string>> _modelOptions =
+    private static readonly List<SelectOption<string>> ModelOptions =
     [
         new("opus", "Opus"),
         new("sonnet", "Sonnet"),

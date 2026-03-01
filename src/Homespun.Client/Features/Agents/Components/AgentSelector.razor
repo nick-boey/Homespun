@@ -2,20 +2,21 @@
 
 <div class="agent-selector">
     <div class="d-flex gap-2 align-items-end">
-        <div class="flex-grow-1">
+        <div class="grow">
             <BbLabel Class="small mb-1">Prompt</BbLabel>
             <BbSelect TValue="string" @bind-Value="_selectedPromptId" Options="_promptOptions"
-                      Disabled="@Disabled" Placeholder="None (no prompt)" />
+                      Disabled="@Disabled" Placeholder="None (no prompt)"/>
         </div>
-        <BbButton Variant="ButtonVariant.Default" Size="ButtonSize.Small" OnClick="HandleStart" Disabled="@(Disabled || IsStarting)" aria-label="Start agent" aria-busy="@IsStarting">
+        <BbButton Variant="ButtonVariant.Default" Size="ButtonSize.Small" OnClick="HandleStart"
+                  Disabled="@(Disabled || IsStarting)" aria-label="Start agent" aria-busy="@IsStarting">
             @if (IsStarting)
             {
-                <BbSpinner Size="SpinnerSize.Small" Class="me-1" />
+                <BbSpinner Size="SpinnerSize.Small" Class="me-1"/>
                 <span>Starting...</span>
             }
             else
             {
-                <LucideIcon Name="play" Size="14" Class="me-1" />
+                <LucideIcon Name="play" Size="14" Class="me-1"/>
                 <span>Start</span>
             }
         </BbButton>
@@ -27,27 +28,32 @@
 </div>
 
 @code {
+
     /// <summary>
     /// Whether the selector is disabled.
     /// </summary>
-    [Parameter] public bool Disabled { get; set; }
+    [Parameter]
+    public bool Disabled { get; set; }
 
     /// <summary>
     /// Whether a session is currently starting.
     /// </summary>
-    [Parameter] public bool IsStarting { get; set; }
+    [Parameter]
+    public bool IsStarting { get; set; }
 
     /// <summary>
     /// Optional project ID to scope prompt loading.
     /// When set, project-specific prompts are shown alongside global prompts.
     /// </summary>
-    [Parameter] public string? ProjectId { get; set; }
+    [Parameter]
+    public string? ProjectId { get; set; }
 
     /// <summary>
     /// Callback when the Start button is clicked.
     /// Passes the selected AgentPrompt (null if "None" is selected).
     /// </summary>
-    [Parameter] public EventCallback<AgentPrompt?> OnStart { get; set; }
+    [Parameter]
+    public EventCallback<AgentPrompt?> OnStart { get; set; }
 
     private IReadOnlyList<AgentPrompt> _prompts = [];
     private List<SelectOption<string>> _promptOptions = [];
@@ -91,4 +97,5 @@
 
         await OnStart.InvokeAsync(selectedPrompt);
     }
+
 }
