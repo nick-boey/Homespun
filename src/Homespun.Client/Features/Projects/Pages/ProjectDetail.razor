@@ -13,8 +13,6 @@
 @inject HttpIssueHistoryApiService IssueHistoryApi
 @inject HttpFleeceSyncApiService FleeceSyncApi
 @inject HttpGitHubInfoApiService GitHubInfoApi
-@inject HttpCloneApiService CloneApi
-@inject HttpSessionApiService SessionApi
 @inject IAgentStartupTracker StartupTracker
 @inject IBreadcrumbService BreadcrumbService
 @inject HttpNotificationApiService NotificationApi
@@ -26,269 +24,254 @@
 
 <PageTitle>@(_project?.Name ?? "Project")</PageTitle>
 
-<div class="project-detail-page @(_sidebarOpen ? "sidebar-open" : "")" @onkeydown="HandleKeyDown" tabindex="-1" @ref="_pageContainer">
-@if (_project == null)
-{
-    <p>Loading...</p>
-}
-else
-{
-    <div class="project-sticky-header">
-        <div class="flex justify-between items-center">
-            <h1>@_project.Name</h1>
-            <div class="flex items-center gap-2">
-                <SplitButton PrimaryText="Pull"
-                             PrimaryOnClick="PullAsync"
-                             Variant="ButtonVariant.Outline"
-                             Size="ButtonSize.Small"
-                             Actions="@_syncActions">
-                    <PrimaryIcon>
-                        <LucideIcon Name="cloud-download" Size="14" Class="me-1" />
-                    </PrimaryIcon>
-                </SplitButton>
-                <BbButton Variant="ButtonVariant.Outline" Size="ButtonSize.Small" Href="@($"projects/{Id}/edit")">Edit Project</BbButton>
+<div class="project-detail-page @(_sidebarOpen ? "sidebar-open" : "")" @onkeydown="HandleKeyDown" tabindex="-1"
+     @ref="_pageContainer">
+    @if (_project == null)
+    {
+        <p>Loading...</p>
+    }
+    else
+    {
+        <div class="project-sticky-header">
+            <div class="flex justify-between items-center">
+                <h1>@_project.Name</h1>
+                <div class="flex items-center gap-2">
+                    <BbSplitButton IconPosition="IconPosition.Start" OnClick="PullAsync">
+                        <Icon>
+                            <LucideIcon Name="cloud" class="h-4 w-4"/>
+                        </Icon>
+                        <ChildContent>Pull</ChildContent>
+                        <DropdownContent>
+                            <BbSplitButtonItem OnClick="SyncAllAsync">Sync</BbSplitButtonItem>
+                        </DropdownContent>
+                    </BbSplitButton>
+                    <BbButton Variant="ButtonVariant.Outline" Size="ButtonSize.Small" Href="@($"projects/{Id}/edit")">
+                        Edit Project
+                    </BbButton>
+                </div>
             </div>
+            @if (_activeTab == "issues")
+            {
+                <ProjectToolbar SelectedIssueId="@NavService.SelectedIssueId"
+                                ProjectId="@Id"
+                                IsAgentRunning="@IsSelectedIssueAgentRunning()"
+                                OnEditClick="HandleEditIssue"
+                                OnSessionStarted="HandleSessionStarted"
+                                IssueTitle="@GetSelectedIssueTitle()"
+                                IssueDescription="@GetSelectedIssueDescription()"
+                                IssueType="@GetSelectedIssueType()"
+                                BranchName="@GetSelectedIssueBranchName()"
+                                RepoPath="@_project?.LocalPath"
+                                DefaultBranch="@_project?.DefaultBranch"
+                                DefaultModel="@(_project?.DefaultModel ?? "opus")"
+                                CreateDisabled="@(!CanCreateIssue())"
+                                ChildOfDisabled="@IsMoveButtonDisabled(MoveOperationType.AsChildOf)"
+                                ParentOfDisabled="@IsMoveButtonDisabled(MoveOperationType.AsParentOf)"
+                                ChildOfActive="@IsMakeChildOfActive()"
+                                ParentOfActive="@IsMakeParentOfActive()"
+                                UndoDisabled="@(!_canUndo || _isUndoRedoing)"
+                                RedoDisabled="@(!_canRedo || _isUndoRedoing)"
+                                UndoTooltip="@(_historyState?.UndoDescription ?? "Undo")"
+                                RedoTooltip="@(_historyState?.RedoDescription ?? "Redo")"
+                                OnUndo="UndoAsync"
+                                OnRedo="RedoAsync"/>
+            }
         </div>
+
+        @* Tab Navigation *@
+        <ul class="nav nav-tabs mb-3">
+            <li class="nav-item">
+                <a class="nav-link @(_activeTab == "issues" ? "active" : "")"
+                   href="/projects/@Id"
+                   @onclick="SwitchToIssuesTab"
+                   @onclick:preventDefault>
+                    <LucideIcon Name="layout-list" Size="14" Class="me-1"/>
+                    Issues
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link @(_activeTab == "branches" ? "active" : "")"
+                   href="/projects/@Id/branches"
+                   @onclick="SwitchToBranchesTab"
+                   @onclick:preventDefault>
+                    <LucideIcon Name="git-branch" Size="14" Class="me-1"/>
+                    Branches
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link @(_activeTab == "agents" ? "active" : "")"
+                   href="/projects/@Id/agents"
+                   @onclick="SwitchToAgentsTab"
+                   @onclick:preventDefault>
+                    <LucideIcon Name="bot" Size="14" Class="me-1"/>
+                    Agents
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link @(_activeTab == "prompts" ? "active" : "")"
+                   href="/projects/@Id/prompts"
+                   @onclick="SwitchToPromptsTab"
+                   @onclick:preventDefault>
+                    <LucideIcon Name="message-square-text" Size="14" Class="me-1"/>
+                    Prompts
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link @(_activeTab == "secrets" ? "active" : "")"
+                   href="/projects/@Id/secrets"
+                   @onclick="SwitchToSecretsTab"
+                   @onclick:preventDefault>
+                    <LucideIcon Name="key-round" Size="14" Class="me-1"/>
+                    Secrets
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link @(_activeTab == "settings" ? "active" : "")"
+                   href="/projects/@Id/settings"
+                   @onclick="SwitchToSettingsTab"
+                   @onclick:preventDefault>
+                    <LucideIcon Name="settings" Size="14" Class="me-1"/>
+                    Settings
+                </a>
+            </li>
+        </ul>
+
         @if (_activeTab == "issues")
         {
-            <ProjectToolbar SelectedIssueId="@NavService.SelectedIssueId"
-                            ProjectId="@Id"
-                            IsAgentRunning="@IsSelectedIssueAgentRunning()"
-                            OnEditClick="HandleEditIssue"
-                            OnSessionStarted="HandleSessionStarted"
-                            IssueTitle="@GetSelectedIssueTitle()"
-                            IssueDescription="@GetSelectedIssueDescription()"
-                            IssueType="@GetSelectedIssueType()"
-                            BranchName="@GetSelectedIssueBranchName()"
-                            RepoPath="@_project?.LocalPath"
-                            DefaultBranch="@_project?.DefaultBranch"
-                            DefaultModel="@(_project?.DefaultModel ?? "opus")"
-                            CreateDisabled="@(!CanCreateIssue())"
-                            ChildOfDisabled="@IsMoveButtonDisabled(MoveOperationType.AsChildOf)"
-                            ParentOfDisabled="@IsMoveButtonDisabled(MoveOperationType.AsParentOf)"
-                            ChildOfActive="@IsMakeChildOfActive()"
-                            ParentOfActive="@IsMakeParentOfActive()"
-                            UndoDisabled="@(!_canUndo || _isUndoRedoing)"
-                            RedoDisabled="@(!_canRedo || _isUndoRedoing)"
-                            UndoTooltip="@(_historyState?.UndoDescription ?? "Undo")"
-                            RedoTooltip="@(_historyState?.RedoDescription ?? "Redo")"
-                            OnUndo="UndoAsync"
-                            OnRedo="RedoAsync" />
-        }
-    </div>
-
-    @* Tab Navigation *@
-    <ul class="nav nav-tabs mb-3">
-        <li class="nav-item">
-            <a class="nav-link @(_activeTab == "issues" ? "active" : "")"
-               href="/projects/@Id"
-               @onclick="SwitchToIssuesTab"
-               @onclick:preventDefault>
-                <LucideIcon Name="layout-list" Size="14" Class="me-1" />Issues
-            </a>
-        </li>
-        <li class="nav-item">
-            <a class="nav-link @(_activeTab == "branches" ? "active" : "")"
-               href="/projects/@Id/branches"
-               @onclick="SwitchToBranchesTab"
-               @onclick:preventDefault>
-                <LucideIcon Name="git-branch" Size="14" Class="me-1" />Branches
-            </a>
-        </li>
-        <li class="nav-item">
-            <a class="nav-link @(_activeTab == "agents" ? "active" : "")"
-               href="/projects/@Id/agents"
-               @onclick="SwitchToAgentsTab"
-               @onclick:preventDefault>
-                <LucideIcon Name="bot" Size="14" Class="me-1" />Agents
-            </a>
-        </li>
-        <li class="nav-item">
-            <a class="nav-link @(_activeTab == "prompts" ? "active" : "")"
-               href="/projects/@Id/prompts"
-               @onclick="SwitchToPromptsTab"
-               @onclick:preventDefault>
-                <LucideIcon Name="message-square-text" Size="14" Class="me-1" />Prompts
-            </a>
-        </li>
-        <li class="nav-item">
-            <a class="nav-link @(_activeTab == "secrets" ? "active" : "")"
-               href="/projects/@Id/secrets"
-               @onclick="SwitchToSecretsTab"
-               @onclick:preventDefault>
-                <LucideIcon Name="key-round" Size="14" Class="me-1" />Secrets
-            </a>
-        </li>
-        <li class="nav-item">
-            <a class="nav-link @(_activeTab == "settings" ? "active" : "")"
-               href="/projects/@Id/settings"
-               @onclick="SwitchToSettingsTab"
-               @onclick:preventDefault>
-                <LucideIcon Name="settings" Size="14" Class="me-1" />Settings
-            </a>
-        </li>
-    </ul>
-
-    @if (_activeTab == "issues")
-    {
-        <div class="project-layout">
-            <div class="timeline-column">
-                <SearchBar IsVisible="@NavService.IsSearching"
-                           SearchTerm="@NavService.SearchTerm"
-                           MatchCount="@NavService.MatchingIndices.Count"
-                           CurrentMatchIndex="@NavService.CurrentMatchIndex"
-                           OnSearchTermChanged="HandleSearchTermChanged"
-                           OnEnter="HandleSearchEnter"
-                           OnEscape="HandleSearchEscape" />
-                <TimelineVisualization
-                    @ref="_graphVisualization"
-                    ProjectId="@Id"
-                    RepoPath="@_project?.LocalPath"
-                    DefaultBranch="@_project?.DefaultBranch"
-                    DefaultModel="@(_project?.DefaultModel ?? "opus")"
-                    OnPullRequestClick="@HandlePullRequestClickFromGraph"
-                    OnIssueClick="@HandleIssueClickFromGraph"
-                    OnIssueCreated="@HandleInlineIssueCreated"
-                    OnEditClick="@HandleEditIssue"
-                    OnSessionStarted="@HandleSessionStarted"
-                    OnOpenPanelClick="@HandleOpenPanelFromGraph"
-                    SelectedNodeId="@GetSelectedNodeId()"
-                    ActiveSearchTerm="@GetActiveSearchTerm()" />
-            </div>
-        </div>
-
-        @* Collapsible Detail Sidebar *@
-        <div class="detail-sidebar @(_sidebarOpen ? "open" : "")">
-            @if (_selectedPullRequest != null)
-            {
-                <CurrentPullRequestDetailPanel PullRequest="_selectedPullRequest"
-                                               OnActionCompleted="RefreshData"
-                                               OnClose="CloseSidebar"/>
-            }
-            else if (_selectedMergedPr != null)
-            {
-                <MergedPullRequestDetailPanel Details="_selectedMergedPr"
-                                              ProjectId="@Id"
-                                              OnClose="CloseSidebar"/>
-            }
-            else if (_isLoadingMergedPr)
-            {
-                <div class="card">
-                    <div class="card-body text-center">
-                        <BbSpinner Size="SpinnerSize.Small" Class="mr-2" />
-                        Loading pull request details...
-                    </div>
-                </div>
-            }
-            else if (_selectedIssue != null)
-            {
-                <IssueDetailPanel ProjectId="@Id"
-                                  Issue="_selectedIssue"
-                                  OnActionCompleted="RefreshData"
-                                  OnClose="CloseSidebar"/>
-            }
-        </div>
-
-    }
-    else if (_activeTab == "branches")
-    {
-        <CloneManagementPanel Project="@_project"
-                                 OnDataChanged="RefreshData" />
-    }
-    else if (_activeTab == "agents")
-    {
-        <SessionsPanel ProjectId="@Id" OnSessionStopped="RefreshData" />
-    }
-    else if (_activeTab == "prompts")
-    {
-        <ProjectPromptsTab ProjectId="@Id" />
-    }
-    else if (_activeTab == "secrets")
-    {
-        <ProjectSecretsTab ProjectId="@Id" />
-    }
-    else if (_activeTab == "settings")
-    {
-        <div class="settings-tab-content">
-            <div class="card mb-3">
-                <div class="card-header">Project Information</div>
-                <div class="card-body">
-                    <dl class="info-list">
-                        <dt>Local Path</dt>
-                        <dd><code>@_project.LocalPath</code></dd>
-                        <dt>Default Branch</dt>
-                        <dd>@_project.DefaultBranch</dd>
-                        @if (!string.IsNullOrEmpty(_project.GitHubOwner) && !string.IsNullOrEmpty(_project.GitHubRepo))
-                        {
-                            <dt>GitHub Repository</dt>
-                            <dd>
-                                <a href="https://github.com/@_project.GitHubOwner/@_project.GitHubRepo"
-                                   target="_blank">
-                                    @_project.GitHubOwner/@_project.GitHubRepo
-                                </a>
-                            </dd>
-                        }
-                    </dl>
+            <div class="project-layout">
+                <div class="timeline-column">
+                    <SearchBar IsVisible="@NavService.IsSearching"
+                               SearchTerm="@NavService.SearchTerm"
+                               MatchCount="@NavService.MatchingIndices.Count"
+                               CurrentMatchIndex="@NavService.CurrentMatchIndex"
+                               OnSearchTermChanged="HandleSearchTermChanged"
+                               OnEnter="HandleSearchEnter"
+                               OnEscape="HandleSearchEscape"/>
+                    <TimelineVisualization
+                        @ref="_graphVisualization"
+                        ProjectId="@Id"
+                        RepoPath="@_project?.LocalPath"
+                        DefaultBranch="@_project?.DefaultBranch"
+                        DefaultModel="@(_project?.DefaultModel ?? "opus")"
+                        OnPullRequestClick="@HandlePullRequestClickFromGraph"
+                        OnIssueClick="@HandleIssueClickFromGraph"
+                        OnIssueCreated="@HandleInlineIssueCreated"
+                        OnEditClick="@HandleEditIssue"
+                        OnSessionStarted="@HandleSessionStarted"
+                        OnOpenPanelClick="@HandleOpenPanelFromGraph"
+                        SelectedNodeId="@GetSelectedNodeId()"
+                        ActiveSearchTerm="@GetActiveSearchTerm()"/>
                 </div>
             </div>
 
-            @if (IsDebugBuild)
-            {
-                <div class="card">
-                    <div class="card-header">Debug Tools</div>
-                    <div class="card-body">
-                        <div class="flex flex-col gap-2">
-                            <AsyncActionButton OnClick="StartTestAgentAsync"
-                                               IsLoadingExternal="_isStartingTestAgent"
-                                               Variant="ButtonVariant.Outline"
-                                               Size="ButtonSize.Small"
-                                               Text="Start Test Agent"
-                                               LoadingText="Starting..." />
-                            @if (!string.IsNullOrEmpty(_testAgentError))
-                            {
-                                <div class="alert alert-danger py-1 px-2 mb-0 text-sm">
-                                    @_testAgentError
-                                </div>
-                            }
+            @* Collapsible Detail Sidebar *@
+            <div class="detail-sidebar @(_sidebarOpen ? "open" : "")">
+                @if (_selectedPullRequest != null)
+                {
+                    <CurrentPullRequestDetailPanel PullRequest="_selectedPullRequest"
+                                                   OnActionCompleted="RefreshData"
+                                                   OnClose="CloseSidebar"/>
+                }
+                else if (_selectedMergedPr != null)
+                {
+                    <MergedPullRequestDetailPanel Details="_selectedMergedPr"
+                                                  ProjectId="@Id"
+                                                  OnClose="CloseSidebar"/>
+                }
+                else if (_isLoadingMergedPr)
+                {
+                    <div class="card">
+                        <div class="card-body text-center">
+                            <BbSpinner Size="SpinnerSize.Small" Class="mr-2"/>
+                            Loading pull request details...
                         </div>
                     </div>
+                }
+                else if (_selectedIssue != null)
+                {
+                    <IssueDetailPanel ProjectId="@Id"
+                                      Issue="_selectedIssue"
+                                      OnActionCompleted="RefreshData"
+                                      OnClose="CloseSidebar"/>
+                }
+            </div>
+        }
+        else if (_activeTab == "branches")
+        {
+            <CloneManagementPanel Project="@_project"
+                                  OnDataChanged="RefreshData"/>
+        }
+        else if (_activeTab == "agents")
+        {
+            <SessionsPanel ProjectId="@Id" OnSessionStopped="RefreshData"/>
+        }
+        else if (_activeTab == "prompts")
+        {
+            <ProjectPromptsTab ProjectId="@Id"/>
+        }
+        else if (_activeTab == "secrets")
+        {
+            <ProjectSecretsTab ProjectId="@Id"/>
+        }
+        else if (_activeTab == "settings")
+        {
+            <div class="settings-tab-content">
+                <div class="card mb-3">
+                    <div class="card-header">Project Information</div>
+                    <div class="card-body">
+                        <dl class="info-list">
+                            <dt>Local Path</dt>
+                            <dd><code>@_project.LocalPath</code></dd>
+                            <dt>Default Branch</dt>
+                            <dd>@_project.DefaultBranch</dd>
+                            @if (!string.IsNullOrEmpty(_project.GitHubOwner) && !string.IsNullOrEmpty(_project.GitHubRepo))
+                            {
+                                <dt>GitHub Repository</dt>
+                                <dd>
+                                    <a href="https://github.com/@_project.GitHubOwner/@_project.GitHubRepo"
+                                       target="_blank">
+                                        @_project.GitHubOwner/@_project.GitHubRepo
+                                    </a>
+                                </dd>
+                            }
+                        </dl>
+                    </div>
                 </div>
-            }
-        </div>
-    }
+            </div>
+        }
 
-    @* Fleece Sync Conflict Modal *@
-    <Modal IsOpen="@_showFleeceConflictModal"
-           OnClose="@HideFleeceConflictModal"
-           Title="Sync Conflict"
-           Centered="true">
-        <Body>
+        @* Fleece Sync Conflict Modal *@
+        <Modal IsOpen="@_showFleeceConflictModal"
+               OnClose="@HideFleeceConflictModal"
+               Title="Sync Conflict"
+               Centered="true">
+            <Body>
             <div class="alert alert-warning">
                 <strong>Unable to pull changes from @_project?.DefaultBranch</strong>
             </div>
             <p class="small text-muted">@_fleecePullConflict?.ErrorMessage</p>
             <p>Choose how to resolve this conflict:</p>
-        </Body>
-        <Footer>
-            <button type="button" class="btn btn-secondary" @onclick="HideFleeceConflictModal">Cancel</button>
-            <AsyncActionButton OnClick="HandleFleeceConflictStash"
-                               IsLoadingExternal="_isSyncingFleece"
-                               Variant="ButtonVariant.Secondary"
-                               Text="Stash Changes" />
-            <AsyncActionButton OnClick="HandleFleeceConflictDiscard"
-                               IsLoadingExternal="_isSyncingFleece"
-                               Variant="ButtonVariant.Destructive"
-                               Text="Discard All Changes" />
-        </Footer>
-    </Modal>
+            </Body>
+            <Footer>
+                <button type="button" class="btn btn-secondary" @onclick="HideFleeceConflictModal">Cancel</button>
+                <AsyncActionButton OnClick="HandleFleeceConflictStash"
+                                   IsLoadingExternal="_isSyncingFleece"
+                                   Variant="ButtonVariant.Secondary"
+                                   Text="Stash Changes"/>
+                <AsyncActionButton OnClick="HandleFleeceConflictDiscard"
+                                   IsLoadingExternal="_isSyncingFleece"
+                                   Variant="ButtonVariant.Destructive"
+                                   Text="Discard All Changes"/>
+            </Footer>
+        </Modal>
 
-    @* Non-Fleece Changes Modal *@
-    <Modal IsOpen="@_showNonFleeceChangesModal"
-           OnClose="@HideNonFleeceChangesModal"
-           Title="Non-Fleece Changes Detected"
-           Size="ModalSize.Lg"
-           Centered="true">
-        <Body>
+        @* Non-Fleece Changes Modal *@
+        <Modal IsOpen="@_showNonFleeceChangesModal"
+               OnClose="@HideNonFleeceChangesModal"
+               Title="Non-Fleece Changes Detected"
+               Size="ModalSize.Lg"
+               Centered="true">
+            <Body>
             <div class="alert alert-warning">
                 <strong>Your local branch is behind the remote</strong>
             </div>
@@ -312,16 +295,16 @@ else
                 You can discard these non-fleece changes to allow the sync to complete.
                 Your <code>.fleece/</code> changes will be preserved.
             </p>
-        </Body>
-        <Footer>
-            <button type="button" class="btn btn-secondary" @onclick="HideNonFleeceChangesModal">Cancel</button>
-            <AsyncActionButton OnClick="HandleDiscardNonFleeceChanges"
-                               IsLoadingExternal="_isSyncingFleece"
-                               Variant="ButtonVariant.Destructive"
-                               Text="Discard Non-Fleece Changes" />
-        </Footer>
-    </Modal>
-}
+            </Body>
+            <Footer>
+                <button type="button" class="btn btn-secondary" @onclick="HideNonFleeceChangesModal">Cancel</button>
+                <AsyncActionButton OnClick="HandleDiscardNonFleeceChanges"
+                                   IsLoadingExternal="_isSyncingFleece"
+                                   Variant="ButtonVariant.Destructive"
+                                   Text="Discard Non-Fleece Changes"/>
+            </Footer>
+        </Modal>
+    }
 </div>
 
 <style>
@@ -330,11 +313,6 @@ else
         max-width: 100%;
         overflow-x: hidden;
         transition: margin-right 0.2s ease;
-    }
-
-    /* Desktop: Squash main content when sidebar is open */
-    .project-detail-page.sidebar-open {
-        margin-right: 350px;
     }
 
     /* ==========================================================================
@@ -366,28 +344,6 @@ else
         min-width: 0;
         max-width: 100%;
         overflow-x: auto;
-    }
-
-    /* ==========================================================================
-       Collapsible Detail Sidebar
-       ========================================================================== */
-    .detail-sidebar {
-        position: fixed;
-        right: 0;
-        top: var(--topbar-height, 48px);
-        height: calc(100vh - var(--topbar-height, 48px));
-        width: 350px;
-        background: var(--bg-primary);
-        border-left: 1px solid var(--border-color);
-        transform: translateX(100%);
-        transition: transform 0.2s ease;
-        overflow-y: auto;
-        z-index: 100;
-        padding: var(--spacing-md);
-    }
-
-    .detail-sidebar.open {
-        transform: translateX(0);
     }
 
     /* ==========================================================================
@@ -452,7 +408,7 @@ else
     private KeyboardEditMode _previousEditMode = KeyboardEditMode.Viewing;
 
     // Collapsible sidebar state - tracks which item was CLICKED (not keyboard-selected)
-    private bool _sidebarOpen = false;  // Collapsed by default
+    private bool _sidebarOpen = false; // Collapsed by default
 
 
     protected override async Task OnParametersSetAsync()
@@ -493,71 +449,25 @@ else
 
             if (_project != null)
             {
-                _ = Task.Run(async () =>
-                {
-                    await InvokeAsync(async () =>
-                    {
-                        await SyncPullRequestsAsync();
-                    });
-                });
+                _ = Task.Run(async () => { await InvokeAsync(async () => { await SyncPullRequestsAsync(); }); });
             }
         }
+
         _previousId = Id;
     }
 
-    // IsDebugBuild property for conditional rendering
-#if DEBUG
-    private static bool IsDebugBuild => true;
-    // Test agent state
-    private bool _isStartingTestAgent;
-    private string? _testAgentError;
-    private const string TestAgentEntityId = "test-agent";
-    private const string TestBranchName = "hsp/test";
-#else
-    private static bool IsDebugBuild => false;
-    // Stubs for Release build (never used since IsDebugBuild is false)
-    private bool _isStartingTestAgent => false;
-    private string? _testAgentError => null;
-    private Task StartTestAgentAsync() => Task.CompletedTask;
-#endif
-
     // Fleece sync state
     private bool _isSyncingFleece;
-    private string? _fleeceSyncError;
     private FleeceIssueSyncResult? _lastFleeceSyncResult;
     private bool _showFleeceConflictModal;
     private PullResult? _fleecePullConflict;
     private bool _showNonFleeceChangesModal;
     private IReadOnlyList<string>? _nonFleeceChangedFiles;
 
-    // Split button sync actions
-    private IReadOnlyList<SplitButtonAction> _syncActions = [];
-
-    private void InitializeSyncActions()
-    {
-        _syncActions =
-        [
-            new SplitButtonAction(
-                Key: "sync",
-                Text: "Sync",
-                Icon: (RenderFragment)(builder =>
-                {
-                    builder.OpenComponent<LucideIcon>(0);
-                    builder.AddAttribute(1, "Name", "cloud-upload");
-                    builder.AddAttribute(2, "Size", 14);
-                    builder.CloseComponent();
-                }),
-                OnClick: EventCallback.Factory.Create(this, SyncAllAsync))
-        ];
-    }
-
     private record FlattenedPR(PullRequest PullRequest, int Level);
 
     protected override async Task OnInitializedAsync()
     {
-        // Initialize sync actions for split button
-        InitializeSyncActions();
-
         // Determine active tab from URL
         var uri = NavigationManager.Uri;
         if (uri.Contains("/settings"))
@@ -592,13 +502,7 @@ else
         // Using Task.Run to not block the initial render
         if (_project != null)
         {
-            _ = Task.Run(async () =>
-            {
-                await InvokeAsync(async () =>
-                {
-                    await SyncPullRequestsAsync();
-                });
-            });
+            _ = Task.Run(async () => { await InvokeAsync(async () => { await SyncPullRequestsAsync(); }); });
         }
     }
 
@@ -666,11 +570,9 @@ else
         if (_previousEditMode != KeyboardEditMode.Viewing && currentMode == KeyboardEditMode.Viewing)
         {
             // Transitioned from edit/create mode back to viewing - re-focus page container
-            _ = InvokeAsync(async () =>
-            {
-                await JSRuntime.InvokeVoidAsync("homespunInterop.focusElement", _pageContainer);
-            });
+            _ = InvokeAsync(async () => { await JSRuntime.InvokeVoidAsync("homespunInterop.focusElement", _pageContainer); });
         }
+
         _previousEditMode = currentMode;
     }
 
@@ -978,6 +880,7 @@ else
             {
                 _selectedPullRequest = await PullRequestApi.GetPullRequestAsync(_selectedPullRequestId);
             }
+
             await _graphVisualization?.RefreshAsync()!;
         }
         finally
@@ -1331,6 +1234,14 @@ else
         _sidebarOpen = true;
     }
 
+    private async Task HandlePull()
+    {
+    }
+
+    private async Task HandleSync()
+    {
+    }
+
     private void HandleEditIssue(string issueId)
     {
         NavigationManager.NavigateTo($"/projects/{Id}/issues/{issueId}/edit");
@@ -1570,150 +1481,6 @@ else
         return issue != null ? BranchNameGenerator.GenerateBranchName(issue) : null;
     }
 
-    private string? GetStartupErrorMessage(string entityId)
-    {
-        var state = StartupTracker.GetState(entityId);
-        return state?.ErrorMessage;
-    }
-
-#if DEBUG
-    private async Task StartTestAgentAsync()
-    {
-        if (_project == null)
-            return;
-
-        _isStartingTestAgent = true;
-        _testAgentError = null;
-        StateHasChanged();
-
-        try
-        {
-            // Clean up existing clone and branch if they exist
-            // Try to remove the clone first (this handles the git clone tracking)
-            try
-            {
-                var existingClones = await CloneApi.ListClonesAsync(Id);
-                var testClone = existingClones.FirstOrDefault(c =>
-                    c.Branch?.Replace("refs/heads/", "") == TestBranchName);
-                if (testClone != null)
-                {
-                    await CloneApi.DeleteCloneAsync(Id, testClone.Path);
-                }
-            }
-            catch (Exception ex2)
-            {
-                Logger.LogWarning(ex2, "Failed to clean up existing test clone, continuing...");
-            }
-
-            // TODO: Branch delete not available via HTTP API
-            // await CommandRunner.RunAsync("git", $"branch -D \"{TestBranchName}\"", _project.LocalPath);
-
-            // Prune any stale clone references
-            await CloneApi.PruneClonesAsync(Id);
-
-            // Create clone for hsp/test branch
-            var createResult = await CloneApi.CreateCloneAsync(new CreateCloneRequest
-            {
-                ProjectId = Id,
-                BranchName = TestBranchName,
-                CreateBranch = true,
-                BaseBranch = _project.DefaultBranch
-            });
-            var clonePath = createResult?.Path;
-
-            if (string.IsNullOrEmpty(clonePath))
-            {
-                _testAgentError = "Failed to create clone for test branch.";
-                return;
-            }
-
-            Logger.LogInformation("Created test clone at {ClonePath}", clonePath);
-
-            // Start the agent session without a system prompt
-            StartupTracker.MarkAsStarting(TestAgentEntityId);
-
-            var session = await SessionApi.StartSessionAsync(
-                TestAgentEntityId,
-                Id,
-                clonePath,
-                SessionMode.Build,
-                "sonnet",
-                systemPrompt: null);
-
-            StartupTracker.MarkAsStarted(TestAgentEntityId);
-
-            Logger.LogInformation("Started test agent session {SessionId}", session.Id);
-
-            // Send the task instruction as the initial message
-            // This way the full instruction is visible in the chat
-            var timestamp = DateTime.UtcNow.ToString("O");
-            var taskMessage = $"""
-                Create a file named `test.txt` in the current directory containing the following timestamp: {timestamp}
-
-                After creating the file, confirm that it was created successfully.
-                """;
-            await SessionApi.SendMessageAsync(session.Id, taskMessage);
-
-            // Agent started - user stays on current page and can monitor via status indicator
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, "Failed to start test agent");
-            StartupTracker.MarkAsFailed(TestAgentEntityId, ex.Message);
-            _testAgentError = $"Failed to start test agent: {ex.Message}";
-        }
-        finally
-        {
-            _isStartingTestAgent = false;
-            StateHasChanged();
-        }
-    }
-#endif
-
-    private async Task SyncFleeceIssuesAsync()
-    {
-        if (_project == null || _isSyncingFleece)
-            return;
-
-        _isSyncingFleece = true;
-        _fleeceSyncError = null;
-        _nonFleeceChangedFiles = null;
-        StateHasChanged();
-
-        try
-        {
-            // In WASM mode, the server handles the full sync workflow
-            // (commit, push, pull, conflict resolution) via a single endpoint
-            _lastFleeceSyncResult = await FleeceSyncApi.SyncAsync(_project.Id);
-
-            if (_lastFleeceSyncResult != null && !_lastFleeceSyncResult.Success)
-            {
-                // Check if sync failed due to non-fleece changes blocking a required pull
-                if (_lastFleeceSyncResult.HasNonFleeceChanges && _lastFleeceSyncResult.RequiresPullFirst)
-                {
-                    _nonFleeceChangedFiles = _lastFleeceSyncResult.NonFleeceChangedFiles;
-                    _showNonFleeceChangesModal = true;
-                    return;
-                }
-
-                _fleeceSyncError = _lastFleeceSyncResult.ErrorMessage;
-                return;
-            }
-
-            await RefreshData();
-        }
-        catch (Exception ex)
-        {
-            _fleeceSyncError = ex.Message;
-            Logger.LogError(ex, "Failed to sync fleece issues for project {ProjectId}", _project.Id);
-        }
-        finally
-        {
-            _isSyncingFleece = false;
-            StateHasChanged();
-        }
-    }
-
     private void HideFleeceConflictModal()
     {
         _showFleeceConflictModal = false;
@@ -1742,7 +1509,6 @@ else
 
             if (_lastFleeceSyncResult != null && !_lastFleeceSyncResult.Success)
             {
-                _fleeceSyncError = _lastFleeceSyncResult.ErrorMessage;
                 return;
             }
 
@@ -1771,7 +1537,6 @@ else
 
             if (_lastFleeceSyncResult != null && !_lastFleeceSyncResult.Success)
             {
-                _fleeceSyncError = _lastFleeceSyncResult.ErrorMessage;
                 return;
             }
 
@@ -1800,7 +1565,6 @@ else
 
             if (_lastFleeceSyncResult != null && !_lastFleeceSyncResult.Success)
             {
-                _fleeceSyncError = _lastFleeceSyncResult.ErrorMessage;
                 return;
             }
 
@@ -1842,6 +1606,7 @@ else
                     NavService.AcceptPromptSelection();
                     break;
             }
+
             return;
         }
 
@@ -1852,6 +1617,7 @@ else
             {
                 NavService.CancelMoveOperation();
             }
+
             return;
         }
 
@@ -1863,6 +1629,7 @@ else
             {
                 NavService.CancelEdit();
             }
+
             return;
         }
 
@@ -1880,6 +1647,7 @@ else
                 {
                     NavService.MoveToNextMatch();
                 }
+
                 break;
             case "N":
                 // Navigate to previous search match
@@ -1887,6 +1655,7 @@ else
                 {
                     NavService.MoveToPreviousMatch();
                 }
+
                 break;
             case "j":
             case "ArrowDown":
@@ -1945,6 +1714,7 @@ else
                 {
                     ClearSelection();
                 }
+
                 break;
             case "u":
                 // u for undo (vim-style)
@@ -1959,7 +1729,6 @@ else
         }
     }
 
-    #region Create Issue Operations
 
     /// <summary>
     /// Determines if the create above/below buttons should be enabled.
@@ -1968,9 +1737,6 @@ else
         NavService.SelectedIndex >= 0 &&
         NavService.EditMode == KeyboardEditMode.Viewing;
 
-    #endregion
-
-    #region Hierarchy Operations
 
     /// <summary>
     /// Determines if a move button should be disabled.
@@ -2004,9 +1770,6 @@ else
         NavService.EditMode == KeyboardEditMode.SelectingMoveTarget &&
         NavService.CurrentMoveOperation == MoveOperationType.AsParentOf;
 
-    #endregion
-
-    #region Undo/Redo Operations
 
     /// <summary>
     /// Refreshes the history state from the server.
@@ -2106,6 +1869,5 @@ else
         }
     }
 
-    #endregion
 
 }
