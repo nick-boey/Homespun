@@ -42,7 +42,6 @@ tags = ["homespun"]
 server_id = "Local"
 repo = "nick-boey/Homespun"
 branch = "main"
-git_account = "nick-boey"
 file_paths = ["docker-compose.yml"]
 auto_update = true
 poll_for_updates = true
