@@ -18,17 +18,14 @@ set -e
 # What this script does:
 #   1. Creates /etc/komodo directory structure
 #   2. Downloads Komodo Docker Compose files
-#   3. Generates secure secrets (passkey, JWT, webhook)
-#   4. Configures GitHub Container Registry access
-#   5. Creates environment file with configuration
+#   3. Generates secure secrets and environment file
+#   4. Installs compose files
 #
 # After installation:
 #   - Run ./scripts/run-komodo.sh to start Komodo
 #   - Access Komodo at https://<tailscale-hostname>:3500
 #
 # Environment Variables (optional):
-#   HSP_GITHUB_TOKEN    - GitHub token for GHCR access
-#   GITHUB_TOKEN        - Alternative GitHub token variable
 #   KOMODO_ADMIN_USER   - Initial admin username (default: admin)
 #   KOMODO_ADMIN_PASS   - Initial admin password (auto-generated if not set)
 
@@ -62,7 +59,7 @@ KOMODO_DIR="/etc/komodo"
 KOMODO_CONFIG_DIR="$REPO_ROOT/config/komodo"
 
 # Step 1: Validate Docker
-log_info "[1/5] Checking prerequisites..."
+log_info "[1/4] Checking prerequisites..."
 
 if ! docker version >/dev/null 2>&1; then
     log_error "Docker is not installed or not running."
@@ -79,54 +76,18 @@ fi
 log_success "      openssl is available."
 
 # Step 2: Create directory structure
-log_info "[2/5] Creating directory structure..."
+log_info "[2/4] Creating directory structure..."
 
 sudo mkdir -p "$KOMODO_DIR"
 sudo mkdir -p "$KOMODO_DIR/backups"
-sudo mkdir -p "$KOMODO_DIR/docker"
 sudo mkdir -p "$KOMODO_DIR/stacks"
 sudo mkdir -p "$KOMODO_DIR/repos"
 sudo chmod 755 "$KOMODO_DIR"
 
 log_success "      Created $KOMODO_DIR"
 
-# Step 3: Set up GitHub Container Registry access
-log_info "[3/5] Configuring GitHub Container Registry..."
-
-# Get GitHub token from environment
-GITHUB_TOKEN="${HSP_GITHUB_TOKEN:-${GITHUB_TOKEN:-}}"
-
-# Try reading from ~/.homespun/env if not set
-if [ -z "$GITHUB_TOKEN" ]; then
-    HOMESPUN_ENV_FILE="$HOME/.homespun/env"
-    if [ -f "$HOMESPUN_ENV_FILE" ]; then
-        source "$HOMESPUN_ENV_FILE"
-        GITHUB_TOKEN="${HSP_GITHUB_TOKEN:-${GITHUB_TOKEN:-}}"
-    fi
-fi
-
-if [ -z "$GITHUB_TOKEN" ]; then
-    log_warn "      No GitHub token found."
-    log_warn "      Set GITHUB_TOKEN or HSP_GITHUB_TOKEN for GHCR access."
-    log_warn "      Komodo will not be able to pull private images."
-else
-    # Create Docker config for GHCR
-    GHCR_AUTH=$(echo -n "homespun:$GITHUB_TOKEN" | base64)
-    sudo tee "$KOMODO_DIR/docker/config.json" > /dev/null << EOF
-{
-  "auths": {
-    "ghcr.io": {
-      "auth": "$GHCR_AUTH"
-    }
-  }
-}
-EOF
-    sudo chmod 600 "$KOMODO_DIR/docker/config.json"
-    log_success "      Configured GHCR authentication."
-fi
-
-# Step 4: Generate secrets and environment file
-log_info "[4/5] Generating configuration..."
+# Step 3: Generate secrets and environment file
+log_info "[3/4] Generating configuration..."
 
 # Generate secrets
 KOMODO_PASSKEY=$(generate_secret)
@@ -224,8 +185,8 @@ EOF
 sudo chmod 600 "$KOMODO_DIR/compose.env"
 log_success "      Generated configuration at $KOMODO_DIR/compose.env"
 
-# Step 5: Copy compose files
-log_info "[5/5] Installing compose files..."
+# Step 4: Copy compose files
+log_info "[4/4] Installing compose files..."
 
 # Ensure config directory exists
 mkdir -p "$KOMODO_CONFIG_DIR"
