@@ -1,6 +1,8 @@
 <div class="settings-tab-content">
     <BbCard Class="mb-3">
-        <BbCardHeader><BbCardTitle>Project Information</BbCardTitle></BbCardHeader>
+        <BbCardHeader>
+            <BbCardTitle>Project Information</BbCardTitle>
+        </BbCardHeader>
         <BbCardContent>
             <dl class="info-list">
                 <dt>Local Path</dt>
@@ -20,33 +22,11 @@
             </dl>
         </BbCardContent>
     </BbCard>
+
+    <BbButton Variant="ButtonVariant.Outline" Size="ButtonSize.Small" Href="@($"projects/{Project.Id}/edit")">
+        Edit Project
+    </BbButton>
 </div>
-
-<style>
-    .settings-tab-content {
-        max-width: 800px;
-    }
-
-    .info-list {
-        display: grid;
-        grid-template-columns: auto 1fr;
-        gap: var(--spacing-sm) var(--spacing-lg);
-        align-items: baseline;
-    }
-
-    .info-list dt {
-        font-weight: 600;
-        color: var(--text-muted);
-        font-size: 0.875rem;
-        white-space: nowrap;
-    }
-
-    .info-list dd {
-        margin: 0;
-        color: var(--text-primary);
-        font-size: 0.875rem;
-    }
-</style>
 
 @code {
     [Parameter] public required Project Project { get; set; }

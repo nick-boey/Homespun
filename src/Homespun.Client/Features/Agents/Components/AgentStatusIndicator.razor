@@ -6,38 +6,40 @@
 
 @if (_totalActive > 0 || _errorCount > 0 || _unknownCount > 0)
 {
-    <a href="/agents" class="agent-status-indicator" title="@GetTooltipText()">
-        @if (_workingCount > 0)
-        {
-            <span class="status-dot working" aria-label="Working agents"></span>
-            <span class="count">@_workingCount</span>
-        }
-        @if (_questionCount > 0)
-        {
-            <span class="status-dot question" aria-label="Agents awaiting response"></span>
-            <span class="count">@_questionCount</span>
-        }
-        @if (_planReadyCount > 0)
-        {
-            <span class="status-dot plan-ready" aria-label="Agents with plan ready"></span>
-            <span class="count">@_planReadyCount</span>
-        }
-        @if (_waitingCount > 0)
-        {
-            <span class="status-dot waiting" aria-label="Agents waiting for input"></span>
-            <span class="count">@_waitingCount</span>
-        }
-        @if (_errorCount > 0)
-        {
-            <span class="status-dot error" aria-label="Agents in error state"></span>
-            <span class="count">@_errorCount</span>
-        }
-        @if (_unknownCount > 0)
-        {
-            <span class="status-dot unknown" aria-label="Agents in unknown state">?</span>
-            <span class="count">@_unknownCount</span>
-        }
-    </a>
+    <BbBadge>
+        <a href="/agents" class="agent-status-indicator" title="@GetTooltipText()">
+            @if (_workingCount > 0)
+            {
+                <span class="status-dot working" aria-label="Working agents"></span>
+                <span class="count">@_workingCount</span>
+            }
+            @if (_questionCount > 0)
+            {
+                <span class="status-dot question" aria-label="Agents awaiting response"></span>
+                <span class="count">@_questionCount</span>
+            }
+            @if (_planReadyCount > 0)
+            {
+                <span class="status-dot plan-ready" aria-label="Agents with plan ready"></span>
+                <span class="count">@_planReadyCount</span>
+            }
+            @if (_waitingCount > 0)
+            {
+                <span class="status-dot waiting" aria-label="Agents waiting for input"></span>
+                <span class="count">@_waitingCount</span>
+            }
+            @if (_errorCount > 0)
+            {
+                <span class="status-dot error" aria-label="Agents in error state"></span>
+                <span class="count">@_errorCount</span>
+            }
+            @if (_unknownCount > 0)
+            {
+                <span class="status-dot unknown" aria-label="Agents in unknown state">?</span>
+                <span class="count">@_unknownCount</span>
+            }
+        </a>
+    </BbBadge>
 }
 
 @code {
@@ -70,7 +72,11 @@
 
         // Periodic refresh as a fallback (every 5 seconds)
         _refreshTimer = new System.Threading.Timer(
-            _ => InvokeAsync(async () => { await UpdateCountsAsync(); StateHasChanged(); }),
+            _ => InvokeAsync(async () =>
+            {
+                await UpdateCountsAsync();
+                StateHasChanged();
+            }),
             null,
             TimeSpan.FromSeconds(5),
             TimeSpan.FromSeconds(5));
@@ -121,13 +127,25 @@
                 .Build();
 
             _hubConnection.On<string, ClaudeSessionStatus, bool>("SessionStatusChanged",
-                (_, _, _) => InvokeAsync(async () => { await UpdateCountsAsync(); StateHasChanged(); }));
+                (_, _, _) => InvokeAsync(async () =>
+                {
+                    await UpdateCountsAsync();
+                    StateHasChanged();
+                }));
 
             _hubConnection.On<ClaudeSession>("SessionStarted",
-                _ => InvokeAsync(async () => { await UpdateCountsAsync(); StateHasChanged(); }));
+                _ => InvokeAsync(async () =>
+                {
+                    await UpdateCountsAsync();
+                    StateHasChanged();
+                }));
 
             _hubConnection.On<string>("SessionStopped",
-                _ => InvokeAsync(async () => { await UpdateCountsAsync(); StateHasChanged(); }));
+                _ => InvokeAsync(async () =>
+                {
+                    await UpdateCountsAsync();
+                    StateHasChanged();
+                }));
 
             await _hubConnection.StartAsync();
         }
@@ -163,9 +181,11 @@
         {
             await _refreshTimer.DisposeAsync();
         }
+
         if (_hubConnection != null)
         {
             await _hubConnection.DisposeAsync();
         }
     }
+
 }

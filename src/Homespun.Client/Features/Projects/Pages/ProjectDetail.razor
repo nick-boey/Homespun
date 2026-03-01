@@ -17,126 +17,127 @@
 
 <PageTitle>@(_project?.Name ?? "Project")</PageTitle>
 
-<div class="project-detail-page">
-    @if (_project == null)
-    {
-        <p>Loading...</p>
-    }
-    else
-    {
-        <div class="project-sticky-header">
-            <div class="flex justify-between items-center">
-                <h1>@_project.Name</h1>
-                <div class="flex items-center gap-2">
-                    <BbSplitButton IconPosition="IconPosition.Start" Size="ButtonSize.Small" OnClick="PullAsync">
-                        <Icon>
-                            <LucideIcon Name="cloud" class="h-4 w-4"/>
-                        </Icon>
-                        <ChildContent>Pull</ChildContent>
-                        <DropdownContent>
-                            <BbSplitButtonItem OnClick="SyncAllAsync">Sync</BbSplitButtonItem>
-                        </DropdownContent>
-                    </BbSplitButton>
-                    <BbButton Variant="ButtonVariant.Outline" Size="ButtonSize.Small" Href="@($"projects/{Id}/edit")">
-                        Edit Project
-                    </BbButton>
-                </div>
-            </div>
+@if (_project == null)
+{
+    <p>Loading...</p>
+}
+else
+{
+    @* Tab Navigation *@
+    <BbTabs Value="@_activeTab" ValueChanged="HandleTabChange"
+            ActivationMode="BlazorBlueprint.Primitives.Tabs.TabsActivationMode.Manual"
+            Class="w-full mb-3">
+        <BbTabsList>
+            <BbTabsTrigger Value="issues">
+                <LucideIcon Name="layout-list" Class="mr-2 h-4 w-4"/>
+                Issues
+            </BbTabsTrigger>
+            <BbTabsTrigger Value="branches">
+                <LucideIcon Name="git-branch" Class="mr-2 h-4 w-4"/>
+                Branches
+            </BbTabsTrigger>
+            <BbTabsTrigger Value="agents">
+                <LucideIcon Name="bot" Class="mr-2 h-4 w-4"/>
+                Agents
+            </BbTabsTrigger>
+            <BbTabsTrigger Value="prompts">
+                <LucideIcon Name="message-square-text" Class="mr-2 h-4 w-4"/>
+                Prompts
+            </BbTabsTrigger>
+            <BbTabsTrigger Value="secrets">
+                <LucideIcon Name="key-round" Class="mr-2 h-4 w-4"/>
+                Secrets
+            </BbTabsTrigger>
+            <BbTabsTrigger Value="settings">
+                <LucideIcon Name="settings" Class="mr-2 h-4 w-4"/>
+                Settings
+            </BbTabsTrigger>
+        </BbTabsList>
+    </BbTabs>
+
+    <div class="flex justify-between items-center mb-4">
+        <h1>@_project.Name</h1>
+        <div class="flex items-center gap-2">
+            <BbSplitButton IconPosition="IconPosition.Start" Size="ButtonSize.Small" OnClick="PullAsync">
+                <Icon>
+                    <LucideIcon Name="cloud" class="h-4 w-4"/>
+                </Icon>
+                <ChildContent>Pull</ChildContent>
+                <DropdownContent>
+                    <BbSplitButtonItem OnClick="SyncAllAsync">Sync</BbSplitButtonItem>
+                </DropdownContent>
+            </BbSplitButton>
         </div>
+    </div>
 
-        @* Tab Navigation *@
-        <BbTabs Value="@_activeTab" ValueChanged="HandleTabChange" ActivationMode="BlazorBlueprint.Primitives.Tabs.TabsActivationMode.Manual" Class="mb-3">
-            <BbTabsList>
-                <BbTabsTrigger Value="issues">
-                    <LucideIcon Name="layout-list" Size="14" Class="me-1"/>
-                    Issues
-                </BbTabsTrigger>
-                <BbTabsTrigger Value="branches">
-                    <LucideIcon Name="git-branch" Size="14" Class="me-1"/>
-                    Branches
-                </BbTabsTrigger>
-                <BbTabsTrigger Value="agents">
-                    <LucideIcon Name="bot" Size="14" Class="me-1"/>
-                    Agents
-                </BbTabsTrigger>
-                <BbTabsTrigger Value="prompts">
-                    <LucideIcon Name="message-square-text" Size="14" Class="me-1"/>
-                    Prompts
-                </BbTabsTrigger>
-                <BbTabsTrigger Value="secrets">
-                    <LucideIcon Name="key-round" Size="14" Class="me-1"/>
-                    Secrets
-                </BbTabsTrigger>
-                <BbTabsTrigger Value="settings">
-                    <LucideIcon Name="settings" Size="14" Class="me-1"/>
-                    Settings
-                </BbTabsTrigger>
-            </BbTabsList>
-        </BbTabs>
-
-        @if (_activeTab == "issues")
-        {
-            <ProjectIssuesTab ProjectId="@Id"
-                              Project="@_project"
-                              RefreshTrigger="@_issuesRefreshTrigger"
+    @if (_activeTab == "issues")
+    {
+        <ProjectIssuesTab ProjectId="@Id"
+                          Project="@_project"
+                          RefreshTrigger="@_issuesRefreshTrigger"
+                          OnDataChanged="OnIssuesDataChanged"/>
+    }
+    else if (_activeTab == "branches")
+    {
+        <CloneManagementPanel Project="@_project"
                               OnDataChanged="OnIssuesDataChanged"/>
-        }
-        else if (_activeTab == "branches")
-        {
-            <CloneManagementPanel Project="@_project"
-                                  OnDataChanged="OnIssuesDataChanged"/>
-        }
-        else if (_activeTab == "agents")
-        {
-            <SessionsPanel ProjectId="@Id" OnSessionStopped="OnIssuesDataChanged"/>
-        }
-        else if (_activeTab == "prompts")
-        {
-            <ProjectPromptsTab ProjectId="@Id"/>
-        }
-        else if (_activeTab == "secrets")
-        {
-            <ProjectSecretsTab ProjectId="@Id"/>
-        }
-        else if (_activeTab == "settings")
-        {
-            <ProjectSettingsTab Project="@_project"/>
-        }
+    }
+    else if (_activeTab == "agents")
+    {
+        <SessionsPanel ProjectId="@Id" OnSessionStopped="OnIssuesDataChanged"/>
+    }
+    else if (_activeTab == "prompts")
+    {
+        <ProjectPromptsTab ProjectId="@Id"/>
+    }
+    else if (_activeTab == "secrets")
+    {
+        <ProjectSecretsTab ProjectId="@Id"/>
+    }
+    else if (_activeTab == "settings")
+    {
+        <ProjectSettingsTab Project="@_project"/>
+    }
 
-        @* Fleece Sync Conflict Modal *@
-        <BbDialog Open="@_showFleeceConflictModal" OnOpenChange="v => { if (!v) HideFleeceConflictModal(); }">
-            <BbDialogContent>
-                <BbDialogHeader>
-                    <BbDialogTitle>Sync Conflict</BbDialogTitle>
-                </BbDialogHeader>
-                <BbDialogBody>
+    @* Fleece Sync Conflict Modal *@
+    <BbDialog Open="@_showFleeceConflictModal" OnOpenChange="v => { if (!v) HideFleeceConflictModal(); }">
+        <BbDialogContent>
+            <BbDialogHeader>
+                <BbDialogTitle>Sync Conflict</BbDialogTitle>
+                <BbDialogDescription>
                     <BbAlert Variant="AlertVariant.Warning">
-                        <BbAlertDescription><strong>Unable to pull changes from @_project?.DefaultBranch</strong></BbAlertDescription>
+                        <BbAlertDescription><strong>Unable to pull changes from @_project?.DefaultBranch</strong>
+                        </BbAlertDescription>
+                        <p class="small text-muted">@_fleecePullConflict?.ErrorMessage</p>
                     </BbAlert>
-                    <p class="small text-muted">@_fleecePullConflict?.ErrorMessage</p>
                     <p>Choose how to resolve this conflict:</p>
-                </BbDialogBody>
-                <BbDialogFooter>
-                    <BbButton Variant="ButtonVariant.Secondary" OnClick="HideFleeceConflictModal">Cancel</BbButton>
-                    <BbButton OnClick="HandleFleeceConflictStash" Loading="@_isSyncingFleece" Variant="ButtonVariant.Secondary">Stash Changes</BbButton>
-                    <BbButton OnClick="HandleFleeceConflictDiscard" Loading="@_isSyncingFleece" Variant="ButtonVariant.Destructive">Discard All Changes</BbButton>
-                </BbDialogFooter>
-            </BbDialogContent>
-        </BbDialog>
+                </BbDialogDescription>
+            </BbDialogHeader>
+            <BbDialogFooter>
+                <BbButton Variant="ButtonVariant.Secondary" OnClick="HideFleeceConflictModal">Cancel</BbButton>
+                <BbButton OnClick="HandleFleeceConflictStash" Loading="@_isSyncingFleece"
+                          Variant="ButtonVariant.Secondary">Stash Changes
+                </BbButton>
+                <BbButton OnClick="HandleFleeceConflictDiscard" Loading="@_isSyncingFleece"
+                          Variant="ButtonVariant.Destructive">Discard All Changes
+                </BbButton>
+            </BbDialogFooter>
+        </BbDialogContent>
+    </BbDialog>
 
-        @* Non-Fleece Changes Modal *@
-        <BbDialog Open="@_showNonFleeceChangesModal" OnOpenChange="v => { if (!v) HideNonFleeceChangesModal(); }">
-            <BbDialogContent Class="sm:max-w-2xl">
-                <BbDialogHeader>
-                    <BbDialogTitle>Non-Fleece Changes Detected</BbDialogTitle>
-                </BbDialogHeader>
-                <BbDialogBody>
+    @* Non-Fleece Changes Modal *@
+    <BbDialog Open="@_showNonFleeceChangesModal" OnOpenChange="v => { if (!v) HideNonFleeceChangesModal(); }">
+        <BbDialogContent Class="sm:max-w-2xl">
+            <BbDialogHeader>
+                <BbDialogTitle>Non-Fleece Changes Detected</BbDialogTitle>
+                <BbDialogDescription>
                     <BbAlert Variant="AlertVariant.Warning">
                         <BbAlertDescription><strong>Your local branch is behind the remote</strong></BbAlertDescription>
                     </BbAlert>
                     <p>
                         The sync cannot complete because your local branch needs to pull changes from the remote,
-                        but you have uncommitted changes outside the <code>.fleece/</code> folder that may cause conflicts.
+                        but you have uncommitted changes outside the <code>.fleece/</code> folder that may cause
+                        conflicts.
                     </p>
                     @if (_nonFleeceChangedFiles != null && _nonFleeceChangedFiles.Count > 0)
                     {
@@ -154,36 +155,17 @@
                         You can discard these non-fleece changes to allow the sync to complete.
                         Your <code>.fleece/</code> changes will be preserved.
                     </p>
-                </BbDialogBody>
-                <BbDialogFooter>
-                    <BbButton Variant="ButtonVariant.Secondary" OnClick="HideNonFleeceChangesModal">Cancel</BbButton>
-                    <BbButton OnClick="HandleDiscardNonFleeceChanges" Loading="@_isSyncingFleece" Variant="ButtonVariant.Destructive">Discard Non-Fleece Changes</BbButton>
-                </BbDialogFooter>
-            </BbDialogContent>
-        </BbDialog>
-    }
-</div>
-
-<style>
-    .project-detail-page {
-        outline: none;
-        max-width: 100%;
-        overflow-x: hidden;
-    }
-
-    /* ==========================================================================
-       Sticky Header - Title and Toolbar
-       ========================================================================== */
-    .project-sticky-header {
-        position: sticky;
-        top: 0;
-        z-index: 90;
-        background: var(--bg-primary, #1a1a2e);
-        padding-bottom: var(--spacing-sm, 8px);
-        margin-bottom: var(--spacing-md, 16px);
-        border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
-    }
-</style>
+                </BbDialogDescription>
+            </BbDialogHeader>
+            <BbDialogFooter>
+                <BbButton Variant="ButtonVariant.Secondary" OnClick="HideNonFleeceChangesModal">Cancel</BbButton>
+                <BbButton OnClick="HandleDiscardNonFleeceChanges" Loading="@_isSyncingFleece"
+                          Variant="ButtonVariant.Destructive">Discard Non-Fleece Changes
+                </BbButton>
+            </BbDialogFooter>
+        </BbDialogContent>
+    </BbDialog>
+}
 
 @code {
     [Parameter] public string Id { get; set; } = "";
@@ -713,4 +695,5 @@
         _issuesRefreshTrigger++;
         StateHasChanged();
     }
+
 }

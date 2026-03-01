@@ -43,8 +43,8 @@ else
                         <BbButton Variant="ButtonVariant.Outline" Size="ButtonSize.Small"
                                   Href="@($"projects/{projectAction.Id}")">View
                         </BbButton>
-                        <BbButton Variant="ButtonVariant.Ghost" Size="ButtonSize.Small"
-                                  OnClick="() => DeleteProject(projectAction.Id)">Edit
+                        <BbButton Variant="ButtonVariant.Destructive" Size="ButtonSize.Small"
+                                  OnClick="() => DeleteProject(projectAction.Id)">Delete
                         </BbButton>
                     </div>
                 </CellTemplate>
@@ -52,7 +52,7 @@ else
         </Columns>
     </BbDataTable>
 
-    <BbButton Href="projects/create">New Project</BbButton>
+    <BbButton Class="mt-4" Href="projects/create">New Project</BbButton>
 }
 
 @code {

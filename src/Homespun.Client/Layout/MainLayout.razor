@@ -2,6 +2,7 @@
 @implements IDisposable
 @inject IBreadcrumbService BreadcrumbService
 @inject IPanelService PanelService
+@using BlazorBlueprint.Primitives.Services
 @using System.Reflection
 
 @inject HttpProjectApiService ProjectApi
@@ -13,15 +14,13 @@
     <div class="flex items-center justify-between">
         <div class="flex items-center gap-4">
             <BbResponsiveNavTrigger/>
+            <span class="font-semibold">Homespun</span>
             <BbBreadcrumb>
                 <!-- 
                 TODO: This should show BreadcrumbLink for all parent pages and a BreadcrumbPage for the current page.
                 Likely requires modifications to the BreadcrumbService.
                  -->
                 <BbBreadcrumbList>
-                    <BbBreadcrumbItem>
-                        <BbBreadcrumbLink Href="/">Homespun</BbBreadcrumbLink>
-                    </BbBreadcrumbItem>
                     @foreach (var crumb in BreadcrumbService.Breadcrumbs)
                     {
                         <BbBreadcrumbSeparator/>
@@ -101,11 +100,12 @@
             </BbSidebarMenu>
         </BbSidebarContent>
     </BbSidebar>
-    <main class="w-full">
+    <main class="w-full p-4">
         @Body
     </main>
+
 </BbSidebarProvider>
-<BbPortalHost />
+<BbPortalHost/>
 
 @code {
     private List<Project> _projects = [];
@@ -138,22 +138,9 @@
         InvokeAsync(StateHasChanged);
     }
 
-    private void TogglePanel()
-    {
-        PanelService.TogglePanel();
-    }
-
     private void OnPanelStateChanged()
     {
         InvokeAsync(StateHasChanged);
-    }
-
-    private string GetPanelToggleTooltip()
-    {
-        if (!PanelService.IsPanelAvailable)
-            return "No panel available on this page";
-
-        return PanelService.IsPanelOpen ? "Close detail panel" : "Open detail panel";
     }
 
     public void Dispose()

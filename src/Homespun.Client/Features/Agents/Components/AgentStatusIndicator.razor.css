@@ -2,20 +2,13 @@
     display: flex;
     align-items: center;
     gap: var(--spacing-xs);
-    padding: var(--spacing-xs) var(--spacing-sm);
-    border-radius: var(--radius-md);
-    background-color: rgba(255, 255, 255, 0.1);
     text-decoration: none;
-    color: var(--text-sidebar);
-    font-size: 0.8125rem;
-    transition: background-color var(--transition-fast);
-    margin-right: var(--spacing-sm);
+    color: inherit;
 }
 
 .agent-status-indicator:hover {
-    background-color: rgba(255, 255, 255, 0.2);
     text-decoration: none;
-    color: var(--text-sidebar);
+    color: inherit;
 }
 
 .status-dot {
