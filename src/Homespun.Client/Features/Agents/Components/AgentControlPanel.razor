@@ -60,7 +60,9 @@ else
 
 @if (!string.IsNullOrEmpty(_errorMessage))
 {
-    <FormMessage Type="FormMessageType.Error" Message="@_errorMessage" Class="mt-1 mb-0" />
+    <BbAlert Variant="AlertVariant.Danger" Class="mt-1 mb-0">
+        <BbAlertDescription>@_errorMessage</BbAlertDescription>
+    </BbAlert>
 }
 
 <style>

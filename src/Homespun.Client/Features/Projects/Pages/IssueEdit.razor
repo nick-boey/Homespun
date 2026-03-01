@@ -177,13 +177,7 @@ else
                                     }
                                 </select>
                             </div>
-                            <AsyncActionButton OnClick="HandleSaveAndRunAgent"
-                                               IsLoadingExternal="_isSavingAndRunning"
-                                               Variant="ButtonVariant.Default"
-                                               CssClass="w-full"
-                                               Text="Save & Run Agent"
-                                               LoadingText="Saving & Starting..."
-                                               Disabled="@(_isSaving)" />
+                            <BbButton OnClick="HandleSaveAndRunAgent" Loading="@_isSavingAndRunning" LoadingText="Saving & Starting..." Class="w-full" Disabled="@_isSaving">Save & Run Agent</BbButton>
                         }
                     </div>
                 </div>
@@ -194,10 +188,7 @@ else
 
         <div class="flex justify-between items-center">
             <div>
-                <AsyncActionButton ButtonType="submit"
-                                   IsLoadingExternal="_isSaving"
-                                   Variant="ButtonVariant.Default"
-                                   Text="Save Changes" />
+                <BbButton Type="ButtonType.Submit" Loading="@_isSaving">Save Changes</BbButton>
                 <a href="projects/@ProjectId" class="btn btn-secondary">Cancel</a>
             </div>
             <div class="text-text-muted text-sm">

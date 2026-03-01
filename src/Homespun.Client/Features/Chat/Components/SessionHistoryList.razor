@@ -53,7 +53,9 @@ else if (_sessions.Count > 0)
 
 @if (!string.IsNullOrEmpty(_errorMessage))
 {
-    <FormMessage Type="FormMessageType.Error" Message="@_errorMessage" Class="mt-2" />
+    <BbAlert Variant="AlertVariant.Danger" Class="mt-2">
+        <BbAlertDescription>@_errorMessage</BbAlertDescription>
+    </BbAlert>
 }
 
 @code {

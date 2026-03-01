@@ -19,7 +19,10 @@
     @if (_isLoading)
     {
         <div class="session-loading">
-            <LoadingSpinner Size="LoadingSpinnerSize.Lg" Label="Loading session..." Centered="true"/>
+            <div class="flex items-center justify-center gap-2">
+                <BbSpinner Size="SpinnerSize.Large" />
+                <span>Loading session...</span>
+            </div>
         </div>
     }
     else if (_session == null)

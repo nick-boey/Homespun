@@ -12,15 +12,14 @@
 }
 else if (_projects.Count == 0)
 {
-    <EmptyState
-        Title="No Projects Yet"
-        Description="Create one to get started."
-        ActionLabel="New Project"
-        ActionHref="projects/create">
+    <BbEmpty Title="No Projects Yet" Description="Create one to get started.">
         <Icon>
             <LucideIcon Name="folder-open" Size="48"/>
         </Icon>
-    </EmptyState>
+        <ChildContent>
+            <BbButton Href="projects/create">New Project</BbButton>
+        </ChildContent>
+    </BbEmpty>
 }
 else
 {

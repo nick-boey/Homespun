@@ -5,7 +5,6 @@
 @using Homespun.Client.Features.Issues.Components.Showcases
 @using Homespun.Client.Features.Notifications.Components.Showcases
 @using Homespun.Client.Features.Projects.Components.Showcases
-@using Homespun.Client.Features.Shared.Components.Showcases
 @using Homespun.Client.Features.Toolbar.Components.Showcases
 @inject HttpComponentRegistryService ComponentRegistry
 @inject IBreadcrumbService BreadcrumbService
@@ -56,16 +55,9 @@ else
             case "notification-banner":
                 <NotificationBannerShowcase />
                 break;
-            case "form-message":
-                <FormMessageShowcase />
-                break;
-            case "model-selector":
+case "model-selector":
                 <ModelSelectorShowcase />
                 break;
-            case "info-list":
-                <InfoListShowcase />
-                break;
-
             // Panel Components
             case "issue-detail-panel":
                 <IssueDetailPanelShowcase />
@@ -117,10 +109,7 @@ else
             case "processing-indicator":
                 <ProcessingIndicatorShowcase />
                 break;
-            case "loading-spinner":
-                <LoadingSpinnerShowcase />
-                break;
-            case "task-graph-view":
+case "task-graph-view":
                 <TaskGraphViewShowcase />
                 break;
             case "issue-row-actions":

@@ -66,11 +66,7 @@
         </div>
     }
 
-    <AsyncActionButton ButtonType="submit"
-                       IsLoadingExternal="_isSubmitting"
-                       Variant="ButtonVariant.Default"
-                       Text="Create"
-                       LoadingText="Creating..." />
+    <BbButton Type="ButtonType.Submit" Loading="@_isSubmitting" LoadingText="Creating...">Create</BbButton>
     <a href="projects" class="btn btn-secondary">Cancel</a>
 </form>
 

@@ -38,15 +38,14 @@
 
 @if (!_prompts.Any())
 {
-    <EmptyState
-        Title="No Project Prompts"
-        Description="This project uses global prompts only. Add a project-specific prompt to customise agent behaviour for this project."
-        ActionLabel="Add Prompt"
-        ActionClick="ShowAddModal">
+    <BbEmpty Title="No Project Prompts" Description="This project uses global prompts only. Add a project-specific prompt to customise agent behaviour for this project.">
         <Icon>
             <LucideIcon Name="sparkles" Size="48" />
         </Icon>
-    </EmptyState>
+        <ChildContent>
+            <BbButton OnClick="ShowAddModal">Add Prompt</BbButton>
+        </ChildContent>
+    </BbEmpty>
 }
 else
 {
@@ -85,58 +84,64 @@ else
     </div>
 }
 
-<Modal IsOpen="@_showModal"
-       OnClose="@HideModal"
-       Title="@(_editingPrompt == null ? "Add Project Prompt" : "Edit Project Prompt")"
-       Size="ModalSize.Lg">
-    <Body>
-        <div class="mb-3">
-            <label class="form-label">Name</label>
-            <input type="text" class="form-control" @bind="_modalName" placeholder="e.g., Plan, Build, Review" />
-        </div>
-        <div class="mb-3">
-            <label class="form-label">Mode</label>
-            <select class="form-select" @bind="_modalMode">
-                <option value="@SessionMode.Plan">Plan (Read-only tools)</option>
-                <option value="@SessionMode.Build">Build (Full access)</option>
-            </select>
-            <div class="form-text">
-                Plan mode restricts the agent to read-only tools. Build mode allows code editing.
+<BbDialog Open="@_showModal" OnOpenChange="v => { if (!v) HideModal(); }">
+    <BbDialogContent Class="sm:max-w-2xl">
+        <BbDialogHeader>
+            <BbDialogTitle>@(_editingPrompt == null ? "Add Project Prompt" : "Edit Project Prompt")</BbDialogTitle>
+        </BbDialogHeader>
+        <BbDialogBody>
+            <div class="mb-3">
+                <label class="form-label">Name</label>
+                <input type="text" class="form-control" @bind="_modalName" placeholder="e.g., Plan, Build, Review" />
             </div>
-        </div>
-        <div class="mb-3">
-            <label class="form-label">Initial Message Template</label>
-            <textarea class="form-control font-monospace" rows="12" @bind="_modalMessage"
-                placeholder="Enter the initial message to send to the agent..."></textarea>
-            <div class="form-text">
-                Available placeholders: <code>@("{{title}}")</code>, <code>@("{{id}}")</code>,
-                <code>@("{{type}}")</code>, <code>@("{{branch}}")</code>, <code>@("{{description}}")</code>
+            <div class="mb-3">
+                <label class="form-label">Mode</label>
+                <select class="form-select" @bind="_modalMode">
+                    <option value="@SessionMode.Plan">Plan (Read-only tools)</option>
+                    <option value="@SessionMode.Build">Build (Full access)</option>
+                </select>
+                <div class="form-text">
+                    Plan mode restricts the agent to read-only tools. Build mode allows code editing.
+                </div>
             </div>
-        </div>
-    </Body>
-    <Footer>
-        @if (!string.IsNullOrEmpty(_modalError))
-        {
-            <div class="text-danger me-auto">@_modalError</div>
-        }
-        <BbButton Variant="ButtonVariant.Secondary" OnClick="HideModal">Cancel</BbButton>
-        <AsyncActionButton OnClick="SavePrompt"
-                           IsLoadingExternal="_isSaving"
-                           Variant="ButtonVariant.Default"
-                           Text="Save" />
-    </Footer>
-</Modal>
+            <div class="mb-3">
+                <label class="form-label">Initial Message Template</label>
+                <textarea class="form-control font-monospace" rows="12" @bind="_modalMessage"
+                    placeholder="Enter the initial message to send to the agent..."></textarea>
+                <div class="form-text">
+                    Available placeholders: <code>@("{{title}}")</code>, <code>@("{{id}}")</code>,
+                    <code>@("{{type}}")</code>, <code>@("{{branch}}")</code>, <code>@("{{description}}")</code>
+                </div>
+            </div>
+        </BbDialogBody>
+        <BbDialogFooter>
+            @if (!string.IsNullOrEmpty(_modalError))
+            {
+                <div class="text-danger me-auto">@_modalError</div>
+            }
+            <BbButton Variant="ButtonVariant.Secondary" OnClick="HideModal">Cancel</BbButton>
+            <BbButton OnClick="SavePrompt" Loading="@_isSaving" LoadingText="Saving...">Save</BbButton>
+        </BbDialogFooter>
+    </BbDialogContent>
+</BbDialog>
 
-<ConfirmModal IsOpen="@(_showDeleteConfirmation && _promptToDelete != null)"
-              OnCancel="@HideDeleteConfirmation"
-              OnConfirm="@DeletePrompt"
-              Title="Delete Project Prompt"
-              ConfirmText="Delete"
-              ConfirmVariant="ConfirmButtonVariant.Danger"
-              IsProcessing="@_isDeleting">
-    <p>Are you sure you want to delete the project prompt <strong>"@_promptToDelete?.Name"</strong>?</p>
-    <p class="text-muted mb-0">This action cannot be undone.</p>
-</ConfirmModal>
+<BbAlertDialog Open="@(_showDeleteConfirmation && _promptToDelete != null)" OnOpenChange="v => { if (!v) HideDeleteConfirmation(); }">
+    <BbAlertDialogContent>
+        <BbAlertDialogHeader>
+            <BbAlertDialogTitle>Delete Project Prompt</BbAlertDialogTitle>
+            <BbAlertDialogDescription>
+                Are you sure you want to delete the project prompt <strong>"@_promptToDelete?.Name"</strong>?
+                This action cannot be undone.
+            </BbAlertDialogDescription>
+        </BbAlertDialogHeader>
+        <BbAlertDialogFooter>
+            <BbAlertDialogCancel>
+                <BbButton Variant="ButtonVariant.Outline" Disabled="@_isDeleting">Cancel</BbButton>
+            </BbAlertDialogCancel>
+            <BbButton Variant="ButtonVariant.Destructive" OnClick="DeletePrompt" Loading="@_isDeleting">Delete</BbButton>
+        </BbAlertDialogFooter>
+    </BbAlertDialogContent>
+</BbAlertDialog>
 
 <style>
     .prompt-preview {

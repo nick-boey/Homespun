@@ -9,7 +9,10 @@
     @if (_isLoading)
     {
         <div class="py-5">
-            <LoadingSpinner Size="LoadingSpinnerSize.Lg" Label="Loading agents..." Centered="true" />
+            <div class="flex items-center justify-center gap-2">
+                <BbSpinner Size="SpinnerSize.Large" />
+                <span>Loading agents...</span>
+            </div>
         </div>
     }
     else

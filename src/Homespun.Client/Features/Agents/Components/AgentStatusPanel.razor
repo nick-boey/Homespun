@@ -78,7 +78,9 @@
 
     @if (!string.IsNullOrEmpty(ErrorMessage))
     {
-        <FormMessage Type="FormMessageType.Error" Message="@ErrorMessage" Class="m-2 mb-0" />
+        <BbAlert Variant="AlertVariant.Danger" Class="m-2 mb-0">
+            <BbAlertDescription>@ErrorMessage</BbAlertDescription>
+        </BbAlert>
     }
 </div>
 

@@ -41,12 +41,16 @@
 
     @if (!string.IsNullOrEmpty(_errorMessage))
     {
-        <FormMessage Type="FormMessageType.Error" Message="@_errorMessage" IsDismissible="true" OnDismiss="() => _errorMessage = null" />
+        <BbAlert Variant="AlertVariant.Danger" Dismissible OnDismiss="() => _errorMessage = null">
+            <BbAlertDescription>@_errorMessage</BbAlertDescription>
+        </BbAlert>
     }
 
     @if (!string.IsNullOrEmpty(_successMessage))
     {
-        <FormMessage Type="FormMessageType.Success" Message="@_successMessage" IsDismissible="true" OnDismiss="() => _successMessage = null" />
+        <BbAlert Variant="AlertVariant.Success" Dismissible OnDismiss="() => _successMessage = null">
+            <BbAlertDescription>@_successMessage</BbAlertDescription>
+        </BbAlert>
     }
 
     @* Active Branches Section *@

@@ -46,30 +46,12 @@ public class ComponentRegistryService : IComponentRegistryService
         },
         new ComponentMetadata
         {
-            Id = "form-message",
-            Name = "FormMessage",
-            Description = "Inline alert component for displaying error, success, warning, and info messages in forms.",
-            Category = "Forms",
-            ComponentPath = "Shared/FormMessage.razor",
-            Tags = new() { "form", "alert", "message", "error", "success", "warning", "info" }
-        },
-        new ComponentMetadata
-        {
             Id = "model-selector",
             Name = "ModelSelector",
             Description = "Dropdown selector for choosing AI model (Opus, Sonnet, Haiku).",
             Category = "Forms",
             ComponentPath = "Shared/ModelSelector.razor",
             Tags = new() { "form", "select", "model", "ai" }
-        },
-        new ComponentMetadata
-        {
-            Id = "info-list",
-            Name = "InfoList",
-            Description = "A reusable component for displaying definition lists (dt/dd pairs).",
-            Category = "Core",
-            ComponentPath = "Shared/InfoList.razor",
-            Tags = new() { "list", "info", "display" }
         },
         // Panel Components
         new ComponentMetadata
@@ -217,15 +199,6 @@ public class ComponentRegistryService : IComponentRegistryService
             Category = "Chat",
             ComponentPath = "Shared/Chat/ProcessingIndicator.razor",
             Tags = new() { "chat", "loading", "processing" }
-        },
-        new ComponentMetadata
-        {
-            Id = "loading-spinner",
-            Name = "LoadingSpinner",
-            Description = "Reusable loading spinner with sm/md/lg size variants and optional label text.",
-            Category = "Core",
-            ComponentPath = "Shared/LoadingSpinner.razor",
-            Tags = new() { "loading", "spinner", "status", "feedback" }
         },
         new ComponentMetadata
         {
