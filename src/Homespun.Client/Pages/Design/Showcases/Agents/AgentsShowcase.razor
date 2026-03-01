@@ -1,0 +1,205 @@
+@*
+    Consolidated showcase for Agent components.
+    AgentSelector and AgentStatusIndicator depend on services, so mock versions are used.
+*@
+
+<h2>AgentSelector</h2>
+
+<div class="showcase-section">
+    <h3>Default State</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Ready to select and start an agent</div>
+        <div class="showcase-preview">
+            <MockAgentSelector />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Starting State</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Agent session is being started</div>
+        <div class="showcase-preview">
+            <MockAgentSelector IsStarting="true" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Disabled State</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">When a session is already running</div>
+        <div class="showcase-preview">
+            <MockAgentSelector Disabled="true" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>In Panel Context</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">How it appears in issue/PR detail panels</div>
+        <div class="showcase-preview">
+            <div class="card" style="max-width: 400px;">
+                <div class="card-header">Issue Details</div>
+                <div class="card-body">
+                    <h5 class="card-title">Implement user authentication</h5>
+                    <p class="text-text-muted text-sm">Start an agent to work on this issue</p>
+                </div>
+                <div class="card-footer">
+                    <MockAgentSelector />
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<h2>AgentStatusIndicator</h2>
+
+<div class="showcase-section">
+    <h3>Working Agents Only</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Shows active working agents</div>
+        <div class="showcase-preview showcase-preview-dark">
+            <MockAgentStatusIndicator WorkingCount="2" WaitingCount="0" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Waiting Agents Only</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Shows agents waiting for input</div>
+        <div class="showcase-preview showcase-preview-dark">
+            <MockAgentStatusIndicator WorkingCount="0" WaitingCount="3" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Question &amp; Plan Ready</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Shows agents awaiting response and with plan ready</div>
+        <div class="showcase-preview showcase-preview-dark">
+            <MockAgentStatusIndicator WorkingCount="0" QuestionCount="1" PlanReadyCount="2" WaitingCount="0" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Mixed Status</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Working, question, plan ready, and waiting agents</div>
+        <div class="showcase-preview showcase-preview-dark">
+            <MockAgentStatusIndicator WorkingCount="1" QuestionCount="1" PlanReadyCount="1" WaitingCount="2" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>No Active Agents</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Nothing shown when no agents are active</div>
+        <div class="showcase-preview showcase-preview-dark">
+            <MockAgentStatusIndicator WorkingCount="0" WaitingCount="0" />
+            <span class="text-text-muted text-sm">(indicator is hidden when no agents are active)</span>
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>In Nav Context</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">How it appears in the navigation header</div>
+        <div class="showcase-preview showcase-preview-dark">
+            <div class="d-flex align-items-center gap-3 p-2 bg-bg-secondary rounded">
+                <span class="text-text-primary font-semibold">Homespun</span>
+                <div class="ms-auto d-flex align-items-center gap-2">
+                    <MockAgentStatusIndicator WorkingCount="2" QuestionCount="1" PlanReadyCount="1" WaitingCount="1" />
+                    <span class="text-text-muted">|</span>
+                    <span class="text-text-secondary text-sm">Settings</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<h2>AgentStatusPanel</h2>
+
+<div class="showcase-section">
+    <h3>Component Overview</h3>
+    <div class="showcase-item">
+        <div class="showcase-preview">
+            <div class="alert alert-info mb-0">
+                <strong>AgentStatusPanel</strong> displays the current status of a Claude Code agent session,
+                showing whether it's running, waiting for input, or has completed.
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Session Status Badges</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Different session states</div>
+        <div class="showcase-preview">
+            <div class="d-flex flex-column gap-3">
+                <div class="d-flex align-items-center gap-2">
+                    <span class="badge bg-success" style="min-width: 120px;">Running</span>
+                    <span class="text-text-muted text-sm">Agent is actively working</span>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="badge bg-warning text-dark" style="min-width: 120px;">WaitingForInput</span>
+                    <span class="text-text-muted text-sm">Agent needs user response</span>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="badge bg-secondary" style="min-width: 120px;">Completed</span>
+                    <span class="text-text-muted text-sm">Session has finished</span>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="badge bg-danger" style="min-width: 120px;">Error</span>
+                    <span class="text-text-muted text-sm">Session encountered an error</span>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="badge bg-info" style="min-width: 120px;">Starting</span>
+                    <span class="text-text-muted text-sm">Session is initializing</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Panel Example</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Status panel with session info</div>
+        <div class="showcase-preview">
+            <div class="card" style="max-width: 300px;">
+                <div class="card-header">Session Status</div>
+                <div class="card-body">
+                    <div class="mb-2">
+                        <span class="badge bg-success">Running</span>
+                    </div>
+                    <dl class="text-sm mb-0">
+                        <dt>Mode</dt>
+                        <dd><span class="badge bg-success">Build</span></dd>
+                        <dt>Model</dt>
+                        <dd><code>claude-3-opus</code></dd>
+                        <dt>Started</dt>
+                        <dd>10 minutes ago</dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .showcase-preview-dark {
+        background: var(--bg-tertiary);
+        padding: var(--spacing-md);
+    }
+</style>
+
+@code {
+}

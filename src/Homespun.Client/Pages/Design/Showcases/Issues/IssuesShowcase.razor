@@ -1,0 +1,1253 @@
+@*
+    Consolidated showcase for issue-related components: WorkItem, IssueDetailPanel,
+    IssueRowActions, CurrentPullRequestDetailPanel, MergedPullRequestDetailPanel,
+    PrStatusBadges, and TaskGraphView.
+*@
+
+@using Homespun.Client.Pages.Design.Showcases.Agents
+
+<h2>WorkItem</h2>
+
+<div class="showcase-section">
+    <h3>Basic Usage</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Simple work item</div>
+        <div class="showcase-preview">
+            <WorkItem
+                Title="Implement user authentication"
+                Number="42"
+                StatusColor="status-progress"
+                StatusTooltip="In Progress"
+                IsFirst="true"
+                IsLast="true" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>With URL Link</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Clickable work item with external link</div>
+        <div class="showcase-preview">
+            <WorkItem
+                Title="Add dark mode support"
+                Number="123"
+                Url="https://github.com/example/repo/issues/123"
+                StatusColor="status-next"
+                StatusTooltip="Ready for development"
+                IsFirst="true"
+                IsLast="true" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Status Colors</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Different status indicators</div>
+        <div class="showcase-preview">
+            <WorkItem
+                Title="Feature: Add search functionality"
+                Number="1"
+                StatusColor="status-idea"
+                StatusTooltip="Idea"
+                Subtitle="Feature"
+                IsFirst="true"
+                IsLast="false" />
+            <WorkItem
+                Title="Bug: Fix login redirect"
+                Number="2"
+                StatusColor="status-progress"
+                StatusTooltip="In Progress"
+                Subtitle="Bug"
+                IsFirst="false"
+                IsLast="false" />
+            <WorkItem
+                Title="Task: Update dependencies"
+                Number="3"
+                StatusColor="status-review"
+                StatusTooltip="In Review"
+                Subtitle="Task"
+                IsFirst="false"
+                IsLast="false" />
+            <WorkItem
+                Title="Feature: Dashboard redesign"
+                Number="4"
+                StatusColor="status-complete"
+                StatusTooltip="Complete"
+                Subtitle="Feature"
+                IsFirst="false"
+                IsLast="true" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>With Indentation</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Hierarchical display</div>
+        <div class="showcase-preview">
+            <WorkItem
+                Title="Epic: User Management"
+                Number="10"
+                StatusColor="status-progress"
+                IndentLevel="0"
+                IsFirst="true"
+                IsLast="false" />
+            <WorkItem
+                Title="Feature: User registration"
+                Number="11"
+                StatusColor="status-complete"
+                IndentLevel="1"
+                IsFirst="false"
+                IsLast="false" />
+            <WorkItem
+                Title="Feature: User profile"
+                Number="12"
+                StatusColor="status-progress"
+                IndentLevel="1"
+                IsFirst="false"
+                IsLast="false" />
+            <WorkItem
+                Title="Task: Add avatar upload"
+                Number="13"
+                StatusColor="status-next"
+                IndentLevel="2"
+                IsFirst="false"
+                IsLast="true" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Clickable & Selected States</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Interactive work items</div>
+        <div class="showcase-preview">
+            <WorkItem
+                Title="Clickable item (hover me)"
+                Number="20"
+                StatusColor="status-next"
+                IsClickable="true"
+                OnClick="@(() => { })"
+                IsFirst="true"
+                IsLast="false" />
+            <WorkItem
+                Title="Selected item"
+                Number="21"
+                StatusColor="status-progress"
+                IsSelected="true"
+                IsClickable="true"
+                OnClick="@(() => { })"
+                IsFirst="false"
+                IsLast="true" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Agent Startup States</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Work items with agent status</div>
+        <div class="showcase-preview">
+            <WorkItem
+                Title="Starting agent session..."
+                Number="30"
+                StatusColor="status-progress"
+                StartupState="AgentStartupStatus.Starting"
+                IsFirst="true"
+                IsLast="false" />
+            <WorkItem
+                Title="Agent failed to start"
+                Number="31"
+                StatusColor="status-failed"
+                StartupState="AgentStartupStatus.Failed"
+                StartupErrorMessage="Connection timeout"
+                IsFirst="false"
+                IsLast="true" />
+        </div>
+    </div>
+</div>
+
+<h2>IssueDetailPanel</h2>
+
+<div class="showcase-section">
+    <h3>Component Overview</h3>
+    <div class="showcase-item">
+        <div class="showcase-preview">
+            <div class="alert alert-info mb-0">
+                <strong>IssueDetailPanel</strong> displays detailed information about an issue and provides actions
+                to manage it. This component has extensive service dependencies and is best viewed in the full
+                application context.
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Key Features</h3>
+    <div class="showcase-item">
+        <div class="showcase-preview">
+            <ul class="list-unstyled mb-0">
+                <li class="mb-2">
+                    <span class="badge bg-primary me-2">Display</span>
+                    Issue title, description, type, status, and priority badges
+                </li>
+                <li class="mb-2">
+                    <span class="badge bg-success me-2">Session</span>
+                    Start, stop, and monitor Claude Code sessions
+                </li>
+                <li class="mb-2">
+                    <span class="badge bg-info me-2">PR Status</span>
+                    Show linked pull request status with PrStatusBadges
+                </li>
+                <li class="mb-2">
+                    <span class="badge bg-warning text-dark me-2">Rebase</span>
+                    Start rebase agent when branch is behind
+                </li>
+                <li class="mb-2">
+                    <span class="badge bg-danger me-2">Actions</span>
+                    Close issue, delete issue, navigate to edit
+                </li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Status Badges</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Type badges</div>
+        <div class="showcase-preview">
+            <div class="d-flex gap-2 flex-wrap">
+                <span class="badge bg-primary">Feature</span>
+                <span class="badge bg-danger">Bug</span>
+                <span class="badge bg-info">Task</span>
+                <span class="badge bg-dark">Chore</span>
+            </div>
+        </div>
+    </div>
+    <div class="showcase-item mt-3">
+        <div class="showcase-label">Status badges</div>
+        <div class="showcase-preview">
+            <div class="d-flex gap-2 flex-wrap">
+                <span class="badge bg-purple">Idea</span>
+                <span class="badge bg-info">Spec</span>
+                <span class="badge bg-warning text-dark">Next</span>
+                <span class="badge bg-primary">Progress</span>
+                <span class="badge bg-info">Review</span>
+                <span class="badge bg-success">Complete</span>
+            </div>
+        </div>
+    </div>
+    <div class="showcase-item mt-3">
+        <div class="showcase-label">Priority badges</div>
+        <div class="showcase-preview">
+            <div class="d-flex gap-2 flex-wrap">
+                <span class="badge bg-danger">P0</span>
+                <span class="badge bg-warning text-dark">P1</span>
+                <span class="badge bg-info">P2</span>
+                <span class="badge bg-secondary">P3</span>
+                <span class="badge bg-light text-dark">P4</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Session States</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Session status indicators</div>
+        <div class="showcase-preview">
+            <div class="d-flex gap-2 flex-wrap">
+                <span class="badge bg-status-warning text-text-primary">
+                    <BbSpinner Size="SpinnerSize.Small" Class="mr-1" />
+                    Starting...
+                </span>
+                <span class="badge bg-status-success">Session Active</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Static Preview</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Simplified panel layout</div>
+        <div class="showcase-preview">
+            <div class="card" style="max-width: 400px;">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span>Issue Details</span>
+                    <button type="button" class="btn-close btn-sm"></button>
+                </div>
+                <div class="card-body">
+                    <h5 class="card-title">Implement user authentication</h5>
+                    <div class="mb-3">
+                        <span class="badge bg-secondary">auth/login</span>
+                        <span class="badge bg-primary ms-1">Feature</span>
+                        <span class="badge bg-primary ms-1">Progress</span>
+                        <span class="badge bg-warning text-dark ms-1">P1</span>
+                    </div>
+                    <p class="text-text-secondary text-sm">Add login and registration functionality with JWT tokens.</p>
+                    <dl class="grid grid-cols-12 text-sm">
+                        <dt class="col-span-4">Branch Preview</dt>
+                        <dd class="col-span-8"><code>feature/auth/login</code></dd>
+                    </dl>
+                </div>
+                <div class="card-footer">
+                    <MockAgentSelector />
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<h2>IssueRowActions</h2>
+
+<div class="showcase-section">
+    <h3>Default State (Hidden)</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Actions are hidden by default (opacity: 0)</div>
+        <div class="showcase-preview" style="background: var(--bg-primary); padding: 1rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem;">
+                <span style="color: var(--text-muted); font-size: 12px;">ISSUE-001</span>
+                <span style="color: var(--text-primary);">Example issue title</span>
+                <IssueRowActions IssueId="ISSUE-001"
+                                 ProjectId="demo-project"
+                                 BranchName="task/example-issue+ISSUE-001"
+                                 IsVisible="false" />
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Visible State (Hover/Selected)</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Actions become visible on hover or when issue is selected</div>
+        <div class="showcase-preview" style="background: var(--bg-primary); padding: 1rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: var(--bg-secondary);">
+                <span style="color: var(--text-muted); font-size: 12px;">ISSUE-002</span>
+                <span style="color: var(--text-primary);">Selected issue with visible actions</span>
+                <IssueRowActions IssueId="ISSUE-002"
+                                 ProjectId="demo-project"
+                                 BranchName="task/selected-issue+ISSUE-002"
+                                 IsVisible="true" />
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Disabled State</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Actions are disabled when an agent is already running on the issue</div>
+        <div class="showcase-preview" style="background: var(--bg-primary); padding: 1rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: var(--bg-secondary);">
+                <span style="color: var(--text-muted); font-size: 12px;">ISSUE-003</span>
+                <span style="color: var(--text-primary);">Issue with active agent</span>
+                <span class="agent-status-badge agent-status-running" style="font-size: 11px; padding: 2px 6px; border-radius: 4px; background: rgba(81, 165, 193, 0.2); color: var(--color-ocean);">
+                    <span class="agent-status-dot agent-status-dot-active" style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--color-ocean); margin-right: 4px;"></span>
+                    Working
+                </span>
+                <IssueRowActions IssueId="ISSUE-003"
+                                 ProjectId="demo-project"
+                                 BranchName="task/active-agent+ISSUE-003"
+                                 IsVisible="true"
+                                 Disabled="true" />
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Interactive Demo</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Click the buttons to see callbacks in action</div>
+        <div class="showcase-preview" style="background: var(--bg-primary); padding: 1rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: var(--bg-secondary);">
+                <span style="color: var(--text-muted); font-size: 12px;">DEMO-001</span>
+                <span style="color: var(--text-primary);">Interactive demo issue</span>
+                <IssueRowActions IssueId="DEMO-001"
+                                 ProjectId="demo-project"
+                                 IssueTitle="Interactive demo issue"
+                                 IssueDescription="This is a demo issue for testing the IssueRowActions component."
+                                 IssueType="Task"
+                                 BranchName="task/interactive-demo+DEMO-001"
+                                 IsVisible="true"
+                                 OnEditClick="HandleIssueRowEditClick"
+                                 OnSessionStarted="HandleIssueRowSessionStarted" />
+            </div>
+            @if (!string.IsNullOrEmpty(_issueRowLastAction))
+            {
+                <div style="margin-top: 0.5rem; padding: 0.5rem; background: var(--bg-tertiary); border-radius: 4px; font-size: 12px; color: var(--text-muted);">
+                    Last action: @_issueRowLastAction
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<h2>CurrentPullRequestDetailPanel</h2>
+
+<div class="showcase-section">
+    <h3>Component Overview</h3>
+    <div class="showcase-item">
+        <div class="showcase-preview">
+            <div class="alert alert-info mb-0">
+                <strong>CurrentPullRequestDetailPanel</strong> displays detailed information about a pull request
+                and provides actions to manage it. This component has extensive service dependencies and is best
+                viewed in the full application context.
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Key Features</h3>
+    <div class="showcase-item">
+        <div class="showcase-preview">
+            <ul class="list-unstyled mb-0">
+                <li class="mb-2">
+                    <span class="badge bg-primary me-2">Display</span>
+                    PR title, description, branch, clone path, and timestamps
+                </li>
+                <li class="mb-2">
+                    <span class="badge bg-success me-2">Session</span>
+                    Start, stop, and resume Claude Code sessions
+                </li>
+                <li class="mb-2">
+                    <span class="badge bg-info me-2">Linked Issue</span>
+                    Show linked Beads issue details when available
+                </li>
+                <li class="mb-2">
+                    <span class="badge bg-warning text-dark me-2">Rebase</span>
+                    Start rebase agent when branch is behind
+                </li>
+                <li class="mb-2">
+                    <span class="badge bg-danger me-2">Actions</span>
+                    Skip review, merge PR, view on GitHub
+                </li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Status Badges</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Pull request status indicators</div>
+        <div class="showcase-preview">
+            <div class="d-flex gap-2 flex-wrap">
+                <span class="badge bg-primary">InDevelopment</span>
+                <span class="badge bg-warning text-dark">ReadyForReview</span>
+                <span class="badge bg-danger">HasReviewComments</span>
+                <span class="badge bg-success">Approved</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Static Preview</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Simplified panel layout</div>
+        <div class="showcase-preview">
+            <div class="card" style="max-width: 450px;">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span>Pull Request Details</span>
+                    <button type="button" class="btn-close btn-sm"></button>
+                </div>
+                <div class="card-body">
+                    <h5 class="card-title">Add user authentication</h5>
+                    <div class="mb-3">
+                        <span class="badge bg-primary">InDevelopment</span>
+                        <a href="#" class="badge bg-secondary text-decoration-none ms-1">PR #42</a>
+                    </div>
+                    <p class="text-text-secondary text-sm">Implements login and registration with JWT tokens.</p>
+
+                    <div class="border rounded p-2 mb-3 bg-surface-secondary">
+                        <h6 class="mb-2">
+                            <span class="badge bg-status-info text-text-primary me-1">auth/login</span>
+                            Linked Issue
+                        </h6>
+                        <p class="mb-1 font-bold">Implement user authentication</p>
+                        <div class="mb-1">
+                            <span class="badge bg-primary">Feature</span>
+                            <span class="badge bg-primary ms-1">Progress</span>
+                        </div>
+                    </div>
+
+                    <dl class="grid grid-cols-12 text-sm">
+                        <dt class="col-span-4">Branch</dt>
+                        <dd class="col-span-8"><code>feature/auth/login</code></dd>
+                        <dt class="col-span-4">Created</dt>
+                        <dd class="col-span-8">Jan 15, 2024 10:30 AM</dd>
+                    </dl>
+                </div>
+                <div class="card-footer">
+                    <div class="d-flex gap-2 flex-wrap">
+                        <button class="btn btn-sm btn-outline-warning">Skip Review</button>
+                        <MockAgentSelector />
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<h2>MergedPullRequestDetailPanel</h2>
+
+<div class="showcase-section">
+    <h3>Component Overview</h3>
+    <div class="showcase-item">
+        <div class="showcase-preview">
+            <div class="alert alert-info mb-0">
+                <strong>MergedPullRequestDetailPanel</strong> displays details for merged pull requests including
+                linked issue information. This allows users to view the PR that resolved an issue and potentially
+                re-open the issue if needed.
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Key Features</h3>
+    <div class="showcase-item">
+        <div class="showcase-preview">
+            <ul class="list-unstyled mb-0">
+                <li class="mb-2">
+                    <span class="badge bg-purple me-2">Merged</span>
+                    Displays merged status with purple badge
+                </li>
+                <li class="mb-2">
+                    <span class="badge bg-info me-2">PR Link</span>
+                    Links to GitHub PR for full details
+                </li>
+                <li class="mb-2">
+                    <span class="badge bg-success me-2">Issue Link</span>
+                    Shows linked Fleece issue if present
+                </li>
+                <li class="mb-2">
+                    <span class="badge bg-primary me-2">Edit</span>
+                    Button to edit linked issue (re-open if needed)
+                </li>
+                <li class="mb-2">
+                    <span class="badge bg-secondary me-2">Info</span>
+                    Branch name and merge timestamp
+                </li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>With Linked Issue</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Merged PR with linked issue (complete)</div>
+        <div class="showcase-preview">
+            <MergedPullRequestDetailPanel Details="@_detailsWithIssue"
+                                          ProjectId="showcase-project"
+                                          OnClose="() => { }" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Without Linked Issue</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Merged PR without linked issue</div>
+        <div class="showcase-preview">
+            <MergedPullRequestDetailPanel Details="@_detailsWithoutIssue"
+                                          ProjectId="showcase-project"
+                                          OnClose="() => { }" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Linked Issue Not Found</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">PR has issue ID in branch but issue not found</div>
+        <div class="showcase-preview">
+            <MergedPullRequestDetailPanel Details="@_detailsWithMissingIssue"
+                                          ProjectId="showcase-project"
+                                          OnClose="() => { }" />
+        </div>
+    </div>
+</div>
+
+<h2>PrStatusBadges</h2>
+
+<div class="showcase-section">
+    <h3>In Progress</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">PR with checks running</div>
+        <div class="showcase-preview">
+            <PrStatusBadges Status="@_inProgressStatus" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Ready for Review</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">PR awaiting review with passing checks</div>
+        <div class="showcase-preview">
+            <PrStatusBadges Status="@_readyForReviewStatus" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Checks Failing</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">PR with failing CI checks</div>
+        <div class="showcase-preview">
+            <PrStatusBadges Status="@_checksFailingStatus" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Changes Requested</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">PR with review feedback</div>
+        <div class="showcase-preview">
+            <PrStatusBadges Status="@_changesRequestedStatus" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Approved</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">PR approved by reviewers</div>
+        <div class="showcase-preview">
+            <PrStatusBadges Status="@_approvedStatus" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Ready to Merge</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">PR ready for merging - all checks passed and approved</div>
+        <div class="showcase-preview">
+            <PrStatusBadges Status="@_readyToMergeStatus" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Merge Conflicts</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">PR with merge conflicts</div>
+        <div class="showcase-preview">
+            <PrStatusBadges Status="@_conflictStatus" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Merged</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">PR that has been merged</div>
+        <div class="showcase-preview">
+            <PrStatusBadges Status="@_mergedStatus" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Closed</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">PR closed without merging</div>
+        <div class="showcase-preview">
+            <PrStatusBadges Status="@_closedStatus" />
+        </div>
+    </div>
+</div>
+
+<h2>TaskGraphView</h2>
+
+<div class="showcase-section">
+    <h3>Single Orphan Issue (Actionable)</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">A standalone actionable issue with accent-colored border marker</div>
+        <div class="showcase-preview">
+            <TaskGraphView TaskGraph="@_singleOrphan" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Parent-Child with Connector</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Child at lane 0 connects to parent at lane 1 with horizontal line and vertical connector</div>
+        <div class="showcase-preview">
+            <TaskGraphView TaskGraph="@_parentChild" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Multiple Siblings Sharing Parent</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">First child uses top-right junction, subsequent siblings use right-tee junction</div>
+        <div class="showcase-preview">
+            <TaskGraphView TaskGraph="@_siblings" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>All Marker Types</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Actionable (accent border), Open (muted border), Complete (green filled), Closed (gray filled)</div>
+        <div class="showcase-preview">
+            <TaskGraphView TaskGraph="@_allMarkers" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Selected Issue</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Second issue is selected with highlight background and marker glow</div>
+        <div class="showcase-preview">
+            <TaskGraphView TaskGraph="@_selectedDemo" SelectedNodeId="issue-DEMO-002" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>With Agent Status Badges</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Issues with active and inactive agent sessions</div>
+        <div class="showcase-preview">
+            <TaskGraphView TaskGraph="@_agentDemo" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Merged PRs with Issue Connector</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Merged PRs connect via lane 0 vertical line to leftmost issue nodes with horizontal branches</div>
+        <div class="showcase-preview">
+            <TaskGraphView TaskGraph="@_mergedPrConnector" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Full Mock Graph (13 Issues)</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Complete task graph with orphans, chains, siblings, and multiple disconnected groups</div>
+        <div class="showcase-preview">
+            <TaskGraphView TaskGraph="@_fullMock" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Full Mock with Merged PRs</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Complete graph with merged PRs connecting to leftmost issue nodes via lane 0 spine</div>
+        <div class="showcase-preview">
+            <TaskGraphView TaskGraph="@_fullMockWithPrs" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Priority Markers (P0-P4)</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Lane 0 connectors colored by priority: P0=Red, P1=Orange, P2=Yellow, P3=Green, P4=Blue, None=Grey</div>
+        <div class="showcase-preview">
+            <TaskGraphView TaskGraph="@_priorityDemo" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Depth Limiting with Hidden Parent Indicators</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">
+            Use [ and ] keys to decrease/increase the number of visible levels.
+            Hidden parent indicators appear as faded dots (below for series mode, right for parallel).
+        </div>
+        <div class="showcase-preview">
+            <div class="showcase-depth-controls">
+                <button class="showcase-depth-btn" @onclick="() => DecreaseDepth()" disabled="@(_depthLevel <= 0)">−</button>
+                <span class="showcase-depth-display">@(_depthLevel + 1) level@(_depthLevel == 0 ? "" : "s")</span>
+                <button class="showcase-depth-btn" @onclick="() => IncreaseDepth()" disabled="@(_depthLevel >= 5)">+</button>
+            </div>
+            <TaskGraphView TaskGraph="@_fullMock" MaxDepth="@_depthLevel" />
+        </div>
+    </div>
+</div>
+
+<div class="showcase-section">
+    <h3>Type Change Menu</h3>
+    <div class="showcase-item">
+        <div class="showcase-label">Click the type badge (Bug, Task, Feat, Chore) to open dropdown menu for changing issue type</div>
+        <div class="showcase-preview">
+            <TaskGraphView TaskGraph="@_typeChangeDemo" ProjectId="demo-project" OnIssueTypeChanged="HandleTypeChanged" />
+            @if (_taskGraphTypeChangeMessage != null)
+            {
+                <div class="mt-2 text-sm text-green-500">@_taskGraphTypeChangeMessage</div>
+            }
+        </div>
+    </div>
+</div>
+
+<style>
+    .bg-purple {
+        background-color: #6f42c1;
+        color: white;
+    }
+
+    .showcase-depth-controls {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 12px;
+        padding: 8px;
+        background: var(--bg-secondary, rgba(255, 255, 255, 0.05));
+        border-radius: 6px;
+        width: fit-content;
+    }
+
+    .showcase-depth-btn {
+        width: 28px;
+        height: 28px;
+        border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+        border-radius: 4px;
+        background: var(--bg-primary, #1a1a2e);
+        color: var(--text-primary, #eaeaea);
+        font-size: 16px;
+        cursor: pointer;
+        transition: background-color 0.15s ease, opacity 0.15s ease;
+    }
+
+    .showcase-depth-btn:hover:not(:disabled) {
+        background: var(--bg-tertiary, rgba(255, 255, 255, 0.1));
+    }
+
+    .showcase-depth-btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
+
+    .showcase-depth-display {
+        font-size: 13px;
+        color: var(--text-secondary, #a0a0a0);
+        min-width: 60px;
+        text-align: center;
+    }
+</style>
+
+@code {
+    // IssueRowActions state
+    private string? _issueRowLastAction;
+
+    private void HandleIssueRowEditClick(string issueId)
+    {
+        _issueRowLastAction = $"Edit clicked for issue: {issueId}";
+    }
+
+    private void HandleIssueRowSessionStarted(ClaudeSession session)
+    {
+        _issueRowLastAction = $"Session started: {session.Id} for entity: {session.EntityId}";
+    }
+
+    // MergedPullRequestDetailPanel state
+    private MergedPullRequestDetails _detailsWithIssue = new()
+    {
+        PullRequest = new PullRequestInfo
+        {
+            Number = 42,
+            Title = "Add user authentication feature",
+            Body = "This PR implements JWT-based authentication with login and registration endpoints.",
+            Status = PullRequestStatus.Merged,
+            BranchName = "feature/auth+gUu123",
+            HtmlUrl = "https://github.com/example/repo/pull/42",
+            CreatedAt = DateTime.UtcNow.AddDays(-7),
+            MergedAt = DateTime.UtcNow.AddDays(-1),
+            UpdatedAt = DateTime.UtcNow.AddDays(-1)
+        },
+        LinkedIssueId = "gUu123",
+        LinkedIssue = new IssueResponse
+        {
+            Id = "gUu123",
+            Title = "Implement user authentication",
+            Description = "Add login and registration functionality with JWT tokens.",
+            Type = IssueType.Feature,
+            Status = IssueStatus.Complete,
+            Priority = 1,
+            LastUpdate = DateTimeOffset.UtcNow.AddDays(-1),
+            CreatedAt = DateTimeOffset.UtcNow.AddDays(-10)
+        }
+    };
+
+    private MergedPullRequestDetails _detailsWithoutIssue = new()
+    {
+        PullRequest = new PullRequestInfo
+        {
+            Number = 38,
+            Title = "Update dependencies",
+            Body = "Bumped all NuGet packages to latest versions.",
+            Status = PullRequestStatus.Merged,
+            BranchName = "chore/update-deps",
+            HtmlUrl = "https://github.com/example/repo/pull/38",
+            CreatedAt = DateTime.UtcNow.AddDays(-14),
+            MergedAt = DateTime.UtcNow.AddDays(-12),
+            UpdatedAt = DateTime.UtcNow.AddDays(-12)
+        },
+        LinkedIssueId = null,
+        LinkedIssue = null
+    };
+
+    private MergedPullRequestDetails _detailsWithMissingIssue = new()
+    {
+        PullRequest = new PullRequestInfo
+        {
+            Number = 35,
+            Title = "Fix database connection issue",
+            Body = "Resolved connection pooling bug that caused timeouts.",
+            Status = PullRequestStatus.Merged,
+            BranchName = "bugfix/db-connection+xyz789",
+            HtmlUrl = "https://github.com/example/repo/pull/35",
+            CreatedAt = DateTime.UtcNow.AddDays(-21),
+            MergedAt = DateTime.UtcNow.AddDays(-20),
+            UpdatedAt = DateTime.UtcNow.AddDays(-20)
+        },
+        LinkedIssueId = "xyz789",
+        LinkedIssue = null
+    };
+
+    // PrStatusBadges state
+    private IssuePullRequestStatus _inProgressStatus = new()
+    {
+        PrNumber = 42,
+        PrUrl = "https://github.com/example/repo/pull/42",
+        BranchName = "feature/add-auth",
+        Status = PullRequestStatus.InProgress,
+        ChecksPassing = null,
+        IsApproved = false,
+        ApprovalCount = 0
+    };
+
+    private IssuePullRequestStatus _readyForReviewStatus = new()
+    {
+        PrNumber = 43,
+        PrUrl = "https://github.com/example/repo/pull/43",
+        BranchName = "feature/dashboard",
+        Status = PullRequestStatus.ReadyForReview,
+        ChecksPassing = true,
+        IsApproved = false,
+        ApprovalCount = 0
+    };
+
+    private IssuePullRequestStatus _checksFailingStatus = new()
+    {
+        PrNumber = 44,
+        PrUrl = "https://github.com/example/repo/pull/44",
+        BranchName = "fix/login-bug",
+        Status = PullRequestStatus.ChecksFailing,
+        ChecksPassing = false,
+        IsApproved = false,
+        ApprovalCount = 0
+    };
+
+    private IssuePullRequestStatus _changesRequestedStatus = new()
+    {
+        PrNumber = 45,
+        PrUrl = "https://github.com/example/repo/pull/45",
+        BranchName = "feature/settings",
+        Status = PullRequestStatus.ReadyForReview,
+        ChecksPassing = true,
+        IsApproved = false,
+        ApprovalCount = 0,
+        ChangesRequestedCount = 2
+    };
+
+    private IssuePullRequestStatus _approvedStatus = new()
+    {
+        PrNumber = 46,
+        PrUrl = "https://github.com/example/repo/pull/46",
+        BranchName = "feature/notifications",
+        Status = PullRequestStatus.ReadyForReview,
+        ChecksPassing = true,
+        IsApproved = true,
+        ApprovalCount = 2
+    };
+
+    private IssuePullRequestStatus _readyToMergeStatus = new()
+    {
+        PrNumber = 47,
+        PrUrl = "https://github.com/example/repo/pull/47",
+        BranchName = "feature/search",
+        Status = PullRequestStatus.ReadyForMerging,
+        ChecksPassing = true,
+        IsApproved = true,
+        ApprovalCount = 2
+    };
+
+    private IssuePullRequestStatus _conflictStatus = new()
+    {
+        PrNumber = 48,
+        PrUrl = "https://github.com/example/repo/pull/48",
+        BranchName = "feature/api-v2",
+        Status = PullRequestStatus.Conflict,
+        ChecksPassing = true,
+        IsApproved = true,
+        ApprovalCount = 1
+    };
+
+    private IssuePullRequestStatus _mergedStatus = new()
+    {
+        PrNumber = 49,
+        PrUrl = "https://github.com/example/repo/pull/49",
+        BranchName = "feature/dark-mode",
+        Status = PullRequestStatus.Merged,
+        ChecksPassing = true,
+        IsApproved = true,
+        ApprovalCount = 2
+    };
+
+    private IssuePullRequestStatus _closedStatus = new()
+    {
+        PrNumber = 50,
+        PrUrl = "https://github.com/example/repo/pull/50",
+        BranchName = "feature/abandoned",
+        Status = PullRequestStatus.Closed,
+        ChecksPassing = null,
+        IsApproved = false,
+        ApprovalCount = 0
+    };
+
+    // TaskGraphView state
+    private string? _taskGraphTypeChangeMessage;
+    private int _depthLevel = 3;
+
+    private void DecreaseDepth()
+    {
+        if (_depthLevel > 0)
+        {
+            _depthLevel--;
+        }
+    }
+
+    private void IncreaseDepth()
+    {
+        if (_depthLevel < 5)
+        {
+            _depthLevel++;
+        }
+    }
+
+    private void HandleTypeChanged()
+    {
+        _taskGraphTypeChangeMessage = $"Type changed at {DateTime.Now:HH:mm:ss}";
+        StateHasChanged();
+    }
+
+    private TaskGraphResponse _typeChangeDemo = new()
+    {
+        TotalLanes = 1,
+        Nodes =
+        [
+            new() { Issue = new() { Id = "TYPE-001", Title = "Bug issue - click badge to change type", Status = IssueStatus.Open, Type = IssueType.Bug }, Lane = 0, Row = 0, IsActionable = true },
+            new() { Issue = new() { Id = "TYPE-002", Title = "Task issue - click badge to change type", Status = IssueStatus.Open, Type = IssueType.Task }, Lane = 0, Row = 1, IsActionable = true },
+            new() { Issue = new() { Id = "TYPE-003", Title = "Feature issue - click badge to change type", Status = IssueStatus.Open, Type = IssueType.Feature }, Lane = 0, Row = 2, IsActionable = true },
+            new() { Issue = new() { Id = "TYPE-004", Title = "Chore issue - click badge to change type", Status = IssueStatus.Open, Type = IssueType.Chore }, Lane = 0, Row = 3, IsActionable = true }
+        ]
+    };
+    private TaskGraphResponse _singleOrphan = new()
+    {
+        TotalLanes = 1,
+        Nodes =
+        [
+            new() { Issue = new() { Id = "FEAT-001", Title = "Add dark mode support", Status = IssueStatus.Open }, Lane = 0, Row = 0, IsActionable = true }
+        ]
+    };
+
+    private TaskGraphResponse _parentChild = new()
+    {
+        TotalLanes = 2,
+        Nodes =
+        [
+            new() { Issue = new() { Id = "TASK-002", Title = "Implement login page", Status = IssueStatus.Open,
+                ParentIssues = [new() { ParentIssue = "TASK-001" }] }, Lane = 0, Row = 0, IsActionable = true },
+            new() { Issue = new() { Id = "TASK-001", Title = "Design authentication flow", Status = IssueStatus.Open }, Lane = 1, Row = 1, IsActionable = false }
+        ]
+    };
+
+    private TaskGraphResponse _siblings = new()
+    {
+        TotalLanes = 2,
+        Nodes =
+        [
+            new() { Issue = new() { Id = "TASK-010", Title = "Write unit tests", Status = IssueStatus.Open,
+                ParentIssues = [new() { ParentIssue = "TASK-005" }] }, Lane = 0, Row = 0, IsActionable = true },
+            new() { Issue = new() { Id = "TASK-011", Title = "Write integration tests", Status = IssueStatus.Open,
+                ParentIssues = [new() { ParentIssue = "TASK-005" }] }, Lane = 0, Row = 1, IsActionable = true },
+            new() { Issue = new() { Id = "TASK-012", Title = "Write e2e tests", Status = IssueStatus.Open,
+                ParentIssues = [new() { ParentIssue = "TASK-005" }] }, Lane = 0, Row = 2, IsActionable = true },
+            new() { Issue = new() { Id = "TASK-005", Title = "Implement feature", Status = IssueStatus.Open }, Lane = 1, Row = 3, IsActionable = false }
+        ]
+    };
+
+    private TaskGraphResponse _allMarkers = new()
+    {
+        TotalLanes = 1,
+        Nodes =
+        [
+            new() { Issue = new() { Id = "MRK-001", Title = "Actionable issue (next to work on)", Status = IssueStatus.Open }, Lane = 0, Row = 0, IsActionable = true },
+            new() { Issue = new() { Id = "MRK-002", Title = "Open issue (blocked by dependencies)", Status = IssueStatus.Open }, Lane = 0, Row = 1, IsActionable = false },
+            new() { Issue = new() { Id = "MRK-003", Title = "Completed issue", Status = IssueStatus.Complete }, Lane = 0, Row = 2, IsActionable = false },
+            new() { Issue = new() { Id = "MRK-004", Title = "Closed issue (won't fix)", Status = IssueStatus.Closed }, Lane = 0, Row = 3, IsActionable = false }
+        ]
+    };
+
+    private TaskGraphResponse _selectedDemo = new()
+    {
+        TotalLanes = 1,
+        Nodes =
+        [
+            new() { Issue = new() { Id = "DEMO-001", Title = "First issue", Status = IssueStatus.Open }, Lane = 0, Row = 0, IsActionable = true },
+            new() { Issue = new() { Id = "DEMO-002", Title = "Selected issue (highlighted)", Status = IssueStatus.Open }, Lane = 0, Row = 1, IsActionable = true },
+            new() { Issue = new() { Id = "DEMO-003", Title = "Third issue", Status = IssueStatus.Open }, Lane = 0, Row = 2, IsActionable = true }
+        ]
+    };
+
+    private TaskGraphResponse _agentDemo = new()
+    {
+        TotalLanes = 1,
+        Nodes =
+        [
+            new() { Issue = new() { Id = "AGT-001", Title = "Issue with active agent", Status = IssueStatus.Progress }, Lane = 0, Row = 0, IsActionable = false },
+            new() { Issue = new() { Id = "AGT-002", Title = "Issue with inactive agent", Status = IssueStatus.Open }, Lane = 0, Row = 1, IsActionable = true },
+            new() { Issue = new() { Id = "AGT-003", Title = "Issue without agent", Status = IssueStatus.Open }, Lane = 0, Row = 2, IsActionable = true }
+        ],
+        AgentStatuses = new Dictionary<string, AgentStatusData>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["AGT-001"] = new() { IsActive = true, Status = "Running", SessionId = "session-1" },
+            ["AGT-002"] = new() { IsActive = false, Status = "Stopped", SessionId = "session-2" }
+        }
+    };
+
+    private TaskGraphResponse _mergedPrConnector = new()
+    {
+        TotalLanes = 2,
+        MergedPrs =
+        [
+            new() { Number = 42, Title = "Add user authentication", IsMerged = true, HasDescription = true },
+            new() { Number = 43, Title = "Fix database migration", IsMerged = true, HasDescription = false },
+            new() { Number = 44, Title = "Update dependencies", IsMerged = false, HasDescription = true }
+        ],
+        Nodes =
+        [
+            new() { Issue = new() { Id = "TASK-001", Title = "Implement caching layer", Status = IssueStatus.Open,
+                ParentIssues = [new() { ParentIssue = "TASK-003" }] }, Lane = 0, Row = 0, IsActionable = true },
+            new() { Issue = new() { Id = "TASK-003", Title = "Design system architecture", Status = IssueStatus.Open }, Lane = 1, Row = 1, IsActionable = false },
+            new() { Issue = new() { Id = "TASK-002", Title = "Write API tests", Status = IssueStatus.Open }, Lane = 0, Row = 2, IsActionable = true }
+        ]
+    };
+
+    private TaskGraphResponse _priorityDemo = new()
+    {
+        TotalLanes = 2,
+        MergedPrs =
+        [
+            new() { Number = 100, Title = "Initial commit", IsMerged = true, HasDescription = true }
+        ],
+        Nodes =
+        [
+            // P0 - Red (critical)
+            new() { Issue = new() { Id = "P0-001", Title = "P0 Critical: Security vulnerability", Status = IssueStatus.Open, Priority = 0, Type = IssueType.Bug }, Lane = 0, Row = 0, IsActionable = true },
+            // P1 - Orange
+            new() { Issue = new() { Id = "P1-001", Title = "P1 High: Performance regression", Status = IssueStatus.Open, Priority = 1, Type = IssueType.Bug }, Lane = 0, Row = 1, IsActionable = true },
+            // P2 - Yellow
+            new() { Issue = new() { Id = "P2-001", Title = "P2 Medium: UI inconsistency", Status = IssueStatus.Open, Priority = 2, Type = IssueType.Task }, Lane = 0, Row = 2, IsActionable = true },
+            // P3 - Green
+            new() { Issue = new() { Id = "P3-001", Title = "P3 Low: Documentation update", Status = IssueStatus.Open, Priority = 3, Type = IssueType.Chore }, Lane = 0, Row = 3, IsActionable = true },
+            // P4 - Blue
+            new() { Issue = new() { Id = "P4-001", Title = "P4 Lowest: Nice to have feature", Status = IssueStatus.Open, Priority = 4, Type = IssueType.Feature }, Lane = 0, Row = 4, IsActionable = true },
+            // No priority - Grey
+            new() { Issue = new() { Id = "NP-001", Title = "No priority: Unclassified issue", Status = IssueStatus.Open, Priority = null, Type = IssueType.Task }, Lane = 0, Row = 5, IsActionable = true }
+        ]
+    };
+
+    private TaskGraphResponse _fullMockWithPrs = new()
+    {
+        TotalLanes = 6,
+        MergedPrs =
+        [
+            new() { Number = 97, Title = "Remove models page navigation entry", IsMerged = true, HasDescription = true },
+            new() { Number = 98, Title = "Fix Test Agent button and SignalR debug panel", IsMerged = true, HasDescription = true },
+            new() { Number = 99, Title = "Allow agent sessions to be resumed", IsMerged = true, HasDescription = false },
+            new() { Number = 100, Title = "Add mock services for testing without production data", IsMerged = true, HasDescription = true },
+            new() { Number = 101, Title = "Fix Node.js Docker build stage for Tailwind CSS compilation", IsMerged = true, HasDescription = true }
+        ],
+        HasMorePastPrs = true,
+        Nodes =
+        [
+            new() { Issue = new() { Id = "ISSUE-003", Title = "Fix login timeout bug", Status = IssueStatus.Progress, Type = IssueType.Bug }, Lane = 0, Row = 0, IsActionable = false },
+            new() { Issue = new() { Id = "ISSUE-001", Title = "Add dark mode support", Status = IssueStatus.Open, Type = IssueType.Feature }, Lane = 0, Row = 1, IsActionable = true },
+            new() { Issue = new() { Id = "ISSUE-010", Title = "Implement DELETE endpoints", Status = IssueStatus.Open, Type = IssueType.Task,
+                ParentIssues = [new() { ParentIssue = "ISSUE-009" }] }, Lane = 0, Row = 2, IsActionable = true },
+            new() { Issue = new() { Id = "ISSUE-009", Title = "Implement PUT/PATCH endpoints", Status = IssueStatus.Open, Type = IssueType.Task,
+                ParentIssues = [new() { ParentIssue = "ISSUE-008" }] }, Lane = 1, Row = 3, IsActionable = false },
+            new() { Issue = new() { Id = "ISSUE-011", Title = "Add request validation", Status = IssueStatus.Open, Type = IssueType.Task,
+                ParentIssues = [new() { ParentIssue = "ISSUE-008" }] }, Lane = 1, Row = 4, IsActionable = false },
+            new() { Issue = new() { Id = "ISSUE-008", Title = "Implement POST endpoints", Status = IssueStatus.Open, Type = IssueType.Task,
+                ParentIssues = [new() { ParentIssue = "ISSUE-007" }] }, Lane = 2, Row = 5, IsActionable = false },
+            new() { Issue = new() { Id = "ISSUE-012", Title = "Add rate limiting", Status = IssueStatus.Open, Type = IssueType.Task,
+                ParentIssues = [new() { ParentIssue = "ISSUE-007" }] }, Lane = 2, Row = 6, IsActionable = false },
+            new() { Issue = new() { Id = "ISSUE-007", Title = "Implement GET endpoints", Status = IssueStatus.Open, Type = IssueType.Task,
+                ParentIssues = [new() { ParentIssue = "ISSUE-005" }] }, Lane = 3, Row = 7, IsActionable = false },
+            new() { Issue = new() { Id = "ISSUE-006", Title = "Write API documentation", Status = IssueStatus.Open, Type = IssueType.Chore,
+                ParentIssues = [new() { ParentIssue = "ISSUE-005" }] }, Lane = 3, Row = 8, IsActionable = true },
+            new() { Issue = new() { Id = "ISSUE-013", Title = "Set up API monitoring", Status = IssueStatus.Open, Type = IssueType.Chore,
+                ParentIssues = [new() { ParentIssue = "ISSUE-005" }] }, Lane = 3, Row = 9, IsActionable = false },
+            new() { Issue = new() { Id = "ISSUE-005", Title = "Implement API endpoints", Status = IssueStatus.Open, Type = IssueType.Task,
+                ParentIssues = [new() { ParentIssue = "ISSUE-004" }] }, Lane = 4, Row = 10, IsActionable = false },
+            new() { Issue = new() { Id = "ISSUE-004", Title = "Design API schema", Status = IssueStatus.Open, Type = IssueType.Task }, Lane = 5, Row = 11, IsActionable = false },
+            new() { Issue = new() { Id = "ISSUE-002", Title = "Improve mobile responsiveness", Status = IssueStatus.Open, Type = IssueType.Task }, Lane = 0, Row = 12, IsActionable = true }
+        ]
+    };
+
+    private TaskGraphResponse _fullMock = new()
+    {
+        TotalLanes = 6,
+        Nodes =
+        [
+            new() { Issue = new() { Id = "ISSUE-003", Title = "Fix login timeout bug", Status = IssueStatus.Progress }, Lane = 0, Row = 0, IsActionable = false },
+            new() { Issue = new() { Id = "ISSUE-001", Title = "Add dark mode support", Status = IssueStatus.Open }, Lane = 0, Row = 1, IsActionable = true },
+            new() { Issue = new() { Id = "ISSUE-010", Title = "Implement DELETE endpoints", Status = IssueStatus.Open,
+                ParentIssues = [new() { ParentIssue = "ISSUE-009" }] }, Lane = 0, Row = 2, IsActionable = true },
+            new() { Issue = new() { Id = "ISSUE-009", Title = "Implement PUT/PATCH endpoints", Status = IssueStatus.Open,
+                ParentIssues = [new() { ParentIssue = "ISSUE-008" }] }, Lane = 1, Row = 3, IsActionable = false },
+            new() { Issue = new() { Id = "ISSUE-011", Title = "Add request validation", Status = IssueStatus.Open,
+                ParentIssues = [new() { ParentIssue = "ISSUE-008" }] }, Lane = 1, Row = 4, IsActionable = false },
+            new() { Issue = new() { Id = "ISSUE-008", Title = "Implement POST endpoints", Status = IssueStatus.Open,
+                ParentIssues = [new() { ParentIssue = "ISSUE-007" }] }, Lane = 2, Row = 5, IsActionable = false },
+            new() { Issue = new() { Id = "ISSUE-012", Title = "Add rate limiting", Status = IssueStatus.Open,
+                ParentIssues = [new() { ParentIssue = "ISSUE-007" }] }, Lane = 2, Row = 6, IsActionable = false },
+            new() { Issue = new() { Id = "ISSUE-007", Title = "Implement GET endpoints", Status = IssueStatus.Open,
+                ParentIssues = [new() { ParentIssue = "ISSUE-005" }] }, Lane = 3, Row = 7, IsActionable = false },
+            new() { Issue = new() { Id = "ISSUE-006", Title = "Write API documentation", Status = IssueStatus.Open,
+                ParentIssues = [new() { ParentIssue = "ISSUE-005" }] }, Lane = 3, Row = 8, IsActionable = true },
+            new() { Issue = new() { Id = "ISSUE-013", Title = "Set up API monitoring", Status = IssueStatus.Open,
+                ParentIssues = [new() { ParentIssue = "ISSUE-005" }] }, Lane = 3, Row = 9, IsActionable = false },
+            new() { Issue = new() { Id = "ISSUE-005", Title = "Implement API endpoints", Status = IssueStatus.Open,
+                ParentIssues = [new() { ParentIssue = "ISSUE-004" }] }, Lane = 4, Row = 10, IsActionable = false },
+            new() { Issue = new() { Id = "ISSUE-004", Title = "Design API schema", Status = IssueStatus.Open }, Lane = 5, Row = 11, IsActionable = false },
+            new() { Issue = new() { Id = "ISSUE-002", Title = "Improve mobile responsiveness", Status = IssueStatus.Open }, Lane = 0, Row = 12, IsActionable = true }
+        ]
+    };
+}
