@@ -1,0 +1,33 @@
+<div class="settings-tab-content">
+    <div class="card mb-3">
+        <div class="card-header">Project Information</div>
+        <div class="card-body">
+            <dl class="info-list">
+                <dt>Local Path</dt>
+                <dd><code>@Project.LocalPath</code></dd>
+                <dt>Default Branch</dt>
+                <dd>@Project.DefaultBranch</dd>
+                @if (!string.IsNullOrEmpty(Project.GitHubOwner) && !string.IsNullOrEmpty(Project.GitHubRepo))
+                {
+                    <dt>GitHub Repository</dt>
+                    <dd>
+                        <a href="https://github.com/@Project.GitHubOwner/@Project.GitHubRepo"
+                           target="_blank">
+                            @Project.GitHubOwner/@Project.GitHubRepo
+                        </a>
+                    </dd>
+                }
+            </dl>
+        </div>
+    </div>
+</div>
+
+<style>
+    .settings-tab-content {
+        max-width: 800px;
+    }
+</style>
+
+@code {
+    [Parameter] public required Project Project { get; set; }
+}

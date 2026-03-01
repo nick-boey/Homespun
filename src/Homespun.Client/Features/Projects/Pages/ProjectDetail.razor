@@ -4,28 +4,20 @@
 @page "/projects/{Id}/prompts"
 @page "/projects/{Id}/secrets"
 @page "/projects/{Id}/settings"
-@implements IDisposable
 @implements IAsyncDisposable
 @using Microsoft.AspNetCore.SignalR.Client
 @inject HttpProjectApiService ProjectApi
 @inject HttpPullRequestApiService PullRequestApi
-@inject HttpIssueApiService IssueApi
-@inject HttpIssueHistoryApiService IssueHistoryApi
 @inject HttpFleeceSyncApiService FleeceSyncApi
 @inject HttpGitHubInfoApiService GitHubInfoApi
-@inject IAgentStartupTracker StartupTracker
 @inject IBreadcrumbService BreadcrumbService
 @inject HttpNotificationApiService NotificationApi
 @inject ILogger<ProjectDetail> Logger
 @inject NavigationManager NavigationManager
-@inject IJSRuntime JSRuntime
-@inject IKeyboardNavigationService NavService
-@inject IPanelService PanelService
 
 <PageTitle>@(_project?.Name ?? "Project")</PageTitle>
 
-<div class="project-detail-page @(_sidebarOpen ? "sidebar-open" : "")" @onkeydown="HandleKeyDown" tabindex="-1"
-     @ref="_pageContainer">
+<div class="project-detail-page">
     @if (_project == null)
     {
         <p>Loading...</p>
@@ -50,32 +42,6 @@
                     </BbButton>
                 </div>
             </div>
-            @if (_activeTab == "issues")
-            {
-                <ProjectToolbar SelectedIssueId="@NavService.SelectedIssueId"
-                                ProjectId="@Id"
-                                IsAgentRunning="@IsSelectedIssueAgentRunning()"
-                                OnEditClick="HandleEditIssue"
-                                OnSessionStarted="HandleSessionStarted"
-                                IssueTitle="@GetSelectedIssueTitle()"
-                                IssueDescription="@GetSelectedIssueDescription()"
-                                IssueType="@GetSelectedIssueType()"
-                                BranchName="@GetSelectedIssueBranchName()"
-                                RepoPath="@_project?.LocalPath"
-                                DefaultBranch="@_project?.DefaultBranch"
-                                DefaultModel="@(_project?.DefaultModel ?? "opus")"
-                                CreateDisabled="@(!CanCreateIssue())"
-                                ChildOfDisabled="@IsMoveButtonDisabled(MoveOperationType.AsChildOf)"
-                                ParentOfDisabled="@IsMoveButtonDisabled(MoveOperationType.AsParentOf)"
-                                ChildOfActive="@IsMakeChildOfActive()"
-                                ParentOfActive="@IsMakeParentOfActive()"
-                                UndoDisabled="@(!_canUndo || _isUndoRedoing)"
-                                RedoDisabled="@(!_canRedo || _isUndoRedoing)"
-                                UndoTooltip="@(_historyState?.UndoDescription ?? "Undo")"
-                                RedoTooltip="@(_historyState?.RedoDescription ?? "Redo")"
-                                OnUndo="UndoAsync"
-                                OnRedo="RedoAsync"/>
-            }
         </div>
 
         @* Tab Navigation *@
@@ -138,72 +104,19 @@
 
         @if (_activeTab == "issues")
         {
-            <div class="project-layout">
-                <div class="timeline-column">
-                    <SearchBar IsVisible="@NavService.IsSearching"
-                               SearchTerm="@NavService.SearchTerm"
-                               MatchCount="@NavService.MatchingIndices.Count"
-                               CurrentMatchIndex="@NavService.CurrentMatchIndex"
-                               OnSearchTermChanged="HandleSearchTermChanged"
-                               OnEnter="HandleSearchEnter"
-                               OnEscape="HandleSearchEscape"/>
-                    <TimelineVisualization
-                        @ref="_graphVisualization"
-                        ProjectId="@Id"
-                        RepoPath="@_project?.LocalPath"
-                        DefaultBranch="@_project?.DefaultBranch"
-                        DefaultModel="@(_project?.DefaultModel ?? "opus")"
-                        OnPullRequestClick="@HandlePullRequestClickFromGraph"
-                        OnIssueClick="@HandleIssueClickFromGraph"
-                        OnIssueCreated="@HandleInlineIssueCreated"
-                        OnEditClick="@HandleEditIssue"
-                        OnSessionStarted="@HandleSessionStarted"
-                        OnOpenPanelClick="@HandleOpenPanelFromGraph"
-                        SelectedNodeId="@GetSelectedNodeId()"
-                        ActiveSearchTerm="@GetActiveSearchTerm()"/>
-                </div>
-            </div>
-
-            @* Collapsible Detail Sidebar *@
-            <div class="detail-sidebar @(_sidebarOpen ? "open" : "")">
-                @if (_selectedPullRequest != null)
-                {
-                    <CurrentPullRequestDetailPanel PullRequest="_selectedPullRequest"
-                                                   OnActionCompleted="RefreshData"
-                                                   OnClose="CloseSidebar"/>
-                }
-                else if (_selectedMergedPr != null)
-                {
-                    <MergedPullRequestDetailPanel Details="_selectedMergedPr"
-                                                  ProjectId="@Id"
-                                                  OnClose="CloseSidebar"/>
-                }
-                else if (_isLoadingMergedPr)
-                {
-                    <div class="card">
-                        <div class="card-body text-center">
-                            <BbSpinner Size="SpinnerSize.Small" Class="mr-2"/>
-                            Loading pull request details...
-                        </div>
-                    </div>
-                }
-                else if (_selectedIssue != null)
-                {
-                    <IssueDetailPanel ProjectId="@Id"
-                                      Issue="_selectedIssue"
-                                      OnActionCompleted="RefreshData"
-                                      OnClose="CloseSidebar"/>
-                }
-            </div>
+            <ProjectIssuesTab ProjectId="@Id"
+                              Project="@_project"
+                              RefreshTrigger="@_issuesRefreshTrigger"
+                              OnDataChanged="OnIssuesDataChanged"/>
         }
         else if (_activeTab == "branches")
         {
             <CloneManagementPanel Project="@_project"
-                                  OnDataChanged="RefreshData"/>
+                                  OnDataChanged="OnIssuesDataChanged"/>
         }
         else if (_activeTab == "agents")
         {
-            <SessionsPanel ProjectId="@Id" OnSessionStopped="RefreshData"/>
+            <SessionsPanel ProjectId="@Id" OnSessionStopped="OnIssuesDataChanged"/>
         }
         else if (_activeTab == "prompts")
         {
@@ -215,29 +128,7 @@
         }
         else if (_activeTab == "settings")
         {
-            <div class="settings-tab-content">
-                <div class="card mb-3">
-                    <div class="card-header">Project Information</div>
-                    <div class="card-body">
-                        <dl class="info-list">
-                            <dt>Local Path</dt>
-                            <dd><code>@_project.LocalPath</code></dd>
-                            <dt>Default Branch</dt>
-                            <dd>@_project.DefaultBranch</dd>
-                            @if (!string.IsNullOrEmpty(_project.GitHubOwner) && !string.IsNullOrEmpty(_project.GitHubRepo))
-                            {
-                                <dt>GitHub Repository</dt>
-                                <dd>
-                                    <a href="https://github.com/@_project.GitHubOwner/@_project.GitHubRepo"
-                                       target="_blank">
-                                        @_project.GitHubOwner/@_project.GitHubRepo
-                                    </a>
-                                </dd>
-                            }
-                        </dl>
-                    </div>
-                </div>
-            </div>
+            <ProjectSettingsTab Project="@_project"/>
         }
 
         @* Fleece Sync Conflict Modal *@
@@ -312,7 +203,6 @@
         outline: none;
         max-width: 100%;
         overflow-x: hidden;
-        transition: margin-right 0.2s ease;
     }
 
     /* ==========================================================================
@@ -327,123 +217,68 @@
         margin-bottom: var(--spacing-md, 16px);
         border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
     }
-
-    /* ==========================================================================
-       Project Layout Grid
-       ========================================================================== */
-    .project-layout {
-        display: grid;
-        grid-template-columns: 1fr;
-        gap: var(--spacing-md);
-        align-items: start;
-        max-width: 100%;
-        min-width: 0;
-    }
-
-    .timeline-column {
-        min-width: 0;
-        max-width: 100%;
-        overflow-x: auto;
-    }
-
-    /* ==========================================================================
-       Mobile: Overlay behavior (sidebar covers content)
-       ========================================================================== */
-    @@media (max-width: 768px) {
-        .detail-sidebar {
-            width: 100%;
-        }
-
-        /* On mobile, don't squash - let sidebar overlay */
-        .project-detail-page.sidebar-open {
-            margin-right: 0;
-        }
-    }
-
-    /* ==========================================================================
-       Settings Tab
-       ========================================================================== */
-    .settings-tab-content {
-        max-width: 800px;
-    }
 </style>
 
 @code {
     [Parameter] public string Id { get; set; } = "";
 
     private Project? _project;
-    private List<PullRequest>? _rootPullRequests;
-    private List<FlattenedPR> _flattenedCurrentPRs = [];
-    private PullRequest? _selectedPullRequest;
-    private string? _selectedPullRequestId;
-    private MergedPullRequestDetails? _selectedMergedPr;
-    private bool _isLoadingMergedPr;
-    private IssueResponse? _selectedIssue;
-    private string? _selectedIssueId;
+    private string _activeTab = "issues";
+    private string? _previousId;
+    private bool _isSyncing;
+    private int _issuesRefreshTrigger;
+
+    // PR sync state
     private bool _isSyncingPRs;
     private bool _tokenMissing;
     private string? _syncError;
     private SyncResult? _lastSyncResult;
-    private List<IssueResponse>? _openIssues;
-    private List<IssueResponse>? _inProgressIssues;
-    private TimelineVisualization? _graphVisualization;
+
+    // Fleece sync state
+    private bool _isSyncingFleece;
+    private FleeceIssueSyncResult? _lastFleeceSyncResult;
+    private bool _showFleeceConflictModal;
+    private PullResult? _fleecePullConflict;
+    private bool _showNonFleeceChangesModal;
+    private IReadOnlyList<string>? _nonFleeceChangedFiles;
+
+    // SignalR
     private HubConnection? _hubConnection;
-    private bool _isRefreshing;
-    private bool _isSyncing;
 
-    // Undo/Redo state
-    private IssueHistoryState? _historyState;
-    private bool _canUndo;
-    private bool _canRedo;
-    private bool _isUndoRedoing;
+    protected override async Task OnInitializedAsync()
+    {
+        // Determine active tab from URL
+        DetermineActiveTab();
 
-    // Tab navigation state
-    private string _activeTab = "issues";
+        await LoadData();
+        await SetupSignalRConnection();
 
-    // Track Id changes for same-component navigation
-    private string? _previousId;
-
-    // Keyboard navigation state
-    private ElementReference _pageContainer;
-    private KeyboardEditMode _previousEditMode = KeyboardEditMode.Viewing;
-
-    // Collapsible sidebar state - tracks which item was CLICKED (not keyboard-selected)
-    private bool _sidebarOpen = false; // Collapsed by default
-
+        // Start sync after project is loaded
+        if (_project != null)
+        {
+            _ = Task.Run(async () => { await InvokeAsync(async () => { await SyncPullRequestsAsync(); }); });
+        }
+    }
 
     protected override async Task OnParametersSetAsync()
     {
         if (_previousId != null && _previousId != Id)
         {
             // Id parameter changed — navigated to a different project
-            // Dispose old SignalR connection
             if (_hubConnection != null)
             {
                 await _hubConnection.DisposeAsync();
                 _hubConnection = null;
             }
 
-            // Reset all state
-            _selectedPullRequest = null;
-            _selectedPullRequestId = null;
-            _selectedMergedPr = null;
-            _isLoadingMergedPr = false;
-            _selectedIssue = null;
-            _selectedIssueId = null;
+            // Reset state
             _lastSyncResult = null;
             _syncError = null;
             _activeTab = "issues";
-            _sidebarOpen = false;
+            _issuesRefreshTrigger = 0;
 
-            // Determine tab from URL
-            var uri = NavigationManager.Uri;
-            if (uri.Contains("/settings")) _activeTab = "settings";
-            else if (uri.Contains("/secrets")) _activeTab = "secrets";
-            else if (uri.Contains("/prompts")) _activeTab = "prompts";
-            else if (uri.Contains("/agents")) _activeTab = "agents";
-            else if (uri.Contains("/branches")) _activeTab = "branches";
+            DetermineActiveTab();
 
-            // Reload data for the new project
             await LoadData();
             await SetupSignalRConnection();
 
@@ -456,19 +291,16 @@
         _previousId = Id;
     }
 
-    // Fleece sync state
-    private bool _isSyncingFleece;
-    private FleeceIssueSyncResult? _lastFleeceSyncResult;
-    private bool _showFleeceConflictModal;
-    private PullResult? _fleecePullConflict;
-    private bool _showNonFleeceChangesModal;
-    private IReadOnlyList<string>? _nonFleeceChangedFiles;
-
-    private record FlattenedPR(PullRequest PullRequest, int Level);
-
-    protected override async Task OnInitializedAsync()
+    public async ValueTask DisposeAsync()
     {
-        // Determine active tab from URL
+        if (_hubConnection != null)
+        {
+            await _hubConnection.DisposeAsync();
+        }
+    }
+
+    private void DetermineActiveTab()
+    {
         var uri = NavigationManager.Uri;
         if (uri.Contains("/settings"))
             _activeTab = "settings";
@@ -482,190 +314,23 @@
             _activeTab = "branches";
         else
             _activeTab = "issues";
+    }
 
-        // Subscribe to agent startup state changes to update UI
-        StartupTracker.OnStateChanged += OnStartupStateChanged;
-
-        // Subscribe to panel service state changes
-        PanelService.OnStateChanged += OnPanelServiceStateChanged;
-
-        // Register panel availability for issues tab
-        if (_activeTab == "issues")
-        {
-            PanelService.SetPanelAvailable(true);
-        }
-
-        await LoadData();
-        await SetupSignalRConnection();
-
-        // Start sync after project is loaded
-        // Using Task.Run to not block the initial render
+    private async Task LoadData()
+    {
+        _project = await ProjectApi.GetProjectAsync(Id);
         if (_project != null)
         {
-            _ = Task.Run(async () => { await InvokeAsync(async () => { await SyncPullRequestsAsync(); }); });
+            await BreadcrumbService.SetContextAsync(new BreadcrumbContext { ProjectId = Id });
         }
     }
 
-    // Track if we've already processed the hash fragment
-    private bool _hasProcessedHashFragment;
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (firstRender)
-        {
-            await HandleHashFragmentAsync();
-
-            if (_activeTab == "issues")
-            {
-                await JSRuntime.InvokeVoidAsync("homespunInterop.focusElement", _pageContainer);
-                await JSRuntime.InvokeVoidAsync("homespunInterop.setupKeyboardPrevention", _pageContainer);
-            }
-
-            NavService.OnStateChanged += OnNavServiceStateChanged;
-            NavService.OnOpenEditRequested += OnOpenEditRequested;
-            NavService.OnIssueCreatedForEdit += NavigateToIssueEditAsync;
-            NavService.OnMoveOperationRequested += OnMoveOperationRequested;
-            NavService.OnSiblingMoveRequested += OnSiblingMoveRequested;
-        }
-    }
-
-    private Task NavigateToIssueEditAsync(string issueId)
-    {
-        return NavigateToIssueEdit(issueId);
-    }
-
-    private async Task HandleHashFragmentAsync()
-    {
-        if (_hasProcessedHashFragment) return;
-        _hasProcessedHashFragment = true;
-
-        var uri = new Uri(NavigationManager.Uri);
-        if (!string.IsNullOrEmpty(uri.Fragment))
-        {
-            var fragment = uri.Fragment.TrimStart('#');
-            if (fragment.StartsWith("issue-"))
-            {
-                var issueId = fragment.Substring(6);
-
-                // Wait a brief moment for issues to be loaded if needed
-                var retries = 0;
-                while ((_openIssues == null || _openIssues.Count == 0) && retries < 10)
-                {
-                    await Task.Delay(100);
-                    retries++;
-                }
-
-                if (_openIssues?.Any(i => i.Id == issueId) == true)
-                {
-                    SelectIssue(issueId);
-                    await InvokeAsync(StateHasChanged);
-                }
-            }
-        }
-    }
-
-    private void OnNavServiceStateChanged()
-    {
-        var currentMode = NavService.EditMode;
-        if (_previousEditMode != KeyboardEditMode.Viewing && currentMode == KeyboardEditMode.Viewing)
-        {
-            // Transitioned from edit/create mode back to viewing - re-focus page container
-            _ = InvokeAsync(async () => { await JSRuntime.InvokeVoidAsync("homespunInterop.focusElement", _pageContainer); });
-        }
-
-        _previousEditMode = currentMode;
-    }
-
-    private void OnOpenEditRequested(string issueId)
-    {
-        HandleEditIssue(issueId);
-    }
-
-    private async Task OnMoveOperationRequested(string sourceIssueId, string targetIssueId, MoveOperationType operation, bool addToExisting)
-    {
-        try
-        {
-            string childId, parentId;
-            if (operation == MoveOperationType.AsChildOf)
-            {
-                // Source becomes child of target
-                childId = sourceIssueId;
-                parentId = targetIssueId;
-            }
-            else // AsParentOf
-            {
-                // Target becomes child of source
-                childId = targetIssueId;
-                parentId = sourceIssueId;
-            }
-
-            var request = new SetParentRequest
-            {
-                ProjectId = Id,
-                ParentIssueId = parentId,
-                AddToExisting = addToExisting
-            };
-
-            await IssueApi.SetParentAsync(childId, request);
-
-            // Refresh the task graph
-            await RefreshData();
-        }
-        catch (InvalidOperationException ex)
-        {
-            // Cycle detected - log the error
-            Logger.LogWarning("Move operation would create cycle: {Message}", ex.Message);
-            // TODO: Show a toast notification to the user
-        }
-    }
-
-    private async Task OnSiblingMoveRequested(string issueId, MoveDirection direction)
-    {
-        try
-        {
-            var request = new MoveSeriesSiblingRequest
-            {
-                ProjectId = Id,
-                Direction = direction
-            };
-
-            await IssueApi.MoveSeriesSiblingAsync(issueId, request);
-
-            // Refresh the task graph
-            await RefreshData();
-        }
-        catch (InvalidOperationException ex)
-        {
-            Logger.LogWarning("Sibling move operation failed: {Message}", ex.Message);
-            // TODO: Show a toast notification to the user
-        }
-    }
-
-    private void OnPanelServiceStateChanged()
-    {
-        // Sync local sidebar state with panel service
-        if (_sidebarOpen != PanelService.IsPanelOpen)
-        {
-            _sidebarOpen = PanelService.IsPanelOpen;
-            InvokeAsync(StateHasChanged);
-        }
-    }
+    #region Tab Switching
 
     private void SwitchTab(string tab)
     {
         if (_activeTab == tab) return;
-
-        // Cancel any in-progress edit when leaving issues tab
-        if (_activeTab == "issues" && NavService.EditMode != KeyboardEditMode.Viewing)
-        {
-            NavService.CancelEdit();
-        }
-
         _activeTab = tab;
-        ClearSelection();
-
-        // Update panel availability based on tab
-        PanelService.SetPanelAvailable(tab == "issues");
 
         // Update the URL without causing a full navigation
         var newUrl = tab switch
@@ -678,15 +343,6 @@
             _ => $"/projects/{Id}"
         };
         NavigationManager.NavigateTo(newUrl, forceLoad: false, replace: true);
-
-        if (tab == "issues")
-        {
-            _ = InvokeAsync(async () =>
-            {
-                await JSRuntime.InvokeVoidAsync("homespunInterop.focusElement", _pageContainer);
-                await JSRuntime.InvokeVoidAsync("homespunInterop.setupKeyboardPrevention", _pageContainer);
-            });
-        }
     }
 
     private void SwitchToIssuesTab() => SwitchTab("issues");
@@ -696,32 +352,9 @@
     private void SwitchToSecretsTab() => SwitchTab("secrets");
     private void SwitchToSettingsTab() => SwitchTab("settings");
 
-    public void Dispose()
-    {
-        StartupTracker.OnStateChanged -= OnStartupStateChanged;
-        NavService.OnStateChanged -= OnNavServiceStateChanged;
-        NavService.OnOpenEditRequested -= OnOpenEditRequested;
-        NavService.OnIssueCreatedForEdit -= NavigateToIssueEditAsync;
-        NavService.OnMoveOperationRequested -= OnMoveOperationRequested;
-        NavService.OnSiblingMoveRequested -= OnSiblingMoveRequested;
-        PanelService.OnStateChanged -= OnPanelServiceStateChanged;
-        PanelService.SetPanelAvailable(false);
-    }
+    #endregion
 
-    public async ValueTask DisposeAsync()
-    {
-        Dispose();
-        if (_hubConnection != null)
-        {
-            await _hubConnection.DisposeAsync();
-        }
-    }
-
-    private async void OnStartupStateChanged(string entityId, AgentStartupState state)
-    {
-        // Re-render when any startup state changes
-        await InvokeAsync(StateHasChanged);
-    }
+    #region SignalR
 
     private async Task SetupSignalRConnection()
     {
@@ -731,17 +364,15 @@
                 .WithUrl(NavigationManager.ToAbsoluteUri(HubConstants.NotificationHub))
                 .Build();
 
-            // Listen for pull request sync events
             _hubConnection.On<string, SyncResult>("PullRequestsSynced", async (projectId, syncResult) =>
             {
-                // Only refresh if this event is for our project
                 if (projectId == Id)
                 {
                     Logger.LogInformation("Received PullRequestsSynced event for project {ProjectId}", projectId);
                     _lastSyncResult = syncResult;
-                    await InvokeAsync(async () =>
+                    await InvokeAsync(() =>
                     {
-                        await RefreshData();
+                        _issuesRefreshTrigger++;
                         StateHasChanged();
                     });
                 }
@@ -752,61 +383,203 @@
         }
         catch (Exception ex)
         {
-            // SignalR connection can fail when accessing via external hostname that the container can't resolve.
-            // This is expected - real-time updates won't work but the page will still function.
             Logger.LogWarning("SignalR connection failed (real-time updates unavailable): {Message}", ex.Message);
         }
     }
 
-    private async Task LoadData()
+    #endregion
+
+    #region Pull / Sync
+
+    private async Task PullAsync()
     {
-        _project = await ProjectApi.GetProjectAsync(Id);
-        if (_project != null)
+        if (_project == null || _isSyncing)
+            return;
+
+        _isSyncing = true;
+        StateHasChanged();
+
+        var errors = new List<string>();
+
+        try
         {
-            // Set breadcrumb context with project info
-            await BreadcrumbService.SetContextAsync(new BreadcrumbContext { ProjectId = Id });
+            var fleecePullTask = PullFleeceInternalAsync();
+            var prSyncTask = SyncPullRequestsInternalAsync();
 
-            _rootPullRequests = await PullRequestApi.GetProjectPullRequestsAsync(Id);
-            _flattenedCurrentPRs = FlattenPRs(_rootPullRequests ?? []);
+            var results = await Task.WhenAll(fleecePullTask, prSyncTask);
 
-            try
+            if (results[0] is string fleeceError)
+                errors.Add($"Fleece pull: {fleeceError}");
+            if (results[1] is string prError)
+                errors.Add($"PR sync: {prError}");
+
+            if (errors.Count > 0)
             {
-                // Load all issues from Fleece
-                var allIssues = await IssueApi.GetIssuesAsync(_project.Id);
-
-                // Get open issues (all non-completed statuses)
-                _openIssues = allIssues
-                    .Where(i => i.Status is IssueStatus.Open or IssueStatus.Progress or IssueStatus.Review)
-                    .ToList();
-
-                // In-progress issues could be tracked separately if needed
-                _inProgressIssues = [];
-
-                // Load history state for undo/redo
-                await RefreshHistoryStateAsync();
+                await NotificationApi.CreateNotificationAsync(new CreateNotificationRequest
+                {
+                    Type = NotificationType.Warning,
+                    Title = "Pull completed with errors",
+                    Message = string.Join("; ", errors),
+                    ProjectId = _project.Id,
+                    IsDismissible = true,
+                    DeduplicationKey = $"pull-error-{_project.Id}"
+                });
             }
-            catch (Exception ex)
-            {
-                Logger.LogWarning(ex, "Failed to load issues for project {ProjectId}", Id);
-                _openIssues = [];
-                _inProgressIssues = [];
-            }
+
+            await LoadData();
+            _issuesRefreshTrigger++;
+        }
+        finally
+        {
+            _isSyncing = false;
+            StateHasChanged();
         }
     }
 
-    private List<FlattenedPR> FlattenPRs(List<PullRequest> prs, int level = 0)
+    private async Task SyncAllAsync()
     {
-        var result = new List<FlattenedPR>();
-        foreach (var pr in prs.OrderBy(p => p.CreatedAt))
-        {
-            result.Add(new FlattenedPR(pr, level));
-            if (pr.Children.Any())
-            {
-                result.AddRange(FlattenPRs(pr.Children.ToList(), level + 1));
-            }
-        }
+        if (_project == null || _isSyncing)
+            return;
 
-        return result;
+        _isSyncing = true;
+        StateHasChanged();
+
+        var errors = new List<string>();
+
+        try
+        {
+            var fleeceSyncTask = SyncFleeceInternalAsync();
+            var prSyncTask = SyncPullRequestsInternalAsync();
+
+            var results = await Task.WhenAll(fleeceSyncTask, prSyncTask);
+
+            if (results[0] is string fleeceError)
+                errors.Add($"Fleece sync: {fleeceError}");
+            if (results[1] is string prError)
+                errors.Add($"PR sync: {prError}");
+
+            if (errors.Count > 0)
+            {
+                await NotificationApi.CreateNotificationAsync(new CreateNotificationRequest
+                {
+                    Type = NotificationType.Warning,
+                    Title = "Sync completed with errors",
+                    Message = string.Join("; ", errors),
+                    ProjectId = _project.Id,
+                    IsDismissible = true,
+                    DeduplicationKey = $"sync-error-{_project.Id}"
+                });
+            }
+
+            await LoadData();
+            _issuesRefreshTrigger++;
+        }
+        finally
+        {
+            _isSyncing = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task<string?> PullFleeceInternalAsync()
+    {
+        if (_project == null)
+            return null;
+
+        try
+        {
+            var result = await FleeceSyncApi.PullFleeceOnlyAsync(_project.Id);
+
+            if (result != null && !result.Success)
+            {
+                if (result.HasNonFleeceChanges)
+                {
+                    _nonFleeceChangedFiles = result.NonFleeceChangedFiles;
+                    _showNonFleeceChangesModal = true;
+                    return null;
+                }
+
+                return result.ErrorMessage ?? "Unknown fleece pull error";
+            }
+
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to pull fleece issues for project {ProjectId}", _project.Id);
+            return ex.Message;
+        }
+    }
+
+    private async Task<string?> SyncFleeceInternalAsync()
+    {
+        if (_project == null)
+            return null;
+
+        try
+        {
+            var result = await FleeceSyncApi.SyncAsync(_project.Id);
+
+            if (result != null && !result.Success)
+            {
+                if (result.HasNonFleeceChanges && result.RequiresPullFirst)
+                {
+                    _nonFleeceChangedFiles = result.NonFleeceChangedFiles;
+                    _showNonFleeceChangesModal = true;
+                    return null;
+                }
+
+                return result.ErrorMessage ?? "Unknown fleece sync error";
+            }
+
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to sync fleece issues for project {ProjectId}", _project.Id);
+            return ex.Message;
+        }
+    }
+
+    private async Task<string?> SyncPullRequestsInternalAsync()
+    {
+        if (_project == null)
+            return null;
+
+        var hasGitHubConfig = !string.IsNullOrEmpty(_project.GitHubOwner) &&
+                              !string.IsNullOrEmpty(_project.GitHubRepo);
+        if (!hasGitHubConfig)
+            return null;
+
+        try
+        {
+            var isConfigured = await GitHubInfoApi.IsConfiguredAsync();
+            if (!isConfigured)
+            {
+                Logger.LogWarning("PR sync skipped for project {ProjectId}: GITHUB_TOKEN not configured", _project.Id);
+                return null;
+            }
+
+            var result = await PullRequestApi.SyncPullRequestsAsync(_project.Id);
+
+            if (result.Errors.Count > 0)
+            {
+                var errorMessage = string.Join("; ", result.Errors);
+                Logger.LogWarning("PR sync completed with errors for project {ProjectId}: {Errors}",
+                    _project.Id, errorMessage);
+                return errorMessage;
+            }
+
+            Logger.LogInformation("PR sync completed for project {ProjectId}: {Imported} imported, {Updated} updated, {Removed} removed",
+                _project.Id, result.Imported, result.Updated, result.Removed);
+
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to sync pull requests for project {ProjectId}", _project.Id);
+            return ex.Message;
+        }
     }
 
     private async Task SyncPullRequestsAsync()
@@ -853,6 +626,7 @@
             }
 
             await LoadData();
+            _issuesRefreshTrigger++;
         }
         catch (Exception ex)
         {
@@ -866,620 +640,9 @@
         }
     }
 
-    private async Task RefreshData()
-    {
-        if (_isRefreshing) return;
-
-        _isRefreshing = true;
-        StateHasChanged();
-
-        try
-        {
-            await LoadData();
-            if (_selectedPullRequestId != null)
-            {
-                _selectedPullRequest = await PullRequestApi.GetPullRequestAsync(_selectedPullRequestId);
-            }
-
-            await _graphVisualization?.RefreshAsync()!;
-        }
-        finally
-        {
-            _isRefreshing = false;
-            StateHasChanged();
-        }
-    }
-
-    /// <summary>
-    /// Pull operation that fetches from remote and merges fleece issues without committing/pushing.
-    /// Also syncs GitHub PRs.
-    /// </summary>
-    private async Task PullAsync()
-    {
-        if (_project == null || _isSyncing)
-            return;
-
-        _isSyncing = true;
-        StateHasChanged();
-
-        var errors = new List<string>();
-
-        try
-        {
-            // Run fleece pull and PR sync in parallel
-            var fleecePullTask = PullFleeceInternalAsync();
-            var prSyncTask = SyncPullRequestsInternalAsync();
-
-            var results = await Task.WhenAll(fleecePullTask, prSyncTask);
-
-            // Collect errors
-            if (results[0] is string fleeceError)
-                errors.Add($"Fleece pull: {fleeceError}");
-            if (results[1] is string prError)
-                errors.Add($"PR sync: {prError}");
-
-            // Show error notification if any errors occurred
-            if (errors.Count > 0)
-            {
-                await NotificationApi.CreateNotificationAsync(new CreateNotificationRequest
-                {
-                    Type = NotificationType.Warning,
-                    Title = "Pull completed with errors",
-                    Message = string.Join("; ", errors),
-                    ProjectId = _project.Id,
-                    IsDismissible = true,
-                    DeduplicationKey = $"pull-error-{_project.Id}"
-                });
-            }
-
-            // Refresh data after both complete
-            await LoadData();
-        }
-        finally
-        {
-            _isSyncing = false;
-            StateHasChanged();
-        }
-    }
-
-    /// <summary>
-    /// Internal fleece pull that returns an error message or null on success.
-    /// </summary>
-    private async Task<string?> PullFleeceInternalAsync()
-    {
-        if (_project == null)
-            return null;
-
-        try
-        {
-            var result = await FleeceSyncApi.PullFleeceOnlyAsync(_project.Id);
-
-            if (result != null && !result.Success)
-            {
-                // For conflicts requiring user interaction, show modal
-                if (result.HasNonFleeceChanges)
-                {
-                    _nonFleeceChangedFiles = result.NonFleeceChangedFiles;
-                    _showNonFleeceChangesModal = true;
-                    return null; // Don't report as error - handled via modal
-                }
-
-                return result.ErrorMessage ?? "Unknown fleece pull error";
-            }
-
-            return null;
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, "Failed to pull fleece issues for project {ProjectId}", _project.Id);
-            return ex.Message;
-        }
-    }
-
-    /// <summary>
-    /// Combined sync operation that runs fleece sync and PR sync in parallel.
-    /// </summary>
-    private async Task SyncAllAsync()
-    {
-        if (_project == null || _isSyncing)
-            return;
-
-        _isSyncing = true;
-        StateHasChanged();
-
-        var errors = new List<string>();
-
-        try
-        {
-            // Run fleece sync and PR sync in parallel
-            var fleeceSyncTask = SyncFleeceInternalAsync();
-            var prSyncTask = SyncPullRequestsInternalAsync();
-
-            var results = await Task.WhenAll(fleeceSyncTask, prSyncTask);
-
-            // Collect errors
-            if (results[0] is string fleeceError)
-                errors.Add($"Fleece sync: {fleeceError}");
-            if (results[1] is string prError)
-                errors.Add($"PR sync: {prError}");
-
-            // Show error notification if any errors occurred
-            if (errors.Count > 0)
-            {
-                await NotificationApi.CreateNotificationAsync(new CreateNotificationRequest
-                {
-                    Type = NotificationType.Warning,
-                    Title = "Sync completed with errors",
-                    Message = string.Join("; ", errors),
-                    ProjectId = _project.Id,
-                    IsDismissible = true,
-                    DeduplicationKey = $"sync-error-{_project.Id}"
-                });
-            }
-
-            // Refresh data after both complete
-            await LoadData();
-        }
-        finally
-        {
-            _isSyncing = false;
-            StateHasChanged();
-        }
-    }
-
-    /// <summary>
-    /// Internal fleece sync that returns an error message or null on success.
-    /// </summary>
-    private async Task<string?> SyncFleeceInternalAsync()
-    {
-        if (_project == null)
-            return null;
-
-        try
-        {
-            var result = await FleeceSyncApi.SyncAsync(_project.Id);
-
-            if (result != null && !result.Success)
-            {
-                // For conflicts requiring user interaction, skip error reporting
-                // (they'll be handled when user manually syncs via the button)
-                if (result.HasNonFleeceChanges && result.RequiresPullFirst)
-                {
-                    _nonFleeceChangedFiles = result.NonFleeceChangedFiles;
-                    _showNonFleeceChangesModal = true;
-                    return null; // Don't report as error - handled via modal
-                }
-
-                return result.ErrorMessage ?? "Unknown fleece sync error";
-            }
-
-            return null;
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, "Failed to sync fleece issues for project {ProjectId}", _project.Id);
-            return ex.Message;
-        }
-    }
-
-    /// <summary>
-    /// Internal PR sync that returns an error message or null on success.
-    /// </summary>
-    private async Task<string?> SyncPullRequestsInternalAsync()
-    {
-        if (_project == null)
-            return null;
-
-        var hasGitHubConfig = !string.IsNullOrEmpty(_project.GitHubOwner) &&
-                              !string.IsNullOrEmpty(_project.GitHubRepo);
-        if (!hasGitHubConfig)
-            return null; // No GitHub config is not an error
-
-        try
-        {
-            var isConfigured = await GitHubInfoApi.IsConfiguredAsync();
-            if (!isConfigured)
-            {
-                Logger.LogWarning("PR sync skipped for project {ProjectId}: GITHUB_TOKEN not configured", _project.Id);
-                return null; // Token not configured - silently skip
-            }
-
-            var result = await PullRequestApi.SyncPullRequestsAsync(_project.Id);
-
-            if (result.Errors.Count > 0)
-            {
-                var errorMessage = string.Join("; ", result.Errors);
-                Logger.LogWarning("PR sync completed with errors for project {ProjectId}: {Errors}",
-                    _project.Id, errorMessage);
-                return errorMessage;
-            }
-
-            Logger.LogInformation("PR sync completed for project {ProjectId}: {Imported} imported, {Updated} updated, {Removed} removed",
-                _project.Id, result.Imported, result.Updated, result.Removed);
-
-            return null;
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, "Failed to sync pull requests for project {ProjectId}", _project.Id);
-            return ex.Message;
-        }
-    }
-
-    private async Task NavigateToIssueEdit(string issueId)
-    {
-        await RefreshData();
-        // autoSuggest=true triggers background branch ID generation on the edit page
-        NavigationManager.NavigateTo($"/projects/{Id}/issues/{issueId}/edit?autoSuggest=true");
-    }
-
-    private async Task SelectPullRequest(string pullRequestId)
-    {
-        // Clear any other selection
-        _selectedIssueId = null;
-        _selectedIssue = null;
-        _selectedMergedPr = null;
-
-        _selectedPullRequestId = pullRequestId;
-        _selectedPullRequest = await PullRequestApi.GetPullRequestAsync(pullRequestId);
-    }
-
-    private void SelectIssue(string issueId)
-    {
-        // Clear any pull request selection
-        _selectedPullRequestId = null;
-        _selectedPullRequest = null;
-        _selectedMergedPr = null;
-
-        _selectedIssueId = issueId;
-        _selectedIssue = _openIssues?.FirstOrDefault(i => i.Id == issueId)
-                         ?? _inProgressIssues?.FirstOrDefault(i => i.Id == issueId);
-    }
-
-    /// <summary>
-    /// Handles a click event on an issue in the task graph.
-    /// On desktop: Opens the collapsible sidebar and displays the issue details.
-    /// On mobile: Only selects the issue (panel opened via explicit button).
-    /// Distinct from keyboard navigation which only highlights.
-    /// </summary>
-    private async Task HandleIssueClickFromGraph(string issueId)
-    {
-        SelectIssue(issueId);
-
-        // On mobile, don't auto-open the sidebar - user must use the open panel button
-        var isMobile = await JSRuntime.InvokeAsync<bool>("sidebarManager.isMobile");
-        if (!isMobile)
-        {
-            _sidebarOpen = true;
-            PanelService.SetPanelOpen(true);
-        }
-    }
-
-    /// <summary>
-    /// Handles explicit "Open Panel" button click from issue row (mobile only).
-    /// </summary>
-    private void HandleOpenPanelFromGraph(string issueId)
-    {
-        SelectIssue(issueId);
-        _sidebarOpen = true;
-        PanelService.SetPanelOpen(true);
-    }
-
-    /// <summary>
-    /// Handles a click event on a pull request in the timeline.
-    /// This opens the collapsible sidebar and displays the PR details.
-    /// </summary>
-    private async Task HandlePullRequestClickFromGraph(int prNumber)
-    {
-        await SelectPullRequestByNumber(prNumber);
-
-        // On mobile, don't auto-open the sidebar
-        var isMobile = await JSRuntime.InvokeAsync<bool>("sidebarManager.isMobile");
-        if (!isMobile)
-        {
-            _sidebarOpen = true;
-            PanelService.SetPanelOpen(true);
-        }
-    }
-
-    /// <summary>
-    /// Closes the collapsible sidebar without clearing the selection.
-    /// </summary>
-    private void CloseSidebar()
-    {
-        _sidebarOpen = false;
-        PanelService.SetPanelOpen(false);
-    }
-
-    /// <summary>
-    /// Selects an issue by ID, fetching from API if not found in local cache.
-    /// Use this for newly created issues that may not be in the cached list yet.
-    /// </summary>
-    private async Task SelectIssueAsync(string issueId)
-    {
-        // Clear any pull request selection
-        _selectedPullRequestId = null;
-        _selectedPullRequest = null;
-        _selectedMergedPr = null;
-
-        _selectedIssueId = issueId;
-
-        // Try to find in cached lists first
-        _selectedIssue = _openIssues?.FirstOrDefault(i => i.Id == issueId)
-                         ?? _inProgressIssues?.FirstOrDefault(i => i.Id == issueId);
-
-        // If not found locally, fetch from API
-        if (_selectedIssue == null)
-        {
-            try
-            {
-                _selectedIssue = await IssueApi.GetIssueAsync(issueId, Id);
-            }
-            catch (Exception ex)
-            {
-                Logger.LogWarning(ex, "Failed to fetch issue {IssueId} for selection", issueId);
-            }
-        }
-    }
-
-    private async Task HandleInlineIssueCreated(string newIssueId)
-    {
-        // Refresh data to include the new issue
-        await RefreshData();
-
-        // Select the newly created issue (fetch from API if not in cache)
-        await SelectIssueAsync(newIssueId);
-
-        // Open the sidebar to show the new issue details
-        _sidebarOpen = true;
-    }
-
-    private async Task HandlePull()
-    {
-    }
-
-    private async Task HandleSync()
-    {
-    }
-
-    private void HandleEditIssue(string issueId)
-    {
-        NavigationManager.NavigateTo($"/projects/{Id}/issues/{issueId}/edit");
-    }
-
-    private void HandleSessionStarted(ClaudeSession session)
-    {
-        // Select the issue that the session was started for
-        if (!string.IsNullOrEmpty(session.EntityId))
-        {
-            SelectIssue(session.EntityId);
-        }
-
-        // The UnifiedAgentLauncher handles navigation when no prompt is selected
-        // Otherwise, the user stays on the current page to monitor the session
-    }
-
-    private async Task SelectPullRequestByNumber(int prNumber)
-    {
-        // Clear any existing selection
-        _selectedIssueId = null;
-        _selectedIssue = null;
-        _selectedMergedPr = null;
-
-        // Find the PR in current PRs (internal database)
-        var currentPr = _flattenedCurrentPRs.FirstOrDefault(p => p.PullRequest.GitHubPRNumber == prNumber);
-        if (currentPr != null)
-        {
-            _selectedPullRequestId = currentPr.PullRequest.Id;
-            _selectedPullRequest = await PullRequestApi.GetPullRequestAsync(currentPr.PullRequest.Id);
-            return;
-        }
-
-        // Not in current PRs - try to fetch as merged/closed PR
-        _selectedPullRequestId = null;
-        _selectedPullRequest = null;
-
-        // Show loading state and fetch merged PR details
-        _isLoadingMergedPr = true;
-        StateHasChanged();
-
-        try
-        {
-            _selectedMergedPr = await PullRequestApi.GetMergedPullRequestDetailsAsync(Id, prNumber);
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, "Failed to fetch merged PR #{PrNumber} details", prNumber);
-            _selectedMergedPr = null;
-        }
-        finally
-        {
-            _isLoadingMergedPr = false;
-        }
-    }
-
-    private string? GetSelectedNodeId()
-    {
-        if (_selectedPullRequest != null && _selectedPullRequest.GitHubPRNumber.HasValue)
-        {
-            return $"pr-{_selectedPullRequest.GitHubPRNumber}";
-        }
-
-        if (_selectedMergedPr != null)
-        {
-            return $"pr-{_selectedMergedPr.PullRequest.Number}";
-        }
-
-        if (_selectedIssueId != null)
-        {
-            return $"issue-{_selectedIssueId}";
-        }
-
-        return null;
-    }
-
-    private void ClearSelection()
-    {
-        _selectedPullRequestId = null;
-        _selectedPullRequest = null;
-        _selectedMergedPr = null;
-        _selectedIssueId = null;
-        _selectedIssue = null;
-        _sidebarOpen = false;
-    }
-
-    #region Search Methods
-
-    private void HandleSearchTermChanged(string term)
-    {
-        NavService.UpdateSearchTerm(term);
-    }
-
-    private async Task HandleSearchEnter()
-    {
-        NavService.EmbedSearch();
-        // Restore focus to page container for keyboard navigation after search bar closes
-        await JSRuntime.InvokeVoidAsync("homespunInterop.focusElement", _pageContainer);
-    }
-
-    private void HandleSearchEscape()
-    {
-        NavService.ClearSearch();
-    }
-
-    private string? GetActiveSearchTerm()
-    {
-        // Return the search term when searching (typing) OR when embedded (committed)
-        // This enables real-time highlighting as the user types
-        return (NavService.IsSearching || NavService.IsSearchEmbedded) ? NavService.SearchTerm : null;
-    }
-
     #endregion
 
-    private int GetTotalCurrentPRCount()
-    {
-        return _flattenedCurrentPRs.Count;
-    }
-
-    private int GetTotalCurrentCount()
-    {
-        return _flattenedCurrentPRs.Count + (_inProgressIssues?.Count ?? 0);
-    }
-
-    private static string GetCurrentPRStatusColor(OpenPullRequestStatus status) => status switch
-    {
-        OpenPullRequestStatus.InDevelopment => "status-in-development",
-        OpenPullRequestStatus.ReadyForReview => "status-ready-for-review",
-        OpenPullRequestStatus.HasReviewComments => "status-has-review-comments",
-        OpenPullRequestStatus.Approved => "status-approved",
-        _ => "status-default"
-    };
-
-    private static string GetIssueTypeStatusColor(IssueType type) => type switch
-    {
-        IssueType.Feature => "status-feature",
-        IssueType.Bug => "status-bug",
-        IssueType.Chore => "status-chore",
-        IssueType.Task => "status-task",
-        _ => "status-default"
-    };
-
-    private static string GetIssueStatusColor(IssueResponse issue)
-    {
-        if (issue.Status == IssueStatus.Closed || issue.Status == IssueStatus.Complete)
-            return "status-approved";
-        return GetIssueTypeStatusColor(issue.Type);
-    }
-
-    private static string GetIssueStatusTooltip(IssueResponse issue)
-    {
-        return $"{issue.Type} ({issue.Status})";
-    }
-
-    private static string? GetCurrentPRSubtitle(PullRequest pr)
-    {
-        var parts = new List<string>();
-
-        if (!string.IsNullOrEmpty(pr.BranchName))
-            parts.Add(pr.BranchName);
-
-        return parts.Count > 0 ? string.Join(" - ", parts) : null;
-    }
-
-    private static string? GetIssueSubtitle(IssueResponse issue)
-    {
-        if (!string.IsNullOrEmpty(issue.Description))
-        {
-            // Truncate description for subtitle display
-            var desc = issue.Description;
-            if (desc.Length > 60)
-                desc = desc[..57] + "...";
-            return desc;
-        }
-
-        return null;
-    }
-
-    private AgentStartupStatus? GetStartupState(string entityId)
-    {
-        var state = StartupTracker.GetState(entityId);
-        return state?.Status;
-    }
-
-    /// <summary>
-    /// Checks if the currently selected issue has an agent running.
-    /// Used by the toolbar to disable the run button when agent is active.
-    /// </summary>
-    private bool IsSelectedIssueAgentRunning()
-    {
-        var selectedId = NavService.SelectedIssueId;
-        if (string.IsNullOrEmpty(selectedId)) return false;
-
-        var state = StartupTracker.GetState(selectedId);
-        return state?.Status == AgentStartupStatus.Starting || state?.Status == AgentStartupStatus.Started;
-    }
-
-    /// <summary>
-    /// Gets the title of the currently selected issue for the toolbar.
-    /// </summary>
-    private string? GetSelectedIssueTitle()
-    {
-        var selectedId = NavService.SelectedIssueId;
-        if (string.IsNullOrEmpty(selectedId)) return null;
-        return _openIssues?.FirstOrDefault(i => i.Id == selectedId)?.Title;
-    }
-
-    /// <summary>
-    /// Gets the description of the currently selected issue for the toolbar.
-    /// </summary>
-    private string? GetSelectedIssueDescription()
-    {
-        var selectedId = NavService.SelectedIssueId;
-        if (string.IsNullOrEmpty(selectedId)) return null;
-        return _openIssues?.FirstOrDefault(i => i.Id == selectedId)?.Description;
-    }
-
-    /// <summary>
-    /// Gets the type of the currently selected issue for the toolbar.
-    /// </summary>
-    private string? GetSelectedIssueType()
-    {
-        var selectedId = NavService.SelectedIssueId;
-        if (string.IsNullOrEmpty(selectedId)) return null;
-        var issue = _openIssues?.FirstOrDefault(i => i.Id == selectedId);
-        return issue?.Type.ToString();
-    }
-
-    /// <summary>
-    /// Gets the branch name for the currently selected issue.
-    /// </summary>
-    private string? GetSelectedIssueBranchName()
-    {
-        var selectedId = NavService.SelectedIssueId;
-        if (string.IsNullOrEmpty(selectedId)) return null;
-        var issue = _openIssues?.FirstOrDefault(i => i.Id == selectedId);
-        return issue != null ? BranchNameGenerator.GenerateBranchName(issue) : null;
-    }
+    #region Fleece Conflict Handlers
 
     private void HideFleeceConflictModal()
     {
@@ -1504,7 +667,6 @@
         {
             HideNonFleeceChangesModal();
 
-            // Retry the sync - server handles conflict resolution
             _lastFleeceSyncResult = await FleeceSyncApi.SyncAsync(_project.Id);
 
             if (_lastFleeceSyncResult != null && !_lastFleeceSyncResult.Success)
@@ -1512,7 +674,8 @@
                 return;
             }
 
-            await RefreshData();
+            await LoadData();
+            _issuesRefreshTrigger++;
         }
         finally
         {
@@ -1532,7 +695,6 @@
         {
             HideFleeceConflictModal();
 
-            // Retry sync - server handles stash/pull/conflict resolution
             _lastFleeceSyncResult = await FleeceSyncApi.SyncAsync(_project.Id);
 
             if (_lastFleeceSyncResult != null && !_lastFleeceSyncResult.Success)
@@ -1540,7 +702,8 @@
                 return;
             }
 
-            await RefreshData();
+            await LoadData();
+            _issuesRefreshTrigger++;
         }
         finally
         {
@@ -1560,7 +723,6 @@
         {
             HideFleeceConflictModal();
 
-            // Retry sync - server handles discard/pull/conflict resolution
             _lastFleeceSyncResult = await FleeceSyncApi.SyncAsync(_project.Id);
 
             if (_lastFleeceSyncResult != null && !_lastFleeceSyncResult.Success)
@@ -1568,7 +730,8 @@
                 return;
             }
 
-            await RefreshData();
+            await LoadData();
+            _issuesRefreshTrigger++;
         }
         finally
         {
@@ -1577,297 +740,12 @@
         }
     }
 
-    private void HandleKeyDown(KeyboardEventArgs e)
+    #endregion
+
+    private async Task OnIssuesDataChanged()
     {
-        // Only handle keyboard shortcuts on the issues tab
-        if (_activeTab != "issues") return;
-
-        // Don't handle when typing in search bar
-        if (NavService.IsSearching) return;
-
-        // Handle SelectingAgentPrompt mode separately
-        if (NavService.EditMode == KeyboardEditMode.SelectingAgentPrompt)
-        {
-            switch (e.Key)
-            {
-                case "Escape":
-                    NavService.CancelEdit();
-                    break;
-                case "j":
-                case "ArrowDown":
-                    NavService.MovePromptSelectionDown();
-                    break;
-                case "k":
-                case "ArrowUp":
-                    NavService.MovePromptSelectionUp();
-                    break;
-                case "Enter":
-                    // Accept the prompt selection (closes selection mode)
-                    NavService.AcceptPromptSelection();
-                    break;
-            }
-
-            return;
-        }
-
-        // Handle SelectingMoveTarget mode
-        if (NavService.EditMode == KeyboardEditMode.SelectingMoveTarget)
-        {
-            if (e.Key == "Escape")
-            {
-                NavService.CancelMoveOperation();
-            }
-
-            return;
-        }
-
-        // Don't handle if in other edit modes - let the inline editor handle it
-        if (NavService.EditMode != KeyboardEditMode.Viewing)
-        {
-            // Handle Escape to cancel edit
-            if (e.Key == "Escape")
-            {
-                NavService.CancelEdit();
-            }
-
-            return;
-        }
-
-        // Handle navigation and edit commands
-        // Note: preventDefault is handled by ShouldPreventKeyDefault property
-        switch (e.Key)
-        {
-            case "/":
-                // Start search (Vim-style)
-                NavService.StartSearch();
-                break;
-            case "n":
-                // Navigate to next search match
-                if (NavService.IsSearchEmbedded)
-                {
-                    NavService.MoveToNextMatch();
-                }
-
-                break;
-            case "N":
-                // Navigate to previous search match
-                if (NavService.IsSearchEmbedded)
-                {
-                    NavService.MoveToPreviousMatch();
-                }
-
-                break;
-            case "j":
-            case "ArrowDown":
-                NavService.MoveDown();
-                break;
-            case "k":
-            case "ArrowUp":
-                NavService.MoveUp();
-                break;
-            case "h":
-            case "ArrowLeft":
-                NavService.MoveToChild();
-                break;
-            case "l":
-            case "ArrowRight":
-                NavService.MoveToParent();
-                break;
-            case "i":
-                NavService.StartEditingAtStart();
-                break;
-            case "a":
-                NavService.StartEditingAtEnd();
-                break;
-            case "r":
-                NavService.StartReplacingTitle();
-                break;
-            case "o":
-                if (e.ShiftKey)
-                    NavService.CreateIssueAbove();
-                else
-                    NavService.CreateIssueBelow();
-                break;
-            case "O":
-                NavService.CreateIssueAbove();
-                break;
-            case "J": // Shift+J - move sibling down
-                _ = NavService.MoveSelectedDownAsync();
-                break;
-            case "K": // Shift+K - move sibling up
-                _ = NavService.MoveSelectedUpAsync();
-                break;
-            case "Enter":
-                NavService.OpenSelectedIssueForEdit();
-                break;
-            case "e":
-                // Start agent prompt selection mode
-                NavService.StartSelectingPrompt();
-                break;
-            case "Escape":
-                // Clear search if active, otherwise clear selection or close sidebar panel
-                if (NavService.IsSearchEmbedded)
-                {
-                    NavService.ClearSearch();
-                }
-                else
-                {
-                    ClearSelection();
-                }
-
-                break;
-            case "u":
-                // u for undo (vim-style)
-                _ = UndoAsync();
-                break;
-            case "g":
-                NavService.MoveToFirst();
-                break;
-            case "G":
-                NavService.MoveToLast();
-                break;
-        }
-    }
-
-
-    /// <summary>
-    /// Determines if the create above/below buttons should be enabled.
-    /// </summary>
-    private bool CanCreateIssue() =>
-        NavService.SelectedIndex >= 0 &&
-        NavService.EditMode == KeyboardEditMode.Viewing;
-
-
-    /// <summary>
-    /// Determines if a move button should be disabled.
-    /// </summary>
-    private bool IsMoveButtonDisabled(MoveOperationType operationType)
-    {
-        // Disabled if no issue selected
-        if (NavService.SelectedIndex < 0) return true;
-
-        // In selection mode, disable the button that's not active
-        if (NavService.EditMode == KeyboardEditMode.SelectingMoveTarget)
-        {
-            return NavService.CurrentMoveOperation != operationType;
-        }
-
-        // Disabled if in any other edit mode
-        return NavService.EditMode != KeyboardEditMode.Viewing;
-    }
-
-    /// <summary>
-    /// Determines if the "Make Child Of" button is in active selection mode.
-    /// </summary>
-    private bool IsMakeChildOfActive() =>
-        NavService.EditMode == KeyboardEditMode.SelectingMoveTarget &&
-        NavService.CurrentMoveOperation == MoveOperationType.AsChildOf;
-
-    /// <summary>
-    /// Determines if the "Make Parent Of" button is in active selection mode.
-    /// </summary>
-    private bool IsMakeParentOfActive() =>
-        NavService.EditMode == KeyboardEditMode.SelectingMoveTarget &&
-        NavService.CurrentMoveOperation == MoveOperationType.AsParentOf;
-
-
-    /// <summary>
-    /// Refreshes the history state from the server.
-    /// </summary>
-    private async Task RefreshHistoryStateAsync()
-    {
-        try
-        {
-            _historyState = await IssueHistoryApi.GetStateAsync(Id);
-            _canUndo = _historyState?.CanUndo ?? false;
-            _canRedo = _historyState?.CanRedo ?? false;
-        }
-        catch (Exception ex)
-        {
-            Logger.LogWarning(ex, "Failed to load history state for project {ProjectId}", Id);
-            _historyState = null;
-            _canUndo = false;
-            _canRedo = false;
-        }
-    }
-
-    /// <summary>
-    /// Undoes the last change to issues.
-    /// </summary>
-    private async Task UndoAsync()
-    {
-        if (!_canUndo || _isUndoRedoing)
-            return;
-
-        _isUndoRedoing = true;
+        await LoadData();
+        _issuesRefreshTrigger++;
         StateHasChanged();
-
-        try
-        {
-            var result = await IssueHistoryApi.UndoAsync(Id);
-            if (result.Success)
-            {
-                _historyState = result.State;
-                _canUndo = _historyState?.CanUndo ?? false;
-                _canRedo = _historyState?.CanRedo ?? false;
-
-                // Refresh the issues display
-                await RefreshData();
-            }
-            else
-            {
-                Logger.LogWarning("Undo failed: {ErrorMessage}", result.ErrorMessage);
-            }
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, "Failed to undo for project {ProjectId}", Id);
-        }
-        finally
-        {
-            _isUndoRedoing = false;
-            StateHasChanged();
-        }
     }
-
-    /// <summary>
-    /// Redoes a previously undone change.
-    /// </summary>
-    private async Task RedoAsync()
-    {
-        if (!_canRedo || _isUndoRedoing)
-            return;
-
-        _isUndoRedoing = true;
-        StateHasChanged();
-
-        try
-        {
-            var result = await IssueHistoryApi.RedoAsync(Id);
-            if (result.Success)
-            {
-                _historyState = result.State;
-                _canUndo = _historyState?.CanUndo ?? false;
-                _canRedo = _historyState?.CanRedo ?? false;
-
-                // Refresh the issues display
-                await RefreshData();
-            }
-            else
-            {
-                Logger.LogWarning("Redo failed: {ErrorMessage}", result.ErrorMessage);
-            }
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, "Failed to redo for project {ProjectId}", Id);
-        }
-        finally
-        {
-            _isUndoRedoing = false;
-            StateHasChanged();
-        }
-    }
-
-
 }

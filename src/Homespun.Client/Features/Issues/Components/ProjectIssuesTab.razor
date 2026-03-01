@@ -1,0 +1,935 @@
+@implements IDisposable
+@inject HttpIssueApiService IssueApi
+@inject HttpIssueHistoryApiService IssueHistoryApi
+@inject HttpPullRequestApiService PullRequestApi
+@inject IAgentStartupTracker StartupTracker
+@inject IKeyboardNavigationService NavService
+@inject IPanelService PanelService
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
+@inject ILogger<ProjectIssuesTab> Logger
+
+<div class="project-issues-tab @(_sidebarOpen ? "sidebar-open" : "")" @onkeydown="HandleKeyDown" tabindex="-1"
+     @ref="_pageContainer">
+
+    <ProjectToolbar SelectedIssueId="@NavService.SelectedIssueId"
+                    ProjectId="@ProjectId"
+                    IsAgentRunning="@IsSelectedIssueAgentRunning()"
+                    OnEditClick="HandleEditIssue"
+                    OnSessionStarted="HandleSessionStarted"
+                    IssueTitle="@GetSelectedIssueTitle()"
+                    IssueDescription="@GetSelectedIssueDescription()"
+                    IssueType="@GetSelectedIssueType()"
+                    BranchName="@GetSelectedIssueBranchName()"
+                    RepoPath="@Project?.LocalPath"
+                    DefaultBranch="@Project?.DefaultBranch"
+                    DefaultModel="@(Project?.DefaultModel ?? "opus")"
+                    CreateDisabled="@(!CanCreateIssue())"
+                    ChildOfDisabled="@IsMoveButtonDisabled(MoveOperationType.AsChildOf)"
+                    ParentOfDisabled="@IsMoveButtonDisabled(MoveOperationType.AsParentOf)"
+                    ChildOfActive="@IsMakeChildOfActive()"
+                    ParentOfActive="@IsMakeParentOfActive()"
+                    UndoDisabled="@(!_canUndo || _isUndoRedoing)"
+                    RedoDisabled="@(!_canRedo || _isUndoRedoing)"
+                    UndoTooltip="@(_historyState?.UndoDescription ?? "Undo")"
+                    RedoTooltip="@(_historyState?.RedoDescription ?? "Redo")"
+                    OnUndo="UndoAsync"
+                    OnRedo="RedoAsync"/>
+
+    <div class="project-layout">
+        <div class="timeline-column">
+            <SearchBar IsVisible="@NavService.IsSearching"
+                       SearchTerm="@NavService.SearchTerm"
+                       MatchCount="@NavService.MatchingIndices.Count"
+                       CurrentMatchIndex="@NavService.CurrentMatchIndex"
+                       OnSearchTermChanged="HandleSearchTermChanged"
+                       OnEnter="HandleSearchEnter"
+                       OnEscape="HandleSearchEscape"/>
+            <TimelineVisualization
+                @ref="_graphVisualization"
+                ProjectId="@ProjectId"
+                RepoPath="@Project?.LocalPath"
+                DefaultBranch="@Project?.DefaultBranch"
+                DefaultModel="@(Project?.DefaultModel ?? "opus")"
+                OnPullRequestClick="@HandlePullRequestClickFromGraph"
+                OnIssueClick="@HandleIssueClickFromGraph"
+                OnIssueCreated="@HandleInlineIssueCreated"
+                OnEditClick="@HandleEditIssue"
+                OnSessionStarted="@HandleSessionStarted"
+                OnOpenPanelClick="@HandleOpenPanelFromGraph"
+                SelectedNodeId="@GetSelectedNodeId()"
+                ActiveSearchTerm="@GetActiveSearchTerm()"/>
+        </div>
+    </div>
+
+    @* Collapsible Detail Sidebar *@
+    <div class="detail-sidebar @(_sidebarOpen ? "open" : "")">
+        @if (_selectedPullRequest != null)
+        {
+            <CurrentPullRequestDetailPanel PullRequest="_selectedPullRequest"
+                                           OnActionCompleted="RefreshData"
+                                           OnClose="CloseSidebar"/>
+        }
+        else if (_selectedMergedPr != null)
+        {
+            <MergedPullRequestDetailPanel Details="_selectedMergedPr"
+                                          ProjectId="@ProjectId"
+                                          OnClose="CloseSidebar"/>
+        }
+        else if (_isLoadingMergedPr)
+        {
+            <div class="card">
+                <div class="card-body text-center">
+                    <BbSpinner Size="SpinnerSize.Small" Class="mr-2"/>
+                    Loading pull request details...
+                </div>
+            </div>
+        }
+        else if (_selectedIssue != null)
+        {
+            <IssueDetailPanel ProjectId="@ProjectId"
+                              Issue="_selectedIssue"
+                              OnActionCompleted="RefreshData"
+                              OnClose="CloseSidebar"/>
+        }
+    </div>
+</div>
+
+<style>
+    .project-issues-tab {
+        outline: none;
+        max-width: 100%;
+        overflow-x: hidden;
+        transition: margin-right 0.2s ease;
+    }
+
+    /* ==========================================================================
+       Project Layout Grid
+       ========================================================================== */
+    .project-layout {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: var(--spacing-md);
+        align-items: start;
+        max-width: 100%;
+        min-width: 0;
+    }
+
+    .timeline-column {
+        min-width: 0;
+        max-width: 100%;
+        overflow-x: auto;
+    }
+
+    /* ==========================================================================
+       Mobile: Overlay behavior (sidebar covers content)
+       ========================================================================== */
+    @@media (max-width: 768px) {
+        .detail-sidebar {
+            width: 100%;
+        }
+
+        /* On mobile, don't squash - let sidebar overlay */
+        .project-issues-tab.sidebar-open {
+            margin-right: 0;
+        }
+    }
+</style>
+
+@code {
+    [Parameter] public required string ProjectId { get; set; }
+    [Parameter] public required Project Project { get; set; }
+    [Parameter] public int RefreshTrigger { get; set; }
+    [Parameter] public EventCallback OnDataChanged { get; set; }
+
+    // PR state
+    private List<PullRequest>? _rootPullRequests;
+    private List<FlattenedPR> _flattenedCurrentPRs = [];
+    private PullRequest? _selectedPullRequest;
+    private string? _selectedPullRequestId;
+    private MergedPullRequestDetails? _selectedMergedPr;
+    private bool _isLoadingMergedPr;
+
+    // Issue state
+    private IssueResponse? _selectedIssue;
+    private string? _selectedIssueId;
+    private List<IssueResponse>? _openIssues;
+    private List<IssueResponse>? _inProgressIssues;
+
+    // Graph ref
+    private TimelineVisualization? _graphVisualization;
+
+    // Undo/Redo state
+    private IssueHistoryState? _historyState;
+    private bool _canUndo;
+    private bool _canRedo;
+    private bool _isUndoRedoing;
+
+    // Keyboard navigation state
+    private ElementReference _pageContainer;
+    private KeyboardEditMode _previousEditMode = KeyboardEditMode.Viewing;
+
+    // Collapsible sidebar state
+    private bool _sidebarOpen;
+
+    // Hash fragment tracking
+    private bool _hasProcessedHashFragment;
+
+    // Refresh trigger tracking
+    private int _lastRefreshTrigger;
+
+    // Refreshing guard
+    private bool _isRefreshing;
+
+    private record FlattenedPR(PullRequest PullRequest, int Level);
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Subscribe to agent startup state changes to update UI
+        StartupTracker.OnStateChanged += OnStartupStateChanged;
+
+        // Subscribe to panel service state changes
+        PanelService.OnStateChanged += OnPanelServiceStateChanged;
+
+        // Register panel availability
+        PanelService.SetPanelAvailable(true);
+
+        await LoadIssuesAndPRs();
+
+        _lastRefreshTrigger = RefreshTrigger;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await HandleHashFragmentAsync();
+
+            await JSRuntime.InvokeVoidAsync("homespunInterop.focusElement", _pageContainer);
+            await JSRuntime.InvokeVoidAsync("homespunInterop.setupKeyboardPrevention", _pageContainer);
+
+            NavService.OnStateChanged += OnNavServiceStateChanged;
+            NavService.OnOpenEditRequested += OnOpenEditRequested;
+            NavService.OnIssueCreatedForEdit += NavigateToIssueEditAsync;
+            NavService.OnMoveOperationRequested += OnMoveOperationRequested;
+            NavService.OnSiblingMoveRequested += OnSiblingMoveRequested;
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (RefreshTrigger != _lastRefreshTrigger)
+        {
+            _lastRefreshTrigger = RefreshTrigger;
+            await RefreshData();
+        }
+    }
+
+    public void Dispose()
+    {
+        StartupTracker.OnStateChanged -= OnStartupStateChanged;
+        NavService.OnStateChanged -= OnNavServiceStateChanged;
+        NavService.OnOpenEditRequested -= OnOpenEditRequested;
+        NavService.OnIssueCreatedForEdit -= NavigateToIssueEditAsync;
+        NavService.OnMoveOperationRequested -= OnMoveOperationRequested;
+        NavService.OnSiblingMoveRequested -= OnSiblingMoveRequested;
+        PanelService.OnStateChanged -= OnPanelServiceStateChanged;
+        PanelService.SetPanelAvailable(false);
+    }
+
+    private async void OnStartupStateChanged(string entityId, AgentStartupState state)
+    {
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task LoadIssuesAndPRs()
+    {
+        _rootPullRequests = await PullRequestApi.GetProjectPullRequestsAsync(ProjectId);
+        _flattenedCurrentPRs = FlattenPRs(_rootPullRequests ?? []);
+
+        try
+        {
+            var allIssues = await IssueApi.GetIssuesAsync(ProjectId);
+
+            _openIssues = allIssues
+                .Where(i => i.Status is IssueStatus.Open or IssueStatus.Progress or IssueStatus.Review)
+                .ToList();
+
+            _inProgressIssues = [];
+
+            await RefreshHistoryStateAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to load issues for project {ProjectId}", ProjectId);
+            _openIssues = [];
+            _inProgressIssues = [];
+        }
+    }
+
+    private async Task RefreshData()
+    {
+        if (_isRefreshing) return;
+
+        _isRefreshing = true;
+        StateHasChanged();
+
+        try
+        {
+            await LoadIssuesAndPRs();
+            if (_selectedPullRequestId != null)
+            {
+                _selectedPullRequest = await PullRequestApi.GetPullRequestAsync(_selectedPullRequestId);
+            }
+
+            await _graphVisualization?.RefreshAsync()!;
+            await OnDataChanged.InvokeAsync();
+        }
+        finally
+        {
+            _isRefreshing = false;
+            StateHasChanged();
+        }
+    }
+
+    private List<FlattenedPR> FlattenPRs(List<PullRequest> prs, int level = 0)
+    {
+        var result = new List<FlattenedPR>();
+        foreach (var pr in prs.OrderBy(p => p.CreatedAt))
+        {
+            result.Add(new FlattenedPR(pr, level));
+            if (pr.Children.Any())
+            {
+                result.AddRange(FlattenPRs(pr.Children.ToList(), level + 1));
+            }
+        }
+
+        return result;
+    }
+
+    #region Hash Fragment
+
+    private async Task HandleHashFragmentAsync()
+    {
+        if (_hasProcessedHashFragment) return;
+        _hasProcessedHashFragment = true;
+
+        var uri = new Uri(NavigationManager.Uri);
+        if (!string.IsNullOrEmpty(uri.Fragment))
+        {
+            var fragment = uri.Fragment.TrimStart('#');
+            if (fragment.StartsWith("issue-"))
+            {
+                var issueId = fragment.Substring(6);
+
+                var retries = 0;
+                while ((_openIssues == null || _openIssues.Count == 0) && retries < 10)
+                {
+                    await Task.Delay(100);
+                    retries++;
+                }
+
+                if (_openIssues?.Any(i => i.Id == issueId) == true)
+                {
+                    SelectIssue(issueId);
+                    await InvokeAsync(StateHasChanged);
+                }
+            }
+        }
+    }
+
+    #endregion
+
+    #region Nav Service Handlers
+
+    private void OnNavServiceStateChanged()
+    {
+        var currentMode = NavService.EditMode;
+        if (_previousEditMode != KeyboardEditMode.Viewing && currentMode == KeyboardEditMode.Viewing)
+        {
+            _ = InvokeAsync(async () => { await JSRuntime.InvokeVoidAsync("homespunInterop.focusElement", _pageContainer); });
+        }
+
+        _previousEditMode = currentMode;
+    }
+
+    private void OnOpenEditRequested(string issueId)
+    {
+        HandleEditIssue(issueId);
+    }
+
+    private Task NavigateToIssueEditAsync(string issueId)
+    {
+        return NavigateToIssueEdit(issueId);
+    }
+
+    private async Task NavigateToIssueEdit(string issueId)
+    {
+        await RefreshData();
+        NavigationManager.NavigateTo($"/projects/{ProjectId}/issues/{issueId}/edit?autoSuggest=true");
+    }
+
+    private async Task OnMoveOperationRequested(string sourceIssueId, string targetIssueId, MoveOperationType operation, bool addToExisting)
+    {
+        try
+        {
+            string childId, parentId;
+            if (operation == MoveOperationType.AsChildOf)
+            {
+                childId = sourceIssueId;
+                parentId = targetIssueId;
+            }
+            else
+            {
+                childId = targetIssueId;
+                parentId = sourceIssueId;
+            }
+
+            var request = new SetParentRequest
+            {
+                ProjectId = ProjectId,
+                ParentIssueId = parentId,
+                AddToExisting = addToExisting
+            };
+
+            await IssueApi.SetParentAsync(childId, request);
+            await RefreshData();
+        }
+        catch (InvalidOperationException ex)
+        {
+            Logger.LogWarning("Move operation would create cycle: {Message}", ex.Message);
+        }
+    }
+
+    private async Task OnSiblingMoveRequested(string issueId, MoveDirection direction)
+    {
+        try
+        {
+            var request = new MoveSeriesSiblingRequest
+            {
+                ProjectId = ProjectId,
+                Direction = direction
+            };
+
+            await IssueApi.MoveSeriesSiblingAsync(issueId, request);
+            await RefreshData();
+        }
+        catch (InvalidOperationException ex)
+        {
+            Logger.LogWarning("Sibling move operation failed: {Message}", ex.Message);
+        }
+    }
+
+    private void OnPanelServiceStateChanged()
+    {
+        if (_sidebarOpen != PanelService.IsPanelOpen)
+        {
+            _sidebarOpen = PanelService.IsPanelOpen;
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
+    #endregion
+
+    #region Selection
+
+    private void SelectIssue(string issueId)
+    {
+        _selectedPullRequestId = null;
+        _selectedPullRequest = null;
+        _selectedMergedPr = null;
+
+        _selectedIssueId = issueId;
+        _selectedIssue = _openIssues?.FirstOrDefault(i => i.Id == issueId)
+                         ?? _inProgressIssues?.FirstOrDefault(i => i.Id == issueId);
+    }
+
+    private async Task SelectIssueAsync(string issueId)
+    {
+        _selectedPullRequestId = null;
+        _selectedPullRequest = null;
+        _selectedMergedPr = null;
+
+        _selectedIssueId = issueId;
+
+        _selectedIssue = _openIssues?.FirstOrDefault(i => i.Id == issueId)
+                         ?? _inProgressIssues?.FirstOrDefault(i => i.Id == issueId);
+
+        if (_selectedIssue == null)
+        {
+            try
+            {
+                _selectedIssue = await IssueApi.GetIssueAsync(issueId, ProjectId);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "Failed to fetch issue {IssueId} for selection", issueId);
+            }
+        }
+    }
+
+    private async Task SelectPullRequest(string pullRequestId)
+    {
+        _selectedIssueId = null;
+        _selectedIssue = null;
+        _selectedMergedPr = null;
+
+        _selectedPullRequestId = pullRequestId;
+        _selectedPullRequest = await PullRequestApi.GetPullRequestAsync(pullRequestId);
+    }
+
+    private async Task SelectPullRequestByNumber(int prNumber)
+    {
+        _selectedIssueId = null;
+        _selectedIssue = null;
+        _selectedMergedPr = null;
+
+        var currentPr = _flattenedCurrentPRs.FirstOrDefault(p => p.PullRequest.GitHubPRNumber == prNumber);
+        if (currentPr != null)
+        {
+            _selectedPullRequestId = currentPr.PullRequest.Id;
+            _selectedPullRequest = await PullRequestApi.GetPullRequestAsync(currentPr.PullRequest.Id);
+            return;
+        }
+
+        _selectedPullRequestId = null;
+        _selectedPullRequest = null;
+
+        _isLoadingMergedPr = true;
+        StateHasChanged();
+
+        try
+        {
+            _selectedMergedPr = await PullRequestApi.GetMergedPullRequestDetailsAsync(ProjectId, prNumber);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to fetch merged PR #{PrNumber} details", prNumber);
+            _selectedMergedPr = null;
+        }
+        finally
+        {
+            _isLoadingMergedPr = false;
+        }
+    }
+
+    private string? GetSelectedNodeId()
+    {
+        if (_selectedPullRequest != null && _selectedPullRequest.GitHubPRNumber.HasValue)
+        {
+            return $"pr-{_selectedPullRequest.GitHubPRNumber}";
+        }
+
+        if (_selectedMergedPr != null)
+        {
+            return $"pr-{_selectedMergedPr.PullRequest.Number}";
+        }
+
+        if (_selectedIssueId != null)
+        {
+            return $"issue-{_selectedIssueId}";
+        }
+
+        return null;
+    }
+
+    private void ClearSelection()
+    {
+        _selectedPullRequestId = null;
+        _selectedPullRequest = null;
+        _selectedMergedPr = null;
+        _selectedIssueId = null;
+        _selectedIssue = null;
+        _sidebarOpen = false;
+    }
+
+    private void CloseSidebar()
+    {
+        _sidebarOpen = false;
+        PanelService.SetPanelOpen(false);
+    }
+
+    #endregion
+
+    #region Graph Click Handlers
+
+    private async Task HandleIssueClickFromGraph(string issueId)
+    {
+        SelectIssue(issueId);
+
+        var isMobile = await JSRuntime.InvokeAsync<bool>("sidebarManager.isMobile");
+        if (!isMobile)
+        {
+            _sidebarOpen = true;
+            PanelService.SetPanelOpen(true);
+        }
+    }
+
+    private void HandleOpenPanelFromGraph(string issueId)
+    {
+        SelectIssue(issueId);
+        _sidebarOpen = true;
+        PanelService.SetPanelOpen(true);
+    }
+
+    private async Task HandlePullRequestClickFromGraph(int prNumber)
+    {
+        await SelectPullRequestByNumber(prNumber);
+
+        var isMobile = await JSRuntime.InvokeAsync<bool>("sidebarManager.isMobile");
+        if (!isMobile)
+        {
+            _sidebarOpen = true;
+            PanelService.SetPanelOpen(true);
+        }
+    }
+
+    private async Task HandleInlineIssueCreated(string newIssueId)
+    {
+        await RefreshData();
+        await SelectIssueAsync(newIssueId);
+        _sidebarOpen = true;
+    }
+
+    private void HandleEditIssue(string issueId)
+    {
+        NavigationManager.NavigateTo($"/projects/{ProjectId}/issues/{issueId}/edit");
+    }
+
+    private void HandleSessionStarted(ClaudeSession session)
+    {
+        if (!string.IsNullOrEmpty(session.EntityId))
+        {
+            SelectIssue(session.EntityId);
+        }
+    }
+
+    #endregion
+
+    #region Search Methods
+
+    private void HandleSearchTermChanged(string term)
+    {
+        NavService.UpdateSearchTerm(term);
+    }
+
+    private async Task HandleSearchEnter()
+    {
+        NavService.EmbedSearch();
+        await JSRuntime.InvokeVoidAsync("homespunInterop.focusElement", _pageContainer);
+    }
+
+    private void HandleSearchEscape()
+    {
+        NavService.ClearSearch();
+    }
+
+    private string? GetActiveSearchTerm()
+    {
+        return (NavService.IsSearching || NavService.IsSearchEmbedded) ? NavService.SearchTerm : null;
+    }
+
+    #endregion
+
+    #region Toolbar Helpers
+
+    private bool IsSelectedIssueAgentRunning()
+    {
+        var selectedId = NavService.SelectedIssueId;
+        if (string.IsNullOrEmpty(selectedId)) return false;
+
+        var state = StartupTracker.GetState(selectedId);
+        return state?.Status == AgentStartupStatus.Starting || state?.Status == AgentStartupStatus.Started;
+    }
+
+    private string? GetSelectedIssueTitle()
+    {
+        var selectedId = NavService.SelectedIssueId;
+        if (string.IsNullOrEmpty(selectedId)) return null;
+        return _openIssues?.FirstOrDefault(i => i.Id == selectedId)?.Title;
+    }
+
+    private string? GetSelectedIssueDescription()
+    {
+        var selectedId = NavService.SelectedIssueId;
+        if (string.IsNullOrEmpty(selectedId)) return null;
+        return _openIssues?.FirstOrDefault(i => i.Id == selectedId)?.Description;
+    }
+
+    private string? GetSelectedIssueType()
+    {
+        var selectedId = NavService.SelectedIssueId;
+        if (string.IsNullOrEmpty(selectedId)) return null;
+        var issue = _openIssues?.FirstOrDefault(i => i.Id == selectedId);
+        return issue?.Type.ToString();
+    }
+
+    private string? GetSelectedIssueBranchName()
+    {
+        var selectedId = NavService.SelectedIssueId;
+        if (string.IsNullOrEmpty(selectedId)) return null;
+        var issue = _openIssues?.FirstOrDefault(i => i.Id == selectedId);
+        return issue != null ? BranchNameGenerator.GenerateBranchName(issue) : null;
+    }
+
+    private bool CanCreateIssue() =>
+        NavService.SelectedIndex >= 0 &&
+        NavService.EditMode == KeyboardEditMode.Viewing;
+
+    private bool IsMoveButtonDisabled(MoveOperationType operationType)
+    {
+        if (NavService.SelectedIndex < 0) return true;
+
+        if (NavService.EditMode == KeyboardEditMode.SelectingMoveTarget)
+        {
+            return NavService.CurrentMoveOperation != operationType;
+        }
+
+        return NavService.EditMode != KeyboardEditMode.Viewing;
+    }
+
+    private bool IsMakeChildOfActive() =>
+        NavService.EditMode == KeyboardEditMode.SelectingMoveTarget &&
+        NavService.CurrentMoveOperation == MoveOperationType.AsChildOf;
+
+    private bool IsMakeParentOfActive() =>
+        NavService.EditMode == KeyboardEditMode.SelectingMoveTarget &&
+        NavService.CurrentMoveOperation == MoveOperationType.AsParentOf;
+
+    #endregion
+
+    #region Undo/Redo
+
+    private async Task RefreshHistoryStateAsync()
+    {
+        try
+        {
+            _historyState = await IssueHistoryApi.GetStateAsync(ProjectId);
+            _canUndo = _historyState?.CanUndo ?? false;
+            _canRedo = _historyState?.CanRedo ?? false;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to load history state for project {ProjectId}", ProjectId);
+            _historyState = null;
+            _canUndo = false;
+            _canRedo = false;
+        }
+    }
+
+    private async Task UndoAsync()
+    {
+        if (!_canUndo || _isUndoRedoing)
+            return;
+
+        _isUndoRedoing = true;
+        StateHasChanged();
+
+        try
+        {
+            var result = await IssueHistoryApi.UndoAsync(ProjectId);
+            if (result.Success)
+            {
+                _historyState = result.State;
+                _canUndo = _historyState?.CanUndo ?? false;
+                _canRedo = _historyState?.CanRedo ?? false;
+
+                await RefreshData();
+            }
+            else
+            {
+                Logger.LogWarning("Undo failed: {ErrorMessage}", result.ErrorMessage);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to undo for project {ProjectId}", ProjectId);
+        }
+        finally
+        {
+            _isUndoRedoing = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task RedoAsync()
+    {
+        if (!_canRedo || _isUndoRedoing)
+            return;
+
+        _isUndoRedoing = true;
+        StateHasChanged();
+
+        try
+        {
+            var result = await IssueHistoryApi.RedoAsync(ProjectId);
+            if (result.Success)
+            {
+                _historyState = result.State;
+                _canUndo = _historyState?.CanUndo ?? false;
+                _canRedo = _historyState?.CanRedo ?? false;
+
+                await RefreshData();
+            }
+            else
+            {
+                Logger.LogWarning("Redo failed: {ErrorMessage}", result.ErrorMessage);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to redo for project {ProjectId}", ProjectId);
+        }
+        finally
+        {
+            _isUndoRedoing = false;
+            StateHasChanged();
+        }
+    }
+
+    #endregion
+
+    #region Keyboard
+
+    private void HandleKeyDown(KeyboardEventArgs e)
+    {
+        // Don't handle when typing in search bar
+        if (NavService.IsSearching) return;
+
+        // Handle SelectingAgentPrompt mode separately
+        if (NavService.EditMode == KeyboardEditMode.SelectingAgentPrompt)
+        {
+            switch (e.Key)
+            {
+                case "Escape":
+                    NavService.CancelEdit();
+                    break;
+                case "j":
+                case "ArrowDown":
+                    NavService.MovePromptSelectionDown();
+                    break;
+                case "k":
+                case "ArrowUp":
+                    NavService.MovePromptSelectionUp();
+                    break;
+                case "Enter":
+                    NavService.AcceptPromptSelection();
+                    break;
+            }
+
+            return;
+        }
+
+        // Handle SelectingMoveTarget mode
+        if (NavService.EditMode == KeyboardEditMode.SelectingMoveTarget)
+        {
+            if (e.Key == "Escape")
+            {
+                NavService.CancelMoveOperation();
+            }
+
+            return;
+        }
+
+        // Don't handle if in other edit modes - let the inline editor handle it
+        if (NavService.EditMode != KeyboardEditMode.Viewing)
+        {
+            if (e.Key == "Escape")
+            {
+                NavService.CancelEdit();
+            }
+
+            return;
+        }
+
+        // Handle navigation and edit commands
+        switch (e.Key)
+        {
+            case "/":
+                NavService.StartSearch();
+                break;
+            case "n":
+                if (NavService.IsSearchEmbedded)
+                {
+                    NavService.MoveToNextMatch();
+                }
+
+                break;
+            case "N":
+                if (NavService.IsSearchEmbedded)
+                {
+                    NavService.MoveToPreviousMatch();
+                }
+
+                break;
+            case "j":
+            case "ArrowDown":
+                NavService.MoveDown();
+                break;
+            case "k":
+            case "ArrowUp":
+                NavService.MoveUp();
+                break;
+            case "h":
+            case "ArrowLeft":
+                NavService.MoveToChild();
+                break;
+            case "l":
+            case "ArrowRight":
+                NavService.MoveToParent();
+                break;
+            case "i":
+                NavService.StartEditingAtStart();
+                break;
+            case "a":
+                NavService.StartEditingAtEnd();
+                break;
+            case "r":
+                NavService.StartReplacingTitle();
+                break;
+            case "o":
+                if (e.ShiftKey)
+                    NavService.CreateIssueAbove();
+                else
+                    NavService.CreateIssueBelow();
+                break;
+            case "O":
+                NavService.CreateIssueAbove();
+                break;
+            case "J":
+                _ = NavService.MoveSelectedDownAsync();
+                break;
+            case "K":
+                _ = NavService.MoveSelectedUpAsync();
+                break;
+            case "Enter":
+                NavService.OpenSelectedIssueForEdit();
+                break;
+            case "e":
+                NavService.StartSelectingPrompt();
+                break;
+            case "Escape":
+                if (NavService.IsSearchEmbedded)
+                {
+                    NavService.ClearSearch();
+                }
+                else
+                {
+                    ClearSelection();
+                }
+
+                break;
+            case "u":
+                _ = UndoAsync();
+                break;
+            case "g":
+                NavService.MoveToFirst();
+                break;
+            case "G":
+                NavService.MoveToLast();
+                break;
+        }
+    }
+
+    #endregion
+}
