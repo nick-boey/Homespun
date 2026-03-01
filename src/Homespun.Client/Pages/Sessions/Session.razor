@@ -19,7 +19,7 @@
     @if (_isLoading)
     {
         <div class="session-loading">
-            <LoadingSpinner Size="LoadingSpinnerSize.Lg" Label="Loading session..." Centered="true" />
+            <LoadingSpinner Size="LoadingSpinnerSize.Lg" Label="Loading session..." Centered="true"/>
         </div>
     }
     else if (_session == null)
@@ -50,310 +50,318 @@
         </div>
 
         <div class="session-content">
-        <div class="chat-container @(_sidePanelOpen ? "" : "expanded")">
-            <div class="messages-area" @ref="_messagesContainer" @onscroll="HandleScroll">
-                @if (_showLoadHistoryButton)
-                {
-                    <div class="load-history-banner">
-                        <button class="btn btn-outline btn-sm"
-                                @onclick="LoadHistoryAsync"
-                                disabled="@_isLoadingHistory">
-                            @if (_isLoadingHistory)
-                            {
-                                <BbSpinner Size="SpinnerSize.Small" />
-                                <span>Loading...</span>
-                            }
-                            else
-                            {
-                                <span>Load @(_cachedMessageCount - _session.Messages.Count) previous messages</span>
-                            }
-                        </button>
-                    </div>
-                }
-                @if (_session.Messages.Count == 0 && _session.Status != ClaudeSessionStatus.Running)
-                {
-                    <div class="empty-state">
-                        <p>Start the conversation by typing a message below.</p>
-                    </div>
-                }
-                else
-                {
-                    @foreach (var displayItem in GetDisplayItems())
+            <div class="chat-container @(_sidePanelOpen ? "" : "expanded")">
+                <div class="messages-area" @ref="_messagesContainer" @onscroll="HandleScroll">
+                    @if (_showLoadHistoryButton)
                     {
-                        @if (displayItem is ClaudeMessage message)
+                        <div class="load-history-banner">
+                            <button class="btn btn-outline btn-sm"
+                                    @onclick="LoadHistoryAsync"
+                                    disabled="@_isLoadingHistory">
+                                @if (_isLoadingHistory)
+                                {
+                                    <BbSpinner Size="SpinnerSize.Small"/>
+                                    <span>Loading...</span>
+                                }
+                                else
+                                {
+                                    <span>Load @(_cachedMessageCount - _session.Messages.Count) previous messages</span>
+                                }
+                            </button>
+                        </div>
+                    }
+                    @if (_session.Messages.Count == 0 && _session.Status != ClaudeSessionStatus.Running)
+                    {
+                        <div class="empty-state">
+                            <p>Start the conversation by typing a message below.</p>
+                        </div>
+                    }
+                    else
+                    {
+                        @foreach (var displayItem in GetDisplayItems())
                         {
-                            @* Check if context was cleared before this message *@
-                            @if (ShouldShowContextSeparator(message))
+                            @if (displayItem is ClaudeMessage message)
                             {
-                                var separatorTime = GetContextSeparatorTime(message);
-                                <div class="context-separator">
-                                    <span class="separator-text">Context Cleared</span>
-                                    <span class="separator-time">@separatorTime.ToLocalTime().ToString("HH:mm:ss")</span>
-                                </div>
-                            }
+                                @* Check if context was cleared before this message *@
+                                @if (ShouldShowContextSeparator(message))
+                                {
+                                    var separatorTime = GetContextSeparatorTime(message);
+                                    <div class="context-separator">
+                                        <span class="separator-text">Context Cleared</span>
+                                        <span
+                                            class="separator-time">@separatorTime.ToLocalTime().ToString("HH:mm:ss")</span>
+                                    </div>
+                                }
 
-                            var messageClass = message.Role == ClaudeMessageRole.User ? "user-message" : "assistant-message";
-                            <div class="message @messageClass">
-                                <div class="message-header">
-                                    <span class="message-role">@(message.Role == ClaudeMessageRole.User ? "You" : "Claude")</span>
-                                    <span class="message-time">@message.CreatedAt.ToLocalTime().ToString("HH:mm:ss")</span>
-                                </div>
-                                <div class="message-content">
-                                    @foreach (var content in message.Content
-                                        .OrderBy(c => c.Index >= 0 ? c.Index : int.MaxValue)
-                                        .ThenBy(c => message.Content.IndexOf(c))
-                                        .ToList())
-                                    {
-                                        <div class="content-block @GetContentBlockClass(content.Type) @(content.IsStreaming ? "streaming" : "")">
-                                            @switch (content.Type)
-                                            {
-                                                case ClaudeContentType.Text:
-                                                    <div class="text-content markdown-content">
-                                                        @((MarkupString)MarkdownService.RenderToHtml(content.Text))
-                                                        @if (content.IsStreaming)
-                                                        {
-                                                            <span class="streaming-cursor">▌</span>
-                                                        }
-                                                    </div>
-                                                    break;
-
-                                                case ClaudeContentType.Thinking:
-                                                    <details class="thinking-block" open="@content.IsStreaming">
-                                                        <summary>
-                                                            @if (content.IsStreaming)
-                                                            {
-                                                                <span>Thinking</span>
-                                                                <span class="streaming-dots">...</span>
-                                                            }
-                                                            else
-                                                            {
-                                                                <span>Thinking...</span>
-                                                            }
-                                                        </summary>
-                                                        <div class="thinking-content">
-                                                            @content.Text
+                                var messageClass = message.Role == ClaudeMessageRole.User ? "user-message" : "assistant-message";
+                                <div class="message @messageClass">
+                                    <div class="message-header">
+                                        <span
+                                            class="message-role">@(message.Role == ClaudeMessageRole.User ? "You" : "Claude")</span>
+                                        <span
+                                            class="message-time">@message.CreatedAt.ToLocalTime().ToString("HH:mm:ss")</span>
+                                    </div>
+                                    <div class="message-content">
+                                        @foreach (var content in message.Content
+                                                          .OrderBy(c => c.Index >= 0 ? c.Index : int.MaxValue)
+                                                          .ThenBy(c => message.Content.IndexOf(c))
+                                                          .ToList())
+                                        {
+                                            <div
+                                                class="content-block @GetContentBlockClass(content.Type) @(content.IsStreaming ? "streaming" : "")">
+                                                @switch (content.Type)
+                                                {
+                                                    case ClaudeContentType.Text:
+                                                        <div class="text-content markdown-content">
+                                                            @((MarkupString)MarkdownService.RenderToHtml(content.Text))
                                                             @if (content.IsStreaming)
                                                             {
                                                                 <span class="streaming-cursor">▌</span>
                                                             }
                                                         </div>
-                                                    </details>
-                                                    break;
-                                            }
+                                                        break;
+
+                                                    case ClaudeContentType.Thinking:
+                                                        <details class="thinking-block" open="@content.IsStreaming">
+                                                            <summary>
+                                                                @if (content.IsStreaming)
+                                                                {
+                                                                    <span>Thinking</span>
+                                                                    <span class="streaming-dots">...</span>
+                                                                }
+                                                                else
+                                                                {
+                                                                    <span>Thinking...</span>
+                                                                }
+                                                            </summary>
+                                                            <div class="thinking-content">
+                                                                @content.Text
+                                                                @if (content.IsStreaming)
+                                                                {
+                                                                    <span class="streaming-cursor">▌</span>
+                                                                }
+                                                            </div>
+                                                        </details>
+                                                        break;
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                            else if (displayItem is ToolExecutionGroup toolGroup)
+                            {
+                                @* Check if context was cleared before any message in this group *@
+                                @foreach (var originalMsg in toolGroup.OriginalMessages)
+                                {
+                                    @if (ShouldShowContextSeparator(originalMsg))
+                                    {
+                                        var separatorTime = GetContextSeparatorTime(originalMsg);
+                                        <div class="context-separator">
+                                            <span class="separator-text">Context Cleared</span>
+                                            <span
+                                                class="separator-time">@separatorTime.ToLocalTime().ToString("HH:mm:ss")</span>
                                         </div>
+                                        break; @* Only show one separator per group *@
                                     }
+                                }
+
+                                <ToolExecutionGroupDisplay Group="toolGroup"/>
+                            }
+                        }
+
+                        @if (_session.Status == ClaudeSessionStatus.Running)
+                        {
+                            <div class="processing-indicator">
+                                <BbSpinner Size="SpinnerSize.Small"/>
+                                <span>Processing...</span>
+                            </div>
+                        }
+
+                        @if (_session.Status == ClaudeSessionStatus.Error && !string.IsNullOrEmpty(_session.ErrorMessage))
+                        {
+                            <div class="session-error-banner">
+                                <div class="error-icon">⚠️</div>
+                                <div class="error-content">
+                                    <div class="error-title">@GetErrorTitle(_errorSubtype)</div>
+                                    <div class="error-message">@_session.ErrorMessage</div>
+                                    <div class="error-actions">
+                                        @if (_isRecoverable)
+                                        {
+                                            <button class="btn btn-primary btn-sm" @onclick="ContinueSession">
+                                                Continue Session
+                                            </button>
+                                        }
+                                        <button class="btn btn-warning btn-sm" @onclick="RestartContainer"
+                                                disabled="@_isRestartingContainer">
+                                            @if (_isRestartingContainer)
+                                            {
+                                                <BbSpinner Size="SpinnerSize.Small" Class="me-1"/>
+                                                <span>Restarting...</span>
+                                            }
+                                            else
+                                            {
+                                                <span>Restart Container</span>
+                                            }
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         }
-                        else if (displayItem is ToolExecutionGroup toolGroup)
+
+                        @if (_pendingQuestion != null)
                         {
-                            @* Check if context was cleared before any message in this group *@
-                            @foreach (var originalMsg in toolGroup.OriginalMessages)
-                            {
-                                @if (ShouldShowContextSeparator(originalMsg))
+                            <div class="question-container">
+                                <div class="question-header">
+                                    <span class="question-icon">❓</span>
+                                    <span class="question-title">Claude has a question for you</span>
+                                </div>
+                                @foreach (var question in _pendingQuestion.Questions)
                                 {
-                                    var separatorTime = GetContextSeparatorTime(originalMsg);
-                                    <div class="context-separator">
-                                        <span class="separator-text">Context Cleared</span>
-                                        <span class="separator-time">@separatorTime.ToLocalTime().ToString("HH:mm:ss")</span>
+                                    <div class="question-item">
+                                        <div class="question-text">
+                                            <span class="question-header-tag">@question.Header</span>
+                                            @question.Question
+                                        </div>
+                                        <div class="question-options">
+                                            @foreach (var option in question.Options)
+                                            {
+                                                var isSelected = _questionAnswers.TryGetValue(question.Question, out var answer) &&
+                                                                     (question.MultiSelect
+                                                                         ? answer.Split(", ").Contains(option.Label)
+                                                                         : answer == option.Label);
+                                                <button class="question-option @(isSelected ? "selected" : "")"
+                                                        @onclick="() => SelectOption(question, option)"
+                                                        title="@option.Description">
+                                                    @if (question.MultiSelect)
+                                                    {
+                                                        <span class="option-checkbox">@(isSelected ? "☑" : "☐")</span>
+                                                    }
+                                                    @option.Label
+                                                </button>
+                                            }
+                                            @* Other option for custom input *@
+                                            <button
+                                                class="question-option other-option @(IsOtherSelected(question.Question) ? "selected" : "")"
+                                                @onclick="() => SelectOther(question)">
+                                                Other...
+                                            </button>
+                                        </div>
+                                        @if (IsOtherSelected(question.Question))
+                                        {
+                                            var questionKey = question.Question;
+                                            <div class="custom-answer-input">
+                                                <input type="text"
+                                                       placeholder="Enter your custom answer..."
+                                                       value="@GetCustomAnswer(questionKey)"
+                                                       @oninput="@(e => UpdateCustomAnswer(questionKey, e.Value?.ToString() ?? string.Empty))"/>
+                                            </div>
+                                        }
                                     </div>
-                                    break; @* Only show one separator per group *@
                                 }
-                            }
-
-                            <ToolExecutionGroupDisplay Group="toolGroup" />
-                        }
-                    }
-
-                    @if (_session.Status == ClaudeSessionStatus.Running)
-                    {
-                        <div class="processing-indicator">
-                            <BbSpinner Size="SpinnerSize.Small" />
-                            <span>Processing...</span>
-                        </div>
-                    }
-
-                    @if (_session.Status == ClaudeSessionStatus.Error && !string.IsNullOrEmpty(_session.ErrorMessage))
-                    {
-                        <div class="session-error-banner">
-                            <div class="error-icon">⚠️</div>
-                            <div class="error-content">
-                                <div class="error-title">@GetErrorTitle(_errorSubtype)</div>
-                                <div class="error-message">@_session.ErrorMessage</div>
-                                <div class="error-actions">
-                                    @if (_isRecoverable)
-                                    {
-                                        <button class="btn btn-primary btn-sm" @onclick="ContinueSession">
-                                            Continue Session
-                                        </button>
-                                    }
-                                    <button class="btn btn-warning btn-sm" @onclick="RestartContainer" disabled="@_isRestartingContainer">
-                                        @if (_isRestartingContainer)
-                                        {
-                                            <BbSpinner Size="SpinnerSize.Small" Class="me-1" />
-                                            <span>Restarting...</span>
-                                        }
-                                        else
-                                        {
-                                            <span>Restart Container</span>
-                                        }
+                                <div class="question-actions">
+                                    <button class="btn btn-primary" @onclick="SubmitAnswers"
+                                            disabled="@(!CanSubmitAnswers())">
+                                        Submit Answers
                                     </button>
                                 </div>
                             </div>
-                        </div>
-                    }
+                        }
 
-                    @if (_pendingQuestion != null)
-                    {
-                        <div class="question-container">
-                            <div class="question-header">
-                                <span class="question-icon">❓</span>
-                                <span class="question-title">Claude has a question for you</span>
-                            </div>
-                            @foreach (var question in _pendingQuestion.Questions)
-                            {
-                                <div class="question-item">
-                                    <div class="question-text">
-                                        <span class="question-header-tag">@question.Header</span>
-                                        @question.Question
-                                    </div>
-                                    <div class="question-options">
-                                        @foreach (var option in question.Options)
-                                        {
-                                            var isSelected = _questionAnswers.TryGetValue(question.Question, out var answer) &&
-                                                (question.MultiSelect
-                                                    ? answer.Split(", ").Contains(option.Label)
-                                                    : answer == option.Label);
-                                            <button class="question-option @(isSelected ? "selected" : "")"
-                                                    @onclick="() => SelectOption(question, option)"
-                                                    title="@option.Description">
-                                                @if (question.MultiSelect)
-                                                {
-                                                    <span class="option-checkbox">@(isSelected ? "☑" : "☐")</span>
-                                                }
-                                                @option.Label
-                                            </button>
-                                        }
-                                        @* Other option for custom input *@
-                                        <button class="question-option other-option @(IsOtherSelected(question.Question) ? "selected" : "")"
-                                                @onclick="() => SelectOther(question)">
-                                            Other...
-                                        </button>
-                                    </div>
-                                    @if (IsOtherSelected(question.Question))
-                                    {
-                                        var questionKey = question.Question;
-                                        <div class="custom-answer-input">
-                                            <input type="text"
-                                                   placeholder="Enter your custom answer..."
-                                                   value="@GetCustomAnswer(questionKey)"
-                                                   @oninput="@(e => UpdateCustomAnswer(questionKey, e.Value?.ToString() ?? string.Empty))" />
-                                        </div>
-                                    }
+                        @if (_session.HasPendingPlanApproval && !string.IsNullOrEmpty(_session.PlanContent))
+                        {
+                            <div class="action-panel">
+                                <div class="action-panel-header">
+                                    <span class="action-panel-header-icon">📋</span>
+                                    <span class="action-panel-header-title">Plan Ready for Implementation</span>
                                 </div>
-                            }
-                            <div class="question-actions">
-                                <button class="btn btn-primary" @onclick="SubmitAnswers" disabled="@(!CanSubmitAnswers())">
-                                    Submit Answers
-                                </button>
-                            </div>
-                        </div>
-                    }
-
-                    @if (_session.HasPendingPlanApproval && !string.IsNullOrEmpty(_session.PlanContent))
-                    {
-                        <div class="action-panel">
-                            <div class="action-panel-header">
-                                <span class="action-panel-header-icon">📋</span>
-                                <span class="action-panel-header-title">Plan Ready for Implementation</span>
-                            </div>
-                            <div class="action-panel-description">
-                                Choose how to proceed with the implementation:
-                            </div>
-                            <div class="action-panel-options">
-                                <button class="action-panel-btn action-panel-btn-primary"
-                                        @onclick="ApprovePlanClearContext"
-                                        disabled="@_isProcessingPlanAction"
-                                        title="Clear conversation context and start fresh implementation">
-                                    <span class="action-panel-btn-icon">🔄</span>
-                                    Clear Context & Start Implementation
-                                </button>
-                                <button class="action-panel-btn"
-                                        @onclick="ApprovePlanKeepContext"
-                                        disabled="@_isProcessingPlanAction"
-                                        title="Continue with existing conversation context">
-                                    <span class="action-panel-btn-icon">▶️</span>
-                                    Continue with Context
-                                </button>
-                                <button class="action-panel-btn action-panel-btn-danger"
-                                        @onclick="() => _showPlanRejectFeedback = !_showPlanRejectFeedback"
-                                        disabled="@_isProcessingPlanAction"
-                                        title="Reject the plan and provide feedback">
-                                    <span class="action-panel-btn-icon">✏️</span>
-                                    Reject & Modify
-                                </button>
-                            </div>
-                            @if (_showPlanRejectFeedback)
-                            {
-                                <div class="action-panel-feedback">
+                                <div class="action-panel-description">
+                                    Choose how to proceed with the implementation:
+                                </div>
+                                <div class="action-panel-options">
+                                    <button class="action-panel-btn action-panel-btn-primary"
+                                            @onclick="ApprovePlanClearContext"
+                                            disabled="@_isProcessingPlanAction"
+                                            title="Clear conversation context and start fresh implementation">
+                                        <span class="action-panel-btn-icon">🔄</span>
+                                        Clear Context & Start Implementation
+                                    </button>
+                                    <button class="action-panel-btn"
+                                            @onclick="ApprovePlanKeepContext"
+                                            disabled="@_isProcessingPlanAction"
+                                            title="Continue with existing conversation context">
+                                        <span class="action-panel-btn-icon">▶️</span>
+                                        Continue with Context
+                                    </button>
+                                    <button class="action-panel-btn action-panel-btn-danger"
+                                            @onclick="() => _showPlanRejectFeedback = !_showPlanRejectFeedback"
+                                            disabled="@_isProcessingPlanAction"
+                                            title="Reject the plan and provide feedback">
+                                        <span class="action-panel-btn-icon">✏️</span>
+                                        Reject & Modify
+                                    </button>
+                                </div>
+                                @if (_showPlanRejectFeedback)
+                                {
+                                    <div class="action-panel-feedback">
                                     <textarea class="action-panel-textarea"
                                               @bind="_planRejectFeedback"
                                               placeholder="Describe what changes you'd like to the plan..."
                                               rows="3"></textarea>
-                                    <button class="action-panel-btn action-panel-btn-danger"
-                                            @onclick="RejectPlan"
-                                            disabled="@_isProcessingPlanAction"
-                                            title="Send feedback to revise the plan">
-                                        Send Feedback
-                                    </button>
-                                </div>
-                            }
-                        </div>
-                    }
-                }
-
-                @* Scroll to bottom button *@
-                @if (_showScrollToBottomButton)
-                {
-                    <button class="scroll-to-bottom-btn" @onclick="ScrollToBottomClick" title="Scroll to bottom">
-                        <span class="scroll-arrow">↓</span>
-                    </button>
-                }
-            </div>
-
-            <div class="input-area">
-                <div class="input-controls">
-                    <select class="permission-select"
-                            @bind="_selectedMode"
-                            disabled="@(_session.Status == ClaudeSessionStatus.Running || _session.Status == ClaudeSessionStatus.Stopped)">
-                        <option value="@SessionMode.Build">Build</option>
-                        <option value="@SessionMode.Plan">Plan</option>
-                    </select>
-                    <select class="model-select"
-                            @bind="_selectedModel"
-                            disabled="@(_session.Status == ClaudeSessionStatus.Running || _session.Status == ClaudeSessionStatus.Stopped)">
-                        <option value="opus">Opus</option>
-                        <option value="sonnet">Sonnet</option>
-                        <option value="haiku">Haiku</option>
-                    </select>
-                    <select class="prompt-select"
-                            value="@_selectedPromptId"
-                            @onchange="OnPromptSelected"
-                            disabled="@(_session.Status == ClaudeSessionStatus.Running || _session.Status == ClaudeSessionStatus.Stopped)">
-                        <option value="">(Select a prompt...)</option>
-                        @foreach (var prompt in _availablePrompts)
-                        {
-                            <option value="@prompt.Id">@prompt.Name</option>
+                                        <button class="action-panel-btn action-panel-btn-danger"
+                                                @onclick="RejectPlan"
+                                                disabled="@_isProcessingPlanAction"
+                                                title="Send feedback to revise the plan">
+                                            Send Feedback
+                                        </button>
+                                    </div>
+                                }
+                            </div>
                         }
-                    </select>
-                    <button class="btn btn-outline-secondary btn-sm clear-context-btn"
-                            @onclick="ClearContext"
-                            disabled="@(_session.Status == ClaudeSessionStatus.Running || _session.Status == ClaudeSessionStatus.Stopped || _session.Messages.Count == 0)"
-                            title="Clear context and start fresh (keeps message history)">
-                        Clear Context
-                    </button>
+                    }
+
+                    @* Scroll to bottom button *@
+                    @if (_showScrollToBottomButton)
+                    {
+                        <button class="scroll-to-bottom-btn" @onclick="ScrollToBottomClick" title="Scroll to bottom">
+                            <span class="scroll-arrow">↓</span>
+                        </button>
+                    }
                 </div>
-                <div class="input-row">
+
+                <div class="input-area">
+                    <div class="input-controls">
+                        <select class="permission-select"
+                                @bind="_selectedMode"
+                                disabled="@(_session.Status == ClaudeSessionStatus.Running || _session.Status == ClaudeSessionStatus.Stopped)">
+                            <option value="@SessionMode.Build">Build</option>
+                            <option value="@SessionMode.Plan">Plan</option>
+                        </select>
+                        <select class="model-select"
+                                @bind="_selectedModel"
+                                disabled="@(_session.Status == ClaudeSessionStatus.Running || _session.Status == ClaudeSessionStatus.Stopped)">
+                            <option value="opus">Opus</option>
+                            <option value="sonnet">Sonnet</option>
+                            <option value="haiku">Haiku</option>
+                        </select>
+                        <select class="prompt-select"
+                                value="@_selectedPromptId"
+                                @onchange="OnPromptSelected"
+                                disabled="@(_session.Status == ClaudeSessionStatus.Running || _session.Status == ClaudeSessionStatus.Stopped)">
+                            <option value="">(Select a prompt...)</option>
+                            @foreach (var prompt in _availablePrompts)
+                            {
+                                <option value="@prompt.Id">@prompt.Name</option>
+                            }
+                        </select>
+                        <button class="btn btn-outline-secondary btn-sm clear-context-btn"
+                                @onclick="ClearContext"
+                                disabled="@(_session.Status == ClaudeSessionStatus.Running || _session.Status == ClaudeSessionStatus.Stopped || _session.Messages.Count == 0)"
+                                title="Clear context and start fresh (keeps message history)">
+                            Clear Context
+                        </button>
+                    </div>
+                    <div class="input-row">
                     <textarea @bind="_inputMessage"
                               @bind:event="oninput"
                               @onkeydown="HandleKeyDown"
@@ -361,54 +369,56 @@
                               rows="3"
                               disabled="@(_session.Status == ClaudeSessionStatus.Stopped)">
                     </textarea>
-                    <div class="button-group">
-                        @if (_session.Status == ClaudeSessionStatus.Running)
-                        {
-                            <button class="btn btn-danger stop-button"
-                                    @onclick="InterruptSession"
-                                    disabled="@_isInterrupting"
-                                    title="Interrupt the current execution (Escape)">
-                                @if (_isInterrupting)
-                                {
-                                    <BbSpinner Size="SpinnerSize.Small" />
-                                }
-                                else
-                                {
-                                    <span class="stop-icon">&#9632;</span>
-                                }
-                                Interrupt
-                            </button>
-                            @if (!string.IsNullOrWhiteSpace(_inputMessage))
+                        <div class="button-group">
+                            @if (_session.Status == ClaudeSessionStatus.Running)
                             {
-                                <button class="btn btn-secondary queue-button"
-                                        @onclick="QueueMessage"
-                                        disabled="@(_pendingMessages.Count >= MaxQueuedMessages)"
-                                        title="Queue this message to send after current processing completes">
-                                    Queue @(_pendingMessages.Count > 0 ? $"({_pendingMessages.Count + 1})" : "")
+                                <button class="btn btn-danger stop-button"
+                                        @onclick="InterruptSession"
+                                        disabled="@_isInterrupting"
+                                        title="Interrupt the current execution (Escape)">
+                                    @if (_isInterrupting)
+                                    {
+                                        <BbSpinner Size="SpinnerSize.Small"/>
+                                    }
+                                    else
+                                    {
+                                        <span class="stop-icon">&#9632;</span>
+                                    }
+                                    Interrupt
+                                </button>
+                                @if (!string.IsNullOrWhiteSpace(_inputMessage))
+                                {
+                                    <button class="btn btn-secondary queue-button"
+                                            @onclick="QueueMessage"
+                                            disabled="@(_pendingMessages.Count >= MaxQueuedMessages)"
+                                            title="Queue this message to send after current processing completes">
+                                        Queue @(_pendingMessages.Count > 0 ? $"({_pendingMessages.Count + 1})" : "")
+                                    </button>
+                                }
+                            }
+                            else
+                            {
+                                <button class="btn btn-primary send-button"
+                                        @onclick="SendMessage"
+                                        disabled="@(string.IsNullOrWhiteSpace(_inputMessage) || _session.Status == ClaudeSessionStatus.Stopped)">
+                                    Send
                                 </button>
                             }
-                        }
-                        else
-                        {
-                            <button class="btn btn-primary send-button"
-                                    @onclick="SendMessage"
-                                    disabled="@(string.IsNullOrWhiteSpace(_inputMessage) || _session.Status == ClaudeSessionStatus.Stopped)">
-                                Send
-                            </button>
-                        }
+                        </div>
                     </div>
+                    @if (_pendingMessages.Count > 0)
+                    {
+                        <div class="queued-messages-indicator">
+                            <span
+                                class="badge bg-secondary">@_pendingMessages.Count message@(_pendingMessages.Count > 1 ? "s" : "") queued</span>
+                            <button class="btn btn-link btn-sm" @onclick="ClearQueue">Clear queue</button>
+                        </div>
+                    }
                 </div>
-                @if (_pendingMessages.Count > 0)
-                {
-                    <div class="queued-messages-indicator">
-                        <span class="badge bg-secondary">@_pendingMessages.Count message@(_pendingMessages.Count > 1 ? "s" : "") queued</span>
-                        <button class="btn btn-link btn-sm" @onclick="ClearQueue">Clear queue</button>
-                    </div>
-                }
             </div>
-        </div>
 
-        <SessionInfoPanel Session="_session" IsOpen="_sidePanelOpen" IsOpenChanged="OnSessionPanelToggled" IssueTitle="@_issue?.Title" />
+            <SessionInfoPanel Session="_session" IsOpen="_sidePanelOpen" IsOpenChanged="OnSessionPanelToggled"
+                              IssueTitle="@_issue?.Title"/>
         </div>
 
         @if (_session.TotalCostUsd > 0)
@@ -438,7 +448,9 @@
                     <div class="debug-log">
                         @if (_debugLog.Count == 0)
                         {
-                            <div class="debug-empty">No events logged yet. Interact with the session to see SignalR events.</div>
+                            <div class="debug-empty">No events logged yet. Interact with the session to see SignalR
+                                events.
+                            </div>
                         }
                         else
                         {
@@ -1156,14 +1168,24 @@
     }
 
     @@keyframes blink {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0; }
+        0%, 100% {
+            opacity: 1;
+        }
+        50% {
+            opacity: 0;
+        }
     }
 
     @@keyframes dots {
-        0%, 20% { content: '.'; }
-        40% { content: '..'; }
-        60%, 100% { content: '...'; }
+        0%, 20% {
+            content: '.';
+        }
+        40% {
+            content: '..';
+        }
+        60%, 100% {
+            content: '...';
+        }
     }
 
     .input-area {
@@ -1278,8 +1300,12 @@
     }
 
     @@keyframes pulse-glow {
-        0%, 100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.4); }
-        50% { box-shadow: 0 0 0 4px rgba(220, 53, 69, 0); }
+        0%, 100% {
+            box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.4);
+        }
+        50% {
+            box-shadow: 0 0 0 4px rgba(220, 53, 69, 0);
+        }
     }
 
     .queue-button {
@@ -1650,7 +1676,7 @@
     // Question handling
     private PendingQuestion? _pendingQuestion;
     private Dictionary<string, string> _questionAnswers = new();
-    private Dictionary<string, string> _customAnswers = new();  // For "Other" text input
+    private Dictionary<string, string> _customAnswers = new(); // For "Other" text input
 
     // Stop/interrupt button state
     private bool _isStopping = false;
@@ -1658,7 +1684,7 @@
 
     // Plan action button state (prevents double-click)
     private bool _isProcessingPlanAction = false;
-      
+
     // Session error state
     private string? _errorSubtype;
     private bool _isRecoverable = true;
@@ -1709,6 +1735,7 @@
     // IsDebugBuild property for conditional rendering
 #if DEBUG
     private static bool IsDebugBuild => true;
+
     // Debug mode for SignalR event logging
     private bool _debugMode = false;
     private List<DebugLogEntry> _debugLog = new();
@@ -1739,6 +1766,7 @@
         {
             _debugLog.Clear();
         }
+
         StateHasChanged();
     }
 
@@ -2223,7 +2251,7 @@
                     {
                         // Collapse all previous thinking blocks when a tool starts
                         foreach (var thinkingBlock in currentMessage.Content
-                            .Where(c => c.Type == ClaudeContentType.Thinking && c.IsStreaming))
+                                     .Where(c => c.Type == ClaudeContentType.Thinking && c.IsStreaming))
                         {
                             thinkingBlock.IsStreaming = false;
                         }
@@ -2382,6 +2410,7 @@
                             {
                                 _session.ContextClearMarkers.Add(DateTime.UtcNow);
                             }
+
                             StateHasChanged();
                             await AutoScrollToBottomIfNearEnd();
                             break;
@@ -2505,6 +2534,7 @@
                     LogDebug("ERROR", $"SessionModeModelChanged: {ex.Message}");
                     Console.WriteLine($"[SignalR] Error in SessionModeModelChanged: {ex.Message}");
                 }
+
                 return Task.CompletedTask;
             });
         });
@@ -2556,9 +2586,11 @@
                                 {
                                     content.IsStreaming = false;
                                 }
+
                                 _session.Messages.Add(msg);
                             }
                         }
+
                         _session.Status = session.Status;
                         _session.TotalCostUsd = session.TotalCostUsd;
                         _session.TotalDurationMs = session.TotalDurationMs;
@@ -2568,6 +2600,7 @@
                         _pendingQuestion = session.PendingQuestion;
                         Console.WriteLine($"[SignalR] SessionState received: {session.Messages.Count} messages, status: {session.Status}");
                     }
+
                     StateHasChanged();
                 }
                 catch (Exception ex)
@@ -2889,6 +2922,7 @@
         {
             return "Type a message to queue... (Ctrl+Enter to queue, Escape to interrupt)";
         }
+
         return "Type a message... (Ctrl+Enter to send)";
     }
 
@@ -3100,6 +3134,7 @@
                 return false;
             }
         }
+
         return true;
     }
 
@@ -3207,6 +3242,7 @@
                 {
                     content.IsStreaming = false;
                 }
+
                 _session.Messages.Add(msg);
             }
 
@@ -3262,4 +3298,5 @@
             await _hubConnection.DisposeAsync();
         }
     }
+
 }
