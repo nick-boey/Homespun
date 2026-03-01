@@ -29,6 +29,61 @@
     }
 </div>
 
+<style>
+    .glob-result {
+        font-family: var(--font-mono, monospace);
+        font-size: 0.75rem;
+    }
+
+    .glob-pattern {
+        display: flex;
+        align-items: baseline;
+        gap: var(--spacing-sm);
+        margin-bottom: var(--spacing-xs);
+    }
+
+    .glob-pattern .label {
+        color: var(--text-muted);
+        font-size: 0.6875rem;
+        flex-shrink: 0;
+    }
+
+    .glob-pattern code {
+        color: var(--text-primary);
+        background: var(--code-bg);
+        padding: 1px 4px;
+        border-radius: var(--radius-sm);
+    }
+
+    .file-count {
+        color: var(--text-muted);
+        font-size: 0.6875rem;
+        margin-bottom: var(--spacing-sm);
+    }
+
+    .files-list {
+        max-height: 250px;
+        overflow-y: auto;
+    }
+
+    .file-item {
+        padding: 1px 0;
+        line-height: 1.4;
+    }
+
+    .file-item code {
+        color: var(--text-primary);
+        font-size: 0.75rem;
+    }
+
+    .more-files {
+        color: var(--text-muted);
+        font-style: italic;
+        padding-top: var(--spacing-xs);
+        font-size: 0.6875rem;
+    }
+</style>
+
 @code {
     [Parameter]
     public required GlobToolData Data { get; set; }

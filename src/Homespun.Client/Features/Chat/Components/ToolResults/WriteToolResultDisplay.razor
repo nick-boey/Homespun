@@ -35,6 +35,57 @@
     }
 </div>
 
+<style>
+    .write-result {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--spacing-sm);
+        font-size: 0.75rem;
+    }
+
+    .operation-icon {
+        flex-shrink: 0;
+        font-size: 0.875rem;
+        line-height: 1.4;
+    }
+
+    .operation-details {
+        display: flex;
+        align-items: baseline;
+        gap: var(--spacing-sm);
+        min-width: 0;
+        flex: 1;
+    }
+
+    .operation-details .file-path {
+        font-family: var(--font-mono, monospace);
+        font-weight: 600;
+        color: var(--text-primary);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .lines-written {
+        color: var(--text-muted);
+        font-size: 0.6875rem;
+        flex-shrink: 0;
+    }
+
+    .operation-message {
+        margin-top: var(--spacing-xs);
+    }
+
+    .operation-message pre {
+        margin: 0;
+        font-family: var(--font-mono, monospace);
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        white-space: pre-wrap;
+        word-break: break-all;
+    }
+</style>
+
 @code {
     [Parameter]
     public required WriteToolData Data { get; set; }

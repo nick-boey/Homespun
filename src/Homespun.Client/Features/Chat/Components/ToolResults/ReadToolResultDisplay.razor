@@ -9,6 +9,57 @@
     </div>
 </div>
 
+<style>
+    .read-result {
+        font-family: var(--font-mono, monospace);
+        font-size: 0.75rem;
+    }
+
+    .file-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--spacing-md);
+        padding-bottom: var(--spacing-xs);
+        margin-bottom: var(--spacing-xs);
+        border-bottom: 1px solid var(--border-color-light);
+    }
+
+    .file-header .file-path {
+        color: var(--text-primary);
+        font-weight: 600;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        min-width: 0;
+    }
+
+    .line-count {
+        color: var(--text-muted);
+        flex-shrink: 0;
+        font-size: 0.6875rem;
+    }
+
+    .code-content {
+        max-height: 300px;
+        overflow-y: auto;
+    }
+
+    .code-block {
+        margin: 0;
+        white-space: pre-wrap;
+        word-break: break-all;
+        background: var(--code-bg);
+        padding: var(--spacing-sm);
+        border-radius: var(--radius-sm);
+    }
+
+    .code-block code {
+        font-size: 0.75rem;
+        color: var(--text-primary);
+    }
+</style>
+
 @code {
     [Parameter]
     public required ReadToolData Data { get; set; }

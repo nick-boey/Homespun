@@ -64,6 +64,90 @@ else
     </div>
 }
 
+<style>
+    .tool-result-block {
+        border: 1px solid var(--border-color-light);
+        border-radius: var(--radius-md);
+        overflow: hidden;
+    }
+
+    .tool-result-block.error {
+        border-left: 3px solid #ef4444;
+    }
+
+    .tool-result-block details > summary {
+        list-style: none;
+    }
+
+    .tool-result-block details > summary::-webkit-details-marker {
+        display: none;
+    }
+
+    .tool-result-summary {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+        padding: var(--spacing-sm) var(--spacing-md);
+        cursor: pointer;
+        font-size: 0.8125rem;
+        background: var(--bg-tertiary);
+        user-select: none;
+    }
+
+    .tool-result-summary:hover {
+        background: var(--bg-secondary);
+    }
+
+    .tool-icon {
+        flex-shrink: 0;
+        font-size: 0.875rem;
+    }
+
+    .tool-name {
+        font-weight: 600;
+        font-family: var(--font-mono, monospace);
+        font-size: 0.75rem;
+        color: var(--text-primary);
+    }
+
+    .tool-summary {
+        color: var(--text-muted);
+        font-size: 0.75rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        flex: 1;
+        min-width: 0;
+    }
+
+    .error-badge {
+        font-size: 0.625rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        color: #fff;
+        background: #ef4444;
+        padding: 1px 6px;
+        border-radius: var(--radius-full);
+        flex-shrink: 0;
+    }
+
+    .tool-result-details {
+        padding: var(--spacing-sm) var(--spacing-md);
+        border-top: 1px solid var(--border-color-light);
+        max-height: 400px;
+        overflow-y: auto;
+    }
+
+    .generic-result {
+        font-family: var(--font-mono, monospace);
+        font-size: 0.75rem;
+        white-space: pre-wrap;
+        word-break: break-all;
+        margin: 0;
+        color: var(--text-primary);
+    }
+</style>
+
 @code {
     [Parameter]
     public ClaudeMessageContent? Result { get; set; }
