@@ -13,23 +13,38 @@
     <div class="flex items-center justify-between">
         <div class="flex items-center gap-4">
             <BbResponsiveNavTrigger/>
-            <nav class="breadcrumbs" aria-label="Breadcrumb">
-                <a href="" class="brand">Homespun</a>
-                @foreach (var crumb in BreadcrumbService.Breadcrumbs)
-                {
-                    <span class="separator">/</span>
-                    @if (crumb.Url != null)
+            <BbBreadcrumb>
+                <!-- 
+                TODO: This should show BreadcrumbLink for all parent pages and a BreadcrumbPage for the current page.
+                Likely requires modifications to the BreadcrumbService.
+                 -->
+                <BbBreadcrumbList>
+                    <BbBreadcrumbItem>
+                        <BbBreadcrumbLink Href="/">Homespun</BbBreadcrumbLink>
+                    </BbBreadcrumbItem>
+                    @foreach (var crumb in BreadcrumbService.Breadcrumbs)
                     {
-                        <a href="@crumb.Url">@crumb.Title</a>
+                        <BbBreadcrumbSeparator/>
+                        @if (crumb.Url != null)
+                        {
+                            <BbBreadcrumbLink Href="@crumb.Url">@crumb.Title</BbBreadcrumbLink>
+                        }
+                        else
+                        {
+                            <BbBreadcrumbPage>@crumb.Title</BbBreadcrumbPage>
+                        }
                     }
-                    else
-                    {
-                        <span class="current">@crumb.Title</span>
-                    }
-                }
-            </nav>
+                </BbBreadcrumbList>
+            </BbBreadcrumb>
+        </div>
+
+        <div class="hidden md:flex items-center gap-6">
+            <AgentStatusIndicator/>
+            <span class="version-display" title="Homespun v@_version">v@_version</span>
         </div>
     </div>
+
+
     <BbResponsiveNavContent>
         <nav class="flex flex-col gap-4">
             <a href="#">Home</a>
@@ -37,23 +52,6 @@
             <a href="#">Contact</a>
         </nav>
     </BbResponsiveNavContent>
-
-    <div class="top-bar-spacer"></div>
-    <AgentStatusIndicator/>
-    <span class="version-display" title="Homespun v@_version">v@_version</span>
-    <button class="panel-toggle @(PanelService.IsPanelAvailable ? "" : "disabled")"
-            @onclick="TogglePanel"
-            disabled="@(!PanelService.IsPanelAvailable)"
-            title="@GetPanelToggleTooltip()">
-        @if (PanelService.IsPanelOpen)
-        {
-            <LucideIcon Name="panel-right-close" Size="18"/>
-        }
-        else
-        {
-            <LucideIcon Name="panel-right" Size="18"/>
-        }
-    </button>
 </BbResponsiveNavProvider>
 <BbSidebarProvider>
     <BbSidebar>
