@@ -40,6 +40,26 @@
 
 <BbCard>
     <BbCardHeader>
+        <BbCardTitle>Error State</BbCardTitle>
+        <BbCardDescription>Shows agents in error state</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <AgentStatusIndicator ErrorCount="2"/>
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>All States</BbCardTitle>
+        <BbCardDescription>Working, question, plan ready, waiting, error, and unknown agents</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <AgentStatusIndicator WorkingCount="3" QuestionCount="1" PlanReadyCount="1" WaitingCount="2" ErrorCount="1" UnknownCount="1"/>
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
         <BbCardTitle>No Active Agents</BbCardTitle>
         <BbCardDescription>Nothing shown when no agents are active</BbCardDescription>
     </BbCardHeader>

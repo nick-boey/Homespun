@@ -1,6 +1,5 @@
 @*
-    AgentSelector depends on IAgentPromptApi.
-    This showcase renders a static mock version of the component.
+    AgentSelector showcase - renders the real component backed by MockAgentPromptService in mock mode.
 *@
 
 <BbCard>
@@ -9,7 +8,7 @@
         <BbCardDescription>Ready to select and start an agent</BbCardDescription>
     </BbCardHeader>
     <BbCardContent>
-        <MockAgentSelector />
+        <AgentSelector />
     </BbCardContent>
 </BbCard>
 
@@ -19,7 +18,7 @@
         <BbCardDescription>Agent session is being started</BbCardDescription>
     </BbCardHeader>
     <BbCardContent>
-        <MockAgentSelector IsStarting="true" />
+        <AgentSelector IsStarting="true" />
     </BbCardContent>
 </BbCard>
 
@@ -29,7 +28,7 @@
         <BbCardDescription>When a session is already running</BbCardDescription>
     </BbCardHeader>
     <BbCardContent>
-        <MockAgentSelector Disabled="true" />
+        <AgentSelector Disabled="true" />
     </BbCardContent>
 </BbCard>
 
@@ -46,7 +45,7 @@
                 <p class="text-text-muted text-sm">Start an agent to work on this issue</p>
             </BbCardContent>
             <BbCardFooter>
-                <MockAgentSelector />
+                <AgentSelector />
             </BbCardFooter>
         </BbCard>
     </BbCardContent>

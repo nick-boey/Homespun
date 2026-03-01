@@ -1,19 +1,28 @@
 @*
-    AgentStatusPanel depends on SignalR and ClaudeCode services.
-    This showcase provides a description and static examples.
+    AgentStatusPanel showcase - renders the real component with entity IDs that won't match any session.
 *@
 
 <BbCard>
     <BbCardHeader>
-        <BbCardTitle>Component Overview</BbCardTitle>
+        <BbCardTitle>No Active Session</BbCardTitle>
+        <BbCardDescription>Panel with no matching session (start controls hidden)</BbCardDescription>
     </BbCardHeader>
     <BbCardContent>
-        <BbAlert Variant="AlertVariant.Info">
-            <BbAlertDescription>
-                <strong>AgentStatusPanel</strong> displays the current status of a Claude Code agent session,
-                showing whether it's running, waiting for input, or has completed.
-            </BbAlertDescription>
-        </BbAlert>
+        <div style="max-width: 300px;">
+            <AgentStatusPanel EntityId="showcase-no-session" CanStart="false" />
+        </div>
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>With Start Controls</BbCardTitle>
+        <BbCardDescription>Panel with model selector and Plan/Build buttons</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <div style="max-width: 300px;">
+            <AgentStatusPanel EntityId="showcase-with-start" CanStart="true" />
+        </div>
     </BbCardContent>
 </BbCard>
 
@@ -45,31 +54,6 @@
                 <span class="text-text-muted text-sm">Session is initializing</span>
             </div>
         </div>
-    </BbCardContent>
-</BbCard>
-
-<BbCard>
-    <BbCardHeader>
-        <BbCardTitle>Panel Example</BbCardTitle>
-        <BbCardDescription>Status panel with session info</BbCardDescription>
-    </BbCardHeader>
-    <BbCardContent>
-        <BbCard style="max-width: 300px;">
-            <BbCardHeader><BbCardTitle>Session Status</BbCardTitle></BbCardHeader>
-            <BbCardContent>
-                <div class="mb-2">
-                    <BbBadge Class="bg-green-600 text-white border-transparent">Running</BbBadge>
-                </div>
-                <dl class="text-sm mb-0">
-                    <dt>Mode</dt>
-                    <dd><BbBadge Class="bg-green-600 text-white border-transparent">Build</BbBadge></dd>
-                    <dt>Model</dt>
-                    <dd><code>claude-3-opus</code></dd>
-                    <dt>Started</dt>
-                    <dd>10 minutes ago</dd>
-                </dl>
-            </BbCardContent>
-        </BbCard>
     </BbCardContent>
 </BbCard>
 
