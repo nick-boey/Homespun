@@ -192,5 +192,37 @@ export function createSessionsRoute(sessionManager: SessionManager) {
     return c.json({ ok: true, message: 'Session stopped', sessionId });
   });
 
+  // GET /sessions/:id/messages - Get message history for catch-up replay
+  // Query params:
+  //   since: ISO timestamp to get messages after (optional)
+  sessions.get('/:id/messages', (c) => {
+    const sessionId = c.req.param('id');
+    const sinceParam = c.req.query('since');
+
+    const ws = sessionManager.get(sessionId);
+    if (!ws) {
+      return c.json({ message: `Session ${sessionId} not found` }, 404);
+    }
+
+    let since: Date | undefined;
+    if (sinceParam) {
+      const parsed = new Date(sinceParam);
+      if (!isNaN(parsed.getTime())) {
+        since = parsed;
+      }
+    }
+
+    const history = sessionManager.getMessageHistory(sessionId, since);
+    info(`GET /sessions/${sessionId}/messages - since=${sinceParam || 'all'}, count=${history.length}`);
+
+    return c.json({
+      sessionId,
+      messages: history.map(entry => ({
+        timestamp: entry.timestamp.toISOString(),
+        event: entry.event,
+      })),
+    });
+  });
+
   return sessions;
 }

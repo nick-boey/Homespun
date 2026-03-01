@@ -168,6 +168,18 @@ else
     {
         case AgentExecutionMode.Docker:
             builder.Services.AddSingleton<IAgentExecutionService, DockerAgentExecutionService>();
+            // Container discovery and recovery services for server restart
+            builder.Services.AddSingleton<IContainerDiscoveryService, ContainerDiscoveryService>();
+            builder.Services.AddHostedService(sp =>
+            {
+                var discoveryService = sp.GetRequiredService<IContainerDiscoveryService>();
+                var executionService = sp.GetRequiredService<IAgentExecutionService>() as DockerAgentExecutionService;
+                var logger = sp.GetRequiredService<ILogger<ContainerRecoveryHostedService>>();
+                return new ContainerRecoveryHostedService(
+                    discoveryService,
+                    container => executionService?.RegisterDiscoveredContainer(container),
+                    logger);
+            });
             break;
         default:
             builder.Services.AddSingleton<IAgentExecutionService, LocalAgentExecutionService>();
