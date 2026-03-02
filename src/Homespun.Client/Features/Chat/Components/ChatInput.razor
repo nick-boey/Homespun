@@ -1,4 +1,4 @@
-<div class="w-full">
+<div class="w-full flex flex-row gap-2">
     <BbTextarea
         Placeholder="@Placeholder"
         Disabled="@Disabled"
@@ -6,15 +6,12 @@
         @bind-Value="Value"
         @onkeydown="HandleKeyDown">
     </BbTextarea>
-    <div class="flex items-center justify-between mt-1">
-        <span class="text-xs text-[var(--text-muted)]">Ctrl+Enter to send</span>
-        <BbButton Variant="ButtonVariant.Default"
-                  OnClick="HandleSend"
-                  Disabled="@(string.IsNullOrWhiteSpace(Value) || Disabled)"
-                  aria-label="Send message">
-            <LucideIcon Name="send-horizontal"/>
-        </BbButton>
-    </div>
+    <BbButton Variant="ButtonVariant.Default"
+              OnClick="HandleSend"
+              Disabled="@(string.IsNullOrWhiteSpace(Value) || Disabled)"
+              aria-label="Send message">
+        <LucideIcon Name="send-horizontal"/>
+    </BbButton>
 </div>
 
 @code {

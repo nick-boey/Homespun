@@ -1,6 +1,6 @@
 using Homespun.Shared.Models.Design;
 
-namespace Homespun.Client.Services;
+namespace Homespun.Client.Features.Design.Services;
 
 public interface IComponentRegistryService
 {

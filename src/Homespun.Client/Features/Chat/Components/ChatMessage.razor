@@ -1,5 +1,5 @@
 <div
-    class="mb-2 p-2 rounded-md bg-[var(--bg-tool-group)] border @(IsUserMessage ? "ml-[20%]]" : "mr-[10%] ")">
+    class="mb-2 p-2 rounded-md bg-[var(--bg-tool-group)] border @(IsUserMessage ? "ml-[20%]" : "mr-[10%] ")">
     <div class="flex justify-between mb-1 text-sm">
         <span class="font-semibold">@(IsUserMessage ? "You" : "Claude")</span>
         <span class="text-[var(--text-muted)]">@Message.CreatedAt.ToLocalTime().ToString("HH:mm:ss")</span>
