@@ -6,7 +6,7 @@
 @using Homespun.Client.Features.Notifications.Components.Showcases
 @using Homespun.Client.Features.Projects.Components.Showcases
 @using Homespun.Client.Features.Toolbar.Components.Showcases
-@inject HttpComponentRegistryService ComponentRegistry
+@inject IComponentRegistryService ComponentRegistry
 @inject IBreadcrumbService BreadcrumbService
 @inject NavigationManager NavigationManager
 
@@ -140,7 +140,6 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        await ComponentRegistry.InitializeAsync();
         _component = ComponentRegistry.GetComponent(ComponentId);
         await BreadcrumbService.SetContextAsync(new BreadcrumbContext
         {

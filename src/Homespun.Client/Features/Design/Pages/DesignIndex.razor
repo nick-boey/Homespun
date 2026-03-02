@@ -1,5 +1,5 @@
 @page "/design"
-@inject HttpComponentRegistryService ComponentRegistry
+@inject IComponentRegistryService ComponentRegistry
 @inject IBreadcrumbService BreadcrumbService
 
 <PageTitle>Design System - Homespun</PageTitle>
@@ -45,7 +45,6 @@
 
     protected override async Task OnInitializedAsync()
     {
-        await ComponentRegistry.InitializeAsync();
         await BreadcrumbService.SetContextAsync(new BreadcrumbContext { PageName = "Design System" });
     }
 

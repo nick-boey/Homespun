@@ -30,7 +30,7 @@ builder.Services.AddScoped<HttpSessionCacheApiService>();
 builder.Services.AddScoped<HttpIssuePrStatusApiService>();
 builder.Services.AddScoped<HttpFleeceSyncApiService>();
 builder.Services.AddScoped<HttpSecretsApiService>();
-builder.Services.AddScoped<HttpComponentRegistryService>();
+builder.Services.AddSingleton<IComponentRegistryService, ComponentRegistryService>();
 builder.Services.AddScoped<HttpPlansApiService>();
 
 // Register SignalR services

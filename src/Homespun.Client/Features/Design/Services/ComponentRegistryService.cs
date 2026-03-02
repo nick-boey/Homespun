@@ -1,12 +1,11 @@
-namespace Homespun.Features.Design;
+using Homespun.Shared.Models.Design;
 
-/// <summary>
-/// Service that provides metadata for all design system components.
-/// </summary>
+namespace Homespun.Client.Services;
+
 public class ComponentRegistryService : IComponentRegistryService
 {
-    private readonly List<ComponentMetadata> _components = new()
-    {
+    private readonly List<ComponentMetadata> _components =
+    [
         // Core UI Components
         new ComponentMetadata
         {
@@ -15,7 +14,7 @@ public class ComponentRegistryService : IComponentRegistryService
             Description = "Displays a work item (issue/PR) with status indicator, title, and graph lines for hierarchy visualization.",
             Category = "Core",
             ComponentPath = "Shared/WorkItem.razor",
-            Tags = new() { "status", "issue", "pr", "list" }
+            Tags = ["status", "issue", "pr", "list"]
         },
         new ComponentMetadata
         {
@@ -24,7 +23,7 @@ public class ComponentRegistryService : IComponentRegistryService
             Description = "Displays pull request status with multiple badges showing checks, approval, merge readiness, and conflicts.",
             Category = "Core",
             ComponentPath = "Shared/PrStatusBadges.razor",
-            Tags = new() { "status", "pr", "badge", "github" }
+            Tags = ["status", "pr", "badge", "github"]
         },
         new ComponentMetadata
         {
@@ -33,7 +32,7 @@ public class ComponentRegistryService : IComponentRegistryService
             Description = "Shows active agent session counts (working/waiting) with real-time SignalR updates.",
             Category = "Core",
             ComponentPath = "Shared/AgentStatusIndicator.razor",
-            Tags = new() { "agent", "status", "realtime" }
+            Tags = ["agent", "status", "realtime"]
         },
         new ComponentMetadata
         {
@@ -42,7 +41,7 @@ public class ComponentRegistryService : IComponentRegistryService
             Description = "Displays notification messages with different severity levels (info, warning, action required) and dismissible actions.",
             Category = "Core",
             ComponentPath = "Shared/NotificationBanner.razor",
-            Tags = new() { "notification", "alert", "banner" }
+            Tags = ["notification", "alert", "banner"]
         },
         new ComponentMetadata
         {
@@ -51,7 +50,7 @@ public class ComponentRegistryService : IComponentRegistryService
             Description = "Dropdown selector for choosing AI model (Opus, Sonnet, Haiku).",
             Category = "Forms",
             ComponentPath = "Shared/ModelSelector.razor",
-            Tags = new() { "form", "select", "model", "ai" }
+            Tags = ["form", "select", "model", "ai"]
         },
         // Panel Components
         new ComponentMetadata
@@ -61,7 +60,7 @@ public class ComponentRegistryService : IComponentRegistryService
             Description = "Detailed panel showing issue information, session status, and available actions.",
             Category = "Panels",
             ComponentPath = "Shared/IssueDetailPanel.razor",
-            Tags = new() { "panel", "issue", "detail" }
+            Tags = ["panel", "issue", "detail"]
         },
         new ComponentMetadata
         {
@@ -70,7 +69,7 @@ public class ComponentRegistryService : IComponentRegistryService
             Description = "Panel displaying pull request details with status, checks, and merge options.",
             Category = "Panels",
             ComponentPath = "Shared/CurrentPullRequestDetailPanel.razor",
-            Tags = new() { "panel", "pr", "detail" }
+            Tags = ["panel", "pr", "detail"]
         },
         new ComponentMetadata
         {
@@ -79,7 +78,7 @@ public class ComponentRegistryService : IComponentRegistryService
             Description = "Panel displaying merged pull request details with linked issue information.",
             Category = "Panels",
             ComponentPath = "Shared/MergedPullRequestDetailPanel.razor",
-            Tags = new() { "panel", "pr", "merged", "issue" }
+            Tags = ["panel", "pr", "merged", "issue"]
         },
         new ComponentMetadata
         {
@@ -88,7 +87,7 @@ public class ComponentRegistryService : IComponentRegistryService
             Description = "Unified panel for managing Claude Code sessions. Groups by project globally, or by status when filtered to a specific project.",
             Category = "Panels",
             ComponentPath = "Shared/SessionsPanel.razor",
-            Tags = new() { "panel", "session", "agent", "management" }
+            Tags = ["panel", "session", "agent", "management"]
         },
         new ComponentMetadata
         {
@@ -97,7 +96,7 @@ public class ComponentRegistryService : IComponentRegistryService
             Description = "Panel showing the current status of an agent session.",
             Category = "Panels",
             ComponentPath = "Shared/AgentStatusPanel.razor",
-            Tags = new() { "panel", "agent", "status" }
+            Tags = ["panel", "agent", "status"]
         },
         new ComponentMetadata
         {
@@ -106,7 +105,7 @@ public class ComponentRegistryService : IComponentRegistryService
             Description = "Panel for managing git clones with create, delete, and switch actions.",
             Category = "Panels",
             ComponentPath = "Shared/CloneManagementPanel.razor",
-            Tags = new() { "panel", "git", "clone" }
+            Tags = ["panel", "git", "clone"]
         },
         new ComponentMetadata
         {
@@ -115,7 +114,7 @@ public class ComponentRegistryService : IComponentRegistryService
             Description = "List of Claude Code session history items.",
             Category = "Panels",
             ComponentPath = "Shared/SessionHistoryList.razor",
-            Tags = new() { "list", "session", "history" }
+            Tags = ["list", "session", "history"]
         },
         new ComponentMetadata
         {
@@ -124,9 +123,8 @@ public class ComponentRegistryService : IComponentRegistryService
             Description = "Selector for choosing which agent/prompt to use when starting a session.",
             Category = "Forms",
             ComponentPath = "Shared/AgentSelector.razor",
-            Tags = new() { "form", "agent", "selector" }
+            Tags = ["form", "agent", "selector"]
         },
-
         // Chat Components
         new ComponentMetadata
         {
@@ -135,7 +133,7 @@ public class ComponentRegistryService : IComponentRegistryService
             Description = "Displays a single chat message from user or assistant with timestamp.",
             Category = "Chat",
             ComponentPath = "Shared/Chat/ChatMessage.razor",
-            Tags = new() { "chat", "message" }
+            Tags = ["chat", "message"]
         },
         new ComponentMetadata
         {
@@ -144,7 +142,7 @@ public class ComponentRegistryService : IComponentRegistryService
             Description = "Text input area for sending chat messages with send button.",
             Category = "Chat",
             ComponentPath = "Shared/Chat/ChatInput.razor",
-            Tags = new() { "chat", "input", "form" }
+            Tags = ["chat", "input", "form"]
         },
         new ComponentMetadata
         {
@@ -153,7 +151,7 @@ public class ComponentRegistryService : IComponentRegistryService
             Description = "Renders different content block types (text, tool use, tool result, thinking).",
             Category = "Chat",
             ComponentPath = "Shared/Chat/ContentBlock.razor",
-            Tags = new() { "chat", "content" }
+            Tags = ["chat", "content"]
         },
         new ComponentMetadata
         {
@@ -162,7 +160,7 @@ public class ComponentRegistryService : IComponentRegistryService
             Description = "Renders text content with markdown support.",
             Category = "Chat",
             ComponentPath = "Shared/Chat/TextBlock.razor",
-            Tags = new() { "chat", "text", "markdown" }
+            Tags = ["chat", "text", "markdown"]
         },
         new ComponentMetadata
         {
@@ -171,7 +169,7 @@ public class ComponentRegistryService : IComponentRegistryService
             Description = "Displays tool invocation with name and input parameters.",
             Category = "Chat",
             ComponentPath = "Shared/Chat/ToolUseBlock.razor",
-            Tags = new() { "chat", "tool" }
+            Tags = ["chat", "tool"]
         },
         new ComponentMetadata
         {
@@ -180,7 +178,7 @@ public class ComponentRegistryService : IComponentRegistryService
             Description = "Displays the result of a tool invocation.",
             Category = "Chat",
             ComponentPath = "Shared/Chat/ToolResultBlock.razor",
-            Tags = new() { "chat", "tool", "result" }
+            Tags = ["chat", "tool", "result"]
         },
         new ComponentMetadata
         {
@@ -189,7 +187,7 @@ public class ComponentRegistryService : IComponentRegistryService
             Description = "Displays Claude's thinking/reasoning process.",
             Category = "Chat",
             ComponentPath = "Shared/Chat/ThinkingBlock.razor",
-            Tags = new() { "chat", "thinking" }
+            Tags = ["chat", "thinking"]
         },
         new ComponentMetadata
         {
@@ -198,7 +196,7 @@ public class ComponentRegistryService : IComponentRegistryService
             Description = "Shows that Claude is processing/thinking.",
             Category = "Chat",
             ComponentPath = "Shared/Chat/ProcessingIndicator.razor",
-            Tags = new() { "chat", "loading", "processing" }
+            Tags = ["chat", "loading", "processing"]
         },
         new ComponentMetadata
         {
@@ -207,7 +205,7 @@ public class ComponentRegistryService : IComponentRegistryService
             Description = "Renders a task graph with lane-based layout, connectors, and interactive issue rows.",
             Category = "Core",
             ComponentPath = "Components/TaskGraphView.razor",
-            Tags = new() { "graph", "task", "issue", "visualization" }
+            Tags = ["graph", "task", "issue", "visualization"]
         },
         new ComponentMetadata
         {
@@ -216,7 +214,7 @@ public class ComponentRegistryService : IComponentRegistryService
             Description = "A button with a primary action and a dropdown for secondary actions.",
             Category = "Core",
             ComponentPath = "Components/SplitButton.razor",
-            Tags = new() { "button", "dropdown", "action" }
+            Tags = ["button", "dropdown", "action"]
         },
         new ComponentMetadata
         {
@@ -225,7 +223,7 @@ public class ComponentRegistryService : IComponentRegistryService
             Description = "Inline action buttons for issue rows, showing edit and run agent controls. Appears on hover or selection.",
             Category = "Issue",
             ComponentPath = "Components/IssueRowActions.razor",
-            Tags = new() { "issue", "button", "action", "inline" }
+            Tags = ["issue", "button", "action", "inline"]
         },
         new ComponentMetadata
         {
@@ -234,7 +232,7 @@ public class ComponentRegistryService : IComponentRegistryService
             Description = "Reusable icon button with CSS tooltip showing action name and keyboard shortcut.",
             Category = "Core",
             ComponentPath = "Components/ToolbarButton.razor",
-            Tags = new() { "button", "icon", "tooltip", "toolbar" }
+            Tags = ["button", "icon", "tooltip", "toolbar"]
         },
         new ComponentMetadata
         {
@@ -243,25 +241,21 @@ public class ComponentRegistryService : IComponentRegistryService
             Description = "Consolidated toolbar for the project page containing create, hierarchy, undo/redo, edit and run buttons for issue management.",
             Category = "Core",
             ComponentPath = "Components/ProjectToolbar.razor",
-            Tags = new() { "toolbar", "issue", "action", "project", "create", "undo", "redo" }
+            Tags = ["toolbar", "issue", "action", "project", "create", "undo", "redo"]
         }
-    };
+    ];
 
-    /// <inheritdoc />
     public IReadOnlyList<ComponentMetadata> GetAllComponents() => _components.AsReadOnly();
 
-    /// <inheritdoc />
     public ComponentMetadata? GetComponent(string id) =>
         _components.FirstOrDefault(c => c.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
 
-    /// <inheritdoc />
     public IReadOnlyList<ComponentMetadata> GetComponentsByCategory(string category) =>
         _components
             .Where(c => c.Category.Equals(category, StringComparison.OrdinalIgnoreCase))
             .ToList()
             .AsReadOnly();
 
-    /// <inheritdoc />
     public IReadOnlyList<string> GetCategories() =>
         _components
             .Select(c => c.Category)

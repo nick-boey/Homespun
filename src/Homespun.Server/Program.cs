@@ -2,7 +2,6 @@ using Homespun.Features.AgentOrchestration.Services;
 using Homespun.Features.ClaudeCode.Hubs;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Commands;
-using Homespun.Features.Design;
 using Homespun.Features.Containers.Services;
 using Homespun.Features.Fleece.Services;
 using Homespun.Features.Git;
@@ -223,8 +222,6 @@ else
         builder.Configuration.GetSection(GitHubSyncPollingOptions.SectionName));
     builder.Services.AddHostedService<GitHubSyncPollingService>();
 
-    // Design system services (component registry for /design page)
-    builder.Services.AddSingleton<IComponentRegistryService, ComponentRegistryService>();
 }
 
 // SignalR URL provider (uses internal URL in Docker, localhost in development)

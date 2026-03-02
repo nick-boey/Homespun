@@ -16,7 +16,7 @@ Click any component card to view its showcase with multiple variations and state
 
 When creating a new shared component, add it to the design system for visual testing:
 
-1. **Register the component** in `src/Homespun.Server/Features/Design/ComponentRegistryService.cs`:
+1. **Register the component** in `src/Homespun.Client/Features/Design/Services/ComponentRegistryService.cs`:
    ```csharp
    new ComponentMetadata
    {
