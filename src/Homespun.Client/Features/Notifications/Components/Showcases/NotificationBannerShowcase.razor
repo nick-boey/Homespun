@@ -1,0 +1,86 @@
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Info Notification</BbCardTitle>
+        <BbCardDescription>Informational message</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <MockNotificationBanner
+            Type="NotificationType.Info"
+            Title="Build Complete"
+            Message="Your project has been built successfully." />
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Warning Notification</BbCardTitle>
+        <BbCardDescription>Warning message requiring attention</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <MockNotificationBanner
+            Type="NotificationType.Warning"
+            Title="Disk Space Low"
+            Message="Less than 10% disk space remaining. Consider cleaning up old files." />
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Action Required Notification</BbCardTitle>
+        <BbCardDescription>Notification requiring user action</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <MockNotificationBanner
+            Type="NotificationType.ActionRequired"
+            Title="Review Required"
+            Message="PR #42 is waiting for your review."
+            ActionLabel="View PR" />
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Non-Dismissible Notification</BbCardTitle>
+        <BbCardDescription>Notification that cannot be dismissed</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <MockNotificationBanner
+            Type="NotificationType.Warning"
+            Title="GitHub Token Required"
+            Message="Configure your GitHub token to enable PR creation."
+            IsDismissible="false"
+            ActionLabel="Configure" />
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Long Message</BbCardTitle>
+        <BbCardDescription>Notification with a longer message</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <MockNotificationBanner
+            Type="NotificationType.Info"
+            Title="Agent Session Complete"
+            Message="The Claude Code agent has finished working on issue #123: Implement user authentication. The changes have been pushed to branch feature/user-auth and a pull request has been created." />
+    </BbCardContent>
+</BbCard>
+
+<style>
+    .notification-preview {
+        position: relative;
+        min-height: 60px;
+    }
+
+    .mock-notification-banner {
+        position: relative;
+        left: 0;
+        right: 0;
+        bottom: auto;
+    }
+</style>
+
+@* Mock component that renders a single notification without the service dependency *@
+@code {
+}

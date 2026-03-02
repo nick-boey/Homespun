@@ -1,0 +1,54 @@
+
+<div class="notification-banner notification-@Type.ToString().ToLower() mock-notification-banner">
+    <div class="notification-content flex items-center gap-sm flex-1 min-w-0">
+        <div class="notification-icon flex-shrink-0 flex items-center justify-center">
+            <LucideIcon Name="@GetIcon(Type)" Size="16" />
+        </div>
+        <div class="notification-text flex items-baseline gap-sm flex-wrap min-w-0">
+            <span class="notification-title font-semibold whitespace-nowrap">@Title</span>
+            <span class="notification-message text-text-secondary overflow-hidden text-ellipsis">@Message</span>
+        </div>
+    </div>
+    <div class="notification-actions flex items-center gap-sm flex-shrink-0">
+        @if (!string.IsNullOrEmpty(ActionLabel))
+        {
+            <BbButton Size="ButtonSize.Small" Class="notification-action-btn whitespace-nowrap">
+                @ActionLabel
+            </BbButton>
+        }
+        @if (IsDismissible)
+        {
+            <button class="notification-dismiss flex items-center justify-center w-6 h-6 p-0 bg-transparent border-none rounded-sm cursor-pointer text-text-muted hover:bg-bg-hover hover:text-text-primary transition-fast focus:outline-none focus:ring-2 focus:ring-ocean/30" title="Dismiss">
+                <LucideIcon Name="x" Size="14" />
+            </button>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public NotificationType Type { get; set; } = NotificationType.Info;
+
+    [Parameter]
+    public string Title { get; set; } = "";
+
+    [Parameter]
+    public string Message { get; set; } = "";
+
+    [Parameter]
+    public string? ActionLabel { get; set; }
+
+    [Parameter]
+    public bool IsDismissible { get; set; } = true;
+
+    private static string GetIcon(NotificationType type)
+    {
+        return type switch
+        {
+            NotificationType.Info => "info",
+            NotificationType.Warning => "alert-triangle",
+            NotificationType.ActionRequired => "alert-circle",
+            _ => "circle"
+        };
+    }
+}

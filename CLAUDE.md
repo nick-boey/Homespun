@@ -84,19 +84,6 @@ tests/
 
 ### Running the Application
 
-The application is containerised and should always be run in a container. Helper Bash and PowerShell scripts are provided to build and run containers.
-
-```bash
-# Linux
-./scripts/run.sh                # Production: Runs the latest container on GHCR
-./scripts/run.sh --local        # Development: Builds a container from source and runs it
-./scripts/mock.sh               # Testing: Runs the application with mock services for local UI testing
-
-# Similar PowerShell scripts exist for windows
-```
-
-There are other various configuration variables that can be passed into the scripts as required. Environment variables are used for auth tokens, review the scripts if required to understand these.
-
 **Do not under any circumstances stop a container called `homespun` or `homespun-prod`.**
 
 ### Running Tests
@@ -144,22 +131,20 @@ E2E tests run against the full application stack using Playwright for browser au
 - Set `E2E_BASE_URL` to test against an external server
 - Set `E2E_CONFIGURATION` to specify build configuration (Release/Debug)
 
-### Data Storage
+## UI 
 
-- JSON and JSONL file storage
-- Data file: `homespun-data.json` (stored in `.homespun` directory)
+The user interface is primarily developed using Blazor Blueprint. Use the MCP tools to gather documentation about components, or if this is not available simplified documentation is available at https://blazorblueprintui.com/llms/index.txt.
 
-## UI Development with Mock Mode
+DO NOT create components if a similar Blazor Blueprint component already exists.
 
-### Overview
+### Inspection with Playwright MCP and Mock Mode
 
 The mock mode provides a development environment with:
 - Pre-seeded demo data (projects, features, issues)
 - No external dependencies (GitHub, Claude API)
 - Isolated from production data
 
-### Starting Mock Mode
-
+To start a server running in Mock Mode:
 ```bash
 ./scripts/mock.sh       # Linux/Mac
 ./scripts/mock.ps1      # Windows
@@ -197,55 +182,3 @@ When cleaning up after UI testing:
 If you need to restart the mock server:
 1. Use `pkill -f "dotnet.*mock"` to stop the dotnet process directly
 2. Start a new mock server with `./scripts/mock.sh &`
-
-### Playwright MCP Tools
-
-Key tools for UI inspection:
-- `browser_navigate` - Navigate to URLs
-- `browser_take_screenshot` - Capture visual state
-- `browser_snapshot` - Get accessibility tree
-- `browser_click` / `browser_type` - Interact with elements
-- `browser_console_messages` - Check for JS errors
-
-## Container Playwright MCP Usage
-
-Most of the development of Homespun comes from agents running within the application container itself.
-
-### Browser Installation
-
-Playwright browsers are pre-installed at `/opt/playwright-browsers`. The `PLAYWRIGHT_BROWSERS_PATH` environment variable is automatically configured. No additional setup is required.
-
-### Container Networking
-
-When running mock.sh inside the agent container, the mock server runs on `localhost` within the container. Use `http://localhost:5095` (or whatever port the script outputs) for Playwright navigation.
-
-For accessing other containers or the host machine:
-- **Linux hosts**: Use the Docker bridge IP, typically `172.17.0.1`
-- **Docker Desktop (Mac/Windows)**: Use `host.docker.internal`
-
-### Troubleshooting
-
-| Issue | Solution |
-|-------|----------|
-| "Browser not installed" error | Verify: `ls /opt/playwright-browsers/` |
-| Connection refused to localhost:5095 | Wait for mock.sh to finish starting, or check if port is different |
-| Permission denied on browser | Check `PLAYWRIGHT_BROWSERS_PATH` is set to `/opt/playwright-browsers` |
-| Session crashed after KillShell | You killed a critical shell - restart the session |
-
-## Styling with Tailwind CSS
-
-When styling components, always use Tailwind CSS utility classes. Avoid inline styles and prefer using:
-- Tailwind utility classes directly in markup
-- Component classes defined in `wwwroot/css/tailwind.css` under `@layer components`
-- CSS variables defined in `wwwroot/css/variables.css` when custom values are needed
-
-Build Tailwind CSS after making changes to the CSS files:
-```bash
-cd src/Homespun.Client && npm run css:build
-```
-
-## Design System and Component Showcases
-
-The design system at `/design` provides a catalog of all UI components with mock data for visual testing. This is only available in mock mode.
-
-A further description on how to use the design system is at `./src/Homespun.Client/Components/CLAUDE.md`. Always create and update the showcase when creating and modifying components.

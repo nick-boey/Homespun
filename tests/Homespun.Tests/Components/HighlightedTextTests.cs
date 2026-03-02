@@ -1,5 +1,6 @@
 using Bunit;
 using Homespun.Client.Components;
+using Homespun.Client.Features.Shared.Components;
 
 namespace Homespun.Tests.Components;
 

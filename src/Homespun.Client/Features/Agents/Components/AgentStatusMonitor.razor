@@ -1,0 +1,137 @@
+@using Microsoft.AspNetCore.SignalR.Client
+@implements IAsyncDisposable
+@inject HttpSessionApiService SessionStoreApi
+@inject NavigationManager NavigationManager
+@inject ILogger<AgentStatusMonitor> Logger
+
+<AgentStatusIndicator
+    WorkingCount="_workingCount"
+    QuestionCount="_questionCount"
+    PlanReadyCount="_planReadyCount"
+    WaitingCount="_waitingCount"
+    ErrorCount="_errorCount"
+    UnknownCount="_unknownCount" />
+
+@code {
+    private int _workingCount;
+    private int _questionCount;
+    private int _planReadyCount;
+    private int _waitingCount;
+    private int _errorCount;
+    private int _unknownCount;
+    private HubConnection? _hubConnection;
+    private Timer? _refreshTimer;
+
+    private static readonly HashSet<ClaudeSessionStatus> KnownStatuses =
+    [
+        ClaudeSessionStatus.Starting,
+        ClaudeSessionStatus.RunningHooks,
+        ClaudeSessionStatus.Running,
+        ClaudeSessionStatus.WaitingForInput,
+        ClaudeSessionStatus.WaitingForQuestionAnswer,
+        ClaudeSessionStatus.WaitingForPlanExecution,
+        ClaudeSessionStatus.Stopped,
+        ClaudeSessionStatus.Error
+    ];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await UpdateCountsAsync();
+        await SetupSignalRConnection();
+
+        // Periodic refresh as a fallback (every 5 seconds)
+        _refreshTimer = new Timer(
+            _ => InvokeAsync(async () =>
+            {
+                await UpdateCountsAsync();
+                StateHasChanged();
+            }),
+            null,
+            TimeSpan.FromSeconds(5),
+            TimeSpan.FromSeconds(5));
+    }
+
+    private async Task UpdateCountsAsync()
+    {
+        var sessions = await SessionStoreApi.GetAllSessionsAsync();
+
+        _workingCount = sessions.Count(s =>
+            s.Status == ClaudeSessionStatus.Running);
+
+        _questionCount = sessions.Count(s =>
+            s.Status == ClaudeSessionStatus.WaitingForQuestionAnswer);
+
+        _planReadyCount = sessions.Count(s =>
+            s.Status == ClaudeSessionStatus.WaitingForPlanExecution);
+
+        _waitingCount = sessions.Count(s =>
+            s.Status == ClaudeSessionStatus.WaitingForInput);
+
+        _errorCount = sessions.Count(s =>
+            s.Status == ClaudeSessionStatus.Error);
+
+        _unknownCount = sessions.Count(s =>
+            !KnownStatuses.Contains(s.Status));
+
+        if (_unknownCount > 0)
+        {
+            var unknownStatuses = sessions
+                .Where(s => !KnownStatuses.Contains(s.Status))
+                .Select(s => s.Status)
+                .Distinct();
+            Logger.LogError("AgentStatusMonitor encountered {Count} session(s) with unknown status: {Statuses}",
+                _unknownCount, string.Join(", ", unknownStatuses));
+        }
+    }
+
+    private async Task SetupSignalRConnection()
+    {
+        try
+        {
+            _hubConnection = new HubConnectionBuilder()
+                .WithUrl(NavigationManager.ToAbsoluteUri("/hubs/claudecode"))
+                .WithAutomaticReconnect()
+                .Build();
+
+            _hubConnection.On<string, ClaudeSessionStatus, bool>("SessionStatusChanged",
+                (_, _, _) => InvokeAsync(async () =>
+                {
+                    await UpdateCountsAsync();
+                    StateHasChanged();
+                }));
+
+            _hubConnection.On<ClaudeSession>("SessionStarted",
+                _ => InvokeAsync(async () =>
+                {
+                    await UpdateCountsAsync();
+                    StateHasChanged();
+                }));
+
+            _hubConnection.On<string>("SessionStopped",
+                _ => InvokeAsync(async () =>
+                {
+                    await UpdateCountsAsync();
+                    StateHasChanged();
+                }));
+
+            await _hubConnection.StartAsync();
+        }
+        catch
+        {
+            // SignalR may fail - polling will still work as fallback
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_refreshTimer != null)
+        {
+            await _refreshTimer.DisposeAsync();
+        }
+
+        if (_hubConnection != null)
+        {
+            await _hubConnection.DisposeAsync();
+        }
+    }
+}

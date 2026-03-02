@@ -1,0 +1,699 @@
+@page "/projects/{Id}"
+@page "/projects/{Id}/branches"
+@page "/projects/{Id}/agents"
+@page "/projects/{Id}/prompts"
+@page "/projects/{Id}/secrets"
+@page "/projects/{Id}/settings"
+@implements IAsyncDisposable
+@using Microsoft.AspNetCore.SignalR.Client
+@inject HttpProjectApiService ProjectApi
+@inject HttpPullRequestApiService PullRequestApi
+@inject HttpFleeceSyncApiService FleeceSyncApi
+@inject HttpGitHubInfoApiService GitHubInfoApi
+@inject IBreadcrumbService BreadcrumbService
+@inject HttpNotificationApiService NotificationApi
+@inject ILogger<ProjectDetail> Logger
+@inject NavigationManager NavigationManager
+
+<PageTitle>@(_project?.Name ?? "Project")</PageTitle>
+
+@if (_project == null)
+{
+    <p>Loading...</p>
+}
+else
+{
+    @* Tab Navigation *@
+    <BbTabs Value="@_activeTab" ValueChanged="HandleTabChange"
+            ActivationMode="BlazorBlueprint.Primitives.Tabs.TabsActivationMode.Manual"
+            Class="w-full mb-3">
+        <BbTabsList>
+            <BbTabsTrigger Value="issues">
+                <LucideIcon Name="layout-list" Class="mr-2 h-4 w-4"/>
+                Issues
+            </BbTabsTrigger>
+            <BbTabsTrigger Value="branches">
+                <LucideIcon Name="git-branch" Class="mr-2 h-4 w-4"/>
+                Branches
+            </BbTabsTrigger>
+            <BbTabsTrigger Value="agents">
+                <LucideIcon Name="bot" Class="mr-2 h-4 w-4"/>
+                Agents
+            </BbTabsTrigger>
+            <BbTabsTrigger Value="prompts">
+                <LucideIcon Name="message-square-text" Class="mr-2 h-4 w-4"/>
+                Prompts
+            </BbTabsTrigger>
+            <BbTabsTrigger Value="secrets">
+                <LucideIcon Name="key-round" Class="mr-2 h-4 w-4"/>
+                Secrets
+            </BbTabsTrigger>
+            <BbTabsTrigger Value="settings">
+                <LucideIcon Name="settings" Class="mr-2 h-4 w-4"/>
+                Settings
+            </BbTabsTrigger>
+        </BbTabsList>
+    </BbTabs>
+
+    <div class="flex justify-between items-center mb-4">
+        <h1>@_project.Name</h1>
+        <div class="flex items-center gap-2">
+            <BbSplitButton IconPosition="IconPosition.Start" Size="ButtonSize.Small" OnClick="PullAsync">
+                <Icon>
+                    <LucideIcon Name="cloud" class="h-4 w-4"/>
+                </Icon>
+                <ChildContent>Pull</ChildContent>
+                <DropdownContent>
+                    <BbSplitButtonItem OnClick="SyncAllAsync">Sync</BbSplitButtonItem>
+                </DropdownContent>
+            </BbSplitButton>
+        </div>
+    </div>
+
+    @if (_activeTab == "issues")
+    {
+        <ProjectIssuesTab ProjectId="@Id"
+                          Project="@_project"
+                          RefreshTrigger="@_issuesRefreshTrigger"
+                          OnDataChanged="OnIssuesDataChanged"/>
+    }
+    else if (_activeTab == "branches")
+    {
+        <CloneManagementPanel Project="@_project"
+                              OnDataChanged="OnIssuesDataChanged"/>
+    }
+    else if (_activeTab == "agents")
+    {
+        <SessionsPanel ProjectId="@Id" OnSessionStopped="OnIssuesDataChanged"/>
+    }
+    else if (_activeTab == "prompts")
+    {
+        <ProjectPromptsTab ProjectId="@Id"/>
+    }
+    else if (_activeTab == "secrets")
+    {
+        <ProjectSecretsTab ProjectId="@Id"/>
+    }
+    else if (_activeTab == "settings")
+    {
+        <ProjectSettingsTab Project="@_project"/>
+    }
+
+    @* Fleece Sync Conflict Modal *@
+    <BbDialog Open="@_showFleeceConflictModal" OnOpenChange="v => { if (!v) HideFleeceConflictModal(); }">
+        <BbDialogContent>
+            <BbDialogHeader>
+                <BbDialogTitle>Sync Conflict</BbDialogTitle>
+                <BbDialogDescription>
+                    <BbAlert Variant="AlertVariant.Warning">
+                        <BbAlertDescription><strong>Unable to pull changes from @_project?.DefaultBranch</strong>
+                        </BbAlertDescription>
+                        <p class="small text-muted">@_fleecePullConflict?.ErrorMessage</p>
+                    </BbAlert>
+                    <p>Choose how to resolve this conflict:</p>
+                </BbDialogDescription>
+            </BbDialogHeader>
+            <BbDialogFooter>
+                <BbButton Variant="ButtonVariant.Secondary" OnClick="HideFleeceConflictModal">Cancel</BbButton>
+                <BbButton OnClick="HandleFleeceConflictStash" Loading="@_isSyncingFleece"
+                          Variant="ButtonVariant.Secondary">Stash Changes
+                </BbButton>
+                <BbButton OnClick="HandleFleeceConflictDiscard" Loading="@_isSyncingFleece"
+                          Variant="ButtonVariant.Destructive">Discard All Changes
+                </BbButton>
+            </BbDialogFooter>
+        </BbDialogContent>
+    </BbDialog>
+
+    @* Non-Fleece Changes Modal *@
+    <BbDialog Open="@_showNonFleeceChangesModal" OnOpenChange="v => { if (!v) HideNonFleeceChangesModal(); }">
+        <BbDialogContent Class="sm:max-w-2xl">
+            <BbDialogHeader>
+                <BbDialogTitle>Non-Fleece Changes Detected</BbDialogTitle>
+                <BbDialogDescription>
+                    <BbAlert Variant="AlertVariant.Warning">
+                        <BbAlertDescription><strong>Your local branch is behind the remote</strong></BbAlertDescription>
+                    </BbAlert>
+                    <p>
+                        The sync cannot complete because your local branch needs to pull changes from the remote,
+                        but you have uncommitted changes outside the <code>.fleece/</code> folder that may cause
+                        conflicts.
+                    </p>
+                    @if (_nonFleeceChangedFiles != null && _nonFleeceChangedFiles.Count > 0)
+                    {
+                        <p><strong>Changed files outside .fleece/:</strong></p>
+                        <div class="border rounded p-2" style="max-height: 200px; overflow-y: auto;">
+                            <ul class="mb-0 small">
+                                @foreach (var file in _nonFleeceChangedFiles)
+                                {
+                                    <li><code>@file</code></li>
+                                }
+                            </ul>
+                        </div>
+                    }
+                    <p class="mt-3 text-muted small">
+                        You can discard these non-fleece changes to allow the sync to complete.
+                        Your <code>.fleece/</code> changes will be preserved.
+                    </p>
+                </BbDialogDescription>
+            </BbDialogHeader>
+            <BbDialogFooter>
+                <BbButton Variant="ButtonVariant.Secondary" OnClick="HideNonFleeceChangesModal">Cancel</BbButton>
+                <BbButton OnClick="HandleDiscardNonFleeceChanges" Loading="@_isSyncingFleece"
+                          Variant="ButtonVariant.Destructive">Discard Non-Fleece Changes
+                </BbButton>
+            </BbDialogFooter>
+        </BbDialogContent>
+    </BbDialog>
+}
+
+@code {
+    [Parameter] public string Id { get; set; } = "";
+
+    private Project? _project;
+    private string _activeTab = "issues";
+    private string? _previousId;
+    private bool _isSyncing;
+    private int _issuesRefreshTrigger;
+
+    // PR sync state
+    private bool _isSyncingPRs;
+    private bool _tokenMissing;
+    private string? _syncError;
+    private SyncResult? _lastSyncResult;
+
+    // Fleece sync state
+    private bool _isSyncingFleece;
+    private FleeceIssueSyncResult? _lastFleeceSyncResult;
+    private bool _showFleeceConflictModal;
+    private PullResult? _fleecePullConflict;
+    private bool _showNonFleeceChangesModal;
+    private IReadOnlyList<string>? _nonFleeceChangedFiles;
+
+    // SignalR
+    private HubConnection? _hubConnection;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Determine active tab from URL
+        DetermineActiveTab();
+
+        await LoadData();
+        await SetupSignalRConnection();
+
+        // Start sync after project is loaded
+        if (_project != null)
+        {
+            _ = Task.Run(async () => { await InvokeAsync(async () => { await SyncPullRequestsAsync(); }); });
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_previousId != null && _previousId != Id)
+        {
+            // Id parameter changed — navigated to a different project
+            if (_hubConnection != null)
+            {
+                await _hubConnection.DisposeAsync();
+                _hubConnection = null;
+            }
+
+            // Reset state
+            _lastSyncResult = null;
+            _syncError = null;
+            _activeTab = "issues";
+            _issuesRefreshTrigger = 0;
+
+            DetermineActiveTab();
+
+            await LoadData();
+            await SetupSignalRConnection();
+
+            if (_project != null)
+            {
+                _ = Task.Run(async () => { await InvokeAsync(async () => { await SyncPullRequestsAsync(); }); });
+            }
+        }
+
+        _previousId = Id;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_hubConnection != null)
+        {
+            await _hubConnection.DisposeAsync();
+        }
+    }
+
+    private void DetermineActiveTab()
+    {
+        var uri = NavigationManager.Uri;
+        if (uri.Contains("/settings"))
+            _activeTab = "settings";
+        else if (uri.Contains("/secrets"))
+            _activeTab = "secrets";
+        else if (uri.Contains("/prompts"))
+            _activeTab = "prompts";
+        else if (uri.Contains("/agents"))
+            _activeTab = "agents";
+        else if (uri.Contains("/branches"))
+            _activeTab = "branches";
+        else
+            _activeTab = "issues";
+    }
+
+    private async Task LoadData()
+    {
+        _project = await ProjectApi.GetProjectAsync(Id);
+        if (_project != null)
+        {
+            await BreadcrumbService.SetContextAsync(new BreadcrumbContext { ProjectId = Id });
+        }
+    }
+
+    #region Tab Switching
+
+    private void SwitchTab(string tab)
+    {
+        if (_activeTab == tab) return;
+        _activeTab = tab;
+
+        // Update the URL without causing a full navigation
+        var newUrl = tab switch
+        {
+            "branches" => $"/projects/{Id}/branches",
+            "agents" => $"/projects/{Id}/agents",
+            "prompts" => $"/projects/{Id}/prompts",
+            "secrets" => $"/projects/{Id}/secrets",
+            "settings" => $"/projects/{Id}/settings",
+            _ => $"/projects/{Id}"
+        };
+        NavigationManager.NavigateTo(newUrl, forceLoad: false, replace: true);
+    }
+
+    private void HandleTabChange(string? tab)
+    {
+        if (!string.IsNullOrEmpty(tab))
+            SwitchTab(tab);
+    }
+
+    #endregion
+
+    #region SignalR
+
+    private async Task SetupSignalRConnection()
+    {
+        try
+        {
+            _hubConnection = new HubConnectionBuilder()
+                .WithUrl(NavigationManager.ToAbsoluteUri(HubConstants.NotificationHub))
+                .Build();
+
+            _hubConnection.On<string, SyncResult>("PullRequestsSynced", async (projectId, syncResult) =>
+            {
+                if (projectId == Id)
+                {
+                    Logger.LogInformation("Received PullRequestsSynced event for project {ProjectId}", projectId);
+                    _lastSyncResult = syncResult;
+                    await InvokeAsync(() =>
+                    {
+                        _issuesRefreshTrigger++;
+                        StateHasChanged();
+                    });
+                }
+            });
+
+            await _hubConnection.StartAsync();
+            Logger.LogInformation("SignalR connection established for project {ProjectId}", Id);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning("SignalR connection failed (real-time updates unavailable): {Message}", ex.Message);
+        }
+    }
+
+    #endregion
+
+    #region Pull / Sync
+
+    private async Task PullAsync()
+    {
+        if (_project == null || _isSyncing)
+            return;
+
+        _isSyncing = true;
+        StateHasChanged();
+
+        var errors = new List<string>();
+
+        try
+        {
+            var fleecePullTask = PullFleeceInternalAsync();
+            var prSyncTask = SyncPullRequestsInternalAsync();
+
+            var results = await Task.WhenAll(fleecePullTask, prSyncTask);
+
+            if (results[0] is string fleeceError)
+                errors.Add($"Fleece pull: {fleeceError}");
+            if (results[1] is string prError)
+                errors.Add($"PR sync: {prError}");
+
+            if (errors.Count > 0)
+            {
+                await NotificationApi.CreateNotificationAsync(new CreateNotificationRequest
+                {
+                    Type = NotificationType.Warning,
+                    Title = "Pull completed with errors",
+                    Message = string.Join("; ", errors),
+                    ProjectId = _project.Id,
+                    IsDismissible = true,
+                    DeduplicationKey = $"pull-error-{_project.Id}"
+                });
+            }
+
+            await LoadData();
+            _issuesRefreshTrigger++;
+        }
+        finally
+        {
+            _isSyncing = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SyncAllAsync()
+    {
+        if (_project == null || _isSyncing)
+            return;
+
+        _isSyncing = true;
+        StateHasChanged();
+
+        var errors = new List<string>();
+
+        try
+        {
+            var fleeceSyncTask = SyncFleeceInternalAsync();
+            var prSyncTask = SyncPullRequestsInternalAsync();
+
+            var results = await Task.WhenAll(fleeceSyncTask, prSyncTask);
+
+            if (results[0] is string fleeceError)
+                errors.Add($"Fleece sync: {fleeceError}");
+            if (results[1] is string prError)
+                errors.Add($"PR sync: {prError}");
+
+            if (errors.Count > 0)
+            {
+                await NotificationApi.CreateNotificationAsync(new CreateNotificationRequest
+                {
+                    Type = NotificationType.Warning,
+                    Title = "Sync completed with errors",
+                    Message = string.Join("; ", errors),
+                    ProjectId = _project.Id,
+                    IsDismissible = true,
+                    DeduplicationKey = $"sync-error-{_project.Id}"
+                });
+            }
+
+            await LoadData();
+            _issuesRefreshTrigger++;
+        }
+        finally
+        {
+            _isSyncing = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task<string?> PullFleeceInternalAsync()
+    {
+        if (_project == null)
+            return null;
+
+        try
+        {
+            var result = await FleeceSyncApi.PullFleeceOnlyAsync(_project.Id);
+
+            if (result != null && !result.Success)
+            {
+                if (result.HasNonFleeceChanges)
+                {
+                    _nonFleeceChangedFiles = result.NonFleeceChangedFiles;
+                    _showNonFleeceChangesModal = true;
+                    return null;
+                }
+
+                return result.ErrorMessage ?? "Unknown fleece pull error";
+            }
+
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to pull fleece issues for project {ProjectId}", _project.Id);
+            return ex.Message;
+        }
+    }
+
+    private async Task<string?> SyncFleeceInternalAsync()
+    {
+        if (_project == null)
+            return null;
+
+        try
+        {
+            var result = await FleeceSyncApi.SyncAsync(_project.Id);
+
+            if (result != null && !result.Success)
+            {
+                if (result.HasNonFleeceChanges && result.RequiresPullFirst)
+                {
+                    _nonFleeceChangedFiles = result.NonFleeceChangedFiles;
+                    _showNonFleeceChangesModal = true;
+                    return null;
+                }
+
+                return result.ErrorMessage ?? "Unknown fleece sync error";
+            }
+
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to sync fleece issues for project {ProjectId}", _project.Id);
+            return ex.Message;
+        }
+    }
+
+    private async Task<string?> SyncPullRequestsInternalAsync()
+    {
+        if (_project == null)
+            return null;
+
+        var hasGitHubConfig = !string.IsNullOrEmpty(_project.GitHubOwner) &&
+                              !string.IsNullOrEmpty(_project.GitHubRepo);
+        if (!hasGitHubConfig)
+            return null;
+
+        try
+        {
+            var isConfigured = await GitHubInfoApi.IsConfiguredAsync();
+            if (!isConfigured)
+            {
+                Logger.LogWarning("PR sync skipped for project {ProjectId}: GITHUB_TOKEN not configured", _project.Id);
+                return null;
+            }
+
+            var result = await PullRequestApi.SyncPullRequestsAsync(_project.Id);
+
+            if (result.Errors.Count > 0)
+            {
+                var errorMessage = string.Join("; ", result.Errors);
+                Logger.LogWarning("PR sync completed with errors for project {ProjectId}: {Errors}",
+                    _project.Id, errorMessage);
+                return errorMessage;
+            }
+
+            Logger.LogInformation("PR sync completed for project {ProjectId}: {Imported} imported, {Updated} updated, {Removed} removed",
+                _project.Id, result.Imported, result.Updated, result.Removed);
+
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to sync pull requests for project {ProjectId}", _project.Id);
+            return ex.Message;
+        }
+    }
+
+    private async Task SyncPullRequestsAsync()
+    {
+        if (_project == null || _isSyncingPRs)
+            return;
+
+        var hasGitHubConfig = !string.IsNullOrEmpty(_project.GitHubOwner) &&
+                              !string.IsNullOrEmpty(_project.GitHubRepo);
+        if (!hasGitHubConfig)
+            return;
+
+        var isConfigured = await GitHubInfoApi.IsConfiguredAsync();
+        if (!isConfigured)
+        {
+            _tokenMissing = true;
+            Logger.LogWarning("PR sync skipped for project {ProjectId}: GITHUB_TOKEN not configured", _project.Id);
+            StateHasChanged();
+            return;
+        }
+
+        _isSyncingPRs = true;
+        _tokenMissing = false;
+        _syncError = null;
+        StateHasChanged();
+
+        try
+        {
+            Logger.LogInformation("Starting automatic PR sync for project {ProjectId} ({Owner}/{Repo})",
+                _project.Id, _project.GitHubOwner, _project.GitHubRepo);
+
+            _lastSyncResult = await PullRequestApi.SyncPullRequestsAsync(_project.Id);
+
+            if (_lastSyncResult.Errors.Count > 0)
+            {
+                _syncError = string.Join("; ", _lastSyncResult.Errors);
+                Logger.LogWarning("PR sync completed with errors for project {ProjectId}: {Errors}",
+                    _project.Id, _syncError);
+            }
+            else
+            {
+                Logger.LogInformation("PR sync completed for project {ProjectId}: {Imported} imported, {Updated} updated, {Removed} removed",
+                    _project.Id, _lastSyncResult.Imported, _lastSyncResult.Updated, _lastSyncResult.Removed);
+            }
+
+            await LoadData();
+            _issuesRefreshTrigger++;
+        }
+        catch (Exception ex)
+        {
+            _syncError = ex.Message;
+            Logger.LogError(ex, "Failed to sync pull requests for project {ProjectId}", _project.Id);
+        }
+        finally
+        {
+            _isSyncingPRs = false;
+            StateHasChanged();
+        }
+    }
+
+    #endregion
+
+    #region Fleece Conflict Handlers
+
+    private void HideFleeceConflictModal()
+    {
+        _showFleeceConflictModal = false;
+        _fleecePullConflict = null;
+    }
+
+    private void HideNonFleeceChangesModal()
+    {
+        _showNonFleeceChangesModal = false;
+        _nonFleeceChangedFiles = null;
+    }
+
+    private async Task HandleDiscardNonFleeceChanges()
+    {
+        if (_project == null) return;
+
+        _isSyncingFleece = true;
+        StateHasChanged();
+
+        try
+        {
+            HideNonFleeceChangesModal();
+
+            _lastFleeceSyncResult = await FleeceSyncApi.SyncAsync(_project.Id);
+
+            if (_lastFleeceSyncResult != null && !_lastFleeceSyncResult.Success)
+            {
+                return;
+            }
+
+            await LoadData();
+            _issuesRefreshTrigger++;
+        }
+        finally
+        {
+            _isSyncingFleece = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleFleeceConflictStash()
+    {
+        if (_project == null) return;
+
+        _isSyncingFleece = true;
+        StateHasChanged();
+
+        try
+        {
+            HideFleeceConflictModal();
+
+            _lastFleeceSyncResult = await FleeceSyncApi.SyncAsync(_project.Id);
+
+            if (_lastFleeceSyncResult != null && !_lastFleeceSyncResult.Success)
+            {
+                return;
+            }
+
+            await LoadData();
+            _issuesRefreshTrigger++;
+        }
+        finally
+        {
+            _isSyncingFleece = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleFleeceConflictDiscard()
+    {
+        if (_project == null) return;
+
+        _isSyncingFleece = true;
+        StateHasChanged();
+
+        try
+        {
+            HideFleeceConflictModal();
+
+            _lastFleeceSyncResult = await FleeceSyncApi.SyncAsync(_project.Id);
+
+            if (_lastFleeceSyncResult != null && !_lastFleeceSyncResult.Success)
+            {
+                return;
+            }
+
+            await LoadData();
+            _issuesRefreshTrigger++;
+        }
+        finally
+        {
+            _isSyncingFleece = false;
+            StateHasChanged();
+        }
+    }
+
+    #endregion
+
+    private async Task OnIssuesDataChanged()
+    {
+        await LoadData();
+        _issuesRefreshTrigger++;
+        StateHasChanged();
+    }
+
+}

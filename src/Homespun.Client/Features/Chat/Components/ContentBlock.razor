@@ -1,0 +1,25 @@
+<div class="mb-1 last:mb-0">
+    @switch (Content.Type)
+    {
+        case ClaudeContentType.Text:
+            @Content.Text
+            break;
+
+        case ClaudeContentType.Thinking:
+            <ThinkingBlock Text="@Content.Text"/>
+            break;
+
+        case ClaudeContentType.ToolUse:
+            <ToolUseBlock ToolName="@Content.ToolName"
+                          ToolInput="@Content.ToolInput"/>
+            break;
+
+        case ClaudeContentType.ToolResult:
+            <ToolResultBlock Text="@Content.Text"/>
+            break;
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public ClaudeMessageContent Content { get; set; }
+}

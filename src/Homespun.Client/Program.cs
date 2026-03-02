@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using BlazorBlueprint.Components;
 using Homespun.Client;
+using Homespun.Client.Features.Design.Services;
 using Homespun.Client.Services;
 using Homespun.Client.Services.Observability;
 
@@ -30,7 +31,7 @@ builder.Services.AddScoped<HttpSessionCacheApiService>();
 builder.Services.AddScoped<HttpIssuePrStatusApiService>();
 builder.Services.AddScoped<HttpFleeceSyncApiService>();
 builder.Services.AddScoped<HttpSecretsApiService>();
-builder.Services.AddScoped<HttpComponentRegistryService>();
+builder.Services.AddSingleton<IComponentRegistryService, ComponentRegistryService>();
 builder.Services.AddScoped<HttpPlansApiService>();
 
 // Register SignalR services

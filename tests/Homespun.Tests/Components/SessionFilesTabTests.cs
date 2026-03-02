@@ -1,5 +1,5 @@
 using Bunit;
-using Homespun.Client.Components.ClaudeCode.SessionInfoPanel;
+using Homespun.Client.Features.Chat.Components.SessionInfoPanel;
 using Homespun.Client.Services;
 using Homespun.Tests.Helpers;
 using Microsoft.Extensions.DependencyInjection;

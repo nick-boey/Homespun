@@ -97,10 +97,8 @@ public class CollapsibleSidebarTests : PageTest
         var sidebar = Page.Locator(".detail-sidebar.open");
         await Expect(sidebar).ToBeVisibleAsync(new() { Timeout = 5000 });
 
-        // Click the panel toggle button in the title bar to close the sidebar
-        // (The close button was moved from the panel to the title bar as part of the mobile-friendly redesign)
-        var panelToggle = Page.Locator("button.panel-toggle[title='Close detail panel']");
-        await panelToggle.ClickAsync();
+        // Press Escape to close the sidebar (the panel has no close button; Escape is the primary close mechanism)
+        await Page.Keyboard.PressAsync("Escape");
 
         // Verify the sidebar collapses
         await Expect(sidebar).Not.ToBeVisibleAsync(new() { Timeout = 5000 });
@@ -148,16 +146,16 @@ public class CollapsibleSidebarTests : PageTest
         var sidebar = Page.Locator(".detail-sidebar.open");
         await Expect(sidebar).ToBeVisibleAsync(new() { Timeout = 5000 });
 
-        // Get the issue ID shown in the sidebar
-        var issueIdBadge = sidebar.Locator(".badge:text-matches('[A-Za-z0-9]{6}')").First;
-        var clickedIssueId = await issueIdBadge.TextContentAsync();
+        // Get the issue title shown in the sidebar
+        var issueTitle = sidebar.Locator(".issue-detail-panel h5").First;
+        var clickedIssueTitle = await issueTitle.TextContentAsync();
 
         // Use keyboard to navigate to a different issue
         await Page.Keyboard.PressAsync("j");
 
         // The sidebar should still show the originally clicked issue
-        var currentIssueId = await issueIdBadge.TextContentAsync();
-        Assert.That(currentIssueId, Is.EqualTo(clickedIssueId),
+        var currentIssueTitle = await issueTitle.TextContentAsync();
+        Assert.That(currentIssueTitle, Is.EqualTo(clickedIssueTitle),
             "Sidebar should continue showing the clicked issue, not the keyboard-selected one");
     }
 }
