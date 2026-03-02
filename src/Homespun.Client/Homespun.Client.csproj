@@ -21,7 +21,8 @@
 
   <Target Name="BuildTailwindCSS" BeforeTargets="BeforeBuild">
     <Message Text="Building Tailwind CSS..." Importance="high" />
-    <Exec Command="$(MSBuildProjectDirectory)\tailwindcss.exe -i wwwroot/css/app-input.css -o wwwroot/css/tailwind.min.css --minify" WorkingDirectory="$(MSBuildProjectDirectory)" />
+    <Exec Condition="$([MSBuild]::IsOSPlatform('Windows'))" Command="$(MSBuildProjectDirectory)\tailwindcss.exe -i wwwroot/css/app-input.css -o wwwroot/css/tailwind.min.css --minify" WorkingDirectory="$(MSBuildProjectDirectory)" />
+    <Exec Condition="!$([MSBuild]::IsOSPlatform('Windows'))" Command="$(MSBuildProjectDirectory)/tailwindcss -i wwwroot/css/app-input.css -o wwwroot/css/tailwind.min.css --minify" WorkingDirectory="$(MSBuildProjectDirectory)" />
   </Target>
 
 </Project>
