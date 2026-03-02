@@ -57,8 +57,39 @@ public class ProjectToolbarTests : BunitTestContext
             p.Add(x => x.ProjectId, "project-1");
         });
 
-        var toolbar = cut.Find(".border.rounded-lg");
-        Assert.That(toolbar, Is.Not.Null);
+        var container = cut.Find(".toolbar-container");
+        Assert.That(container, Is.Not.Null);
+    }
+
+    [Test]
+    public void HasScrollAreaDiv()
+    {
+        var cut = Render<ProjectToolbar>(p =>
+        {
+            p.Add(x => x.ProjectId, "project-1");
+        });
+
+        var scrollArea = cut.Find(".toolbar-scroll-area");
+        Assert.That(scrollArea, Is.Not.Null, "Should have a toolbar-scroll-area div for mobile horizontal scrolling");
+    }
+
+    [Test]
+    public void ScrollAreaContainsAllButtons()
+    {
+        var cut = Render<ProjectToolbar>(p =>
+        {
+            p.Add(x => x.ProjectId, "project-1");
+        });
+
+        var scrollArea = cut.Find(".toolbar-scroll-area");
+
+        // Verify that all button groups are inside the scroll area
+        Assert.That(scrollArea.QuerySelector("[data-testid='toolbar-create-above-button']"), Is.Not.Null);
+        Assert.That(scrollArea.QuerySelector("[data-testid='toolbar-create-below-button']"), Is.Not.Null);
+        Assert.That(scrollArea.QuerySelector("[data-testid='toolbar-edit-button']"), Is.Not.Null);
+        Assert.That(scrollArea.QuerySelector("[data-testid='toolbar-run-button']"), Is.Not.Null);
+        Assert.That(scrollArea.QuerySelector("[data-testid='toolbar-undo-button']"), Is.Not.Null);
+        Assert.That(scrollArea.QuerySelector("[data-testid='toolbar-redo-button']"), Is.Not.Null);
     }
 
     [Test]

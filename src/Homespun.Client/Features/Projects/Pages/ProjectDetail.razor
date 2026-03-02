@@ -55,7 +55,7 @@ else
         </BbTabsList>
     </BbTabs>
 
-    <div class="flex justify-between items-center mb-4">
+    <div class="project-title-row">
         <h1>@_project.Name</h1>
         <div class="flex items-center gap-2">
             <BbSplitButton IconPosition="IconPosition.Start" Size="ButtonSize.Small" OnClick="PullAsync">
@@ -166,6 +166,24 @@ else
         </BbDialogContent>
     </BbDialog>
 }
+
+<style>
+    .project-title-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        background: hsl(var(--background));
+        padding: var(--spacing-md) var(--spacing-xl);
+        margin: 0 calc(-1 * var(--spacing-xl));
+    }
+
+    .project-title-row h1 {
+        margin-bottom: 0;
+    }
+</style>
 
 @code {
     [Parameter] public string Id { get; set; } = "";
