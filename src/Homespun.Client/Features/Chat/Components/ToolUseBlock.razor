@@ -1,17 +1,15 @@
-<div class="tool-use-container">
-    <div class="tool-header">
-        <span class="tool-icon" aria-hidden="true">🔧</span>
-        <span class="tool-name">@ToolName</span>
+<div class="bg-[var(--bg-tertiary)] p-1 rounded-sm font-mono text-sm">
+    <div class="flex items-center gap-0.5 mb-0.5">
+        <span aria-hidden="true">🔧</span>
+        <span class="font-semibold">@ToolName</span>
         @if (IsStreaming)
         {
-            <span class="tool-streaming-indicator">
-                <BbSpinner Size="SpinnerSize.Small" Class="ml-2" />
-            </span>
+            <BbSpinner Size="SpinnerSize.Small" Class="ml-2" />
         }
     </div>
     @if (!string.IsNullOrEmpty(ToolInput))
     {
-        <pre class="tool-input">@ToolInput@(IsStreaming ? "▌" : "")</pre>
+        <pre class="m-0 p-1 bg-[var(--bg-tool-group)] rounded-sm overflow-x-auto whitespace-pre-wrap break-words max-h-[200px] overflow-y-auto">@ToolInput@(IsStreaming ? "▌" : "")</pre>
     }
 </div>
 

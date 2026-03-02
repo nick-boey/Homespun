@@ -832,3 +832,34 @@ pre code {
     font-style: italic;
     line-height: 1.5;
 }
+
+/* Streaming Indicators */
+.streaming-cursor {
+    animation: blink 1s step-end infinite;
+    color: var(--color-lagoon);
+}
+
+.streaming-dots {
+    animation: dots 1.5s ease-in-out infinite;
+}
+
+@keyframes blink {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0;
+    }
+}
+
+@keyframes dots {
+    0%, 20% {
+        content: '.';
+    }
+    40% {
+        content: '..';
+    }
+    60%, 100% {
+        content: '...';
+    }
+}
