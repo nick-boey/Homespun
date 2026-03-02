@@ -38,16 +38,6 @@ public class ComponentRegistryService : IComponentRegistryService
         },
         new ComponentMetadata
         {
-            Id = "notification-banner",
-            Name = "NotificationBanner",
-            Description =
-                "Displays notification messages with different severity levels (info, warning, action required) and dismissible actions.",
-            Category = "Core",
-            ComponentPath = "Shared/NotificationBanner.razor",
-            Tags = ["notification", "alert", "banner"]
-        },
-        new ComponentMetadata
-        {
             Id = "model-selector",
             Name = "ModelSelector",
             Description = "Dropdown selector for choosing AI model (Opus, Sonnet, Haiku).",
