@@ -1,4 +1,4 @@
-using Homespun.Client.Services;
+using Homespun.Client.Features.Design.Services;
 
 namespace Homespun.Tests.Features.Design;
 

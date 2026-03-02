@@ -1,6 +1,6 @@
 using Homespun.Shared.Models.Design;
 
-namespace Homespun.Client.Services;
+namespace Homespun.Client.Features.Design.Services;
 
 public class ComponentRegistryService : IComponentRegistryService
 {
@@ -11,7 +11,8 @@ public class ComponentRegistryService : IComponentRegistryService
         {
             Id = "work-item",
             Name = "WorkItem",
-            Description = "Displays a work item (issue/PR) with status indicator, title, and graph lines for hierarchy visualization.",
+            Description =
+                "Displays a work item (issue/PR) with status indicator, title, and graph lines for hierarchy visualization.",
             Category = "Core",
             ComponentPath = "Shared/WorkItem.razor",
             Tags = ["status", "issue", "pr", "list"]
@@ -20,7 +21,8 @@ public class ComponentRegistryService : IComponentRegistryService
         {
             Id = "pr-status-badges",
             Name = "PrStatusBadges",
-            Description = "Displays pull request status with multiple badges showing checks, approval, merge readiness, and conflicts.",
+            Description =
+                "Displays pull request status with multiple badges showing checks, approval, merge readiness, and conflicts.",
             Category = "Core",
             ComponentPath = "Shared/PrStatusBadges.razor",
             Tags = ["status", "pr", "badge", "github"]
@@ -38,7 +40,8 @@ public class ComponentRegistryService : IComponentRegistryService
         {
             Id = "notification-banner",
             Name = "NotificationBanner",
-            Description = "Displays notification messages with different severity levels (info, warning, action required) and dismissible actions.",
+            Description =
+                "Displays notification messages with different severity levels (info, warning, action required) and dismissible actions.",
             Category = "Core",
             ComponentPath = "Shared/NotificationBanner.razor",
             Tags = ["notification", "alert", "banner"]
@@ -84,7 +87,8 @@ public class ComponentRegistryService : IComponentRegistryService
         {
             Id = "sessions-panel",
             Name = "SessionsPanel",
-            Description = "Unified panel for managing Claude Code sessions. Groups by project globally, or by status when filtered to a specific project.",
+            Description =
+                "Unified panel for managing Claude Code sessions. Groups by project globally, or by status when filtered to a specific project.",
             Category = "Panels",
             ComponentPath = "Shared/SessionsPanel.razor",
             Tags = ["panel", "session", "agent", "management"]
@@ -220,7 +224,8 @@ public class ComponentRegistryService : IComponentRegistryService
         {
             Id = "issue-row-actions",
             Name = "IssueRowActions",
-            Description = "Inline action buttons for issue rows, showing edit and run agent controls. Appears on hover or selection.",
+            Description =
+                "Inline action buttons for issue rows, showing edit and run agent controls. Appears on hover or selection.",
             Category = "Issue",
             ComponentPath = "Components/IssueRowActions.razor",
             Tags = ["issue", "button", "action", "inline"]
@@ -238,7 +243,8 @@ public class ComponentRegistryService : IComponentRegistryService
         {
             Id = "project-toolbar",
             Name = "ProjectToolbar",
-            Description = "Consolidated toolbar for the project page containing create, hierarchy, undo/redo, edit and run buttons for issue management.",
+            Description =
+                "Consolidated toolbar for the project page containing create, hierarchy, undo/redo, edit and run buttons for issue management.",
             Category = "Core",
             ComponentPath = "Components/ProjectToolbar.razor",
             Tags = ["toolbar", "issue", "action", "project", "create", "undo", "redo"]

@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using BlazorBlueprint.Components;
 using Homespun.Client;
+using Homespun.Client.Features.Design.Services;
 using Homespun.Client.Services;
 using Homespun.Client.Services.Observability;
 
