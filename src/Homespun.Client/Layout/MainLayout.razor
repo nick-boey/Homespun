@@ -45,54 +45,13 @@
 
 
     <BbResponsiveNavContent>
-        <nav class="flex flex-col gap-4">
-            <a href="#">Home</a>
-            <a href="#">About</a>
-            <a href="#">Contact</a>
-        </nav>
+        <NavMenuContent Projects="_projects" RenderMode="NavRenderMode.Responsive"/>
     </BbResponsiveNavContent>
 </BbResponsiveNavProvider>
 <BbSidebarProvider>
     <BbSidebar>
         <BbSidebarContent>
-            <BbSidebarMenu>
-                <BbSidebarGroup>
-                    <BbSidebarGroupLabel>Projects</BbSidebarGroupLabel>
-                    <BbSidebarMenuItem>
-                        <BbSidebarMenuButton IsActive="true" Match="NavLinkMatch.All" Href="projects">
-                            <LucideIcon Name="list"/>
-                            All
-                        </BbSidebarMenuButton>
-                    </BbSidebarMenuItem>
-
-                    @foreach (var project in _projects)
-                    {
-                        <BbSidebarMenuItem>
-                            <BbSidebarMenuButton Href="@($"projects/{project.Id}")">
-                                @project.Name
-                            </BbSidebarMenuButton>
-                        </BbSidebarMenuItem>
-                    }
-                </BbSidebarGroup>
-                <BbSidebarMenuItem>
-                    <BbSidebarMenuButton Href="agents">
-                        <LucideIcon Name="bot"/>
-                        Agents
-                    </BbSidebarMenuButton>
-                </BbSidebarMenuItem>
-                <BbSidebarMenuItem>
-                    <BbSidebarMenuButton Href="prompts">
-                        <LucideIcon Name="message-circle"/>
-                        Prompts
-                    </BbSidebarMenuButton>
-                </BbSidebarMenuItem>
-                <BbSidebarMenuItem>
-                    <BbSidebarMenuButton Href="settings">
-                        <LucideIcon Name="settings"/>
-                        Settings
-                    </BbSidebarMenuButton>
-                </BbSidebarMenuItem>
-            </BbSidebarMenu>
+            <NavMenuContent Projects="_projects" RenderMode="NavRenderMode.Sidebar"/>
         </BbSidebarContent>
     </BbSidebar>
     <main class="w-full p-4">
