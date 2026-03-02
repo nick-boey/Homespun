@@ -4,7 +4,6 @@
 @using Homespun.Client.Features.Chat.Components.Showcases
 @using Homespun.Client.Features.Design.Services
 @using Homespun.Client.Features.Issues.Components.Showcases
-@using Homespun.Client.Features.Notifications.Components.Showcases
 @using Homespun.Client.Features.Projects.Components.Showcases
 @using Homespun.Client.Features.Toolbar.Components.Showcases
 @inject IComponentRegistryService ComponentRegistry
@@ -54,9 +53,6 @@ else
                 break;
             case "agent-status-indicator":
                 <AgentStatusIndicatorShowcase/>
-                break;
-            case "notification-banner":
-                <NotificationBannerShowcase/>
                 break;
             case "model-selector":
                 <ModelSelectorShowcase/>
