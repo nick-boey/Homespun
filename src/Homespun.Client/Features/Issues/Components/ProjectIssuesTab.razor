@@ -4,12 +4,11 @@
 @inject HttpPullRequestApiService PullRequestApi
 @inject IAgentStartupTracker StartupTracker
 @inject IKeyboardNavigationService NavService
-@inject IPanelService PanelService
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JSRuntime
 @inject ILogger<ProjectIssuesTab> Logger
 
-<div class="project-issues-tab @(_sidebarOpen ? "sidebar-open" : "")" @onkeydown="HandleKeyDown" tabindex="-1"
+<div class="project-issues-tab" @onkeydown="HandleKeyDown" tabindex="-1"
      @ref="_pageContainer">
 
     <div class="sticky-toolbar-wrapper">
@@ -67,40 +66,13 @@
                 ActiveSearchTerm="@GetActiveSearchTerm()"
                 MaxDepth="@_maxDepth"
                 MaxDepthChanged="HandleMaxDepthChanged"
-                MaxAvailableDepthChanged="HandleMaxAvailableDepthChanged"/>
+                MaxAvailableDepthChanged="HandleMaxAvailableDepthChanged"
+                GetIssueById="GetIssueById"
+                GetCurrentPrByNumber="GetCurrentPrByNumber"
+                GetMergedPrByNumber="GetMergedPrByNumber"
+                OnIssueActionCompleted="RefreshData"
+                OnPrActionCompleted="RefreshData"/>
         </div>
-    </div>
-
-    @* Collapsible Detail Sidebar *@
-    <div class="detail-sidebar @(_sidebarOpen ? "open" : "")">
-        @if (_selectedPullRequest != null)
-        {
-            <CurrentPullRequestDetailPanel PullRequest="_selectedPullRequest"
-                                           OnActionCompleted="RefreshData"
-                                           OnClose="CloseSidebar"/>
-        }
-        else if (_selectedMergedPr != null)
-        {
-            <MergedPullRequestDetailPanel Details="_selectedMergedPr"
-                                          ProjectId="@ProjectId"
-                                          OnClose="CloseSidebar"/>
-        }
-        else if (_isLoadingMergedPr)
-        {
-            <BbCard>
-                <BbCardContent Class="text-center">
-                    <BbSpinner Size="SpinnerSize.Small" Class="mr-2"/>
-                    Loading pull request details...
-                </BbCardContent>
-            </BbCard>
-        }
-        else if (_selectedIssue != null)
-        {
-            <IssueDetailPanel ProjectId="@ProjectId"
-                              Issue="_selectedIssue"
-                              OnActionCompleted="RefreshData"
-                              OnClose="CloseSidebar"/>
-        }
     </div>
 </div>
 
@@ -109,7 +81,6 @@
         outline: none;
         max-width: 100%;
         overflow-x: hidden;
-        transition: margin-right 0.2s ease;
     }
 
     /* ==========================================================================
@@ -140,20 +111,6 @@
         min-width: 0;
         max-width: 100%;
         overflow-x: auto;
-    }
-
-    /* ==========================================================================
-       Mobile: Overlay behavior (sidebar covers content)
-       ========================================================================== */
-    @@media (max-width: 768px) {
-        .detail-sidebar {
-            width: 100%;
-        }
-
-        /* On mobile, don't squash - let sidebar overlay */
-        .project-issues-tab.sidebar-open {
-            margin-right: 0;
-        }
     }
 </style>
 
@@ -195,9 +152,6 @@
     private ElementReference _pageContainer;
     private KeyboardEditMode _previousEditMode = KeyboardEditMode.Viewing;
 
-    // Collapsible sidebar state
-    private bool _sidebarOpen;
-
     // Hash fragment tracking
     private bool _hasProcessedHashFragment;
 
@@ -213,12 +167,6 @@
     {
         // Subscribe to agent startup state changes to update UI
         StartupTracker.OnStateChanged += OnStartupStateChanged;
-
-        // Subscribe to panel service state changes
-        PanelService.OnStateChanged += OnPanelServiceStateChanged;
-
-        // Register panel availability
-        PanelService.SetPanelAvailable(true);
 
         await LoadIssuesAndPRs();
 
@@ -259,8 +207,6 @@
         NavService.OnIssueCreatedForEdit -= NavigateToIssueEditAsync;
         NavService.OnMoveOperationRequested -= OnMoveOperationRequested;
         NavService.OnSiblingMoveRequested -= OnSiblingMoveRequested;
-        PanelService.OnStateChanged -= OnPanelServiceStateChanged;
-        PanelService.SetPanelAvailable(false);
     }
 
     private async void OnStartupStateChanged(string entityId, AgentStartupState state)
@@ -446,15 +392,6 @@
         }
     }
 
-    private void OnPanelServiceStateChanged()
-    {
-        if (_sidebarOpen != PanelService.IsPanelOpen)
-        {
-            _sidebarOpen = PanelService.IsPanelOpen;
-            InvokeAsync(StateHasChanged);
-        }
-    }
-
     #endregion
 
     #region Selection
@@ -566,55 +503,32 @@
         _selectedMergedPr = null;
         _selectedIssueId = null;
         _selectedIssue = null;
-        _sidebarOpen = false;
-    }
-
-    private void CloseSidebar()
-    {
-        _sidebarOpen = false;
-        PanelService.SetPanelOpen(false);
     }
 
     #endregion
 
     #region Graph Click Handlers
 
-    private async Task HandleIssueClickFromGraph(string issueId)
+    private void HandleIssueClickFromGraph(string issueId)
     {
         SelectIssue(issueId);
-
-        var isMobile = await JSRuntime.InvokeAsync<bool>("sidebarManager.isMobile");
-        if (!isMobile)
-        {
-            _sidebarOpen = true;
-            PanelService.SetPanelOpen(true);
-        }
     }
 
     private void HandleOpenPanelFromGraph(string issueId)
     {
+        // With inline expansion, this is handled by double-click in TaskGraphView
         SelectIssue(issueId);
-        _sidebarOpen = true;
-        PanelService.SetPanelOpen(true);
     }
 
     private async Task HandlePullRequestClickFromGraph(int prNumber)
     {
         await SelectPullRequestByNumber(prNumber);
-
-        var isMobile = await JSRuntime.InvokeAsync<bool>("sidebarManager.isMobile");
-        if (!isMobile)
-        {
-            _sidebarOpen = true;
-            PanelService.SetPanelOpen(true);
-        }
     }
 
     private async Task HandleInlineIssueCreated(string newIssueId)
     {
         await RefreshData();
         await SelectIssueAsync(newIssueId);
-        _sidebarOpen = true;
     }
 
     private void HandleEditIssue(string issueId)
@@ -979,11 +893,17 @@
                 {
                     NavService.ClearSearch();
                 }
+                else if (_graphVisualization?.IsExpanded == true)
+                {
+                    _graphVisualization.CollapseAll();
+                }
                 else
                 {
                     ClearSelection();
                 }
-
+                break;
+            case " ": // Space key - toggle inline expansion
+                _ = _graphVisualization?.ToggleSelectedIssueExpansionAsync();
                 break;
             case "[":
                 HandleDecreaseDepth();
@@ -1000,6 +920,33 @@
             case "G":
                 NavService.MoveToLast();
                 break;
+        }
+    }
+
+    #endregion
+
+    #region Inline Detail Callbacks
+
+    private IssueResponse? GetIssueById(string issueId)
+    {
+        return _openIssues?.FirstOrDefault(i => i.Id == issueId);
+    }
+
+    private PullRequest? GetCurrentPrByNumber(int prNumber)
+    {
+        return _flattenedCurrentPRs.FirstOrDefault(p => p.PullRequest.GitHubPRNumber == prNumber)?.PullRequest;
+    }
+
+    private async Task<MergedPullRequestDetails?> GetMergedPrByNumber(int prNumber)
+    {
+        try
+        {
+            return await PullRequestApi.GetMergedPullRequestDetailsAsync(ProjectId, prNumber);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to load merged PR details for PR #{PrNumber}", prNumber);
+            return null;
         }
     }
 

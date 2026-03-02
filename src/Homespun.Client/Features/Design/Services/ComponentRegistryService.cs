@@ -57,24 +57,6 @@ public class ComponentRegistryService : IComponentRegistryService
         },
         new ComponentMetadata
         {
-            Id = "current-pull-request-detail-panel",
-            Name = "CurrentPullRequestDetailPanel",
-            Description = "Panel displaying pull request details with status, checks, and merge options.",
-            Category = "Panels",
-            ComponentPath = "Shared/CurrentPullRequestDetailPanel.razor",
-            Tags = ["panel", "pr", "detail"]
-        },
-        new ComponentMetadata
-        {
-            Id = "merged-pull-request-detail-panel",
-            Name = "MergedPullRequestDetailPanel",
-            Description = "Panel displaying merged pull request details with linked issue information.",
-            Category = "Panels",
-            ComponentPath = "Shared/MergedPullRequestDetailPanel.razor",
-            Tags = ["panel", "pr", "merged", "issue"]
-        },
-        new ComponentMetadata
-        {
             Id = "sessions-panel",
             Name = "SessionsPanel",
             Description =
