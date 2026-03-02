@@ -1,8 +1,9 @@
 @inject IKeyboardNavigationService NavService
 @inject IJSRuntime JSRuntime
 
-<div class="flex flex-wrap items-center gap-2 p-2 border rounded-lg bg-background">
-    @* Creation buttons *@
+<div class="toolbar-container">
+    <div class="toolbar-scroll-area">
+        @* Creation buttons *@
     <BbButtonGroup>
         <ToolbarButton Icon="arrow-up-from-line"
                        Tooltip="Create issue above (Shift+O)"
@@ -143,9 +144,47 @@
             }
         </div>
     </div>
+    </div>
 </div>
 
 <style>
+    .toolbar-container {
+        border: 1px solid hsl(var(--border));
+        border-radius: var(--radius-lg, 0.5rem);
+        background: hsl(var(--background));
+        padding: var(--spacing-sm, 0.5rem);
+    }
+
+    .toolbar-scroll-area {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm, 0.5rem);
+        flex-wrap: wrap; /* Wrap on desktop */
+    }
+
+    @@media (max-width: 768px) {
+        .toolbar-scroll-area {
+            flex-wrap: nowrap; /* No wrap on mobile */
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: thin;
+            padding-bottom: 2px;
+        }
+
+        .toolbar-scroll-area::-webkit-scrollbar {
+            height: 4px;
+        }
+
+        .toolbar-scroll-area::-webkit-scrollbar-thumb {
+            background: hsl(var(--muted-foreground));
+            border-radius: 2px;
+        }
+
+        .toolbar-scroll-area::-webkit-scrollbar-track {
+            background: transparent;
+        }
+    }
+
     .toolbar-search-wrapper {
         position: relative;
         display: flex;

@@ -12,7 +12,8 @@
 <div class="project-issues-tab @(_sidebarOpen ? "sidebar-open" : "")" @onkeydown="HandleKeyDown" tabindex="-1"
      @ref="_pageContainer">
 
-    <ProjectToolbar @ref="_toolbar"
+    <div class="sticky-toolbar-wrapper">
+        <ProjectToolbar @ref="_toolbar"
                     SelectedIssueId="@NavService.SelectedIssueId"
                     ProjectId="@ProjectId"
                     IsAgentRunning="@IsSelectedIssueAgentRunning()"
@@ -46,6 +47,7 @@
                     OnSearchEnter="HandleSearchEnter"
                     OnSearchEscape="HandleSearchEscape"
                     OnSearchFocused="HandleSearchFocused"/>
+    </div>
 
     <div class="project-layout">
         <div class="timeline-column">
@@ -108,6 +110,18 @@
         max-width: 100%;
         overflow-x: hidden;
         transition: margin-right 0.2s ease;
+    }
+
+    /* ==========================================================================
+       Sticky Toolbar Wrapper
+       ========================================================================== */
+    .sticky-toolbar-wrapper {
+        position: sticky;
+        top: 52px; /* Height of project title row */
+        z-index: 19;
+        background: hsl(var(--background));
+        padding: var(--spacing-sm) var(--spacing-xl);
+        margin: 0 calc(-1 * var(--spacing-xl));
     }
 
     /* ==========================================================================
