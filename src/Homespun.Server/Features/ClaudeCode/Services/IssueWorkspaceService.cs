@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using Homespun.Features.Fleece.Services;
 using Microsoft.Extensions.Logging;
 
 namespace Homespun.Features.ClaudeCode.Services;
@@ -15,16 +16,19 @@ public class IssueWorkspaceService : IIssueWorkspaceService
 {
     private readonly string _baseDir;
     private readonly ICommandRunner _commandRunner;
+    private readonly IFleeceIssuesSyncService _fleeceSyncService;
     private readonly ILogger<IssueWorkspaceService> _logger;
     private readonly ConcurrentDictionary<string, IssueWorkspace> _workspaces = new();
 
     public IssueWorkspaceService(
         string baseDir,
         ICommandRunner commandRunner,
+        IFleeceIssuesSyncService fleeceSyncService,
         ILogger<IssueWorkspaceService> logger)
     {
         _baseDir = baseDir;
         _commandRunner = commandRunner;
+        _fleeceSyncService = fleeceSyncService;
         _logger = logger;
     }
 
@@ -61,6 +65,7 @@ public class IssueWorkspaceService : IIssueWorkspaceService
         string issueId,
         string repoUrl,
         string branchName,
+        string defaultBranch,
         CancellationToken ct = default)
     {
         var issueDir = GetIssueDir(projectName, issueId);
@@ -73,8 +78,10 @@ public class IssueWorkspaceService : IIssueWorkspaceService
         Directory.CreateDirectory(sessionsPath);
         Directory.CreateDirectory(issueDir); // Ensure parent of src exists
 
+        var repoAlreadyExists = Directory.Exists(Path.Combine(sourcePath, ".git"));
+
         // Clone if src doesn't have a .git directory
-        if (!Directory.Exists(Path.Combine(sourcePath, ".git")))
+        if (!repoAlreadyExists)
         {
             _logger.LogInformation("Cloning {RepoUrl} to {SourcePath} for issue {IssueId}", repoUrl, sourcePath, issueId);
             var cloneResult = await _commandRunner.RunAsync("git", $"clone {repoUrl} {sourcePath}", issueDir);
@@ -82,6 +89,38 @@ public class IssueWorkspaceService : IIssueWorkspaceService
             {
                 _logger.LogError("Failed to clone repository for issue {IssueId}: {Error}", issueId, cloneResult.Error);
                 throw new InvalidOperationException($"Failed to clone repository for issue {issueId}: {cloneResult.Error}");
+            }
+        }
+        else
+        {
+            // Repository already exists - pull latest changes from default branch before creating issue branch
+            _logger.LogInformation("Repository exists for issue {IssueId}, pulling latest from {DefaultBranch}", issueId, defaultBranch);
+
+            // Checkout default branch to prepare for pull
+            var checkoutDefaultResult = await _commandRunner.RunAsync("git", $"checkout {defaultBranch}", sourcePath);
+            if (!checkoutDefaultResult.Success)
+            {
+                _logger.LogWarning("Failed to checkout default branch {DefaultBranch}: {Error}, continuing anyway",
+                    defaultBranch, checkoutDefaultResult.Error);
+            }
+            else
+            {
+                // Pull latest using same logic as "Pull" button
+                var pullResult = await _fleeceSyncService.PullFleeceOnlyAsync(sourcePath, defaultBranch, ct);
+
+                if (!pullResult.Success)
+                {
+                    _logger.LogWarning("Pull failed: {Error}, continuing anyway", pullResult.ErrorMessage);
+                }
+                else if (pullResult.WasBehindRemote)
+                {
+                    _logger.LogInformation("Pulled {Commits} commits and merged {Issues} issues",
+                        pullResult.CommitsPulled, pullResult.IssuesMerged);
+                }
+                else
+                {
+                    _logger.LogDebug("Repository is already up to date with {DefaultBranch}", defaultBranch);
+                }
             }
         }
 

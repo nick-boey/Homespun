@@ -211,6 +211,7 @@ else
         new IssueWorkspaceService(
             projectsBaseDir,
             sp.GetRequiredService<ICommandRunner>(),
+            sp.GetRequiredService<IFleeceIssuesSyncService>(),
             sp.GetRequiredService<ILogger<IssueWorkspaceService>>()));
 
     builder.Services.AddSingleton<IToolResultParser, ToolResultParser>();
