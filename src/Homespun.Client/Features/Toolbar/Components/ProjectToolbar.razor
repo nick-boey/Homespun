@@ -54,25 +54,6 @@
     </BbButtonGroup>
 
     <BbSeparator Orientation="SeparatorOrientation.Vertical" class="h-6"/>
-    @* Level controls *@
-    @if (MaxAvailableDepth > 0)
-    {
-        <BbButtonGroup>
-            <ToolbarButton Icon="minus"
-                           Tooltip="Decrease levels ([ key)"
-                           TestId="toolbar-decrease-levels-button"
-                           Disabled="@(MaxDepth <= 0)"
-                           OnClick="HandleDecreaseDepth"/>
-            <ToolbarButton Icon="plus"
-                           Tooltip="Increase levels (] key)"
-                           TestId="toolbar-increase-levels-button"
-                           Disabled="@(MaxDepth >= MaxAvailableDepth)"
-                           OnClick="HandleIncreaseDepth"/>
-            <p class="text-sm mx-2">@(MaxDepth + 1)</p>
-        </BbButtonGroup>
-
-        <BbSeparator Orientation="SeparatorOrientation.Vertical" class="h-6"/>
-    }
 
     @* Edit button *@
     <BbButtonGroup>
@@ -115,6 +96,21 @@
 
     @* Search input — right-aligned *@
     <div class="ml-auto flex items-center gap-2">
+        @* Level controls *@
+        <BbButtonGroup>
+            <ToolbarButton Icon="minus"
+                           Tooltip="Decrease levels ([ key)"
+                           TestId="toolbar-decrease-levels-button"
+                           Disabled="@(MaxDepth <= 0)"
+                           OnClick="HandleDecreaseDepth"/>
+            <ToolbarButton Icon="plus"
+                           Tooltip="Increase levels (] key)"
+                           TestId="toolbar-increase-levels-button"
+                           Disabled="@(MaxDepth >= MaxAvailableDepth)"
+                           OnClick="HandleIncreaseDepth"/>
+        </BbButtonGroup>
+
+        <BbSeparator Orientation="SeparatorOrientation.Vertical" class="h-6"/>
         <div class="toolbar-search-wrapper">
             <input type="search"
                    class="toolbar-search-input"
