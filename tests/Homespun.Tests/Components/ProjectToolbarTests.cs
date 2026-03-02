@@ -70,7 +70,7 @@ public class ProjectToolbarTests : BunitTestContext
         });
 
         var separators = cut.FindAll("[role='none']");
-        Assert.That(separators, Has.Count.EqualTo(3), "Should have 3 separators between 4 button groups");
+        Assert.That(separators, Has.Count.EqualTo(4), "Should have 4 separators between 5 button groups");
     }
 
     #endregion
@@ -625,16 +625,19 @@ public class ProjectToolbarTests : BunitTestContext
     #region Level Control Tests
 
     [Test]
-    public void LevelControls_NotRendered_WhenMaxAvailableDepthIsZero()
+    public void LevelControls_BothDisabled_WhenMaxAvailableDepthIsZero()
     {
         var cut = Render<ProjectToolbar>(p =>
         {
             p.Add(x => x.ProjectId, "project-1");
             p.Add(x => x.MaxAvailableDepth, 0);
+            p.Add(x => x.MaxDepth, 0);
         });
 
-        Assert.That(cut.FindAll("[data-testid='toolbar-decrease-levels-button']"), Is.Empty);
-        Assert.That(cut.FindAll("[data-testid='toolbar-increase-levels-button']"), Is.Empty);
+        var decreaseBtn = cut.Find("[data-testid='toolbar-decrease-levels-button']");
+        var increaseBtn = cut.Find("[data-testid='toolbar-increase-levels-button']");
+        Assert.That(decreaseBtn.HasAttribute("disabled"), Is.True);
+        Assert.That(increaseBtn.HasAttribute("disabled"), Is.True);
     }
 
     [Test]
@@ -649,11 +652,11 @@ public class ProjectToolbarTests : BunitTestContext
 
         var decreaseBtn = cut.Find("[data-testid='toolbar-decrease-levels-button']");
         var increaseBtn = cut.Find("[data-testid='toolbar-increase-levels-button']");
-        var display = cut.Find("[data-testid='toolbar-level-display']");
 
         Assert.That(decreaseBtn, Is.Not.Null);
         Assert.That(increaseBtn, Is.Not.Null);
-        Assert.That(display.TextContent.Trim(), Is.EqualTo("3 levels"));
+        Assert.That(decreaseBtn.HasAttribute("disabled"), Is.False);
+        Assert.That(increaseBtn.HasAttribute("disabled"), Is.False);
     }
 
     [Test]
