@@ -5,4 +5,5 @@ export { ProjectsEmptyState } from './components/projects-empty-state'
 export { ProjectsList } from './components/projects-list'
 
 // Hooks
+export { useProject } from './hooks/use-project'
 export { useProjects, useDeleteProject, projectsQueryKey } from './hooks/use-projects'
