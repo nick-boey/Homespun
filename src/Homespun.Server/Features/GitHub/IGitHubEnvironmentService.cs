@@ -32,4 +32,14 @@ public interface IGitHubEnvironmentService
     /// <param name="ct">Cancellation token</param>
     /// <returns>Authentication status including username if authenticated</returns>
     Task<GitHubAuthStatus> CheckGhAuthStatusAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Gets the configured Git author name.
+    /// </summary>
+    string GetGitAuthorName();
+
+    /// <summary>
+    /// Gets the configured Git author email.
+    /// </summary>
+    string GetGitAuthorEmail();
 }

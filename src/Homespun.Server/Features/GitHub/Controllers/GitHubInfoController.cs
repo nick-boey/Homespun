@@ -25,10 +25,27 @@ public class GitHubInfoController(IGitHubEnvironmentService gitHubEnvironmentSer
         var status = await gitHubEnvironmentService.CheckGhAuthStatusAsync(ct);
         return Ok(status);
     }
+
+    [HttpGet("git-config")]
+    [ProducesResponseType<GitConfigResponse>(StatusCodes.Status200OK)]
+    public ActionResult<GitConfigResponse> GetGitConfig()
+    {
+        return Ok(new GitConfigResponse
+        {
+            AuthorName = gitHubEnvironmentService.GetGitAuthorName(),
+            AuthorEmail = gitHubEnvironmentService.GetGitAuthorEmail()
+        });
+    }
 }
 
 public class GitHubStatusResponse
 {
     public bool IsConfigured { get; set; }
     public string? MaskedToken { get; set; }
+}
+
+public class GitConfigResponse
+{
+    public string AuthorName { get; set; } = string.Empty;
+    public string AuthorEmail { get; set; } = string.Empty;
 }
