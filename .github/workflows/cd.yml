@@ -109,6 +109,10 @@ jobs:
             dockerfile: ./src/Homespun.Worker/Dockerfile
             context: ./src/Homespun.Worker
             suffix: "-worker"
+          - name: homespun-web
+            dockerfile: ./src/Homespun.Web/Dockerfile
+            context: ./src/Homespun.Web
+            suffix: "-web"
 
     steps:
     - name: Checkout repository
