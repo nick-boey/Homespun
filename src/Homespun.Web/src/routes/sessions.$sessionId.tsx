@@ -3,7 +3,15 @@ import { useEffect, useRef, useCallback, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useBreadcrumbSetter } from '@/hooks/use-breadcrumbs'
-import { useSession, useSessionMessages, MessageList, ChatInput } from '@/features/sessions'
+import {
+  useSession,
+  useSessionMessages,
+  MessageList,
+  ChatInput,
+  usePlanApproval,
+  useApprovePlan,
+  PlanApprovalPanel,
+} from '@/features/sessions'
 import { useAnswerQuestion } from '@/features/questions'
 import { useClaudeCodeHub } from '@/providers/signalr-provider'
 import { ArrowLeft, AlertCircle, RefreshCw } from 'lucide-react'
@@ -31,6 +39,16 @@ function SessionChat() {
   const { answerQuestion, isSubmitting: isSubmittingAnswer } = useAnswerQuestion({
     sessionId,
   })
+
+  // Plan approval state and actions (must be called before early returns)
+  const { hasPendingPlan, planContent, planFilePath } = usePlanApproval(sessionId, session)
+  const {
+    approveClearContext,
+    approveKeepContext,
+    reject,
+    isLoading: isApprovingPlan,
+    error: approvalError,
+  } = useApprovePlan(sessionId)
 
   // Determine if the session is processing (not accepting input)
   const isProcessing =
@@ -142,6 +160,20 @@ function SessionChat() {
           onAnswerQuestion={answerQuestion}
           isSubmittingAnswer={isSubmittingAnswer}
         />
+        {/* Plan approval panel displayed inline after messages */}
+        {hasPendingPlan && planContent && (
+          <div className="p-4">
+            <PlanApprovalPanel
+              planContent={planContent}
+              planFilePath={planFilePath}
+              onApproveClearContext={approveClearContext}
+              onApproveKeepContext={approveKeepContext}
+              onReject={reject}
+              isLoading={isApprovingPlan}
+              error={approvalError}
+            />
+          </div>
+        )}
       </div>
       <ChatInput
         onSend={handleSend}
