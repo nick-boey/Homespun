@@ -3,6 +3,7 @@ import { Outlet, useRouterState } from '@tanstack/react-router'
 import { Sidebar } from './sidebar'
 import { Header } from './header'
 import { ErrorBoundary } from '@/components/error-boundary'
+import { RouteLoadingFallback } from '@/components/route-loading-fallback'
 import { BreadcrumbProvider } from '@/hooks/use-breadcrumbs'
 import { useAppStore } from '@/stores/app-store'
 import { cn } from '@/lib/utils'
@@ -47,7 +48,9 @@ export function RootLayout() {
           <Header projectId={projectId} onMenuClick={() => setMobileMenuOpen(!mobileMenuOpen)} />
           <main className="flex-1 overflow-auto p-6">
             <ErrorBoundary>
-              <Outlet />
+              <React.Suspense fallback={<RouteLoadingFallback />}>
+                <Outlet />
+              </React.Suspense>
             </ErrorBoundary>
           </main>
         </div>

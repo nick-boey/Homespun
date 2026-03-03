@@ -1,16 +1,26 @@
-import { AlertCircle, RefreshCw } from 'lucide-react'
+import { useState } from 'react'
 import { useProjects, useDeleteProject } from '../hooks/use-projects'
 import { ProjectCard } from './project-card'
 import { ProjectCardSkeleton } from './project-card-skeleton'
 import { ProjectsEmptyState } from './projects-empty-state'
-import { Button } from '@/components/ui/button'
+import { ErrorFallback } from '@/components/error-boundary'
 
 export function ProjectsList() {
-  const { data: projects, isLoading, isError, refetch } = useProjects()
+  const { data: projects, isLoading, isError, error, refetch, isFetching } = useProjects()
   const deleteProject = useDeleteProject()
+  const [isRetrying, setIsRetrying] = useState(false)
 
   const handleDelete = (projectId: string) => {
     deleteProject.mutate(projectId)
+  }
+
+  const handleRetry = async () => {
+    setIsRetrying(true)
+    try {
+      await refetch()
+    } finally {
+      setIsRetrying(false)
+    }
   }
 
   if (isLoading) {
@@ -25,17 +35,14 @@ export function ProjectsList() {
 
   if (isError) {
     return (
-      <div className="border-destructive/50 bg-destructive/10 flex flex-col items-center justify-center rounded-lg border p-8 text-center">
-        <AlertCircle className="text-destructive h-10 w-10" />
-        <h3 className="mt-4 text-lg font-semibold">Error loading projects</h3>
-        <p className="text-muted-foreground mt-2 text-sm">
-          Something went wrong while loading your projects.
-        </p>
-        <Button variant="outline" className="mt-4" onClick={() => refetch()}>
-          <RefreshCw className="mr-2 h-4 w-4" />
-          Retry
-        </Button>
-      </div>
+      <ErrorFallback
+        error={error}
+        title="Error loading projects"
+        description="Something went wrong while loading your projects."
+        variant="inline"
+        onRetry={handleRetry}
+        isRetrying={isRetrying || isFetching}
+      />
     )
   }
 

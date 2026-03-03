@@ -8,9 +8,10 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
-import { Skeleton } from '@/components/ui/skeleton'
 import { useSignalR } from '@/hooks/use-signalr'
 import { registerNotificationHubEvents } from '@/lib/signalr/notification-hub'
+import { ErrorFallback } from '@/components/error-boundary'
+import { IssueRowSkeleton } from './issue-row-skeleton'
 import {
   computeLayout,
   isIssueRenderLine,
@@ -606,14 +607,9 @@ export const TaskGraphView = memo(function TaskGraphView({
   // Render loading skeleton
   if (isLoading) {
     return (
-      <div className={cn('space-y-1', className)}>
+      <div className={cn('space-y-1', className)} data-testid="task-graph-loading">
         {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="flex items-center gap-2" style={{ height: ROW_HEIGHT }}>
-            <Skeleton className="h-6 w-12" />
-            <Skeleton className="h-4 w-16" />
-            <Skeleton className="h-4 flex-1" />
-            <Skeleton className="h-4 w-16" />
-          </div>
+          <IssueRowSkeleton key={i} />
         ))}
       </div>
     )
@@ -622,12 +618,13 @@ export const TaskGraphView = memo(function TaskGraphView({
   // Render error state
   if (isError) {
     return (
-      <div className={cn('border-border rounded-lg border p-8 text-center', className)}>
-        <p className="text-muted-foreground mb-2">Failed to load issues.</p>
-        <button type="button" onClick={() => refetch()} className="text-primary hover:underline">
-          Retry
-        </button>
-      </div>
+      <ErrorFallback
+        title="Failed to load issues"
+        description="Unable to fetch the task graph. Please try again."
+        variant="inline"
+        onRetry={() => refetch()}
+        className={className}
+      />
     )
   }
 

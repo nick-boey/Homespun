@@ -1,5 +1,5 @@
 import { memo, useState, useCallback } from 'react'
-import { RefreshCw, AlertCircle } from 'lucide-react'
+import { RefreshCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { type PullRequestInfo } from '@/api'
@@ -8,6 +8,7 @@ import { PrRow } from './pr-row'
 import { PrRowSkeleton } from './pr-row-skeleton'
 import { OpenPrDetailPanel } from './open-pr-detail-panel'
 import { MergedPrDetailPanel } from './merged-pr-detail-panel'
+import { ErrorFallback } from '@/components/error-boundary'
 
 export interface PullRequestsTabProps {
   projectId: string
@@ -84,20 +85,15 @@ export const PullRequestsTab = memo(function PullRequestsTab({
 
         {/* Error state */}
         {hasError && (
-          <div className="border-destructive/50 bg-destructive/10 text-destructive flex items-center gap-2 rounded-lg border p-4">
-            <AlertCircle className="h-5 w-5" />
-            <span>Failed to load pull requests. Please try again.</span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                refetchOpen()
-                refetchMerged()
-              }}
-            >
-              Retry
-            </Button>
-          </div>
+          <ErrorFallback
+            title="Failed to load pull requests"
+            description="Unable to fetch pull requests. Please try again."
+            variant="compact"
+            onRetry={() => {
+              refetchOpen()
+              refetchMerged()
+            }}
+          />
         )}
 
         {/* Open PRs section */}

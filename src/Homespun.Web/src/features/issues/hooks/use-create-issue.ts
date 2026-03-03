@@ -3,12 +3,14 @@
  *
  * Supports creating issues as siblings, children (via parentIssueId),
  * or parents (via childIssueId) of existing issues.
+ *
+ * Features optimistic updates for instant UI feedback.
  */
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Issues } from '@/api'
-import type { IssueResponse, IssueType } from '@/api'
+import type { IssueResponse, IssueType, TaskGraphResponse, TaskGraphNodeResponse } from '@/api'
 import { taskGraphQueryKey } from './use-task-graph'
 
 export interface UseCreateIssueOptions {
@@ -16,6 +18,10 @@ export interface UseCreateIssueOptions {
   projectId: string
   /** Callback fired when an issue is successfully created */
   onSuccess?: (issue: IssueResponse) => void
+  /** Callback fired when an error occurs */
+  onError?: (error: Error) => void
+  /** Enable optimistic updates (default: true) */
+  optimistic?: boolean
 }
 
 export interface CreateIssueParams {
@@ -36,21 +42,87 @@ export interface UseCreateIssueReturn {
   createIssue: (params: CreateIssueParams) => Promise<IssueResponse>
   /** Whether a creation is in progress */
   isCreating: boolean
+  /** The error that occurred during the last mutation, if any */
+  error: Error | null
+}
+
+/**
+ * Generate a temporary ID for optimistic updates.
+ */
+function generateTempId(): string {
+  return `temp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
 }
 
 /**
  * Hook for creating new issues with parent/child relationships.
+ * Supports optimistic updates for instant UI feedback.
  */
 export function useCreateIssue(options: UseCreateIssueOptions): UseCreateIssueReturn {
-  const { projectId, onSuccess } = options
+  const { projectId, onSuccess, onError, optimistic = true } = options
   const queryClient = useQueryClient()
   const [isCreating, setIsCreating] = useState(false)
+  const [error, setError] = useState<Error | null>(null)
+  const rollbackRef = useRef<(() => void) | null>(null)
 
   const createIssue = useCallback(
     async (params: CreateIssueParams): Promise<IssueResponse> => {
       const { title, type = 0, parentIssueId, childIssueId, parentSortOrder } = params
 
       setIsCreating(true)
+      setError(null)
+
+      // Generate temp ID for optimistic update
+      const tempId = generateTempId()
+
+      // Optimistic update - add placeholder issue to cache
+      if (optimistic) {
+        const queryKey = taskGraphQueryKey(projectId)
+        const previousData = queryClient.getQueryData<TaskGraphResponse>(queryKey)
+
+        if (previousData) {
+          // Create optimistic issue
+          const optimisticIssue: IssueResponse = {
+            id: tempId,
+            title,
+            description: null,
+            status: 0, // Open
+            type,
+            priority: null,
+            linkedPR: null,
+            linkedIssues: null,
+            parentIssues: parentIssueId
+              ? [{ parentIssue: parentIssueId, sortOrder: parentSortOrder ?? 'a' }]
+              : null,
+            tags: null,
+            workingBranchId: null,
+            executionMode: 0, // Series
+            createdBy: null,
+            assignedTo: null,
+            lastUpdate: new Date().toISOString(),
+            createdAt: new Date().toISOString(),
+          }
+
+          // Create optimistic node
+          const optimisticNode: TaskGraphNodeResponse = {
+            issue: optimisticIssue,
+            lane: 0, // Default lane, will be corrected on server response
+            row: previousData.nodes?.length ?? 0,
+            isActionable: true,
+          }
+
+          // Update cache optimistically
+          queryClient.setQueryData<TaskGraphResponse>(queryKey, {
+            ...previousData,
+            nodes: [...(previousData.nodes ?? []), optimisticNode],
+          })
+
+          // Store rollback function
+          rollbackRef.current = () => {
+            queryClient.setQueryData<TaskGraphResponse>(queryKey, previousData)
+          }
+        }
+      }
+
       try {
         const response = await Issues.postApiIssues({
           body: {
@@ -63,25 +135,46 @@ export function useCreateIssue(options: UseCreateIssueOptions): UseCreateIssueRe
           },
         })
 
+        if (response.error || !response.data) {
+          throw new Error(response.error?.detail ?? 'Failed to create issue')
+        }
+
         const issue = response.data as IssueResponse
 
-        // Invalidate task graph to refresh the view
+        // Clear rollback ref on success
+        rollbackRef.current = null
+
+        // Invalidate task graph to get the correct server state
+        // This replaces our optimistic data with the real data
         await queryClient.invalidateQueries({
           queryKey: taskGraphQueryKey(projectId),
         })
 
         onSuccess?.(issue)
         return issue
+      } catch (err) {
+        const error = err instanceof Error ? err : new Error('Failed to create issue')
+        setError(error)
+
+        // Rollback optimistic update on error
+        if (rollbackRef.current) {
+          rollbackRef.current()
+          rollbackRef.current = null
+        }
+
+        onError?.(error)
+        throw error
       } finally {
         setIsCreating(false)
       }
     },
-    [projectId, queryClient, onSuccess]
+    [projectId, queryClient, onSuccess, onError, optimistic]
   )
 
   return {
     createIssue,
     isCreating,
+    error,
   }
 }
 
