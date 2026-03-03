@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useBreadcrumbSetter } from '@/hooks/use-breadcrumbs'
 import { useSession, useSessionMessages, MessageList } from '@/features/sessions'
+import { useAnswerQuestion } from '@/features/questions'
 import { ArrowLeft, AlertCircle, RefreshCw } from 'lucide-react'
 
 export const Route = createFileRoute('/sessions/$sessionId')({
@@ -21,12 +22,17 @@ function SessionChat() {
     initialMessages: session?.messages ?? [],
   })
 
-  // Auto-scroll to bottom when new messages arrive
+  // Handle question answering
+  const { answerQuestion, isSubmitting: isSubmittingAnswer } = useAnswerQuestion({
+    sessionId,
+  })
+
+  // Auto-scroll to bottom when new messages arrive or when pending question appears
   useEffect(() => {
     if (scrollContainerRef.current) {
       scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight
     }
-  }, [messages])
+  }, [messages, session?.pendingQuestion])
 
   useBreadcrumbSetter(
     [
@@ -100,7 +106,13 @@ function SessionChat() {
         ref={scrollContainerRef}
         className="border-border flex-1 overflow-y-auto rounded-lg border"
       >
-        <MessageList messages={messages} isLoading={isLoading} />
+        <MessageList
+          messages={messages}
+          isLoading={isLoading}
+          pendingQuestion={session?.pendingQuestion}
+          onAnswerQuestion={answerQuestion}
+          isSubmittingAnswer={isSubmittingAnswer}
+        />
       </div>
     </div>
   )

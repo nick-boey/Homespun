@@ -1,21 +1,32 @@
 import { cn } from '@/lib/utils'
 import { Markdown } from '@/components/ui/markdown'
 import { Skeleton } from '@/components/ui/skeleton'
-import type { ClaudeMessage, ClaudeMessageContent } from '@/types/signalr'
+import { QuestionPanel } from '@/features/questions'
+import type { ClaudeMessage, ClaudeMessageContent, PendingQuestion } from '@/types/signalr'
 import { useState } from 'react'
 
 export interface MessageListProps {
   messages: ClaudeMessage[]
   isLoading?: boolean
   className?: string
+  pendingQuestion?: PendingQuestion
+  onAnswerQuestion?: (answers: Record<string, string>) => Promise<void>
+  isSubmittingAnswer?: boolean
 }
 
-export function MessageList({ messages, isLoading, className }: MessageListProps) {
+export function MessageList({
+  messages,
+  isLoading,
+  className,
+  pendingQuestion,
+  onAnswerQuestion,
+  isSubmittingAnswer,
+}: MessageListProps) {
   if (isLoading) {
     return <MessageListSkeleton />
   }
 
-  if (messages.length === 0) {
+  if (messages.length === 0 && !pendingQuestion) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <p className="text-muted-foreground">No messages yet</p>
@@ -28,6 +39,17 @@ export function MessageList({ messages, isLoading, className }: MessageListProps
       {messages.map((message) => (
         <MessageItem key={message.id} message={message} />
       ))}
+      {pendingQuestion && onAnswerQuestion && (
+        <div className="flex w-full justify-start">
+          <div className="max-w-[90%]">
+            <QuestionPanel
+              pendingQuestion={pendingQuestion}
+              onSubmit={onAnswerQuestion}
+              isSubmitting={isSubmittingAnswer}
+            />
+          </div>
+        </div>
+      )}
     </div>
   )
 }
