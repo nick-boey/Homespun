@@ -1,0 +1,168 @@
+import { useEffect, useRef, useCallback } from 'react'
+import { toast } from 'sonner'
+import { useNotificationHub } from '@/providers/signalr-provider'
+import { useNotificationStore } from '../stores/notification-store'
+import type { NotificationDto, IssueChangeType, NotificationType } from '@/types/signalr'
+
+interface UseNotificationEventsOptions {
+  /** Project ID to join notifications group for */
+  projectId?: string
+}
+
+/**
+ * Hook that connects SignalR notification events to the notification store and toasts.
+ * Handles:
+ * - NotificationAdded events -> adds to store and shows toast
+ * - NotificationDismissed events -> removes from store
+ * - IssuesChanged events -> creates local notifications for issue changes
+ */
+export function useNotificationEvents(options: UseNotificationEventsOptions = {}) {
+  const { projectId } = options
+  const { connection, methods, isConnected } = useNotificationHub()
+
+  const addNotification = useNotificationStore((state) => state.addNotification)
+  const dismissNotification = useNotificationStore((state) => state.dismissNotification)
+  const setNotifications = useNotificationStore((state) => state.setNotifications)
+  const preferences = useNotificationStore((state) => state.preferences)
+
+  // Use ref to access current preferences without re-registering handlers
+  const preferencesRef = useRef(preferences)
+  useEffect(() => {
+    preferencesRef.current = preferences
+  }, [preferences])
+
+  // Show toast for notification based on type
+  const showToast = useCallback((notification: NotificationDto) => {
+    const { showToasts, autoDismissDuration } = preferencesRef.current
+    if (!showToasts) return
+
+    const toastOptions = {
+      id: notification.id,
+      description: notification.message,
+      duration: autoDismissDuration,
+      dismissible: notification.isDismissible,
+    }
+
+    const toastFn = getToastFunction(notification.type)
+    toastFn(notification.title, toastOptions)
+  }, [])
+
+  // Handle NotificationAdded event
+  const handleNotificationAdded = useCallback(
+    (notification: NotificationDto) => {
+      addNotification(notification)
+      showToast(notification)
+    },
+    [addNotification, showToast]
+  )
+
+  // Handle NotificationDismissed event
+  const handleNotificationDismissed = useCallback(
+    (notificationId: string) => {
+      dismissNotification(notificationId)
+      toast.dismiss(notificationId)
+    },
+    [dismissNotification]
+  )
+
+  // Handle IssuesChanged event - create local notification
+  const handleIssuesChanged = useCallback(
+    (issueProjectId: string, changeType: IssueChangeType, issueId: string) => {
+      const notification: NotificationDto = {
+        id: `issue-${issueId}-${changeType}-${Date.now()}`,
+        type: 'Info',
+        title: `Issue ${changeType}`,
+        message: getIssueChangeMessage(changeType, issueId),
+        projectId: issueProjectId,
+        createdAt: new Date().toISOString(),
+        isDismissible: true,
+        deduplicationKey: `issue-${issueId}-${changeType}`,
+      }
+
+      addNotification(notification)
+      showToast(notification)
+    },
+    [addNotification, showToast]
+  )
+
+  // Register/unregister event handlers
+  useEffect(() => {
+    if (!connection || !isConnected) return
+
+    connection.on('NotificationAdded', handleNotificationAdded)
+    connection.on('NotificationDismissed', handleNotificationDismissed)
+    connection.on('IssuesChanged', handleIssuesChanged)
+
+    return () => {
+      connection.off('NotificationAdded', handleNotificationAdded)
+      connection.off('NotificationDismissed', handleNotificationDismissed)
+      connection.off('IssuesChanged', handleIssuesChanged)
+    }
+  }, [
+    connection,
+    isConnected,
+    handleNotificationAdded,
+    handleNotificationDismissed,
+    handleIssuesChanged,
+  ])
+
+  // Fetch active notifications on mount and join project group
+  useEffect(() => {
+    if (!methods || !isConnected) return
+
+    // Fetch initial notifications
+    methods.getActiveNotifications(projectId).then((notifications) => {
+      if (notifications.length > 0) {
+        setNotifications(notifications)
+      }
+    })
+  }, [methods, isConnected, projectId, setNotifications])
+
+  // Join/leave project group
+  useEffect(() => {
+    if (!methods || !isConnected || !projectId) return
+
+    methods.joinProjectGroup(projectId)
+
+    return () => {
+      methods.leaveProjectGroup(projectId)
+    }
+  }, [methods, isConnected, projectId])
+
+  return {
+    dismissNotification: useCallback(
+      async (id: string) => {
+        dismissNotification(id)
+        if (methods) {
+          await methods.dismissNotification(id)
+        }
+      },
+      [methods, dismissNotification]
+    ),
+  }
+}
+
+function getToastFunction(type: NotificationType) {
+  switch (type) {
+    case 'Warning':
+      return toast.warning
+    case 'ActionRequired':
+      return toast.error
+    case 'Info':
+    default:
+      return toast.info
+  }
+}
+
+function getIssueChangeMessage(changeType: IssueChangeType, issueId: string): string {
+  switch (changeType) {
+    case 'Created':
+      return `A new issue has been created (${issueId})`
+    case 'Updated':
+      return `Issue ${issueId} has been updated`
+    case 'Deleted':
+      return `Issue ${issueId} has been deleted`
+    default:
+      return `Issue ${issueId} changed`
+  }
+}
