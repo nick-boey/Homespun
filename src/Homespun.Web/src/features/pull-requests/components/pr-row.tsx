@@ -47,7 +47,7 @@ export const PrRow = memo(function PrRow({
       type="button"
       className={cn(
         'flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-left transition-colors',
-        'hover:bg-accent/50 focus:outline-none focus:ring-2 focus:ring-ring',
+        'hover:bg-accent/50 focus:ring-ring focus:ring-2 focus:outline-none',
         isSelected && 'bg-accent',
         className
       )}
@@ -55,7 +55,7 @@ export const PrRow = memo(function PrRow({
       onKeyDown={handleKeyDown}
     >
       {/* PR Number */}
-      <span className="shrink-0 font-mono text-sm font-semibold text-muted-foreground">
+      <span className="text-muted-foreground shrink-0 font-mono text-sm font-semibold">
         #{pr.number}
       </span>
 
@@ -65,7 +65,7 @@ export const PrRow = memo(function PrRow({
           <span className="truncate font-medium">{pr.title}</span>
           {linkedIssueId && (
             <Link2
-              className="h-4 w-4 shrink-0 text-muted-foreground"
+              className="text-muted-foreground h-4 w-4 shrink-0"
               aria-label="Has linked issue"
             />
           )}
@@ -87,7 +87,7 @@ export const PrRow = memo(function PrRow({
         href={pr.htmlUrl ?? '#'}
         target="_blank"
         rel="noopener noreferrer"
-        className="shrink-0 text-muted-foreground hover:text-primary"
+        className="text-muted-foreground hover:text-primary shrink-0"
         aria-label="View on GitHub"
         onClick={handleLinkClick}
       >

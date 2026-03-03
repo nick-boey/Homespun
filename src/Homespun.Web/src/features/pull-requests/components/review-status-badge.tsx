@@ -32,7 +32,10 @@ export const ReviewStatusBadge = memo(function ReviewStatusBadge({
 }: ReviewStatusBadgeProps) {
   // Show changes requested if any
   if (changesRequestedCount > 0) {
-    const label = changesRequestedCount === 1 ? '1 Change Requested' : `${changesRequestedCount} Changes Requested`
+    const label =
+      changesRequestedCount === 1
+        ? '1 Change Requested'
+        : `${changesRequestedCount} Changes Requested`
     return (
       <span
         className={cn(

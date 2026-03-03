@@ -67,9 +67,7 @@ describe('OpenPrDetailPanel', () => {
   it('calls onViewIssue when linked issue is clicked', async () => {
     const user = userEvent.setup()
     const onViewIssue = vi.fn()
-    render(
-      <OpenPrDetailPanel pr={mockPr} linkedIssueId="issue-123" onViewIssue={onViewIssue} />
-    )
+    render(<OpenPrDetailPanel pr={mockPr} linkedIssueId="issue-123" onViewIssue={onViewIssue} />)
 
     await user.click(screen.getByText('View Linked Issue'))
     expect(onViewIssue).toHaveBeenCalledWith('issue-123')

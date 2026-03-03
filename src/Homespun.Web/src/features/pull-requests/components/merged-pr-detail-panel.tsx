@@ -61,15 +61,10 @@ export const MergedPrDetailPanel = memo(function MergedPrDetailPanel({
     if (linkedIssue?.id && onViewIssue) {
       onViewIssue(linkedIssue.id)
     }
-  }, [linkedIssue?.id, onViewIssue])
+  }, [linkedIssue, onViewIssue])
 
   return (
-    <div
-      className={cn(
-        'bg-card text-card-foreground rounded-lg border p-4 shadow-sm',
-        className
-      )}
-    >
+    <div className={cn('bg-card text-card-foreground rounded-lg border p-4 shadow-sm', className)}>
       {/* Header */}
       <div className="mb-4 flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
@@ -78,9 +73,7 @@ export const MergedPrDetailPanel = memo(function MergedPrDetailPanel({
             <h3 className="truncate text-lg font-medium">{pr.title}</h3>
             <PrStatusBadge status={pr.status} size="sm" />
           </div>
-          <p className="text-muted-foreground mt-1 text-sm">
-            Merged on {formatDate(pr.mergedAt)}
-          </p>
+          <p className="text-muted-foreground mt-1 text-sm">Merged on {formatDate(pr.mergedAt)}</p>
         </div>
         <Button
           variant="ghost"
@@ -95,7 +88,7 @@ export const MergedPrDetailPanel = memo(function MergedPrDetailPanel({
 
       {/* Time spent */}
       {timeSpentMinutes !== undefined && timeSpentMinutes > 0 && (
-        <div className="mb-4 flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="text-muted-foreground mb-4 flex items-center gap-2 text-sm">
           <Clock className="h-4 w-4" />
           <span>Time spent: {formatTimeSpent(timeSpentMinutes)}</span>
         </div>
@@ -103,9 +96,7 @@ export const MergedPrDetailPanel = memo(function MergedPrDetailPanel({
 
       {/* Description */}
       <div className="mb-4">
-        <h4 className="text-muted-foreground mb-2 text-xs font-medium uppercase">
-          Description
-        </h4>
+        <h4 className="text-muted-foreground mb-2 text-xs font-medium uppercase">Description</h4>
         {pr.body ? (
           <Markdown className="prose-sm max-w-none">{pr.body}</Markdown>
         ) : (
@@ -116,9 +107,7 @@ export const MergedPrDetailPanel = memo(function MergedPrDetailPanel({
       {/* Linked Issue */}
       {linkedIssue && (
         <div className="mb-4">
-          <h4 className="text-muted-foreground mb-2 text-xs font-medium uppercase">
-            Linked Issue
-          </h4>
+          <h4 className="text-muted-foreground mb-2 text-xs font-medium uppercase">Linked Issue</h4>
           <button
             type="button"
             className="text-primary inline-flex items-center gap-1 text-sm hover:underline"

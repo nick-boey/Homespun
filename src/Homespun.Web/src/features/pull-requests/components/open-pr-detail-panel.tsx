@@ -42,12 +42,7 @@ export const OpenPrDetailPanel = memo(function OpenPrDetailPanel({
   }, [pr.branchName, onStartAgent])
 
   return (
-    <div
-      className={cn(
-        'bg-card text-card-foreground rounded-lg border p-4 shadow-sm',
-        className
-      )}
-    >
+    <div className={cn('bg-card text-card-foreground rounded-lg border p-4 shadow-sm', className)}>
       {/* Header */}
       <div className="mb-4 flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
@@ -55,9 +50,9 @@ export const OpenPrDetailPanel = memo(function OpenPrDetailPanel({
             <span className="font-mono text-sm font-semibold">#{pr.number}</span>
             <h3 className="truncate text-lg font-medium">{pr.title}</h3>
           </div>
-          <div className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
+          <div className="text-muted-foreground mt-1 flex items-center gap-2 text-sm">
             <GitBranch className="h-4 w-4" />
-            <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
+            <code className="bg-muted rounded px-1.5 py-0.5 font-mono text-xs">
               {pr.branchName}
             </code>
           </div>
@@ -99,9 +94,7 @@ export const OpenPrDetailPanel = memo(function OpenPrDetailPanel({
 
       {/* Description */}
       <div className="mb-4">
-        <h4 className="text-muted-foreground mb-2 text-xs font-medium uppercase">
-          Description
-        </h4>
+        <h4 className="text-muted-foreground mb-2 text-xs font-medium uppercase">Description</h4>
         {pr.body ? (
           <Markdown className="prose-sm max-w-none">{pr.body}</Markdown>
         ) : (

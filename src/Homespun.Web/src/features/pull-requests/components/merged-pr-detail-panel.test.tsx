@@ -71,11 +71,7 @@ describe('MergedPrDetailPanel', () => {
     const user = userEvent.setup()
     const onViewIssue = vi.fn()
     render(
-      <MergedPrDetailPanel
-        pr={mockPr}
-        linkedIssue={mockLinkedIssue}
-        onViewIssue={onViewIssue}
-      />
+      <MergedPrDetailPanel pr={mockPr} linkedIssue={mockLinkedIssue} onViewIssue={onViewIssue} />
     )
 
     await user.click(screen.getByText('Implement feature X'))

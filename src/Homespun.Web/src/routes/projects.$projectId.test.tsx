@@ -17,8 +17,12 @@ vi.mock('@/api', async (importOriginal) => {
       getApiGraphByProjectIdTaskgraphData: vi.fn(),
     },
     PullRequests: {
-      getApiProjectsByProjectIdPullRequestsOpen: vi.fn().mockResolvedValue({ data: [], error: undefined }),
-      getApiProjectsByProjectIdPullRequestsMerged: vi.fn().mockResolvedValue({ data: [], error: undefined }),
+      getApiProjectsByProjectIdPullRequestsOpen: vi
+        .fn()
+        .mockResolvedValue({ data: [], error: undefined }),
+      getApiProjectsByProjectIdPullRequestsMerged: vi
+        .fn()
+        .mockResolvedValue({ data: [], error: undefined }),
       postApiProjectsByProjectIdSync: vi.fn(),
     },
   }

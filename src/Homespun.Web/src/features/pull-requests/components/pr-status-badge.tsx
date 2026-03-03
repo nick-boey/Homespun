@@ -8,10 +8,7 @@ export interface PrStatusBadgeProps {
   className?: string
 }
 
-const STATUS_CONFIG: Record<
-  number,
-  { label: string; bgColor: string; textColor: string }
-> = {
+const STATUS_CONFIG: Record<number, { label: string; bgColor: string; textColor: string }> = {
   [PullRequestStatus[0]]: {
     label: 'Draft',
     bgColor: 'bg-gray-500/20',

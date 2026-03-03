@@ -20,14 +20,11 @@ function PullRequestsPage() {
     [navigate, projectId]
   )
 
-  const handleStartAgent = useCallback(
-    (branchName: string) => {
-      // TODO: Implement starting an agent on the PR branch
-      // This could navigate to a session creation page or open a modal
-      console.log('Start agent on branch:', branchName)
-    },
-    []
-  )
+  const handleStartAgent = useCallback((branchName: string) => {
+    // TODO: Implement starting an agent on the PR branch
+    // This could navigate to a session creation page or open a modal
+    console.log('Start agent on branch:', branchName)
+  }, [])
 
   return (
     <div className="h-[calc(100vh-16rem)]">

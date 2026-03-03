@@ -33,12 +33,7 @@ describe('ReviewStatusBadge', () => {
 
   it('renders with small size', () => {
     render(
-      <ReviewStatusBadge
-        isApproved={true}
-        approvalCount={1}
-        changesRequestedCount={0}
-        size="sm"
-      />
+      <ReviewStatusBadge isApproved={true} approvalCount={1} changesRequestedCount={0} size="sm" />
     )
     const badge = screen.getByText('1 Approval')
     expect(badge).toHaveClass('px-1.5', 'py-0.5', 'text-xs')

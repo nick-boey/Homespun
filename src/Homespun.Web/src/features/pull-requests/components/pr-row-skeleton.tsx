@@ -13,10 +13,7 @@ export const PrRowSkeleton = memo(function PrRowSkeleton({ className }: PrRowSke
   return (
     <div
       data-testid="pr-row-skeleton"
-      className={cn(
-        'flex items-center gap-3 rounded-lg border px-4 py-3',
-        className
-      )}
+      className={cn('flex items-center gap-3 rounded-lg border px-4 py-3', className)}
     >
       {/* PR Number skeleton */}
       <Skeleton className="h-5 w-10 shrink-0" />

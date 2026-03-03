@@ -76,12 +76,7 @@ export const PullRequestsTab = memo(function PullRequestsTab({
         {/* Header with sync button */}
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">Pull Requests</h2>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleSync}
-            disabled={isSyncing}
-          >
+          <Button variant="outline" size="sm" onClick={handleSync} disabled={isSyncing}>
             <RefreshCw className={cn('mr-2 h-4 w-4', isSyncing && 'animate-spin')} />
             Sync from GitHub
           </Button>
@@ -89,7 +84,7 @@ export const PullRequestsTab = memo(function PullRequestsTab({
 
         {/* Error state */}
         {hasError && (
-          <div className="flex items-center gap-2 rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-destructive">
+          <div className="border-destructive/50 bg-destructive/10 text-destructive flex items-center gap-2 rounded-lg border p-4">
             <AlertCircle className="h-5 w-5" />
             <span>Failed to load pull requests. Please try again.</span>
             <Button
@@ -107,9 +102,7 @@ export const PullRequestsTab = memo(function PullRequestsTab({
 
         {/* Open PRs section */}
         <section>
-          <h3 className="mb-3 text-sm font-medium text-muted-foreground">
-            Open Pull Requests
-          </h3>
+          <h3 className="text-muted-foreground mb-3 text-sm font-medium">Open Pull Requests</h3>
           <div className="space-y-2">
             {isLoading ? (
               <>
@@ -130,7 +123,7 @@ export const PullRequestsTab = memo(function PullRequestsTab({
                 />
               ))
             ) : (
-              <p className="py-4 text-center text-sm text-muted-foreground">
+              <p className="text-muted-foreground py-4 text-center text-sm">
                 No open pull requests
               </p>
             )}
@@ -139,9 +132,7 @@ export const PullRequestsTab = memo(function PullRequestsTab({
 
         {/* Merged PRs section */}
         <section>
-          <h3 className="mb-3 text-sm font-medium text-muted-foreground">
-            Recently Merged
-          </h3>
+          <h3 className="text-muted-foreground mb-3 text-sm font-medium">Recently Merged</h3>
           <div className="space-y-2">
             {isLoading ? (
               <>
@@ -161,7 +152,7 @@ export const PullRequestsTab = memo(function PullRequestsTab({
                 />
               ))
             ) : (
-              <p className="py-4 text-center text-sm text-muted-foreground">
+              <p className="text-muted-foreground py-4 text-center text-sm">
                 No recently merged pull requests
               </p>
             )}
