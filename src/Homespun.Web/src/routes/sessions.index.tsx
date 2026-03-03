@@ -1,19 +1,18 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useBreadcrumbSetter } from '@/hooks/use-breadcrumbs'
+import { SessionsList } from '@/features/sessions'
 
 export const Route = createFileRoute('/sessions/')({
-  component: SessionsList,
+  component: SessionsPage,
 })
 
-function SessionsList() {
+function SessionsPage() {
   useBreadcrumbSetter([{ title: 'Sessions' }], [])
 
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold">Sessions</h1>
-      <div className="border-border rounded-lg border p-8 text-center">
-        <p className="text-muted-foreground">Sessions list will be implemented here.</p>
-      </div>
+      <SessionsList />
     </div>
   )
 }
