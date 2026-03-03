@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { RouterProvider, createRouter } from '@tanstack/react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { SignalRProvider } from '@/providers/signalr-provider'
+import { Toaster } from '@/components/ui/sonner'
 import './index.css'
 
 // Import the generated route tree
@@ -33,6 +34,7 @@ createRoot(document.getElementById('root')!).render(
     <QueryClientProvider client={queryClient}>
       <SignalRProvider>
         <RouterProvider router={router} />
+        <Toaster position="bottom-right" closeButton richColors />
       </SignalRProvider>
     </QueryClientProvider>
   </StrictMode>

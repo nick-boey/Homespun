@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { useBreadcrumbs } from '@/hooks/use-breadcrumbs'
 import { cn } from '@/lib/utils'
 import { ActiveAgentsIndicator } from '@/features/agents'
+import { NotificationDropdown } from '@/features/notifications'
 
 interface HeaderProps {
   projectId?: string
@@ -49,6 +50,7 @@ export function Header({ projectId, onMenuClick, className }: HeaderProps) {
       </nav>
 
       <div className="flex items-center gap-2">
+        <NotificationDropdown projectId={projectId} />
         {projectId ? (
           <ActiveAgentsIndicator projectId={projectId} />
         ) : (
