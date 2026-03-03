@@ -5,7 +5,7 @@ import { defineConfig, devices } from '@playwright/test'
  * Tests run against the full application stack (React frontend + ASP.NET backend).
  *
  * Configuration:
- * - E2E_BASE_URL: Override the base URL (default: http://localhost:5000)
+ * - E2E_BASE_URL: Override the base URL (default: http://localhost:5101)
  * - CI: Set to 'true' in CI environments for optimized settings
  *
  * Usage:
@@ -27,7 +27,7 @@ export default defineConfig({
   },
 
   use: {
-    baseURL: process.env.E2E_BASE_URL || 'http://localhost:5000',
+    baseURL: process.env.E2E_BASE_URL || 'http://localhost:5101',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
@@ -57,9 +57,9 @@ export default defineConfig({
     ? undefined
     : {
         command: 'cd ../Homespun.Server && dotnet run --launch-profile mock',
-        url: 'http://localhost:5000/health',
+        url: 'http://localhost:5101/health',
         reuseExistingServer: !process.env.CI,
-        timeout: 60000,
+        timeout: 120000,
         stdout: 'pipe',
         stderr: 'pipe',
       },
