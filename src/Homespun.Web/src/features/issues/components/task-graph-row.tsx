@@ -14,6 +14,7 @@ import {
 } from './task-graph-svg'
 import type { TaskGraphIssueRenderLine, TaskGraphPrRenderLine } from '../services'
 import { TaskGraphMarkerType } from '../services'
+import { IssueRowActions } from './issue-row-actions'
 
 /** Issue status labels */
 const STATUS_LABELS: Record<number, string> = {
@@ -42,6 +43,9 @@ interface TaskGraphIssueRowProps extends HTMLAttributes<HTMLDivElement> {
   isExpanded?: boolean
   searchQuery?: string
   onToggleExpand?: () => void
+  onEdit?: (issueId: string) => void
+  onRunAgent?: (issueId: string) => void
+  showActions?: boolean
 }
 
 /**
@@ -56,6 +60,9 @@ export const TaskGraphIssueRow = memo(
       isExpanded = false,
       searchQuery,
       onToggleExpand,
+      onEdit,
+      onRunAgent,
+      showActions = true,
       className,
       ...props
     },
@@ -153,6 +160,17 @@ export const TaskGraphIssueRow = memo(
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
               <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
             </span>
+          )}
+
+          {/* Hover actions */}
+          {showActions && (
+            <IssueRowActions
+              issueId={line.issueId}
+              isExpanded={isExpanded}
+              onEdit={onEdit}
+              onRunAgent={onRunAgent}
+              onExpand={onToggleExpand}
+            />
           )}
 
           {/* Status badge */}
@@ -308,37 +326,16 @@ export const TaskGraphLoadMoreRow = memo(
   })
 )
 
-interface TaskGraphExpandedDetailsProps {
-  line: TaskGraphIssueRenderLine
-  maxLanes: number
-}
-
 /**
  * Expanded details panel shown below an issue row.
+ * Re-exports InlineIssueDetailRow for backwards compatibility.
  */
-export const TaskGraphExpandedDetails = memo(function TaskGraphExpandedDetails({
-  line,
-  maxLanes,
-}: TaskGraphExpandedDetailsProps) {
-  // Calculate left padding to align with content (after SVG)
-  const svgWidth = 24 * Math.max(maxLanes, 1) + 12
+export { InlineIssueDetailRow as TaskGraphExpandedDetails } from './inline-issue-detail-row'
 
-  return (
-    <div className="bg-muted/30 border-muted border-t px-2 py-3" style={{ marginLeft: svgWidth }}>
-      <div className="space-y-2 text-sm">
-        {line.description ? (
-          <p className="text-foreground whitespace-pre-wrap">{line.description}</p>
-        ) : (
-          <p className="text-muted-foreground italic">No description</p>
-        )}
-
-        {line.branchName && (
-          <div className="flex items-center gap-2">
-            <span className="text-muted-foreground">Branch:</span>
-            <code className="bg-muted rounded px-1.5 py-0.5 text-xs">{line.branchName}</code>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-})
+// Export the new components for direct use
+export { InlineIssueDetailRow } from './inline-issue-detail-row'
+export { InlinePrDetailRow } from './inline-pr-detail-row'
+export { IssueRowActions } from './issue-row-actions'
+export type { InlineIssueDetailRowProps } from './inline-issue-detail-row'
+export type { InlinePrDetailRowProps, PrCommit, RelatedIssue } from './inline-pr-detail-row'
+export type { IssueRowActionsProps } from './issue-row-actions'

@@ -35,6 +35,7 @@ export interface TaskGraphViewProps {
   selectedIssueId?: string | null
   onSelectIssue?: (issueId: string | null) => void
   onEditIssue?: (issueId: string) => void
+  onRunAgent?: (issueId: string) => void
   className?: string
 }
 
@@ -55,6 +56,7 @@ export const TaskGraphView = memo(function TaskGraphView({
   selectedIssueId,
   onSelectIssue,
   onEditIssue,
+  onRunAgent,
   className,
 }: TaskGraphViewProps) {
   const { taskGraph, isLoading, isError, refetch } = useTaskGraph(projectId)
@@ -191,14 +193,18 @@ export const TaskGraphView = memo(function TaskGraphView({
         }
 
         case 'Escape': {
-          // Escape to deselect
+          // Escape to close expanded row or deselect
           event.preventDefault()
-          onSelectIssue?.(null)
+          if (expandedIds.has(selectedIssueId)) {
+            toggleExpanded(selectedIssueId)
+          } else {
+            onSelectIssue?.(null)
+          }
           break
         }
       }
     },
-    [selectedIssueId, issueIds, onSelectIssue, onEditIssue, toggleExpanded]
+    [selectedIssueId, issueIds, onSelectIssue, onEditIssue, toggleExpanded, expandedIds]
   )
 
   // Render loading skeleton
@@ -272,10 +278,20 @@ export const TaskGraphView = memo(function TaskGraphView({
                 isExpanded={isExpanded}
                 searchQuery={searchQuery}
                 onToggleExpand={() => toggleExpanded(line.issueId)}
+                onEdit={onEditIssue}
+                onRunAgent={onRunAgent}
                 onClick={() => handleRowClick(line.issueId)}
                 aria-rowindex={index + 1}
               />
-              {isExpanded && <TaskGraphExpandedDetails line={line} maxLanes={maxLanes} />}
+              {isExpanded && (
+                <TaskGraphExpandedDetails
+                  line={line}
+                  maxLanes={maxLanes}
+                  onEdit={onEditIssue}
+                  onRunAgent={onRunAgent}
+                  onClose={() => toggleExpanded(line.issueId)}
+                />
+              )}
             </div>
           )
         }
