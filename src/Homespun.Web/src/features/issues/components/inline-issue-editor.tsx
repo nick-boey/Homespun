@@ -125,13 +125,16 @@ export const InlineIssueEditor = memo(function InlineIssueEditor({
   const indicatorClass = showParentIndicator ? 'parent' : showChildIndicator ? 'child' : ''
 
   return (
-    <div data-testid="inline-issue-create" className={cn('flex flex-1 items-center gap-1', className)}>
+    <div
+      data-testid="inline-issue-create"
+      className={cn('flex flex-1 items-center gap-1', className)}
+    >
       <input
         ref={inputRef}
         type="text"
         data-testid="inline-issue-input"
         className={cn(
-          'flex-1 rounded border-2 bg-background px-2 py-1 text-sm outline-none',
+          'bg-background flex-1 rounded border-2 px-2 py-1 text-sm outline-none',
           'border-primary/50 shadow-[0_0_8px_rgba(var(--primary)/0.3)]',
           'focus:border-primary focus:shadow-[0_0_12px_rgba(var(--primary)/0.5)]',
           'placeholder:text-muted-foreground'
@@ -168,7 +171,7 @@ export const InlineIssueEditor = memo(function InlineIssueEditor({
           className={cn(
             'flex h-7 w-7 items-center justify-center rounded',
             'bg-green-600 text-white',
-            'hover:bg-green-700 hover:scale-105',
+            'hover:scale-105 hover:bg-green-700',
             'transition-transform'
           )}
         >

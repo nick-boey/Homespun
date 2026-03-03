@@ -54,10 +54,9 @@ describe('useCreateIssue', () => {
       response: {} as Response,
     })
 
-    const { result } = renderHook(
-      () => useCreateIssue({ projectId: 'proj-1' }),
-      { wrapper: createWrapper() }
-    )
+    const { result } = renderHook(() => useCreateIssue({ projectId: 'proj-1' }), {
+      wrapper: createWrapper(),
+    })
 
     await result.current.createIssue({
       title: 'Test Issue',
@@ -89,10 +88,9 @@ describe('useCreateIssue', () => {
       response: {} as Response,
     })
 
-    const { result } = renderHook(
-      () => useCreateIssue({ projectId: 'proj-1' }),
-      { wrapper: createWrapper() }
-    )
+    const { result } = renderHook(() => useCreateIssue({ projectId: 'proj-1' }), {
+      wrapper: createWrapper(),
+    })
 
     await result.current.createIssue({
       title: 'New Child Issue',
@@ -125,10 +123,9 @@ describe('useCreateIssue', () => {
       response: {} as Response,
     })
 
-    const { result } = renderHook(
-      () => useCreateIssue({ projectId: 'proj-1' }),
-      { wrapper: createWrapper() }
-    )
+    const { result } = renderHook(() => useCreateIssue({ projectId: 'proj-1' }), {
+      wrapper: createWrapper(),
+    })
 
     await result.current.createIssue({
       title: 'New Parent Issue',
@@ -161,10 +158,9 @@ describe('useCreateIssue', () => {
       response: {} as Response,
     })
 
-    const { result } = renderHook(
-      () => useCreateIssue({ projectId: 'proj-1' }),
-      { wrapper: createWrapper() }
-    )
+    const { result } = renderHook(() => useCreateIssue({ projectId: 'proj-1' }), {
+      wrapper: createWrapper(),
+    })
 
     const createdIssue = await result.current.createIssue({
       title: 'Test Issue',
@@ -187,10 +183,9 @@ describe('useCreateIssue', () => {
     })
 
     const onSuccess = vi.fn()
-    const { result } = renderHook(
-      () => useCreateIssue({ projectId: 'proj-1', onSuccess }),
-      { wrapper: createWrapper() }
-    )
+    const { result } = renderHook(() => useCreateIssue({ projectId: 'proj-1', onSuccess }), {
+      wrapper: createWrapper(),
+    })
 
     await result.current.createIssue({
       title: 'Test Issue',
@@ -209,10 +204,9 @@ describe('useCreateIssue', () => {
 
     vi.mocked(Issues.postApiIssues).mockReturnValueOnce(pendingPromise as never)
 
-    const { result } = renderHook(
-      () => useCreateIssue({ projectId: 'proj-1' }),
-      { wrapper: createWrapper() }
-    )
+    const { result } = renderHook(() => useCreateIssue({ projectId: 'proj-1' }), {
+      wrapper: createWrapper(),
+    })
 
     expect(result.current.isCreating).toBe(false)
 
@@ -238,10 +232,9 @@ describe('useCreateIssue', () => {
   it('handles API errors gracefully', async () => {
     vi.mocked(Issues.postApiIssues).mockRejectedValueOnce(new Error('Network error'))
 
-    const { result } = renderHook(
-      () => useCreateIssue({ projectId: 'proj-1' }),
-      { wrapper: createWrapper() }
-    )
+    const { result } = renderHook(() => useCreateIssue({ projectId: 'proj-1' }), {
+      wrapper: createWrapper(),
+    })
 
     await expect(result.current.createIssue({ title: 'Test' })).rejects.toThrow('Network error')
   })
@@ -259,10 +252,9 @@ describe('useCreateIssue', () => {
       response: {} as Response,
     })
 
-    const { result } = renderHook(
-      () => useCreateIssue({ projectId: 'proj-1' }),
-      { wrapper: createWrapper() }
-    )
+    const { result } = renderHook(() => useCreateIssue({ projectId: 'proj-1' }), {
+      wrapper: createWrapper(),
+    })
 
     await result.current.createIssue({
       title: 'Bug Fix',

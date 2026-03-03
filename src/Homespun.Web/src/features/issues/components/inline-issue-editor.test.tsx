@@ -164,49 +164,25 @@ describe('InlineIssueEditor', () => {
 
   describe('hierarchy indicator', () => {
     it('shows "Parent of" indicator when showParentIndicator is true', () => {
-      render(
-        <InlineIssueEditor
-          {...defaultProps}
-          showParentIndicator={true}
-          isAbove={false}
-        />
-      )
+      render(<InlineIssueEditor {...defaultProps} showParentIndicator={true} isAbove={false} />)
 
       expect(screen.getByText('Parent of above')).toBeInTheDocument()
     })
 
     it('shows "Parent of below" indicator when showParentIndicator is true and isAbove is true', () => {
-      render(
-        <InlineIssueEditor
-          {...defaultProps}
-          showParentIndicator={true}
-          isAbove={true}
-        />
-      )
+      render(<InlineIssueEditor {...defaultProps} showParentIndicator={true} isAbove={true} />)
 
       expect(screen.getByText('Parent of below')).toBeInTheDocument()
     })
 
     it('shows "Child of above" indicator when showChildIndicator is true', () => {
-      render(
-        <InlineIssueEditor
-          {...defaultProps}
-          showChildIndicator={true}
-          isAbove={false}
-        />
-      )
+      render(<InlineIssueEditor {...defaultProps} showChildIndicator={true} isAbove={false} />)
 
       expect(screen.getByText('Child of above')).toBeInTheDocument()
     })
 
     it('shows "Child of below" indicator when showChildIndicator is true and isAbove is true', () => {
-      render(
-        <InlineIssueEditor
-          {...defaultProps}
-          showChildIndicator={true}
-          isAbove={true}
-        />
-      )
+      render(<InlineIssueEditor {...defaultProps} showChildIndicator={true} isAbove={true} />)
 
       expect(screen.getByText('Child of below')).toBeInTheDocument()
     })
@@ -252,11 +228,7 @@ describe('InlineIssueEditor', () => {
       // For Replace mode, the title should be empty but the component is told to replace
       // The clearing happens before render, so we just verify the behavior exists
       render(
-        <InlineIssueEditor
-          {...defaultProps}
-          title=""
-          cursorPosition={EditCursorPosition.Replace}
-        />
+        <InlineIssueEditor {...defaultProps} title="" cursorPosition={EditCursorPosition.Replace} />
       )
 
       const input = screen.getByTestId('inline-issue-input') as HTMLInputElement

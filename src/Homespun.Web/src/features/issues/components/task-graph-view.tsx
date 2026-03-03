@@ -19,7 +19,12 @@ import {
   isLoadMoreRenderLine,
 } from '../services'
 import { useTaskGraph, taskGraphQueryKey, useCreateIssue } from '../hooks'
-import { KeyboardEditMode, EditCursorPosition, type PendingNewIssue, type InlineEditState } from '../types'
+import {
+  KeyboardEditMode,
+  EditCursorPosition,
+  type PendingNewIssue,
+  type InlineEditState,
+} from '../types'
 import {
   TaskGraphIssueRow,
   TaskGraphPrRow,
@@ -482,7 +487,7 @@ export const TaskGraphView = memo(function TaskGraphView({
           data-testid="task-graph-inline-create-row"
           className={cn(
             'flex items-center gap-2 transition-colors',
-            'bg-muted ring-2 ring-primary/50'
+            'bg-muted ring-primary/50 ring-2'
           )}
           style={{ height: ROW_HEIGHT }}
         >
@@ -616,7 +621,7 @@ export const TaskGraphView = memo(function TaskGraphView({
                   data-issue-id={line.issueId}
                   className={cn(
                     'flex items-center gap-2 transition-colors',
-                    'bg-muted ring-2 ring-primary/50'
+                    'bg-muted ring-primary/50 ring-2'
                   )}
                   style={{ height: ROW_HEIGHT }}
                 >
