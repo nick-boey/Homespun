@@ -5,6 +5,7 @@ import { BranchCard } from './branch-card'
 import { BranchCardSkeleton } from './branch-card-skeleton'
 import { RemoteBranchRow } from './remote-branch-row'
 import { BranchesEmptyState } from './branches-empty-state'
+import { ErrorFallback } from '@/components/error-boundary'
 import { useClones, useDeleteClone, usePullClone, useCreateClone } from '../hooks/use-clones'
 import { useBranches, getRemoteOnlyBranches } from '../hooks/use-branches'
 import type { BranchInfo, CloneInfo } from '@/api/generated/types.gen'
@@ -15,11 +16,19 @@ export interface BranchesListProps {
 }
 
 export function BranchesList({ projectId, repoPath }: BranchesListProps) {
-  const { data: clones, isLoading: clonesLoading, refetch: refetchClones } = useClones(projectId)
+  const {
+    data: clones,
+    isLoading: clonesLoading,
+    isError: clonesError,
+    error: clonesErrorObj,
+    refetch: refetchClones,
+  } = useClones(projectId)
 
   const {
     data: branches,
     isLoading: branchesLoading,
+    isError: branchesError,
+    error: branchesErrorObj,
     refetch: refetchBranches,
   } = useBranches(repoPath)
 
@@ -33,6 +42,8 @@ export function BranchesList({ projectId, repoPath }: BranchesListProps) {
   const [isRefreshingAll, setIsRefreshingAll] = useState(false)
 
   const isLoading = clonesLoading || branchesLoading
+  const isError = clonesError || branchesError
+  const error = clonesErrorObj || branchesErrorObj
 
   // Map clones to their branch info for richer display
   const cloneWithBranchInfo = (clones ?? []).map((clone) => {
@@ -126,6 +137,26 @@ export function BranchesList({ projectId, repoPath }: BranchesListProps) {
           <BranchCardSkeleton />
           <BranchCardSkeleton />
         </div>
+      </div>
+    )
+  }
+
+  if (isError) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Local Worktrees</h2>
+        </div>
+        <ErrorFallback
+          error={error}
+          title="Failed to load branches"
+          description="Unable to fetch worktrees and branches. Please try again."
+          variant="inline"
+          onRetry={() => {
+            refetchClones()
+            refetchBranches()
+          }}
+        />
       </div>
     )
   }

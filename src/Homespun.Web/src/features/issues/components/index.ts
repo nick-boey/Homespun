@@ -18,3 +18,5 @@ export {
   NODE_RADIUS,
   getTypeColor,
 } from './task-graph-svg'
+export { IssueRowSkeleton, type IssueRowSkeletonProps } from './issue-row-skeleton'
+export { DetailPanelSkeleton, type DetailPanelSkeletonProps } from './detail-panel-skeleton'
