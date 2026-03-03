@@ -8,15 +8,20 @@ interface NavItemProps {
   label: string
   isActive?: boolean
   indent?: boolean
+  onClick?: () => void
 }
 
-function NavItem({ to, icon, label, isActive, indent }: NavItemProps) {
+function NavItem({ to, icon, label, isActive, indent, onClick }: NavItemProps) {
   return (
     <Link
       to={to}
+      onClick={onClick}
       className={cn(
-        'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+        // Base styles with touch-friendly tap target (min 44px height)
+        'flex min-h-[44px] items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors',
         'hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+        // Active touch feedback
+        'active:bg-sidebar-accent/80',
         isActive && 'bg-sidebar-accent text-sidebar-accent-foreground',
         !isActive && 'text-sidebar-foreground',
         indent && 'pl-8'
@@ -30,9 +35,10 @@ function NavItem({ to, icon, label, isActive, indent }: NavItemProps) {
 
 interface SidebarProps {
   className?: string
+  onNavigate?: () => void
 }
 
-export function Sidebar({ className }: SidebarProps) {
+export function Sidebar({ className, onNavigate }: SidebarProps) {
   const routerState = useRouterState()
   const pathname = routerState.location.pathname
 
@@ -51,7 +57,11 @@ export function Sidebar({ className }: SidebarProps) {
       )}
     >
       <div className="border-sidebar-border flex h-14 items-center border-b px-4">
-        <Link to="/" className="text-sidebar-foreground flex items-center gap-2 font-semibold">
+        <Link
+          to="/"
+          onClick={onNavigate}
+          className="text-sidebar-foreground flex min-h-[44px] items-center gap-2 font-semibold"
+        >
           <FolderKanban className="h-5 w-5" />
           <span>Homespun</span>
         </Link>
@@ -67,6 +77,7 @@ export function Sidebar({ className }: SidebarProps) {
             icon={<List className="h-4 w-4" />}
             label="All Projects"
             isActive={isActive('/') && !pathname.startsWith('/projects')}
+            onClick={onNavigate}
           />
         </div>
 
@@ -80,12 +91,14 @@ export function Sidebar({ className }: SidebarProps) {
             icon={<Bot className="h-4 w-4" />}
             label="Sessions"
             isActive={isActive('/sessions')}
+            onClick={onNavigate}
           />
           <NavItem
             to="/settings"
             icon={<Settings className="h-4 w-4" />}
             label="Settings"
             isActive={isActive('/settings')}
+            onClick={onNavigate}
           />
         </div>
       </nav>

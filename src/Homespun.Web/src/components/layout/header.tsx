@@ -23,7 +23,12 @@ export function Header({ projectId, onMenuClick, className }: HeaderProps) {
       )}
     >
       {onMenuClick && (
-        <Button variant="ghost" size="icon" className="md:hidden" onClick={onMenuClick}>
+        <Button
+          variant="ghost"
+          size="icon-touch"
+          className="shrink-0 md:hidden"
+          onClick={onMenuClick}
+        >
           <Menu className="h-5 w-5" />
           <span className="sr-only">Toggle menu</span>
         </Button>

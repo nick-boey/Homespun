@@ -147,11 +147,12 @@ function SessionChat() {
   }
 
   return (
-    <div className="flex h-full flex-col space-y-4">
+    <div className="flex h-full flex-col">
       <SessionHeader sessionId={sessionId} session={session} />
+      {/* Messages area - flex-1 takes remaining space */}
       <div
         ref={scrollContainerRef}
-        className="border-border min-h-0 flex-1 overflow-y-auto rounded-lg border"
+        className="border-border mt-4 min-h-0 flex-1 overflow-y-auto rounded-lg border"
       >
         <MessageList
           messages={messages}
@@ -175,14 +176,17 @@ function SessionChat() {
           </div>
         )}
       </div>
-      <ChatInput
-        onSend={handleSend}
-        disabled={isProcessing || !isConnected}
-        isLoading={isSending}
-        placeholder={
-          !isConnected ? 'Connecting...' : isProcessing ? 'Processing...' : 'Type a message...'
-        }
-      />
+      {/* Chat input - sticky at bottom with safe area inset for mobile keyboards */}
+      <div className="bg-background sticky bottom-0 mt-3 pb-[env(safe-area-inset-bottom)] md:mt-4">
+        <ChatInput
+          onSend={handleSend}
+          disabled={isProcessing || !isConnected}
+          isLoading={isSending}
+          placeholder={
+            !isConnected ? 'Connecting...' : isProcessing ? 'Processing...' : 'Type a message...'
+          }
+        />
+      </div>
     </div>
   )
 }
@@ -198,20 +202,23 @@ interface SessionHeaderProps {
 
 function SessionHeader({ sessionId, session }: SessionHeaderProps) {
   return (
-    <div className="flex items-center justify-between">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" asChild>
+    <div className="flex items-center justify-between gap-2">
+      <div className="flex min-w-0 items-center gap-2 md:gap-4">
+        {/* Touch-friendly back button */}
+        <Button variant="ghost" size="icon" asChild className="h-10 w-10 shrink-0">
           <Link to="/sessions">
-            <ArrowLeft className="h-4 w-4" />
+            <ArrowLeft className="h-5 w-5" />
           </Link>
         </Button>
-        <div>
-          <h1 className="text-2xl font-semibold">Session {sessionId.slice(0, 8)}...</h1>
+        <div className="min-w-0">
+          <h1 className="truncate text-lg font-semibold md:text-2xl">
+            Session {sessionId.slice(0, 8)}...
+          </h1>
           {session && (
-            <div className="text-muted-foreground flex items-center gap-2 text-sm">
+            <div className="text-muted-foreground flex flex-wrap items-center gap-1 text-xs md:gap-2 md:text-sm">
               <span className="capitalize">{session.mode}</span>
-              <span>•</span>
-              <span>{session.model}</span>
+              <span className="hidden sm:inline">•</span>
+              <span className="hidden sm:inline">{session.model}</span>
               <span>•</span>
               <SessionStatusBadge status={session.status} />
             </div>
