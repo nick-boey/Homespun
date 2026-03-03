@@ -39,6 +39,39 @@ vi.mock('@/hooks/use-signalr', () => ({
   }),
 }))
 
+// Mock SignalR provider hooks
+vi.mock('@/providers/signalr-provider', () => ({
+  useNotificationHub: () => ({
+    connection: null,
+    status: 'disconnected',
+    methods: null,
+    isConnected: false,
+    isReconnecting: false,
+  }),
+  useClaudeCodeHub: () => ({
+    connection: null,
+    status: 'disconnected',
+    methods: null,
+    isConnected: false,
+    isReconnecting: false,
+  }),
+  useSignalRContext: () => ({
+    claudeCodeConnection: null,
+    claudeCodeStatus: 'disconnected',
+    claudeCodeError: undefined,
+    claudeCodeMethods: null,
+    notificationConnection: null,
+    notificationStatus: 'disconnected',
+    notificationError: undefined,
+    notificationMethods: null,
+    isConnecting: false,
+    isConnected: false,
+    isReconnecting: false,
+    connect: vi.fn(),
+    disconnect: vi.fn(),
+  }),
+}))
+
 function createTestRouter(initialPath: string) {
   const memoryHistory = createMemoryHistory({
     initialEntries: [initialPath],
