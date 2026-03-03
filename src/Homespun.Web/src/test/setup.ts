@@ -18,3 +18,11 @@ Object.defineProperty(window, 'matchMedia', {
     dispatchEvent: () => false,
   }),
 })
+
+// Mock ResizeObserver for components that use it (e.g., Radix UI)
+class MockResizeObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+window.ResizeObserver = MockResizeObserver as unknown as typeof ResizeObserver
