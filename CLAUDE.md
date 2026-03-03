@@ -298,6 +298,51 @@ E2E tests run against the full application stack using Playwright for browser au
 - Set `E2E_BASE_URL` to test against an external server
 - Set `E2E_CONFIGURATION` to specify build configuration (Release/Debug)
 
+### React Frontend E2E Tests (Homespun.Web/e2e)
+
+**Framework:** Playwright Test
+
+E2E tests for the React frontend are located in `src/Homespun.Web/e2e/`. These tests mirror the C# E2E tests but use the JavaScript Playwright API.
+
+**Running React E2E Tests:**
+
+```bash
+cd src/Homespun.Web
+
+# Install Playwright browsers (first time only)
+npm run playwright:install
+
+# Run all E2E tests
+npm run test:e2e
+
+# Run tests with UI mode (interactive debugging)
+npm run test:e2e:ui
+
+# Run tests with browser visible
+npm run test:e2e:headed
+
+# Run with debug mode (step through tests)
+npm run test:e2e:debug
+
+# View HTML test report
+npm run test:e2e:report
+```
+
+**E2E Test Configuration:**
+- Tests automatically start the mock server via `webServer` config
+- Set `E2E_BASE_URL` to test against a running server (skips automatic server start)
+- Tests run in Chromium by default
+- Traces, screenshots, and videos are captured on test failure
+
+**Test Coverage:**
+- `critical-journeys.spec.ts` - Basic navigation and page loading
+- `agui-sessions.spec.ts` - Session management and API connectivity
+- `keyboard-navigation.spec.ts` - Vim-like keyboard controls
+- `type-change-menu.spec.ts` - Issue type dropdown menu
+- `collapsible-sidebar.spec.ts` - Inline issue detail expansion
+- `issue-edit-ctrl-enter.spec.ts` - CTRL+Enter save behavior
+- `inline-issue-hierarchy.spec.ts` - TAB/Shift+TAB hierarchy creation
+
 ### Inspection with Playwright MCP and Mock Mode
 
 The mock mode provides a development environment with:
