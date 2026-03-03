@@ -1,5 +1,14 @@
 // Components
 export { ProjectToolbar, type ProjectToolbarProps } from './components'
+export { TaskGraphView, type TaskGraphViewProps } from './components'
+export {
+  TaskGraphIssueRow,
+  TaskGraphPrRow,
+  TaskGraphSeparatorRow,
+  TaskGraphLoadMoreRow,
+  TaskGraphExpandedDetails,
+} from './components'
+export { LANE_WIDTH, ROW_HEIGHT, NODE_RADIUS, getTypeColor } from './components'
 
 // Types
 export {
@@ -30,3 +39,20 @@ export {
   type UseKeyboardNavigationOptions,
   type UseKeyboardNavigationReturn,
 } from './hooks'
+export { useTaskGraph, taskGraphQueryKey, type UseTaskGraphOptions } from './hooks'
+
+// Services
+export {
+  computeLayout,
+  TaskGraphMarkerType,
+  isIssueRenderLine,
+  isPrRenderLine,
+  isSeparatorRenderLine,
+  isLoadMoreRenderLine,
+  type TaskGraphIssueRenderLine,
+  type TaskGraphPrRenderLine,
+  type TaskGraphSeparatorRenderLine,
+  type TaskGraphLoadMoreRenderLine,
+} from './services'
+export { getPriorityColor } from './services'
+export { generateBranchName } from './services'
