@@ -1,13 +1,12 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, useParams } from '@tanstack/react-router'
+import { SecretsList } from '@/features/secrets'
 
 export const Route = createFileRoute('/projects/$projectId/secrets')({
   component: Secrets,
 })
 
 function Secrets() {
-  return (
-    <div className="border-border rounded-lg border p-8 text-center">
-      <p className="text-muted-foreground">Project secrets will be implemented here.</p>
-    </div>
-  )
+  const { projectId } = useParams({ from: '/projects/$projectId/secrets' })
+
+  return <SecretsList projectId={projectId} />
 }
