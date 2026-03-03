@@ -2125,6 +2125,29 @@
             .WithAutomaticReconnect()
             .Build();
 
+        // Handle SignalR reconnection - re-join session group to continue receiving AG-UI events
+        _hubConnection.Reconnected += async (connectionId) =>
+        {
+            Console.WriteLine($"[SignalR] Reconnected with connection ID: {connectionId}");
+            try
+            {
+                // Re-join the session group to receive AG-UI streaming events
+                await _hubConnection.SendAsync("JoinSession", SessionId);
+                Console.WriteLine($"[SignalR] Re-joined session {SessionId} after reconnection");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[SignalR] Error re-joining session after reconnection: {ex.Message}");
+            }
+        };
+
+        // Log connection closed for debugging
+        _hubConnection.Closed += (error) =>
+        {
+            Console.WriteLine($"[SignalR] Connection closed: {error?.Message ?? "No error"}");
+            return Task.CompletedTask;
+        };
+
         // AG-UI Text Message Events - handles streaming text content from the assistant
         _hubConnection.On<TextMessageStartEvent>(AGUIEventType.TextMessageStart, (evt) =>
         {
