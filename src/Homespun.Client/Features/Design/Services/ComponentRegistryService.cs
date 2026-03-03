@@ -1,0 +1,244 @@
+using Homespun.Shared.Models.Design;
+
+namespace Homespun.Client.Features.Design.Services;
+
+public class ComponentRegistryService : IComponentRegistryService
+{
+    private readonly List<ComponentMetadata> _components =
+    [
+        // Core UI Components
+        new ComponentMetadata
+        {
+            Id = "work-item",
+            Name = "WorkItem",
+            Description =
+                "Displays a work item (issue/PR) with status indicator, title, and graph lines for hierarchy visualization.",
+            Category = "Core",
+            ComponentPath = "Shared/WorkItem.razor",
+            Tags = ["status", "issue", "pr", "list"]
+        },
+        new ComponentMetadata
+        {
+            Id = "pr-status-badges",
+            Name = "PrStatusBadges",
+            Description =
+                "Displays pull request status with multiple badges showing checks, approval, merge readiness, and conflicts.",
+            Category = "Core",
+            ComponentPath = "Shared/PrStatusBadges.razor",
+            Tags = ["status", "pr", "badge", "github"]
+        },
+        new ComponentMetadata
+        {
+            Id = "agent-status-indicator",
+            Name = "AgentStatusIndicator",
+            Description = "Shows active agent session counts (working/waiting) with real-time SignalR updates.",
+            Category = "Core",
+            ComponentPath = "Shared/AgentStatusIndicator.razor",
+            Tags = ["agent", "status", "realtime"]
+        },
+        new ComponentMetadata
+        {
+            Id = "model-selector",
+            Name = "ModelSelector",
+            Description = "Dropdown selector for choosing AI model (Opus, Sonnet, Haiku).",
+            Category = "Forms",
+            ComponentPath = "Shared/ModelSelector.razor",
+            Tags = ["form", "select", "model", "ai"]
+        },
+        // Panel Components
+        new ComponentMetadata
+        {
+            Id = "issue-detail-panel",
+            Name = "IssueDetailPanel",
+            Description = "Detailed panel showing issue information, session status, and available actions.",
+            Category = "Panels",
+            ComponentPath = "Shared/IssueDetailPanel.razor",
+            Tags = ["panel", "issue", "detail"]
+        },
+        new ComponentMetadata
+        {
+            Id = "sessions-panel",
+            Name = "SessionsPanel",
+            Description =
+                "Unified panel for managing Claude Code sessions. Groups by project globally, or by status when filtered to a specific project.",
+            Category = "Panels",
+            ComponentPath = "Shared/SessionsPanel.razor",
+            Tags = ["panel", "session", "agent", "management"]
+        },
+        new ComponentMetadata
+        {
+            Id = "agent-status-panel",
+            Name = "AgentStatusPanel",
+            Description = "Panel showing the current status of an agent session.",
+            Category = "Panels",
+            ComponentPath = "Shared/AgentStatusPanel.razor",
+            Tags = ["panel", "agent", "status"]
+        },
+        new ComponentMetadata
+        {
+            Id = "clone-management-panel",
+            Name = "CloneManagementPanel",
+            Description = "Panel for managing git clones with create, delete, and switch actions.",
+            Category = "Panels",
+            ComponentPath = "Shared/CloneManagementPanel.razor",
+            Tags = ["panel", "git", "clone"]
+        },
+        new ComponentMetadata
+        {
+            Id = "session-history-list",
+            Name = "SessionHistoryList",
+            Description = "List of Claude Code session history items.",
+            Category = "Panels",
+            ComponentPath = "Shared/SessionHistoryList.razor",
+            Tags = ["list", "session", "history"]
+        },
+        new ComponentMetadata
+        {
+            Id = "agent-selector",
+            Name = "AgentSelector",
+            Description = "Selector for choosing which agent/prompt to use when starting a session.",
+            Category = "Forms",
+            ComponentPath = "Shared/AgentSelector.razor",
+            Tags = ["form", "agent", "selector"]
+        },
+        // Chat Components
+        new ComponentMetadata
+        {
+            Id = "chat-message",
+            Name = "ChatMessage",
+            Description = "Displays a single chat message from user or assistant with timestamp.",
+            Category = "Chat",
+            ComponentPath = "Shared/Chat/ChatMessage.razor",
+            Tags = ["chat", "message"]
+        },
+        new ComponentMetadata
+        {
+            Id = "chat-input",
+            Name = "ChatInput",
+            Description = "Text input area for sending chat messages with send button.",
+            Category = "Chat",
+            ComponentPath = "Shared/Chat/ChatInput.razor",
+            Tags = ["chat", "input", "form"]
+        },
+        new ComponentMetadata
+        {
+            Id = "content-block",
+            Name = "ContentBlock",
+            Description = "Renders different content block types (text, tool use, tool result, thinking).",
+            Category = "Chat",
+            ComponentPath = "Shared/Chat/ContentBlock.razor",
+            Tags = ["chat", "content"]
+        },
+        new ComponentMetadata
+        {
+            Id = "text-block",
+            Name = "TextBlock",
+            Description = "Renders text content with markdown support.",
+            Category = "Chat",
+            ComponentPath = "Shared/Chat/TextBlock.razor",
+            Tags = ["chat", "text", "markdown"]
+        },
+        new ComponentMetadata
+        {
+            Id = "tool-use-block",
+            Name = "ToolUseBlock",
+            Description = "Displays tool invocation with name and input parameters.",
+            Category = "Chat",
+            ComponentPath = "Shared/Chat/ToolUseBlock.razor",
+            Tags = ["chat", "tool"]
+        },
+        new ComponentMetadata
+        {
+            Id = "tool-result-block",
+            Name = "ToolResultBlock",
+            Description = "Displays the result of a tool invocation.",
+            Category = "Chat",
+            ComponentPath = "Shared/Chat/ToolResultBlock.razor",
+            Tags = ["chat", "tool", "result"]
+        },
+        new ComponentMetadata
+        {
+            Id = "thinking-block",
+            Name = "ThinkingBlock",
+            Description = "Displays Claude's thinking/reasoning process.",
+            Category = "Chat",
+            ComponentPath = "Shared/Chat/ThinkingBlock.razor",
+            Tags = ["chat", "thinking"]
+        },
+        new ComponentMetadata
+        {
+            Id = "processing-indicator",
+            Name = "ProcessingIndicator",
+            Description = "Shows that Claude is processing/thinking.",
+            Category = "Chat",
+            ComponentPath = "Shared/Chat/ProcessingIndicator.razor",
+            Tags = ["chat", "loading", "processing"]
+        },
+        new ComponentMetadata
+        {
+            Id = "task-graph-view",
+            Name = "TaskGraphView",
+            Description = "Renders a task graph with lane-based layout, connectors, and interactive issue rows.",
+            Category = "Core",
+            ComponentPath = "Components/TaskGraphView.razor",
+            Tags = ["graph", "task", "issue", "visualization"]
+        },
+        new ComponentMetadata
+        {
+            Id = "split-button",
+            Name = "SplitButton",
+            Description = "A button with a primary action and a dropdown for secondary actions.",
+            Category = "Core",
+            ComponentPath = "Components/SplitButton.razor",
+            Tags = ["button", "dropdown", "action"]
+        },
+        new ComponentMetadata
+        {
+            Id = "issue-row-actions",
+            Name = "IssueRowActions",
+            Description =
+                "Inline action buttons for issue rows, showing edit and run agent controls. Appears on hover or selection.",
+            Category = "Issue",
+            ComponentPath = "Components/IssueRowActions.razor",
+            Tags = ["issue", "button", "action", "inline"]
+        },
+        new ComponentMetadata
+        {
+            Id = "toolbar-button",
+            Name = "ToolbarButton",
+            Description = "Reusable icon button with CSS tooltip showing action name and keyboard shortcut.",
+            Category = "Core",
+            ComponentPath = "Components/ToolbarButton.razor",
+            Tags = ["button", "icon", "tooltip", "toolbar"]
+        },
+        new ComponentMetadata
+        {
+            Id = "project-toolbar",
+            Name = "ProjectToolbar",
+            Description =
+                "Consolidated toolbar for the project page containing create, hierarchy, undo/redo, edit and run buttons for issue management.",
+            Category = "Core",
+            ComponentPath = "Components/ProjectToolbar.razor",
+            Tags = ["toolbar", "issue", "action", "project", "create", "undo", "redo"]
+        }
+    ];
+
+    public IReadOnlyList<ComponentMetadata> GetAllComponents() => _components.AsReadOnly();
+
+    public ComponentMetadata? GetComponent(string id) =>
+        _components.FirstOrDefault(c => c.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+
+    public IReadOnlyList<ComponentMetadata> GetComponentsByCategory(string category) =>
+        _components
+            .Where(c => c.Category.Equals(category, StringComparison.OrdinalIgnoreCase))
+            .ToList()
+            .AsReadOnly();
+
+    public IReadOnlyList<string> GetCategories() =>
+        _components
+            .Select(c => c.Category)
+            .Distinct()
+            .OrderBy(c => c)
+            .ToList()
+            .AsReadOnly();
+}

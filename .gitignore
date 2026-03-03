@@ -311,6 +311,10 @@ FakesAssemblies/
 .ntvs_analysis.dat
 node_modules/
 
+# Tailwind CSS standalone CLI (downloaded during setup)
+**/tailwindcss
+**/tailwindcss.exe
+
 # Tailwind CSS generated output (regenerated during build)
 **/wwwroot/css/tailwind.min.css
 

@@ -1,7 +1,6 @@
 using Homespun.Features.AgentOrchestration.Services;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Containers.Services;
-using Homespun.Features.Design;
 using Homespun.Features.Fleece.Services;
 using Homespun.Features.Gitgraph.Services;
 using Homespun.Features.GitHub;
@@ -114,9 +113,6 @@ public static class MockServiceExtensions
 
         // Graph service
         services.AddScoped<IGraphService, MockGraphService>();
-
-        // Design system services (only available in mock mode)
-        services.AddSingleton<IComponentRegistryService, ComponentRegistryService>();
 
         // JSONL session loader for loading real session data
         services.AddSingleton<IJsonlSessionLoader, JsonlSessionLoader>();

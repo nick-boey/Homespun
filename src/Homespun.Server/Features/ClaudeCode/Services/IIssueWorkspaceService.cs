@@ -29,12 +29,15 @@ public interface IIssueWorkspaceService
     /// <summary>
     /// Creates or verifies the per-issue folder structure (clone, .claude, .sessions).
     /// Creates and checks out the issue branch if needed.
+    /// When the repository already exists, pulls latest changes from the default branch
+    /// (including fleece issue merging) before creating or checking out the issue branch.
     /// </summary>
     Task<IssueWorkspace> EnsureIssueWorkspaceAsync(
         string projectName,
         string issueId,
         string repoUrl,
         string branchName,
+        string defaultBranch,
         CancellationToken ct = default);
 
     /// <summary>

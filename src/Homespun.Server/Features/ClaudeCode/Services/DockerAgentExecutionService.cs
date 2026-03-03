@@ -1168,6 +1168,42 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
     }
 
     /// <summary>
+    /// Registers a discovered container for tracking. Called during server startup recovery
+    /// to re-populate the in-memory tracking dictionaries for containers that were started
+    /// before the server restarted.
+    /// </summary>
+    /// <param name="container">The discovered container metadata.</param>
+    public void RegisterDiscoveredContainer(DiscoveredContainer container)
+    {
+        _logger.LogInformation(
+            "Registering discovered container {ContainerName} ({ContainerId}) at {WorkerUrl} for {WorkingDirectory}",
+            container.ContainerName, container.ContainerId, container.WorkerUrl, container.WorkingDirectory);
+
+        // Track by working directory (always)
+        _cloneContainers[container.WorkingDirectory] = new CloneContainer(
+            container.WorkingDirectory,
+            container.ContainerId,
+            container.ContainerName,
+            container.WorkerUrl,
+            container.CreatedAt,
+            container.ProjectId,
+            container.IssueId);
+
+        // Track by (projectId, issueId) if both are available
+        if (!string.IsNullOrEmpty(container.ProjectId) && !string.IsNullOrEmpty(container.IssueId))
+        {
+            var key = (container.ProjectId, container.IssueId);
+            _issueContainers[key] = new IssueContainer(
+                container.ProjectId,
+                container.IssueId,
+                container.ContainerId,
+                container.ContainerName,
+                container.WorkerUrl,
+                container.CreatedAt);
+        }
+    }
+
+    /// <summary>
     /// Checks Docker directly for an existing container with the given name (e.g. after app restart
     /// when in-memory tracking is lost). If the container is running and healthy, returns its info
     /// for recovery. If it's stopped/exited/dead or unhealthy, removes it and returns null.
@@ -1387,15 +1423,17 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
     /// <param name="workingDirectory">Working directory to mount as /workdir.</param>
     /// <param name="useRm">Whether to use --rm flag.</param>
     /// <param name="claudePath">Explicit path to .claude directory. If null, derived from workingDirectory parent.</param>
-    /// <param name="issueId">Optional issue ID for environment variable.</param>
+    /// <param name="issueId">Optional issue ID for environment variable and label.</param>
     /// <param name="projectName">Optional project name for environment variable.</param>
+    /// <param name="projectId">Optional project ID for label.</param>
     internal string BuildContainerDockerArgs(
         string containerName,
         string workingDirectory,
         bool useRm,
         string? claudePath = null,
         string? issueId = null,
-        string? projectName = null)
+        string? projectName = null,
+        string? projectId = null)
     {
         var dockerArgs = new StringBuilder();
         dockerArgs.Append(useRm ? "run -d --rm " : "run -d ");
@@ -1447,6 +1485,17 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         // Labels for Promtail log discovery
         dockerArgs.Append("--label logging=promtail ");
 
+        // Labels for container discovery after server restart
+        dockerArgs.Append("--label homespun.managed=true ");
+        dockerArgs.Append("--label homespun.type=worker ");
+        dockerArgs.Append($"--label homespun.working.directory={workingDirectory} ");
+        dockerArgs.Append($"--label homespun.created.at={DateTime.UtcNow:O} ");
+
+        if (!string.IsNullOrEmpty(projectId))
+            dockerArgs.Append($"--label homespun.project.id={projectId} ");
+        if (!string.IsNullOrEmpty(issueId))
+            dockerArgs.Append($"--label homespun.issue.id={issueId} ");
+
         dockerArgs.Append($"--network {_options.NetworkName} ");
 
         dockerArgs.Append(_options.WorkerImage);
@@ -1476,7 +1525,7 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
         CancellationToken cancellationToken = default)
     {
         EnsureClaudeDirectoryExists(workingDirectory, claudePath);
-        var dockerArgs = BuildContainerDockerArgs(containerName, workingDirectory, useRm, claudePath, issueId, projectName);
+        var dockerArgs = BuildContainerDockerArgs(containerName, workingDirectory, useRm, claudePath, issueId, projectName, projectId);
 
         // Append project-specific secrets as environment variables
         var secretsArgs = new StringBuilder();

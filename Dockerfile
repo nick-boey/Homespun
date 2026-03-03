@@ -18,7 +18,7 @@ ARG BASE_IMAGE=homespun-base:local
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
-# Install Node.js (required for Tailwind CSS build during dotnet publish)
+# Install Node.js (required for npm packages during build)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ca-certificates \
@@ -48,10 +48,10 @@ ARG BUILD_CONFIGURATION=Release
 # Copy everything else
 COPY . .
 
-# Install npm dependencies for Tailwind CSS build (Client project)
-# (node_modules is excluded by .dockerignore, so we must install here)
-# Use npm ci for clean, reproducible installs from package-lock.json
-RUN cd src/Homespun.Client && rm -rf node_modules && npm ci
+# Install Tailwind CSS standalone CLI for Client project build
+RUN curl -sLO https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-linux-x64 \
+    && chmod +x tailwindcss-linux-x64 \
+    && mv tailwindcss-linux-x64 src/Homespun.Client/tailwindcss
 
 # Build and publish the Server project
 # The Server references the Client project, so publishing Server automatically

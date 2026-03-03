@@ -1,0 +1,66 @@
+@if (WorkingCount + QuestionCount + PlanReadyCount + WaitingCount + ErrorCount + UnknownCount > 0)
+{
+    <div class="flex items-center gap-2">
+        @if (WorkingCount > 0)
+        {
+            <BbBadge Class="working border-0">@WorkingCount</BbBadge>
+        }
+        @if (QuestionCount + PlanReadyCount > 0)
+        {
+            <BbBadge Class="input border-0">@(PlanReadyCount + QuestionCount)</BbBadge>
+        }
+        @if (WaitingCount > 0)
+        {
+            <BbBadge Class="waiting border-0">@WaitingCount</BbBadge>
+        }
+        @if (ErrorCount > 0)
+        {
+            <BbBadge Class="error border-0">@ErrorCount</BbBadge>
+        }
+        @if (UnknownCount > 0)
+        {
+            <BbBadge Class="unknown border-0">@UnknownCount</BbBadge>
+        }
+    </div>
+}
+
+<style>
+    .working {
+        background: var(--status-success);
+        color: white;
+        animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    .waiting {
+        background: var(--status-warning);
+    }
+
+    .input {
+        background: var(--status-question);
+        color: white;
+        animation: pulse 1s ease-in-out infinite;
+    }
+
+    .error {
+        background: var(--status-error);
+        color: white;
+    }
+
+    .unknown {
+        background: var(--text-muted);
+    }
+</style>
+
+@code {
+    [Parameter] public int WorkingCount { get; set; }
+
+    [Parameter] public int QuestionCount { get; set; }
+
+    [Parameter] public int PlanReadyCount { get; set; }
+
+    [Parameter] public int WaitingCount { get; set; }
+
+    [Parameter] public int ErrorCount { get; set; }
+
+    [Parameter] public int UnknownCount { get; set; }
+}

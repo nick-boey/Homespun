@@ -1,0 +1,33 @@
+<div class="settings-tab-content">
+    <BbCard Class="mb-3">
+        <BbCardHeader>
+            <BbCardTitle>Project Information</BbCardTitle>
+        </BbCardHeader>
+        <BbCardContent>
+            <dl class="info-list">
+                <dt>Local Path</dt>
+                <dd><code>@Project.LocalPath</code></dd>
+                <dt>Default Branch</dt>
+                <dd>@Project.DefaultBranch</dd>
+                @if (!string.IsNullOrEmpty(Project.GitHubOwner) && !string.IsNullOrEmpty(Project.GitHubRepo))
+                {
+                    <dt>GitHub Repository</dt>
+                    <dd>
+                        <a href="https://github.com/@Project.GitHubOwner/@Project.GitHubRepo"
+                           target="_blank">
+                            @Project.GitHubOwner/@Project.GitHubRepo
+                        </a>
+                    </dd>
+                }
+            </dl>
+        </BbCardContent>
+    </BbCard>
+
+    <BbButton Variant="ButtonVariant.Outline" Size="ButtonSize.Small" Href="@($"projects/{Project.Id}/edit")">
+        Edit Project
+    </BbButton>
+</div>
+
+@code {
+    [Parameter] public required Project Project { get; set; }
+}

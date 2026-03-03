@@ -1,0 +1,73 @@
+
+@*
+    SessionHistoryList depends on IClaudeSessionApi.
+    This showcase renders a static mock version of the component.
+*@
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>With Sessions</BbCardTitle>
+        <BbCardDescription>List of resumable sessions</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <MockSessionHistoryList Sessions="_sessions" />
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Empty State</BbCardTitle>
+        <BbCardDescription>No previous sessions</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <MockSessionHistoryList Sessions="[]" />
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Loading State</BbCardTitle>
+        <BbCardDescription>Sessions being loaded</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <MockSessionHistoryList IsLoading="true" />
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Resuming Session</BbCardTitle>
+        <BbCardDescription>Session being resumed</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <MockSessionHistoryList Sessions="_sessions" ResumingSessionId="session-2" />
+    </BbCardContent>
+</BbCard>
+
+@code {
+    private List<MockSessionHistoryList.MockSession> _sessions = new()
+    {
+        new MockSessionHistoryList.MockSession
+        {
+            SessionId = "session-1",
+            Mode = SessionMode.Build,
+            LastActivityAt = DateTime.Now.AddHours(-2),
+            MessageCount = 15
+        },
+        new MockSessionHistoryList.MockSession
+        {
+            SessionId = "session-2",
+            Mode = SessionMode.Plan,
+            LastActivityAt = DateTime.Now.AddDays(-1),
+            MessageCount = 8
+        },
+        new MockSessionHistoryList.MockSession
+        {
+            SessionId = "session-3",
+            Mode = SessionMode.Build,
+            LastActivityAt = DateTime.Now.AddDays(-3),
+            MessageCount = 42
+        }
+    };
+
+}

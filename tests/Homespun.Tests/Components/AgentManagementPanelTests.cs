@@ -1,4 +1,6 @@
 using Homespun.Client.Components;
+using Homespun.Client.Features.Agents.Components;
+using Homespun.Client.Features.Chat.Components;
 using NUnit.Framework;
 
 namespace Homespun.Tests.Components;

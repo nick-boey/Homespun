@@ -2,7 +2,6 @@ using Homespun.Features.AgentOrchestration.Services;
 using Homespun.Features.ClaudeCode.Hubs;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Commands;
-using Homespun.Features.Design;
 using Homespun.Features.Containers.Services;
 using Homespun.Features.Fleece.Services;
 using Homespun.Features.Git;
@@ -168,6 +167,18 @@ else
     {
         case AgentExecutionMode.Docker:
             builder.Services.AddSingleton<IAgentExecutionService, DockerAgentExecutionService>();
+            // Container discovery and recovery services for server restart
+            builder.Services.AddSingleton<IContainerDiscoveryService, ContainerDiscoveryService>();
+            builder.Services.AddHostedService(sp =>
+            {
+                var discoveryService = sp.GetRequiredService<IContainerDiscoveryService>();
+                var executionService = sp.GetRequiredService<IAgentExecutionService>() as DockerAgentExecutionService;
+                var logger = sp.GetRequiredService<ILogger<ContainerRecoveryHostedService>>();
+                return new ContainerRecoveryHostedService(
+                    discoveryService,
+                    container => executionService?.RegisterDiscoveredContainer(container),
+                    logger);
+            });
             break;
         default:
             builder.Services.AddSingleton<IAgentExecutionService, LocalAgentExecutionService>();
@@ -200,6 +211,7 @@ else
         new IssueWorkspaceService(
             projectsBaseDir,
             sp.GetRequiredService<ICommandRunner>(),
+            sp.GetRequiredService<IFleeceIssuesSyncService>(),
             sp.GetRequiredService<ILogger<IssueWorkspaceService>>()));
 
     builder.Services.AddSingleton<IToolResultParser, ToolResultParser>();
@@ -223,8 +235,6 @@ else
         builder.Configuration.GetSection(GitHubSyncPollingOptions.SectionName));
     builder.Services.AddHostedService<GitHubSyncPollingService>();
 
-    // Design system services (component registry for /design page)
-    builder.Services.AddSingleton<IComponentRegistryService, ComponentRegistryService>();
 }
 
 // SignalR URL provider (uses internal URL in Docker, localhost in development)

@@ -22,14 +22,14 @@ public class CriticalJourneysTests : PageTest
     [Test]
     public async Task HomePage_LoadsSuccessfully()
     {
-        // Navigate to home page
-        await Page.GotoAsync(BaseUrl);
+        // Navigate to projects page (the app has no root route)
+        await Page.GotoAsync($"{BaseUrl}/projects");
 
         // Wait for Blazor to initialize
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
-        // Verify the page title or main heading
-        await Expect(Page).ToHaveTitleAsync(new System.Text.RegularExpressions.Regex("Homespun"));
+        // Verify the page title (Projects page sets its own title)
+        await Expect(Page).ToHaveTitleAsync(new System.Text.RegularExpressions.Regex("Projects|Homespun"));
     }
 
     [Test]

@@ -1,0 +1,9 @@
+@import 'tailwindcss';
+@import './theme.css';
+
+@source "../../Features/**/*.razor";
+@source "../../Components/**/*.razor";
+@source "../../Layout/**/*.razor";
+@source "../../Pages/**/*.razor";
+
+@custom-variant dark (&:where(.dark, .dark *));

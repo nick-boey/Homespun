@@ -199,12 +199,12 @@ public class KeyboardNavigationTests : PageTest
         var taskGraphRow = Page.Locator(".task-graph-row").First;
         await Expect(taskGraphRow).ToBeVisibleAsync(new() { Timeout = 10000 });
 
-        // Press / to start search
+        // Press / to focus the toolbar search input
         await Page.Keyboard.PressAsync("/");
 
-        // Verify the search bar appears
-        var searchBar = Page.Locator("[data-testid='search-bar']");
-        await Expect(searchBar).ToBeVisibleAsync(new() { Timeout = 5000 });
+        // Verify the toolbar search input is focused
+        var searchInput = Page.Locator("[data-testid='toolbar-search-input']");
+        await Expect(searchInput).ToBeFocusedAsync(new() { Timeout = 5000 });
 
         // Type a search term that should match some issues
         await Page.Keyboard.TypeAsync("issue");
@@ -228,12 +228,12 @@ public class KeyboardNavigationTests : PageTest
         var taskGraphRow = Page.Locator(".task-graph-row").First;
         await Expect(taskGraphRow).ToBeVisibleAsync(new() { Timeout = 10000 });
 
-        // Press / to start search
+        // Press / to focus the toolbar search input
         await Page.Keyboard.PressAsync("/");
 
-        // Verify the search bar appears
-        var searchBar = Page.Locator("[data-testid='search-bar']");
-        await Expect(searchBar).ToBeVisibleAsync(new() { Timeout = 5000 });
+        // Verify the toolbar search input is focused
+        var searchInput = Page.Locator("[data-testid='toolbar-search-input']");
+        await Expect(searchInput).ToBeFocusedAsync(new() { Timeout = 5000 });
 
         // Type a search term
         await Page.Keyboard.TypeAsync("issue");
@@ -241,8 +241,8 @@ public class KeyboardNavigationTests : PageTest
         // Press Enter to embed search and select first match
         await Page.Keyboard.PressAsync("Enter");
 
-        // Verify the search bar is hidden after embedding
-        await Expect(searchBar).Not.ToBeVisibleAsync(new() { Timeout = 5000 });
+        // Verify the search input is no longer focused after embedding
+        await Expect(searchInput).Not.ToBeFocusedAsync(new() { Timeout = 5000 });
 
         // Verify a row is selected (first match)
         var selectedRow = Page.Locator(".task-graph-row-selected");

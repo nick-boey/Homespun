@@ -4,11 +4,13 @@ This file contains instructions for Claude Code when working on this project.
 
 ## Overview
 
-Homespun is a Blazor web application for managing development features and AI agents. It provides:
+Homespun is a web application for managing development features and AI agents. It provides:
 - Project and feature management with hierarchical tree visualization
 - Git clone integration for isolated feature development
 - GitHub PR synchronization
 - Claude Code agent orchestration
+
+The frontend is built with React + Vite + TypeScript + TailwindCSS, with an ASP.NET server backend.
 
 ## Development Practices
 
@@ -22,12 +24,12 @@ Homespun is a Blazor web application for managing development features and AI ag
    - Green: Write minimal code to make the test pass
    - Refactor: Clean up the code while keeping tests green
 3. **Plan with tests in mind** - When planning features, identify test cases as part of the design
-4. **Test naming** - Use descriptive test names that explain the scenario and expected outcome (e.g., `GetProjectById_ReturnsNotFound_WhenNotExists`)
-5. **Test coverage** - Aim for comprehensive coverage of business logic in services
+4. **Test naming** - Use descriptive test names that explain the scenario and expected outcome (e.g., `it('returns error when project not found')`)
+5. **Test coverage** - Aim for comprehensive coverage of business logic and component behavior
 
 ### Project Structure (Vertical Slice Architecture)
 
-The project follows Vertical Slice Architecture with a Blazor WebAssembly (WASM) frontend and ASP.NET server backend. Code is organized by feature rather than technical layer.
+The project follows Vertical Slice Architecture where code is organized by feature rather than technical layer. Features are organized at the top level, each containing all related components, hooks, stores, and API calls.
 
 ```
 src/
@@ -36,73 +38,160 @@ src/
 │   │   ├── AgentOrchestration/  # Agent lifecycle management
 │   │   ├── ClaudeCode/          # Claude Code SDK session management
 │   │   ├── Commands/            # Shell command execution
-│   │   ├── Design/              # Design system component registry
 │   │   ├── Fleece/              # Fleece issue tracking integration
 │   │   ├── Git/                 # Git clone operations
 │   │   ├── GitHub/              # GitHub API integration (Octokit)
-│   │   ├── Navigation/          # Navigation services
 │   │   ├── Notifications/       # Toast notifications via SignalR
 │   │   ├── Projects/            # Project management
 │   │   ├── PullRequests/        # PR workflow and data entities
 │   │   └── SignalR/             # SignalR hub implementations
 │   └── Program.cs               # Application entry point
-├── Homespun.Client/             # Blazor WASM frontend
-│   ├── Components/              # Shared Blazor components
-│   ├── Layout/                  # Layout components
-│   ├── Pages/                   # Page components
-│   ├── Services/                # Client-side HTTP services
-│   └── Program.cs               # WASM entry point
+├── Homespun.Web/                # React frontend
+│   ├── src/
+│   │   ├── features/            # Feature slices (top-level organization)
+│   │   │   ├── projects/        # Project management
+│   │   │   │   ├── components/  # Feature-specific components
+│   │   │   │   ├── hooks/       # Feature-specific hooks
+│   │   │   │   └── index.ts     # Public exports
+│   │   │   ├── issues/          # Issue tracking
+│   │   │   ├── agents/          # Agent sessions and chat
+│   │   │   └── branches/        # Branch and PR management
+│   │   ├── components/          # Shared components
+│   │   │   └── ui/              # shadcn/ui components
+│   │   ├── api/                 # OpenAPI generated client
+│   │   ├── hooks/               # Shared hooks
+│   │   ├── lib/                 # Utility functions
+│   │   ├── stores/              # Zustand stores
+│   │   ├── routes/              # TanStack Router routes
+│   │   └── test/                # Test setup and utilities
+│   └── package.json
 ├── Homespun.Shared/             # Shared library (DTOs, contracts, hub interfaces)
-│   ├── Models/                  # Shared data models
-│   ├── Hubs/                    # SignalR hub interfaces
-│   └── Requests/                # API request/response types
 ├── Homespun.ClaudeAgentSdk/     # Claude Code SDK C# wrapper
 └── Homespun.Worker/             # TypeScript agent worker (Hono + Claude Agent SDK)
 
 tests/
-├── Homespun.Tests/              # Unit tests (NUnit + bUnit + Moq)
-│   ├── Features/                # Tests organized by feature (mirrors src structure)
-│   │   ├── ClaudeCode/          # ClaudeCode service and hub tests
-│   │   ├── Git/                 # Git clone tests
-│   │   ├── GitHub/              # GitHub service tests
-│   │   └── PullRequests/        # PR model and workflow tests
-│   ├── Components/              # bUnit tests for Blazor components
-│   └── Helpers/                 # Shared test utilities and fixtures
+├── Homespun.Tests/              # Backend unit tests (NUnit + Moq)
 ├── Homespun.Api.Tests/          # API integration tests (WebApplicationFactory)
 └── Homespun.E2E.Tests/          # End-to-end tests (Playwright)
 ```
 
 ### Feature Slices
 
-- **Fleece**: Integration with Fleece issue tracking - JSONL-based storage in `.fleece/` directory, uses Fleece.Core types directly.
-- **ClaudeCode**: Claude Code SDK session management using ClaudeAgentSdk NuGet package - supports Plan (read-only) and Build (full access) modes
+- **Fleece**: Integration with Fleece issue tracking - JSONL-based storage in `.fleece/` directory
+- **ClaudeCode**: Claude Code SDK session management - supports Plan (read-only) and Build (full access) modes
 - **Commands**: Shell command execution abstraction
 - **Git**: Git clone creation, management, and rebase operations
 - **GitHub**: GitHub PR synchronization and API operations using Octokit
 - **Projects**: Project CRUD operations
-- **PullRequests**: PR workflow, feature management, and core data entities (Feature, Project, PullRequest)
+- **PullRequests**: PR workflow, feature management, and core data entities
 
 ### Running the Application
 
-The application is containerised and should always be run in a container. Helper Bash and PowerShell scripts are provided to build and run containers.
-
-```bash
-# Linux
-./scripts/run.sh                # Production: Runs the latest container on GHCR
-./scripts/run.sh --local        # Development: Builds a container from source and runs it
-./scripts/mock.sh               # Testing: Runs the application with mock services for local UI testing
-
-# Similar PowerShell scripts exist for windows
-```
-
-There are other various configuration variables that can be passed into the scripts as required. Environment variables are used for auth tokens, review the scripts if required to understand these.
-
 **Do not under any circumstances stop a container called `homespun` or `homespun-prod`.**
 
-### Running Tests
+## React Frontend Development
+
+### Technology Stack
+
+The React frontend uses:
+- **React 19** with TypeScript
+- **Vite** for build tooling
+- **TailwindCSS v4** for styling
+- **TanStack Router** for file-based routing
+- **TanStack Query** for server state management
+- **Zustand** for client state management
+- **shadcn/ui** with Base UI for components (New York style, Zinc base color)
+- **prompt-kit** for AI chat interface components
+
+### UI Components
+
+#### shadcn/ui
+
+The project uses shadcn/ui for base components. Components are installed into `src/components/ui/`. Use the default shadcn/ui theme (which will be styled later).
+
+Add new components:
+```bash
+cd src/Homespun.Web
+npx shadcn@latest add button
+npx shadcn@latest add input
+# etc.
+```
+
+**DO NOT create custom components if a shadcn/ui component already exists.**
+
+Configuration is in `components.json`:
+- Style: new-york
+- Base color: zinc
+- CSS Variables: enabled
+- Icon library: lucide
+
+#### prompt-kit (Chat Components)
+
+For AI chat interface components, use the prompt-kit library. These components are built on shadcn/ui and Tailwind.
+
+Add prompt-kit components:
+```bash
+npx shadcn@latest add "https://prompt-kit.com/c/prompt-input.json"
+npx shadcn@latest add "https://prompt-kit.com/c/message.json"
+npx shadcn@latest add "https://prompt-kit.com/c/markdown.json"
+```
+
+Available prompt-kit components:
+- **prompt-input** - Chat input with file attachments
+- **message** - Chat message display
+- **markdown** - Markdown rendering with syntax highlighting
+- **code-block** - Code display with copy button
+- **thinking-bar** - AI thinking indicator
+- **loader** - Loading animations
+
+**Use prompt-kit components for all chat and AI-related UI.** Do not create custom chat components.
+
+### Development Commands
 
 ```bash
-# Run all tests
+cd src/Homespun.Web
+
+# Start development server
+npm run dev
+
+# Build for production
+npm run build
+
+# Lint code
+npm run lint
+npm run lint:fix
+
+# Format code
+npm run format
+npm run format:check
+
+# Type checking
+npm run typecheck
+
+# Generate API client from OpenAPI spec
+npm run generate:api:fetch
+```
+
+### OpenAPI Client
+
+The API client is auto-generated from the server's OpenAPI spec. The generated code is in `src/api/generated/`.
+
+Regenerate after server API changes:
+```bash
+npm run generate:api:fetch
+```
+
+Use the typed API client:
+```typescript
+import { getProjects, createProject } from '@/api'
+```
+
+## Testing
+
+### Backend Tests (.NET)
+
+```bash
+# Run all backend tests
 dotnet test
 
 # Run specific test project
@@ -114,18 +203,83 @@ dotnet test tests/Homespun.E2E.Tests
 dotnet test --verbosity normal
 ```
 
+### Frontend Tests (Vitest)
+
+The React frontend uses **Vitest** with **React Testing Library** for testing.
+
+```bash
+cd src/Homespun.Web
+
+# Run tests once
+npm test
+
+# Run tests in watch mode
+npm run test:watch
+
+# Run tests with coverage
+npm run test:coverage
+```
+
+#### Test Structure
+
+Tests are co-located with source files using the `.test.ts` or `.test.tsx` extension:
+
+```
+src/
+├── components/ui/
+│   ├── button.tsx
+│   └── button.test.tsx
+├── lib/
+│   ├── utils.ts
+│   └── utils.test.ts
+└── features/projects/
+    ├── ProjectCard.tsx
+    └── ProjectCard.test.tsx
+```
+
+#### Writing Tests
+
+Use React Testing Library with Vitest:
+
+```typescript
+import { describe, it, expect } from 'vitest'
+import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { Button } from './button'
+
+describe('Button', () => {
+  it('renders button text', () => {
+    render(<Button>Click me</Button>)
+    expect(screen.getByRole('button', { name: 'Click me' })).toBeInTheDocument()
+  })
+
+  it('calls onClick when clicked', async () => {
+    const user = userEvent.setup()
+    let clicked = false
+    render(<Button onClick={() => (clicked = true)}>Click</Button>)
+
+    await user.click(screen.getByRole('button'))
+    expect(clicked).toBe(true)
+  })
+})
+```
+
+#### Test Utilities
+
+- `@testing-library/react` - Component rendering and queries
+- `@testing-library/user-event` - User interaction simulation
+- `@testing-library/jest-dom` - DOM matchers (toBeInTheDocument, etc.)
+- `vitest` - Test runner with globals enabled
+
 ## Testing Infrastructure
 
 The project uses a comprehensive three-tier testing strategy:
 
 ### Unit Tests (Homespun.Tests)
 
-**Framework:** NUnit + bUnit + Moq
+**Framework:** NUnit + Moq
 
-Unit tests cover service logic and Blazor components in isolation.
-
-**Service tests** use Moq for dependency mocking.
-**Component tests** use bUnit with a shared `BunitTestContext` base class.
+Unit tests cover service logic in isolation using Moq for dependency mocking.
 
 ### API Integration Tests (Homespun.Api.Tests)
 
@@ -137,29 +291,21 @@ API tests verify HTTP endpoints using an in-memory test server with `HomespunWeb
 
 **Framework:** NUnit + Playwright
 
-E2E tests run against the full application stack using Playwright for browser automation:
+E2E tests run against the full application stack using Playwright for browser automation.
 
 **E2E Configuration:**
 - `HomespunFixture` automatically starts the application for tests
 - Set `E2E_BASE_URL` to test against an external server
 - Set `E2E_CONFIGURATION` to specify build configuration (Release/Debug)
 
-### Data Storage
-
-- JSON and JSONL file storage
-- Data file: `homespun-data.json` (stored in `.homespun` directory)
-
-## UI Development with Mock Mode
-
-### Overview
+### Inspection with Playwright MCP and Mock Mode
 
 The mock mode provides a development environment with:
 - Pre-seeded demo data (projects, features, issues)
 - No external dependencies (GitHub, Claude API)
 - Isolated from production data
 
-### Starting Mock Mode
-
+To start a server running in Mock Mode:
 ```bash
 ./scripts/mock.sh       # Linux/Mac
 ./scripts/mock.ps1      # Windows
@@ -197,55 +343,3 @@ When cleaning up after UI testing:
 If you need to restart the mock server:
 1. Use `pkill -f "dotnet.*mock"` to stop the dotnet process directly
 2. Start a new mock server with `./scripts/mock.sh &`
-
-### Playwright MCP Tools
-
-Key tools for UI inspection:
-- `browser_navigate` - Navigate to URLs
-- `browser_take_screenshot` - Capture visual state
-- `browser_snapshot` - Get accessibility tree
-- `browser_click` / `browser_type` - Interact with elements
-- `browser_console_messages` - Check for JS errors
-
-## Container Playwright MCP Usage
-
-Most of the development of Homespun comes from agents running within the application container itself.
-
-### Browser Installation
-
-Playwright browsers are pre-installed at `/opt/playwright-browsers`. The `PLAYWRIGHT_BROWSERS_PATH` environment variable is automatically configured. No additional setup is required.
-
-### Container Networking
-
-When running mock.sh inside the agent container, the mock server runs on `localhost` within the container. Use `http://localhost:5095` (or whatever port the script outputs) for Playwright navigation.
-
-For accessing other containers or the host machine:
-- **Linux hosts**: Use the Docker bridge IP, typically `172.17.0.1`
-- **Docker Desktop (Mac/Windows)**: Use `host.docker.internal`
-
-### Troubleshooting
-
-| Issue | Solution |
-|-------|----------|
-| "Browser not installed" error | Verify: `ls /opt/playwright-browsers/` |
-| Connection refused to localhost:5095 | Wait for mock.sh to finish starting, or check if port is different |
-| Permission denied on browser | Check `PLAYWRIGHT_BROWSERS_PATH` is set to `/opt/playwright-browsers` |
-| Session crashed after KillShell | You killed a critical shell - restart the session |
-
-## Styling with Tailwind CSS
-
-When styling components, always use Tailwind CSS utility classes. Avoid inline styles and prefer using:
-- Tailwind utility classes directly in markup
-- Component classes defined in `wwwroot/css/tailwind.css` under `@layer components`
-- CSS variables defined in `wwwroot/css/variables.css` when custom values are needed
-
-Build Tailwind CSS after making changes to the CSS files:
-```bash
-cd src/Homespun.Client && npm run css:build
-```
-
-## Design System and Component Showcases
-
-The design system at `/design` provides a catalog of all UI components with mock data for visual testing. This is only available in mock mode.
-
-A further description on how to use the design system is at `./src/Homespun.Client/Components/CLAUDE.md`. Always create and update the showcase when creating and modifying components.

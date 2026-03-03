@@ -1,0 +1,72 @@
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Default (Opus Selected)</BbCardTitle>
+        <BbCardDescription>Default model selector</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ModelSelector
+            Id="default"
+            SelectedModel="@_selectedModel1"
+            SelectedModelChanged="@(m => _selectedModel1 = m)" />
+        <p class="text-text-muted text-sm mt-2">Selected: @_selectedModel1</p>
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Sonnet Selected</BbCardTitle>
+        <BbCardDescription>Model selector with Sonnet pre-selected</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ModelSelector
+            Id="sonnet"
+            SelectedModel="@_selectedModel2"
+            SelectedModelChanged="@(m => _selectedModel2 = m)" />
+        <p class="text-text-muted text-sm mt-2">Selected: @_selectedModel2</p>
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Haiku Selected</BbCardTitle>
+        <BbCardDescription>Model selector with Haiku pre-selected</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ModelSelector
+            Id="haiku"
+            SelectedModel="@_selectedModel3"
+            SelectedModelChanged="@(m => _selectedModel3 = m)" />
+        <p class="text-text-muted text-sm mt-2">Selected: @_selectedModel3</p>
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>In Form Context</BbCardTitle>
+        <BbCardDescription>Model selector within a form layout</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <div class="max-w-md">
+            <div class="mb-3">
+                <BbLabel Class="text-sm mb-1">Agent Name</BbLabel>
+                <BbInput @bind-Value="_agentName" Disabled="true" />
+            </div>
+            <div class="mb-3">
+                <BbLabel Class="text-sm mb-1">Model</BbLabel>
+                <ModelSelector
+                    Id="form-context"
+                    SelectedModel="@_selectedModel4"
+                    SelectedModelChanged="@(m => _selectedModel4 = m)" />
+            </div>
+            <BbButton Size="ButtonSize.Small">Start Session</BbButton>
+        </div>
+    </BbCardContent>
+</BbCard>
+
+@code {
+    private string _selectedModel1 = "opus";
+    private string _selectedModel2 = "sonnet";
+    private string _selectedModel3 = "haiku";
+    private string _selectedModel4 = "opus";
+    private string _agentName = "Build Agent";
+}

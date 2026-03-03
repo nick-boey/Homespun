@@ -36,16 +36,34 @@ export function isControlEvent(event: OutputEvent): event is ControlEvent {
 }
 
 /**
+ * Message history entry with timestamp for catch-up replay.
+ */
+export interface MessageHistoryEntry {
+  timestamp: Date;
+  event: OutputEvent;
+}
+
+/**
  * Single-consumer async queue that merges pushes from multiple producers
  * (the SDK query background task and the canUseTool callback).
+ * Also maintains a history of messages for catch-up replay after server restart.
  */
 export class OutputChannel {
   private queue: OutputEvent[] = [];
   private resolver: ((result: IteratorResult<OutputEvent>) => void) | null = null;
   private done = false;
+  private history: MessageHistoryEntry[] = [];
+  private readonly maxHistorySize = 1000; // Limit history to prevent memory issues
 
   push(event: OutputEvent): void {
     if (this.done) return;
+
+    // Add to history with timestamp
+    this.history.push({ timestamp: new Date(), event });
+    if (this.history.length > this.maxHistorySize) {
+      this.history.shift();
+    }
+
     if (this.resolver) {
       const resolve = this.resolver;
       this.resolver = null;
@@ -62,6 +80,20 @@ export class OutputChannel {
       this.resolver = null;
       resolve({ value: undefined as any, done: true });
     }
+  }
+
+  /**
+   * Gets messages since a given timestamp for catch-up replay.
+   */
+  getMessagesSince(since: Date): MessageHistoryEntry[] {
+    return this.history.filter(entry => entry.timestamp > since);
+  }
+
+  /**
+   * Gets all messages in history.
+   */
+  getAllMessages(): MessageHistoryEntry[] {
+    return [...this.history];
   }
 
   async *[Symbol.asyncIterator](): AsyncGenerator<OutputEvent> {
@@ -622,5 +654,21 @@ export class SessionManager {
     for (const [id] of this.sessions) {
       await this.close(id);
     }
+  }
+
+  /**
+   * Gets message history for a session since a given timestamp.
+   * Used for catch-up replay after server restart.
+   */
+  getMessageHistory(sessionId: string, since?: Date): MessageHistoryEntry[] {
+    const ws = this.sessions.get(sessionId);
+    if (!ws) {
+      return [];
+    }
+
+    if (since) {
+      return ws.outputChannel.getMessagesSince(since);
+    }
+    return ws.outputChannel.getAllMessages();
   }
 }

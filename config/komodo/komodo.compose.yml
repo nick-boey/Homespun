@@ -1,5 +1,6 @@
 # Komodo Docker Compose for Homespun
 # This compose file runs Komodo with MongoDB for container management.
+# Tailscale is managed separately via config/tailscale/compose.yml.
 #
 # Usage:
 #   docker compose -f komodo.compose.yml --env-file compose.env up -d
@@ -11,7 +12,7 @@
 #
 # Integration:
 #   - Logs are collected by Promtail (labels: logging=promtail)
-#   - Access via Tailscale on port 3500 (configured in homespun tailscale sidecar)
+#   - Access via Tailscale on port 3500 (when Tailscale sidecar is running)
 
 services:
   # MongoDB - Database for Komodo
@@ -63,7 +64,7 @@ services:
     networks:
       - homespun-net
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9120/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:9120"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -81,19 +82,19 @@ services:
     depends_on:
       core:
         condition: service_healthy
-    env_file: ./compose.env
     environment:
-      # Mount docker config for GHCR access
-      DOCKER_CONFIG: /etc/komodo/docker
+      PERIPHERY_ROOT_DIRECTORY: ${PERIPHERY_ROOT_DIRECTORY:-/etc/komodo}
+      PERIPHERY_PASSKEYS: ${KOMODO_PASSKEY}
+      PERIPHERY_SSL_ENABLED: true
+      PERIPHERY_DISABLE_TERMINALS: false
+      PERIPHERY_INCLUDE_DISK_MOUNTS: ${PERIPHERY_INCLUDE_DISK_MOUNTS:-/etc/hostname}
     volumes:
       # Docker socket for container management
       - /var/run/docker.sock:/var/run/docker.sock
       # Proc for system metrics
       - /proc:/proc
-      # Komodo data directory
+      # Komodo data directory (must be same path inside and outside container)
       - ${PERIPHERY_ROOT_DIRECTORY:-/etc/komodo}:${PERIPHERY_ROOT_DIRECTORY:-/etc/komodo}
-      # Docker config for registry auth (GHCR)
-      - /etc/komodo/docker:/etc/komodo/docker:ro
     networks:
       - homespun-net
 

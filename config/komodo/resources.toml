@@ -1,0 +1,70 @@
+# Komodo Resource Sync - Homespun Stack
+#
+# This file declares the Homespun application stack for Komodo management.
+# Komodo's Resource Sync feature reads this TOML to register, deploy, and
+# auto-update the stack when newer images are pushed to GHCR.
+#
+# Setup (one-time):
+#   1. Create a Resource Sync in Komodo UI named "homespun-resources"
+#      pointing to repo nick-boey/Homespun, branch main,
+#      resource path config/komodo/resources.toml
+#   2. Click "Sync" to import both the resource_sync and stack definitions
+#   3. From the "homespun" Stack page, click "Deploy"
+#   After this, the resource_sync below keeps itself up-to-date automatically.
+#
+# Prerequisites:
+#   - Komodo installed and running (scripts/install-komodo.sh + scripts/run-komodo.sh)
+#   - Git account "nick-boey" configured in Komodo with GitHub repo read access
+#   - Komodo variables/secrets set: GITHUB_TOKEN, CLAUDE_CODE_OAUTH_TOKEN,
+#     TAILSCALE_AUTH_KEY, GRAFANA_ADMIN_PASSWORD, HOMESPUN_TAG
+#   - HOMESPUN_TAG controls which image tag to deploy:
+#       "latest" = stable releases, "alpha" = latest alpha build,
+#       or a specific version like "0.5.2-alpha.0.4.1.1.1.1"
+
+## ── Resource Sync (self-referential) ─────────────────────────────────
+# After the one-time manual setup, this entry keeps the sync self-managing.
+# Changes pushed to main are picked up automatically.
+
+[[resource_sync]]
+name = "homespun-resources"
+description = "Syncs Homespun stack definitions from the GitHub repo"
+
+[resource_sync.config]
+repo = "nick-boey/Homespun"
+branch = "main"
+resource_path = ["config/komodo/resources.toml"]
+
+## ── Stack ────────────────────────────────────────────────────────────
+
+[[stack]]
+name = "homespun"
+description = "Homespun - Blazor web app for managing development features and AI agents"
+tags = ["homespun"]
+
+[stack.config]
+server_id = "Local"
+repo = "nick-boey/Homespun"
+branch = "main"
+file_paths = ["docker-compose.yml"]
+auto_update = true
+poll_for_updates = true
+environment = """
+HOMESPUN_IMAGE=ghcr.io/nick-boey/homespun:[[HOMESPUN_TAG]]
+WORKER_IMAGE=ghcr.io/nick-boey/homespun-worker:[[HOMESPUN_TAG]]
+COMPOSE_PROFILES=plg
+CONTAINER_NAME=homespun
+HOST_PORT=8080
+HOST_UID=1000
+HOST_GID=1000
+DOCKER_GID=987
+DATA_DIR=/home/azureuser/.homespun-container/data
+SSH_DIR=/home/azureuser/.ssh
+CLAUDE_CREDENTIALS=/home/azureuser/.claude/.credentials.json
+ASPNETCORE_ENVIRONMENT=Production
+AGENT_MODE=Docker
+GITHUB_TOKEN=[[GITHUB_TOKEN]]
+CLAUDE_CODE_OAUTH_TOKEN=[[CLAUDE_CODE_OAUTH_TOKEN]]
+MINI_PROMPT_SIDECAR_URL=http://homespun-worker:8080
+GRAFANA_PORT=3000
+GRAFANA_ADMIN_PASSWORD=[[GRAFANA_ADMIN_PASSWORD]]
+"""

@@ -696,6 +696,81 @@ public class DockerAgentExecutionServiceTests
     }
 
     [Test]
+    public void BuildContainerDockerArgs_IncludesHomespunManagedLabel()
+    {
+        // Act
+        var args = _service.BuildContainerDockerArgs(
+            "test-container", "/data/some/path", useRm: false);
+
+        // Assert - containers need homespun.managed=true label for discovery
+        Assert.That(args, Does.Contain("--label homespun.managed=true"));
+    }
+
+    [Test]
+    public void BuildContainerDockerArgs_IncludesHomespunTypeLabel()
+    {
+        // Act
+        var args = _service.BuildContainerDockerArgs(
+            "test-container", "/data/some/path", useRm: false);
+
+        // Assert - containers need homespun.type=worker label for identification
+        Assert.That(args, Does.Contain("--label homespun.type=worker"));
+    }
+
+    [Test]
+    public void BuildContainerDockerArgs_IncludesHomespunWorkingDirectoryLabel()
+    {
+        // Act
+        var args = _service.BuildContainerDockerArgs(
+            "test-container", "/data/projects/test/workdir", useRm: false);
+
+        // Assert - containers need working directory label for recovery
+        Assert.That(args, Does.Contain("--label homespun.working.directory=/data/projects/test/workdir"));
+    }
+
+    [Test]
+    public void BuildContainerDockerArgs_IncludesHomespunProjectAndIssueLabels_WhenProvided()
+    {
+        // Act
+        var args = _service.BuildContainerDockerArgs(
+            "test-container", "/data/some/path", useRm: false,
+            issueId: "abc123", projectName: "my-project", projectId: "proj-1");
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(args, Does.Contain("--label homespun.issue.id=abc123"));
+            Assert.That(args, Does.Contain("--label homespun.project.id=proj-1"));
+        });
+    }
+
+    [Test]
+    public void BuildContainerDockerArgs_ExcludesProjectAndIssueLabels_WhenNotProvided()
+    {
+        // Act
+        var args = _service.BuildContainerDockerArgs(
+            "test-container", "/data/some/path", useRm: false);
+
+        // Assert - should not have project or issue labels without data
+        Assert.Multiple(() =>
+        {
+            Assert.That(args, Does.Not.Contain("homespun.issue.id"));
+            Assert.That(args, Does.Not.Contain("homespun.project.id"));
+        });
+    }
+
+    [Test]
+    public void BuildContainerDockerArgs_IncludesCreatedAtLabel()
+    {
+        // Act
+        var args = _service.BuildContainerDockerArgs(
+            "test-container", "/data/some/path", useRm: false);
+
+        // Assert - containers need creation timestamp for discovery
+        Assert.That(args, Does.Contain("--label homespun.created.at="));
+    }
+
+    [Test]
     public void EnsureClaudeDirectoryExists_CreatesSubdirectories_WithExplicitPath()
     {
         // Arrange
@@ -819,6 +894,86 @@ public class DockerAgentExecutionServiceTests
 
         // Assert
         Assert.That(result, Is.Null);
+    }
+
+    #endregion
+
+    #region RegisterDiscoveredContainer Tests
+
+    [Test]
+    public async Task RegisterDiscoveredContainer_WithIssue_PopulatesTracking()
+    {
+        // Arrange
+        var container = new DiscoveredContainer(
+            ContainerId: "abc123",
+            ContainerName: "homespun-issue-proj1-issue1",
+            WorkerUrl: "http://172.17.0.5:8080",
+            ProjectId: "proj1",
+            IssueId: "issue1",
+            WorkingDirectory: "/data/projects/test",
+            CreatedAt: DateTime.UtcNow);
+
+        // Act
+        _service.RegisterDiscoveredContainer(container);
+
+        // Assert - container should be listed
+        var containers = await _service.ListContainersAsync();
+        Assert.That(containers, Has.Count.EqualTo(1));
+        Assert.Multiple(() =>
+        {
+            Assert.That(containers[0].ContainerId, Is.EqualTo("abc123"));
+            Assert.That(containers[0].WorkingDirectory, Is.EqualTo("/data/projects/test"));
+            Assert.That(containers[0].ProjectId, Is.EqualTo("proj1"));
+            Assert.That(containers[0].IssueId, Is.EqualTo("issue1"));
+        });
+    }
+
+    [Test]
+    public async Task RegisterDiscoveredContainer_WithoutIssue_PopulatesCloneTracking()
+    {
+        // Arrange
+        var container = new DiscoveredContainer(
+            ContainerId: "xyz789",
+            ContainerName: "homespun-agent-12345678",
+            WorkerUrl: "http://172.17.0.6:8080",
+            ProjectId: null,
+            IssueId: null,
+            WorkingDirectory: "/data/clones/test",
+            CreatedAt: DateTime.UtcNow);
+
+        // Act
+        _service.RegisterDiscoveredContainer(container);
+
+        // Assert - container should be listed
+        var containers = await _service.ListContainersAsync();
+        Assert.That(containers, Has.Count.EqualTo(1));
+        Assert.Multiple(() =>
+        {
+            Assert.That(containers[0].ContainerId, Is.EqualTo("xyz789"));
+            Assert.That(containers[0].WorkingDirectory, Is.EqualTo("/data/clones/test"));
+            Assert.That(containers[0].ProjectId, Is.Null);
+            Assert.That(containers[0].IssueId, Is.Null);
+        });
+    }
+
+    [Test]
+    public async Task RegisterDiscoveredContainer_Multiple_AllTracked()
+    {
+        // Arrange
+        var container1 = new DiscoveredContainer(
+            "container1", "homespun-issue-p1-i1", "http://172.17.0.5:8080",
+            "proj1", "issue1", "/data/projects/p1", DateTime.UtcNow);
+        var container2 = new DiscoveredContainer(
+            "container2", "homespun-issue-p2-i2", "http://172.17.0.6:8080",
+            "proj2", "issue2", "/data/projects/p2", DateTime.UtcNow);
+
+        // Act
+        _service.RegisterDiscoveredContainer(container1);
+        _service.RegisterDiscoveredContainer(container2);
+
+        // Assert
+        var containers = await _service.ListContainersAsync();
+        Assert.That(containers, Has.Count.EqualTo(2));
     }
 
     #endregion

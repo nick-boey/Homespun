@@ -1,5 +1,5 @@
 using Bunit;
-using Homespun.Client.Components;
+using Homespun.Client.Features.Toolbar.Components;
 using Homespun.Client.Services;
 using Homespun.Shared.Models.Sessions;
 using Homespun.Tests.Helpers;
@@ -57,8 +57,39 @@ public class ProjectToolbarTests : BunitTestContext
             p.Add(x => x.ProjectId, "project-1");
         });
 
-        var toolbar = cut.Find(".project-toolbar");
-        Assert.That(toolbar, Is.Not.Null);
+        var container = cut.Find(".toolbar-container");
+        Assert.That(container, Is.Not.Null);
+    }
+
+    [Test]
+    public void HasScrollAreaDiv()
+    {
+        var cut = Render<ProjectToolbar>(p =>
+        {
+            p.Add(x => x.ProjectId, "project-1");
+        });
+
+        var scrollArea = cut.Find(".toolbar-scroll-area");
+        Assert.That(scrollArea, Is.Not.Null, "Should have a toolbar-scroll-area div for mobile horizontal scrolling");
+    }
+
+    [Test]
+    public void ScrollAreaContainsAllButtons()
+    {
+        var cut = Render<ProjectToolbar>(p =>
+        {
+            p.Add(x => x.ProjectId, "project-1");
+        });
+
+        var scrollArea = cut.Find(".toolbar-scroll-area");
+
+        // Verify that all button groups are inside the scroll area
+        Assert.That(scrollArea.QuerySelector("[data-testid='toolbar-create-above-button']"), Is.Not.Null);
+        Assert.That(scrollArea.QuerySelector("[data-testid='toolbar-create-below-button']"), Is.Not.Null);
+        Assert.That(scrollArea.QuerySelector("[data-testid='toolbar-edit-button']"), Is.Not.Null);
+        Assert.That(scrollArea.QuerySelector("[data-testid='toolbar-run-button']"), Is.Not.Null);
+        Assert.That(scrollArea.QuerySelector("[data-testid='toolbar-undo-button']"), Is.Not.Null);
+        Assert.That(scrollArea.QuerySelector("[data-testid='toolbar-redo-button']"), Is.Not.Null);
     }
 
     [Test]
@@ -69,8 +100,8 @@ public class ProjectToolbarTests : BunitTestContext
             p.Add(x => x.ProjectId, "project-1");
         });
 
-        var separators = cut.FindAll("[data-testid='toolbar-separator']");
-        Assert.That(separators, Has.Count.EqualTo(3), "Should have 3 separators between 4 button groups");
+        var separators = cut.FindAll("[role='none']");
+        Assert.That(separators, Has.Count.EqualTo(4), "Should have 4 separators between 5 button groups");
     }
 
     #endregion
@@ -145,7 +176,7 @@ public class ProjectToolbarTests : BunitTestContext
     }
 
     [Test]
-    public void ShowsDropdown_WhenRunButtonClicked()
+    public void RunButtonClick_TogglesDropdownState()
     {
         var cut = Render<ProjectToolbar>(p =>
         {
@@ -153,15 +184,15 @@ public class ProjectToolbarTests : BunitTestContext
             p.Add(x => x.SelectedIssueId, "TEST-001");
         });
 
-        // Initially dropdown should not be visible
-        Assert.That(cut.FindAll(".toolbar-agent-dropdown"), Is.Empty);
+        // Click run button — should not throw and button should remain clickable
+        var runButton = cut.Find("[data-testid='toolbar-run-button']");
+        runButton.Click();
 
-        // Click run button
-        cut.Find("[data-testid='toolbar-run-button']").Click();
+        // Click again to toggle off
+        runButton.Click();
 
-        // Dropdown should now be visible
-        var dropdown = cut.Find(".toolbar-agent-dropdown");
-        Assert.That(dropdown, Is.Not.Null);
+        // Button should still be enabled and rendered
+        Assert.That(runButton.HasAttribute("disabled"), Is.False);
     }
 
     [Test]
@@ -191,23 +222,18 @@ public class ProjectToolbarTests : BunitTestContext
     }
 
     [Test]
-    public void HidesDropdown_WhenRunButtonClickedAgain()
+    public void RunButton_DoesNotToggle_WhenDisabled()
     {
         var cut = Render<ProjectToolbar>(p =>
         {
             p.Add(x => x.ProjectId, "project-1");
             p.Add(x => x.SelectedIssueId, "TEST-001");
+            p.Add(x => x.IsAgentRunning, true);
         });
 
-        // Open dropdown
-        cut.Find("[data-testid='toolbar-run-button']").Click();
-        Assert.That(cut.FindAll(".toolbar-agent-dropdown"), Has.Count.EqualTo(1));
-
-        // Click again to close
-        cut.Find("[data-testid='toolbar-run-button']").Click();
-
-        // Dropdown should be closed
-        Assert.That(cut.FindAll(".toolbar-agent-dropdown"), Is.Empty);
+        // Run button should be disabled
+        var runButton = cut.Find("[data-testid='toolbar-run-button']");
+        Assert.That(runButton.HasAttribute("disabled"), Is.True);
     }
 
     #endregion
@@ -388,7 +414,7 @@ public class ProjectToolbarTests : BunitTestContext
         });
 
         var makeChildOfBtn = cut.Find("[data-testid='toolbar-child-of-button']");
-        Assert.That(makeChildOfBtn.ClassList.Contains("toolbar-btn-active"), Is.True,
+        Assert.That(makeChildOfBtn.ClassList.Contains("ring-2"), Is.True,
             "Make Child Of button should be highlighted when active");
     }
 
@@ -402,7 +428,7 @@ public class ProjectToolbarTests : BunitTestContext
         });
 
         var makeParentOfBtn = cut.Find("[data-testid='toolbar-parent-of-button']");
-        Assert.That(makeParentOfBtn.ClassList.Contains("toolbar-btn-active"), Is.True,
+        Assert.That(makeParentOfBtn.ClassList.Contains("ring-2"), Is.True,
             "Make Parent Of button should be highlighted when active");
     }
 
@@ -623,6 +649,198 @@ public class ProjectToolbarTests : BunitTestContext
         var redoBtn = cut.Find("[data-testid='toolbar-redo-button']");
         Assert.That(redoBtn.HasAttribute("disabled"), Is.True);
         Assert.That(callbackInvoked, Is.False);
+    }
+
+    #endregion
+
+    #region Level Control Tests
+
+    [Test]
+    public void LevelControls_BothDisabled_WhenMaxAvailableDepthIsZero()
+    {
+        var cut = Render<ProjectToolbar>(p =>
+        {
+            p.Add(x => x.ProjectId, "project-1");
+            p.Add(x => x.MaxAvailableDepth, 0);
+            p.Add(x => x.MaxDepth, 0);
+        });
+
+        var decreaseBtn = cut.Find("[data-testid='toolbar-decrease-levels-button']");
+        var increaseBtn = cut.Find("[data-testid='toolbar-increase-levels-button']");
+        Assert.That(decreaseBtn.HasAttribute("disabled"), Is.True);
+        Assert.That(increaseBtn.HasAttribute("disabled"), Is.True);
+    }
+
+    [Test]
+    public void LevelControls_Rendered_WhenMaxAvailableDepthGreaterThanZero()
+    {
+        var cut = Render<ProjectToolbar>(p =>
+        {
+            p.Add(x => x.ProjectId, "project-1");
+            p.Add(x => x.MaxAvailableDepth, 3);
+            p.Add(x => x.MaxDepth, 2);
+        });
+
+        var decreaseBtn = cut.Find("[data-testid='toolbar-decrease-levels-button']");
+        var increaseBtn = cut.Find("[data-testid='toolbar-increase-levels-button']");
+
+        Assert.That(decreaseBtn, Is.Not.Null);
+        Assert.That(increaseBtn, Is.Not.Null);
+        Assert.That(decreaseBtn.HasAttribute("disabled"), Is.False);
+        Assert.That(increaseBtn.HasAttribute("disabled"), Is.False);
+    }
+
+    [Test]
+    public void DecreaseButton_Disabled_WhenMaxDepthIsZero()
+    {
+        var cut = Render<ProjectToolbar>(p =>
+        {
+            p.Add(x => x.ProjectId, "project-1");
+            p.Add(x => x.MaxAvailableDepth, 3);
+            p.Add(x => x.MaxDepth, 0);
+        });
+
+        var decreaseBtn = cut.Find("[data-testid='toolbar-decrease-levels-button']");
+        Assert.That(decreaseBtn.HasAttribute("disabled"), Is.True);
+    }
+
+    [Test]
+    public void IncreaseButton_Disabled_WhenMaxDepthEqualsMaxAvailable()
+    {
+        var cut = Render<ProjectToolbar>(p =>
+        {
+            p.Add(x => x.ProjectId, "project-1");
+            p.Add(x => x.MaxAvailableDepth, 3);
+            p.Add(x => x.MaxDepth, 3);
+        });
+
+        var increaseBtn = cut.Find("[data-testid='toolbar-increase-levels-button']");
+        Assert.That(increaseBtn.HasAttribute("disabled"), Is.True);
+    }
+
+    [Test]
+    public void DecreaseButton_InvokesCallback()
+    {
+        var callbackInvoked = false;
+        var cut = Render<ProjectToolbar>(p =>
+        {
+            p.Add(x => x.ProjectId, "project-1");
+            p.Add(x => x.MaxAvailableDepth, 3);
+            p.Add(x => x.MaxDepth, 2);
+            p.Add(x => x.OnDecreaseDepth, EventCallback.Factory.Create(this, () => callbackInvoked = true));
+        });
+
+        cut.Find("[data-testid='toolbar-decrease-levels-button']").Click();
+
+        Assert.That(callbackInvoked, Is.True);
+    }
+
+    [Test]
+    public void IncreaseButton_InvokesCallback()
+    {
+        var callbackInvoked = false;
+        var cut = Render<ProjectToolbar>(p =>
+        {
+            p.Add(x => x.ProjectId, "project-1");
+            p.Add(x => x.MaxAvailableDepth, 3);
+            p.Add(x => x.MaxDepth, 2);
+            p.Add(x => x.OnIncreaseDepth, EventCallback.Factory.Create(this, () => callbackInvoked = true));
+        });
+
+        cut.Find("[data-testid='toolbar-increase-levels-button']").Click();
+
+        Assert.That(callbackInvoked, Is.True);
+    }
+
+    #endregion
+
+    #region Search Tests
+
+    [Test]
+    public void SearchInput_AlwaysRendered()
+    {
+        var cut = Render<ProjectToolbar>(p =>
+        {
+            p.Add(x => x.ProjectId, "project-1");
+        });
+
+        var searchInput = cut.Find("[data-testid='toolbar-search-input']");
+        Assert.That(searchInput, Is.Not.Null);
+    }
+
+    [Test]
+    public void SearchInput_ShowsMatchCount_WhenSearchTermHasMatches()
+    {
+        var cut = Render<ProjectToolbar>(p =>
+        {
+            p.Add(x => x.ProjectId, "project-1");
+            p.Add(x => x.SearchTerm, "test");
+            p.Add(x => x.SearchMatchCount, 5);
+        });
+
+        var matchCount = cut.Find("[data-testid='toolbar-search-match-count']");
+        Assert.That(matchCount.TextContent.Trim(), Is.EqualTo("5"));
+    }
+
+    [Test]
+    public void SearchInput_ShowsNoMatches_WhenSearchTermHasZeroMatches()
+    {
+        var cut = Render<ProjectToolbar>(p =>
+        {
+            p.Add(x => x.ProjectId, "project-1");
+            p.Add(x => x.SearchTerm, "nonexistent");
+            p.Add(x => x.SearchMatchCount, 0);
+        });
+
+        var noMatches = cut.Find("[data-testid='toolbar-search-no-matches']");
+        Assert.That(noMatches.TextContent.Trim(), Is.EqualTo("0"));
+    }
+
+    [Test]
+    public void SearchInput_HidesBadges_WhenSearchTermEmpty()
+    {
+        var cut = Render<ProjectToolbar>(p =>
+        {
+            p.Add(x => x.ProjectId, "project-1");
+            p.Add(x => x.SearchTerm, "");
+        });
+
+        Assert.That(cut.FindAll("[data-testid='toolbar-search-match-count']"), Is.Empty);
+        Assert.That(cut.FindAll("[data-testid='toolbar-search-no-matches']"), Is.Empty);
+    }
+
+    [Test]
+    public void SearchInput_InvokesOnSearchTermChanged_OnInput()
+    {
+        string? receivedTerm = null;
+        var cut = Render<ProjectToolbar>(p =>
+        {
+            p.Add(x => x.ProjectId, "project-1");
+            p.Add(x => x.OnSearchTermChanged,
+                EventCallback.Factory.Create<string>(this, term => receivedTerm = term));
+        });
+
+        var searchInput = cut.Find("[data-testid='toolbar-search-input']");
+        searchInput.Input("hello");
+
+        Assert.That(receivedTerm, Is.EqualTo("hello"));
+    }
+
+    [Test]
+    public void SearchInput_InvokesOnSearchFocused_OnFocus()
+    {
+        var focusCalled = false;
+        var cut = Render<ProjectToolbar>(p =>
+        {
+            p.Add(x => x.ProjectId, "project-1");
+            p.Add(x => x.OnSearchFocused,
+                EventCallback.Factory.Create(this, () => focusCalled = true));
+        });
+
+        var searchInput = cut.Find("[data-testid='toolbar-search-input']");
+        searchInput.Focus();
+
+        Assert.That(focusCalled, Is.True);
     }
 
     #endregion

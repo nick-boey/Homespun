@@ -1,0 +1,30 @@
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>Default Processing Indicator</BbCardTitle>
+        <BbCardDescription>Shows that Claude is processing</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <ProcessingIndicator />
+    </BbCardContent>
+</BbCard>
+
+<BbCard>
+    <BbCardHeader>
+        <BbCardTitle>In Chat Context</BbCardTitle>
+        <BbCardDescription>Processing indicator within a chat flow</BbCardDescription>
+    </BbCardHeader>
+    <BbCardContent>
+        <div class="chat-message chat-message-user">
+            <div class="chat-message-header">
+                <span class="chat-message-role">You</span>
+                <span class="chat-message-time">@DateTime.Now.AddSeconds(-10).ToString("HH:mm:ss")</span>
+            </div>
+            <div class="chat-message-content">
+                <div class="content-block">
+                    <p>Can you analyze this codebase and suggest improvements?</p>
+                </div>
+            </div>
+        </div>
+        <ProcessingIndicator />
+    </BbCardContent>
+</BbCard>

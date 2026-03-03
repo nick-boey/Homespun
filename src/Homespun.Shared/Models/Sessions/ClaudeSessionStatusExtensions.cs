@@ -38,6 +38,22 @@ public static class ClaudeSessionStatusExtensions
     };
 
     /// <summary>
+    /// Gets the BbBadge CSS class for a status (Tailwind-based for BbBadge component).
+    /// </summary>
+    public static string ToBbBadgeClass(this ClaudeSessionStatus status) => status switch
+    {
+        ClaudeSessionStatus.Starting => "bg-amber-500 text-white border-transparent",
+        ClaudeSessionStatus.RunningHooks => "bg-amber-500 text-white border-transparent",
+        ClaudeSessionStatus.Running => "bg-green-600 text-white border-transparent",
+        ClaudeSessionStatus.WaitingForInput => "bg-blue-500 text-white border-transparent",
+        ClaudeSessionStatus.WaitingForQuestionAnswer => "bg-purple-500 text-white border-transparent",
+        ClaudeSessionStatus.WaitingForPlanExecution => "bg-blue-500 text-white border-transparent",
+        ClaudeSessionStatus.Stopped => "bg-secondary text-secondary-foreground border-transparent",
+        ClaudeSessionStatus.Error => "bg-destructive text-destructive-foreground border-transparent",
+        _ => "bg-secondary text-secondary-foreground border-transparent"
+    };
+
+    /// <summary>
     /// Gets the CSS indicator class for a status.
     /// </summary>
     public static string ToIndicatorClass(this ClaudeSessionStatus status) => status switch

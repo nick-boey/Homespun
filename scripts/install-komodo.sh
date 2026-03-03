@@ -18,17 +18,17 @@ set -e
 # What this script does:
 #   1. Creates /etc/komodo directory structure
 #   2. Downloads Komodo Docker Compose files
-#   3. Generates secure secrets (passkey, JWT, webhook)
-#   4. Configures GitHub Container Registry access
-#   5. Creates environment file with configuration
+#   3. Generates secure secrets and environment file
+#   4. Installs compose files
 #
 # After installation:
 #   - Run ./scripts/run-komodo.sh to start Komodo
 #   - Access Komodo at https://<tailscale-hostname>:3500
 #
+# Options:
+#   --clean   Remove existing MongoDB volumes before install (fixes auth issues)
+#
 # Environment Variables (optional):
-#   HSP_GITHUB_TOKEN    - GitHub token for GHCR access
-#   GITHUB_TOKEN        - Alternative GitHub token variable
 #   KOMODO_ADMIN_USER   - Initial admin username (default: admin)
 #   KOMODO_ADMIN_PASS   - Initial admin password (auto-generated if not set)
 
@@ -49,6 +49,22 @@ generate_secret() {
     openssl rand -base64 32 | tr -dc 'a-zA-Z0-9' | head -c 32
 }
 
+# Default values
+CLEAN_INSTALL=false
+
+# Parse arguments
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        --clean) CLEAN_INSTALL=true ;;
+        -h|--help)
+            head -35 "$0" | tail -30
+            exit 0
+            ;;
+        *) log_error "Unknown parameter: $1"; exit 1 ;;
+    esac
+    shift
+done
+
 echo
 log_info "=== Komodo Installation Script ==="
 echo
@@ -62,7 +78,7 @@ KOMODO_DIR="/etc/komodo"
 KOMODO_CONFIG_DIR="$REPO_ROOT/config/komodo"
 
 # Step 1: Validate Docker
-log_info "[1/5] Checking prerequisites..."
+log_info "[1/4] Checking prerequisites..."
 
 if ! docker version >/dev/null 2>&1; then
     log_error "Docker is not installed or not running."
@@ -70,6 +86,24 @@ if ! docker version >/dev/null 2>&1; then
     exit 1
 fi
 log_success "      Docker is available."
+
+# Clean existing MongoDB volumes if requested
+if [ "$CLEAN_INSTALL" = true ]; then
+    log_warn "      --clean flag set: removing existing Komodo containers and MongoDB volumes..."
+
+    # Stop existing Komodo containers
+    if [ -f "$KOMODO_DIR/komodo.compose.yml" ] && [ -f "$KOMODO_DIR/compose.env" ]; then
+        sudo docker compose -f "$KOMODO_DIR/komodo.compose.yml" --env-file "$KOMODO_DIR/compose.env" --profile tailscale down 2>/dev/null || true
+    fi
+
+    # Remove MongoDB volumes
+    for vol in komodo_komodo-mongo-data komodo_komodo-mongo-config; do
+        if docker volume inspect "$vol" >/dev/null 2>&1; then
+            docker volume rm "$vol"
+            log_success "      Removed volume: $vol"
+        fi
+    done
+fi
 
 if ! command -v openssl &>/dev/null; then
     log_error "openssl is required for secret generation."
@@ -79,54 +113,18 @@ fi
 log_success "      openssl is available."
 
 # Step 2: Create directory structure
-log_info "[2/5] Creating directory structure..."
+log_info "[2/4] Creating directory structure..."
 
 sudo mkdir -p "$KOMODO_DIR"
 sudo mkdir -p "$KOMODO_DIR/backups"
-sudo mkdir -p "$KOMODO_DIR/docker"
 sudo mkdir -p "$KOMODO_DIR/stacks"
 sudo mkdir -p "$KOMODO_DIR/repos"
 sudo chmod 755 "$KOMODO_DIR"
 
 log_success "      Created $KOMODO_DIR"
 
-# Step 3: Set up GitHub Container Registry access
-log_info "[3/5] Configuring GitHub Container Registry..."
-
-# Get GitHub token from environment
-GITHUB_TOKEN="${HSP_GITHUB_TOKEN:-${GITHUB_TOKEN:-}}"
-
-# Try reading from ~/.homespun/env if not set
-if [ -z "$GITHUB_TOKEN" ]; then
-    HOMESPUN_ENV_FILE="$HOME/.homespun/env"
-    if [ -f "$HOMESPUN_ENV_FILE" ]; then
-        source "$HOMESPUN_ENV_FILE"
-        GITHUB_TOKEN="${HSP_GITHUB_TOKEN:-${GITHUB_TOKEN:-}}"
-    fi
-fi
-
-if [ -z "$GITHUB_TOKEN" ]; then
-    log_warn "      No GitHub token found."
-    log_warn "      Set GITHUB_TOKEN or HSP_GITHUB_TOKEN for GHCR access."
-    log_warn "      Komodo will not be able to pull private images."
-else
-    # Create Docker config for GHCR
-    GHCR_AUTH=$(echo -n "homespun:$GITHUB_TOKEN" | base64)
-    sudo tee "$KOMODO_DIR/docker/config.json" > /dev/null << EOF
-{
-  "auths": {
-    "ghcr.io": {
-      "auth": "$GHCR_AUTH"
-    }
-  }
-}
-EOF
-    sudo chmod 600 "$KOMODO_DIR/docker/config.json"
-    log_success "      Configured GHCR authentication."
-fi
-
-# Step 4: Generate secrets and environment file
-log_info "[4/5] Generating configuration..."
+# Step 3: Generate secrets and environment file
+log_info "[3/4] Generating configuration..."
 
 # Generate secrets
 KOMODO_PASSKEY=$(generate_secret)
@@ -177,13 +175,13 @@ KOMODO_WEBHOOK_SECRET=$KOMODO_WEBHOOK_SECRET
 # Core Settings
 # ============================================================================
 # Host URL (set to your Tailscale hostname)
-KOMODO_HOST=https://homespun:3500
+KOMODO_HOST=https://homespun-dev:3500
 
 # Browser title
 KOMODO_TITLE=Homespun Komodo
 
-# First server is automatically added (localhost)
-KOMODO_FIRST_SERVER=https://host.docker.internal:8443
+# First server is automatically added (periphery on Docker network)
+KOMODO_FIRST_SERVER=https://homespun-komodo-periphery:8120
 
 # Monitoring intervals
 KOMODO_MONITORING_INTERVAL=15-sec
@@ -196,8 +194,8 @@ KOMODO_RESOURCE_POLL_INTERVAL=1-hr
 KOMODO_LOCAL_AUTH=true
 
 # Initial admin account
-KOMODO_LOCAL_AUTH_INITIAL_ADMIN_USERNAME=$ADMIN_USER
-KOMODO_LOCAL_AUTH_INITIAL_ADMIN_PASSWORD=$ADMIN_PASS
+KOMODO_INIT_ADMIN_USERNAME=$ADMIN_USER
+KOMODO_INIT_ADMIN_PASSWORD=$ADMIN_PASS
 
 # Disable signup (admin manages users)
 KOMODO_DISABLE_USER_REGISTRATION=true
@@ -211,6 +209,11 @@ PERIPHERY_PASSKEYS=$KOMODO_PASSKEY
 PERIPHERY_INCLUDE_DISK_MOUNTS=/
 
 # ============================================================================
+# Tailscale
+# ============================================================================
+TS_HOSTNAME=homespun-dev
+
+# ============================================================================
 # Timezone
 # ============================================================================
 TZ=UTC
@@ -219,8 +222,8 @@ EOF
 sudo chmod 600 "$KOMODO_DIR/compose.env"
 log_success "      Generated configuration at $KOMODO_DIR/compose.env"
 
-# Step 5: Copy compose files
-log_info "[5/5] Installing compose files..."
+# Step 4: Copy compose files
+log_info "[4/4] Installing compose files..."
 
 # Ensure config directory exists
 mkdir -p "$KOMODO_CONFIG_DIR"
@@ -233,6 +236,15 @@ else
     log_error "      Compose file not found at $KOMODO_CONFIG_DIR/komodo.compose.yml"
     log_error "      Please ensure config/komodo/komodo.compose.yml exists."
     exit 1
+fi
+
+# Verify Tailscale config exists (used by run-komodo.sh at runtime)
+TAILSCALE_CONFIG_DIR="$REPO_ROOT/config/tailscale"
+if [ -f "$TAILSCALE_CONFIG_DIR/start.sh" ]; then
+    log_success "      Tailscale config found: $TAILSCALE_CONFIG_DIR"
+else
+    log_warn "      Tailscale config not found at $TAILSCALE_CONFIG_DIR"
+    log_warn "      Tailscale sidecar will not be available."
 fi
 
 echo

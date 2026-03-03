@@ -1,0 +1,109 @@
+
+<div class="agent-result">
+    <div class="summary-section">
+        <h6>Summary</h6>
+        <p>@Data.Summary</p>
+    </div>
+    @if (!string.IsNullOrEmpty(Data.DetailedOutput))
+    {
+        <details class="detailed-output">
+            <summary>Full Output</summary>
+            <pre>@Data.DetailedOutput</pre>
+        </details>
+    }
+    @if (Data.FilesAffected?.Count > 0)
+    {
+        <div class="files-affected">
+            <h6>Files Affected</h6>
+            <ul>
+                @foreach (var file in Data.FilesAffected)
+                {
+                    <li><code>@file</code></li>
+                }
+            </ul>
+        </div>
+    }
+</div>
+
+<style>
+    .agent-result {
+        font-size: 0.75rem;
+    }
+
+    .summary-section {
+        margin-bottom: var(--spacing-sm);
+    }
+
+    .summary-section h6 {
+        font-size: 0.6875rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        margin: 0 0 var(--spacing-xs) 0;
+    }
+
+    .summary-section p {
+        margin: 0;
+        color: var(--text-primary);
+        line-height: 1.5;
+    }
+
+    .detailed-output summary {
+        font-size: 0.6875rem;
+        font-weight: 600;
+        color: var(--text-muted);
+        cursor: pointer;
+        padding: var(--spacing-xs) 0;
+    }
+
+    .detailed-output summary:hover {
+        color: var(--text-primary);
+    }
+
+    .detailed-output pre {
+        margin: var(--spacing-xs) 0 0 0;
+        font-family: var(--font-mono, monospace);
+        font-size: 0.75rem;
+        white-space: pre-wrap;
+        word-break: break-all;
+        color: var(--text-muted);
+        max-height: 300px;
+        overflow-y: auto;
+        background: var(--code-bg);
+        padding: var(--spacing-sm);
+        border-radius: var(--radius-sm);
+    }
+
+    .files-affected {
+        margin-top: var(--spacing-sm);
+    }
+
+    .files-affected h6 {
+        font-size: 0.6875rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        margin: 0 0 var(--spacing-xs) 0;
+    }
+
+    .files-affected ul {
+        margin: 0;
+        padding-left: var(--spacing-lg);
+        list-style: disc;
+    }
+
+    .files-affected li {
+        padding: 1px 0;
+    }
+
+    .files-affected code {
+        font-family: var(--font-mono, monospace);
+        color: var(--text-primary);
+        font-size: 0.75rem;
+    }
+</style>
+
+@code {
+    [Parameter]
+    public required AgentToolData Data { get; set; }
+}
