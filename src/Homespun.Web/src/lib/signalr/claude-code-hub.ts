@@ -139,6 +139,12 @@ export interface ClaudeCodeHubMethods {
   getSession(sessionId: string): Promise<ClaudeSession | null>
   answerQuestion(sessionId: string, answersJson: string): Promise<void>
   executePlan(sessionId: string, clearContext?: boolean): Promise<void>
+  approvePlan(
+    sessionId: string,
+    approved: boolean,
+    keepContext: boolean,
+    feedback?: string | null
+  ): Promise<void>
   getCachedMessageCount(sessionId: string): Promise<number>
   restartSession(sessionId: string): Promise<ClaudeSession | null>
 }
@@ -163,6 +169,12 @@ export function createClaudeCodeHubMethods(connection: HubConnection): ClaudeCod
       connection.invoke('AnswerQuestion', sessionId, answersJson),
     executePlan: (sessionId: string, clearContext = true) =>
       connection.invoke('ExecutePlan', sessionId, clearContext),
+    approvePlan: (
+      sessionId: string,
+      approved: boolean,
+      keepContext: boolean,
+      feedback?: string | null
+    ) => connection.invoke('ApprovePlan', sessionId, approved, keepContext, feedback),
     getCachedMessageCount: (sessionId: string) =>
       connection.invoke<number>('GetCachedMessageCount', sessionId),
     restartSession: (sessionId: string) =>
