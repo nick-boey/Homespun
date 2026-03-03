@@ -25,6 +25,8 @@ public class GitCloneService(ICommandRunner commandRunner, ILogger<GitCloneServi
         public string? GetMaskedToken() => null;
         public Task<GitHubAuthStatus> CheckGhAuthStatusAsync(CancellationToken ct = default) =>
             Task.FromResult(new GitHubAuthStatus { IsAuthenticated = false, AuthMethod = GitHubAuthMethod.None });
+        public string GetGitAuthorName() => "Unknown";
+        public string GetGitAuthorEmail() => "unknown@localhost";
     }
 
     public async Task<string?> CreateCloneAsync(string repoPath, string branchName, bool createBranch = false, string? baseBranch = null)

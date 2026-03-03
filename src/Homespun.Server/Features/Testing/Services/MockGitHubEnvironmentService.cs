@@ -31,4 +31,8 @@ public class MockGitHubEnvironmentService : IGitHubEnvironmentService
             AuthMethod = GitHubAuthMethod.Token
         });
     }
+
+    public string GetGitAuthorName() => "Mock User";
+
+    public string GetGitAuthorEmail() => "mock@example.com";
 }

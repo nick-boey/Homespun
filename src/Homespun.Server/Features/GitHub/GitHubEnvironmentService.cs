@@ -90,8 +90,8 @@ public partial class GitHubEnvironmentService : IGitHubEnvironmentService, IDisp
         }
 
         // Git identity for commits (required for bd sync and other git operations)
-        var gitName = GetGitIdentityName();
-        var gitEmail = GetGitIdentityEmail();
+        var gitName = GetGitAuthorName();
+        var gitEmail = GetGitAuthorEmail();
 
         env["GIT_AUTHOR_NAME"] = gitName;
         env["GIT_AUTHOR_EMAIL"] = gitEmail;
@@ -106,7 +106,7 @@ public partial class GitHubEnvironmentService : IGitHubEnvironmentService, IDisp
     /// <summary>
     /// Gets the git author/committer name from configuration or defaults to "Homespun Bot".
     /// </summary>
-    private string GetGitIdentityName()
+    public string GetGitAuthorName()
     {
         return _configuration["Git:AuthorName"]
             ?? _configuration["GIT_AUTHOR_NAME"]
@@ -117,7 +117,7 @@ public partial class GitHubEnvironmentService : IGitHubEnvironmentService, IDisp
     /// <summary>
     /// Gets the git author/committer email from configuration or defaults to "homespun@localhost".
     /// </summary>
-    private string GetGitIdentityEmail()
+    public string GetGitAuthorEmail()
     {
         return _configuration["Git:AuthorEmail"]
             ?? _configuration["GIT_AUTHOR_EMAIL"]
