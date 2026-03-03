@@ -18,7 +18,13 @@ import {
   isSeparatorRenderLine,
   isLoadMoreRenderLine,
 } from '../services'
-import { useTaskGraph, taskGraphQueryKey } from '../hooks'
+import { useTaskGraph, taskGraphQueryKey, useCreateIssue } from '../hooks'
+import {
+  KeyboardEditMode,
+  EditCursorPosition,
+  type PendingNewIssue,
+  type InlineEditState,
+} from '../types'
 import {
   TaskGraphIssueRow,
   TaskGraphPrRow,
@@ -26,7 +32,8 @@ import {
   TaskGraphLoadMoreRow,
   TaskGraphExpandedDetails,
 } from './task-graph-row'
-import { ROW_HEIGHT } from './task-graph-svg'
+import { InlineIssueEditor } from './inline-issue-editor'
+import { ROW_HEIGHT, LANE_WIDTH } from './task-graph-svg'
 
 export interface TaskGraphViewProps {
   projectId: string
@@ -46,7 +53,8 @@ export interface TaskGraphViewProps {
  * - SVG connectors showing parent-child relationships
  * - Series vs parallel execution mode indicators
  * - Real-time updates via SignalR
- * - Keyboard navigation
+ * - Vim-like keyboard navigation
+ * - Inline issue creation and editing
  * - Expand/collapse for inline details
  */
 export const TaskGraphView = memo(function TaskGraphView({
@@ -65,9 +73,24 @@ export const TaskGraphView = memo(function TaskGraphView({
   // Expanded rows state
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
 
+  // Edit mode state
+  const [editMode, setEditMode] = useState<KeyboardEditMode>(KeyboardEditMode.Viewing)
+  const [pendingNewIssue, setPendingNewIssue] = useState<PendingNewIssue | null>(null)
+  const [pendingEdit, setPendingEdit] = useState<InlineEditState | null>(null)
+
   // Refs for keyboard navigation
   const containerRef = useRef<HTMLDivElement>(null)
   const rowRefs = useRef<Map<string, HTMLDivElement>>(new Map())
+
+  // Create issue mutation
+  const { createIssue } = useCreateIssue({
+    projectId,
+    onSuccess: () => {
+      // Reset edit mode after successful creation
+      setEditMode(KeyboardEditMode.Viewing)
+      setPendingNewIssue(null)
+    },
+  })
 
   // Compute render lines from task graph
   const renderLines = useMemo(() => {
@@ -80,10 +103,15 @@ export const TaskGraphView = memo(function TaskGraphView({
     return Math.max(1, ...renderLines.filter(isIssueRenderLine).map((line) => line.lane + 1))
   }, [renderLines])
 
+  // Issue render lines only
+  const issueRenderLines = useMemo(() => {
+    return renderLines.filter(isIssueRenderLine)
+  }, [renderLines])
+
   // Issue IDs for keyboard navigation
   const issueIds = useMemo(() => {
-    return renderLines.filter(isIssueRenderLine).map((line) => line.issueId)
-  }, [renderLines])
+    return issueRenderLines.map((line) => line.issueId)
+  }, [issueRenderLines])
 
   // Search match count
   const searchMatchCount = useMemo(() => {
@@ -93,6 +121,18 @@ export const TaskGraphView = memo(function TaskGraphView({
       (line) => isIssueRenderLine(line) && line.title.toLowerCase().includes(lowerQuery)
     ).length
   }, [renderLines, searchQuery])
+
+  // Get selected issue index
+  const selectedIndex = useMemo(() => {
+    if (!selectedIssueId) return -1
+    return issueIds.indexOf(selectedIssueId)
+  }, [selectedIssueId, issueIds])
+
+  // Get selected render line
+  const selectedRenderLine = useMemo(() => {
+    if (selectedIndex < 0) return null
+    return issueRenderLines[selectedIndex] ?? null
+  }, [selectedIndex, issueRenderLines])
 
   // SignalR connection for real-time updates
   const { connection } = useSignalR({
@@ -134,16 +174,190 @@ export const TaskGraphView = memo(function TaskGraphView({
   // Handle row click
   const handleRowClick = useCallback(
     (issueId: string) => {
+      // If in creating mode, clicking elsewhere cancels
+      if (editMode === KeyboardEditMode.CreatingNew) {
+        setEditMode(KeyboardEditMode.Viewing)
+        setPendingNewIssue(null)
+      }
       onSelectIssue?.(issueId)
     },
-    [onSelectIssue]
+    [onSelectIssue, editMode]
   )
 
-  // Handle keyboard navigation
+  // ============================================================================
+  // Inline Issue Creation Handlers
+  // ============================================================================
+
+  const handleCreateBelow = useCallback(() => {
+    if (selectedIndex < 0) return
+    const referenceIssue = issueRenderLines[selectedIndex]
+    if (!referenceIssue) return
+
+    setPendingNewIssue({
+      insertAtIndex: selectedIndex + 1,
+      title: '',
+      isAbove: false,
+      referenceIssueId: referenceIssue.issueId,
+    })
+    setEditMode(KeyboardEditMode.CreatingNew)
+  }, [selectedIndex, issueRenderLines])
+
+  const handleCreateAbove = useCallback(() => {
+    if (selectedIndex < 0) return
+    const referenceIssue = issueRenderLines[selectedIndex]
+    if (!referenceIssue) return
+
+    setPendingNewIssue({
+      insertAtIndex: selectedIndex,
+      title: '',
+      isAbove: true,
+      referenceIssueId: referenceIssue.issueId,
+    })
+    setEditMode(KeyboardEditMode.CreatingNew)
+  }, [selectedIndex, issueRenderLines])
+
+  const handleCancelEdit = useCallback(() => {
+    setEditMode(KeyboardEditMode.Viewing)
+    setPendingNewIssue(null)
+    setPendingEdit(null)
+    // Return focus to container
+    containerRef.current?.focus()
+  }, [])
+
+  const handleTitleChange = useCallback((title: string) => {
+    setPendingNewIssue((prev) => (prev ? { ...prev, title } : null))
+    setPendingEdit((prev) => (prev ? { ...prev, title } : null))
+  }, [])
+
+  const handleIndent = useCallback(() => {
+    if (!pendingNewIssue?.referenceIssueId) return
+    // Only allow indent if not already indented/unindented
+    if (pendingNewIssue.pendingChildId || pendingNewIssue.pendingParentId) return
+
+    // Tab = make this new issue a PARENT of the reference (reference becomes child)
+    setPendingNewIssue((prev) =>
+      prev
+        ? {
+            ...prev,
+            pendingChildId: prev.referenceIssueId,
+            pendingParentId: undefined,
+          }
+        : null
+    )
+  }, [pendingNewIssue])
+
+  const handleUnindent = useCallback(() => {
+    if (!pendingNewIssue?.referenceIssueId) return
+    // Only allow unindent if not already indented/unindented
+    if (pendingNewIssue.pendingChildId || pendingNewIssue.pendingParentId) return
+
+    // Shift+Tab = make this new issue a CHILD of the reference (reference becomes parent)
+    setPendingNewIssue((prev) =>
+      prev
+        ? {
+            ...prev,
+            pendingParentId: prev.referenceIssueId,
+            pendingChildId: undefined,
+          }
+        : null
+    )
+  }, [pendingNewIssue])
+
+  const handleSave = useCallback(async () => {
+    if (!pendingNewIssue?.title.trim()) {
+      handleCancelEdit()
+      return
+    }
+
+    try {
+      await createIssue({
+        title: pendingNewIssue.title.trim(),
+        parentIssueId: pendingNewIssue.pendingParentId,
+        childIssueId: pendingNewIssue.pendingChildId,
+      })
+      // Return focus to container after save
+      containerRef.current?.focus()
+    } catch {
+      // Keep edit mode on error so user can retry
+    }
+  }, [pendingNewIssue, createIssue, handleCancelEdit])
+
+  const handleSaveAndEdit = useCallback(async () => {
+    if (!pendingNewIssue?.title.trim()) {
+      handleCancelEdit()
+      return
+    }
+
+    try {
+      const issue = await createIssue({
+        title: pendingNewIssue.title.trim(),
+        parentIssueId: pendingNewIssue.pendingParentId,
+        childIssueId: pendingNewIssue.pendingChildId,
+      })
+      // Navigate to edit page for description
+      if (issue?.id) {
+        onEditIssue?.(issue.id)
+      }
+    } catch {
+      // Keep edit mode on error so user can retry
+    }
+  }, [pendingNewIssue, createIssue, handleCancelEdit, onEditIssue])
+
+  // ============================================================================
+  // Inline Editing Handlers (for existing issues)
+  // ============================================================================
+
+  const handleStartEditAtStart = useCallback(() => {
+    if (!selectedRenderLine) return
+    setPendingEdit({
+      issueId: selectedRenderLine.issueId,
+      title: selectedRenderLine.title,
+      originalTitle: selectedRenderLine.title,
+      cursorPosition: EditCursorPosition.Start,
+    })
+    setEditMode(KeyboardEditMode.EditingExisting)
+  }, [selectedRenderLine])
+
+  const handleStartEditAtEnd = useCallback(() => {
+    if (!selectedRenderLine) return
+    setPendingEdit({
+      issueId: selectedRenderLine.issueId,
+      title: selectedRenderLine.title,
+      originalTitle: selectedRenderLine.title,
+      cursorPosition: EditCursorPosition.End,
+    })
+    setEditMode(KeyboardEditMode.EditingExisting)
+  }, [selectedRenderLine])
+
+  const handleStartReplace = useCallback(() => {
+    if (!selectedRenderLine) return
+    setPendingEdit({
+      issueId: selectedRenderLine.issueId,
+      title: '',
+      originalTitle: selectedRenderLine.title,
+      cursorPosition: EditCursorPosition.Replace,
+    })
+    setEditMode(KeyboardEditMode.EditingExisting)
+  }, [selectedRenderLine])
+
+  // ============================================================================
+  // Keyboard Navigation
+  // ============================================================================
+
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
+      // If in editing mode, don't handle navigation keys
+      if (editMode !== KeyboardEditMode.Viewing) {
+        // Only handle Escape to cancel
+        if (event.key === 'Escape') {
+          event.preventDefault()
+          handleCancelEdit()
+        }
+        return
+      }
+
+      // If nothing selected, select first issue on any nav key
       if (!selectedIssueId && issueIds.length > 0) {
-        // If nothing selected, select first issue on any nav key
         if (['ArrowDown', 'ArrowUp', 'j', 'k'].includes(event.key)) {
           event.preventDefault()
           onSelectIssue?.(issueIds[0])
@@ -157,6 +371,7 @@ export const TaskGraphView = memo(function TaskGraphView({
       if (currentIndex === -1) return
 
       switch (event.key) {
+        // Navigation
         case 'ArrowDown':
         case 'j': {
           event.preventDefault()
@@ -177,21 +392,56 @@ export const TaskGraphView = memo(function TaskGraphView({
           break
         }
 
+        // Creation
+        case 'o': {
+          if (!event.shiftKey) {
+            event.preventDefault()
+            handleCreateBelow()
+          }
+          break
+        }
+
+        case 'O': {
+          event.preventDefault()
+          handleCreateAbove()
+          break
+        }
+
+        // Editing existing
+        case 'i': {
+          event.preventDefault()
+          handleStartEditAtStart()
+          break
+        }
+
+        case 'a': {
+          event.preventDefault()
+          handleStartEditAtEnd()
+          break
+        }
+
+        case 'r': {
+          event.preventDefault()
+          handleStartReplace()
+          break
+        }
+
+        // Expand/collapse
         case ' ': {
-          // Space to toggle expand/collapse
           event.preventDefault()
           toggleExpanded(selectedIssueId)
           break
         }
 
+        // Open full edit page
         case 'Enter':
         case 'e': {
-          // Enter/e to edit
           event.preventDefault()
           onEditIssue?.(selectedIssueId)
           break
         }
 
+        // Deselect
         case 'Escape': {
           // Escape to close expanded row or deselect
           event.preventDefault()
@@ -204,8 +454,90 @@ export const TaskGraphView = memo(function TaskGraphView({
         }
       }
     },
-    [selectedIssueId, issueIds, onSelectIssue, onEditIssue, toggleExpanded, expandedIds]
+    [
+      editMode,
+      selectedIssueId,
+      issueIds,
+      onSelectIssue,
+      onEditIssue,
+      toggleExpanded,
+      expandedIds,
+      handleCancelEdit,
+      handleCreateBelow,
+      handleCreateAbove,
+      handleStartEditAtStart,
+      handleStartEditAtEnd,
+      handleStartReplace,
+    ]
   )
+
+  // ============================================================================
+  // Inline Editor Row Rendering
+  // ============================================================================
+
+  const renderInlineEditor = useCallback(
+    (_lane: number) => {
+      if (!pendingNewIssue) return null
+
+      // Compute SVG width for lane offset
+      const svgWidth = LANE_WIDTH * maxLanes + 12
+
+      return (
+        <div
+          data-testid="task-graph-inline-create-row"
+          className={cn(
+            'flex items-center gap-2 transition-colors',
+            'bg-muted ring-primary/50 ring-2'
+          )}
+          style={{ height: ROW_HEIGHT }}
+        >
+          {/* SVG placeholder for alignment */}
+          <div style={{ width: svgWidth, flexShrink: 0 }} />
+
+          {/* Type badge */}
+          <span
+            className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium"
+            style={{
+              backgroundColor: '#3b82f620',
+              color: '#3b82f6',
+            }}
+          >
+            Task
+          </span>
+
+          {/* Inline editor */}
+          <InlineIssueEditor
+            title={pendingNewIssue.title}
+            onTitleChange={handleTitleChange}
+            onSave={handleSave}
+            onSaveAndEdit={handleSaveAndEdit}
+            onCancel={handleCancelEdit}
+            onIndent={handleIndent}
+            onUnindent={handleUnindent}
+            placeholder="Enter new issue title..."
+            cursorPosition={EditCursorPosition.Start}
+            showParentIndicator={!!pendingNewIssue.pendingChildId}
+            showChildIndicator={!!pendingNewIssue.pendingParentId}
+            isAbove={pendingNewIssue.isAbove}
+          />
+        </div>
+      )
+    },
+    [
+      pendingNewIssue,
+      maxLanes,
+      handleTitleChange,
+      handleSave,
+      handleSaveAndEdit,
+      handleCancelEdit,
+      handleIndent,
+      handleUnindent,
+    ]
+  )
+
+  // ============================================================================
+  // Rendering
+  // ============================================================================
 
   // Render loading skeleton
   if (isLoading) {
@@ -254,6 +586,7 @@ export const TaskGraphView = memo(function TaskGraphView({
       tabIndex={0}
       aria-label="Task graph"
       aria-rowcount={renderLines.length}
+      data-testid="task-graph"
       className={cn('focus-visible:outline-none', className)}
       onKeyDown={handleKeyDown}
     >
@@ -261,29 +594,101 @@ export const TaskGraphView = memo(function TaskGraphView({
         if (isIssueRenderLine(line)) {
           const isSelected = selectedIssueId === line.issueId
           const isExpanded = expandedIds.has(line.issueId)
+          const isEditing =
+            editMode === KeyboardEditMode.EditingExisting && pendingEdit?.issueId === line.issueId
+
+          // Check if we should insert inline editor ABOVE this issue
+          const shouldInsertAbove =
+            editMode === KeyboardEditMode.CreatingNew &&
+            pendingNewIssue?.isAbove &&
+            pendingNewIssue?.referenceIssueId === line.issueId
+
+          // Check if we should insert inline editor BELOW this issue
+          const shouldInsertBelow =
+            editMode === KeyboardEditMode.CreatingNew &&
+            !pendingNewIssue?.isAbove &&
+            pendingNewIssue?.referenceIssueId === line.issueId
 
           return (
             <div key={line.issueId}>
-              <TaskGraphIssueRow
-                ref={(el) => {
-                  if (el) {
-                    rowRefs.current.set(line.issueId, el)
-                  } else {
-                    rowRefs.current.delete(line.issueId)
-                  }
-                }}
-                line={line}
-                maxLanes={maxLanes}
-                isSelected={isSelected}
-                isExpanded={isExpanded}
-                searchQuery={searchQuery}
-                onToggleExpand={() => toggleExpanded(line.issueId)}
-                onEdit={onEditIssue}
-                onRunAgent={onRunAgent}
-                onClick={() => handleRowClick(line.issueId)}
-                aria-rowindex={index + 1}
-              />
-              {isExpanded && (
+              {/* Insert inline editor ABOVE if creating above this issue */}
+              {shouldInsertAbove && renderInlineEditor(line.lane)}
+
+              {/* Issue row (or inline edit if editing existing) */}
+              {isEditing && pendingEdit ? (
+                <div
+                  data-testid="task-graph-issue-row"
+                  data-issue-id={line.issueId}
+                  className={cn(
+                    'flex items-center gap-2 transition-colors',
+                    'bg-muted ring-primary/50 ring-2'
+                  )}
+                  style={{ height: ROW_HEIGHT }}
+                >
+                  {/* SVG placeholder for alignment */}
+                  <div style={{ width: LANE_WIDTH * maxLanes + 12, flexShrink: 0 }} />
+
+                  {/* Type badge */}
+                  <span
+                    className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium"
+                    style={{
+                      backgroundColor: '#3b82f620',
+                      color: '#3b82f6',
+                    }}
+                  >
+                    Task
+                  </span>
+
+                  {/* ID */}
+                  <span className="text-muted-foreground shrink-0 font-mono text-xs">
+                    {line.issueId.substring(0, 6)}
+                  </span>
+
+                  {/* Inline editor */}
+                  <InlineIssueEditor
+                    title={pendingEdit.title}
+                    onTitleChange={handleTitleChange}
+                    onSave={() => {
+                      // TODO: Implement save existing issue title
+                      handleCancelEdit()
+                    }}
+                    onSaveAndEdit={() => {
+                      // TODO: Implement save and navigate to edit
+                      onEditIssue?.(line.issueId)
+                    }}
+                    onCancel={handleCancelEdit}
+                    onIndent={() => {}}
+                    onUnindent={() => {}}
+                    placeholder="Enter issue title..."
+                    cursorPosition={pendingEdit.cursorPosition}
+                  />
+                </div>
+              ) : (
+                <TaskGraphIssueRow
+                  ref={(el) => {
+                    if (el) {
+                      rowRefs.current.set(line.issueId, el)
+                    } else {
+                      rowRefs.current.delete(line.issueId)
+                    }
+                  }}
+                  line={line}
+                  maxLanes={maxLanes}
+                  isSelected={isSelected}
+                  isExpanded={isExpanded}
+                  searchQuery={searchQuery}
+                  onToggleExpand={() => toggleExpanded(line.issueId)}
+                  onEdit={onEditIssue}
+                  onRunAgent={onRunAgent}
+                  onClick={() => handleRowClick(line.issueId)}
+                  aria-rowindex={index + 1}
+                  data-testid="task-graph-issue-row"
+                  data-issue-id={line.issueId}
+                />
+              )}
+
+              {/* Expanded details */}
+              {isExpanded && !isEditing && (
                 <TaskGraphExpandedDetails
                   line={line}
                   maxLanes={maxLanes}
@@ -292,6 +697,9 @@ export const TaskGraphView = memo(function TaskGraphView({
                   onClose={() => toggleExpanded(line.issueId)}
                 />
               )}
+
+              {/* Insert inline editor BELOW if creating below this issue */}
+              {shouldInsertBelow && renderInlineEditor(line.lane)}
             </div>
           )
         }
