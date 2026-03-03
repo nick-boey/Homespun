@@ -42,13 +42,7 @@ export function useDeleteClone() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({
-      projectId,
-      clonePath,
-    }: {
-      projectId: string
-      clonePath: string
-    }) => {
+    mutationFn: async ({ projectId, clonePath }: { projectId: string; clonePath: string }) => {
       const response = await Clones.deleteApiClones({
         query: { projectId, clonePath },
       })

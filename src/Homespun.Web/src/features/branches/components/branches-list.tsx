@@ -5,16 +5,8 @@ import { BranchCard } from './branch-card'
 import { BranchCardSkeleton } from './branch-card-skeleton'
 import { RemoteBranchRow } from './remote-branch-row'
 import { BranchesEmptyState } from './branches-empty-state'
-import {
-  useClones,
-  useDeleteClone,
-  usePullClone,
-  useCreateClone,
-} from '../hooks/use-clones'
-import {
-  useBranches,
-  getRemoteOnlyBranches,
-} from '../hooks/use-branches'
+import { useClones, useDeleteClone, usePullClone, useCreateClone } from '../hooks/use-clones'
+import { useBranches, getRemoteOnlyBranches } from '../hooks/use-branches'
 import type { BranchInfo, CloneInfo } from '@/api/generated/types.gen'
 
 export interface BranchesListProps {
@@ -23,11 +15,7 @@ export interface BranchesListProps {
 }
 
 export function BranchesList({ projectId, repoPath }: BranchesListProps) {
-  const {
-    data: clones,
-    isLoading: clonesLoading,
-    refetch: refetchClones,
-  } = useClones(projectId)
+  const { data: clones, isLoading: clonesLoading, refetch: refetchClones } = useClones(projectId)
 
   const {
     data: branches,
@@ -116,9 +104,7 @@ export function BranchesList({ projectId, repoPath }: BranchesListProps) {
       // Refetch data
       await Promise.all([refetchClones(), refetchBranches()])
       // Pull all clones
-      const pullPromises = (clones ?? [])
-        .filter((c) => c.path)
-        .map((clone) => handlePull(clone))
+      const pullPromises = (clones ?? []).filter((c) => c.path).map((clone) => handlePull(clone))
       await Promise.allSettled(pullPromises)
     } finally {
       setIsRefreshingAll(false)
@@ -156,9 +142,7 @@ export function BranchesList({ projectId, repoPath }: BranchesListProps) {
             <GitBranch className="h-5 w-5" />
             Local Worktrees
             {hasLocalWorktrees && (
-              <span className="text-muted-foreground text-sm font-normal">
-                ({clones.length})
-              </span>
+              <span className="text-muted-foreground text-sm font-normal">({clones.length})</span>
             )}
           </h2>
           <Button
@@ -167,9 +151,7 @@ export function BranchesList({ projectId, repoPath }: BranchesListProps) {
             onClick={handleRefreshAll}
             disabled={isRefreshingAll || !hasLocalWorktrees}
           >
-            <RefreshCw
-              className={`mr-2 h-4 w-4 ${isRefreshingAll ? 'animate-spin' : ''}`}
-            />
+            <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshingAll ? 'animate-spin' : ''}`} />
             Refresh All
           </Button>
         </div>

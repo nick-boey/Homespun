@@ -2,7 +2,13 @@ import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createElement, type ReactNode } from 'react'
-import { useClones, useCreateClone, useDeleteClone, usePullClone, usePruneClones } from './use-clones'
+import {
+  useClones,
+  useCreateClone,
+  useDeleteClone,
+  usePullClone,
+  usePruneClones,
+} from './use-clones'
 import { Clones } from '@/api'
 import type { CloneInfo } from '@/api/generated/types.gen'
 

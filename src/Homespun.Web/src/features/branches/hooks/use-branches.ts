@@ -25,7 +25,10 @@ export function useBranches(repoPath: string) {
 export function getRemoteOnlyBranches(branches: BranchInfo[]): BranchInfo[] {
   return branches.filter(
     (branch) =>
-      branch.hasRemote && !branch.hasClone && branch.shortName !== 'main' && branch.shortName !== 'master'
+      branch.hasRemote &&
+      !branch.hasClone &&
+      branch.shortName !== 'main' &&
+      branch.shortName !== 'master'
   )
 }
 

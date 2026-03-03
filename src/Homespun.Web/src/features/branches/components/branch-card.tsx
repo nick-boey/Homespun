@@ -1,12 +1,5 @@
 import { useState } from 'react'
-import {
-  GitBranch,
-  Trash2,
-  RefreshCw,
-  Play,
-  AlertTriangle,
-  Clock,
-} from 'lucide-react'
+import { GitBranch, Trash2, RefreshCw, Play, AlertTriangle, Clock } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardDescription, CardAction } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -56,7 +49,10 @@ function formatRelativeTime(dateString: string): string {
   return 'just now'
 }
 
-function getBranchStatus(branch: BranchInfo): { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' } {
+function getBranchStatus(branch: BranchInfo): {
+  label: string
+  variant: 'default' | 'secondary' | 'destructive' | 'outline'
+} {
   if (branch.behindCount && branch.behindCount > 0) {
     return { label: `${branch.behindCount} behind`, variant: 'destructive' }
   }
@@ -156,8 +152,8 @@ export function BranchCard({
                   <AlertDialogDescription>
                     {isMerged ? (
                       <>
-                        Are you sure you want to delete the worktree for "{branch.shortName}"?
-                        This branch has been merged.
+                        Are you sure you want to delete the worktree for "{branch.shortName}"? This
+                        branch has been merged.
                       </>
                     ) : (
                       <>
@@ -166,8 +162,8 @@ export function BranchCard({
                           Warning: This branch has not been merged!
                         </span>
                         <span className="mt-2 block">
-                          Deleting this worktree may result in lost work. Are you sure you want
-                          to continue?
+                          Deleting this worktree may result in lost work. Are you sure you want to
+                          continue?
                         </span>
                       </>
                     )}
