@@ -2,12 +2,13 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { Button } from '@/components/ui/button'
 import { useBreadcrumbSetter } from '@/hooks/use-breadcrumbs'
 import { Plus } from 'lucide-react'
+import { ProjectsList } from '@/features/projects'
 
 export const Route = createFileRoute('/')({
-  component: ProjectsList,
+  component: ProjectsPage,
 })
 
-function ProjectsList() {
+function ProjectsPage() {
   useBreadcrumbSetter([{ title: 'Projects' }], [])
 
   return (
@@ -21,11 +22,7 @@ function ProjectsList() {
           </Link>
         </Button>
       </div>
-      <div className="border-border rounded-lg border p-8 text-center">
-        <p className="text-muted-foreground">
-          No projects yet. Create your first project to get started.
-        </p>
-      </div>
+      <ProjectsList />
     </div>
   )
 }
