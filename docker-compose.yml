@@ -18,6 +18,8 @@
 #   GRAFANA_PORT           - Grafana port (default: 3000)
 #   GRAFANA_ADMIN_PASSWORD - Grafana admin password (default: admin)
 #   MINI_PROMPT_SIDECAR_URL - URL for mini-prompt sidecar (default: http://homespun-worker:8080)
+#   WEB_PORT               - Host port for React frontend (default: 3001)
+#   WEB_IMAGE              - React frontend image (default: ghcr.io/nick-boey/homespun-web:latest)
 
 services:
   # Main Homespun application
@@ -85,6 +87,28 @@ services:
       - "logging=promtail"
       - "logging_jobname=homespun-worker"
     depends_on:
+      loki:
+        condition: service_started
+        required: false
+
+  # React Frontend - Vite-based React application
+  web:
+    image: ${WEB_IMAGE:-ghcr.io/nick-boey/homespun-web:latest}
+    container_name: homespun-web
+    ports:
+      - "${WEB_PORT:-3001}:80"
+    environment:
+      - VITE_API_URL=http://homespun:8080
+    restart: unless-stopped
+    networks:
+      - homespun-net
+    labels:
+      - "logging=promtail"
+      - "logging_jobname=homespun-web"
+    depends_on:
+      homespun:
+        condition: service_healthy
+        required: false
       loki:
         condition: service_started
         required: false
