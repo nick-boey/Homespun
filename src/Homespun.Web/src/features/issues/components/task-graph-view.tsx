@@ -18,7 +18,7 @@ import {
   isSeparatorRenderLine,
   isLoadMoreRenderLine,
 } from '../services'
-import { useTaskGraph, taskGraphQueryKey, useCreateIssue } from '../hooks'
+import { useTaskGraph, taskGraphQueryKey, useCreateIssue, useUpdateIssue } from '../hooks'
 import {
   KeyboardEditMode,
   EditCursorPosition,
@@ -89,6 +89,15 @@ export const TaskGraphView = memo(function TaskGraphView({
       // Reset edit mode after successful creation
       setEditMode(KeyboardEditMode.Viewing)
       setPendingNewIssue(null)
+    },
+  })
+
+  // Update issue mutation
+  const { mutateAsync: updateIssue } = useUpdateIssue({
+    onSuccess: () => {
+      // Reset edit mode after successful update
+      setEditMode(KeyboardEditMode.Viewing)
+      setPendingEdit(null)
     },
   })
 
@@ -392,6 +401,60 @@ export const TaskGraphView = memo(function TaskGraphView({
           break
         }
 
+        // Parent/child navigation
+        case 'ArrowLeft':
+        case 'h': {
+          event.preventDefault()
+          // Navigate to parent - find issue at parent lane
+          const currentLine = issueRenderLines[currentIndex]
+          if (currentLine?.parentLane !== undefined) {
+            const parentLine = issueRenderLines.find((line) => line.lane === currentLine.parentLane)
+            if (parentLine) {
+              onSelectIssue?.(parentLine.issueId)
+              rowRefs.current.get(parentLine.issueId)?.scrollIntoView({ block: 'nearest' })
+            }
+          }
+          break
+        }
+
+        case 'ArrowRight':
+        case 'l': {
+          event.preventDefault()
+          // Navigate to first child - find first issue with parentLane === current lane
+          const currentLine = issueRenderLines[currentIndex]
+          if (currentLine) {
+            const childLine = issueRenderLines.find((line) => line.parentLane === currentLine.lane)
+            if (childLine) {
+              onSelectIssue?.(childLine.issueId)
+              rowRefs.current.get(childLine.issueId)?.scrollIntoView({ block: 'nearest' })
+            }
+          }
+          break
+        }
+
+        // Jump to first/last
+        case 'g': {
+          if (!event.shiftKey) {
+            event.preventDefault()
+            const firstId = issueIds[0]
+            if (firstId) {
+              onSelectIssue?.(firstId)
+              rowRefs.current.get(firstId)?.scrollIntoView({ block: 'nearest' })
+            }
+          }
+          break
+        }
+
+        case 'G': {
+          event.preventDefault()
+          const lastId = issueIds[issueIds.length - 1]
+          if (lastId) {
+            onSelectIssue?.(lastId)
+            rowRefs.current.get(lastId)?.scrollIntoView({ block: 'nearest' })
+          }
+          break
+        }
+
         // Creation
         case 'o': {
           if (!event.shiftKey) {
@@ -458,6 +521,7 @@ export const TaskGraphView = memo(function TaskGraphView({
       editMode,
       selectedIssueId,
       issueIds,
+      issueRenderLines,
       onSelectIssue,
       onEditIssue,
       toggleExpanded,
@@ -648,13 +712,45 @@ export const TaskGraphView = memo(function TaskGraphView({
                   <InlineIssueEditor
                     title={pendingEdit.title}
                     onTitleChange={handleTitleChange}
-                    onSave={() => {
-                      // TODO: Implement save existing issue title
-                      handleCancelEdit()
+                    onSave={async () => {
+                      if (!pendingEdit.title.trim()) {
+                        handleCancelEdit()
+                        return
+                      }
+                      // Only save if title changed
+                      if (pendingEdit.title.trim() !== pendingEdit.originalTitle) {
+                        try {
+                          await updateIssue({
+                            issueId: line.issueId,
+                            data: { projectId, title: pendingEdit.title.trim() },
+                          })
+                        } catch {
+                          // Keep edit mode on error
+                        }
+                      } else {
+                        handleCancelEdit()
+                      }
+                      containerRef.current?.focus()
                     }}
-                    onSaveAndEdit={() => {
-                      // TODO: Implement save and navigate to edit
-                      onEditIssue?.(line.issueId)
+                    onSaveAndEdit={async () => {
+                      if (!pendingEdit.title.trim()) {
+                        handleCancelEdit()
+                        return
+                      }
+                      // Save title if changed, then navigate to edit
+                      if (pendingEdit.title.trim() !== pendingEdit.originalTitle) {
+                        try {
+                          await updateIssue({
+                            issueId: line.issueId,
+                            data: { projectId, title: pendingEdit.title.trim() },
+                          })
+                          onEditIssue?.(line.issueId)
+                        } catch {
+                          // Keep edit mode on error
+                        }
+                      } else {
+                        onEditIssue?.(line.issueId)
+                      }
                     }}
                     onCancel={handleCancelEdit}
                     onIndent={() => {}}
