@@ -11,3 +11,9 @@ export {
   type UseKeyboardNavigationReturn,
 } from './use-keyboard-navigation'
 export { useTaskGraph, taskGraphQueryKey, type UseTaskGraphOptions } from './use-task-graph'
+export { useIssue, issueQueryKey, type UseIssueResult } from './use-issue'
+export {
+  useUpdateIssue,
+  type UseUpdateIssueOptions,
+  type UpdateIssueParams,
+} from './use-update-issue'
