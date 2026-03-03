@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useBreadcrumbSetter } from '@/hooks/use-breadcrumbs'
 import { useSession, useSessionMessages, MessageList, ChatInput } from '@/features/sessions'
+import { useAnswerQuestion } from '@/features/questions'
 import { useClaudeCodeHub } from '@/providers/signalr-provider'
 import { ArrowLeft, AlertCircle, RefreshCw } from 'lucide-react'
 import type { PermissionMode, ModelSelection } from '@/stores/chat-input-store'
@@ -24,6 +25,11 @@ function SessionChat() {
   const { messages } = useSessionMessages({
     sessionId,
     initialMessages: session?.messages ?? [],
+  })
+
+  // Handle question answering
+  const { answerQuestion, isSubmitting: isSubmittingAnswer } = useAnswerQuestion({
+    sessionId,
   })
 
   // Determine if the session is processing (not accepting input)
@@ -50,12 +56,12 @@ function SessionChat() {
     [methods, isConnected, sessionId]
   )
 
-  // Auto-scroll to bottom when new messages arrive
+  // Auto-scroll to bottom when new messages arrive or when pending question appears
   useEffect(() => {
     if (scrollContainerRef.current) {
       scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight
     }
-  }, [messages])
+  }, [messages, session?.pendingQuestion])
 
   useBreadcrumbSetter(
     [
@@ -129,7 +135,13 @@ function SessionChat() {
         ref={scrollContainerRef}
         className="border-border min-h-0 flex-1 overflow-y-auto rounded-lg border"
       >
-        <MessageList messages={messages} isLoading={isLoading} />
+        <MessageList
+          messages={messages}
+          isLoading={isLoading}
+          pendingQuestion={session?.pendingQuestion}
+          onAnswerQuestion={answerQuestion}
+          isSubmittingAnswer={isSubmittingAnswer}
+        />
       </div>
       <ChatInput
         onSend={handleSend}
