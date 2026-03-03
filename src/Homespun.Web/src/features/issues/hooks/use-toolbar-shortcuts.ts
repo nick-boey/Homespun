@@ -61,6 +61,15 @@ export function useToolbarShortcuts(callbacks: ToolbarShortcutCallbacks) {
         return
       }
 
+      // Undo: Ctrl+Z or Cmd+Z
+      if ((ctrlKey || metaKey) && !shiftKey && key.toLowerCase() === 'z') {
+        if (canUndo) {
+          event.preventDefault()
+          onUndo()
+        }
+        return
+      }
+
       // Create above: Shift+O
       if (shiftKey && key === 'O') {
         event.preventDefault()

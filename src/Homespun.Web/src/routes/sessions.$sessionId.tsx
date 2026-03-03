@@ -1,11 +1,14 @@
 import { createFileRoute, useParams, Link } from '@tanstack/react-router'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useCallback, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useBreadcrumbSetter } from '@/hooks/use-breadcrumbs'
-import { useSession, useSessionMessages, MessageList } from '@/features/sessions'
+import { useSession, useSessionMessages, MessageList, ChatInput } from '@/features/sessions'
 import { useAnswerQuestion } from '@/features/questions'
+import { useClaudeCodeHub } from '@/providers/signalr-provider'
 import { ArrowLeft, AlertCircle, RefreshCw } from 'lucide-react'
+import type { PermissionMode, ModelSelection } from '@/stores/chat-input-store'
+import type { SessionMode } from '@/types/signalr'
 
 export const Route = createFileRoute('/sessions/$sessionId')({
   component: SessionChat,
@@ -14,7 +17,9 @@ export const Route = createFileRoute('/sessions/$sessionId')({
 function SessionChat() {
   const { sessionId } = useParams({ from: '/sessions/$sessionId' })
   const { session, isLoading, isNotFound, error, refetch } = useSession(sessionId)
+  const { methods, isConnected } = useClaudeCodeHub()
   const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const [isSending, setIsSending] = useState(false)
 
   // Get session messages with real-time updates
   const { messages } = useSessionMessages({
@@ -26,6 +31,30 @@ function SessionChat() {
   const { answerQuestion, isSubmitting: isSubmittingAnswer } = useAnswerQuestion({
     sessionId,
   })
+
+  // Determine if the session is processing (not accepting input)
+  const isProcessing =
+    session?.status === 'Running' ||
+    session?.status === 'RunningHooks' ||
+    session?.status === 'Starting'
+
+  // Handle sending messages
+  const handleSend = useCallback(
+    async (message: string, permissionMode: PermissionMode, _model: ModelSelection) => {
+      if (!methods || !isConnected) return
+
+      // Map permission mode to session mode
+      const sessionMode: SessionMode = permissionMode === 'plan' ? 'Plan' : 'Build'
+
+      setIsSending(true)
+      try {
+        await methods.sendMessage(sessionId, message, sessionMode)
+      } finally {
+        setIsSending(false)
+      }
+    },
+    [methods, isConnected, sessionId]
+  )
 
   // Auto-scroll to bottom when new messages arrive or when pending question appears
   useEffect(() => {
@@ -104,7 +133,7 @@ function SessionChat() {
       <SessionHeader sessionId={sessionId} session={session} />
       <div
         ref={scrollContainerRef}
-        className="border-border flex-1 overflow-y-auto rounded-lg border"
+        className="border-border min-h-0 flex-1 overflow-y-auto rounded-lg border"
       >
         <MessageList
           messages={messages}
@@ -114,6 +143,14 @@ function SessionChat() {
           isSubmittingAnswer={isSubmittingAnswer}
         />
       </div>
+      <ChatInput
+        onSend={handleSend}
+        disabled={isProcessing || !isConnected}
+        isLoading={isSending}
+        placeholder={
+          !isConnected ? 'Connecting...' : isProcessing ? 'Processing...' : 'Type a message...'
+        }
+      />
     </div>
   )
 }

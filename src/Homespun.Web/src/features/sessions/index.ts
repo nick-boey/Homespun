@@ -1,4 +1,5 @@
 // Components
+export { ChatInput } from './components/chat-input'
 export { MessageList } from './components/message-list'
 export { SessionsList } from './components/sessions-list'
 export { SessionsEmptyState } from './components/sessions-empty-state'
