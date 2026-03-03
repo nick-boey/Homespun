@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { Button } from '@/components/ui/button'
 import { useBreadcrumbSetter } from '@/hooks/use-breadcrumbs'
+import { ProjectCreationForm } from '@/features/projects'
 import { ArrowLeft } from 'lucide-react'
 
 export const Route = createFileRoute('/projects/new')({
@@ -20,8 +21,8 @@ function NewProject() {
         </Button>
         <h1 className="text-2xl font-semibold">New Project</h1>
       </div>
-      <div className="border-border rounded-lg border p-8 text-center">
-        <p className="text-muted-foreground">Project creation form will be implemented here.</p>
+      <div className="max-w-lg">
+        <ProjectCreationForm />
       </div>
     </div>
   )
