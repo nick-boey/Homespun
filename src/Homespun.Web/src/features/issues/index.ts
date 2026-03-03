@@ -1,6 +1,7 @@
 // Components
 export { ProjectToolbar, type ProjectToolbarProps } from './components'
 export { TaskGraphView, type TaskGraphViewProps } from './components'
+export { InlineIssueEditor, type InlineIssueEditorProps } from './components'
 export {
   TaskGraphIssueRow,
   TaskGraphPrRow,
@@ -42,6 +43,12 @@ export {
 export { useTaskGraph, taskGraphQueryKey, type UseTaskGraphOptions } from './hooks'
 export { useIssue, issueQueryKey, type UseIssueResult } from './hooks'
 export { useUpdateIssue, type UseUpdateIssueOptions, type UpdateIssueParams } from './hooks'
+export {
+  useCreateIssue,
+  type UseCreateIssueOptions,
+  type UseCreateIssueReturn,
+  type CreateIssueParams,
+} from './hooks'
 
 // Services
 export {

@@ -17,3 +17,9 @@ export {
   type UseUpdateIssueOptions,
   type UpdateIssueParams,
 } from './use-update-issue'
+export {
+  useCreateIssue,
+  type UseCreateIssueOptions,
+  type UseCreateIssueReturn,
+  type CreateIssueParams,
+} from './use-create-issue'

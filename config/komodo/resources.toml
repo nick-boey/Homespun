@@ -38,7 +38,7 @@ resource_path = ["config/komodo/resources.toml"]
 
 [[stack]]
 name = "homespun"
-description = "Homespun - Blazor web app for managing development features and AI agents"
+description = "Homespun - React web app for managing development features and AI agents"
 tags = ["homespun"]
 
 [stack.config]
@@ -51,6 +51,7 @@ poll_for_updates = true
 environment = """
 HOMESPUN_IMAGE=ghcr.io/nick-boey/homespun:[[HOMESPUN_TAG]]
 WORKER_IMAGE=ghcr.io/nick-boey/homespun-worker:[[HOMESPUN_TAG]]
+WEB_IMAGE=ghcr.io/nick-boey/homespun-web:[[HOMESPUN_TAG]]
 COMPOSE_PROFILES=plg
 CONTAINER_NAME=homespun
 HOST_PORT=8080
