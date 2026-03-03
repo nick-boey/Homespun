@@ -1,15 +1,17 @@
 import { Link } from '@tanstack/react-router'
-import { Menu, ChevronRight, Circle } from 'lucide-react'
+import { Menu, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useBreadcrumbs } from '@/hooks/use-breadcrumbs'
 import { cn } from '@/lib/utils'
+import { ActiveAgentsIndicator } from '@/features/agents'
 
 interface HeaderProps {
+  projectId?: string
   onMenuClick?: () => void
   className?: string
 }
 
-export function Header({ onMenuClick, className }: HeaderProps) {
+export function Header({ projectId, onMenuClick, className }: HeaderProps) {
   const { breadcrumbs } = useBreadcrumbs()
 
   return (
@@ -47,10 +49,11 @@ export function Header({ onMenuClick, className }: HeaderProps) {
       </nav>
 
       <div className="flex items-center gap-2">
-        <div className="text-muted-foreground flex items-center gap-2 text-sm">
-          <Circle className="h-2 w-2 fill-current text-green-500" />
-          <span className="hidden sm:inline">Agent idle</span>
-        </div>
+        {projectId ? (
+          <ActiveAgentsIndicator projectId={projectId} />
+        ) : (
+          <span className="text-muted-foreground text-sm">Select a project</span>
+        )}
       </div>
     </header>
   )
