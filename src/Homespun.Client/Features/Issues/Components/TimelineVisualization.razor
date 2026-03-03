@@ -40,7 +40,12 @@
                 NavService="@NavService"
                 MaxDepth="@MaxDepth"
                 MaxDepthChanged="HandleMaxDepthChanged"
-                ActiveSearchTerm="@ActiveSearchTerm" />
+                ActiveSearchTerm="@ActiveSearchTerm"
+                GetIssueById="GetIssueById"
+                GetCurrentPrByNumber="GetCurrentPrByNumber"
+                GetMergedPrByNumber="GetMergedPrByNumber"
+                OnIssueActionCompleted="OnIssueActionCompleted"
+                OnPrActionCompleted="OnPrActionCompleted" />
         </div>
     }
 </div>
@@ -147,6 +152,31 @@
     /// Called when the max available depth changes after data loads.
     /// </summary>
     [Parameter] public EventCallback<int> MaxAvailableDepthChanged { get; set; }
+
+    /// <summary>
+    /// Callback to get full issue data for inline detail panel.
+    /// </summary>
+    [Parameter] public Func<string, IssueResponse?>? GetIssueById { get; set; }
+
+    /// <summary>
+    /// Callback to get current PR data for inline detail panel.
+    /// </summary>
+    [Parameter] public Func<int, PullRequest?>? GetCurrentPrByNumber { get; set; }
+
+    /// <summary>
+    /// Callback to get merged PR data for inline detail panel.
+    /// </summary>
+    [Parameter] public Func<int, Task<MergedPullRequestDetails?>>? GetMergedPrByNumber { get; set; }
+
+    /// <summary>
+    /// Called when issue detail actions are completed.
+    /// </summary>
+    [Parameter] public EventCallback OnIssueActionCompleted { get; set; }
+
+    /// <summary>
+    /// Called when PR detail actions are completed.
+    /// </summary>
+    [Parameter] public EventCallback OnPrActionCompleted { get; set; }
 
 
     private HubConnection? _hubConnection;
@@ -348,6 +378,30 @@
         StateHasChanged();
     }
 
+    /// <summary>
+    /// Returns true if any issue or PR is expanded inline.
+    /// </summary>
+    public bool IsExpanded => _taskGraphViewRef?.IsExpanded == true;
+
+    /// <summary>
+    /// Collapses any expanded issue or PR row.
+    /// </summary>
+    public void CollapseAll()
+    {
+        _taskGraphViewRef?.CollapseAll();
+    }
+
+    /// <summary>
+    /// Toggles expansion for the currently selected issue.
+    /// </summary>
+    public async Task ToggleSelectedIssueExpansionAsync()
+    {
+        if (_taskGraphViewRef != null)
+        {
+            await _taskGraphViewRef.ToggleExpansionForSelectedIssueAsync(NavService.SelectedIssueId);
+        }
+    }
+
     private async Task HandleIssueCreated(string newIssueId)
     {
         // Refresh the task graph to show the new issue
@@ -453,6 +507,17 @@
                 break;
             case "s":
                 _taskGraphViewRef?.OpenStatusMenu();
+                break;
+            case " ": // Space key
+                // Toggle expansion of selected issue
+                _ = _taskGraphViewRef?.ToggleExpansionForSelectedIssueAsync(NavService.SelectedIssueId);
+                break;
+            case "Escape":
+                // Collapse any expanded row
+                if (_taskGraphViewRef?.IsExpanded == true)
+                {
+                    _taskGraphViewRef.CollapseAll();
+                }
                 break;
         }
     }

@@ -1,8 +1,8 @@
 namespace Homespun.E2E.Tests;
 
 /// <summary>
-/// End-to-end tests for the collapsible issue details sidebar.
-/// Verifies that the sidebar opens only on click, not on keyboard navigation.
+/// End-to-end tests for the inline issue detail expansion.
+/// Verifies that issue rows expand only on double-click, not on keyboard navigation.
 /// </summary>
 [Parallelizable(ParallelScope.Self)]
 [TestFixture]
@@ -20,7 +20,7 @@ public class CollapsibleSidebarTests : PageTest
     }
 
     [Test]
-    public async Task Sidebar_IsCollapsedByDefault()
+    public async Task InlineDetail_IsCollapsedByDefault()
     {
         // Navigate to the demo project page
         await Page.GotoAsync($"{BaseUrl}/projects/demo-project");
@@ -30,13 +30,17 @@ public class CollapsibleSidebarTests : PageTest
         var taskGraphRow = Page.Locator(".task-graph-row").First;
         await Expect(taskGraphRow).ToBeVisibleAsync(new() { Timeout = 10000 });
 
-        // Verify the sidebar exists but is not open
-        var sidebar = Page.Locator(".detail-sidebar");
-        await Expect(sidebar).Not.ToHaveClassAsync(new System.Text.RegularExpressions.Regex("open"));
+        // Verify no rows are expanded by default
+        var expandedRow = Page.Locator(".task-graph-row-expanded");
+        await Expect(expandedRow).Not.ToBeVisibleAsync();
+
+        // Verify no inline detail panel is visible
+        var inlineDetail = Page.Locator("[data-testid='inline-issue-detail']");
+        await Expect(inlineDetail).Not.ToBeVisibleAsync();
     }
 
     [Test]
-    public async Task KeyboardNavigation_DoesNotOpenSidebar()
+    public async Task KeyboardNavigation_DoesNotExpandRow()
     {
         // Navigate to the demo project page
         await Page.GotoAsync($"{BaseUrl}/projects/demo-project");
@@ -53,13 +57,17 @@ public class CollapsibleSidebarTests : PageTest
         var selectedRow = Page.Locator(".task-graph-row-selected");
         await Expect(selectedRow).ToBeVisibleAsync(new() { Timeout = 5000 });
 
-        // Verify the sidebar is still NOT open
-        var sidebar = Page.Locator(".detail-sidebar");
-        await Expect(sidebar).Not.ToHaveClassAsync(new System.Text.RegularExpressions.Regex("open"));
+        // Verify no row is expanded
+        var expandedRow = Page.Locator(".task-graph-row-expanded");
+        await Expect(expandedRow).Not.ToBeVisibleAsync();
+
+        // Verify no inline detail panel is visible
+        var inlineDetail = Page.Locator("[data-testid='inline-issue-detail']");
+        await Expect(inlineDetail).Not.ToBeVisibleAsync();
     }
 
     [Test]
-    public async Task ClickingIssue_OpensSidebar()
+    public async Task DoubleClickingIssue_ExpandsRow()
     {
         // Navigate to the demo project page
         await Page.GotoAsync($"{BaseUrl}/projects/demo-project");
@@ -69,66 +77,74 @@ public class CollapsibleSidebarTests : PageTest
         var taskGraphRow = Page.Locator("[data-testid='task-graph-issue-row']").First;
         await Expect(taskGraphRow).ToBeVisibleAsync(new() { Timeout = 10000 });
 
-        // Click on an issue row
-        await taskGraphRow.ClickAsync();
+        // Double-click on an issue row
+        await taskGraphRow.DblClickAsync();
 
-        // Verify the sidebar opens
-        var sidebar = Page.Locator(".detail-sidebar.open");
-        await Expect(sidebar).ToBeVisibleAsync(new() { Timeout = 5000 });
+        // Verify the row is expanded
+        var expandedRow = Page.Locator(".task-graph-row-expanded");
+        await Expect(expandedRow).ToBeVisibleAsync(new() { Timeout = 5000 });
 
-        // Verify IssueDetailPanel is shown in the sidebar
-        var issuePanel = sidebar.Locator(".issue-detail-panel");
-        await Expect(issuePanel).ToBeVisibleAsync(new() { Timeout = 5000 });
+        // Verify inline detail panel is shown
+        var inlineDetail = Page.Locator("[data-testid='inline-issue-detail']");
+        await Expect(inlineDetail).ToBeVisibleAsync(new() { Timeout = 5000 });
     }
 
     [Test]
-    public async Task ClosingPanel_CollapsesSidebar()
+    public async Task DoubleClickingExpandedIssue_CollapsesRow()
     {
         // Navigate to the demo project page
         await Page.GotoAsync($"{BaseUrl}/projects/demo-project");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
-        // Wait for task graph to render and click an issue to open sidebar
+        // Wait for task graph to render and double-click an issue to expand
         var taskGraphRow = Page.Locator("[data-testid='task-graph-issue-row']").First;
         await Expect(taskGraphRow).ToBeVisibleAsync(new() { Timeout = 10000 });
-        await taskGraphRow.ClickAsync();
+        await taskGraphRow.DblClickAsync();
 
-        // Verify sidebar is open
-        var sidebar = Page.Locator(".detail-sidebar.open");
-        await Expect(sidebar).ToBeVisibleAsync(new() { Timeout = 5000 });
+        // Verify row is expanded
+        var expandedRow = Page.Locator(".task-graph-row-expanded");
+        await Expect(expandedRow).ToBeVisibleAsync(new() { Timeout = 5000 });
 
-        // Press Escape to close the sidebar (the panel has no close button; Escape is the primary close mechanism)
-        await Page.Keyboard.PressAsync("Escape");
+        // Double-click again to collapse
+        await taskGraphRow.DblClickAsync();
 
-        // Verify the sidebar collapses
-        await Expect(sidebar).Not.ToBeVisibleAsync(new() { Timeout = 5000 });
+        // Verify the row is collapsed
+        await Expect(expandedRow).Not.ToBeVisibleAsync(new() { Timeout = 5000 });
+
+        // Verify inline detail panel is hidden
+        var inlineDetail = Page.Locator("[data-testid='inline-issue-detail']");
+        await Expect(inlineDetail).Not.ToBeVisibleAsync(new() { Timeout = 5000 });
     }
 
     [Test]
-    public async Task EscapeKey_ClosesSidebar()
+    public async Task EscapeKey_CollapsesExpandedRow()
     {
         // Navigate to the demo project page
         await Page.GotoAsync($"{BaseUrl}/projects/demo-project");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
-        // Wait for task graph to render and click an issue to open sidebar
+        // Wait for task graph to render and double-click an issue to expand
         var taskGraphRow = Page.Locator("[data-testid='task-graph-issue-row']").First;
         await Expect(taskGraphRow).ToBeVisibleAsync(new() { Timeout = 10000 });
-        await taskGraphRow.ClickAsync();
+        await taskGraphRow.DblClickAsync();
 
-        // Verify sidebar is open
-        var sidebar = Page.Locator(".detail-sidebar.open");
-        await Expect(sidebar).ToBeVisibleAsync(new() { Timeout = 5000 });
+        // Verify row is expanded
+        var expandedRow = Page.Locator(".task-graph-row-expanded");
+        await Expect(expandedRow).ToBeVisibleAsync(new() { Timeout = 5000 });
 
-        // Press Escape to close the sidebar
+        // Press Escape to collapse
         await Page.Keyboard.PressAsync("Escape");
 
-        // Verify the sidebar collapses
-        await Expect(sidebar).Not.ToBeVisibleAsync(new() { Timeout = 5000 });
+        // Verify the row is collapsed
+        await Expect(expandedRow).Not.ToBeVisibleAsync(new() { Timeout = 5000 });
+
+        // Verify inline detail panel is hidden
+        var inlineDetail = Page.Locator("[data-testid='inline-issue-detail']");
+        await Expect(inlineDetail).Not.ToBeVisibleAsync(new() { Timeout = 5000 });
     }
 
     [Test]
-    public async Task KeyboardNavigation_DoesNotChangeSidebarContent_WhenOpen()
+    public async Task KeyboardNavigation_DoesNotChangeExpandedContent_WhenExpanded()
     {
         // Navigate to the demo project page
         await Page.GotoAsync($"{BaseUrl}/projects/demo-project");
@@ -138,24 +154,26 @@ public class CollapsibleSidebarTests : PageTest
         var issueRows = Page.Locator("[data-testid='task-graph-issue-row']");
         await Expect(issueRows.First).ToBeVisibleAsync(new() { Timeout = 10000 });
 
-        // Click on the first issue to open sidebar
+        // Double-click on the first issue to expand
         var firstRow = issueRows.First;
-        await firstRow.ClickAsync();
+        await firstRow.DblClickAsync();
 
-        // Verify sidebar is open
-        var sidebar = Page.Locator(".detail-sidebar.open");
-        await Expect(sidebar).ToBeVisibleAsync(new() { Timeout = 5000 });
+        // Verify row is expanded and inline detail is shown
+        var expandedRow = Page.Locator(".task-graph-row-expanded");
+        await Expect(expandedRow).ToBeVisibleAsync(new() { Timeout = 5000 });
 
-        // Get the issue title shown in the sidebar
-        var issueTitle = sidebar.Locator(".issue-detail-panel h5").First;
-        var clickedIssueTitle = await issueTitle.TextContentAsync();
+        // Get the issue ID shown in the inline detail panel
+        var inlineDetail = Page.Locator("[data-testid='inline-issue-detail']");
+        var expandedIssueId = await firstRow.GetAttributeAsync("data-issue-id");
 
         // Use keyboard to navigate to a different issue
         await Page.Keyboard.PressAsync("j");
 
-        // The sidebar should still show the originally clicked issue
-        var currentIssueTitle = await issueTitle.TextContentAsync();
-        Assert.That(currentIssueTitle, Is.EqualTo(clickedIssueTitle),
-            "Sidebar should continue showing the clicked issue, not the keyboard-selected one");
+        // Verify the original row is still expanded (expansion doesn't change on navigation)
+        var stillExpandedRow = Page.Locator($"[data-issue-id='{expandedIssueId}'].task-graph-row-expanded");
+        await Expect(stillExpandedRow).ToBeVisibleAsync(new() { Timeout = 5000 });
+
+        // Verify inline detail panel is still visible
+        await Expect(inlineDetail).ToBeVisibleAsync(new() { Timeout = 5000 });
     }
 }

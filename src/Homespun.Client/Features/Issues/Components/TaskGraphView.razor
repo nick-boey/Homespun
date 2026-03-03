@@ -22,8 +22,11 @@
             else if (line is TaskGraphPrRenderLine prLine)
             {
                 var isSelected = SelectedNodeId == $"pr-{prLine.PrNumber}";
-                <div class="task-graph-row @(isSelected ? "task-graph-row-selected" : "")"
-                     @onclick="() => HandlePrClick(prLine.Url)">
+                var isPrExpanded = _expandedNodeId == $"pr-{prLine.PrNumber}";
+                <div class="task-graph-row @(isSelected ? "task-graph-row-selected" : "") @(isPrExpanded ? "task-graph-row-expanded" : "")"
+                     @onclick="() => HandlePrClick(prLine.Url)"
+                     @ondblclick="async () => await HandlePrDoubleClick(prLine.PrNumber, prLine.IsMerged)"
+                     @ondblclick:preventDefault>
                     <div class="task-graph-graph-cell">
                         @((MarkupString)GeneratePrSvg(prLine))
                     </div>
@@ -43,6 +46,34 @@
                         }
                     </div>
                 </div>
+                @if (isPrExpanded && !string.IsNullOrEmpty(ProjectId))
+                {
+                    <div class="task-graph-row task-graph-inline-detail-row">
+                        <div class="task-graph-graph-cell"></div>
+                        <div class="task-graph-content-cell">
+                            @if (prLine.IsMerged && _loadedMergedPr != null)
+                            {
+                                <InlinePrDetailRow
+                                    ProjectId="@ProjectId"
+                                    MergedPr="@_loadedMergedPr"
+                                    OnActionCompleted="HandlePrDetailActionCompleted"
+                                    OnClose="CollapseExpanded" />
+                            }
+                            else if (!prLine.IsMerged)
+                            {
+                                var currentPr = GetCurrentPrByNumber?.Invoke(prLine.PrNumber);
+                                @if (currentPr != null)
+                                {
+                                    <InlinePrDetailRow
+                                        ProjectId="@ProjectId"
+                                        CurrentPr="@currentPr"
+                                        OnActionCompleted="HandlePrDetailActionCompleted"
+                                        OnClose="CollapseExpanded" />
+                                }
+                            }
+                        </div>
+                    </div>
+                }
             }
             else if (line is TaskGraphIssueRenderLine issueLine)
             {
@@ -84,8 +115,10 @@
                     && NavService?.PendingEdit?.IssueId == issueLine.IssueId;
                 var isSearchMatch = IsSearchMatch(issueLine.Title);
 
-                <div class="task-graph-row @(isSelected ? "task-graph-row-selected" : "") @(isEditing ? "task-graph-row-editing" : "") @(isSearchMatch ? "task-graph-row-search-match" : "") @(IsInMoveSelectionMode ? "task-graph-row-move-target" : "")"
+                <div class="task-graph-row @(isSelected ? "task-graph-row-selected" : "") @(isEditing ? "task-graph-row-editing" : "") @(isSearchMatch ? "task-graph-row-search-match" : "") @(IsInMoveSelectionMode ? "task-graph-row-move-target" : "") @(_expandedNodeId == $"issue-{issueLine.IssueId}" ? "task-graph-row-expanded" : "")"
                      @onclick="(e) => HandleIssueClick(issueLine.IssueId, e.ShiftKey)"
+                     @ondblclick="() => HandleIssueDoubleClick(issueLine.IssueId)"
+                     @ondblclick:preventDefault
                      data-testid="task-graph-issue-row"
                      data-issue-id="@issueLine.IssueId">
                     <div class="task-graph-graph-cell">
@@ -173,6 +206,23 @@
                         }
                     </div>
                 </div>
+                @if (_expandedNodeId == $"issue-{issueLine.IssueId}" && !string.IsNullOrEmpty(ProjectId))
+                {
+                    var issueData = GetIssueById?.Invoke(issueLine.IssueId);
+                    @if (issueData != null)
+                    {
+                        <div class="task-graph-row task-graph-inline-detail-row">
+                            <div class="task-graph-graph-cell"></div>
+                            <div class="task-graph-content-cell">
+                                <InlineIssueDetailRow
+                                    ProjectId="@ProjectId"
+                                    Issue="@issueData"
+                                    OnActionCompleted="HandleIssueDetailActionCompleted"
+                                    OnClose="CollapseExpanded" />
+                            </div>
+                        </div>
+                    }
+                }
 
             }
             else if (line is TaskGraphSeparatorRenderLine)
@@ -322,6 +372,19 @@
     .task-graph-row-selected .task-graph-graph-cell svg circle[fill]:not([fill="none"]),
     .task-graph-row-selected .task-graph-graph-cell svg path[fill]:not([fill="none"]) {
         filter: drop-shadow(0 0 4px var(--color-ocean, #51A5C1));
+    }
+
+    /* Expanded row styling */
+    .task-graph-row-expanded {
+        background-color: var(--bg-secondary, rgba(255, 255, 255, 0.08));
+    }
+
+    .task-graph-inline-detail-row {
+        background-color: var(--bg-tertiary, rgba(255, 255, 255, 0.05));
+    }
+
+    .task-graph-inline-detail-row .task-graph-content-cell {
+        padding: 0;
     }
 
     /* Search match highlight */
@@ -881,12 +944,39 @@
     /// </summary>
     [Parameter] public EventCallback<string> OnOpenPanelClick { get; set; }
 
+    /// <summary>
+    /// Callback to get full issue data for the inline detail panel.
+    /// </summary>
+    [Parameter] public Func<string, IssueResponse?>? GetIssueById { get; set; }
+
+    /// <summary>
+    /// Callback to get full PR data for the inline detail panel (current PRs).
+    /// </summary>
+    [Parameter] public Func<int, PullRequest?>? GetCurrentPrByNumber { get; set; }
+
+    /// <summary>
+    /// Callback to get merged PR data for the inline detail panel.
+    /// </summary>
+    [Parameter] public Func<int, Task<MergedPullRequestDetails?>>? GetMergedPrByNumber { get; set; }
+
+    /// <summary>
+    /// Called when issue detail actions are completed (e.g., status change).
+    /// </summary>
+    [Parameter] public EventCallback OnIssueActionCompleted { get; set; }
+
+    /// <summary>
+    /// Called when PR detail actions are completed.
+    /// </summary>
+    [Parameter] public EventCallback OnPrActionCompleted { get; set; }
+
     private List<TaskGraphRenderLine> _renderLines = [];
     private int _maxLane;
     private int _maxAvailableLane;
     private string? _typeMenuOpenForIssueId;
     private string? _statusMenuOpenForIssueId;
     private string? _previousSelectedNodeId;
+    private string? _expandedNodeId;
+    private MergedPullRequestDetails? _loadedMergedPr;
 
     protected override void OnParametersSet()
     {
@@ -1163,6 +1253,99 @@ lane0Color: issueLine.Lane0Color,
     private async Task HandleOpenPanelClick(string issueId)
     {
         await OnOpenPanelClick.InvokeAsync(issueId);
+    }
+
+    private async Task HandleIssueDoubleClick(string issueId)
+    {
+        // Toggle expansion
+        if (_expandedNodeId == $"issue-{issueId}")
+        {
+            _expandedNodeId = null;
+        }
+        else
+        {
+            _expandedNodeId = $"issue-{issueId}";
+            _loadedMergedPr = null;
+        }
+    }
+
+    private async Task HandlePrDoubleClick(int prNumber, bool isMerged)
+    {
+        var nodeId = $"pr-{prNumber}";
+
+        // Toggle expansion
+        if (_expandedNodeId == nodeId)
+        {
+            _expandedNodeId = null;
+            _loadedMergedPr = null;
+        }
+        else
+        {
+            _expandedNodeId = nodeId;
+
+            // Load merged PR data if needed
+            if (isMerged && GetMergedPrByNumber != null)
+            {
+                _loadedMergedPr = await GetMergedPrByNumber(prNumber);
+            }
+            else
+            {
+                _loadedMergedPr = null;
+            }
+        }
+    }
+
+    private void CollapseExpanded()
+    {
+        _expandedNodeId = null;
+        _loadedMergedPr = null;
+    }
+
+    private async Task HandleIssueDetailActionCompleted()
+    {
+        await OnIssueActionCompleted.InvokeAsync();
+    }
+
+    private async Task HandlePrDetailActionCompleted()
+    {
+        await OnPrActionCompleted.InvokeAsync();
+    }
+
+    /// <summary>
+    /// Returns true if an issue or PR is currently expanded inline.
+    /// </summary>
+    public bool IsExpanded => _expandedNodeId != null;
+
+    /// <summary>
+    /// Collapses any expanded issue/PR row.
+    /// </summary>
+    public void CollapseAll()
+    {
+        _expandedNodeId = null;
+        _loadedMergedPr = null;
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Toggles expansion for the currently selected issue.
+    /// Called by keyboard shortcut (Space/Enter) from TimelineVisualization.
+    /// </summary>
+    public async Task ToggleExpansionForSelectedIssueAsync(string? selectedIssueId)
+    {
+        if (string.IsNullOrEmpty(selectedIssueId)) return;
+
+        var nodeId = $"issue-{selectedIssueId}";
+        if (_expandedNodeId == nodeId)
+        {
+            _expandedNodeId = null;
+            _loadedMergedPr = null;
+        }
+        else
+        {
+            _expandedNodeId = nodeId;
+            _loadedMergedPr = null;
+        }
+        StateHasChanged();
     }
 
     private async Task HandleLoadMoreClick()
