@@ -55,6 +55,31 @@ describe('useToolbarShortcuts', () => {
     expect(callbacks.onUndo).toHaveBeenCalled()
   })
 
+  it('calls onUndo when Ctrl+Z is pressed', () => {
+    renderHook(() => useToolbarShortcuts(callbacks))
+
+    dispatchKeyDown('z', { ctrlKey: true })
+    expect(callbacks.onUndo).toHaveBeenCalled()
+  })
+
+  it('calls onUndo when Cmd+Z is pressed (Mac)', () => {
+    renderHook(() => useToolbarShortcuts(callbacks))
+
+    dispatchKeyDown('z', { metaKey: true })
+    expect(callbacks.onUndo).toHaveBeenCalled()
+  })
+
+  it('does not call onUndo when Ctrl+Z is pressed and canUndo is false', () => {
+    const callbacksWithDisabled = {
+      ...callbacks,
+      canUndo: false,
+    }
+    renderHook(() => useToolbarShortcuts(callbacksWithDisabled))
+
+    dispatchKeyDown('z', { ctrlKey: true })
+    expect(callbacksWithDisabled.onUndo).not.toHaveBeenCalled()
+  })
+
   it('calls onRedo when Ctrl+Shift+Z is pressed', () => {
     renderHook(() => useToolbarShortcuts(callbacks))
 
