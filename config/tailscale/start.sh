@@ -33,13 +33,14 @@ resolve() {
 generate_config() {
     # Resolve all known service hostnames
     # homespun-web is the React frontend (nginx on port 80)
-    # homespun is the ASP.NET backend (API server on port 8080)
+    # homespun is the ASP.NET backend (API server on port 8080, also serves Blazor UI)
     HOMESPUN_WEB_IP=$(resolve homespun-web)
+    HOMESPUN_IP=$(resolve homespun)
     GRAFANA_IP=$(resolve homespun-grafana)
     KOMODO_IP=$(resolve homespun-komodo-core)
 
     # Build a comparable state string
-    STATE="homespun-web=$HOMESPUN_WEB_IP grafana=$GRAFANA_IP komodo=$KOMODO_IP"
+    STATE="homespun-web=$HOMESPUN_WEB_IP homespun=$HOMESPUN_IP grafana=$GRAFANA_IP komodo=$KOMODO_IP"
 
     # Short-circuit if nothing changed
     if [ "$STATE" = "$PREV_STATE" ]; then
@@ -48,6 +49,7 @@ generate_config() {
     PREV_STATE="$STATE"
 
     [ -n "$HOMESPUN_WEB_IP" ] && echo "  resolved homespun-web -> $HOMESPUN_WEB_IP"
+    [ -n "$HOMESPUN_IP" ]     && echo "  resolved homespun -> $HOMESPUN_IP"
     [ -n "$GRAFANA_IP" ]      && echo "  resolved homespun-grafana -> $GRAFANA_IP"
     [ -n "$KOMODO_IP" ]       && echo "  resolved homespun-komodo-core -> $KOMODO_IP"
 
@@ -66,6 +68,10 @@ generate_config() {
             [ -n "$TCP_ENTRIES" ] && TCP_ENTRIES="$TCP_ENTRIES,"
             TCP_ENTRIES="$TCP_ENTRIES"'\n    "3000": { "HTTPS": true }'
         fi
+        if [ -n "$HOMESPUN_IP" ]; then
+            [ -n "$TCP_ENTRIES" ] && TCP_ENTRIES="$TCP_ENTRIES,"
+            TCP_ENTRIES="$TCP_ENTRIES"'\n    "3200": { "HTTPS": true }'
+        fi
         if [ -n "$KOMODO_IP" ]; then
             [ -n "$TCP_ENTRIES" ] && TCP_ENTRIES="$TCP_ENTRIES,"
             TCP_ENTRIES="$TCP_ENTRIES"'\n    "3500": { "HTTPS": true }'
@@ -83,6 +89,13 @@ generate_config() {
             printf '    },\n'
             printf '    "${TS_CERT_DOMAIN}:80": {\n'
             printf '      "Handlers": { "/": { "Proxy": "http://%s:80" } }\n' "$HOMESPUN_WEB_IP"
+            printf '    }'
+            WEB_FIRST=false
+        fi
+        if [ -n "$HOMESPUN_IP" ]; then
+            [ "$WEB_FIRST" = false ] && printf ','
+            printf '\n    "${TS_CERT_DOMAIN}:3200": {\n'
+            printf '      "Handlers": { "/": { "Proxy": "http://%s:8080" } }\n' "$HOMESPUN_IP"
             printf '    }'
             WEB_FIRST=false
         fi
