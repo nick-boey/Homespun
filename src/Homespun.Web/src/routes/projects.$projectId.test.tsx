@@ -3,13 +3,27 @@ import { render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { RouterProvider, createRouter, createMemoryHistory } from '@tanstack/react-router'
 import { routeTree } from '@/routeTree.gen'
-import { Projects } from '@/api'
+import { Projects, Graph } from '@/api'
 import { BreadcrumbProvider } from '@/hooks/use-breadcrumbs'
 
 vi.mock('@/api', () => ({
   Projects: {
     getApiProjectsById: vi.fn(),
   },
+  Graph: {
+    getApiGraphByProjectIdTaskgraphData: vi.fn(),
+  },
+}))
+
+// Mock SignalR connection
+vi.mock('@/hooks/use-signalr', () => ({
+  useSignalR: () => ({
+    connection: null,
+    status: 'disconnected',
+    error: undefined,
+    connect: vi.fn(),
+    disconnect: vi.fn(),
+  }),
 }))
 
 function createTestRouter(initialPath: string) {
@@ -45,6 +59,13 @@ function renderWithProviders(initialPath: string) {
 describe('ProjectLayout', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // Default mock for Graph API (returns empty graph)
+    vi.mocked(Graph.getApiGraphByProjectIdTaskgraphData).mockResolvedValue({
+      data: { nodes: [], mergedPrs: [], hasMorePastPrs: false },
+      response: new Response(),
+      request: new Request('http://test'),
+      error: undefined,
+    } as Awaited<ReturnType<typeof Graph.getApiGraphByProjectIdTaskgraphData>>)
   })
 
   it('displays loading state while fetching project', async () => {

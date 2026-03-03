@@ -10,3 +10,4 @@ export {
   type UseKeyboardNavigationOptions,
   type UseKeyboardNavigationReturn,
 } from './use-keyboard-navigation'
+export { useTaskGraph, taskGraphQueryKey, type UseTaskGraphOptions } from './use-task-graph'
