@@ -19,6 +19,7 @@ import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projec
 import { Route as ProjectsProjectIdIndexRouteImport } from './routes/projects.$projectId.index'
 import { Route as ProjectsProjectIdSettingsRouteImport } from './routes/projects.$projectId.settings'
 import { Route as ProjectsProjectIdSecretsRouteImport } from './routes/projects.$projectId.secrets'
+import { Route as ProjectsProjectIdPullRequestsRouteImport } from './routes/projects.$projectId.pull-requests'
 import { Route as ProjectsProjectIdPromptsRouteImport } from './routes/projects.$projectId.prompts'
 import { Route as ProjectsProjectIdIssuesRouteImport } from './routes/projects.$projectId.issues'
 import { Route as ProjectsProjectIdBranchesRouteImport } from './routes/projects.$projectId.branches'
@@ -77,6 +78,12 @@ const ProjectsProjectIdSecretsRoute =
     path: '/secrets',
     getParentRoute: () => ProjectsProjectIdRoute,
   } as any)
+const ProjectsProjectIdPullRequestsRoute =
+  ProjectsProjectIdPullRequestsRouteImport.update({
+    id: '/pull-requests',
+    path: '/pull-requests',
+    getParentRoute: () => ProjectsProjectIdRoute,
+  } as any)
 const ProjectsProjectIdPromptsRoute =
   ProjectsProjectIdPromptsRouteImport.update({
     id: '/prompts',
@@ -118,6 +125,7 @@ export interface FileRoutesByFullPath {
   '/projects/$projectId/branches': typeof ProjectsProjectIdBranchesRoute
   '/projects/$projectId/issues': typeof ProjectsProjectIdIssuesRouteWithChildren
   '/projects/$projectId/prompts': typeof ProjectsProjectIdPromptsRoute
+  '/projects/$projectId/pull-requests': typeof ProjectsProjectIdPullRequestsRoute
   '/projects/$projectId/secrets': typeof ProjectsProjectIdSecretsRoute
   '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
   '/projects/$projectId/': typeof ProjectsProjectIdIndexRoute
@@ -132,6 +140,7 @@ export interface FileRoutesByTo {
   '/sessions': typeof SessionsIndexRoute
   '/projects/$projectId/branches': typeof ProjectsProjectIdBranchesRoute
   '/projects/$projectId/prompts': typeof ProjectsProjectIdPromptsRoute
+  '/projects/$projectId/pull-requests': typeof ProjectsProjectIdPullRequestsRoute
   '/projects/$projectId/secrets': typeof ProjectsProjectIdSecretsRoute
   '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
   '/projects/$projectId': typeof ProjectsProjectIdIndexRoute
@@ -150,6 +159,7 @@ export interface FileRoutesById {
   '/projects/$projectId/branches': typeof ProjectsProjectIdBranchesRoute
   '/projects/$projectId/issues': typeof ProjectsProjectIdIssuesRouteWithChildren
   '/projects/$projectId/prompts': typeof ProjectsProjectIdPromptsRoute
+  '/projects/$projectId/pull-requests': typeof ProjectsProjectIdPullRequestsRoute
   '/projects/$projectId/secrets': typeof ProjectsProjectIdSecretsRoute
   '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
   '/projects/$projectId/': typeof ProjectsProjectIdIndexRoute
@@ -169,6 +179,7 @@ export interface FileRouteTypes {
     | '/projects/$projectId/branches'
     | '/projects/$projectId/issues'
     | '/projects/$projectId/prompts'
+    | '/projects/$projectId/pull-requests'
     | '/projects/$projectId/secrets'
     | '/projects/$projectId/settings'
     | '/projects/$projectId/'
@@ -183,6 +194,7 @@ export interface FileRouteTypes {
     | '/sessions'
     | '/projects/$projectId/branches'
     | '/projects/$projectId/prompts'
+    | '/projects/$projectId/pull-requests'
     | '/projects/$projectId/secrets'
     | '/projects/$projectId/settings'
     | '/projects/$projectId'
@@ -200,6 +212,7 @@ export interface FileRouteTypes {
     | '/projects/$projectId/branches'
     | '/projects/$projectId/issues'
     | '/projects/$projectId/prompts'
+    | '/projects/$projectId/pull-requests'
     | '/projects/$projectId/secrets'
     | '/projects/$projectId/settings'
     | '/projects/$projectId/'
@@ -287,6 +300,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsProjectIdSecretsRouteImport
       parentRoute: typeof ProjectsProjectIdRoute
     }
+    '/projects/$projectId/pull-requests': {
+      id: '/projects/$projectId/pull-requests'
+      path: '/pull-requests'
+      fullPath: '/projects/$projectId/pull-requests'
+      preLoaderRoute: typeof ProjectsProjectIdPullRequestsRouteImport
+      parentRoute: typeof ProjectsProjectIdRoute
+    }
     '/projects/$projectId/prompts': {
       id: '/projects/$projectId/prompts'
       path: '/prompts'
@@ -360,6 +380,7 @@ interface ProjectsProjectIdRouteChildren {
   ProjectsProjectIdBranchesRoute: typeof ProjectsProjectIdBranchesRoute
   ProjectsProjectIdIssuesRoute: typeof ProjectsProjectIdIssuesRouteWithChildren
   ProjectsProjectIdPromptsRoute: typeof ProjectsProjectIdPromptsRoute
+  ProjectsProjectIdPullRequestsRoute: typeof ProjectsProjectIdPullRequestsRoute
   ProjectsProjectIdSecretsRoute: typeof ProjectsProjectIdSecretsRoute
   ProjectsProjectIdSettingsRoute: typeof ProjectsProjectIdSettingsRoute
   ProjectsProjectIdIndexRoute: typeof ProjectsProjectIdIndexRoute
@@ -369,6 +390,7 @@ const ProjectsProjectIdRouteChildren: ProjectsProjectIdRouteChildren = {
   ProjectsProjectIdBranchesRoute: ProjectsProjectIdBranchesRoute,
   ProjectsProjectIdIssuesRoute: ProjectsProjectIdIssuesRouteWithChildren,
   ProjectsProjectIdPromptsRoute: ProjectsProjectIdPromptsRoute,
+  ProjectsProjectIdPullRequestsRoute: ProjectsProjectIdPullRequestsRoute,
   ProjectsProjectIdSecretsRoute: ProjectsProjectIdSecretsRoute,
   ProjectsProjectIdSettingsRoute: ProjectsProjectIdSettingsRoute,
   ProjectsProjectIdIndexRoute: ProjectsProjectIdIndexRoute,

@@ -19,6 +19,7 @@ export const Route = createFileRoute('/projects/$projectId')({
 
 const tabs = [
   { label: 'Issues', path: '' },
+  { label: 'Pull Requests', path: '/pull-requests' },
   { label: 'Branches', path: '/branches' },
   { label: 'Prompts', path: '/prompts' },
   { label: 'Secrets', path: '/secrets' },
