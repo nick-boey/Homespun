@@ -6,14 +6,27 @@ import { routeTree } from '@/routeTree.gen'
 import { Projects, Graph } from '@/api'
 import { BreadcrumbProvider } from '@/hooks/use-breadcrumbs'
 
-vi.mock('@/api', () => ({
-  Projects: {
-    getApiProjectsById: vi.fn(),
-  },
-  Graph: {
-    getApiGraphByProjectIdTaskgraphData: vi.fn(),
-  },
-}))
+vi.mock('@/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/api')>()
+  return {
+    ...actual,
+    Projects: {
+      getApiProjectsById: vi.fn(),
+    },
+    Graph: {
+      getApiGraphByProjectIdTaskgraphData: vi.fn(),
+    },
+    PullRequests: {
+      getApiProjectsByProjectIdPullRequestsOpen: vi
+        .fn()
+        .mockResolvedValue({ data: [], error: undefined }),
+      getApiProjectsByProjectIdPullRequestsMerged: vi
+        .fn()
+        .mockResolvedValue({ data: [], error: undefined }),
+      postApiProjectsByProjectIdSync: vi.fn(),
+    },
+  }
+})
 
 // Mock SignalR connection
 vi.mock('@/hooks/use-signalr', () => ({
