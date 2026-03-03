@@ -35,6 +35,11 @@ if [ -z "$HOMESPUN_IP" ]; then
 fi
 echo "Resolved homespun -> $HOMESPUN_IP"
 
+WEB_IP=$(getent hosts homespun-web | awk '{print $1}' 2>/dev/null || true)
+if [ -n "$WEB_IP" ]; then
+    echo "Resolved homespun-web -> $WEB_IP"
+fi
+
 GRAFANA_IP=$(getent hosts homespun-grafana | awk '{print $1}' 2>/dev/null || true)
 if [ -n "$GRAFANA_IP" ]; then
     echo "Resolved homespun-grafana -> $GRAFANA_IP"
@@ -47,20 +52,32 @@ fi
 SERVE_DIR=$(dirname "${TS_SERVE_CONFIG:-/tmp/serve/serve-config.json}")
 mkdir -p "$SERVE_DIR"
 
+# Determine the proxy target for ports 80/443:
+# If homespun-web is running, route to it; otherwise fall back to homespun server.
+if [ -n "$WEB_IP" ]; then
+  WEB_PROXY="http://${WEB_IP}:80"
+else
+  WEB_PROXY="http://${HOMESPUN_IP}:8080"
+fi
+
 {
   printf '{\n'
   printf '  "TCP": {\n'
   printf '    "443": { "HTTPS": true },\n'
-  printf '    "80": { "HTTP": true }'
+  printf '    "80": { "HTTP": true },\n'
+  printf '    "3200": { "HTTPS": true }'
   if [ -n "$GRAFANA_IP" ]; then
     printf ',\n    "3000": { "HTTPS": true }'
   fi
   printf '\n  },\n'
   printf '  "Web": {\n'
   printf '    "${TS_CERT_DOMAIN}:443": {\n'
-  printf '      "Handlers": { "/": { "Proxy": "http://%s:8080" } }\n' "$HOMESPUN_IP"
+  printf '      "Handlers": { "/": { "Proxy": "%s" } }\n' "$WEB_PROXY"
   printf '    },\n'
   printf '    "${TS_CERT_DOMAIN}:80": {\n'
+  printf '      "Handlers": { "/": { "Proxy": "%s" } }\n' "$WEB_PROXY"
+  printf '    },\n'
+  printf '    "${TS_CERT_DOMAIN}:3200": {\n'
   printf '      "Handlers": { "/": { "Proxy": "http://%s:8080" } }\n' "$HOMESPUN_IP"
   printf '    }'
   if [ -n "$GRAFANA_IP" ]; then
