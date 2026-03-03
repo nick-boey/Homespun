@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Markdown } from '@/components/ui/markdown'
 import type { TaskGraphIssueRenderLine } from '../services'
 import { getTypeColor } from './task-graph-svg'
+import { useMobile } from '@/hooks'
 
 /** Issue status labels */
 const STATUS_LABELS: Record<number, string> = {
@@ -68,9 +69,11 @@ export const InlineIssueDetailRow = memo(function InlineIssueDetailRow({
   onClose,
 }: InlineIssueDetailRowProps) {
   const [copied, setCopied] = useState(false)
+  const isMobile = useMobile()
 
   // Calculate left padding to align with content (after SVG)
-  const svgWidth = 24 * Math.max(maxLanes, 1) + 12
+  // On mobile, use minimal padding for full-width display
+  const svgWidth = isMobile ? 12 : 24 * Math.max(maxLanes, 1) + 12
 
   const typeColor = getTypeColor(line.issueType)
 
@@ -127,15 +130,15 @@ export const InlineIssueDetailRow = memo(function InlineIssueDetailRow({
         {/* Spacer */}
         <div className="flex-1" />
 
-        {/* Close button */}
+        {/* Close button - touch-friendly */}
         <Button
           variant="ghost"
           size="sm"
-          className="h-6 w-6 p-0"
+          className="h-10 w-10 p-0"
           onClick={onClose}
           aria-label="Close"
         >
-          <X className="h-4 w-4" />
+          <X className="h-5 w-5" />
         </Button>
       </div>
 
@@ -218,14 +221,26 @@ export const InlineIssueDetailRow = memo(function InlineIssueDetailRow({
         )}
       </div>
 
-      {/* Actions */}
-      <div className="flex items-center gap-2">
-        <Button variant="outline" size="sm" onClick={handleEdit} aria-label="Edit">
-          <Pencil className="mr-1 h-3 w-3" />
+      {/* Actions - touch-friendly on mobile */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleEdit}
+          aria-label="Edit"
+          className="min-h-[44px] px-4"
+        >
+          <Pencil className="mr-1.5 h-4 w-4" />
           Edit
         </Button>
-        <Button variant="outline" size="sm" onClick={handleRunAgent} aria-label="Run Agent">
-          <Play className="mr-1 h-3 w-3" />
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleRunAgent}
+          aria-label="Run Agent"
+          className="min-h-[44px] px-4"
+        >
+          <Play className="mr-1.5 h-4 w-4" />
           Run Agent
         </Button>
       </div>

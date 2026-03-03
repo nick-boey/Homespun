@@ -46,8 +46,11 @@ export const PrRow = memo(function PrRow({
     <button
       type="button"
       className={cn(
-        'flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-left transition-colors',
+        // Touch-friendly tap target (min 44px height)
+        'flex min-h-[56px] w-full items-center gap-3 rounded-lg border px-4 py-3 text-left transition-colors',
         'hover:bg-accent/50 focus:ring-ring focus:ring-2 focus:outline-none',
+        // Active touch feedback
+        'active:bg-accent/70',
         isSelected && 'bg-accent',
         className
       )}
@@ -82,12 +85,12 @@ export const PrRow = memo(function PrRow({
         </div>
       </div>
 
-      {/* View on GitHub link */}
+      {/* View on GitHub link - larger touch target */}
       <a
         href={pr.htmlUrl ?? '#'}
         target="_blank"
         rel="noopener noreferrer"
-        className="text-muted-foreground hover:text-primary shrink-0"
+        className="text-muted-foreground hover:text-primary active:bg-accent/50 flex h-10 w-10 shrink-0 items-center justify-center rounded-md"
         aria-label="View on GitHub"
         onClick={handleLinkClick}
       >

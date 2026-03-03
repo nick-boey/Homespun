@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useIssueHistory } from '../hooks/use-issue-history'
 import { cn } from '@/lib/utils'
+import { useMobile } from '@/hooks'
 
 export interface ProjectToolbarProps {
   projectId: string
@@ -52,8 +53,12 @@ export function ProjectToolbar({
 }: ProjectToolbarProps) {
   const { canUndo, canRedo, undoDescription, redoDescription, undo, redo, isUndoing, isRedoing } =
     useIssueHistory(projectId)
+  const isMobile = useMobile()
 
   const hasIssueSelected = selectedIssueId !== null
+
+  // Use touch-friendly sizes on mobile
+  const buttonSize = isMobile ? 'icon-touch' : 'icon-sm'
 
   return (
     <div
@@ -62,7 +67,9 @@ export function ProjectToolbar({
       className={cn(
         'sticky top-[52px] z-10',
         'flex items-center gap-1 overflow-x-auto',
-        'bg-background border-border border-b px-2 py-1.5',
+        'bg-background border-border border-b px-2',
+        // More padding on mobile for touch
+        isMobile ? 'py-2' : 'py-1.5',
         'scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent'
       )}
     >
@@ -70,7 +77,7 @@ export function ProjectToolbar({
       <div className="flex items-center gap-0.5">
         <Button
           variant="ghost"
-          size="icon-sm"
+          size={buttonSize}
           onClick={onCreateAbove}
           aria-label="Create above (Shift+O)"
           title="Create above (Shift+O)"
@@ -79,7 +86,7 @@ export function ProjectToolbar({
         </Button>
         <Button
           variant="ghost"
-          size="icon-sm"
+          size={buttonSize}
           onClick={onCreateBelow}
           aria-label="Create below (O)"
           title="Create below (O)"
@@ -90,11 +97,11 @@ export function ProjectToolbar({
 
       <div className="bg-border mx-1 h-6 w-px" aria-hidden="true" />
 
-      {/* Hierarchy buttons group */}
-      <div className="flex items-center gap-0.5">
+      {/* Hierarchy buttons group - hidden on mobile to save space */}
+      <div className="hidden items-center gap-0.5 sm:flex">
         <Button
           variant="ghost"
-          size="icon-sm"
+          size={buttonSize}
           onClick={onMakeChild}
           aria-label="Make child of another"
           title="Make child of another"
@@ -103,7 +110,7 @@ export function ProjectToolbar({
         </Button>
         <Button
           variant="ghost"
-          size="icon-sm"
+          size={buttonSize}
           onClick={onMakeParent}
           aria-label="Make parent of another"
           title="Make parent of another"
@@ -112,13 +119,13 @@ export function ProjectToolbar({
         </Button>
       </div>
 
-      <div className="bg-border mx-1 h-6 w-px" aria-hidden="true" />
+      <div className="bg-border mx-1 hidden h-6 w-px sm:block" aria-hidden="true" />
 
       {/* Undo/Redo buttons group */}
       <div className="flex items-center gap-0.5">
         <Button
           variant="ghost"
-          size="icon-sm"
+          size={buttonSize}
           onClick={() => undo()}
           disabled={!canUndo || isUndoing}
           aria-label="Undo (u)"
@@ -128,7 +135,7 @@ export function ProjectToolbar({
         </Button>
         <Button
           variant="ghost"
-          size="icon-sm"
+          size={buttonSize}
           onClick={() => redo()}
           disabled={!canRedo || isRedoing}
           aria-label="Redo"
@@ -143,7 +150,7 @@ export function ProjectToolbar({
       {/* Edit button */}
       <Button
         variant="ghost"
-        size="icon-sm"
+        size={buttonSize}
         onClick={onEditIssue}
         disabled={!hasIssueSelected}
         aria-label="Edit issue"
@@ -157,7 +164,7 @@ export function ProjectToolbar({
       {/* Agent Run button */}
       <Button
         variant="ghost"
-        size="icon-sm"
+        size={buttonSize}
         onClick={onOpenAgentLauncher}
         aria-label="Run agent (e)"
         title="Run agent (e)"
@@ -168,11 +175,11 @@ export function ProjectToolbar({
       {/* Spacer */}
       <div className="flex-1" />
 
-      {/* Depth controls (right side) */}
-      <div className="flex items-center gap-0.5">
+      {/* Depth controls (right side) - hidden on mobile */}
+      <div className="hidden items-center gap-0.5 sm:flex">
         <Button
           variant="ghost"
-          size="icon-sm"
+          size={buttonSize}
           onClick={() => onDepthChange(depth - 1)}
           disabled={depth <= 1}
           aria-label="Decrease depth ([)"
@@ -183,7 +190,7 @@ export function ProjectToolbar({
         <span className="text-muted-foreground min-w-[1.5rem] text-center text-sm">{depth}</span>
         <Button
           variant="ghost"
-          size="icon-sm"
+          size={buttonSize}
           onClick={() => onDepthChange(depth + 1)}
           aria-label="Increase depth (])"
           title="Increase depth (])"
@@ -192,7 +199,7 @@ export function ProjectToolbar({
         </Button>
       </div>
 
-      <div className="bg-border mx-1 h-6 w-px" aria-hidden="true" />
+      <div className="bg-border mx-1 hidden h-6 w-px sm:block" aria-hidden="true" />
 
       {/* Search input (right side) */}
       <div className="relative flex items-center">
@@ -200,10 +207,14 @@ export function ProjectToolbar({
         <Input
           type="search"
           role="searchbox"
-          placeholder="Search issues (/)..."
+          placeholder={isMobile ? 'Search...' : 'Search issues (/)...'}
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
-          className="h-8 w-[180px] pr-8 pl-8"
+          className={cn(
+            'pr-8 pl-8',
+            // Touch-friendly height on mobile
+            isMobile ? 'h-11 w-[140px]' : 'h-8 w-[180px]'
+          )}
           aria-label="Search issues"
         />
         {searchQuery && searchMatchCount > 0 && (
