@@ -40,6 +40,8 @@ export {
   type UseKeyboardNavigationReturn,
 } from './hooks'
 export { useTaskGraph, taskGraphQueryKey, type UseTaskGraphOptions } from './hooks'
+export { useIssue, issueQueryKey, type UseIssueResult } from './hooks'
+export { useUpdateIssue, type UseUpdateIssueOptions, type UpdateIssueParams } from './hooks'
 
 // Services
 export {
