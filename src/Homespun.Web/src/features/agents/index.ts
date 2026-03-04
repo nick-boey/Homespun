@@ -13,7 +13,11 @@ export {
   useAgentPrompts,
   useProjectSessions,
   useActiveSessionCount,
+  useGenerateBranchId,
+  useBranches,
   agentPromptsQueryKey,
   projectSessionsQueryKey,
+  branchesQueryKey,
   type StartAgentParams,
+  type GenerateBranchIdResult,
 } from './hooks'
