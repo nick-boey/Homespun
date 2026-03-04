@@ -87,3 +87,52 @@ jobs:
 
     - name: Build
       run: cd src/Homespun.Web && npm run build
+
+  web-e2e:
+    name: E2E Tests (Web Client)
+    runs-on: ubuntu-latest
+    needs: [build-and-test, web-build]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 10.0.x
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 22
+
+    - name: Install Node dependencies
+      run: cd src/Homespun.Web && npm ci
+
+    - name: Install Playwright Browsers
+      run: cd src/Homespun.Web && npx playwright install chromium --with-deps
+
+    - name: Install Tailwind CSS CLI
+      run: |
+        curl -sLO https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-linux-x64
+        chmod +x tailwindcss-linux-x64
+        mv tailwindcss-linux-x64 src/Homespun.Client/tailwindcss
+
+    - name: Restore .NET dependencies
+      run: dotnet restore
+
+    - name: Build .NET Server
+      run: dotnet build --no-restore --configuration Release
+
+    - name: Run E2E tests
+      run: cd src/Homespun.Web && npm run test:e2e
+      env:
+        CI: true
+
+    - name: Upload Playwright Report
+      uses: actions/upload-artifact@v4
+      if: ${{ !cancelled() }}
+      with:
+        name: playwright-report
+        path: src/Homespun.Web/playwright-report/
+        retention-days: 30
