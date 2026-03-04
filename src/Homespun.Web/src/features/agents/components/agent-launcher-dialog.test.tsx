@@ -56,9 +56,7 @@ const mockPrompts: AgentPrompt[] = [
   },
 ]
 
-function createMockRunAgentResponse(
-  overrides: Partial<RunAgentResponse> = {}
-): RunAgentResponse {
+function createMockRunAgentResponse(overrides: Partial<RunAgentResponse> = {}): RunAgentResponse {
   return {
     sessionId: 'session-123',
     branchName: 'feature/test-123',

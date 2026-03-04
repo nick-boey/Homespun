@@ -83,12 +83,10 @@ export function AgentLauncherDialog({
   })
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false)
 
-  // Initialize base branch from project default when project loads
-  useEffect(() => {
-    if (project?.defaultBranch && !selectedBaseBranch) {
-      setSelectedBaseBranch(project.defaultBranch)
-    }
-  }, [project?.defaultBranch, selectedBaseBranch])
+  // Compute effective base branch - use selected value or fall back to project default
+  const effectiveBaseBranch = useMemo(() => {
+    return selectedBaseBranch || project?.defaultBranch || ''
+  }, [selectedBaseBranch, project?.defaultBranch])
 
   // Agent prompts
   const { data: prompts, isLoading: promptsLoading, isError, error } = useAgentPrompts(projectId)
@@ -131,7 +129,7 @@ export function AgentLauncherDialog({
         projectId,
         promptId: effectivePromptId,
         model: selectedModel,
-        baseBranch: selectedBaseBranch || undefined,
+        baseBranch: effectiveBaseBranch || undefined,
       })
 
       onAgentStart?.(result)
@@ -145,7 +143,7 @@ export function AgentLauncherDialog({
     projectId,
     effectivePromptId,
     selectedModel,
-    selectedBaseBranch,
+    effectiveBaseBranch,
     onAgentStart,
     onOpenChange,
     onError,
@@ -271,7 +269,7 @@ export function AgentLauncherDialog({
                     <BaseBranchSelector
                       repoPath={project?.localPath ?? undefined}
                       defaultBranch={project?.defaultBranch}
-                      value={selectedBaseBranch}
+                      value={effectiveBaseBranch}
                       onChange={setSelectedBaseBranch}
                       disabled={isLoading}
                       aria-label="Select base branch"
