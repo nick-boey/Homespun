@@ -561,4 +561,76 @@ public class IssuesApiTests
     }
 
     #endregion
+
+    #region RunAgent Tests
+
+    [Test]
+    public async Task RunAgent_ReturnsNotFound_WhenProjectNotExists()
+    {
+        // Arrange
+        var request = new RunAgentRequest
+        {
+            ProjectId = "nonexistent",
+            PromptId = "prompt-1"
+        };
+
+        // Act
+        var response = await _client.PostAsJsonAsync("/api/issues/issue-123/run", request);
+
+        // Assert
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+    }
+
+    [Test]
+    public async Task RunAgent_ReturnsNotFound_WhenIssueNotExists()
+    {
+        // Arrange
+        var project = new Project { Id = "proj1", Name = "TestProject", LocalPath = "/tmp/test-project", DefaultBranch = "main" };
+        _factory.MockDataStore.SeedProject(project);
+
+        var request = new RunAgentRequest
+        {
+            ProjectId = "proj1",
+            PromptId = "prompt-1"
+        };
+
+        // Act
+        var response = await _client.PostAsJsonAsync("/api/issues/nonexistent/run", request);
+
+        // Assert
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+    }
+
+    [Test]
+    public async Task RunAgent_ReturnsNotFound_WhenPromptNotExists()
+    {
+        // Arrange
+        var project = new Project { Id = "proj1", Name = "TestProject", LocalPath = "/tmp/test-project", DefaultBranch = "main" };
+        _factory.MockDataStore.SeedProject(project);
+
+        var issue = new Issue
+        {
+            Id = "issue-123",
+            Title = "Test Issue",
+            Description = "Test Description",
+            Type = IssueType.Task,
+            Status = IssueStatus.Open,
+            LastUpdate = DateTime.UtcNow
+        };
+        _factory.MockFleeceService.SeedIssue(project.LocalPath, issue);
+
+        var request = new RunAgentRequest
+        {
+            ProjectId = "proj1",
+            PromptId = "nonexistent-prompt"
+        };
+
+        // Act
+        var response = await _client.PostAsJsonAsync("/api/issues/issue-123/run", request);
+
+        // Assert
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+    }
+
+    #endregion
 }

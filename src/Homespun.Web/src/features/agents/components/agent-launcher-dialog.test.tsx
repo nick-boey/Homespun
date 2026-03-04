@@ -3,37 +3,21 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AgentLauncherDialog } from './agent-launcher-dialog'
-import { AgentPrompts, Clones, Issues, Sessions } from '@/api'
+import { AgentPrompts, Issues } from '@/api'
 import type { ReactNode } from 'react'
-import type {
-  AgentPrompt,
-  ClaudeSession,
-  CloneExistsResponse,
-  CreateCloneResponse,
-  ResolvedBranchResponse,
-} from '@/api/generated/types.gen'
+import type { AgentPrompt, RunAgentResponse } from '@/api/generated/types.gen'
 
 vi.mock('@/api', () => ({
   AgentPrompts: {
     getApiAgentPromptsAvailableForProjectByProjectId: vi.fn(),
   },
-  Clones: {
-    getApiClonesExists: vi.fn(),
-    postApiClones: vi.fn(),
-  },
   Issues: {
-    getApiIssuesByIssueIdResolvedBranch: vi.fn(),
-  },
-  Sessions: {
-    postApiSessions: vi.fn(),
+    postApiIssuesByIssueIdRun: vi.fn(),
   },
 }))
 
 const mockGetAgentPrompts = vi.mocked(AgentPrompts.getApiAgentPromptsAvailableForProjectByProjectId)
-const mockGetApiClonesExists = vi.mocked(Clones.getApiClonesExists)
-const mockPostApiClones = vi.mocked(Clones.postApiClones)
-const mockGetResolvedBranch = vi.mocked(Issues.getApiIssuesByIssueIdResolvedBranch)
-const mockPostApiSessions = vi.mocked(Sessions.postApiSessions)
+const mockRunAgent = vi.mocked(Issues.postApiIssuesByIssueIdRun)
 
 // Helper to create mock API response
 function createMockResponse<T>(data: T) {
@@ -72,15 +56,13 @@ const mockPrompts: AgentPrompt[] = [
   },
 ]
 
-function createMockSession(overrides: Partial<ClaudeSession> = {}): ClaudeSession {
+function createMockRunAgentResponse(
+  overrides: Partial<RunAgentResponse> = {}
+): RunAgentResponse {
   return {
-    id: 'session-123',
-    entityId: 'issue-456',
-    projectId: 'project-123',
-    workingDirectory: '/workdir',
-    model: 'claude-sonnet-4-20250514',
-    mode: 1 as const,
-    status: 0 as const,
+    sessionId: 'session-123',
+    branchName: 'feature/test-123',
+    clonePath: '/clones/project-123/feature-test-123',
     ...overrides,
   }
 }
@@ -90,18 +72,8 @@ describe('AgentLauncherDialog', () => {
     vi.clearAllMocks()
 
     // Setup default mock responses
-    const resolvedBranch: ResolvedBranchResponse = { branchName: 'feature/test-123' }
-    const cloneExists: CloneExistsResponse = { exists: false }
-    const createCloneResponse: CreateCloneResponse = {
-      path: '/clones/project-123/feature-test-123',
-      branchName: 'feature/test-123',
-    }
-
-    mockGetResolvedBranch.mockResolvedValue(createMockResponse(resolvedBranch))
-    mockGetApiClonesExists.mockResolvedValue(createMockResponse(cloneExists))
-    mockPostApiClones.mockResolvedValue(createMockResponse(createCloneResponse))
     mockGetAgentPrompts.mockResolvedValue(createMockResponse(mockPrompts))
-    mockPostApiSessions.mockResolvedValue(createMockResponse(createMockSession()))
+    mockRunAgent.mockResolvedValue(createMockResponse(createMockRunAgentResponse()))
   })
 
   it('renders nothing when closed', () => {
@@ -134,12 +106,12 @@ describe('AgentLauncherDialog', () => {
     })
   })
 
-  it('shows loading state while resolving branch', async () => {
-    // Delay the branch resolution
-    let resolveBranch: (value: ReturnType<typeof createMockResponse>) => void
-    mockGetResolvedBranch.mockReturnValue(
+  it('shows loading state while loading prompts', async () => {
+    // Delay the prompt loading
+    let resolvePrompts: (value: ReturnType<typeof createMockResponse>) => void
+    mockGetAgentPrompts.mockReturnValue(
       new Promise((resolve) => {
-        resolveBranch = resolve
+        resolvePrompts = resolve
       }) as never
     )
 
@@ -155,28 +127,11 @@ describe('AgentLauncherDialog', () => {
 
     // Should show loading indicator
     await waitFor(() => {
-      expect(screen.getByText(/preparing/i)).toBeInTheDocument()
+      expect(screen.getByText(/loading prompts/i)).toBeInTheDocument()
     })
 
     // Resolve and clean up
-    const resolvedBranch: ResolvedBranchResponse = { branchName: 'feature/test' }
-    resolveBranch!(createMockResponse(resolvedBranch))
-  })
-
-  it('displays branch name once resolved', async () => {
-    render(
-      <AgentLauncherDialog
-        open={true}
-        onOpenChange={() => {}}
-        projectId="project-123"
-        issueId="issue-456"
-      />,
-      { wrapper: createWrapper() }
-    )
-
-    await waitFor(() => {
-      expect(screen.getByText(/feature\/test-123/)).toBeInTheDocument()
-    })
+    resolvePrompts!(createMockResponse(mockPrompts))
   })
 
   it('renders launcher controls once ready', async () => {
@@ -198,9 +153,9 @@ describe('AgentLauncherDialog', () => {
     expect(screen.getByRole('button', { name: /start agent/i })).toBeInTheDocument()
   })
 
-  it('creates clone and starts agent when start is clicked', async () => {
+  it('calls run agent endpoint when start is clicked', async () => {
     const user = userEvent.setup()
-    const onSessionStart = vi.fn()
+    const onAgentStart = vi.fn()
 
     render(
       <AgentLauncherDialog
@@ -208,7 +163,7 @@ describe('AgentLauncherDialog', () => {
         onOpenChange={() => {}}
         projectId="project-123"
         issueId="issue-456"
-        onSessionStart={onSessionStart}
+        onAgentStart={onAgentStart}
       />,
       { wrapper: createWrapper() }
     )
@@ -221,31 +176,24 @@ describe('AgentLauncherDialog', () => {
     // Click start agent
     await user.click(screen.getByRole('button', { name: /start agent/i }))
 
-    // Should have created the clone
+    // Should have called the run agent endpoint
     await waitFor(() => {
-      expect(mockPostApiClones).toHaveBeenCalledWith({
-        body: {
-          projectId: 'project-123',
-          branchName: 'feature/test-123',
-          createBranch: true,
-        },
-      })
-    })
-
-    // Should have started the session with the clone path
-    await waitFor(() => {
-      expect(mockPostApiSessions).toHaveBeenCalledWith({
+      expect(mockRunAgent).toHaveBeenCalledWith({
+        path: { issueId: 'issue-456' },
         body: expect.objectContaining({
-          entityId: 'issue-456',
           projectId: 'project-123',
-          workingDirectory: '/clones/project-123/feature-test-123',
+          promptId: 'prompt-1', // First prompt is selected by default
         }),
       })
     })
 
-    // Should have called onSessionStart
+    // Should have called onAgentStart with the result
     await waitFor(() => {
-      expect(onSessionStart).toHaveBeenCalled()
+      expect(onAgentStart).toHaveBeenCalledWith({
+        sessionId: 'session-123',
+        branchName: 'feature/test-123',
+        clonePath: '/clones/project-123/feature-test-123',
+      })
     })
   })
 
@@ -290,10 +238,10 @@ describe('AgentLauncherDialog', () => {
     })
   })
 
-  it('shows error when branch resolution fails', async () => {
-    mockGetResolvedBranch.mockResolvedValue({
+  it('shows error when prompts loading fails', async () => {
+    mockGetAgentPrompts.mockResolvedValue({
       data: undefined,
-      error: { detail: 'Failed to resolve branch' },
+      error: { detail: 'Failed to load prompts' },
       request: new Request('http://localhost/api/test'),
       response: new Response(null, { status: 500 }),
     })
@@ -309,19 +257,18 @@ describe('AgentLauncherDialog', () => {
     )
 
     await waitFor(() => {
-      expect(screen.getByText(/failed to prepare workspace/i)).toBeInTheDocument()
+      expect(screen.getByText(/failed to load prompts/i)).toBeInTheDocument()
     })
-    expect(screen.getByText(/failed to resolve branch/i)).toBeInTheDocument()
   })
 
-  it('disables start button while clone is being created', async () => {
+  it('disables start button while agent is starting', async () => {
     const user = userEvent.setup()
 
-    // Delay clone creation
-    let resolveClone: (value: ReturnType<typeof createMockResponse>) => void
-    mockPostApiClones.mockReturnValue(
+    // Delay run agent call
+    let resolveRunAgent: (value: ReturnType<typeof createMockResponse>) => void
+    mockRunAgent.mockReturnValue(
       new Promise((resolve) => {
-        resolveClone = resolve
+        resolveRunAgent = resolve
       }) as never
     )
 
@@ -343,20 +290,16 @@ describe('AgentLauncherDialog', () => {
     // Click start
     await user.click(screen.getByRole('button', { name: /start agent/i }))
 
-    // Button should be disabled during creation
+    // Button should be disabled during request
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /start agent/i })).toBeDisabled()
     })
 
     // Clean up
-    const createCloneResponse: CreateCloneResponse = {
-      path: '/clones/project-123/feature-test-123',
-      branchName: 'feature/test-123',
-    }
-    resolveClone!(createMockResponse(createCloneResponse))
+    resolveRunAgent!(createMockResponse(createMockRunAgentResponse()))
   })
 
-  it('closes dialog after successful session start', async () => {
+  it('closes dialog after successful agent start', async () => {
     const user = userEvent.setup()
     const onOpenChange = vi.fn()
 
@@ -381,6 +324,42 @@ describe('AgentLauncherDialog', () => {
     // Should close dialog after success
     await waitFor(() => {
       expect(onOpenChange).toHaveBeenCalledWith(false)
+    })
+  })
+
+  it('calls onError when run agent fails', async () => {
+    const user = userEvent.setup()
+    const onError = vi.fn()
+
+    mockRunAgent.mockResolvedValue({
+      data: undefined,
+      error: { detail: 'Failed to run agent' },
+      request: new Request('http://localhost/api/test'),
+      response: new Response(null, { status: 500 }),
+    })
+
+    render(
+      <AgentLauncherDialog
+        open={true}
+        onOpenChange={() => {}}
+        projectId="project-123"
+        issueId="issue-456"
+        onError={onError}
+      />,
+      { wrapper: createWrapper() }
+    )
+
+    // Wait for controls to be ready
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /start agent/i })).toBeInTheDocument()
+    })
+
+    // Click start agent
+    await user.click(screen.getByRole('button', { name: /start agent/i }))
+
+    // Should have called onError
+    await waitFor(() => {
+      expect(onError).toHaveBeenCalled()
     })
   })
 })

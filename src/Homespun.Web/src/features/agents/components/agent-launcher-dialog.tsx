@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { Play, ChevronDown, ChevronUp } from 'lucide-react'
+import { Play, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -16,14 +16,12 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Loader } from '@/components/ui/loader'
-import { AlertCircle } from 'lucide-react'
 import { Label } from '@/components/ui/label'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { useEnsureClone } from '../hooks/use-ensure-clone'
-import { useStartAgent, useAgentPrompts } from '../hooks'
+import { useRunAgent, useAgentPrompts } from '../hooks'
 import { useProject } from '@/features/projects'
 import { BaseBranchSelector } from './base-branch-selector'
-import type { ClaudeSession, SessionMode } from '@/api/generated/types.gen'
+import type { RunAgentResult } from '../hooks/use-run-agent'
 
 const MODELS = [
   { value: 'claude-sonnet-4-20250514', label: 'Sonnet' },
@@ -49,27 +47,27 @@ interface AgentLauncherDialogProps {
   projectId: string
   /** The issue ID to run the agent on */
   issueId: string
-  /** Callback when a session is started */
-  onSessionStart?: (session: ClaudeSession) => void
-  /** Callback when there's an error starting the session */
+  /** Callback when an agent is started */
+  onAgentStart?: (result: RunAgentResult) => void
+  /** Callback when there's an error starting the agent */
   onError?: (error: Error) => void
 }
 
 /**
  * Dialog component for launching an agent on an issue.
  *
- * This component:
- * 1. Resolves the branch name for the issue
- * 2. Shows prompt/model/base branch selection
- * 3. Creates clone when start is clicked
- * 4. Starts agent session with the clone path
+ * This component uses the server-side run agent endpoint which handles:
+ * 1. Fetching issue data
+ * 2. Resolving or creating the working branch/clone
+ * 3. Rendering the prompt template with issue context
+ * 4. Creating the session and sending the initial message
  */
 export function AgentLauncherDialog({
   open,
   onOpenChange,
   projectId,
   issueId,
-  onSessionStart,
+  onAgentStart,
   onError,
 }: AgentLauncherDialogProps) {
   // Project data for repo path and default branch
@@ -92,26 +90,9 @@ export function AgentLauncherDialog({
     }
   }, [project?.defaultBranch, selectedBaseBranch])
 
-  // Clone management - pass baseBranch
-  const {
-    branchName,
-    isLoading: isLoadingClone,
-    isCreating,
-    isError,
-    error,
-    ensureClone,
-  } = useEnsureClone({
-    projectId,
-    issueId: open ? issueId : '', // Only load when dialog is open
-    baseBranch: selectedBaseBranch || project?.defaultBranch || undefined,
-  })
-
   // Agent prompts
-  const { data: prompts, isLoading: promptsLoading } = useAgentPrompts(projectId)
-  const startAgent = useStartAgent()
-
-  // Starting state
-  const [isStartingSession, setIsStartingSession] = useState(false)
+  const { data: prompts, isLoading: promptsLoading, isError, error } = useAgentPrompts(projectId)
+  const runAgent = useRunAgent()
 
   // Persist selections to localStorage
   useEffect(() => {
@@ -142,59 +123,37 @@ export function AgentLauncherDialog({
     return prompts[0].id ?? ''
   }, [prompts, selectedPromptId])
 
-  const selectedPrompt = prompts?.find((p) => p.id === effectivePromptId)
-
-  // Handle start - creates clone then starts session
+  // Handle start - call server-side run agent endpoint
   const handleStart = useCallback(async () => {
-    setIsStartingSession(true)
     try {
-      // First, ensure clone exists
-      const clonePath = await ensureClone()
-
-      // Then start the session with the initial message from the prompt
-      const session = await startAgent.mutateAsync({
-        entityId: issueId,
+      const result = await runAgent.mutateAsync({
+        issueId,
         projectId,
-        workingDirectory: clonePath,
+        promptId: effectivePromptId,
         model: selectedModel,
-        mode: selectedPrompt?.mode as SessionMode | undefined,
-        initialMessage: selectedPrompt?.initialMessage ?? undefined,
+        baseBranch: selectedBaseBranch || undefined,
       })
 
-      onSessionStart?.(session)
+      onAgentStart?.(result)
       onOpenChange(false) // Close dialog on success
     } catch (e) {
       onError?.(e as Error)
-    } finally {
-      setIsStartingSession(false)
     }
   }, [
-    ensureClone,
-    startAgent,
+    runAgent,
     issueId,
     projectId,
+    effectivePromptId,
     selectedModel,
-    selectedPrompt,
-    onSessionStart,
+    selectedBaseBranch,
+    onAgentStart,
     onOpenChange,
     onError,
   ])
 
   // Combined loading states
-  const isLoading =
-    projectLoading ||
-    isLoadingClone ||
-    promptsLoading ||
-    isCreating ||
-    isStartingSession ||
-    startAgent.isPending
-  const isReady =
-    !projectLoading &&
-    !isLoadingClone &&
-    !promptsLoading &&
-    !isError &&
-    branchName &&
-    effectivePromptId
+  const isLoading = projectLoading || promptsLoading || runAgent.isPending
+  const isReady = !projectLoading && !promptsLoading && !isError && effectivePromptId
 
   // Don't render dialog content when closed
   if (!open) {
@@ -206,19 +165,15 @@ export function AgentLauncherDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Run Agent</DialogTitle>
-          <DialogDescription>
-            {branchName
-              ? `Start an agent session on branch ${branchName}`
-              : 'Configure and start an agent session'}
-          </DialogDescription>
+          <DialogDescription>Configure and start an agent session on this issue</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
           {/* Initial loading state */}
-          {(projectLoading || isLoadingClone || promptsLoading) && (
+          {(projectLoading || promptsLoading) && (
             <div className="flex items-center justify-center gap-2 py-8">
               <Loader variant="circular" size="sm" />
-              <span className="text-muted-foreground text-sm">Preparing workspace...</span>
+              <span className="text-muted-foreground text-sm">Loading prompts...</span>
             </div>
           )}
 
@@ -227,14 +182,14 @@ export function AgentLauncherDialog({
             <div className="border-destructive/50 bg-destructive/10 flex items-center gap-2 rounded-md border p-4">
               <AlertCircle className="text-destructive h-5 w-5 flex-shrink-0" />
               <div>
-                <p className="text-destructive text-sm font-medium">Failed to prepare workspace</p>
+                <p className="text-destructive text-sm font-medium">Failed to load prompts</p>
                 <p className="text-muted-foreground text-xs">{error.message}</p>
               </div>
             </div>
           )}
 
           {/* Launcher controls - show when ready */}
-          {!projectLoading && !isLoadingClone && !promptsLoading && !isError && branchName && (
+          {!projectLoading && !promptsLoading && !isError && (
             <>
               {/* Main controls row */}
               <div className="flex items-center gap-2">
@@ -277,7 +232,7 @@ export function AgentLauncherDialog({
                   disabled={isLoading || !isReady}
                   className="gap-1.5"
                 >
-                  {isCreating || isStartingSession || startAgent.isPending ? (
+                  {runAgent.isPending ? (
                     <Loader variant="circular" size="sm" />
                   ) : (
                     <Play className="h-3.5 w-3.5" />
