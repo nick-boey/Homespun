@@ -1,5 +1,5 @@
 export { ProjectToolbar, type ProjectToolbarProps } from './project-toolbar'
-export { TaskGraphView, type TaskGraphViewProps } from './task-graph-view'
+export { TaskGraphView, type TaskGraphViewProps, type TaskGraphViewRef } from './task-graph-view'
 export { InlineIssueEditor, type InlineIssueEditorProps } from './inline-issue-editor'
 export {
   TaskGraphIssueRow,

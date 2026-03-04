@@ -5,7 +5,26 @@ import { GitHubAuthMethod } from '@/api'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { AlertCircle, CheckCircle2, Github, GitBranch, User, Mail, Key } from 'lucide-react'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { useAppStore } from '@/stores/app-store'
+import {
+  AlertCircle,
+  CheckCircle2,
+  Github,
+  GitBranch,
+  User,
+  Mail,
+  Key,
+  Sun,
+  Moon,
+  Monitor,
+} from 'lucide-react'
 
 export const Route = createFileRoute('/settings')({
   component: Settings,
@@ -27,6 +46,8 @@ function Settings() {
       </div>
 
       <div className="grid gap-6">
+        <ThemeSection />
+
         <GitHubAuthSection
           status={status}
           authStatus={authStatus}
@@ -275,6 +296,56 @@ function GitConfigSection({ config, isLoading, isError }: GitConfigSectionProps)
             These values can be configured via environment variables (GIT_AUTHOR_NAME,
             GIT_AUTHOR_EMAIL) or in the application configuration (Git:AuthorName, Git:AuthorEmail).
           </p>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function ThemeSection() {
+  const theme = useAppStore((state) => state.theme)
+  const setTheme = useAppStore((state) => state.setTheme)
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <Sun className="h-5 w-5" />
+          <CardTitle>Appearance</CardTitle>
+        </div>
+        <CardDescription>Customize the application appearance.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex items-center gap-3">
+          <span className="text-muted-foreground w-28 text-sm font-medium">Theme:</span>
+          <Select
+            value={theme}
+            onValueChange={(value) => setTheme(value as 'light' | 'dark' | 'system')}
+          >
+            <SelectTrigger className="w-40" aria-label="Select theme">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="light">
+                <span className="flex items-center gap-2">
+                  <Sun className="h-4 w-4" />
+                  Light
+                </span>
+              </SelectItem>
+              <SelectItem value="dark">
+                <span className="flex items-center gap-2">
+                  <Moon className="h-4 w-4" />
+                  Dark
+                </span>
+              </SelectItem>
+              <SelectItem value="system">
+                <span className="flex items-center gap-2">
+                  <Monitor className="h-4 w-4" />
+                  System
+                </span>
+              </SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </CardContent>
     </Card>
