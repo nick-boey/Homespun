@@ -62,28 +62,28 @@ describe('InlineIssueDetailRow', () => {
       expect(screen.getByText('Task')).toBeInTheDocument()
     })
 
-    it('renders type badge for feature', () => {
-      const line = createRenderLine({ issueType: 1 })
-      render(<InlineIssueDetailRow {...defaultProps} line={line} />)
-      expect(screen.getByText('Feature')).toBeInTheDocument()
-    })
-
     it('renders type badge for bug', () => {
-      const line = createRenderLine({ issueType: 2 })
+      const line = createRenderLine({ issueType: 1 })
       render(<InlineIssueDetailRow {...defaultProps} line={line} />)
       expect(screen.getByText('Bug')).toBeInTheDocument()
     })
 
     it('renders type badge for chore', () => {
-      const line = createRenderLine({ issueType: 3 })
+      const line = createRenderLine({ issueType: 2 })
       render(<InlineIssueDetailRow {...defaultProps} line={line} />)
       expect(screen.getByText('Chore')).toBeInTheDocument()
     })
 
-    it('renders type badge for epic', () => {
+    it('renders type badge for feature', () => {
+      const line = createRenderLine({ issueType: 3 })
+      render(<InlineIssueDetailRow {...defaultProps} line={line} />)
+      expect(screen.getByText('Feature')).toBeInTheDocument()
+    })
+
+    it('renders type badge for idea', () => {
       const line = createRenderLine({ issueType: 4 })
       render(<InlineIssueDetailRow {...defaultProps} line={line} />)
-      expect(screen.getByText('Epic')).toBeInTheDocument()
+      expect(screen.getByText('Idea')).toBeInTheDocument()
     })
 
     it('renders status badge for open', () => {
@@ -91,22 +91,22 @@ describe('InlineIssueDetailRow', () => {
       expect(screen.getByText('Open')).toBeInTheDocument()
     })
 
-    it('renders status badge for complete', () => {
+    it('renders status badge for in progress', () => {
       const line = createRenderLine({ status: 1 })
       render(<InlineIssueDetailRow {...defaultProps} line={line} />)
-      expect(screen.getByText('Complete')).toBeInTheDocument()
-    })
-
-    it('renders status badge for in progress', () => {
-      const line = createRenderLine({ status: 4 })
-      render(<InlineIssueDetailRow {...defaultProps} line={line} />)
-      expect(screen.getByText('Progress')).toBeInTheDocument()
+      expect(screen.getByText('In Progress')).toBeInTheDocument()
     })
 
     it('renders status badge for in review', () => {
-      const line = createRenderLine({ status: 5 })
+      const line = createRenderLine({ status: 2 })
       render(<InlineIssueDetailRow {...defaultProps} line={line} />)
       expect(screen.getByText('Review')).toBeInTheDocument()
+    })
+
+    it('renders status badge for complete', () => {
+      const line = createRenderLine({ status: 3 })
+      render(<InlineIssueDetailRow {...defaultProps} line={line} />)
+      expect(screen.getByText('Complete')).toBeInTheDocument()
     })
   })
 
