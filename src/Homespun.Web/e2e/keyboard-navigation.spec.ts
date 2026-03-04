@@ -28,44 +28,42 @@ test.describe('Keyboard Navigation', () => {
     expect(response.status()).toBeLessThan(500)
   })
 
-  test.skip('insert mode - typing appends text to input', async ({ page }) => {
+  test.skip('insert mode - typing appends text to input', async ({ page: _page }) => {
     // This test requires specific UI selectors to be implemented
     // Skipped until selectors are verified
   })
 
-  test.skip('replace mode - typing replaces input text', async ({ page }) => {
+  test.skip('replace mode - typing replaces input text', async ({ page: _page }) => {
     // This test requires specific UI selectors to be implemented
     // Skipped until selectors are verified
   })
 
-  test.skip('create issue below - typing adds text to new input', async ({ page }) => {
+  test.skip('create issue below - typing adds text to new input', async ({ page: _page }) => {
     // This test requires specific UI selectors to be implemented
     // Skipped until selectors are verified
   })
 
-  test.skip('navigation keys work with selective keyboard prevention', async ({
-    page,
-  }) => {
+  test.skip('navigation keys work with selective keyboard prevention', async ({ page: _page }) => {
     // This test requires specific UI selectors to be implemented
     // Skipped until selectors are verified
   })
 
-  test.skip('enter key when issue selected navigates to edit page', async ({ page }) => {
+  test.skip('enter key when issue selected navigates to edit page', async ({ page: _page }) => {
     // This test requires specific UI selectors to be implemented
     // Skipped until selectors are verified
   })
 
-  test.skip('search highlights matching issues while typing', async ({ page }) => {
+  test.skip('search highlights matching issues while typing', async ({ page: _page }) => {
     // This test requires specific UI selectors to be implemented
     // Skipped until selectors are verified
   })
 
-  test.skip('search enter selects first match and restores focus', async ({ page }) => {
+  test.skip('search enter selects first match and restores focus', async ({ page: _page }) => {
     // This test requires specific UI selectors to be implemented
     // Skipped until selectors are verified
   })
 
-  test.skip('search next and previous match navigation', async ({ page }) => {
+  test.skip('search next and previous match navigation', async ({ page: _page }) => {
     // This test requires specific UI selectors to be implemented
     // Skipped until selectors are verified
   })

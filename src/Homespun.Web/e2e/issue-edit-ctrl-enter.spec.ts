@@ -10,24 +10,21 @@ import { test } from '@playwright/test'
  * navigation patterns that may not match the actual implementation.
  */
 test.describe('Issue Edit CTRL+Enter', () => {
-  test.skip(
-    'issue edit - ctrl+enter saves description when focus in description field',
-    async ({ page }) => {
-      // This test requires specific UI selectors to be implemented
-      // Skipped until selectors are verified
-    }
-  )
-
-  test.skip('issue edit - meta+enter saves description for mac support', async ({
-    page,
+  test.skip('issue edit - ctrl+enter saves description when focus in description field', async ({
+    page: _page,
   }) => {
     // This test requires specific UI selectors to be implemented
     // Skipped until selectors are verified
   })
 
-  test.skip('issue edit - enter alone does not save, allows newlines', async ({
-    page,
+  test.skip('issue edit - meta+enter saves description for mac support', async ({
+    page: _page,
   }) => {
+    // This test requires specific UI selectors to be implemented
+    // Skipped until selectors are verified
+  })
+
+  test.skip('issue edit - enter alone does not save, allows newlines', async ({ page: _page }) => {
     // This test requires specific UI selectors to be implemented
     // Skipped until selectors are verified
   })

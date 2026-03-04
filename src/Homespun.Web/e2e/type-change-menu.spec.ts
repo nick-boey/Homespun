@@ -11,22 +11,22 @@ import { test } from '@playwright/test'
  * and should be updated when the actual selectors are known.
  */
 test.describe('Type Change Menu', () => {
-  test.skip('type badge click opens menu', async ({ page }) => {
+  test.skip('type badge click opens menu', async ({ page: _page }) => {
     // This test requires specific UI selectors to be implemented
     // Skipped until selectors are verified
   })
 
-  test.skip('type badge clicking again closes menu', async ({ page }) => {
+  test.skip('type badge clicking again closes menu', async ({ page: _page }) => {
     // This test requires specific UI selectors to be implemented
     // Skipped until selectors are verified
   })
 
-  test.skip('type menu selecting type closes menu', async ({ page }) => {
+  test.skip('type menu selecting type closes menu', async ({ page: _page }) => {
     // This test requires specific UI selectors to be implemented
     // Skipped until selectors are verified
   })
 
-  test.skip('type badge click does not trigger row click', async ({ page }) => {
+  test.skip('type badge click does not trigger row click', async ({ page: _page }) => {
     // This test requires specific UI selectors to be implemented
     // Skipped until selectors are verified
   })
