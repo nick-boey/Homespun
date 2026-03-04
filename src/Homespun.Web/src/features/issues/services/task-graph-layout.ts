@@ -574,8 +574,17 @@ function renderGroup(
     const seriesConnectorFromLane = childLane != null ? childLane + laneOffset : null
 
     // Get linked PR and agent status for this issue
-    const linkedPr = linkedPrs[node.issue.id] ?? null
-    const agentStatus = agentStatuses[node.issue.id] ?? null
+    // Use case-insensitive lookup to match server-side behavior
+    const linkedPr =
+      linkedPrs[node.issue.id] ??
+      linkedPrs[node.issue.id.toLowerCase()] ??
+      linkedPrs[node.issue.id.toUpperCase()] ??
+      null
+    const agentStatus =
+      agentStatuses[node.issue.id] ??
+      agentStatuses[node.issue.id.toLowerCase()] ??
+      agentStatuses[node.issue.id.toUpperCase()] ??
+      null
 
     // Get hidden parent info (defaults to false if not provided)
     let hasHiddenParent = false
