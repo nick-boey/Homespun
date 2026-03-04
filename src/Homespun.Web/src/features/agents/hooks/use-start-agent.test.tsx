@@ -82,6 +82,7 @@ describe('useStartAgent', () => {
         model: 'claude-sonnet-4-20250514',
         workingDirectory: '/workdir',
         systemPrompt: 'Test prompt',
+        initialMessage: undefined,
       },
     })
   })
@@ -132,6 +133,39 @@ describe('useStartAgent', () => {
     expect(result.current.error).toBeInstanceOf(Error)
   })
 
+  it('passes initialMessage to start agent work immediately', async () => {
+    mockPostApiSessions.mockResolvedValueOnce(createMockResponse(createMockSession()))
+
+    const { result } = renderHook(() => useStartAgent(), {
+      wrapper: createWrapper(),
+    })
+
+    result.current.mutate({
+      entityId: 'issue-456',
+      projectId: 'project-789',
+      mode: 1,
+      model: 'claude-sonnet-4-20250514',
+      workingDirectory: '/workdir',
+      initialMessage: 'Build the feature',
+    })
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+
+    expect(mockPostApiSessions).toHaveBeenCalledWith({
+      body: {
+        entityId: 'issue-456',
+        projectId: 'project-789',
+        mode: 1,
+        model: 'claude-sonnet-4-20250514',
+        workingDirectory: '/workdir',
+        systemPrompt: undefined,
+        initialMessage: 'Build the feature',
+      },
+    })
+  })
+
   it('uses default mode and model when not specified', async () => {
     mockPostApiSessions.mockResolvedValueOnce(createMockResponse(createMockSession()))
 
@@ -158,6 +192,7 @@ describe('useStartAgent', () => {
         mode: undefined,
         model: undefined,
         systemPrompt: undefined,
+        initialMessage: undefined,
       },
     })
   })

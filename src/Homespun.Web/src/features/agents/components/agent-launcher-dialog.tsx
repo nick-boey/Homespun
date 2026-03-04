@@ -125,14 +125,14 @@ export function AgentLauncherDialog({
       // First, ensure clone exists
       const clonePath = await ensureClone()
 
-      // Then start the session
+      // Then start the session with the initial message from the prompt
       const session = await startAgent.mutateAsync({
         entityId: issueId,
         projectId,
         workingDirectory: clonePath,
         model: selectedModel,
         mode: selectedPrompt?.mode as SessionMode | undefined,
-        systemPrompt: selectedPrompt?.initialMessage ?? undefined,
+        initialMessage: selectedPrompt?.initialMessage ?? undefined,
       })
 
       onSessionStart?.(session)

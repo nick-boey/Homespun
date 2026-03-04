@@ -33,9 +33,15 @@ public class CreateSessionRequest
     public string? WorkingDirectory { get; set; }
 
     /// <summary>
-    /// Optional system prompt.
+    /// Optional system prompt (background context like CLAUDE.md content).
     /// </summary>
     public string? SystemPrompt { get; set; }
+
+    /// <summary>
+    /// Optional initial message to send immediately after session creation.
+    /// This is the first user message that starts the agent work.
+    /// </summary>
+    public string? InitialMessage { get; set; }
 }
 
 /// <summary>

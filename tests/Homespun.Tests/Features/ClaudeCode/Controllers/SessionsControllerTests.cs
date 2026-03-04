@@ -5,6 +5,7 @@ using Homespun.Features.Projects;
 using Homespun.Shared.Models.Sessions;
 using Homespun.Shared.Requests;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using Moq;
 using NUnit.Framework;
 
@@ -17,6 +18,7 @@ public class SessionsControllerTests
     private Mock<IClaudeSessionService> _sessionServiceMock = null!;
     private Mock<IProjectService> _projectServiceMock = null!;
     private Mock<IContainerQueryService> _containerServiceMock = null!;
+    private Mock<ILogger<SessionsController>> _loggerMock = null!;
 
     [SetUp]
     public void SetUp()
@@ -24,10 +26,12 @@ public class SessionsControllerTests
         _sessionServiceMock = new Mock<IClaudeSessionService>();
         _projectServiceMock = new Mock<IProjectService>();
         _containerServiceMock = new Mock<IContainerQueryService>();
+        _loggerMock = new Mock<ILogger<SessionsController>>();
         _controller = new SessionsController(
             _sessionServiceMock.Object,
             _projectServiceMock.Object,
-            _containerServiceMock.Object);
+            _containerServiceMock.Object,
+            _loggerMock.Object);
     }
 
     [Test]

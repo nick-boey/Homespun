@@ -17,7 +17,8 @@ namespace Homespun.Features.ClaudeCode.Controllers;
 public class SessionsController(
     IClaudeSessionService sessionService,
     IProjectService projectService,
-    IContainerQueryService containerService) : ControllerBase
+    IContainerQueryService containerService,
+    ILogger<SessionsController> logger) : ControllerBase
 {
     /// <summary>
     /// Get all active sessions.
@@ -153,6 +154,30 @@ public class SessionsController(
                 request.Mode,
                 model,
                 request.SystemPrompt);
+
+            // If an initial message is provided, send it to start the agent work
+            if (!string.IsNullOrWhiteSpace(request.InitialMessage))
+            {
+                // Fire and forget - don't block the response
+                // The message processing will happen asynchronously and clients
+                // will receive updates via SignalR
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await sessionService.SendMessageAsync(
+                            session.Id,
+                            request.InitialMessage,
+                            request.Mode);
+                    }
+                    catch (Exception ex)
+                    {
+                        // Log but don't fail - session is already created
+                        // The error will be communicated via SignalR
+                        logger.LogError(ex, "Error sending initial message for session {SessionId}", session.Id);
+                    }
+                });
+            }
 
             return CreatedAtAction(nameof(GetById), new { id = session.Id }, session);
         }
