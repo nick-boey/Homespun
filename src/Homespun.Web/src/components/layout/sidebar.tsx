@@ -85,17 +85,19 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
             isActive={isActive('/') && !pathname.startsWith('/projects')}
             onClick={onNavigate}
           />
-          {projects?.map((project) => (
-            <NavItem
-              key={project.id}
-              to={`/projects/${project.id}`}
-              icon={<FolderGit2 className="h-4 w-4" />}
-              label={project.name}
-              isActive={isProjectActive(project.id)}
-              indent
-              onClick={onNavigate}
-            />
-          ))}
+          {projects
+            ?.filter((project) => project.id && project.name)
+            .map((project) => (
+              <NavItem
+                key={project.id}
+                to={`/projects/${project.id}`}
+                icon={<FolderGit2 className="h-4 w-4" />}
+                label={project.name!}
+                isActive={isProjectActive(project.id!)}
+                indent
+                onClick={onNavigate}
+              />
+            ))}
         </div>
 
         <div className="mb-2">
