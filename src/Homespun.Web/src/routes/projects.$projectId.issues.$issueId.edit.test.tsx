@@ -158,7 +158,7 @@ describe('EditIssue Page', () => {
     const titleInput = screen.getByLabelText(/title/i)
     await user.clear(titleInput)
 
-    const saveButton = screen.getByRole('button', { name: /save/i })
+    const saveButton = screen.getByRole('button', { name: /^save changes$/i })
     await user.click(saveButton)
 
     await waitFor(() => {
@@ -192,7 +192,7 @@ describe('EditIssue Page', () => {
     await user.clear(titleInput)
     await user.type(titleInput, 'Updated Title')
 
-    const saveButton = screen.getByRole('button', { name: /save/i })
+    const saveButton = screen.getByRole('button', { name: /^save changes$/i })
     await user.click(saveButton)
 
     await waitFor(() => {
@@ -241,7 +241,7 @@ describe('EditIssue Page', () => {
     await user.clear(titleInput)
     await user.type(titleInput, 'Updated Title')
 
-    const saveButton = screen.getByRole('button', { name: /save/i })
+    const saveButton = screen.getByRole('button', { name: /^save changes$/i })
     await user.click(saveButton)
 
     await waitFor(() => {
@@ -358,7 +358,7 @@ describe('EditIssue Page', () => {
     const titleInput = screen.getByLabelText(/title/i)
     await user.type(titleInput, ' modified')
 
-    const saveButton = screen.getByRole('button', { name: /save/i })
+    const saveButton = screen.getByRole('button', { name: /^save changes$/i })
     await user.click(saveButton)
 
     await waitFor(() => {
