@@ -2,8 +2,42 @@ import { cn } from '@/lib/utils'
 import { Markdown } from '@/components/ui/markdown'
 import { Skeleton } from '@/components/ui/skeleton'
 import { QuestionPanel } from '@/features/questions'
-import type { ClaudeMessage, ClaudeMessageContent, PendingQuestion } from '@/types/signalr'
+import type {
+  ClaudeMessage,
+  ClaudeMessageContent,
+  ClaudeContentType,
+  ClaudeMessageRole,
+  PendingQuestion,
+} from '@/types/signalr'
 import { useState } from 'react'
+
+// Backend sends numeric enum values, but TypeScript types expect strings.
+// These maps normalize both forms to the string representation.
+const ContentTypeMap: Record<number | string, ClaudeContentType> = {
+  0: 'Text',
+  1: 'Thinking',
+  2: 'ToolUse',
+  3: 'ToolResult',
+  Text: 'Text',
+  Thinking: 'Thinking',
+  ToolUse: 'ToolUse',
+  ToolResult: 'ToolResult',
+}
+
+const RoleMap: Record<number | string, ClaudeMessageRole> = {
+  0: 'User',
+  1: 'Assistant',
+  User: 'User',
+  Assistant: 'Assistant',
+}
+
+function normalizeContentType(type: number | string): ClaudeContentType {
+  return ContentTypeMap[type] ?? 'Text'
+}
+
+function normalizeRole(role: number | string): ClaudeMessageRole {
+  return RoleMap[role] ?? 'User'
+}
 
 export interface MessageListProps {
   messages: ClaudeMessage[]
@@ -60,7 +94,7 @@ interface MessageItemProps {
 
 function MessageItem({ message }: MessageItemProps) {
   const [isHovered, setIsHovered] = useState(false)
-  const isUser = message.role === 'User'
+  const isUser = normalizeRole(message.role) === 'User'
 
   return (
     <div
@@ -103,7 +137,9 @@ interface ContentBlockProps {
 }
 
 function ContentBlock({ content, isUser }: ContentBlockProps) {
-  switch (content.type) {
+  const contentType = normalizeContentType(content.type)
+
+  switch (contentType) {
     case 'Text':
       if (isUser) {
         return <span>{content.text}</span>
