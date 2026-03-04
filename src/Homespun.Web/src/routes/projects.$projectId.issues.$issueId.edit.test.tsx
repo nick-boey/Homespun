@@ -416,4 +416,109 @@ describe('EditIssue Page', () => {
     // Check for preview tab
     expect(screen.getByRole('tab', { name: /preview/i })).toBeInTheDocument()
   })
+
+  it('initializes form with correct status and type from API response', async () => {
+    // Create an issue with specific type (Chore = 3) and status (InProgress = 4)
+    const issueWithChoreType: IssueResponse = {
+      ...mockIssue,
+      status: 4, // InProgress
+      type: 3, // Chore
+      priority: 2,
+    }
+
+    vi.mocked(Issues.getApiIssuesByIssueId).mockResolvedValue({
+      data: issueWithChoreType,
+      error: undefined,
+      request: new Request('http://test'),
+      response: new Response(),
+    })
+
+    vi.mocked(Issues.putApiIssuesByIssueId).mockResolvedValue({
+      data: issueWithChoreType,
+      error: undefined,
+      request: new Request('http://test'),
+      response: new Response(),
+    })
+
+    const user = userEvent.setup()
+    render(<EditIssue />, { wrapper: createWrapper() })
+
+    // Wait for title to be populated (confirms data is loaded)
+    await waitFor(() => {
+      expect(screen.getByLabelText(/title/i)).toHaveValue('Test Issue')
+    })
+
+    // Verify the Select components display the correct values
+    const statusTrigger = screen.getByRole('combobox', { name: /status/i })
+    const typeTrigger = screen.getByRole('combobox', { name: /type/i })
+    expect(statusTrigger).toHaveTextContent('In Progress')
+    expect(typeTrigger).toHaveTextContent('Chore')
+
+    // Save without changing anything and verify correct values are sent
+    const saveButton = screen.getByRole('button', { name: /^save changes$/i })
+    await user.click(saveButton)
+
+    await waitFor(() => {
+      expect(Issues.putApiIssuesByIssueId).toHaveBeenCalledWith(
+        expect.objectContaining({
+          body: expect.objectContaining({
+            status: 4, // InProgress
+            type: 3, // Chore
+            priority: 2,
+          }),
+        })
+      )
+    })
+  })
+
+  it('sends correct status and type values when saving', async () => {
+    // Start with a Chore type issue
+    const issueWithChoreType: IssueResponse = {
+      ...mockIssue,
+      status: 4, // InProgress
+      type: 3, // Chore
+    }
+
+    vi.mocked(Issues.getApiIssuesByIssueId).mockResolvedValue({
+      data: issueWithChoreType,
+      error: undefined,
+      request: new Request('http://test'),
+      response: new Response(),
+    })
+
+    vi.mocked(Issues.putApiIssuesByIssueId).mockResolvedValue({
+      data: issueWithChoreType,
+      error: undefined,
+      request: new Request('http://test'),
+      response: new Response(),
+    })
+
+    const user = userEvent.setup()
+    render(<EditIssue />, { wrapper: createWrapper() })
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/title/i)).toHaveValue('Test Issue')
+    })
+
+    // Wait for form to be fully loaded with correct values
+    await waitFor(() => {
+      expect(screen.getByRole('combobox', { name: /type/i })).toHaveTextContent('Chore')
+    })
+
+    // Just save without changing anything
+    const saveButton = screen.getByRole('button', { name: /^save changes$/i })
+    await user.click(saveButton)
+
+    // Verify the API was called with the correct type and status
+    await waitFor(() => {
+      expect(Issues.putApiIssuesByIssueId).toHaveBeenCalledWith(
+        expect.objectContaining({
+          body: expect.objectContaining({
+            status: 4, // InProgress
+            type: 3, // Chore
+          }),
+        })
+      )
+    })
+  })
 })

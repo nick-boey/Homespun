@@ -54,6 +54,7 @@ const TYPE_OPTIONS = [
 ]
 
 const PRIORITY_OPTIONS = [
+  { value: 'none', label: 'No Priority' },
   { value: '1', label: '1 - Highest' },
   { value: '2', label: '2 - High' },
   { value: '3', label: '3 - Medium' },
@@ -101,7 +102,7 @@ export default function EditIssue() {
       description: '',
       status: '0',
       type: '0',
-      priority: '3',
+      priority: 'none',
       executionMode: '0',
       workingBranchId: '',
       tags: '',
@@ -120,7 +121,7 @@ export default function EditIssue() {
   // Watch description for preview
   const description = watch('description')
 
-  // Reset form when issue data loads
+  // Reset form when issue data loads - use useEffect with proper dependencies
   useEffect(() => {
     if (issue) {
       reset({
@@ -128,7 +129,7 @@ export default function EditIssue() {
         description: issue.description ?? '',
         status: String(issue.status ?? 0),
         type: String(issue.type ?? 0),
-        priority: issue.priority != null ? String(issue.priority) : '3',
+        priority: issue.priority != null ? String(issue.priority) : 'none',
         executionMode: String(issue.executionMode ?? 0),
         workingBranchId: issue.workingBranchId ?? '',
         tags: issue.tags?.join(', ') ?? '',
@@ -169,7 +170,7 @@ export default function EditIssue() {
           description: data.description || undefined,
           status: parseInt(data.status) as IssueStatus,
           type: parseInt(data.type) as IssueType,
-          priority: data.priority ? parseInt(data.priority) : undefined,
+          priority: data.priority && data.priority !== 'none' ? parseInt(data.priority) : undefined,
           workingBranchId: data.workingBranchId || undefined,
         },
       })
@@ -196,7 +197,7 @@ export default function EditIssue() {
           description: data.description || undefined,
           status: parseInt(data.status) as IssueStatus,
           type: parseInt(data.type) as IssueType,
-          priority: data.priority ? parseInt(data.priority) : undefined,
+          priority: data.priority && data.priority !== 'none' ? parseInt(data.priority) : undefined,
           workingBranchId: data.workingBranchId || undefined,
         },
       },
@@ -344,7 +345,11 @@ export default function EditIssue() {
                 control={control}
                 name="status"
                 render={({ field }) => (
-                  <Select value={field.value} onValueChange={field.onChange}>
+                  <Select
+                    key={`status-${field.value}`}
+                    value={field.value}
+                    onValueChange={field.onChange}
+                  >
                     <SelectTrigger id="status" className="w-full">
                       <SelectValue placeholder="Select status" />
                     </SelectTrigger>
@@ -367,7 +372,11 @@ export default function EditIssue() {
                 control={control}
                 name="type"
                 render={({ field }) => (
-                  <Select value={field.value} onValueChange={field.onChange}>
+                  <Select
+                    key={`type-${field.value}`}
+                    value={field.value}
+                    onValueChange={field.onChange}
+                  >
                     <SelectTrigger id="type" className="w-full">
                       <SelectValue placeholder="Select type" />
                     </SelectTrigger>
@@ -393,7 +402,11 @@ export default function EditIssue() {
                 control={control}
                 name="priority"
                 render={({ field }) => (
-                  <Select value={field.value} onValueChange={field.onChange}>
+                  <Select
+                    key={`priority-${field.value}`}
+                    value={field.value}
+                    onValueChange={field.onChange}
+                  >
                     <SelectTrigger id="priority" className="w-full">
                       <SelectValue placeholder="Select priority" />
                     </SelectTrigger>
@@ -416,7 +429,11 @@ export default function EditIssue() {
                 control={control}
                 name="executionMode"
                 render={({ field }) => (
-                  <Select value={field.value} onValueChange={field.onChange}>
+                  <Select
+                    key={`executionMode-${field.value}`}
+                    value={field.value}
+                    onValueChange={field.onChange}
+                  >
                     <SelectTrigger id="executionMode" className="w-full">
                       <SelectValue placeholder="Select mode" />
                     </SelectTrigger>
