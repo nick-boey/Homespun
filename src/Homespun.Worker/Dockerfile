@@ -8,6 +8,9 @@
 #   - Playwright 1.52.0 browsers for E2E tests
 # =============================================================================
 
+# ARG before any FROM so it's available in the FROM instruction below
+ARG BASE_IMAGE=homespun-base:local
+
 # Build stage
 FROM node:22-bookworm-slim AS build
 WORKDIR /app
@@ -22,7 +25,6 @@ RUN npm run build
 # Runtime stage - use shared base image for common tooling
 # Base image provides: .NET 10 SDK, Node.js, gh CLI, Claude Code, Playwright MCP,
 #                      Fleece CLI, Docker CLI, Blazor Blueprint MCP
-ARG BASE_IMAGE=homespun-base:local
 FROM ${BASE_IMAGE}
 WORKDIR /app
 
