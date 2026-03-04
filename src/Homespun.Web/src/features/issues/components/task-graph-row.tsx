@@ -46,6 +46,10 @@ interface TaskGraphIssueRowProps extends HTMLAttributes<HTMLDivElement> {
   onEdit?: (issueId: string) => void
   onRunAgent?: (issueId: string) => void
   showActions?: boolean
+  /** Whether this issue is the source of a move operation */
+  isMoveSource?: boolean
+  /** Whether a move operation is in progress (any issue is being moved) */
+  isMoveOperationActive?: boolean
 }
 
 /**
@@ -63,6 +67,8 @@ export const TaskGraphIssueRow = memo(
       onEdit,
       onRunAgent,
       showActions = true,
+      isMoveSource = false,
+      isMoveOperationActive = false,
       className,
       ...props
     },
@@ -99,6 +105,9 @@ export const TaskGraphIssueRow = memo(
           'hover:bg-muted/50 focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none',
           isSelected && 'bg-muted',
           hasSearchMatch && 'ring-2 ring-yellow-400',
+          // Move operation styling
+          isMoveSource && 'ring-primary opacity-70 ring-2',
+          isMoveOperationActive && !isMoveSource && 'hover:ring-primary hover:ring-2',
           className
         )}
         style={{ height: ROW_HEIGHT }}
@@ -109,12 +118,7 @@ export const TaskGraphIssueRow = memo(
         <TaskGraphNodeSvg line={line} maxLanes={maxLanes} />
 
         {/* Issue content */}
-        <div className="flex flex-1 items-center gap-2 overflow-hidden pr-2">
-          {/* Issue ID */}
-          <span className="text-muted-foreground shrink-0 font-mono text-xs">
-            {line.issueId.substring(0, 6)}
-          </span>
-
+        <div className="flex flex-1 items-center gap-2 pr-2">
           {/* Type badge */}
           <span
             className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium"
@@ -126,10 +130,18 @@ export const TaskGraphIssueRow = memo(
             {TYPE_LABELS[line.issueType] ?? 'Task'}
           </span>
 
-          {/* Title */}
-          <span className="text-sm whitespace-nowrap" title={line.title}>
-            {line.title || 'Untitled'}
+          {/* Status badge */}
+          <span
+            className={cn(
+              'shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium',
+              getStatusColor()
+            )}
+          >
+            {STATUS_LABELS[line.status] ?? 'Open'}
           </span>
+
+          {/* Title - no truncation to allow full horizontal scroll */}
+          <span className="text-sm whitespace-nowrap">{line.title || 'Untitled'}</span>
 
           {/* Spacer */}
           <div className="flex-1" />
@@ -172,16 +184,6 @@ export const TaskGraphIssueRow = memo(
               onExpand={onToggleExpand}
             />
           )}
-
-          {/* Status badge */}
-          <span
-            className={cn(
-              'shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium',
-              getStatusColor()
-            )}
-          >
-            {STATUS_LABELS[line.status] ?? 'Open'}
-          </span>
         </div>
       </div>
     )

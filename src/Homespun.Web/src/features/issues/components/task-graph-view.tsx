@@ -32,6 +32,7 @@ import { useTaskGraph, taskGraphQueryKey, useCreateIssue, useUpdateIssue } from 
 import {
   KeyboardEditMode,
   EditCursorPosition,
+  MoveOperationType,
   type PendingNewIssue,
   type InlineEditState,
 } from '../types'
@@ -53,6 +54,14 @@ export interface TaskGraphViewProps {
   onSelectIssue?: (issueId: string | null) => void
   onEditIssue?: (issueId: string) => void
   onRunAgent?: (issueId: string) => void
+  /** Active move operation type (AsChildOf or AsParentOf) */
+  moveOperation?: MoveOperationType | null
+  /** Source issue ID for the move operation */
+  moveSourceIssueId?: string | null
+  /** Called when a move target is selected */
+  onMoveComplete?: (targetIssueId: string) => void
+  /** Called when move operation is cancelled */
+  onMoveCancel?: () => void
   className?: string
 }
 
@@ -85,6 +94,10 @@ export const TaskGraphView = memo(
       onSelectIssue,
       onEditIssue,
       onRunAgent,
+      moveOperation,
+      moveSourceIssueId,
+      onMoveComplete,
+      onMoveCancel,
       className,
     },
     ref
@@ -210,9 +223,16 @@ export const TaskGraphView = memo(
           setEditMode(KeyboardEditMode.Viewing)
           setPendingNewIssue(null)
         }
+
+        // If a move operation is active and clicking a different issue, complete the move
+        if (moveOperation && moveSourceIssueId && issueId !== moveSourceIssueId) {
+          onMoveComplete?.(issueId)
+          return
+        }
+
         onSelectIssue?.(issueId)
       },
-      [onSelectIssue, editMode]
+      [onSelectIssue, editMode, moveOperation, moveSourceIssueId, onMoveComplete]
     )
 
     // ============================================================================
@@ -423,6 +443,13 @@ export const TaskGraphView = memo(
 
     const handleKeyDown = useCallback(
       (event: React.KeyboardEvent<HTMLDivElement>) => {
+        // If a move operation is active, Escape cancels it
+        if (moveOperation && event.key === 'Escape') {
+          event.preventDefault()
+          onMoveCancel?.()
+          return
+        }
+
         // If in editing mode, don't handle navigation keys
         if (editMode !== KeyboardEditMode.Viewing) {
           // Only handle Escape to cancel
@@ -604,6 +631,8 @@ export const TaskGraphView = memo(
         handleStartEditAtStart,
         handleStartEditAtEnd,
         handleStartReplace,
+        moveOperation,
+        onMoveCancel,
       ]
     )
 
@@ -848,6 +877,8 @@ export const TaskGraphView = memo(
                     onEdit={onEditIssue}
                     onRunAgent={onRunAgent}
                     onClick={() => handleRowClick(line.issueId)}
+                    isMoveSource={moveSourceIssueId === line.issueId}
+                    isMoveOperationActive={!!moveOperation}
                     aria-rowindex={index + 1}
                     data-testid="task-graph-issue-row"
                     data-issue-id={line.issueId}

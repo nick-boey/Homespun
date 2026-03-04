@@ -24,6 +24,10 @@ export interface ProjectToolbarProps {
   onCreateBelow: () => void
   onMakeChild: () => void
   onMakeParent: () => void
+  /** Whether the "Make Child Of" button is in active selection mode */
+  childOfActive?: boolean
+  /** Whether the "Make Parent Of" button is in active selection mode */
+  parentOfActive?: boolean
   onEditIssue: () => void
   onOpenAgentLauncher: () => void
   depth: number
@@ -43,6 +47,8 @@ export function ProjectToolbar({
   onCreateBelow,
   onMakeChild,
   onMakeParent,
+  childOfActive = false,
+  parentOfActive = false,
   onEditIssue,
   onOpenAgentLauncher,
   depth,
@@ -103,8 +109,10 @@ export function ProjectToolbar({
           variant="ghost"
           size={buttonSize}
           onClick={onMakeChild}
-          aria-label="Make child of another"
-          title="Make child of another"
+          disabled={!hasIssueSelected}
+          aria-label="Make child of another (click to select target)"
+          title="Make child of another (click to select target)"
+          className={cn(childOfActive && 'ring-ring ring-2')}
         >
           <CornerRightUp className="h-4 w-4" />
         </Button>
@@ -112,8 +120,10 @@ export function ProjectToolbar({
           variant="ghost"
           size={buttonSize}
           onClick={onMakeParent}
-          aria-label="Make parent of another"
-          title="Make parent of another"
+          disabled={!hasIssueSelected}
+          aria-label="Make parent of another (click to select target)"
+          title="Make parent of another (click to select target)"
+          className={cn(parentOfActive && 'ring-ring ring-2')}
         >
           <CornerLeftDown className="h-4 w-4" />
         </Button>

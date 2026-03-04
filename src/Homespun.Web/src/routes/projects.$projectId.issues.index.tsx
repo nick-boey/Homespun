@@ -1,12 +1,16 @@
 import { useState, useCallback, useRef } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   TaskGraphView,
   ProjectToolbar,
   useToolbarShortcuts,
+  taskGraphQueryKey,
   type TaskGraphViewRef,
 } from '@/features/issues'
+import { MoveOperationType } from '@/features/issues/types'
 import { AgentLauncherDialog } from '@/features/agents'
+import { Issues } from '@/api'
 
 export const Route = createFileRoute('/projects/$projectId/issues/')({
   component: IssuesList,
@@ -15,6 +19,7 @@ export const Route = createFileRoute('/projects/$projectId/issues/')({
 function IssuesList() {
   const { projectId } = Route.useParams()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
 
   // Ref to TaskGraphView for imperative actions
   const taskGraphRef = useRef<TaskGraphViewRef>(null)
@@ -30,6 +35,22 @@ function IssuesList() {
   // Agent launcher dialog state
   const [agentLauncherOpen, setAgentLauncherOpen] = useState(false)
   const [agentLauncherIssueId, setAgentLauncherIssueId] = useState<string | null>(null)
+
+  // Move operation state
+  const [moveOperation, setMoveOperation] = useState<MoveOperationType | null>(null)
+  const [moveSourceIssueId, setMoveSourceIssueId] = useState<string | null>(null)
+
+  // Set parent mutation for move operations
+  const setParentMutation = useMutation({
+    mutationFn: ({ childId, parentIssueId }: { childId: string; parentIssueId: string | null }) =>
+      Issues.postApiIssuesByChildIdSetParent({
+        path: { childId },
+        body: { projectId, parentIssueId },
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: taskGraphQueryKey(projectId) })
+    },
+  })
 
   // Handlers
   const handleEditIssue = useCallback(
@@ -54,14 +75,60 @@ function IssuesList() {
   }, [])
 
   const handleMakeChild = useCallback(() => {
-    // TODO: Implement make child
-    console.log('Make child', selectedIssueId)
-  }, [selectedIssueId])
+    if (!selectedIssueId) return
+    // Toggle: if already in child mode, cancel; otherwise start child mode
+    if (moveOperation === MoveOperationType.AsChildOf) {
+      setMoveOperation(null)
+      setMoveSourceIssueId(null)
+    } else {
+      setMoveOperation(MoveOperationType.AsChildOf)
+      setMoveSourceIssueId(selectedIssueId)
+    }
+  }, [selectedIssueId, moveOperation])
 
   const handleMakeParent = useCallback(() => {
-    // TODO: Implement make parent
-    console.log('Make parent', selectedIssueId)
-  }, [selectedIssueId])
+    if (!selectedIssueId) return
+    // Toggle: if already in parent mode, cancel; otherwise start parent mode
+    if (moveOperation === MoveOperationType.AsParentOf) {
+      setMoveOperation(null)
+      setMoveSourceIssueId(null)
+    } else {
+      setMoveOperation(MoveOperationType.AsParentOf)
+      setMoveSourceIssueId(selectedIssueId)
+    }
+  }, [selectedIssueId, moveOperation])
+
+  const handleMoveComplete = useCallback(
+    async (targetIssueId: string) => {
+      if (!moveSourceIssueId || !moveOperation) return
+
+      try {
+        if (moveOperation === MoveOperationType.AsChildOf) {
+          // Make source a child of target
+          await setParentMutation.mutateAsync({
+            childId: moveSourceIssueId,
+            parentIssueId: targetIssueId,
+          })
+        } else if (moveOperation === MoveOperationType.AsParentOf) {
+          // Make target a child of source
+          await setParentMutation.mutateAsync({
+            childId: targetIssueId,
+            parentIssueId: moveSourceIssueId,
+          })
+        }
+      } finally {
+        // Reset move operation state
+        setMoveOperation(null)
+        setMoveSourceIssueId(null)
+      }
+    },
+    [moveSourceIssueId, moveOperation, setParentMutation]
+  )
+
+  const handleMoveCancel = useCallback(() => {
+    setMoveOperation(null)
+    setMoveSourceIssueId(null)
+  }, [])
 
   const handleOpenAgentLauncher = useCallback(() => {
     if (selectedIssueId) {
@@ -122,6 +189,8 @@ function IssuesList() {
         onCreateBelow={handleCreateBelow}
         onMakeChild={handleMakeChild}
         onMakeParent={handleMakeParent}
+        childOfActive={moveOperation === MoveOperationType.AsChildOf}
+        parentOfActive={moveOperation === MoveOperationType.AsParentOf}
         onEditIssue={() => handleEditIssue()}
         onOpenAgentLauncher={handleOpenAgentLauncher}
         depth={depth}
@@ -145,6 +214,10 @@ function IssuesList() {
           onSelectIssue={setSelectedIssueId}
           onEditIssue={handleEditIssue}
           onRunAgent={handleRunAgent}
+          moveOperation={moveOperation}
+          moveSourceIssueId={moveSourceIssueId}
+          onMoveComplete={handleMoveComplete}
+          onMoveCancel={handleMoveCancel}
         />
       </div>
 
