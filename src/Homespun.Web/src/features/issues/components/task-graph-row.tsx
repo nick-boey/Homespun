@@ -127,7 +127,7 @@ export const TaskGraphIssueRow = memo(
           </span>
 
           {/* Title */}
-          <span className="truncate text-sm" title={line.title}>
+          <span className="text-sm whitespace-nowrap" title={line.title}>
             {line.title || 'Untitled'}
           </span>
 
@@ -234,7 +234,7 @@ export const TaskGraphPrRow = memo(
           </span>
 
           {/* Title */}
-          <span className="truncate text-sm" title={line.title}>
+          <span className="text-sm whitespace-nowrap" title={line.title}>
             {line.title || 'Untitled PR'}
           </span>
 
