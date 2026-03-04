@@ -120,7 +120,7 @@ describe('ProjectToolbar', () => {
     it('calls onMakeChild when make child button is clicked', async () => {
       const user = userEvent.setup()
       const onMakeChild = vi.fn()
-      renderToolbar({ onMakeChild })
+      renderToolbar({ onMakeChild, selectedIssueId: 'test-issue-1' })
 
       await user.click(screen.getByRole('button', { name: /make child/i }))
       expect(onMakeChild).toHaveBeenCalled()
@@ -129,7 +129,7 @@ describe('ProjectToolbar', () => {
     it('calls onMakeParent when make parent button is clicked', async () => {
       const user = userEvent.setup()
       const onMakeParent = vi.fn()
-      renderToolbar({ onMakeParent })
+      renderToolbar({ onMakeParent, selectedIssueId: 'test-issue-1' })
 
       await user.click(screen.getByRole('button', { name: /make parent/i }))
       expect(onMakeParent).toHaveBeenCalled()
