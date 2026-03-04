@@ -125,8 +125,7 @@ function computeSortOrderForSibling(
     return computeMidpoint(previousSibling?.sortOrder ?? null, referenceSibling.sortOrder)
   } else {
     // Insert below reference (after in sort order)
-    const nextSibling =
-      referenceIndex < siblings.length - 1 ? siblings[referenceIndex + 1] : null
+    const nextSibling = referenceIndex < siblings.length - 1 ? siblings[referenceIndex + 1] : null
     return computeMidpoint(referenceSibling.sortOrder, nextSibling?.sortOrder ?? null)
   }
 }

@@ -20,7 +20,4 @@ export { getPriorityColor } from './priority-colors'
 export { generateBranchName } from './branch-name'
 
 // Inherited parent computation
-export {
-  computeInheritedParentInfo,
-  type InheritedParentInfo,
-} from './inherited-parent'
+export { computeInheritedParentInfo, type InheritedParentInfo } from './inherited-parent'

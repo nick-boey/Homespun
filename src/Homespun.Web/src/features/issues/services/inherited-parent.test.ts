@@ -3,11 +3,7 @@ import { computeInheritedParentInfo } from './inherited-parent'
 import type { TaskGraphResponse, TaskGraphNodeResponse, IssueResponse } from '@/api'
 
 // Helper to create a mock issue
-function createIssue(
-  id: string,
-  parentIssueId?: string,
-  sortOrder?: string
-): IssueResponse {
+function createIssue(id: string, parentIssueId?: string, sortOrder?: string): IssueResponse {
   return {
     id,
     title: `Issue ${id}`,
@@ -17,14 +13,16 @@ function createIssue(
     priority: null,
     linkedPR: null,
     linkedIssues: null,
-    parentIssues: parentIssueId ? [{ parentIssue: parentIssueId, sortOrder: sortOrder ?? 'V' }] : [],
+    parentIssues: parentIssueId
+      ? [{ parentIssue: parentIssueId, sortOrder: sortOrder ?? 'V' }]
+      : [],
     tags: null,
     workingBranchId: null,
     executionMode: 0,
     createdBy: null,
     assignedTo: null,
-    lastUpdate: null,
-    createdAt: null,
+    lastUpdate: undefined,
+    createdAt: undefined,
   }
 }
 
