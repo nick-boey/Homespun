@@ -11,12 +11,38 @@ import { NotificationProvider } from '@/features/notifications'
 
 export function RootLayout() {
   const sidebarOpen = useAppStore((state) => state.sidebarOpen)
+  const theme = useAppStore((state) => state.theme)
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false)
 
   // Extract projectId from current route params
   const routerState = useRouterState()
   const pathname = routerState.location.pathname
   const projectId = (pathname.match(/\/projects\/([^/]+)/) ?? [])[1]
+
+  // Apply theme to document root
+  React.useEffect(() => {
+    const root = document.documentElement
+
+    const applyTheme = (isDark: boolean) => {
+      if (isDark) {
+        root.classList.add('dark')
+      } else {
+        root.classList.remove('dark')
+      }
+    }
+
+    if (theme === 'system') {
+      // Check system preference and listen for changes
+      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
+      applyTheme(mediaQuery.matches)
+
+      const handler = (e: MediaQueryListEvent) => applyTheme(e.matches)
+      mediaQuery.addEventListener('change', handler)
+      return () => mediaQuery.removeEventListener('change', handler)
+    } else {
+      applyTheme(theme === 'dark')
+    }
+  }, [theme])
 
   // Close mobile menu when route changes
   React.useEffect(() => {

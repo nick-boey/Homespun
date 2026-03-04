@@ -18,12 +18,22 @@ const MODELS = [
   { value: 'claude-haiku-3-5-20241022', label: 'Haiku' },
 ] as const
 
+const DEFAULT_MODEL = 'claude-opus-4-20250514'
 const MODEL_STORAGE_KEY = 'agent-launcher-model'
 const PROMPT_STORAGE_KEY = 'agent-launcher-prompt'
 
-/** Get the initial prompt ID from localStorage or return empty string */
+/** Special "No prompt" option - starts session in Plan mode without a system prompt */
+const NO_PROMPT_ID = '__no_prompt__'
+const NO_PROMPT_OPTION = {
+  id: NO_PROMPT_ID,
+  name: 'No prompt',
+  initialMessage: undefined,
+  mode: 0, // SessionMode.Plan
+} as const
+
+/** Get the initial prompt ID from localStorage or return "No prompt" as default */
 function getInitialPromptId(): string {
-  return localStorage.getItem(PROMPT_STORAGE_KEY) ?? ''
+  return localStorage.getItem(PROMPT_STORAGE_KEY) ?? NO_PROMPT_ID
 }
 
 interface AgentLauncherProps {
@@ -52,7 +62,7 @@ export function AgentLauncher({
 
   // Load persisted selections from localStorage
   const [selectedModel, setSelectedModel] = useState<string>(() => {
-    return localStorage.getItem(MODEL_STORAGE_KEY) ?? MODELS[0].value
+    return localStorage.getItem(MODEL_STORAGE_KEY) ?? DEFAULT_MODEL
   })
   const [selectedPromptId, setSelectedPromptId] = useState<string>(getInitialPromptId)
 
@@ -68,18 +78,21 @@ export function AgentLauncher({
   }, [selectedPromptId])
 
   // Compute the effective selected prompt ID
-  // If the selected prompt exists in the list, use it; otherwise use first available
+  // "No prompt" is always valid; otherwise check if selected prompt exists in list
   const effectivePromptId = useMemo(() => {
-    if (!prompts || prompts.length === 0) {
-      return ''
+    // If "No prompt" is selected, use it
+    if (selectedPromptId === NO_PROMPT_ID) {
+      return NO_PROMPT_ID
     }
     // Check if the selected prompt exists in the loaded prompts
-    const selectedExists = prompts.some((p) => p.id === selectedPromptId)
-    if (selectedExists) {
-      return selectedPromptId
+    if (prompts && prompts.length > 0) {
+      const selectedExists = prompts.some((p) => p.id === selectedPromptId)
+      if (selectedExists) {
+        return selectedPromptId
+      }
     }
-    // Fall back to the first prompt
-    return prompts[0].id ?? ''
+    // Default to "No prompt"
+    return NO_PROMPT_ID
   }, [prompts, selectedPromptId])
 
   // Handler for prompt selection that updates state
@@ -87,7 +100,11 @@ export function AgentLauncher({
     setSelectedPromptId(value)
   }
 
-  const selectedPrompt = prompts?.find((p) => p.id === effectivePromptId)
+  // Get the selected prompt object (or NO_PROMPT_OPTION if "No prompt" selected)
+  const selectedPrompt =
+    effectivePromptId === NO_PROMPT_ID
+      ? NO_PROMPT_OPTION
+      : prompts?.find((p) => p.id === effectivePromptId)
 
   const handleStart = async () => {
     try {
@@ -111,15 +128,15 @@ export function AgentLauncher({
     <div className={className}>
       <div className="flex items-center gap-2">
         {/* Prompt selector */}
-        <Select
-          value={effectivePromptId}
-          onValueChange={handlePromptChange}
-          disabled={isLoading || !prompts?.length}
-        >
+        <Select value={effectivePromptId} onValueChange={handlePromptChange} disabled={isLoading}>
           <SelectTrigger className="w-40" aria-label="Select prompt">
             <SelectValue placeholder="Select prompt" />
           </SelectTrigger>
           <SelectContent>
+            {/* "No prompt" option always first */}
+            <SelectItem key={NO_PROMPT_ID} value={NO_PROMPT_ID}>
+              {NO_PROMPT_OPTION.name}
+            </SelectItem>
             {prompts?.map((prompt) => (
               <SelectItem key={prompt.id} value={prompt.id ?? ''}>
                 {prompt.name}
@@ -143,12 +160,7 @@ export function AgentLauncher({
         </Select>
 
         {/* Start button */}
-        <Button
-          size="sm"
-          onClick={handleStart}
-          disabled={isLoading || !effectivePromptId}
-          className="gap-1.5"
-        >
+        <Button size="sm" onClick={handleStart} disabled={isLoading} className="gap-1.5">
           {startAgent.isPending ? (
             <Loader variant="circular" size="sm" />
           ) : (

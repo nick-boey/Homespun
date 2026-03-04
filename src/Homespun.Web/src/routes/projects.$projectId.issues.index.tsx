@@ -1,6 +1,11 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { TaskGraphView, ProjectToolbar, useToolbarShortcuts } from '@/features/issues'
+import {
+  TaskGraphView,
+  ProjectToolbar,
+  useToolbarShortcuts,
+  type TaskGraphViewRef,
+} from '@/features/issues'
 import { AgentLauncherDialog } from '@/features/agents'
 
 export const Route = createFileRoute('/projects/$projectId/issues/')({
@@ -10,6 +15,9 @@ export const Route = createFileRoute('/projects/$projectId/issues/')({
 function IssuesList() {
   const { projectId } = Route.useParams()
   const navigate = useNavigate()
+
+  // Ref to TaskGraphView for imperative actions
+  const taskGraphRef = useRef<TaskGraphViewRef>(null)
 
   // State
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null)
@@ -38,14 +46,12 @@ function IssuesList() {
   )
 
   const handleCreateAbove = useCallback(() => {
-    // TODO: Implement create above
-    console.log('Create above', selectedIssueId)
-  }, [selectedIssueId])
+    taskGraphRef.current?.createAbove()
+  }, [])
 
   const handleCreateBelow = useCallback(() => {
-    // TODO: Implement create below
-    console.log('Create below', selectedIssueId)
-  }, [selectedIssueId])
+    taskGraphRef.current?.createBelow()
+  }, [])
 
   const handleMakeChild = useCallback(() => {
     // TODO: Implement make child
@@ -131,6 +137,7 @@ function IssuesList() {
       {/* Task Graph View */}
       <div className="min-h-0 flex-1 overflow-auto p-4">
         <TaskGraphView
+          ref={taskGraphRef}
           projectId={projectId}
           depth={depth}
           searchQuery={searchQuery}

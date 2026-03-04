@@ -1,6 +1,6 @@
 // Components
 export { ProjectToolbar, type ProjectToolbarProps } from './components'
-export { TaskGraphView, type TaskGraphViewProps } from './components'
+export { TaskGraphView, type TaskGraphViewProps, type TaskGraphViewRef } from './components'
 export { InlineIssueEditor, type InlineIssueEditorProps } from './components'
 export {
   TaskGraphIssueRow,
