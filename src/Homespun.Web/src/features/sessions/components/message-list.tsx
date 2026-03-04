@@ -92,27 +92,53 @@ interface MessageItemProps {
   message: ClaudeMessage
 }
 
+/**
+ * Determines if a message should be displayed on the assistant side.
+ * Tool result messages should appear on the assistant side even though
+ * they technically have a "User" role from the backend.
+ */
+function isAssistantSideMessage(message: ClaudeMessage): boolean {
+  const role = normalizeRole(message.role)
+  if (role === 'Assistant') return true
+
+  // Tool result messages should be displayed on the assistant side
+  // They contain results from tool calls made by the assistant
+  const hasOnlyToolResults = message.content.every(
+    (c) => normalizeContentType(c.type) === 'ToolResult'
+  )
+  if (hasOnlyToolResults && message.content.length > 0) return true
+
+  return false
+}
+
 function MessageItem({ message }: MessageItemProps) {
   const [isHovered, setIsHovered] = useState(false)
-  const isUser = normalizeRole(message.role) === 'User'
+  const isAssistant = isAssistantSideMessage(message)
 
   return (
     <div
       data-testid={`message-${message.id}`}
-      className={cn('flex w-full gap-3', isUser ? 'justify-end' : 'justify-start')}
+      className={cn('flex w-full min-w-0 gap-3', isAssistant ? 'justify-start' : 'justify-end')}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      <div className={cn('flex max-w-[80%] flex-col gap-1', isUser ? 'items-end' : 'items-start')}>
+      <div
+        className={cn(
+          'flex max-w-[80%] min-w-0 flex-col gap-1',
+          isAssistant ? 'items-start' : 'items-end'
+        )}
+      >
         <div
           data-testid={`message-content-${message.id}`}
           className={cn(
-            'rounded-lg px-4 py-2',
-            isUser ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'
+            'max-w-full min-w-0 overflow-hidden rounded-lg px-4 py-2',
+            isAssistant
+              ? 'bg-secondary text-secondary-foreground'
+              : 'bg-primary text-primary-foreground'
           )}
         >
           {message.content.map((content, index) => (
-            <ContentBlock key={index} content={content} isUser={isUser} />
+            <ContentBlock key={index} content={content} isAssistant={isAssistant} />
           ))}
           {message.isStreaming && (
             <span
@@ -133,35 +159,47 @@ function MessageItem({ message }: MessageItemProps) {
 
 interface ContentBlockProps {
   content: ClaudeMessageContent
-  isUser: boolean
+  isAssistant: boolean
 }
 
-function ContentBlock({ content, isUser }: ContentBlockProps) {
+function ContentBlock({ content, isAssistant }: ContentBlockProps) {
   const contentType = normalizeContentType(content.type)
 
   switch (contentType) {
     case 'Text':
-      if (isUser) {
-        return <span>{content.text}</span>
-      }
-      return <Markdown className="prose-sm max-w-none">{content.text ?? ''}</Markdown>
+      // All text messages are rendered with Markdown for consistent styling
+      return (
+        <Markdown
+          className={cn(
+            'prose-sm max-w-none break-words',
+            // User messages have inverted colors so we need prose-invert
+            !isAssistant && 'prose-invert'
+          )}
+        >
+          {content.text ?? ''}
+        </Markdown>
+      )
 
     case 'ToolUse':
       return (
-        <div className="bg-muted/50 my-1 rounded border p-2 text-sm">
-          <span className="font-mono text-xs">🔧 {content.toolName}</span>
+        <div className="bg-muted/50 my-1 overflow-hidden rounded border p-2 text-sm">
+          <span className="font-mono text-xs break-all">🔧 {content.toolName}</span>
         </div>
       )
 
     case 'ToolResult':
       return (
-        <div className="bg-muted/50 my-1 rounded border p-2 text-sm">
+        <div className="bg-muted/50 my-1 overflow-hidden rounded border p-2 text-sm">
           <span className="text-muted-foreground text-xs">Tool result</span>
         </div>
       )
 
     case 'Thinking':
-      return <div className="text-muted-foreground my-1 text-sm italic">{content.thinking}</div>
+      return (
+        <div className="text-muted-foreground my-1 text-sm break-words italic">
+          {content.thinking}
+        </div>
+      )
 
     default:
       return null

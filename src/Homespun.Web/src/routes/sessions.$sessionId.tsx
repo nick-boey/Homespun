@@ -15,6 +15,7 @@ import {
 import { useAnswerQuestion } from '@/features/questions'
 import { useClaudeCodeHub } from '@/providers/signalr-provider'
 import { ArrowLeft, AlertCircle, RefreshCw } from 'lucide-react'
+import { ScrollToBottom } from '@/components/ui/scroll-to-bottom'
 import type { PermissionMode, ModelSelection } from '@/stores/chat-input-store'
 import type { SessionMode } from '@/types/signalr'
 
@@ -150,31 +151,34 @@ function SessionChat() {
     <div className="flex h-full flex-col">
       <SessionHeader sessionId={sessionId} session={session} />
       {/* Messages area - flex-1 takes remaining space */}
-      <div
-        ref={scrollContainerRef}
-        className="border-border mt-4 min-h-0 flex-1 overflow-y-auto rounded-lg border"
-      >
-        <MessageList
-          messages={messages}
-          isLoading={isLoading}
-          pendingQuestion={session?.pendingQuestion}
-          onAnswerQuestion={answerQuestion}
-          isSubmittingAnswer={isSubmittingAnswer}
-        />
-        {/* Plan approval panel displayed inline after messages */}
-        {hasPendingPlan && planContent && (
-          <div className="p-4">
-            <PlanApprovalPanel
-              planContent={planContent}
-              planFilePath={planFilePath}
-              onApproveClearContext={approveClearContext}
-              onApproveKeepContext={approveKeepContext}
-              onReject={reject}
-              isLoading={isApprovingPlan}
-              error={approvalError}
-            />
-          </div>
-        )}
+      <div className="relative mt-4 min-h-0 flex-1">
+        <div
+          ref={scrollContainerRef}
+          className="border-border absolute inset-0 overflow-y-auto rounded-lg border"
+        >
+          <MessageList
+            messages={messages}
+            isLoading={isLoading}
+            pendingQuestion={session?.pendingQuestion}
+            onAnswerQuestion={answerQuestion}
+            isSubmittingAnswer={isSubmittingAnswer}
+          />
+          {/* Plan approval panel displayed inline after messages */}
+          {hasPendingPlan && planContent && (
+            <div className="p-4">
+              <PlanApprovalPanel
+                planContent={planContent}
+                planFilePath={planFilePath}
+                onApproveClearContext={approveClearContext}
+                onApproveKeepContext={approveKeepContext}
+                onReject={reject}
+                isLoading={isApprovingPlan}
+                error={approvalError}
+              />
+            </div>
+          )}
+        </div>
+        <ScrollToBottom scrollRef={scrollContainerRef} />
       </div>
       {/* Chat input - sticky at bottom with safe area inset for mobile keyboards */}
       <div className="bg-background sticky bottom-0 mt-3 pb-[env(safe-area-inset-bottom)] md:mt-4">
