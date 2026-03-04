@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Markdown } from '@/components/ui/markdown'
+import { Loader } from '@/components/ui/loader'
 import {
   Select,
   SelectContent,
@@ -29,8 +30,8 @@ import {
 } from '@/components/ui/alert-dialog'
 import { useBreadcrumbSetter } from '@/hooks/use-breadcrumbs'
 import { useIssue, useUpdateIssue } from '@/features/issues'
-import { AgentLauncherDialog } from '@/features/agents'
-import { ArrowLeft, Play } from 'lucide-react'
+import { AgentLauncherDialog, useGenerateBranchId } from '@/features/agents'
+import { ArrowLeft, Play, Sparkles } from 'lucide-react'
 import type { IssueStatus, IssueType } from '@/api'
 
 export const Route = createFileRoute('/projects/$projectId/issues/$issueId/edit')({
@@ -73,6 +74,61 @@ const issueSchema = z.object({
 })
 
 type IssueFormData = z.infer<typeof issueSchema>
+
+/** Props for WorkingBranchField component */
+interface WorkingBranchFieldProps {
+  register: ReturnType<typeof useForm<IssueFormData>>['register']
+  watch: ReturnType<typeof useForm<IssueFormData>>['watch']
+  setValue: ReturnType<typeof useForm<IssueFormData>>['setValue']
+}
+
+/** Working Branch field with AI-powered branch ID suggestion button */
+function WorkingBranchField({ register, watch, setValue }: WorkingBranchFieldProps) {
+  const title = watch('title')
+  const generateBranchId = useGenerateBranchId()
+
+  const handleSuggest = useCallback(async () => {
+    if (!title?.trim()) {
+      return
+    }
+    try {
+      const result = await generateBranchId.mutateAsync(title)
+      setValue('workingBranchId', result.branchId, { shouldDirty: true })
+    } catch {
+      // Error is handled by the mutation
+    }
+  }, [title, generateBranchId, setValue])
+
+  return (
+    <div className="space-y-2">
+      <Label htmlFor="workingBranchId">Working Branch ID</Label>
+      <div className="flex gap-2">
+        <Input
+          id="workingBranchId"
+          placeholder="Custom branch identifier"
+          className="flex-1"
+          {...register('workingBranchId')}
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          onClick={handleSuggest}
+          disabled={!title?.trim() || generateBranchId.isPending}
+          title="Suggest branch ID based on title"
+          aria-label="Suggest branch ID"
+        >
+          {generateBranchId.isPending ? (
+            <Loader variant="circular" size="sm" />
+          ) : (
+            <Sparkles className="h-4 w-4" />
+          )}
+        </Button>
+      </div>
+      <p className="text-muted-foreground text-xs">AI-suggested or auto-generated from title</p>
+    </div>
+  )
+}
 
 export default function EditIssue() {
   const { projectId, issueId } = useParams({
@@ -431,15 +487,7 @@ export default function EditIssue() {
           </div>
 
           {/* Working Branch */}
-          <div className="space-y-2">
-            <Label htmlFor="workingBranchId">Working Branch</Label>
-            <Input
-              id="workingBranchId"
-              placeholder="feature/branch-name"
-              {...register('workingBranchId')}
-            />
-            <p className="text-muted-foreground text-sm">Branch to use for this issue (optional)</p>
-          </div>
+          <WorkingBranchField register={register} watch={watch} setValue={form.setValue} />
 
           {/* Tags */}
           <div className="space-y-2">

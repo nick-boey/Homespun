@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { Play } from 'lucide-react'
+import { Play, ChevronDown, ChevronUp } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -17,8 +17,12 @@ import {
 } from '@/components/ui/select'
 import { Loader } from '@/components/ui/loader'
 import { AlertCircle } from 'lucide-react'
+import { Label } from '@/components/ui/label'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { useEnsureClone } from '../hooks/use-ensure-clone'
 import { useStartAgent, useAgentPrompts } from '../hooks'
+import { useProject } from '@/features/projects'
+import { BaseBranchSelector } from './base-branch-selector'
 import type { ClaudeSession, SessionMode } from '@/api/generated/types.gen'
 
 const MODELS = [
@@ -29,6 +33,7 @@ const MODELS = [
 
 const MODEL_STORAGE_KEY = 'agent-launcher-model'
 const PROMPT_STORAGE_KEY = 'agent-launcher-prompt'
+const BASE_BRANCH_STORAGE_KEY = 'agent-launcher-base-branch'
 
 /** Get the initial prompt ID from localStorage or return empty string */
 function getInitialPromptId(): string {
@@ -55,7 +60,7 @@ interface AgentLauncherDialogProps {
  *
  * This component:
  * 1. Resolves the branch name for the issue
- * 2. Shows prompt/model selection
+ * 2. Shows prompt/model/base branch selection
  * 3. Creates clone when start is clicked
  * 4. Starts agent session with the clone path
  */
@@ -67,7 +72,27 @@ export function AgentLauncherDialog({
   onSessionStart,
   onError,
 }: AgentLauncherDialogProps) {
-  // Clone management
+  // Project data for repo path and default branch
+  const { project, isLoading: projectLoading } = useProject(projectId)
+
+  // Selection state
+  const [selectedModel, setSelectedModel] = useState<string>(() => {
+    return localStorage.getItem(MODEL_STORAGE_KEY) ?? MODELS[1].value // Default to Opus
+  })
+  const [selectedPromptId, setSelectedPromptId] = useState<string>(getInitialPromptId)
+  const [selectedBaseBranch, setSelectedBaseBranch] = useState<string>(() => {
+    return localStorage.getItem(BASE_BRANCH_STORAGE_KEY) ?? ''
+  })
+  const [showAdvancedSettings, setShowAdvancedSettings] = useState(false)
+
+  // Initialize base branch from project default when project loads
+  useEffect(() => {
+    if (project?.defaultBranch && !selectedBaseBranch) {
+      setSelectedBaseBranch(project.defaultBranch)
+    }
+  }, [project?.defaultBranch, selectedBaseBranch])
+
+  // Clone management - pass baseBranch
   const {
     branchName,
     isLoading: isLoadingClone,
@@ -78,17 +103,12 @@ export function AgentLauncherDialog({
   } = useEnsureClone({
     projectId,
     issueId: open ? issueId : '', // Only load when dialog is open
+    baseBranch: selectedBaseBranch || project?.defaultBranch || undefined,
   })
 
   // Agent prompts
   const { data: prompts, isLoading: promptsLoading } = useAgentPrompts(projectId)
   const startAgent = useStartAgent()
-
-  // Selection state
-  const [selectedModel, setSelectedModel] = useState<string>(() => {
-    return localStorage.getItem(MODEL_STORAGE_KEY) ?? MODELS[0].value
-  })
-  const [selectedPromptId, setSelectedPromptId] = useState<string>(getInitialPromptId)
 
   // Starting state
   const [isStartingSession, setIsStartingSession] = useState(false)
@@ -103,6 +123,12 @@ export function AgentLauncherDialog({
       localStorage.setItem(PROMPT_STORAGE_KEY, selectedPromptId)
     }
   }, [selectedPromptId])
+
+  useEffect(() => {
+    if (selectedBaseBranch) {
+      localStorage.setItem(BASE_BRANCH_STORAGE_KEY, selectedBaseBranch)
+    }
+  }, [selectedBaseBranch])
 
   // Compute effective prompt ID
   const effectivePromptId = useMemo(() => {
@@ -156,8 +182,19 @@ export function AgentLauncherDialog({
 
   // Combined loading states
   const isLoading =
-    isLoadingClone || promptsLoading || isCreating || isStartingSession || startAgent.isPending
-  const isReady = !isLoadingClone && !promptsLoading && !isError && branchName && effectivePromptId
+    projectLoading ||
+    isLoadingClone ||
+    promptsLoading ||
+    isCreating ||
+    isStartingSession ||
+    startAgent.isPending
+  const isReady =
+    !projectLoading &&
+    !isLoadingClone &&
+    !promptsLoading &&
+    !isError &&
+    branchName &&
+    effectivePromptId
 
   // Don't render dialog content when closed
   if (!open) {
@@ -176,9 +213,9 @@ export function AgentLauncherDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="py-4">
+        <div className="space-y-4 py-4">
           {/* Initial loading state */}
-          {(isLoadingClone || promptsLoading) && (
+          {(projectLoading || isLoadingClone || promptsLoading) && (
             <div className="flex items-center justify-center gap-2 py-8">
               <Loader variant="circular" size="sm" />
               <span className="text-muted-foreground text-sm">Preparing workspace...</span>
@@ -197,55 +234,100 @@ export function AgentLauncherDialog({
           )}
 
           {/* Launcher controls - show when ready */}
-          {!isLoadingClone && !promptsLoading && !isError && branchName && (
-            <div className="flex items-center gap-2">
-              {/* Prompt selector */}
-              <Select
-                value={effectivePromptId}
-                onValueChange={setSelectedPromptId}
-                disabled={isLoading || !prompts?.length}
-              >
-                <SelectTrigger className="w-40" aria-label="Select prompt">
-                  <SelectValue placeholder="Select prompt" />
-                </SelectTrigger>
-                <SelectContent>
-                  {prompts?.map((prompt) => (
-                    <SelectItem key={prompt.id} value={prompt.id ?? ''}>
-                      {prompt.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          {!projectLoading && !isLoadingClone && !promptsLoading && !isError && branchName && (
+            <>
+              {/* Main controls row */}
+              <div className="flex items-center gap-2">
+                {/* Prompt selector */}
+                <Select
+                  value={effectivePromptId}
+                  onValueChange={setSelectedPromptId}
+                  disabled={isLoading || !prompts?.length}
+                >
+                  <SelectTrigger className="w-40" aria-label="Select prompt">
+                    <SelectValue placeholder="Select prompt" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {prompts?.map((prompt) => (
+                      <SelectItem key={prompt.id} value={prompt.id ?? ''}>
+                        {prompt.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
 
-              {/* Model selector */}
-              <Select value={selectedModel} onValueChange={setSelectedModel} disabled={isLoading}>
-                <SelectTrigger className="w-24" aria-label="Select model">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {MODELS.map((model) => (
-                    <SelectItem key={model.value} value={model.value}>
-                      {model.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                {/* Model selector */}
+                <Select value={selectedModel} onValueChange={setSelectedModel} disabled={isLoading}>
+                  <SelectTrigger className="w-24" aria-label="Select model">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MODELS.map((model) => (
+                      <SelectItem key={model.value} value={model.value}>
+                        {model.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
 
-              {/* Start button */}
-              <Button
-                size="sm"
-                onClick={handleStart}
-                disabled={isLoading || !isReady}
-                className="gap-1.5"
-              >
-                {isCreating || isStartingSession || startAgent.isPending ? (
-                  <Loader variant="circular" size="sm" />
-                ) : (
-                  <Play className="h-3.5 w-3.5" />
-                )}
-                Start Agent
-              </Button>
-            </div>
+                {/* Start button */}
+                <Button
+                  size="sm"
+                  onClick={handleStart}
+                  disabled={isLoading || !isReady}
+                  className="gap-1.5"
+                >
+                  {isCreating || isStartingSession || startAgent.isPending ? (
+                    <Loader variant="circular" size="sm" />
+                  ) : (
+                    <Play className="h-3.5 w-3.5" />
+                  )}
+                  Start Agent
+                </Button>
+              </div>
+
+              {/* More settings collapsible */}
+              <Collapsible open={showAdvancedSettings} onOpenChange={setShowAdvancedSettings}>
+                <CollapsibleTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-muted-foreground hover:text-foreground gap-1 p-0 text-xs"
+                  >
+                    {showAdvancedSettings ? (
+                      <>
+                        <ChevronUp className="h-3 w-3" />
+                        Hide settings
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown className="h-3 w-3" />
+                        More settings
+                      </>
+                    )}
+                  </Button>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="mt-3 space-y-3">
+                  {/* Base Branch Selector */}
+                  <div className="space-y-1.5">
+                    <Label htmlFor="base-branch" className="text-sm">
+                      Base Branch
+                    </Label>
+                    <BaseBranchSelector
+                      repoPath={project?.localPath ?? undefined}
+                      defaultBranch={project?.defaultBranch}
+                      value={selectedBaseBranch}
+                      onChange={setSelectedBaseBranch}
+                      disabled={isLoading}
+                      aria-label="Select base branch"
+                    />
+                    <p className="text-muted-foreground text-xs">
+                      The branch to create the working branch from
+                    </p>
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+            </>
           )}
         </div>
       </DialogContent>

@@ -5,6 +5,8 @@ import { Clones, Issues } from '@/api'
 interface UseEnsureCloneOptions {
   projectId: string
   issueId: string
+  /** Optional base branch to create the new branch from */
+  baseBranch?: string
 }
 
 interface UseEnsureCloneResult {
@@ -38,6 +40,7 @@ interface UseEnsureCloneResult {
 export function useEnsureClone({
   projectId,
   issueId,
+  baseBranch,
 }: UseEnsureCloneOptions): UseEnsureCloneResult {
   const queryClient = useQueryClient()
   const enabled = !!projectId && !!issueId
@@ -89,6 +92,7 @@ export function useEnsureClone({
           projectId,
           branchName: branchNameToCreate,
           createBranch: true,
+          baseBranch: baseBranch || undefined,
         },
       })
 
