@@ -40,8 +40,10 @@ describe('useBranches', () => {
 
     vi.mocked(Clones.getApiClonesBranches).mockResolvedValue({
       data: mockBranches,
-      response: {} as Response,
-    })
+      response: new Response(),
+      request: new Request('http://test'),
+      error: undefined,
+    } as Awaited<ReturnType<typeof Clones.getApiClonesBranches>>)
 
     const { result } = renderHook(() => useBranches('/path/to/repo', 'main'), { wrapper })
 
@@ -59,9 +61,11 @@ describe('useBranches', () => {
 
   it('handles errors gracefully', async () => {
     vi.mocked(Clones.getApiClonesBranches).mockResolvedValue({
+      data: undefined,
+      response: new Response(null, { status: 500 }),
+      request: new Request('http://test'),
       error: { detail: 'Failed to fetch branches' },
-      response: {} as Response,
-    })
+    } as Awaited<ReturnType<typeof Clones.getApiClonesBranches>>)
 
     const { result } = renderHook(() => useBranches('/path/to/repo'), { wrapper })
 

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import { QueryClientProvider, QueryClient } from '@tanstack/react-query'
 import { BaseBranchSelector } from './base-branch-selector'
@@ -27,7 +27,8 @@ describe('BaseBranchSelector', () => {
   )
 
   it('shows loading state while fetching branches', () => {
-    vi.mocked(Clones.getApiClonesBranches).mockReturnValue(new Promise(() => {}))
+    const mockGet = Clones.getApiClonesBranches as Mock
+    mockGet.mockReturnValue(new Promise(() => {}))
 
     render(<BaseBranchSelector repoPath="/path/to/repo" value="" onChange={mockOnChange} />, {
       wrapper,
@@ -44,8 +45,10 @@ describe('BaseBranchSelector', () => {
 
     vi.mocked(Clones.getApiClonesBranches).mockResolvedValue({
       data: mockBranches,
-      response: {} as Response,
-    })
+      response: new Response(),
+      request: new Request('http://test'),
+      error: undefined,
+    } as Awaited<ReturnType<typeof Clones.getApiClonesBranches>>)
 
     render(
       <BaseBranchSelector
@@ -73,9 +76,11 @@ describe('BaseBranchSelector', () => {
 
   it('shows error state when fetching fails', async () => {
     vi.mocked(Clones.getApiClonesBranches).mockResolvedValue({
+      data: undefined,
+      response: new Response(null, { status: 500 }),
+      request: new Request('http://test'),
       error: { detail: 'Failed' },
-      response: {} as Response,
-    })
+    } as Awaited<ReturnType<typeof Clones.getApiClonesBranches>>)
 
     render(<BaseBranchSelector repoPath="/path/to/repo" value="" onChange={mockOnChange} />, {
       wrapper,

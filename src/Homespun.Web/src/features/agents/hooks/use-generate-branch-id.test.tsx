@@ -31,8 +31,10 @@ describe('useGenerateBranchId', () => {
         branchId: 'add-user-auth',
         wasAiGenerated: true,
       },
-      response: {} as Response,
-    })
+      response: new Response(),
+      request: new Request('http://test'),
+      error: undefined,
+    } as Awaited<ReturnType<typeof Orchestration.postApiOrchestrationGenerateBranchId>>)
 
     const { result } = renderHook(() => useGenerateBranchId(), { wrapper })
 
@@ -45,9 +47,11 @@ describe('useGenerateBranchId', () => {
 
   it('handles API errors', async () => {
     vi.mocked(Orchestration.postApiOrchestrationGenerateBranchId).mockResolvedValue({
+      data: undefined,
+      response: new Response(null, { status: 500 }),
+      request: new Request('http://test'),
       error: { detail: 'API error' },
-      response: {} as Response,
-    })
+    } as Awaited<ReturnType<typeof Orchestration.postApiOrchestrationGenerateBranchId>>)
 
     const { result } = renderHook(() => useGenerateBranchId(), { wrapper })
 
@@ -64,8 +68,10 @@ describe('useGenerateBranchId', () => {
         success: false,
         error: 'Failed to generate',
       },
-      response: {} as Response,
-    })
+      response: new Response(),
+      request: new Request('http://test'),
+      error: undefined,
+    } as Awaited<ReturnType<typeof Orchestration.postApiOrchestrationGenerateBranchId>>)
 
     const { result } = renderHook(() => useGenerateBranchId(), { wrapper })
 
