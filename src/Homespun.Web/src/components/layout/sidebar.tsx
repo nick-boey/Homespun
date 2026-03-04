@@ -1,6 +1,7 @@
 import { Link, useRouterState } from '@tanstack/react-router'
-import { FolderKanban, List, Settings, Bot } from 'lucide-react'
+import { FolderKanban, List, Settings, Bot, FolderGit2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useProjects } from '@/features/projects/hooks/use-projects'
 
 interface NavItemProps {
   to: string
@@ -41,12 +42,17 @@ interface SidebarProps {
 export function Sidebar({ className, onNavigate }: SidebarProps) {
   const routerState = useRouterState()
   const pathname = routerState.location.pathname
+  const { data: projects } = useProjects()
 
   const isActive = (path: string) => {
     if (path === '/') {
       return pathname === '/'
     }
     return pathname.startsWith(path)
+  }
+
+  const isProjectActive = (projectId: string) => {
+    return pathname.startsWith(`/projects/${projectId}`)
   }
 
   return (
@@ -79,6 +85,17 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
             isActive={isActive('/') && !pathname.startsWith('/projects')}
             onClick={onNavigate}
           />
+          {projects?.map((project) => (
+            <NavItem
+              key={project.id}
+              to={`/projects/${project.id}`}
+              icon={<FolderGit2 className="h-4 w-4" />}
+              label={project.name}
+              isActive={isProjectActive(project.id)}
+              indent
+              onClick={onNavigate}
+            />
+          ))}
         </div>
 
         <div className="mb-2">
