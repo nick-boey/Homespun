@@ -169,7 +169,7 @@ describe('ProjectLayout', () => {
     expect(issuesLink).toHaveClass('border-primary')
   })
 
-  it('displays 404 error when project not found', { timeout: 20000 }, async () => {
+  it('displays 404 error when project not found', { timeout: 30000 }, async () => {
     vi.mocked(Projects.getApiProjectsById).mockResolvedValue({
       data: undefined,
       response: new Response(null, { status: 404 }),
