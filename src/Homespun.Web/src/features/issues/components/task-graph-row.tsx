@@ -15,6 +15,12 @@ import {
 import type { TaskGraphIssueRenderLine, TaskGraphPrRenderLine } from '../services'
 import { TaskGraphMarkerType } from '../services'
 import { IssueRowActions } from './issue-row-actions'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 /** Issue status labels */
 const STATUS_LABELS: Record<number, string> = {
@@ -50,6 +56,10 @@ interface TaskGraphIssueRowProps extends HTMLAttributes<HTMLDivElement> {
   isMoveSource?: boolean
   /** Whether a move operation is in progress (any issue is being moved) */
   isMoveOperationActive?: boolean
+  /** Callback for changing issue type */
+  onTypeChange?: (issueId: string, newType: number) => void
+  /** Callback for changing issue status */
+  onStatusChange?: (issueId: string, newStatus: number) => void
 }
 
 /**
@@ -69,6 +79,8 @@ export const TaskGraphIssueRow = memo(
       showActions = true,
       isMoveSource = false,
       isMoveOperationActive = false,
+      onTypeChange,
+      onStatusChange,
       className,
       ...props
     },
@@ -119,26 +131,66 @@ export const TaskGraphIssueRow = memo(
 
         {/* Issue content */}
         <div className="flex flex-1 items-center gap-2 pr-2">
-          {/* Type badge */}
-          <span
-            className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium"
-            style={{
-              backgroundColor: `${typeColor}20`,
-              color: typeColor,
-            }}
-          >
-            {TYPE_LABELS[line.issueType] ?? 'Task'}
-          </span>
+          {/* Type badge with dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="shrink-0 cursor-pointer rounded px-1.5 py-0.5 text-[10px] font-medium transition-opacity hover:opacity-80"
+                style={{
+                  backgroundColor: `${typeColor}20`,
+                  color: typeColor,
+                }}
+                onClick={(e) => e.stopPropagation()}
+                title="Click to change type"
+              >
+                {TYPE_LABELS[line.issueType] ?? 'Task'}
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" onClick={(e) => e.stopPropagation()}>
+              {Object.entries(TYPE_LABELS).map(([value, label]) => (
+                <DropdownMenuItem
+                  key={value}
+                  onClick={() => onTypeChange?.(line.issueId, Number(value))}
+                  className={cn('text-xs', Number(value) === line.issueType && 'bg-accent')}
+                >
+                  <span
+                    className="mr-2 inline-block h-2 w-2 rounded-full"
+                    style={{ backgroundColor: getTypeColor(Number(value)) }}
+                  />
+                  {label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
 
-          {/* Status badge */}
-          <span
-            className={cn(
-              'shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium',
-              getStatusColor()
-            )}
-          >
-            {STATUS_LABELS[line.status] ?? 'Open'}
-          </span>
+          {/* Status badge with dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className={cn(
+                  'shrink-0 cursor-pointer rounded px-1.5 py-0.5 text-[10px] font-medium transition-opacity hover:opacity-80',
+                  getStatusColor()
+                )}
+                onClick={(e) => e.stopPropagation()}
+                title="Click to change status"
+              >
+                {STATUS_LABELS[line.status] ?? 'Open'}
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" onClick={(e) => e.stopPropagation()}>
+              {Object.entries(STATUS_LABELS).map(([value, label]) => (
+                <DropdownMenuItem
+                  key={value}
+                  onClick={() => onStatusChange?.(line.issueId, Number(value))}
+                  className={cn('text-xs', Number(value) === line.status && 'bg-accent')}
+                >
+                  {label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           {/* Title - no truncation to allow full horizontal scroll */}
           <span className="text-sm whitespace-nowrap">{line.title || 'Untitled'}</span>

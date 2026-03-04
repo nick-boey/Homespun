@@ -637,6 +637,30 @@ export const TaskGraphView = memo(
     )
 
     // ============================================================================
+    // Type and Status Change Handlers
+    // ============================================================================
+
+    const handleTypeChange = useCallback(
+      async (issueId: string, newType: number) => {
+        await updateIssue({
+          issueId,
+          data: { projectId, type: newType as 0 | 1 | 2 | 3 | 4 },
+        })
+      },
+      [updateIssue, projectId]
+    )
+
+    const handleStatusChange = useCallback(
+      async (issueId: string, newStatus: number) => {
+        await updateIssue({
+          issueId,
+          data: { projectId, status: newStatus as 0 | 1 | 2 | 3 | 4 | 5 | 6 },
+        })
+      },
+      [updateIssue, projectId]
+    )
+
+    // ============================================================================
     // Inline Editor Row Rendering
     // ============================================================================
 
@@ -877,6 +901,8 @@ export const TaskGraphView = memo(
                     onEdit={onEditIssue}
                     onRunAgent={onRunAgent}
                     onClick={() => handleRowClick(line.issueId)}
+                    onTypeChange={handleTypeChange}
+                    onStatusChange={handleStatusChange}
                     isMoveSource={moveSourceIssueId === line.issueId}
                     isMoveOperationActive={!!moveOperation}
                     aria-rowindex={index + 1}
