@@ -31,28 +31,13 @@ import {
 import { useBreadcrumbSetter } from '@/hooks/use-breadcrumbs'
 import { useIssue, useUpdateIssue } from '@/features/issues'
 import { AgentLauncherDialog, useGenerateBranchId } from '@/features/agents'
+import { ISSUE_STATUS_OPTIONS, ISSUE_TYPE_OPTIONS } from '@/lib/issue-constants'
 import { ArrowLeft, Play, Sparkles } from 'lucide-react'
 import type { IssueStatus, IssueType } from '@/api'
 
 export const Route = createFileRoute('/projects/$projectId/issues/$issueId/edit')({
   component: EditIssue,
 })
-
-const STATUS_OPTIONS = [
-  { value: '0', label: 'Open' },
-  { value: '4', label: 'In Progress' },
-  { value: '5', label: 'Review' },
-  { value: '1', label: 'Complete' },
-  { value: '2', label: 'Closed' },
-  { value: '3', label: 'Archived' },
-]
-
-const TYPE_OPTIONS = [
-  { value: '0', label: 'Task' },
-  { value: '1', label: 'Feature' },
-  { value: '2', label: 'Bug' },
-  { value: '3', label: 'Chore' },
-]
 
 const PRIORITY_OPTIONS = [
   { value: 'none', label: 'No Priority' },
@@ -410,7 +395,7 @@ export default function EditIssue() {
                       <SelectValue placeholder="Select status" />
                     </SelectTrigger>
                     <SelectContent>
-                      {STATUS_OPTIONS.map((option) => (
+                      {ISSUE_STATUS_OPTIONS.map((option) => (
                         <SelectItem key={option.value} value={option.value}>
                           {option.label}
                         </SelectItem>
@@ -437,7 +422,7 @@ export default function EditIssue() {
                       <SelectValue placeholder="Select type" />
                     </SelectTrigger>
                     <SelectContent>
-                      {TYPE_OPTIONS.map((option) => (
+                      {ISSUE_TYPE_OPTIONS.map((option) => (
                         <SelectItem key={option.value} value={option.value}>
                           {option.label}
                         </SelectItem>

@@ -5,42 +5,12 @@
 import { memo, useCallback, useState } from 'react'
 import { Copy, Pencil, Play, X, ExternalLink } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { ISSUE_STATUS_LABELS, ISSUE_STATUS_COLORS, ISSUE_TYPE_LABELS } from '@/lib/issue-constants'
 import { Button } from '@/components/ui/button'
 import { Markdown } from '@/components/ui/markdown'
 import type { TaskGraphIssueRenderLine } from '../services'
 import { getTypeColor } from './task-graph-svg'
 import { useMobile } from '@/hooks'
-
-/** Issue status labels */
-const STATUS_LABELS: Record<number, string> = {
-  0: 'Open',
-  1: 'Complete',
-  2: 'Closed',
-  3: 'Archived',
-  4: 'Progress',
-  5: 'Review',
-  6: 'Blocked',
-}
-
-/** Issue type labels */
-const TYPE_LABELS: Record<number, string> = {
-  0: 'Task',
-  1: 'Feature',
-  2: 'Bug',
-  3: 'Chore',
-  4: 'Epic',
-}
-
-/** Status color variants */
-const STATUS_COLORS: Record<number, string> = {
-  0: 'bg-blue-500/20 text-blue-700 dark:text-blue-400', // Open
-  1: 'bg-green-500/20 text-green-700 dark:text-green-400', // Complete
-  2: 'bg-gray-500/20 text-gray-700 dark:text-gray-400', // Closed
-  3: 'bg-gray-500/20 text-gray-700 dark:text-gray-400', // Archived
-  4: 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400', // Progress
-  5: 'bg-purple-500/20 text-purple-700 dark:text-purple-400', // Review
-  6: 'bg-red-500/20 text-red-700 dark:text-red-400', // Blocked
-}
 
 /** PR status color variants */
 const PR_STATUS_COLORS: Record<string, string> = {
@@ -114,17 +84,17 @@ export const InlineIssueDetailRow = memo(function InlineIssueDetailRow({
             color: typeColor,
           }}
         >
-          {TYPE_LABELS[line.issueType] ?? 'Task'}
+          {ISSUE_TYPE_LABELS[line.issueType] ?? 'Task'}
         </span>
 
         {/* Status badge */}
         <span
           className={cn(
             'shrink-0 rounded px-1.5 py-0.5 text-xs font-medium',
-            STATUS_COLORS[line.status] ?? STATUS_COLORS[0]
+            ISSUE_STATUS_COLORS[line.status] ?? ISSUE_STATUS_COLORS[0]
           )}
         >
-          {STATUS_LABELS[line.status] ?? 'Open'}
+          {ISSUE_STATUS_LABELS[line.status] ?? 'Open'}
         </span>
 
         {/* Spacer */}

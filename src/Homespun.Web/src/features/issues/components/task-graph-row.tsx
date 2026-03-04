@@ -4,6 +4,7 @@
 
 import { memo, forwardRef, type HTMLAttributes } from 'react'
 import { cn } from '@/lib/utils'
+import { ISSUE_STATUS_LABELS, ISSUE_TYPE_LABELS } from '@/lib/issue-constants'
 import {
   TaskGraphNodeSvg,
   TaskGraphPrSvg,
@@ -21,26 +22,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-
-/** Issue status labels */
-const STATUS_LABELS: Record<number, string> = {
-  0: 'Open',
-  1: 'Complete',
-  2: 'Closed',
-  3: 'Archived',
-  4: 'Progress',
-  5: 'Review',
-  6: 'Blocked',
-}
-
-/** Issue type labels */
-const TYPE_LABELS: Record<number, string> = {
-  0: 'Task',
-  1: 'Feature',
-  2: 'Bug',
-  3: 'Chore',
-  4: 'Epic',
-}
 
 interface TaskGraphIssueRowProps extends HTMLAttributes<HTMLDivElement> {
   line: TaskGraphIssueRenderLine
@@ -144,11 +125,11 @@ export const TaskGraphIssueRow = memo(
                 onClick={(e) => e.stopPropagation()}
                 title="Click to change type"
               >
-                {TYPE_LABELS[line.issueType] ?? 'Task'}
+                {ISSUE_TYPE_LABELS[line.issueType] ?? 'Task'}
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" onClick={(e) => e.stopPropagation()}>
-              {Object.entries(TYPE_LABELS).map(([value, label]) => (
+              {Object.entries(ISSUE_TYPE_LABELS).map(([value, label]) => (
                 <DropdownMenuItem
                   key={value}
                   onClick={() => onTypeChange?.(line.issueId, Number(value))}
@@ -176,11 +157,11 @@ export const TaskGraphIssueRow = memo(
                 onClick={(e) => e.stopPropagation()}
                 title="Click to change status"
               >
-                {STATUS_LABELS[line.status] ?? 'Open'}
+                {ISSUE_STATUS_LABELS[line.status] ?? 'Open'}
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" onClick={(e) => e.stopPropagation()}>
-              {Object.entries(STATUS_LABELS).map(([value, label]) => (
+              {Object.entries(ISSUE_STATUS_LABELS).map(([value, label]) => (
                 <DropdownMenuItem
                   key={value}
                   onClick={() => onStatusChange?.(line.issueId, Number(value))}
