@@ -5,3 +5,4 @@ export {
   useActiveSessionCount,
   projectSessionsQueryKey,
 } from './use-project-sessions'
+export { useEnsureClone } from './use-ensure-clone'

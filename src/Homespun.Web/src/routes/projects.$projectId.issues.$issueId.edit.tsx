@@ -29,7 +29,8 @@ import {
 } from '@/components/ui/alert-dialog'
 import { useBreadcrumbSetter } from '@/hooks/use-breadcrumbs'
 import { useIssue, useUpdateIssue } from '@/features/issues'
-import { ArrowLeft } from 'lucide-react'
+import { AgentLauncherDialog } from '@/features/agents'
+import { ArrowLeft, Play } from 'lucide-react'
 import type { IssueStatus, IssueType } from '@/api'
 
 export const Route = createFileRoute('/projects/$projectId/issues/$issueId/edit')({
@@ -80,6 +81,7 @@ export default function EditIssue() {
   const navigate = useNavigate()
   const [apiError, setApiError] = useState<string | null>(null)
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false)
+  const [agentLauncherOpen, setAgentLauncherOpen] = useState(false)
 
   useBreadcrumbSetter(
     [
@@ -174,6 +176,38 @@ export default function EditIssue() {
     },
     [issueId, projectId, updateIssue]
   )
+
+  // Handler for save and run agent
+  const handleSaveAndRunAgent = useCallback(async () => {
+    // Trigger form validation and get values
+    const isValid = await form.trigger()
+    if (!isValid) return
+
+    const data = form.getValues()
+    setApiError(null)
+
+    // Save the issue first
+    updateIssue.mutate(
+      {
+        issueId,
+        data: {
+          projectId,
+          title: data.title,
+          description: data.description || undefined,
+          status: parseInt(data.status) as IssueStatus,
+          type: parseInt(data.type) as IssueType,
+          priority: data.priority ? parseInt(data.priority) : undefined,
+          workingBranchId: data.workingBranchId || undefined,
+        },
+      },
+      {
+        onSuccess: () => {
+          // Open agent launcher dialog after save succeeds
+          setAgentLauncherOpen(true)
+        },
+      }
+    )
+  }, [form, issueId, projectId, updateIssue])
 
   // Keyboard shortcut for save (Cmd/Ctrl+S)
   useEffect(() => {
@@ -419,6 +453,16 @@ export default function EditIssue() {
             <Button type="submit" disabled={updateIssue.isPending}>
               {updateIssue.isPending ? 'Saving...' : 'Save Changes'}
             </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={updateIssue.isPending}
+              onClick={handleSaveAndRunAgent}
+              className="gap-1.5"
+            >
+              <Play className="h-3.5 w-3.5" />
+              Save & Run Agent
+            </Button>
             <Button type="button" variant="outline" onClick={handleCancel}>
               Cancel
             </Button>
@@ -449,6 +493,14 @@ export default function EditIssue() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Agent Launcher Dialog */}
+      <AgentLauncherDialog
+        open={agentLauncherOpen}
+        onOpenChange={setAgentLauncherOpen}
+        projectId={projectId}
+        issueId={issueId}
+      />
     </div>
   )
 }

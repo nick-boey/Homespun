@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { TaskGraphView, ProjectToolbar, useToolbarShortcuts } from '@/features/issues'
+import { AgentLauncherDialog } from '@/features/agents'
 
 export const Route = createFileRoute('/projects/$projectId/issues/')({
   component: IssuesList,
@@ -17,6 +18,10 @@ function IssuesList() {
 
   // Compute search match count from rendered issues
   const [searchMatchCount] = useState(0)
+
+  // Agent launcher dialog state
+  const [agentLauncherOpen, setAgentLauncherOpen] = useState(false)
+  const [agentLauncherIssueId, setAgentLauncherIssueId] = useState<string | null>(null)
 
   // Handlers
   const handleEditIssue = useCallback(
@@ -53,9 +58,17 @@ function IssuesList() {
   }, [selectedIssueId])
 
   const handleOpenAgentLauncher = useCallback(() => {
-    // TODO: Implement agent launcher
-    console.log('Open agent launcher', selectedIssueId)
+    if (selectedIssueId) {
+      setAgentLauncherIssueId(selectedIssueId)
+      setAgentLauncherOpen(true)
+    }
   }, [selectedIssueId])
+
+  // Handler for running agent on a specific issue (from row actions)
+  const handleRunAgent = useCallback((issueId: string) => {
+    setAgentLauncherIssueId(issueId)
+    setAgentLauncherOpen(true)
+  }, [])
 
   const handleFocusSearch = useCallback(() => {
     // Focus the search input in toolbar
@@ -124,8 +137,19 @@ function IssuesList() {
           selectedIssueId={selectedIssueId}
           onSelectIssue={setSelectedIssueId}
           onEditIssue={handleEditIssue}
+          onRunAgent={handleRunAgent}
         />
       </div>
+
+      {/* Agent Launcher Dialog */}
+      {agentLauncherIssueId && (
+        <AgentLauncherDialog
+          open={agentLauncherOpen}
+          onOpenChange={setAgentLauncherOpen}
+          projectId={projectId}
+          issueId={agentLauncherIssueId}
+        />
+      )}
     </div>
   )
 }
