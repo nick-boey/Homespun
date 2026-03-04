@@ -23,7 +23,20 @@ vi.mock('@/api', async (importOriginal) => {
       getApiProjectsByProjectIdPullRequestsMerged: vi
         .fn()
         .mockResolvedValue({ data: [], error: undefined }),
-      postApiProjectsByProjectIdSync: vi.fn(),
+      postApiProjectsByProjectIdSync: vi.fn().mockResolvedValue({
+        data: { imported: 0, updated: 0, removed: 0 },
+        error: undefined,
+      }),
+    },
+    FleeceIssueSync: {
+      postApiFleeceSyncByProjectIdPull: vi.fn().mockResolvedValue({
+        data: { success: true, issuesMerged: 0, wasBehindRemote: false, commitsPulled: 0 },
+        error: undefined,
+      }),
+      postApiFleeceSyncByProjectIdSync: vi.fn().mockResolvedValue({
+        data: { success: true, filesCommitted: 0, pushSucceeded: true },
+        error: undefined,
+      }),
     },
   }
 })

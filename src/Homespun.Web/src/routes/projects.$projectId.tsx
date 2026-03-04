@@ -1,7 +1,7 @@
 import { createFileRoute, Link, Outlet, useParams, useNavigate } from '@tanstack/react-router'
 import { MoreHorizontal, Pencil, Trash2, Settings, RefreshCw } from 'lucide-react'
 import { useBreadcrumbSetter } from '@/hooks/use-breadcrumbs'
-import { useProject } from '@/features/projects'
+import { useProject, PullSyncButton } from '@/features/projects'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
@@ -90,9 +90,12 @@ function ProjectLayout() {
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">{projectName}</h1>
-          <p className="text-muted-foreground text-sm">Project details and management</p>
+        <div className="flex items-center gap-4">
+          <div>
+            <h1 className="text-2xl font-semibold">{projectName}</h1>
+            <p className="text-muted-foreground text-sm">Project details and management</p>
+          </div>
+          <PullSyncButton projectId={projectId} />
         </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
