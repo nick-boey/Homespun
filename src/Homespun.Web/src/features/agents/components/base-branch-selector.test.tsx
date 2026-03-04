@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import { QueryClientProvider, QueryClient } from '@tanstack/react-query'
 import { BaseBranchSelector } from './base-branch-selector'
 import { Clones } from '@/api'
@@ -30,14 +29,9 @@ describe('BaseBranchSelector', () => {
   it('shows loading state while fetching branches', () => {
     vi.mocked(Clones.getApiClonesBranches).mockReturnValue(new Promise(() => {}))
 
-    render(
-      <BaseBranchSelector
-        repoPath="/path/to/repo"
-        value=""
-        onChange={mockOnChange}
-      />,
-      { wrapper }
-    )
+    render(<BaseBranchSelector repoPath="/path/to/repo" value="" onChange={mockOnChange} />, {
+      wrapper,
+    })
 
     expect(screen.getByText('Loading branches...')).toBeInTheDocument()
   })
@@ -83,14 +77,9 @@ describe('BaseBranchSelector', () => {
       response: {} as Response,
     })
 
-    render(
-      <BaseBranchSelector
-        repoPath="/path/to/repo"
-        value=""
-        onChange={mockOnChange}
-      />,
-      { wrapper }
-    )
+    render(<BaseBranchSelector repoPath="/path/to/repo" value="" onChange={mockOnChange} />, {
+      wrapper,
+    })
 
     await waitFor(() => {
       expect(screen.getByText('Failed to load branches')).toBeInTheDocument()
@@ -98,14 +87,9 @@ describe('BaseBranchSelector', () => {
   })
 
   it('does not fetch when repoPath is undefined', () => {
-    render(
-      <BaseBranchSelector
-        repoPath={undefined}
-        value=""
-        onChange={mockOnChange}
-      />,
-      { wrapper }
-    )
+    render(<BaseBranchSelector repoPath={undefined} value="" onChange={mockOnChange} />, {
+      wrapper,
+    })
 
     expect(Clones.getApiClonesBranches).not.toHaveBeenCalled()
   })
