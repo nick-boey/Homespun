@@ -27,6 +27,7 @@ import {
   isPrRenderLine,
   isSeparatorRenderLine,
   isLoadMoreRenderLine,
+  computeInheritedParentInfo,
 } from '../services'
 import { useTaskGraph, taskGraphQueryKey, useCreateIssue, useUpdateIssue } from '../hooks'
 import {
@@ -244,52 +245,86 @@ export const TaskGraphView = memo(
       const referenceIssue = issueRenderLines[selectedIndex]
       if (!referenceIssue) return
 
+      // Compute inherited parent info for sibling creation
+      const inheritedParent = computeInheritedParentInfo(
+        taskGraph,
+        referenceIssue.issueId,
+        false // isAbove = false for creating below
+      )
+
       setPendingNewIssue({
         insertAtIndex: selectedIndex + 1,
         title: '',
         isAbove: false,
         referenceIssueId: referenceIssue.issueId,
+        inheritedParentIssueId: inheritedParent?.parentIssueId ?? undefined,
+        inheritedParentSortOrder: inheritedParent?.sortOrder ?? undefined,
       })
       setEditMode(KeyboardEditMode.CreatingNew)
-    }, [selectedIndex, issueRenderLines])
+    }, [selectedIndex, issueRenderLines, taskGraph])
 
     const handleCreateAbove = useCallback(() => {
       if (selectedIndex < 0) return
       const referenceIssue = issueRenderLines[selectedIndex]
       if (!referenceIssue) return
 
+      // Compute inherited parent info for sibling creation
+      const inheritedParent = computeInheritedParentInfo(
+        taskGraph,
+        referenceIssue.issueId,
+        true // isAbove = true for creating above
+      )
+
       setPendingNewIssue({
         insertAtIndex: selectedIndex,
         title: '',
         isAbove: true,
         referenceIssueId: referenceIssue.issueId,
+        inheritedParentIssueId: inheritedParent?.parentIssueId ?? undefined,
+        inheritedParentSortOrder: inheritedParent?.sortOrder ?? undefined,
       })
       setEditMode(KeyboardEditMode.CreatingNew)
-    }, [selectedIndex, issueRenderLines])
+    }, [selectedIndex, issueRenderLines, taskGraph])
 
     // Handler for creating at top of list (no selection)
     const handleCreateAtTop = useCallback(() => {
       const firstIssue = issueRenderLines[0]
+
+      // Compute inherited parent info if there's a reference issue
+      const inheritedParent = firstIssue
+        ? computeInheritedParentInfo(taskGraph, firstIssue.issueId, true)
+        : null
+
       setPendingNewIssue({
         insertAtIndex: 0,
         title: '',
         isAbove: true,
         referenceIssueId: firstIssue?.issueId,
+        inheritedParentIssueId: inheritedParent?.parentIssueId ?? undefined,
+        inheritedParentSortOrder: inheritedParent?.sortOrder ?? undefined,
       })
       setEditMode(KeyboardEditMode.CreatingNew)
-    }, [issueRenderLines])
+    }, [issueRenderLines, taskGraph])
 
     // Handler for creating at bottom of list (no selection)
     const handleCreateAtBottom = useCallback(() => {
       const lastIssue = issueRenderLines[issueRenderLines.length - 1]
+
+      // Compute inherited parent info if there's a reference issue
+      const inheritedParent = lastIssue
+        ? computeInheritedParentInfo(taskGraph, lastIssue.issueId, false)
+        : null
+
       setPendingNewIssue({
         insertAtIndex: issueRenderLines.length,
         title: '',
         isAbove: false,
         referenceIssueId: lastIssue?.issueId,
+        inheritedParentIssueId: inheritedParent?.parentIssueId ?? undefined,
+        inheritedParentSortOrder: inheritedParent?.sortOrder ?? undefined,
       })
       setEditMode(KeyboardEditMode.CreatingNew)
-    }, [issueRenderLines])
+    }, [issueRenderLines, taskGraph])
 
     // Expose imperative methods via ref
     useImperativeHandle(
@@ -367,10 +402,23 @@ export const TaskGraphView = memo(
       }
 
       try {
+        // Determine parent ID and sort order:
+        // - If Tab/Shift+Tab was pressed, use pendingParentId/pendingChildId (explicit hierarchy)
+        // - Otherwise, use inherited parent for sibling creation
+        const hasExplicitHierarchy =
+          pendingNewIssue.pendingParentId || pendingNewIssue.pendingChildId
+        const parentIssueId = hasExplicitHierarchy
+          ? pendingNewIssue.pendingParentId
+          : pendingNewIssue.inheritedParentIssueId
+        const parentSortOrder = hasExplicitHierarchy
+          ? undefined
+          : pendingNewIssue.inheritedParentSortOrder
+
         await createIssue({
           title: pendingNewIssue.title.trim(),
-          parentIssueId: pendingNewIssue.pendingParentId,
+          parentIssueId,
           childIssueId: pendingNewIssue.pendingChildId,
+          parentSortOrder,
         })
         // Return focus to container after save
         containerRef.current?.focus()
@@ -386,10 +434,23 @@ export const TaskGraphView = memo(
       }
 
       try {
+        // Determine parent ID and sort order:
+        // - If Tab/Shift+Tab was pressed, use pendingParentId/pendingChildId (explicit hierarchy)
+        // - Otherwise, use inherited parent for sibling creation
+        const hasExplicitHierarchy =
+          pendingNewIssue.pendingParentId || pendingNewIssue.pendingChildId
+        const parentIssueId = hasExplicitHierarchy
+          ? pendingNewIssue.pendingParentId
+          : pendingNewIssue.inheritedParentIssueId
+        const parentSortOrder = hasExplicitHierarchy
+          ? undefined
+          : pendingNewIssue.inheritedParentSortOrder
+
         const issue = await createIssue({
           title: pendingNewIssue.title.trim(),
-          parentIssueId: pendingNewIssue.pendingParentId,
+          parentIssueId,
           childIssueId: pendingNewIssue.pendingChildId,
+          parentSortOrder,
         })
         // Navigate to edit page for description
         if (issue?.id) {
