@@ -126,13 +126,16 @@ function ProjectLayout() {
         </DropdownMenu>
       </div>
 
-      <nav className="border-border flex gap-1 border-b" aria-label="Project tabs">
+      <nav
+        className="scrollbar-thin scrollbar-track-transparent scrollbar-thumb-muted border-border flex gap-1 overflow-x-auto border-b"
+        aria-label="Project tabs"
+      >
         {tabs.map((tab) => (
           <Link
             key={tab.path}
             to={getTabPath(tab.path)}
             className={cn(
-              'px-4 py-2 text-sm font-medium transition-colors',
+              'shrink-0 px-4 py-2 text-sm font-medium transition-colors',
               '-mb-px border-b-2',
               isTabActive(tab.path)
                 ? 'border-primary text-foreground'

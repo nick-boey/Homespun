@@ -648,7 +648,10 @@ export const TaskGraphView = memo(function TaskGraphView({
       aria-label="Task graph"
       aria-rowcount={renderLines.length}
       data-testid="task-graph"
-      className={cn('focus-visible:outline-none', className)}
+      className={cn(
+        'scrollbar-thin scrollbar-track-transparent scrollbar-thumb-muted overflow-x-auto focus-visible:outline-none',
+        className
+      )}
       onKeyDown={handleKeyDown}
     >
       {renderLines.map((line, index) => {
