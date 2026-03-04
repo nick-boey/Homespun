@@ -220,6 +220,7 @@ export type CreateSessionRequest = {
     model?: string | null;
     workingDirectory?: string | null;
     systemPrompt?: string | null;
+    initialMessage?: string | null;
 };
 
 export const ExecutionMode = { 0: 0, 1: 1 } as const;

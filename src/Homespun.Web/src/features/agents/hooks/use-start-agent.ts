@@ -10,6 +10,8 @@ export interface StartAgentParams {
   model?: string
   workingDirectory?: string
   systemPrompt?: string
+  /** Initial message to send immediately after session creation to start agent work */
+  initialMessage?: string
 }
 
 /**
@@ -27,6 +29,7 @@ export function useStartAgent() {
         model: params.model,
         workingDirectory: params.workingDirectory,
         systemPrompt: params.systemPrompt,
+        initialMessage: params.initialMessage,
       }
 
       const response = await Sessions.postApiSessions({
