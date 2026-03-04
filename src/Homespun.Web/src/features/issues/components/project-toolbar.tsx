@@ -12,7 +12,9 @@ import {
   Search,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { ButtonGroup } from '@/components/ui/button-group'
 import { Input } from '@/components/ui/input'
+import { Separator } from '@/components/ui/separator'
 import { useIssueHistory } from '../hooks/use-issue-history'
 import { cn } from '@/lib/utils'
 import { useMobile } from '@/hooks'
@@ -72,17 +74,17 @@ export function ProjectToolbar({
       aria-label="Issue management toolbar"
       className={cn(
         'sticky top-[52px] z-10',
-        'flex items-center gap-1 overflow-x-auto',
-        'bg-background border-border border-b px-2',
+        'flex items-center gap-2 overflow-x-auto',
+        'border-border bg-background/80 rounded-lg border px-2 backdrop-blur-sm',
         // More padding on mobile for touch
         isMobile ? 'py-2' : 'py-1.5',
         'scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent'
       )}
     >
       {/* Creation buttons group */}
-      <div className="flex items-center gap-0.5">
+      <ButtonGroup>
         <Button
-          variant="ghost"
+          variant="outline"
           size={buttonSize}
           onClick={onCreateAbove}
           aria-label="Create above (Shift+O)"
@@ -91,7 +93,7 @@ export function ProjectToolbar({
           <ArrowUpFromLine className="h-4 w-4" />
         </Button>
         <Button
-          variant="ghost"
+          variant="outline"
           size={buttonSize}
           onClick={onCreateBelow}
           aria-label="Create below (O)"
@@ -99,14 +101,14 @@ export function ProjectToolbar({
         >
           <ArrowDownFromLine className="h-4 w-4" />
         </Button>
-      </div>
+      </ButtonGroup>
 
-      <div className="bg-border mx-1 h-6 w-px" aria-hidden="true" />
+      <Separator orientation="vertical" className="mx-1 h-6" />
 
-      {/* Hierarchy buttons group - hidden on mobile to save space */}
-      <div className="hidden items-center gap-0.5 sm:flex">
+      {/* Hierarchy buttons group */}
+      <ButtonGroup>
         <Button
-          variant="ghost"
+          variant="outline"
           size={buttonSize}
           onClick={onMakeChild}
           disabled={!hasIssueSelected}
@@ -117,7 +119,7 @@ export function ProjectToolbar({
           <CornerRightUp className="h-4 w-4" />
         </Button>
         <Button
-          variant="ghost"
+          variant="outline"
           size={buttonSize}
           onClick={onMakeParent}
           disabled={!hasIssueSelected}
@@ -127,14 +129,14 @@ export function ProjectToolbar({
         >
           <CornerLeftDown className="h-4 w-4" />
         </Button>
-      </div>
+      </ButtonGroup>
 
-      <div className="bg-border mx-1 hidden h-6 w-px sm:block" aria-hidden="true" />
+      <Separator orientation="vertical" className="mx-1 h-6" />
 
       {/* Undo/Redo buttons group */}
-      <div className="flex items-center gap-0.5">
+      <ButtonGroup>
         <Button
-          variant="ghost"
+          variant="outline"
           size={buttonSize}
           onClick={() => undo()}
           disabled={!canUndo || isUndoing}
@@ -144,7 +146,7 @@ export function ProjectToolbar({
           <Undo2 className="h-4 w-4" />
         </Button>
         <Button
-          variant="ghost"
+          variant="outline"
           size={buttonSize}
           onClick={() => redo()}
           disabled={!canRedo || isRedoing}
@@ -153,13 +155,13 @@ export function ProjectToolbar({
         >
           <Redo2 className="h-4 w-4" />
         </Button>
-      </div>
+      </ButtonGroup>
 
-      <div className="bg-border mx-1 h-6 w-px" aria-hidden="true" />
+      <Separator orientation="vertical" className="mx-1 h-6" />
 
       {/* Edit button */}
       <Button
-        variant="ghost"
+        variant="outline"
         size={buttonSize}
         onClick={onEditIssue}
         disabled={!hasIssueSelected}
@@ -169,11 +171,11 @@ export function ProjectToolbar({
         <Pencil className="h-4 w-4" />
       </Button>
 
-      <div className="bg-border mx-1 h-6 w-px" aria-hidden="true" />
+      <Separator orientation="vertical" className="mx-1 h-6" />
 
       {/* Agent Run button */}
       <Button
-        variant="ghost"
+        variant="outline"
         size={buttonSize}
         onClick={onOpenAgentLauncher}
         aria-label="Run agent (e)"
@@ -185,10 +187,10 @@ export function ProjectToolbar({
       {/* Spacer */}
       <div className="flex-1" />
 
-      {/* Depth controls (right side) - hidden on mobile */}
-      <div className="hidden items-center gap-0.5 sm:flex">
+      {/* Depth controls (right side) */}
+      <ButtonGroup>
         <Button
-          variant="ghost"
+          variant="outline"
           size={buttonSize}
           onClick={() => onDepthChange(depth - 1)}
           disabled={depth <= 1}
@@ -197,9 +199,11 @@ export function ProjectToolbar({
         >
           <Minus className="h-4 w-4" />
         </Button>
-        <span className="text-muted-foreground min-w-[1.5rem] text-center text-sm">{depth}</span>
+        <span className="border-border text-muted-foreground flex min-w-[1.5rem] items-center justify-center border-y bg-transparent text-center text-sm">
+          {depth}
+        </span>
         <Button
-          variant="ghost"
+          variant="outline"
           size={buttonSize}
           onClick={() => onDepthChange(depth + 1)}
           aria-label="Increase depth (])"
@@ -207,9 +211,9 @@ export function ProjectToolbar({
         >
           <Plus className="h-4 w-4" />
         </Button>
-      </div>
+      </ButtonGroup>
 
-      <div className="bg-border mx-1 hidden h-6 w-px sm:block" aria-hidden="true" />
+      <Separator orientation="vertical" className="mx-1 h-6" />
 
       {/* Search input (right side) */}
       <div className="relative flex items-center">

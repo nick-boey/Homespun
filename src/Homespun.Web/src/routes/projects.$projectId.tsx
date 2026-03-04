@@ -1,4 +1,11 @@
-import { createFileRoute, Link, Outlet, useParams, useNavigate } from '@tanstack/react-router'
+import {
+  createFileRoute,
+  Link,
+  Outlet,
+  useParams,
+  useNavigate,
+  useRouterState,
+} from '@tanstack/react-router'
 import { MoreHorizontal, Pencil, Trash2, Settings, RefreshCw } from 'lucide-react'
 import { useBreadcrumbSetter } from '@/hooks/use-breadcrumbs'
 import { useProject, PullSyncButton } from '@/features/projects'
@@ -28,7 +35,7 @@ const tabs = [
 
 function ProjectLayout() {
   const { projectId } = useParams({ from: '/projects/$projectId' })
-  const currentPath = Route.useMatch().pathname
+  const currentPath = useRouterState({ select: (s) => s.location.pathname })
   const navigate = useNavigate()
   const { project, isLoading, isError, refetch } = useProject(projectId)
 
