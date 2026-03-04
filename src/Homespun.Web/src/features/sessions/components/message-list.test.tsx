@@ -213,4 +213,137 @@ describe('MessageList', () => {
 
     expect(screen.getByTestId('message-list-loading')).toBeInTheDocument()
   })
+
+  // Tests for handling numeric enum values from backend
+  describe('numeric enum handling', () => {
+    it('renders text content when type is numeric 0 (Text)', () => {
+      const messages: ClaudeMessage[] = [
+        createMessage({
+          id: 'msg-1',
+          role: 'Assistant',
+          content: [
+            // @ts-expect-error - testing numeric enum from backend
+            { type: 0, text: 'Message with numeric type', isStreaming: false, index: 0 },
+          ],
+        }),
+      ]
+
+      render(<MessageList messages={messages} />)
+
+      expect(screen.getByText('Message with numeric type')).toBeInTheDocument()
+    })
+
+    it('renders thinking content when type is numeric 1 (Thinking)', () => {
+      const messages: ClaudeMessage[] = [
+        createMessage({
+          id: 'msg-1',
+          role: 'Assistant',
+          content: [
+            // @ts-expect-error - testing numeric enum from backend
+            { type: 1, thinking: 'Thinking about something', isStreaming: false, index: 0 },
+          ],
+        }),
+      ]
+
+      render(<MessageList messages={messages} />)
+
+      expect(screen.getByText('Thinking about something')).toBeInTheDocument()
+    })
+
+    it('renders tool use content when type is numeric 2 (ToolUse)', () => {
+      const messages: ClaudeMessage[] = [
+        createMessage({
+          id: 'msg-1',
+          role: 'Assistant',
+          content: [
+            // @ts-expect-error - testing numeric enum from backend
+            { type: 2, toolName: 'write_file', isStreaming: false, index: 0 },
+          ],
+        }),
+      ]
+
+      render(<MessageList messages={messages} />)
+
+      expect(screen.getByText(/write_file/)).toBeInTheDocument()
+    })
+
+    it('renders tool result content when type is numeric 3 (ToolResult)', () => {
+      const messages: ClaudeMessage[] = [
+        createMessage({
+          id: 'msg-1',
+          role: 'Assistant',
+          content: [
+            // @ts-expect-error - testing numeric enum from backend
+            { type: 3, toolResult: 'Success', isStreaming: false, index: 0 },
+          ],
+        }),
+      ]
+
+      render(<MessageList messages={messages} />)
+
+      expect(screen.getByText(/Tool result/)).toBeInTheDocument()
+    })
+
+    it('renders user message correctly when role is numeric 0 (User)', () => {
+      const messages: ClaudeMessage[] = [
+        createMessage({
+          id: 'msg-1',
+          // @ts-expect-error - testing numeric enum from backend
+          role: 0,
+          content: [
+            { type: 'Text', text: 'User message with numeric role', isStreaming: false, index: 0 },
+          ],
+        }),
+      ]
+
+      render(<MessageList messages={messages} />)
+
+      const messageElement = screen.getByTestId('message-msg-1')
+      expect(messageElement).toHaveClass('justify-end') // User messages are right-aligned
+      expect(screen.getByText('User message with numeric role')).toBeInTheDocument()
+    })
+
+    it('renders assistant message correctly when role is numeric 1 (Assistant)', () => {
+      const messages: ClaudeMessage[] = [
+        createMessage({
+          id: 'msg-1',
+          // @ts-expect-error - testing numeric enum from backend
+          role: 1,
+          content: [
+            {
+              type: 'Text',
+              text: 'Assistant message with numeric role',
+              isStreaming: false,
+              index: 0,
+            },
+          ],
+        }),
+      ]
+
+      render(<MessageList messages={messages} />)
+
+      const messageElement = screen.getByTestId('message-msg-1')
+      expect(messageElement).toHaveClass('justify-start') // Assistant messages are left-aligned
+    })
+
+    it('handles mixed numeric and string enum values', () => {
+      const messages: ClaudeMessage[] = [
+        createMessage({
+          id: 'msg-1',
+          // @ts-expect-error - testing numeric enum from backend
+          role: 1, // numeric Assistant
+          content: [
+            // @ts-expect-error - testing numeric enum from backend
+            { type: 0, text: 'First part', isStreaming: false, index: 0 }, // numeric Text
+            { type: 'ToolUse', toolName: 'test_tool', isStreaming: false, index: 1 }, // string ToolUse
+          ],
+        }),
+      ]
+
+      render(<MessageList messages={messages} />)
+
+      expect(screen.getByText('First part')).toBeInTheDocument()
+      expect(screen.getByText(/test_tool/)).toBeInTheDocument()
+    })
+  })
 })
