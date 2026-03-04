@@ -67,16 +67,21 @@ COPY --from=build /app/package.json ./
 COPY start.sh ./
 RUN chmod +x start.sh
 
-# Non-root user (UID 1000 to match the main container's homespun user)
-# Base image runs as root by default, so create homespun user
-RUN useradd --create-home --shell /bin/bash --uid 1000 homespun 2>/dev/null || true \
+# Create non-root user for security (don't force UID to avoid conflicts with base image)
+RUN useradd --create-home --shell /bin/bash homespun
+
+# Create data directories and set permissions
+RUN mkdir -p /home/homespun/.local/share /home/homespun/.config /home/homespun/.cache \
     && mkdir -p /home/homespun/.claude/todos /home/homespun/.claude/debug /home/homespun/.claude/projects /home/homespun/.claude/statsig /home/homespun/.claude/plans \
-    && mkdir -p /home/homespun/.local/share /home/homespun/.config /home/homespun/.cache \
     && mkdir -p /workdir \
-    && cp -r /root/.claude/plugins /home/homespun/.claude/plugins 2>/dev/null || true \
-    && cp -r /root/.mcp.json /home/homespun/.mcp.json 2>/dev/null || true \
-    && chown -R homespun:homespun /home/homespun /workdir /app \
     && chmod -R 777 /home/homespun/.local /home/homespun/.config /home/homespun/.cache /home/homespun/.claude
+
+# Copy Claude plugins and config from root user (installed by claude commands above)
+RUN cp -r /root/.claude/plugins /home/homespun/.claude/plugins 2>/dev/null || true \
+    && cp -r /root/.mcp.json /home/homespun/.mcp.json 2>/dev/null || true
+
+# Set ownership of all directories
+RUN chown -R homespun:homespun /home/homespun /workdir /app
 
 USER homespun
 ENV HOME=/home/homespun
