@@ -214,6 +214,89 @@ describe('MessageList', () => {
     expect(screen.getByTestId('message-list-loading')).toBeInTheDocument()
   })
 
+  // Tool result should appear on agent side (grouped with tool call)
+  describe('tool result grouping', () => {
+    it('renders tool result messages with assistant styling even when role is User', () => {
+      const messages: ClaudeMessage[] = [
+        createMessage({
+          id: 'msg-1',
+          role: 'Assistant',
+          content: [
+            {
+              type: 'ToolUse',
+              toolName: 'read_file',
+              toolUseId: 'tool-1',
+              isStreaming: false,
+              index: 0,
+            },
+          ],
+        }),
+        createMessage({
+          id: 'msg-2',
+          role: 'User', // Tool results come with User role from backend
+          content: [
+            {
+              type: 'ToolResult',
+              toolResult: 'File contents',
+              toolUseId: 'tool-1',
+              isStreaming: false,
+              index: 0,
+            },
+          ],
+        }),
+      ]
+
+      render(<MessageList messages={messages} />)
+
+      // The tool result message should be left-aligned (assistant side)
+      const toolResultMessage = screen.getByTestId('message-msg-2')
+      expect(toolResultMessage).toHaveClass('justify-start')
+    })
+
+    it('renders tool result messages with secondary background color', () => {
+      const messages: ClaudeMessage[] = [
+        createMessage({
+          id: 'msg-1',
+          role: 'User',
+          content: [
+            {
+              type: 'ToolResult',
+              toolResult: 'Success',
+              toolUseId: 'tool-1',
+              isStreaming: false,
+              index: 0,
+            },
+          ],
+        }),
+      ]
+
+      render(<MessageList messages={messages} />)
+
+      const contentElement = screen.getByTestId('message-content-msg-1')
+      expect(contentElement).toHaveClass('bg-secondary')
+    })
+  })
+
+  // Tests for markdown rendering in user messages
+  describe('user message markdown', () => {
+    it('renders markdown in user messages', () => {
+      const messages: ClaudeMessage[] = [
+        createMessage({
+          id: 'msg-1',
+          role: 'User',
+          content: [
+            { type: 'Text', text: '# Heading\n**Bold** text', isStreaming: false, index: 0 },
+          ],
+        }),
+      ]
+
+      render(<MessageList messages={messages} />)
+
+      // Markdown component should be used for user text messages
+      expect(screen.getByTestId('markdown')).toBeInTheDocument()
+    })
+  })
+
   // Tests for handling numeric enum values from backend
   describe('numeric enum handling', () => {
     it('renders text content when type is numeric 0 (Text)', () => {
