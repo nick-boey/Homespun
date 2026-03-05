@@ -379,7 +379,14 @@ public class GraphServiceTaskGraphSortingTests
             Type = IssueType.Task,
             Priority = priority,
             CreatedAt = createdAt ?? DateTime.UtcNow,
-            UpdatedAt = createdAt ?? DateTime.UtcNow
+            LastUpdate = createdAt ?? DateTime.UtcNow,
+            Description = "",
+            ExecutionMode = ExecutionMode.Series,
+            ParentIssues = [],
+            Tags = [],
+            LinkedIssues = [],
+            CreatedBy = "test-user",
+            AssignedTo = null
         };
     }
 

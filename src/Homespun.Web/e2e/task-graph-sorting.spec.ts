@@ -21,7 +21,9 @@ async function getActionableIssueTitles(page: Page): Promise<string[]> {
   await page.waitForSelector('[data-test-id="task-graph-issue"]', { state: 'visible' })
 
   // Get all actionable issues (marked with ○ symbol)
-  const actionableIssues = await page.locator('[data-test-id="task-graph-issue"]:has-text("○")').all()
+  const actionableIssues = await page
+    .locator('[data-test-id="task-graph-issue"]:has-text("○")')
+    .all()
 
   const titles: string[] = []
   for (const issue of actionableIssues) {
@@ -53,12 +55,17 @@ test.describe('Task Graph Sorting', () => {
     // and unprioritized issues at the end
 
     // Check if any P0 issues exist and appear first
-    const p0Index = titles.findIndex(t => t.includes('P0'))
-    const p1Index = titles.findIndex(t => t.includes('P1'))
-    const p2Index = titles.findIndex(t => t.includes('P2'))
-    const unprioritizedIndex = titles.findIndex(t =>
-      !t.includes('P0') && !t.includes('P1') && !t.includes('P2') &&
-      !t.includes('P3') && !t.includes('P4'))
+    const p0Index = titles.findIndex((t) => t.includes('P0'))
+    const p1Index = titles.findIndex((t) => t.includes('P1'))
+    const p2Index = titles.findIndex((t) => t.includes('P2'))
+    const unprioritizedIndex = titles.findIndex(
+      (t) =>
+        !t.includes('P0') &&
+        !t.includes('P1') &&
+        !t.includes('P2') &&
+        !t.includes('P3') &&
+        !t.includes('P4')
+    )
 
     // If we have issues of different priorities, verify ordering
     if (p0Index >= 0 && p1Index >= 0) {
@@ -80,7 +87,9 @@ test.describe('Task Graph Sorting', () => {
     expect(actionableMarkers).toBeGreaterThan(0)
 
     // Verify actionable issues have the correct visual indicator
-    const firstActionable = await page.locator('[data-test-id="task-graph-issue"]:has-text("○")').first()
+    const firstActionable = await page
+      .locator('[data-test-id="task-graph-issue"]:has-text("○")')
+      .first()
     await expect(firstActionable).toBeVisible()
   })
 
@@ -94,7 +103,11 @@ test.describe('Task Graph Sorting', () => {
     await page.keyboard.press('j')
 
     // Get the currently selected issue
-    let selectedIssue = await page.locator('[data-test-id="task-graph-issue"].selected, [data-test-id="task-graph-issue"][data-selected="true"]').first()
+    let selectedIssue = await page
+      .locator(
+        '[data-test-id="task-graph-issue"].selected, [data-test-id="task-graph-issue"][data-selected="true"]'
+      )
+      .first()
     await expect(selectedIssue).toBeVisible()
 
     const firstTitle = await selectedIssue.textContent()
@@ -103,7 +116,11 @@ test.describe('Task Graph Sorting', () => {
     await page.keyboard.press('j')
 
     // Verify we moved to a different issue
-    selectedIssue = await page.locator('[data-test-id="task-graph-issue"].selected, [data-test-id="task-graph-issue"][data-selected="true"]').first()
+    selectedIssue = await page
+      .locator(
+        '[data-test-id="task-graph-issue"].selected, [data-test-id="task-graph-issue"][data-selected="true"]'
+      )
+      .first()
     const secondTitle = await selectedIssue.textContent()
 
     expect(firstTitle).not.toEqual(secondTitle)
@@ -117,7 +134,11 @@ test.describe('Task Graph Sorting', () => {
 
     if (lanes > 1) {
       // Get issues from first lane
-      const firstLaneIssues = await page.locator('[data-test-id="task-graph-lane"]:first-child [data-test-id="task-graph-issue"]:has-text("○")').all()
+      const firstLaneIssues = await page
+        .locator(
+          '[data-test-id="task-graph-lane"]:first-child [data-test-id="task-graph-issue"]:has-text("○")'
+        )
+        .all()
 
       // Verify issues in the same lane are sorted
       const firstLaneTitles: string[] = []
@@ -141,7 +162,9 @@ test.describe('Task Graph Sorting', () => {
     const allIssues = await page.locator('[data-test-id="task-graph-issue"]').all()
 
     // Get issues without the ○ marker (non-actionable)
-    const nonActionableIssues = await page.locator('[data-test-id="task-graph-issue"]:not(:has-text("○"))').all()
+    const nonActionableIssues = await page
+      .locator('[data-test-id="task-graph-issue"]:not(:has-text("○"))')
+      .all()
 
     // Verify we have both types of issues
     expect(allIssues.length).toBeGreaterThan(0)
