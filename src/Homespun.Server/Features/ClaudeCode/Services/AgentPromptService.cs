@@ -158,6 +158,15 @@ public partial class AgentPromptService : IAgentPromptService
                 GetDefaultRebaseMessage(),
                 SessionMode.Build);
         }
+
+        // Create IssueModify prompt if it doesn't exist
+        if (!existingPrompts.Any(p => p.Name.Equals("IssueModify", StringComparison.OrdinalIgnoreCase)))
+        {
+            await CreatePromptAsync(
+                "IssueModify",
+                GetDefaultIssueModifyMessage(),
+                SessionMode.Build);
+        }
     }
 
     private static string GetDefaultPlanMessage()
@@ -214,6 +223,36 @@ public partial class AgentPromptService : IAgentPromptService
             4. Resolve any conflicts using the context provided
             5. Run tests to verify no regressions
             6. Push with --force-with-lease when ready
+            """;
+    }
+
+    private static string GetDefaultIssueModifyMessage()
+    {
+        return """
+            ## Issue Modification Request
+
+            You are an agent designed to modify Fleece issues based on user instructions.
+
+            IMPORTANT CONSTRAINTS:
+            - You may ONLY use the Fleece CLI tool to make modifications
+            - Do NOT write any files in the repository
+            - Do NOT make any code changes
+            - Focus solely on issue modifications using fleece commands
+
+            {{#if selectedIssueId}}
+            **Selected Issue:** {{selectedIssueId}}
+            {{/if}}
+
+            Available fleece commands:
+            - fleece list --oneline - List all issues
+            - fleece show <id> --json - Show issue details
+            - fleece edit <id> -t <title> -s <status> -d <description> - Edit issue
+            - fleece create -t <title> -s <status> -y <type> - Create new issue
+            - fleece edit <id> --parent-issues <parent>:<order> - Set parent hierarchy
+            - fleece list --tree - View issue hierarchy
+            - fleece list --next - View task graph
+
+            User request: {{userPrompt}}
             """;
     }
 }

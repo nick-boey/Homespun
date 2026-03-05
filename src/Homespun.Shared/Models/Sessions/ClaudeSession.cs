@@ -83,6 +83,16 @@ public class ClaudeSession
     public long TotalDurationMs { get; set; }
 
     /// <summary>
+    /// The type of session (Standard or IssueModify).
+    /// </summary>
+    public SessionType SessionType { get; set; } = SessionType.Standard;
+
+    /// <summary>
+    /// Additional metadata for the session.
+    /// </summary>
+    public Dictionary<string, string>? Metadata { get; set; }
+
+    /// <summary>
     /// The pending question that needs a user answer (only set when Status is WaitingForQuestionAnswer).
     /// </summary>
     public PendingQuestion? PendingQuestion { get; set; }

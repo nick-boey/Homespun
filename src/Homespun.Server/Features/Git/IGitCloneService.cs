@@ -184,4 +184,14 @@ public interface IGitCloneService
     /// <param name="targetBranch">Target branch to compare against (e.g., "main")</param>
     /// <returns>List of changed files with their status and line counts</returns>
     Task<List<FileChangeInfo>> GetChangedFilesAsync(string clonePath, string targetBranch);
+
+    /// <summary>
+    /// Creates a clone specifically for modifying Fleece issues.
+    /// The clone is created from the main branch with a timestamped branch name
+    /// in the format "hsp/agent+{timestamp}". Any unstaged .fleece/ changes
+    /// from the main repo are copied to the clone.
+    /// </summary>
+    /// <param name="repoPath">Path to the main repository</param>
+    /// <returns>Path to the created clone's workdir, or null if failed</returns>
+    Task<string?> CreateIssueModifyCloneAsync(string repoPath);
 }

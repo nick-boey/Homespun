@@ -42,6 +42,16 @@ public class CreateSessionRequest
     /// This is the first user message that starts the agent work.
     /// </summary>
     public string? InitialMessage { get; set; }
+
+    /// <summary>
+    /// The type of session (defaults to Standard).
+    /// </summary>
+    public SessionType SessionType { get; set; } = SessionType.Standard;
+
+    /// <summary>
+    /// Additional metadata for the session.
+    /// </summary>
+    public Dictionary<string, string>? Metadata { get; set; }
 }
 
 /// <summary>

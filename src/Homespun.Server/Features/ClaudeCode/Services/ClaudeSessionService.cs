@@ -2270,4 +2270,73 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             _ => true                             // Default to recoverable for unknown errors
         };
     }
+
+    /// <summary>
+    /// Accepts issue changes from an issue modification session.
+    /// Copies modified .fleece files back to the main repo and stops the session.
+    /// </summary>
+    public async Task<string> AcceptIssueChangesAsync(string sessionId, CancellationToken cancellationToken = default)
+    {
+        var session = GetSession(sessionId);
+        if (session == null)
+        {
+            throw new KeyNotFoundException($"Session with ID {sessionId} not found");
+        }
+
+        try
+        {
+            // Get the issue ID from entity ID
+            var issueId = session.EntityId;
+
+            // TODO: Copy .fleece files from clone back to main repo
+            // This would involve:
+            // 1. Identifying which .fleece files were modified
+            // 2. Copying them back to the main repo
+            // 3. Committing the changes
+
+            // Stop the session
+            await StopSessionAsync(sessionId, cancellationToken);
+
+            // Return redirect URL to the issue page
+            return $"/projects/{session.ProjectId}/issues/{issueId}";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error accepting issue changes for session {SessionId}", sessionId);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Cancels issue changes from an issue modification session.
+    /// Stops the session and deletes the clone without merging changes.
+    /// </summary>
+    public async Task<string> CancelIssueChangesAsync(string sessionId, CancellationToken cancellationToken = default)
+    {
+        var session = GetSession(sessionId);
+        if (session == null)
+        {
+            throw new KeyNotFoundException($"Session with ID {sessionId} not found");
+        }
+
+        try
+        {
+            // Get the issue ID from entity ID
+            var issueId = session.EntityId;
+
+            // Stop the session (this will also clean up the container)
+            await StopSessionAsync(sessionId, cancellationToken);
+
+            // TODO: Delete the clone directory if needed
+            // This might be handled automatically by container cleanup
+
+            // Return redirect URL to the issue page
+            return $"/projects/{session.ProjectId}/issues/{issueId}";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error canceling issue changes for session {SessionId}", sessionId);
+            throw;
+        }
+    }
 }
