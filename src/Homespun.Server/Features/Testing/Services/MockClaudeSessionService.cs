@@ -876,7 +876,7 @@ public class MockClaudeSessionService : IClaudeSessionService
     /// <summary>
     /// Accepts issue changes from an issue modification session.
     /// </summary>
-    public Task<string> AcceptIssueChangesAsync(string sessionId, CancellationToken cancellationToken = default)
+    public async Task<string> AcceptIssueChangesAsync(string sessionId, CancellationToken cancellationToken = default)
     {
         var session = _sessionStore.GetById(sessionId);
         if (session == null)
@@ -884,18 +884,17 @@ public class MockClaudeSessionService : IClaudeSessionService
             throw new KeyNotFoundException($"Session with ID {sessionId} not found");
         }
 
-        // Simulate stopping the session
-        session.State = Shared.Models.Sessions.SessionState.Stopped;
-        session.StoppedAt = DateTime.UtcNow;
+        // Stop the session
+        await StopSessionAsync(sessionId, cancellationToken);
 
         // Return mock redirect URL
-        return Task.FromResult($"/projects/{session.ProjectId}/issues/{session.EntityId}");
+        return $"/projects/{session.ProjectId}/issues/{session.EntityId}";
     }
 
     /// <summary>
     /// Cancels issue changes from an issue modification session.
     /// </summary>
-    public Task<string> CancelIssueChangesAsync(string sessionId, CancellationToken cancellationToken = default)
+    public async Task<string> CancelIssueChangesAsync(string sessionId, CancellationToken cancellationToken = default)
     {
         var session = _sessionStore.GetById(sessionId);
         if (session == null)
@@ -903,11 +902,10 @@ public class MockClaudeSessionService : IClaudeSessionService
             throw new KeyNotFoundException($"Session with ID {sessionId} not found");
         }
 
-        // Simulate stopping the session
-        session.State = Shared.Models.Sessions.SessionState.Stopped;
-        session.StoppedAt = DateTime.UtcNow;
+        // Stop the session
+        await StopSessionAsync(sessionId, cancellationToken);
 
         // Return mock redirect URL
-        return Task.FromResult($"/projects/{session.ProjectId}/issues/{session.EntityId}");
+        return $"/projects/{session.ProjectId}/issues/{session.EntityId}";
     }
 }
