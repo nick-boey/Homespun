@@ -1162,3 +1162,54 @@ public class GitCloneService(ICommandRunner commandRunner, ILogger<GitCloneServi
         return FileChangeStatus.Modified;
     }
 }
+
+    public async Task<string?> CreateIssueModifyCloneAsync(string repoPath)
+    {
+        // Generate timestamp-based branch name
+        var timestamp = DateTime.UtcNow.ToString("yyyyMMddTHHmmss");
+        var branchName = $"hsp/agent+{timestamp}";
+
+        // Create the clone from main branch
+        var clonePath = await CreateCloneAsync(repoPath, branchName, createBranch: true, baseBranch: "main");
+
+        if (clonePath == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            // Check for unstaged .fleece/ changes in main repo
+            var statusResult = await commandRunner.RunAsync("git", "status --porcelain -- .fleece/", repoPath);
+
+            if (statusResult.Success && !string.IsNullOrWhiteSpace(statusResult.Output))
+            {
+                // Copy unstaged .fleece/ changes to the clone
+                var sourceFleecePath = Path.Combine(repoPath, ".fleece");
+                var destFleecePath = Path.Combine(clonePath, ".fleece");
+
+                // Ensure destination directory exists
+                Directory.CreateDirectory(destFleecePath);
+
+                // Use rsync to copy the files, preserving timestamps and excluding .git
+                var rsyncResult = await commandRunner.RunAsync(
+                    "rsync",
+                    $"-av --exclude=.git \"{sourceFleecePath}/\" \"{destFleecePath}/\"",
+                    repoPath);
+
+                if (!rsyncResult.Success)
+                {
+                    logger.LogWarning("Failed to copy .fleece changes to clone: {Error}", rsyncResult.Error);
+                    // Don't fail the clone creation, just log the warning
+                }
+            }
+
+            return clonePath;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error copying .fleece changes to clone");
+            // Don't fail the clone creation, just return the clone path
+            return clonePath;
+        }
+    }

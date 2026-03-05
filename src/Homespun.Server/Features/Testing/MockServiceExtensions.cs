@@ -63,6 +63,7 @@ public static class MockServiceExtensions
         services.AddSingleton<IFleeceIssuesSyncService, MockFleeceIssuesSyncService>();
         services.AddScoped<IIssueBranchResolverService, IssueBranchResolverService>();
         services.AddSingleton<IIssueHistoryService, IssueHistoryService>();
+        services.AddScoped<IFleeceIssueDiffService, FleeceIssueDiffService>();
 
         // Git services
         services.AddSingleton<IGitCloneService, MockGitCloneService>();

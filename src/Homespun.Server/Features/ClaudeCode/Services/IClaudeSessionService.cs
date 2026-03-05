@@ -204,4 +204,22 @@ public interface IClaudeSessionService
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>The updated session ready for new messages, or null if session not found</returns>
     Task<ClaudeSession?> RestartSessionAsync(string sessionId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Accepts issue changes from an issue modification session.
+    /// Copies modified .fleece files back to the main repo and stops the session.
+    /// </summary>
+    /// <param name="sessionId">The session ID</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Redirect URL to navigate to after accepting changes</returns>
+    Task<string> AcceptIssueChangesAsync(string sessionId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Cancels issue changes from an issue modification session.
+    /// Stops the session and deletes the clone without merging changes.
+    /// </summary>
+    /// <param name="sessionId">The session ID</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Redirect URL to navigate to after canceling</returns>
+    Task<string> CancelIssueChangesAsync(string sessionId, CancellationToken cancellationToken = default);
 }
