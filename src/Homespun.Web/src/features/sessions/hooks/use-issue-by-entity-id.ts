@@ -17,15 +17,12 @@ export function useIssueByEntityId(entityId: string, projectId: string) {
   const issueId = parseIssueIdFromEntityId(entityId)
 
   // Use the existing useIssue hook
-  const result = useIssue(
-    issueId || '',
-    projectId || ''
-  )
+  const result = useIssue(issueId || '', projectId || '')
 
   return {
     issue: result.issue,
     isLoading: result.isLoading,
-    error: result.error
+    error: result.error,
   }
 }
 

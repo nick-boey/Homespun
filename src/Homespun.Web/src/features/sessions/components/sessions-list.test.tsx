@@ -10,12 +10,16 @@ import { SessionsList } from './sessions-list'
 // Mock the SessionCard component
 vi.mock('./session-card', () => ({
   SessionCard: ({ session }: { session: SessionSummary }) =>
-    createElement('div', { 'data-testid': 'session-card', 'data-session-id': session.id }, session.entityId)
+    createElement(
+      'div',
+      { 'data-testid': 'session-card', 'data-session-id': session.id },
+      session.entityId
+    ),
 }))
 
 // Mock the SessionCardSkeleton component
 vi.mock('./session-card-skeleton', () => ({
-  SessionCardSkeleton: () => createElement('div', { 'data-testid': 'session-card-skeleton' })
+  SessionCardSkeleton: () => createElement('div', { 'data-testid': 'session-card-skeleton' }),
 }))
 
 vi.mock('@/api', () => ({

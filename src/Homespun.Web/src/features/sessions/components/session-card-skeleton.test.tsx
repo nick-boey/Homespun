@@ -48,7 +48,7 @@ describe('SessionCardSkeleton', () => {
     // Badges should be smaller
     const badgesSkeleton = screen.getByTestId('badges-skeleton')
     const badges = badgesSkeleton.querySelectorAll('[data-testid*="skeleton"]')
-    badges.forEach(badge => {
+    badges.forEach((badge) => {
       expect(badge).toHaveClass('h-5')
     })
 
@@ -65,7 +65,7 @@ describe('SessionCardSkeleton', () => {
     const skeletons = container.querySelectorAll('[data-slot="skeleton"]')
     expect(skeletons.length).toBeGreaterThan(0)
 
-    skeletons.forEach(skeleton => {
+    skeletons.forEach((skeleton) => {
       expect(skeleton).toHaveClass('animate-pulse')
     })
   })

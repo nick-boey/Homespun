@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { AlertCircle, RefreshCw, Terminal } from 'lucide-react'
 import { useSessions, sessionsQueryKey } from '../hooks/use-sessions'
 import { SessionsEmptyState } from './sessions-empty-state'
@@ -124,7 +124,7 @@ export function SessionsList() {
             </TabsList>
           </Tabs>
         </div>
-        <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3, 4, 5, 6].map((i) => (
             <SessionCardSkeleton key={i} />
           ))}
@@ -210,7 +210,7 @@ export function SessionsList() {
                 <p className="mt-4">No active sessions</p>
               </div>
             ) : (
-              <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {filteredSessions.map((session) => (
                   <SessionCard key={session.id} session={session} />
                 ))}
@@ -225,7 +225,7 @@ export function SessionsList() {
                 <p className="mt-4">No archived sessions</p>
               </div>
             ) : (
-              <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {filteredSessions.map((session) => (
                   <SessionCard key={session.id} session={session} />
                 ))}

@@ -12,8 +12,8 @@ describe('useIssueByEntityId', () => {
   const createWrapper = () => {
     const queryClient = new QueryClient({
       defaultOptions: {
-        queries: { retry: false }
-      }
+        queries: { retry: false },
+      },
     })
     return ({ children }: { children: ReactNode }) => (
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
@@ -32,13 +32,12 @@ describe('useIssueByEntityId', () => {
       error: null,
       isSuccess: true,
       isError: false,
-      refetch: vi.fn()
+      refetch: vi.fn(),
     })
 
-    const { result } = renderHook(
-      () => useIssueByEntityId('issue:abc123', 'project-1'),
-      { wrapper: createWrapper() }
-    )
+    const { result } = renderHook(() => useIssueByEntityId('issue:abc123', 'project-1'), {
+      wrapper: createWrapper(),
+    })
 
     await waitFor(() => {
       expect(result.current.issue).toEqual(mockIssue)
@@ -58,13 +57,12 @@ describe('useIssueByEntityId', () => {
       error: null,
       isSuccess: true,
       isError: false,
-      refetch: vi.fn()
+      refetch: vi.fn(),
     })
 
-    const { result } = renderHook(
-      () => useIssueByEntityId('feature:def456', 'project-1'),
-      { wrapper: createWrapper() }
-    )
+    const { result } = renderHook(() => useIssueByEntityId('feature:def456', 'project-1'), {
+      wrapper: createWrapper(),
+    })
 
     await waitFor(() => {
       expect(result.current.issue).toEqual(mockIssue)
@@ -81,13 +79,12 @@ describe('useIssueByEntityId', () => {
       error: null,
       isSuccess: false,
       isError: false,
-      refetch: vi.fn()
+      refetch: vi.fn(),
     })
 
-    const { result } = renderHook(
-      () => useIssueByEntityId('project:proj123', 'project-1'),
-      { wrapper: createWrapper() }
-    )
+    const { result } = renderHook(() => useIssueByEntityId('project:proj123', 'project-1'), {
+      wrapper: createWrapper(),
+    })
 
     await waitFor(() => {
       expect(result.current.issue).toBeUndefined()
@@ -106,13 +103,12 @@ describe('useIssueByEntityId', () => {
       error: null,
       isSuccess: false,
       isError: false,
-      refetch: vi.fn()
+      refetch: vi.fn(),
     })
 
-    const { result } = renderHook(
-      () => useIssueByEntityId('invalid-format', 'project-1'),
-      { wrapper: createWrapper() }
-    )
+    const { result } = renderHook(() => useIssueByEntityId('invalid-format', 'project-1'), {
+      wrapper: createWrapper(),
+    })
 
     await waitFor(() => {
       expect(result.current.issue).toBeUndefined()
@@ -130,13 +126,12 @@ describe('useIssueByEntityId', () => {
       error: null,
       isSuccess: false,
       isError: false,
-      refetch: vi.fn()
+      refetch: vi.fn(),
     })
 
-    const { result } = renderHook(
-      () => useIssueByEntityId('', 'project-1'),
-      { wrapper: createWrapper() }
-    )
+    const { result } = renderHook(() => useIssueByEntityId('', 'project-1'), {
+      wrapper: createWrapper(),
+    })
 
     await waitFor(() => {
       expect(result.current.issue).toBeUndefined()
@@ -154,13 +149,12 @@ describe('useIssueByEntityId', () => {
       error: null,
       isSuccess: false,
       isError: false,
-      refetch: vi.fn()
+      refetch: vi.fn(),
     })
 
-    const { result } = renderHook(
-      () => useIssueByEntityId('issue:abc123', 'project-1'),
-      { wrapper: createWrapper() }
-    )
+    const { result } = renderHook(() => useIssueByEntityId('issue:abc123', 'project-1'), {
+      wrapper: createWrapper(),
+    })
 
     expect(result.current.isLoading).toBe(true)
     expect(result.current.issue).toBeUndefined()
@@ -174,13 +168,12 @@ describe('useIssueByEntityId', () => {
       error: mockError,
       isSuccess: false,
       isError: true,
-      refetch: vi.fn()
+      refetch: vi.fn(),
     })
 
-    const { result } = renderHook(
-      () => useIssueByEntityId('issue:abc123', 'project-1'),
-      { wrapper: createWrapper() }
-    )
+    const { result } = renderHook(() => useIssueByEntityId('issue:abc123', 'project-1'), {
+      wrapper: createWrapper(),
+    })
 
     expect(result.current.error).toEqual(mockError)
     expect(result.current.issue).toBeUndefined()
@@ -195,13 +188,12 @@ describe('useIssueByEntityId', () => {
       error: null,
       isSuccess: true,
       isError: false,
-      refetch: vi.fn()
+      refetch: vi.fn(),
     })
 
-    const { result } = renderHook(
-      () => useIssueByEntityId('issue:abc-123_xyz', 'project-1'),
-      { wrapper: createWrapper() }
-    )
+    const { result } = renderHook(() => useIssueByEntityId('issue:abc-123_xyz', 'project-1'), {
+      wrapper: createWrapper(),
+    })
 
     await waitFor(() => {
       expect(result.current.issue).toEqual(mockIssue)
@@ -217,13 +209,12 @@ describe('useIssueByEntityId', () => {
       error: null,
       isSuccess: false,
       isError: false,
-      refetch: vi.fn()
+      refetch: vi.fn(),
     })
 
-    const { result } = renderHook(
-      () => useIssueByEntityId('issue:abc123', ''),
-      { wrapper: createWrapper() }
-    )
+    const { result } = renderHook(() => useIssueByEntityId('issue:abc123', ''), {
+      wrapper: createWrapper(),
+    })
 
     await waitFor(() => {
       expect(result.current.issue).toBeUndefined()
