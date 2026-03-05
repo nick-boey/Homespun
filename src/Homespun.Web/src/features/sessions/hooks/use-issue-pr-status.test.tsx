@@ -8,16 +8,16 @@ import type { ReactNode } from 'react'
 // Mock the API
 vi.mock('@/api', () => ({
   IssuePrStatus: {
-    getApiIssuePrStatusByProjectIdByIssueId: vi.fn()
-  }
+    getApiIssuePrStatusByProjectIdByIssueId: vi.fn(),
+  },
 }))
 
 describe('useIssuePrStatus', () => {
   const createWrapper = () => {
     const queryClient = new QueryClient({
       defaultOptions: {
-        queries: { retry: false }
-      }
+        queries: { retry: false },
+      },
     })
     return ({ children }: { children: ReactNode }) => (
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
@@ -30,19 +30,20 @@ describe('useIssuePrStatus', () => {
 
   it('fetches PR status successfully', async () => {
     const mockPrStatus = {
-      hasPr: true,
       prNumber: 123,
-      prStatus: 'open'
+      prUrl: 'https://github.com/example/repo/pull/123',
+      status: 0, // Open
+      branchName: null,
+      checksPassing: null,
     }
 
     vi.mocked(api.IssuePrStatus.getApiIssuePrStatusByProjectIdByIssueId).mockResolvedValue({
-      data: mockPrStatus
+      data: mockPrStatus,
     } as any)
 
-    const { result } = renderHook(
-      () => useIssuePrStatus('project-1', 'issue-1'),
-      { wrapper: createWrapper() }
-    )
+    const { result } = renderHook(() => useIssuePrStatus('project-1', 'issue-1'), {
+      wrapper: createWrapper(),
+    })
 
     await waitFor(() => {
       expect(result.current.prStatus).toEqual(mockPrStatus)
@@ -51,28 +52,32 @@ describe('useIssuePrStatus', () => {
     })
 
     expect(api.IssuePrStatus.getApiIssuePrStatusByProjectIdByIssueId).toHaveBeenCalledWith({
-      projectId: 'project-1',
-      issueId: 'issue-1'
+      path: {
+        projectId: 'project-1',
+        issueId: 'issue-1',
+      },
     })
   })
 
   it('handles no PR status', async () => {
     const mockPrStatus = {
-      hasPr: false
+      prNumber: undefined,
+      prUrl: null,
+      status: undefined,
+      branchName: null,
+      checksPassing: null,
     }
 
     vi.mocked(api.IssuePrStatus.getApiIssuePrStatusByProjectIdByIssueId).mockResolvedValue({
-      data: mockPrStatus
+      data: mockPrStatus,
     } as any)
 
-    const { result } = renderHook(
-      () => useIssuePrStatus('project-1', 'issue-1'),
-      { wrapper: createWrapper() }
-    )
+    const { result } = renderHook(() => useIssuePrStatus('project-1', 'issue-1'), {
+      wrapper: createWrapper(),
+    })
 
     await waitFor(() => {
       expect(result.current.prStatus).toEqual(mockPrStatus)
-      expect(result.current.prStatus?.hasPr).toBe(false)
       expect(result.current.prStatus?.prNumber).toBeUndefined()
     })
   })
@@ -80,12 +85,13 @@ describe('useIssuePrStatus', () => {
   it('handles API errors', async () => {
     const mockError = new Error('API Error')
 
-    vi.mocked(api.IssuePrStatus.getApiIssuePrStatusByProjectIdByIssueId).mockRejectedValue(mockError)
-
-    const { result } = renderHook(
-      () => useIssuePrStatus('project-1', 'issue-1'),
-      { wrapper: createWrapper() }
+    vi.mocked(api.IssuePrStatus.getApiIssuePrStatusByProjectIdByIssueId).mockRejectedValue(
+      mockError
     )
+
+    const { result } = renderHook(() => useIssuePrStatus('project-1', 'issue-1'), {
+      wrapper: createWrapper(),
+    })
 
     await waitFor(() => {
       expect(result.current.error).toEqual(mockError)
@@ -96,13 +102,12 @@ describe('useIssuePrStatus', () => {
 
   it('shows loading state initially', () => {
     vi.mocked(api.IssuePrStatus.getApiIssuePrStatusByProjectIdByIssueId).mockImplementation(
-      () => new Promise(() => {}) // Never resolves
+      () => new Promise(() => {}) as any // Never resolves
     )
 
-    const { result } = renderHook(
-      () => useIssuePrStatus('project-1', 'issue-1'),
-      { wrapper: createWrapper() }
-    )
+    const { result } = renderHook(() => useIssuePrStatus('project-1', 'issue-1'), {
+      wrapper: createWrapper(),
+    })
 
     expect(result.current.isLoading).toBe(true)
     expect(result.current.prStatus).toBeUndefined()
@@ -110,10 +115,9 @@ describe('useIssuePrStatus', () => {
   })
 
   it('does not fetch when projectId is empty', () => {
-    const { result } = renderHook(
-      () => useIssuePrStatus('', 'issue-1'),
-      { wrapper: createWrapper() }
-    )
+    const { result } = renderHook(() => useIssuePrStatus('', 'issue-1'), {
+      wrapper: createWrapper(),
+    })
 
     expect(result.current.isLoading).toBe(false)
     expect(result.current.prStatus).toBeUndefined()
@@ -122,10 +126,9 @@ describe('useIssuePrStatus', () => {
   })
 
   it('does not fetch when issueId is empty', () => {
-    const { result } = renderHook(
-      () => useIssuePrStatus('project-1', ''),
-      { wrapper: createWrapper() }
-    )
+    const { result } = renderHook(() => useIssuePrStatus('project-1', ''), {
+      wrapper: createWrapper(),
+    })
 
     expect(result.current.isLoading).toBe(false)
     expect(result.current.prStatus).toBeUndefined()
@@ -137,26 +140,24 @@ describe('useIssuePrStatus', () => {
     const mockPrStatus = { hasPr: true, prNumber: 456 }
 
     vi.mocked(api.IssuePrStatus.getApiIssuePrStatusByProjectIdByIssueId).mockResolvedValue({
-      data: mockPrStatus
+      data: mockPrStatus,
     } as any)
 
     // Create a single wrapper instance to share the query client
     const wrapper = createWrapper()
 
-    const { result: result1 } = renderHook(
-      () => useIssuePrStatus('project-1', 'issue-1'),
-      { wrapper }
-    )
+    const { result: result1 } = renderHook(() => useIssuePrStatus('project-1', 'issue-1'), {
+      wrapper,
+    })
 
     await waitFor(() => {
       expect(result1.current.prStatus).toEqual(mockPrStatus)
     })
 
     // Call API only once even with multiple hooks using same params
-    const { result: result2 } = renderHook(
-      () => useIssuePrStatus('project-1', 'issue-1'),
-      { wrapper }
-    )
+    const { result: result2 } = renderHook(() => useIssuePrStatus('project-1', 'issue-1'), {
+      wrapper,
+    })
 
     expect(result2.current.prStatus).toEqual(mockPrStatus)
     expect(api.IssuePrStatus.getApiIssuePrStatusByProjectIdByIssueId).toHaveBeenCalledTimes(1)
@@ -174,7 +175,7 @@ describe('useIssuePrStatus', () => {
       ({ projectId, issueId }) => useIssuePrStatus(projectId, issueId),
       {
         wrapper: createWrapper(),
-        initialProps: { projectId: 'project-1', issueId: 'issue-1' }
+        initialProps: { projectId: 'project-1', issueId: 'issue-1' },
       }
     )
 
@@ -192,11 +193,11 @@ describe('useIssuePrStatus', () => {
     expect(api.IssuePrStatus.getApiIssuePrStatusByProjectIdByIssueId).toHaveBeenCalledTimes(2)
     expect(api.IssuePrStatus.getApiIssuePrStatusByProjectIdByIssueId).toHaveBeenNthCalledWith(1, {
       projectId: 'project-1',
-      issueId: 'issue-1'
+      issueId: 'issue-1',
     })
     expect(api.IssuePrStatus.getApiIssuePrStatusByProjectIdByIssueId).toHaveBeenNthCalledWith(2, {
       projectId: 'project-1',
-      issueId: 'issue-2'
+      issueId: 'issue-2',
     })
   })
 })

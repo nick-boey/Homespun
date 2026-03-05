@@ -117,7 +117,7 @@ test.describe('Sessions page', () => {
     const emptyState = page.getByText('No active sessions')
 
     // Either we have cards or empty state
-    const hasCards = await cards.count() > 0
+    const hasCards = (await cards.count()) > 0
     const hasEmptyState = await emptyState.isVisible().catch(() => false)
 
     expect(hasCards || hasEmptyState).toBeTruthy()

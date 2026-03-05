@@ -2,7 +2,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { SessionCard } from './session-card'
-import { SessionSummary } from '@/api'
+import type {
+  SessionSummary,
+  IssueResponse,
+  IssueStatus,
+  IssueType,
+  ClaudeSessionStatus,
+  SessionMode,
+} from '@/api'
+import { ISSUE_STATUS, ISSUE_TYPE } from '@/lib/issue-constants'
 import * as issueHooks from '../hooks/use-issue-by-entity-id'
 import * as prHooks from '../hooks/use-issue-pr-status'
 
@@ -12,14 +20,14 @@ vi.mock('../hooks/use-issue-pr-status')
 vi.mock('../hooks/use-sessions', () => ({
   useStopSession: () => ({
     mutate: vi.fn(),
-    isPending: false
-  })
+    isPending: false,
+  }),
 }))
 
 // Mock router
 const mockNavigate = vi.fn()
 vi.mock('@tanstack/react-router', () => ({
-  useNavigate: () => mockNavigate
+  useNavigate: () => mockNavigate,
 }))
 
 describe('SessionCard', () => {
@@ -27,30 +35,33 @@ describe('SessionCard', () => {
     id: 'session-123',
     entityId: 'issue:abc123',
     projectId: 'project-456',
-    mode: 1, // Build
+    mode: 1 as SessionMode, // Build
     model: 'claude-3.5-sonnet',
-    status: 2, // Running
+    status: 2 as ClaudeSessionStatus, // Running
     messageCount: 42,
     createdAt: new Date().toISOString(),
     lastActivityAt: new Date().toISOString(),
     totalCostUsd: 0,
     containerId: null,
-    containerName: null
+    containerName: null,
   }
 
-  const mockIssue = {
+  const mockIssue: IssueResponse = {
     id: 'abc123',
     title: 'Fix authentication bug',
-    type: 'bug',
-    status: 'progress',
-    description: 'The authentication system is not working properly when users try to log in with OAuth providers.',
-    priority: 'high'
+    type: ISSUE_TYPE.Bug as IssueType,
+    status: ISSUE_STATUS.Progress as IssueStatus,
+    description:
+      'The authentication system is not working properly when users try to log in with OAuth providers.',
+    priority: 1,
   }
 
   const mockPrStatus = {
-    hasPr: true,
     prNumber: 123,
-    prStatus: 'open'
+    prUrl: 'https://github.com/example/repo/pull/123',
+    status: 0 as any, // Open
+    branchName: null,
+    checksPassing: null,
   }
 
   beforeEach(() => {
@@ -61,12 +72,12 @@ describe('SessionCard', () => {
     vi.mocked(issueHooks.useIssueByEntityId).mockReturnValue({
       issue: undefined,
       isLoading: true,
-      error: null
+      error: null,
     })
     vi.mocked(prHooks.useIssuePrStatus).mockReturnValue({
       prStatus: undefined,
       isLoading: true,
-      error: null
+      error: null,
     })
 
     render(<SessionCard session={mockSession} />)
@@ -77,14 +88,14 @@ describe('SessionCard', () => {
 
   it('renders card with all issue data when loaded', async () => {
     vi.mocked(issueHooks.useIssueByEntityId).mockReturnValue({
-      issue: mockIssue,
+      issue: mockIssue as any,
       isLoading: false,
-      error: null
+      error: null,
     })
     vi.mocked(prHooks.useIssuePrStatus).mockReturnValue({
-      prStatus: mockPrStatus,
+      prStatus: mockPrStatus as any,
       isLoading: false,
-      error: null
+      error: null,
     })
 
     render(<SessionCard session={mockSession} />)
@@ -113,12 +124,12 @@ describe('SessionCard', () => {
     vi.mocked(issueHooks.useIssueByEntityId).mockReturnValue({
       issue: undefined,
       isLoading: false,
-      error: new Error('Failed to fetch issue')
+      error: new Error('Failed to fetch issue'),
     })
     vi.mocked(prHooks.useIssuePrStatus).mockReturnValue({
       prStatus: undefined,
       isLoading: false,
-      error: null
+      error: null,
     })
 
     render(<SessionCard session={mockSession} />)
@@ -135,12 +146,12 @@ describe('SessionCard', () => {
     vi.mocked(issueHooks.useIssueByEntityId).mockReturnValue({
       issue: undefined,
       isLoading: false,
-      error: null
+      error: null,
     })
     vi.mocked(prHooks.useIssuePrStatus).mockReturnValue({
       prStatus: undefined,
       isLoading: false,
-      error: null
+      error: null,
     })
 
     render(<SessionCard session={mockSession} />)
@@ -152,14 +163,14 @@ describe('SessionCard', () => {
 
   it('shows stop button for active sessions', async () => {
     vi.mocked(issueHooks.useIssueByEntityId).mockReturnValue({
-      issue: mockIssue,
+      issue: mockIssue as any,
       isLoading: false,
-      error: null
+      error: null,
     })
     vi.mocked(prHooks.useIssuePrStatus).mockReturnValue({
       prStatus: undefined,
       isLoading: false,
-      error: null
+      error: null,
     })
 
     render(<SessionCard session={mockSession} />)
@@ -172,17 +183,17 @@ describe('SessionCard', () => {
 
   it('hides stop button for stopped sessions', async () => {
     vi.mocked(issueHooks.useIssueByEntityId).mockReturnValue({
-      issue: mockIssue,
+      issue: mockIssue as any,
       isLoading: false,
-      error: null
+      error: null,
     })
     vi.mocked(prHooks.useIssuePrStatus).mockReturnValue({
       prStatus: undefined,
       isLoading: false,
-      error: null
+      error: null,
     })
 
-    const stoppedSession = { ...mockSession, status: 6 } // Stopped
+    const stoppedSession = { ...mockSession, status: 6 as ClaudeSessionStatus } // Stopped
     render(<SessionCard session={stoppedSession} />)
 
     await waitFor(() => {
@@ -192,14 +203,20 @@ describe('SessionCard', () => {
 
   it('does not show PR badge when no PR exists', async () => {
     vi.mocked(issueHooks.useIssueByEntityId).mockReturnValue({
-      issue: mockIssue,
+      issue: mockIssue as any,
       isLoading: false,
-      error: null
+      error: null,
     })
     vi.mocked(prHooks.useIssuePrStatus).mockReturnValue({
-      prStatus: { hasPr: false },
+      prStatus: {
+        prNumber: undefined,
+        prUrl: null,
+        status: undefined,
+        branchName: null,
+        checksPassing: null,
+      } as any,
       isLoading: false,
-      error: null
+      error: null,
     })
 
     render(<SessionCard session={mockSession} />)
@@ -213,14 +230,14 @@ describe('SessionCard', () => {
     mockNavigate.mockReset()
 
     vi.mocked(issueHooks.useIssueByEntityId).mockReturnValue({
-      issue: mockIssue,
+      issue: mockIssue as any,
       isLoading: false,
-      error: null
+      error: null,
     })
     vi.mocked(prHooks.useIssuePrStatus).mockReturnValue({
       prStatus: undefined,
       isLoading: false,
-      error: null
+      error: null,
     })
 
     const user = userEvent.setup()
@@ -239,26 +256,26 @@ describe('SessionCard', () => {
 
   it('shows different session status indicators', async () => {
     vi.mocked(issueHooks.useIssueByEntityId).mockReturnValue({
-      issue: mockIssue,
+      issue: mockIssue as any,
       isLoading: false,
-      error: null
+      error: null,
     })
     vi.mocked(prHooks.useIssuePrStatus).mockReturnValue({
       prStatus: undefined,
       isLoading: false,
-      error: null
+      error: null,
     })
 
     // Test different session statuses
     const statuses = [
       { value: 2, label: 'Running', dataStatus: 'running' },
       { value: 3, label: 'Waiting', dataStatus: 'idle' },
-      { value: 6, label: 'Stopped', dataStatus: 'stopped' }
+      { value: 6, label: 'Stopped', dataStatus: 'stopped' },
     ]
 
     for (const status of statuses) {
       const { unmount } = render(
-        <SessionCard session={{ ...mockSession, status: status.value }} />
+        <SessionCard session={{ ...mockSession, status: status.value as ClaudeSessionStatus }} />
       )
 
       await waitFor(() => {
@@ -274,14 +291,14 @@ describe('SessionCard', () => {
   it('truncates long descriptions', async () => {
     const longDescription = 'A'.repeat(200)
     vi.mocked(issueHooks.useIssueByEntityId).mockReturnValue({
-      issue: { ...mockIssue, description: longDescription },
+      issue: { ...mockIssue, description: longDescription } as any,
       isLoading: false,
-      error: null
+      error: null,
     })
     vi.mocked(prHooks.useIssuePrStatus).mockReturnValue({
       prStatus: undefined,
       isLoading: false,
-      error: null
+      error: null,
     })
 
     render(<SessionCard session={mockSession} />)
@@ -296,14 +313,14 @@ describe('SessionCard', () => {
     mockNavigate.mockReset()
 
     vi.mocked(issueHooks.useIssueByEntityId).mockReturnValue({
-      issue: mockIssue,
+      issue: mockIssue as any,
       isLoading: false,
-      error: null
+      error: null,
     })
     vi.mocked(prHooks.useIssuePrStatus).mockReturnValue({
       prStatus: undefined,
       isLoading: false,
-      error: null
+      error: null,
     })
 
     const user = userEvent.setup()
@@ -322,17 +339,17 @@ describe('SessionCard', () => {
 
   it('shows Plan mode correctly', async () => {
     vi.mocked(issueHooks.useIssueByEntityId).mockReturnValue({
-      issue: mockIssue,
+      issue: mockIssue as any,
       isLoading: false,
-      error: null
+      error: null,
     })
     vi.mocked(prHooks.useIssuePrStatus).mockReturnValue({
       prStatus: undefined,
       isLoading: false,
-      error: null
+      error: null,
     })
 
-    const planSession = { ...mockSession, mode: 0 } // Plan mode
+    const planSession = { ...mockSession, mode: 0 as SessionMode } // Plan mode
     render(<SessionCard session={planSession} />)
 
     await waitFor(() => {

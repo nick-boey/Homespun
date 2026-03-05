@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Square } from 'lucide-react'
-import { SessionSummary } from '@/api'
+import type { SessionSummary } from '@/api'
 import { useIssueByEntityId } from '../hooks/use-issue-by-entity-id'
 import { useIssuePrStatus } from '../hooks/use-issue-pr-status'
 import { useStopSession } from '../hooks/use-sessions'
@@ -10,6 +10,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { SessionCardSkeleton } from './session-card-skeleton'
 import { cn } from '@/lib/utils'
 import type { ClaudeSessionStatus } from '@/api/generated'
+import { getStatusLabel as getIssueStatusLabel, getTypeLabel } from '@/lib/issue-constants'
 
 // Status enum values from backend
 const SessionStatus = {
@@ -23,7 +24,7 @@ const SessionStatus = {
   Error: 7,
 } as const
 
-function getStatusLabel(status: ClaudeSessionStatus | undefined): string {
+function getSessionStatusLabel(status: ClaudeSessionStatus | undefined): string {
   switch (status) {
     case SessionStatus.Starting:
       return 'Starting'
@@ -65,10 +66,7 @@ function getAgentStatusVariant(status: ClaudeSessionStatus | undefined): string 
 }
 
 function isActiveStatus(status: ClaudeSessionStatus | undefined): boolean {
-  return (
-    status !== SessionStatus.Stopped &&
-    status !== SessionStatus.Error
-  )
+  return status !== SessionStatus.Stopped && status !== SessionStatus.Error
 }
 
 // Simple time ago formatter
@@ -99,17 +97,15 @@ export function SessionCard({ session }: SessionCardProps) {
   const stopSession = useStopSession()
 
   // Fetch issue data based on entityId
-  const { issue, isLoading: issueLoading, error: issueError } = useIssueByEntityId(
-    session.entityId || '',
-    session.projectId || ''
-  )
+  const {
+    issue,
+    isLoading: issueLoading,
+    error: issueError,
+  } = useIssueByEntityId(session.entityId || '', session.projectId || '')
 
   // Parse issue ID from entityId for PR status query
   const issueId = session.entityId?.split(':')[1] || ''
-  const { prStatus, isLoading: prLoading } = useIssuePrStatus(
-    session.projectId || '',
-    issueId
-  )
+  const { prStatus, isLoading: prLoading } = useIssuePrStatus(session.projectId || '', issueId)
 
   // Show skeleton while loading
   if (issueLoading || prLoading) {
@@ -117,7 +113,7 @@ export function SessionCard({ session }: SessionCardProps) {
   }
 
   const handleCardClick = () => {
-    navigate(`/projects/${session.projectId}/sessions/${session.id}`)
+    navigate({ to: `/projects/${session.projectId}/sessions/${session.id}` })
   }
 
   const handleStopClick = (e: React.MouseEvent) => {
@@ -127,59 +123,16 @@ export function SessionCard({ session }: SessionCardProps) {
     }
   }
 
-  const getIssueTypeBadgeVariant = (type?: string): "default" | "secondary" | "destructive" | "outline" => {
-    switch (type?.toLowerCase()) {
-      case 'bug':
-        return 'destructive'
-      case 'feature':
-        return 'default'
-      case 'task':
-        return 'secondary'
-      default:
-        return 'outline'
-    }
-  }
-
-  const getIssueStatusBadgeVariant = (status?: string): "default" | "secondary" | "destructive" | "outline" => {
-    switch (status?.toLowerCase()) {
-      case 'open':
-        return 'outline'
-      case 'progress':
-        return 'default'
-      case 'review':
-        return 'secondary'
-      case 'complete':
-        return 'default'
-      default:
-        return 'outline'
-    }
-  }
-
-  const formatIssueStatus = (status?: string): string => {
-    switch (status?.toLowerCase()) {
-      case 'open':
-        return 'Open'
-      case 'progress':
-        return 'In Progress'
-      case 'review':
-        return 'In Review'
-      case 'complete':
-        return 'Complete'
-      default:
-        return status || ''
-    }
-  }
-
   return (
     <Card
       data-testid="session-card"
-      className="rounded-lg border p-4 hover:bg-muted/50 transition-colors cursor-pointer"
+      className="hover:bg-muted/50 cursor-pointer rounded-lg border p-4 transition-colors"
       onClick={handleCardClick}
     >
-      <CardHeader className="p-0 space-y-2">
+      <CardHeader className="space-y-2 p-0">
         {/* Title and stop button row */}
         <div className="flex items-start justify-between gap-2">
-          <h3 className="font-semibold text-base leading-tight truncate">
+          <h3 className="truncate text-base leading-tight font-semibold">
             {issueError ? (
               <span className="text-destructive">Failed to load issue details</span>
             ) : issue ? (
@@ -205,26 +158,22 @@ export function SessionCard({ session }: SessionCardProps) {
         <div className="flex items-center gap-2">
           {issue && (
             <>
-              <Badge variant={getIssueTypeBadgeVariant(issue.type)} className="capitalize">
-                {issue.type}
+              <Badge variant="secondary" className="capitalize">
+                {getTypeLabel(issue.type)}
               </Badge>
-              <Badge variant={getIssueStatusBadgeVariant(issue.status)}>
-                {formatIssueStatus(issue.status)}
-              </Badge>
+              <Badge variant="outline">{getIssueStatusLabel(issue.status)}</Badge>
             </>
           )}
-          {prStatus?.hasPr && prStatus.prNumber && (
-            <Badge variant="outline">PR #{prStatus.prNumber}</Badge>
-          )}
+          {prStatus?.prNumber && <Badge variant="outline">PR #{prStatus.prNumber}</Badge>}
         </div>
       </CardHeader>
 
-      <CardContent className="p-0 space-y-4">
+      <CardContent className="space-y-4 p-0">
         {/* Description */}
         {issue?.description && (
           <p
             data-testid="issue-description"
-            className="text-sm text-muted-foreground line-clamp-2 pt-3"
+            className="text-muted-foreground line-clamp-2 pt-3 text-sm"
           >
             {issue.description.length > 150
               ? `${issue.description.substring(0, 150)}...`
@@ -244,17 +193,20 @@ export function SessionCard({ session }: SessionCardProps) {
               data-status={getAgentStatusVariant(session.status)}
               className={cn(
                 'h-3 w-3 rounded-full',
-                (session.status === SessionStatus.Running || session.status === SessionStatus.RunningHooks) && 'bg-green-500 animate-pulse',
+                (session.status === SessionStatus.Running ||
+                  session.status === SessionStatus.RunningHooks) &&
+                  'animate-pulse bg-green-500',
                 (session.status === SessionStatus.Starting ||
-                 session.status === SessionStatus.WaitingForInput ||
-                 session.status === SessionStatus.WaitingForQuestionAnswer ||
-                 session.status === SessionStatus.WaitingForPlanExecution) && 'bg-yellow-500',
-                (session.status === SessionStatus.Stopped || session.status === SessionStatus.Error) && 'bg-gray-500'
+                  session.status === SessionStatus.WaitingForInput ||
+                  session.status === SessionStatus.WaitingForQuestionAnswer ||
+                  session.status === SessionStatus.WaitingForPlanExecution) &&
+                  'bg-yellow-500',
+                (session.status === SessionStatus.Stopped ||
+                  session.status === SessionStatus.Error) &&
+                  'bg-gray-500'
               )}
             />
-            <span className="text-muted-foreground">
-              {getStatusLabel(session.status)}
-            </span>
+            <span className="text-muted-foreground">{getSessionStatusLabel(session.status)}</span>
             <span className="text-muted-foreground">•</span>
             <span className="text-muted-foreground">{session.messageCount || 0} messages</span>
           </div>
@@ -267,7 +219,9 @@ export function SessionCard({ session }: SessionCardProps) {
             <span className="text-muted-foreground truncate">{session.model}</span>
             <span className="text-muted-foreground">•</span>
             <span className="text-muted-foreground">
-              {formatTimeAgo(session.lastActivityAt || session.createdAt || new Date().toISOString())}
+              {formatTimeAgo(
+                session.lastActivityAt || session.createdAt || new Date().toISOString()
+              )}
             </span>
           </div>
         </div>

@@ -3,8 +3,11 @@ import { Skeleton } from '@/components/ui/skeleton'
 
 export function SessionCardSkeleton() {
   return (
-    <Card data-testid="session-card-skeleton" className="rounded-lg border p-4 hover:bg-muted/50 transition-colors">
-      <CardHeader className="p-0 space-y-2">
+    <Card
+      data-testid="session-card-skeleton"
+      className="hover:bg-muted/50 rounded-lg border p-4 transition-colors"
+    >
+      <CardHeader className="space-y-2 p-0">
         {/* Title and stop button row */}
         <div className="flex items-start justify-between gap-2">
           <Skeleton data-testid="title-skeleton" className="h-6 w-3/4 animate-pulse" />
@@ -19,10 +22,13 @@ export function SessionCardSkeleton() {
         </div>
       </CardHeader>
 
-      <CardContent className="p-0 space-y-4">
+      <CardContent className="space-y-4 p-0">
         {/* Description skeleton */}
         <div data-testid="description-skeleton" className="space-y-1 pt-3">
-          <Skeleton data-testid="description-line-1-skeleton" className="h-4 w-full animate-pulse" />
+          <Skeleton
+            data-testid="description-line-1-skeleton"
+            className="h-4 w-full animate-pulse"
+          />
           <Skeleton data-testid="description-line-2-skeleton" className="h-4 w-4/5 animate-pulse" />
         </div>
 
@@ -33,7 +39,7 @@ export function SessionCardSkeleton() {
         <div data-testid="session-info-skeleton" className="space-y-2">
           {/* Agent status row */}
           <div data-testid="agent-status-skeleton" className="flex items-center gap-2">
-            <Skeleton className="h-3 w-3 rounded-full animate-pulse" />
+            <Skeleton className="h-3 w-3 animate-pulse rounded-full" />
             <Skeleton className="h-4 w-24 animate-pulse" />
             <Skeleton className="h-4 w-20 animate-pulse" />
           </div>
