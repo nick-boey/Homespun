@@ -1,4 +1,5 @@
 export { useStartAgent, type StartAgentParams } from './use-start-agent'
+export { useRunAgent, type RunAgentParams, type RunAgentResult } from './use-run-agent'
 export { useAgentPrompts, agentPromptsQueryKey } from './use-agent-prompts'
 export {
   useProjectSessions,

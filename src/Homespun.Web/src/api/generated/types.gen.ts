@@ -582,6 +582,19 @@ export type ResumeSessionRequest = {
     workingDirectory: string | null;
 };
 
+export type RunAgentRequest = {
+    projectId: string | null;
+    promptId: string | null;
+    model?: string | null;
+    baseBranch?: string | null;
+};
+
+export type RunAgentResponse = {
+    sessionId: string | null;
+    branchName: string | null;
+    clonePath: string | null;
+};
+
 export type SecretInfo = {
     name: string | null;
     lastModified?: string | null;
@@ -1908,6 +1921,37 @@ export type PostApiIssuesByIssueIdMoveSiblingResponses = {
 };
 
 export type PostApiIssuesByIssueIdMoveSiblingResponse = PostApiIssuesByIssueIdMoveSiblingResponses[keyof PostApiIssuesByIssueIdMoveSiblingResponses];
+
+export type PostApiIssuesByIssueIdRunData = {
+    body?: RunAgentRequest;
+    path: {
+        issueId: string;
+    };
+    query?: never;
+    url: '/api/issues/{issueId}/run';
+};
+
+export type PostApiIssuesByIssueIdRunErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+};
+
+export type PostApiIssuesByIssueIdRunError = PostApiIssuesByIssueIdRunErrors[keyof PostApiIssuesByIssueIdRunErrors];
+
+export type PostApiIssuesByIssueIdRunResponses = {
+    /**
+     * OK
+     */
+    200: RunAgentResponse;
+};
+
+export type PostApiIssuesByIssueIdRunResponse = PostApiIssuesByIssueIdRunResponses[keyof PostApiIssuesByIssueIdRunResponses];
 
 export type GetApiProjectsByProjectIdIssuesHistoryStateData = {
     body?: never;

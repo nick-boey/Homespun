@@ -157,3 +157,52 @@ public class MoveSeriesSiblingRequest
     /// </summary>
     public MoveDirection Direction { get; set; }
 }
+
+/// <summary>
+/// Request model for running an agent on an issue.
+/// </summary>
+public class RunAgentRequest
+{
+    /// <summary>
+    /// The project ID.
+    /// </summary>
+    public required string ProjectId { get; set; }
+
+    /// <summary>
+    /// The agent prompt ID to use.
+    /// </summary>
+    public required string PromptId { get; set; }
+
+    /// <summary>
+    /// The Claude model to use (e.g., "claude-sonnet-4-20250514").
+    /// If not specified, defaults to project's default model.
+    /// </summary>
+    public string? Model { get; set; }
+
+    /// <summary>
+    /// Base branch to create the working branch from.
+    /// If not specified, defaults to project's default branch.
+    /// </summary>
+    public string? BaseBranch { get; set; }
+}
+
+/// <summary>
+/// Response model for running an agent on an issue.
+/// </summary>
+public class RunAgentResponse
+{
+    /// <summary>
+    /// The created session ID.
+    /// </summary>
+    public required string SessionId { get; set; }
+
+    /// <summary>
+    /// The branch name used for the session.
+    /// </summary>
+    public required string BranchName { get; set; }
+
+    /// <summary>
+    /// The clone path where the agent is working.
+    /// </summary>
+    public required string ClonePath { get; set; }
+}

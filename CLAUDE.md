@@ -27,6 +27,25 @@ The frontend is built with React + Vite + TypeScript + TailwindCSS, with an ASP.
 4. **Test naming** - Use descriptive test names that explain the scenario and expected outcome (e.g., `it('returns error when project not found')`)
 5. **Test coverage** - Aim for comprehensive coverage of business logic and component behavior
 
+### Pre-PR Checklist
+
+**Before creating a pull request, always run the following checks:**
+
+```bash
+cd src/Homespun.Web
+
+# Run linting (must pass with no errors)
+npm run lint
+
+# Run type checking (must pass with no errors)
+npm run typecheck
+
+# Run tests
+npm test
+```
+
+These checks are run in CI and will cause the PR to fail if not passing. Always verify locally first.
+
 ### Project Structure (Vertical Slice Architecture)
 
 The project follows Vertical Slice Architecture where code is organized by feature rather than technical layer. Features are organized at the top level, each containing all related components, hooks, stores, and API calls.

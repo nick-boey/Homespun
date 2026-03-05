@@ -1,8 +1,12 @@
 using Fleece.Core.Models;
+using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Fleece.Services;
+using Homespun.Features.Git;
 using Homespun.Features.Notifications;
 using Homespun.Features.Projects;
 using Homespun.Shared.Models.Fleece;
+using Homespun.Shared.Models.PullRequests;
+using Homespun.Shared.Models.Sessions;
 using Homespun.Shared.Requests;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
@@ -21,6 +25,9 @@ public class IssuesController(
     IHubContext<NotificationHub> notificationHub,
     IIssueBranchResolverService branchResolverService,
     IIssueHistoryService historyService,
+    IClaudeSessionService sessionService,
+    IAgentPromptService agentPromptService,
+    IGitCloneService cloneService,
     ILogger<IssuesController> logger) : ControllerBase
 {
     /// <summary>
@@ -314,6 +321,129 @@ public class IssuesController(
             return BadRequest(ex.Message);
         }
     }
+
+    #region Agent Operations
+
+    /// <summary>
+    /// Run an agent on an issue.
+    /// This endpoint handles the complete agent startup flow:
+    /// 1. Fetches issue data
+    /// 2. Resolves or creates the working branch/clone
+    /// 3. Fetches the prompt and renders the template with issue context
+    /// 4. Creates the session and sends the initial message
+    /// </summary>
+    [HttpPost("issues/{issueId}/run")]
+    [ProducesResponseType<RunAgentResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<RunAgentResponse>> RunAgent(string issueId, [FromBody] RunAgentRequest request)
+    {
+        // Fetch project
+        var project = await projectService.GetByIdAsync(request.ProjectId);
+        if (project == null)
+        {
+            return NotFound("Project not found");
+        }
+
+        // Fetch issue
+        var issue = await fleeceService.GetIssueAsync(project.LocalPath, issueId);
+        if (issue == null)
+        {
+            return NotFound("Issue not found");
+        }
+
+        // Fetch prompt
+        var prompt = agentPromptService.GetPrompt(request.PromptId);
+        if (prompt == null)
+        {
+            return NotFound("Prompt not found");
+        }
+
+        // Resolve branch name - check for existing branch first, then generate from issue
+        var branchName = await branchResolverService.ResolveIssueBranchAsync(request.ProjectId, issueId)
+            ?? BranchNameGenerator.GenerateBranchName(issue);
+
+        // Get or create clone for the branch
+        string? clonePath = await cloneService.GetClonePathForBranchAsync(project.LocalPath, branchName);
+
+        if (string.IsNullOrEmpty(clonePath))
+        {
+            // Clone doesn't exist, create it
+            var baseBranch = !string.IsNullOrEmpty(request.BaseBranch)
+                ? request.BaseBranch
+                : project.DefaultBranch;
+
+            logger.LogInformation("Creating clone for branch {BranchName} from base {BaseBranch}", branchName, baseBranch);
+
+            clonePath = await cloneService.CreateCloneAsync(
+                project.LocalPath,
+                branchName,
+                createBranch: true,
+                baseBranch: baseBranch);
+
+            if (string.IsNullOrEmpty(clonePath))
+            {
+                return BadRequest("Failed to create clone for issue branch");
+            }
+
+            logger.LogInformation("Created clone at {ClonePath} for issue {IssueId}", clonePath, issueId);
+        }
+        else
+        {
+            logger.LogInformation("Using existing clone at {ClonePath} for branch {BranchName}", clonePath, branchName);
+        }
+
+        // Render the prompt template with issue context
+        var promptContext = new PromptContext
+        {
+            Title = issue.Title,
+            Id = issue.Id,
+            Description = issue.Description,
+            Branch = branchName,
+            Type = issue.Type.ToString()
+        };
+
+        var renderedMessage = agentPromptService.RenderTemplate(prompt.InitialMessage, promptContext);
+
+        // Determine model
+        var model = request.Model ?? project.DefaultModel ?? "claude-sonnet-4-20250514";
+
+        // Create session
+        var session = await sessionService.StartSessionAsync(
+            issueId,
+            request.ProjectId,
+            clonePath,
+            prompt.Mode,
+            model,
+            systemPrompt: null);
+
+        // Send the rendered initial message to start agent work
+        if (!string.IsNullOrWhiteSpace(renderedMessage))
+        {
+            // Fire and forget - the message will be processed asynchronously
+            // and clients will receive updates via SignalR
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await sessionService.SendMessageAsync(session.Id, renderedMessage, prompt.Mode);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Error sending initial message for session {SessionId}", session.Id);
+                }
+            });
+        }
+
+        return Ok(new RunAgentResponse
+        {
+            SessionId = session.Id,
+            BranchName = branchName,
+            ClonePath = clonePath
+        });
+    }
+
+    #endregion
 
     #region History Operations
 
