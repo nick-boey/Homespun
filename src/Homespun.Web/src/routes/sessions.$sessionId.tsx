@@ -16,7 +16,7 @@ import { useAnswerQuestion } from '@/features/questions'
 import { useClaudeCodeHub } from '@/providers/signalr-provider'
 import { ArrowLeft, AlertCircle, RefreshCw } from 'lucide-react'
 import { ScrollToBottom } from '@/components/ui/scroll-to-bottom'
-import { Sessions } from '@/api'
+import { Sessions, SessionMode as ApiSessionMode } from '@/api'
 import { toast } from 'sonner'
 import type { ModelSelection } from '@/stores/chat-input-store'
 import type { SessionMode } from '@/types/signalr'
@@ -31,7 +31,6 @@ function SessionChat() {
   const { isConnected } = useClaudeCodeHub()
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [isSending, setIsSending] = useState(false)
-  const [sendError, setSendError] = useState<string | null>(null)
 
   // Get session messages with real-time updates
   const { messages } = useSessionMessages({
@@ -66,18 +65,20 @@ function SessionChat() {
       if (!isConnected) return
 
       setIsSending(true)
-      setSendError(null)
 
       try {
+        // Map our string SessionMode to API's numeric enum
+        const apiMode: ApiSessionMode = sessionMode === 'Plan' ? 1 : 0
+
         await Sessions.postApiSessionsByIdMessages({
           path: { id: sessionId },
-          body: { message, mode: sessionMode }
+          body: { message, mode: apiMode },
         })
-      } catch (error: any) {
-        const errorMessage = error.status === 404
-          ? 'Session not found'
-          : 'Failed to send message'
-        setSendError(errorMessage)
+      } catch (error) {
+        const errorMessage =
+          error && typeof error === 'object' && 'status' in error && error.status === 404
+            ? 'Session not found'
+            : 'Failed to send message'
         toast.error(errorMessage)
       } finally {
         setIsSending(false)

@@ -1,34 +1,30 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { useChatInputStore, type PermissionMode, type ModelSelection } from './chat-input-store'
+import { useChatInputStore, type ModelSelection } from './chat-input-store'
+import { type SessionMode } from '@/types/signalr'
 
 describe('useChatInputStore', () => {
   beforeEach(() => {
     // Reset the store before each test
     useChatInputStore.setState({
-      permissionMode: 'default',
+      sessionMode: 'Build',
       model: 'opus',
     })
   })
 
-  describe('permissionMode', () => {
-    it('has default permission mode as "default"', () => {
+  describe('sessionMode', () => {
+    it('has default session mode as "Build"', () => {
       const state = useChatInputStore.getState()
-      expect(state.permissionMode).toBe('default')
+      expect(state.sessionMode).toBe('Build')
     })
 
-    it('can set permission mode to "bypass"', () => {
-      useChatInputStore.getState().setPermissionMode('bypass')
-      expect(useChatInputStore.getState().permissionMode).toBe('bypass')
+    it('can set session mode to "Plan"', () => {
+      useChatInputStore.getState().setSessionMode('Plan')
+      expect(useChatInputStore.getState().sessionMode).toBe('Plan')
     })
 
-    it('can set permission mode to "accept-edits"', () => {
-      useChatInputStore.getState().setPermissionMode('accept-edits')
-      expect(useChatInputStore.getState().permissionMode).toBe('accept-edits')
-    })
-
-    it('can set permission mode to "plan"', () => {
-      useChatInputStore.getState().setPermissionMode('plan')
-      expect(useChatInputStore.getState().permissionMode).toBe('plan')
+    it('can set session mode to "Build"', () => {
+      useChatInputStore.getState().setSessionMode('Build')
+      expect(useChatInputStore.getState().sessionMode).toBe('Build')
     })
   })
 
@@ -50,9 +46,9 @@ describe('useChatInputStore', () => {
   })
 
   describe('type exports', () => {
-    it('exports PermissionMode type with valid values', () => {
-      const modes: PermissionMode[] = ['default', 'bypass', 'accept-edits', 'plan']
-      expect(modes).toHaveLength(4)
+    it('exports SessionMode type with valid values', () => {
+      const modes: SessionMode[] = ['Build', 'Plan']
+      expect(modes).toHaveLength(2)
     })
 
     it('exports ModelSelection type with valid values', () => {
