@@ -2278,7 +2278,6 @@ public class GitCloneServiceTests
     }
 
     #endregion
-}
 
     #region CreateIssueModifyCloneAsync Tests
 

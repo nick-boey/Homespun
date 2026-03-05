@@ -125,7 +125,6 @@ public class SessionsControllerTests
         // Assert
         Assert.That(result, Is.InstanceOf<NotFoundResult>());
     }
-}
 
     #region Accept/Cancel Issue Changes Tests
 
