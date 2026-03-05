@@ -54,11 +54,14 @@ public class FleeceIssueDiffServiceTests
     {
         // Arrange
         var workingDirectory = "/test/repo";
-        var newIssue = new Issue("test123", "New Feature")
+        var newIssue = new Issue
         {
+            Id = "test123",
+            Title = "New Feature",
             Status = IssueStatus.Open,
             Type = IssueType.Feature,
-            Description = "Test description"
+            Description = "Test description",
+            LastUpdate = DateTimeOffset.UtcNow
         };
         var issueJson = JsonSerializer.Serialize(newIssue);
 
@@ -104,17 +107,23 @@ public class FleeceIssueDiffServiceTests
     {
         // Arrange
         var workingDirectory = "/test/repo";
-        var originalIssue = new Issue("test123", "Original Title")
+        var originalIssue = new Issue
         {
+            Id = "test123",
+            Title = "Original Title",
             Status = IssueStatus.Open,
             Type = IssueType.Feature,
-            Description = "Original description"
+            Description = "Original description",
+            LastUpdate = DateTimeOffset.UtcNow
         };
-        var modifiedIssue = new Issue("test123", "Modified Title")
+        var modifiedIssue = new Issue
         {
+            Id = "test123",
+            Title = "Modified Title",
             Status = IssueStatus.Progress,
             Type = IssueType.Feature,
-            Description = "Modified description"
+            Description = "Modified description",
+            LastUpdate = DateTimeOffset.UtcNow
         };
         var originalJson = JsonSerializer.Serialize(originalIssue);
         var modifiedJson = JsonSerializer.Serialize(modifiedIssue);
@@ -177,11 +186,14 @@ public class FleeceIssueDiffServiceTests
     {
         // Arrange
         var workingDirectory = "/test/repo";
-        var deletedIssue = new Issue("test123", "Deleted Issue")
+        var deletedIssue = new Issue
         {
+            Id = "test123",
+            Title = "Deleted Issue",
             Status = IssueStatus.Complete,
             Type = IssueType.Task,
-            Description = "This will be deleted"
+            Description = "This will be deleted",
+            LastUpdate = DateTimeOffset.UtcNow
         };
         var issueJson = JsonSerializer.Serialize(deletedIssue);
 
@@ -260,7 +272,7 @@ public class FleeceIssueDiffServiceTests
             .ReturnsAsync(new CommandResult
             {
                 Success = true,
-                Output = JsonSerializer.Serialize(new Issue("test123", "Valid Issue")),
+                Output = JsonSerializer.Serialize(new Issue { Id = "test123", Title = "Valid Issue", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }),
                 Error = ""
             });
 
@@ -276,9 +288,9 @@ public class FleeceIssueDiffServiceTests
     {
         // Arrange
         var workingDirectory = "/test/repo";
-        var issue1 = new Issue("test1", "Issue 1");
-        var issue2 = new Issue("test2", "Issue 2");
-        var issue3 = new Issue("test3", "Issue 3");
+        var issue1 = new Issue { Id = "test1", Title = "Issue 1", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow };
+        var issue2 = new Issue { Id = "test2", Title = "Issue 2", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow };
+        var issue3 = new Issue { Id = "test3", Title = "Issue 3", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow };
 
         // Mock git diff showing multiple changes
         _commandRunnerMock.Setup(x => x.RunAsync(
@@ -324,7 +336,7 @@ public class FleeceIssueDiffServiceTests
             .ReturnsAsync(new CommandResult
             {
                 Success = true,
-                Output = JsonSerializer.Serialize(new Issue("test2", "Original Issue 2")),
+                Output = JsonSerializer.Serialize(new Issue { Id = "test2", Title = "Original Issue 2", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }),
                 Error = ""
             });
 

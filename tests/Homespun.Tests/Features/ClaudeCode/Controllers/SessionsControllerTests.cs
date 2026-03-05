@@ -141,7 +141,8 @@ public class SessionsControllerTests
             EntityId = "entity-456",
             ProjectId = "project-789",
             WorkingDirectory = "/test/clone/workdir",
-            SessionType = SessionType.IssueModify,
+            Model = "claude-3-opus-20240229",
+            Mode = SessionMode.Build,
             Status = ClaudeSessionStatus.Running
         };
 
@@ -182,7 +183,11 @@ public class SessionsControllerTests
         var session = new ClaudeSession
         {
             Id = "session-123",
-            SessionType = SessionType.Standard, // Not an issue modify session
+            EntityId = "entity-456",
+            ProjectId = "project-789",
+            WorkingDirectory = "/test/workdir",
+            Model = "claude-3-opus-20240229",
+            Mode = SessionMode.Plan, // Not an issue modify session (Build mode)
             Status = ClaudeSessionStatus.Running
         };
 
@@ -205,7 +210,11 @@ public class SessionsControllerTests
         var session = new ClaudeSession
         {
             Id = "session-123",
-            SessionType = SessionType.IssueModify,
+            EntityId = "entity-456",
+            ProjectId = "project-789",
+            WorkingDirectory = "/test/clone/workdir",
+            Model = "claude-3-opus-20240229",
+            Mode = SessionMode.Build,
             Status = ClaudeSessionStatus.Running
         };
 
@@ -235,7 +244,8 @@ public class SessionsControllerTests
             EntityId = "entity-456",
             ProjectId = "project-789",
             WorkingDirectory = "/test/clone/workdir",
-            SessionType = SessionType.IssueModify,
+            Model = "claude-3-opus-20240229",
+            Mode = SessionMode.Build,
             Status = ClaudeSessionStatus.Running
         };
 
@@ -276,7 +286,11 @@ public class SessionsControllerTests
         var session = new ClaudeSession
         {
             Id = "session-123",
-            SessionType = SessionType.Standard, // Not an issue modify session
+            EntityId = "entity-456",
+            ProjectId = "project-789",
+            WorkingDirectory = "/test/workdir",
+            Model = "claude-3-opus-20240229",
+            Mode = SessionMode.Plan, // Not an issue modify session (Build mode)
             Status = ClaudeSessionStatus.Running
         };
 
@@ -299,7 +313,11 @@ public class SessionsControllerTests
         var session = new ClaudeSession
         {
             Id = "session-123",
-            SessionType = SessionType.IssueModify,
+            EntityId = "entity-456",
+            ProjectId = "project-789",
+            WorkingDirectory = "/test/clone/workdir",
+            Model = "claude-3-opus-20240229",
+            Mode = SessionMode.Build,
             Status = ClaudeSessionStatus.Running
         };
 
