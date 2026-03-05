@@ -201,6 +201,14 @@ string? lane0Color = null,
             }
         }
 
+        // Actionable glow ring (rendered before the node so it appears behind)
+        if (isActionable && agentStatus?.IsActive != true)
+        {
+            // Only show actionable glow if there's no agent status ring
+            var glowRadius = NodeRadius + 4;
+            sb.Append($"<circle cx=\"{cx}\" cy=\"{cy}\" r=\"{glowRadius}\" fill=\"none\" stroke=\"{EscapeAttribute(nodeColor)}\" stroke-width=\"2\" opacity=\"0.4\" />");
+        }
+
         if (isOutlineOnly)
         {
             sb.Append($"<circle cx=\"{cx}\" cy=\"{cy}\" r=\"{NodeRadius}\" fill=\"none\" stroke=\"{EscapeAttribute(nodeColor)}\" stroke-width=\"2\" />");

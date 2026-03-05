@@ -5,7 +5,6 @@
 
 import { memo } from 'react'
 import type { TaskGraphIssueRenderLine } from '../services'
-import { TaskGraphMarkerType } from '../services'
 
 // Constants matching TimelineSvgRenderer.cs
 export const LANE_WIDTH = 24
@@ -187,7 +186,7 @@ export const TaskGraphNodeSvg = memo(function TaskGraphNodeSvg({
       )}
 
       {/* Agent status ring */}
-      {line.agentStatus?.isActive && (
+      {line.agentStatus?.isActive &&
         (() => {
           const color = getAgentStatusColor(line.agentStatus.status)
           return color ? (
@@ -202,8 +201,7 @@ export const TaskGraphNodeSvg = memo(function TaskGraphNodeSvg({
               className="animate-pulse"
             />
           ) : null
-        })()
-      )}
+        })()}
 
       {/* Node circle */}
       {isOutlineOnly ? (

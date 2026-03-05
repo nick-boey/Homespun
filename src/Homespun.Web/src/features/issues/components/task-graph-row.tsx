@@ -199,7 +199,6 @@ export const TaskGraphIssueRow = memo(
             </a>
           )}
 
-
           {/* Hover actions */}
           {showActions && (
             <IssueRowActions
@@ -280,7 +279,6 @@ export const TaskGraphPrRow = memo(
               View
             </a>
           )}
-
         </div>
       </div>
     )
