@@ -13,24 +13,19 @@ import {
   PromptInputActions,
   PromptInputAction,
 } from '@/components/ui/prompt-input'
-import {
-  useChatInputStore,
-  type PermissionMode,
-  type ModelSelection,
-} from '@/stores/chat-input-store'
+import { useChatInputStore, type ModelSelection } from '@/stores/chat-input-store'
+import type { SessionMode } from '@/types/signalr'
 
 export interface ChatInputProps {
-  onSend: (message: string, permissionMode: PermissionMode, model: ModelSelection) => void
+  onSend: (message: string, sessionMode: SessionMode, model: ModelSelection) => void
   disabled?: boolean
   isLoading?: boolean
   placeholder?: string
 }
 
-const PERMISSION_MODE_LABELS: Record<PermissionMode, string> = {
-  default: 'Default',
-  bypass: 'Bypass Permissions',
-  'accept-edits': 'Accept Edits',
-  plan: 'Plan Mode',
+const SESSION_MODE_LABELS: Record<SessionMode, string> = {
+  Build: 'Build Mode',
+  Plan: 'Plan Mode',
 }
 
 const MODEL_LABELS: Record<ModelSelection, string> = {
@@ -46,21 +41,21 @@ export function ChatInput({
   placeholder = 'Type a message...',
 }: ChatInputProps) {
   const [value, setValue] = useState('')
-  const { permissionMode, model, setPermissionMode, setModel } = useChatInputStore()
+  const { sessionMode, model, setSessionMode, setModel } = useChatInputStore()
 
   const handleSubmit = useCallback(() => {
     const trimmedValue = value.trim()
     if (!trimmedValue || disabled) return
 
-    onSend(trimmedValue, permissionMode, model)
+    onSend(trimmedValue, sessionMode, model)
     setValue('')
-  }, [value, disabled, onSend, permissionMode, model])
+  }, [value, disabled, onSend, sessionMode, model])
 
-  const handlePermissionModeChange = useCallback(
-    (mode: PermissionMode) => {
-      setPermissionMode(mode)
+  const handleSessionModeChange = useCallback(
+    (mode: SessionMode) => {
+      setSessionMode(mode)
     },
-    [setPermissionMode]
+    [setSessionMode]
   )
 
   const handleModelChange = useCallback(
@@ -82,31 +77,25 @@ export function ChatInput({
       <PromptInputTextarea placeholder={placeholder} />
       <PromptInputActions className="justify-between px-2 pb-2">
         <div className="flex items-center gap-2">
-          {/* Permission Mode Selector */}
+          {/* Session Mode Selector */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
                 size="sm"
                 className="gap-1"
-                aria-label="Permission mode"
+                aria-label="Session mode"
                 disabled={disabled}
               >
                 <Shield className="h-4 w-4" />
-                <span className="hidden sm:inline">{PERMISSION_MODE_LABELS[permissionMode]}</span>
+                <span className="hidden sm:inline">{SESSION_MODE_LABELS[sessionMode]}</span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
-              <DropdownMenuItem onClick={() => handlePermissionModeChange('default')}>
-                Default
+              <DropdownMenuItem onClick={() => handleSessionModeChange('Build')}>
+                Build Mode
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handlePermissionModeChange('bypass')}>
-                Bypass Permissions
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handlePermissionModeChange('accept-edits')}>
-                Accept Edits
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handlePermissionModeChange('plan')}>
+              <DropdownMenuItem onClick={() => handleSessionModeChange('Plan')}>
                 Plan Mode
               </DropdownMenuItem>
             </DropdownMenuContent>

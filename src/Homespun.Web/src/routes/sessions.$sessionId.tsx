@@ -16,7 +16,9 @@ import { useAnswerQuestion } from '@/features/questions'
 import { useClaudeCodeHub } from '@/providers/signalr-provider'
 import { ArrowLeft, AlertCircle, RefreshCw } from 'lucide-react'
 import { ScrollToBottom } from '@/components/ui/scroll-to-bottom'
-import type { PermissionMode, ModelSelection } from '@/stores/chat-input-store'
+import { Sessions } from '@/api'
+import { toast } from 'sonner'
+import type { ModelSelection } from '@/stores/chat-input-store'
 import type { SessionMode } from '@/types/signalr'
 
 export const Route = createFileRoute('/sessions/$sessionId')({
@@ -26,9 +28,10 @@ export const Route = createFileRoute('/sessions/$sessionId')({
 function SessionChat() {
   const { sessionId } = useParams({ from: '/sessions/$sessionId' })
   const { session, isLoading, isNotFound, error, refetch } = useSession(sessionId)
-  const { methods, isConnected } = useClaudeCodeHub()
+  const { isConnected } = useClaudeCodeHub()
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [isSending, setIsSending] = useState(false)
+  const [sendError, setSendError] = useState<string | null>(null)
 
   // Get session messages with real-time updates
   const { messages } = useSessionMessages({
@@ -59,20 +62,28 @@ function SessionChat() {
 
   // Handle sending messages
   const handleSend = useCallback(
-    async (message: string, permissionMode: PermissionMode, _model: ModelSelection) => {
-      if (!methods || !isConnected) return
-
-      // Map permission mode to session mode
-      const sessionMode: SessionMode = permissionMode === 'plan' ? 'Plan' : 'Build'
+    async (message: string, sessionMode: SessionMode, _model: ModelSelection) => {
+      if (!isConnected) return
 
       setIsSending(true)
+      setSendError(null)
+
       try {
-        await methods.sendMessage(sessionId, message, sessionMode)
+        await Sessions.postApiSessionsByIdMessages({
+          path: { id: sessionId },
+          body: { message, mode: sessionMode }
+        })
+      } catch (error: any) {
+        const errorMessage = error.status === 404
+          ? 'Session not found'
+          : 'Failed to send message'
+        setSendError(errorMessage)
+        toast.error(errorMessage)
       } finally {
         setIsSending(false)
       }
     },
-    [methods, isConnected, sessionId]
+    [isConnected, sessionId]
   )
 
   // Auto-scroll to bottom when new messages arrive or when pending question appears
