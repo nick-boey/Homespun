@@ -878,14 +878,14 @@ public class MockClaudeSessionService : IClaudeSessionService
     /// </summary>
     public Task<string> AcceptIssueChangesAsync(string sessionId, CancellationToken cancellationToken = default)
     {
-        var session = _sessions.GetValueOrDefault(sessionId);
+        var session = _sessionStore.GetById(sessionId);
         if (session == null)
         {
             throw new KeyNotFoundException($"Session with ID {sessionId} not found");
         }
 
         // Simulate stopping the session
-        session.State = SessionState.Stopped;
+        session.State = Shared.Models.Sessions.SessionState.Stopped;
         session.StoppedAt = DateTime.UtcNow;
 
         // Return mock redirect URL
@@ -897,14 +897,14 @@ public class MockClaudeSessionService : IClaudeSessionService
     /// </summary>
     public Task<string> CancelIssueChangesAsync(string sessionId, CancellationToken cancellationToken = default)
     {
-        var session = _sessions.GetValueOrDefault(sessionId);
+        var session = _sessionStore.GetById(sessionId);
         if (session == null)
         {
             throw new KeyNotFoundException($"Session with ID {sessionId} not found");
         }
 
         // Simulate stopping the session
-        session.State = SessionState.Stopped;
+        session.State = Shared.Models.Sessions.SessionState.Stopped;
         session.StoppedAt = DateTime.UtcNow;
 
         // Return mock redirect URL

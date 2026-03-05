@@ -4,6 +4,7 @@ using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Commands;
 using Homespun.Features.Containers.Services;
 using Homespun.Features.Fleece.Services;
+using Homespun.Server.Features.Fleece.Services;
 using Homespun.Features.Git;
 using Homespun.Features.GitHub;
 using Homespun.Features.Gitgraph.Services;
