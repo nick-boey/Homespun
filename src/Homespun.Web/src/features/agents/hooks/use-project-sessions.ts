@@ -45,6 +45,18 @@ export function useProjectSessions(projectId: string) {
 export function useActiveSessionCount(projectId: string) {
   const { data: sessions, ...rest } = useProjectSessions(projectId)
 
+  // If no projectId, return empty results
+  if (!projectId) {
+    return {
+      count: 0,
+      hasActive: false,
+      isProcessing: false,
+      activeSessions: [],
+      ...rest,
+      isLoading: false,
+    }
+  }
+
   const result = useMemo(() => {
     const activeSessions = (sessions ?? []).filter((s) =>
       ACTIVE_STATUSES.includes(s.status as ClaudeSessionStatus)

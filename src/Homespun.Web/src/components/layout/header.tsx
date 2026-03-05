@@ -56,11 +56,7 @@ export function Header({ projectId, onMenuClick, className }: HeaderProps) {
 
       <div className="flex items-center gap-2">
         <NotificationDropdown projectId={projectId} />
-        {projectId ? (
-          <ActiveAgentsIndicator projectId={projectId} />
-        ) : (
-          <span className="text-muted-foreground text-sm">Select a project</span>
-        )}
+        <ActiveAgentsIndicator projectId={projectId} />
       </div>
     </header>
   )

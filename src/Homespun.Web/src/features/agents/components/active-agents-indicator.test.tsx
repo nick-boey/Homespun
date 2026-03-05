@@ -9,6 +9,7 @@ import type { SessionSummary } from '@/api/generated/types.gen'
 vi.mock('@/api', () => ({
   Sessions: {
     getApiSessionsProjectByProjectId: vi.fn(),
+    getApiSessions: vi.fn(),
   },
 }))
 
@@ -23,6 +24,7 @@ vi.mock('@tanstack/react-router', async () => {
 })
 
 const mockGetProjectSessions = vi.mocked(Sessions.getApiSessionsProjectByProjectId)
+const mockGetAllSessions = vi.mocked(Sessions.getApiSessions)
 
 // Helper to create mock API response
 function createMockResponse<T>(data: T) {
@@ -146,6 +148,153 @@ describe('ActiveAgentsIndicator', () => {
     await waitFor(() => {
       const indicator = screen.getByTestId('status-indicator')
       expect(indicator).toHaveClass('animate-pulse')
+    })
+  })
+
+  describe('global status indicators', () => {
+    it('shows multiple status indicators for different agent states', async () => {
+      mockGetAllSessions.mockResolvedValueOnce(
+        createMockResponse([
+          createSessionSummary({ id: 'session-1', status: 2 as const }), // Running
+          createSessionSummary({ id: 'session-2', status: 3 as const }), // WaitingForInput
+          createSessionSummary({ id: 'session-3', status: 4 as const }), // WaitingForQuestionAnswer
+          createSessionSummary({ id: 'session-4', status: 5 as const }), // WaitingForPlanExecution
+        ])
+      )
+
+      render(<ActiveAgentsIndicator />, { wrapper: createWrapper() })
+
+      await waitFor(() => {
+        // Should show working count
+        expect(screen.getByTestId('status-working')).toBeInTheDocument()
+        expect(screen.getByTestId('status-working-count')).toHaveTextContent('1')
+
+        // Should show waiting for input count
+        expect(screen.getByTestId('status-waiting-input')).toBeInTheDocument()
+        expect(screen.getByTestId('status-waiting-input-count')).toHaveTextContent('1')
+
+        // Should show waiting for answer count
+        expect(screen.getByTestId('status-waiting-answer')).toBeInTheDocument()
+        expect(screen.getByTestId('status-waiting-answer-count')).toHaveTextContent('1')
+
+        // Should show waiting for plan count
+        expect(screen.getByTestId('status-waiting-plan')).toBeInTheDocument()
+        expect(screen.getByTestId('status-waiting-plan-count')).toHaveTextContent('1')
+      })
+    })
+
+    it('hides status indicators with zero counts', async () => {
+      mockGetAllSessions.mockResolvedValueOnce(
+        createMockResponse([
+          createSessionSummary({ id: 'session-1', status: 2 as const }), // Running
+          createSessionSummary({ id: 'session-2', status: 2 as const }), // Running
+        ])
+      )
+
+      render(<ActiveAgentsIndicator />, { wrapper: createWrapper() })
+
+      await waitFor(() => {
+        // Should show working count
+        expect(screen.getByTestId('status-working')).toBeInTheDocument()
+        expect(screen.getByTestId('status-working-count')).toHaveTextContent('2')
+
+        // Should NOT show other statuses with zero count
+        expect(screen.queryByTestId('status-waiting-input')).not.toBeInTheDocument()
+        expect(screen.queryByTestId('status-waiting-answer')).not.toBeInTheDocument()
+        expect(screen.queryByTestId('status-waiting-plan')).not.toBeInTheDocument()
+        expect(screen.queryByTestId('status-error')).not.toBeInTheDocument()
+      })
+    })
+
+    it('shows error status with correct color', async () => {
+      mockGetAllSessions.mockResolvedValueOnce(
+        createMockResponse([
+          createSessionSummary({ id: 'session-1', status: 7 as const }), // Error
+          createSessionSummary({ id: 'session-2', status: 2 as const }), // Running
+        ])
+      )
+
+      render(<ActiveAgentsIndicator />, { wrapper: createWrapper() })
+
+      await waitFor(() => {
+        const errorIndicator = screen.getByTestId('status-error')
+        expect(errorIndicator).toBeInTheDocument()
+        expect(errorIndicator).toHaveClass('text-red-500')
+        expect(screen.getByTestId('status-error-count')).toHaveTextContent('1')
+      })
+    })
+
+    it('shows correct colors for each status type', async () => {
+      mockGetAllSessions.mockResolvedValueOnce(
+        createMockResponse([
+          createSessionSummary({ id: 'session-1', status: 2 as const }), // Running
+          createSessionSummary({ id: 'session-2', status: 3 as const }), // WaitingForInput
+          createSessionSummary({ id: 'session-3', status: 4 as const }), // WaitingForQuestionAnswer
+          createSessionSummary({ id: 'session-4', status: 5 as const }), // WaitingForPlanExecution
+          createSessionSummary({ id: 'session-5', status: 7 as const }), // Error
+        ])
+      )
+
+      render(<ActiveAgentsIndicator />, { wrapper: createWrapper() })
+
+      await waitFor(() => {
+        // Check count text color as a proxy for status color
+        expect(screen.getByTestId('status-working-count')).toHaveClass('text-blue-500')
+        expect(screen.getByTestId('status-waiting-input-count')).toHaveClass('text-yellow-500')
+        expect(screen.getByTestId('status-waiting-answer-count')).toHaveClass('text-orange-500')
+        expect(screen.getByTestId('status-waiting-plan-count')).toHaveClass('text-purple-500')
+        expect(screen.getByTestId('status-error-count')).toHaveClass('text-red-500')
+      })
+    })
+
+    it('shows pinging animation only for working status', async () => {
+      mockGetAllSessions.mockResolvedValueOnce(
+        createMockResponse([
+          createSessionSummary({ id: 'session-1', status: 2 as const }), // Running
+          createSessionSummary({ id: 'session-2', status: 3 as const }), // WaitingForInput
+          createSessionSummary({ id: 'session-3', status: 7 as const }), // Error
+        ])
+      )
+
+      render(<ActiveAgentsIndicator />, { wrapper: createWrapper() })
+
+      await waitFor(() => {
+        // Working status should have ping animation
+        const workingDot = screen.getByTestId('status-working')
+        expect(workingDot.querySelector('.animate-ping')).toBeInTheDocument()
+
+        // Other statuses should not have ping animation
+        const waitingDot = screen.getByTestId('status-waiting-input')
+        expect(waitingDot.querySelector('.animate-ping')).not.toBeInTheDocument()
+
+        const errorDot = screen.getByTestId('status-error')
+        expect(errorDot.querySelector('.animate-ping')).not.toBeInTheDocument()
+      })
+    })
+
+    it('navigates to global sessions page when clicked', async () => {
+      mockGetAllSessions.mockResolvedValueOnce(
+        createMockResponse([
+          createSessionSummary({ id: 'session-1', status: 2 as const }),
+        ])
+      )
+
+      render(<ActiveAgentsIndicator />, { wrapper: createWrapper() })
+
+      await waitFor(() => {
+        const link = screen.getByRole('link')
+        expect(link).toHaveAttribute('href', '/sessions')
+      })
+    })
+
+    it('shows idle state when no sessions exist globally', async () => {
+      mockGetAllSessions.mockResolvedValueOnce(createMockResponse<SessionSummary[]>([]))
+
+      render(<ActiveAgentsIndicator />, { wrapper: createWrapper() })
+
+      await waitFor(() => {
+        expect(screen.getByText(/idle/i)).toBeInTheDocument()
+      })
     })
   })
 })
