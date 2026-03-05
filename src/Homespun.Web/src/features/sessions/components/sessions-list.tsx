@@ -1,11 +1,10 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
-import { Link } from '@tanstack/react-router'
-import { AlertCircle, RefreshCw, Square, Terminal } from 'lucide-react'
-import { useSessions, useStopSession, sessionsQueryKey } from '../hooks/use-sessions'
+import { AlertCircle, RefreshCw, Terminal } from 'lucide-react'
+import { useSessions, sessionsQueryKey } from '../hooks/use-sessions'
 import { SessionsEmptyState } from './sessions-empty-state'
-import { SessionRowSkeleton } from './session-row-skeleton'
+import { SessionCard } from './session-card'
+import { SessionCardSkeleton } from './session-card-skeleton'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import {
   Select,
   SelectContent,
@@ -13,29 +12,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useClaudeCodeHub } from '@/providers/signalr-provider'
 import { registerClaudeCodeHubEvents } from '@/lib/signalr/claude-code-hub'
-import type { ClaudeSessionStatus } from '@/api/generated'
 import { useQueryClient } from '@tanstack/react-query'
+import type { ClaudeSessionStatus } from '@/api/generated'
 
 // Status enum values from backend
 const SessionStatus = {
@@ -51,49 +32,6 @@ const SessionStatus = {
 
 type StatusFilter = 'all' | 'active' | 'stopped' | 'error'
 
-function getStatusLabel(status: ClaudeSessionStatus | undefined): string {
-  switch (status) {
-    case SessionStatus.Starting:
-      return 'Starting'
-    case SessionStatus.RunningHooks:
-      return 'Running Hooks'
-    case SessionStatus.Running:
-      return 'Running'
-    case SessionStatus.WaitingForInput:
-      return 'Waiting'
-    case SessionStatus.WaitingForQuestionAnswer:
-      return 'Question'
-    case SessionStatus.WaitingForPlanExecution:
-      return 'Plan Ready'
-    case SessionStatus.Stopped:
-      return 'Stopped'
-    case SessionStatus.Error:
-      return 'Error'
-    default:
-      return 'Unknown'
-  }
-}
-
-function getStatusVariant(
-  status: ClaudeSessionStatus | undefined
-): 'default' | 'secondary' | 'destructive' | 'outline' {
-  switch (status) {
-    case SessionStatus.Running:
-    case SessionStatus.RunningHooks:
-      return 'default'
-    case SessionStatus.Starting:
-    case SessionStatus.WaitingForInput:
-    case SessionStatus.WaitingForQuestionAnswer:
-    case SessionStatus.WaitingForPlanExecution:
-      return 'secondary'
-    case SessionStatus.Error:
-      return 'destructive'
-    case SessionStatus.Stopped:
-    default:
-      return 'outline'
-  }
-}
-
 function isActiveStatus(status: ClaudeSessionStatus | undefined): boolean {
   return (
     status === SessionStatus.Starting ||
@@ -105,42 +43,13 @@ function isActiveStatus(status: ClaudeSessionStatus | undefined): boolean {
   )
 }
 
-function formatRelativeTime(dateString: string | undefined): string {
-  if (!dateString) return 'Unknown'
-
-  const date = new Date(dateString)
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-  const diffSecs = Math.floor(diffMs / 1000)
-  const diffMins = Math.floor(diffSecs / 60)
-  const diffHours = Math.floor(diffMins / 60)
-  const diffDays = Math.floor(diffHours / 24)
-
-  if (diffDays > 0) {
-    return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`
-  }
-  if (diffHours > 0) {
-    return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`
-  }
-  if (diffMins > 0) {
-    return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`
-  }
-  return 'just now'
-}
-
-function getModeLabel(mode: number): string {
-  return mode === 0 ? 'Plan' : 'Build'
-}
-
 export function SessionsList() {
   const { data: sessions, isLoading, isError, refetch } = useSessions()
-  const stopSession = useStopSession()
   const queryClient = useQueryClient()
   const { connection, isConnected } = useClaudeCodeHub()
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [activeTab, setActiveTab] = useState<'active' | 'archived'>('active')
-  const [sessionToStop, setSessionToStop] = useState<string | null>(null)
 
   // Subscribe to SignalR events for real-time updates
   useEffect(() => {
@@ -163,24 +72,6 @@ export function SessionsList() {
 
     return cleanup
   }, [connection, isConnected, queryClient])
-
-  const handleStopSession = useCallback(
-    (sessionId: string) => {
-      setSessionToStop(sessionId)
-    },
-    [setSessionToStop]
-  )
-
-  const confirmStopSession = useCallback(() => {
-    if (sessionToStop) {
-      stopSession.mutate(sessionToStop)
-      setSessionToStop(null)
-    }
-  }, [sessionToStop, stopSession])
-
-  const cancelStopSession = useCallback(() => {
-    setSessionToStop(null)
-  }, [])
 
   const filteredSessions = useMemo(() => {
     if (!sessions) return []
@@ -233,25 +124,10 @@ export function SessionsList() {
             </TabsList>
           </Tabs>
         </div>
-        <div className="rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[200px]">Session</TableHead>
-                <TableHead>Entity</TableHead>
-                <TableHead>Mode</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Messages</TableHead>
-                <TableHead>Last Activity</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {[1, 2, 3].map((i) => (
-                <SessionRowSkeleton key={i} />
-              ))}
-            </TableBody>
-          </Table>
+        <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <SessionCardSkeleton key={i} />
+          ))}
         </div>
       </div>
     )
@@ -334,11 +210,11 @@ export function SessionsList() {
                 <p className="mt-4">No active sessions</p>
               </div>
             ) : (
-              <SessionsTable
-                sessions={filteredSessions}
-                onStopSession={handleStopSession}
-                isStopPending={stopSession.isPending}
-              />
+              <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+                {filteredSessions.map((session) => (
+                  <SessionCard key={session.id} session={session} />
+                ))}
+              </div>
             )}
           </TabsContent>
 
@@ -349,113 +225,15 @@ export function SessionsList() {
                 <p className="mt-4">No archived sessions</p>
               </div>
             ) : (
-              <SessionsTable sessions={filteredSessions} />
+              <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+                {filteredSessions.map((session) => (
+                  <SessionCard key={session.id} session={session} />
+                ))}
+              </div>
             )}
           </TabsContent>
         </Tabs>
       </div>
-
-      <AlertDialog
-        open={sessionToStop !== null}
-        onOpenChange={(open) => !open && cancelStopSession()}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Stop Session</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to stop this session? This will terminate the running agent.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={cancelStopSession}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmStopSession}>Stop Session</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
-  )
-}
-
-interface SessionsTableProps {
-  sessions: Array<{
-    id: string | null
-    entityId: string | null
-    projectId: string | null
-    model: string | null
-    mode: number
-    status?: ClaudeSessionStatus
-    createdAt?: string
-    lastActivityAt?: string
-    messageCount?: number
-    totalCostUsd?: number
-    containerId?: string | null
-    containerName?: string | null
-  }>
-  onStopSession?: (sessionId: string) => void
-  isStopPending?: boolean
-}
-
-function SessionsTable({ sessions, onStopSession, isStopPending }: SessionsTableProps) {
-  return (
-    <div className="rounded-md border">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-[200px]">Session</TableHead>
-            <TableHead>Entity</TableHead>
-            <TableHead>Mode</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Messages</TableHead>
-            <TableHead>Last Activity</TableHead>
-            <TableHead className="text-right">Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {sessions.map((session) => (
-            <TableRow key={session.id}>
-              <TableCell className="font-mono text-sm">
-                <Link
-                  to="/sessions/$sessionId"
-                  params={{ sessionId: session.id ?? '' }}
-                  className="hover:underline"
-                  aria-label={session.id ?? ''}
-                >
-                  {session.id}
-                </Link>
-              </TableCell>
-              <TableCell>
-                <span className="font-mono text-sm">{session.entityId}</span>
-              </TableCell>
-              <TableCell>
-                <Badge variant="outline">{getModeLabel(session.mode)}</Badge>
-              </TableCell>
-              <TableCell>
-                <Badge variant={getStatusVariant(session.status)}>
-                  {getStatusLabel(session.status)}
-                </Badge>
-              </TableCell>
-              <TableCell>{session.messageCount ?? 0}</TableCell>
-              <TableCell className="text-muted-foreground text-sm">
-                {formatRelativeTime(session.lastActivityAt)}
-              </TableCell>
-              <TableCell className="text-right">
-                {isActiveStatus(session.status) && onStopSession && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => session.id && onStopSession(session.id)}
-                    disabled={isStopPending}
-                    aria-label="Stop"
-                  >
-                    <Square className="mr-1 h-3 w-3" />
-                    Stop
-                  </Button>
-                )}
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
     </div>
   )
 }
