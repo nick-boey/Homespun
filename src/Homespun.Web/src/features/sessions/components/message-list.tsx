@@ -93,7 +93,7 @@ export function MessageList({
           <Card className="max-w-[90%]">
             <CardContent className="flex items-center gap-2 p-4">
               <Loader2 className="h-4 w-4 animate-spin" />
-              <span className="text-sm text-muted-foreground">Processing your answer...</span>
+              <span className="muted-foreground text-sm">Processing your answer...</span>
             </CardContent>
           </Card>
         </div>
