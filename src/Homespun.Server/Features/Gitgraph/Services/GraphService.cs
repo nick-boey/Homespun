@@ -597,6 +597,9 @@ public class GraphService(
                 }).ToList()
             };
 
+            // Sort actionable issues by priority then age within their groups
+            SortActionableIssuesByPriorityAndAge(response.Nodes);
+
             // Get merged/closed PRs
             cacheService.LoadCacheForProject(projectId, project.LocalPath);
             var cachedData = cacheService.GetCachedPRData(projectId);
@@ -670,5 +673,64 @@ public class GraphService(
             logger.LogWarning(ex, "Failed to build enhanced task graph for project {ProjectId}", projectId);
             return null;
         }
+    }
+
+    /// <summary>
+    /// Sorts actionable issues by priority (lowest number first) then by age (oldest first) within their groups.
+    /// Maintains the original positions of non-actionable issues and preserves lane grouping.
+    /// </summary>
+    private static void SortActionableIssuesByPriorityAndAge(List<TaskGraphNodeResponse> nodes)
+    {
+        // Group nodes by lane to maintain the task graph grouping
+        var nodesByLane = nodes.GroupBy(n => n.Lane).ToList();
+
+        foreach (var laneGroup in nodesByLane)
+        {
+            var nodesInLane = laneGroup.OrderBy(n => n.Row).ToList();
+
+            // Separate actionable and non-actionable nodes
+            var actionableNodes = nodesInLane.Where(n => n.IsActionable).ToList();
+            var nonActionableNodes = nodesInLane.Where(n => !n.IsActionable).ToList();
+
+            if (actionableNodes.Count <= 1)
+            {
+                // No need to sort if there's 0 or 1 actionable issue
+                continue;
+            }
+
+            // Sort actionable nodes by priority (nulls last), then by creation date (oldest first)
+            var sortedActionable = actionableNodes
+                .OrderBy(n => n.Issue.Priority ?? int.MaxValue) // Null priorities go to the end
+                .ThenBy(n => n.Issue.CreatedAt)
+                .ToList();
+
+            // Create a mapping of original positions to nodes
+            var originalPositions = nodesInLane.ToDictionary(n => n.Row, n => n);
+
+            // Build the new row assignments
+            int actionableIndex = 0;
+            int minRow = nodesInLane.Min(n => n.Row);
+
+            for (int i = 0; i < nodesInLane.Count; i++)
+            {
+                var currentRow = minRow + i;
+                var originalNode = originalPositions[currentRow];
+
+                if (originalNode.IsActionable)
+                {
+                    // Replace with sorted actionable node
+                    var sortedNode = sortedActionable[actionableIndex++];
+                    sortedNode.Row = currentRow;
+                }
+                // Non-actionable nodes keep their rows (already set)
+            }
+        }
+
+        // Sort the entire list by row to maintain order
+        nodes.Sort((a, b) =>
+        {
+            var laneCompare = a.Lane.CompareTo(b.Lane);
+            return laneCompare != 0 ? laneCompare : a.Row.CompareTo(b.Row);
+        });
     }
 }
