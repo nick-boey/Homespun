@@ -11,7 +11,7 @@ describe('ChatInput', () => {
     vi.clearAllMocks()
     // Reset the store to defaults
     useChatInputStore.setState({
-      permissionMode: 'default',
+      sessionMode: 'Build',
       model: 'opus',
     })
   })
@@ -29,10 +29,10 @@ describe('ChatInput', () => {
       expect(screen.getByRole('button', { name: /send/i })).toBeInTheDocument()
     })
 
-    it('renders the permission mode selector', () => {
+    it('renders the session mode selector', () => {
       render(<ChatInput onSend={mockOnSend} />)
 
-      expect(screen.getByRole('button', { name: /permission/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /session mode/i })).toBeInTheDocument()
     })
 
     it('renders the model selector', () => {
@@ -51,7 +51,7 @@ describe('ChatInput', () => {
       await user.type(input, 'Hello Claude')
       await user.click(screen.getByRole('button', { name: /send/i }))
 
-      expect(mockOnSend).toHaveBeenCalledWith('Hello Claude', 'default', 'opus')
+      expect(mockOnSend).toHaveBeenCalledWith('Hello Claude', 'Build', 'opus')
     })
 
     it('calls onSend with message when Enter is pressed', async () => {
@@ -61,7 +61,7 @@ describe('ChatInput', () => {
       const input = screen.getByPlaceholderText(/message/i)
       await user.type(input, 'Hello Claude{Enter}')
 
-      expect(mockOnSend).toHaveBeenCalledWith('Hello Claude', 'default', 'opus')
+      expect(mockOnSend).toHaveBeenCalledWith('Hello Claude', 'Build', 'opus')
     })
 
     it('does not send when Shift+Enter is pressed (adds new line)', async () => {
@@ -137,56 +137,47 @@ describe('ChatInput', () => {
     })
   })
 
-  describe('permission mode selector', () => {
-    it('displays default permission mode initially', () => {
+  describe('session mode selector', () => {
+    it('displays Build mode initially', () => {
       render(<ChatInput onSend={mockOnSend} />)
 
-      expect(screen.getByRole('button', { name: /permission/i })).toHaveTextContent(/default/i)
+      expect(screen.getByRole('button', { name: /session mode/i })).toHaveTextContent(/build/i)
     })
 
-    it('can select bypass permissions mode', async () => {
+    it('can select Plan mode', async () => {
       const user = userEvent.setup()
       render(<ChatInput onSend={mockOnSend} />)
 
-      await user.click(screen.getByRole('button', { name: /permission/i }))
-      await user.click(screen.getByRole('menuitem', { name: /bypass/i }))
+      await user.click(screen.getByRole('button', { name: /session mode/i }))
+      await user.click(screen.getByRole('menuitem', { name: /plan mode/i }))
 
-      expect(useChatInputStore.getState().permissionMode).toBe('bypass')
+      expect(useChatInputStore.getState().sessionMode).toBe('Plan')
     })
 
-    it('can select accept edits mode', async () => {
+    it('can select Build mode from Plan mode', async () => {
+      const user = userEvent.setup()
+      useChatInputStore.setState({ sessionMode: 'Plan' })
+      render(<ChatInput onSend={mockOnSend} />)
+
+      await user.click(screen.getByRole('button', { name: /session mode/i }))
+      await user.click(screen.getByRole('menuitem', { name: /build mode/i }))
+
+      expect(useChatInputStore.getState().sessionMode).toBe('Build')
+    })
+
+    it('sends message with selected session mode', async () => {
       const user = userEvent.setup()
       render(<ChatInput onSend={mockOnSend} />)
 
-      await user.click(screen.getByRole('button', { name: /permission/i }))
-      await user.click(screen.getByRole('menuitem', { name: /accept edits/i }))
-
-      expect(useChatInputStore.getState().permissionMode).toBe('accept-edits')
-    })
-
-    it('can select plan mode', async () => {
-      const user = userEvent.setup()
-      render(<ChatInput onSend={mockOnSend} />)
-
-      await user.click(screen.getByRole('button', { name: /permission/i }))
-      await user.click(screen.getByRole('menuitem', { name: /plan/i }))
-
-      expect(useChatInputStore.getState().permissionMode).toBe('plan')
-    })
-
-    it('sends message with selected permission mode', async () => {
-      const user = userEvent.setup()
-      render(<ChatInput onSend={mockOnSend} />)
-
-      // Select bypass mode
-      await user.click(screen.getByRole('button', { name: /permission/i }))
-      await user.click(screen.getByRole('menuitem', { name: /bypass/i }))
+      // Select Plan mode
+      await user.click(screen.getByRole('button', { name: /session mode/i }))
+      await user.click(screen.getByRole('menuitem', { name: /plan mode/i }))
 
       // Send message
       const input = screen.getByPlaceholderText(/message/i)
       await user.type(input, 'Hello{Enter}')
 
-      expect(mockOnSend).toHaveBeenCalledWith('Hello', 'bypass', 'opus')
+      expect(mockOnSend).toHaveBeenCalledWith('Hello', 'Plan', 'opus')
     })
   })
 
@@ -229,16 +220,16 @@ describe('ChatInput', () => {
       const input = screen.getByPlaceholderText(/message/i)
       await user.type(input, 'Hello{Enter}')
 
-      expect(mockOnSend).toHaveBeenCalledWith('Hello', 'default', 'sonnet')
+      expect(mockOnSend).toHaveBeenCalledWith('Hello', 'Build', 'sonnet')
     })
   })
 
   describe('persisted state', () => {
-    it('uses persisted permission mode from store', () => {
-      useChatInputStore.setState({ permissionMode: 'plan' })
+    it('uses persisted session mode from store', () => {
+      useChatInputStore.setState({ sessionMode: 'Plan' })
       render(<ChatInput onSend={mockOnSend} />)
 
-      expect(screen.getByRole('button', { name: /permission/i })).toHaveTextContent(/plan/i)
+      expect(screen.getByRole('button', { name: /session mode/i })).toHaveTextContent(/plan/i)
     })
 
     it('uses persisted model from store', () => {

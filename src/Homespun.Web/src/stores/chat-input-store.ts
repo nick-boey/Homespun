@@ -1,14 +1,13 @@
 import { create } from 'zustand'
 import { devtools, persist } from 'zustand/middleware'
-
-export type PermissionMode = 'default' | 'bypass' | 'accept-edits' | 'plan'
+import type { SessionMode } from '@/types/signalr'
 
 export type ModelSelection = 'opus' | 'sonnet' | 'haiku'
 
 interface ChatInputState {
-  permissionMode: PermissionMode
+  sessionMode: SessionMode
   model: ModelSelection
-  setPermissionMode: (mode: PermissionMode) => void
+  setSessionMode: (mode: SessionMode) => void
   setModel: (model: ModelSelection) => void
 }
 
@@ -16,9 +15,9 @@ export const useChatInputStore = create<ChatInputState>()(
   devtools(
     persist(
       (set) => ({
-        permissionMode: 'default',
+        sessionMode: 'Build' as SessionMode,
         model: 'opus',
-        setPermissionMode: (mode) => set({ permissionMode: mode }),
+        setSessionMode: (mode) => set({ sessionMode: mode }),
         setModel: (model) => set({ model }),
       }),
       {
