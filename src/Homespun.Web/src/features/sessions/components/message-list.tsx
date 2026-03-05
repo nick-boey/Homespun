@@ -125,7 +125,7 @@ function MessageItem({ message }: MessageItemProps) {
     >
       <div
         className={cn(
-          'flex max-w-[90%] md:max-w-[80%] min-w-0 flex-col gap-1',
+          'flex max-w-[90%] min-w-0 flex-col gap-1 md:max-w-[80%]',
           isAssistant ? 'items-start' : 'items-end'
         )}
       >
@@ -174,9 +174,7 @@ function ContentBlock({ content, isAssistant }: ContentBlockProps) {
     case 'Text':
       // All text messages are rendered with Markdown for consistent styling
       return (
-        <Markdown
-          className={cn(responsiveProse, 'max-w-none break-words')}
-        >
+        <Markdown className={cn(responsiveProse, 'max-w-none break-words')}>
           {content.text ?? ''}
         </Markdown>
       )

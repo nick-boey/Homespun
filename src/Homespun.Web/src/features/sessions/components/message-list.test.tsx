@@ -304,9 +304,7 @@ describe('MessageList', () => {
         createMessage({
           id: 'msg-1',
           role: 'Assistant',
-          content: [
-            { type: 'Text', text: '# Responsive heading', isStreaming: false, index: 0 },
-          ],
+          content: [{ type: 'Text', text: '# Responsive heading', isStreaming: false, index: 0 }],
         }),
       ]
 
@@ -326,7 +324,12 @@ describe('MessageList', () => {
           id: 'msg-1',
           role: 'User',
           content: [
-            { type: 'Text', text: 'User message with inverted prose', isStreaming: false, index: 0 },
+            {
+              type: 'Text',
+              text: 'User message with inverted prose',
+              isStreaming: false,
+              index: 0,
+            },
           ],
         }),
       ]
@@ -342,9 +345,7 @@ describe('MessageList', () => {
         createMessage({
           id: 'msg-1',
           role: 'User',
-          content: [
-            { type: 'Text', text: 'Test message', isStreaming: false, index: 0 },
-          ],
+          content: [{ type: 'Text', text: 'Test message', isStreaming: false, index: 0 }],
         }),
       ]
 

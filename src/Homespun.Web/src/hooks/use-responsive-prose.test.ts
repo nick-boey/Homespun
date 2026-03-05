@@ -80,9 +80,7 @@ describe('useResponsiveProse', () => {
   it('combines base class and modifiers correctly', () => {
     mockedUseMobile.mockReturnValue(false)
 
-    const { result } = renderHook(() =>
-      useResponsiveProse({ includeBase: true, invert: true })
-    )
+    const { result } = renderHook(() => useResponsiveProse({ includeBase: true, invert: true }))
 
     expect(result.current).toBe('prose prose-invert')
   })
