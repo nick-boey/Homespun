@@ -26,15 +26,7 @@ public class TaskGraphSortingApiTests : IDisposable
     {
         _mockFleeceService = new Mock<IFleeceService>();
 
-        _factory = new HomespunWebApplicationFactory()
-            .WithWebHostBuilder(builder =>
-            {
-                builder.ConfigureServices(services =>
-                {
-                    // Replace the IFleeceService with our mock
-                    services.AddScoped(_ => _mockFleeceService.Object);
-                });
-            });
+        _factory = new HomespunWebApplicationFactory();
 
         _client = _factory.CreateClient();
 
@@ -44,11 +36,11 @@ public class TaskGraphSortingApiTests : IDisposable
             Name = "test-project",
             LocalPath = "/test/path",
             GitHubOwner = "test-owner",
-            GitHubRepo = "test-repo"
+            GitHubRepo = "test-repo",
+            DefaultBranch = "main"
         };
 
-        var projectService = _factory.Services.GetRequiredService<IProjectService>();
-        await projectService.CreateAsync(_testProject);
+        await _factory.MockDataStore.AddProjectAsync(_testProject);
     }
 
     [TearDown]
@@ -215,7 +207,14 @@ public class TaskGraphSortingApiTests : IDisposable
             Type = IssueType.Task,
             Priority = priority,
             CreatedAt = createdAt ?? DateTime.UtcNow,
-            UpdatedAt = createdAt ?? DateTime.UtcNow
+            LastUpdate = createdAt ?? DateTime.UtcNow,
+            Description = "",
+            ExecutionMode = ExecutionMode.Series,
+            ParentIssues = [],
+            Tags = [],
+            LinkedIssues = [],
+            CreatedBy = "test-user",
+            AssignedTo = null
         };
     }
 
