@@ -297,6 +297,71 @@ describe('MessageList', () => {
     })
   })
 
+  // Tests for responsive behavior
+  describe('responsive behavior', () => {
+    it('applies responsive prose classes to markdown content', () => {
+      const messages: ClaudeMessage[] = [
+        createMessage({
+          id: 'msg-1',
+          role: 'Assistant',
+          content: [{ type: 'Text', text: '# Responsive heading', isStreaming: false, index: 0 }],
+        }),
+      ]
+
+      render(<MessageList messages={messages} />)
+
+      const markdownElement = screen.getByTestId('markdown')
+      // The markdown component receives the responsive prose class from ContentBlock
+      // For desktop tests (default), it should have 'prose' class
+      expect(markdownElement).toHaveClass('prose')
+      expect(markdownElement).toHaveClass('max-w-none')
+      expect(markdownElement).toHaveClass('break-words')
+    })
+
+    it('applies prose-invert to user messages', () => {
+      const messages: ClaudeMessage[] = [
+        createMessage({
+          id: 'msg-1',
+          role: 'User',
+          content: [
+            {
+              type: 'Text',
+              text: 'User message with inverted prose',
+              isStreaming: false,
+              index: 0,
+            },
+          ],
+        }),
+      ]
+
+      render(<MessageList messages={messages} />)
+
+      const markdownElement = screen.getByTestId('markdown')
+      expect(markdownElement).toHaveClass('prose-invert')
+    })
+
+    it('uses responsive width classes for message bubbles', () => {
+      const messages: ClaudeMessage[] = [
+        createMessage({
+          id: 'msg-1',
+          role: 'User',
+          content: [{ type: 'Text', text: 'Test message', isStreaming: false, index: 0 }],
+        }),
+      ]
+
+      render(<MessageList messages={messages} />)
+
+      // Find the div that contains the max-width classes
+      const messageElement = screen.getByTestId('message-msg-1')
+      const bubbleContainer = messageElement.querySelector('div[class*="max-w-"]')
+
+      expect(bubbleContainer).toBeInTheDocument()
+      // Check for responsive width classes
+      expect(bubbleContainer).toHaveClass('max-w-[90%]')
+      expect(bubbleContainer).toHaveClass('md:max-w-[80%]')
+    })
+  })
+
   // Tests for handling numeric enum values from backend
   describe('numeric enum handling', () => {
     it('renders text content when type is numeric 0 (Text)', () => {

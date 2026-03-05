@@ -334,10 +334,11 @@ public class AgentPromptServiceTests
         await _service.EnsureDefaultPromptsAsync();
 
         var prompts = _service.GetAllPrompts();
-        Assert.That(prompts, Has.Count.EqualTo(3)); // Plan, Build, Rebase
+        Assert.That(prompts, Has.Count.EqualTo(4)); // Plan, Build, Rebase, IssueModify
         Assert.That(prompts.Any(p => p.Name == "Plan"), Is.True);
         Assert.That(prompts.Any(p => p.Name == "Build"), Is.True);
         Assert.That(prompts.Any(p => p.Name == "Rebase"), Is.True);
+        Assert.That(prompts.Any(p => p.Name == "IssueModify"), Is.True);
     }
 
     [Test]
@@ -348,7 +349,7 @@ public class AgentPromptServiceTests
         await _service.EnsureDefaultPromptsAsync();
 
         var prompts = _service.GetAllPrompts();
-        Assert.That(prompts, Has.Count.EqualTo(4)); // Custom + 3 defaults (Plan, Build, Rebase)
+        Assert.That(prompts, Has.Count.EqualTo(5)); // Custom + 4 defaults (Plan, Build, Rebase, IssueModify)
     }
 
     [Test]

@@ -2,6 +2,7 @@ using Homespun.Features.AgentOrchestration.Services;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Containers.Services;
 using Homespun.Features.Fleece.Services;
+using Homespun.Server.Features.Fleece.Services;
 using Homespun.Features.Gitgraph.Services;
 using Homespun.Features.GitHub;
 using Homespun.Features.Projects;
@@ -63,6 +64,7 @@ public static class MockServiceExtensions
         services.AddSingleton<IFleeceIssuesSyncService, MockFleeceIssuesSyncService>();
         services.AddScoped<IIssueBranchResolverService, IssueBranchResolverService>();
         services.AddSingleton<IIssueHistoryService, IssueHistoryService>();
+        services.AddScoped<IFleeceIssueDiffService, FleeceIssueDiffService>();
 
         // Git services
         services.AddSingleton<IGitCloneService, MockGitCloneService>();

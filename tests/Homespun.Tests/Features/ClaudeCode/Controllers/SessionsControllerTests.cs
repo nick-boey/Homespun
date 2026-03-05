@@ -125,4 +125,160 @@ public class SessionsControllerTests
         // Assert
         Assert.That(result, Is.InstanceOf<NotFoundResult>());
     }
+
+    #region Accept/Cancel Issue Changes Tests
+
+    [Test]
+    public async Task AcceptIssueChanges_ValidSession_ReturnsOkWithRedirect()
+    {
+        // Arrange
+        var sessionId = "session-123";
+        var expectedRedirectUrl = "/projects/project-789";
+        
+        var session = new ClaudeSession
+        {
+            Id = sessionId,
+            EntityId = "entity-456",
+            ProjectId = "project-789",
+            WorkingDirectory = "/test/clone/workdir",
+            Model = "claude-3-opus-20240229",
+            Mode = SessionMode.Build,
+            Status = ClaudeSessionStatus.Running
+        };
+
+        _sessionServiceMock.Setup(s => s.GetSession(sessionId)).Returns(session);
+        _sessionServiceMock.Setup(s => s.AcceptIssueChangesAsync(sessionId))
+            .ReturnsAsync(expectedRedirectUrl);
+
+        // Act
+        var result = await _controller.AcceptIssueChanges(sessionId);
+
+        // Assert
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        var okResult = (OkObjectResult)result;
+        dynamic responseData = okResult.Value!;
+        Assert.That(responseData.redirectUrl, Is.EqualTo(expectedRedirectUrl));
+        
+        _sessionServiceMock.Verify(s => s.AcceptIssueChangesAsync(sessionId), Times.Once);
+    }
+
+    [Test]
+    public async Task AcceptIssueChanges_SessionNotFound_ReturnsNotFound()
+    {
+        // Arrange
+        _sessionServiceMock.Setup(s => s.GetSession("nonexistent")).Returns((ClaudeSession?)null);
+
+        // Act
+        var result = await _controller.AcceptIssueChanges("nonexistent");
+
+        // Assert
+        Assert.That(result, Is.InstanceOf<NotFoundResult>());
+        _sessionServiceMock.Verify(s => s.AcceptIssueChangesAsync(It.IsAny<string>()), Times.Never);
+    }
+
+    [Test]
+    public async Task AcceptIssueChanges_ServiceThrows_ReturnsBadRequest()
+    {
+        // Arrange
+        var session = new ClaudeSession
+        {
+            Id = "session-123",
+            EntityId = "entity-456",
+            ProjectId = "project-789",
+            WorkingDirectory = "/test/clone/workdir",
+            Model = "claude-3-opus-20240229",
+            Mode = SessionMode.Build,
+            Status = ClaudeSessionStatus.Running
+        };
+
+        _sessionServiceMock.Setup(s => s.GetSession("session-123")).Returns(session);
+        _sessionServiceMock.Setup(s => s.AcceptIssueChangesAsync("session-123"))
+            .ThrowsAsync(new InvalidOperationException("Failed to merge changes"));
+
+        // Act
+        var result = await _controller.AcceptIssueChanges("session-123");
+
+        // Assert
+        Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
+        var badRequest = (BadRequestObjectResult)result;
+        Assert.That(badRequest.Value, Does.Contain("Failed to merge changes"));
+    }
+
+    [Test]
+    public async Task CancelIssueChanges_ValidSession_ReturnsOkWithRedirect()
+    {
+        // Arrange
+        var sessionId = "session-123";
+        var expectedRedirectUrl = "/projects/project-789";
+        
+        var session = new ClaudeSession
+        {
+            Id = sessionId,
+            EntityId = "entity-456",
+            ProjectId = "project-789",
+            WorkingDirectory = "/test/clone/workdir",
+            Model = "claude-3-opus-20240229",
+            Mode = SessionMode.Build,
+            Status = ClaudeSessionStatus.Running
+        };
+
+        _sessionServiceMock.Setup(s => s.GetSession(sessionId)).Returns(session);
+        _sessionServiceMock.Setup(s => s.CancelIssueChangesAsync(sessionId))
+            .ReturnsAsync(expectedRedirectUrl);
+
+        // Act
+        var result = await _controller.CancelIssueChanges(sessionId);
+
+        // Assert
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        var okResult = (OkObjectResult)result;
+        dynamic responseData = okResult.Value!;
+        Assert.That(responseData.redirectUrl, Is.EqualTo(expectedRedirectUrl));
+        
+        _sessionServiceMock.Verify(s => s.CancelIssueChangesAsync(sessionId), Times.Once);
+    }
+
+    [Test]
+    public async Task CancelIssueChanges_SessionNotFound_ReturnsNotFound()
+    {
+        // Arrange
+        _sessionServiceMock.Setup(s => s.GetSession("nonexistent")).Returns((ClaudeSession?)null);
+
+        // Act
+        var result = await _controller.CancelIssueChanges("nonexistent");
+
+        // Assert
+        Assert.That(result, Is.InstanceOf<NotFoundResult>());
+        _sessionServiceMock.Verify(s => s.CancelIssueChangesAsync(It.IsAny<string>()), Times.Never);
+    }
+
+    [Test]
+    public async Task CancelIssueChanges_ServiceThrows_ReturnsBadRequest()
+    {
+        // Arrange
+        var session = new ClaudeSession
+        {
+            Id = "session-123",
+            EntityId = "entity-456",
+            ProjectId = "project-789",
+            WorkingDirectory = "/test/clone/workdir",
+            Model = "claude-3-opus-20240229",
+            Mode = SessionMode.Build,
+            Status = ClaudeSessionStatus.Running
+        };
+
+        _sessionServiceMock.Setup(s => s.GetSession("session-123")).Returns(session);
+        _sessionServiceMock.Setup(s => s.CancelIssueChangesAsync("session-123"))
+            .ThrowsAsync(new InvalidOperationException("Failed to cancel"));
+
+        // Act
+        var result = await _controller.CancelIssueChanges("session-123");
+
+        // Assert
+        Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
+        var badRequest = (BadRequestObjectResult)result;
+        Assert.That(badRequest.Value, Does.Contain("Failed to cancel"));
+    }
+
+    #endregion
 }

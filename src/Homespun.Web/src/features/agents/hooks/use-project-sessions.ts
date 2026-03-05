@@ -61,6 +61,18 @@ export function useActiveSessionCount(projectId: string) {
     }
   }, [sessions])
 
+  // If no projectId, return empty results
+  if (!projectId) {
+    return {
+      count: 0,
+      hasActive: false,
+      isProcessing: false,
+      activeSessions: [],
+      ...rest,
+      isLoading: false,
+    }
+  }
+
   return {
     ...result,
     ...rest,

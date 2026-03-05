@@ -301,6 +301,68 @@ public class SessionsController(
     }
 
     /// <summary>
+    /// Accept issue changes from an issue modification session.
+    /// </summary>
+    /// <param name="id">The session ID.</param>
+    /// <returns>Redirect URL.</returns>
+    [HttpPost("{id}/accept-issue-changes")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> AcceptIssueChanges(string id)
+    {
+        var session = sessionService.GetSession(id);
+        if (session == null)
+        {
+            return NotFound();
+        }
+
+        // For now, we don't check session mode/type for issue modification
+        // The service method itself will handle validation
+
+        try
+        {
+            var redirectUrl = await sessionService.AcceptIssueChangesAsync(id);
+            return Ok(new { redirectUrl });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest($"Failed to accept changes: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Cancel issue changes from an issue modification session.
+    /// </summary>
+    /// <param name="id">The session ID.</param>
+    /// <returns>Redirect URL.</returns>
+    [HttpPost("{id}/cancel-issue-changes")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> CancelIssueChanges(string id)
+    {
+        var session = sessionService.GetSession(id);
+        if (session == null)
+        {
+            return NotFound();
+        }
+
+        // For now, we don't check session mode/type for issue modification
+        // The service method itself will handle validation
+
+        try
+        {
+            var redirectUrl = await sessionService.CancelIssueChangesAsync(id);
+            return Ok(new { redirectUrl });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest($"Failed to cancel changes: {ex.Message}");
+        }
+    }
+
+    /// <summary>
     /// Maps a ClaudeSession to a SessionSummary, using container status as the authoritative source.
     /// </summary>
     /// <param name="session">The in-memory session.</param>

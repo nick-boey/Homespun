@@ -872,4 +872,40 @@ public class MockClaudeSessionService : IClaudeSessionService
 
         return Task.FromResult<ClaudeSession?>(session);
     }
+
+    /// <summary>
+    /// Accepts issue changes from an issue modification session.
+    /// </summary>
+    public async Task<string> AcceptIssueChangesAsync(string sessionId, CancellationToken cancellationToken = default)
+    {
+        var session = _sessionStore.GetById(sessionId);
+        if (session == null)
+        {
+            throw new KeyNotFoundException($"Session with ID {sessionId} not found");
+        }
+
+        // Stop the session
+        await StopSessionAsync(sessionId, cancellationToken);
+
+        // Return mock redirect URL
+        return $"/projects/{session.ProjectId}/issues/{session.EntityId}";
+    }
+
+    /// <summary>
+    /// Cancels issue changes from an issue modification session.
+    /// </summary>
+    public async Task<string> CancelIssueChangesAsync(string sessionId, CancellationToken cancellationToken = default)
+    {
+        var session = _sessionStore.GetById(sessionId);
+        if (session == null)
+        {
+            throw new KeyNotFoundException($"Session with ID {sessionId} not found");
+        }
+
+        // Stop the session
+        await StopSessionAsync(sessionId, cancellationToken);
+
+        // Return mock redirect URL
+        return $"/projects/{session.ProjectId}/issues/{session.EntityId}";
+    }
 }

@@ -4,6 +4,7 @@ using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Commands;
 using Homespun.Features.Containers.Services;
 using Homespun.Features.Fleece.Services;
+using Homespun.Server.Features.Fleece.Services;
 using Homespun.Features.Git;
 using Homespun.Features.GitHub;
 using Homespun.Features.Gitgraph.Services;
@@ -120,6 +121,7 @@ else
     builder.Services.AddScoped<IFleeceIssueTransitionService, FleeceIssueTransitionService>();
     builder.Services.AddSingleton<IFleeceIssuesSyncService, FleeceIssuesSyncService>();
     builder.Services.AddScoped<IIssueBranchResolverService, IssueBranchResolverService>();
+    builder.Services.AddScoped<IFleeceIssueDiffService, FleeceIssueDiffService>();
 
     // Markdown rendering service
     builder.Services.AddSingleton<IMarkdownRenderingService, MarkdownRenderingService>();
