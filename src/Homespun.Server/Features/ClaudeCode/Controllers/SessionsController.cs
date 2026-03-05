@@ -317,10 +317,8 @@ public class SessionsController(
             return NotFound();
         }
 
-        if (session.SessionType != SessionType.IssueModify)
-        {
-            return BadRequest("Can only accept changes from an issue modification session");
-        }
+        // For now, we don't check session mode/type for issue modification
+        // The service method itself will handle validation
 
         try
         {
@@ -350,10 +348,8 @@ public class SessionsController(
             return NotFound();
         }
 
-        if (session.SessionType != SessionType.IssueModify)
-        {
-            return BadRequest("Can only cancel changes from an issue modification session");
-        }
+        // For now, we don't check session mode/type for issue modification
+        // The service method itself will handle validation
 
         try
         {
