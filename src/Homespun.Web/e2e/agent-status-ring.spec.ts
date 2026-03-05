@@ -31,7 +31,6 @@ test.describe('Agent Status Ring', () => {
   test('should show blue pulsing ring for running agent', async ({ page }) => {
     // Find an issue to start an agent on
     const issueNode = page.locator('[data-issue-id]').first()
-    const issueId = await issueNode.getAttribute('data-issue-id')
 
     // Click on the issue to select it
     await issueNode.click()
@@ -63,7 +62,7 @@ test.describe('Agent Status Ring', () => {
     // In a real test, we'd need to set up this state through the API
     const issueWithWaitingAgent = page.locator('[data-issue-id="test-waiting"]')
 
-    if (await issueWithWaitingAgent.count() > 0) {
+    if ((await issueWithWaitingAgent.count()) > 0) {
       const svg = issueWithWaitingAgent.locator('svg')
       const circles = svg.locator('circle')
       await expect(circles).toHaveCount(2)
@@ -79,7 +78,7 @@ test.describe('Agent Status Ring', () => {
 
     const issueWithErrorAgent = page.locator('[data-issue-id="test-error"]')
 
-    if (await issueWithErrorAgent.count() > 0) {
+    if ((await issueWithErrorAgent.count()) > 0) {
       const svg = issueWithErrorAgent.locator('svg')
       const circles = svg.locator('circle')
       await expect(circles).toHaveCount(2)
@@ -111,11 +110,14 @@ test.describe('Agent Status Ring', () => {
 
   test('ring should have correct size relative to node', async ({ page }) => {
     // Find an issue with an active agent
-    const issueWithAgent = page.locator('[data-issue-id]').filter({
-      has: page.locator('svg circle').nth(1) // Has 2 circles
-    }).first()
+    const issueWithAgent = page
+      .locator('[data-issue-id]')
+      .filter({
+        has: page.locator('svg circle').nth(1), // Has 2 circles
+      })
+      .first()
 
-    if (await issueWithAgent.count() > 0) {
+    if ((await issueWithAgent.count()) > 0) {
       const svg = issueWithAgent.locator('svg')
       const circles = svg.locator('circle')
 
@@ -149,11 +151,14 @@ test.describe('Agent Status Ring - Keyboard Navigation', () => {
     await page.waitForSelector('[data-testid="task-graph-view"]')
 
     // Find issue with active agent (if any)
-    const issueWithAgent = page.locator('[data-issue-id]').filter({
-      has: page.locator('svg circle').nth(1)
-    }).first()
+    const issueWithAgent = page
+      .locator('[data-issue-id]')
+      .filter({
+        has: page.locator('svg circle').nth(1),
+      })
+      .first()
 
-    if (await issueWithAgent.count() > 0) {
+    if ((await issueWithAgent.count()) > 0) {
       // Focus on the issue
       await issueWithAgent.focus()
 

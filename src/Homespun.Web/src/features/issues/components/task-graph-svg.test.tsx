@@ -9,12 +9,16 @@ import type { TaskGraphIssueRenderLine } from '../services'
 import { TaskGraphMarkerType } from '../services'
 
 describe('TaskGraphNodeSvg', () => {
-  const createMockLine = (overrides?: Partial<TaskGraphIssueRenderLine>): TaskGraphIssueRenderLine => ({
+  const createMockLine = (
+    overrides?: Partial<TaskGraphIssueRenderLine>
+  ): TaskGraphIssueRenderLine => ({
     type: 'issue',
     issueId: 'test-id',
     issueType: 0, // Task
     status: 0, // Open
     title: 'Test Issue',
+    description: null,
+    branchName: null,
     hasDescription: true,
     lane: 0,
     parentLane: null,
@@ -29,10 +33,10 @@ describe('TaskGraphNodeSvg', () => {
     lane0Color: null,
     hasHiddenParent: false,
     hiddenParentIsSeriesMode: false,
-    marker: TaskGraphMarkerType.None,
+    marker: TaskGraphMarkerType.Open,
     linkedPr: null,
     agentStatus: null,
-    ...overrides
+    ...overrides,
   })
 
   describe('agent status ring', () => {
@@ -50,8 +54,8 @@ describe('TaskGraphNodeSvg', () => {
         agentStatus: {
           isActive: false,
           status: '2', // Running
-          sessionId: 'session-123'
-        }
+          sessionId: 'session-123',
+        },
       })
       const { container } = render(<TaskGraphNodeSvg line={line} maxLanes={1} />)
 
@@ -62,13 +66,13 @@ describe('TaskGraphNodeSvg', () => {
     it('should render blue ring for running states', () => {
       const runningStates = ['0', '1', '2'] // Starting, RunningHooks, Running
 
-      runningStates.forEach(status => {
+      runningStates.forEach((status) => {
         const line = createMockLine({
           agentStatus: {
             isActive: true,
             status,
-            sessionId: 'session-123'
-          }
+            sessionId: 'session-123',
+          },
         })
         const { container } = render(<TaskGraphNodeSvg line={line} maxLanes={1} />)
 
@@ -86,13 +90,13 @@ describe('TaskGraphNodeSvg', () => {
     it('should render yellow ring for waiting states', () => {
       const waitingStates = ['3', '4', '5'] // WaitingForInput, WaitingForQuestionAnswer, WaitingForPlanExecution
 
-      waitingStates.forEach(status => {
+      waitingStates.forEach((status) => {
         const line = createMockLine({
           agentStatus: {
             isActive: true,
             status,
-            sessionId: 'session-123'
-          }
+            sessionId: 'session-123',
+          },
         })
         const { container } = render(<TaskGraphNodeSvg line={line} maxLanes={1} />)
 
@@ -112,8 +116,8 @@ describe('TaskGraphNodeSvg', () => {
         agentStatus: {
           isActive: true,
           status: '7', // Error
-          sessionId: 'session-123'
-        }
+          sessionId: 'session-123',
+        },
       })
       const { container } = render(<TaskGraphNodeSvg line={line} maxLanes={1} />)
 
@@ -132,8 +136,8 @@ describe('TaskGraphNodeSvg', () => {
         agentStatus: {
           isActive: true,
           status: '6', // Stopped
-          sessionId: 'session-123'
-        }
+          sessionId: 'session-123',
+        },
       })
       const { container } = render(<TaskGraphNodeSvg line={line} maxLanes={1} />)
 
@@ -146,8 +150,8 @@ describe('TaskGraphNodeSvg', () => {
         agentStatus: {
           isActive: true,
           status: '99', // Unknown
-          sessionId: 'session-123'
-        }
+          sessionId: 'session-123',
+        },
       })
       const { container } = render(<TaskGraphNodeSvg line={line} maxLanes={1} />)
 
@@ -160,8 +164,8 @@ describe('TaskGraphNodeSvg', () => {
         agentStatus: {
           isActive: true,
           status: null,
-          sessionId: 'session-123'
-        }
+          sessionId: 'session-123',
+        },
       })
       const { container } = render(<TaskGraphNodeSvg line={line} maxLanes={1} />)
 
@@ -174,8 +178,8 @@ describe('TaskGraphNodeSvg', () => {
         agentStatus: {
           isActive: true,
           status: '2', // Running
-          sessionId: 'session-123'
-        }
+          sessionId: 'session-123',
+        },
       })
       const { container } = render(<TaskGraphNodeSvg line={line} maxLanes={1} />)
 
