@@ -2,6 +2,7 @@ import { cn } from '@/lib/utils'
 import { Markdown } from '@/components/ui/markdown'
 import { Skeleton } from '@/components/ui/skeleton'
 import { QuestionPanel } from '@/features/questions'
+import { useResponsiveProse } from '@/hooks/use-responsive-prose'
 import type {
   ClaudeMessage,
   ClaudeMessageContent,
@@ -124,7 +125,7 @@ function MessageItem({ message }: MessageItemProps) {
     >
       <div
         className={cn(
-          'flex max-w-[80%] min-w-0 flex-col gap-1',
+          'flex max-w-[90%] md:max-w-[80%] min-w-0 flex-col gap-1',
           isAssistant ? 'items-start' : 'items-end'
         )}
       >
@@ -164,17 +165,17 @@ interface ContentBlockProps {
 
 function ContentBlock({ content, isAssistant }: ContentBlockProps) {
   const contentType = normalizeContentType(content.type)
+  const responsiveProse = useResponsiveProse({
+    includeBase: true,
+    invert: !isAssistant,
+  })
 
   switch (contentType) {
     case 'Text':
       // All text messages are rendered with Markdown for consistent styling
       return (
         <Markdown
-          className={cn(
-            'prose-sm max-w-none break-words',
-            // User messages have inverted colors so we need prose-invert
-            !isAssistant && 'prose-invert'
-          )}
+          className={cn(responsiveProse, 'max-w-none break-words')}
         >
           {content.text ?? ''}
         </Markdown>
