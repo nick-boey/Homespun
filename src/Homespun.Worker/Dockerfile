@@ -70,8 +70,11 @@ RUN chmod +x start.sh
 # Create non-root user for security (don't force UID to avoid conflicts with base image)
 RUN useradd --create-home --shell /bin/bash homespun
 
-# Create data directories and set permissions
-RUN mkdir -p /home/homespun/.local/share /home/homespun/.config /home/homespun/.cache \
+# Make home directory accessible to any runtime user and create data directories
+# Docker containers run with --user UID:GID (from DockerAgentExecutionService/ProcessUserInfo)
+# that may differ from the homespun user's UID, so /home/homespun must be world-writable
+RUN chmod 777 /home/homespun \
+    && mkdir -p /home/homespun/.local/share /home/homespun/.config /home/homespun/.cache \
     && mkdir -p /home/homespun/.claude/todos /home/homespun/.claude/debug /home/homespun/.claude/projects /home/homespun/.claude/statsig /home/homespun/.claude/plans \
     && mkdir -p /workdir \
     && chmod -R 777 /home/homespun/.local /home/homespun/.config /home/homespun/.cache /home/homespun/.claude
