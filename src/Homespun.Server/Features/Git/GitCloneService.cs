@@ -1161,7 +1161,6 @@ public class GitCloneService(ICommandRunner commandRunner, ILogger<GitCloneServi
         // Both additions and deletions means modified
         return FileChangeStatus.Modified;
     }
-}
 
     public async Task<string?> CreateIssueModifyCloneAsync(string repoPath)
     {
@@ -1213,3 +1212,4 @@ public class GitCloneService(ICommandRunner commandRunner, ILogger<GitCloneServi
             return clonePath;
         }
     }
+}
