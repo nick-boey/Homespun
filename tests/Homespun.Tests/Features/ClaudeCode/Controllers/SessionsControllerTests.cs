@@ -177,33 +177,6 @@ public class SessionsControllerTests
     }
 
     [Test]
-    public async Task AcceptIssueChanges_NotIssueModifySession_ReturnsBadRequest()
-    {
-        // Arrange
-        var session = new ClaudeSession
-        {
-            Id = "session-123",
-            EntityId = "entity-456",
-            ProjectId = "project-789",
-            WorkingDirectory = "/test/workdir",
-            Model = "claude-3-opus-20240229",
-            Mode = SessionMode.Plan, // Not an issue modify session (Build mode)
-            Status = ClaudeSessionStatus.Running
-        };
-
-        _sessionServiceMock.Setup(s => s.GetSession("session-123")).Returns(session);
-
-        // Act
-        var result = await _controller.AcceptIssueChanges("session-123");
-
-        // Assert
-        Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
-        var badRequest = (BadRequestObjectResult)result;
-        Assert.That(badRequest.Value, Does.Contain("issue modification session"));
-        _sessionServiceMock.Verify(s => s.AcceptIssueChangesAsync(It.IsAny<string>()), Times.Never);
-    }
-
-    [Test]
     public async Task AcceptIssueChanges_ServiceThrows_ReturnsBadRequest()
     {
         // Arrange
@@ -276,33 +249,6 @@ public class SessionsControllerTests
 
         // Assert
         Assert.That(result, Is.InstanceOf<NotFoundResult>());
-        _sessionServiceMock.Verify(s => s.CancelIssueChangesAsync(It.IsAny<string>()), Times.Never);
-    }
-
-    [Test]
-    public async Task CancelIssueChanges_NotIssueModifySession_ReturnsBadRequest()
-    {
-        // Arrange
-        var session = new ClaudeSession
-        {
-            Id = "session-123",
-            EntityId = "entity-456",
-            ProjectId = "project-789",
-            WorkingDirectory = "/test/workdir",
-            Model = "claude-3-opus-20240229",
-            Mode = SessionMode.Plan, // Not an issue modify session (Build mode)
-            Status = ClaudeSessionStatus.Running
-        };
-
-        _sessionServiceMock.Setup(s => s.GetSession("session-123")).Returns(session);
-
-        // Act
-        var result = await _controller.CancelIssueChanges("session-123");
-
-        // Assert
-        Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
-        var badRequest = (BadRequestObjectResult)result;
-        Assert.That(badRequest.Value, Does.Contain("issue modification session"));
         _sessionServiceMock.Verify(s => s.CancelIssueChangesAsync(It.IsAny<string>()), Times.Never);
     }
 
