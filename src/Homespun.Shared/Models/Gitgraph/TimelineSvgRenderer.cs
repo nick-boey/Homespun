@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using Homespun.Shared.Models.Sessions;
 
 namespace Homespun.Shared.Models.Gitgraph;
 
@@ -43,6 +44,31 @@ public static class TimelineSvgRenderer
         return RowHeight / 2;
     }
 
+    /// <summary>
+    /// Maps agent status to ring color based on status value.
+    /// Returns null if no ring should be shown.
+    /// </summary>
+    private static string? GetAgentStatusColor(string status)
+    {
+        if (Enum.TryParse<ClaudeSessionStatus>(status, out var sessionStatus))
+        {
+            return sessionStatus switch
+            {
+                ClaudeSessionStatus.Starting or
+                ClaudeSessionStatus.RunningHooks or
+                ClaudeSessionStatus.Running => "#3b82f6", // Blue
+
+                ClaudeSessionStatus.WaitingForInput or
+                ClaudeSessionStatus.WaitingForQuestionAnswer or
+                ClaudeSessionStatus.WaitingForPlanExecution => "#eab308", // Yellow
+
+                ClaudeSessionStatus.Error => "#ef4444", // Red
+                _ => null // No ring for Stopped or unknown status
+            };
+        }
+        return null;
+    }
+
     public static string GenerateDividerRowSvg(
         int maxLanes,
         IReadOnlyDictionary<int, string>? laneColors = null)
@@ -65,6 +91,7 @@ public static class TimelineSvgRenderer
     /// </summary>
     /// <param name="hasHiddenParent">If true, shows a faded continuation indicator</param>
     /// <param name="hiddenParentIsSeriesMode">If true, shows dots below (series), otherwise to the right (parallel)</param>
+    /// <param name="agentStatus">Optional agent status data for showing status ring</param>
     public static string GenerateTaskGraphCircleSvg(
         int nodeLane, int? parentLane, bool isFirstChild, int maxLanes,
         string nodeColor, bool isOutlineOnly, bool isActionable,
@@ -72,7 +99,8 @@ public static class TimelineSvgRenderer
         int? seriesConnectorFromLane = null,
         bool drawLane0Connector = false, bool isLastLane0Connector = false, bool drawLane0PassThrough = false,
 string? lane0Color = null,
-        bool hasHiddenParent = false, bool hiddenParentIsSeriesMode = false)
+        bool hasHiddenParent = false, bool hiddenParentIsSeriesMode = false,
+        AgentStatusData? agentStatus = null)
     {
         var width = CalculateSvgWidth(maxLanes);
         var sb = new StringBuilder();
@@ -159,12 +187,26 @@ string? lane0Color = null,
                 $"<path d=\"M {cx} {bottomLineStartY} L {cx} {RowHeight}\" stroke=\"{EscapeAttribute(nodeColor)}\" stroke-width=\"{LineStrokeWidth.ToString(CultureInfo.InvariantCulture)}\" fill=\"none\" />");
         }
 
-        if (isActionable)
+        // Agent status ring
+        if (agentStatus?.IsActive == true)
         {
-            // Glow ring for actionable items
-            var outerRadius = NodeRadius + 4;
-            sb.Append(
-                $"<circle cx=\"{cx}\" cy=\"{cy}\" r=\"{outerRadius}\" fill=\"none\" stroke=\"{EscapeAttribute(nodeColor)}\" stroke-width=\"1\" opacity=\"0.4\" />");
+            var statusColor = GetAgentStatusColor(agentStatus.Status);
+            if (!string.IsNullOrEmpty(statusColor))
+            {
+                var outerRadius = NodeRadius + 4;
+                // SVG animate element for pulsing effect
+                sb.Append($@"<circle cx=""{cx}"" cy=""{cy}"" r=""{outerRadius}"" fill=""none"" stroke=""{EscapeAttribute(statusColor)}"" stroke-width=""2"" opacity=""0.6"">
+            <animate attributeName=""opacity"" values=""0.6;1;0.6"" dur=""2s"" repeatCount=""indefinite""/>
+        </circle>");
+            }
+        }
+
+        // Actionable glow ring (rendered before the node so it appears behind)
+        if (isActionable && agentStatus?.IsActive != true)
+        {
+            // Only show actionable glow if there's no agent status ring
+            var glowRadius = NodeRadius + 4;
+            sb.Append($"<circle cx=\"{cx}\" cy=\"{cy}\" r=\"{glowRadius}\" fill=\"none\" stroke=\"{EscapeAttribute(nodeColor)}\" stroke-width=\"2\" opacity=\"0.4\" />");
         }
 
         if (isOutlineOnly)
