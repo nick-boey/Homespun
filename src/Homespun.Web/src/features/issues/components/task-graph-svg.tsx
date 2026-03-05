@@ -5,6 +5,7 @@
 
 import { memo } from 'react'
 import type { TaskGraphIssueRenderLine } from '../services'
+import { TaskGraphMarkerType } from '../services'
 
 // Constants matching TimelineSvgRenderer.cs
 export const LANE_WIDTH = 24
@@ -182,6 +183,19 @@ export const TaskGraphNodeSvg = memo(function TaskGraphNodeSvg({
           stroke={nodeColor}
           strokeWidth={LINE_STROKE_WIDTH}
           fill="none"
+        />
+      )}
+
+      {/* Actionable glow ring (rendered before the node so it appears behind) */}
+      {line.marker === TaskGraphMarkerType.Actionable && !line.agentStatus?.isActive && (
+        <circle
+          cx={cx}
+          cy={cy}
+          r={NODE_RADIUS + 4}
+          fill="none"
+          stroke={nodeColor}
+          strokeWidth={2}
+          opacity={0.4}
         />
       )}
 
