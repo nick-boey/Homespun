@@ -9,6 +9,7 @@ import type {
   IssueType,
   ClaudeSessionStatus,
   SessionMode,
+  IssuePullRequestStatus,
 } from '@/api'
 import { ISSUE_STATUS, ISSUE_TYPE } from '@/lib/issue-constants'
 import * as issueHooks from '../hooks/use-issue-by-entity-id'
@@ -56,10 +57,10 @@ describe('SessionCard', () => {
     priority: 1,
   }
 
-  const mockPrStatus = {
+  const mockPrStatus: IssuePullRequestStatus = {
     prNumber: 123,
     prUrl: 'https://github.com/example/repo/pull/123',
-    status: 0 as any, // Open
+    status: 0, // Open
     branchName: null,
     checksPassing: null,
   }
@@ -88,12 +89,12 @@ describe('SessionCard', () => {
 
   it('renders card with all issue data when loaded', async () => {
     vi.mocked(issueHooks.useIssueByEntityId).mockReturnValue({
-      issue: mockIssue as any,
+      issue: mockIssue,
       isLoading: false,
       error: null,
     })
     vi.mocked(prHooks.useIssuePrStatus).mockReturnValue({
-      prStatus: mockPrStatus as any,
+      prStatus: mockPrStatus,
       isLoading: false,
       error: null,
     })
@@ -163,7 +164,7 @@ describe('SessionCard', () => {
 
   it('shows stop button for active sessions', async () => {
     vi.mocked(issueHooks.useIssueByEntityId).mockReturnValue({
-      issue: mockIssue as any,
+      issue: mockIssue,
       isLoading: false,
       error: null,
     })
@@ -183,7 +184,7 @@ describe('SessionCard', () => {
 
   it('hides stop button for stopped sessions', async () => {
     vi.mocked(issueHooks.useIssueByEntityId).mockReturnValue({
-      issue: mockIssue as any,
+      issue: mockIssue,
       isLoading: false,
       error: null,
     })
@@ -203,7 +204,7 @@ describe('SessionCard', () => {
 
   it('does not show PR badge when no PR exists', async () => {
     vi.mocked(issueHooks.useIssueByEntityId).mockReturnValue({
-      issue: mockIssue as any,
+      issue: mockIssue,
       isLoading: false,
       error: null,
     })
@@ -214,7 +215,7 @@ describe('SessionCard', () => {
         status: undefined,
         branchName: null,
         checksPassing: null,
-      } as any,
+      } as IssuePullRequestStatus,
       isLoading: false,
       error: null,
     })
@@ -230,7 +231,7 @@ describe('SessionCard', () => {
     mockNavigate.mockReset()
 
     vi.mocked(issueHooks.useIssueByEntityId).mockReturnValue({
-      issue: mockIssue as any,
+      issue: mockIssue,
       isLoading: false,
       error: null,
     })
@@ -256,7 +257,7 @@ describe('SessionCard', () => {
 
   it('shows different session status indicators', async () => {
     vi.mocked(issueHooks.useIssueByEntityId).mockReturnValue({
-      issue: mockIssue as any,
+      issue: mockIssue,
       isLoading: false,
       error: null,
     })
@@ -291,7 +292,7 @@ describe('SessionCard', () => {
   it('truncates long descriptions', async () => {
     const longDescription = 'A'.repeat(200)
     vi.mocked(issueHooks.useIssueByEntityId).mockReturnValue({
-      issue: { ...mockIssue, description: longDescription } as any,
+      issue: { ...mockIssue, description: longDescription },
       isLoading: false,
       error: null,
     })
@@ -313,7 +314,7 @@ describe('SessionCard', () => {
     mockNavigate.mockReset()
 
     vi.mocked(issueHooks.useIssueByEntityId).mockReturnValue({
-      issue: mockIssue as any,
+      issue: mockIssue,
       isLoading: false,
       error: null,
     })
@@ -339,7 +340,7 @@ describe('SessionCard', () => {
 
   it('shows Plan mode correctly', async () => {
     vi.mocked(issueHooks.useIssueByEntityId).mockReturnValue({
-      issue: mockIssue as any,
+      issue: mockIssue,
       isLoading: false,
       error: null,
     })

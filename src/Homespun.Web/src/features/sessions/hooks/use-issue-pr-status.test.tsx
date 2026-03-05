@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useIssuePrStatus } from './use-issue-pr-status'
 import * as api from '@/api'
 import type { ReactNode } from 'react'
+import type { IssuePullRequestStatus } from '@/api'
 
 // Mock the API
 vi.mock('@/api', () => ({
@@ -11,6 +12,12 @@ vi.mock('@/api', () => ({
     getApiIssuePrStatusByProjectIdByIssueId: vi.fn(),
   },
 }))
+
+// Type for the mock API response
+type MockApiResponse<T> = {
+  data: T
+  error?: never
+}
 
 describe('useIssuePrStatus', () => {
   const createWrapper = () => {
@@ -39,7 +46,7 @@ describe('useIssuePrStatus', () => {
 
     vi.mocked(api.IssuePrStatus.getApiIssuePrStatusByProjectIdByIssueId).mockResolvedValue({
       data: mockPrStatus,
-    } as any)
+    } as MockApiResponse<IssuePullRequestStatus>)
 
     const { result } = renderHook(() => useIssuePrStatus('project-1', 'issue-1'), {
       wrapper: createWrapper(),
@@ -70,7 +77,7 @@ describe('useIssuePrStatus', () => {
 
     vi.mocked(api.IssuePrStatus.getApiIssuePrStatusByProjectIdByIssueId).mockResolvedValue({
       data: mockPrStatus,
-    } as any)
+    } as MockApiResponse<IssuePullRequestStatus>)
 
     const { result } = renderHook(() => useIssuePrStatus('project-1', 'issue-1'), {
       wrapper: createWrapper(),
@@ -102,7 +109,7 @@ describe('useIssuePrStatus', () => {
 
   it('shows loading state initially', () => {
     vi.mocked(api.IssuePrStatus.getApiIssuePrStatusByProjectIdByIssueId).mockImplementation(
-      () => new Promise(() => {}) as any // Never resolves
+      () => new Promise(() => {}) // Never resolves
     )
 
     const { result } = renderHook(() => useIssuePrStatus('project-1', 'issue-1'), {
@@ -141,7 +148,7 @@ describe('useIssuePrStatus', () => {
 
     vi.mocked(api.IssuePrStatus.getApiIssuePrStatusByProjectIdByIssueId).mockResolvedValue({
       data: mockPrStatus,
-    } as any)
+    } as MockApiResponse<IssuePullRequestStatus>)
 
     // Create a single wrapper instance to share the query client
     const wrapper = createWrapper()
@@ -168,8 +175,8 @@ describe('useIssuePrStatus', () => {
     const mockPrStatus2 = { hasPr: false }
 
     vi.mocked(api.IssuePrStatus.getApiIssuePrStatusByProjectIdByIssueId)
-      .mockResolvedValueOnce({ data: mockPrStatus1 } as any)
-      .mockResolvedValueOnce({ data: mockPrStatus2 } as any)
+      .mockResolvedValueOnce({ data: mockPrStatus1 } as MockApiResponse<IssuePullRequestStatus>)
+      .mockResolvedValueOnce({ data: mockPrStatus2 } as MockApiResponse<IssuePullRequestStatus>)
 
     const { result, rerender } = renderHook(
       ({ projectId, issueId }) => useIssuePrStatus(projectId, issueId),
