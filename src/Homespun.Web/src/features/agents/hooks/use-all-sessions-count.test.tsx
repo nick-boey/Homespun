@@ -50,7 +50,9 @@ describe('useAllSessionsCount', () => {
   it('should return zero counts when no sessions exist', async () => {
     vi.mocked(Sessions.getApiSessions).mockResolvedValueOnce({
       data: [],
-    } as { data: Array<SessionSummary> })
+      request: {} as Request,
+      response: {} as Response,
+    })
 
     const { result } = renderHook(() => useAllSessionsCount(), {
       wrapper: createWrapper(),
@@ -79,7 +81,9 @@ describe('useAllSessionsCount', () => {
 
     vi.mocked(Sessions.getApiSessions).mockResolvedValueOnce({
       data: sessions,
-    } as { data: Array<SessionSummary> })
+      request: {} as Request,
+      response: {} as Response,
+    })
 
     const { result } = renderHook(() => useAllSessionsCount(), {
       wrapper: createWrapper(),
@@ -104,7 +108,9 @@ describe('useAllSessionsCount', () => {
 
     vi.mocked(Sessions.getApiSessions).mockResolvedValueOnce({
       data: sessions,
-    } as { data: Array<SessionSummary> })
+      request: {} as Request,
+      response: {} as Response,
+    })
 
     const { result } = renderHook(() => useAllSessionsCount(), {
       wrapper: createWrapper(),
@@ -132,7 +138,9 @@ describe('useAllSessionsCount', () => {
 
     vi.mocked(Sessions.getApiSessions).mockResolvedValueOnce({
       data: sessions,
-    } as { data: Array<SessionSummary> })
+      request: {} as Request,
+      response: {} as Response,
+    })
 
     const { result } = renderHook(() => useAllSessionsCount(), {
       wrapper: createWrapper(),
@@ -157,7 +165,9 @@ describe('useAllSessionsCount', () => {
 
     vi.mocked(Sessions.getApiSessions).mockResolvedValueOnce({
       data: sessions,
-    } as { data: Array<SessionSummary> })
+      request: {} as Request,
+      response: {} as Response,
+    })
 
     const { result } = renderHook(() => useAllSessionsCount(), {
       wrapper: createWrapper(),
@@ -183,7 +193,9 @@ describe('useAllSessionsCount', () => {
 
     vi.mocked(Sessions.getApiSessions).mockResolvedValueOnce({
       data: sessions,
-    } as { data: Array<SessionSummary> })
+      request: {} as Request,
+      response: {} as Response,
+    })
 
     const { result } = renderHook(() => useAllSessionsCount(), {
       wrapper: createWrapper(),
@@ -221,7 +233,12 @@ describe('useAllSessionsCount', () => {
 
   it('should handle loading state', () => {
     vi.mocked(Sessions.getApiSessions).mockImplementation(
-      () => new Promise<{ data: Array<SessionSummary> }>(() => {}) // Never resolves
+      () =>
+        new Promise(() => {}) as Promise<{
+          data: Array<SessionSummary>
+          request: Request
+          response: Response
+        }> // Never resolves
     )
 
     const { result } = renderHook(() => useAllSessionsCount(), {
@@ -240,7 +257,9 @@ describe('useAllSessionsCount', () => {
   it('should return zero granular counts when no sessions exist', async () => {
     vi.mocked(Sessions.getApiSessions).mockResolvedValueOnce({
       data: [],
-    } as { data: Array<SessionSummary> })
+      request: {} as Request,
+      response: {} as Response,
+    })
 
     const { result } = renderHook(() => useAllSessionsCount(), {
       wrapper: createWrapper(),
