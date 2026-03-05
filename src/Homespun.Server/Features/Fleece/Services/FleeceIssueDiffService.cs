@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Fleece.Core.Models;
-using Homespun.Server.Features.Commands.Services;
+using Homespun.Features.Commands;
 using Homespun.Shared.Models.Fleece;
 
 namespace Homespun.Server.Features.Fleece.Services;
@@ -16,13 +16,13 @@ public interface IFleeceIssueDiffService
 
 public class FleeceIssueDiffService : IFleeceIssueDiffService
 {
-    private readonly ICommandExecutor _commandExecutor;
+    private readonly ICommandRunner _commandRunner;
     private readonly ILogger<FleeceIssueDiffService> _logger;
     private static readonly Regex IssueFileRegex = new(@"\.fleece/issues/([a-zA-Z0-9]+)\.json$", RegexOptions.Compiled);
 
-    public FleeceIssueDiffService(ICommandExecutor commandExecutor, ILogger<FleeceIssueDiffService> logger)
+    public FleeceIssueDiffService(ICommandRunner commandExecutor, ILogger<FleeceIssueDiffService> logger)
     {
-        _commandExecutor = commandExecutor;
+        _commandRunner = commandExecutor;
         _logger = logger;
     }
 
@@ -31,10 +31,10 @@ public class FleeceIssueDiffService : IFleeceIssueDiffService
         var diffs = new List<IssueDiff>();
 
         // Get list of changed files in .fleece/issues/
-        var diffResult = await _commandExecutor.ExecuteCommandAsync(
-            "git diff --name-status HEAD -- .fleece/issues/",
-            workingDirectory,
-            cancellationToken);
+        var diffResult = await _commandRunner.RunAsync(
+            "git",
+            "diff --name-status HEAD -- .fleece/issues/",
+            workingDirectory);
 
         if (!diffResult.Success || string.IsNullOrEmpty(diffResult.Output))
         {
@@ -136,10 +136,10 @@ public class FleeceIssueDiffService : IFleeceIssueDiffService
 
     private async Task<Issue?> ReadIssueFromWorkingTree(string filePath, string workingDirectory, CancellationToken cancellationToken)
     {
-        var result = await _commandExecutor.ExecuteCommandAsync(
-            $"cat {filePath}",
-            workingDirectory,
-            cancellationToken);
+        var result = await _commandRunner.RunAsync(
+            "cat",
+            filePath,
+            workingDirectory);
 
         if (!result.Success || string.IsNullOrEmpty(result.Output))
             return null;
@@ -157,10 +157,10 @@ public class FleeceIssueDiffService : IFleeceIssueDiffService
 
     private async Task<Issue?> ReadIssueFromHead(string filePath, string workingDirectory, CancellationToken cancellationToken)
     {
-        var result = await _commandExecutor.ExecuteCommandAsync(
-            $"git show HEAD:{filePath}",
-            workingDirectory,
-            cancellationToken);
+        var result = await _commandRunner.RunAsync(
+            "git",
+            $"show HEAD:{filePath}",
+            workingDirectory);
 
         if (!result.Success || string.IsNullOrEmpty(result.Output))
             return null;
