@@ -8,7 +8,6 @@ import {
   CardFooter,
 } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { QuestionOption } from './question-option'
@@ -202,10 +201,8 @@ function QuestionItem({
 
   return (
     <div data-testid={`question-item-${question.header}`} className="flex flex-col gap-3">
-      <div className="flex items-start gap-2">
-        <Badge variant="secondary" className="shrink-0">
-          {question.header}
-        </Badge>
+      <div className="flex flex-col gap-1">
+        <h4 className="text-sm font-semibold">{question.header}</h4>
         <p className="text-sm font-medium">{question.question}</p>
       </div>
       <div className="flex flex-col gap-2 pl-2">

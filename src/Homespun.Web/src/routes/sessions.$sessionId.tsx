@@ -29,6 +29,7 @@ function SessionChat() {
   const { methods, isConnected } = useClaudeCodeHub()
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [isSending, setIsSending] = useState(false)
+  const [isProcessingAnswer, setIsProcessingAnswer] = useState(false)
 
   // Get session messages with real-time updates
   const { messages } = useSessionMessages({
@@ -39,6 +40,10 @@ function SessionChat() {
   // Handle question answering
   const { answerQuestion, isSubmitting: isSubmittingAnswer } = useAnswerQuestion({
     sessionId,
+    onSuccess: () => {
+      // Start processing indicator when answer is submitted successfully
+      setIsProcessingAnswer(true)
+    },
   })
 
   // Plan approval state and actions (must be called before early returns)
@@ -81,6 +86,17 @@ function SessionChat() {
       scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight
     }
   }, [messages, session?.pendingQuestion])
+
+  // Clear processing answer state when session status changes or question is cleared
+  useEffect(() => {
+    if (session?.status !== 'WaitingForQuestionAnswer' && isProcessingAnswer) {
+      setIsProcessingAnswer(false)
+    }
+    // Also clear if no pending question
+    if (!session?.pendingQuestion && isProcessingAnswer) {
+      setIsProcessingAnswer(false)
+    }
+  }, [session?.status, session?.pendingQuestion, isProcessingAnswer])
 
   useBreadcrumbSetter(
     [
@@ -159,9 +175,10 @@ function SessionChat() {
           <MessageList
             messages={messages}
             isLoading={isLoading}
-            pendingQuestion={session?.pendingQuestion}
+            pendingQuestion={!isProcessingAnswer ? session?.pendingQuestion : undefined}
             onAnswerQuestion={answerQuestion}
             isSubmittingAnswer={isSubmittingAnswer}
+            isProcessingAnswer={isProcessingAnswer}
           />
           {/* Plan approval panel displayed inline after messages */}
           {hasPendingPlan && planContent && (
