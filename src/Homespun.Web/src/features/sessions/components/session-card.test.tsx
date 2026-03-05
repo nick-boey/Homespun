@@ -104,7 +104,7 @@ describe('SessionCard', () => {
     await waitFor(() => {
       // Issue content
       expect(screen.getByText('Fix authentication bug')).toBeInTheDocument()
-      expect(screen.getByText('bug')).toBeInTheDocument()
+      expect(screen.getByText('Bug')).toBeInTheDocument()
       expect(screen.getByText('In Progress')).toBeInTheDocument()
       expect(screen.getByText(/authentication system is not working/)).toBeInTheDocument()
 
@@ -252,7 +252,7 @@ describe('SessionCard', () => {
     const card = screen.getByTestId('session-card')
     await user.click(card)
 
-    expect(mockNavigate).toHaveBeenCalledWith(`/projects/project-456/sessions/session-123`)
+    expect(mockNavigate).toHaveBeenCalledWith({ to: `/projects/project-456/sessions/session-123` })
   })
 
   it('shows different session status indicators', async () => {
