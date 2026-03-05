@@ -5,7 +5,6 @@ using Homespun.Features.Projects;
 using Homespun.Shared.Models.Fleece;
 using Homespun.Tests.Helpers;
 using Microsoft.Extensions.DependencyInjection;
-using Moq;
 
 namespace Homespun.Api.Tests.Features.Gitgraph;
 
@@ -18,14 +17,11 @@ public class TaskGraphSortingApiTests : IDisposable
 {
     private HomespunWebApplicationFactory _factory = null!;
     private HttpClient _client = null!;
-    private Mock<IFleeceService> _mockFleeceService = null!;
     private Project _testProject = null!;
 
     [SetUp]
     public async Task SetUp()
     {
-        _mockFleeceService = new Mock<IFleeceService>();
-
         _factory = new HomespunWebApplicationFactory();
 
         _client = _factory.CreateClient();
@@ -75,14 +71,22 @@ public class TaskGraphSortingApiTests : IDisposable
             }).ToList()
         };
 
-        _mockFleeceService.Setup(s => s.GetTaskGraphWithAdditionalIssuesAsync(
-                It.IsAny<string>(),
-                It.IsAny<IEnumerable<string>?>(),
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(taskGraph);
+        // Add the test issues to the mock fleece service
+        foreach (var node in taskGraph.Nodes)
+        {
+            await _factory.MockFleeceService.CreateIssueAsync(
+                _testProject.LocalPath,
+                node.Issue.Title,
+                node.Issue.Type,
+                node.Issue.Description,
+                node.Issue.Priority,
+                node.Issue.ExecutionMode,
+                node.Issue.Status
+            );
+        }
 
         // Act
-        var response = await _client.GetFromJsonAsync<TaskGraphResponse>($"/api/projects/{_testProject.Id}/task-graph");
+        var response = await _client.GetFromJsonAsync<TaskGraphResponse>($"/api/graph/{_testProject.Id}/taskgraph/data");
 
         // Assert
         Assert.That(response, Is.Not.Null);
@@ -121,14 +125,22 @@ public class TaskGraphSortingApiTests : IDisposable
             }
         };
 
-        _mockFleeceService.Setup(s => s.GetTaskGraphWithAdditionalIssuesAsync(
-                It.IsAny<string>(),
-                It.IsAny<IEnumerable<string>?>(),
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(taskGraph);
+        // Add the test issues to the mock fleece service
+        foreach (var node in taskGraph.Nodes)
+        {
+            await _factory.MockFleeceService.CreateIssueAsync(
+                _testProject.LocalPath,
+                node.Issue.Title,
+                node.Issue.Type,
+                node.Issue.Description,
+                node.Issue.Priority,
+                node.Issue.ExecutionMode,
+                node.Issue.Status
+            );
+        }
 
         // Act
-        var response = await _client.GetFromJsonAsync<TaskGraphResponse>($"/api/projects/{_testProject.Id}/task-graph");
+        var response = await _client.GetFromJsonAsync<TaskGraphResponse>($"/api/graph/{_testProject.Id}/taskgraph/data");
 
         // Assert
         Assert.That(response, Is.Not.Null);
@@ -172,14 +184,22 @@ public class TaskGraphSortingApiTests : IDisposable
             }
         };
 
-        _mockFleeceService.Setup(s => s.GetTaskGraphWithAdditionalIssuesAsync(
-                It.IsAny<string>(),
-                It.IsAny<IEnumerable<string>?>(),
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(taskGraph);
+        // Add the test issues to the mock fleece service
+        foreach (var node in taskGraph.Nodes)
+        {
+            await _factory.MockFleeceService.CreateIssueAsync(
+                _testProject.LocalPath,
+                node.Issue.Title,
+                node.Issue.Type,
+                node.Issue.Description,
+                node.Issue.Priority,
+                node.Issue.ExecutionMode,
+                node.Issue.Status
+            );
+        }
 
         // Act
-        var response = await _client.GetFromJsonAsync<TaskGraphResponse>($"/api/projects/{_testProject.Id}/task-graph");
+        var response = await _client.GetFromJsonAsync<TaskGraphResponse>($"/api/graph/{_testProject.Id}/taskgraph/data");
 
         // Assert
         Assert.That(response, Is.Not.Null);
