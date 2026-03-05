@@ -58,6 +58,7 @@ export function QuestionOption({
       <input
         id={inputId}
         type={inputType}
+        name={mode === 'radio' ? questionId : undefined}
         checked={isSelected}
         onChange={handleInputChange}
         disabled={disabled}
