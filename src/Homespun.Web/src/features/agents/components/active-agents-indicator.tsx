@@ -46,7 +46,7 @@ export function ActiveAgentsIndicator({ projectId, className }: ActiveAgentsIndi
       waitingForAnswerCount,
       waitingForPlanCount,
       errorCount,
-      hasActive
+      hasActive,
     } = allSessionsData
 
     // Build array of status indicators to display
@@ -94,7 +94,7 @@ export function ActiveAgentsIndicator({ projectId, className }: ActiveAgentsIndi
         testId: 'status-error',
         showPing: false,
       },
-    ].filter(status => status.count > 0)
+    ].filter((status) => status.count > 0)
 
     // Show idle state if no active sessions
     if (!hasActive || statusIndicators.length === 0) {
@@ -108,7 +108,10 @@ export function ActiveAgentsIndicator({ projectId, className }: ActiveAgentsIndi
 
     // Render status indicators
     return (
-      <Link to={sessionsUrl} className={cn('flex items-center gap-3 transition-colors hover:opacity-80', className)}>
+      <Link
+        to={sessionsUrl}
+        className={cn('flex items-center gap-3 transition-colors hover:opacity-80', className)}
+      >
         {statusIndicators.map((status) => (
           <div key={status.testId} className="flex items-center gap-1">
             {status.showPing ? (
@@ -119,7 +122,9 @@ export function ActiveAgentsIndicator({ projectId, className }: ActiveAgentsIndi
                     status.colorClass === 'text-blue-500' && 'bg-blue-400'
                   )}
                 />
-                <Circle className={cn('relative h-2 w-2 animate-pulse fill-current', status.colorClass)} />
+                <Circle
+                  className={cn('relative h-2 w-2 animate-pulse fill-current', status.colorClass)}
+                />
               </span>
             ) : (
               <Circle

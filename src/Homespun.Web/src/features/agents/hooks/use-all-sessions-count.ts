@@ -47,7 +47,12 @@ export interface AllSessionsCount {
  * Groups sessions by status category (working, waiting, error).
  */
 export function useAllSessionsCount() {
-  const { data: sessions, isLoading, isError, ...rest } = useQuery({
+  const {
+    data: sessions,
+    isLoading,
+    isError,
+    ...rest
+  } = useQuery({
     queryKey: allSessionsCountQueryKey,
     queryFn: async (): Promise<SessionSummary[]> => {
       const response = await Sessions.getApiSessions()
@@ -83,15 +88,9 @@ export function useAllSessionsCount() {
     )
 
     // Count granular waiting status types
-    const waitingForInputSessions = sessions.filter((s) =>
-      s.status === WAITING_FOR_INPUT_STATUS
-    )
-    const waitingForAnswerSessions = sessions.filter((s) =>
-      s.status === WAITING_FOR_ANSWER_STATUS
-    )
-    const waitingForPlanSessions = sessions.filter((s) =>
-      s.status === WAITING_FOR_PLAN_STATUS
-    )
+    const waitingForInputSessions = sessions.filter((s) => s.status === WAITING_FOR_INPUT_STATUS)
+    const waitingForAnswerSessions = sessions.filter((s) => s.status === WAITING_FOR_ANSWER_STATUS)
+    const waitingForPlanSessions = sessions.filter((s) => s.status === WAITING_FOR_PLAN_STATUS)
 
     // Total active includes working and waiting, but not errors
     const totalActive = workingSessions.length + waitingSessions.length

@@ -274,9 +274,7 @@ describe('ActiveAgentsIndicator', () => {
 
     it('navigates to global sessions page when clicked', async () => {
       mockGetAllSessions.mockResolvedValueOnce(
-        createMockResponse([
-          createSessionSummary({ id: 'session-1', status: 2 as const }),
-        ])
+        createMockResponse([createSessionSummary({ id: 'session-1', status: 2 as const })])
       )
 
       render(<ActiveAgentsIndicator />, { wrapper: createWrapper() })

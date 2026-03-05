@@ -40,11 +40,12 @@ test.describe('Agent Status Indicator', () => {
     const errorIndicator = page.locator('[data-testid="status-error"]')
 
     // At least one indicator should be visible (idle or active)
-    const anyIndicatorVisible = await workingIndicator.isVisible({ timeout: 1000 }).catch(() => false) ||
-                                await waitingInputIndicator.isVisible({ timeout: 1000 }).catch(() => false) ||
-                                await waitingAnswerIndicator.isVisible({ timeout: 1000 }).catch(() => false) ||
-                                await waitingPlanIndicator.isVisible({ timeout: 1000 }).catch(() => false) ||
-                                await errorIndicator.isVisible({ timeout: 1000 }).catch(() => false)
+    const anyIndicatorVisible =
+      (await workingIndicator.isVisible({ timeout: 1000 }).catch(() => false)) ||
+      (await waitingInputIndicator.isVisible({ timeout: 1000 }).catch(() => false)) ||
+      (await waitingAnswerIndicator.isVisible({ timeout: 1000 }).catch(() => false)) ||
+      (await waitingPlanIndicator.isVisible({ timeout: 1000 }).catch(() => false)) ||
+      (await errorIndicator.isVisible({ timeout: 1000 }).catch(() => false))
 
     if (anyIndicatorVisible) {
       // Verify counts are shown next to indicators
@@ -115,7 +116,7 @@ test.describe('Agent Status Indicator', () => {
         description: 'Test project for E2E',
         owner: 'test-owner',
         repository: 'test-repo',
-      }
+      },
     })
 
     // Navigate to project page
@@ -135,7 +136,9 @@ test.describe('Agent Status Indicator', () => {
     const statusContainer = page.locator('a[href="/sessions"]').first()
 
     // Count visible status indicators
-    const visibleStatuses = await statusContainer.locator('[data-testid^="status-"][data-testid$="-count"]').count()
+    const visibleStatuses = await statusContainer
+      .locator('[data-testid^="status-"][data-testid$="-count"]')
+      .count()
 
     // If any statuses are visible, they should be displayed horizontally
     if (visibleStatuses > 1) {
@@ -151,8 +154,14 @@ test.describe('Agent Status Indicator', () => {
     await page.goto('/projects')
 
     // Get initial state
-    const idleVisible = await page.locator('text=Agent idle').isVisible({ timeout: 1000 }).catch(() => false)
-    const workingVisible = await page.locator('[data-testid="status-working"]').isVisible({ timeout: 1000 }).catch(() => false)
+    const idleVisible = await page
+      .locator('text=Agent idle')
+      .isVisible({ timeout: 1000 })
+      .catch(() => false)
+    await page
+      .locator('[data-testid="status-working"]')
+      .isVisible({ timeout: 1000 })
+      .catch(() => false)
 
     // Verify indicator exists
     if (idleVisible) {
