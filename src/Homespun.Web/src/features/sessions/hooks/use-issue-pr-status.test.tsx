@@ -13,12 +13,6 @@ vi.mock('@/api', () => ({
   },
 }))
 
-// Type for the mock API response
-type MockApiResponse<T> = {
-  data: T
-  error?: never
-}
-
 describe('useIssuePrStatus', () => {
   const createWrapper = () => {
     const queryClient = new QueryClient({
@@ -36,7 +30,7 @@ describe('useIssuePrStatus', () => {
   })
 
   it('fetches PR status successfully', async () => {
-    const mockPrStatus = {
+    const mockPrStatus: IssuePullRequestStatus = {
       prNumber: 123,
       prUrl: 'https://github.com/example/repo/pull/123',
       status: 0, // Open
@@ -46,7 +40,10 @@ describe('useIssuePrStatus', () => {
 
     vi.mocked(api.IssuePrStatus.getApiIssuePrStatusByProjectIdByIssueId).mockResolvedValue({
       data: mockPrStatus,
-    } as MockApiResponse<IssuePullRequestStatus>)
+      error: undefined,
+      request: {} as Request,
+      response: {} as Response,
+    })
 
     const { result } = renderHook(() => useIssuePrStatus('project-1', 'issue-1'), {
       wrapper: createWrapper(),
@@ -67,7 +64,7 @@ describe('useIssuePrStatus', () => {
   })
 
   it('handles no PR status', async () => {
-    const mockPrStatus = {
+    const mockPrStatus: IssuePullRequestStatus = {
       prNumber: undefined,
       prUrl: null,
       status: undefined,
@@ -77,7 +74,10 @@ describe('useIssuePrStatus', () => {
 
     vi.mocked(api.IssuePrStatus.getApiIssuePrStatusByProjectIdByIssueId).mockResolvedValue({
       data: mockPrStatus,
-    } as MockApiResponse<IssuePullRequestStatus>)
+      error: undefined,
+      request: {} as Request,
+      response: {} as Response,
+    })
 
     const { result } = renderHook(() => useIssuePrStatus('project-1', 'issue-1'), {
       wrapper: createWrapper(),
@@ -109,7 +109,13 @@ describe('useIssuePrStatus', () => {
 
   it('shows loading state initially', () => {
     vi.mocked(api.IssuePrStatus.getApiIssuePrStatusByProjectIdByIssueId).mockImplementation(
-      () => new Promise(() => {}) // Never resolves
+      () =>
+        new Promise<{
+          data: IssuePullRequestStatus
+          error: undefined
+          request: Request
+          response: Response
+        }>(() => {}) // Never resolves
     )
 
     const { result } = renderHook(() => useIssuePrStatus('project-1', 'issue-1'), {
@@ -144,11 +150,13 @@ describe('useIssuePrStatus', () => {
   })
 
   it('uses correct cache key', async () => {
-    const mockPrStatus = { hasPr: true, prNumber: 456 }
+    const mockPrStatus: Partial<IssuePullRequestStatus> = { prNumber: 456 }
 
     vi.mocked(api.IssuePrStatus.getApiIssuePrStatusByProjectIdByIssueId).mockResolvedValue({
-      data: mockPrStatus,
-    } as MockApiResponse<IssuePullRequestStatus>)
+      data: mockPrStatus as IssuePullRequestStatus,
+      request: {} as Request,
+      response: {} as Response,
+    })
 
     // Create a single wrapper instance to share the query client
     const wrapper = createWrapper()
@@ -171,12 +179,22 @@ describe('useIssuePrStatus', () => {
   })
 
   it('refetches when parameters change', async () => {
-    const mockPrStatus1 = { hasPr: true, prNumber: 123 }
-    const mockPrStatus2 = { hasPr: false }
+    const mockPrStatus1: Partial<IssuePullRequestStatus> = { prNumber: 123 }
+    const mockPrStatus2: Partial<IssuePullRequestStatus> = { prNumber: undefined }
 
     vi.mocked(api.IssuePrStatus.getApiIssuePrStatusByProjectIdByIssueId)
-      .mockResolvedValueOnce({ data: mockPrStatus1 } as MockApiResponse<IssuePullRequestStatus>)
-      .mockResolvedValueOnce({ data: mockPrStatus2 } as MockApiResponse<IssuePullRequestStatus>)
+      .mockResolvedValueOnce({
+        data: mockPrStatus1 as IssuePullRequestStatus,
+        error: undefined,
+        request: {} as Request,
+        response: {} as Response,
+      })
+      .mockResolvedValueOnce({
+        data: mockPrStatus2 as IssuePullRequestStatus,
+        error: undefined,
+        request: {} as Request,
+        response: {} as Response,
+      })
 
     const { result, rerender } = renderHook(
       ({ projectId, issueId }) => useIssuePrStatus(projectId, issueId),
