@@ -21,10 +21,11 @@ interface TodoWriteWrapper {
 export function parseTodosFromMessages(messages: ClaudeMessage[]): SessionTodoItem[] {
   // Find all TodoWrite tool use blocks across all messages
   const allTodoWrites = messages
-    .flatMap(msg => msg.content || [])
-    .filter(content =>
-      content.type === 2 && // ToolUse
-      content.toolName === 'TodoWrite'
+    .flatMap((msg) => msg.content || [])
+    .filter(
+      (content) =>
+        content.type === 2 && // ToolUse
+        content.toolName === 'TodoWrite'
     )
 
   if (allTodoWrites.length === 0) {
@@ -49,10 +50,10 @@ function parseTodoJson(json: string): SessionTodoItem[] {
       return []
     }
 
-    return wrapper.todos.map(todo => ({
+    return wrapper.todos.map((todo) => ({
       content: todo.content || '',
       activeForm: todo.activeForm || '',
-      status: parseStatus(todo.status)
+      status: parseStatus(todo.status),
     }))
   } catch {
     // Return empty array on JSON parse error

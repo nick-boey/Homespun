@@ -1,13 +1,15 @@
 import { describe, it, expect } from 'vitest'
 import { parseTodosFromMessages } from './todo-parser'
-import type { ClaudeMessage, ClaudeContentType } from '@/api/generated'
+import type { ClaudeMessage } from '@/api/generated'
 
 // Helper to create a message with TodoWrite tool use
-function createTodoWriteMessage(todos: Array<{
-  content: string
-  activeForm: string
-  status: 'pending' | 'in_progress' | 'completed'
-}>): ClaudeMessage {
+function createTodoWriteMessage(
+  todos: Array<{
+    content: string
+    activeForm: string
+    status: 'pending' | 'in_progress' | 'completed'
+  }>
+): ClaudeMessage {
   return {
     id: 'msg-1',
     sessionId: 'session-1',
@@ -18,7 +20,7 @@ function createTodoWriteMessage(todos: Array<{
         toolName: 'TodoWrite',
         toolInput: JSON.stringify({ todos }),
         index: 0,
-      }
+      },
     ],
     createdAt: new Date().toISOString(),
   }
@@ -115,9 +117,7 @@ describe('parseTodosFromMessages', () => {
         id: 'msg-2',
         sessionId: 'session-1',
         role: 1,
-        content: [
-          { type: 0, text: 'Let me work on this', index: 0 },
-        ],
+        content: [{ type: 0, text: 'Let me work on this', index: 0 }],
       },
       createTodoWriteMessage([
         { content: 'Task 1', activeForm: 'Doing Task 1', status: 'completed' },

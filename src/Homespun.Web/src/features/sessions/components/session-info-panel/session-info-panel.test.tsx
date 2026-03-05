@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { SessionInfoPanel } from './session-info-panel'
 import type { ClaudeSession } from '@/api/generated'
@@ -7,65 +7,88 @@ import type { ClaudeSession } from '@/api/generated'
 // Mock hooks
 import { useMobile } from '@/hooks/use-mobile'
 vi.mock('@/hooks/use-mobile', () => ({
-  useMobile: vi.fn(() => false) // Default to desktop
+  useMobile: vi.fn(() => false), // Default to desktop
 }))
 
 // Mock bottom sheet
 vi.mock('../bottom-sheet', () => ({
-  BottomSheet: ({ children, ...props }: any) => (
+  BottomSheet: ({
+    children,
+    ...props
+  }: {
+    children?: React.ReactNode
+    open?: boolean
+    onOpenChange?: (open: boolean) => void
+    title?: string
+  }) => (
     <div data-testid="bottom-sheet" {...props}>
       {children}
     </div>
-  )
+  ),
 }))
 
 // Mock child components
 vi.mock('./session-issue-tab', () => ({
-  SessionIssueTab: ({ session }: any) => (
+  SessionIssueTab: ({ session }: { session: ClaudeSession }) => (
     <div data-testid="session-issue-tab">Issue Tab - {session.entityId}</div>
-  )
+  ),
 }))
 
 vi.mock('./session-pr-tab', () => ({
-  SessionPrTab: ({ session }: any) => (
+  SessionPrTab: ({ session }: { session: ClaudeSession }) => (
     <div data-testid="session-pr-tab">PR Tab - {session.entityId}</div>
-  )
+  ),
 }))
 
 vi.mock('./session-todos-tab', () => ({
-  SessionTodosTab: ({ session }: any) => (
+  SessionTodosTab: ({ session }: { session: ClaudeSession }) => (
     <div data-testid="session-todos-tab">Todos Tab - {session.messages?.length || 0} messages</div>
-  )
+  ),
 }))
 
 vi.mock('./session-files-tab', () => ({
-  SessionFilesTab: ({ session }: any) => (
+  SessionFilesTab: ({ session }: { session: ClaudeSession }) => (
     <div data-testid="session-files-tab">Files Tab - {session.workingDirectory}</div>
-  )
+  ),
 }))
 
 vi.mock('./session-plans-tab', () => ({
-  SessionPlansTab: ({ session }: any) => (
+  SessionPlansTab: ({ session }: { session: ClaudeSession }) => (
     <div data-testid="session-plans-tab">Plans Tab - {session.workingDirectory}</div>
-  )
+  ),
 }))
 
 // Mock UI components
 vi.mock('@/components/ui/tabs', () => ({
-  Tabs: ({ children, defaultValue, ...props }: any) => (
+  Tabs: ({
+    children,
+    defaultValue,
+    ...props
+  }: {
+    children?: React.ReactNode
+    defaultValue?: string
+  }) => (
     <div data-testid="tabs" data-default-value={defaultValue} {...props}>
       {children}
     </div>
   ),
-  TabsList: ({ children }: any) => (
+  TabsList: ({ children }: { children?: React.ReactNode }) => (
     <div data-testid="tabs-list">{children}</div>
   ),
-  TabsTrigger: ({ children, value, onClick }: any) => (
+  TabsTrigger: ({
+    children,
+    value,
+    onClick,
+  }: {
+    children?: React.ReactNode
+    value: string
+    onClick?: () => void
+  }) => (
     <button data-testid={`tab-trigger-${value}`} onClick={onClick}>
       {children}
     </button>
   ),
-  TabsContent: ({ children, value }: any) => (
+  TabsContent: ({ children, value }: { children?: React.ReactNode; value: string }) => (
     <div data-testid={`tab-content-${value}`} role="tabpanel">
       {children}
     </div>
@@ -106,13 +129,7 @@ describe('SessionInfoPanel', () => {
 
   describe('Desktop Layout', () => {
     it('renders as a side panel on desktop', () => {
-      render(
-        <SessionInfoPanel
-          session={mockSession}
-          isOpen={true}
-          onOpenChange={() => {}}
-        />
-      )
+      render(<SessionInfoPanel session={mockSession} isOpen={true} onOpenChange={() => {}} />)
 
       const panel = screen.getByTestId('session-info-panel-desktop')
       expect(panel).toBeInTheDocument()
@@ -120,26 +137,14 @@ describe('SessionInfoPanel', () => {
     })
 
     it('hides panel when closed on desktop', () => {
-      render(
-        <SessionInfoPanel
-          session={mockSession}
-          isOpen={false}
-          onOpenChange={() => {}}
-        />
-      )
+      render(<SessionInfoPanel session={mockSession} isOpen={false} onOpenChange={() => {}} />)
 
       const panel = screen.getByTestId('session-info-panel-desktop')
       expect(panel).toHaveClass('translate-x-full')
     })
 
     it('shows panel when open on desktop', () => {
-      render(
-        <SessionInfoPanel
-          session={mockSession}
-          isOpen={true}
-          onOpenChange={() => {}}
-        />
-      )
+      render(<SessionInfoPanel session={mockSession} isOpen={true} onOpenChange={() => {}} />)
 
       const panel = screen.getByTestId('session-info-panel-desktop')
       expect(panel).not.toHaveClass('translate-x-full')
@@ -152,13 +157,7 @@ describe('SessionInfoPanel', () => {
     })
 
     it('renders as a bottom sheet on mobile', () => {
-      render(
-        <SessionInfoPanel
-          session={mockSession}
-          isOpen={true}
-          onOpenChange={() => {}}
-        />
-      )
+      render(<SessionInfoPanel session={mockSession} isOpen={true} onOpenChange={() => {}} />)
 
       expect(screen.getByTestId('bottom-sheet')).toBeInTheDocument()
       expect(screen.queryByTestId('session-info-panel-desktop')).not.toBeInTheDocument()
@@ -167,13 +166,7 @@ describe('SessionInfoPanel', () => {
 
   describe('Tab Navigation', () => {
     it('renders all 5 tabs', () => {
-      render(
-        <SessionInfoPanel
-          session={mockSession}
-          isOpen={true}
-          onOpenChange={() => {}}
-        />
-      )
+      render(<SessionInfoPanel session={mockSession} isOpen={true} onOpenChange={() => {}} />)
 
       expect(screen.getByTestId('tab-trigger-issue')).toBeInTheDocument()
       expect(screen.getByTestId('tab-trigger-pr')).toBeInTheDocument()
@@ -183,26 +176,14 @@ describe('SessionInfoPanel', () => {
     })
 
     it('shows issue tab by default', () => {
-      render(
-        <SessionInfoPanel
-          session={mockSession}
-          isOpen={true}
-          onOpenChange={() => {}}
-        />
-      )
+      render(<SessionInfoPanel session={mockSession} isOpen={true} onOpenChange={() => {}} />)
 
       expect(screen.getByTestId('tabs')).toHaveAttribute('data-default-value', 'issue')
     })
 
     it('renders correct tab content', async () => {
       const user = userEvent.setup()
-      render(
-        <SessionInfoPanel
-          session={mockSession}
-          isOpen={true}
-          onOpenChange={() => {}}
-        />
-      )
+      render(<SessionInfoPanel session={mockSession} isOpen={true} onOpenChange={() => {}} />)
 
       // Check each tab
       await user.click(screen.getByTestId('tab-trigger-pr'))
@@ -223,64 +204,34 @@ describe('SessionInfoPanel', () => {
     it('saves open state to localStorage when changed', () => {
       const onOpenChange = vi.fn()
       const { rerender } = render(
-        <SessionInfoPanel
-          session={mockSession}
-          isOpen={false}
-          onOpenChange={onOpenChange}
-        />
+        <SessionInfoPanel session={mockSession} isOpen={false} onOpenChange={onOpenChange} />
       )
 
       // Change to open
-      rerender(
-        <SessionInfoPanel
-          session={mockSession}
-          isOpen={true}
-          onOpenChange={onOpenChange}
-        />
-      )
+      rerender(<SessionInfoPanel session={mockSession} isOpen={true} onOpenChange={onOpenChange} />)
 
-      expect(mockLocalStorage.setItem).toHaveBeenCalledWith(
-        'sessionInfoPanelOpen',
-        'true'
-      )
+      expect(mockLocalStorage.setItem).toHaveBeenCalledWith('sessionInfoPanelOpen', 'true')
     })
 
     it('saves closed state to localStorage when changed', () => {
       const onOpenChange = vi.fn()
       const { rerender } = render(
-        <SessionInfoPanel
-          session={mockSession}
-          isOpen={true}
-          onOpenChange={onOpenChange}
-        />
+        <SessionInfoPanel session={mockSession} isOpen={true} onOpenChange={onOpenChange} />
       )
 
       // Change to closed
       rerender(
-        <SessionInfoPanel
-          session={mockSession}
-          isOpen={false}
-          onOpenChange={onOpenChange}
-        />
+        <SessionInfoPanel session={mockSession} isOpen={false} onOpenChange={onOpenChange} />
       )
 
-      expect(mockLocalStorage.setItem).toHaveBeenCalledWith(
-        'sessionInfoPanelOpen',
-        'false'
-      )
+      expect(mockLocalStorage.setItem).toHaveBeenCalledWith('sessionInfoPanelOpen', 'false')
     })
 
     it('initializes from localStorage on mount', () => {
       mockLocalStorage.getItem.mockReturnValue('true')
       const onOpenChange = vi.fn()
 
-      render(
-        <SessionInfoPanel
-          session={mockSession}
-          isOpen={false}
-          onOpenChange={onOpenChange}
-        />
-      )
+      render(<SessionInfoPanel session={mockSession} isOpen={false} onOpenChange={onOpenChange} />)
 
       expect(onOpenChange).toHaveBeenCalledWith(true)
     })
@@ -295,13 +246,7 @@ describe('SessionInfoPanel', () => {
       const onOpenChange = vi.fn()
       const user = userEvent.setup()
 
-      render(
-        <SessionInfoPanel
-          session={mockSession}
-          isOpen={true}
-          onOpenChange={onOpenChange}
-        />
-      )
+      render(<SessionInfoPanel session={mockSession} isOpen={true} onOpenChange={onOpenChange} />)
 
       const closeButton = screen.getByLabelText('Close panel')
       await user.click(closeButton)
@@ -312,13 +257,7 @@ describe('SessionInfoPanel', () => {
 
   describe('Session Data', () => {
     it('passes session data to all tabs', () => {
-      render(
-        <SessionInfoPanel
-          session={mockSession}
-          isOpen={true}
-          onOpenChange={() => {}}
-        />
-      )
+      render(<SessionInfoPanel session={mockSession} isOpen={true} onOpenChange={() => {}} />)
 
       expect(screen.getByText('Issue Tab - issue-456')).toBeInTheDocument()
       expect(screen.getByText('Todos Tab - 1 messages')).toBeInTheDocument()

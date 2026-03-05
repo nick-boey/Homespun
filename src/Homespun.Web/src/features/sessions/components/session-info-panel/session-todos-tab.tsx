@@ -9,12 +9,12 @@ interface SessionTodosTabProps {
 
 export function SessionTodosTab({ session }: SessionTodosTabProps) {
   const todos = parseTodosFromMessages(session.messages || [])
-  const completedCount = todos.filter(t => t.status === 'completed').length
+  const completedCount = todos.filter((t) => t.status === 'completed').length
 
   if (todos.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
-        <Circle className="h-12 w-12 mb-3 opacity-50" />
+      <div className="text-muted-foreground flex flex-col items-center justify-center py-8">
+        <Circle className="mb-3 h-12 w-12 opacity-50" />
         <p>No tasks tracked in this session</p>
       </div>
     )
@@ -34,35 +34,29 @@ export function SessionTodosTab({ session }: SessionTodosTabProps) {
           <div
             key={index}
             className={cn(
-              'flex items-start gap-3 p-3 rounded-lg border',
+              'flex items-start gap-3 rounded-lg border p-3',
               todo.status === 'in_progress' && 'bg-yellow-50 dark:bg-yellow-950/10'
             )}
           >
-            <div className="flex-shrink-0 mt-0.5">
-              {todo.status === 'pending' && (
-                <Circle className="h-4 w-4 text-muted-foreground" />
-              )}
+            <div className="mt-0.5 flex-shrink-0">
+              {todo.status === 'pending' && <Circle className="text-muted-foreground h-4 w-4" />}
               {todo.status === 'in_progress' && (
-                <Loader className="h-4 w-4 text-yellow-600 animate-spin" />
+                <Loader className="h-4 w-4 animate-spin text-yellow-600" />
               )}
-              {todo.status === 'completed' && (
-                <CheckCircle className="h-4 w-4 text-green-600" />
-              )}
+              {todo.status === 'completed' && <CheckCircle className="h-4 w-4 text-green-600" />}
             </div>
 
-            <div className="flex-1 min-w-0">
+            <div className="min-w-0 flex-1">
               <p
                 className={cn(
                   'text-sm',
-                  todo.status === 'completed' && 'line-through text-muted-foreground'
+                  todo.status === 'completed' && 'text-muted-foreground line-through'
                 )}
               >
                 {todo.content}
               </p>
               {todo.status === 'in_progress' && todo.activeForm && (
-                <p className="text-xs text-muted-foreground italic mt-1">
-                  {todo.activeForm}
-                </p>
+                <p className="text-muted-foreground mt-1 text-xs italic">{todo.activeForm}</p>
               )}
             </div>
           </div>

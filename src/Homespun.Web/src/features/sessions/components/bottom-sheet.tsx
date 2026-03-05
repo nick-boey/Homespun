@@ -1,11 +1,6 @@
 import * as React from 'react'
 import { cn } from '@/lib/utils'
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet'
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 
 interface BottomSheetProps {
   children: React.ReactNode
@@ -77,11 +72,7 @@ export function BottomSheet({
       <SheetContent
         ref={contentRef}
         side="bottom"
-        className={cn(
-          'touch-none',
-          heightClass,
-          className
-        )}
+        className={cn('touch-none', heightClass, className)}
         style={{
           transform: `translateY(${translateY}px)`,
           transition: isDragging ? 'none' : 'transform 0.2s ease-out',

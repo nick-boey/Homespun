@@ -3,12 +3,7 @@ import { X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useMobile } from '@/hooks/use-mobile'
 import type { ClaudeSession } from '@/api/generated'
-import {
-  Tabs,
-  TabsList,
-  TabsTrigger,
-  TabsContent,
-} from '@/components/ui/tabs'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { BottomSheet } from '../bottom-sheet'
 import { SessionIssueTab } from './session-issue-tab'
@@ -43,6 +38,7 @@ export function SessionInfoPanel({
     } else if (defaultOpen !== undefined && defaultOpen !== isOpen) {
       onOpenChange(defaultOpen)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Save state to localStorage when it changes
@@ -51,8 +47,8 @@ export function SessionInfoPanel({
   }, [isOpen])
 
   const content = (
-    <Tabs defaultValue="issue" className="flex flex-col h-full">
-      <TabsList variant="line" className="w-full justify-start px-4 border-b">
+    <Tabs defaultValue="issue" className="flex h-full flex-col">
+      <TabsList variant="line" className="w-full justify-start border-b px-4">
         <TabsTrigger value="issue">Issue</TabsTrigger>
         <TabsTrigger value="pr">PR</TabsTrigger>
         <TabsTrigger value="todos">To-do's</TabsTrigger>
@@ -82,12 +78,7 @@ export function SessionInfoPanel({
 
   if (isMobile) {
     return (
-      <BottomSheet
-        open={isOpen}
-        onOpenChange={onOpenChange}
-        title="Session Info"
-        heightMode="full"
-      >
+      <BottomSheet open={isOpen} onOpenChange={onOpenChange} title="Session Info" heightMode="full">
         {content}
       </BottomSheet>
     )
@@ -98,12 +89,12 @@ export function SessionInfoPanel({
     <div
       data-testid="session-info-panel-desktop"
       className={cn(
-        'fixed right-0 top-0 h-full w-80 bg-background border-l shadow-lg',
-        'transform transition-transform duration-300 ease-in-out z-40',
+        'bg-background fixed top-0 right-0 h-full w-80 border-l shadow-lg',
+        'z-40 transform transition-transform duration-300 ease-in-out',
         isOpen ? 'translate-x-0' : 'translate-x-full'
       )}
     >
-      <div className="flex items-center justify-between p-4 border-b">
+      <div className="flex items-center justify-between border-b p-4">
         <h2 className="text-lg font-semibold">Session Info</h2>
         <Button
           size="icon"
