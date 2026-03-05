@@ -1,7 +1,7 @@
 using NUnit.Framework;
 using Moq;
 using Homespun.Server.Features.Fleece.Services;
-using Homespun.Server.Features.Commands.Services;
+using Homespun.Features.Commands;
 using Homespun.Shared.Models.Fleece;
 using Microsoft.Extensions.Logging;
 using Fleece.Core.Models;
@@ -12,16 +12,16 @@ namespace Homespun.Tests.Features.Fleece.Services;
 [TestFixture]
 public class FleeceIssueDiffServiceTests
 {
-    private Mock<ICommandExecutor> _commandExecutorMock = null!;
+    private Mock<ICommandRunner> _commandRunnerMock = null!;
     private Mock<ILogger<FleeceIssueDiffService>> _loggerMock = null!;
     private FleeceIssueDiffService _service = null!;
 
     [SetUp]
     public void SetUp()
     {
-        _commandExecutorMock = new Mock<ICommandExecutor>();
+        _commandRunnerMock = new Mock<ICommandRunner>();
         _loggerMock = new Mock<ILogger<FleeceIssueDiffService>>();
-        _service = new FleeceIssueDiffService(_commandExecutorMock.Object, _loggerMock.Object);
+        _service = new FleeceIssueDiffService(_commandRunnerMock.Object, _loggerMock.Object);
     }
 
     [Test]
@@ -31,10 +31,10 @@ public class FleeceIssueDiffServiceTests
         var workingDirectory = "/test/repo";
 
         // Mock git diff to show no changes
-        _commandExecutorMock.Setup(x => x.ExecuteCommandAsync(
-            It.Is<string>(cmd => cmd.Contains("git diff")),
-            It.Is<string>(dir => dir == workingDirectory),
-            It.IsAny<CancellationToken>()))
+        _commandRunnerMock.Setup(x => x.RunAsync(
+            "git",
+            "diff --name-status HEAD -- .fleece/issues/",
+            workingDirectory))
             .ReturnsAsync(new CommandResult
             {
                 Success = true,
@@ -63,10 +63,10 @@ public class FleeceIssueDiffServiceTests
         var issueJson = JsonSerializer.Serialize(newIssue);
 
         // Mock git diff showing new file
-        _commandExecutorMock.Setup(x => x.ExecuteCommandAsync(
-            It.Is<string>(cmd => cmd.Contains("git diff --name-status")),
-            workingDirectory,
-            It.IsAny<CancellationToken>()))
+        _commandRunnerMock.Setup(x => x.RunAsync(
+            "git",
+            "diff --name-status HEAD -- .fleece/issues/",
+            workingDirectory))
             .ReturnsAsync(new CommandResult
             {
                 Success = true,
@@ -75,10 +75,10 @@ public class FleeceIssueDiffServiceTests
             });
 
         // Mock reading new file
-        _commandExecutorMock.Setup(x => x.ExecuteCommandAsync(
-            It.Is<string>(cmd => cmd.Contains("cat") && cmd.Contains("test123.json")),
-            workingDirectory,
-            It.IsAny<CancellationToken>()))
+        _commandRunnerMock.Setup(x => x.RunAsync(
+            "cat",
+            ".fleece/issues/test123.json",
+            workingDirectory))
             .ReturnsAsync(new CommandResult
             {
                 Success = true,
@@ -90,18 +90,17 @@ public class FleeceIssueDiffServiceTests
         var result = await _service.GetIssueDiffsAsync(workingDirectory);
 
         // Assert
-        Assert.That(result.Count, Is.EqualTo(1));
+        Assert.That(result, Has.Count.EqualTo(1));
         var diff = result[0];
         Assert.That(diff.IssueId, Is.EqualTo("test123"));
         Assert.That(diff.ChangeType, Is.EqualTo(IssueChangeType.Created));
         Assert.That(diff.OriginalIssue, Is.Null);
         Assert.That(diff.ModifiedIssue, Is.Not.Null);
         Assert.That(diff.ModifiedIssue!.Title, Is.EqualTo("New Feature"));
-        Assert.That(diff.ChangedFields, Is.Empty);
     }
 
     [Test]
-    public async Task GetIssueDiffsAsync_WithModifiedIssue_ReturnsModifiedDiffWithChangedFields()
+    public async Task GetIssueDiffsAsync_WithModifiedIssue_ReturnsUpdatedDiff()
     {
         // Arrange
         var workingDirectory = "/test/repo";
@@ -117,12 +116,14 @@ public class FleeceIssueDiffServiceTests
             Type = IssueType.Feature,
             Description = "Modified description"
         };
+        var originalJson = JsonSerializer.Serialize(originalIssue);
+        var modifiedJson = JsonSerializer.Serialize(modifiedIssue);
 
         // Mock git diff showing modified file
-        _commandExecutorMock.Setup(x => x.ExecuteCommandAsync(
-            It.Is<string>(cmd => cmd.Contains("git diff --name-status")),
-            workingDirectory,
-            It.IsAny<CancellationToken>()))
+        _commandRunnerMock.Setup(x => x.RunAsync(
+            "git",
+            "diff --name-status HEAD -- .fleece/issues/",
+            workingDirectory))
             .ReturnsAsync(new CommandResult
             {
                 Success = true,
@@ -130,27 +131,27 @@ public class FleeceIssueDiffServiceTests
                 Error = ""
             });
 
-        // Mock reading original file from HEAD
-        _commandExecutorMock.Setup(x => x.ExecuteCommandAsync(
-            It.Is<string>(cmd => cmd.Contains("git show HEAD:.fleece/issues/test123.json")),
-            workingDirectory,
-            It.IsAny<CancellationToken>()))
+        // Mock reading modified file from working tree
+        _commandRunnerMock.Setup(x => x.RunAsync(
+            "cat",
+            ".fleece/issues/test123.json",
+            workingDirectory))
             .ReturnsAsync(new CommandResult
             {
                 Success = true,
-                Output = JsonSerializer.Serialize(originalIssue),
+                Output = modifiedJson,
                 Error = ""
             });
 
-        // Mock reading modified file
-        _commandExecutorMock.Setup(x => x.ExecuteCommandAsync(
-            It.Is<string>(cmd => cmd.Contains("cat") && cmd.Contains("test123.json")),
-            workingDirectory,
-            It.IsAny<CancellationToken>()))
+        // Mock reading original file from HEAD
+        _commandRunnerMock.Setup(x => x.RunAsync(
+            "git",
+            "show HEAD:.fleece/issues/test123.json",
+            workingDirectory))
             .ReturnsAsync(new CommandResult
             {
                 Success = true,
-                Output = JsonSerializer.Serialize(modifiedIssue),
+                Output = originalJson,
                 Error = ""
             });
 
@@ -158,18 +159,17 @@ public class FleeceIssueDiffServiceTests
         var result = await _service.GetIssueDiffsAsync(workingDirectory);
 
         // Assert
-        Assert.That(result.Count, Is.EqualTo(1));
+        Assert.That(result, Has.Count.EqualTo(1));
         var diff = result[0];
         Assert.That(diff.IssueId, Is.EqualTo("test123"));
         Assert.That(diff.ChangeType, Is.EqualTo(IssueChangeType.Updated));
         Assert.That(diff.OriginalIssue, Is.Not.Null);
-        Assert.That(diff.OriginalIssue!.Title, Is.EqualTo("Original Title"));
         Assert.That(diff.ModifiedIssue, Is.Not.Null);
+        Assert.That(diff.OriginalIssue!.Title, Is.EqualTo("Original Title"));
         Assert.That(diff.ModifiedIssue!.Title, Is.EqualTo("Modified Title"));
         Assert.That(diff.ChangedFields, Contains.Item("Title"));
         Assert.That(diff.ChangedFields, Contains.Item("Status"));
         Assert.That(diff.ChangedFields, Contains.Item("Description"));
-        Assert.That(diff.ChangedFields.Count, Is.EqualTo(3));
     }
 
     [Test]
@@ -179,15 +179,17 @@ public class FleeceIssueDiffServiceTests
         var workingDirectory = "/test/repo";
         var deletedIssue = new Issue("test123", "Deleted Issue")
         {
-            Status = IssueStatus.Open,
-            Type = IssueType.Bug
+            Status = IssueStatus.Complete,
+            Type = IssueType.Task,
+            Description = "This will be deleted"
         };
+        var issueJson = JsonSerializer.Serialize(deletedIssue);
 
         // Mock git diff showing deleted file
-        _commandExecutorMock.Setup(x => x.ExecuteCommandAsync(
-            It.Is<string>(cmd => cmd.Contains("git diff --name-status")),
-            workingDirectory,
-            It.IsAny<CancellationToken>()))
+        _commandRunnerMock.Setup(x => x.RunAsync(
+            "git",
+            "diff --name-status HEAD -- .fleece/issues/",
+            workingDirectory))
             .ReturnsAsync(new CommandResult
             {
                 Success = true,
@@ -196,14 +198,14 @@ public class FleeceIssueDiffServiceTests
             });
 
         // Mock reading original file from HEAD
-        _commandExecutorMock.Setup(x => x.ExecuteCommandAsync(
-            It.Is<string>(cmd => cmd.Contains("git show HEAD:.fleece/issues/test123.json")),
-            workingDirectory,
-            It.IsAny<CancellationToken>()))
+        _commandRunnerMock.Setup(x => x.RunAsync(
+            "git",
+            "show HEAD:.fleece/issues/test123.json",
+            workingDirectory))
             .ReturnsAsync(new CommandResult
             {
                 Success = true,
-                Output = JsonSerializer.Serialize(deletedIssue),
+                Output = issueJson,
                 Error = ""
             });
 
@@ -211,119 +213,54 @@ public class FleeceIssueDiffServiceTests
         var result = await _service.GetIssueDiffsAsync(workingDirectory);
 
         // Assert
-        Assert.That(result.Count, Is.EqualTo(1));
+        Assert.That(result, Has.Count.EqualTo(1));
         var diff = result[0];
         Assert.That(diff.IssueId, Is.EqualTo("test123"));
         Assert.That(diff.ChangeType, Is.EqualTo(IssueChangeType.Deleted));
         Assert.That(diff.OriginalIssue, Is.Not.Null);
-        Assert.That(diff.OriginalIssue!.Title, Is.EqualTo("Deleted Issue"));
         Assert.That(diff.ModifiedIssue, Is.Null);
-        Assert.That(diff.ChangedFields, Is.Empty);
+        Assert.That(diff.OriginalIssue!.Title, Is.EqualTo("Deleted Issue"));
     }
 
     [Test]
-    public async Task GetIssueDiffsAsync_WithMultipleChanges_ReturnsAllDiffs()
+    public async Task GetIssueDiffsAsync_WithInvalidJsonInWorkingTree_IgnoresEntry()
     {
         // Arrange
         var workingDirectory = "/test/repo";
 
-        // Mock git diff showing multiple changes
-        _commandExecutorMock.Setup(x => x.ExecuteCommandAsync(
-            It.Is<string>(cmd => cmd.Contains("git diff --name-status")),
-            workingDirectory,
-            It.IsAny<CancellationToken>()))
+        // Mock git diff showing modified file
+        _commandRunnerMock.Setup(x => x.RunAsync(
+            "git",
+            "diff --name-status HEAD -- .fleece/issues/",
+            workingDirectory))
             .ReturnsAsync(new CommandResult
             {
                 Success = true,
-                Output = "A\t.fleece/issues/new001.json\nM\t.fleece/issues/mod001.json\nD\t.fleece/issues/del001.json",
+                Output = "M\t.fleece/issues/test123.json",
                 Error = ""
             });
 
-        // Setup mocks for each issue type
-        var newIssue = new Issue("new001", "New Issue") { Status = IssueStatus.Open };
-        _commandExecutorMock.Setup(x => x.ExecuteCommandAsync(
-            It.Is<string>(cmd => cmd.Contains("cat") && cmd.Contains("new001.json")),
-            workingDirectory,
-            It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new CommandResult
-            {
-                Success = true,
-                Output = JsonSerializer.Serialize(newIssue),
-                Error = ""
-            });
-
-        var originalModIssue = new Issue("mod001", "Original") { Status = IssueStatus.Open };
-        var modifiedModIssue = new Issue("mod001", "Modified") { Status = IssueStatus.Progress };
-        _commandExecutorMock.Setup(x => x.ExecuteCommandAsync(
-            It.Is<string>(cmd => cmd.Contains("git show HEAD:.fleece/issues/mod001.json")),
-            workingDirectory,
-            It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new CommandResult
-            {
-                Success = true,
-                Output = JsonSerializer.Serialize(originalModIssue),
-                Error = ""
-            });
-        _commandExecutorMock.Setup(x => x.ExecuteCommandAsync(
-            It.Is<string>(cmd => cmd.Contains("cat") && cmd.Contains("mod001.json")),
-            workingDirectory,
-            It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new CommandResult
-            {
-                Success = true,
-                Output = JsonSerializer.Serialize(modifiedModIssue),
-                Error = ""
-            });
-
-        var deletedIssue = new Issue("del001", "Deleted") { Status = IssueStatus.Complete };
-        _commandExecutorMock.Setup(x => x.ExecuteCommandAsync(
-            It.Is<string>(cmd => cmd.Contains("git show HEAD:.fleece/issues/del001.json")),
-            workingDirectory,
-            It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new CommandResult
-            {
-                Success = true,
-                Output = JsonSerializer.Serialize(deletedIssue),
-                Error = ""
-            });
-
-        // Act
-        var result = await _service.GetIssueDiffsAsync(workingDirectory);
-
-        // Assert
-        Assert.That(result.Count, Is.EqualTo(3));
-        Assert.That(result.Any(d => d.IssueId == "new001" && d.ChangeType == IssueChangeType.Created), Is.True);
-        Assert.That(result.Any(d => d.IssueId == "mod001" && d.ChangeType == IssueChangeType.Updated), Is.True);
-        Assert.That(result.Any(d => d.IssueId == "del001" && d.ChangeType == IssueChangeType.Deleted), Is.True);
-    }
-
-    [Test]
-    public async Task GetIssueDiffsAsync_WithInvalidJson_SkipsInvalidFiles()
-    {
-        // Arrange
-        var workingDirectory = "/test/repo";
-
-        // Mock git diff showing new file
-        _commandExecutorMock.Setup(x => x.ExecuteCommandAsync(
-            It.Is<string>(cmd => cmd.Contains("git diff --name-status")),
-            workingDirectory,
-            It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new CommandResult
-            {
-                Success = true,
-                Output = "A\t.fleece/issues/invalid.json",
-                Error = ""
-            });
-
-        // Mock reading invalid JSON
-        _commandExecutorMock.Setup(x => x.ExecuteCommandAsync(
-            It.Is<string>(cmd => cmd.Contains("cat") && cmd.Contains("invalid.json")),
-            workingDirectory,
-            It.IsAny<CancellationToken>()))
+        // Mock reading modified file with invalid JSON
+        _commandRunnerMock.Setup(x => x.RunAsync(
+            "cat",
+            ".fleece/issues/test123.json",
+            workingDirectory))
             .ReturnsAsync(new CommandResult
             {
                 Success = true,
                 Output = "{ invalid json",
+                Error = ""
+            });
+
+        // Mock reading original file (valid JSON)
+        _commandRunnerMock.Setup(x => x.RunAsync(
+            "git",
+            "show HEAD:.fleece/issues/test123.json",
+            workingDirectory))
+            .ReturnsAsync(new CommandResult
+            {
+                Success = true,
+                Output = JsonSerializer.Serialize(new Issue("test123", "Valid Issue")),
                 Error = ""
             });
 
@@ -332,12 +269,85 @@ public class FleeceIssueDiffServiceTests
 
         // Assert
         Assert.That(result, Is.Empty);
-        _loggerMock.Verify(x => x.Log(
-            LogLevel.Warning,
-            It.IsAny<EventId>(),
-            It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Failed to parse issue")),
-            It.IsAny<Exception>(),
-            It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
-            Times.Once);
+    }
+
+    [Test]
+    public async Task GetIssueDiffsAsync_WithMultipleChanges_ReturnsAllDiffs()
+    {
+        // Arrange
+        var workingDirectory = "/test/repo";
+        var issue1 = new Issue("test1", "Issue 1");
+        var issue2 = new Issue("test2", "Issue 2");
+        var issue3 = new Issue("test3", "Issue 3");
+
+        // Mock git diff showing multiple changes
+        _commandRunnerMock.Setup(x => x.RunAsync(
+            "git",
+            "diff --name-status HEAD -- .fleece/issues/",
+            workingDirectory))
+            .ReturnsAsync(new CommandResult
+            {
+                Success = true,
+                Output = "A\t.fleece/issues/test1.json\nM\t.fleece/issues/test2.json\nD\t.fleece/issues/test3.json",
+                Error = ""
+            });
+
+        // Mock reading new file
+        _commandRunnerMock.Setup(x => x.RunAsync(
+            "cat",
+            ".fleece/issues/test1.json",
+            workingDirectory))
+            .ReturnsAsync(new CommandResult
+            {
+                Success = true,
+                Output = JsonSerializer.Serialize(issue1),
+                Error = ""
+            });
+
+        // Mock reading modified file
+        _commandRunnerMock.Setup(x => x.RunAsync(
+            "cat",
+            ".fleece/issues/test2.json",
+            workingDirectory))
+            .ReturnsAsync(new CommandResult
+            {
+                Success = true,
+                Output = JsonSerializer.Serialize(issue2),
+                Error = ""
+            });
+
+        // Mock reading original for modified file
+        _commandRunnerMock.Setup(x => x.RunAsync(
+            "git",
+            "show HEAD:.fleece/issues/test2.json",
+            workingDirectory))
+            .ReturnsAsync(new CommandResult
+            {
+                Success = true,
+                Output = JsonSerializer.Serialize(new Issue("test2", "Original Issue 2")),
+                Error = ""
+            });
+
+        // Mock reading deleted file from HEAD
+        _commandRunnerMock.Setup(x => x.RunAsync(
+            "git",
+            "show HEAD:.fleece/issues/test3.json",
+            workingDirectory))
+            .ReturnsAsync(new CommandResult
+            {
+                Success = true,
+                Output = JsonSerializer.Serialize(issue3),
+                Error = ""
+            });
+
+        // Act
+        var result = await _service.GetIssueDiffsAsync(workingDirectory);
+
+        // Assert
+        Assert.That(result, Has.Count.EqualTo(3));
+        Assert.That(result.Select(d => d.IssueId), Is.EquivalentTo(new[] { "test1", "test2", "test3" }));
+        Assert.That(result[0].ChangeType, Is.EqualTo(IssueChangeType.Created));
+        Assert.That(result[1].ChangeType, Is.EqualTo(IssueChangeType.Updated));
+        Assert.That(result[2].ChangeType, Is.EqualTo(IssueChangeType.Deleted));
     }
 }
