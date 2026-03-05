@@ -5,6 +5,7 @@ import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkBreaks from 'remark-breaks'
 import remarkGfm from 'remark-gfm'
 import { CodeBlock, CodeBlockCode } from './code-block'
+import { useResponsiveProse } from '@/hooks/use-responsive-prose'
 
 export type MarkdownProps = {
   children: string
@@ -85,8 +86,24 @@ function MarkdownComponent({
   const blockId = id ?? generatedId
   const blocks = useMemo(() => parseMarkdownIntoBlocks(children), [children])
 
+  // Extract prose modifiers from className
+  const hasProseInvert = className?.includes('prose-invert')
+  const hasCustomProseClass = className?.includes('prose')
+
+  // Use responsive prose if no custom prose class is provided
+  const responsiveProse = useResponsiveProse({
+    includeBase: true,
+    invert: hasProseInvert && !hasCustomProseClass,
+  })
+
+  // Combine classes: if custom prose classes exist, use them; otherwise use responsive
+  const finalClassName = cn(
+    hasCustomProseClass ? className : responsiveProse,
+    !hasCustomProseClass && className
+  )
+
   return (
-    <div className={className}>
+    <div className={finalClassName}>
       {blocks.map((block, index) => (
         <MemoizedMarkdownBlock
           key={`${blockId}-block-${index}`}
