@@ -220,13 +220,13 @@ describe('useIssuePrStatus', () => {
       path: {
         projectId: 'project-1',
         issueId: 'issue-1',
-      }
+      },
     })
     expect(api.IssuePrStatus.getApiIssuePrStatusByProjectIdByIssueId).toHaveBeenNthCalledWith(2, {
       path: {
         projectId: 'project-1',
         issueId: 'issue-2',
-      }
+      },
     })
   })
 })
