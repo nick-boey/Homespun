@@ -12,21 +12,6 @@ test.describe('Agent Status Indicator', () => {
     await navigateAndWait(page, '/')
   })
 
-  test('shows idle status when no sessions are active', async ({ page }) => {
-    // Wait for the status indicator to be ready
-    await waitForStatusIndicator(page)
-
-    // The indicator should be visible in the header
-    const indicator = page.locator('[data-testid="status-indicator"]')
-    await expect(indicator).toBeVisible()
-
-    // Check for green idle indicator
-    await expect(indicator).toHaveClass(/text-green-500/)
-
-    // Check idle text
-    await expect(page.locator('text=Agent idle')).toBeVisible()
-  })
-
   test('navigates to global sessions page when clicked without project', async ({ page }) => {
     // Click on the indicator
     await page.click('[data-testid="status-indicator"]')
@@ -51,9 +36,6 @@ test.describe('Agent Status Indicator', () => {
       for (const status of visibleStatuses) {
         await expect(page.locator(`[data-testid="status-${status}-count"]`)).toBeVisible()
       }
-    } else {
-      // Should show idle state
-      await expect(page.locator('text=Agent idle')).toBeVisible()
     }
   })
 

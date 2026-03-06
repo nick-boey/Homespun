@@ -28,6 +28,10 @@ vi.mock('@/api', async (importOriginal) => {
         error: undefined,
       }),
     },
+    Sessions: {
+      getApiSessions: vi.fn().mockResolvedValue({ data: [], error: undefined }),
+      getApiSessionsProjectByProjectId: vi.fn().mockResolvedValue({ data: [], error: undefined }),
+    },
     FleeceIssueSync: {
       postApiFleeceSyncByProjectIdPull: vi.fn().mockResolvedValue({
         data: { success: true, issuesMerged: 0, wasBehindRemote: false, commitsPulled: 0 },
