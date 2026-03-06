@@ -1,11 +1,11 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
-import { Link } from '@tanstack/react-router'
-import { AlertCircle, RefreshCw, Square, Terminal } from 'lucide-react'
-import { useSessions, useStopSession, sessionsQueryKey } from '../hooks/use-sessions'
+import { AlertCircle, RefreshCw, Terminal } from 'lucide-react'
+import { useEnrichedSessions } from '../hooks/use-enriched-sessions'
+import { useStopSession, sessionsQueryKey } from '../hooks/use-sessions'
+import { SessionCard } from './session-card'
 import { SessionsEmptyState } from './sessions-empty-state'
-import { SessionRowSkeleton } from './session-row-skeleton'
+import { SessionCardSkeleton } from './session-card-skeleton'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import {
   Select,
   SelectContent,
@@ -13,14 +13,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -34,7 +26,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useClaudeCodeHub } from '@/providers/signalr-provider'
 import { registerClaudeCodeHubEvents } from '@/lib/signalr/claude-code-hub'
-import type { ClaudeSessionStatus } from '@/api/generated'
+import type { ClaudeSessionStatus } from '@/api/generated/types.gen'
 import { useQueryClient } from '@tanstack/react-query'
 
 // Status enum values from backend
@@ -51,49 +43,6 @@ const SessionStatus = {
 
 type StatusFilter = 'all' | 'active' | 'stopped' | 'error'
 
-function getStatusLabel(status: ClaudeSessionStatus | undefined): string {
-  switch (status) {
-    case SessionStatus.Starting:
-      return 'Starting'
-    case SessionStatus.RunningHooks:
-      return 'Running Hooks'
-    case SessionStatus.Running:
-      return 'Running'
-    case SessionStatus.WaitingForInput:
-      return 'Waiting'
-    case SessionStatus.WaitingForQuestionAnswer:
-      return 'Question'
-    case SessionStatus.WaitingForPlanExecution:
-      return 'Plan Ready'
-    case SessionStatus.Stopped:
-      return 'Stopped'
-    case SessionStatus.Error:
-      return 'Error'
-    default:
-      return 'Unknown'
-  }
-}
-
-function getStatusVariant(
-  status: ClaudeSessionStatus | undefined
-): 'default' | 'secondary' | 'destructive' | 'outline' {
-  switch (status) {
-    case SessionStatus.Running:
-    case SessionStatus.RunningHooks:
-      return 'default'
-    case SessionStatus.Starting:
-    case SessionStatus.WaitingForInput:
-    case SessionStatus.WaitingForQuestionAnswer:
-    case SessionStatus.WaitingForPlanExecution:
-      return 'secondary'
-    case SessionStatus.Error:
-      return 'destructive'
-    case SessionStatus.Stopped:
-    default:
-      return 'outline'
-  }
-}
-
 function isActiveStatus(status: ClaudeSessionStatus | undefined): boolean {
   return (
     status === SessionStatus.Starting ||
@@ -105,35 +54,8 @@ function isActiveStatus(status: ClaudeSessionStatus | undefined): boolean {
   )
 }
 
-function formatRelativeTime(dateString: string | undefined): string {
-  if (!dateString) return 'Unknown'
-
-  const date = new Date(dateString)
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-  const diffSecs = Math.floor(diffMs / 1000)
-  const diffMins = Math.floor(diffSecs / 60)
-  const diffHours = Math.floor(diffMins / 60)
-  const diffDays = Math.floor(diffHours / 24)
-
-  if (diffDays > 0) {
-    return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`
-  }
-  if (diffHours > 0) {
-    return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`
-  }
-  if (diffMins > 0) {
-    return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`
-  }
-  return 'just now'
-}
-
-function getModeLabel(mode: number): string {
-  return mode === 0 ? 'Plan' : 'Build'
-}
-
 export function SessionsList() {
-  const { data: sessions, isLoading, isError, refetch } = useSessions()
+  const { sessions, isLoading, isError, refetch } = useEnrichedSessions()
   const stopSession = useStopSession()
   const queryClient = useQueryClient()
   const { connection, isConnected } = useClaudeCodeHub()
@@ -190,25 +112,28 @@ export function SessionsList() {
     // Filter by active/archived tab
     if (activeTab === 'active') {
       filtered = filtered.filter(
-        (s) => s.status !== SessionStatus.Stopped && s.status !== SessionStatus.Error
+        (s) =>
+          s.session.status !== SessionStatus.Stopped && s.session.status !== SessionStatus.Error
       )
     } else {
       filtered = filtered.filter(
-        (s) => s.status === SessionStatus.Stopped || s.status === SessionStatus.Error
+        (s) =>
+          s.session.status === SessionStatus.Stopped || s.session.status === SessionStatus.Error
       )
     }
 
     // Filter by status dropdown
     if (statusFilter !== 'all') {
-      filtered = filtered.filter((session) => {
+      filtered = filtered.filter((enrichedSession) => {
+        const status = enrichedSession.session.status
         if (statusFilter === 'active') {
-          return isActiveStatus(session.status)
+          return isActiveStatus(status)
         }
         if (statusFilter === 'stopped') {
-          return session.status === SessionStatus.Stopped
+          return status === SessionStatus.Stopped
         }
         if (statusFilter === 'error') {
-          return session.status === SessionStatus.Error
+          return status === SessionStatus.Error
         }
         return true
       })
@@ -216,11 +141,29 @@ export function SessionsList() {
 
     // Sort by last activity (most recent first)
     return filtered.sort((a, b) => {
-      const dateA = a.lastActivityAt ? new Date(a.lastActivityAt).getTime() : 0
-      const dateB = b.lastActivityAt ? new Date(b.lastActivityAt).getTime() : 0
+      const dateA = a.session.lastActivityAt ? new Date(a.session.lastActivityAt).getTime() : 0
+      const dateB = b.session.lastActivityAt ? new Date(b.session.lastActivityAt).getTime() : 0
       return dateB - dateA
     })
   }, [sessions, statusFilter, activeTab])
+
+  // Group filtered sessions by project
+  const groupedFilteredSessions = useMemo(() => {
+    const groups = new Map<string, typeof filteredSessions>()
+
+    filteredSessions.forEach((enrichedSession) => {
+      const projectId = enrichedSession.session.projectId || 'no-project'
+      const existing = groups.get(projectId) || []
+      groups.set(projectId, [...existing, enrichedSession])
+    })
+
+    // Sort groups by project name
+    return Array.from(groups.entries()).sort(([, sessionsA], [, sessionsB]) => {
+      const nameA = sessionsA[0]?.projectName || 'Unknown Project'
+      const nameB = sessionsB[0]?.projectName || 'Unknown Project'
+      return nameA.localeCompare(nameB)
+    })
+  }, [filteredSessions])
 
   if (isLoading) {
     return (
@@ -233,25 +176,10 @@ export function SessionsList() {
             </TabsList>
           </Tabs>
         </div>
-        <div className="rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[200px]">Session</TableHead>
-                <TableHead>Entity</TableHead>
-                <TableHead>Mode</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Messages</TableHead>
-                <TableHead>Last Activity</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {[1, 2, 3].map((i) => (
-                <SessionRowSkeleton key={i} />
-              ))}
-            </TableBody>
-          </Table>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <SessionCardSkeleton key={i} />
+          ))}
         </div>
       </div>
     )
@@ -277,6 +205,13 @@ export function SessionsList() {
     return <SessionsEmptyState />
   }
 
+  const activeSessions = sessions.filter(
+    (s) => s.session.status !== SessionStatus.Stopped && s.session.status !== SessionStatus.Error
+  )
+  const archivedSessions = sessions.filter(
+    (s) => s.session.status === SessionStatus.Stopped || s.session.status === SessionStatus.Error
+  )
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-4">
@@ -287,24 +222,8 @@ export function SessionsList() {
         >
           <div className="flex items-center justify-between">
             <TabsList>
-              <TabsTrigger value="active">
-                Active (
-                {
-                  sessions.filter(
-                    (s) => s.status !== SessionStatus.Stopped && s.status !== SessionStatus.Error
-                  ).length
-                }
-                )
-              </TabsTrigger>
-              <TabsTrigger value="archived">
-                Archived (
-                {
-                  sessions.filter(
-                    (s) => s.status === SessionStatus.Stopped || s.status === SessionStatus.Error
-                  ).length
-                }
-                )
-              </TabsTrigger>
+              <TabsTrigger value="active">Active ({activeSessions.length})</TabsTrigger>
+              <TabsTrigger value="archived">Archived ({archivedSessions.length})</TabsTrigger>
             </TabsList>
             <div className="flex items-center gap-2">
               <Select
@@ -334,8 +253,8 @@ export function SessionsList() {
                 <p className="mt-4">No active sessions</p>
               </div>
             ) : (
-              <SessionsTable
-                sessions={filteredSessions}
+              <SessionsGrid
+                groupedSessions={groupedFilteredSessions}
                 onStopSession={handleStopSession}
                 isStopPending={stopSession.isPending}
               />
@@ -349,7 +268,7 @@ export function SessionsList() {
                 <p className="mt-4">No archived sessions</p>
               </div>
             ) : (
-              <SessionsTable sessions={filteredSessions} />
+              <SessionsGrid groupedSessions={groupedFilteredSessions} />
             )}
           </TabsContent>
         </Tabs>
@@ -376,86 +295,42 @@ export function SessionsList() {
   )
 }
 
-interface SessionsTableProps {
-  sessions: Array<{
-    id: string | null
-    entityId: string | null
-    projectId: string | null
-    model: string | null
-    mode: number
-    status?: ClaudeSessionStatus
-    createdAt?: string
-    lastActivityAt?: string
-    messageCount?: number
-    totalCostUsd?: number
-    containerId?: string | null
-    containerName?: string | null
-  }>
+interface SessionsGridProps {
+  groupedSessions: Array<[string, Array<ReturnType<typeof useEnrichedSessions>['sessions'][0]>]>
   onStopSession?: (sessionId: string) => void
   isStopPending?: boolean
 }
 
-function SessionsTable({ sessions, onStopSession, isStopPending }: SessionsTableProps) {
+function SessionsGrid({ groupedSessions, onStopSession, isStopPending }: SessionsGridProps) {
   return (
-    <div className="rounded-md border">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-[200px]">Session</TableHead>
-            <TableHead>Entity</TableHead>
-            <TableHead>Mode</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Messages</TableHead>
-            <TableHead>Last Activity</TableHead>
-            <TableHead className="text-right">Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {sessions.map((session) => (
-            <TableRow key={session.id}>
-              <TableCell className="font-mono text-sm">
-                <Link
-                  to="/sessions/$sessionId"
-                  params={{ sessionId: session.id ?? '' }}
-                  className="hover:underline"
-                  aria-label={session.id ?? ''}
-                >
-                  {session.id}
-                </Link>
-              </TableCell>
-              <TableCell>
-                <span className="font-mono text-sm">{session.entityId}</span>
-              </TableCell>
-              <TableCell>
-                <Badge variant="outline">{getModeLabel(session.mode)}</Badge>
-              </TableCell>
-              <TableCell>
-                <Badge variant={getStatusVariant(session.status)}>
-                  {getStatusLabel(session.status)}
-                </Badge>
-              </TableCell>
-              <TableCell>{session.messageCount ?? 0}</TableCell>
-              <TableCell className="text-muted-foreground text-sm">
-                {formatRelativeTime(session.lastActivityAt)}
-              </TableCell>
-              <TableCell className="text-right">
-                {isActiveStatus(session.status) && onStopSession && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => session.id && onStopSession(session.id)}
-                    disabled={isStopPending}
-                    aria-label="Stop"
-                  >
-                    <Square className="mr-1 h-3 w-3" />
-                    Stop
-                  </Button>
-                )}
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+    <div className="space-y-6">
+      {groupedSessions.map(([projectId, projectSessions]) => {
+        const projectName = projectSessions[0]?.projectName || 'Unknown Project'
+        return (
+          <div key={projectId}>
+            <h3 className="text-muted-foreground mb-3 text-sm font-medium">
+              {projectName}
+              <span className="text-muted-foreground ml-2 text-xs">
+                ({projectSessions.length} session{projectSessions.length !== 1 ? 's' : ''})
+              </span>
+            </h3>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {projectSessions.map((enrichedSession) => (
+                <SessionCard
+                  key={enrichedSession.session.id}
+                  session={enrichedSession.session}
+                  entityTitle={enrichedSession.entityTitle}
+                  entityType={enrichedSession.entityType}
+                  projectName={enrichedSession.projectName}
+                  messageCount={enrichedSession.messageCount}
+                  onStop={onStopSession}
+                  isStopPending={isStopPending}
+                />
+              ))}
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }
