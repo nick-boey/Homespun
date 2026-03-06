@@ -25,3 +25,6 @@ dist-ssr
 
 # OpenAPI generation temp file
 swagger.json
+
+# Playwright report
+playwright-report/*
