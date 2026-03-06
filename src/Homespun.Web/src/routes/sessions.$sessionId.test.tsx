@@ -44,7 +44,7 @@ vi.mock('@/providers/signalr-provider', () => ({
 
 vi.mock('@/features/sessions', () => ({
   useSession: vi.fn(),
-  useSessionMessages: vi.fn(() => ({ messages: [] })),
+  useSessionMessages: vi.fn(() => ({ messages: [], addUserMessage: vi.fn() })),
   MessageList: vi.fn(() => <div data-testid="message-list" />),
   ChatInput: vi.fn(),
   usePlanApproval: vi.fn(() => ({ hasPendingPlan: false })),
@@ -78,6 +78,7 @@ const SessionChat = (Route as any).component as React.ComponentType
 describe('SessionChat - Message Sending', () => {
   const mockSessionsAPI = vi.mocked(Sessions)
   const mockToast = vi.mocked(toast)
+  const mockAddUserMessage = vi.fn()
   const mockSession = {
     id: 'test-session-id',
     entityId: 'entity-123',
@@ -97,6 +98,7 @@ describe('SessionChat - Message Sending', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks()
+    mockAddUserMessage.mockClear()
 
     // Set up connected state by default
     const { useClaudeCodeHub } = vi.mocked(await import('@/providers/signalr-provider'))
@@ -109,7 +111,15 @@ describe('SessionChat - Message Sending', () => {
       isReconnecting: false,
     })
 
-    const { useSession, ChatInput } = vi.mocked(await import('@/features/sessions'))
+    const { useSession, ChatInput, useSessionMessages } = vi.mocked(
+      await import('@/features/sessions')
+    )
+
+    // Mock useSessionMessages to return addUserMessage
+    useSessionMessages.mockReturnValue({
+      messages: [],
+      addUserMessage: mockAddUserMessage,
+    })
 
     // Mock useSession to return a valid session
     useSession.mockReturnValue({
@@ -331,5 +341,125 @@ describe('SessionChat - Message Sending', () => {
 
     const placeholder = screen.getByTestId('placeholder')
     expect(placeholder).toHaveTextContent('Processing...')
+  })
+
+  it('should call addUserMessage optimistically when sending a message', async () => {
+    const user = userEvent.setup()
+    mockSessionsAPI.postApiSessionsByIdMessages = vi.fn().mockResolvedValueOnce({
+      data: {},
+      error: undefined,
+    })
+
+    render(<SessionChat />)
+
+    const sendButton = screen.getByTestId('send-button')
+    await user.click(sendButton)
+
+    // Verify addUserMessage was called with the message text
+    expect(mockAddUserMessage).toHaveBeenCalledWith('Test message')
+    expect(mockAddUserMessage).toHaveBeenCalledTimes(1)
+
+    // Verify API was also called
+    await waitFor(() => {
+      expect(mockSessionsAPI.postApiSessionsByIdMessages).toHaveBeenCalledWith({
+        path: { id: 'test-session-id' },
+        body: { message: 'Test message', mode: 0 },
+      })
+    })
+  })
+
+  it('should add user message before API call for better UX', async () => {
+    const user = userEvent.setup()
+    const callOrder: string[] = []
+
+    // Track order of calls
+    mockAddUserMessage.mockImplementation(() => {
+      callOrder.push('addUserMessage')
+    })
+
+    mockSessionsAPI.postApiSessionsByIdMessages = vi.fn().mockImplementation(() => {
+      callOrder.push('apiCall')
+      return Promise.resolve({ data: {}, error: undefined })
+    })
+
+    render(<SessionChat />)
+
+    const sendButton = screen.getByTestId('send-button')
+    await user.click(sendButton)
+
+    // Verify addUserMessage was called before the API
+    expect(callOrder).toEqual(['addUserMessage', 'apiCall'])
+  })
+
+  it('should keep user message visible even if API call fails', async () => {
+    const user = userEvent.setup()
+    mockSessionsAPI.postApiSessionsByIdMessages = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('Network error'))
+
+    render(<SessionChat />)
+
+    const sendButton = screen.getByTestId('send-button')
+    await user.click(sendButton)
+
+    // Verify addUserMessage was called
+    expect(mockAddUserMessage).toHaveBeenCalledWith('Test message')
+
+    // Wait for error to be shown
+    await waitFor(() => {
+      expect(mockToast.error).toHaveBeenCalledWith('Failed to send message')
+    })
+
+    // Verify addUserMessage was still called (message stays visible)
+    expect(mockAddUserMessage).toHaveBeenCalledTimes(1)
+  })
+
+  it('should handle multiple rapid messages with unique optimistic updates', async () => {
+    const user = userEvent.setup()
+    let messageCount = 0
+
+    // Mock ChatInput to allow different messages
+    const { ChatInput } = vi.mocked(await import('@/features/sessions'))
+    ChatInput.mockImplementation(({ onSend, disabled, placeholder, isLoading }) => (
+      <div data-testid="chat-input">
+        <button
+          data-testid="send-button"
+          onClick={() => {
+            messageCount++
+            onSend(`Message ${messageCount}`, 'Build', 'opus')
+          }}
+          disabled={disabled || isLoading}
+        >
+          Send
+        </button>
+        <span data-testid="placeholder">{placeholder}</span>
+        {isLoading && <span data-testid="loading">Loading...</span>}
+      </div>
+    ))
+
+    mockSessionsAPI.postApiSessionsByIdMessages = vi.fn().mockResolvedValue({
+      data: {},
+      error: undefined,
+    })
+
+    render(<SessionChat />)
+
+    const sendButton = screen.getByTestId('send-button')
+
+    // Send multiple messages rapidly
+    await user.click(sendButton)
+    await user.click(sendButton)
+    await user.click(sendButton)
+
+    // Verify addUserMessage was called for each message
+    expect(mockAddUserMessage).toHaveBeenCalledWith('Message 1')
+    expect(mockAddUserMessage).toHaveBeenCalledWith('Message 2')
+    expect(mockAddUserMessage).toHaveBeenCalledWith('Message 3')
+    expect(mockAddUserMessage).toHaveBeenCalledTimes(3)
+
+    // Verify all API calls were made
+    await waitFor(() => {
+      expect(mockSessionsAPI.postApiSessionsByIdMessages).toHaveBeenCalledTimes(3)
+    })
   })
 })
