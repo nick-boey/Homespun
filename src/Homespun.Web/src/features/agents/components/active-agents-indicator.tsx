@@ -99,7 +99,11 @@ export function ActiveAgentsIndicator({ projectId, className }: ActiveAgentsIndi
     // Show idle state if no active sessions
     if (!hasActive || statusIndicators.length === 0) {
       return (
-        <Link to={sessionsUrl} className={cn('flex items-center gap-2', className)}>
+        <Link
+          to={sessionsUrl}
+          className={cn('flex items-center gap-2', className)}
+          data-testid="status-indicator"
+        >
           <Circle data-testid="status-indicator" className="h-2 w-2 fill-current text-green-500" />
           <span className="text-muted-foreground hidden text-sm sm:inline">Agent idle</span>
         </Link>
@@ -110,6 +114,7 @@ export function ActiveAgentsIndicator({ projectId, className }: ActiveAgentsIndi
     return (
       <Link
         to={sessionsUrl}
+        data-testid="status-indicator"
         className={cn('flex items-center gap-3 transition-colors hover:opacity-80', className)}
       >
         {statusIndicators.map((status) => (

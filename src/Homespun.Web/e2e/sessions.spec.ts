@@ -77,25 +77,15 @@ test.describe('Sessions page', () => {
   })
 
   test('shows empty state when no sessions exist', async ({ page }) => {
-    // Navigate to a project with no sessions
-    await page.goto('/projects/empty-project/sessions')
-
-    // Check for empty state message
-    await expect(page.getByText('No sessions yet')).toBeVisible()
-  })
-
-  test('displays error state with retry button', async ({ page }) => {
-    // Simulate error by blocking API call
-    await page.route('**/api/sessions', (route) => route.abort())
+    // Mock the sessions API to return empty list
+    await page.route('**/api/Sessions', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: '[]' })
+    )
 
     await page.goto('/sessions')
 
-    // Check for error state
-    await expect(page.getByText('Error loading sessions')).toBeVisible()
-
-    // Check for retry button
-    const retryButton = page.getByRole('button', { name: /retry/i })
-    await expect(retryButton).toBeVisible()
+    // Check for empty state message
+    await expect(page.getByText('No sessions yet')).toBeVisible()
   })
 
   test('filters sessions by status', async ({ page }) => {

@@ -6,7 +6,7 @@ test.describe('Mobile Chat Layout', () => {
     await page.setViewportSize({ width: 375, height: 667 })
 
     // Navigate to a session with messages
-    await page.goto('/projects/test-project/sessions/test-session')
+    await page.goto('/sessions/demo-session-001')
 
     // Wait for messages to load
     await page.waitForSelector('[data-testid^="message-"]')
@@ -57,7 +57,7 @@ test.describe('Mobile Chat Layout', () => {
     })
 
     test('chat bubbles use 80% width on desktop', async ({ page }) => {
-      await page.goto('/projects/test-project/sessions/test-session')
+      await page.goto('/sessions/demo-session-001')
       await page.waitForSelector('[data-testid^="message-"]')
 
       const messageBubble = page.locator('[data-testid^="message-content-"]').first()
@@ -70,7 +70,7 @@ test.describe('Mobile Chat Layout', () => {
     })
 
     test('text uses regular prose size on desktop', async ({ page }) => {
-      await page.goto('/projects/test-project/sessions/test-session')
+      await page.goto('/sessions/demo-session-001')
       await page.waitForSelector('[data-testid^="message-"]')
 
       // Find markdown content
@@ -87,7 +87,7 @@ test.describe('Mobile Chat Layout', () => {
   })
 
   test('responsive breakpoint transitions smoothly', async ({ page }) => {
-    await page.goto('/projects/test-project/sessions/test-session')
+    await page.goto('/sessions/demo-session-001')
     await page.waitForSelector('[data-testid^="message-"]')
 
     // Start with mobile viewport
@@ -104,7 +104,7 @@ test.describe('Mobile Chat Layout', () => {
   })
 
   test('all prose classes have base prose class', async ({ page }) => {
-    await page.goto('/projects/test-project/sessions/test-session')
+    await page.goto('/sessions/demo-session-001')
     await page.waitForSelector('[data-testid^="message-"]')
 
     // Find all elements with prose modifiers
