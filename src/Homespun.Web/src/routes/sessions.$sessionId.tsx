@@ -33,7 +33,7 @@ function SessionChat() {
   const [isSending, setIsSending] = useState(false)
 
   // Get session messages with real-time updates
-  const { messages } = useSessionMessages({
+  const { messages, addUserMessage } = useSessionMessages({
     sessionId,
     initialMessages: session?.messages ?? [],
   })
@@ -66,6 +66,9 @@ function SessionChat() {
 
       setIsSending(true)
 
+      // Add user message optimistically
+      addUserMessage(message)
+
       try {
         // Map our string SessionMode to API's numeric enum
         const apiMode: ApiSessionMode = sessionMode === 'Plan' ? 1 : 0
@@ -84,7 +87,7 @@ function SessionChat() {
         setIsSending(false)
       }
     },
-    [isConnected, sessionId]
+    [isConnected, sessionId, addUserMessage]
   )
 
   // Auto-scroll to bottom when new messages arrive or when pending question appears
