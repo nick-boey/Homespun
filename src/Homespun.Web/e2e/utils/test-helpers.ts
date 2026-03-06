@@ -16,7 +16,7 @@ export async function waitForStatusIndicator(page: Page) {
 
   // Wait for initial API call to complete
   await page.waitForResponse(
-    response => response.url().includes('/api/sessions') && response.status() === 200,
+    (response) => response.url().includes('/api/sessions') && response.status() === 200,
     { timeout: 10000 }
   )
 }
@@ -25,10 +25,7 @@ export async function waitForStatusIndicator(page: Page) {
  * Safely check if an element is visible without throwing errors
  * Returns false if the element is not visible within the timeout
  */
-export async function isElementSafelyVisible(
-  locator: Locator,
-  timeout = 1000
-): Promise<boolean> {
+export async function isElementSafelyVisible(locator: Locator, timeout = 1000): Promise<boolean> {
   try {
     return await locator.isVisible({ timeout })
   } catch {

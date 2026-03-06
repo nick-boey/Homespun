@@ -4,7 +4,7 @@ import {
   waitForStatusIndicator,
   isElementSafelyVisible,
   checkStatusIndicators,
-  createTestProject
+  createTestProject,
 } from './utils/test-helpers'
 
 test.describe('Agent Status Indicator', () => {
@@ -67,7 +67,7 @@ test.describe('Agent Status Indicator', () => {
       'waiting-input': 'text-yellow-500',
       'waiting-answer': 'text-orange-500',
       'waiting-plan': 'text-purple-500',
-      error: 'text-red-500'
+      error: 'text-red-500',
     }
 
     for (const [status, colorClass] of Object.entries(statusColorMap)) {
