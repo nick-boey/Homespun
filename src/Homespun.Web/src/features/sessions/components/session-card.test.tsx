@@ -1,0 +1,252 @@
+import { describe, it, expect, vi } from 'vitest'
+import { render, screen, fireEvent } from '@testing-library/react'
+import React from 'react'
+import { SessionCard } from './session-card'
+import type { SessionSummary, ClaudeSessionStatus } from '@/api/generated/types.gen'
+
+const mockSession: SessionSummary = {
+  id: 'test-session-id',
+  entityId: 'issue-123',
+  projectId: 'project-1',
+  model: 'claude-3.5-sonnet',
+  mode: 1, // Build
+  status: 2, // Running
+  createdAt: new Date().toISOString(),
+  lastActivityAt: new Date().toISOString(),
+  messageCount: 0,
+  totalCostUsd: 0.05,
+}
+
+// Mock the router
+vi.mock('@tanstack/react-router', () => ({
+  Link: ({
+    children,
+    to,
+    ...props
+  }: {
+    children: React.ReactNode
+    to: string
+    [key: string]: unknown
+  }) => {
+    return React.createElement('a', { href: to, ...props }, children)
+  },
+}))
+
+describe('SessionCard', () => {
+  it('renders session information correctly', () => {
+    render(
+      <SessionCard
+        session={mockSession}
+        entityTitle="Fix login bug"
+        entityType="issue"
+        projectName="Test Project"
+        onStop={vi.fn()}
+      />
+    )
+
+    // Check entity badge and title
+    expect(screen.getByText('Issue')).toBeInTheDocument()
+    expect(screen.getByText('Fix login bug')).toBeInTheDocument()
+
+    // Check status
+    expect(screen.getByText('Running')).toBeInTheDocument()
+
+    // Check mode
+    expect(screen.getByText('Build')).toBeInTheDocument()
+
+    // Check model (should extract sonnet from full model name)
+    expect(screen.getByText('sonnet')).toBeInTheDocument()
+
+    // Check action buttons
+    expect(screen.getByRole('link', { name: /Chat/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Stop/ })).toBeInTheDocument()
+  })
+
+  it('shows PR badge for pull request entities', () => {
+    render(
+      <SessionCard
+        session={{ ...mockSession, entityId: 'pr-456' }}
+        entityTitle="Add new feature"
+        entityType="pr"
+        projectName="Test Project"
+      />
+    )
+
+    expect(screen.getByText('PR')).toBeInTheDocument()
+    expect(screen.getByText('Add new feature')).toBeInTheDocument()
+  })
+
+  it('falls back to entity ID when title is not available', () => {
+    render(
+      <SessionCard
+        session={mockSession}
+        entityTitle={undefined}
+        entityType="issue"
+        projectName="Test Project"
+      />
+    )
+
+    expect(screen.getByText('issue-123')).toBeInTheDocument()
+  })
+
+  it('shows Plan mode correctly', () => {
+    render(
+      <SessionCard
+        session={{ ...mockSession, mode: 0 }}
+        entityTitle="Test"
+        entityType="issue"
+        projectName="Test Project"
+      />
+    )
+
+    expect(screen.getByText('Plan')).toBeInTheDocument()
+  })
+
+  it('hides Stop button for stopped sessions', () => {
+    render(
+      <SessionCard
+        session={{ ...mockSession, status: 6 }} // Stopped
+        entityTitle="Test"
+        entityType="issue"
+        projectName="Test Project"
+      />
+    )
+
+    expect(screen.queryByRole('button', { name: /Stop/ })).not.toBeInTheDocument()
+    expect(screen.getByText('Stopped')).toBeInTheDocument()
+  })
+
+  it('shows error state correctly', () => {
+    render(
+      <SessionCard
+        session={{ ...mockSession, status: 7 }} // Error
+        entityTitle="Test"
+        entityType="issue"
+        projectName="Test Project"
+      />
+    )
+
+    expect(screen.queryByRole('button', { name: /Stop/ })).not.toBeInTheDocument()
+    expect(screen.getByText('Error')).toBeInTheDocument()
+  })
+
+  it('displays time information correctly', () => {
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString()
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
+
+    render(
+      <SessionCard
+        session={{
+          ...mockSession,
+          createdAt: twoHoursAgo,
+          lastActivityAt: oneHourAgo,
+        }}
+        entityTitle="Test"
+        entityType="issue"
+        projectName="Test Project"
+      />
+    )
+
+    expect(screen.getByText(/Started 2 hours ago/)).toBeInTheDocument()
+    expect(screen.getByText(/Active 1 hour ago/)).toBeInTheDocument()
+  })
+
+  it('calls onStop when Stop button is clicked', () => {
+    const onStop = vi.fn()
+    render(
+      <SessionCard
+        session={mockSession}
+        entityTitle="Test"
+        entityType="issue"
+        projectName="Test Project"
+        onStop={onStop}
+      />
+    )
+
+    const stopButton = screen.getByRole('button', { name: /Stop/ })
+    fireEvent.click(stopButton)
+
+    expect(onStop).toHaveBeenCalledWith('test-session-id')
+  })
+
+  it('extracts model name correctly from full model string', () => {
+    const testCases = [
+      { model: 'claude-3.5-sonnet-20241022', expected: 'sonnet' },
+      { model: 'claude-3-opus', expected: 'opus' },
+      { model: 'claude-3.5-haiku-1234', expected: 'haiku' },
+      { model: 'gpt-4', expected: 'gpt-4' }, // fallback to full name
+    ]
+
+    testCases.forEach(({ model, expected }) => {
+      const { rerender } = render(
+        <SessionCard
+          session={{ ...mockSession, model }}
+          entityTitle="Test"
+          entityType="issue"
+          projectName="Test Project"
+        />
+      )
+
+      expect(screen.getByText(expected)).toBeInTheDocument()
+
+      rerender(<div />) // cleanup for next iteration
+    })
+  })
+
+  it('shows project name when provided', () => {
+    render(
+      <SessionCard
+        session={mockSession}
+        entityTitle="Test"
+        entityType="issue"
+        projectName="My Awesome Project"
+      />
+    )
+
+    expect(screen.getByText('My Awesome Project')).toBeInTheDocument()
+  })
+
+  it('shows message count when available', () => {
+    render(
+      <SessionCard
+        session={mockSession}
+        entityTitle="Test"
+        entityType="issue"
+        projectName="Test Project"
+        messageCount={42}
+      />
+    )
+
+    expect(screen.getByText('42 messages')).toBeInTheDocument()
+  })
+
+  it('shows different status animations', () => {
+    const statusTests = [
+      { status: 0, label: 'Starting' }, // Starting
+      { status: 1, label: 'Running Hooks' }, // RunningHooks
+      { status: 2, label: 'Running' }, // Running
+      { status: 3, label: 'Waiting' }, // WaitingForInput
+      { status: 4, label: 'Question' }, // WaitingForQuestionAnswer
+      { status: 5, label: 'Plan Ready' }, // WaitingForPlanExecution
+    ]
+
+    statusTests.forEach(({ status, label }) => {
+      const { rerender } = render(
+        <SessionCard
+          session={{ ...mockSession, status: status as ClaudeSessionStatus }}
+          entityTitle="Test"
+          entityType="issue"
+          projectName="Test Project"
+        />
+      )
+
+      expect(screen.getByText(label)).toBeInTheDocument()
+
+      // Check that the status indicator has animation class
+      const statusElement = screen.getByText(label).parentElement
+      expect(statusElement?.querySelector('.animate-pulse')).toBeInTheDocument()
+
+      rerender(<div />)
+    })
+  })
+})
