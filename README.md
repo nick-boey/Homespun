@@ -1,6 +1,10 @@
 # Homespun
 
-Homespun is a .NET application for managing software development workflows using Git, GitHub, and agentic AI tools like Claude Code. It models development as a tree where each node represents a feature or fix aligned with GitHub pull requests.
+Homespun is a web application for managing development features and AI agents. It provides:
+- Project and feature management with hierarchical tree visualization
+- Git clone integration for isolated feature development
+- GitHub PR synchronization
+- Claude Code agent orchestration
 
 ## Overview
 
@@ -9,8 +13,28 @@ Homespun provides a visual interface for planning and executing software develop
 - **Feature Tree**: Visualize past, present, and future pull requests as a tree structure
 - **Multiple Projects**: Work on multiple repositories simultaneously
 - **Git Clones**: Automatically manage clones for each feature branch
-- **Claude Code Agents**: Spawn and manage headless Claude Code instances
-- **Message Persistence**: Store all agent communications in JSON storage
+- **Claude Code Agents**: Spawn and manage Claude Code SDK sessions
+- **Issue Tracking**: Integration with Fleece issue tracking
+- **Real-time Updates**: Live updates via SignalR
+
+## Technology Stack
+
+### Frontend
+- **React 19** with TypeScript
+- **Vite** for build tooling
+- **TailwindCSS v4** for styling
+- **TanStack Router** for file-based routing
+- **TanStack Query** for server state management
+- **Zustand** for client state management
+- **shadcn/ui** for UI components (New York style, Zinc base color)
+- **prompt-kit** for AI chat interface components
+
+### Backend
+- **ASP.NET Core** (.NET 8)
+- **SignalR** for real-time communication
+- **Fleece** for issue tracking (JSONL-based)
+- **Claude Code SDK** for AI agent integration
+- **Octokit** for GitHub API integration
 
 ## Features
 
@@ -22,7 +46,7 @@ Homespun provides a visual interface for planning and executing software develop
 - Custom system prompts with template variables
 - Color-coded feature status:
   - Blue: Merged
-  - Red: Cancelled
+  - Red: Cancelled/Closed
   - Yellow: In development
   - Green: Ready for review
   - Orange: Has review comments
@@ -30,21 +54,14 @@ Homespun provides a visual interface for planning and executing software develop
   - Grey: Future/planned
 - Automated review polling from GitHub
 - Agent status panel with real-time updates
-
-## Technology Stack
-
-- **.NET 10**: Core runtime
-- **Blazor WebAssembly**: Web frontend
-- **JSON File Storage**: Persistence
-- **SignalR**: Real-time updates
-- **Claude Code CLI**: AI agent
-- **Tailscale**: Optional secure remote access
+- Fleece integration for local issue tracking
 
 ## Getting Started
 
 ### Prerequisites
 
-- .NET 10 SDK or later
+- .NET 8 SDK or later
+- Node.js 18+ and npm
 - Git
 - Claude Code CLI installed and configured
 - GitHub personal access token (for PR synchronization)
@@ -54,8 +71,14 @@ Homespun provides a visual interface for planning and executing software develop
 ```bash
 git clone https://github.com/your-org/Homespun.git
 cd Homespun
+
+# Backend
 dotnet restore
 dotnet build
+
+# Frontend
+cd src/Homespun.Web
+npm install
 ```
 
 ### Configuration
@@ -67,7 +90,6 @@ Set the following environment variables before running:
 | `HOMESPUN_DATA_PATH` | Path to data file | `~/.homespun/homespun-data.json` |
 | `GITHUB_TOKEN` | GitHub personal access token for PR operations | (required for GitHub sync) |
 | `HOMESPUN_CLONE_ROOT` | Base directory for clones | (uses project path) |
-| `CLAUDE_CODE_PATH` | Path to Claude Code CLI executable | (uses PATH) |
 
 Example:
 ```bash
@@ -77,11 +99,131 @@ export HOMESPUN_DATA_PATH="/data/.homespun/homespun-data.json"
 
 ### Running
 
+#### Development Mode
+
 ```bash
+# Backend (from repository root)
 dotnet run --project src/Homespun.Server
+
+# Frontend (in a separate terminal)
+cd src/Homespun.Web
+npm run dev
 ```
 
-The application will be available at `https://localhost:5001` (or the configured port).
+The application will be available at `http://localhost:5173` (frontend) with API at `https://localhost:5001`.
+
+#### Mock Mode (for development/testing)
+
+```bash
+# Linux/Mac
+./scripts/mock.sh
+
+# Windows
+./scripts/mock.ps1
+```
+
+Mock mode provides pre-seeded demo data without external dependencies.
+
+## Development
+
+### Project Structure
+
+The project follows Vertical Slice Architecture where code is organized by feature rather than technical layer:
+
+```
+src/
+├── Homespun.Server/             # ASP.NET backend
+│   ├── Features/                # Feature slices
+│   │   ├── AgentOrchestration/  # Agent lifecycle management
+│   │   ├── ClaudeCode/          # Claude Code SDK session management
+│   │   ├── Commands/            # Shell command execution
+│   │   ├── Fleece/              # Fleece issue tracking integration
+│   │   ├── Git/                 # Git clone operations
+│   │   ├── GitHub/              # GitHub API integration (Octokit)
+│   │   ├── Notifications/       # Toast notifications via SignalR
+│   │   ├── Projects/            # Project management
+│   │   └── PullRequests/        # PR workflow and data entities
+├── Homespun.Web/                # React frontend
+│   ├── src/
+│   │   ├── features/            # Feature slices
+│   │   ├── components/ui/       # shadcn/ui components
+│   │   ├── api/                 # OpenAPI generated client
+│   │   └── routes/              # TanStack Router routes
+├── Homespun.Shared/             # Shared DTOs and contracts
+├── Homespun.ClaudeAgentSdk/     # Claude Code SDK C# wrapper
+└── Homespun.Worker/             # TypeScript agent worker
+```
+
+### Frontend Development
+
+```bash
+cd src/Homespun.Web
+
+# Development server with hot reload
+npm run dev
+
+# Build for production
+npm run build
+
+# Linting and formatting
+npm run lint
+npm run lint:fix
+npm run format
+npm run format:check
+
+# Type checking
+npm run typecheck
+
+# Generate API client from OpenAPI spec
+npm run generate:api:fetch
+```
+
+### Testing
+
+#### Frontend Tests
+
+```bash
+cd src/Homespun.Web
+
+# Run tests once
+npm test
+
+# Run tests in watch mode
+npm run test:watch
+
+# Run tests with coverage
+npm run test:coverage
+
+# Run E2E tests
+npm run playwright:install  # First time only
+npm run test:e2e
+npm run test:e2e:ui        # Interactive mode
+```
+
+#### Backend Tests
+
+```bash
+# Run all tests
+dotnet test
+
+# Run specific test project
+dotnet test tests/Homespun.Tests
+dotnet test tests/Homespun.Api.Tests
+dotnet test tests/Homespun.E2E.Tests
+```
+
+### Pre-PR Checklist
+
+Before creating a pull request:
+
+```bash
+cd src/Homespun.Web
+
+# Must pass with no errors
+npm run lint
+npm run typecheck
+npm test
+```
 
 ## Usage Guide
 
@@ -103,12 +245,28 @@ The application will be available at `https://localhost:5001` (or the configured
    - Spawn a Claude Code agent
    - Begin development in isolation
 
+### Managing Issues with Fleece
+
+Homespun integrates with Fleece for local issue tracking:
+
+1. **View Issues**: Issues are displayed in the sidebar
+2. **Create Issues**: Use the Fleece CLI or UI to create new issues
+3. **Update Status**: Progress issues through workflow states:
+   ```
+   open → progress → review → complete
+                           ↘ archived
+                           ↘ closed
+   ```
+4. **Link to PRs**: Issues are automatically linked to pull requests
+
 ### Managing Agents
 
 1. **View Agents**: Navigate to the Agents dashboard to see all active agents
-2. **Monitor Messages**: Click on an agent to view its message stream in real-time
-3. **Stop Agents**: Use the "Stop" button to gracefully terminate an agent
-4. **Custom Prompts**: Configure system prompts per feature or use project-level defaults
+2. **Agent Modes**:
+   - **Plan Mode**: Read-only access for planning
+   - **Build Mode**: Full access for implementation
+3. **Monitor Messages**: Click on an agent to view its message stream in real-time
+4. **Stop Agents**: Use the "Stop" button to gracefully terminate an agent
 
 ### System Prompts
 
@@ -122,168 +280,33 @@ Homespun supports customizable system prompts with template variables:
 | `{{BranchName}}` | Git branch name |
 | `{{ClonePath}}` | Path to the clone directory |
 
-Create prompt templates in the Prompt Templates page to reuse across features and projects.
-
-### Pull Request Workflow
-
-Homespun organizes development as a continuous chain of pull requests across three time stages:
-
-#### Time Dimension
-
-Each pull request has a calculated time value `t` based on its position in the workflow. This value is not stored but computed dynamically:
-
-- **Past (`t <= 0`)**: Merged/closed PRs. The value is calculated from merge order - most recent merge has `t = 0`, older PRs have negative values (`t = -1`, `t = -2`, etc.).
-- **Present (`t = 1`)**: All currently open PRs have `t = 1`. Multiple PRs can exist in parallel at this stage.
-- **Future (`t > 1`)**: Planned changes stored in `ROADMAP.json`. The value is calculated from the change's depth in the tree structure.
-
-#### PR Status Workflow
-
-```mermaid
-stateDiagram-v2
-    [*] --> InProgress : Agent opens PR
-    InProgress --> ReadyForReview : Agent completes work
-    ReadyForReview --> InProgress : User adds code comments
-    ReadyForReview --> ChecksFailing : CI checks fail
-    ChecksFailing --> InProgress : Agent fixes issues
-    ReadyForReview --> ReadyForMerging : User approves (no comments)
-    ReadyForMerging --> [*] : User merges PR
-    InProgress --> Conflict : Rebase fails
-    Conflict --> InProgress : User/agent resolves
-```
-
-| Status | Color | Description |
-|--------|-------|-------------|
-| In Development | Yellow | Agent is actively working on the PR |
-| Ready for Review | Green | Agent completed, awaiting user review |
-| Has Review Comments | Orange | PR has review comments needing attention |
-| Approved | Cyan | PR approved and ready to merge |
-| Merged | Blue | PR has been merged (past) |
-| Closed | Red | PR was closed without merging (past) |
-
-#### Automatic Rebasing
-
-When a PR is merged, all other open PRs (`t = 1`) are automatically rebased onto the new main branch HEAD. This keeps all parallel branches up-to-date and ensures clean merges.
-
-#### Branch Naming Convention
-
-Branches follow the pattern: `{group}/{type}/{id}`
-- `group`: Project or component (e.g., `core`, `web`, `services`)
-- `type`: Change type (`feature`, `bug`, `refactor`, `docs`, `test`, `chore`)
-- `id`: Short identifier describing the change
-
-Examples: `core/feature/pr-time-dimension`, `web/bug/fix-status-colors`
-
-#### Future Changes (ROADMAP.json)
-
-Planned changes are stored in `ROADMAP.json` on the default branch:
-- Each change includes `id`, `group`, `type`, `title`, and `instructions`
-- Changes are organized as a recursive tree structure with nested children
-- When an agent starts work on a future change, it becomes a current PR
-
-#### Plan Update PRs
-
-When a PR contains *only* modifications to `ROADMAP.json` (planning changes without code), it is treated as a special `plan-update` group PR. These PRs:
-- Contain only modifications to the roadmap file (no code changes)
-- Must be merged before other PRs
-- Ensure the single source of truth for planning is always consistent
-
-Note: When a future change is promoted to a current PR, the `ROADMAP.json` is also updated to remove that change. This is a normal PR, not a plan-update PR, since it includes code changes.
-
-#### GitHub Sync
-
-- **Past PRs**: Imported from closed/merged PRs with correct time ordering
-- **Current PRs**: Synced with open PRs, status reflects review/check state
-- **Create PRs**: Push branches and create PRs directly from Homespun
-
 ## API Endpoints
 
-### Health Check
+The application exposes an OpenAPI-documented REST API. Key endpoints include:
 
-```
-GET /health
-```
+- `/api/projects` - Project management
+- `/api/features` - Feature/PR management
+- `/api/agents` - Agent orchestration
+- `/api/fleece` - Issue tracking
+- `/api/github` - GitHub sync operations
 
-Returns application health status including data store accessibility and process manager state.
-
-## Real-time Updates
-
-Homespun uses SignalR for real-time updates. Connect to `/hubs/agent` for:
-- Agent message streaming
-- Agent status changes
-- Feature status changes
+SignalR hubs:
+- `/hubs/agent` - Agent message streaming and status updates
+- `/hubs/notifications` - Toast notifications
 
 ## Deployment
 
-Homespun can be deployed using Docker containers with optional Tailscale for secure remote access.
+Homespun can be deployed using Docker containers.
 
-### Prerequisites
-
-- Docker installed on your system
-- Docker Compose V2 (included with Docker Desktop, or install separately)
-- PowerShell 7.0+ (for Windows scripts only)
-
-### Quick Start (Linux/VM)
+### Docker Deployment
 
 ```bash
-# Set your GitHub token
-export GITHUB_TOKEN="ghp_your_token_here"
-
-# Make scripts executable (first time only)
-chmod +x ./scripts/run.sh ./scripts/test.sh
-
-# Run with pre-built image from GHCR (production mode with auto-updates)
-./scripts/run.sh
-
-# Or build and run locally (development mode)
-./scripts/run.sh --local -it
-```
-
-### Quick Start (Windows)
-
-```powershell
-# Build the image first
+# Build the image
 docker build -t homespun:local .
 
-# Run interactively
-.\scripts\run.ps1
+# Run with GitHub token
+docker run -e GITHUB_TOKEN="ghp_..." -p 8080:8080 homespun:local
 ```
-
-### Common Commands
-
-```bash
-# View logs
-./scripts/run.sh --logs
-
-# Stop containers
-./scripts/run.sh --stop
-
-# Pull latest image and restart
-./scripts/run.sh --pull
-
-# Build and run for quick testing
-./scripts/test.sh
-```
-
-### Tailscale Integration
-
-To access Homespun securely via Tailscale:
-
-```bash
-export GITHUB_TOKEN="ghp_..."
-./scripts/run.sh --tailscale-auth-key "tskey-auth-..." --tailscale-hostname "homespun-vm"
-```
-
-The application will be available at `http://homespun-vm.<your-tailnet>.ts.net:8080`.
-
-### Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `GITHUB_TOKEN` | GitHub personal access token | (required for PR sync) |
-| `TAILSCALE_AUTH_KEY` | Tailscale auth key | (none) |
-| `TAILSCALE_HOSTNAME` | Tailscale hostname | `homespun` |
-| `HSP_GITHUB_TOKEN` | Alternative GitHub token (VM secrets) | (none) |
-| `HSP_TAILSCALE_AUTH_KEY` | Alternative Tailscale key (VM secrets) | (none) |
 
 ### Pre-built Images
 
@@ -293,40 +316,25 @@ Pre-built images are available from GitHub Container Registry:
 docker pull ghcr.io/nick-boey/homespun:latest
 ```
 
-Available tags: `latest`, `x.y.z` (specific version), `x.y` (latest patch)
-
 ### Data Persistence
 
 Data is stored in `~/.homespun-container/data/` including:
 - JSON data file
-- Tailscale state (for consistent device identity)
+- Fleece issue tracking data
 - Data protection keys
 
 ## Documentation
 
-- [Installation Guide](docs/installation.md) - Deployment options (VM, Docker)
+- [CLAUDE.md](CLAUDE.md) - Development instructions for Claude Code
+- [Installation Guide](docs/installation.md) - Deployment options
 - [SPECIFICATION.md](SPECIFICATION.md) - Technical specification
 - [ROADMAP.md](ROADMAP.md) - Development roadmap
 
-## Development
-
-### Running Tests
-
-```bash
-dotnet test
-```
-
 ## Known Issues
 
-### OpenCode Web UI Shows Wrong Branch for Clones
+### Agent UI Shows Wrong Branch
 
-When running OpenCode in a Git clone, the web UI may display "main" (or your default branch) instead of the actual clone branch. This is a bug in OpenCode's VCS module where it runs `git rev-parse --abbrev-ref HEAD` in the main repository directory instead of the clone directory.
-
-**Workaround**: The terminal within the OpenCode web UI correctly operates in the clone, so you can verify the actual branch using `git branch` in the terminal.
-
-**Root Cause**: In OpenCode's `packages/opencode/src/project/vcs.ts`, line 35 uses `.cwd(Instance.worktree)` which points to the main repository path (from `git rev-parse --git-common-dir`), not the clone directory (`Instance.directory`).
-
-**Status**: A similar fix was applied to OpenCode's TUI in commit `16f9edc1a` but the web app still has this issue. The fix requires changing `.cwd(Instance.worktree)` to `.cwd(Instance.directory)` in the `currentBranch()` function.
+When running Claude Code in a Git clone, the UI may display the default branch instead of the actual clone branch. This is a known issue with the agent's VCS module. Use `git branch` in the terminal to verify the actual branch.
 
 ## License
 
