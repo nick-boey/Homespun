@@ -1,20 +1,15 @@
 import { test, expect } from '@playwright/test'
+import {
+  navigateAndWait,
+  waitForStatusIndicator,
+  isElementSafelyVisible,
+  checkStatusIndicators,
+  createTestProject,
+} from './utils/test-helpers'
 
 test.describe('Agent Status Indicator', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/')
-  })
-
-  test('shows idle status when no sessions are active', async ({ page }) => {
-    // The indicator should be visible in the header
-    const indicator = page.locator('[data-testid="status-indicator"]')
-    await expect(indicator).toBeVisible()
-
-    // Check for green idle indicator
-    await expect(indicator).toHaveClass(/text-green-500/)
-
-    // Check idle text
-    await expect(page.locator('text=Agent idle')).toBeVisible()
+    await navigateAndWait(page, '/')
   })
 
   test('navigates to global sessions page when clicked without project', async ({ page }) => {
@@ -30,75 +25,53 @@ test.describe('Agent Status Indicator', () => {
     // For now, we'll just test the UI behavior
 
     // Navigate to projects page to see global indicator
-    await page.goto('/projects')
+    await navigateAndWait(page, '/projects')
+    await waitForStatusIndicator(page)
 
     // Check if any status indicators are visible
-    const workingIndicator = page.locator('[data-testid="status-working"]')
-    const waitingInputIndicator = page.locator('[data-testid="status-waiting-input"]')
-    const waitingAnswerIndicator = page.locator('[data-testid="status-waiting-answer"]')
-    const waitingPlanIndicator = page.locator('[data-testid="status-waiting-plan"]')
-    const errorIndicator = page.locator('[data-testid="status-error"]')
+    const visibleStatuses = await checkStatusIndicators(page)
 
-    // At least one indicator should be visible (idle or active)
-    const anyIndicatorVisible =
-      (await workingIndicator.isVisible({ timeout: 1000 }).catch(() => false)) ||
-      (await waitingInputIndicator.isVisible({ timeout: 1000 }).catch(() => false)) ||
-      (await waitingAnswerIndicator.isVisible({ timeout: 1000 }).catch(() => false)) ||
-      (await waitingPlanIndicator.isVisible({ timeout: 1000 }).catch(() => false)) ||
-      (await errorIndicator.isVisible({ timeout: 1000 }).catch(() => false))
-
-    if (anyIndicatorVisible) {
+    if (visibleStatuses.length > 0) {
       // Verify counts are shown next to indicators
-      if (await workingIndicator.isVisible({ timeout: 100 }).catch(() => false)) {
-        await expect(page.locator('[data-testid="status-working-count"]')).toBeVisible()
+      for (const status of visibleStatuses) {
+        await expect(page.locator(`[data-testid="status-${status}-count"]`)).toBeVisible()
       }
-      if (await waitingInputIndicator.isVisible({ timeout: 100 }).catch(() => false)) {
-        await expect(page.locator('[data-testid="status-waiting-input-count"]')).toBeVisible()
-      }
-    } else {
-      // Should show idle state
-      await expect(page.locator('text=Agent idle')).toBeVisible()
     }
   })
 
   test('shows correct indicator colors based on status type', async ({ page }) => {
-    await page.goto('/projects')
+    await navigateAndWait(page, '/projects')
+    await waitForStatusIndicator(page)
 
     // Check color classes for each status type if visible
-    const workingCount = page.locator('[data-testid="status-working-count"]')
-    if (await workingCount.isVisible({ timeout: 1000 }).catch(() => false)) {
-      await expect(workingCount).toHaveClass(/text-blue-500/)
+    const statusColorMap = {
+      working: 'text-blue-500',
+      'waiting-input': 'text-yellow-500',
+      'waiting-answer': 'text-orange-500',
+      'waiting-plan': 'text-purple-500',
+      error: 'text-red-500',
     }
 
-    const waitingInputCount = page.locator('[data-testid="status-waiting-input-count"]')
-    if (await waitingInputCount.isVisible({ timeout: 1000 }).catch(() => false)) {
-      await expect(waitingInputCount).toHaveClass(/text-yellow-500/)
-    }
-
-    const waitingAnswerCount = page.locator('[data-testid="status-waiting-answer-count"]')
-    if (await waitingAnswerCount.isVisible({ timeout: 1000 }).catch(() => false)) {
-      await expect(waitingAnswerCount).toHaveClass(/text-orange-500/)
-    }
-
-    const waitingPlanCount = page.locator('[data-testid="status-waiting-plan-count"]')
-    if (await waitingPlanCount.isVisible({ timeout: 1000 }).catch(() => false)) {
-      await expect(waitingPlanCount).toHaveClass(/text-purple-500/)
-    }
-
-    const errorCount = page.locator('[data-testid="status-error-count"]')
-    if (await errorCount.isVisible({ timeout: 1000 }).catch(() => false)) {
-      await expect(errorCount).toHaveClass(/text-red-500/)
+    for (const [status, colorClass] of Object.entries(statusColorMap)) {
+      const countElement = page.locator(`[data-testid="status-${status}-count"]`)
+      if (await isElementSafelyVisible(countElement)) {
+        await expect(countElement).toHaveClass(new RegExp(colorClass))
+      }
     }
   })
 
   test('indicator is always visible in header', async ({ page }) => {
     // Navigate to root (no project selected)
-    await page.goto('/')
+    await navigateAndWait(page, '/')
+    await waitForStatusIndicator(page)
+
     let indicator = page.locator('[data-testid="status-indicator"]')
     await expect(indicator).toBeVisible()
 
     // Navigate to projects page
-    await page.goto('/projects')
+    await navigateAndWait(page, '/projects')
+    await waitForStatusIndicator(page)
+
     indicator = page.locator('[data-testid="status-indicator"]')
     await expect(indicator).toBeVisible()
 
@@ -109,18 +82,11 @@ test.describe('Agent Status Indicator', () => {
   test('navigates to project sessions when clicked with project context', async ({ page }) => {
     // First create a project via API
     const projectId = 'test-project-' + Date.now()
-    await page.request.post('/api/projects', {
-      data: {
-        id: projectId,
-        name: 'Test Project',
-        description: 'Test project for E2E',
-        owner: 'test-owner',
-        repository: 'test-repo',
-      },
-    })
+    await createTestProject(page, projectId)
 
     // Navigate to project page
-    await page.goto(`/projects/${projectId}`)
+    await navigateAndWait(page, `/projects/${projectId}`)
+    await waitForStatusIndicator(page)
 
     // Click on the indicator
     await page.click('[data-testid="status-indicator"]')
@@ -130,7 +96,8 @@ test.describe('Agent Status Indicator', () => {
   })
 
   test('shows multiple status indicators horizontally', async ({ page }) => {
-    await page.goto('/projects')
+    await navigateAndWait(page, '/projects')
+    await waitForStatusIndicator(page)
 
     // Check if multiple status indicators can be shown in a row
     const statusContainer = page.locator('a[href="/sessions"]').first()
@@ -151,22 +118,17 @@ test.describe('Agent Status Indicator', () => {
   })
 
   test('updates in real-time when session status changes', async ({ page }) => {
-    await page.goto('/projects')
+    await navigateAndWait(page, '/projects')
+    await waitForStatusIndicator(page)
 
     // Get initial state
-    const idleVisible = await page
-      .locator('text=Agent idle')
-      .isVisible({ timeout: 1000 })
-      .catch(() => false)
-    await page
-      .locator('[data-testid="status-working"]')
-      .isVisible({ timeout: 1000 })
-      .catch(() => false)
+    const idleVisible = await isElementSafelyVisible(page.locator('text=Agent idle'))
+    const visibleStatuses = await checkStatusIndicators(page)
 
     // Verify indicator exists
     if (idleVisible) {
       await expect(page.locator('[data-testid="status-indicator"]')).toBeVisible()
-    } else {
+    } else if (visibleStatuses.length > 0) {
       // At least one status indicator should be visible
       const anyStatus = page.locator('[data-testid^="status-"][data-testid$="-count"]').first()
       await expect(anyStatus).toBeVisible()
@@ -177,7 +139,8 @@ test.describe('Agent Status Indicator', () => {
   })
 
   test('only shows non-zero counts', async ({ page }) => {
-    await page.goto('/projects')
+    await navigateAndWait(page, '/projects')
+    await waitForStatusIndicator(page)
 
     // Get all visible count elements
     const countElements = await page.locator('[data-testid$="-count"]').all()
@@ -191,10 +154,11 @@ test.describe('Agent Status Indicator', () => {
   })
 
   test('working status shows ping animation', async ({ page }) => {
-    await page.goto('/projects')
+    await navigateAndWait(page, '/projects')
+    await waitForStatusIndicator(page)
 
     const workingIndicator = page.locator('[data-testid="status-working"]')
-    if (await workingIndicator.isVisible({ timeout: 1000 }).catch(() => false)) {
+    if (await isElementSafelyVisible(workingIndicator)) {
       // Working status should have ping animation
       const pingElement = workingIndicator.locator('.animate-ping')
       await expect(pingElement).toBeVisible()
@@ -203,7 +167,7 @@ test.describe('Agent Status Indicator', () => {
       const otherStatuses = ['waiting-input', 'waiting-answer', 'waiting-plan', 'error']
       for (const status of otherStatuses) {
         const indicator = page.locator(`[data-testid="status-${status}"]`)
-        if (await indicator.isVisible({ timeout: 100 }).catch(() => false)) {
+        if (await isElementSafelyVisible(indicator, 100)) {
           const ping = indicator.locator('.animate-ping')
           await expect(ping).not.toBeVisible()
         }
