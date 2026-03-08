@@ -51,10 +51,10 @@ test.describe('Agent Status Indicator', () => {
 
     // Check color classes for each status type if visible
     const statusColorMap = {
-      working: 'text-blue-500',
+      working: 'text-green-500',
       'waiting-input': 'text-yellow-500',
-      'waiting-answer': 'text-orange-500',
-      'waiting-plan': 'text-purple-500',
+      'waiting-answer': 'text-purple-500',
+      'waiting-plan': 'text-orange-500',
       error: 'text-red-500',
     }
 

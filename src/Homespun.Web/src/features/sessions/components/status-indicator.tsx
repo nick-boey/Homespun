@@ -27,7 +27,7 @@ function getStatusColor(status: ClaudeSessionStatus | undefined): string {
     case SessionStatus.Running:
       return 'bg-green-500'
     case SessionStatus.WaitingForInput:
-      return 'bg-blue-500'
+      return 'bg-yellow-500'
     case SessionStatus.WaitingForQuestionAnswer:
       return 'bg-purple-500'
     case SessionStatus.WaitingForPlanExecution:
