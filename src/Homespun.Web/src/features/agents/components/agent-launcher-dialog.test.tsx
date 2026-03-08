@@ -16,6 +16,12 @@ vi.mock('@/api', () => ({
   },
 }))
 
+// Mock useNavigate from tanstack router
+const mockNavigate = vi.fn()
+vi.mock('@tanstack/react-router', () => ({
+  useNavigate: () => mockNavigate,
+}))
+
 const mockGetAgentPrompts = vi.mocked(AgentPrompts.getApiAgentPromptsAvailableForProjectByProjectId)
 const mockRunAgent = vi.mocked(Issues.postApiIssuesByIssueIdRun)
 
@@ -359,5 +365,118 @@ describe('AgentLauncherDialog', () => {
     await waitFor(() => {
       expect(onError).toHaveBeenCalled()
     })
+  })
+
+  it('shows None option as first item in dropdown', async () => {
+    const user = userEvent.setup()
+    render(
+      <AgentLauncherDialog
+        open={true}
+        onOpenChange={() => {}}
+        projectId="project-123"
+        issueId="issue-456"
+      />,
+      { wrapper: createWrapper() }
+    )
+
+    // Wait for prompts to load
+    await waitFor(() => {
+      expect(screen.getByRole('combobox', { name: /prompt/i })).toBeInTheDocument()
+    })
+
+    // Open the prompt dropdown
+    const promptSelect = screen.getByRole('combobox', { name: /prompt/i })
+    await user.click(promptSelect)
+
+    // Should have None as first option
+    const options = screen.getAllByRole('option')
+    expect(options[0]).toHaveTextContent('None - Start without prompt (Plan mode)')
+  })
+
+  it('navigates to session page when None is selected', async () => {
+    const user = userEvent.setup()
+    render(
+      <AgentLauncherDialog
+        open={true}
+        onOpenChange={() => {}}
+        projectId="project-123"
+        issueId="issue-456"
+      />,
+      { wrapper: createWrapper() }
+    )
+
+    // Wait for controls to be ready
+    await waitFor(() => {
+      expect(screen.getByRole('combobox', { name: /prompt/i })).toBeInTheDocument()
+    })
+
+    // Select None option
+    const promptSelect = screen.getByRole('combobox', { name: /prompt/i })
+    await user.click(promptSelect)
+    await user.click(screen.getByText('None - Start without prompt (Plan mode)'))
+
+    // Click start
+    await user.click(screen.getByRole('button', { name: /start agent/i }))
+
+    // Should call run agent with null promptId
+    await waitFor(() => {
+      expect(mockRunAgent).toHaveBeenCalledWith({
+        path: { issueId: 'issue-456' },
+        body: expect.objectContaining({
+          projectId: 'project-123',
+          promptId: null,
+        }),
+      })
+    })
+
+    // Should navigate to session page
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith({
+        to: '/sessions/$sessionId',
+        params: { sessionId: 'session-123' },
+      })
+    })
+  })
+
+  it('only shows None option for Plan mode', async () => {
+    // Update mock prompts to only have Build prompts
+    const buildOnlyPrompts: AgentPrompt[] = [
+      {
+        id: 'prompt-1',
+        name: 'Build Feature',
+        initialMessage: 'Build the feature',
+        mode: 1 as const,
+      },
+      {
+        id: 'prompt-2',
+        name: 'Build Another',
+        initialMessage: 'Build another feature',
+        mode: 1 as const,
+      },
+    ]
+    mockGetAgentPrompts.mockResolvedValue(createMockResponse(buildOnlyPrompts))
+
+    const user = userEvent.setup()
+    render(
+      <AgentLauncherDialog
+        open={true}
+        onOpenChange={() => {}}
+        projectId="project-123"
+        issueId="issue-456"
+      />,
+      { wrapper: createWrapper() }
+    )
+
+    // Wait for prompts to load
+    await waitFor(() => {
+      expect(screen.getByRole('combobox', { name: /prompt/i })).toBeInTheDocument()
+    })
+
+    // Open the prompt dropdown
+    const promptSelect = screen.getByRole('combobox', { name: /prompt/i })
+    await user.click(promptSelect)
+
+    // Should NOT have None option when only Build prompts are available
+    expect(screen.queryByText('None - Start without prompt (Plan mode)')).not.toBeInTheDocument()
   })
 })

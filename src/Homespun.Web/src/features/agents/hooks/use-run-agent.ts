@@ -8,8 +8,8 @@ export interface RunAgentParams {
   issueId: string
   /** The project ID */
   projectId: string
-  /** The agent prompt ID to use */
-  promptId: string
+  /** The agent prompt ID to use, null for None */
+  promptId: string | null
   /** The Claude model to use (e.g., "claude-sonnet-4-20250514") */
   model?: string
   /** Base branch to create the working branch from */

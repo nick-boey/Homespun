@@ -352,11 +352,19 @@ public class IssuesController(
             return NotFound("Issue not found");
         }
 
-        // Fetch prompt
-        var prompt = agentPromptService.GetPrompt(request.PromptId);
-        if (prompt == null)
+        // Fetch prompt (if provided)
+        AgentPrompt? prompt = null;
+        string? renderedMessage = null;
+        SessionMode mode = SessionMode.Plan; // Default for None
+
+        if (!string.IsNullOrEmpty(request.PromptId))
         {
-            return NotFound("Prompt not found");
+            prompt = agentPromptService.GetPrompt(request.PromptId);
+            if (prompt == null)
+            {
+                return NotFound("Prompt not found");
+            }
+            mode = prompt.Mode;
         }
 
         // Resolve branch name - check for existing branch first, then generate from issue
@@ -393,17 +401,20 @@ public class IssuesController(
             logger.LogInformation("Using existing clone at {ClonePath} for branch {BranchName}", clonePath, branchName);
         }
 
-        // Render the prompt template with issue context
-        var promptContext = new PromptContext
+        // Render the prompt template with issue context (if prompt exists)
+        if (prompt != null)
         {
-            Title = issue.Title,
-            Id = issue.Id,
-            Description = issue.Description,
-            Branch = branchName,
-            Type = issue.Type.ToString()
-        };
+            var promptContext = new PromptContext
+            {
+                Title = issue.Title,
+                Id = issue.Id,
+                Description = issue.Description,
+                Branch = branchName,
+                Type = issue.Type.ToString()
+            };
 
-        var renderedMessage = agentPromptService.RenderTemplate(prompt.InitialMessage, promptContext);
+            renderedMessage = agentPromptService.RenderTemplate(prompt.InitialMessage, promptContext);
+        }
 
         // Determine model
         var model = request.Model ?? project.DefaultModel ?? "claude-sonnet-4-20250514";
@@ -413,7 +424,7 @@ public class IssuesController(
             issueId,
             request.ProjectId,
             clonePath,
-            prompt.Mode,
+            mode,
             model,
             systemPrompt: null);
 
@@ -426,7 +437,7 @@ public class IssuesController(
             {
                 try
                 {
-                    await sessionService.SendMessageAsync(session.Id, renderedMessage, prompt.Mode);
+                    await sessionService.SendMessageAsync(session.Id, renderedMessage, mode);
                 }
                 catch (Exception ex)
                 {

@@ -3,6 +3,7 @@ import { Plus, RefreshCw, MessageSquare } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { useProjectPrompts } from '../hooks/use-project-prompts'
+import { useGlobalPrompts } from '../hooks/use-global-prompts'
 import { useCreatePrompt } from '../hooks/use-create-prompt'
 import { useUpdatePrompt } from '../hooks/use-update-prompt'
 import { useDeletePrompt } from '../hooks/use-delete-prompt'
@@ -13,27 +14,36 @@ import { PromptsEmptyState } from './prompts-empty-state'
 import type { AgentPrompt } from '@/api/generated/types.gen'
 
 export interface PromptsListProps {
-  projectId: string
+  projectId?: string
+  isGlobal?: boolean
 }
 
 type ViewMode = 'list' | 'create' | 'edit'
 
-export function PromptsList({ projectId }: PromptsListProps) {
+export function PromptsList({ projectId, isGlobal = false }: PromptsListProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('list')
   const [editingPrompt, setEditingPrompt] = useState<AgentPrompt | null>(null)
   const [deletingPromptId, setDeletingPromptId] = useState<string | null>(null)
 
-  const { data: prompts, isLoading, refetch, isRefetching } = useProjectPrompts(projectId)
+  const globalPromptsQuery = useGlobalPrompts()
+  const projectPromptsQuery = useProjectPrompts(projectId || '')
+
+  const {
+    data: prompts,
+    isLoading,
+    refetch,
+    isRefetching,
+  } = isGlobal ? globalPromptsQuery : projectPromptsQuery
 
   const createPrompt = useCreatePrompt({
-    projectId,
+    projectId: isGlobal ? undefined : projectId,
     onSuccess: () => {
       setViewMode('list')
     },
   })
 
   const updatePrompt = useUpdatePrompt({
-    projectId,
+    projectId: isGlobal ? undefined : projectId,
     onSuccess: () => {
       setViewMode('list')
       setEditingPrompt(null)
@@ -41,7 +51,7 @@ export function PromptsList({ projectId }: PromptsListProps) {
   })
 
   const deletePrompt = useDeletePrompt({
-    projectId,
+    projectId: isGlobal ? undefined : projectId,
     onSuccess: () => {
       setDeletingPromptId(null)
     },
@@ -65,7 +75,7 @@ export function PromptsList({ projectId }: PromptsListProps) {
       name: data.name,
       initialMessage: data.initialMessage,
       mode: data.mode as 0 | 1,
-      projectId,
+      projectId: isGlobal ? null : projectId,
     })
   }
 
