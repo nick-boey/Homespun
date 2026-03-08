@@ -4,6 +4,7 @@ using Homespun.Features.Fleece.Services;
 using Homespun.Features.Git;
 using Homespun.Features.Notifications;
 using Homespun.Features.Projects;
+using Homespun.Server.Features.AgentOrchestration.Services;
 using Homespun.Shared.Models.Fleece;
 using Homespun.Shared.Models.PullRequests;
 using Homespun.Shared.Models.Sessions;
@@ -28,6 +29,7 @@ public class IssuesController(
     IClaudeSessionService sessionService,
     IAgentPromptService agentPromptService,
     IGitCloneService cloneService,
+    IBranchIdBackgroundService branchIdBackgroundService,
     ILogger<IssuesController> logger) : ControllerBase
 {
     /// <summary>
@@ -173,6 +175,12 @@ public class IssuesController(
         // Broadcast issue creation to connected clients
         await notificationHub.BroadcastIssuesChanged(request.ProjectId, IssueChangeType.Created, issue.Id);
 
+        // Trigger background branch ID generation if title is provided and no working branch ID
+        if (!string.IsNullOrWhiteSpace(request.Title) && string.IsNullOrWhiteSpace(request.WorkingBranchId))
+        {
+            await branchIdBackgroundService.QueueBranchIdGenerationAsync(issue.Id, request.ProjectId, request.Title);
+        }
+
         return CreatedAtAction(
             nameof(GetById),
             new { issueId = issue.Id, projectId = request.ProjectId },
@@ -193,6 +201,13 @@ public class IssuesController(
             return NotFound("Project not found");
         }
 
+        // Get the current issue to check for title changes
+        var currentIssue = await fleeceService.GetIssueAsync(project.LocalPath, issueId);
+        if (currentIssue == null)
+        {
+            return NotFound("Issue not found");
+        }
+
         var issue = await fleeceService.UpdateIssueAsync(
             project.LocalPath,
             issueId,
@@ -210,6 +225,14 @@ public class IssuesController(
 
         // Broadcast issue update to connected clients
         await notificationHub.BroadcastIssuesChanged(request.ProjectId, IssueChangeType.Updated, issueId);
+
+        // Check if title changed and working branch ID is empty
+        if (!string.IsNullOrWhiteSpace(request.Title) &&
+            request.Title != currentIssue.Title &&
+            string.IsNullOrWhiteSpace(issue.WorkingBranchId))
+        {
+            await branchIdBackgroundService.QueueBranchIdGenerationAsync(issue.Id, request.ProjectId, request.Title);
+        }
 
         return Ok(issue.ToResponse());
     }
