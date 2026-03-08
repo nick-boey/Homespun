@@ -82,6 +82,7 @@ export function PromptCard({ prompt, onEdit, onDelete, isDeleting }: PromptCardP
             </CardTitle>
             <div className="flex items-center gap-2">
               <Badge variant={getModeVariant(prompt.mode)}>{getModeLabel(prompt.mode)}</Badge>
+              {!prompt.projectId && <Badge variant="outline">Global</Badge>}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" className="h-8 w-8">

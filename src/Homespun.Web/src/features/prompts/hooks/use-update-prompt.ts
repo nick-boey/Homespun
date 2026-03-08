@@ -4,7 +4,7 @@ import { projectPromptsQueryKey } from './use-project-prompts'
 import { agentPromptsQueryKey } from '@/features/agents/hooks/use-agent-prompts'
 
 interface UseUpdatePromptOptions {
-  projectId: string
+  projectId?: string
   onSuccess?: (prompt: AgentPrompt) => void
   onError?: (error: Error) => void
 }
@@ -30,12 +30,19 @@ export function useUpdatePrompt(options: UseUpdatePromptOptions) {
       return result.data
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({
-        queryKey: projectPromptsQueryKey(options.projectId),
-      })
-      queryClient.invalidateQueries({
-        queryKey: agentPromptsQueryKey(options.projectId),
-      })
+      if (options.projectId) {
+        queryClient.invalidateQueries({
+          queryKey: projectPromptsQueryKey(options.projectId),
+        })
+        queryClient.invalidateQueries({
+          queryKey: agentPromptsQueryKey(options.projectId),
+        })
+      } else {
+        // Invalidate global prompts list
+        queryClient.invalidateQueries({
+          queryKey: ['global-prompts'],
+        })
+      }
       options.onSuccess?.(data as AgentPrompt)
     },
     onError: (error) => {

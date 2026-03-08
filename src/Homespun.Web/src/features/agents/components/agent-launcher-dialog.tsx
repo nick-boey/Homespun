@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useNavigate } from '@tanstack/react-router'
 import { Play, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react'
 import {
   Dialog,
@@ -32,6 +33,7 @@ const MODELS = [
 const MODEL_STORAGE_KEY = 'agent-launcher-model'
 const PROMPT_STORAGE_KEY = 'agent-launcher-prompt'
 const BASE_BRANCH_STORAGE_KEY = 'agent-launcher-base-branch'
+const NONE_PROMPT_ID = '__none__'
 
 /** Get the initial prompt ID from localStorage or return empty string */
 function getInitialPromptId(): string {
@@ -70,6 +72,8 @@ export function AgentLauncherDialog({
   onAgentStart,
   onError,
 }: AgentLauncherDialogProps) {
+  const navigate = useNavigate()
+
   // Project data for repo path and default branch
   const { project, isLoading: projectLoading } = useProject(projectId)
 
@@ -111,6 +115,11 @@ export function AgentLauncherDialog({
 
   // Compute effective prompt ID
   const effectivePromptId = useMemo(() => {
+    // Handle None selection
+    if (selectedPromptId === NONE_PROMPT_ID) {
+      return NONE_PROMPT_ID
+    }
+
     if (!prompts || prompts.length === 0) {
       return ''
     }
@@ -118,6 +127,8 @@ export function AgentLauncherDialog({
     if (selectedExists) {
       return selectedPromptId
     }
+
+    // Default to first prompt
     return prompts[0].id ?? ''
   }, [prompts, selectedPromptId])
 
@@ -127,10 +138,15 @@ export function AgentLauncherDialog({
       const result = await runAgent.mutateAsync({
         issueId,
         projectId,
-        promptId: effectivePromptId,
+        promptId: effectivePromptId === NONE_PROMPT_ID ? null : effectivePromptId,
         model: selectedModel,
         baseBranch: effectiveBaseBranch || undefined,
       })
+
+      // If None was selected, navigate to the session page
+      if (effectivePromptId === NONE_PROMPT_ID && result.sessionId) {
+        navigate({ to: '/sessions/$sessionId', params: { sessionId: result.sessionId } })
+      }
 
       onAgentStart?.(result)
       onOpenChange(false) // Close dialog on success
@@ -147,6 +163,7 @@ export function AgentLauncherDialog({
     onAgentStart,
     onOpenChange,
     onError,
+    navigate,
   ])
 
   // Combined loading states
@@ -201,6 +218,10 @@ export function AgentLauncherDialog({
                     <SelectValue placeholder="Select prompt" />
                   </SelectTrigger>
                   <SelectContent>
+                    {/* "None" option always available as first option */}
+                    <SelectItem value={NONE_PROMPT_ID}>
+                      None - Start without prompt (Plan mode)
+                    </SelectItem>
                     {prompts?.map((prompt) => (
                       <SelectItem key={prompt.id} value={prompt.id ?? ''}>
                         {prompt.name}

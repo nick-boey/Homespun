@@ -4,7 +4,7 @@ import { projectPromptsQueryKey } from './use-project-prompts'
 import { agentPromptsQueryKey } from '@/features/agents/hooks/use-agent-prompts'
 
 interface UseCreatePromptOptions {
-  projectId: string
+  projectId?: string
   onSuccess?: (prompt: AgentPrompt) => void
   onError?: (error: Error) => void
 }
@@ -25,14 +25,21 @@ export function useCreatePrompt(options: UseCreatePromptOptions) {
       return result.data
     },
     onSuccess: (data) => {
-      // Invalidate project prompts list
-      queryClient.invalidateQueries({
-        queryKey: projectPromptsQueryKey(options.projectId),
-      })
-      // Also invalidate available prompts for agent launcher
-      queryClient.invalidateQueries({
-        queryKey: agentPromptsQueryKey(options.projectId),
-      })
+      if (options.projectId) {
+        // Invalidate project prompts list
+        queryClient.invalidateQueries({
+          queryKey: projectPromptsQueryKey(options.projectId),
+        })
+        // Also invalidate available prompts for agent launcher
+        queryClient.invalidateQueries({
+          queryKey: agentPromptsQueryKey(options.projectId),
+        })
+      } else {
+        // Invalidate global prompts list
+        queryClient.invalidateQueries({
+          queryKey: ['global-prompts'],
+        })
+      }
       options.onSuccess?.(data as AgentPrompt)
     },
     onError: (error) => {

@@ -169,9 +169,9 @@ public class RunAgentRequest
     public required string ProjectId { get; set; }
 
     /// <summary>
-    /// The agent prompt ID to use.
+    /// The agent prompt ID to use, null for None.
     /// </summary>
-    public required string PromptId { get; set; }
+    public required string? PromptId { get; set; }
 
     /// <summary>
     /// The Claude model to use (e.g., "claude-sonnet-4-20250514").

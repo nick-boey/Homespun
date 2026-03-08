@@ -536,5 +536,77 @@ public class IssuesControllerTests
             Times.Never);
     }
 
+    [Test]
+    public async Task RunAgent_WithNullPromptId_CreatesSessionWithoutInitialMessage()
+    {
+        // Arrange
+        var issueId = "ABC123";
+        var issue = CreateTestIssue(issueId, "Test Issue");
+        var session = new ClaudeSession
+        {
+            Id = "session-123",
+            EntityId = issueId,
+            ProjectId = TestProject.Id,
+            WorkingDirectory = "/path/to/clone",
+            Model = "claude-sonnet-4-20250514",
+            Mode = SessionMode.Plan // Default for None prompt
+        };
+
+        _projectServiceMock
+            .Setup(x => x.GetByIdAsync(TestProject.Id))
+            .ReturnsAsync(TestProject);
+        _fleeceServiceMock
+            .Setup(x => x.GetIssueAsync(TestProject.LocalPath, issueId))
+            .ReturnsAsync(issue);
+        _branchResolverServiceMock
+            .Setup(x => x.ResolveIssueBranchAsync(TestProject.Id, issueId))
+            .ReturnsAsync((string?)null);
+        _cloneServiceMock
+            .Setup(x => x.GetClonePathForBranchAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync("/path/to/clone");
+        _sessionServiceMock
+            .Setup(x => x.StartSessionAsync(
+                issueId, TestProject.Id, "/path/to/clone", SessionMode.Plan, It.IsAny<string>(), null, default))
+            .ReturnsAsync(session);
+
+        var request = new RunAgentRequest
+        {
+            ProjectId = TestProject.Id,
+            PromptId = null, // Null prompt ID for "None" option
+            Model = "claude-sonnet-4-20250514"
+        };
+
+        // Act
+        var result = await _controller.RunAgent(issueId, request);
+
+        // Assert
+        Assert.That(result.Result, Is.TypeOf<OkObjectResult>());
+        var okResult = (OkObjectResult)result.Result!;
+        var response = (RunAgentResponse)okResult.Value!;
+        Assert.That(response.SessionId, Is.EqualTo("session-123"));
+
+        // Verify GetPrompt was NOT called
+        _agentPromptServiceMock.Verify(
+            x => x.GetPrompt(It.IsAny<string>()),
+            Times.Never);
+
+        // Verify RenderTemplate was NOT called
+        _agentPromptServiceMock.Verify(
+            x => x.RenderTemplate(It.IsAny<string?>(), It.IsAny<PromptContext>()),
+            Times.Never);
+
+        // Verify session was started with Plan mode and null initial message
+        _sessionServiceMock.Verify(
+            x => x.StartSessionAsync(
+                issueId,
+                TestProject.Id,
+                "/path/to/clone",
+                SessionMode.Plan,  // Should use Plan mode for None
+                It.IsAny<string>(),
+                null,  // No initial message
+                default),
+            Times.Once);
+    }
+
     #endregion
 }

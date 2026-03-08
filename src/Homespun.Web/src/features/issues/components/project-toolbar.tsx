@@ -180,6 +180,7 @@ export function ProjectToolbar({
         onClick={onOpenAgentLauncher}
         aria-label="Run agent (e)"
         title="Run agent (e)"
+        data-testid="toolbar-run-agent"
       >
         <Play className="h-4 w-4" />
       </Button>
