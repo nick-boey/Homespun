@@ -2,13 +2,12 @@
 
 ## Purpose
 
-This document specifies how new issues are inserted into the task graph dependency diagram. It is intended for test writers implementing tests against `KeyboardNavigationService` and `TaskGraphView`.
+This document specifies how new issues are inserted into the task graph dependency diagram.
+
+**Note:** This documentation is preserved for historical reference. The Homespun.Client project (Blazor WebAssembly) has been removed in favor of the React frontend (Homespun.Web).
 
 **Source files:**
-- `src/Homespun.Client/Services/IKeyboardNavigationService.cs` — `PendingNewIssue` model (properties below)
-- `src/Homespun.Client/Services/KeyboardNavigationService.cs` — `CreateIssueBelow`, `CreateIssueAbove`, `IndentAsChild`, `UnindentAsSibling`, `GetInheritedParentInfo`, `AcceptEditAsync`
 - `src/Homespun.Shared/Requests/IssueRequests.cs` — `CreateIssueRequest` fields sent to the API
-- `tests/Homespun.Tests/Services/KeyboardNavigationServiceTests.cs` — existing test patterns
 
 ## Diagram Legend
 

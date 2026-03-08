@@ -2,6 +2,8 @@
 
 Parent issue: `oU1zLd` - Split into Blazor WASM and ASP.NET server
 
+**UPDATE (2026-03-08)**: Homespun.Client has been removed as part of issue yJkxRR. The Blazor WebAssembly client was replaced by Homespun.Web (React frontend) and is no longer part of the codebase.
+
 ## Completed
 
 ### 8yebWn (aaa) - Create Homespun.Shared project with shared DTOs and contracts
