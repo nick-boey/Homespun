@@ -1,16 +1,24 @@
-import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createElement, type ReactNode } from 'react'
-import { Sessions } from '@/api'
-import type { SessionSummary, ClaudeSessionStatus, SessionMode } from '@/api/generated'
+import { Issues, PullRequests } from '@/api'
+import type { SessionSummary, ClaudeSessionStatus, SessionMode } from '@/api/generated/types.gen'
 import { SessionsList } from './sessions-list'
+import { useSessions, useStopSession } from '../hooks/use-sessions'
+import { useProjects } from '@/features/projects'
 
 vi.mock('@/api', () => ({
   Sessions: {
     getApiSessions: vi.fn(),
     deleteApiSessionsById: vi.fn(),
+  },
+  Issues: {
+    getApiIssuesByIssueId: vi.fn(),
+  },
+  PullRequests: {
+    getApiPullRequestsById: vi.fn(),
   },
 }))
 
@@ -46,6 +54,20 @@ vi.mock('@/providers/signalr-provider', () => ({
   })),
 }))
 
+vi.mock('../hooks/use-sessions', () => ({
+  ...vi.importActual('../hooks/use-sessions'),
+  useSessions: vi.fn(),
+  useStopSession: vi.fn(() => ({
+    mutate: vi.fn(),
+    isPending: false,
+  })),
+  sessionsQueryKey: ['sessions'],
+}))
+
+vi.mock('@/features/projects', () => ({
+  useProjects: vi.fn(),
+}))
+
 // Active session (Running status = 2)
 const activeSession: SessionSummary = {
   id: 'session-1',
@@ -58,8 +80,6 @@ const activeSession: SessionSummary = {
   lastActivityAt: '2024-01-01T10:30:00Z',
   messageCount: 15,
   totalCostUsd: 0.25,
-  containerId: 'container-1',
-  containerName: 'session-container-1',
 }
 
 // Archived sessions (Stopped = 6, Error = 7)
@@ -74,8 +94,6 @@ const stoppedSession: SessionSummary = {
   lastActivityAt: '2024-01-01T09:15:00Z',
   messageCount: 5,
   totalCostUsd: 0.1,
-  containerId: null,
-  containerName: null,
 }
 
 const errorSession: SessionSummary = {
@@ -89,11 +107,9 @@ const errorSession: SessionSummary = {
   lastActivityAt: '2024-01-02T08:05:00Z',
   messageCount: 2,
   totalCostUsd: 0.05,
-  containerId: null,
-  containerName: null,
 }
 
-const mockSessions: SessionSummary[] = [activeSession, stoppedSession, errorSession]
+const mockSessionSummaries: SessionSummary[] = [activeSession, stoppedSession, errorSession]
 
 function createWrapper() {
   const queryClient = new QueryClient({
@@ -108,61 +124,122 @@ function createWrapper() {
 describe('SessionsList', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+
+    // Setup default mocks
+    vi.mocked(useSessions).mockReturnValue({
+      data: mockSessionSummaries,
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useSessions>)
+
+    vi.mocked(useProjects).mockReturnValue({
+      data: [
+        { id: 'project-1', name: 'Project One' },
+        { id: 'project-2', name: 'Project Two' },
+      ],
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useProjects>)
+
+    // Setup API mocks for entity info
+    vi.mocked(Issues.getApiIssuesByIssueId).mockImplementation(({ path }) => {
+      const mockIssues: Record<string, { id: string; title: string }> = {
+        'issue-abc123': { id: 'issue-abc123', title: 'Fix login bug' },
+        'issue-def456': { id: 'issue-def456', title: 'Update documentation' },
+        'issue-ghi789': { id: 'issue-ghi789', title: 'Refactor auth module' },
+      }
+      return Promise.resolve({
+        data: mockIssues[path.issueId] || null,
+        error: undefined,
+        request: new Request('http://test'),
+        response: new Response(),
+      })
+    })
+
+    vi.mocked(PullRequests.getApiPullRequestsById).mockResolvedValue({
+      data: { id: 'pr-456', title: 'Add new feature' },
+      error: undefined,
+      request: new Request('http://test'),
+      response: new Response(),
+    } as Awaited<ReturnType<typeof PullRequests.getApiPullRequestsById>>)
   })
 
   it('shows loading skeletons while fetching', async () => {
-    const mockGetApiSessions = Sessions.getApiSessions as Mock
-    mockGetApiSessions.mockReturnValue(new Promise(() => {})) // Never resolves
+    vi.mocked(useSessions).mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useSessions>)
 
     render(<SessionsList />, { wrapper: createWrapper() })
 
-    expect(screen.getAllByTestId('session-row-skeleton')).toHaveLength(3)
+    // The component now shows session card skeletons
+    const skeletonCards = document.querySelectorAll('[data-slot="card"]')
+    expect(skeletonCards.length).toBe(6) // Grid shows 6 skeleton cards
   })
 
   it('displays active session in active tab when loaded', async () => {
-    const mockGetApiSessions = Sessions.getApiSessions as Mock
-    mockGetApiSessions.mockResolvedValueOnce({ data: mockSessions })
-
     render(<SessionsList />, { wrapper: createWrapper() })
 
     // Active tab is shown by default
     await waitFor(() => {
-      expect(screen.getByText('session-1')).toBeInTheDocument()
+      expect(screen.getByText('Fix login bug')).toBeInTheDocument()
     })
 
+    // Should show "Issue" badge
+    expect(screen.getByText('Issue')).toBeInTheDocument()
+
+    // Should show Running status
+    expect(screen.getByText('Running')).toBeInTheDocument()
+
     // Archived sessions should not be visible in active tab
-    expect(screen.queryByText('session-2')).not.toBeInTheDocument()
-    expect(screen.queryByText('session-3')).not.toBeInTheDocument()
+    expect(screen.queryByText('Stopped')).not.toBeInTheDocument()
+    expect(screen.queryByText('Error')).not.toBeInTheDocument()
   })
 
   it('displays archived sessions in archived tab', async () => {
     const user = userEvent.setup()
-    const mockGetApiSessions = Sessions.getApiSessions as Mock
-    mockGetApiSessions.mockResolvedValueOnce({ data: mockSessions })
 
     render(<SessionsList />, { wrapper: createWrapper() })
 
     await waitFor(() => {
-      expect(screen.getByText('session-1')).toBeInTheDocument()
+      expect(screen.getByText('Fix login bug')).toBeInTheDocument()
     })
 
     // Click archived tab
     const archivedTab = screen.getByRole('tab', { name: /archived/i })
     await user.click(archivedTab)
 
-    // Now we should see archived sessions
+    // Now we should see archived sessions with their titles
     await waitFor(() => {
-      expect(screen.getByText('session-2')).toBeInTheDocument()
+      expect(screen.getByText('Stopped')).toBeInTheDocument()
     })
-    expect(screen.getByText('session-3')).toBeInTheDocument()
+    expect(screen.getByText('Error')).toBeInTheDocument()
+
+    // Should show entity titles
+    await waitFor(() => {
+      expect(screen.getByText('Update documentation')).toBeInTheDocument()
+    })
+    expect(screen.getByText('Refactor auth module')).toBeInTheDocument()
 
     // Active session should not be visible
-    expect(screen.queryByText('session-1')).not.toBeInTheDocument()
+    expect(screen.queryByText('Running')).not.toBeInTheDocument()
   })
 
   it('displays empty state when no sessions', async () => {
-    const mockGetApiSessions = Sessions.getApiSessions as Mock
-    mockGetApiSessions.mockResolvedValueOnce({ data: [] })
+    vi.mocked(useSessions).mockReturnValue({
+      data: [],
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useSessions>)
 
     render(<SessionsList />, { wrapper: createWrapper() })
 
@@ -172,8 +249,13 @@ describe('SessionsList', () => {
   })
 
   it('displays error state with retry button', async () => {
-    const mockGetApiSessions = Sessions.getApiSessions as Mock
-    mockGetApiSessions.mockRejectedValueOnce(new Error('Network error'))
+    vi.mocked(useSessions).mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      error: new Error('Network error'),
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useSessions>)
 
     render(<SessionsList />, { wrapper: createWrapper() })
 
@@ -185,9 +267,6 @@ describe('SessionsList', () => {
   })
 
   it('shows session status badge for Running session', async () => {
-    const mockGetApiSessions = Sessions.getApiSessions as Mock
-    mockGetApiSessions.mockResolvedValueOnce({ data: [activeSession] })
-
     render(<SessionsList />, { wrapper: createWrapper() })
 
     await waitFor(() => {
@@ -197,13 +276,11 @@ describe('SessionsList', () => {
 
   it('shows session status badges in archived tab', async () => {
     const user = userEvent.setup()
-    const mockGetApiSessions = Sessions.getApiSessions as Mock
-    mockGetApiSessions.mockResolvedValueOnce({ data: mockSessions })
 
     render(<SessionsList />, { wrapper: createWrapper() })
 
     await waitFor(() => {
-      expect(screen.getByText('session-1')).toBeInTheDocument()
+      expect(screen.getByText('Fix login bug')).toBeInTheDocument()
     })
 
     // Switch to archived tab
@@ -217,28 +294,22 @@ describe('SessionsList', () => {
   })
 
   it('navigates to session on row click', async () => {
-    const mockGetApiSessions = Sessions.getApiSessions as Mock
-    mockGetApiSessions.mockResolvedValueOnce({ data: [activeSession] })
-
     render(<SessionsList />, { wrapper: createWrapper() })
 
     await waitFor(() => {
-      expect(screen.getByText('session-1')).toBeInTheDocument()
+      expect(screen.getByText('Fix login bug')).toBeInTheDocument()
     })
 
-    // Check that session rows are links
-    const sessionLink = screen.getByRole('link', { name: /session-1/i })
-    expect(sessionLink).toHaveAttribute('href', '/sessions/session-1')
+    // Check that chat button is a link
+    const chatLink = screen.getByRole('link', { name: /Chat/i })
+    expect(chatLink).toHaveAttribute('href', '/sessions/session-1')
   })
 
   it('shows stop action for active sessions', async () => {
-    const mockGetApiSessions = Sessions.getApiSessions as Mock
-    mockGetApiSessions.mockResolvedValueOnce({ data: [activeSession] })
-
     render(<SessionsList />, { wrapper: createWrapper() })
 
     await waitFor(() => {
-      expect(screen.getByText('session-1')).toBeInTheDocument()
+      expect(screen.getByText('Fix login bug')).toBeInTheDocument()
     })
 
     // Active sessions should have a stop button
@@ -247,13 +318,11 @@ describe('SessionsList', () => {
 
   it('does not show stop action for archived sessions', async () => {
     const user = userEvent.setup()
-    const mockGetApiSessions = Sessions.getApiSessions as Mock
-    mockGetApiSessions.mockResolvedValueOnce({ data: mockSessions })
 
     render(<SessionsList />, { wrapper: createWrapper() })
 
     await waitFor(() => {
-      expect(screen.getByText('session-1')).toBeInTheDocument()
+      expect(screen.getByText('Fix login bug')).toBeInTheDocument()
     })
 
     // Switch to archived tab
@@ -261,19 +330,15 @@ describe('SessionsList', () => {
     await user.click(archivedTab)
 
     await waitFor(() => {
-      expect(screen.getByText('session-2')).toBeInTheDocument()
+      expect(screen.getByText('Stopped')).toBeInTheDocument()
     })
 
     // Archived sessions should not have stop button
-    const table = screen.getByRole('table')
-    const stopButtons = within(table).queryAllByRole('button', { name: /stop/i })
+    const stopButtons = screen.queryAllByRole('button', { name: /stop/i })
     expect(stopButtons).toHaveLength(0)
   })
 
   it('shows correct tab counts', async () => {
-    const mockGetApiSessions = Sessions.getApiSessions as Mock
-    mockGetApiSessions.mockResolvedValueOnce({ data: mockSessions })
-
     render(<SessionsList />, { wrapper: createWrapper() })
 
     await waitFor(() => {
@@ -284,13 +349,11 @@ describe('SessionsList', () => {
 
   it('shows confirmation dialog when stopping session', async () => {
     const user = userEvent.setup()
-    const mockGetApiSessions = Sessions.getApiSessions as Mock
-    mockGetApiSessions.mockResolvedValueOnce({ data: [activeSession] })
 
     render(<SessionsList />, { wrapper: createWrapper() })
 
     await waitFor(() => {
-      expect(screen.getByText('session-1')).toBeInTheDocument()
+      expect(screen.getByText('Fix login bug')).toBeInTheDocument()
     })
 
     // Click stop button
@@ -307,15 +370,16 @@ describe('SessionsList', () => {
 
   it('calls stop mutation when confirmed', async () => {
     const user = userEvent.setup()
-    const mockGetApiSessions = Sessions.getApiSessions as Mock
-    const mockDeleteApiSessionsById = Sessions.deleteApiSessionsById as Mock
-    mockGetApiSessions.mockResolvedValueOnce({ data: [activeSession] })
-    mockDeleteApiSessionsById.mockResolvedValueOnce({})
+    const mockMutate = vi.fn()
+    vi.mocked(useStopSession).mockReturnValue({
+      mutate: mockMutate,
+      isPending: false,
+    } as unknown as ReturnType<typeof useStopSession>)
 
     render(<SessionsList />, { wrapper: createWrapper() })
 
     await waitFor(() => {
-      expect(screen.getByText('session-1')).toBeInTheDocument()
+      expect(screen.getByText('Fix login bug')).toBeInTheDocument()
     })
 
     // Click stop button
@@ -330,15 +394,18 @@ describe('SessionsList', () => {
     await user.click(confirmButton)
 
     await waitFor(() => {
-      expect(mockDeleteApiSessionsById).toHaveBeenCalledWith({
-        path: { id: 'session-1' },
-      })
+      expect(mockMutate).toHaveBeenCalledWith('session-1')
     })
   })
 
   it('shows empty state for active tab when only archived sessions exist', async () => {
-    const mockGetApiSessions = Sessions.getApiSessions as Mock
-    mockGetApiSessions.mockResolvedValueOnce({ data: [stoppedSession, errorSession] })
+    vi.mocked(useSessions).mockReturnValue({
+      data: [stoppedSession, errorSession],
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useSessions>)
 
     render(<SessionsList />, { wrapper: createWrapper() })
 
