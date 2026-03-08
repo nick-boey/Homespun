@@ -45,7 +45,7 @@ import {
   TaskGraphExpandedDetails,
 } from './task-graph-row'
 import { InlineIssueEditor } from './inline-issue-editor'
-import { ROW_HEIGHT, LANE_WIDTH } from './task-graph-svg'
+import { ROW_HEIGHT, LANE_WIDTH, getTypeColor } from './task-graph-svg'
 
 export interface TaskGraphViewProps {
   projectId: string
@@ -748,8 +748,8 @@ export const TaskGraphView = memo(
             <span
               className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium"
               style={{
-                backgroundColor: '#3b82f620',
-                color: '#3b82f6',
+                backgroundColor: `${getTypeColor(0)}20`,
+                color: getTypeColor(0),
               }}
             >
               Task
@@ -881,8 +881,8 @@ export const TaskGraphView = memo(
                     <span
                       className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium"
                       style={{
-                        backgroundColor: '#3b82f620',
-                        color: '#3b82f6',
+                        backgroundColor: `${getTypeColor(0)}20`,
+                        color: getTypeColor(0),
                       }}
                     >
                       Task

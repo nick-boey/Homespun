@@ -196,10 +196,10 @@ describe('TaskGraphNodeSvg', () => {
   describe('type colors', () => {
     it('should return correct colors for each issue type', () => {
       expect(getTypeColor(0)).toBe('#3b82f6') // Task: Blue
-      expect(getTypeColor(1)).toBe('#22c55e') // Feature: Green
-      expect(getTypeColor(2)).toBe('#ef4444') // Bug: Red
-      expect(getTypeColor(3)).toBe('#6b7280') // Chore: Gray
-      expect(getTypeColor(4)).toBe('#8b5cf6') // Epic: Purple
+      expect(getTypeColor(1)).toBe('#ef4444') // Bug: Red
+      expect(getTypeColor(2)).toBe('#6b7280') // Chore: Gray
+      expect(getTypeColor(3)).toBe('#22c55e') // Feature: Green
+      expect(getTypeColor(4)).toBe('#8b5cf6') // Idea: Purple
     })
 
     it('should return default color for unknown issue type', () => {
