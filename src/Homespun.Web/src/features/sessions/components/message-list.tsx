@@ -139,7 +139,7 @@ function MessageItem({ message }: MessageItemProps) {
           )}
         >
           {message.content.map((content, index) => (
-            <ContentBlock key={index} content={content} isAssistant={isAssistant} />
+            <ContentBlock key={index} content={content} />
           ))}
           {message.isStreaming && (
             <span
@@ -160,14 +160,12 @@ function MessageItem({ message }: MessageItemProps) {
 
 interface ContentBlockProps {
   content: ClaudeMessageContent
-  isAssistant: boolean
 }
 
-function ContentBlock({ content, isAssistant }: ContentBlockProps) {
+function ContentBlock({ content }: ContentBlockProps) {
   const contentType = normalizeContentType(content.type)
   const responsiveProse = useResponsiveProse({
     includeBase: true,
-    invert: !isAssistant,
   })
 
   switch (contentType) {

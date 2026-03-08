@@ -318,7 +318,7 @@ describe('MessageList', () => {
       expect(markdownElement).toHaveClass('break-words')
     })
 
-    it('applies prose-invert to user messages', () => {
+    it('does not apply prose-invert to user messages (colors inherit via currentColor)', () => {
       const messages: ClaudeMessage[] = [
         createMessage({
           id: 'msg-1',
@@ -326,7 +326,7 @@ describe('MessageList', () => {
           content: [
             {
               type: 'Text',
-              text: 'User message with inverted prose',
+              text: 'User message with inherited prose colors',
               isStreaming: false,
               index: 0,
             },
@@ -337,7 +337,8 @@ describe('MessageList', () => {
       render(<MessageList messages={messages} />)
 
       const markdownElement = screen.getByTestId('markdown')
-      expect(markdownElement).toHaveClass('prose-invert')
+      expect(markdownElement).not.toHaveClass('prose-invert')
+      expect(markdownElement).toHaveClass('prose')
     })
 
     it('uses responsive width classes for message bubbles', () => {

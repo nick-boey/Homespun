@@ -1,5 +1,5 @@
 @import 'tailwindcss';
-@import '@tailwindcss/typography';
+@plugin '@tailwindcss/typography';
 
 @custom-variant dark (&:is(.dark *));
 
@@ -122,6 +122,16 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* Override typography plugin colors to inherit from parent context */
+.prose {
+  --tw-prose-body: currentColor;
+  --tw-prose-headings: currentColor;
+  --tw-prose-bold: currentColor;
+  --tw-prose-links: currentColor;
+  --tw-prose-counters: currentColor;
+  --tw-prose-bullets: currentColor;
 }
 
 /* Animation for inline detail row expand */
