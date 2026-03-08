@@ -438,7 +438,7 @@ describe('AgentLauncherDialog', () => {
     })
   })
 
-  it('only shows None option for Plan mode', async () => {
+  it('always shows None option regardless of prompt types', async () => {
     // Update mock prompts to only have Build prompts
     const buildOnlyPrompts: AgentPrompt[] = [
       {
@@ -476,7 +476,8 @@ describe('AgentLauncherDialog', () => {
     const promptSelect = screen.getByRole('combobox', { name: /prompt/i })
     await user.click(promptSelect)
 
-    // Should NOT have None option when only Build prompts are available
-    expect(screen.queryByText('None - Start without prompt (Plan mode)')).not.toBeInTheDocument()
+    // Should ALWAYS have None option as first option, regardless of prompt types
+    const options = screen.getAllByRole('option')
+    expect(options[0]).toHaveTextContent('None - Start without prompt (Plan mode)')
   })
 })

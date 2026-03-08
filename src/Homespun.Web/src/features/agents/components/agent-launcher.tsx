@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { useNavigate } from '@tanstack/react-router'
 import { Play } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -22,16 +23,16 @@ const DEFAULT_MODEL = 'claude-opus-4-20250514'
 const MODEL_STORAGE_KEY = 'agent-launcher-model'
 const PROMPT_STORAGE_KEY = 'agent-launcher-prompt'
 
-/** Special "No prompt" option - starts session in Plan mode without a system prompt */
-const NO_PROMPT_ID = '__no_prompt__'
+/** Special "None" option - starts session in Plan mode without a system prompt */
+const NO_PROMPT_ID = '__none__'
 const NO_PROMPT_OPTION = {
   id: NO_PROMPT_ID,
-  name: 'No prompt',
+  name: 'None - Start without prompt (Plan mode)',
   initialMessage: undefined,
   mode: 0, // SessionMode.Plan
 } as const
 
-/** Get the initial prompt ID from localStorage or return "No prompt" as default */
+/** Get the initial prompt ID from localStorage or return "None" as default */
 function getInitialPromptId(): string {
   return localStorage.getItem(PROMPT_STORAGE_KEY) ?? NO_PROMPT_ID
 }
@@ -57,6 +58,7 @@ export function AgentLauncher({
   onError,
   className,
 }: AgentLauncherProps) {
+  const navigate = useNavigate()
   const { data: prompts, isLoading: promptsLoading } = useAgentPrompts(projectId)
   const startAgent = useStartAgent()
 
@@ -116,6 +118,12 @@ export function AgentLauncher({
         mode: selectedPrompt?.mode as SessionMode | undefined,
         systemPrompt: selectedPrompt?.initialMessage ?? undefined,
       })
+
+      // Navigate to session page if "None" was selected
+      if (effectivePromptId === NO_PROMPT_ID && session.id) {
+        navigate({ to: '/sessions/$sessionId', params: { sessionId: session.id } })
+      }
+
       onStart?.(session)
     } catch (error) {
       onError?.(error as Error)
@@ -133,7 +141,7 @@ export function AgentLauncher({
             <SelectValue placeholder="Select prompt" />
           </SelectTrigger>
           <SelectContent>
-            {/* "No prompt" option always first */}
+            {/* "None" option always first */}
             <SelectItem key={NO_PROMPT_ID} value={NO_PROMPT_ID}>
               {NO_PROMPT_OPTION.name}
             </SelectItem>

@@ -113,11 +113,6 @@ export function AgentLauncherDialog({
     }
   }, [selectedBaseBranch])
 
-  // Check if we have any Plan mode prompts (which allows None option)
-  const hasPlanPrompts = useMemo(() => {
-    return prompts?.some((p) => p.mode === 0) ?? false
-  }, [prompts])
-
   // Compute effective prompt ID
   const effectivePromptId = useMemo(() => {
     // Handle None selection
@@ -223,11 +218,10 @@ export function AgentLauncherDialog({
                     <SelectValue placeholder="Select prompt" />
                   </SelectTrigger>
                   <SelectContent>
-                    {hasPlanPrompts && (
-                      <SelectItem value={NONE_PROMPT_ID}>
-                        None - Start without prompt (Plan mode)
-                      </SelectItem>
-                    )}
+                    {/* "None" option always available as first option */}
+                    <SelectItem value={NONE_PROMPT_ID}>
+                      None - Start without prompt (Plan mode)
+                    </SelectItem>
                     {prompts?.map((prompt) => (
                       <SelectItem key={prompt.id} value={prompt.id ?? ''}>
                         {prompt.name}
