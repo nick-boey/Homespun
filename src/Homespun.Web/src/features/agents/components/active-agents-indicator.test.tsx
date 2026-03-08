@@ -197,13 +197,13 @@ describe('ActiveAgentsIndicator', () => {
       })
     })
 
-    it('shows idle state when no sessions exist globally', async () => {
+    it('renders nothing when no sessions exist globally', async () => {
       mockGetAllSessions.mockResolvedValueOnce(createMockResponse<SessionSummary[]>([]))
 
-      render(<ActiveAgentsIndicator />, { wrapper: createWrapper() })
+      const { container } = render(<ActiveAgentsIndicator />, { wrapper: createWrapper() })
 
       await waitFor(() => {
-        expect(screen.getByText(/idle/i)).toBeInTheDocument()
+        expect(container.firstChild).toBeNull()
       })
     })
   })
