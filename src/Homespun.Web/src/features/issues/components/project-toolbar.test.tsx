@@ -406,11 +406,11 @@ describe('ProjectToolbar', () => {
       renderToolbar()
       const toolbar = screen.getByRole('toolbar')
       // Should have mobile offset
-      expect(toolbar).toHaveClass('top-[68px]')
+      expect(toolbar).toHaveClass('top-[4px]')
       // Should have desktop offset
-      expect(toolbar).toHaveClass('md:top-[80px]')
+      expect(toolbar).toHaveClass('md:top-[4px]')
       // Should not have the old incorrect offset
-      expect(toolbar).not.toHaveClass('top-[52px]')
+      expect(toolbar).not.toHaveClass('top-[68px]')
     })
 
     it('has horizontal scroll class for mobile', () => {
