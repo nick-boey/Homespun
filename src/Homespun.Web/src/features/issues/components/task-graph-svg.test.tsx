@@ -236,7 +236,7 @@ describe('TaskGraphNodeSvg', () => {
       expect(ring).toHaveClass('animate-pulse')
     })
 
-    it('should show actionable ring when agent is not active', () => {
+    it('should not show actionable ring when agent is not active', () => {
       const line = createMockLine({
         marker: TaskGraphMarkerType.Actionable,
         agentStatus: {
@@ -248,12 +248,7 @@ describe('TaskGraphNodeSvg', () => {
       const { container } = render(<TaskGraphNodeSvg line={line} maxLanes={1} />)
 
       const circles = container.querySelectorAll('circle')
-      expect(circles).toHaveLength(2) // Actionable ring + node
-
-      // Verify the ring is the actionable ring (no animation)
-      const ring = circles[0]
-      expect(ring).toHaveAttribute('opacity', '0.4')
-      expect(ring).not.toHaveClass('animate-pulse')
+      expect(circles).toHaveLength(1) // Only the node, no actionable ring
     })
   })
 
