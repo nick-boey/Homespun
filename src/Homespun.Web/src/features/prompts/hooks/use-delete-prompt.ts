@@ -4,7 +4,7 @@ import { projectPromptsQueryKey } from './use-project-prompts'
 import { agentPromptsQueryKey } from '@/features/agents/hooks/use-agent-prompts'
 
 interface UseDeletePromptOptions {
-  projectId: string
+  projectId?: string
   onSuccess?: () => void
   onError?: (error: Error) => void
 }
@@ -25,12 +25,19 @@ export function useDeletePrompt(options: UseDeletePromptOptions) {
       return result.data
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: projectPromptsQueryKey(options.projectId),
-      })
-      queryClient.invalidateQueries({
-        queryKey: agentPromptsQueryKey(options.projectId),
-      })
+      if (options.projectId) {
+        queryClient.invalidateQueries({
+          queryKey: projectPromptsQueryKey(options.projectId),
+        })
+        queryClient.invalidateQueries({
+          queryKey: agentPromptsQueryKey(options.projectId),
+        })
+      } else {
+        // Invalidate global prompts list
+        queryClient.invalidateQueries({
+          queryKey: ['global-prompts'],
+        })
+      }
       options.onSuccess?.()
     },
     onError: (error) => {

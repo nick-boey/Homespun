@@ -35,33 +35,27 @@ describe('useGlobalPrompts', () => {
       {
         id: '1',
         name: 'Global Prompt 1',
-        description: 'A global prompt',
         initialMessage: 'Test message',
         mode: 0 as const,
         projectId: null,
-        isDefault: false,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       },
       {
         id: '2',
         name: 'Project Prompt',
-        description: 'A project prompt',
         initialMessage: 'Project message',
         mode: 1 as const,
         projectId: 'project-123',
-        isDefault: false,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       },
       {
         id: '3',
         name: 'Global Prompt 2',
-        description: 'Another global prompt',
         initialMessage: 'Another message',
         mode: 0 as const,
         projectId: null,
-        isDefault: false,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       },
@@ -86,7 +80,7 @@ describe('useGlobalPrompts', () => {
 
   it('handles loading state correctly', () => {
     vi.mocked(AgentPrompts.getApiAgentPrompts).mockImplementation(
-      () => new Promise(() => {}) // Never resolves
+      () => new Promise(() => {}) as any // Never resolves
     )
 
     const { result } = renderHook(() => useGlobalPrompts(), { wrapper })
