@@ -52,7 +52,7 @@ export function ActiveAgentsIndicator({ className }: ActiveAgentsIndicatorProps)
     {
       count: workingCount,
       label: 'Working',
-      colorClass: 'text-blue-500',
+      colorClass: 'text-green-500',
       testId: 'status-working',
       showPing: true,
     },
@@ -66,14 +66,14 @@ export function ActiveAgentsIndicator({ className }: ActiveAgentsIndicatorProps)
     {
       count: waitingForAnswerCount,
       label: 'Waiting for answer',
-      colorClass: 'text-orange-500',
+      colorClass: 'text-purple-500',
       testId: 'status-waiting-answer',
       showPing: false,
     },
     {
       count: waitingForPlanCount,
       label: 'Waiting for plan',
-      colorClass: 'text-purple-500',
+      colorClass: 'text-orange-500',
       testId: 'status-waiting-plan',
       showPing: false,
     },
@@ -105,7 +105,7 @@ export function ActiveAgentsIndicator({ className }: ActiveAgentsIndicatorProps)
               <span
                 className={cn(
                   'absolute inline-flex h-full w-full animate-ping rounded-full opacity-75',
-                  status.colorClass === 'text-blue-500' && 'bg-blue-400'
+                  status.colorClass === 'text-green-500' && 'bg-green-400'
                 )}
               />
               <Circle
