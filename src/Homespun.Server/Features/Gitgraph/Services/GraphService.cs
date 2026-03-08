@@ -629,15 +629,51 @@ public class GraphService(
 
             // Get agent statuses
             var sessions = sessionStore.GetByProjectId(projectId);
-            var sessionsByEntityId = sessions
+            logger.LogInformation(
+                "Found {SessionCount} sessions for project {ProjectId}",
+                sessions.Count, projectId);
+
+            // Filter out sessions without EntityId and group by EntityId
+            var validSessions = sessions.Where(s => !string.IsNullOrWhiteSpace(s.EntityId)).ToList();
+            logger.LogInformation(
+                "Filtered {ValidCount} valid sessions from {TotalCount} total sessions (excluded {ExcludedCount} with null/empty EntityId)",
+                validSessions.Count, sessions.Count, sessions.Count - validSessions.Count);
+
+            var sessionsByEntityId = validSessions
                 .GroupBy(s => s.EntityId, StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(g => g.Key, g => g.OrderByDescending(s => s.LastActivityAt).First(), StringComparer.OrdinalIgnoreCase);
 
+            logger.LogInformation(
+                "Sessions grouped by entity ID: {EntityIds}",
+                string.Join(", ", sessionsByEntityId.Keys.Select(k => $"'{k}'")));
+
             foreach (var node in response.Nodes)
             {
+                if (string.IsNullOrWhiteSpace(node.Issue?.Id))
+                {
+                    logger.LogWarning(
+                        "Skipping node with null or empty issue ID. Title: {Title}",
+                        node.Issue?.Title ?? "N/A");
+                    continue;
+                }
+
+                logger.LogDebug(
+                    "Checking session for issue '{IssueId}' (Title: {IssueTitle})",
+                    node.Issue.Id, node.Issue.Title);
+
                 if (sessionsByEntityId.TryGetValue(node.Issue.Id, out var session))
                 {
-                    response.AgentStatuses[node.Issue.Id] = CreateAgentStatusData(session);
+                    var statusData = CreateAgentStatusData(session);
+                    response.AgentStatuses[node.Issue.Id] = statusData;
+                    logger.LogInformation(
+                        "Matched session for issue '{IssueId}': SessionId={SessionId}, Status={Status}, IsActive={IsActive}",
+                        node.Issue.Id, session.Id, session.Status, statusData.IsActive);
+                }
+                else
+                {
+                    logger.LogDebug(
+                        "No session found for issue '{IssueId}' (available keys: {AvailableKeys})",
+                        node.Issue.Id, string.Join(", ", sessionsByEntityId.Keys.Take(5).Select(k => $"'{k}'")));
                 }
             }
 
