@@ -1,4 +1,5 @@
 using Homespun.Features.AgentOrchestration.Services;
+using Homespun.Server.Features.AgentOrchestration.Services;
 using Homespun.Features.ClaudeCode.Hubs;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Commands;
@@ -231,6 +232,7 @@ else
     builder.Services.AddHttpClient("MiniPrompt");
     builder.Services.AddSingleton<IMiniPromptService, MiniPromptService>();
     builder.Services.AddSingleton<IBranchIdGeneratorService, BranchIdGeneratorService>();
+    builder.Services.AddSingleton<IBranchIdBackgroundService, BranchIdBackgroundService>();
 
     // GitHub sync polling service (PR sync, review polling, issue linking)
     builder.Services.Configure<GitHubSyncPollingOptions>(

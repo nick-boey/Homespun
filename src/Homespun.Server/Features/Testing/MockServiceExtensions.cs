@@ -95,6 +95,7 @@ public static class MockServiceExtensions
         // Then register the services
         services.AddSingleton<IMiniPromptService, MiniPromptService>();
         services.AddSingleton<IBranchIdGeneratorService, BranchIdGeneratorService>();
+        services.AddSingleton<IBranchIdBackgroundService, BranchIdBackgroundService>();
 
         // Message cache store - use real implementation
         // In container: /data/sessions, locally: ~/.homespun/sessions (consistent with Program.cs)
