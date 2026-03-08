@@ -303,9 +303,7 @@ app.MapHealthChecks("/health");
 // Map API controllers
 app.MapControllers();
 
-// MapStaticAssets replaces UseBlazorFrameworkFiles + UseStaticFiles in .NET 10
-// It serves both Blazor WASM framework files and static assets via endpoint routing
+// MapStaticAssets serves static files via endpoint routing
 app.MapStaticAssets();
-app.MapFallbackToFile("index.html");
 
 app.Run();
