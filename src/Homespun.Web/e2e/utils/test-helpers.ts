@@ -13,12 +13,6 @@ export async function navigateAndWait(page: Page, url: string) {
  */
 export async function waitForStatusIndicator(page: Page) {
   await page.waitForSelector('[data-testid="status-indicator"]', { state: 'visible' })
-
-  // Wait for initial API call to complete
-  await page.waitForResponse(
-    (response) => response.url().includes('/api/sessions') && response.status() === 200,
-    { timeout: 10000 }
-  )
 }
 
 /**

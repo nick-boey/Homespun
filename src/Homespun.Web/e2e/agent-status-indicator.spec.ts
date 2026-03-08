@@ -91,8 +91,8 @@ test.describe('Agent Status Indicator', () => {
     // Click on the indicator
     await page.click('[data-testid="status-indicator"]')
 
-    // Should navigate to project-specific sessions page
-    await expect(page).toHaveURL(new RegExp(`/projects/${projectId}/sessions$`))
+    // Component always links to global sessions page
+    await expect(page).toHaveURL(/\/sessions$/)
   })
 
   test('shows multiple status indicators horizontally', async ({ page }) => {
@@ -100,7 +100,7 @@ test.describe('Agent Status Indicator', () => {
     await waitForStatusIndicator(page)
 
     // Check if multiple status indicators can be shown in a row
-    const statusContainer = page.locator('a[href="/sessions"]').first()
+    const statusContainer = page.locator('[data-testid="status-indicator"]').first()
 
     // Count visible status indicators
     const visibleStatuses = await statusContainer
