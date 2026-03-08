@@ -30,5 +30,4 @@ test.describe('Sessions page', () => {
     // Check for empty state message
     await expect(page.getByText('No sessions yet')).toBeVisible()
   })
-
 })
