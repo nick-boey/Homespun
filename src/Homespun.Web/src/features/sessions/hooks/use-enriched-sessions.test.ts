@@ -99,6 +99,17 @@ describe('useEnrichedSessions', () => {
       expect(result.current.sessions[1].entityTitle).toBeDefined()
     })
 
+    // Verify API calls include projectId for issues
+    expect(Issues.getApiIssuesByIssueId).toHaveBeenCalledWith({
+      path: { issueId: 'issue-123' },
+      query: { projectId: 'project-1' },
+    })
+
+    // Verify API calls don't include query for PRs
+    expect(PullRequests.getApiPullRequestsById).toHaveBeenCalledWith({
+      path: { id: 'pr-456' },
+    })
+
     expect(result.current.sessions[0]).toEqual({
       session: mockSessions[0],
       entityTitle: 'Fix login bug',
@@ -188,6 +199,12 @@ describe('useEnrichedSessions', () => {
       expect(result.current.sessions[0].entityTitle).toBeDefined()
     })
 
+    // Verify API call is made without projectId query parameter
+    expect(Issues.getApiIssuesByIssueId).toHaveBeenCalledWith({
+      path: { issueId: 'issue-123' },
+      query: undefined,
+    })
+
     expect(result.current.sessions[0].entityTitle).toBe('Fix login bug')
     expect(result.current.sessions[0].entityType).toBe('issue')
     expect(result.current.sessions[0].projectName).toBeUndefined()
@@ -236,6 +253,16 @@ describe('useEnrichedSessions', () => {
 
     await waitFor(() => {
       expect(result.current.groupedByProject.size).toBe(2)
+    })
+
+    // Verify API calls include projectId for both issues
+    expect(Issues.getApiIssuesByIssueId).toHaveBeenCalledWith({
+      path: { issueId: 'issue-123' },
+      query: { projectId: 'project-1' },
+    })
+    expect(Issues.getApiIssuesByIssueId).toHaveBeenCalledWith({
+      path: { issueId: 'issue-789' },
+      query: { projectId: 'project-1' },
     })
 
     expect(result.current.groupedByProject.get('project-1')).toHaveLength(2)

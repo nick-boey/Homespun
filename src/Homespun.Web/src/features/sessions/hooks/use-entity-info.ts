@@ -19,9 +19,15 @@ function detectEntityType(entityId: string): EntityType {
   return 'issue'
 }
 
-export function useEntityInfo(entityId: string | null | undefined) {
+export function useEntityInfo(entityId: string | null | undefined, projectId?: string) {
+  const entityType = entityId ? detectEntityType(entityId) : null
+  const queryKey =
+    entityType === 'issue' && projectId
+      ? ['entity-info', entityId, projectId]
+      : ['entity-info', entityId]
+
   return useQuery({
-    queryKey: ['entity-info', entityId],
+    queryKey,
     queryFn: async (): Promise<EntityInfo | null> => {
       if (!entityId) return null
 
@@ -41,6 +47,7 @@ export function useEntityInfo(entityId: string | null | undefined) {
         } else {
           const response = await Issues.getApiIssuesByIssueId({
             path: { issueId: entityId },
+            query: projectId ? { projectId } : undefined,
           })
           const issue = response.data as IssueResponse
           return {
