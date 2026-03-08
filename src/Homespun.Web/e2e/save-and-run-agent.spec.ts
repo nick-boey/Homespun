@@ -3,17 +3,14 @@ import { test, expect } from '@playwright/test'
 test.describe('Save and Run Agent', () => {
   test('saves issue and opens agent launcher dialog', async ({ page }) => {
     // Navigate to the issues page
-    await page.goto('/projects/sample-project/issues')
+    await page.goto('/projects/demo-project/issues')
 
-    // Find an issue to edit
-    const issueCard = page
-      .locator('.rounded-lg')
-      .filter({ hasText: 'Feature: Enhance homepage' })
-      .first()
-    await expect(issueCard).toBeVisible()
+    // Find and click on the issue text directly
+    const issueText = page.getByText('Add dark mode support')
+    await expect(issueText).toBeVisible()
 
     // Click on the issue to view details
-    await issueCard.click()
+    await issueText.click()
 
     // Wait for the detail panel to open
     const detailPanel = page.locator('aside[data-testid="issue-detail-panel"]')
@@ -42,7 +39,7 @@ test.describe('Save and Run Agent', () => {
     await saveAndRunButton.click()
 
     // Wait for save to complete and agent launcher dialog to open
-    const agentDialog = page.locator('[role="dialog"]').filter({ hasText: 'Launch Agent' })
+    const agentDialog = page.locator('[role="dialog"]').filter({ hasText: 'Run Agent' })
     await expect(agentDialog).toBeVisible({ timeout: 10000 })
 
     // Verify dialog has the prompt selector
@@ -63,17 +60,14 @@ test.describe('Save and Run Agent', () => {
 
   test('validates form before save and run', async ({ page }) => {
     // Navigate to the issues page
-    await page.goto('/projects/sample-project/issues')
+    await page.goto('/projects/demo-project/issues')
 
-    // Find an issue to edit
-    const issueCard = page
-      .locator('.rounded-lg')
-      .filter({ hasText: 'Feature: Enhance homepage' })
-      .first()
-    await expect(issueCard).toBeVisible()
+    // Find and click on the issue text directly
+    const issueText = page.getByText('Add dark mode support')
+    await expect(issueText).toBeVisible()
 
-    // Click on the issue
-    await issueCard.click()
+    // Click on the issue to view details
+    await issueText.click()
 
     // Wait for detail panel and click edit
     const detailPanel = page.locator('aside[data-testid="issue-detail-panel"]')
@@ -97,23 +91,20 @@ test.describe('Save and Run Agent', () => {
     await expect(page.getByText('Title is required')).toBeVisible()
 
     // Verify agent launcher dialog does NOT open
-    const agentDialog = page.locator('[role="dialog"]').filter({ hasText: 'Launch Agent' })
+    const agentDialog = page.locator('[role="dialog"]').filter({ hasText: 'Run Agent' })
     await expect(agentDialog).not.toBeVisible()
   })
 
   test('regular save button navigates away', async ({ page }) => {
     // Navigate to the issues page
-    await page.goto('/projects/sample-project/issues')
+    await page.goto('/projects/demo-project/issues')
 
-    // Find an issue to edit
-    const issueCard = page
-      .locator('.rounded-lg')
-      .filter({ hasText: 'Feature: Enhance homepage' })
-      .first()
-    await expect(issueCard).toBeVisible()
+    // Find and click on the issue text directly
+    const issueText = page.getByText('Add dark mode support')
+    await expect(issueText).toBeVisible()
 
-    // Click on the issue
-    await issueCard.click()
+    // Click on the issue to view details
+    await issueText.click()
 
     // Wait for detail panel and click edit
     const detailPanel = page.locator('aside[data-testid="issue-detail-panel"]')
@@ -134,26 +125,23 @@ test.describe('Save and Run Agent', () => {
     await saveButton.click()
 
     // Wait for navigation back to issues list
-    await expect(page).toHaveURL('/projects/sample-project/issues')
+    await expect(page).toHaveURL('/projects/demo-project/issues')
 
     // Verify agent launcher dialog does NOT open
-    const agentDialog = page.locator('[role="dialog"]').filter({ hasText: 'Launch Agent' })
+    const agentDialog = page.locator('[role="dialog"]').filter({ hasText: 'Run Agent' })
     await expect(agentDialog).not.toBeVisible()
   })
 
   test('can start agent from launcher after save and run', async ({ page }) => {
     // Navigate to the issues page
-    await page.goto('/projects/sample-project/issues')
+    await page.goto('/projects/demo-project/issues')
 
-    // Find an issue to edit
-    const issueCard = page
-      .locator('.rounded-lg')
-      .filter({ hasText: 'Feature: Enhance homepage' })
-      .first()
-    await expect(issueCard).toBeVisible()
+    // Find and click on the issue text directly
+    const issueText = page.getByText('Add dark mode support')
+    await expect(issueText).toBeVisible()
 
-    // Click on the issue
-    await issueCard.click()
+    // Click on the issue to view details
+    await issueText.click()
 
     // Wait for detail panel and click edit
     const detailPanel = page.locator('aside[data-testid="issue-detail-panel"]')
@@ -174,7 +162,7 @@ test.describe('Save and Run Agent', () => {
     await saveAndRunButton.click()
 
     // Wait for agent launcher dialog
-    const agentDialog = page.locator('[role="dialog"]').filter({ hasText: 'Launch Agent' })
+    const agentDialog = page.locator('[role="dialog"]').filter({ hasText: 'Run Agent' })
     await expect(agentDialog).toBeVisible({ timeout: 10000 })
 
     // Select a prompt
