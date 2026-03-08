@@ -16,10 +16,10 @@ export const LINE_STROKE_WIDTH = 2
 /** Type colors matching the issue acceptance criteria */
 const TYPE_COLORS: Record<number, string> = {
   0: '#3b82f6', // Task: Blue
-  1: '#22c55e', // Feature: Green
-  2: '#ef4444', // Bug: Red
-  3: '#6b7280', // Chore: Gray
-  4: '#8b5cf6', // Epic: Purple
+  1: '#ef4444', // Bug: Red
+  2: '#6b7280', // Chore: Gray
+  3: '#22c55e', // Feature: Green
+  4: '#8b5cf6', // Idea: Purple
 }
 
 export function getTypeColor(issueType: number): string {
