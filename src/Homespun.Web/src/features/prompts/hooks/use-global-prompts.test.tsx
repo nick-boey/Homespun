@@ -80,7 +80,7 @@ describe('useGlobalPrompts', () => {
 
   it('handles loading state correctly', () => {
     vi.mocked(AgentPrompts.getApiAgentPrompts).mockImplementation(
-      () => new Promise(() => {}) as any // Never resolves
+      () => new Promise<never>(() => {}) // Never resolves
     )
 
     const { result } = renderHook(() => useGlobalPrompts(), { wrapper })

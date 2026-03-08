@@ -59,6 +59,7 @@ export function ProjectCard({ project, onDelete }: ProjectCardProps) {
           to="/projects/$projectId"
           params={{ projectId: project.id ?? '' }}
           className="hover:underline"
+          data-testid="project-card-link"
         >
           <CardTitle className="flex items-center gap-2">
             <FolderGit2 className="h-5 w-5" />
