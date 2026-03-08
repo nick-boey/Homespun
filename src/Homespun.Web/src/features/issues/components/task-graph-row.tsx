@@ -199,14 +199,6 @@ export const TaskGraphIssueRow = memo(
             </a>
           )}
 
-          {/* Agent status */}
-          {line.agentStatus?.isActive && (
-            <span className="relative flex h-2 w-2 shrink-0">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
-            </span>
-          )}
-
           {/* Hover actions */}
           {showActions && (
             <IssueRowActions
@@ -286,14 +278,6 @@ export const TaskGraphPrRow = memo(
             >
               View
             </a>
-          )}
-
-          {/* Agent status */}
-          {line.agentStatus?.isActive && (
-            <span className="relative flex h-2 w-2 shrink-0">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
-            </span>
           )}
         </div>
       </div>

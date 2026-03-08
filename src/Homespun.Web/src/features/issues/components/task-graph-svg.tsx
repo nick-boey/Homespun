@@ -26,6 +26,30 @@ export function getTypeColor(issueType: number): string {
   return TYPE_COLORS[issueType] ?? TYPE_COLORS[0]
 }
 
+/**
+ * Maps agent status to ring color based on status value.
+ * Returns null if no ring should be shown.
+ */
+function getAgentStatusColor(status: string | null): string | null {
+  if (!status) return null
+  const statusNum = parseInt(status)
+
+  switch (statusNum) {
+    case 0: // Starting
+    case 1: // RunningHooks
+    case 2: // Running
+      return '#3b82f6' // Blue
+    case 3: // WaitingForInput
+    case 4: // WaitingForQuestionAnswer
+    case 5: // WaitingForPlanExecution
+      return '#eab308' // Yellow
+    case 7: // Error
+      return '#ef4444' // Red
+    default:
+      return null // No ring for Stopped (6) or unknown status
+  }
+}
+
 export function calculateSvgWidth(maxLanes: number): number {
   return LANE_WIDTH * Math.max(maxLanes, 1) + LANE_WIDTH / 2
 }
@@ -58,7 +82,6 @@ export const TaskGraphNodeSvg = memo(function TaskGraphNodeSvg({
 
   // Determine if node should be outline only (no description)
   const isOutlineOnly = !line.hasDescription
-  const isActionable = line.marker === TaskGraphMarkerType.Actionable
 
   return (
     <svg width={width} height={ROW_HEIGHT} className="shrink-0" aria-hidden="true">
@@ -163,18 +186,36 @@ export const TaskGraphNodeSvg = memo(function TaskGraphNodeSvg({
         />
       )}
 
-      {/* Glow ring for actionable items */}
-      {isActionable && (
+      {/* Actionable glow ring (rendered before the node so it appears behind) */}
+      {line.marker === TaskGraphMarkerType.Actionable && !line.agentStatus?.isActive && (
         <circle
           cx={cx}
           cy={cy}
           r={NODE_RADIUS + 4}
           fill="none"
           stroke={nodeColor}
-          strokeWidth={1}
+          strokeWidth={2}
           opacity={0.4}
         />
       )}
+
+      {/* Agent status ring */}
+      {line.agentStatus?.isActive &&
+        (() => {
+          const color = getAgentStatusColor(line.agentStatus.status)
+          return color ? (
+            <circle
+              cx={cx}
+              cy={cy}
+              r={NODE_RADIUS + 4}
+              fill="none"
+              stroke={color}
+              strokeWidth={2}
+              opacity={0.6}
+              className="animate-pulse"
+            />
+          ) : null
+        })()}
 
       {/* Node circle */}
       {isOutlineOnly ? (
