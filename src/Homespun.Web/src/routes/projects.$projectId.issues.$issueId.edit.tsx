@@ -201,7 +201,9 @@ export default function EditIssue() {
   })
 
   // Navigation blocker for unsaved changes
-  const blocker = useBlocker({ condition: isDirty && !updateIssue.isPending && !updateIssueAndRun.isPending })
+  const blocker = useBlocker({
+    condition: isDirty && !updateIssue.isPending && !updateIssueAndRun.isPending,
+  })
 
   // Handle blocked navigation
   useEffect(() => {

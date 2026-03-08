@@ -62,7 +62,17 @@ vi.mock('@tanstack/react-router', async () => {
 const mockAgentLauncherRender = vi.fn()
 
 vi.mock('@/features/agents', () => ({
-  AgentLauncherDialog: ({ open, onOpenChange, projectId, issueId }: any) => {
+  AgentLauncherDialog: ({
+    open,
+    onOpenChange,
+    projectId,
+    issueId,
+  }: {
+    open: boolean
+    onOpenChange: (open: boolean) => void
+    projectId: string
+    issueId: string
+  }) => {
     // Track when the component is rendered with specific open state
     React.useEffect(() => {
       mockAgentLauncherRender(open)

@@ -6,7 +6,10 @@ test.describe('Save and Run Agent', () => {
     await page.goto('/projects/sample-project/issues')
 
     // Find an issue to edit
-    const issueCard = page.locator('.rounded-lg').filter({ hasText: 'Feature: Enhance homepage' }).first()
+    const issueCard = page
+      .locator('.rounded-lg')
+      .filter({ hasText: 'Feature: Enhance homepage' })
+      .first()
     await expect(issueCard).toBeVisible()
 
     // Click on the issue to view details
@@ -63,7 +66,10 @@ test.describe('Save and Run Agent', () => {
     await page.goto('/projects/sample-project/issues')
 
     // Find an issue to edit
-    const issueCard = page.locator('.rounded-lg').filter({ hasText: 'Feature: Enhance homepage' }).first()
+    const issueCard = page
+      .locator('.rounded-lg')
+      .filter({ hasText: 'Feature: Enhance homepage' })
+      .first()
     await expect(issueCard).toBeVisible()
 
     // Click on the issue
@@ -100,7 +106,10 @@ test.describe('Save and Run Agent', () => {
     await page.goto('/projects/sample-project/issues')
 
     // Find an issue to edit
-    const issueCard = page.locator('.rounded-lg').filter({ hasText: 'Feature: Enhance homepage' }).first()
+    const issueCard = page
+      .locator('.rounded-lg')
+      .filter({ hasText: 'Feature: Enhance homepage' })
+      .first()
     await expect(issueCard).toBeVisible()
 
     // Click on the issue
@@ -137,7 +146,10 @@ test.describe('Save and Run Agent', () => {
     await page.goto('/projects/sample-project/issues')
 
     // Find an issue to edit
-    const issueCard = page.locator('.rounded-lg').filter({ hasText: 'Feature: Enhance homepage' }).first()
+    const issueCard = page
+      .locator('.rounded-lg')
+      .filter({ hasText: 'Feature: Enhance homepage' })
+      .first()
     await expect(issueCard).toBeVisible()
 
     // Click on the issue
