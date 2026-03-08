@@ -52,6 +52,33 @@ describe('useEntityInfo', () => {
 
     expect(Issues.getApiIssuesByIssueId).toHaveBeenCalledWith({
       path: { issueId: 'issue-123' },
+      query: undefined,
+    })
+    expect(PullRequests.getApiPullRequestsById).not.toHaveBeenCalled()
+  })
+
+  it('detects issue entity type with projectId', async () => {
+    const mockIssue = {
+      data: { id: 'issue-123', title: 'Test Issue' },
+      error: undefined,
+      request: new Request('http://test'),
+      response: new Response(),
+    }
+    vi.mocked(Issues.getApiIssuesByIssueId).mockResolvedValue(mockIssue)
+
+    const { result } = renderHook(() => useEntityInfo('issue-123', 'project-1'), { wrapper })
+
+    await waitFor(() => {
+      expect(result.current.data).toEqual({
+        type: 'issue',
+        title: 'Test Issue',
+        id: 'issue-123',
+      })
+    })
+
+    expect(Issues.getApiIssuesByIssueId).toHaveBeenCalledWith({
+      path: { issueId: 'issue-123' },
+      query: { projectId: 'project-1' },
     })
     expect(PullRequests.getApiPullRequestsById).not.toHaveBeenCalled()
   })
@@ -77,6 +104,34 @@ describe('useEntityInfo', () => {
 
     expect(PullRequests.getApiPullRequestsById).toHaveBeenCalledWith({
       path: { id: 'pr-456' },
+    })
+    expect(Issues.getApiIssuesByIssueId).not.toHaveBeenCalled()
+  })
+
+  it('ignores projectId for PR entity type', async () => {
+    const mockPR = {
+      data: { id: 'pr-789', title: 'Test PR with Project', projectId: 'project-1' },
+      error: undefined,
+      request: new Request('http://test'),
+      response: new Response(),
+    } as Awaited<ReturnType<typeof PullRequests.getApiPullRequestsById>>
+    vi.mocked(PullRequests.getApiPullRequestsById).mockResolvedValue(mockPR)
+
+    const { result } = renderHook(() => useEntityInfo('pr-789', 'project-1'), {
+      wrapper: createWrapper(),
+    })
+
+    await waitFor(() => {
+      expect(result.current.data).toEqual({
+        type: 'pr',
+        title: 'Test PR with Project',
+        id: 'pr-789',
+      })
+    })
+
+    // PRs don't use projectId, so it should only pass the path parameter
+    expect(PullRequests.getApiPullRequestsById).toHaveBeenCalledWith({
+      path: { id: 'pr-789' },
     })
     expect(Issues.getApiIssuesByIssueId).not.toHaveBeenCalled()
   })
@@ -120,6 +175,7 @@ describe('useEntityInfo', () => {
 
     expect(Issues.getApiIssuesByIssueId).toHaveBeenCalledWith({
       path: { issueId: 'custom-id' },
+      query: undefined,
     })
   })
 
@@ -171,6 +227,55 @@ describe('useEntityInfo', () => {
     expect(Issues.getApiIssuesByIssueId).toHaveBeenCalledTimes(1) // Still only 1 call
   })
 
+  it('uses different cache key when projectId is provided', async () => {
+    const mockIssue1 = {
+      data: { id: 'issue-888', title: 'Issue without project' },
+      error: undefined,
+      request: new Request('http://test'),
+      response: new Response(),
+    }
+    const mockIssue2 = {
+      data: { id: 'issue-888', title: 'Issue with project' },
+      error: undefined,
+      request: new Request('http://test'),
+      response: new Response(),
+    }
+    vi.mocked(Issues.getApiIssuesByIssueId)
+      .mockResolvedValueOnce(mockIssue1)
+      .mockResolvedValueOnce(mockIssue2)
+
+    // First render without projectId
+    const { result, rerender } = renderHook(
+      ({ entityId, projectId }) => useEntityInfo(entityId, projectId),
+      {
+        wrapper: createWrapper(),
+        initialProps: { entityId: 'issue-888', projectId: undefined } as {
+          entityId: string
+          projectId?: string
+        },
+      }
+    )
+
+    await waitFor(() => {
+      expect(result.current.data?.title).toBe('Issue without project')
+    })
+
+    expect(Issues.getApiIssuesByIssueId).toHaveBeenCalledTimes(1)
+
+    // Re-render with projectId - should make new request (different cache key)
+    rerender({ entityId: 'issue-888', projectId: 'project-1' })
+
+    await waitFor(() => {
+      expect(result.current.data?.title).toBe('Issue with project')
+    })
+
+    expect(Issues.getApiIssuesByIssueId).toHaveBeenCalledTimes(2)
+    expect(Issues.getApiIssuesByIssueId).toHaveBeenCalledWith({
+      path: { issueId: 'issue-888' },
+      query: { projectId: 'project-1' },
+    })
+  })
+
   it('refetches when entity ID changes', async () => {
     const mockIssue1 = {
       data: { id: 'issue-001', title: 'First Issue' },
@@ -190,7 +295,7 @@ describe('useEntityInfo', () => {
       .mockResolvedValueOnce(mockIssue2)
 
     const { result, rerender } = renderHook(({ entityId }) => useEntityInfo(entityId), {
-      wrapper,
+      wrapper: createWrapper(),
       initialProps: { entityId: 'issue-001' },
     })
 
