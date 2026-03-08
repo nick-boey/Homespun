@@ -402,6 +402,17 @@ describe('ProjectToolbar', () => {
       expect(toolbar).toHaveClass('sticky')
     })
 
+    it('has correct top offset classes for sticky positioning', () => {
+      renderToolbar()
+      const toolbar = screen.getByRole('toolbar')
+      // Should have mobile offset
+      expect(toolbar).toHaveClass('top-[68px]')
+      // Should have desktop offset
+      expect(toolbar).toHaveClass('md:top-[80px]')
+      // Should not have the old incorrect offset
+      expect(toolbar).not.toHaveClass('top-[52px]')
+    })
+
     it('has horizontal scroll class for mobile', () => {
       renderToolbar()
       const toolbar = screen.getByRole('toolbar')
