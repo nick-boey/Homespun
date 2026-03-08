@@ -12,9 +12,9 @@ export function WriteToolResult({ content, isError, toolInput }: WriteToolResult
 
   if (isError) {
     return (
-      <div className={cn('text-sm text-destructive p-2 rounded border border-destructive/50')}>
+      <div className={cn('text-destructive border-destructive/50 rounded border p-2 text-sm')}>
         <div className="flex items-start gap-2">
-          <AlertCircle className="size-4 mt-0.5" />
+          <AlertCircle className="mt-0.5 size-4" />
           <span>{contentStr}</span>
         </div>
       </div>
@@ -22,18 +22,19 @@ export function WriteToolResult({ content, isError, toolInput }: WriteToolResult
   }
 
   // Extract file path from input if available
-  const filePath = (toolInput as Record<string, unknown>)?.file_path ||
-                   (toolInput as Record<string, unknown>)?.path as string | undefined
+  const inputObj = toolInput as Record<string, unknown> | undefined
+  const filePath = inputObj?.file_path || inputObj?.path
+  const filePathStr = typeof filePath === 'string' ? filePath : undefined
 
   return (
-    <div className="text-sm text-muted-foreground">
+    <div className="text-muted-foreground text-sm">
       <div className="flex items-start gap-2">
-        <CheckCircle className="size-4 mt-0.5 text-green-600 dark:text-green-400" />
+        <CheckCircle className="mt-0.5 size-4 text-green-600 dark:text-green-400" />
         <div>
           <span>{contentStr}</span>
-          {filePath && (
-            <div className="text-xs mt-1">
-              File: <span className="font-mono">{filePath}</span>
+          {filePathStr && (
+            <div className="mt-1 text-xs">
+              File: <span className="font-mono">{filePathStr}</span>
             </div>
           )}
         </div>

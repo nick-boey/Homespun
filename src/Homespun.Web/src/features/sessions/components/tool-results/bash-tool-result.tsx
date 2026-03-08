@@ -16,15 +16,15 @@ export function BashToolResult({ content, isError, toolInput }: BashToolResultPr
   return (
     <div className="space-y-2">
       {command && (
-        <div className="text-xs text-muted-foreground">
-          Command: <span className="font-mono bg-muted px-1 py-0.5 rounded">{command}</span>
+        <div className="text-muted-foreground text-xs">
+          Command: <span className="bg-muted rounded px-1 py-0.5 font-mono">{command}</span>
         </div>
       )}
       <CodeBlockCode
         language="bash"
         code={contentStr}
         className={cn(
-          'rounded border max-h-96 overflow-auto',
+          'max-h-96 overflow-auto rounded border',
           isError ? 'border-destructive/50' : 'border-border',
           isError && 'text-destructive'
         )}

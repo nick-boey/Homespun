@@ -1,4 +1,3 @@
-import * as React from 'react'
 import type { ClaudeMessageContent } from '@/types/tool-execution'
 import { ReadToolResult } from './read-tool-result'
 import { WriteToolResult } from './write-tool-result'

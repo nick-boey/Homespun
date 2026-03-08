@@ -1,4 +1,22 @@
-import type { ClaudeMessage, ClaudeMessageContent } from '@/api'
+// Define content types for tool execution
+export interface ClaudeMessageContent {
+  contentType: 'text' | 'tool_use' | 'tool_result' | 'thinking'
+  text?: string
+  toolUseId?: string
+  name?: string
+  input?: any
+  content?: string
+  isError?: boolean
+  toolResult?: string
+}
+
+export interface ClaudeMessage {
+  id: string
+  sessionId?: string
+  role: 0 | 1 | 'User' | 'Assistant'
+  content: ClaudeMessageContent[]
+  createdAt: string
+}
 
 /**
  * Represents a single tool execution (tool use + optional result)
@@ -32,6 +50,3 @@ export interface ToolExecutionGroup {
 export type MessageDisplayItem =
   | { type: 'message'; message: ClaudeMessage }
   | { type: 'toolGroup'; group: ToolExecutionGroup }
-
-// Re-export for convenience
-export type { ClaudeMessage, ClaudeMessageContent } from '@/api'

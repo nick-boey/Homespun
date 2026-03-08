@@ -1,4 +1,7 @@
-import type { ClaudeMessage as SignalRMessage, ClaudeMessageContent as SignalRContent } from '@/types/signalr'
+import type {
+  ClaudeMessage as SignalRMessage,
+  ClaudeMessageContent as SignalRContent,
+} from '@/types/signalr'
 import type { ClaudeMessage, ClaudeMessageContent } from '@/types/tool-execution'
 
 /**
@@ -64,13 +67,13 @@ function convertContent(content: SignalRContent): ClaudeMessageContent {
 export function convertSignalRMessage(message: SignalRMessage): ClaudeMessage {
   // Map role - SignalR uses "User"/"Assistant", we need numeric values
   const roleMap: Record<string, number> = {
-    'User': 0,
-    'Assistant': 1,
+    User: 0,
+    Assistant: 1,
   }
 
   return {
     id: message.id,
-    role: roleMap[message.role] ?? 0,
+    role: (roleMap[message.role] ?? 0) as 0 | 1,
     content: message.content.map(convertContent),
     createdAt: message.createdAt,
   }

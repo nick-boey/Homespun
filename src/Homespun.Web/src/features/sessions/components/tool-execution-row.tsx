@@ -18,8 +18,8 @@ export function ToolExecutionRow({ execution, className }: ToolExecutionRowProps
     <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
       <div
         className={cn(
-          'rounded-md bg-background/50 overflow-hidden',
-          hasError && 'border-l-4 border-destructive',
+          'bg-background/50 overflow-hidden rounded-md',
+          hasError && 'border-destructive border-l-4',
           className
         )}
         data-testid="tool-execution-row"
@@ -29,23 +29,27 @@ export function ToolExecutionRow({ execution, className }: ToolExecutionRowProps
           <button
             type="button"
             className={cn(
-              'flex items-center gap-2 p-2 w-full text-left',
-              'hover:bg-accent/50 transition-colors cursor-pointer'
+              'flex w-full items-center gap-2 p-2 text-left',
+              'hover:bg-accent/50 cursor-pointer transition-colors'
             )}
           >
             {/* Expand/collapse icon */}
             <span className="text-muted-foreground">
-              {isExpanded ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
+              {isExpanded ? (
+                <ChevronDown className="size-3" />
+              ) : (
+                <ChevronRight className="size-3" />
+              )}
             </span>
 
             {/* Tool icon */}
-            <span className="text-sm">{getToolIcon(execution.toolUse.name)}</span>
+            <span className="text-sm">{getToolIcon(execution.toolUse.name || '')}</span>
 
             {/* Tool name */}
-            <span className="font-medium text-sm">{execution.toolUse.name}</span>
+            <span className="text-sm font-medium">{execution.toolUse.name || 'Unknown'}</span>
 
             {/* Status/summary */}
-            <span className="text-sm text-muted-foreground flex-1">
+            <span className="text-muted-foreground flex-1 text-sm">
               {getToolSummary(execution)}
             </span>
 
@@ -57,17 +61,17 @@ export function ToolExecutionRow({ execution, className }: ToolExecutionRowProps
         </CollapsibleTrigger>
 
         <CollapsibleContent>
-          <div className="px-4 pb-2 pt-0">
+          <div className="px-4 pt-0 pb-2">
             {execution.toolResult ? (
               <ToolResultRenderer
-                toolName={execution.toolUse.name}
+                toolName={execution.toolUse.name || ''}
                 toolResult={execution.toolResult}
                 toolInput={execution.toolUse.input}
               />
             ) : execution.isRunning ? (
-              <div className="text-sm text-muted-foreground">Waiting for result...</div>
+              <div className="text-muted-foreground text-sm">Waiting for result...</div>
             ) : (
-              <div className="text-sm text-muted-foreground">No result available</div>
+              <div className="text-muted-foreground text-sm">No result available</div>
             )}
           </div>
         </CollapsibleContent>

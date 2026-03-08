@@ -64,6 +64,12 @@ export function MessageList({
   isSubmittingAnswer,
   isProcessingAnswer,
 }: MessageListProps) {
+  // Process messages through the grouping utility - must be before early returns
+  const displayItems = useMemo(() => {
+    const convertedMessages = convertSignalRMessages(messages)
+    return groupToolExecutions(convertedMessages)
+  }, [messages])
+
   if (isLoading) {
     return <MessageListSkeleton />
   }
@@ -76,15 +82,9 @@ export function MessageList({
     )
   }
 
-  // Process messages through the grouping utility
-  const displayItems = useMemo(() => {
-    const convertedMessages = convertSignalRMessages(messages)
-    return groupToolExecutions(convertedMessages)
-  }, [messages])
-
   return (
     <div className={cn('flex flex-col gap-4 p-4', className)}>
-      {displayItems.map((item, index) => {
+      {displayItems.map((item, _index) => {
         if (item.type === 'message') {
           // Convert back to SignalR format for existing MessageItem
           const signalRMessage = messages.find((m) => m.id === item.message.id)
@@ -95,10 +95,7 @@ export function MessageList({
         } else {
           // Render tool group
           return (
-            <div
-              key={item.group.id}
-              className="flex w-full justify-start"
-            >
+            <div key={item.group.id} className="flex w-full justify-start">
               <div className="max-w-[90%] md:max-w-[80%]">
                 <ToolExecutionGroupDisplay group={item.group} />
               </div>

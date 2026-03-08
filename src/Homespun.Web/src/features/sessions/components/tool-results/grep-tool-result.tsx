@@ -13,7 +13,7 @@ export function GrepToolResult({ content, isError, toolInput }: GrepToolResultPr
 
   if (isError) {
     return (
-      <div className={cn('text-sm text-destructive p-2 rounded border border-destructive/50')}>
+      <div className={cn('text-destructive border-destructive/50 rounded border p-2 text-sm')}>
         {contentStr}
       </div>
     )
@@ -24,24 +24,34 @@ export function GrepToolResult({ content, isError, toolInput }: GrepToolResultPr
   const path = (toolInput as Record<string, unknown>)?.path as string | undefined
 
   // Count matches if content looks like grep output
-  const lines = contentStr.split('\n').filter(line => line.trim())
+  const lines = contentStr.split('\n').filter((line) => line.trim())
   const matchCount = lines.length
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+      <div className="text-muted-foreground flex items-center gap-2 text-xs">
         <Search className="size-3" />
         <span>
           {matchCount} {matchCount === 1 ? 'match' : 'matches'}
-          {pattern && <> for <span className="font-mono bg-muted px-1 py-0.5 rounded">{pattern}</span></>}
-          {path && <> in <span className="font-mono">{path}</span></>}
+          {pattern && (
+            <>
+              {' '}
+              for <span className="bg-muted rounded px-1 py-0.5 font-mono">{pattern}</span>
+            </>
+          )}
+          {path && (
+            <>
+              {' '}
+              in <span className="font-mono">{path}</span>
+            </>
+          )}
         </span>
       </div>
 
       <CodeBlockCode
         language="plaintext"
         code={contentStr}
-        className="rounded border border-border max-h-96 overflow-auto"
+        className="border-border max-h-96 overflow-auto rounded border"
       />
     </div>
   )

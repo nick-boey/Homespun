@@ -1,7 +1,6 @@
 import type {
   ClaudeMessage,
   ClaudeMessageContent,
-  ToolExecution,
   ToolExecutionGroup,
   MessageDisplayItem,
 } from '@/types/tool-execution'
@@ -45,7 +44,6 @@ export function groupToolExecutions(messages: ClaudeMessage[]): MessageDisplayIt
       return
     }
 
-    const hasToolUse = message.content.some((c) => c.contentType === 'tool_use')
     const hasOnlyToolResults = message.content.every((c) => c.contentType === 'tool_result')
 
     // Skip user messages that only contain tool results (they've been matched)
@@ -118,21 +116,20 @@ export function groupToolExecutions(messages: ClaudeMessage[]): MessageDisplayIt
           isRunning = false
 
           // Mark the tool result message as processed
-          const resultMessage = messages.find(
-            (m) =>
-              m.content?.some(
-                (c) => c.contentType === 'tool_result' && c.toolUseId === toolUse.toolUseId
-              )
+          const resultMessage = messages.find((m) =>
+            m.content?.some(
+              (c) => c.contentType === 'tool_result' && c.toolUseId === toolUse.toolUseId
+            )
           )
           if (resultMessage) {
             processedMessageIds.add(resultMessage.id)
-            if (!currentGroup.originalMessageIds.includes(resultMessage.id)) {
+            if (currentGroup && !currentGroup.originalMessageIds.includes(resultMessage.id)) {
               currentGroup.originalMessageIds.push(resultMessage.id)
             }
           }
         }
 
-        currentGroup.executions.push({
+        currentGroup?.executions.push({
           toolUse,
           toolResult,
           isRunning,

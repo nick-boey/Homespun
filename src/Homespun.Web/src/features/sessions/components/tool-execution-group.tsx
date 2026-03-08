@@ -1,7 +1,7 @@
 import * as React from 'react'
 import type { ToolExecutionGroup } from '@/types/tool-execution'
 import { cn } from '@/lib/utils'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { Button } from '@/components/ui/button'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { ToolExecutionRow } from './tool-execution-row'
@@ -28,7 +28,7 @@ export function ToolExecutionGroupDisplay({ group, className }: ToolExecutionGro
   return (
     <div
       className={cn(
-        'rounded-lg bg-secondary p-4 space-y-3',
+        'bg-secondary space-y-3 rounded-lg p-4',
         'bg-muted/50', // subtle background as per plan
         className
       )}
@@ -61,7 +61,7 @@ export function ToolExecutionGroupDisplay({ group, className }: ToolExecutionGro
 
       {/* Hidden tools notice */}
       {!isExpanded && hiddenCount > 0 && (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-muted-foreground text-xs">
           {hiddenCount} earlier tool {hiddenCount === 1 ? 'call' : 'calls'} hidden
         </p>
       )}
@@ -91,10 +91,7 @@ export function ToolExecutionGroupDisplay({ group, className }: ToolExecutionGro
         ) : (
           // Simple list for 2 or fewer tools, or when collapsed
           visibleExecutions.map((execution, index) => (
-            <ToolExecutionRow
-              key={`${group.id}-${index}`}
-              execution={execution}
-            />
+            <ToolExecutionRow key={`${group.id}-${index}`} execution={execution} />
           ))
         )}
       </div>

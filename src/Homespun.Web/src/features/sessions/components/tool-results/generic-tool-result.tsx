@@ -12,8 +12,8 @@ export function GenericToolResult({ content, isError }: GenericToolResultProps) 
 
   if (isError) {
     return (
-      <div className={cn('text-sm text-destructive p-2 rounded border border-destructive/50')}>
-        <pre className="whitespace-pre-wrap break-words">{contentStr}</pre>
+      <div className={cn('text-destructive border-destructive/50 rounded border p-2 text-sm')}>
+        <pre className="break-words whitespace-pre-wrap">{contentStr}</pre>
       </div>
     )
   }
@@ -35,7 +35,7 @@ export function GenericToolResult({ content, isError }: GenericToolResultProps) 
     <CodeBlockCode
       language={isJson ? 'json' : 'plaintext'}
       code={contentStr}
-      className="rounded border border-border max-h-96 overflow-auto"
+      className="border-border max-h-96 overflow-auto rounded border"
     />
   )
 }

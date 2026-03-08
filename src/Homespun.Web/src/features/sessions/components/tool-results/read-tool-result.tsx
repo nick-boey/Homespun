@@ -12,7 +12,7 @@ export function ReadToolResult({ content, isError, toolInput }: ReadToolResultPr
 
   if (isError) {
     return (
-      <div className={cn('text-sm text-destructive p-2 rounded border border-destructive/50')}>
+      <div className={cn('text-destructive border-destructive/50 rounded border p-2 text-sm')}>
         {contentStr}
       </div>
     )
@@ -24,14 +24,14 @@ export function ReadToolResult({ content, isError, toolInput }: ReadToolResultPr
   return (
     <div className="space-y-2">
       {filePath && (
-        <div className="text-xs text-muted-foreground">
+        <div className="text-muted-foreground text-xs">
           File: <span className="font-mono">{filePath}</span>
         </div>
       )}
       <CodeBlockCode
         language="plaintext"
         code={contentStr}
-        className="rounded border border-border max-h-96 overflow-auto"
+        className="border-border max-h-96 overflow-auto rounded border"
       />
     </div>
   )
