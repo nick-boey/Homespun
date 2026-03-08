@@ -178,6 +178,7 @@ export default function EditIssue() {
     }
   }, [issue, reset])
 
+  // Create separate mutations for save and save&run
   const updateIssue = useUpdateIssue({
     onSuccess: () => {
       navigate({
@@ -190,8 +191,17 @@ export default function EditIssue() {
     },
   })
 
+  const updateIssueAndRun = useUpdateIssue({
+    onSuccess: () => {
+      setAgentLauncherOpen(true)
+    },
+    onError: (err) => {
+      setApiError(err.message || 'Failed to update issue')
+    },
+  })
+
   // Navigation blocker for unsaved changes
-  const blocker = useBlocker({ condition: isDirty && !updateIssue.isPending })
+  const blocker = useBlocker({ condition: isDirty && !updateIssue.isPending && !updateIssueAndRun.isPending })
 
   // Handle blocked navigation
   useEffect(() => {
@@ -228,28 +238,20 @@ export default function EditIssue() {
     const data = form.getValues()
     setApiError(null)
 
-    // Save the issue first
-    updateIssue.mutate(
-      {
-        issueId,
-        data: {
-          projectId,
-          title: data.title,
-          description: data.description || undefined,
-          status: parseInt(data.status) as IssueStatus,
-          type: parseInt(data.type) as IssueType,
-          priority: data.priority && data.priority !== 'none' ? parseInt(data.priority) : undefined,
-          workingBranchId: data.workingBranchId || undefined,
-        },
+    // Use the save & run mutation
+    updateIssueAndRun.mutate({
+      issueId,
+      data: {
+        projectId,
+        title: data.title,
+        description: data.description || undefined,
+        status: parseInt(data.status) as IssueStatus,
+        type: parseInt(data.type) as IssueType,
+        priority: data.priority && data.priority !== 'none' ? parseInt(data.priority) : undefined,
+        workingBranchId: data.workingBranchId || undefined,
       },
-      {
-        onSuccess: () => {
-          // Open agent launcher dialog after save succeeds
-          setAgentLauncherOpen(true)
-        },
-      }
-    )
-  }, [form, issueId, projectId, updateIssue])
+    })
+  }, [form, issueId, projectId, updateIssueAndRun])
 
   // Keyboard shortcut for save (Cmd/Ctrl+S)
   useEffect(() => {
@@ -500,13 +502,13 @@ export default function EditIssue() {
 
           {/* Action Buttons */}
           <div className="flex gap-3">
-            <Button type="submit" disabled={updateIssue.isPending}>
+            <Button type="submit" disabled={updateIssue.isPending || updateIssueAndRun.isPending}>
               {updateIssue.isPending ? 'Saving...' : 'Save Changes'}
             </Button>
             <Button
               type="button"
               variant="secondary"
-              disabled={updateIssue.isPending}
+              disabled={updateIssue.isPending || updateIssueAndRun.isPending}
               onClick={handleSaveAndRunAgent}
               className="gap-1.5"
             >
