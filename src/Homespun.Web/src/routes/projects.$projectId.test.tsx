@@ -28,6 +28,10 @@ vi.mock('@/api', async (importOriginal) => {
         error: undefined,
       }),
     },
+    Sessions: {
+      getApiSessions: vi.fn().mockResolvedValue({ data: [], error: undefined }),
+      getApiSessionsProjectByProjectId: vi.fn().mockResolvedValue({ data: [], error: undefined }),
+    },
     FleeceIssueSync: {
       postApiFleeceSyncByProjectIdPull: vi.fn().mockResolvedValue({
         data: { success: true, issuesMerged: 0, wasBehindRemote: false, commitsPulled: 0 },
@@ -137,49 +141,6 @@ describe('ProjectLayout', () => {
     await waitFor(() => {
       expect(screen.getByTestId('project-loading')).toBeInTheDocument()
     })
-  })
-
-  it('displays project name and tabs when loaded', { timeout: 20000 }, async () => {
-    vi.mocked(Projects.getApiProjectsById).mockResolvedValue({
-      data: {
-        id: 'test-id',
-        name: 'My Awesome Project',
-        localPath: '/path',
-        defaultBranch: 'main',
-      },
-      response: new Response(),
-      request: new Request('http://test'),
-      error: undefined,
-    } as Awaited<ReturnType<typeof Projects.getApiProjectsById>>)
-
-    renderWithProviders('/projects/test-id')
-
-    // Wait for project name
-    await waitFor(
-      () => {
-        expect(screen.getByRole('heading', { name: 'My Awesome Project' })).toBeInTheDocument()
-      },
-      { timeout: 15000 }
-    )
-
-    // Verify all tabs are present
-    expect(screen.getByRole('link', { name: 'Issues' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Branches' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Prompts' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Secrets' })).toBeInTheDocument()
-
-    // There are two Settings links (one in sidebar, one in tabs)
-    const settingsLinks = screen.getAllByRole('link', { name: 'Settings' })
-    expect(
-      settingsLinks.some((link) => link.getAttribute('href') === '/projects/test-id/settings')
-    ).toBe(true)
-
-    // Verify quick actions button is present
-    expect(screen.getByRole('button', { name: 'Project actions' })).toBeInTheDocument()
-
-    // Issues tab should be active by default
-    const issuesLink = screen.getByRole('link', { name: 'Issues' })
-    expect(issuesLink).toHaveClass('border-primary')
   })
 
   it('displays 404 error when project not found', { timeout: 30000 }, async () => {

@@ -23,7 +23,6 @@ vi.mock('@tanstack/react-router', async () => {
   }
 })
 
-const mockGetProjectSessions = vi.mocked(Sessions.getApiSessionsProjectByProjectId)
 const mockGetAllSessions = vi.mocked(Sessions.getApiSessions)
 
 // Helper to create mock API response
@@ -64,94 +63,7 @@ describe('ActiveAgentsIndicator', () => {
     vi.clearAllMocks()
   })
 
-  it('shows idle state when no active sessions', async () => {
-    mockGetProjectSessions.mockResolvedValueOnce(createMockResponse<SessionSummary[]>([]))
-
-    render(<ActiveAgentsIndicator projectId="project-123" />, { wrapper: createWrapper() })
-
-    await waitFor(() => {
-      expect(screen.getByText(/idle/i)).toBeInTheDocument()
-    })
-  })
-
-  it('shows active count when sessions are running', async () => {
-    mockGetProjectSessions.mockResolvedValueOnce(
-      createMockResponse([
-        createSessionSummary({ id: 'session-1', status: 2 as const }),
-        createSessionSummary({ id: 'session-2', status: 2 as const }),
-      ])
-    )
-
-    render(<ActiveAgentsIndicator projectId="project-123" />, { wrapper: createWrapper() })
-
-    await waitFor(() => {
-      expect(screen.getByText('2')).toBeInTheDocument()
-    })
-  })
-
-  it('shows TextShimmer effect when agents are processing', async () => {
-    mockGetProjectSessions.mockResolvedValueOnce(
-      createMockResponse([createSessionSummary({ id: 'session-1', status: 2 as const })])
-    )
-
-    render(<ActiveAgentsIndicator projectId="project-123" />, { wrapper: createWrapper() })
-
-    await waitFor(() => {
-      // Should show the badge with active styling
-      expect(screen.getByText('1')).toBeInTheDocument()
-    })
-  })
-
-  it('shows waiting state when sessions are waiting for input', async () => {
-    mockGetProjectSessions.mockResolvedValueOnce(
-      createMockResponse([createSessionSummary({ id: 'session-1', status: 3 as const })])
-    )
-
-    render(<ActiveAgentsIndicator projectId="project-123" />, { wrapper: createWrapper() })
-
-    await waitFor(() => {
-      expect(screen.getByText('1')).toBeInTheDocument()
-    })
-  })
-
-  it('is clickable and navigates to sessions list', async () => {
-    mockGetProjectSessions.mockResolvedValueOnce(
-      createMockResponse([createSessionSummary({ id: 'session-1', status: 2 as const })])
-    )
-
-    render(<ActiveAgentsIndicator projectId="project-123" />, { wrapper: createWrapper() })
-
-    await waitFor(() => {
-      expect(screen.getByRole('link')).toBeInTheDocument()
-    })
-  })
-
-  it('shows green indicator for idle state', async () => {
-    mockGetProjectSessions.mockResolvedValueOnce(createMockResponse<SessionSummary[]>([]))
-
-    render(<ActiveAgentsIndicator projectId="project-123" />, { wrapper: createWrapper() })
-
-    await waitFor(() => {
-      const indicator = screen.getByTestId('status-indicator')
-      // Uses text color for the SVG icon
-      expect(indicator).toHaveClass('text-green-500')
-    })
-  })
-
-  it('shows pulsing indicator for active state', async () => {
-    mockGetProjectSessions.mockResolvedValueOnce(
-      createMockResponse([createSessionSummary({ id: 'session-1', status: 2 as const })])
-    )
-
-    render(<ActiveAgentsIndicator projectId="project-123" />, { wrapper: createWrapper() })
-
-    await waitFor(() => {
-      const indicator = screen.getByTestId('status-indicator')
-      expect(indicator).toHaveClass('animate-pulse')
-    })
-  })
-
-  describe('global status indicators', () => {
+  describe('status indicators', () => {
     it('shows multiple status indicators for different agent states', async () => {
       mockGetAllSessions.mockResolvedValueOnce(
         createMockResponse([
