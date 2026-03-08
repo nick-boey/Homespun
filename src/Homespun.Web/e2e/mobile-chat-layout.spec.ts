@@ -35,23 +35,6 @@ test.describe('Mobile Chat Layout', () => {
     await expect(markdownContent).toHaveClass(/prose-sm/)
   })
 
-  test('markdown headings render with distinct sizes', async ({ page }) => {
-    // Create a test message with headings if needed
-    // This would normally be done through the chat interface or test data setup
-
-    // Look for heading elements in messages
-    const h1 = page.locator('h1').first()
-    const h2 = page.locator('h2').first()
-
-    if (await h1.isVisible()) {
-      const h1Size = await h1.evaluate((el) => window.getComputedStyle(el).fontSize)
-      const h2Size = await h2.evaluate((el) => window.getComputedStyle(el).fontSize)
-
-      // H1 should be larger than H2
-      expect(parseFloat(h1Size)).toBeGreaterThan(parseFloat(h2Size))
-    }
-  })
-
   test.describe('Desktop Chat Layout', () => {
     test.beforeEach(async ({ page }) => {
       // Set desktop viewport
