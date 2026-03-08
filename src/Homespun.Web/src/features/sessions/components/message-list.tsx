@@ -3,6 +3,8 @@ import { Markdown } from '@/components/ui/markdown'
 import { Skeleton } from '@/components/ui/skeleton'
 import { QuestionPanel } from '@/features/questions'
 import { useResponsiveProse } from '@/hooks/use-responsive-prose'
+import { Card, CardContent } from '@/components/ui/card'
+import { Loader2 } from 'lucide-react'
 import type {
   ClaudeMessage,
   ClaudeMessageContent,
@@ -47,6 +49,7 @@ export interface MessageListProps {
   pendingQuestion?: PendingQuestion
   onAnswerQuestion?: (answers: Record<string, string>) => Promise<void>
   isSubmittingAnswer?: boolean
+  isProcessingAnswer?: boolean
 }
 
 export function MessageList({
@@ -56,6 +59,7 @@ export function MessageList({
   pendingQuestion,
   onAnswerQuestion,
   isSubmittingAnswer,
+  isProcessingAnswer,
 }: MessageListProps) {
   if (isLoading) {
     return <MessageListSkeleton />
@@ -83,6 +87,16 @@ export function MessageList({
               isSubmitting={isSubmittingAnswer}
             />
           </div>
+        </div>
+      )}
+      {isProcessingAnswer && (
+        <div className="flex w-full justify-start">
+          <Card className="max-w-[90%]">
+            <CardContent className="flex items-center gap-2 p-4">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span className="muted-foreground-text-sm">Processing your answer...</span>
+            </CardContent>
+          </Card>
         </div>
       )}
     </div>

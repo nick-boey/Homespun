@@ -31,11 +31,14 @@ describe('QuestionPanel', () => {
     expect(screen.getByText(/Please answer the following/i)).toBeInTheDocument()
   })
 
-  it('renders question text and header badge', () => {
+  it('renders question text and header', () => {
     render(<QuestionPanel pendingQuestion={createPendingQuestion()} onSubmit={vi.fn()} />)
 
     expect(screen.getByText('Framework')).toBeInTheDocument()
     expect(screen.getByText('Which framework do you prefer?')).toBeInTheDocument()
+    // Verify header is rendered as a heading, not a badge
+    const header = screen.getByText('Framework')
+    expect(header.tagName).toBe('H4')
   })
 
   it('renders all options', () => {
