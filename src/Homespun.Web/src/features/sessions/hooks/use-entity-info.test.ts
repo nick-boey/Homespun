@@ -36,7 +36,7 @@ describe('useEntityInfo', () => {
       data: { id: 'issue-123', title: 'Test Issue' },
       error: undefined,
       request: new Request('http://test'),
-      response: new Response()
+      response: new Response(),
     }
     vi.mocked(Issues.getApiIssuesByIssueId).mockResolvedValue(mockIssue)
 
@@ -61,8 +61,8 @@ describe('useEntityInfo', () => {
       data: { id: 'pr-456', title: 'Test PR', projectId: 'project-1' },
       error: undefined,
       request: new Request('http://test'),
-      response: new Response()
-    } as any
+      response: new Response(),
+    } as Awaited<ReturnType<typeof PullRequests.getApiPullRequestsById>>
     vi.mocked(PullRequests.getApiPullRequestsById).mockResolvedValue(mockPR)
 
     const { result } = renderHook(() => useEntityInfo('pr-456'), { wrapper })
@@ -104,7 +104,7 @@ describe('useEntityInfo', () => {
       data: { id: 'custom-id', title: 'Custom Entity' },
       error: undefined,
       request: new Request('http://test'),
-      response: new Response()
+      response: new Response(),
     }
     vi.mocked(Issues.getApiIssuesByIssueId).mockResolvedValue(mockIssue)
 
@@ -145,7 +145,7 @@ describe('useEntityInfo', () => {
       data: { id: 'issue-999', title: 'Cached Issue' },
       error: undefined,
       request: new Request('http://test'),
-      response: new Response()
+      response: new Response(),
     }
     vi.mocked(Issues.getApiIssuesByIssueId).mockResolvedValue(mockIssue)
 
@@ -176,13 +176,13 @@ describe('useEntityInfo', () => {
       data: { id: 'issue-001', title: 'First Issue' },
       error: undefined,
       request: new Request('http://test'),
-      response: new Response()
+      response: new Response(),
     }
     const mockIssue2 = {
       data: { id: 'issue-002', title: 'Second Issue' },
       error: undefined,
       request: new Request('http://test'),
-      response: new Response()
+      response: new Response(),
     }
 
     vi.mocked(Issues.getApiIssuesByIssueId)

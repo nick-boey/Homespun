@@ -4,11 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createElement, type ReactNode } from 'react'
 import { Issues, PullRequests } from '@/api'
-import type {
-  SessionSummary,
-  ClaudeSessionStatus,
-  SessionMode,
-} from '@/api/generated/types.gen'
+import type { SessionSummary, ClaudeSessionStatus, SessionMode } from '@/api/generated/types.gen'
 import { SessionsList } from './sessions-list'
 import { useSessions, useStopSession } from '../hooks/use-sessions'
 import { useProjects } from '@/features/projects'
@@ -136,7 +132,7 @@ describe('SessionsList', () => {
       isError: false,
       error: null,
       refetch: vi.fn(),
-    } as any)
+    } as ReturnType<typeof useSessions>)
 
     vi.mocked(useProjects).mockReturnValue({
       data: [
@@ -147,7 +143,7 @@ describe('SessionsList', () => {
       isError: false,
       error: null,
       refetch: vi.fn(),
-    } as any)
+    } as ReturnType<typeof useProjects>)
 
     // Setup API mocks for entity info
     vi.mocked(Issues.getApiIssuesByIssueId).mockImplementation(({ path }) => {
@@ -160,7 +156,7 @@ describe('SessionsList', () => {
         data: mockIssues[path.issueId] || null,
         error: undefined,
         request: new Request('http://test'),
-        response: new Response()
+        response: new Response(),
       })
     })
 
@@ -168,7 +164,7 @@ describe('SessionsList', () => {
       data: { id: 'pr-456', title: 'Add new feature' },
       error: undefined,
       request: new Request('http://test'),
-      response: new Response()
+      response: new Response(),
     } as Awaited<ReturnType<typeof PullRequests.getApiPullRequestsById>>)
   })
 
@@ -179,7 +175,7 @@ describe('SessionsList', () => {
       isError: false,
       error: null,
       refetch: vi.fn(),
-    } as any)
+    } as ReturnType<typeof useSessions>)
 
     render(<SessionsList />, { wrapper: createWrapper() })
 
@@ -243,7 +239,7 @@ describe('SessionsList', () => {
       isError: false,
       error: null,
       refetch: vi.fn(),
-    } as any)
+    } as ReturnType<typeof useSessions>)
 
     render(<SessionsList />, { wrapper: createWrapper() })
 
@@ -259,7 +255,7 @@ describe('SessionsList', () => {
       isError: true,
       error: new Error('Network error'),
       refetch: vi.fn(),
-    } as any)
+    } as ReturnType<typeof useSessions>)
 
     render(<SessionsList />, { wrapper: createWrapper() })
 
@@ -378,7 +374,7 @@ describe('SessionsList', () => {
     vi.mocked(useStopSession).mockReturnValue({
       mutate: mockMutate,
       isPending: false,
-    } as any)
+    } as ReturnType<typeof useStopSession>)
 
     render(<SessionsList />, { wrapper: createWrapper() })
 
@@ -409,7 +405,7 @@ describe('SessionsList', () => {
       isError: false,
       error: null,
       refetch: vi.fn(),
-    } as any)
+    } as ReturnType<typeof useSessions>)
 
     render(<SessionsList />, { wrapper: createWrapper() })
 
