@@ -5,7 +5,7 @@
 # Extends the shared base image with worker-specific tooling:
 #   - .NET SDKs 8 and 9 (base has 10)
 #   - C# Language Server for LSP support
-#   - Playwright 1.52.0 browsers for E2E tests
+#   - Playwright 1.58.2 browsers for E2E tests
 # =============================================================================
 
 # ARG before any FROM so it's available in the FROM instruction below
@@ -49,13 +49,13 @@ RUN dotnet tool install csharp-ls --tool-path /usr/local/bin
 RUN claude plugin marketplace add anthropics/claude-plugins-official \
     && claude plugin install csharp-lsp@claude-plugins-official
 
-# Install .NET Playwright browsers for E2E tests
+# Install Playwright browsers for E2E tests
 # The Node.js @playwright/mcp in base image installs browsers for its version, but E2E tests use
-# Microsoft.Playwright 1.52.0 which requires browser revision 1169. Use the matching
+# @playwright/test 1.58.2 which requires chromium revision 1208. Use the matching
 # Node.js playwright version to download the correct browsers.
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers
 RUN --mount=type=cache,target=/root/.npm \
-    npx playwright@1.52.0 install chromium --with-deps \
+    npx playwright@1.58.2 install chromium --with-deps \
     && chmod -R 777 /opt/playwright-browsers
 
 # Copy built app and production dependencies
