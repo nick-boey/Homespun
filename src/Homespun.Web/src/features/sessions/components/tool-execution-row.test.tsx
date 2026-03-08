@@ -40,13 +40,23 @@ describe('ToolExecutionRow', () => {
     // Details should not be visible initially
     expect(screen.queryByText('File contents here...')).not.toBeInTheDocument()
 
-    // Click on the button (not the row itself)
+    // Click on the button to expand
     const button = screen.getByRole('button')
     await user.click(button)
 
-    // Wait for content to appear
-    const content = await screen.findByText('File contents here...')
-    expect(content).toBeInTheDocument()
+    // The content is rendered inside a CodeBlockCode component
+    // We need to wait for the collapsible content to open
+    await waitFor(() => {
+      // Check that the file path is shown
+      expect(screen.getByText('File:')).toBeInTheDocument()
+      // There are multiple elements with this text, use getAllByText
+      const pathElements = screen.getAllByText('/src/app.tsx')
+      expect(pathElements.length).toBeGreaterThan(0)
+    })
+
+    // The content itself is rendered in a code block with syntax highlighting
+    const codeBlock = screen.getByText('File contents here...')
+    expect(codeBlock).toBeInTheDocument()
   })
 
   it('shows error state with red indicator', () => {

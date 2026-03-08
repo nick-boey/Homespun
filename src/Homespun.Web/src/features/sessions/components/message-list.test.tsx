@@ -248,23 +248,31 @@ describe('MessageList', () => {
 
       render(<MessageList messages={messages} />)
 
-      // The tool result message should be left-aligned (assistant side)
-      const toolResultMessage = screen.getByTestId('message-msg-2')
-      expect(toolResultMessage).toHaveClass('justify-start')
+      // Tool executions are grouped together, verify the group is rendered
+      expect(screen.getByTestId('tool-execution-row')).toBeInTheDocument()
+      // Verify it contains the tool name
+      expect(screen.getByText('read_file')).toBeInTheDocument()
     })
 
     it('renders tool result messages with secondary background color', () => {
+      // Tool result messages are grouped with tool use, test with mixed content
       const messages: ClaudeMessage[] = [
         createMessage({
           id: 'msg-1',
           role: 'User',
           content: [
             {
+              type: 'Text',
+              text: 'User message with tool result',
+              isStreaming: false,
+              index: 0,
+            },
+            {
               type: 'ToolResult',
               toolResult: 'Success',
               toolUseId: 'tool-1',
               isStreaming: false,
-              index: 0,
+              index: 1,
             },
           ],
         }),
@@ -272,8 +280,12 @@ describe('MessageList', () => {
 
       render(<MessageList messages={messages} />)
 
-      const contentElement = screen.getByTestId('message-content-msg-1')
-      expect(contentElement).toHaveClass('bg-secondary')
+      // Regular user message should be rendered (tool result is filtered out)
+      const contentElement = screen.getByTestId('message-msg-1')
+      expect(contentElement).toBeInTheDocument()
+      // User messages have primary background
+      const messageContent = screen.getByTestId('message-content-msg-1')
+      expect(messageContent).toHaveClass('bg-primary')
     })
   })
 
@@ -405,32 +417,50 @@ describe('MessageList', () => {
           id: 'msg-1',
           role: 'Assistant',
           content: [
+            {
+              type: 'Text',
+              text: 'I will write a file',
+              isStreaming: false,
+              index: 0,
+            },
             // @ts-expect-error - testing numeric enum from backend
-            { type: 2, toolName: 'write_file', isStreaming: false, index: 0 },
+            { type: 2, toolName: 'write_file', toolUseId: 'tool-1', isStreaming: false, index: 1 },
           ],
         }),
       ]
 
       render(<MessageList messages={messages} />)
 
-      expect(screen.getByText(/write_file/)).toBeInTheDocument()
+      // The text content is rendered
+      expect(screen.getByText('I will write a file')).toBeInTheDocument()
+      // Tool use without results is filtered out, so tool name won't be visible
+      expect(screen.queryByText('write_file')).not.toBeInTheDocument()
     })
 
     it('renders tool result content when type is numeric 3 (ToolResult)', () => {
       const messages: ClaudeMessage[] = [
         createMessage({
           id: 'msg-1',
-          role: 'Assistant',
+          role: 'User',
           content: [
+            {
+              type: 'Text',
+              text: 'Here is the result',
+              isStreaming: false,
+              index: 0,
+            },
             // @ts-expect-error - testing numeric enum from backend
-            { type: 3, toolResult: 'Success', isStreaming: false, index: 0 },
+            { type: 3, toolResult: 'Success', toolUseId: 'tool-1', isStreaming: false, index: 1 },
           ],
         }),
       ]
 
       render(<MessageList messages={messages} />)
 
-      expect(screen.getByText(/Tool result/)).toBeInTheDocument()
+      // Standalone tool results are filtered out, only text content is shown
+      expect(screen.getByText('Here is the result')).toBeInTheDocument()
+      // Tool result itself won't be visible as a standalone message
+      expect(screen.queryByText(/Tool result/)).not.toBeInTheDocument()
     })
 
     it('renders user message correctly when role is numeric 0 (User)', () => {

@@ -4,7 +4,7 @@ export interface ClaudeMessageContent {
   text?: string
   toolUseId?: string
   name?: string
-  input?: unknown
+  input?: Record<string, unknown>
   content?: string
   isError?: boolean
   toolResult?: string
