@@ -13,7 +13,7 @@ describe('groupToolExecutions', () => {
       {
         id: 'msg1',
         role: 1, // Assistant
-        sessionId: "session1",
+        sessionId: 'session1',
         content: [{ contentType: 'text', text: 'Hello world' }],
         createdAt: '2024-01-01T00:00:00Z',
       },
@@ -45,14 +45,14 @@ describe('groupToolExecutions', () => {
       {
         id: 'msg1',
         role: 1, // Assistant
-        sessionId: "session1",
+        sessionId: 'session1',
         content: [toolUse],
         createdAt: '2024-01-01T00:00:00Z',
       },
       {
         id: 'msg2',
         role: 0, // User (tool results come from user)
-        sessionId: "session1",
+        sessionId: 'session1',
         content: [toolResult],
         createdAt: '2024-01-01T00:00:01Z',
       },
@@ -96,14 +96,14 @@ describe('groupToolExecutions', () => {
       {
         id: 'msg1',
         role: 1, // Assistant
-        sessionId: "session1",
+        sessionId: 'session1',
         content: [toolUse1, toolUse2],
         createdAt: '2024-01-01T00:00:00Z',
       },
       {
         id: 'msg2',
         role: 0, // User
-        sessionId: "session1",
+        sessionId: 'session1',
         content: [
           { contentType: 'tool_result', toolUseId: 'tool1', content: 'result1' },
           { contentType: 'tool_result', toolUseId: 'tool2', content: 'result2' },
@@ -136,7 +136,7 @@ describe('groupToolExecutions', () => {
       {
         id: 'msg1',
         role: 1, // Assistant
-        sessionId: "session1",
+        sessionId: 'session1',
         content: [toolUse],
         createdAt: '2024-01-01T00:00:00Z',
       },
@@ -162,28 +162,28 @@ describe('groupToolExecutions', () => {
       {
         id: 'msg1',
         role: 1, // Assistant
-        sessionId: "session1",
+        sessionId: 'session1',
         content: [{ contentType: 'tool_use', toolUseId: 'tool1', name: 'read_file', input: {} }],
         createdAt: '2024-01-01T00:00:00Z',
       },
       {
         id: 'msg2',
         role: 0, // User
-        sessionId: "session1",
+        sessionId: 'session1',
         content: [{ contentType: 'tool_result', toolUseId: 'tool1', content: 'result1' }],
         createdAt: '2024-01-01T00:00:01Z',
       },
       {
         id: 'msg3',
         role: 1, // Assistant
-        sessionId: "session1",
+        sessionId: 'session1',
         content: [{ contentType: 'text', text: 'Here are the results' }],
         createdAt: '2024-01-01T00:00:02Z',
       },
       {
         id: 'msg4',
         role: 1, // Assistant
-        sessionId: "session1",
+        sessionId: 'session1',
         content: [{ contentType: 'tool_use', toolUseId: 'tool2', name: 'write_file', input: {} }],
         createdAt: '2024-01-01T00:00:03Z',
       },
@@ -201,7 +201,7 @@ describe('groupToolExecutions', () => {
       {
         id: 'msg1',
         role: 1, // Assistant
-        sessionId: "session1",
+        sessionId: 'session1',
         content: [
           { contentType: 'text', text: 'Let me read the file' },
           { contentType: 'tool_use', toolUseId: 'tool1', name: 'read_file', input: {} },
@@ -211,7 +211,7 @@ describe('groupToolExecutions', () => {
       {
         id: 'msg2',
         role: 0, // User
-        sessionId: "session1",
+        sessionId: 'session1',
         content: [{ contentType: 'tool_result', toolUseId: 'tool1', content: 'result' }],
         createdAt: '2024-01-01T00:00:01Z',
       },
@@ -236,7 +236,7 @@ describe('groupToolExecutions', () => {
       {
         id: 'msg1',
         role: 1, // Assistant
-        sessionId: "session1",
+        sessionId: 'session1',
         content: [toolUse],
         createdAt: '2024-01-01T00:00:00Z',
       },
@@ -262,14 +262,14 @@ describe('groupToolExecutions', () => {
       {
         id: 'msg1',
         role: 1, // Assistant
-        sessionId: "session1",
+        sessionId: 'session1',
         content: [{ contentType: 'tool_use', toolUseId: 'tool1', name: 'read_file', input: {} }],
         createdAt: '2024-01-01T00:00:00Z',
       },
       {
         id: 'msg2',
         role: 0, // User
-        sessionId: "session1",
+        sessionId: 'session1',
         content: [{ contentType: 'text', text: 'User message' }],
         createdAt: '2024-01-01T00:00:01Z',
       },
@@ -300,14 +300,14 @@ describe('groupToolExecutions', () => {
       {
         id: 'msg1',
         role: 1, // Assistant
-        sessionId: "session1",
+        sessionId: 'session1',
         content: [toolUse],
         createdAt: '2024-01-01T00:00:00Z',
       },
       {
         id: 'msg2',
         role: 0, // User
-        sessionId: "session1",
+        sessionId: 'session1',
         content: [toolResult],
         createdAt: '2024-01-01T00:00:01Z',
       },
