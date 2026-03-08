@@ -70,7 +70,7 @@ describe('useEnrichedSessions', () => {
       isError: false,
       error: null,
       refetch: vi.fn(),
-    } as ReturnType<typeof useSessions>)
+    } as unknown as ReturnType<typeof useSessions>)
 
     vi.mocked(useProjects).mockReturnValue({
       data: mockProjects,
@@ -78,7 +78,7 @@ describe('useEnrichedSessions', () => {
       isError: false,
       error: null,
       refetch: vi.fn(),
-    } as ReturnType<typeof useProjects>)
+    } as unknown as ReturnType<typeof useProjects>)
 
     // Setup API mocks
     vi.mocked(Issues.getApiIssuesByIssueId).mockResolvedValue({
@@ -123,7 +123,7 @@ describe('useEnrichedSessions', () => {
       isError: false,
       error: null,
       refetch: vi.fn(),
-    } as ReturnType<typeof useSessions>)
+    } as unknown as ReturnType<typeof useSessions>)
 
     const { result } = renderHook(() => useEnrichedSessions(), { wrapper })
 
@@ -139,7 +139,7 @@ describe('useEnrichedSessions', () => {
       isError: true,
       error,
       refetch: vi.fn(),
-    } as ReturnType<typeof useSessions>)
+    } as unknown as ReturnType<typeof useSessions>)
 
     const { result } = renderHook(() => useEnrichedSessions(), { wrapper })
 
@@ -155,7 +155,7 @@ describe('useEnrichedSessions', () => {
       isError: false,
       error: null,
       refetch: vi.fn(),
-    } as ReturnType<typeof useSessions>)
+    } as unknown as ReturnType<typeof useSessions>)
 
     const { result } = renderHook(() => useEnrichedSessions(), { wrapper })
 
@@ -179,7 +179,7 @@ describe('useEnrichedSessions', () => {
       isError: false,
       error: null,
       refetch: vi.fn(),
-    } as ReturnType<typeof useSessions>)
+    } as unknown as ReturnType<typeof useSessions>)
 
     const { result } = renderHook(() => useEnrichedSessions(), { wrapper })
 
@@ -202,7 +202,7 @@ describe('useEnrichedSessions', () => {
       isError: false,
       error: null,
       refetch: vi.fn(),
-    } as ReturnType<typeof useSessions>)
+    } as unknown as ReturnType<typeof useSessions>)
 
     const { result } = renderHook(() => useEnrichedSessions(), { wrapper })
 
@@ -222,7 +222,7 @@ describe('useEnrichedSessions', () => {
       isError: false,
       error: null,
       refetch: vi.fn(),
-    } as ReturnType<typeof useSessions>)
+    } as unknown as ReturnType<typeof useSessions>)
 
     vi.mocked(Issues.getApiIssuesByIssueId)
       .mockResolvedValueOnce({ data: { id: 'issue-123', title: 'Fix login bug' } } as Awaited<
@@ -254,7 +254,7 @@ describe('useEnrichedSessions', () => {
       isError: false,
       error: null,
       refetch: vi.fn(),
-    } as ReturnType<typeof useSessions>)
+    } as unknown as ReturnType<typeof useSessions>)
 
     const { result } = renderHook(() => useEnrichedSessions(), { wrapper })
 
@@ -271,7 +271,7 @@ describe('useEnrichedSessions', () => {
       isError: false,
       error: null,
       refetch: mockRefetch,
-    } as ReturnType<typeof useSessions>)
+    } as unknown as ReturnType<typeof useSessions>)
 
     const { result } = renderHook(() => useEnrichedSessions(), { wrapper })
 

@@ -132,7 +132,7 @@ describe('SessionsList', () => {
       isError: false,
       error: null,
       refetch: vi.fn(),
-    } as ReturnType<typeof useSessions>)
+    } as unknown as ReturnType<typeof useSessions>)
 
     vi.mocked(useProjects).mockReturnValue({
       data: [
@@ -143,7 +143,7 @@ describe('SessionsList', () => {
       isError: false,
       error: null,
       refetch: vi.fn(),
-    } as ReturnType<typeof useProjects>)
+    } as unknown as ReturnType<typeof useProjects>)
 
     // Setup API mocks for entity info
     vi.mocked(Issues.getApiIssuesByIssueId).mockImplementation(({ path }) => {
@@ -175,7 +175,7 @@ describe('SessionsList', () => {
       isError: false,
       error: null,
       refetch: vi.fn(),
-    } as ReturnType<typeof useSessions>)
+    } as unknown as ReturnType<typeof useSessions>)
 
     render(<SessionsList />, { wrapper: createWrapper() })
 
@@ -239,7 +239,7 @@ describe('SessionsList', () => {
       isError: false,
       error: null,
       refetch: vi.fn(),
-    } as ReturnType<typeof useSessions>)
+    } as unknown as ReturnType<typeof useSessions>)
 
     render(<SessionsList />, { wrapper: createWrapper() })
 
@@ -255,7 +255,7 @@ describe('SessionsList', () => {
       isError: true,
       error: new Error('Network error'),
       refetch: vi.fn(),
-    } as ReturnType<typeof useSessions>)
+    } as unknown as ReturnType<typeof useSessions>)
 
     render(<SessionsList />, { wrapper: createWrapper() })
 
@@ -374,7 +374,7 @@ describe('SessionsList', () => {
     vi.mocked(useStopSession).mockReturnValue({
       mutate: mockMutate,
       isPending: false,
-    } as ReturnType<typeof useStopSession>)
+    } as unknown as ReturnType<typeof useStopSession>)
 
     render(<SessionsList />, { wrapper: createWrapper() })
 
@@ -405,7 +405,7 @@ describe('SessionsList', () => {
       isError: false,
       error: null,
       refetch: vi.fn(),
-    } as ReturnType<typeof useSessions>)
+    } as unknown as ReturnType<typeof useSessions>)
 
     render(<SessionsList />, { wrapper: createWrapper() })
 
