@@ -8,7 +8,7 @@ test.describe.serial('Save and Run Agent', () => {
     // Wait for the issues list to load
     await page.waitForLoadState('networkidle')
 
-    // Find the first Feature issue row - specifically ISSUE-001 (Add dark mode support)
+    // Find the first Feature issue row - use one that exists in mock data
     const issueRow = page
       .locator('[role="row"]')
       .filter({ hasText: 'Add dark mode support' })
@@ -138,10 +138,10 @@ test.describe.serial('Save and Run Agent', () => {
     // Wait for the issues list to load
     await page.waitForLoadState('networkidle')
 
-    // Find a different Task issue - use ISSUE-004 (Design API schema)
+    // Find a different Task issue - use one that exists in mock data
     const issueRow = page
       .locator('[role="row"]')
-      .filter({ hasText: 'Design API schema' })
+      .filter({ hasText: 'Implement DELETE endpoints' })
       .first()
     await expect(issueRow).toBeVisible()
 
