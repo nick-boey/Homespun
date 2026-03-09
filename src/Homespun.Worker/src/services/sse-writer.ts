@@ -18,7 +18,7 @@ import {
   type TranslationContext,
 } from './a2a-translator.js';
 import type { A2AStreamEvent } from '../types/a2a.js';
-import { info } from '../utils/logger.js';
+import { info, debug } from '../utils/logger.js';
 
 /**
  * Formats an A2A event as an SSE message.
@@ -67,6 +67,7 @@ export async function* streamSessionEvents(
   // 1. Emit initial task with state 'submitted'
   const initialTask = createInitialTask(ctx.taskId, ctx.contextId);
   yield formatSSE(initialTask.kind, initialTask);
+  info(`A2A state transition: submitted → working (sessionId: ${sessionId})`);
 
   // 2. Emit working status
   const workingStatus = createWorkingStatus(ctx);
@@ -86,6 +87,7 @@ export async function* streamSessionEvents(
         // Control events (question_pending, plan_pending) -> TaskStatusUpdateEvent with input-required
         const controlEvent = event as ControlEvent;
         info(`A2A control event: type='${controlEvent.type}'`);
+        info(`A2A state transition: working → input-required (sessionId: ${sessionId})`);
 
         const statusUpdate = translateControlEvent(controlEvent, ctx);
         yield formatSSE(statusUpdate.kind, statusUpdate);
@@ -102,6 +104,8 @@ export async function* streamSessionEvents(
         // Result -> TaskStatusUpdateEvent with completed/failed, final: true
         const r = msg as any;
         info(`A2A result: subtype='${r.subtype}', is_error=${r.is_error}`);
+        const finalState = r.is_error ? 'failed' : 'completed';
+        info(`A2A state transition: working → ${finalState} (sessionId: ${sessionId})`);
 
         const statusUpdate = translateResultToStatus(msg, ctx);
         yield formatSSE(statusUpdate.kind, statusUpdate);
@@ -111,6 +115,14 @@ export async function* streamSessionEvents(
       // Regular SDK messages -> A2A Message
       const a2aMessage = translateSdkMessage(msg, ctx);
       if (a2aMessage) {
+        // Log tool executions at DEBUG level
+        if (msg.type === 'stream_event') {
+          const streamMsg = msg as any;
+          const eventData = streamMsg.event;
+          if (eventData?.type === 'tool_invocation') {
+            debug(`Tool execution: ${eventData.name || 'unknown'} (sessionId: ${sessionId})`);
+          }
+        }
         yield formatSSE(a2aMessage.kind, a2aMessage);
       }
     }
