@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import React from 'react'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -56,6 +57,44 @@ vi.mock('@tanstack/react-router', async () => {
     createFileRoute: () => () => ({ component: () => null }),
   }
 })
+
+// Mock agent features
+const mockAgentLauncherRender = vi.fn()
+
+vi.mock('@/features/agents', () => ({
+  AgentLauncherDialog: ({
+    open,
+    onOpenChange,
+    projectId,
+    issueId,
+  }: {
+    open: boolean
+    onOpenChange: (open: boolean) => void
+    projectId: string
+    issueId: string
+  }) => {
+    // Track when the component is rendered with specific open state
+    React.useEffect(() => {
+      mockAgentLauncherRender(open)
+    }, [open])
+
+    return (
+      <div
+        data-testid="agent-launcher-dialog"
+        data-open={open}
+        data-project-id={projectId}
+        data-issue-id={issueId}
+        style={{ display: open ? 'block' : 'none' }}
+      >
+        {open && <button onClick={() => onOpenChange(false)}>Close Agent Launcher</button>}
+      </div>
+    )
+  },
+  useGenerateBranchId: () => ({
+    mutateAsync: vi.fn().mockResolvedValue({ branchId: 'suggested-branch' }),
+    isPending: false,
+  }),
+}))
 
 const mockIssue: IssueResponse = {
   id: 'issue-123',
@@ -523,6 +562,221 @@ describe('EditIssue Page', () => {
           }),
         })
       )
+    })
+  })
+
+  describe('Save & Run Agent functionality', () => {
+    it('opens agent launcher dialog after successful save', async () => {
+      vi.mocked(Issues.getApiIssuesByIssueId).mockResolvedValue({
+        data: mockIssue,
+        error: undefined,
+        request: new Request('http://test'),
+        response: new Response(),
+      })
+
+      vi.mocked(Issues.putApiIssuesByIssueId).mockResolvedValue({
+        data: { ...mockIssue, title: 'Updated Title' },
+        error: undefined,
+        request: new Request('http://test'),
+        response: new Response(),
+      })
+
+      const user = userEvent.setup()
+      render(<EditIssue />, { wrapper: createWrapper() })
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/title/i)).toBeInTheDocument()
+      })
+
+      // Clear the mock to track fresh calls
+      mockAgentLauncherRender.mockClear()
+
+      // Click Save & Run Agent button
+      const saveAndRunButton = screen.getByRole('button', { name: /save & run agent/i })
+      await user.click(saveAndRunButton)
+
+      // Verify save was called
+      await waitFor(() => {
+        expect(Issues.putApiIssuesByIssueId).toHaveBeenCalled()
+      })
+
+      // Verify agent launcher dialog opens after successful save
+      await waitFor(() => {
+        const dialog = screen.getByTestId('agent-launcher-dialog')
+        expect(dialog).toHaveAttribute('data-open', 'true')
+      })
+
+      // Verify navigation does NOT happen
+      expect(mockNavigate).not.toHaveBeenCalled()
+
+      // Verify dialog is rendered with correct props
+      const dialog = screen.getByTestId('agent-launcher-dialog')
+      expect(dialog).toHaveAttribute('data-project-id', 'project-1')
+      expect(dialog).toHaveAttribute('data-issue-id', 'issue-123')
+    })
+
+    it('does not open agent launcher if save fails', async () => {
+      vi.mocked(Issues.getApiIssuesByIssueId).mockResolvedValue({
+        data: mockIssue,
+        error: undefined,
+        request: new Request('http://test'),
+        response: new Response(),
+      })
+
+      vi.mocked(Issues.putApiIssuesByIssueId).mockResolvedValue({
+        data: undefined,
+        error: { detail: 'Server error' },
+        request: new Request('http://test'),
+        response: new Response(null, { status: 500 }),
+      })
+
+      const user = userEvent.setup()
+      render(<EditIssue />, { wrapper: createWrapper() })
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/title/i)).toBeInTheDocument()
+      })
+
+      // Clear the mock to track fresh calls
+      mockAgentLauncherRender.mockClear()
+
+      // Click Save & Run Agent button
+      const saveAndRunButton = screen.getByRole('button', { name: /save & run agent/i })
+      await user.click(saveAndRunButton)
+
+      // Wait for error to appear
+      await waitFor(() => {
+        expect(screen.getByRole('alert')).toBeInTheDocument()
+      })
+
+      // Verify agent launcher dialog does NOT open
+      expect(mockAgentLauncherRender).not.toHaveBeenCalledWith(true)
+    })
+
+    it('validates form before save and run', async () => {
+      vi.mocked(Issues.getApiIssuesByIssueId).mockResolvedValue({
+        data: mockIssue,
+        error: undefined,
+        request: new Request('http://test'),
+        response: new Response(),
+      })
+
+      const user = userEvent.setup()
+      render(<EditIssue />, { wrapper: createWrapper() })
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/title/i)).toBeInTheDocument()
+      })
+
+      // Clear title to make form invalid
+      const titleInput = screen.getByLabelText(/title/i)
+      await user.clear(titleInput)
+
+      // Clear the mock to track fresh calls
+      mockAgentLauncherRender.mockClear()
+
+      // Click Save & Run Agent button
+      const saveAndRunButton = screen.getByRole('button', { name: /save & run agent/i })
+      await user.click(saveAndRunButton)
+
+      // Verify validation error appears
+      await waitFor(() => {
+        expect(screen.getByText(/title is required/i)).toBeInTheDocument()
+      })
+
+      // Verify save was NOT called
+      expect(Issues.putApiIssuesByIssueId).not.toHaveBeenCalled()
+
+      // Verify agent launcher dialog does NOT open
+      expect(mockAgentLauncherRender).not.toHaveBeenCalledWith(true)
+    })
+
+    it('can close agent launcher dialog', async () => {
+      vi.mocked(Issues.getApiIssuesByIssueId).mockResolvedValue({
+        data: mockIssue,
+        error: undefined,
+        request: new Request('http://test'),
+        response: new Response(),
+      })
+
+      vi.mocked(Issues.putApiIssuesByIssueId).mockResolvedValue({
+        data: mockIssue,
+        error: undefined,
+        request: new Request('http://test'),
+        response: new Response(),
+      })
+
+      const user = userEvent.setup()
+      render(<EditIssue />, { wrapper: createWrapper() })
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/title/i)).toBeInTheDocument()
+      })
+
+      // Click Save & Run Agent button
+      const saveAndRunButton = screen.getByRole('button', { name: /save & run agent/i })
+      await user.click(saveAndRunButton)
+
+      // Wait for dialog to open
+      await waitFor(() => {
+        const dialog = screen.getByTestId('agent-launcher-dialog')
+        expect(dialog).toHaveAttribute('data-open', 'true')
+      })
+
+      // Close the dialog
+      const closeButton = screen.getByText('Close Agent Launcher')
+      await user.click(closeButton)
+
+      // Verify dialog is closed
+      await waitFor(() => {
+        const dialog = screen.getByTestId('agent-launcher-dialog')
+        expect(dialog).toHaveAttribute('data-open', 'false')
+      })
+    })
+
+    it('disables Save & Run Agent button while saving', async () => {
+      vi.mocked(Issues.getApiIssuesByIssueId).mockResolvedValue({
+        data: mockIssue,
+        error: undefined,
+        request: new Request('http://test'),
+        response: new Response(),
+      })
+
+      let resolvePromise: (value: unknown) => void
+      const pendingPromise = new Promise((resolve) => {
+        resolvePromise = resolve
+      })
+
+      vi.mocked(Issues.putApiIssuesByIssueId).mockReturnValue(pendingPromise as never)
+
+      const user = userEvent.setup()
+      render(<EditIssue />, { wrapper: createWrapper() })
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/title/i)).toBeInTheDocument()
+      })
+
+      const titleInput = screen.getByLabelText(/title/i)
+      await user.type(titleInput, ' modified')
+
+      const saveAndRunButton = screen.getByRole('button', { name: /save & run agent/i })
+      const saveButton = screen.getByRole('button', { name: /save changes/i })
+
+      await user.click(saveAndRunButton)
+
+      // Both buttons should be disabled while saving
+      await waitFor(() => {
+        expect(saveButton).toBeDisabled()
+        expect(saveAndRunButton).toBeDisabled()
+      })
+
+      // Clean up
+      resolvePromise!({
+        data: mockIssue,
+        error: undefined,
+        request: new Request('http://test'),
+        response: new Response(),
+      })
     })
   })
 })
