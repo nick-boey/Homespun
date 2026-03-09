@@ -12,7 +12,10 @@ import type {
   ClaudeMessageRole,
   PendingQuestion,
 } from '@/types/signalr'
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
+import { groupToolExecutions } from '../utils/tool-execution-grouper'
+import { convertSignalRMessages } from '../utils/signalr-message-adapter'
+import { ToolExecutionGroupDisplay } from './tool-execution-group'
 
 // Backend sends numeric enum values, but TypeScript types expect strings.
 // These maps normalize both forms to the string representation.
@@ -61,6 +64,12 @@ export function MessageList({
   isSubmittingAnswer,
   isProcessingAnswer,
 }: MessageListProps) {
+  // Process messages through the grouping utility - must be before early returns
+  const displayItems = useMemo(() => {
+    const convertedMessages = convertSignalRMessages(messages)
+    return groupToolExecutions(convertedMessages)
+  }, [messages])
+
   if (isLoading) {
     return <MessageListSkeleton />
   }
@@ -75,9 +84,25 @@ export function MessageList({
 
   return (
     <div className={cn('flex flex-col gap-4 p-4', className)}>
-      {messages.map((message) => (
-        <MessageItem key={message.id} message={message} />
-      ))}
+      {displayItems.map((item, _index) => {
+        if (item.type === 'message') {
+          // Convert back to SignalR format for existing MessageItem
+          const signalRMessage = messages.find((m) => m.id === item.message.id)
+          if (signalRMessage) {
+            return <MessageItem key={signalRMessage.id} message={signalRMessage} />
+          }
+          return null
+        } else {
+          // Render tool group
+          return (
+            <div key={item.group.id} className="flex w-full justify-start">
+              <div className="max-w-[90%] md:max-w-[80%]">
+                <ToolExecutionGroupDisplay group={item.group} />
+              </div>
+            </div>
+          )
+        }
+      })}
       {pendingQuestion && onAnswerQuestion && (
         <div className="flex w-full justify-start">
           <div className="max-w-[90%]">
@@ -130,6 +155,17 @@ function MessageItem({ message }: MessageItemProps) {
   const [isHovered, setIsHovered] = useState(false)
   const isAssistant = isAssistantSideMessage(message)
 
+  // Filter out tool-related content as they're handled by ToolExecutionGroupDisplay
+  const nonToolContent = message.content.filter((c) => {
+    const type = normalizeContentType(c.type)
+    return type !== 'ToolUse' && type !== 'ToolResult'
+  })
+
+  // Don't render if only tool content
+  if (nonToolContent.length === 0) {
+    return null
+  }
+
   return (
     <div
       data-testid={`message-${message.id}`}
@@ -152,7 +188,7 @@ function MessageItem({ message }: MessageItemProps) {
               : 'bg-primary text-primary-foreground'
           )}
         >
-          {message.content.map((content, index) => (
+          {nonToolContent.map((content, index) => (
             <ContentBlock key={index} content={content} />
           ))}
           {message.isStreaming && (
