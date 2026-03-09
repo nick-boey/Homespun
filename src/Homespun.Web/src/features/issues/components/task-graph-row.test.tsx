@@ -100,8 +100,8 @@ describe('TaskGraphIssueRow', () => {
   describe('PR status indicator', () => {
     it('does not show PR status when no linked PR', () => {
       vi.spyOn(prStatusHook, 'useLinkedPrStatus').mockReturnValue(
-      createMockQueryResult<IssuePullRequestStatus | null>(null)
-    )
+        createMockQueryResult<IssuePullRequestStatus | null>(null)
+      )
 
       render(<TaskGraphIssueRow {...defaultProps} />)
 
