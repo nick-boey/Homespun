@@ -1,9 +1,12 @@
-import { FileText } from 'lucide-react'
+import { FileText, GitMerge } from 'lucide-react'
 import type { ClaudeSession } from '@/api/generated'
 import { useIssue } from '@/features/issues/hooks/use-issue'
 import { getStatusLabel, getStatusColorClass, getTypeLabel } from '@/lib/issue-constants'
 import { cn } from '@/lib/utils'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Button } from '@/components/ui/button'
+import { useState } from 'react'
+import { ApplyAgentChangesDialog } from '@/features/issues/components/apply-agent-changes-dialog'
 
 interface SessionIssueTabProps {
   session: ClaudeSession
@@ -11,6 +14,7 @@ interface SessionIssueTabProps {
 
 export function SessionIssueTab({ session }: SessionIssueTabProps) {
   const { issue, isLoading, isError } = useIssue(session.entityId || '', session.projectId || '')
+  const [showApplyDialog, setShowApplyDialog] = useState(false)
 
   if (!session.entityId || !session.projectId) {
     return (
@@ -94,6 +98,35 @@ export function SessionIssueTab({ session }: SessionIssueTabProps) {
           <p className="text-muted-foreground text-xs font-medium">Branch</p>
           <p className="font-mono text-sm">{issue.workingBranchId}</p>
         </div>
+      )}
+
+      {/* Apply Changes Button */}
+      {session.status !== 'active' && (
+        <div className="mt-6 pt-4 border-t">
+          <Button
+            onClick={() => setShowApplyDialog(true)}
+            className="w-full"
+            variant="outline"
+          >
+            <GitMerge className="mr-2 h-4 w-4" />
+            Apply Agent Changes
+          </Button>
+          <p className="text-xs text-muted-foreground mt-2">
+            Apply changes made by the agent back to the main branch
+          </p>
+        </div>
+      )}
+
+      {/* Apply Changes Dialog */}
+      {showApplyDialog && session.projectId && (
+        <ApplyAgentChangesDialog
+          open={showApplyDialog}
+          onOpenChange={setShowApplyDialog}
+          sessionId={session.id}
+          projectId={session.projectId}
+          issueId={issue.id}
+          issueTitle={issue.title}
+        />
       )}
     </div>
   )

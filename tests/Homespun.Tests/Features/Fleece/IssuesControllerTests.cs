@@ -33,6 +33,7 @@ public class IssuesControllerTests
     private Mock<IAgentPromptService> _agentPromptServiceMock = null!;
     private Mock<IGitCloneService> _cloneServiceMock = null!;
     private Mock<IBranchIdBackgroundService> _branchIdBackgroundServiceMock = null!;
+    private Mock<IFleeceChangeApplicationService> _changeApplicationServiceMock = null!;
     private Mock<ILogger<IssuesController>> _loggerMock = null!;
     private Mock<IHubClients> _clientsMock = null!;
     private Mock<IClientProxy> _allClientsMock = null!;
@@ -68,6 +69,7 @@ public class IssuesControllerTests
         _agentPromptServiceMock = new Mock<IAgentPromptService>();
         _cloneServiceMock = new Mock<IGitCloneService>();
         _branchIdBackgroundServiceMock = new Mock<IBranchIdBackgroundService>();
+        _changeApplicationServiceMock = new Mock<IFleeceChangeApplicationService>();
         _loggerMock = new Mock<ILogger<IssuesController>>();
         _clientsMock = new Mock<IHubClients>();
         _allClientsMock = new Mock<IClientProxy>();
@@ -87,6 +89,7 @@ public class IssuesControllerTests
             _agentPromptServiceMock.Object,
             _cloneServiceMock.Object,
             _branchIdBackgroundServiceMock.Object,
+            _changeApplicationServiceMock.Object,
             NullLogger<IssuesController>.Instance);
     }
 
