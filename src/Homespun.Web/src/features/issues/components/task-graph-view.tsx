@@ -955,6 +955,7 @@ export const TaskGraphView = memo(
                     }}
                     line={line}
                     maxLanes={maxLanes}
+                    projectId={projectId}
                     isSelected={isSelected}
                     isExpanded={isExpanded}
                     searchQuery={searchQuery}

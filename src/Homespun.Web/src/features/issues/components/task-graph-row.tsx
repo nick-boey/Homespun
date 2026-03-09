@@ -16,6 +16,8 @@ import {
 import type { TaskGraphIssueRenderLine, TaskGraphPrRenderLine } from '../services'
 import { TaskGraphMarkerType } from '../services'
 import { IssueRowActions } from './issue-row-actions'
+import { PrStatusIndicator } from './pr-status-indicator'
+import { useLinkedPrStatus } from '../hooks/use-linked-pr-status'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,6 +28,7 @@ import {
 interface TaskGraphIssueRowProps extends HTMLAttributes<HTMLDivElement> {
   line: TaskGraphIssueRenderLine
   maxLanes: number
+  projectId: string
   isSelected?: boolean
   isExpanded?: boolean
   searchQuery?: string
@@ -51,6 +54,7 @@ export const TaskGraphIssueRow = memo(
     {
       line,
       maxLanes,
+      projectId,
       isSelected = false,
       isExpanded = false,
       searchQuery,
@@ -70,6 +74,13 @@ export const TaskGraphIssueRow = memo(
     const typeColor = getTypeColor(line.issueType)
     const hasSearchMatch =
       searchQuery && line.title.toLowerCase().includes(searchQuery.toLowerCase())
+
+    // Fetch PR status if this issue has a linked PR
+    const { data: prStatus } = useLinkedPrStatus(
+      projectId,
+      line.linkedPr ? line.issueId : undefined,
+      true // Only fetch when component is visible
+    )
 
     // Status color based on marker
     const getStatusColor = () => {
@@ -188,15 +199,26 @@ export const TaskGraphIssueRow = memo(
 
           {/* Linked PR indicator */}
           {line.linkedPr && (
-            <a
-              href={line.linkedPr.url ?? '#'}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-muted-foreground hover:text-foreground shrink-0 text-xs underline"
-              onClick={(e) => e.stopPropagation()}
-            >
-              #{line.linkedPr.number}
-            </a>
+            <div className="flex items-center gap-1.5">
+              <a
+                href={line.linkedPr.url ?? '#'}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-muted-foreground hover:text-foreground shrink-0 text-xs underline"
+                onClick={(e) => e.stopPropagation()}
+              >
+                #{line.linkedPr.number}
+              </a>
+              {prStatus && (
+                <PrStatusIndicator
+                  checksPassing={prStatus.checksPassing ?? null}
+                  hasConflicts={
+                    prStatus.mergeableState === 'conflicting' ||
+                    prStatus.isMergeableByGitHub === false
+                  }
+                />
+              )}
+            </div>
           )}
 
           {/* Hover actions */}

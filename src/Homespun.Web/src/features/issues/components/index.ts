@@ -20,3 +20,4 @@ export {
 } from './task-graph-svg'
 export { IssueRowSkeleton, type IssueRowSkeletonProps } from './issue-row-skeleton'
 export { DetailPanelSkeleton, type DetailPanelSkeletonProps } from './detail-panel-skeleton'
+export { PrStatusIndicator } from './pr-status-indicator'

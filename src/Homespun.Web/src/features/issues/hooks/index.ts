@@ -23,3 +23,4 @@ export {
   type UseCreateIssueReturn,
   type CreateIssueParams,
 } from './use-create-issue'
+export { useLinkedPrStatus } from './use-linked-pr-status'
