@@ -34,6 +34,7 @@ import { AgentLauncherDialog, useGenerateBranchId } from '@/features/agents'
 import { ISSUE_STATUS_OPTIONS, ISSUE_TYPE_OPTIONS } from '@/lib/issue-constants'
 import { ArrowLeft, Play, Sparkles } from 'lucide-react'
 import type { IssueStatus, IssueType } from '@/api'
+import { useBranchIdGenerationStore } from '@/features/issues/stores/branch-id-generation-store'
 
 export const Route = createFileRoute('/projects/$projectId/issues/$issueId/edit')({
   component: EditIssue,
@@ -66,12 +67,14 @@ interface WorkingBranchFieldProps {
   register: ReturnType<typeof useForm<IssueFormData>>['register']
   watch: ReturnType<typeof useForm<IssueFormData>>['watch']
   setValue: ReturnType<typeof useForm<IssueFormData>>['setValue']
+  issueId: string
 }
 
 /** Working Branch field with AI-powered branch ID suggestion button */
-function WorkingBranchField({ register, watch, setValue }: WorkingBranchFieldProps) {
+function WorkingBranchField({ register, watch, setValue, issueId }: WorkingBranchFieldProps) {
   const title = watch('title')
   const generateBranchId = useGenerateBranchId()
+  const isGenerating = useBranchIdGenerationStore((state) => state.isGenerating(issueId))
 
   const handleSuggest = useCallback(async () => {
     if (!title?.trim()) {
@@ -89,18 +92,25 @@ function WorkingBranchField({ register, watch, setValue }: WorkingBranchFieldPro
     <div className="space-y-2">
       <Label htmlFor="workingBranchId">Working Branch ID</Label>
       <div className="flex gap-2">
-        <Input
-          id="workingBranchId"
-          placeholder="Custom branch identifier"
-          className="flex-1"
-          {...register('workingBranchId')}
-        />
+        <div className="relative flex-1">
+          <Input
+            id="workingBranchId"
+            placeholder="Custom branch identifier"
+            className="pr-10"
+            {...register('workingBranchId')}
+          />
+          {isGenerating && (
+            <div className="absolute inset-y-0 right-0 flex items-center pr-3">
+              <Loader variant="circular" size="sm" />
+            </div>
+          )}
+        </div>
         <Button
           type="button"
           variant="outline"
           size="icon"
           onClick={handleSuggest}
-          disabled={!title?.trim() || generateBranchId.isPending}
+          disabled={!title?.trim() || generateBranchId.isPending || isGenerating}
           title="Suggest branch ID based on title"
           aria-label="Suggest branch ID"
         >
@@ -111,7 +121,11 @@ function WorkingBranchField({ register, watch, setValue }: WorkingBranchFieldPro
           )}
         </Button>
       </div>
-      <p className="text-muted-foreground text-xs">AI-suggested or auto-generated from title</p>
+      <p className="text-muted-foreground text-xs">
+        {isGenerating
+          ? 'AI is generating branch ID...'
+          : 'AI-suggested or auto-generated from title'}
+      </p>
     </div>
   )
 }
@@ -124,6 +138,9 @@ export default function EditIssue() {
   const [apiError, setApiError] = useState<string | null>(null)
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false)
   const [agentLauncherOpen, setAgentLauncherOpen] = useState(false)
+
+  // Listen for branch ID generation events
+  // useBranchIdGenerationEvents(projectId)
 
   useBreadcrumbSetter(
     [
@@ -489,7 +506,12 @@ export default function EditIssue() {
           </div>
 
           {/* Working Branch */}
-          <WorkingBranchField register={register} watch={watch} setValue={form.setValue} />
+          <WorkingBranchField
+            register={register}
+            watch={watch}
+            setValue={form.setValue}
+            issueId={issueId}
+          />
 
           {/* Tags */}
           <div className="space-y-2">

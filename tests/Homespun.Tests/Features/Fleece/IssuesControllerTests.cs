@@ -5,12 +5,14 @@ using Homespun.Features.Fleece.Services;
 using Homespun.Features.Git;
 using Homespun.Features.Notifications;
 using Homespun.Features.Projects;
+using Homespun.Features.AgentOrchestration.Services;
 using Homespun.Shared.Models.Fleece;
 using Homespun.Shared.Models.Projects;
 using Homespun.Shared.Models.Sessions;
 using Homespun.Shared.Requests;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
@@ -30,6 +32,8 @@ public class IssuesControllerTests
     private Mock<IClaudeSessionService> _sessionServiceMock = null!;
     private Mock<IAgentPromptService> _agentPromptServiceMock = null!;
     private Mock<IGitCloneService> _cloneServiceMock = null!;
+    private Mock<IBranchIdBackgroundService> _branchIdBackgroundServiceMock = null!;
+    private Mock<ILogger<IssuesController>> _loggerMock = null!;
     private Mock<IHubClients> _clientsMock = null!;
     private Mock<IClientProxy> _allClientsMock = null!;
     private Mock<IClientProxy> _groupClientsMock = null!;
@@ -63,6 +67,8 @@ public class IssuesControllerTests
         _sessionServiceMock = new Mock<IClaudeSessionService>();
         _agentPromptServiceMock = new Mock<IAgentPromptService>();
         _cloneServiceMock = new Mock<IGitCloneService>();
+        _branchIdBackgroundServiceMock = new Mock<IBranchIdBackgroundService>();
+        _loggerMock = new Mock<ILogger<IssuesController>>();
         _clientsMock = new Mock<IHubClients>();
         _allClientsMock = new Mock<IClientProxy>();
         _groupClientsMock = new Mock<IClientProxy>();
@@ -80,6 +86,7 @@ public class IssuesControllerTests
             _sessionServiceMock.Object,
             _agentPromptServiceMock.Object,
             _cloneServiceMock.Object,
+            _branchIdBackgroundServiceMock.Object,
             NullLogger<IssuesController>.Instance);
     }
 
@@ -174,10 +181,13 @@ public class IssuesControllerTests
             .Setup(x => x.GetByIdAsync(TestProject.Id))
             .ReturnsAsync(TestProject);
         _fleeceServiceMock
+            .Setup(x => x.GetIssueAsync(It.IsAny<string>(), issueId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CreateTestIssue(issueId, "Original Issue", IssueType.Bug));
+        _fleeceServiceMock
             .Setup(x => x.UpdateIssueAsync(
                 It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(),
                 It.IsAny<IssueStatus?>(), It.IsAny<IssueType?>(), It.IsAny<string?>(),
-                It.IsAny<int?>(), It.IsAny<ExecutionMode?>(), It.IsAny<string?>()))
+                It.IsAny<int?>(), It.IsAny<ExecutionMode?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(issue);
 
         var request = new UpdateIssueRequest { ProjectId = TestProject.Id, Title = "Updated Issue" };

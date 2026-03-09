@@ -1,6 +1,8 @@
 using Fleece.Core.Models;
 using Homespun.Shared.Requests;
 
+namespace Homespun.Features.Fleece.Services;
+
 /// <summary>
 /// Project-aware service interface for Fleece issue tracking.
 /// Wraps Fleece.Core's IIssueService to provide project path context.
