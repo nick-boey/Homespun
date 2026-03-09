@@ -64,7 +64,15 @@ describe('TaskGraphNodeSvg', () => {
     })
 
     it('should render blue ring for running states', () => {
-      const runningStates = ['0', '1', '2'] // Starting, RunningHooks, Running
+      const runningStates = [
+        // Test both numeric and string formats
+        '0',
+        '1',
+        '2', // Starting, RunningHooks, Running
+        'Starting',
+        'RunningHooks',
+        'Running',
+      ]
 
       runningStates.forEach((status) => {
         const line = createMockLine({
@@ -88,7 +96,15 @@ describe('TaskGraphNodeSvg', () => {
     })
 
     it('should render yellow ring for waiting states', () => {
-      const waitingStates = ['3', '4', '5'] // WaitingForInput, WaitingForQuestionAnswer, WaitingForPlanExecution
+      const waitingStates = [
+        // Test both numeric and string formats
+        '3',
+        '4',
+        '5', // WaitingForInput, WaitingForQuestionAnswer, WaitingForPlanExecution
+        'WaitingForInput',
+        'WaitingForQuestionAnswer',
+        'WaitingForPlanExecution',
+      ]
 
       waitingStates.forEach((status) => {
         const line = createMockLine({
@@ -112,37 +128,45 @@ describe('TaskGraphNodeSvg', () => {
     })
 
     it('should render red ring for error state', () => {
-      const line = createMockLine({
-        agentStatus: {
-          isActive: true,
-          status: '7', // Error
-          sessionId: 'session-123',
-        },
+      const errorStates = ['7', 'Error'] // Test both formats
+
+      errorStates.forEach((status) => {
+        const line = createMockLine({
+          agentStatus: {
+            isActive: true,
+            status,
+            sessionId: 'session-123',
+          },
+        })
+        const { container } = render(<TaskGraphNodeSvg line={line} maxLanes={1} />)
+
+        const circles = container.querySelectorAll('circle')
+        expect(circles).toHaveLength(2)
+
+        const ring = circles[0]
+        expect(ring).toHaveAttribute('stroke', '#ef4444') // Red
+        expect(ring).toHaveAttribute('stroke-width', '2')
+        expect(ring).toHaveAttribute('opacity', '0.6')
+        expect(ring).toHaveClass('animate-pulse')
       })
-      const { container } = render(<TaskGraphNodeSvg line={line} maxLanes={1} />)
-
-      const circles = container.querySelectorAll('circle')
-      expect(circles).toHaveLength(2)
-
-      const ring = circles[0]
-      expect(ring).toHaveAttribute('stroke', '#ef4444') // Red
-      expect(ring).toHaveAttribute('stroke-width', '2')
-      expect(ring).toHaveAttribute('opacity', '0.6')
-      expect(ring).toHaveClass('animate-pulse')
     })
 
     it('should not render ring for stopped state', () => {
-      const line = createMockLine({
-        agentStatus: {
-          isActive: true,
-          status: '6', // Stopped
-          sessionId: 'session-123',
-        },
-      })
-      const { container } = render(<TaskGraphNodeSvg line={line} maxLanes={1} />)
+      const stoppedStates = ['6', 'Stopped'] // Test both formats
 
-      const circles = container.querySelectorAll('circle')
-      expect(circles).toHaveLength(1) // Only the main node
+      stoppedStates.forEach((status) => {
+        const line = createMockLine({
+          agentStatus: {
+            isActive: true,
+            status,
+            sessionId: 'session-123',
+          },
+        })
+        const { container } = render(<TaskGraphNodeSvg line={line} maxLanes={1} />)
+
+        const circles = container.querySelectorAll('circle')
+        expect(circles).toHaveLength(1) // Only the main node
+      })
     })
 
     it('should not render ring for unknown status', () => {
@@ -190,6 +214,41 @@ describe('TaskGraphNodeSvg', () => {
       // Ring should be 4 pixels larger radius than the node
       expect(ring).toHaveAttribute('r', '10') // NODE_RADIUS (6) + 4
       expect(node).toHaveAttribute('r', '6')
+    })
+
+    it('should not show actionable ring when agent is active', () => {
+      const line = createMockLine({
+        marker: TaskGraphMarkerType.Actionable,
+        agentStatus: {
+          isActive: true,
+          status: 'Running',
+          sessionId: 'session-123',
+        },
+      })
+      const { container } = render(<TaskGraphNodeSvg line={line} maxLanes={1} />)
+
+      const circles = container.querySelectorAll('circle')
+      expect(circles).toHaveLength(2) // Agent ring + node, no actionable ring
+
+      // Verify the ring is the agent status ring (blue)
+      const ring = circles[0]
+      expect(ring).toHaveAttribute('stroke', '#3b82f6')
+      expect(ring).toHaveClass('animate-pulse')
+    })
+
+    it('should not show actionable ring when agent is not active', () => {
+      const line = createMockLine({
+        marker: TaskGraphMarkerType.Actionable,
+        agentStatus: {
+          isActive: false,
+          status: 'Stopped',
+          sessionId: 'session-123',
+        },
+      })
+      const { container } = render(<TaskGraphNodeSvg line={line} maxLanes={1} />)
+
+      const circles = container.querySelectorAll('circle')
+      expect(circles).toHaveLength(1) // Only the node, no actionable ring
     })
   })
 

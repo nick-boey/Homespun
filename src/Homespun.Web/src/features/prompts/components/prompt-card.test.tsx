@@ -87,4 +87,18 @@ describe('PromptCard', () => {
     const previewText = screen.getByText(/^A+\.\.\./)
     expect(previewText).toBeInTheDocument()
   })
+
+  it('displays Global badge for global prompts', () => {
+    const globalPrompt = { ...mockPrompt, projectId: null }
+    render(<PromptCard prompt={globalPrompt} onEdit={vi.fn()} onDelete={vi.fn()} />)
+
+    expect(screen.getByText('Global')).toBeInTheDocument()
+  })
+
+  it('does not display badge for project prompts', () => {
+    render(<PromptCard prompt={mockPrompt} onEdit={vi.fn()} onDelete={vi.fn()} />)
+
+    // Should not have Global badge
+    expect(screen.queryByText('Global')).not.toBeInTheDocument()
+  })
 })

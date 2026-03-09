@@ -139,6 +139,12 @@ export function SessionCard({
                 {entityType === 'pr' ? 'PR' : 'Issue'}
               </Badge>
               {projectName && <span className="text-muted-foreground text-xs">{projectName}</span>}
+              {projectName && session.entityId && (
+                <span className="text-muted-foreground text-xs">•</span>
+              )}
+              {session.entityId && (
+                <span className="text-muted-foreground text-xs">{session.entityId}</span>
+              )}
             </div>
             <CardTitle className="line-clamp-2 text-base">{displayTitle}</CardTitle>
           </div>

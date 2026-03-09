@@ -73,7 +73,7 @@ export function ProjectToolbar({
       role="toolbar"
       aria-label="Issue management toolbar"
       className={cn(
-        'sticky top-[68px] z-10 md:top-[80px]',
+        'sticky top-[4px] z-10 md:top-[4px]',
         'flex items-center gap-2 overflow-x-auto',
         'border-border bg-background/80 rounded-lg border px-2 backdrop-blur-sm',
         // More padding on mobile for touch
@@ -180,6 +180,7 @@ export function ProjectToolbar({
         onClick={onOpenAgentLauncher}
         aria-label="Run agent (e)"
         title="Run agent (e)"
+        data-testid="toolbar-run-agent"
       >
         <Play className="h-4 w-4" />
       </Button>

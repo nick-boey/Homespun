@@ -5,7 +5,6 @@ using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Commands;
 using Homespun.Features.Containers.Services;
 using Homespun.Features.Fleece.Services;
-using Homespun.Server.Features.Fleece.Services;
 using Homespun.Features.Git;
 using Homespun.Features.GitHub;
 using Homespun.Features.Gitgraph.Services;
@@ -305,9 +304,7 @@ app.MapHealthChecks("/health");
 // Map API controllers
 app.MapControllers();
 
-// MapStaticAssets replaces UseBlazorFrameworkFiles + UseStaticFiles in .NET 10
-// It serves both Blazor WASM framework files and static assets via endpoint routing
+// MapStaticAssets serves static files via endpoint routing
 app.MapStaticAssets();
-app.MapFallbackToFile("index.html");
 
 app.Run();

@@ -21,7 +21,7 @@ describe('StatusIndicator', () => {
       { status: SessionStatus.Starting, expectedColor: 'bg-yellow-500' },
       { status: SessionStatus.RunningHooks, expectedColor: 'bg-green-500' },
       { status: SessionStatus.Running, expectedColor: 'bg-green-500' },
-      { status: SessionStatus.WaitingForInput, expectedColor: 'bg-blue-500' },
+      { status: SessionStatus.WaitingForInput, expectedColor: 'bg-yellow-500' },
       { status: SessionStatus.WaitingForQuestionAnswer, expectedColor: 'bg-purple-500' },
       { status: SessionStatus.WaitingForPlanExecution, expectedColor: 'bg-orange-500' },
       { status: SessionStatus.Stopped, expectedColor: 'bg-gray-400' },

@@ -16,6 +16,12 @@ vi.mock('@/api', () => ({
   },
 }))
 
+// Mock useNavigate from tanstack router
+const mockNavigate = vi.fn()
+vi.mock('@tanstack/react-router', () => ({
+  useNavigate: () => mockNavigate,
+}))
+
 const mockGetAgentPrompts = vi.mocked(AgentPrompts.getApiAgentPromptsAvailableForProjectByProjectId)
 const mockPostApiSessions = vi.mocked(Sessions.postApiSessions)
 
@@ -72,6 +78,7 @@ function createMockSession(overrides: Partial<ClaudeSession> = {}): ClaudeSessio
 describe('AgentLauncher', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockNavigate.mockClear()
     mockGetAgentPrompts.mockResolvedValue(createMockResponse(mockPrompts))
   })
 
@@ -188,5 +195,101 @@ describe('AgentLauncher', () => {
     // The model selector should show Opus since we pre-set localStorage
     const modelSelector = screen.getByRole('combobox', { name: /model/i })
     expect(modelSelector).toHaveTextContent(/opus/i)
+  })
+
+  it('shows None option as first in dropdown', async () => {
+    const user = userEvent.setup()
+    render(
+      <AgentLauncher projectId="project-123" entityId="issue-456" workingDirectory="/workdir" />,
+      { wrapper: createWrapper() }
+    )
+
+    // Wait for prompts to load
+    await waitFor(() => {
+      expect(screen.getByRole('combobox', { name: /prompt/i })).toBeInTheDocument()
+    })
+
+    // Open the prompt dropdown
+    const promptSelect = screen.getByRole('combobox', { name: /prompt/i })
+    await user.click(promptSelect)
+
+    // Should have None as first option
+    const options = screen.getAllByRole('option')
+    expect(options[0]).toHaveTextContent('None - Start without prompt (Plan mode)')
+  })
+
+  it('navigates to session page when None is selected', async () => {
+    const user = userEvent.setup()
+    mockPostApiSessions.mockResolvedValueOnce(
+      createMockResponse(createMockSession({ id: 'session-789' }))
+    )
+
+    render(
+      <AgentLauncher projectId="project-123" entityId="issue-456" workingDirectory="/workdir" />,
+      { wrapper: createWrapper() }
+    )
+
+    // Wait for prompts to load
+    await waitFor(() => {
+      expect(screen.getByRole('combobox', { name: /prompt/i })).toBeInTheDocument()
+    })
+
+    // Select None option
+    const promptSelect = screen.getByRole('combobox', { name: /prompt/i })
+    await user.click(promptSelect)
+    // Use getAllByText since the text appears in both the trigger and dropdown
+    const noneOptions = screen.getAllByText('None - Start without prompt (Plan mode)')
+    // Click the one in the dropdown (not the selected value)
+    await user.click(noneOptions[noneOptions.length - 1])
+
+    // Click start button
+    await user.click(screen.getByRole('button', { name: /start agent/i }))
+
+    // Should navigate to session page
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith({
+        to: '/sessions/$sessionId',
+        params: { sessionId: 'session-789' },
+      })
+    })
+  })
+
+  it('starts session with plan mode when None is selected', async () => {
+    const user = userEvent.setup()
+    mockPostApiSessions.mockResolvedValueOnce(createMockResponse(createMockSession()))
+
+    render(
+      <AgentLauncher projectId="project-123" entityId="issue-456" workingDirectory="/workdir" />,
+      { wrapper: createWrapper() }
+    )
+
+    // Wait for prompts to load
+    await waitFor(() => {
+      expect(screen.getByRole('combobox', { name: /prompt/i })).toBeInTheDocument()
+    })
+
+    // Select None option
+    const promptSelect = screen.getByRole('combobox', { name: /prompt/i })
+    await user.click(promptSelect)
+    // Use getAllByText since the text appears in both the trigger and dropdown
+    const noneOptions = screen.getAllByText('None - Start without prompt (Plan mode)')
+    // Click the one in the dropdown (not the selected value)
+    await user.click(noneOptions[noneOptions.length - 1])
+
+    // Click start button
+    await user.click(screen.getByRole('button', { name: /start agent/i }))
+
+    // Should create session with Plan mode (0) and no system prompt
+    await waitFor(() => {
+      expect(mockPostApiSessions).toHaveBeenCalledWith({
+        body: expect.objectContaining({
+          entityId: 'issue-456',
+          projectId: 'project-123',
+          workingDirectory: '/workdir',
+          mode: 0, // Plan mode
+          systemPrompt: undefined,
+        }),
+      })
+    })
   })
 })

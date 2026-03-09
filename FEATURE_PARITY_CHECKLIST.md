@@ -5,7 +5,7 @@
 This document provides a comprehensive comparison between the Blazor and React frontend implementations of Homespun, verifying feature parity for the migration.
 
 **Verification Date:** March 4, 2026
-**Blazor Location:** (Original client - no longer in repo)
+**Blazor Location:** (Original client - completely removed as of 2026-03-08)
 **React Location:** `src/Homespun.Web`
 
 ---

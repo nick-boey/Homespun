@@ -5,7 +5,6 @@
 
 import { memo } from 'react'
 import type { TaskGraphIssueRenderLine } from '../services'
-import { TaskGraphMarkerType } from '../services'
 
 // Constants matching TimelineSvgRenderer.cs
 export const LANE_WIDTH = 24
@@ -29,25 +28,48 @@ export function getTypeColor(issueType: number): string {
 /**
  * Maps agent status to ring color based on status value.
  * Returns null if no ring should be shown.
+ * Handles both string status names and numeric values.
  */
 function getAgentStatusColor(status: string | null): string | null {
   if (!status) return null
-  const statusNum = parseInt(status)
 
-  switch (statusNum) {
-    case 0: // Starting
-    case 1: // RunningHooks
-    case 2: // Running
-      return '#3b82f6' // Blue
-    case 3: // WaitingForInput
-    case 4: // WaitingForQuestionAnswer
-    case 5: // WaitingForPlanExecution
-      return '#eab308' // Yellow
-    case 7: // Error
-      return '#ef4444' // Red
-    default:
-      return null // No ring for Stopped (6) or unknown status
+  // Map string status names to colors
+  const statusMap: Record<string, string | null> = {
+    Starting: '#3b82f6', // Blue
+    RunningHooks: '#3b82f6', // Blue
+    Running: '#3b82f6', // Blue
+    WaitingForInput: '#eab308', // Yellow
+    WaitingForQuestionAnswer: '#eab308', // Yellow
+    WaitingForPlanExecution: '#eab308', // Yellow
+    Error: '#ef4444', // Red
+    Stopped: null, // No ring
   }
+
+  // First check if it's a string status name
+  if (status in statusMap) {
+    return statusMap[status]
+  }
+
+  // Fall back to numeric parsing for backward compatibility
+  const statusNum = parseInt(status)
+  if (!isNaN(statusNum)) {
+    switch (statusNum) {
+      case 0: // Starting
+      case 1: // RunningHooks
+      case 2: // Running
+        return '#3b82f6' // Blue
+      case 3: // WaitingForInput
+      case 4: // WaitingForQuestionAnswer
+      case 5: // WaitingForPlanExecution
+        return '#eab308' // Yellow
+      case 7: // Error
+        return '#ef4444' // Red
+      default:
+        return null // No ring for Stopped (6) or unknown status
+    }
+  }
+
+  return null // Unknown status
 }
 
 export function calculateSvgWidth(maxLanes: number): number {
@@ -186,23 +208,17 @@ export const TaskGraphNodeSvg = memo(function TaskGraphNodeSvg({
         />
       )}
 
-      {/* Actionable glow ring (rendered before the node so it appears behind) */}
-      {line.marker === TaskGraphMarkerType.Actionable && !line.agentStatus?.isActive && (
-        <circle
-          cx={cx}
-          cy={cy}
-          r={NODE_RADIUS + 4}
-          fill="none"
-          stroke={nodeColor}
-          strokeWidth={2}
-          opacity={0.4}
-        />
-      )}
-
       {/* Agent status ring */}
       {line.agentStatus?.isActive &&
         (() => {
+          console.log('Agent status for issue:', {
+            issueId: line.issueId,
+            isActive: line.agentStatus.isActive,
+            status: line.agentStatus.status,
+            rawAgentStatus: line.agentStatus,
+          })
           const color = getAgentStatusColor(line.agentStatus.status)
+          console.log('Agent status color:', color)
           return color ? (
             <circle
               cx={cx}

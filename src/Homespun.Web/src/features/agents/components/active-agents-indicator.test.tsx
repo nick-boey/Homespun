@@ -151,10 +151,10 @@ describe('ActiveAgentsIndicator', () => {
 
       await waitFor(() => {
         // Check count text color as a proxy for status color
-        expect(screen.getByTestId('status-working-count')).toHaveClass('text-blue-500')
+        expect(screen.getByTestId('status-working-count')).toHaveClass('text-green-500')
         expect(screen.getByTestId('status-waiting-input-count')).toHaveClass('text-yellow-500')
-        expect(screen.getByTestId('status-waiting-answer-count')).toHaveClass('text-orange-500')
-        expect(screen.getByTestId('status-waiting-plan-count')).toHaveClass('text-purple-500')
+        expect(screen.getByTestId('status-waiting-answer-count')).toHaveClass('text-purple-500')
+        expect(screen.getByTestId('status-waiting-plan-count')).toHaveClass('text-orange-500')
         expect(screen.getByTestId('status-error-count')).toHaveClass('text-red-500')
       })
     })

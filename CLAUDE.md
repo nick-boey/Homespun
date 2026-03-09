@@ -5,6 +5,7 @@ This file contains instructions for Claude Code when working on this project.
 ## Overview
 
 Homespun is a web application for managing development features and AI agents. It provides:
+
 - Project and feature management with hierarchical tree visualization
 - Git clone integration for isolated feature development
 - GitHub PR synchronization
@@ -32,16 +33,27 @@ The frontend is built with React + Vite + TypeScript + TailwindCSS, with an ASP.
 **Before creating a pull request, always run the following checks:**
 
 ```bash
+dotnet test
+
 cd src/Homespun.Web
 
 # Run linting (must pass with no errors)
-npm run lint
+npm run lint:fix
+
+# Format code
+npm run format:check
+
+# Generate API client from OpenAPI spec
+npm run generate:api:fetch
 
 # Run type checking (must pass with no errors)
 npm run typecheck
 
 # Run tests
 npm test
+
+# Run e2e tests
+npm test:e2e
 ```
 
 These checks are run in CI and will cause the PR to fail if not passing. Always verify locally first.
@@ -91,7 +103,6 @@ src/
 tests/
 ├── Homespun.Tests/              # Backend unit tests (NUnit + Moq)
 ├── Homespun.Api.Tests/          # API integration tests (WebApplicationFactory)
-└── Homespun.E2E.Tests/          # End-to-end tests (Playwright)
 ```
 
 ### Feature Slices
@@ -113,6 +124,7 @@ tests/
 ### Technology Stack
 
 The React frontend uses:
+
 - **React 19** with TypeScript
 - **Vite** for build tooling
 - **TailwindCSS v4** for styling
@@ -122,85 +134,18 @@ The React frontend uses:
 - **shadcn/ui** with Base UI for components (New York style, Zinc base color)
 - **prompt-kit** for AI chat interface components
 
-### UI Components
-
-#### shadcn/ui
-
-The project uses shadcn/ui for base components. Components are installed into `src/components/ui/`. Use the default shadcn/ui theme (which will be styled later).
-
-Add new components:
-```bash
-cd src/Homespun.Web
-npx shadcn@latest add button
-npx shadcn@latest add input
-# etc.
-```
-
-**DO NOT create custom components if a shadcn/ui component already exists.**
-
-Configuration is in `components.json`:
-- Style: new-york
-- Base color: zinc
-- CSS Variables: enabled
-- Icon library: lucide
-
-#### prompt-kit (Chat Components)
-
-For AI chat interface components, use the prompt-kit library. These components are built on shadcn/ui and Tailwind.
-
-Add prompt-kit components:
-```bash
-npx shadcn@latest add "https://prompt-kit.com/c/prompt-input.json"
-npx shadcn@latest add "https://prompt-kit.com/c/message.json"
-npx shadcn@latest add "https://prompt-kit.com/c/markdown.json"
-```
-
-Available prompt-kit components:
-- **prompt-input** - Chat input with file attachments
-- **message** - Chat message display
-- **markdown** - Markdown rendering with syntax highlighting
-- **code-block** - Code display with copy button
-- **thinking-bar** - AI thinking indicator
-- **loader** - Loading animations
-
-**Use prompt-kit components for all chat and AI-related UI.** Do not create custom chat components.
-
-### Development Commands
-
-```bash
-cd src/Homespun.Web
-
-# Start development server
-npm run dev
-
-# Build for production
-npm run build
-
-# Lint code
-npm run lint
-npm run lint:fix
-
-# Format code
-npm run format
-npm run format:check
-
-# Type checking
-npm run typecheck
-
-# Generate API client from OpenAPI spec
-npm run generate:api:fetch
-```
-
 ### OpenAPI Client
 
 The API client is auto-generated from the server's OpenAPI spec. The generated code is in `src/api/generated/`.
 
 Regenerate after server API changes:
+
 ```bash
 npm run generate:api:fetch
 ```
 
 Use the typed API client:
+
 ```typescript
 import { getProjects, createProject } from '@/api'
 ```
@@ -216,7 +161,6 @@ dotnet test
 # Run specific test project
 dotnet test tests/Homespun.Tests
 dotnet test tests/Homespun.Api.Tests
-dotnet test tests/Homespun.E2E.Tests
 
 # Run with verbose output
 dotnet test --verbosity normal
@@ -258,37 +202,7 @@ src/
 
 #### Writing Tests
 
-Use React Testing Library with Vitest:
-
-```typescript
-import { describe, it, expect } from 'vitest'
-import { render, screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
-import { Button } from './button'
-
-describe('Button', () => {
-  it('renders button text', () => {
-    render(<Button>Click me</Button>)
-    expect(screen.getByRole('button', { name: 'Click me' })).toBeInTheDocument()
-  })
-
-  it('calls onClick when clicked', async () => {
-    const user = userEvent.setup()
-    let clicked = false
-    render(<Button onClick={() => (clicked = true)}>Click</Button>)
-
-    await user.click(screen.getByRole('button'))
-    expect(clicked).toBe(true)
-  })
-})
-```
-
-#### Test Utilities
-
-- `@testing-library/react` - Component rendering and queries
-- `@testing-library/user-event` - User interaction simulation
-- `@testing-library/jest-dom` - DOM matchers (toBeInTheDocument, etc.)
-- `vitest` - Test runner with globals enabled
+Refer to existing tests and use a similar style.
 
 ## Testing Infrastructure
 
@@ -306,104 +220,44 @@ Unit tests cover service logic in isolation using Moq for dependency mocking.
 
 API tests verify HTTP endpoints using an in-memory test server with `HomespunWebApplicationFactory`.
 
-### End-to-End Tests (Homespun.E2E.Tests)
-
-**Framework:** NUnit + Playwright
-
-E2E tests run against the full application stack using Playwright for browser automation.
-
-**E2E Configuration:**
-- `HomespunFixture` automatically starts the application for tests
-- Set `E2E_BASE_URL` to test against an external server
-- Set `E2E_CONFIGURATION` to specify build configuration (Release/Debug)
-
 ### React Frontend E2E Tests (Homespun.Web/e2e)
 
 **Framework:** Playwright Test
 
 E2E tests for the React frontend are located in `src/Homespun.Web/e2e/`. These tests mirror the C# E2E tests but use the JavaScript Playwright API.
 
-**Running React E2E Tests:**
-
-```bash
-cd src/Homespun.Web
-
-# Install Playwright browsers (first time only)
-npm run playwright:install
-
-# Run all E2E tests
-npm run test:e2e
-
-# Run tests with UI mode (interactive debugging)
-npm run test:e2e:ui
-
-# Run tests with browser visible
-npm run test:e2e:headed
-
-# Run with debug mode (step through tests)
-npm run test:e2e:debug
-
-# View HTML test report
-npm run test:e2e:report
-```
-
 **E2E Test Configuration:**
-- Tests automatically start the mock server via `webServer` config
-- Set `E2E_BASE_URL` to test against a running server (skips automatic server start)
-- Tests run in Chromium by default
-- Traces, screenshots, and videos are captured on test failure
 
-**Test Coverage:**
-- `critical-journeys.spec.ts` - Basic navigation and page loading
-- `agui-sessions.spec.ts` - Session management and API connectivity
-- `keyboard-navigation.spec.ts` - Vim-like keyboard controls
-- `type-change-menu.spec.ts` - Issue type dropdown menu
-- `collapsible-sidebar.spec.ts` - Inline issue detail expansion
-- `issue-edit-ctrl-enter.spec.ts` - CTRL+Enter save behavior
-- `inline-issue-hierarchy.spec.ts` - TAB/Shift+TAB hierarchy creation
+- Tests automatically start the mock server via `webServer` config
 
 ### Inspection with Playwright MCP and Mock Mode
 
-The mock mode provides a development environment with:
-- Pre-seeded demo data (projects, features, issues)
-- No external dependencies (GitHub, Claude API)
-- Isolated from production data
+To start a server running in Mock Mode to investigate with the Playwright MCP:
 
-To start a server running in Mock Mode:
 ```bash
+# Start mock backend server
 ./scripts/mock.sh       # Linux/Mac
 ./scripts/mock.ps1      # Windows
+
+cd src/Homespun.Web
+
+# Start development server
+npm run dev
 ```
 
-The script runs `dotnet run` with the mock launch profile. When running inside a container, it uses `localhost` for the URL. Review the script output to find the URL to access (typically `http://localhost:5095`).
-
-### Using Mock Mode with Playwright
-
-When testing the UI with Playwright MCP tools inside the agent container:
-
-1. **Start the mock server as a background process:**
-   ```bash
-   ./scripts/mock.sh &
-   ```
-   Wait for the server to start (look for "Now listening on: http://localhost:5095" in the output).
-
-2. **Access the mock server at localhost:**
-   - Navigate: `browser_navigate` to `http://localhost:5095/projects`
-   - Screenshot: `browser_take_screenshot`
-
-3. **After testing, the mock process will continue running.** To stop it:
-   - Find the process: `ps aux | grep dotnet`
-   - Stop it: `kill <pid>` or use Ctrl+C if running in foreground
+Review the output to find the ports that the development backend and frontend applications are running on, then use the Playwright MCP tools to investigate.
 
 ### Critical Shell Management Rules
 
 **NEVER use `KillShell` on a shell running `mock.sh` or any `dotnet` process.** Killing these shells can terminate your entire session and crash the agent.
 
 When cleaning up after UI testing:
+
 - Close the browser using `mcp__playwright__browser_close` - this is safe
 - Leave the mock.sh process running - it will be cleaned up when the session ends
 - Do NOT attempt to kill background shells that are running server processes
 
 If you need to restart the mock server:
+
 1. Use `pkill -f "dotnet.*mock"` to stop the dotnet process directly
 2. Start a new mock server with `./scripts/mock.sh &`

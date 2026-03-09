@@ -4,7 +4,7 @@ using Fleece.Core.Models;
 using Homespun.Features.Commands;
 using Homespun.Shared.Models.Fleece;
 
-namespace Homespun.Server.Features.Fleece.Services;
+namespace Homespun.Features.Fleece.Services;
 
 public interface IFleeceIssueDiffService
 {

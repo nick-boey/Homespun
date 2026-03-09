@@ -1,5 +1,5 @@
 # Homespun Dockerfile
-# Multi-stage build for .NET 10 Blazor WASM application (Server + Client)
+# Multi-stage build for .NET 10 application with React frontend
 # Includes: git, gh CLI, and Fleece issue tracking tools
 #
 # Environment Variables (passed at runtime via scripts/run.sh):
@@ -30,12 +30,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy solution and project files first for better layer caching
 COPY Homespun.sln ./
 COPY src/Homespun.Server/Homespun.Server.csproj src/Homespun.Server/
-COPY src/Homespun.Client/Homespun.Client.csproj src/Homespun.Client/
 COPY src/Homespun.Shared/Homespun.Shared.csproj src/Homespun.Shared/
 COPY src/Homespun.ClaudeAgentSdk/Homespun.ClaudeAgentSdk.csproj src/Homespun.ClaudeAgentSdk/
 COPY tests/Homespun.Tests/Homespun.Tests.csproj tests/Homespun.Tests/
 COPY tests/Homespun.Api.Tests/Homespun.Api.Tests.csproj tests/Homespun.Api.Tests/
-COPY tests/Homespun.E2E.Tests/Homespun.E2E.Tests.csproj tests/Homespun.E2E.Tests/
 
 # Restore dependencies
 RUN dotnet restore
@@ -48,14 +46,8 @@ ARG BUILD_CONFIGURATION=Release
 # Copy everything else
 COPY . .
 
-# Install Tailwind CSS standalone CLI for Client project build
-RUN curl -sLO https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-linux-x64 \
-    && chmod +x tailwindcss-linux-x64 \
-    && mv tailwindcss-linux-x64 src/Homespun.Client/tailwindcss
-
 # Build and publish the Server project
-# The Server references the Client project, so publishing Server automatically
-# includes the WASM client output (wwwroot/_framework/) in the publish directory
+# The server now serves only API endpoints and SignalR hubs
 RUN dotnet publish src/Homespun.Server/Homespun.Server.csproj \
     -c $BUILD_CONFIGURATION \
     /p:Version=$VERSION \

@@ -34,18 +34,46 @@ export function useEnrichedSessions() {
     return new Map(projects.map((p) => [p.id, p]))
   }, [projects])
 
-  // Get unique entity IDs
-  const entityIds = useMemo(() => {
+  // Get unique entity IDs with their project context
+  const entityQueries = useMemo(() => {
     if (!sessions) return []
-    return Array.from(new Set(sessions.map((s) => s.entityId).filter(Boolean))) as string[]
+
+    // Create a map to track unique entity+project combinations
+    const uniqueQueries = new Map<string, { entityId: string; projectId?: string }>()
+
+    sessions.forEach((session) => {
+      if (session.entityId) {
+        // For issues, we need both entityId and projectId
+        // For PRs, projectId is not needed
+        const entityType = detectEntityType(session.entityId)
+        const key =
+          entityType === 'issue' && session.projectId
+            ? `${session.entityId}:${session.projectId}`
+            : session.entityId
+
+        if (!uniqueQueries.has(key)) {
+          uniqueQueries.set(key, {
+            entityId: session.entityId,
+            projectId: entityType === 'issue' ? (session.projectId ?? undefined) : undefined,
+          })
+        }
+      }
+    })
+
+    return Array.from(uniqueQueries.values())
   }, [sessions])
 
   // Batch fetch entity info for all unique entity IDs
   const entityInfoQueries = useQueries({
-    queries: entityIds.map((entityId) => {
+    queries: entityQueries.map(({ entityId, projectId }) => {
       const entityType = detectEntityType(entityId)
+      const queryKey =
+        entityType === 'issue' && projectId
+          ? ['entity-info', entityId, projectId]
+          : ['entity-info', entityId]
+
       return {
-        queryKey: ['entity-info', entityId],
+        queryKey,
         queryFn: async () => {
           try {
             if (entityType === 'pr') {
@@ -61,6 +89,7 @@ export function useEnrichedSessions() {
             } else {
               const response = await Issues.getApiIssuesByIssueId({
                 path: { issueId: entityId },
+                query: projectId ? { projectId } : undefined,
               })
               const issue = response.data as IssueResponse
               return {
@@ -86,24 +115,38 @@ export function useEnrichedSessions() {
   // Create a map for quick entity info lookup
   const entityInfoMap = useMemo(() => {
     const map = new Map<string, { title: string; type: EntityType }>()
-    entityIds.forEach((entityId, index) => {
+    entityQueries.forEach(({ entityId, projectId }, index) => {
       const query = entityInfoQueries[index]
       if (query?.data) {
-        map.set(entityId, {
+        // For issues with projectId, use composite key, otherwise just entityId
+        const entityType = detectEntityType(entityId)
+        const key = entityType === 'issue' && projectId ? `${entityId}:${projectId}` : entityId
+        map.set(key, {
           title: query.data.title,
           type: query.data.type,
         })
       }
     })
     return map
-  }, [entityIds, entityInfoQueries])
+  }, [entityQueries, entityInfoQueries])
 
   // Enrich sessions with entity and project information
   const enrichedSessions = useMemo(() => {
     if (!sessions) return []
 
     return sessions.map((session): EnrichedSession => {
-      const entityInfo = session.entityId ? entityInfoMap.get(session.entityId) : undefined
+      let entityInfo: { title: string; type: EntityType } | undefined
+
+      if (session.entityId) {
+        const entityType = detectEntityType(session.entityId)
+        // For issues with projectId, use composite key, otherwise just entityId
+        const key =
+          entityType === 'issue' && session.projectId
+            ? `${session.entityId}:${session.projectId}`
+            : session.entityId
+        entityInfo = entityInfoMap.get(key)
+      }
+
       const project = session.projectId ? projectMap.get(session.projectId) : undefined
 
       return {

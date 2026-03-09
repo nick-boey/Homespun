@@ -86,7 +86,9 @@ describe('SessionCard', () => {
       />
     )
 
-    expect(screen.getByText('issue-123')).toBeInTheDocument()
+    // When no title is provided, entity ID appears twice: once as title fallback and once in metadata
+    const entityIdElements = screen.getAllByText('issue-123')
+    expect(entityIdElements).toHaveLength(2)
   })
 
   it('shows Plan mode correctly', () => {
@@ -248,5 +250,52 @@ describe('SessionCard', () => {
 
       rerender(<div />)
     })
+  })
+
+  it('displays entity ID in metadata section', () => {
+    render(
+      <SessionCard
+        session={mockSession}
+        entityTitle="Fix login bug"
+        entityType="issue"
+        projectName="Test Project"
+      />
+    )
+
+    // Check that entity ID is shown
+    expect(screen.getByText('issue-123')).toBeInTheDocument()
+    // Check that title is still shown as main title
+    expect(screen.getByText('Fix login bug')).toBeInTheDocument()
+  })
+
+  it('displays entity ID even when title is missing', () => {
+    render(
+      <SessionCard
+        session={mockSession}
+        entityTitle={undefined}
+        entityType="issue"
+        projectName="Test Project"
+      />
+    )
+
+    // Check that entity ID appears in both places (title fallback and metadata)
+    const entityIdElements = screen.getAllByText('issue-123')
+    expect(entityIdElements).toHaveLength(2) // One in title, one in metadata
+  })
+
+  it('displays entity ID without project name', () => {
+    render(
+      <SessionCard
+        session={mockSession}
+        entityTitle="Test Issue"
+        entityType="issue"
+        projectName={undefined}
+      />
+    )
+
+    // Check that entity ID is shown even without project
+    expect(screen.getByText('issue-123')).toBeInTheDocument()
+    // Check that bullet separator is not shown
+    expect(screen.queryByText('•')).not.toBeInTheDocument()
   })
 })

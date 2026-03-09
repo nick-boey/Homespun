@@ -17,7 +17,6 @@
     <PackageReference Include="Fleece.Core" Version="1.4.0" />
     <PackageReference Include="Markdig" Version="0.44.0" />
     <PackageReference Include="Microsoft.Agents.AI.Hosting.AGUI.AspNetCore" Version="1.0.0-preview.260219.1" />
-    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.2" />
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.1" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.1" />
     <PackageReference Include="Octokit" Version="14.0.0" />
@@ -25,7 +24,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Homespun.Client\Homespun.Client.csproj" />
     <ProjectReference Include="..\Homespun.ClaudeAgentSdk\Homespun.ClaudeAgentSdk.csproj" />
     <ProjectReference Include="..\Homespun.Shared\Homespun.Shared.csproj" />
   </ItemGroup>

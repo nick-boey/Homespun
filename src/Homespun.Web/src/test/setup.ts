@@ -26,3 +26,25 @@ class MockResizeObserver {
   disconnect() {}
 }
 window.ResizeObserver = MockResizeObserver as unknown as typeof ResizeObserver
+
+// Mock pointer capture methods for Radix UI
+Object.defineProperty(HTMLElement.prototype, 'hasPointerCapture', {
+  writable: true,
+  value: () => false,
+})
+
+Object.defineProperty(HTMLElement.prototype, 'setPointerCapture', {
+  writable: true,
+  value: () => {},
+})
+
+Object.defineProperty(HTMLElement.prototype, 'releasePointerCapture', {
+  writable: true,
+  value: () => {},
+})
+
+// Mock scrollIntoView for Radix UI Select
+Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+  writable: true,
+  value: () => {},
+})

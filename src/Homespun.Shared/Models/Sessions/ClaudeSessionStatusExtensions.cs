@@ -74,6 +74,7 @@ public static class ClaudeSessionStatusExtensions
     /// </summary>
     public static bool IsActive(this ClaudeSessionStatus status) => status is
         ClaudeSessionStatus.Starting or
+        ClaudeSessionStatus.RunningHooks or
         ClaudeSessionStatus.Running or
         ClaudeSessionStatus.WaitingForInput or
         ClaudeSessionStatus.WaitingForQuestionAnswer or

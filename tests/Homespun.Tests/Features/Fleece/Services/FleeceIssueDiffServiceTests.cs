@@ -1,6 +1,6 @@
 using NUnit.Framework;
 using Moq;
-using Homespun.Server.Features.Fleece.Services;
+using Homespun.Features.Fleece.Services;
 using Homespun.Features.Commands;
 using Homespun.Shared.Models.Fleece;
 using Microsoft.Extensions.Logging;
