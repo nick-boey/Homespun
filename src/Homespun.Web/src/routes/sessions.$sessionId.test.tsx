@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Sessions } from '@/api'
@@ -24,6 +24,7 @@ vi.mock('@tanstack/react-router', () => ({
 vi.mock('@/api', () => ({
   Sessions: {
     postApiSessionsByIdMessages: vi.fn(),
+    deleteApiSessionsById: vi.fn(),
   },
 }))
 
@@ -54,6 +55,11 @@ vi.mock('@/features/sessions', () => ({
     reject: vi.fn(),
   })),
   PlanApprovalPanel: vi.fn(() => null),
+  useEntityInfo: vi.fn(),
+  useStopSession: vi.fn(() => ({
+    mutate: vi.fn(),
+    isPending: false,
+  })),
 }))
 
 vi.mock('@/features/questions', () => ({
@@ -66,6 +72,50 @@ vi.mock('@/hooks/use-breadcrumbs', () => ({
 
 vi.mock('@/components/ui/scroll-to-bottom', () => ({
   ScrollToBottom: vi.fn(() => null),
+}))
+
+// Mock AlertDialog components
+vi.mock('@/components/ui/alert-dialog', () => ({
+  AlertDialog: ({ children, open }: { children: React.ReactNode; open: boolean }) =>
+    open ? <div data-testid="alert-dialog">{children}</div> : null,
+  AlertDialogTrigger: ({ children }: { children: React.ReactNode }) => children,
+  AlertDialogContent: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="dialog-content">{children}</div>
+  ),
+  AlertDialogHeader: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="dialog-header">{children}</div>
+  ),
+  AlertDialogFooter: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="dialog-footer">{children}</div>
+  ),
+  AlertDialogTitle: ({ children }: { children: React.ReactNode }) => (
+    <h2 data-testid="dialog-title">{children}</h2>
+  ),
+  AlertDialogDescription: ({ children }: { children: React.ReactNode }) => (
+    <p data-testid="dialog-description">{children}</p>
+  ),
+  AlertDialogCancel: ({
+    children,
+    onClick,
+  }: {
+    children: React.ReactNode
+    onClick?: () => void
+  }) => (
+    <button data-testid="dialog-cancel" onClick={onClick}>
+      {children}
+    </button>
+  ),
+  AlertDialogAction: ({
+    children,
+    onClick,
+  }: {
+    children: React.ReactNode
+    onClick?: () => void
+  }) => (
+    <button data-testid="dialog-action" onClick={onClick}>
+      {children}
+    </button>
+  ),
 }))
 
 // Import the component directly
@@ -111,9 +161,16 @@ describe('SessionChat - Message Sending', () => {
       isReconnecting: false,
     })
 
-    const { useSession, ChatInput, useSessionMessages } = vi.mocked(
+    const { useSession, ChatInput, useSessionMessages, useEntityInfo } = vi.mocked(
       await import('@/features/sessions')
     )
+
+    // Mock useEntityInfo to return a default value
+    ;(useEntityInfo as Mock).mockReturnValue({
+      data: null,
+      isLoading: false,
+      error: null,
+    })
 
     // Mock useSessionMessages to return addUserMessage
     useSessionMessages.mockReturnValue({
@@ -461,5 +518,256 @@ describe('SessionChat - Message Sending', () => {
     await waitFor(() => {
       expect(mockSessionsAPI.postApiSessionsByIdMessages).toHaveBeenCalledTimes(3)
     })
+  })
+})
+
+describe('SessionChat - Entity Title Display', () => {
+  const mockSession = {
+    id: 'test-session-id',
+    entityId: 'issue-123',
+    projectId: 'project-123',
+    workingDirectory: '/test/dir',
+    model: 'claude-3-5-sonnet',
+    mode: 'Build' as const,
+    status: 'WaitingForInput' as const,
+    createdAt: '2024-01-01T00:00:00Z',
+    lastActivityAt: '2024-01-01T00:00:00Z',
+    messages: [],
+    totalCostUsd: 0,
+    totalDurationMs: 0,
+    hasPendingPlanApproval: false,
+    contextClearMarkers: [],
+  }
+
+  beforeEach(async () => {
+    vi.clearAllMocks()
+
+    const { useSession, useEntityInfo } = vi.mocked(await import('@/features/sessions'))
+    useSession.mockReturnValue({
+      session: mockSession,
+      isLoading: false,
+      isNotFound: false,
+      error: undefined,
+      refetch: vi.fn(),
+    })
+    ;(useEntityInfo as Mock).mockReturnValue({
+      data: null,
+      isLoading: false,
+      error: null,
+    })
+  })
+
+  it('should display entity title when successfully loaded', async () => {
+    const { useEntityInfo } = vi.mocked(await import('@/features/sessions'))
+    ;(useEntityInfo as Mock).mockReturnValue({
+      data: { type: 'issue', title: 'Fix authentication bug', id: 'issue-123' },
+      isLoading: false,
+      error: null,
+    })
+
+    render(<SessionChat />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Fix authentication bug')).toBeInTheDocument()
+    })
+    expect(screen.queryByText(/Session test-session-id/)).not.toBeInTheDocument()
+  })
+
+  it('should show loading state while fetching entity title', async () => {
+    const { useEntityInfo } = vi.mocked(await import('@/features/sessions'))
+    ;(useEntityInfo as Mock).mockReturnValue({
+      data: null,
+      isLoading: true,
+      error: null,
+    })
+
+    render(<SessionChat />)
+
+    // Should show session ID as fallback during loading
+    expect(screen.getByText('Session test-ses...')).toBeInTheDocument()
+  })
+
+  it('should fallback to session ID when entity info fails to load', async () => {
+    const { useEntityInfo } = vi.mocked(await import('@/features/sessions'))
+    ;(useEntityInfo as Mock).mockReturnValue({
+      data: null,
+      isLoading: false,
+      error: new Error('Failed to fetch entity'),
+    })
+
+    render(<SessionChat />)
+
+    // Should show session ID as fallback when error
+    expect(screen.getByText('Session test-ses...')).toBeInTheDocument()
+  })
+
+  it('should display PR title correctly', async () => {
+    const prSession = { ...mockSession, entityId: 'pr-456' }
+    const { useSession, useEntityInfo } = vi.mocked(await import('@/features/sessions'))
+    useSession.mockReturnValue({
+      session: prSession,
+      isLoading: false,
+      isNotFound: false,
+      error: undefined,
+      refetch: vi.fn(),
+    })
+    ;(useEntityInfo as Mock).mockReturnValue({
+      data: { type: 'pr', title: 'Add new feature', id: 'pr-456' },
+      isLoading: false,
+      error: null,
+    })
+
+    render(<SessionChat />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Add new feature')).toBeInTheDocument()
+    })
+  })
+})
+
+describe('SessionChat - Stop Button Functionality', () => {
+  const mockSession = {
+    id: 'test-session-id',
+    entityId: 'issue-123',
+    projectId: 'project-123',
+    workingDirectory: '/test/dir',
+    model: 'claude-3-5-sonnet',
+    mode: 'Build' as const,
+    status: 'WaitingForInput' as const,
+    createdAt: '2024-01-01T00:00:00Z',
+    lastActivityAt: '2024-01-01T00:00:00Z',
+    messages: [],
+    totalCostUsd: 0,
+    totalDurationMs: 0,
+    hasPendingPlanApproval: false,
+    contextClearMarkers: [],
+  }
+
+  beforeEach(async () => {
+    vi.clearAllMocks()
+
+    const { useSession, useEntityInfo } = vi.mocked(await import('@/features/sessions'))
+    useSession.mockReturnValue({
+      session: mockSession,
+      isLoading: false,
+      isNotFound: false,
+      error: undefined,
+      refetch: vi.fn(),
+    })
+    ;(useEntityInfo as Mock).mockReturnValue({
+      data: { type: 'issue', title: 'Test Issue', id: 'issue-123' },
+      isLoading: false,
+      error: null,
+    })
+  })
+
+  it('should display stop button for active session', async () => {
+    render(<SessionChat />)
+
+    const stopButton = await screen.findByRole('button', { name: /stop/i })
+    expect(stopButton).toBeInTheDocument()
+  })
+
+  it('should not display stop button for stopped session', async () => {
+    const stoppedSession = { ...mockSession, status: 'Stopped' as const }
+    const { useSession } = vi.mocked(await import('@/features/sessions'))
+    useSession.mockReturnValue({
+      session: stoppedSession,
+      isLoading: false,
+      isNotFound: false,
+      error: undefined,
+      refetch: vi.fn(),
+    })
+
+    render(<SessionChat />)
+
+    expect(screen.queryByRole('button', { name: /stop/i })).not.toBeInTheDocument()
+  })
+
+  it('should not display stop button for error session', async () => {
+    const errorSession = { ...mockSession, status: 'Error' as const }
+    const { useSession } = vi.mocked(await import('@/features/sessions'))
+    useSession.mockReturnValue({
+      session: errorSession,
+      isLoading: false,
+      isNotFound: false,
+      error: undefined,
+      refetch: vi.fn(),
+    })
+
+    render(<SessionChat />)
+
+    expect(screen.queryByRole('button', { name: /stop/i })).not.toBeInTheDocument()
+  })
+
+  it('should show confirmation dialog when stop button clicked', async () => {
+    const user = userEvent.setup()
+    render(<SessionChat />)
+
+    const stopButton = await screen.findByRole('button', { name: /stop/i })
+    await user.click(stopButton)
+
+    expect(screen.getByTestId('alert-dialog')).toBeInTheDocument()
+    expect(screen.getByTestId('dialog-title')).toHaveTextContent('Stop Session')
+    expect(screen.getByTestId('dialog-description')).toHaveTextContent(
+      /Are you sure you want to stop this session/
+    )
+  })
+
+  it('should cancel stop when cancel button clicked in dialog', async () => {
+    const user = userEvent.setup()
+    render(<SessionChat />)
+
+    const stopButton = await screen.findByRole('button', { name: /stop/i })
+    await user.click(stopButton)
+
+    const cancelButton = screen.getByTestId('dialog-cancel')
+    await user.click(cancelButton)
+
+    expect(screen.queryByTestId('alert-dialog')).not.toBeInTheDocument()
+  })
+
+  it('should call stop mutation when confirmed', async () => {
+    const mockStopMutate = vi.fn()
+    const { useStopSession } = vi.mocked(await import('@/features/sessions'))
+    ;(useStopSession as Mock).mockReturnValue({
+      mutate: mockStopMutate,
+      isPending: false,
+    })
+
+    const user = userEvent.setup()
+    render(<SessionChat />)
+
+    const stopButton = await screen.findByRole('button', { name: /stop/i })
+    await user.click(stopButton)
+
+    const confirmButton = screen.getByTestId('dialog-action')
+    await user.click(confirmButton)
+
+    expect(mockStopMutate).toHaveBeenCalledWith('test-session-id')
+  })
+
+  it('should disable stop button while stop is pending', async () => {
+    const { useStopSession } = vi.mocked(await import('@/features/sessions'))
+    ;(useStopSession as Mock).mockReturnValue({
+      mutate: vi.fn(),
+      isPending: true,
+    })
+
+    render(<SessionChat />)
+
+    const stopButton = await screen.findByRole('button', { name: /stop/i })
+    expect(stopButton).toBeDisabled()
+  })
+
+  it('should show stop button on mobile layout', async () => {
+    // Set viewport to mobile size
+    window.innerWidth = 375
+    window.innerHeight = 667
+
+    render(<SessionChat />)
+
+    const stopButton = await screen.findByRole('button', { name: /stop/i })
+    expect(stopButton).toBeInTheDocument()
   })
 })
