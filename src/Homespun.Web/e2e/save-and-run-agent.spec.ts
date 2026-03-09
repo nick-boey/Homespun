@@ -1,14 +1,17 @@
 import { test, expect } from '@playwright/test'
 
-test.describe('Save and Run Agent', () => {
+test.describe.serial('Save and Run Agent', () => {
   test('saves issue and opens agent launcher dialog', async ({ page }) => {
     // Navigate to the issues page
     await page.goto('/projects/demo-project/issues')
 
-    // Find any Feature issue row - we'll use the first one we find
+    // Wait for the issues list to load
+    await page.waitForLoadState('networkidle')
+
+    // Find the first Feature issue row - specifically ISSUE-001 (Add dark mode support)
     const issueRow = page
       .locator('[role="row"]')
-      .filter({ has: page.locator('button:text("Feature")') })
+      .filter({ hasText: 'Add dark mode support' })
       .first()
     await expect(issueRow).toBeVisible()
 
@@ -58,10 +61,13 @@ test.describe('Save and Run Agent', () => {
     // Navigate to the issues page
     await page.goto('/projects/demo-project/issues')
 
-    // Find any Feature issue row - we'll use the first one we find
+    // Wait for the issues list to load
+    await page.waitForLoadState('networkidle')
+
+    // Find a different issue to avoid conflicts - use ISSUE-002 (Improve mobile responsiveness)
     const issueRow = page
       .locator('[role="row"]')
-      .filter({ has: page.locator('button:text("Feature")') })
+      .filter({ hasText: 'Improve mobile responsiveness' })
       .first()
     await expect(issueRow).toBeVisible()
 
@@ -92,10 +98,13 @@ test.describe('Save and Run Agent', () => {
     // Navigate to the issues page
     await page.goto('/projects/demo-project/issues')
 
-    // Find any Feature issue row - we'll use the first one we find
+    // Wait for the issues list to load
+    await page.waitForLoadState('networkidle')
+
+    // Find a Bug issue to avoid conflicts - use ISSUE-003 (Fix login timeout bug)
     const issueRow = page
       .locator('[role="row"]')
-      .filter({ has: page.locator('button:text("Feature")') })
+      .filter({ hasText: 'Fix login timeout bug' })
       .first()
     await expect(issueRow).toBeVisible()
 
@@ -126,10 +135,13 @@ test.describe('Save and Run Agent', () => {
     // Navigate to the issues page
     await page.goto('/projects/demo-project/issues')
 
-    // Find any Feature issue row - we'll use the first one we find
+    // Wait for the issues list to load
+    await page.waitForLoadState('networkidle')
+
+    // Find a different Task issue - use ISSUE-004 (Design API schema)
     const issueRow = page
       .locator('[role="row"]')
-      .filter({ has: page.locator('button:text("Feature")') })
+      .filter({ hasText: 'Design API schema' })
       .first()
     await expect(issueRow).toBeVisible()
 
@@ -140,8 +152,15 @@ test.describe('Save and Run Agent', () => {
     // Wait for navigation to edit page
     await expect(page).toHaveURL(/\/issues\/.*\/edit/)
 
+    // Wait for the form to load
+    await page.waitForLoadState('networkidle')
+
+    // Verify we're on the edit page
+    await expect(page.getByRole('heading', { name: 'Edit Issue' })).toBeVisible()
+
     // Make a change
     const descriptionTextarea = page.getByLabel('Description')
+    await expect(descriptionTextarea).toBeVisible({ timeout: 10000 })
     await descriptionTextarea.fill('Updated description for testing agent launch')
 
     // Click Save & Run Agent button
