@@ -2,6 +2,7 @@ import { vi, beforeEach, describe, it, expect, type Mock } from 'vitest';
 import { createMockQuery, setMockQueryMessages } from '../helpers/mock-sdk.js';
 import { createAssistantMessage, createResultMessage } from '../helpers/test-fixtures.js';
 import { collectAsyncGenerator } from '../helpers/async-helpers.js';
+import { isControlEvent } from '../../../src/Homespun.Worker/src/services/session-manager.js';
 
 // Mock the logger module
 vi.mock('#src/utils/logger.js', () => ({
@@ -423,9 +424,16 @@ describe('SessionManager Logging', () => {
       // Stream to trigger the control event logging
       const generator = sessionManager.stream('test-session-123');
       // Need to consume events until we get the control event
-      const { value: firstEvent } = await generator.next();
+      let foundControlEvent = false;
+      for await (const event of generator) {
+        if (isControlEvent(event) && event.type === 'question_pending') {
+          foundControlEvent = true;
+          break;
+        }
+      }
 
       // Assert
+      expect(foundControlEvent).toBe(true);
       expect(debug).toHaveBeenCalledWith(
         expect.stringContaining('Control event details: 2 questions pending')
       );
@@ -461,9 +469,16 @@ describe('SessionManager Logging', () => {
       // Stream to trigger the control event logging
       const generator = sessionManager.stream('test-session-123');
       // Need to consume events until we get the control event
-      const { value: firstEvent } = await generator.next();
+      let foundControlEvent = false;
+      for await (const event of generator) {
+        if (isControlEvent(event) && event.type === 'plan_pending') {
+          foundControlEvent = true;
+          break;
+        }
+      }
 
       // Assert
+      expect(foundControlEvent).toBe(true);
       expect(debug).toHaveBeenCalledWith(
         expect.stringContaining('Control event details: plan approval pending')
       );
