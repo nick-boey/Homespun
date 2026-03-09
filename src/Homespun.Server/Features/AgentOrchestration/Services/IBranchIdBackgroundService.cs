@@ -1,4 +1,4 @@
-namespace Homespun.Server.Features.AgentOrchestration.Services;
+namespace Homespun.Features.AgentOrchestration.Services;
 
 /// <summary>
 /// Service for handling asynchronous branch ID generation in the background.

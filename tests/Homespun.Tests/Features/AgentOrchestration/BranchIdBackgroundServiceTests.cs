@@ -1,9 +1,8 @@
 using Fleece.Core.Models;
 using Homespun.Features.AgentOrchestration.Services;
-using Homespun.Server.Features.AgentOrchestration.Services;
-using Homespun.Server.Features.Fleece.Services;
-using Homespun.Server.Features.Projects;
-using Homespun.Server.Features.Projects.Data;
+using Homespun.Features.Fleece.Services;
+using Homespun.Features.Projects;
+using Homespun.Shared.Models.Projects;
 using Homespun.Shared.Hubs;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
@@ -21,9 +20,9 @@ public class BranchIdBackgroundServiceTests
     private Mock<IBranchIdGeneratorService> _mockBranchIdGenerator = null!;
     private Mock<IFleeceService> _mockFleeceService = null!;
     private Mock<IProjectService> _mockProjectService = null!;
-    private Mock<IHubContext<NotificationHub, INotificationHubClient>> _mockHubContext = null!;
-    private Mock<IClientProxy> _mockClients = null!;
-    private Mock<INotificationHubClient> _mockClientProxy = null!;
+    private Mock<IHubContext<NotificationHub>> _mockHubContext = null!;
+    private Mock<IHubClients> _mockHubClients = null!;
+    private Mock<IClientProxy> _mockClientProxy = null!;
     private Mock<ILogger<BranchIdBackgroundService>> _mockLogger = null!;
     private BranchIdBackgroundService _service = null!;
 
@@ -36,9 +35,9 @@ public class BranchIdBackgroundServiceTests
         _mockBranchIdGenerator = new Mock<IBranchIdGeneratorService>();
         _mockFleeceService = new Mock<IFleeceService>();
         _mockProjectService = new Mock<IProjectService>();
-        _mockHubContext = new Mock<IHubContext<NotificationHub, INotificationHubClient>>();
-        _mockClients = new Mock<IClientProxy>();
-        _mockClientProxy = new Mock<INotificationHubClient>();
+        _mockHubContext = new Mock<IHubContext<NotificationHub>>();
+        _mockHubClients = new Mock<IHubClients>();
+        _mockClientProxy = new Mock<IClientProxy>();
         _mockLogger = new Mock<ILogger<BranchIdBackgroundService>>();
 
         // Setup service scope
@@ -49,7 +48,7 @@ public class BranchIdBackgroundServiceTests
             .Returns(_mockFleeceService.Object);
         scopedServiceProvider.Setup(x => x.GetService(typeof(IProjectService)))
             .Returns(_mockProjectService.Object);
-        scopedServiceProvider.Setup(x => x.GetService(typeof(IHubContext<NotificationHub, INotificationHubClient>)))
+        scopedServiceProvider.Setup(x => x.GetService(typeof(IHubContext<NotificationHub>)))
             .Returns(_mockHubContext.Object);
 
         _mockServiceScope.Setup(x => x.ServiceProvider).Returns(scopedServiceProvider.Object);
@@ -58,8 +57,8 @@ public class BranchIdBackgroundServiceTests
             .Returns(_mockServiceScopeFactory.Object);
 
         // Setup hub context
-        _mockHubContext.Setup(x => x.Clients).Returns(_mockClients.Object);
-        _mockClients.Setup(x => x.All).Returns(_mockClientProxy.Object);
+        _mockHubContext.Setup(x => x.Clients).Returns(_mockHubClients.Object);
+        _mockHubClients.Setup(x => x.All).Returns(_mockClientProxy.Object);
 
         _service = new BranchIdBackgroundService(_mockServiceProvider.Object, _mockLogger.Object);
     }
@@ -75,9 +74,9 @@ public class BranchIdBackgroundServiceTests
         var title = "Fix authentication bug";
         var generatedBranchId = "fix-auth-bug";
 
-        var project = new Project { Id = projectId, LocalPath = "/path" };
-        var issue = new Issue { Id = issueId, Title = title, WorkingBranchId = null };
-        var updatedIssue = new Issue { Id = issueId, Title = title, WorkingBranchId = generatedBranchId };
+        var project = new Project { Id = projectId, Name = "Test Project", LocalPath = "/path", DefaultBranch = "main" };
+        var issue = new Issue { Id = issueId, Title = title, WorkingBranchId = null, Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTime.UtcNow };
+        var updatedIssue = new Issue { Id = issueId, Title = title, WorkingBranchId = generatedBranchId, Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTime.UtcNow };
 
         _mockBranchIdGenerator.Setup(x => x.GenerateAsync(title, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new BranchIdResult(true, generatedBranchId, null, true));
@@ -85,7 +84,7 @@ public class BranchIdBackgroundServiceTests
         _mockProjectService.Setup(x => x.GetByIdAsync(projectId))
             .ReturnsAsync(project);
 
-        _mockFleeceService.Setup(x => x.GetIssueByIdAsync("/path", issueId, It.IsAny<CancellationToken>()))
+        _mockFleeceService.Setup(x => x.GetIssueAsync("/path", issueId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(issue);
 
         _mockFleeceService.Setup(x => x.UpdateIssueAsync(
@@ -102,7 +101,13 @@ public class BranchIdBackgroundServiceTests
         _mockBranchIdGenerator.Verify(x => x.GenerateAsync(title, It.IsAny<CancellationToken>()), Times.Once);
         _mockFleeceService.Verify(x => x.UpdateIssueAsync(
             "/path", issueId, null, null, null, null, null, null, generatedBranchId, It.IsAny<CancellationToken>()), Times.Once);
-        _mockClientProxy.Verify(x => x.BranchIdGenerated(issueId, projectId, generatedBranchId, true), Times.Once);
+        _mockClientProxy.Verify(x => x.SendCoreAsync("BranchIdGenerated",
+            It.Is<object[]>(args => args.Length == 4 &&
+                args[0].Equals(issueId) &&
+                args[1].Equals(projectId) &&
+                args[2].Equals(generatedBranchId) &&
+                args[3].Equals(true)),
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Test]
@@ -130,7 +135,12 @@ public class BranchIdBackgroundServiceTests
             It.IsAny<IssueStatus?>(), It.IsAny<IssueType?>(), It.IsAny<string>(),
             It.IsAny<int?>(), It.IsAny<ExecutionMode?>(), It.IsAny<string>(),
             It.IsAny<CancellationToken>()), Times.Never);
-        _mockClientProxy.Verify(x => x.BranchIdGenerationFailed(issueId, projectId, errorMessage), Times.Once);
+        _mockClientProxy.Verify(x => x.SendCoreAsync("BranchIdGenerationFailed",
+            It.Is<object[]>(args => args.Length == 3 &&
+                args[0].Equals(issueId) &&
+                args[1].Equals(projectId) &&
+                args[2].Equals(errorMessage)),
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Test]
@@ -142,8 +152,8 @@ public class BranchIdBackgroundServiceTests
         var title = "Fix authentication bug";
         var existingBranchId = "existing-branch";
 
-        var project = new Project { Id = projectId, LocalPath = "/path" };
-        var issue = new Issue { Id = issueId, Title = title, WorkingBranchId = existingBranchId };
+        var project = new Project { Id = projectId, Name = "Test Project", LocalPath = "/path", DefaultBranch = "main" };
+        var issue = new Issue { Id = issueId, Title = title, WorkingBranchId = existingBranchId, Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTime.UtcNow };
 
         _mockBranchIdGenerator.Setup(x => x.GenerateAsync(title, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new BranchIdResult(true, "new-branch", null, true));
@@ -151,7 +161,7 @@ public class BranchIdBackgroundServiceTests
         _mockProjectService.Setup(x => x.GetByIdAsync(projectId))
             .ReturnsAsync(project);
 
-        _mockFleeceService.Setup(x => x.GetIssueByIdAsync("/path", issueId, It.IsAny<CancellationToken>()))
+        _mockFleeceService.Setup(x => x.GetIssueAsync("/path", issueId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(issue);
 
         // Act
@@ -167,8 +177,12 @@ public class BranchIdBackgroundServiceTests
             It.IsAny<IssueStatus?>(), It.IsAny<IssueType?>(), It.IsAny<string>(),
             It.IsAny<int?>(), It.IsAny<ExecutionMode?>(), It.IsAny<string>(),
             It.IsAny<CancellationToken>()), Times.Never);
-        _mockClientProxy.Verify(x => x.BranchIdGenerated(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>()), Times.Never);
-        _mockClientProxy.Verify(x => x.BranchIdGenerationFailed(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+        _mockClientProxy.Verify(x => x.SendCoreAsync("BranchIdGenerated",
+            It.IsAny<object[]>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+        _mockClientProxy.Verify(x => x.SendCoreAsync("BranchIdGenerationFailed",
+            It.IsAny<object[]>(),
+            It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Test]
@@ -192,14 +206,18 @@ public class BranchIdBackgroundServiceTests
         await Task.Delay(100);
 
         // Assert
-        _mockFleeceService.Verify(x => x.GetIssueByIdAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        _mockFleeceService.Verify(x => x.GetIssueAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
         _mockFleeceService.Verify(x => x.UpdateIssueAsync(
             It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
             It.IsAny<IssueStatus?>(), It.IsAny<IssueType?>(), It.IsAny<string>(),
             It.IsAny<int?>(), It.IsAny<ExecutionMode?>(), It.IsAny<string>(),
             It.IsAny<CancellationToken>()), Times.Never);
-        _mockClientProxy.Verify(x => x.BranchIdGenerated(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>()), Times.Never);
-        _mockClientProxy.Verify(x => x.BranchIdGenerationFailed(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+        _mockClientProxy.Verify(x => x.SendCoreAsync("BranchIdGenerated",
+            It.IsAny<object[]>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+        _mockClientProxy.Verify(x => x.SendCoreAsync("BranchIdGenerationFailed",
+            It.IsAny<object[]>(),
+            It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Test]
@@ -225,7 +243,12 @@ public class BranchIdBackgroundServiceTests
         await Task.Delay(TimeSpan.FromSeconds(11));
 
         // Assert
-        _mockClientProxy.Verify(x => x.BranchIdGenerationFailed(issueId, projectId, "Generation timed out"), Times.Once);
+        _mockClientProxy.Verify(x => x.SendCoreAsync("BranchIdGenerationFailed",
+            It.Is<object[]>(args => args.Length == 3 &&
+                args[0].Equals(issueId) &&
+                args[1].Equals(projectId) &&
+                args[2].Equals("Generation timed out")),
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Test]

@@ -2,7 +2,6 @@ using Homespun.Features.AgentOrchestration.Services;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Containers.Services;
 using Homespun.Features.Fleece.Services;
-using Homespun.Server.Features.Fleece.Services;
 using Homespun.Features.Gitgraph.Services;
 using Homespun.Features.GitHub;
 using Homespun.Features.Projects;

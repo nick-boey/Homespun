@@ -4,7 +4,7 @@ using Homespun.Features.Fleece.Services;
 using Homespun.Features.Git;
 using Homespun.Features.Notifications;
 using Homespun.Features.Projects;
-using Homespun.Server.Features.AgentOrchestration.Services;
+using Homespun.Features.AgentOrchestration.Services;
 using Homespun.Shared.Models.Fleece;
 using Homespun.Shared.Models.PullRequests;
 using Homespun.Shared.Models.Sessions;
