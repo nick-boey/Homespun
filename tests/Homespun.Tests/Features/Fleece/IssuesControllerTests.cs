@@ -181,10 +181,13 @@ public class IssuesControllerTests
             .Setup(x => x.GetByIdAsync(TestProject.Id))
             .ReturnsAsync(TestProject);
         _fleeceServiceMock
+            .Setup(x => x.GetIssueAsync(It.IsAny<string>(), issueId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CreateTestIssue(issueId, "Original Issue", IssueType.Bug));
+        _fleeceServiceMock
             .Setup(x => x.UpdateIssueAsync(
                 It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(),
                 It.IsAny<IssueStatus?>(), It.IsAny<IssueType?>(), It.IsAny<string?>(),
-                It.IsAny<int?>(), It.IsAny<ExecutionMode?>(), It.IsAny<string?>()))
+                It.IsAny<int?>(), It.IsAny<ExecutionMode?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(issue);
 
         var request = new UpdateIssueRequest { ProjectId = TestProject.Id, Title = "Updated Issue" };

@@ -1,5 +1,4 @@
 using Homespun.Features.AgentOrchestration.Services;
-using Homespun.Server.Features.AgentOrchestration.Services;
 using Homespun.Features.ClaudeCode.Hubs;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Commands;
