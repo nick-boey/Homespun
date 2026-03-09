@@ -162,7 +162,7 @@ describe('SessionChat - Message Sending', () => {
     await waitFor(() => {
       expect(mockSessionsAPI.postApiSessionsByIdMessages).toHaveBeenCalledWith({
         path: { id: 'test-session-id' },
-        body: { message: 'Test message', mode: 0 },
+        body: { message: 'Test message', mode: 1 }, // Build mode = 1
       })
     })
 
@@ -271,21 +271,35 @@ describe('SessionChat - Message Sending', () => {
     })
   })
 
-  it('should send messages with Plan mode correctly', async () => {
-    // This test was checking for Plan mode, but the current mock always sends Build mode
-    // Since the API is working correctly, we'll rename this to reflect what it actually tests
+  it('should send Plan mode as 0', async () => {
     const user = userEvent.setup()
     mockSessionsAPI.postApiSessionsByIdMessages = vi.fn().mockResolvedValueOnce({
       data: {},
       error: undefined,
     })
 
+    // Mock ChatInput to send Plan mode
+    const { ChatInput } = vi.mocked(await import('@/features/sessions'))
+    ChatInput.mockImplementation(({ onSend, disabled, placeholder, isLoading }) => (
+      <div data-testid="chat-input">
+        <button
+          data-testid="send-button"
+          onClick={() => onSend('Test message', 'Plan', 'opus')}
+          disabled={disabled || isLoading}
+        >
+          Send
+        </button>
+        <span data-testid="placeholder">{placeholder}</span>
+        {isLoading && <span data-testid="loading">Loading...</span>}
+      </div>
+    ))
+
     render(<SessionChat />)
 
     const sendButton = screen.getByTestId('send-button')
     await user.click(sendButton)
 
-    // Verify it was called
+    // Verify API was called with Plan mode as 0
     await waitFor(() => {
       expect(mockSessionsAPI.postApiSessionsByIdMessages).toHaveBeenCalledWith({
         path: { id: 'test-session-id' },
@@ -293,7 +307,45 @@ describe('SessionChat - Message Sending', () => {
       })
     })
 
-    // Verify no error was shown
+    expect(mockToast.error).not.toHaveBeenCalled()
+  })
+
+  it('should send Build mode as 1', async () => {
+    const user = userEvent.setup()
+    mockSessionsAPI.postApiSessionsByIdMessages = vi.fn().mockResolvedValueOnce({
+      data: {},
+      error: undefined,
+    })
+
+    // Mock ChatInput to send Build mode
+    const { ChatInput } = vi.mocked(await import('@/features/sessions'))
+    ChatInput.mockImplementation(({ onSend, disabled, placeholder, isLoading }) => (
+      <div data-testid="chat-input">
+        <button
+          data-testid="send-button"
+          onClick={() => onSend('Test message', 'Build', 'opus')}
+          disabled={disabled || isLoading}
+        >
+          Send
+        </button>
+        <span data-testid="placeholder">{placeholder}</span>
+        {isLoading && <span data-testid="loading">Loading...</span>}
+      </div>
+    ))
+
+    render(<SessionChat />)
+
+    const sendButton = screen.getByTestId('send-button')
+    await user.click(sendButton)
+
+    // Verify API was called with Build mode as 1
+    await waitFor(() => {
+      expect(mockSessionsAPI.postApiSessionsByIdMessages).toHaveBeenCalledWith({
+        path: { id: 'test-session-id' },
+        body: { message: 'Test message', mode: 1 },
+      })
+    })
+
     expect(mockToast.error).not.toHaveBeenCalled()
   })
 
@@ -363,7 +415,7 @@ describe('SessionChat - Message Sending', () => {
     await waitFor(() => {
       expect(mockSessionsAPI.postApiSessionsByIdMessages).toHaveBeenCalledWith({
         path: { id: 'test-session-id' },
-        body: { message: 'Test message', mode: 0 },
+        body: { message: 'Test message', mode: 1 }, // Build mode = 1
       })
     })
   })

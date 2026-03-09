@@ -3,6 +3,7 @@ import { useEffect, useRef, useCallback, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useBreadcrumbSetter } from '@/hooks/use-breadcrumbs'
+import { toApiSessionMode } from '@/lib/utils/session-mode'
 import {
   useSession,
   useSessionMessages,
@@ -16,7 +17,7 @@ import { useAnswerQuestion } from '@/features/questions'
 import { useClaudeCodeHub } from '@/providers/signalr-provider'
 import { ArrowLeft, AlertCircle, RefreshCw } from 'lucide-react'
 import { ScrollToBottom } from '@/components/ui/scroll-to-bottom'
-import { Sessions, SessionMode as ApiSessionMode } from '@/api'
+import { Sessions } from '@/api'
 import { toast } from 'sonner'
 import type { ModelSelection } from '@/stores/chat-input-store'
 import type { SessionMode } from '@/types/signalr'
@@ -76,7 +77,7 @@ function SessionChat() {
 
       try {
         // Map our string SessionMode to API's numeric enum
-        const apiMode: ApiSessionMode = sessionMode === 'Plan' ? 1 : 0
+        const apiMode = toApiSessionMode(sessionMode)
 
         await Sessions.postApiSessionsByIdMessages({
           path: { id: sessionId },

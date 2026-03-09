@@ -84,10 +84,25 @@ export function useSession(sessionId: string): UseSessionResult {
       }
     }
 
+    const handleSessionModeModelChanged = (
+      updatedSessionId: string,
+      mode: ClaudeSession['mode'],
+      model: string
+    ) => {
+      if (updatedSessionId === sessionId) {
+        setSession((prevSession) => {
+          if (!prevSession || prevSession.id !== sessionId) return prevSession
+          return { ...prevSession, mode, model }
+        })
+      }
+    }
+
     connection.on('SessionState', handleSessionState)
+    connection.on('SessionModeModelChanged', handleSessionModeModelChanged)
 
     return () => {
       connection.off('SessionState', handleSessionState)
+      connection.off('SessionModeModelChanged', handleSessionModeModelChanged)
     }
   }, [connection, sessionId])
 
