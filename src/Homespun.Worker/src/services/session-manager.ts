@@ -7,6 +7,8 @@ import {
 import type { SessionInfo, AskUserQuestionInput, ExitPlanModeInput, UserQuestion, ApprovePlanRequest, LastMessageType } from '../types/index.js';
 import { randomUUID } from 'node:crypto';
 import { info, error, warn, debug } from '../utils/logger.js';
+import { captureDebugInfo, FileMonitor, type DebugInfo } from '../utils/diagnostics.js';
+import { watch, existsSync } from 'node:fs';
 
 export type SdkPermissionMode = 'default' | 'acceptEdits' | 'plan' | 'bypassPermissions';
 
@@ -274,7 +276,11 @@ export class SessionManager {
   }): Promise<WorkerSession> {
     const id = randomUUID();
     const isPlan = opts.mode.toLowerCase() === 'plan';
-    info(`mode='${opts.mode}', isPlan=${isPlan}, model='${opts.model}'`);
+    const startTime = Date.now();
+
+    // Log comprehensive session creation details
+    info(`Creating session ${id} - mode='${opts.mode}', isPlan=${isPlan}, model='${opts.model}', workingDirectory='${opts.workingDirectory || process.env.WORKING_DIRECTORY || '/workdir'}', systemPromptLength=${opts.systemPrompt?.length || 0}, resumeSessionId='${opts.resumeSessionId}'`);
+
     const common = buildCommonOptions(opts.model, opts.systemPrompt, opts.workingDirectory);
 
     const inputController = new InputController();
@@ -300,7 +306,7 @@ export class SessionManager {
       sessionOptions.resume = opts.resumeSessionId;
     }
 
-    info(`attempting permissionMode='${sessionOptions.permissionMode}', allowDangerouslySkipPermissions=${sessionOptions.allowDangerouslySkipPermissions}`);
+    info(`Session configuration: permissionMode='${sessionOptions.permissionMode}', allowDangerouslySkipPermissions=${sessionOptions.allowDangerouslySkipPermissions}, sessionId='${id}', allowedTools=${isPlan ? 'PLAN_MODE_TOOLS' : 'all'}, hasCanUseTool=true, hasResume=${!!opts.resumeSessionId}`);
 
     // Create async generator that yields the initial message and subsequent messages
     async function* createInputStream(initialPrompt: string, controller: InputController): AsyncGenerator<SDKUserMessage> {
@@ -348,6 +354,22 @@ export class SessionManager {
     // Log initial status transition
     this.logStatusChange(workerSession, 'streaming', 'session_created');
 
+    // Setup debug log monitoring
+    let debugLogWatcher: any;
+    const debugLogPath = '/home/homespun/.claude/debug/claude_sdk_debug.log';
+    const debugMonitor = new FileMonitor(debugLogPath);
+
+    if (existsSync(debugLogPath)) {
+      debugLogWatcher = watch(debugLogPath, { persistent: false }, async (eventType) => {
+        if (eventType === 'change') {
+          const newLines = await debugMonitor.readNewLines();
+          newLines.forEach(line => {
+            info(`[SDK Debug] ${line} (sessionId: ${id})`);
+          });
+        }
+      });
+    }
+
     // Background task: forward SDK query messages to the output channel
     (async () => {
       try {
@@ -357,27 +379,59 @@ export class SessionManager {
           outputChannel.push(msg);
           messageCount++;
         }
-        info(`Query processing completed (sessionId: ${id}, messageCount: ${messageCount})`);
+        const duration = Date.now() - startTime;
+        info(`Query processing completed (sessionId: ${id}, messageCount: ${messageCount}, duration: ${duration}ms)`);
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        error(`query forwarder error for session '${id}'`, err);
-        // Push a synthetic error result so the SSE stream reports the failure
-        // instead of ending silently
+        const duration = Date.now() - startTime;
+        const errorDetails = {
+          message: err instanceof Error ? err.message : String(err),
+          stack: err instanceof Error ? err.stack : undefined,
+          type: err?.constructor?.name || 'Unknown',
+          sessionId: id,
+          sessionOptions: {
+            mode: opts.mode,
+            model: opts.model,
+            permissionMode: sessionOptions.permissionMode,
+            workingDirectory: sessionOptions.cwd,
+          },
+          timestamp: new Date().toISOString(),
+          duration,
+        };
+
+        error(`query forwarder error for session '${id}' - ${JSON.stringify(errorDetails)}`);
+
+        // Capture debug information
+        const debugInfo = await captureDebugInfo(this.sessions.size);
+
+        // Push a synthetic error result with enhanced debug information
         outputChannel.push({
           type: 'result',
           subtype: 'error_during_execution',
           session_id: id,
           is_error: true,
-          duration_ms: 0,
+          duration_ms: duration,
           duration_api_ms: 0,
           num_turns: 0,
           total_cost_usd: 0,
           usage: { input_tokens: 0, output_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 },
-          result: message,
-          errors: [message],
+          result: errorDetails.message,
+          errors: [errorDetails.message],
+          debug: {
+            stack: errorDetails.stack,
+            errorType: errorDetails.type,
+            lastStderr: debugInfo.lastStderr.slice(-10), // Last 10 lines for the result
+            diagnostics: {
+              memory: debugInfo.diagnostics.memory,
+              uptime: debugInfo.diagnostics.uptime,
+              sessionCount: debugInfo.sessionCount,
+            },
+            sessionOptions: errorDetails.sessionOptions,
+          },
         } as unknown as SDKMessage);
       } finally {
         outputChannel.complete();
+        // Cleanup debug log watcher
+        debugLogWatcher?.close();
       }
     })();
 
