@@ -389,7 +389,7 @@ describe('SessionManager Logging', () => {
         expect.stringContaining('Query processing started (sessionId: test-session-123)')
       );
       expect(info).toHaveBeenCalledWith(
-        expect.stringContaining('Query processing completed (sessionId: test-session-123, messageCount: 3)')
+        expect.stringContaining('Query processing completed (sessionId: test-session-123, messageCount: 3,')
       );
     });
   });

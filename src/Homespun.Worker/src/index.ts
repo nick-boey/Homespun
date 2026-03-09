@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { serve } from '@hono/node-server';
-import health from './routes/health.js';
+import { createHealthRoute } from './routes/health.js';
 import { createInfoRoute } from './routes/info.js';
 import { createSessionsRoute } from './routes/sessions.js';
 import { createMiniPromptRoute } from './routes/mini-prompt.js';
@@ -14,7 +14,7 @@ const sessionManager = new SessionManager();
 
 // Mount all routes under /api
 const api = new Hono();
-api.route('/health', health);
+api.route('/health', createHealthRoute(sessionManager));
 api.route('/info', createInfoRoute(sessionManager));
 api.route('/sessions', createSessionsRoute(sessionManager));
 api.route('/mini-prompt', createMiniPromptRoute());
