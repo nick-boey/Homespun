@@ -189,7 +189,7 @@ test.describe.serial('Save and Run Agent', () => {
     // Dialog should close after launching
     await expect(agentDialog).not.toBeVisible()
 
-    // Should navigate to the agent chat page
-    await expect(page).toHaveURL(/\/agents\//)
+    // Should stay on the edit page (no navigation happens when starting with a prompt)
+    await expect(page).toHaveURL(/\/issues\/.*\/edit/)
   })
 })
