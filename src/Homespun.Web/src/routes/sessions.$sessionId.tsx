@@ -12,15 +12,27 @@ import {
   usePlanApproval,
   useApprovePlan,
   PlanApprovalPanel,
+  useEntityInfo,
+  useStopSession,
 } from '@/features/sessions'
 import { useAnswerQuestion } from '@/features/questions'
 import { useClaudeCodeHub } from '@/providers/signalr-provider'
-import { ArrowLeft, AlertCircle, RefreshCw } from 'lucide-react'
+import { ArrowLeft, AlertCircle, RefreshCw, StopCircle } from 'lucide-react'
 import { ScrollToBottom } from '@/components/ui/scroll-to-bottom'
 import { Sessions } from '@/api'
 import { toast } from 'sonner'
 import type { ModelSelection } from '@/stores/chat-input-store'
 import type { SessionMode } from '@/types/signalr'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 
 export const Route = createFileRoute('/sessions/$sessionId')({
   component: SessionChat,
@@ -33,6 +45,13 @@ function SessionChat() {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [isSending, setIsSending] = useState(false)
   const [isProcessingAnswer, setIsProcessingAnswer] = useState(false)
+  const [showStopDialog, setShowStopDialog] = useState(false)
+
+  // Fetch entity info
+  const { data: entityInfo } = useEntityInfo(session?.entityId, session?.projectId)
+
+  // Stop session mutation
+  const stopSession = useStopSession()
 
   // Get session messages with real-time updates
   const { messages, addUserMessage } = useSessionMessages({
@@ -96,6 +115,20 @@ function SessionChat() {
     [isConnected, sessionId, addUserMessage]
   )
 
+  // Handle stop session
+  const handleStop = useCallback(() => {
+    setShowStopDialog(true)
+  }, [])
+
+  const confirmStop = useCallback(() => {
+    stopSession.mutate(sessionId)
+    setShowStopDialog(false)
+  }, [stopSession, sessionId])
+
+  const cancelStop = useCallback(() => {
+    setShowStopDialog(false)
+  }, [])
+
   // Auto-scroll to bottom when new messages arrive or when pending question appears
   useEffect(() => {
     if (scrollContainerRef.current) {
@@ -117,16 +150,19 @@ function SessionChat() {
   useBreadcrumbSetter(
     [
       { title: 'Sessions', url: '/sessions' },
-      { title: session ? `Session ${sessionId.slice(0, 8)}...` : 'Loading...' },
+      {
+        title:
+          entityInfo?.title || (session ? `Session ${sessionId.slice(0, 8)}...` : 'Loading...'),
+      },
     ],
-    [sessionId, session]
+    [sessionId, session, entityInfo]
   )
 
   // Loading state
   if (isLoading) {
     return (
       <div className="flex h-full flex-col space-y-4">
-        <SessionHeader sessionId={sessionId} />
+        <SessionHeader sessionId={sessionId} session={null} />
         <div className="flex flex-1 flex-col gap-4 overflow-hidden rounded-lg border p-4">
           <div className="flex justify-end">
             <Skeleton className="h-12 w-48 rounded-lg" />
@@ -146,7 +182,7 @@ function SessionChat() {
   if (isNotFound) {
     return (
       <div className="flex h-full flex-col space-y-4">
-        <SessionHeader sessionId={sessionId} />
+        <SessionHeader sessionId={sessionId} session={null} />
         <div className="border-border flex flex-1 flex-col items-center justify-center rounded-lg border p-8">
           <AlertCircle className="text-muted-foreground mb-4 h-12 w-12" />
           <h2 className="mb-2 text-lg font-semibold">Session not found</h2>
@@ -165,7 +201,7 @@ function SessionChat() {
   if (error) {
     return (
       <div className="flex h-full flex-col space-y-4">
-        <SessionHeader sessionId={sessionId} />
+        <SessionHeader sessionId={sessionId} session={null} />
         <div className="border-border flex flex-1 flex-col items-center justify-center rounded-lg border p-8">
           <AlertCircle className="text-destructive mb-4 h-12 w-12" />
           <h2 className="mb-2 text-lg font-semibold">Error loading session</h2>
@@ -181,7 +217,13 @@ function SessionChat() {
 
   return (
     <div className="flex h-full flex-col">
-      <SessionHeader sessionId={sessionId} session={session} />
+      <SessionHeader
+        sessionId={sessionId}
+        session={session}
+        entityTitle={entityInfo?.title}
+        onStop={handleStop}
+        isStopPending={stopSession.isPending}
+      />
       {/* Messages area - flex-1 takes remaining space */}
       <div className="relative mt-4 min-h-0 flex-1">
         <div
@@ -224,6 +266,22 @@ function SessionChat() {
           }
         />
       </div>
+
+      {/* Stop confirmation dialog */}
+      <AlertDialog open={showStopDialog} onOpenChange={setShowStopDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Stop Session</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to stop this session? This will terminate the running agent.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={cancelStop}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmStop}>Stop</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
@@ -231,13 +289,29 @@ function SessionChat() {
 interface SessionHeaderProps {
   sessionId: string
   session?: {
+    id: string
+    entityId: string
+    projectId: string
     mode: string
     status: string
     model: string
   } | null
+  entityTitle?: string
+  onStop?: () => void
+  isStopPending?: boolean
 }
 
-function SessionHeader({ sessionId, session }: SessionHeaderProps) {
+function SessionHeader({
+  sessionId,
+  session,
+  entityTitle,
+  onStop,
+  isStopPending,
+}: SessionHeaderProps) {
+  // Determine if stop button should be shown
+  const showStopButton =
+    session && session.status !== 'Stopped' && session.status !== 'Error' && onStop
+
   return (
     <div className="flex items-center justify-between gap-2">
       <div className="flex min-w-0 items-center gap-2 md:gap-4">
@@ -249,7 +323,7 @@ function SessionHeader({ sessionId, session }: SessionHeaderProps) {
         </Button>
         <div className="min-w-0">
           <h1 className="truncate text-lg font-semibold md:text-2xl">
-            Session {sessionId.slice(0, 8)}...
+            {entityTitle || `Session ${sessionId.slice(0, 8)}...`}
           </h1>
           {session && (
             <div className="text-muted-foreground flex flex-wrap items-center gap-1 text-xs md:gap-2 md:text-sm">
@@ -262,6 +336,18 @@ function SessionHeader({ sessionId, session }: SessionHeaderProps) {
           )}
         </div>
       </div>
+      {showStopButton && (
+        <Button
+          variant="destructive"
+          size="sm"
+          onClick={onStop}
+          disabled={isStopPending}
+          className="h-8"
+        >
+          <StopCircle className="mr-2 h-4 w-4" />
+          Stop
+        </Button>
+      )}
     </div>
   )
 }
