@@ -6,7 +6,7 @@ import {
 } from '@anthropic-ai/claude-agent-sdk';
 import type { SessionInfo, AskUserQuestionInput, ExitPlanModeInput, UserQuestion, ApprovePlanRequest, LastMessageType } from '../types/index.js';
 import { randomUUID } from 'node:crypto';
-import { info, error } from '../utils/logger.js';
+import { info, error, warn, debug } from '../utils/logger.js';
 
 export type SdkPermissionMode = 'default' | 'acceptEdits' | 'plan' | 'bypassPermissions';
 
@@ -254,6 +254,16 @@ export class SessionManager {
   private pendingQuestions = new Map<string, PendingQuestionState>();
   private pendingPlanApprovals = new Map<string, PendingPlanApprovalState>();
 
+  /**
+   * Helper method to log status changes with consistent format.
+   * Updates the session status and logs the transition.
+   */
+  private logStatusChange(session: WorkerSession, newStatus: 'idle' | 'streaming' | 'closed', reason: string): void {
+    const previousStatus = session.status;
+    session.status = newStatus;
+    info(`Session status changed: ${previousStatus} → ${newStatus} (sessionId: ${session.id}, reason: ${reason})`);
+  }
+
   async create(opts: {
     prompt: string;
     model: string;
@@ -327,7 +337,7 @@ export class SessionManager {
       mode: opts.mode,
       model: opts.model,
       permissionMode: isPlan ? 'plan' : 'bypassPermissions',
-      status: 'streaming',
+      status: 'idle', // Initialize as idle, will change to streaming below
       createdAt: new Date(),
       lastActivityAt: new Date(),
     };
@@ -335,12 +345,19 @@ export class SessionManager {
     this.sessions.set(id, workerSession);
     info(`session created, workerSessionId='${id}'`);
 
+    // Log initial status transition
+    this.logStatusChange(workerSession, 'streaming', 'session_created');
+
     // Background task: forward SDK query messages to the output channel
     (async () => {
       try {
+        info(`Query processing started (sessionId: ${id})`);
+        let messageCount = 0;
         for await (const msg of q) {
           outputChannel.push(msg);
+          messageCount++;
         }
+        info(`Query processing completed (sessionId: ${id}, messageCount: ${messageCount})`);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         error(`query forwarder error for session '${id}'`, err);
@@ -384,6 +401,7 @@ export class SessionManager {
 
         // Create promise that will be resolved when /answer endpoint is called
         const answersPromise = new Promise<Record<string, string>>((resolve, reject) => {
+          info(`Session entering pending question state (sessionId: ${sessionId}, questionCount: ${questionInput.questions.length})`);
           this.pendingQuestions.set(sessionId, {
             questions: questionInput.questions,
             resolve,
@@ -406,6 +424,12 @@ export class SessionManager {
 
         info(`received answers for session '${sessionId}'`);
 
+        // Log resuming status
+        const session = this.sessions.get(sessionId);
+        if (session) {
+          this.logStatusChange(session, 'streaming', 'resuming_after_question');
+        }
+
         // Return allow with populated answers
         return {
           behavior: 'allow',
@@ -422,6 +446,7 @@ export class SessionManager {
 
         // Create promise that will be resolved when /approve-plan endpoint is called
         const approvalPromise = new Promise<PermissionResult>((resolve, reject) => {
+          info(`Session entering pending plan approval state (sessionId: ${sessionId})`);
           this.pendingPlanApprovals.set(sessionId, {
             plan: planContent,
             resolve,
@@ -443,6 +468,14 @@ export class SessionManager {
         const result = await approvalPromise;
 
         info(`received plan approval decision for session '${sessionId}': behavior='${result.behavior}'`);
+
+        // Log resuming status if approved
+        if (result.behavior === 'allow') {
+          const session = this.sessions.get(sessionId);
+          if (session) {
+            this.logStatusChange(session, 'streaming', 'resuming_after_plan_approval');
+          }
+        }
 
         return result;
       }
@@ -468,6 +501,7 @@ export class SessionManager {
 
     pending.resolve(answers);
     this.pendingQuestions.delete(sessionId);
+    info(`Session exiting pending question state (sessionId: ${sessionId}, resolved: true)`);
     info(`resolvePendingQuestion - resolved for session '${sessionId}'`);
     return true;
   }
@@ -507,6 +541,7 @@ export class SessionManager {
 
     pending.resolve(result);
     this.pendingPlanApprovals.delete(sessionId);
+    info(`Session exiting pending plan approval state (sessionId: ${sessionId}, approved: ${approved})`);
     info(`resolvePendingPlanApproval - resolved for session '${sessionId}', approved=${approved}, keepContext=${keepContext}`);
     return true;
   }
@@ -559,7 +594,7 @@ export class SessionManager {
 
     ws.lastActivityAt = new Date();
     ws.inputController.send(message);
-    ws.status = 'streaming';
+    this.logStatusChange(ws, 'streaming', 'message_sent');
 
     return ws;
   }
@@ -574,6 +609,13 @@ export class SessionManager {
       for await (const event of ws.outputChannel) {
         if (isControlEvent(event)) {
           info(`stream() - control event: type='${event.type}'`);
+          // Log additional detail for control events
+          if (event.type === 'question_pending') {
+            const questionCount = (event.data as any).questions?.length || 0;
+            debug(`Control event details: ${questionCount} questions pending`);
+          } else if (event.type === 'plan_pending') {
+            debug(`Control event details: plan approval pending`);
+          }
           // Track control event as last message type
           ws.lastMessageType = event.type;
           ws.lastMessageSubtype = undefined;
@@ -603,7 +645,7 @@ export class SessionManager {
         yield event;
       }
     } finally {
-      ws.status = 'idle';
+      this.logStatusChange(ws, 'idle', 'stream_complete');
     }
   }
 
@@ -614,6 +656,7 @@ export class SessionManager {
     // Reject any pending questions
     const pendingQuestion = this.pendingQuestions.get(sessionId);
     if (pendingQuestion) {
+      warn(`Session closed with pending question (sessionId: ${sessionId})`);
       pendingQuestion.reject(new Error('Session closed'));
       this.pendingQuestions.delete(sessionId);
     }
@@ -621,13 +664,14 @@ export class SessionManager {
     // Reject any pending plan approvals
     const pendingPlan = this.pendingPlanApprovals.get(sessionId);
     if (pendingPlan) {
+      warn(`Session closed with pending plan approval (sessionId: ${sessionId})`);
       pendingPlan.reject(new Error('Session closed'));
       this.pendingPlanApprovals.delete(sessionId);
     }
 
     ws.outputChannel.complete();
     ws.inputController.close();
-    ws.status = 'closed';
+    this.logStatusChange(ws, 'closed', 'session_closed');
     this.sessions.delete(sessionId);
   }
 
