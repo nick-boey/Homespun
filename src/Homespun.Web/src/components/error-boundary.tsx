@@ -2,6 +2,7 @@ import * as React from 'react'
 import { AlertCircle, RefreshCw, WifiOff, Clock, ServerCrash } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { getGlobalTelemetryService } from '@/lib/telemetry/telemetry-singleton'
 
 /**
  * Error type classification for contextual error display.
@@ -256,6 +257,20 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error('ErrorBoundary caught an error:', error, errorInfo)
+
+    // Track exception in telemetry
+    const telemetry = getGlobalTelemetryService()
+    if (telemetry) {
+      const errorType = classifyError(error)
+      telemetry.trackException(error, {
+        errorBoundary: 'true',
+        errorType,
+        componentStack: errorInfo.componentStack || '',
+        // Extract component name from stack if possible
+        component: errorInfo.componentStack?.split('\n')[0]?.trim() || 'unknown',
+      })
+    }
+
     this.props.onError?.(error, errorInfo)
   }
 

@@ -3,6 +3,7 @@
  */
 
 import '@testing-library/jest-dom/vitest'
+import './mocks/telemetry'
 
 // Mock window.matchMedia for components that use media queries
 Object.defineProperty(window, 'matchMedia', {
