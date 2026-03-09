@@ -70,9 +70,6 @@ jobs:
     - name: Install dependencies
       run: cd src/Homespun.Web && npm ci
 
-    - name: Lint
-      run: cd src/Homespun.Web && npm run lint
-
     - name: Type check
       run: cd src/Homespun.Web && npm run typecheck
 

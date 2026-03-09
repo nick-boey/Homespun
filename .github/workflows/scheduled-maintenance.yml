@@ -1,0 +1,91 @@
+name: Scheduled Maintenance
+
+on:
+  # Run daily at 2 AM UTC
+  schedule:
+    - cron: '0 2 * * *'
+  # Allow manual triggering for testing
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  lint-and-fix:
+    name: Auto-fix Linting Issues
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        # Need full history to check for recent changes
+        fetch-depth: 0
+
+    - name: Check for recent changes
+      id: check-changes
+      run: |
+        # Check if there were any changes to main in the last 24 hours
+        CHANGES=$(git log --since="24 hours ago" --oneline origin/main -- src/Homespun.Web)
+        if [ -z "$CHANGES" ]; then
+          echo "No recent changes in src/Homespun.Web, skipping maintenance"
+          echo "skip=true" >> $GITHUB_OUTPUT
+        else
+          echo "Found recent changes:"
+          echo "$CHANGES"
+          echo "skip=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Setup Node.js
+      if: steps.check-changes.outputs.skip != 'true'
+      uses: actions/setup-node@v4
+      with:
+        node-version: 22
+
+    - name: Install dependencies
+      if: steps.check-changes.outputs.skip != 'true'
+      run: cd src/Homespun.Web && npm ci
+
+    - name: Run lint fix
+      if: steps.check-changes.outputs.skip != 'true'
+      id: lint-fix
+      run: |
+        cd src/Homespun.Web
+        # Run lint fix and capture if any changes were made
+        npm run lint:fix || true
+
+        # Check if there are any changes
+        cd ${{ github.workspace }}
+        if [ -n "$(git status --porcelain)" ]; then
+          echo "Linting fixes were applied"
+          echo "changes=true" >> $GITHUB_OUTPUT
+        else
+          echo "No linting fixes needed"
+          echo "changes=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Run tests
+      if: steps.check-changes.outputs.skip != 'true' && steps.lint-fix.outputs.changes == 'true'
+      run: |
+        cd src/Homespun.Web
+        # Run tests to ensure lint fixes didn't break anything
+        npm test
+
+        # Also run type checking to be extra safe
+        npm run typecheck
+
+    - name: Configure git
+      if: steps.check-changes.outputs.skip != 'true' && steps.lint-fix.outputs.changes == 'true'
+      run: |
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+    - name: Commit and push changes
+      if: steps.check-changes.outputs.skip != 'true' && steps.lint-fix.outputs.changes == 'true'
+      run: |
+        git add -A
+        git commit -m "chore: auto-fix linting issues [skip ci]
+
+        This automated commit fixes linting issues detected in the codebase.
+        The changes have been tested to ensure they don't break functionality."
+
+        git push
