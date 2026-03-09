@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Sessions } from '@/api'
 import type { ClaudeSession, CreateSessionRequest, SessionMode } from '@/api/generated/types.gen'
 import { sessionsQueryKey } from '@/features/sessions/hooks/use-sessions'
+import { useTelemetry } from '@/hooks/use-telemetry'
 
 export interface StartAgentParams {
   entityId: string
@@ -19,6 +20,7 @@ export interface StartAgentParams {
  */
 export function useStartAgent() {
   const queryClient = useQueryClient()
+  const telemetry = useTelemetry()
 
   return useMutation({
     mutationFn: async (params: StartAgentParams): Promise<ClaudeSession> => {
@@ -38,9 +40,28 @@ export function useStartAgent() {
 
       return response.data as ClaudeSession
     },
-    onSuccess: () => {
+    onSuccess: (session, params) => {
+      // Track successful agent launch
+      telemetry.trackEvent('agent_launched', {
+        sessionId: session.id || '',
+        entityId: params.entityId,
+        projectId: params.projectId,
+        mode: (params.mode ?? 'Build').toString(),
+        model: params.model || '',
+        hasInitialMessage: params.initialMessage ? 'true' : 'false',
+      })
+
       // Invalidate sessions query to refresh the list
       queryClient.invalidateQueries({ queryKey: sessionsQueryKey })
+    },
+    onError: (error: Error, params) => {
+      // Track failed agent launch
+      telemetry.trackEvent('agent_launch_failed', {
+        entityId: params.entityId,
+        projectId: params.projectId,
+        mode: (params.mode ?? 'Build').toString(),
+        error: error.message || 'Unknown error',
+      })
     },
   })
 }

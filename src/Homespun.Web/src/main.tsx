@@ -4,10 +4,14 @@ import { RouterProvider, createRouter } from '@tanstack/react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { SignalRProvider } from '@/providers/signalr-provider'
 import { Toaster } from '@/components/ui/sonner'
+import { configureApiClient } from '@/api'
 import './index.css'
 
 // Import the generated route tree
 import { routeTree } from './routeTree.gen'
+
+// Configure the API client
+configureApiClient()
 
 // Create a new router instance
 const router = createRouter({ routeTree })
