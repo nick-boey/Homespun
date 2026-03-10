@@ -3,7 +3,8 @@ import { useEffect, useRef, useCallback, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useBreadcrumbSetter } from '@/hooks/use-breadcrumbs'
-import { toApiSessionMode } from '@/lib/utils/session-mode'
+import { toApiSessionMode, fromApiSessionMode } from '@/lib/utils/session-mode'
+import type { SessionMode as ApiSessionMode } from '@/api'
 import {
   useSession,
   useSessionMessages,
@@ -304,13 +305,26 @@ interface SessionHeaderProps {
     id: string
     entityId: string
     projectId: string
-    mode: string
+    mode: string | number
     status: string
     model: string
   } | null
   entityTitle?: string
   onStop?: () => void
   isStopPending?: boolean
+}
+
+/**
+ * Convert session mode (which may be numeric from API or string from SignalR types)
+ * to a display-friendly string.
+ */
+function getModeDisplayString(mode: string | number): string {
+  // Handle numeric values from SignalR/API
+  if (typeof mode === 'number') {
+    return fromApiSessionMode(mode as ApiSessionMode)
+  }
+  // Handle string values (already "Plan" or "Build")
+  return mode
 }
 
 function SessionHeader({
@@ -339,7 +353,7 @@ function SessionHeader({
           </h1>
           {session && (
             <div className="text-muted-foreground flex flex-wrap items-center gap-1 text-xs md:gap-2 md:text-sm">
-              <span className="capitalize">{session.mode}</span>
+              <span className="capitalize">{getModeDisplayString(session.mode)}</span>
               <span className="hidden sm:inline">•</span>
               <span className="hidden sm:inline">{session.model}</span>
               <span>•</span>
