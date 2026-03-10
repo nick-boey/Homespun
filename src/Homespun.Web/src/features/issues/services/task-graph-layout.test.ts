@@ -497,6 +497,146 @@ describe('computeLayout', () => {
     })
   })
 
+  describe('isSeriesChild flag computation', () => {
+    it('sets isSeriesChild=true when parent has executionMode=1 (Series)', () => {
+      const parent = createIssue({ id: 'parent', executionMode: 1 }) // Series
+      const child = createIssue({ id: 'child', parentIssues: [{ parentIssue: 'parent' }] })
+
+      const taskGraph: TaskGraphResponse = {
+        nodes: [createNode(parent, 1, 0), createNode(child, 0, 1)],
+        mergedPrs: [],
+        hasMorePastPrs: false,
+        agentStatuses: {},
+        linkedPrs: {},
+      }
+
+      const result = computeLayout(taskGraph)
+
+      const childLine = result.find(
+        (l) => isIssueRenderLine(l) && l.issueId === 'child'
+      ) as TaskGraphIssueRenderLine
+      expect(childLine).toBeDefined()
+      expect(childLine.isSeriesChild).toBe(true)
+    })
+
+    it('sets isSeriesChild=false when parent has executionMode=0 (Parallel)', () => {
+      const parent = createIssue({ id: 'parent', executionMode: 0 }) // Parallel
+      const child = createIssue({ id: 'child', parentIssues: [{ parentIssue: 'parent' }] })
+
+      const taskGraph: TaskGraphResponse = {
+        nodes: [createNode(parent, 1, 0), createNode(child, 0, 1)],
+        mergedPrs: [],
+        hasMorePastPrs: false,
+        agentStatuses: {},
+        linkedPrs: {},
+      }
+
+      const result = computeLayout(taskGraph)
+
+      const childLine = result.find(
+        (l) => isIssueRenderLine(l) && l.issueId === 'child'
+      ) as TaskGraphIssueRenderLine
+      expect(childLine).toBeDefined()
+      expect(childLine.isSeriesChild).toBe(false)
+    })
+
+    it('sets isSeriesChild=false when executionMode is undefined', () => {
+      const parent = createIssue({ id: 'parent' }) // No executionMode set
+      delete (parent as Partial<typeof parent>).executionMode // Explicitly remove
+      const child = createIssue({ id: 'child', parentIssues: [{ parentIssue: 'parent' }] })
+
+      const taskGraph: TaskGraphResponse = {
+        nodes: [createNode(parent, 1, 0), createNode(child, 0, 1)],
+        mergedPrs: [],
+        hasMorePastPrs: false,
+        agentStatuses: {},
+        linkedPrs: {},
+      }
+
+      const result = computeLayout(taskGraph)
+
+      const childLine = result.find(
+        (l) => isIssueRenderLine(l) && l.issueId === 'child'
+      ) as TaskGraphIssueRenderLine
+      expect(childLine).toBeDefined()
+      expect(childLine.isSeriesChild).toBe(false)
+    })
+
+    it('correctly identifies multiple children of series parent', () => {
+      const parent = createIssue({ id: 'parent', executionMode: 1 }) // Series
+      const child1 = createIssue({ id: 'child1', parentIssues: [{ parentIssue: 'parent' }] })
+      const child2 = createIssue({ id: 'child2', parentIssues: [{ parentIssue: 'parent' }] })
+      const child3 = createIssue({ id: 'child3', parentIssues: [{ parentIssue: 'parent' }] })
+
+      const taskGraph: TaskGraphResponse = {
+        nodes: [
+          createNode(parent, 1, 0),
+          createNode(child1, 0, 1),
+          createNode(child2, 0, 2),
+          createNode(child3, 0, 3),
+        ],
+        mergedPrs: [],
+        hasMorePastPrs: false,
+        agentStatuses: {},
+        linkedPrs: {},
+      }
+
+      const result = computeLayout(taskGraph)
+
+      const child1Line = result.find(
+        (l) => isIssueRenderLine(l) && l.issueId === 'child1'
+      ) as TaskGraphIssueRenderLine
+      const child2Line = result.find(
+        (l) => isIssueRenderLine(l) && l.issueId === 'child2'
+      ) as TaskGraphIssueRenderLine
+      const child3Line = result.find(
+        (l) => isIssueRenderLine(l) && l.issueId === 'child3'
+      ) as TaskGraphIssueRenderLine
+
+      expect(child1Line.isSeriesChild).toBe(true)
+      expect(child2Line.isSeriesChild).toBe(true)
+      expect(child3Line.isSeriesChild).toBe(true)
+    })
+
+    it('handles mixed parallel and series parents in same graph', () => {
+      const parallelParent = createIssue({ id: 'parallel-parent', executionMode: 0 }) // Parallel
+      const seriesParent = createIssue({ id: 'series-parent', executionMode: 1 }) // Series
+      const parallelChild = createIssue({
+        id: 'parallel-child',
+        parentIssues: [{ parentIssue: 'parallel-parent' }],
+      })
+      const seriesChild = createIssue({
+        id: 'series-child',
+        parentIssues: [{ parentIssue: 'series-parent' }],
+      })
+
+      const taskGraph: TaskGraphResponse = {
+        nodes: [
+          createNode(parallelParent, 1, 0),
+          createNode(parallelChild, 0, 1),
+          createNode(seriesParent, 1, 2),
+          createNode(seriesChild, 0, 3),
+        ],
+        mergedPrs: [],
+        hasMorePastPrs: false,
+        agentStatuses: {},
+        linkedPrs: {},
+      }
+
+      const result = computeLayout(taskGraph)
+
+      const parallelChildLine = result.find(
+        (l) => isIssueRenderLine(l) && l.issueId === 'parallel-child'
+      ) as TaskGraphIssueRenderLine
+      const seriesChildLine = result.find(
+        (l) => isIssueRenderLine(l) && l.issueId === 'series-child'
+      ) as TaskGraphIssueRenderLine
+
+      expect(parallelChildLine.isSeriesChild).toBe(false)
+      expect(seriesChildLine.isSeriesChild).toBe(true)
+    })
+  })
+
   describe('branch name generation', () => {
     it('generates branch name for issues', () => {
       const issue = createIssue({

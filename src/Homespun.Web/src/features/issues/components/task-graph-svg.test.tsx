@@ -252,6 +252,110 @@ describe('TaskGraphNodeSvg', () => {
     })
   })
 
+  describe('connector rendering based on isSeriesChild', () => {
+    it('renders parallel connector (horizontal) when isSeriesChild=false and parentLane > lane', () => {
+      const line = createMockLine({
+        isSeriesChild: false,
+        lane: 0,
+        parentLane: 1,
+        isFirstChild: true,
+      })
+      const { container } = render(<TaskGraphNodeSvg line={line} maxLanes={2} />)
+
+      // Should have a path for parallel connector (from cx + NODE_RADIUS + 2)
+      const paths = container.querySelectorAll('path')
+      expect(paths.length).toBeGreaterThan(0)
+
+      // Find the path with horizontal component (M x y L x2 y ... which is the parallel connector)
+      const parallelPath = Array.from(paths).find((p) => {
+        const d = p.getAttribute('d') || ''
+        // Parallel connector starts from right edge of node: cx + NODE_RADIUS + 2
+        // For lane 0, cx = 12 (LANE_WIDTH / 2 + 0 * LANE_WIDTH), so start x = 12 + 6 + 2 = 20
+        return d.includes('M 20 20') // cx + NODE_RADIUS + 2, cy
+      })
+      expect(parallelPath).toBeDefined()
+    })
+
+    it('does NOT render parallel connector when isSeriesChild=true', () => {
+      const line = createMockLine({
+        isSeriesChild: true,
+        lane: 0,
+        parentLane: 1,
+        isFirstChild: true,
+      })
+      const { container } = render(<TaskGraphNodeSvg line={line} maxLanes={2} />)
+
+      // Should NOT have a horizontal path from cx + NODE_RADIUS + 2
+      const paths = container.querySelectorAll('path')
+      const parallelPath = Array.from(paths).find((p) => {
+        const d = p.getAttribute('d') || ''
+        // Parallel connector starts from right edge of node: M (cx + NODE_RADIUS + 2) cy
+        return d.startsWith('M 20 20') // This is the parallel connector start
+      })
+      expect(parallelPath).toBeUndefined()
+    })
+
+    it('renders series top line when drawTopLine=true', () => {
+      const line = createMockLine({
+        isSeriesChild: true,
+        lane: 0,
+        parentLane: 1,
+        drawTopLine: true,
+      })
+      const { container } = render(<TaskGraphNodeSvg line={line} maxLanes={2} />)
+
+      // Should have a vertical path from top (y=0) to node top edge
+      const paths = container.querySelectorAll('path')
+      const topLinePath = Array.from(paths).find((p) => {
+        const d = p.getAttribute('d') || ''
+        // Top line: M cx 0 L cx (cy - NODE_RADIUS - 2)
+        // For lane 0: cx = 12, cy = 20, so: M 12 0 L 12 12
+        return d.includes('M 12 0 L 12 12')
+      })
+      expect(topLinePath).toBeDefined()
+    })
+
+    it('renders series bottom line when drawBottomLine=true', () => {
+      const line = createMockLine({
+        isSeriesChild: true,
+        lane: 0,
+        parentLane: 1,
+        drawBottomLine: true,
+      })
+      const { container } = render(<TaskGraphNodeSvg line={line} maxLanes={2} />)
+
+      // Should have a vertical path from node bottom edge to bottom (ROW_HEIGHT=40)
+      const paths = container.querySelectorAll('path')
+      const bottomLinePath = Array.from(paths).find((p) => {
+        const d = p.getAttribute('d') || ''
+        // Bottom line: M cx (cy + NODE_RADIUS + 2) L cx ROW_HEIGHT
+        // For lane 0: cx = 12, cy = 20, so: M 12 28 L 12 40
+        return d.includes('M 12 28 L 12 40')
+      })
+      expect(bottomLinePath).toBeDefined()
+    })
+
+    it('does NOT render series lines when drawTopLine and drawBottomLine are false', () => {
+      const line = createMockLine({
+        isSeriesChild: true,
+        lane: 0,
+        parentLane: 1,
+        drawTopLine: false,
+        drawBottomLine: false,
+      })
+      const { container } = render(<TaskGraphNodeSvg line={line} maxLanes={2} />)
+
+      // Should NOT have vertical series paths
+      const paths = container.querySelectorAll('path')
+      const seriesLinePaths = Array.from(paths).filter((p) => {
+        const d = p.getAttribute('d') || ''
+        // Check for top or bottom series lines
+        return d.includes('M 12 0 L 12 12') || d.includes('M 12 28 L 12 40')
+      })
+      expect(seriesLinePaths).toHaveLength(0)
+    })
+  })
+
   describe('type colors', () => {
     it('should return correct colors for each issue type', () => {
       expect(getTypeColor(0)).toBe('#3b82f6') // Task: Blue
