@@ -138,7 +138,7 @@ describe('translateSdkMessage', () => {
       type: 'system',
       session_id: 'sess-1',
       subtype: 'init',
-      model: 'claude-3-opus',
+      model: 'opus',
     } as SDKMessage;
 
     const a2aMsg = translateSdkMessage(sdkMsg, ctx);

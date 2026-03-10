@@ -992,7 +992,7 @@ public class DockerSessionRecordTests
         var request = new AgentStartRequest(
             WorkingDirectory: "/test/path",
             Mode: SessionMode.Build,
-            Model: "claude-sonnet-4-20250514",
+            Model: "sonnet",
             Prompt: "Test prompt",
             SystemPrompt: "System prompt",
             ResumeSessionId: "resume-123");
@@ -1002,7 +1002,7 @@ public class DockerSessionRecordTests
         {
             Assert.That(request.WorkingDirectory, Is.EqualTo("/test/path"));
             Assert.That(request.Mode, Is.EqualTo(SessionMode.Build));
-            Assert.That(request.Model, Is.EqualTo("claude-sonnet-4-20250514"));
+            Assert.That(request.Model, Is.EqualTo("sonnet"));
             Assert.That(request.Prompt, Is.EqualTo("Test prompt"));
             Assert.That(request.SystemPrompt, Is.EqualTo("System prompt"));
             Assert.That(request.ResumeSessionId, Is.EqualTo("resume-123"));
@@ -1057,14 +1057,14 @@ public class DockerSessionRecordTests
         var request = new AgentMessageRequest(
             SessionId: "session-123",
             Message: "Hello",
-            Model: "claude-opus-4");
+            Model: "opus");
 
         // Assert
         Assert.Multiple(() =>
         {
             Assert.That(request.SessionId, Is.EqualTo("session-123"));
             Assert.That(request.Message, Is.EqualTo("Hello"));
-            Assert.That(request.Model, Is.EqualTo("claude-opus-4"));
+            Assert.That(request.Model, Is.EqualTo("opus"));
         });
     }
 
@@ -1216,7 +1216,7 @@ public class SdkMessageRecordTests
             SessionId: "session-123",
             WorkingDirectory: "/test/path",
             Mode: SessionMode.Build,
-            Model: "claude-sonnet-4-20250514",
+            Model: "sonnet",
             ConversationId: "conversation-456",
             CreatedAt: now.AddHours(-1),
             LastActivityAt: now);
@@ -1227,7 +1227,7 @@ public class SdkMessageRecordTests
             Assert.That(status.SessionId, Is.EqualTo("session-123"));
             Assert.That(status.WorkingDirectory, Is.EqualTo("/test/path"));
             Assert.That(status.Mode, Is.EqualTo(SessionMode.Build));
-            Assert.That(status.Model, Is.EqualTo("claude-sonnet-4-20250514"));
+            Assert.That(status.Model, Is.EqualTo("sonnet"));
             Assert.That(status.ConversationId, Is.EqualTo("conversation-456"));
             Assert.That(status.CreatedAt, Is.EqualTo(now.AddHours(-1)));
             Assert.That(status.LastActivityAt, Is.EqualTo(now));

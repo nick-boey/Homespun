@@ -144,7 +144,7 @@ public class SessionsPanelTests
     [Test]
     public void GetModelDisplayName_ExtractsModelName()
     {
-        Assert.That(GetModelDisplayName("anthropic/sonnet"), Is.EqualTo("sonnet"));
+        Assert.That(GetModelDisplayName("sonnet"), Is.EqualTo("sonnet"));
         Assert.That(GetModelDisplayName("opus"), Is.EqualTo("opus"));
     }
 

@@ -37,7 +37,7 @@ public class Project
 
     /// <summary>
     /// Default model used for new agent sessions in this project.
-    /// Format: "provider/model" (e.g., "anthropic/claude-sonnet-4-5")
+    /// Format: "provider/model" (e.g., "sonnet")
     /// </summary>
     public string? DefaultModel { get; set; }
 

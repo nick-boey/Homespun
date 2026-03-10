@@ -197,7 +197,7 @@ public class ClaudeSessionStoreTests
             ProjectId = projectId,
             Mode = SessionMode.Build,
             WorkingDirectory = "/test/path",
-            Model = "claude-sonnet-4-20250514",
+            Model = "sonnet",
             Status = ClaudeSessionStatus.Starting,
             CreatedAt = DateTime.UtcNow
         };

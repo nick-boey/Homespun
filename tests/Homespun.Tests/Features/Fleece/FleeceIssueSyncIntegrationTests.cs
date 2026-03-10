@@ -305,7 +305,8 @@ public class FleeceIssueSyncIntegrationTests
 
     #region Helper Methods
 
-    private static Issue CreateIssue(string id, string title, IssueStatus status = IssueStatus.Open, DateTimeOffset? timestamp = null)
+    private static Issue CreateIssue(string id, string title, IssueStatus status = IssueStatus.Open,
+        DateTimeOffset? timestamp = null)
     {
         var ts = timestamp ?? DateTimeOffset.UtcNow;
         return new Issue
@@ -425,7 +426,8 @@ public class FleeceIssueSyncIntegrationTests
 
         if (process.ExitCode != 0)
         {
-            throw new InvalidOperationException($"Git command failed: git {arguments}\nOutput: {output}\nError: {error}");
+            throw new InvalidOperationException(
+                $"Git command failed: git {arguments}\nOutput: {output}\nError: {error}");
         }
     }
 
@@ -461,6 +463,7 @@ public class FleeceIssueSyncIntegrationTests
         {
             File.SetAttributes(file, FileAttributes.Normal);
         }
+
         Directory.Delete(path, recursive: true);
     }
 
@@ -520,8 +523,8 @@ public class FleeceIssueSyncIntegrationTests
         // Arrange: Create initial issue in both clones
         // Use explicit timestamps to avoid race conditions with DateTimeOffset.UtcNow
         var baseTime = DateTimeOffset.UtcNow.AddMinutes(-10);
-        var titleModifiedTime = DateTimeOffset.UtcNow.AddSeconds(-5);  // Remote title change
-        var statusModifiedTime = DateTimeOffset.UtcNow;  // Local status change (newer than title change)
+        var titleModifiedTime = DateTimeOffset.UtcNow.AddSeconds(-5); // Remote title change
+        var statusModifiedTime = DateTimeOffset.UtcNow; // Local status change (newer than title change)
 
         var issue = CreateIssue("CCCCCC", "Original Title", IssueStatus.Open, baseTime);
         await SaveAndCommitIssues(_cloneAPath, [issue], "Add initial issue");
@@ -559,7 +562,8 @@ public class FleeceIssueSyncIntegrationTests
         var parts = revListBefore.Trim().Split('\t');
         Assert.That(parts.Length, Is.GreaterThanOrEqualTo(2), $"Invalid rev-list output: {revListBefore}");
         var behind = int.Parse(parts[0]);
-        Assert.That(behind, Is.GreaterThan(0), $"Clone B should be behind remote. rev-list: {revListBefore}, status: {statusBefore}");
+        Assert.That(behind, Is.GreaterThan(0),
+            $"Clone B should be behind remote. rev-list: {revListBefore}, status: {statusBefore}");
 
         // Act: Run sync on Clone B
         var syncService = CreateSyncService();
@@ -671,7 +675,8 @@ public class FleeceIssueSyncIntegrationTests
         Assert.That(finalIssues.Any(i => i.Id == "WWWWWW"), Is.True, "Issue W should exist");
     }
 
-    private static (int exitCode, string output, string error) RunGitInWithOutput(string workingDirectory, string arguments)
+    private static (int exitCode, string output, string error) RunGitInWithOutput(string workingDirectory,
+        string arguments)
     {
         var startInfo = new ProcessStartInfo
         {

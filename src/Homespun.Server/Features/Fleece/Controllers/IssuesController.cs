@@ -440,7 +440,7 @@ public class IssuesController(
         }
 
         // Determine model
-        var model = request.Model ?? project.DefaultModel ?? "claude-sonnet-4-20250514";
+        var model = request.Model ?? project.DefaultModel ?? "sonnet";
 
         // Create session
         var session = await sessionService.StartSessionAsync(

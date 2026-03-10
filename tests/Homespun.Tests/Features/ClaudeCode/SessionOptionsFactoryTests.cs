@@ -23,7 +23,7 @@ public class SessionOptionsFactoryTests
     {
         // Arrange
         var workingDirectory = "/test/path";
-        var model = "claude-sonnet-4-20250514";
+        var model = "sonnet";
 
         // Act
         var options = _factory.Create(SessionMode.Plan, workingDirectory, model);
@@ -51,7 +51,7 @@ public class SessionOptionsFactoryTests
     {
         // Arrange
         var workingDirectory = "/test/path";
-        var model = "claude-sonnet-4-20250514";
+        var model = "sonnet";
 
         // Act
         var options = _factory.Create(SessionMode.Build, workingDirectory, model);
@@ -72,7 +72,7 @@ public class SessionOptionsFactoryTests
     {
         // Arrange
         var workingDirectory = "/test/path";
-        var model = "claude-opus-4-20250514";
+        var model = "opus";
 
         // Act
         var options = _factory.Create(SessionMode.Plan, workingDirectory, model);
@@ -91,7 +91,7 @@ public class SessionOptionsFactoryTests
     {
         // Arrange
         var workingDirectory = "/test/path";
-        var model = "claude-sonnet-4-20250514";
+        var model = "sonnet";
         var systemPrompt = "You are a helpful assistant.";
 
         // Act
@@ -106,7 +106,7 @@ public class SessionOptionsFactoryTests
     {
         // Arrange
         var workingDirectory = "/test/path";
-        var model = "claude-sonnet-4-20250514";
+        var model = "sonnet";
 
         // Act & Assert
         Assert.DoesNotThrow(() => _factory.Create(SessionMode.Plan, workingDirectory, model, null));
@@ -117,7 +117,7 @@ public class SessionOptionsFactoryTests
     {
         // Arrange
         var workingDirectory = "/test/path";
-        var model = "claude-sonnet-4-20250514";
+        var model = "sonnet";
 
         // Act
         var options = _factory.Create(SessionMode.Build, workingDirectory, model);
@@ -146,7 +146,7 @@ public class SessionOptionsFactoryTests
     {
         // Arrange
         var workingDirectory = "/test/path";
-        var model = "claude-sonnet-4-20250514";
+        var model = "sonnet";
 
         // Act
         var options = _factory.Create(SessionMode.Build, workingDirectory, model);
@@ -161,7 +161,7 @@ public class SessionOptionsFactoryTests
     {
         // Arrange
         var workingDirectory = "/test/path";
-        var model = "claude-sonnet-4-20250514";
+        var model = "sonnet";
 
         // Act
         var options = _factory.Create(SessionMode.Build, workingDirectory, model);
@@ -176,7 +176,7 @@ public class SessionOptionsFactoryTests
     {
         // Arrange
         var workingDirectory = "/test/path";
-        var model = "claude-sonnet-4-20250514";
+        var model = "sonnet";
 
         // Act
         var options = _factory.Create(SessionMode.Build, workingDirectory, model);
@@ -191,7 +191,7 @@ public class SessionOptionsFactoryTests
     {
         // Arrange
         var workingDirectory = "/test/path";
-        var model = "claude-sonnet-4-20250514";
+        var model = "sonnet";
         var options = _factory.Create(SessionMode.Build, workingDirectory, model);
 
         // Act - Simulate buffer overflow by invoking the callback

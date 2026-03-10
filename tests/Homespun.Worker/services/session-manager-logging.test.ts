@@ -70,7 +70,7 @@ describe('SessionManager Logging', () => {
       // Act
       await sessionManager.create({
         prompt: 'Test prompt',
-        model: 'claude-3-opus-20240229',
+        model: 'opus',
         mode: 'Build',
       });
 
@@ -89,7 +89,7 @@ describe('SessionManager Logging', () => {
 
       const session = await sessionManager.create({
         prompt: 'Test prompt',
-        model: 'claude-3-opus-20240229',
+        model: 'opus',
         mode: 'Build',
       });
 
@@ -114,7 +114,7 @@ describe('SessionManager Logging', () => {
 
       const session = await sessionManager.create({
         prompt: 'Test prompt',
-        model: 'claude-3-opus-20240229',
+        model: 'opus',
         mode: 'Build',
       });
 
@@ -139,7 +139,7 @@ describe('SessionManager Logging', () => {
 
       const session = await sessionManager.create({
         prompt: 'Test prompt',
-        model: 'claude-3-opus-20240229',
+        model: 'opus',
         mode: 'Build',
       });
 
@@ -166,7 +166,7 @@ describe('SessionManager Logging', () => {
 
       await sessionManager.create({
         prompt: 'Test prompt',
-        model: 'claude-3-opus-20240229',
+        model: 'opus',
         mode: 'Build',
       });
 
@@ -209,7 +209,7 @@ describe('SessionManager Logging', () => {
 
       await sessionManager.create({
         prompt: 'Test prompt',
-        model: 'claude-3-opus-20240229',
+        model: 'opus',
         mode: 'Build',
       });
 
@@ -243,7 +243,7 @@ describe('SessionManager Logging', () => {
 
       await sessionManager.create({
         prompt: 'Test prompt',
-        model: 'claude-3-opus-20240229',
+        model: 'opus',
         mode: 'Plan',
       });
 
@@ -277,7 +277,7 @@ describe('SessionManager Logging', () => {
 
       await sessionManager.create({
         prompt: 'Test prompt',
-        model: 'claude-3-opus-20240229',
+        model: 'opus',
         mode: 'Plan',
       });
 
@@ -311,7 +311,7 @@ describe('SessionManager Logging', () => {
 
       await sessionManager.create({
         prompt: 'Test prompt',
-        model: 'claude-3-opus-20240229',
+        model: 'opus',
         mode: 'Build',
       });
 
@@ -342,7 +342,7 @@ describe('SessionManager Logging', () => {
 
       await sessionManager.create({
         prompt: 'Test prompt',
-        model: 'claude-3-opus-20240229',
+        model: 'opus',
         mode: 'Plan',
       });
 
@@ -377,7 +377,7 @@ describe('SessionManager Logging', () => {
       // Act
       await sessionManager.create({
         prompt: 'Test prompt',
-        model: 'claude-3-opus-20240229',
+        model: 'opus',
         mode: 'Build',
       });
 
@@ -404,7 +404,7 @@ describe('SessionManager Logging', () => {
 
       await sessionManager.create({
         prompt: 'Test prompt',
-        model: 'claude-3-opus-20240229',
+        model: 'opus',
         mode: 'Build',
       });
 
@@ -452,7 +452,7 @@ describe('SessionManager Logging', () => {
 
       await sessionManager.create({
         prompt: 'Test prompt',
-        model: 'claude-3-opus-20240229',
+        model: 'opus',
         mode: 'Plan',
       });
 

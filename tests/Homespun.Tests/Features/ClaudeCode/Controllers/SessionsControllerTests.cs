@@ -44,7 +44,7 @@ public class SessionsControllerTests
             EntityId = "entity-456",
             ProjectId = "project-789",
             WorkingDirectory = "/test/path",
-            Model = "claude-sonnet-4-20250514",
+            Model = "sonnet",
             Mode = SessionMode.Plan,
             Status = ClaudeSessionStatus.Running,
             CreatedAt = DateTime.UtcNow
@@ -83,7 +83,7 @@ public class SessionsControllerTests
             EntityId = "entity-456",
             ProjectId = "project-789",
             WorkingDirectory = "/test/path",
-            Model = "claude-sonnet-4-20250514",
+            Model = "sonnet",
             Mode = SessionMode.Plan,
             Status = ClaudeSessionStatus.Running,
             CreatedAt = DateTime.UtcNow
@@ -141,7 +141,7 @@ public class SessionsControllerTests
             EntityId = "entity-456",
             ProjectId = "project-789",
             WorkingDirectory = "/test/clone/workdir",
-            Model = "claude-3-opus-20240229",
+            Model = "opus",
             Mode = SessionMode.Build,
             Status = ClaudeSessionStatus.Running
         };
@@ -186,7 +186,7 @@ public class SessionsControllerTests
             EntityId = "entity-456",
             ProjectId = "project-789",
             WorkingDirectory = "/test/clone/workdir",
-            Model = "claude-3-opus-20240229",
+            Model = "opus",
             Mode = SessionMode.Build,
             Status = ClaudeSessionStatus.Running
         };
@@ -217,7 +217,7 @@ public class SessionsControllerTests
             EntityId = "entity-456",
             ProjectId = "project-789",
             WorkingDirectory = "/test/clone/workdir",
-            Model = "claude-3-opus-20240229",
+            Model = "opus",
             Mode = SessionMode.Build,
             Status = ClaudeSessionStatus.Running
         };
@@ -262,7 +262,7 @@ public class SessionsControllerTests
             EntityId = "entity-456",
             ProjectId = "project-789",
             WorkingDirectory = "/test/clone/workdir",
-            Model = "claude-3-opus-20240229",
+            Model = "opus",
             Mode = SessionMode.Build,
             Status = ClaudeSessionStatus.Running
         };

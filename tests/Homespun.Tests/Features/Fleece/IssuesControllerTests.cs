@@ -315,7 +315,7 @@ public class IssuesControllerTests
             EntityId = issueId,
             ProjectId = TestProject.Id,
             WorkingDirectory = "/path/to/clone",
-            Model = "claude-sonnet-4-20250514",
+            Model = "sonnet",
             Mode = SessionMode.Build
         };
 
@@ -354,7 +354,7 @@ public class IssuesControllerTests
         {
             ProjectId = TestProject.Id,
             PromptId = "prompt-1",
-            Model = "claude-sonnet-4-20250514"
+            Model = "sonnet"
         };
 
         // Act
@@ -451,7 +451,7 @@ public class IssuesControllerTests
             EntityId = issueId,
             ProjectId = TestProject.Id,
             WorkingDirectory = "/path/to/new-clone",
-            Model = "claude-sonnet-4-20250514",
+            Model = "sonnet",
             Mode = SessionMode.Build
         };
 
@@ -505,7 +505,7 @@ public class IssuesControllerTests
             EntityId = issueId,
             ProjectId = TestProject.Id,
             WorkingDirectory = "/path/to/existing-clone",
-            Model = "claude-sonnet-4-20250514",
+            Model = "sonnet",
             Mode = SessionMode.Build
         };
 
@@ -558,7 +558,7 @@ public class IssuesControllerTests
             EntityId = issueId,
             ProjectId = TestProject.Id,
             WorkingDirectory = "/path/to/clone",
-            Model = "claude-sonnet-4-20250514",
+            Model = "sonnet",
             Mode = SessionMode.Plan // Default for None prompt
         };
 
@@ -583,7 +583,7 @@ public class IssuesControllerTests
         {
             ProjectId = TestProject.Id,
             PromptId = null, // Null prompt ID for "None" option
-            Model = "claude-sonnet-4-20250514"
+            Model = "sonnet"
         };
 
         // Act

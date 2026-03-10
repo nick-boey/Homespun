@@ -240,7 +240,7 @@ public class ClaudeCodeChatClient : IChatClient, IAsyncDisposable
         ChatFinishReason? finishReason = null;
         UsageDetails? usage = null;
         var additionalProps = new AdditionalPropertiesDictionary();
-        string? modelId = _options.Model ?? "claude-sonnet-4";
+        string? modelId = _options.Model ?? "sonnet";
 
         await foreach (var msg in _client.ReceiveResponseAsync(cancellationToken))
         {

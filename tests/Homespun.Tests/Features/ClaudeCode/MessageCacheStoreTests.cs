@@ -56,7 +56,7 @@ public class MessageCacheStoreTests
     {
         // Arrange
         var mode = SessionMode.Plan;
-        var model = "claude-opus-4";
+        var model = "opus";
 
         // Act
         await _store.InitializeSessionAsync("session-1", "entity-1", "project-1", mode, model);

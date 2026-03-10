@@ -1,8 +1,6 @@
 using Fleece.Core.Models;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Testing.Services;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Homespun.Features.Testing;
@@ -623,7 +621,7 @@ public class MockDataSeederService : IHostedService
             ProjectId = "demo-project",
             WorkingDirectory = "/mock/projects/demo-project",
             Mode = SessionMode.Build,
-            Model = "claude-sonnet-4-20250514",
+            Model = "sonnet",
             Status = ClaudeSessionStatus.WaitingForInput,
             CreatedAt = now.AddMinutes(-15),
             LastActivityAt = now.AddMinutes(-2),

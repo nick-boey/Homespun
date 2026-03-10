@@ -174,7 +174,7 @@ public class RunAgentRequest
     public required string? PromptId { get; set; }
 
     /// <summary>
-    /// The Claude model to use (e.g., "claude-sonnet-4-20250514").
+    /// The Claude model to use (e.g., "sonnet").
     /// If not specified, defaults to project's default model.
     /// </summary>
     public string? Model { get; set; }

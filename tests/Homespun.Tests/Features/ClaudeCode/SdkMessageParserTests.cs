@@ -162,7 +162,7 @@ public class SdkMessageParserTests
             "session_id": "sess-123",
             "uuid": "uuid-4",
             "subtype": "init",
-            "model": "claude-sonnet-4-20250514",
+            "model": "sonnet",
             "tools": ["Read", "Write", "Bash"]
         }
         """;
@@ -175,7 +175,7 @@ public class SdkMessageParserTests
         {
             Assert.That(msg.SessionId, Is.EqualTo("sess-123"));
             Assert.That(msg.Subtype, Is.EqualTo("init"));
-            Assert.That(msg.Model, Is.EqualTo("claude-sonnet-4-20250514"));
+            Assert.That(msg.Model, Is.EqualTo("sonnet"));
             Assert.That(msg.Tools, Is.EqualTo(new[] { "Read", "Write", "Bash" }));
         });
     }

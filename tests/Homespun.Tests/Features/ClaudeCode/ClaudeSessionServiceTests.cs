@@ -120,7 +120,7 @@ public class ClaudeSessionServiceTests
             projectId,
             "/test/path",
             SessionMode.Build,
-            "claude-sonnet-4-20250514");
+            "sonnet");
 
         // Assert
         var retrieved = _sessionStore.GetById(session.Id);
@@ -140,7 +140,7 @@ public class ClaudeSessionServiceTests
             "project-456",
             "/test/path",
             SessionMode.Build,
-            "claude-sonnet-4-20250514",
+            "sonnet",
             systemPrompt);
 
         // Assert
@@ -170,7 +170,7 @@ public class ClaudeSessionServiceTests
             EntityId = "entity-123",
             ProjectId = "project-456",
             WorkingDirectory = "/test/path",
-            Model = "claude-sonnet-4-20250514",
+            Model = "sonnet",
             Mode = SessionMode.Plan,
             Status = ClaudeSessionStatus.Running,
             CreatedAt = DateTime.UtcNow
@@ -205,7 +205,7 @@ public class ClaudeSessionServiceTests
             EntityId = "entity-123",
             ProjectId = "project-456",
             WorkingDirectory = "/test/path",
-            Model = "claude-sonnet-4-20250514",
+            Model = "sonnet",
             Mode = SessionMode.Plan,
             Status = ClaudeSessionStatus.Running,
             CreatedAt = DateTime.UtcNow
@@ -304,7 +304,7 @@ public class ClaudeSessionServiceTests
             "project-456",
             "/test/path",
             SessionMode.Build,
-            "claude-sonnet-4-20250514");
+            "sonnet");
 
         // Act
         await _service.StopSessionAsync(session.Id);
@@ -331,7 +331,7 @@ public class ClaudeSessionServiceTests
             "project-456",
             "/test/path",
             SessionMode.Plan,
-            "claude-sonnet-4-20250514");
+            "sonnet");
 
         // Act
         await _service.StopSessionAsync(session.Id);
@@ -351,7 +351,7 @@ public class ClaudeSessionServiceTests
             "project-456",
             "/test/path",
             SessionMode.Build,
-            "claude-sonnet-4-20250514");
+            "sonnet");
 
         // Act
         await _service.InterruptSessionAsync(session.Id);
@@ -371,7 +371,7 @@ public class ClaudeSessionServiceTests
             "project-456",
             "/test/path",
             SessionMode.Build,
-            "claude-sonnet-4-20250514");
+            "sonnet");
 
         // Act
         await _service.InterruptSessionAsync(session.Id);
@@ -390,7 +390,7 @@ public class ClaudeSessionServiceTests
             "project-456",
             "/test/path",
             SessionMode.Build,
-            "claude-sonnet-4-20250514");
+            "sonnet");
         session.PendingQuestion = new PendingQuestion
         {
             Id = "q1",
@@ -976,7 +976,7 @@ public class ClaudeSessionServiceResumeTests
             ProjectId: "project-456",
             WorkingDirectory: "/test/path",
             Mode: SessionMode.Build,
-            Model: "claude-opus-4",
+            Model: "opus",
             SystemPrompt: "Test prompt",
             CreatedAt: DateTime.UtcNow.AddHours(-1)
         );
@@ -995,7 +995,7 @@ public class ClaudeSessionServiceResumeTests
         {
             Assert.That(session.ConversationId, Is.EqualTo(claudeSessionId));
             Assert.That(session.Mode, Is.EqualTo(SessionMode.Build));
-            Assert.That(session.Model, Is.EqualTo("claude-opus-4"));
+            Assert.That(session.Model, Is.EqualTo("opus"));
             Assert.That(session.SystemPrompt, Is.EqualTo("Test prompt"));
             Assert.That(session.Status, Is.EqualTo(ClaudeSessionStatus.Running));
         });
@@ -1118,7 +1118,7 @@ public class ClaudeSessionServiceResumeTests
             ProjectId: "project-456",
             WorkingDirectory: workingDirectory,
             Mode: SessionMode.Plan,
-            Model: "claude-opus-4",
+            Model: "opus",
             SystemPrompt: null,
             CreatedAt: DateTime.UtcNow.AddHours(-1)
         );
@@ -1140,7 +1140,7 @@ public class ClaudeSessionServiceResumeTests
         {
             Assert.That(resumable.SessionId, Is.EqualTo(sessionId));
             Assert.That(resumable.Mode, Is.EqualTo(SessionMode.Plan));
-            Assert.That(resumable.Model, Is.EqualTo("claude-opus-4"));
+            Assert.That(resumable.Model, Is.EqualTo("opus"));
             Assert.That(resumable.MessageCount, Is.EqualTo(42));
         });
     }
