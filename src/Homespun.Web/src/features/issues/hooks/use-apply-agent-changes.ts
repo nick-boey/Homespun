@@ -1,22 +1,23 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { postApiIssuesApplyAgentChanges, postApiIssuesResolveConflicts } from '@/api'
+import { Issues } from '@/api'
 import type {
   ApplyAgentChangesRequest,
   ApplyAgentChangesResponse,
   ResolveConflictsRequest,
 } from '@/api/generated'
-import { toast } from '@/hooks/use-toast'
+import { toast } from 'sonner'
 
 export function useApplyAgentChanges(issueId: string) {
   const queryClient = useQueryClient()
 
   return useMutation<ApplyAgentChangesResponse, Error, ApplyAgentChangesRequest>({
     mutationFn: async (request) => {
-      const response = await postApiIssuesApplyAgentChanges(issueId, {
+      const response = await Issues.postApiIssuesByIssueIdApplyAgentChanges({
+        path: { issueId },
         body: request,
       })
 
-      if (!response.ok) {
+      if (response.error || !response.data) {
         throw new Error('Failed to apply changes')
       }
 
@@ -24,33 +25,26 @@ export function useApplyAgentChanges(issueId: string) {
     },
     onSuccess: (data) => {
       if (data.success) {
-        toast({
-          title: 'Changes Applied',
-          description: data.message,
+        toast.success('Changes Applied', {
+          description: data.message ?? undefined,
         })
 
         // Invalidate issue queries to refresh the UI
         queryClient.invalidateQueries({ queryKey: ['issues'] })
         queryClient.invalidateQueries({ queryKey: ['issue', issueId] })
       } else if (data.conflicts && data.conflicts.length > 0) {
-        toast({
-          title: 'Conflicts Detected',
-          description: data.message,
-          variant: 'destructive',
+        toast.error('Conflicts Detected', {
+          description: data.message ?? undefined,
         })
       } else {
-        toast({
-          title: 'Apply Failed',
-          description: data.message,
-          variant: 'destructive',
+        toast.error('Apply Failed', {
+          description: data.message ?? undefined,
         })
       }
     },
     onError: (error) => {
-      toast({
-        title: 'Error',
+      toast.error('Error', {
         description: error.message || 'Failed to apply changes',
-        variant: 'destructive',
       })
     },
   })
@@ -60,16 +54,17 @@ export function usePreviewAgentChanges(issueId: string, sessionId: string, proje
   return useQuery<ApplyAgentChangesResponse>({
     queryKey: ['agent-changes-preview', issueId, sessionId],
     queryFn: async () => {
-      const response = await postApiIssuesApplyAgentChanges(issueId, {
+      const response = await Issues.postApiIssuesByIssueIdApplyAgentChanges({
+        path: { issueId },
         body: {
           projectId,
           sessionId,
           dryRun: true,
-          conflictStrategy: 'Manual',
+          conflictStrategy: 3, // Manual
         },
       })
 
-      if (!response.ok) {
+      if (response.error || !response.data) {
         throw new Error('Failed to preview changes')
       }
 
@@ -84,11 +79,12 @@ export function useResolveConflicts(issueId: string) {
 
   return useMutation<ApplyAgentChangesResponse, Error, ResolveConflictsRequest>({
     mutationFn: async (request) => {
-      const response = await postApiIssuesResolveConflicts(issueId, {
+      const response = await Issues.postApiIssuesByIssueIdResolveConflicts({
+        path: { issueId },
         body: request,
       })
 
-      if (!response.ok) {
+      if (response.error || !response.data) {
         throw new Error('Failed to resolve conflicts')
       }
 
@@ -96,27 +92,22 @@ export function useResolveConflicts(issueId: string) {
     },
     onSuccess: (data) => {
       if (data.success) {
-        toast({
-          title: 'Conflicts Resolved',
-          description: data.message,
+        toast.success('Conflicts Resolved', {
+          description: data.message ?? undefined,
         })
 
         // Invalidate issue queries to refresh the UI
         queryClient.invalidateQueries({ queryKey: ['issues'] })
         queryClient.invalidateQueries({ queryKey: ['issue', issueId] })
       } else {
-        toast({
-          title: 'Resolution Failed',
-          description: data.message,
-          variant: 'destructive',
+        toast.error('Resolution Failed', {
+          description: data.message ?? undefined,
         })
       }
     },
     onError: (error) => {
-      toast({
-        title: 'Error',
+      toast.error('Error', {
         description: error.message || 'Failed to resolve conflicts',
-        variant: 'destructive',
       })
     },
   })

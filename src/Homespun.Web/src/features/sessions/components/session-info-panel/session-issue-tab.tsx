@@ -1,5 +1,5 @@
 import { FileText, GitMerge } from 'lucide-react'
-import type { ClaudeSession } from '@/api/generated'
+import type { ClaudeSession, ClaudeSessionStatus } from '@/api/generated'
 import { useIssue } from '@/features/issues/hooks/use-issue'
 import { getStatusLabel, getStatusColorClass, getTypeLabel } from '@/lib/issue-constants'
 import { cn } from '@/lib/utils'
@@ -7,6 +7,29 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { useState } from 'react'
 import { ApplyAgentChangesDialog } from '@/features/issues/components/apply-agent-changes-dialog'
+
+// Session status enum values from backend
+const SessionStatus = {
+  Starting: 0,
+  RunningHooks: 1,
+  Running: 2,
+  WaitingForInput: 3,
+  WaitingForQuestionAnswer: 4,
+  WaitingForPlanExecution: 5,
+  Stopped: 6,
+  Error: 7,
+} as const
+
+function isActiveStatus(status: ClaudeSessionStatus | undefined): boolean {
+  return (
+    status === SessionStatus.Starting ||
+    status === SessionStatus.RunningHooks ||
+    status === SessionStatus.Running ||
+    status === SessionStatus.WaitingForInput ||
+    status === SessionStatus.WaitingForQuestionAnswer ||
+    status === SessionStatus.WaitingForPlanExecution
+  )
+}
 
 interface SessionIssueTabProps {
   session: ClaudeSession
@@ -101,24 +124,20 @@ export function SessionIssueTab({ session }: SessionIssueTabProps) {
       )}
 
       {/* Apply Changes Button */}
-      {session.status !== 'active' && (
-        <div className="mt-6 pt-4 border-t">
-          <Button
-            onClick={() => setShowApplyDialog(true)}
-            className="w-full"
-            variant="outline"
-          >
+      {!isActiveStatus(session.status) && (
+        <div className="mt-6 border-t pt-4">
+          <Button onClick={() => setShowApplyDialog(true)} className="w-full" variant="outline">
             <GitMerge className="mr-2 h-4 w-4" />
             Apply Agent Changes
           </Button>
-          <p className="text-xs text-muted-foreground mt-2">
+          <p className="text-muted-foreground mt-2 text-xs">
             Apply changes made by the agent back to the main branch
           </p>
         </div>
       )}
 
       {/* Apply Changes Dialog */}
-      {showApplyDialog && session.projectId && (
+      {showApplyDialog && session.projectId && session.id && issue.id && issue.title && (
         <ApplyAgentChangesDialog
           open={showApplyDialog}
           onOpenChange={setShowApplyDialog}

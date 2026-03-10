@@ -1,5 +1,13 @@
 import { useState, useMemo } from 'react'
-import { AlertCircle, CheckCircle2, GitMerge, Info, XCircle, ChevronDown, ChevronRight } from 'lucide-react'
+import {
+  AlertCircle,
+  CheckCircle2,
+  GitMerge,
+  Info,
+  XCircle,
+  ChevronDown,
+  ChevronRight,
+} from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -9,18 +17,13 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { cn } from '@/lib/utils'
 import { useApplyAgentChanges, usePreviewAgentChanges } from '../hooks/use-apply-agent-changes'
-import type { ChangeType, IssueChangeDto, IssueConflictDto } from '@/api/generated'
+import { ChangeType, ConflictResolutionStrategy } from '@/api/generated'
+import type { IssueChangeDto, IssueConflictDto } from '@/api/generated'
 
 interface ApplyAgentChangesDialogProps {
   open: boolean
@@ -62,7 +65,9 @@ export function ApplyAgentChangesDialog({
         projectId,
         sessionId,
         dryRun: false,
-        conflictStrategy: preview?.conflicts?.length ? 'Manual' : 'AgentWins',
+        conflictStrategy: preview?.conflicts?.length
+          ? ConflictResolutionStrategy[3] // Manual
+          : ConflictResolutionStrategy[0], // AgentWins
       },
       {
         onSuccess: (data) => {
@@ -79,15 +84,15 @@ export function ApplyAgentChangesDialog({
     if (!preview?.changes) return { createdCount: 0, updatedCount: 0, deletedCount: 0 }
 
     return {
-      createdCount: preview.changes.filter((c) => c.changeType === 'Created').length,
-      updatedCount: preview.changes.filter((c) => c.changeType === 'Updated').length,
-      deletedCount: preview.changes.filter((c) => c.changeType === 'Deleted').length,
+      createdCount: preview.changes.filter((c) => c.changeType === ChangeType[0]).length, // Created
+      updatedCount: preview.changes.filter((c) => c.changeType === ChangeType[1]).length, // Updated
+      deletedCount: preview.changes.filter((c) => c.changeType === ChangeType[2]).length, // Deleted
     }
   }, [preview])
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh]">
+      <DialogContent className="max-h-[90vh] max-w-3xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <GitMerge className="h-5 w-5" />
@@ -108,27 +113,29 @@ export function ApplyAgentChangesDialog({
           )}
 
           {error && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{error.message}</AlertDescription>
-            </Alert>
+            <div className="border-destructive/50 bg-destructive/10 text-destructive flex items-center gap-2 rounded-md border p-3">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <p className="text-sm">{error.message}</p>
+            </div>
           )}
 
           {preview && !preview.changes?.length && (
-            <Alert>
-              <Info className="h-4 w-4" />
-              <AlertDescription>No changes detected from the agent session.</AlertDescription>
-            </Alert>
+            <div className="bg-muted flex items-center gap-2 rounded-md border p-3">
+              <Info className="text-muted-foreground h-4 w-4 shrink-0" />
+              <p className="text-muted-foreground text-sm">
+                No changes detected from the agent session.
+              </p>
+            </div>
           )}
 
           {preview?.conflicts && preview.conflicts.length > 0 && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                {preview.conflicts.length} conflict{preview.conflicts.length > 1 ? 's' : ''} detected.
-                Manual resolution required.
-              </AlertDescription>
-            </Alert>
+            <div className="border-destructive/50 bg-destructive/10 text-destructive flex items-center gap-2 rounded-md border p-3">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <p className="text-sm">
+                {preview.conflicts.length} conflict{preview.conflicts.length > 1 ? 's' : ''}{' '}
+                detected. Manual resolution required.
+              </p>
+            </div>
           )}
 
           {preview?.changes && preview.changes.length > 0 && (
@@ -154,7 +161,7 @@ export function ApplyAgentChangesDialog({
                 )}
               </div>
 
-              <ScrollArea className="h-[400px] rounded-md border p-4">
+              <div className="h-[400px] overflow-y-auto rounded-md border p-4">
                 <div className="space-y-3">
                   {preview.changes.map((change, index) => (
                     <ChangeItem
@@ -165,20 +172,20 @@ export function ApplyAgentChangesDialog({
                     />
                   ))}
                 </div>
-              </ScrollArea>
+              </div>
             </>
           )}
 
           {preview?.conflicts && preview.conflicts.length > 0 && (
             <div className="space-y-2">
               <h4 className="text-sm font-semibold">Conflicts</h4>
-              <ScrollArea className="h-[200px] rounded-md border p-4">
+              <div className="h-[200px] overflow-y-auto rounded-md border p-4">
                 <div className="space-y-3">
                   {preview.conflicts.map((conflict, index) => (
                     <ConflictItem key={conflict.issueId || index} conflict={conflict} />
                   ))}
                 </div>
-              </ScrollArea>
+              </div>
             </div>
           )}
         </div>
@@ -193,7 +200,7 @@ export function ApplyAgentChangesDialog({
               isLoading ||
               !preview?.changes?.length ||
               applyChangesMutation.isPending ||
-              (preview.conflicts && preview.conflicts.length > 0)
+              Boolean(preview?.conflicts && preview.conflicts.length > 0)
             }
           >
             {applyChangesMutation.isPending ? 'Applying...' : 'Apply Changes'}
@@ -213,11 +220,11 @@ interface ChangeItemProps {
 function ChangeItem({ change, expanded, onToggle }: ChangeItemProps) {
   const getChangeIcon = (type: ChangeType | undefined) => {
     switch (type) {
-      case 'Created':
+      case ChangeType[0]: // Created
         return <CheckCircle2 className="h-4 w-4 text-green-600" />
-      case 'Updated':
+      case ChangeType[1]: // Updated
         return <GitMerge className="h-4 w-4 text-blue-600" />
-      case 'Deleted':
+      case ChangeType[2]: // Deleted
         return <XCircle className="h-4 w-4 text-red-600" />
       default:
         return null
@@ -226,11 +233,11 @@ function ChangeItem({ change, expanded, onToggle }: ChangeItemProps) {
 
   const getChangeBadge = (type: ChangeType | undefined) => {
     switch (type) {
-      case 'Created':
+      case ChangeType[0]: // Created
         return <Badge className="bg-green-100 text-green-700">Created</Badge>
-      case 'Updated':
+      case ChangeType[1]: // Updated
         return <Badge className="bg-blue-100 text-blue-700">Updated</Badge>
-      case 'Deleted':
+      case ChangeType[2]: // Deleted
         return <Badge className="bg-red-100 text-red-700">Deleted</Badge>
       default:
         return null
@@ -242,7 +249,7 @@ function ChangeItem({ change, expanded, onToggle }: ChangeItemProps) {
       <CollapsibleTrigger
         onClick={onToggle}
         className={cn(
-          'flex w-full items-center gap-2 rounded-md border p-3 text-left transition-colors hover:bg-muted/50',
+          'hover:bg-muted/50 flex w-full items-center gap-2 rounded-md border p-3 text-left transition-colors',
           expanded && 'bg-muted/30'
         )}
       >
@@ -253,14 +260,12 @@ function ChangeItem({ change, expanded, onToggle }: ChangeItemProps) {
       </CollapsibleTrigger>
       <CollapsibleContent>
         {change.fieldChanges && change.fieldChanges.length > 0 && (
-          <div className="mt-2 space-y-1 border-l-2 border-muted pl-4">
+          <div className="border-muted mt-2 space-y-1 border-l-2 pl-4">
             {change.fieldChanges.map((field, index) => (
               <div key={index} className="text-sm">
                 <span className="font-medium">{field.fieldName}:</span>
                 {field.oldValue && (
-                  <span className="text-muted-foreground line-through mx-1">
-                    {field.oldValue}
-                  </span>
+                  <span className="text-muted-foreground mx-1 line-through">{field.oldValue}</span>
                 )}
                 {field.oldValue && field.newValue && <span className="mx-1">→</span>}
                 {field.newValue && (
@@ -281,9 +286,9 @@ interface ConflictItemProps {
 
 function ConflictItem({ conflict }: ConflictItemProps) {
   return (
-    <div className="rounded-md border border-destructive/50 p-3">
+    <div className="border-destructive/50 rounded-md border p-3">
       <div className="mb-2 flex items-center gap-2">
-        <AlertCircle className="h-4 w-4 text-destructive" />
+        <AlertCircle className="text-destructive h-4 w-4" />
         <span className="font-medium">{conflict.title || conflict.issueId}</span>
       </div>
       {conflict.fieldConflicts && conflict.fieldConflicts.length > 0 && (
