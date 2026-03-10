@@ -212,10 +212,7 @@ export const TaskGraphIssueRow = memo(
               {prStatus && (
                 <PrStatusIndicator
                   checksPassing={prStatus.checksPassing ?? null}
-                  hasConflicts={
-                    prStatus.mergeableState === 'conflicting' ||
-                    prStatus.isMergeableByGitHub === false
-                  }
+                  hasConflicts={prStatus.hasConflicts ?? false}
                 />
               )}
             </div>

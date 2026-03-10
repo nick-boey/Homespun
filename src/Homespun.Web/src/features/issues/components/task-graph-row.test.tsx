@@ -147,6 +147,7 @@ describe('TaskGraphIssueRow', () => {
           checksPassing: true,
           mergeableState: 'clean',
           isMergeableByGitHub: true,
+          hasConflicts: false,
         })
       )
 
@@ -172,8 +173,9 @@ describe('TaskGraphIssueRow', () => {
           prNumber: 789,
           prUrl: 'https://github.com/test/test/pull/789',
           checksPassing: true,
-          mergeableState: 'conflicting',
+          mergeableState: 'dirty', // GitHub API returns 'dirty' for merge conflicts
           isMergeableByGitHub: false,
+          hasConflicts: true, // Use the computed property from backend
         })
       )
 
@@ -199,6 +201,7 @@ describe('TaskGraphIssueRow', () => {
           checksPassing: false,
           mergeableState: 'clean',
           isMergeableByGitHub: true,
+          hasConflicts: false,
         })
       )
 
@@ -224,6 +227,7 @@ describe('TaskGraphIssueRow', () => {
           checksPassing: null,
           mergeableState: 'clean',
           isMergeableByGitHub: true,
+          hasConflicts: false,
         })
       )
 
