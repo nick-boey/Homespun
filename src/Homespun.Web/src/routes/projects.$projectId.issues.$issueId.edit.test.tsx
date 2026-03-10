@@ -338,6 +338,43 @@ describe('EditIssue Page', () => {
     })
   })
 
+  it('does not block navigation when changes are reverted to original values', async () => {
+    vi.mocked(Issues.getApiIssuesByIssueId).mockResolvedValue({
+      data: mockIssue,
+      error: undefined,
+      request: new Request('http://test'),
+      response: new Response(),
+    })
+
+    const user = userEvent.setup()
+    render(<EditIssue />, { wrapper: createWrapper() })
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/title/i)).toBeInTheDocument()
+    })
+
+    // Initially should not be blocking navigation
+    expect(mockUseBlocker).toHaveBeenLastCalledWith(expect.objectContaining({ condition: false }))
+
+    // Make a change
+    const titleInput = screen.getByLabelText(/title/i)
+    await user.type(titleInput, ' modified')
+
+    // Should now be blocking navigation
+    await waitFor(() => {
+      expect(mockUseBlocker).toHaveBeenLastCalledWith(expect.objectContaining({ condition: true }))
+    })
+
+    // Revert the change by clearing and typing back the original value
+    await user.clear(titleInput)
+    await user.type(titleInput, 'Test Issue')
+
+    // Should no longer be blocking navigation since values match original
+    await waitFor(() => {
+      expect(mockUseBlocker).toHaveBeenLastCalledWith(expect.objectContaining({ condition: false }))
+    })
+  })
+
   it('handles keyboard shortcut Cmd/Ctrl+S to save', async () => {
     vi.mocked(Issues.getApiIssuesByIssueId).mockResolvedValue({
       data: mockIssue,
@@ -562,6 +599,175 @@ describe('EditIssue Page', () => {
           }),
         })
       )
+    })
+  })
+
+  describe('Dirty state detection', () => {
+    it('does not block navigation when no changes are made', async () => {
+      vi.mocked(Issues.getApiIssuesByIssueId).mockResolvedValue({
+        data: mockIssue,
+        error: undefined,
+        request: new Request('http://test'),
+        response: new Response(),
+      })
+
+      render(<EditIssue />, { wrapper: createWrapper() })
+
+      // Wait for form to be fully loaded
+      await waitFor(() => {
+        expect(screen.getByLabelText(/title/i)).toHaveValue('Test Issue')
+      })
+
+      // Wait for the form to stabilize after reset
+      await waitFor(() => {
+        expect(screen.getByLabelText(/description/i)).toHaveValue('Test description')
+      })
+
+      // Should not block navigation when no changes are made
+      await waitFor(() => {
+        expect(mockUseBlocker).toHaveBeenLastCalledWith(
+          expect.objectContaining({ condition: false })
+        )
+      })
+    })
+
+    it('does not block navigation after reverting changes to original values', async () => {
+      vi.mocked(Issues.getApiIssuesByIssueId).mockResolvedValue({
+        data: mockIssue,
+        error: undefined,
+        request: new Request('http://test'),
+        response: new Response(),
+      })
+
+      const user = userEvent.setup()
+      render(<EditIssue />, { wrapper: createWrapper() })
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/title/i)).toHaveValue('Test Issue')
+      })
+
+      const titleInput = screen.getByLabelText(/title/i)
+
+      // Make a change - blocker should be true
+      await user.type(titleInput, ' modified')
+      await waitFor(() => {
+        expect(mockUseBlocker).toHaveBeenLastCalledWith(
+          expect.objectContaining({ condition: true })
+        )
+      })
+
+      // Revert to original value by clearing and retyping
+      await user.clear(titleInput)
+      await user.type(titleInput, 'Test Issue')
+
+      // Should not block navigation after reverting to original
+      await waitFor(() => {
+        expect(mockUseBlocker).toHaveBeenLastCalledWith(
+          expect.objectContaining({ condition: false })
+        )
+      })
+    })
+
+    it('blocks navigation when title is changed', async () => {
+      vi.mocked(Issues.getApiIssuesByIssueId).mockResolvedValue({
+        data: mockIssue,
+        error: undefined,
+        request: new Request('http://test'),
+        response: new Response(),
+      })
+
+      const user = userEvent.setup()
+      render(<EditIssue />, { wrapper: createWrapper() })
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/title/i)).toHaveValue('Test Issue')
+      })
+
+      const titleInput = screen.getByLabelText(/title/i)
+      await user.type(titleInput, ' changed')
+
+      await waitFor(() => {
+        expect(mockUseBlocker).toHaveBeenLastCalledWith(
+          expect.objectContaining({ condition: true })
+        )
+      })
+    })
+
+    it('blocks navigation when description is changed', async () => {
+      vi.mocked(Issues.getApiIssuesByIssueId).mockResolvedValue({
+        data: mockIssue,
+        error: undefined,
+        request: new Request('http://test'),
+        response: new Response(),
+      })
+
+      const user = userEvent.setup()
+      render(<EditIssue />, { wrapper: createWrapper() })
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/description/i)).toHaveValue('Test description')
+      })
+
+      const descriptionInput = screen.getByLabelText(/description/i)
+      await user.type(descriptionInput, ' added text')
+
+      await waitFor(() => {
+        expect(mockUseBlocker).toHaveBeenLastCalledWith(
+          expect.objectContaining({ condition: true })
+        )
+      })
+    })
+
+    it('blocks navigation when tags are changed', async () => {
+      vi.mocked(Issues.getApiIssuesByIssueId).mockResolvedValue({
+        data: mockIssue,
+        error: undefined,
+        request: new Request('http://test'),
+        response: new Response(),
+      })
+
+      const user = userEvent.setup()
+      render(<EditIssue />, { wrapper: createWrapper() })
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/tags/i)).toHaveValue('test, urgent')
+      })
+
+      const tagsInput = screen.getByLabelText(/tags/i)
+      await user.clear(tagsInput)
+      await user.type(tagsInput, 'new-tag')
+
+      await waitFor(() => {
+        expect(mockUseBlocker).toHaveBeenLastCalledWith(
+          expect.objectContaining({ condition: true })
+        )
+      })
+    })
+
+    it('blocks navigation when working branch ID is changed', async () => {
+      vi.mocked(Issues.getApiIssuesByIssueId).mockResolvedValue({
+        data: mockIssue,
+        error: undefined,
+        request: new Request('http://test'),
+        response: new Response(),
+      })
+
+      const user = userEvent.setup()
+      render(<EditIssue />, { wrapper: createWrapper() })
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/working branch/i)).toHaveValue('feature/test')
+      })
+
+      const branchInput = screen.getByLabelText(/working branch/i)
+      await user.clear(branchInput)
+      await user.type(branchInput, 'feature/new-branch')
+
+      await waitFor(() => {
+        expect(mockUseBlocker).toHaveBeenLastCalledWith(
+          expect.objectContaining({ condition: true })
+        )
+      })
     })
   })
 
