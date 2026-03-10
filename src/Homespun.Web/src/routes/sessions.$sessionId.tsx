@@ -57,6 +57,7 @@ function SessionChat() {
   const { messages, addUserMessage } = useSessionMessages({
     sessionId,
     initialMessages: session?.messages ?? [],
+    isLoading,
   })
 
   // Handle question answering

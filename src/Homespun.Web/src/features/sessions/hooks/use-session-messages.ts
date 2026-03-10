@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useEffect, useCallback, useRef, useReducer } from 'react'
 import { useClaudeCodeHub } from '@/providers/signalr-provider'
 import type {
   ClaudeMessage,
@@ -15,6 +15,7 @@ import type {
 export interface UseSessionMessagesOptions {
   sessionId: string
   initialMessages: ClaudeMessage[]
+  isLoading?: boolean
 }
 
 export interface UseSessionMessagesResult {
@@ -27,23 +28,100 @@ function capitalizeRole(role: string): ClaudeMessageRole {
   return 'Assistant'
 }
 
+// Message state and actions
+interface MessagesState {
+  messages: ClaudeMessage[]
+  sessionId: string
+  hasReceivedInitialData: boolean
+}
+
+type MessagesAction =
+  | { type: 'RESET'; sessionId: string }
+  | { type: 'SET_INITIAL'; messages: ClaudeMessage[] }
+  | { type: 'ADD_MESSAGE'; message: ClaudeMessage }
+  | {
+      type: 'UPDATE_MESSAGE'
+      messageId: string
+      updater: (msg: ClaudeMessage) => ClaudeMessage
+    }
+  | {
+      type: 'ADD_OR_UPDATE_MESSAGE'
+      messageId: string
+      fallbackMessage: ClaudeMessage
+      updater: (msg: ClaudeMessage) => ClaudeMessage
+    }
+  | {
+      type: 'UPDATE_MESSAGE_BY_TOOL_ID'
+      toolCallId: string
+      updater: (msg: ClaudeMessage) => ClaudeMessage
+    }
+
+function messagesReducer(state: MessagesState, action: MessagesAction): MessagesState {
+  switch (action.type) {
+    case 'RESET':
+      return { messages: [], sessionId: action.sessionId, hasReceivedInitialData: false }
+    case 'SET_INITIAL':
+      return { ...state, messages: action.messages, hasReceivedInitialData: true }
+    case 'ADD_MESSAGE':
+      return { ...state, messages: [...state.messages, action.message] }
+    case 'UPDATE_MESSAGE': {
+      const messageIndex = state.messages.findIndex((m) => m.id === action.messageId)
+      if (messageIndex === -1) return state
+      const updatedMessages = [...state.messages]
+      updatedMessages[messageIndex] = action.updater(state.messages[messageIndex])
+      return { ...state, messages: updatedMessages }
+    }
+    case 'ADD_OR_UPDATE_MESSAGE': {
+      const messageIndex = state.messages.findIndex((m) => m.id === action.messageId)
+      if (messageIndex === -1) {
+        // Add the fallback message and then apply updater
+        const newMessages = [...state.messages, action.fallbackMessage]
+        newMessages[newMessages.length - 1] = action.updater(action.fallbackMessage)
+        return { ...state, messages: newMessages }
+      }
+      const updatedMessages = [...state.messages]
+      updatedMessages[messageIndex] = action.updater(state.messages[messageIndex])
+      return { ...state, messages: updatedMessages }
+    }
+    case 'UPDATE_MESSAGE_BY_TOOL_ID': {
+      const messageIndex = state.messages.findIndex((m) =>
+        m.content.some((c) => c.type === 'ToolUse' && c.toolUseId === action.toolCallId)
+      )
+      if (messageIndex === -1) return state
+      const updatedMessages = [...state.messages]
+      updatedMessages[messageIndex] = action.updater(state.messages[messageIndex])
+      return { ...state, messages: updatedMessages }
+    }
+    default:
+      return state
+  }
+}
+
 export function useSessionMessages({
   sessionId,
   initialMessages,
+  isLoading = false,
 }: UseSessionMessagesOptions): UseSessionMessagesResult {
   const { connection } = useClaudeCodeHub()
-  const [messages, setMessages] = useState<ClaudeMessage[]>(initialMessages)
-  const messagesRef = useRef(messages)
+  const [state, dispatch] = useReducer(messagesReducer, {
+    messages: [],
+    sessionId,
+    hasReceivedInitialData: false,
+  })
+  const messagesRef = useRef(state.messages)
 
   // Keep ref in sync with state
   useEffect(() => {
-    messagesRef.current = messages
-  }, [messages])
+    messagesRef.current = state.messages
+  }, [state.messages])
 
-  // Update messages when initialMessages change
-  useEffect(() => {
-    setMessages(initialMessages)
-  }, [initialMessages])
+  // Handle session changes and initial data loading
+  // This is a synchronization effect that responds to external data changes
+  if (sessionId !== state.sessionId) {
+    dispatch({ type: 'RESET', sessionId })
+  } else if (!isLoading && !state.hasReceivedInitialData) {
+    dispatch({ type: 'SET_INITIAL', messages: initialMessages })
+  }
 
   // Handle AG-UI text message start
   const handleTextMessageStart = useCallback(
@@ -57,106 +135,87 @@ export function useSessionMessages({
         isStreaming: true,
       }
 
-      setMessages((prev) => [...prev, newMessage])
+      dispatch({ type: 'ADD_MESSAGE', message: newMessage })
     },
     [sessionId]
   )
 
   // Handle AG-UI text message content (streaming delta)
   const handleTextMessageContent = useCallback((event: TextMessageContentEvent) => {
-    setMessages((prev) => {
-      const messageIndex = prev.findIndex((m) => m.id === event.messageId)
-      if (messageIndex === -1) return prev
+    dispatch({
+      type: 'UPDATE_MESSAGE',
+      messageId: event.messageId,
+      updater: (message) => {
+        const updatedContent = [...message.content]
 
-      const message = prev[messageIndex]
-      const updatedContent = [...message.content]
+        // Find the text content block or create one
+        let textContentIndex = updatedContent.findIndex((c) => c.type === 'Text' && c.isStreaming)
+        if (textContentIndex === -1) {
+          textContentIndex = updatedContent.length
+          updatedContent.push({
+            type: 'Text',
+            text: '',
+            isStreaming: true,
+            index: textContentIndex,
+          })
+        }
 
-      // Find the text content block or create one
-      let textContentIndex = updatedContent.findIndex((c) => c.type === 'Text' && c.isStreaming)
-      if (textContentIndex === -1) {
-        textContentIndex = updatedContent.length
-        updatedContent.push({ type: 'Text', text: '', isStreaming: true, index: textContentIndex })
-      }
+        // Append the delta
+        updatedContent[textContentIndex] = {
+          ...updatedContent[textContentIndex],
+          text: (updatedContent[textContentIndex].text ?? '') + event.delta,
+        }
 
-      // Append the delta
-      updatedContent[textContentIndex] = {
-        ...updatedContent[textContentIndex],
-        text: (updatedContent[textContentIndex].text ?? '') + event.delta,
-      }
-
-      const updatedMessages = [...prev]
-      updatedMessages[messageIndex] = {
-        ...message,
-        content: updatedContent,
-      }
-
-      return updatedMessages
+        return { ...message, content: updatedContent }
+      },
     })
   }, [])
 
   // Handle AG-UI text message end
   const handleTextMessageEnd = useCallback((event: TextMessageEndEvent) => {
-    setMessages((prev) => {
-      const messageIndex = prev.findIndex((m) => m.id === event.messageId)
-      if (messageIndex === -1) return prev
-
-      const message = prev[messageIndex]
-      const updatedContent = message.content.map((c) => ({
-        ...c,
-        isStreaming: false,
-      }))
-
-      const updatedMessages = [...prev]
-      updatedMessages[messageIndex] = {
-        ...message,
-        content: updatedContent,
-        isStreaming: false,
-      }
-
-      return updatedMessages
+    dispatch({
+      type: 'UPDATE_MESSAGE',
+      messageId: event.messageId,
+      updater: (message) => {
+        const updatedContent = message.content.map((c) => ({
+          ...c,
+          isStreaming: false,
+        }))
+        return { ...message, content: updatedContent, isStreaming: false }
+      },
     })
   }, [])
 
   // Handle tool call start
   const handleToolCallStart = useCallback(
     (event: ToolCallStartEvent) => {
-      setMessages((prev) => {
-        // Find the parent message or create a new one
-        let messageIndex = prev.findIndex((m) => m.id === event.parentMessageId)
+      const messageId = event.parentMessageId ?? `tool-${event.toolCallId}`
+      const fallbackMessage: ClaudeMessage = {
+        id: messageId,
+        sessionId,
+        role: 'Assistant',
+        content: [],
+        createdAt: new Date(event.timestamp).toISOString(),
+        isStreaming: true,
+      }
 
-        if (messageIndex === -1) {
-          // Create a new assistant message for the tool use
-          const newMessage: ClaudeMessage = {
-            id: event.parentMessageId ?? `tool-${event.toolCallId}`,
-            sessionId,
-            role: 'Assistant',
-            content: [],
-            createdAt: new Date(event.timestamp).toISOString(),
-            isStreaming: true,
-          }
-          messageIndex = prev.length
-          prev = [...prev, newMessage]
-        }
-
-        const message = prev[messageIndex]
-        const updatedContent = [
-          ...message.content,
-          {
-            type: 'ToolUse' as const,
-            toolName: event.toolCallName,
-            toolUseId: event.toolCallId,
-            isStreaming: true,
-            index: message.content.length,
-          },
-        ]
-
-        const updatedMessages = [...prev]
-        updatedMessages[messageIndex] = {
+      dispatch({
+        type: 'ADD_OR_UPDATE_MESSAGE',
+        messageId,
+        fallbackMessage,
+        updater: (message) => ({
           ...message,
-          content: updatedContent,
-        }
-
-        return updatedMessages
+          content: [
+            ...message.content,
+            {
+              type: 'ToolUse' as const,
+              toolName: event.toolCallName,
+              toolUseId: event.toolCallId,
+              isStreaming: true,
+              index: message.content.length,
+            },
+          ],
+        }),
       })
     },
     [sessionId]
@@ -164,88 +223,59 @@ export function useSessionMessages({
 
   // Handle tool call args (streaming)
   const handleToolCallArgs = useCallback((event: ToolCallArgsEvent) => {
-    setMessages((prev) => {
-      // Find message with this tool call
-      const messageIndex = prev.findIndex((m) =>
-        m.content.some((c) => c.type === 'ToolUse' && c.toolUseId === event.toolCallId)
-      )
-      if (messageIndex === -1) return prev
-
-      const message = prev[messageIndex]
-      const updatedContent = message.content.map((c) => {
-        if (c.type === 'ToolUse' && c.toolUseId === event.toolCallId) {
-          return {
-            ...c,
-            toolInput: (c.toolInput ?? '') + event.delta,
-          }
-        }
-        return c
-      })
-
-      const updatedMessages = [...prev]
-      updatedMessages[messageIndex] = {
+    dispatch({
+      type: 'UPDATE_MESSAGE_BY_TOOL_ID',
+      toolCallId: event.toolCallId,
+      updater: (message) => ({
         ...message,
-        content: updatedContent,
-      }
-
-      return updatedMessages
+        content: message.content.map((c) => {
+          if (c.type === 'ToolUse' && c.toolUseId === event.toolCallId) {
+            return {
+              ...c,
+              toolInput: (c.toolInput ?? '') + event.delta,
+            }
+          }
+          return c
+        }),
+      }),
     })
   }, [])
 
   // Handle tool call end
   const handleToolCallEnd = useCallback((event: ToolCallEndEvent) => {
-    setMessages((prev) => {
-      const messageIndex = prev.findIndex((m) =>
-        m.content.some((c) => c.type === 'ToolUse' && c.toolUseId === event.toolCallId)
-      )
-      if (messageIndex === -1) return prev
-
-      const message = prev[messageIndex]
-      const updatedContent = message.content.map((c) => {
-        if (c.type === 'ToolUse' && c.toolUseId === event.toolCallId) {
-          return { ...c, isStreaming: false }
-        }
-        return c
-      })
-
-      const updatedMessages = [...prev]
-      updatedMessages[messageIndex] = {
+    dispatch({
+      type: 'UPDATE_MESSAGE_BY_TOOL_ID',
+      toolCallId: event.toolCallId,
+      updater: (message) => ({
         ...message,
-        content: updatedContent,
-      }
-
-      return updatedMessages
+        content: message.content.map((c) => {
+          if (c.type === 'ToolUse' && c.toolUseId === event.toolCallId) {
+            return { ...c, isStreaming: false }
+          }
+          return c
+        }),
+      }),
     })
   }, [])
 
   // Handle tool call result
   const handleToolCallResult = useCallback((event: ToolCallResultEvent) => {
-    setMessages((prev) => {
-      // Find message with this tool call
-      const messageIndex = prev.findIndex((m) =>
-        m.content.some((c) => c.type === 'ToolUse' && c.toolUseId === event.toolCallId)
-      )
-      if (messageIndex === -1) return prev
-
-      const message = prev[messageIndex]
-      const updatedContent = message.content.map((c) => {
-        if (c.type === 'ToolUse' && c.toolUseId === event.toolCallId) {
-          return {
-            ...c,
-            toolResult: event.content,
-            isStreaming: false,
-          }
-        }
-        return c
-      })
-
-      const updatedMessages = [...prev]
-      updatedMessages[messageIndex] = {
+    dispatch({
+      type: 'UPDATE_MESSAGE_BY_TOOL_ID',
+      toolCallId: event.toolCallId,
+      updater: (message) => ({
         ...message,
-        content: updatedContent,
-      }
-
-      return updatedMessages
+        content: message.content.map((c) => {
+          if (c.type === 'ToolUse' && c.toolUseId === event.toolCallId) {
+            return {
+              ...c,
+              toolResult: event.content,
+              isStreaming: false,
+            }
+          }
+          return c
+        }),
+      }),
     })
   }, [])
 
@@ -261,7 +291,7 @@ export function useSessionMessages({
         isStreaming: false,
       }
 
-      setMessages((prev) => [...prev, newMessage])
+      dispatch({ type: 'ADD_MESSAGE', message: newMessage })
     },
     [sessionId]
   )
@@ -299,7 +329,7 @@ export function useSessionMessages({
   ])
 
   return {
-    messages,
+    messages: state.messages,
     addUserMessage,
   }
 }
