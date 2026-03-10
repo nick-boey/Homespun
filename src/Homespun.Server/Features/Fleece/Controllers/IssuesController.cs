@@ -218,7 +218,8 @@ public class IssuesController(
             request.Type,
             request.Description,
             request.Priority,
-            workingBranchId: request.WorkingBranchId);
+            request.ExecutionMode,
+            request.WorkingBranchId);
 
         if (issue == null)
         {

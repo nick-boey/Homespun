@@ -33,7 +33,7 @@ import { useIssue, useUpdateIssue } from '@/features/issues'
 import { AgentLauncherDialog, useGenerateBranchId } from '@/features/agents'
 import { ISSUE_STATUS_OPTIONS, ISSUE_TYPE_OPTIONS } from '@/lib/issue-constants'
 import { ArrowLeft, Play, Sparkles } from 'lucide-react'
-import type { IssueStatus, IssueType, IssueResponse } from '@/api'
+import type { IssueStatus, IssueType, ExecutionMode, IssueResponse } from '@/api'
 import { useBranchIdGenerationStore } from '@/features/issues/stores/branch-id-generation-store'
 
 export const Route = createFileRoute('/projects/$projectId/issues/$issueId/edit')({
@@ -268,6 +268,7 @@ export default function EditIssue() {
           status: parseInt(data.status) as IssueStatus,
           type: parseInt(data.type) as IssueType,
           priority: data.priority && data.priority !== 'none' ? parseInt(data.priority) : undefined,
+          executionMode: parseInt(data.executionMode) as ExecutionMode,
           workingBranchId: data.workingBranchId || undefined,
         },
       })
@@ -294,6 +295,7 @@ export default function EditIssue() {
         status: parseInt(data.status) as IssueStatus,
         type: parseInt(data.type) as IssueType,
         priority: data.priority && data.priority !== 'none' ? parseInt(data.priority) : undefined,
+        executionMode: parseInt(data.executionMode) as ExecutionMode,
         workingBranchId: data.workingBranchId || undefined,
       },
     })

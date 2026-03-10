@@ -855,6 +855,7 @@ export type UpdateIssueRequest = {
     type?: IssueType;
     description?: string | null;
     priority?: number | null;
+    executionMode?: ExecutionMode;
     workingBranchId?: string | null;
 };
 

@@ -94,6 +94,11 @@ public class UpdateIssueRequest
     public int? Priority { get; set; }
 
     /// <summary>
+    /// Execution mode for child issues (Series or Parallel).
+    /// </summary>
+    public ExecutionMode? ExecutionMode { get; set; }
+
+    /// <summary>
     /// Optional working branch ID update.
     /// </summary>
     public string? WorkingBranchId { get; set; }
