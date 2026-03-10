@@ -36,6 +36,9 @@ public class PRStatusResolver(
             "Resolving status for {Count} removed PRs in project {ProjectId}",
             removedPrs.Count, projectId);
 
+        // Load cache from disk before processing to ensure we have the latest data
+        graphCacheService.LoadCacheForProject(projectId, project.LocalPath);
+
         foreach (var removedPr in removedPrs)
         {
             if (!removedPr.GitHubPrNumber.HasValue)
@@ -58,7 +61,8 @@ public class PRStatusResolver(
                 // Determine final status
                 if (prInfo.Status == PullRequestStatus.Merged)
                 {
-                    await graphCacheService.UpdatePRStatusAsync(
+                    // Try to move from open to closed list
+                    var moved = await graphCacheService.UpdatePRStatusAsync(
                         projectId,
                         project.LocalPath,
                         removedPr.GitHubPrNumber.Value,
@@ -66,6 +70,16 @@ public class PRStatusResolver(
                         mergedAt: prInfo.MergedAt,
                         closedAt: null,
                         issueId: removedPr.BeadsIssueId);
+
+                    // If not in open list, add directly to closed list
+                    if (!moved)
+                    {
+                        await graphCacheService.AddClosedPRAsync(
+                            projectId,
+                            project.LocalPath,
+                            prInfo,
+                            removedPr.BeadsIssueId);
+                    }
 
                     // Update linked Fleece issue to Complete
                     if (!string.IsNullOrEmpty(removedPr.BeadsIssueId))
@@ -80,7 +94,8 @@ public class PRStatusResolver(
                 }
                 else if (prInfo.Status == PullRequestStatus.Closed)
                 {
-                    await graphCacheService.UpdatePRStatusAsync(
+                    // Try to move from open to closed list
+                    var moved = await graphCacheService.UpdatePRStatusAsync(
                         projectId,
                         project.LocalPath,
                         removedPr.GitHubPrNumber.Value,
@@ -88,6 +103,16 @@ public class PRStatusResolver(
                         mergedAt: null,
                         closedAt: prInfo.ClosedAt,
                         issueId: removedPr.BeadsIssueId);
+
+                    // If not in open list, add directly to closed list
+                    if (!moved)
+                    {
+                        await graphCacheService.AddClosedPRAsync(
+                            projectId,
+                            project.LocalPath,
+                            prInfo,
+                            removedPr.BeadsIssueId);
+                    }
 
                     // Update linked Fleece issue to Closed
                     if (!string.IsNullOrEmpty(removedPr.BeadsIssueId))
