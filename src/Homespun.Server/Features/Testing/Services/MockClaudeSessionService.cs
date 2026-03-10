@@ -908,4 +908,40 @@ public class MockClaudeSessionService : IClaudeSessionService
         // Return mock redirect URL
         return $"/projects/{session.ProjectId}/issues/{session.EntityId}";
     }
+
+    /// <inheritdoc />
+    public Task SetSessionModeAsync(string sessionId, SessionMode mode, CancellationToken cancellationToken = default)
+    {
+        _logger.LogDebug("[Mock] SetSessionMode for session {SessionId} to {Mode}", sessionId, mode);
+
+        var session = _sessionStore.GetById(sessionId);
+        if (session == null)
+        {
+            throw new KeyNotFoundException($"Session with ID {sessionId} not found");
+        }
+
+        session.Mode = mode;
+        session.LastActivityAt = DateTime.UtcNow;
+        _sessionStore.Update(session);
+
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc />
+    public Task SetSessionModelAsync(string sessionId, string model, CancellationToken cancellationToken = default)
+    {
+        _logger.LogDebug("[Mock] SetSessionModel for session {SessionId} to {Model}", sessionId, model);
+
+        var session = _sessionStore.GetById(sessionId);
+        if (session == null)
+        {
+            throw new KeyNotFoundException($"Session with ID {sessionId} not found");
+        }
+
+        session.Model = model;
+        session.LastActivityAt = DateTime.UtcNow;
+        _sessionStore.Update(session);
+
+        return Task.CompletedTask;
+    }
 }

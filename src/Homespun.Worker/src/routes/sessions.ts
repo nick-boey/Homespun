@@ -144,6 +144,34 @@ export function createSessionsRoute(sessionManager: SessionManager) {
     return c.json({ ok: true });
   });
 
+  // POST /sessions/:id/mode - Change session mode without sending a message
+  sessions.post('/:id/mode', async (c) => {
+    const sessionId = c.req.param('id');
+    const body = await c.req.json<{ mode: 'Plan' | 'Build' }>();
+    info(`POST /sessions/${sessionId}/mode - mode=${body.mode}`);
+
+    const success = await sessionManager.setMode(sessionId, body.mode);
+    if (!success) {
+      return c.json({ ok: false, error: `Session ${sessionId} not found` }, 404);
+    }
+
+    return c.json({ ok: true });
+  });
+
+  // POST /sessions/:id/model - Change session model without sending a message
+  sessions.post('/:id/model', async (c) => {
+    const sessionId = c.req.param('id');
+    const body = await c.req.json<{ model: string }>();
+    info(`POST /sessions/${sessionId}/model - model=${body.model}`);
+
+    const success = sessionManager.setModel(sessionId, body.model);
+    if (!success) {
+      return c.json({ ok: false, error: `Session ${sessionId} not found` }, 404);
+    }
+
+    return c.json({ ok: true });
+  });
+
   // POST /sessions/:id/interrupt - Interrupt current turn
   sessions.post('/:id/interrupt', async (c) => {
     const sessionId = c.req.param('id');

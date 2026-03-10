@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useClaudeCodeHub } from '@/providers/signalr-provider'
+import { useSessionSettingsStore } from '@/stores/session-settings-store'
 import type { ClaudeSession } from '@/types/signalr'
 
 export interface UseSessionResult {
@@ -29,6 +30,10 @@ export function useSession(sessionId: string): UseSessionResult {
     try {
       const result = await methods.getSession(sessionId)
       setSession(result)
+      // Sync session settings to the per-session cache
+      if (result) {
+        useSessionSettingsStore.getState().updateSession(sessionId, result.mode, result.model)
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch session')
     } finally {
@@ -94,6 +99,8 @@ export function useSession(sessionId: string): UseSessionResult {
           if (!prevSession || prevSession.id !== sessionId) return prevSession
           return { ...prevSession, mode, model }
         })
+        // Sync to per-session settings cache
+        useSessionSettingsStore.getState().updateSession(sessionId, mode, model)
       }
     }
 

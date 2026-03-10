@@ -60,6 +60,13 @@ vi.mock('@/features/sessions', () => ({
     mutate: vi.fn(),
     isPending: false,
   })),
+  useSessionSettings: vi.fn(() => ({ mode: 'Build', model: 'opus' })),
+  useChangeSessionSettings: vi.fn(() => ({
+    changeMode: vi.fn(),
+    changeModel: vi.fn(),
+    isChanging: false,
+    error: null,
+  })),
 }))
 
 vi.mock('@/features/questions', () => ({

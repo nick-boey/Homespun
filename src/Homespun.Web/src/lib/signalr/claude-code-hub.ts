@@ -147,6 +147,8 @@ export interface ClaudeCodeHubMethods {
   ): Promise<void>
   getCachedMessageCount(sessionId: string): Promise<number>
   restartSession(sessionId: string): Promise<ClaudeSession | null>
+  setSessionMode(sessionId: string, mode: SessionMode): Promise<void>
+  setSessionModel(sessionId: string, model: string): Promise<void>
 }
 
 /**
@@ -179,5 +181,9 @@ export function createClaudeCodeHubMethods(connection: HubConnection): ClaudeCod
       connection.invoke<number>('GetCachedMessageCount', sessionId),
     restartSession: (sessionId: string) =>
       connection.invoke<ClaudeSession | null>('RestartSession', sessionId),
+    setSessionMode: (sessionId: string, mode: SessionMode) =>
+      connection.invoke('SetSessionMode', sessionId, mode),
+    setSessionModel: (sessionId: string, model: string) =>
+      connection.invoke('SetSessionModel', sessionId, model),
   }
 }

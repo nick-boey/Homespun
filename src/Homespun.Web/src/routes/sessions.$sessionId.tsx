@@ -3,7 +3,8 @@ import { useEffect, useRef, useCallback, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useBreadcrumbSetter } from '@/hooks/use-breadcrumbs'
-import { toApiSessionMode } from '@/lib/utils/session-mode'
+import { toApiSessionMode, fromApiSessionMode } from '@/lib/utils/session-mode'
+import type { SessionMode as ApiSessionMode } from '@/api'
 import {
   useSession,
   useSessionMessages,
@@ -14,6 +15,8 @@ import {
   PlanApprovalPanel,
   useEntityInfo,
   useStopSession,
+  useSessionSettings,
+  useChangeSessionSettings,
 } from '@/features/sessions'
 import { useAnswerQuestion } from '@/features/questions'
 import { useClaudeCodeHub } from '@/providers/signalr-provider'
@@ -21,7 +24,7 @@ import { ArrowLeft, AlertCircle, RefreshCw, StopCircle } from 'lucide-react'
 import { ScrollToBottom } from '@/components/ui/scroll-to-bottom'
 import { Sessions } from '@/api'
 import { toast } from 'sonner'
-import type { ModelSelection } from '@/stores/chat-input-store'
+import type { ModelSelection } from '@/stores/session-settings-store'
 import type { SessionMode } from '@/types/signalr'
 import {
   AlertDialog,
@@ -46,6 +49,11 @@ function SessionChat() {
   const [isSending, setIsSending] = useState(false)
   const [isProcessingAnswer, setIsProcessingAnswer] = useState(false)
   const [showStopDialog, setShowStopDialog] = useState(false)
+
+  // Get session settings (mode/model) from server or cache
+  const { mode, model } = useSessionSettings(sessionId, session)
+  // Hook to change mode/model
+  const { changeMode, changeModel } = useChangeSessionSettings(sessionId)
 
   // Fetch entity info
   const { data: entityInfo } = useEntityInfo(session?.entityId, session?.projectId)
@@ -260,6 +268,10 @@ function SessionChat() {
       <div className="bg-background sticky bottom-0 mt-3 pb-[env(safe-area-inset-bottom)] md:mt-4">
         <ChatInput
           onSend={handleSend}
+          sessionMode={mode}
+          sessionModel={model}
+          onModeChange={changeMode}
+          onModelChange={changeModel}
           disabled={isProcessing || !isConnected}
           isLoading={isSending}
           placeholder={
@@ -293,13 +305,26 @@ interface SessionHeaderProps {
     id: string
     entityId: string
     projectId: string
-    mode: string
+    mode: string | number
     status: string
     model: string
   } | null
   entityTitle?: string
   onStop?: () => void
   isStopPending?: boolean
+}
+
+/**
+ * Convert session mode (which may be numeric from API or string from SignalR types)
+ * to a display-friendly string.
+ */
+function getModeDisplayString(mode: string | number): string {
+  // Handle numeric values from SignalR/API
+  if (typeof mode === 'number') {
+    return fromApiSessionMode(mode as ApiSessionMode)
+  }
+  // Handle string values (already "Plan" or "Build")
+  return mode
 }
 
 function SessionHeader({
@@ -328,7 +353,7 @@ function SessionHeader({
           </h1>
           {session && (
             <div className="text-muted-foreground flex flex-wrap items-center gap-1 text-xs md:gap-2 md:text-sm">
-              <span className="capitalize">{session.mode}</span>
+              <span className="capitalize">{getModeDisplayString(session.mode)}</span>
               <span className="hidden sm:inline">•</span>
               <span className="hidden sm:inline">{session.model}</span>
               <span>•</span>
