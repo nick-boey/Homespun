@@ -21,6 +21,64 @@ import type { A2AStreamEvent } from '../types/a2a.js';
 import { info, debug } from '../utils/logger.js';
 
 /**
+ * Formats tool parameters for debug logging.
+ * Shows parameter names with scalar values (strings truncated to 50 chars).
+ * Objects/arrays shown as [Object] or [Array(N)].
+ */
+function formatToolParams(input: unknown): string {
+  if (!input || typeof input !== 'object') return '';
+
+  const params: string[] = [];
+  for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
+    if (value === undefined || value === null) {
+      continue;
+    } else if (typeof value === 'string') {
+      const truncated = value.length > 50 ? value.slice(0, 50) + '...' : value;
+      params.push(`${key}="${truncated}"`);
+    } else if (typeof value === 'number' || typeof value === 'boolean') {
+      params.push(`${key}=${value}`);
+    } else if (Array.isArray(value)) {
+      params.push(`${key}=[Array(${value.length})]`);
+    } else if (typeof value === 'object') {
+      params.push(`${key}=[Object]`);
+    }
+  }
+
+  return params.length > 0 ? params.join(' ') : '';
+}
+
+/**
+ * Extracts a text summary from message content blocks.
+ * Truncates to specified length with '...' if needed.
+ */
+function extractContentSummary(msg: unknown, maxLength: number): string {
+  const assistantMsg = msg as {
+    type: string;
+    message?: {
+      content?: Array<{ type: string; text?: string }>;
+    };
+  };
+
+  const content = assistantMsg.message?.content;
+  if (!content || !Array.isArray(content)) {
+    return '';
+  }
+
+  const textParts: string[] = [];
+  for (const block of content) {
+    if (block.type === 'text' && block.text) {
+      textParts.push(block.text);
+    }
+  }
+
+  const fullText = textParts.join(' ').replace(/\s+/g, ' ').trim();
+  if (fullText.length > maxLength) {
+    return fullText.slice(0, maxLength) + '...';
+  }
+  return fullText;
+}
+
+/**
  * Formats an A2A event as an SSE message.
  * Uses the A2A event 'kind' as the SSE event name.
  */
@@ -115,14 +173,25 @@ export async function* streamSessionEvents(
       // Regular SDK messages -> A2A Message
       const a2aMessage = translateSdkMessage(msg, ctx);
       if (a2aMessage) {
-        // Log tool executions at DEBUG level
+        // Log tool executions at DEBUG level with parameter details
         if (msg.type === 'stream_event') {
           const streamMsg = msg as any;
           const eventData = streamMsg.event;
           if (eventData?.type === 'tool_invocation') {
-            debug(`Tool execution: ${eventData.name || 'unknown'} (sessionId: ${sessionId})`);
+            const toolName = eventData.name || 'unknown';
+            const params = formatToolParams(eventData.input);
+            debug(`Tool: ${toolName} ${params} (sessionId: ${sessionId})`);
           }
         }
+
+        // Log assistant message content summary
+        if (msg.type === 'assistant') {
+          const summary = extractContentSummary(msg, 200);
+          if (summary) {
+            debug(`Assistant: ${summary} (sessionId: ${sessionId})`);
+          }
+        }
+
         yield formatSSE(a2aMessage.kind, a2aMessage);
       }
     }

@@ -174,7 +174,7 @@ describe('SSE Writer Logging', () => {
   });
 
   describe('Tool execution logging', () => {
-    it('logs tool executions at debug level', async () => {
+    it('logs tool name with parameter details at debug level', async () => {
       // Arrange
       const toolStreamEvent = {
         type: 'stream_event',
@@ -182,7 +182,7 @@ describe('SSE Writer Logging', () => {
         event: {
           type: 'tool_invocation',
           name: 'Read',
-          input: { file_path: '/test.txt' },
+          input: { file_path: '/test.txt', limit: 100 },
         },
       };
 
@@ -208,7 +208,7 @@ describe('SSE Writer Logging', () => {
 
       // Assert
       expect(debug).toHaveBeenCalledWith(
-        expect.stringContaining('Tool execution: Read (sessionId: test-session-123)')
+        expect.stringContaining('Tool: Read file_path="/test.txt" limit=100 (sessionId: test-session-123)')
       );
     });
 
@@ -246,7 +246,234 @@ describe('SSE Writer Logging', () => {
 
       // Assert
       expect(debug).toHaveBeenCalledWith(
-        expect.stringContaining('Tool execution: unknown (sessionId: test-session-123)')
+        expect.stringContaining('Tool: unknown')
+      );
+    });
+
+    it('truncates long string parameters to 50 chars', async () => {
+      // Arrange
+      const longPath = '/a/very/long/path/that/exceeds/fifty/characters/in/length/file.txt';
+      const toolStreamEvent = {
+        type: 'stream_event',
+        session_id: 'test-session-123',
+        event: {
+          type: 'tool_invocation',
+          name: 'Read',
+          input: { file_path: longPath },
+        },
+      };
+
+      const mockSession = {
+        id: 'test-session-123',
+        conversationId: 'conv-123',
+        outputChannel: {
+          [Symbol.asyncIterator]: async function* () {
+            yield toolStreamEvent;
+            yield createResultMessage();
+          },
+        },
+      };
+
+      mockSessionManager.get.mockReturnValue(mockSession);
+      mockSessionManager.stream.mockImplementation(async function* () {
+        yield toolStreamEvent;
+        yield createResultMessage();
+      });
+
+      // Act
+      const events = await collectAsyncGenerator(streamSessionEvents(mockSessionManager, 'test-session-123'));
+
+      // Assert - the long path should be truncated with '...'
+      // First 50 chars of longPath = '/a/very/long/path/that/exceeds/fifty/characters/in'
+      expect(debug).toHaveBeenCalledWith(
+        expect.stringContaining('file_path="/a/very/long/path/that/exceeds/fifty/characters/in...')
+      );
+    });
+
+    it('shows arrays as [Array(N)]', async () => {
+      // Arrange
+      const toolStreamEvent = {
+        type: 'stream_event',
+        session_id: 'test-session-123',
+        event: {
+          type: 'tool_invocation',
+          name: 'Edit',
+          input: { items: ['a', 'b', 'c'] },
+        },
+      };
+
+      const mockSession = {
+        id: 'test-session-123',
+        conversationId: 'conv-123',
+        outputChannel: {
+          [Symbol.asyncIterator]: async function* () {
+            yield toolStreamEvent;
+            yield createResultMessage();
+          },
+        },
+      };
+
+      mockSessionManager.get.mockReturnValue(mockSession);
+      mockSessionManager.stream.mockImplementation(async function* () {
+        yield toolStreamEvent;
+        yield createResultMessage();
+      });
+
+      // Act
+      const events = await collectAsyncGenerator(streamSessionEvents(mockSessionManager, 'test-session-123'));
+
+      // Assert
+      expect(debug).toHaveBeenCalledWith(
+        expect.stringContaining('items=[Array(3)]')
+      );
+    });
+
+    it('shows objects as [Object]', async () => {
+      // Arrange
+      const toolStreamEvent = {
+        type: 'stream_event',
+        session_id: 'test-session-123',
+        event: {
+          type: 'tool_invocation',
+          name: 'Edit',
+          input: { config: { nested: true } },
+        },
+      };
+
+      const mockSession = {
+        id: 'test-session-123',
+        conversationId: 'conv-123',
+        outputChannel: {
+          [Symbol.asyncIterator]: async function* () {
+            yield toolStreamEvent;
+            yield createResultMessage();
+          },
+        },
+      };
+
+      mockSessionManager.get.mockReturnValue(mockSession);
+      mockSessionManager.stream.mockImplementation(async function* () {
+        yield toolStreamEvent;
+        yield createResultMessage();
+      });
+
+      // Act
+      const events = await collectAsyncGenerator(streamSessionEvents(mockSessionManager, 'test-session-123'));
+
+      // Assert
+      expect(debug).toHaveBeenCalledWith(
+        expect.stringContaining('config=[Object]')
+      );
+    });
+
+    it('includes boolean parameters', async () => {
+      // Arrange
+      const toolStreamEvent = {
+        type: 'stream_event',
+        session_id: 'test-session-123',
+        event: {
+          type: 'tool_invocation',
+          name: 'Edit',
+          input: { replace_all: true },
+        },
+      };
+
+      const mockSession = {
+        id: 'test-session-123',
+        conversationId: 'conv-123',
+        outputChannel: {
+          [Symbol.asyncIterator]: async function* () {
+            yield toolStreamEvent;
+            yield createResultMessage();
+          },
+        },
+      };
+
+      mockSessionManager.get.mockReturnValue(mockSession);
+      mockSessionManager.stream.mockImplementation(async function* () {
+        yield toolStreamEvent;
+        yield createResultMessage();
+      });
+
+      // Act
+      const events = await collectAsyncGenerator(streamSessionEvents(mockSessionManager, 'test-session-123'));
+
+      // Assert
+      expect(debug).toHaveBeenCalledWith(
+        expect.stringContaining('replace_all=true')
+      );
+    });
+  });
+
+  describe('Assistant message content logging', () => {
+    it('logs assistant message content summary at debug level', async () => {
+      // Arrange
+      const assistantMessage = createAssistantMessage({
+        message: {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Hello, I will help you with this task.' }],
+        },
+      });
+
+      const mockSession = {
+        id: 'test-session-123',
+        conversationId: 'conv-123',
+        outputChannel: {
+          [Symbol.asyncIterator]: async function* () {
+            yield assistantMessage;
+            yield createResultMessage();
+          },
+        },
+      };
+
+      mockSessionManager.get.mockReturnValue(mockSession);
+      mockSessionManager.stream.mockImplementation(async function* () {
+        yield assistantMessage;
+        yield createResultMessage();
+      });
+
+      // Act
+      const events = await collectAsyncGenerator(streamSessionEvents(mockSessionManager, 'test-session-123'));
+
+      // Assert
+      expect(debug).toHaveBeenCalledWith(
+        expect.stringContaining('Assistant: Hello, I will help you with this task.')
+      );
+    });
+
+    it('truncates long assistant messages to 200 chars', async () => {
+      // Arrange
+      const longText = 'A'.repeat(250);
+      const assistantMessage = createAssistantMessage({
+        message: {
+          role: 'assistant',
+          content: [{ type: 'text', text: longText }],
+        },
+      });
+
+      const mockSession = {
+        id: 'test-session-123',
+        conversationId: 'conv-123',
+        outputChannel: {
+          [Symbol.asyncIterator]: async function* () {
+            yield assistantMessage;
+            yield createResultMessage();
+          },
+        },
+      };
+
+      mockSessionManager.get.mockReturnValue(mockSession);
+      mockSessionManager.stream.mockImplementation(async function* () {
+        yield assistantMessage;
+        yield createResultMessage();
+      });
+
+      // Act
+      const events = await collectAsyncGenerator(streamSessionEvents(mockSessionManager, 'test-session-123'));
+
+      // Assert - should be truncated at 200 chars with '...'
+      expect(debug).toHaveBeenCalledWith(
+        expect.stringContaining('Assistant: ' + 'A'.repeat(200) + '...')
       );
     });
   });
