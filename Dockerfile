@@ -33,7 +33,6 @@ COPY src/Homespun.Server/Homespun.Server.csproj src/Homespun.Server/
 COPY src/Homespun.Shared/Homespun.Shared.csproj src/Homespun.Shared/
 COPY src/Homespun.ClaudeAgentSdk/Homespun.ClaudeAgentSdk.csproj src/Homespun.ClaudeAgentSdk/
 COPY tests/Homespun.Tests/Homespun.Tests.csproj tests/Homespun.Tests/
-COPY tests/Homespun.Api.Tests/Homespun.Api.Tests.csproj tests/Homespun.Api.Tests/
 
 # Restore dependencies
 RUN dotnet restore
