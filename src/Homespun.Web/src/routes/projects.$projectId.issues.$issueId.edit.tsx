@@ -2,7 +2,7 @@ import { createFileRoute, useParams, useNavigate, useBlocker, Link } from '@tans
 import { useForm, Controller } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useEffect, useCallback, useState } from 'react'
+import { useEffect, useCallback, useState, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -33,7 +33,7 @@ import { useIssue, useUpdateIssue } from '@/features/issues'
 import { AgentLauncherDialog, useGenerateBranchId } from '@/features/agents'
 import { ISSUE_STATUS_OPTIONS, ISSUE_TYPE_OPTIONS } from '@/lib/issue-constants'
 import { ArrowLeft, Play, Sparkles } from 'lucide-react'
-import type { IssueStatus, IssueType } from '@/api'
+import type { IssueStatus, IssueType, IssueResponse } from '@/api'
 import { useBranchIdGenerationStore } from '@/features/issues/stores/branch-id-generation-store'
 
 export const Route = createFileRoute('/projects/$projectId/issues/$issueId/edit')({
@@ -61,6 +61,32 @@ const issueSchema = z.object({
 })
 
 type IssueFormData = z.infer<typeof issueSchema>
+
+/** Helper to convert issue data to form values for comparison */
+const issueToFormValues = (issue: IssueResponse): IssueFormData => ({
+  title: issue.title ?? '',
+  description: issue.description ?? '',
+  status: String(issue.status ?? 0),
+  type: String(issue.type ?? 0),
+  priority: issue.priority != null ? String(issue.priority) : 'none',
+  executionMode: String(issue.executionMode ?? 0),
+  workingBranchId: issue.workingBranchId ?? '',
+  tags: issue.tags?.join(', ') ?? '',
+})
+
+/** Helper to check if form values differ from original */
+const hasFormChanges = (currentValues: IssueFormData, originalValues: IssueFormData): boolean => {
+  return (
+    currentValues.title !== originalValues.title ||
+    currentValues.description !== originalValues.description ||
+    currentValues.status !== originalValues.status ||
+    currentValues.type !== originalValues.type ||
+    currentValues.priority !== originalValues.priority ||
+    currentValues.executionMode !== originalValues.executionMode ||
+    currentValues.workingBranchId !== originalValues.workingBranchId ||
+    currentValues.tags !== originalValues.tags
+  )
+}
 
 /** Props for WorkingBranchField component */
 interface WorkingBranchFieldProps {
@@ -172,26 +198,27 @@ export default function EditIssue() {
     handleSubmit,
     control,
     reset,
-    formState: { errors, isDirty },
+    formState: { errors },
     watch,
   } = form
 
-  // Watch description for preview
-  const description = watch('description')
+  // Watch all form values for change detection
+  const formValues = watch()
+
+  // Watch description separately for preview (derived from formValues)
+  const description = formValues.description
+
+  // Compute whether form has actual changes compared to original issue
+  const hasActualChanges = useMemo(() => {
+    if (!issue) return false
+    const originalValues = issueToFormValues(issue)
+    return hasFormChanges(formValues, originalValues)
+  }, [issue, formValues])
 
   // Reset form when issue data loads - use useEffect with proper dependencies
   useEffect(() => {
     if (issue) {
-      reset({
-        title: issue.title ?? '',
-        description: issue.description ?? '',
-        status: String(issue.status ?? 0),
-        type: String(issue.type ?? 0),
-        priority: issue.priority != null ? String(issue.priority) : 'none',
-        executionMode: String(issue.executionMode ?? 0),
-        workingBranchId: issue.workingBranchId ?? '',
-        tags: issue.tags?.join(', ') ?? '',
-      })
+      reset(issueToFormValues(issue))
     }
   }, [issue, reset])
 
@@ -217,9 +244,9 @@ export default function EditIssue() {
     },
   })
 
-  // Navigation blocker for unsaved changes
+  // Navigation blocker for unsaved changes - only block if actual changes exist
   const blocker = useBlocker({
-    condition: isDirty && !updateIssue.isPending && !updateIssueAndRun.isPending,
+    condition: hasActualChanges && !updateIssue.isPending && !updateIssueAndRun.isPending,
   })
 
   // Handle blocked navigation
