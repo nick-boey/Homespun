@@ -6,6 +6,7 @@ using Homespun.Features.Notifications;
 using Homespun.Features.Projects;
 using Homespun.Features.AgentOrchestration.Services;
 using Homespun.Shared.Models.Fleece;
+using Homespun.Shared.Models.Issues;
 using Homespun.Shared.Models.PullRequests;
 using Homespun.Shared.Models.Sessions;
 using Homespun.Shared.Requests;
@@ -30,6 +31,7 @@ public class IssuesController(
     IAgentPromptService agentPromptService,
     IGitCloneService cloneService,
     IBranchIdBackgroundService branchIdBackgroundService,
+    IFleeceChangeApplicationService changeApplicationService,
     ILogger<IssuesController> logger) : ControllerBase
 {
     /// <summary>
@@ -475,6 +477,80 @@ public class IssuesController(
             BranchName = branchName,
             ClonePath = clonePath
         });
+    }
+
+    /// <summary>
+    /// Apply agent changes from a session back to the main branch.
+    /// </summary>
+    [HttpPost("issues/{issueId}/apply-agent-changes")]
+    [ProducesResponseType<ApplyAgentChangesResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<ApplyAgentChangesResponse>> ApplyAgentChanges(
+        string issueId,
+        [FromBody] ApplyAgentChangesRequest request)
+    {
+        // Validate project
+        var project = await projectService.GetByIdAsync(request.ProjectId);
+        if (project == null)
+        {
+            return NotFound("Project not found");
+        }
+
+        // Validate issue exists
+        var issue = await fleeceService.GetIssueAsync(project.LocalPath, issueId);
+        if (issue == null)
+        {
+            return NotFound("Issue not found");
+        }
+
+        // Apply changes
+        var result = await changeApplicationService.ApplyChangesAsync(
+            request.ProjectId,
+            request.SessionId,
+            request.ConflictStrategy,
+            request.DryRun);
+
+        if (!request.DryRun && result.Success)
+        {
+            // Broadcast issue changes to connected clients
+            await notificationHub.BroadcastIssuesChanged(request.ProjectId, IssueChangeType.Updated, null);
+        }
+
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Resolve specific conflicts from a previous apply attempt.
+    /// </summary>
+    [HttpPost("issues/{issueId}/resolve-conflicts")]
+    [ProducesResponseType<ApplyAgentChangesResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<ApplyAgentChangesResponse>> ResolveConflicts(
+        string issueId,
+        [FromBody] ResolveConflictsRequest request)
+    {
+        // Validate project
+        var project = await projectService.GetByIdAsync(request.ProjectId);
+        if (project == null)
+        {
+            return NotFound("Project not found");
+        }
+
+        // Apply resolutions
+        var result = await changeApplicationService.ResolveConflictsAsync(
+            request.ProjectId,
+            request.SessionId,
+            request.Resolutions);
+
+        if (result.Success)
+        {
+            // Broadcast issue changes to connected clients
+            await notificationHub.BroadcastIssuesChanged(request.ProjectId, IssueChangeType.Updated, null);
+        }
+
+        return Ok(result);
     }
 
     #endregion

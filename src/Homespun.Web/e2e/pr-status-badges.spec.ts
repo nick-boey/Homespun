@@ -6,7 +6,9 @@ test.describe('PR Status Badges', () => {
     await page.goto('/projects')
 
     // Wait for project cards or empty state to be rendered
-    await page.waitForSelector('[data-testid="project-card-link"], :text("No projects yet")', { timeout: 15000 })
+    await page.waitForSelector('[data-testid="project-card-link"], :text("No projects yet")', {
+      timeout: 15000,
+    })
 
     // Check if there's a project, if not create one
     const projectCards = page.locator('[data-testid="project-card-link"]')
