@@ -612,6 +612,101 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
     }
 
     /// <inheritdoc />
+    public async Task<bool> SetSessionModeAsync(string sessionId, SessionMode mode, CancellationToken cancellationToken = default)
+    {
+        _sessionToIssue.TryGetValue(sessionId, out var issueId);
+        using var issueScope = IssueLogScope.BeginIssueScope(_logger, issueId);
+
+        if (!_sessions.TryGetValue(sessionId, out var session))
+        {
+            _logger.LogDebug("SetSessionModeAsync: Session {SessionId} not found", sessionId);
+            return false;
+        }
+
+        if (string.IsNullOrEmpty(session.WorkerSessionId))
+        {
+            _logger.LogWarning("SetSessionModeAsync: Worker session ID not set for session {SessionId}", sessionId);
+            return false;
+        }
+
+        try
+        {
+            var modeString = mode == SessionMode.Plan ? "Plan" : "Build";
+            var requestBody = new { Mode = modeString };
+            var json = JsonSerializer.Serialize(requestBody, CamelCaseJsonOptions);
+            using var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            var url = $"{session.WorkerUrl}/api/sessions/{session.WorkerSessionId}/mode";
+            _logger.LogInformation("SetSessionModeAsync: POSTing mode {Mode} to {Url} for session {SessionId}", modeString, url, sessionId);
+
+            var response = await _httpClient.PostAsync(url, content, cancellationToken);
+
+            if (response.IsSuccessStatusCode)
+            {
+                _logger.LogInformation("SetSessionModeAsync: Worker updated mode for session {SessionId}", sessionId);
+                return true;
+            }
+
+            var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            _logger.LogWarning("SetSessionModeAsync: Worker returned {StatusCode}: {Error} for session {SessionId}",
+                response.StatusCode, errorBody, sessionId);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "SetSessionModeAsync: Error posting mode for session {SessionId}", sessionId);
+            return false;
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> SetSessionModelAsync(string sessionId, string model, CancellationToken cancellationToken = default)
+    {
+        _sessionToIssue.TryGetValue(sessionId, out var issueId);
+        using var issueScope = IssueLogScope.BeginIssueScope(_logger, issueId);
+
+        if (!_sessions.TryGetValue(sessionId, out var session))
+        {
+            _logger.LogDebug("SetSessionModelAsync: Session {SessionId} not found", sessionId);
+            return false;
+        }
+
+        if (string.IsNullOrEmpty(session.WorkerSessionId))
+        {
+            _logger.LogWarning("SetSessionModelAsync: Worker session ID not set for session {SessionId}", sessionId);
+            return false;
+        }
+
+        try
+        {
+            var requestBody = new { Model = model };
+            var json = JsonSerializer.Serialize(requestBody, CamelCaseJsonOptions);
+            using var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            var url = $"{session.WorkerUrl}/api/sessions/{session.WorkerSessionId}/model";
+            _logger.LogInformation("SetSessionModelAsync: POSTing model {Model} to {Url} for session {SessionId}", model, url, sessionId);
+
+            var response = await _httpClient.PostAsync(url, content, cancellationToken);
+
+            if (response.IsSuccessStatusCode)
+            {
+                _logger.LogInformation("SetSessionModelAsync: Worker updated model for session {SessionId}", sessionId);
+                return true;
+            }
+
+            var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            _logger.LogWarning("SetSessionModelAsync: Worker returned {StatusCode}: {Error} for session {SessionId}",
+                response.StatusCode, errorBody, sessionId);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "SetSessionModelAsync: Error posting model for session {SessionId}", sessionId);
+            return false;
+        }
+    }
+
+    /// <inheritdoc />
     public async Task<CloneContainerState?> GetCloneContainerStateAsync(
         string workingDirectory,
         CancellationToken cancellationToken = default)

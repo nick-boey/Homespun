@@ -174,6 +174,26 @@ public class ClaudeCodeHub(IClaudeSessionService sessionService, IMessageCacheSt
     {
         return await sessionService.RestartSessionAsync(sessionId);
     }
+
+    /// <summary>
+    /// Sets the session mode without sending a new message.
+    /// </summary>
+    /// <param name="sessionId">The session ID</param>
+    /// <param name="mode">The new session mode</param>
+    public async Task SetSessionMode(string sessionId, SessionMode mode)
+    {
+        await sessionService.SetSessionModeAsync(sessionId, mode);
+    }
+
+    /// <summary>
+    /// Sets the session model without sending a new message.
+    /// </summary>
+    /// <param name="sessionId">The session ID</param>
+    /// <param name="model">The new model</param>
+    public async Task SetSessionModel(string sessionId, string model)
+    {
+        await sessionService.SetSessionModelAsync(sessionId, model);
+    }
 }
 
 /// <summary>

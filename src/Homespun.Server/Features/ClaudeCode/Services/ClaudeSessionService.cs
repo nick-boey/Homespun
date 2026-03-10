@@ -2339,4 +2339,100 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             throw;
         }
     }
+
+    /// <inheritdoc />
+    public async Task SetSessionModeAsync(string sessionId, SessionMode mode, CancellationToken cancellationToken = default)
+    {
+        var session = _sessionStore.GetById(sessionId);
+        if (session == null)
+        {
+            throw new KeyNotFoundException($"Session with ID {sessionId} not found");
+        }
+
+        // Return early if mode unchanged
+        if (session.Mode == mode)
+        {
+            _logger.LogDebug("Session {SessionId} mode unchanged at {Mode}", sessionId, mode);
+            return;
+        }
+
+        // Update session mode
+        session.Mode = mode;
+        _sessionStore.Update(session);
+
+        // Forward to worker
+        if (_agentExecutionService != null)
+        {
+            var success = await _agentExecutionService.SetSessionModeAsync(sessionId, mode, cancellationToken);
+            if (!success)
+            {
+                _logger.LogWarning("Failed to set mode on worker for session {SessionId}", sessionId);
+            }
+        }
+
+        // Persist to metadata store
+        await _metadataStore.SaveAsync(new SessionMetadata(
+            session.Id,
+            session.EntityId,
+            session.ProjectId,
+            session.WorkingDirectory,
+            session.Mode,
+            session.Model,
+            session.SystemPrompt,
+            session.CreatedAt
+        ), cancellationToken);
+
+        // Broadcast change via SignalR
+        await _hubContext.BroadcastSessionModeModelChanged(sessionId, mode, session.Model);
+
+        _logger.LogInformation("Session {SessionId} mode changed to {Mode}", sessionId, mode);
+    }
+
+    /// <inheritdoc />
+    public async Task SetSessionModelAsync(string sessionId, string model, CancellationToken cancellationToken = default)
+    {
+        var session = _sessionStore.GetById(sessionId);
+        if (session == null)
+        {
+            throw new KeyNotFoundException($"Session with ID {sessionId} not found");
+        }
+
+        // Return early if model unchanged
+        if (session.Model == model)
+        {
+            _logger.LogDebug("Session {SessionId} model unchanged at {Model}", sessionId, model);
+            return;
+        }
+
+        // Update session model
+        session.Model = model;
+        _sessionStore.Update(session);
+
+        // Forward to worker
+        if (_agentExecutionService != null)
+        {
+            var success = await _agentExecutionService.SetSessionModelAsync(sessionId, model, cancellationToken);
+            if (!success)
+            {
+                _logger.LogWarning("Failed to set model on worker for session {SessionId}", sessionId);
+            }
+        }
+
+        // Persist to metadata store
+        await _metadataStore.SaveAsync(new SessionMetadata(
+            session.Id,
+            session.EntityId,
+            session.ProjectId,
+            session.WorkingDirectory,
+            session.Mode,
+            session.Model,
+            session.SystemPrompt,
+            session.CreatedAt
+        ), cancellationToken);
+
+        // Broadcast change via SignalR
+        await _hubContext.BroadcastSessionModeModelChanged(sessionId, session.Mode, model);
+
+        _logger.LogInformation("Session {SessionId} model changed to {Model}", sessionId, model);
+    }
 }

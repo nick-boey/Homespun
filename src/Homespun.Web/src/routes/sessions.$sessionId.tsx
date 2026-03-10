@@ -14,6 +14,8 @@ import {
   PlanApprovalPanel,
   useEntityInfo,
   useStopSession,
+  useSessionSettings,
+  useChangeSessionSettings,
 } from '@/features/sessions'
 import { useAnswerQuestion } from '@/features/questions'
 import { useClaudeCodeHub } from '@/providers/signalr-provider'
@@ -21,7 +23,7 @@ import { ArrowLeft, AlertCircle, RefreshCw, StopCircle } from 'lucide-react'
 import { ScrollToBottom } from '@/components/ui/scroll-to-bottom'
 import { Sessions } from '@/api'
 import { toast } from 'sonner'
-import type { ModelSelection } from '@/stores/chat-input-store'
+import type { ModelSelection } from '@/stores/session-settings-store'
 import type { SessionMode } from '@/types/signalr'
 import {
   AlertDialog,
@@ -46,6 +48,11 @@ function SessionChat() {
   const [isSending, setIsSending] = useState(false)
   const [isProcessingAnswer, setIsProcessingAnswer] = useState(false)
   const [showStopDialog, setShowStopDialog] = useState(false)
+
+  // Get session settings (mode/model) from server or cache
+  const { mode, model } = useSessionSettings(sessionId, session)
+  // Hook to change mode/model
+  const { changeMode, changeModel } = useChangeSessionSettings(sessionId)
 
   // Fetch entity info
   const { data: entityInfo } = useEntityInfo(session?.entityId, session?.projectId)
@@ -260,6 +267,10 @@ function SessionChat() {
       <div className="bg-background sticky bottom-0 mt-3 pb-[env(safe-area-inset-bottom)] md:mt-4">
         <ChatInput
           onSend={handleSend}
+          sessionMode={mode}
+          sessionModel={model}
+          onModeChange={changeMode}
+          onModelChange={changeModel}
           disabled={isProcessing || !isConnected}
           isLoading={isSending}
           placeholder={

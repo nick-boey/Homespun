@@ -13,11 +13,15 @@ import {
   PromptInputActions,
   PromptInputAction,
 } from '@/components/ui/prompt-input'
-import { useChatInputStore, type ModelSelection } from '@/stores/chat-input-store'
+import type { ModelSelection } from '@/stores/session-settings-store'
 import type { SessionMode } from '@/types/signalr'
 
 export interface ChatInputProps {
   onSend: (message: string, sessionMode: SessionMode, model: ModelSelection) => void
+  sessionMode: SessionMode
+  sessionModel: ModelSelection
+  onModeChange: (mode: SessionMode) => void
+  onModelChange: (model: ModelSelection) => void
   disabled?: boolean
   isLoading?: boolean
   placeholder?: string
@@ -36,33 +40,36 @@ const MODEL_LABELS: Record<ModelSelection, string> = {
 
 export function ChatInput({
   onSend,
+  sessionMode,
+  sessionModel,
+  onModeChange,
+  onModelChange,
   disabled = false,
   isLoading = false,
   placeholder = 'Type a message...',
 }: ChatInputProps) {
   const [value, setValue] = useState('')
-  const { sessionMode, model, setSessionMode, setModel } = useChatInputStore()
 
   const handleSubmit = useCallback(() => {
     const trimmedValue = value.trim()
     if (!trimmedValue || disabled) return
 
-    onSend(trimmedValue, sessionMode, model)
+    onSend(trimmedValue, sessionMode, sessionModel)
     setValue('')
-  }, [value, disabled, onSend, sessionMode, model])
+  }, [value, disabled, onSend, sessionMode, sessionModel])
 
   const handleSessionModeChange = useCallback(
     (mode: SessionMode) => {
-      setSessionMode(mode)
+      onModeChange(mode)
     },
-    [setSessionMode]
+    [onModeChange]
   )
 
   const handleModelChange = useCallback(
     (newModel: ModelSelection) => {
-      setModel(newModel)
+      onModelChange(newModel)
     },
-    [setModel]
+    [onModelChange]
   )
 
   return (
@@ -112,7 +119,7 @@ export function ChatInput({
                 disabled={disabled}
               >
                 <Sparkles className="h-4 w-4" />
-                <span className="hidden sm:inline">{MODEL_LABELS[model]}</span>
+                <span className="hidden sm:inline">{MODEL_LABELS[sessionModel]}</span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">

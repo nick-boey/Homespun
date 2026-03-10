@@ -486,6 +486,22 @@ public class LocalAgentExecutionService : IAgentExecutionService, IAsyncDisposab
         return Task.FromResult<ContainerRestartResult?>(null);
     }
 
+    /// <inheritdoc />
+    public Task<bool> SetSessionModeAsync(string sessionId, SessionMode mode, CancellationToken cancellationToken = default)
+    {
+        // Local agent mode changes are handled directly through SDK without worker API calls
+        _logger.LogDebug("SetSessionModeAsync called on LocalAgentExecutionService - no worker to update");
+        return Task.FromResult(true);
+    }
+
+    /// <inheritdoc />
+    public Task<bool> SetSessionModelAsync(string sessionId, string model, CancellationToken cancellationToken = default)
+    {
+        // Local agent model changes are handled directly through SDK without worker API calls
+        _logger.LogDebug("SetSessionModelAsync called on LocalAgentExecutionService - no worker to update");
+        return Task.FromResult(true);
+    }
+
     public async ValueTask DisposeAsync()
     {
         foreach (var session in _sessions.Values)

@@ -222,4 +222,22 @@ public interface IClaudeSessionService
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Redirect URL to navigate to after canceling</returns>
     Task<string> CancelIssueChangesAsync(string sessionId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Sets the session mode without sending a new message.
+    /// Updates the mode in the session and forwards to the worker container.
+    /// </summary>
+    /// <param name="sessionId">The session ID</param>
+    /// <param name="mode">The new session mode</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    Task SetSessionModeAsync(string sessionId, SessionMode mode, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Sets the session model without sending a new message.
+    /// Updates the model in the session and forwards to the worker container.
+    /// </summary>
+    /// <param name="sessionId">The session ID</param>
+    /// <param name="model">The new model</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    Task SetSessionModelAsync(string sessionId, string model, CancellationToken cancellationToken = default);
 }

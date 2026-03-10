@@ -228,4 +228,22 @@ public interface IAgentExecutionService
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Result containing info needed to resume the session, or null if session not found.</returns>
     Task<ContainerRestartResult?> RestartContainerAsync(string sessionId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Sets the session mode on the worker without sending a message.
+    /// </summary>
+    /// <param name="sessionId">The session ID</param>
+    /// <param name="mode">The new session mode</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>True if successful, false if session not found</returns>
+    Task<bool> SetSessionModeAsync(string sessionId, SessionMode mode, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Sets the session model on the worker without sending a message.
+    /// </summary>
+    /// <param name="sessionId">The session ID</param>
+    /// <param name="model">The new model</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>True if successful, false if session not found</returns>
+    Task<bool> SetSessionModelAsync(string sessionId, string model, CancellationToken cancellationToken = default);
 }

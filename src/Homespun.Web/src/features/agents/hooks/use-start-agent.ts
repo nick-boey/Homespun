@@ -3,6 +3,8 @@ import { Sessions } from '@/api'
 import type { ClaudeSession, CreateSessionRequest, SessionMode } from '@/api/generated/types.gen'
 import { sessionsQueryKey } from '@/features/sessions/hooks/use-sessions'
 import { useTelemetry } from '@/hooks/use-telemetry'
+import { useSessionSettingsStore, type ModelSelection } from '@/stores/session-settings-store'
+import { fromApiSessionMode } from '@/lib/utils/session-mode'
 
 export interface StartAgentParams {
   entityId: string
@@ -41,6 +43,14 @@ export function useStartAgent() {
       return response.data as ClaudeSession
     },
     onSuccess: (session, params) => {
+      // Cache initial mode/model for this session for immediate display
+      if (session.id) {
+        const mode = params.mode !== undefined ? fromApiSessionMode(params.mode) : 'Build'
+        useSessionSettingsStore
+          .getState()
+          .initSession(session.id, mode, (params.model ?? 'opus') as ModelSelection)
+      }
+
       // Track successful agent launch
       telemetry.trackEvent('agent_launched', {
         sessionId: session.id || '',

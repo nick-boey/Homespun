@@ -621,6 +621,63 @@ export class SessionManager {
     return this.pendingQuestions.get(sessionId)?.questions;
   }
 
+  /**
+   * Sets the mode for a session without sending a message.
+   * Updates the permission mode and stores the mode string.
+   * Returns false if session not found.
+   */
+  async setMode(sessionId: string, mode: 'Plan' | 'Build'): Promise<boolean> {
+    const ws = this.sessions.get(sessionId);
+    if (!ws) {
+      info(`setMode - session '${sessionId}' not found`);
+      return false;
+    }
+
+    const newPermissionMode = mapMode(mode);
+
+    // Skip if no change
+    if (ws.mode === mode && ws.permissionMode === newPermissionMode) {
+      info(`setMode - no change (mode='${mode}', sessionId='${sessionId}')`);
+      return true;
+    }
+
+    ws.mode = mode;
+    ws.permissionMode = newPermissionMode;
+    info(`setMode - mode updated to '${mode}', permissionMode='${newPermissionMode}' (sessionId='${sessionId}')`);
+
+    // Update permission mode on the SDK query if available
+    if (ws.query.setPermissionMode) {
+      await ws.query.setPermissionMode(newPermissionMode);
+      info(`setMode - setPermissionMode('${newPermissionMode}') applied (sessionId='${sessionId}')`);
+    }
+
+    ws.lastActivityAt = new Date();
+    return true;
+  }
+
+  /**
+   * Sets the model for a session without sending a message.
+   * Returns false if session not found.
+   */
+  setModel(sessionId: string, model: string): boolean {
+    const ws = this.sessions.get(sessionId);
+    if (!ws) {
+      info(`setModel - session '${sessionId}' not found`);
+      return false;
+    }
+
+    // Skip if no change
+    if (ws.model === model) {
+      info(`setModel - no change (model='${model}', sessionId='${sessionId}')`);
+      return true;
+    }
+
+    ws.model = model;
+    info(`setModel - model updated to '${model}' (sessionId='${sessionId}')`);
+    ws.lastActivityAt = new Date();
+    return true;
+  }
+
   async send(sessionId: string, message: string, model?: string, mode?: string): Promise<WorkerSession> {
     info(`send() - sessionId='${sessionId}', messageLength=${message?.length}, model=${model || 'default'}, mode=${mode || 'unchanged'}`);
     const ws = this.sessions.get(sessionId);
