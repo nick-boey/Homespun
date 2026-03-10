@@ -12,6 +12,7 @@ interface LogEntry {
 // Cache environment values at startup
 const issueId = process.env.ISSUE_ID || undefined;
 const projectName = process.env.PROJECT_NAME || undefined;
+const debugEnabled = process.env.DEBUG_LOGGING === 'true';
 
 function getCallerInfo(): { file: string; line: number } {
   const stack = new Error().stack?.split('\n')[3]; // Skip: Error, getCallerInfo, log fn
@@ -46,6 +47,7 @@ function formatLog(level: string, message: string, error?: unknown): string {
 }
 
 export function debug(message: string): void {
+  if (!debugEnabled) return;
   console.debug(formatLog('Debug', message));
 }
 
