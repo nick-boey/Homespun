@@ -117,8 +117,10 @@ test.describe('Session Navigation', () => {
     await page.waitForURL(/\/sessions\/.+/)
     await page.waitForLoadState('networkidle')
 
-    // Click the back button
-    const backButton = page
+    // Click the back button in the main content area (not sidebar)
+    // The back button is in the session header within the main content
+    const mainContent = page.locator('main')
+    const backButton = mainContent
       .getByRole('link')
       .filter({ has: page.locator('svg') })
       .first()
