@@ -68,13 +68,29 @@ public interface IGraphCacheService
     /// <param name="mergedAt">When the PR was merged (if merged).</param>
     /// <param name="closedAt">When the PR was closed (if closed without merge).</param>
     /// <param name="issueId">Optional issue ID to update status for.</param>
-    Task UpdatePRStatusAsync(
+    /// <returns>True if the PR was found in the open list and moved; false otherwise.</returns>
+    Task<bool> UpdatePRStatusAsync(
         string projectId,
         string projectLocalPath,
         int prNumber,
         PullRequestStatus newStatus,
         DateTime? mergedAt = null,
         DateTime? closedAt = null,
+        string? issueId = null);
+
+    /// <summary>
+    /// Adds a closed PR directly to the cache's closed list.
+    /// Used when a PR was closed/merged but wasn't in the cache's open list
+    /// (e.g., PRs that were opened and closed between polling intervals).
+    /// </summary>
+    /// <param name="projectId">The project ID.</param>
+    /// <param name="projectLocalPath">The project's local path.</param>
+    /// <param name="closedPr">The PR info to add to the closed list.</param>
+    /// <param name="issueId">Optional issue ID to update status for.</param>
+    Task AddClosedPRAsync(
+        string projectId,
+        string projectLocalPath,
+        PullRequestInfo closedPr,
         string? issueId = null);
 }
 

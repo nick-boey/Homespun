@@ -302,7 +302,7 @@ public class GraphCacheService : IGraphCacheService
     }
 
     /// <inheritdoc />
-    public async Task UpdatePRStatusAsync(
+    public async Task<bool> UpdatePRStatusAsync(
         string projectId,
         string projectLocalPath,
         int prNumber,
@@ -314,7 +314,7 @@ public class GraphCacheService : IGraphCacheService
         if (!_memoryCache.TryGetValue(projectId, out var cachedData))
         {
             _logger.LogDebug("Cannot update PR #{PrNumber} status: project {ProjectId} not in cache", prNumber, projectId);
-            return;
+            return false;
         }
 
         // Find the PR in the open list
@@ -322,7 +322,7 @@ public class GraphCacheService : IGraphCacheService
         if (prToMove == null)
         {
             _logger.LogDebug("Cannot update PR #{PrNumber} status: PR not found in open list for project {ProjectId}", prNumber, projectId);
-            return;
+            return false;
         }
 
         // Remove from open list
@@ -354,6 +354,57 @@ public class GraphCacheService : IGraphCacheService
         _logger.LogInformation(
             "Updated PR #{PrNumber} status to {NewStatus} for project {ProjectId}",
             prNumber, newStatus, projectId);
+
+        // Persist to JSONL file
+        await PersistToJsonlAsync(projectId, projectLocalPath, cachedData);
+
+        return true;
+    }
+
+    /// <inheritdoc />
+    public async Task AddClosedPRAsync(
+        string projectId,
+        string projectLocalPath,
+        PullRequestInfo closedPr,
+        string? issueId = null)
+    {
+        // Load cache from disk if not in memory
+        LoadCacheForProject(projectId, projectLocalPath);
+
+        // Get or create cached data
+        if (!_memoryCache.TryGetValue(projectId, out var cachedData))
+        {
+            cachedData = new CachedPRData
+            {
+                OpenPrs = [],
+                ClosedPrs = [],
+                CachedAt = DateTime.UtcNow
+            };
+            _memoryCache[projectId] = cachedData;
+        }
+
+        // Check if already in closed list (avoid duplicates)
+        if (cachedData.ClosedPrs.Any(p => p.Number == closedPr.Number))
+        {
+            _logger.LogDebug("PR #{PrNumber} already in closed list for project {ProjectId}", closedPr.Number, projectId);
+            return;
+        }
+
+        // Add to closed list
+        cachedData.ClosedPrs.Add(closedPr);
+
+        // Update issue PR status if provided
+        if (!string.IsNullOrEmpty(issueId))
+        {
+            cachedData.IssuePrStatuses[issueId] = closedPr.Status;
+        }
+
+        // Update the cache timestamp
+        cachedData.CachedAt = DateTime.UtcNow;
+
+        _logger.LogInformation(
+            "Added PR #{PrNumber} directly to closed list for project {ProjectId}",
+            closedPr.Number, projectId);
 
         // Persist to JSONL file
         await PersistToJsonlAsync(projectId, projectLocalPath, cachedData);

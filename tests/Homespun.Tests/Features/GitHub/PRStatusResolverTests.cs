@@ -491,4 +491,172 @@ public class PRStatusResolverTests
     }
 
     #endregion
+
+    #region Cache Loading and Fallback Tests
+
+    [Test]
+    public async Task ResolveClosedPRStatusesAsync_LoadsCacheBeforeUpdate()
+    {
+        // Arrange
+        var project = await CreateTestProject();
+        var removedPrs = new List<RemovedPrInfo>
+        {
+            new() { PullRequestId = "pr-1", GitHubPrNumber = 42 }
+        };
+
+        _mockGitHubService.Setup(s => s.GetPullRequestAsync(project.Id, 42))
+            .ReturnsAsync(new PullRequestInfo
+            {
+                Number = 42,
+                Title = "PR 42",
+                Status = PullRequestStatus.Merged,
+                MergedAt = DateTime.UtcNow
+            });
+
+        // Act
+        await _resolver.ResolveClosedPRStatusesAsync(project.Id, removedPrs);
+
+        // Assert - Cache should be loaded before updating
+        _mockGraphCacheService.Verify(
+            s => s.LoadCacheForProject(project.Id, project.LocalPath),
+            Times.Once);
+    }
+
+    [Test]
+    public async Task ResolveClosedPRStatusesAsync_AddsDirectlyToClosedList_WhenNotInOpenList()
+    {
+        // Arrange
+        var project = await CreateTestProject();
+        var mergedAt = DateTime.UtcNow;
+        var removedPrs = new List<RemovedPrInfo>
+        {
+            new() { PullRequestId = "pr-1", GitHubPrNumber = 42, BeadsIssueId = "issue-1" }
+        };
+
+        var prInfo = new PullRequestInfo
+        {
+            Number = 42,
+            Title = "PR 42",
+            Status = PullRequestStatus.Merged,
+            MergedAt = mergedAt
+        };
+
+        _mockGitHubService.Setup(s => s.GetPullRequestAsync(project.Id, 42))
+            .ReturnsAsync(prInfo);
+
+        // UpdatePRStatusAsync returns false (PR not in open list)
+        _mockGraphCacheService.Setup(s => s.UpdatePRStatusAsync(
+            project.Id,
+            project.LocalPath,
+            42,
+            PullRequestStatus.Merged,
+            mergedAt,
+            null,
+            "issue-1"))
+            .ReturnsAsync(false);
+
+        // Act
+        await _resolver.ResolveClosedPRStatusesAsync(project.Id, removedPrs);
+
+        // Assert - Should fallback to AddClosedPRAsync
+        _mockGraphCacheService.Verify(
+            s => s.AddClosedPRAsync(
+                project.Id,
+                project.LocalPath,
+                It.Is<PullRequestInfo>(p => p.Number == 42),
+                "issue-1"),
+            Times.Once);
+    }
+
+    [Test]
+    public async Task ResolveClosedPRStatusesAsync_DoesNotAddDirectly_WhenUpdateSucceeds()
+    {
+        // Arrange
+        var project = await CreateTestProject();
+        var mergedAt = DateTime.UtcNow;
+        var removedPrs = new List<RemovedPrInfo>
+        {
+            new() { PullRequestId = "pr-1", GitHubPrNumber = 42, BeadsIssueId = "issue-1" }
+        };
+
+        _mockGitHubService.Setup(s => s.GetPullRequestAsync(project.Id, 42))
+            .ReturnsAsync(new PullRequestInfo
+            {
+                Number = 42,
+                Title = "PR 42",
+                Status = PullRequestStatus.Merged,
+                MergedAt = mergedAt
+            });
+
+        // UpdatePRStatusAsync returns true (PR was in open list and moved)
+        _mockGraphCacheService.Setup(s => s.UpdatePRStatusAsync(
+            project.Id,
+            project.LocalPath,
+            42,
+            PullRequestStatus.Merged,
+            mergedAt,
+            null,
+            "issue-1"))
+            .ReturnsAsync(true);
+
+        // Act
+        await _resolver.ResolveClosedPRStatusesAsync(project.Id, removedPrs);
+
+        // Assert - Should NOT call AddClosedPRAsync
+        _mockGraphCacheService.Verify(
+            s => s.AddClosedPRAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<PullRequestInfo>(),
+                It.IsAny<string?>()),
+            Times.Never);
+    }
+
+    [Test]
+    public async Task ResolveClosedPRStatusesAsync_AddsClosedPRDirectly_WhenClosedNotMerged()
+    {
+        // Arrange
+        var project = await CreateTestProject();
+        var closedAt = DateTime.UtcNow;
+        var removedPrs = new List<RemovedPrInfo>
+        {
+            new() { PullRequestId = "pr-1", GitHubPrNumber = 42, BeadsIssueId = "issue-1" }
+        };
+
+        var prInfo = new PullRequestInfo
+        {
+            Number = 42,
+            Title = "PR 42",
+            Status = PullRequestStatus.Closed,
+            ClosedAt = closedAt
+        };
+
+        _mockGitHubService.Setup(s => s.GetPullRequestAsync(project.Id, 42))
+            .ReturnsAsync(prInfo);
+
+        // UpdatePRStatusAsync returns false (PR not in open list)
+        _mockGraphCacheService.Setup(s => s.UpdatePRStatusAsync(
+            project.Id,
+            project.LocalPath,
+            42,
+            PullRequestStatus.Closed,
+            null,
+            closedAt,
+            "issue-1"))
+            .ReturnsAsync(false);
+
+        // Act
+        await _resolver.ResolveClosedPRStatusesAsync(project.Id, removedPrs);
+
+        // Assert - Should fallback to AddClosedPRAsync with Closed status
+        _mockGraphCacheService.Verify(
+            s => s.AddClosedPRAsync(
+                project.Id,
+                project.LocalPath,
+                It.Is<PullRequestInfo>(p => p.Number == 42 && p.Status == PullRequestStatus.Closed),
+                "issue-1"),
+            Times.Once);
+    }
+
+    #endregion
 }

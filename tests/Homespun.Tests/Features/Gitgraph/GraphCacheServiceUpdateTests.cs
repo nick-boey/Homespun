@@ -332,6 +332,198 @@ public class GraphCacheServiceUpdateTests
         Assert.That(cached!.IssuePrStatuses["issue-1"], Is.EqualTo(PullRequestStatus.Merged));
     }
 
+    [Test]
+    public async Task UpdatePRStatusAsync_ReturnsTrue_WhenPrFoundAndMoved()
+    {
+        // Arrange - Cache an open PR
+        var openPr = CreateOpenPr(42);
+        await _service.CachePRDataAsync("project-1", _projectLocalPath, [openPr], []);
+
+        // Act
+        var result = await _service.UpdatePRStatusAsync(
+            "project-1",
+            _projectLocalPath,
+            42,
+            PullRequestStatus.Merged,
+            mergedAt: DateTime.UtcNow);
+
+        // Assert
+        Assert.That(result, Is.True);
+    }
+
+    [Test]
+    public async Task UpdatePRStatusAsync_ReturnsFalse_WhenProjectNotCached()
+    {
+        // Arrange - No cache
+
+        // Act
+        var result = await _service.UpdatePRStatusAsync(
+            "nonexistent-project",
+            _projectLocalPath,
+            42,
+            PullRequestStatus.Merged,
+            mergedAt: DateTime.UtcNow);
+
+        // Assert
+        Assert.That(result, Is.False);
+    }
+
+    [Test]
+    public async Task UpdatePRStatusAsync_ReturnsFalse_WhenPrNotInOpenList()
+    {
+        // Arrange - Cache a different PR
+        var openPr = CreateOpenPr(100);
+        await _service.CachePRDataAsync("project-1", _projectLocalPath, [openPr], []);
+
+        // Act
+        var result = await _service.UpdatePRStatusAsync(
+            "project-1",
+            _projectLocalPath,
+            42, // This PR is not in the cache
+            PullRequestStatus.Merged,
+            mergedAt: DateTime.UtcNow);
+
+        // Assert
+        Assert.That(result, Is.False);
+    }
+
+    #endregion
+
+    #region AddClosedPRAsync Tests
+
+    [Test]
+    public async Task AddClosedPRAsync_AddsToClosedList_WhenCacheEmpty()
+    {
+        // Arrange - No cache exists
+        var closedPr = CreateClosedPr(42);
+
+        // Act
+        await _service.AddClosedPRAsync("project-1", _projectLocalPath, closedPr);
+
+        // Assert
+        var cached = _service.GetCachedPRData("project-1");
+        Assert.That(cached, Is.Not.Null);
+        Assert.That(cached!.ClosedPrs, Has.Count.EqualTo(1));
+        Assert.That(cached.ClosedPrs[0].Number, Is.EqualTo(42));
+        Assert.That(cached.OpenPrs, Has.Count.EqualTo(0));
+    }
+
+    [Test]
+    public async Task AddClosedPRAsync_AddsToClosedList_WhenPrNotInOpenList()
+    {
+        // Arrange - Cache with a different open PR
+        var openPr = CreateOpenPr(100);
+        await _service.CachePRDataAsync("project-1", _projectLocalPath, [openPr], []);
+
+        var closedPr = CreateClosedPr(42);
+
+        // Act
+        await _service.AddClosedPRAsync("project-1", _projectLocalPath, closedPr);
+
+        // Assert
+        var cached = _service.GetCachedPRData("project-1");
+        Assert.That(cached, Is.Not.Null);
+        Assert.That(cached!.ClosedPrs, Has.Count.EqualTo(1));
+        Assert.That(cached.ClosedPrs[0].Number, Is.EqualTo(42));
+        Assert.That(cached.OpenPrs, Has.Count.EqualTo(1)); // Existing open PR preserved
+    }
+
+    [Test]
+    public async Task AddClosedPRAsync_DoesNotDuplicate_WhenPrAlreadyInClosedList()
+    {
+        // Arrange - Cache already has PR #42 in closed list
+        var closedPr = CreateClosedPr(42);
+        await _service.CachePRDataAsync("project-1", _projectLocalPath, [], [closedPr]);
+
+        // Act - Try to add the same PR again
+        var duplicatePr = CreateClosedPr(42);
+        duplicatePr.Title = "Duplicate Title"; // Different title to verify it's not added
+        await _service.AddClosedPRAsync("project-1", _projectLocalPath, duplicatePr);
+
+        // Assert
+        var cached = _service.GetCachedPRData("project-1");
+        Assert.That(cached!.ClosedPrs, Has.Count.EqualTo(1)); // Still just one
+        Assert.That(cached.ClosedPrs[0].Title, Is.EqualTo($"Closed PR #42")); // Original title
+    }
+
+    [Test]
+    public async Task AddClosedPRAsync_PersistsToJsonlFile()
+    {
+        // Arrange
+        var closedPr = CreateClosedPr(42);
+
+        // Act
+        await _service.AddClosedPRAsync("project-1", _projectLocalPath, closedPr);
+
+        // Assert - Create fresh service to verify persistence
+        var freshService = new GraphCacheService(_mockLogger.Object);
+        freshService.LoadCacheForProject("project-1", _projectLocalPath);
+        var freshCached = freshService.GetCachedPRData("project-1");
+
+        Assert.That(freshCached, Is.Not.Null);
+        Assert.That(freshCached!.ClosedPrs, Has.Count.EqualTo(1));
+        Assert.That(freshCached.ClosedPrs[0].Number, Is.EqualTo(42));
+        Assert.That(freshCached.ClosedPrs[0].Status, Is.EqualTo(PullRequestStatus.Merged));
+    }
+
+    [Test]
+    public async Task AddClosedPRAsync_UpdatesIssuePrStatuses_WhenProvided()
+    {
+        // Arrange
+        var closedPr = CreateClosedPr(42);
+
+        // Act
+        await _service.AddClosedPRAsync("project-1", _projectLocalPath, closedPr, issueId: "issue-1");
+
+        // Assert
+        var cached = _service.GetCachedPRData("project-1");
+        Assert.That(cached!.IssuePrStatuses.ContainsKey("issue-1"), Is.True);
+        Assert.That(cached.IssuePrStatuses["issue-1"], Is.EqualTo(PullRequestStatus.Merged));
+    }
+
+    [Test]
+    public async Task AddClosedPRAsync_LoadsCacheFromDisk_WhenNotInMemory()
+    {
+        // Arrange - First create and persist cache to disk
+        var existingPr = CreateClosedPr(100);
+        await _service.CachePRDataAsync("project-1", _projectLocalPath, [], [existingPr]);
+
+        // Create a fresh service (simulating server restart)
+        var freshService = new GraphCacheService(_mockLogger.Object);
+
+        var newClosedPr = CreateClosedPr(42);
+
+        // Act - Add PR via fresh service (cache should be loaded from disk)
+        await freshService.AddClosedPRAsync("project-1", _projectLocalPath, newClosedPr);
+
+        // Assert
+        var cached = freshService.GetCachedPRData("project-1");
+        Assert.That(cached, Is.Not.Null);
+        Assert.That(cached!.ClosedPrs, Has.Count.EqualTo(2)); // Both the existing and new PR
+        Assert.That(cached.ClosedPrs.Select(p => p.Number), Is.EquivalentTo(new[] { 100, 42 }));
+    }
+
+    [Test]
+    public async Task AddClosedPRAsync_PreservesExistingIssuePrStatuses()
+    {
+        // Arrange - Cache with existing issue status
+        var statuses = new Dictionary<string, PullRequestStatus>
+        {
+            ["issue-100"] = PullRequestStatus.Merged
+        };
+        await _service.CachePRDataWithStatusesAsync("project-1", _projectLocalPath, [], [], statuses);
+
+        var closedPr = CreateClosedPr(42);
+
+        // Act
+        await _service.AddClosedPRAsync("project-1", _projectLocalPath, closedPr, issueId: "issue-42");
+
+        // Assert
+        var cached = _service.GetCachedPRData("project-1");
+        Assert.That(cached!.IssuePrStatuses.ContainsKey("issue-100"), Is.True); // Preserved
+        Assert.That(cached.IssuePrStatuses.ContainsKey("issue-42"), Is.True); // Added
+    }
+
     #endregion
 
     #region Helper Methods
