@@ -40,7 +40,7 @@ function createSessionSummary(overrides: Partial<SessionSummary> = {}): SessionS
     id: 'session-1',
     entityId: 'entity-1',
     projectId: 'project-1',
-    model: 'claude-sonnet-4-20250514',
+    model: 'sonnet',
     mode: 1 as const,
     status: 2 as const,
     ...overrides,

@@ -68,7 +68,7 @@ function createMockSession(overrides: Partial<ClaudeSession> = {}): ClaudeSessio
     entityId: 'issue-456',
     projectId: 'project-123',
     workingDirectory: '/workdir',
-    model: 'claude-sonnet-4-20250514',
+    model: 'sonnet',
     mode: 1 as const,
     status: 0 as const,
     ...overrides,
@@ -180,7 +180,7 @@ describe('AgentLauncher', () => {
     // since Radix UI's Select has complex interaction patterns in tests.
 
     // Pre-set the localStorage value
-    localStorage.setItem('agent-launcher-model', 'claude-opus-4-20250514')
+    localStorage.setItem('agent-launcher-model', 'opus')
 
     render(
       <AgentLauncher projectId="project-123" entityId="issue-456" workingDirectory="/workdir" />,

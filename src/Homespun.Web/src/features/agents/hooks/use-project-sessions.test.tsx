@@ -29,7 +29,7 @@ function createSessionSummary(overrides: Partial<SessionSummary> = {}): SessionS
     id: 'session-1',
     entityId: 'entity-1',
     projectId: 'project-123',
-    model: 'claude-sonnet-4-20250514',
+    model: 'sonnet',
     mode: 1 as const,
     status: 2 as const,
     ...overrides,
@@ -62,7 +62,7 @@ describe('useProjectSessions', () => {
       createSessionSummary({
         id: 'session-2',
         entityId: 'issue-2',
-        model: 'claude-opus-4-20250514',
+        model: 'opus',
         status: 3 as const, // WaitingForInput
       }),
     ]

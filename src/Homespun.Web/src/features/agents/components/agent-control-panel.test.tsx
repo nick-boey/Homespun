@@ -42,7 +42,7 @@ const mockSession: ClaudeSession = {
   id: 'session-123',
   entityId: 'issue-456',
   projectId: 'project-789',
-  model: 'claude-sonnet-4-20250514',
+  model: 'sonnet',
   mode: 1 as const, // Build
   status: 2 as const, // Running
   workingDirectory: '/workdir',

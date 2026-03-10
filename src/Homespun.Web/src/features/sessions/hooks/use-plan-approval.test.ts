@@ -14,7 +14,7 @@ const mockSession: ClaudeSession = {
   entityId: 'entity-123',
   projectId: 'project-456',
   workingDirectory: '/path/to/project',
-  model: 'claude-3-opus',
+  model: 'opus',
   mode: 'Build',
   status: 'WaitingForPlanExecution',
   createdAt: '2024-01-01T00:00:00Z',

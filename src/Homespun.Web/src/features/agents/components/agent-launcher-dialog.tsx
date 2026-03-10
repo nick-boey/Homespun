@@ -25,9 +25,9 @@ import { BaseBranchSelector } from './base-branch-selector'
 import type { RunAgentResult } from '../hooks/use-run-agent'
 
 const MODELS = [
-  { value: 'claude-sonnet-4-20250514', label: 'Sonnet' },
-  { value: 'claude-opus-4-20250514', label: 'Opus' },
-  { value: 'claude-haiku-3-5-20241022', label: 'Haiku' },
+  { value: 'opus', label: 'Opus' },
+  { value: 'sonnet', label: 'Sonnet' },
+  { value: 'haiku', label: 'Haiku' },
 ] as const
 
 const MODEL_STORAGE_KEY = 'agent-launcher-model'
@@ -79,7 +79,7 @@ export function AgentLauncherDialog({
 
   // Selection state
   const [selectedModel, setSelectedModel] = useState<string>(() => {
-    return localStorage.getItem(MODEL_STORAGE_KEY) ?? MODELS[1].value // Default to Opus
+    return localStorage.getItem(MODEL_STORAGE_KEY) ?? MODELS[0].value // Default to Opus
   })
   const [selectedPromptId, setSelectedPromptId] = useState<string>(getInitialPromptId)
   const [selectedBaseBranch, setSelectedBaseBranch] = useState<string>(() => {

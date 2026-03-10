@@ -73,7 +73,7 @@ const activeSession: SessionSummary = {
   id: 'session-1',
   entityId: 'issue-abc123',
   projectId: 'project-1',
-  model: 'claude-sonnet-4-20250514',
+  model: 'sonnet',
   mode: 1 as SessionMode,
   status: 2 as ClaudeSessionStatus, // Running
   createdAt: '2024-01-01T10:00:00Z',
@@ -87,7 +87,7 @@ const stoppedSession: SessionSummary = {
   id: 'session-2',
   entityId: 'issue-def456',
   projectId: 'project-2',
-  model: 'claude-opus-4-20250514',
+  model: 'opus',
   mode: 0 as SessionMode,
   status: 6 as ClaudeSessionStatus, // Stopped
   createdAt: '2024-01-01T09:00:00Z',
@@ -100,7 +100,7 @@ const errorSession: SessionSummary = {
   id: 'session-3',
   entityId: 'issue-ghi789',
   projectId: 'project-1',
-  model: 'claude-sonnet-4-20250514',
+  model: 'sonnet',
   mode: 1 as SessionMode,
   status: 7 as ClaudeSessionStatus, // Error
   createdAt: '2024-01-02T08:00:00Z',

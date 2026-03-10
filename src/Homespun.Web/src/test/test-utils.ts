@@ -13,7 +13,7 @@ export function createMockSession(overrides: Partial<ClaudeSession> = {}): Claud
     entityId: 'issue-123',
     projectId: 'project-1',
     workingDirectory: '/path/to/project',
-    model: 'claude-3-opus',
+    model: 'opus',
     mode: SessionMode[0], // Plan mode
     ...overrides,
   }

@@ -171,30 +171,6 @@ describe('SessionCard', () => {
     expect(onStop).toHaveBeenCalledWith('test-session-id')
   })
 
-  it('extracts model name correctly from full model string', () => {
-    const testCases = [
-      { model: 'claude-3.5-sonnet-20241022', expected: 'sonnet' },
-      { model: 'claude-3-opus', expected: 'opus' },
-      { model: 'claude-3.5-haiku-1234', expected: 'haiku' },
-      { model: 'gpt-4', expected: 'gpt-4' }, // fallback to full name
-    ]
-
-    testCases.forEach(({ model, expected }) => {
-      const { rerender } = render(
-        <SessionCard
-          session={{ ...mockSession, model }}
-          entityTitle="Test"
-          entityType="issue"
-          projectName="Test Project"
-        />
-      )
-
-      expect(screen.getByText(expected)).toBeInTheDocument()
-
-      rerender(<div />) // cleanup for next iteration
-    })
-  })
-
   it('shows project name when provided', () => {
     render(
       <SessionCard

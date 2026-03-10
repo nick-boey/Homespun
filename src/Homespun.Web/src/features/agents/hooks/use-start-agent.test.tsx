@@ -30,7 +30,7 @@ function createMockSession(overrides: Partial<ClaudeSession> = {}): ClaudeSessio
     entityId: 'issue-456',
     projectId: 'project-789',
     workingDirectory: '/workdir',
-    model: 'claude-sonnet-4-20250514',
+    model: 'sonnet',
     mode: 1 as const, // Build mode
     status: 0 as const,
     ...overrides,
@@ -65,7 +65,7 @@ describe('useStartAgent', () => {
       entityId: 'issue-456',
       projectId: 'project-789',
       mode: 1,
-      model: 'claude-sonnet-4-20250514',
+      model: 'sonnet',
       workingDirectory: '/workdir',
       systemPrompt: 'Test prompt',
     })
@@ -79,7 +79,7 @@ describe('useStartAgent', () => {
         entityId: 'issue-456',
         projectId: 'project-789',
         mode: 1,
-        model: 'claude-sonnet-4-20250514',
+        model: 'sonnet',
         workingDirectory: '/workdir',
         systemPrompt: 'Test prompt',
         initialMessage: undefined,
@@ -100,7 +100,7 @@ describe('useStartAgent', () => {
       entityId: 'issue-456',
       projectId: 'project-789',
       mode: 1,
-      model: 'claude-sonnet-4-20250514',
+      model: 'sonnet',
       workingDirectory: '/workdir',
     })
 
@@ -122,7 +122,7 @@ describe('useStartAgent', () => {
       entityId: 'issue-456',
       projectId: 'project-789',
       mode: 1,
-      model: 'claude-sonnet-4-20250514',
+      model: 'sonnet',
       workingDirectory: '/workdir',
     })
 
@@ -144,7 +144,7 @@ describe('useStartAgent', () => {
       entityId: 'issue-456',
       projectId: 'project-789',
       mode: 1,
-      model: 'claude-sonnet-4-20250514',
+      model: 'sonnet',
       workingDirectory: '/workdir',
       initialMessage: 'Build the feature',
     })
@@ -158,7 +158,7 @@ describe('useStartAgent', () => {
         entityId: 'issue-456',
         projectId: 'project-789',
         mode: 1,
-        model: 'claude-sonnet-4-20250514',
+        model: 'sonnet',
         workingDirectory: '/workdir',
         systemPrompt: undefined,
         initialMessage: 'Build the feature',

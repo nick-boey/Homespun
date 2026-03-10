@@ -14,12 +14,12 @@ import { useStartAgent, useAgentPrompts } from '../hooks'
 import type { ClaudeSession, SessionMode } from '@/api/generated/types.gen'
 
 const MODELS = [
-  { value: 'claude-sonnet-4-20250514', label: 'Sonnet' },
-  { value: 'claude-opus-4-20250514', label: 'Opus' },
-  { value: 'claude-haiku-3-5-20241022', label: 'Haiku' },
+  { value: 'opus', label: 'Opus' },
+  { value: 'sonnet', label: 'Sonnet' },
+  { value: 'haiku', label: 'Haiku' },
 ] as const
 
-const DEFAULT_MODEL = 'claude-opus-4-20250514'
+const DEFAULT_MODEL = 'opus'
 const MODEL_STORAGE_KEY = 'agent-launcher-model'
 const PROMPT_STORAGE_KEY = 'agent-launcher-prompt'
 
@@ -31,6 +31,8 @@ const NO_PROMPT_OPTION = {
   initialMessage: undefined,
   mode: 0, // SessionMode.Plan
 } as const
+
+// TODO: Join this with the agent-launcher-dialog
 
 /** Get the initial prompt ID from localStorage or return "None" as default */
 function getInitialPromptId(): string {
