@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { Send, Loader2, Shield, Sparkles } from 'lucide-react'
+import { Send, Loader2, Shield, Sparkles, Hammer } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -25,11 +25,6 @@ export interface ChatInputProps {
   disabled?: boolean
   isLoading?: boolean
   placeholder?: string
-}
-
-const SESSION_MODE_LABELS: Record<SessionMode, string> = {
-  Build: 'Build Mode',
-  Plan: 'Plan Mode',
 }
 
 const MODEL_LABELS: Record<ModelSelection, string> = {
@@ -58,18 +53,26 @@ export function ChatInput({
     setValue('')
   }, [value, disabled, onSend, sessionMode, sessionModel])
 
-  const handleSessionModeChange = useCallback(
-    (mode: SessionMode) => {
-      onModeChange(mode)
-    },
-    [onModeChange]
-  )
+  const toggleSessionMode = useCallback(() => {
+    const newMode = sessionMode === 'Build' ? 'Plan' : 'Build'
+    onModeChange(newMode)
+  }, [sessionMode, onModeChange])
 
   const handleModelChange = useCallback(
     (newModel: ModelSelection) => {
       onModelChange(newModel)
     },
     [onModelChange]
+  )
+
+  const handleTextareaKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.key === 'Tab' && e.shiftKey) {
+        e.preventDefault()
+        toggleSessionMode()
+      }
+    },
+    [toggleSessionMode]
   )
 
   return (
@@ -81,32 +84,30 @@ export function ChatInput({
       isLoading={isLoading}
       className="w-full"
     >
-      <PromptInputTextarea placeholder={placeholder} />
-      <PromptInputActions className="justify-between px-2 pb-2">
+      {/* Controls above textarea */}
+      <PromptInputActions className="justify-between px-2 pt-1">
         <div className="flex items-center gap-2">
-          {/* Session Mode Selector */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="gap-1"
-                aria-label="Session mode"
-                disabled={disabled}
-              >
+          {/* Session Mode Toggle */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={toggleSessionMode}
+            disabled={disabled}
+            className="gap-1"
+            aria-label="Toggle session mode"
+          >
+            {sessionMode === 'Build' ? (
+              <>
+                <Hammer className="h-4 w-4" />
+                <span>Build</span>
+              </>
+            ) : (
+              <>
                 <Shield className="h-4 w-4" />
-                <span className="hidden sm:inline">{SESSION_MODE_LABELS[sessionMode]}</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
-              <DropdownMenuItem onClick={() => handleSessionModeChange('Build')}>
-                Build Mode
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleSessionModeChange('Plan')}>
-                Plan Mode
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+                <span>Plan</span>
+              </>
+            )}
+          </Button>
 
           {/* Model Selector */}
           <DropdownMenu>
@@ -131,8 +132,12 @@ export function ChatInput({
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
+      </PromptInputActions>
 
-        {/* Send Button */}
+      <PromptInputTextarea placeholder={placeholder} onKeyDown={handleTextareaKeyDown} />
+
+      {/* Send button below textarea */}
+      <PromptInputActions className="justify-end px-2 pb-2">
         <PromptInputAction tooltip="Send message (Enter)">
           <Button
             size="icon"

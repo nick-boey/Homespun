@@ -33,10 +33,11 @@ describe('ChatInput', () => {
       expect(screen.getByRole('button', { name: /send/i })).toBeInTheDocument()
     })
 
-    it('renders the session mode selector', () => {
+    it('renders the session mode toggle button', () => {
       render(<ChatInput {...defaultProps} />)
 
-      expect(screen.getByRole('button', { name: /session mode/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /toggle session mode/i })).toBeInTheDocument()
+      expect(screen.getByText('Build')).toBeInTheDocument()
     })
 
     it('renders the model selector', () => {
@@ -141,35 +142,35 @@ describe('ChatInput', () => {
     })
   })
 
-  describe('session mode selector', () => {
-    it('displays Build mode from props', () => {
+  describe('session mode toggle', () => {
+    it('shows Build mode from props', () => {
       render(<ChatInput {...defaultProps} sessionMode="Build" />)
 
-      expect(screen.getByRole('button', { name: /session mode/i })).toHaveTextContent(/build/i)
+      const toggleButton = screen.getByRole('button', { name: /toggle session mode/i })
+      expect(toggleButton).toHaveTextContent('Build')
     })
 
-    it('displays Plan mode from props', () => {
+    it('shows Plan mode from props', () => {
       render(<ChatInput {...defaultProps} sessionMode="Plan" />)
 
-      expect(screen.getByRole('button', { name: /session mode/i })).toHaveTextContent(/plan/i)
+      const toggleButton = screen.getByRole('button', { name: /toggle session mode/i })
+      expect(toggleButton).toHaveTextContent('Plan')
     })
 
-    it('calls onModeChange when Plan mode is selected', async () => {
+    it('toggles to Plan mode when clicked from Build', async () => {
       const user = userEvent.setup()
       render(<ChatInput {...defaultProps} sessionMode="Build" />)
 
-      await user.click(screen.getByRole('button', { name: /session mode/i }))
-      await user.click(screen.getByRole('menuitem', { name: /plan mode/i }))
+      await user.click(screen.getByRole('button', { name: /toggle session mode/i }))
 
       expect(mockOnModeChange).toHaveBeenCalledWith('Plan')
     })
 
-    it('calls onModeChange when Build mode is selected', async () => {
+    it('toggles to Build mode when clicked from Plan', async () => {
       const user = userEvent.setup()
       render(<ChatInput {...defaultProps} sessionMode="Plan" />)
 
-      await user.click(screen.getByRole('button', { name: /session mode/i }))
-      await user.click(screen.getByRole('menuitem', { name: /build mode/i }))
+      await user.click(screen.getByRole('button', { name: /toggle session mode/i }))
 
       expect(mockOnModeChange).toHaveBeenCalledWith('Build')
     })
@@ -182,6 +183,30 @@ describe('ChatInput', () => {
       await user.type(input, 'Hello{Enter}')
 
       expect(mockOnSend).toHaveBeenCalledWith('Hello', 'Plan', 'opus')
+    })
+  })
+
+  describe('keyboard shortcuts', () => {
+    it('toggles from Build to Plan with Shift+Tab in textarea', async () => {
+      const user = userEvent.setup()
+      render(<ChatInput {...defaultProps} sessionMode="Build" />)
+
+      const input = screen.getByPlaceholderText(/message/i)
+      await user.click(input)
+      await user.keyboard('{Shift>}{Tab}{/Shift}')
+
+      expect(mockOnModeChange).toHaveBeenCalledWith('Plan')
+    })
+
+    it('toggles from Plan to Build with Shift+Tab in textarea', async () => {
+      const user = userEvent.setup()
+      render(<ChatInput {...defaultProps} sessionMode="Plan" />)
+
+      const input = screen.getByPlaceholderText(/message/i)
+      await user.click(input)
+      await user.keyboard('{Shift>}{Tab}{/Shift}')
+
+      expect(mockOnModeChange).toHaveBeenCalledWith('Build')
     })
   })
 
