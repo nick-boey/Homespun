@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Clones } from '@/api'
-import type { ClaudeSession } from '@/api/generated'
+import type { ClaudeSession } from '@/types/signalr'
 
 export function useChangedFiles(session: ClaudeSession | undefined) {
   const workingDirectory = session?.workingDirectory

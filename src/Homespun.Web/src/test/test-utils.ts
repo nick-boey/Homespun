@@ -1,7 +1,6 @@
 import { vi } from 'vitest'
 import type { UseQueryResult } from '@tanstack/react-query'
-import type { ClaudeSession } from '@/api/generated'
-import { SessionMode } from '@/api/generated'
+import type { ClaudeSession } from '@/types/signalr'
 
 // Helper type for mocking React Query hooks
 export type MockQueryResult<TData> = Partial<UseQueryResult<TData, Error>>
@@ -14,7 +13,15 @@ export function createMockSession(overrides: Partial<ClaudeSession> = {}): Claud
     projectId: 'project-1',
     workingDirectory: '/path/to/project',
     model: 'opus',
-    mode: SessionMode[0], // Plan mode
+    mode: 'Plan',
+    status: 'Running',
+    createdAt: new Date().toISOString(),
+    lastActivityAt: new Date().toISOString(),
+    messages: [],
+    totalCostUsd: 0,
+    totalDurationMs: 0,
+    hasPendingPlanApproval: false,
+    contextClearMarkers: [],
     ...overrides,
   }
 }

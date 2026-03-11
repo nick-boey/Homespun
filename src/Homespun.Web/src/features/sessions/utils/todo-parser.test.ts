@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { parseTodosFromMessages } from './todo-parser'
-import type { ClaudeMessage } from '@/api/generated'
+import type { ClaudeMessage } from '@/types/signalr'
 
 // Helper to create a message with TodoWrite tool use
 function createTodoWriteMessage(
@@ -13,16 +13,18 @@ function createTodoWriteMessage(
   return {
     id: 'msg-1',
     sessionId: 'session-1',
-    role: 1, // Assistant
+    role: 'Assistant',
     content: [
       {
-        type: 2, // ToolUse
+        type: 'ToolUse',
         toolName: 'TodoWrite',
         toolInput: JSON.stringify({ todos }),
         index: 0,
+        isStreaming: false,
       },
     ],
     createdAt: new Date().toISOString(),
+    isStreaming: false,
   }
 }
 
@@ -37,18 +39,20 @@ describe('parseTodosFromMessages', () => {
       {
         id: 'msg-1',
         sessionId: 'session-1',
-        role: 1,
-        content: [
-          { type: 0, text: 'Hello there', index: 0 }, // Text content
-        ],
+        role: 'Assistant',
+        content: [{ type: 'Text', text: 'Hello there', index: 0, isStreaming: false }],
+        createdAt: new Date().toISOString(),
+        isStreaming: false,
       },
       {
         id: 'msg-2',
         sessionId: 'session-1',
-        role: 1,
+        role: 'Assistant',
         content: [
-          { type: 2, toolName: 'Bash', toolInput: 'ls', index: 0 }, // Different tool
+          { type: 'ToolUse', toolName: 'Bash', toolInput: 'ls', index: 0, isStreaming: false },
         ],
+        createdAt: new Date().toISOString(),
+        isStreaming: false,
       },
     ]
 
@@ -116,8 +120,10 @@ describe('parseTodosFromMessages', () => {
       {
         id: 'msg-2',
         sessionId: 'session-1',
-        role: 1,
-        content: [{ type: 0, text: 'Let me work on this', index: 0 }],
+        role: 'Assistant',
+        content: [{ type: 'Text', text: 'Let me work on this', index: 0, isStreaming: false }],
+        createdAt: new Date().toISOString(),
+        isStreaming: false,
       },
       createTodoWriteMessage([
         { content: 'Task 1', activeForm: 'Doing Task 1', status: 'completed' },
@@ -136,15 +142,18 @@ describe('parseTodosFromMessages', () => {
       {
         id: 'msg-1',
         sessionId: 'session-1',
-        role: 1,
+        role: 'Assistant',
         content: [
           {
-            type: 2,
+            type: 'ToolUse',
             toolName: 'TodoWrite',
             toolInput: 'not valid json',
             index: 0,
+            isStreaming: false,
           },
         ],
+        createdAt: new Date().toISOString(),
+        isStreaming: false,
       },
     ]
 
@@ -157,15 +166,18 @@ describe('parseTodosFromMessages', () => {
       {
         id: 'msg-1',
         sessionId: 'session-1',
-        role: 1,
+        role: 'Assistant',
         content: [
           {
-            type: 2,
+            type: 'ToolUse',
             toolName: 'TodoWrite',
-            toolInput: null,
+            toolInput: undefined,
             index: 0,
+            isStreaming: false,
           },
         ],
+        createdAt: new Date().toISOString(),
+        isStreaming: false,
       },
     ]
 
@@ -178,15 +190,18 @@ describe('parseTodosFromMessages', () => {
       {
         id: 'msg-1',
         sessionId: 'session-1',
-        role: 1,
+        role: 'Assistant',
         content: [
           {
-            type: 2,
+            type: 'ToolUse',
             toolName: 'TodoWrite',
             toolInput: JSON.stringify({ todos: [] }),
             index: 0,
+            isStreaming: false,
           },
         ],
+        createdAt: new Date().toISOString(),
+        isStreaming: false,
       },
     ]
 
@@ -199,10 +214,10 @@ describe('parseTodosFromMessages', () => {
       {
         id: 'msg-1',
         sessionId: 'session-1',
-        role: 1,
+        role: 'Assistant',
         content: [
           {
-            type: 2,
+            type: 'ToolUse',
             toolName: 'TodoWrite',
             toolInput: JSON.stringify({
               todos: [
@@ -214,8 +229,11 @@ describe('parseTodosFromMessages', () => {
               ],
             }),
             index: 0,
+            isStreaming: false,
           },
         ],
+        createdAt: new Date().toISOString(),
+        isStreaming: false,
       },
     ]
 
@@ -228,10 +246,10 @@ describe('parseTodosFromMessages', () => {
       {
         id: 'msg-1',
         sessionId: 'session-1',
-        role: 1,
+        role: 'Assistant',
         content: [
           {
-            type: 2,
+            type: 'ToolUse',
             toolName: 'TodoWrite',
             toolInput: JSON.stringify({
               todos: [
@@ -247,8 +265,11 @@ describe('parseTodosFromMessages', () => {
               ],
             }),
             index: 0,
+            isStreaming: false,
           },
         ],
+        createdAt: new Date().toISOString(),
+        isStreaming: false,
       },
     ]
 
@@ -271,11 +292,11 @@ describe('parseTodosFromMessages', () => {
       {
         id: 'msg-1',
         sessionId: 'session-1',
-        role: 1,
+        role: 'Assistant',
         content: [
-          { type: 0, text: 'Let me update the todos', index: 0 },
+          { type: 'Text', text: 'Let me update the todos', index: 0, isStreaming: false },
           {
-            type: 2,
+            type: 'ToolUse',
             toolName: 'TodoWrite',
             toolInput: JSON.stringify({
               todos: [
@@ -287,9 +308,12 @@ describe('parseTodosFromMessages', () => {
               ],
             }),
             index: 1,
+            isStreaming: false,
           },
-          { type: 0, text: 'Updated!', index: 2 },
+          { type: 'Text', text: 'Updated!', index: 2, isStreaming: false },
         ],
+        createdAt: new Date().toISOString(),
+        isStreaming: false,
       },
     ]
 

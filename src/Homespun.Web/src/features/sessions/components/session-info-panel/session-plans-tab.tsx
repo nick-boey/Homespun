@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { FileText, ChevronDown, ChevronRight, Copy, Check } from 'lucide-react'
-import type { ClaudeSession, PlanFileInfo } from '@/api/generated'
+import type { PlanFileInfo } from '@/api/generated'
+import type { ClaudeSession } from '@/types/signalr'
 import { usePlanFiles, usePlanContent } from '@/features/sessions/hooks'
 import { Skeleton } from '@/components/ui/skeleton'
 

@@ -1,6 +1,7 @@
 import { useQuery, useQueries } from '@tanstack/react-query'
 import { Plans } from '@/api'
-import type { ClaudeSession, PlanFileInfo } from '@/api/generated'
+import type { PlanFileInfo } from '@/api/generated'
+import type { ClaudeSession } from '@/types/signalr'
 
 export function usePlanFiles(session: ClaudeSession | undefined) {
   const workingDirectory = session?.workingDirectory

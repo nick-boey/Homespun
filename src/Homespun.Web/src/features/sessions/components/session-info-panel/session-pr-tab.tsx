@@ -1,5 +1,5 @@
 import { GitPullRequest, CheckCircle, X, Loader, ExternalLink, AlertCircle } from 'lucide-react'
-import type { ClaudeSession } from '@/api/generated'
+import type { ClaudeSession } from '@/types/signalr'
 import { useIssuePrStatus } from '@/features/sessions/hooks'
 import { Skeleton } from '@/components/ui/skeleton'
 

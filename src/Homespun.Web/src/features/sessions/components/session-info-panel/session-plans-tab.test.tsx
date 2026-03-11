@@ -23,7 +23,7 @@ describe('SessionPlansTab', () => {
   })
 
   const sessionNoDir = createMockSession({
-    workingDirectory: null,
+    workingDirectory: undefined,
   })
 
   beforeEach(() => {

@@ -1,5 +1,5 @@
 import { Circle, CheckCircle, Loader } from 'lucide-react'
-import type { ClaudeSession } from '@/api/generated'
+import type { ClaudeSession } from '@/types/signalr'
 import { parseTodosFromMessages } from '../../utils/todo-parser'
 import { cn } from '@/lib/utils'
 

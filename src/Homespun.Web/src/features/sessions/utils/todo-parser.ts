@@ -1,4 +1,4 @@
-import type { ClaudeMessage } from '@/api/generated'
+import type { ClaudeMessage } from '@/types/signalr'
 
 export interface SessionTodoItem {
   content: string
@@ -22,11 +22,7 @@ export function parseTodosFromMessages(messages: ClaudeMessage[]): SessionTodoIt
   // Find all TodoWrite tool use blocks across all messages
   const allTodoWrites = messages
     .flatMap((msg) => msg.content || [])
-    .filter(
-      (content) =>
-        content.type === 2 && // ToolUse
-        content.toolName === 'TodoWrite'
-    )
+    .filter((content) => content.type === 'ToolUse' && content.toolName === 'TodoWrite')
 
   if (allTodoWrites.length === 0) {
     return []
