@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { IssuePrStatus } from '@/api'
-import type { ClaudeSession } from '@/api/generated'
+import type { ClaudeSession } from '@/types/signalr'
 
 export function useIssuePrStatus(session: ClaudeSession | undefined) {
   const isClone = session?.entityId?.startsWith('clone:')

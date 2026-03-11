@@ -8,6 +8,7 @@ export { SessionCard } from './components/session-card'
 export { SessionCardSkeleton } from './components/session-card-skeleton'
 export { StatusIndicator } from './components/status-indicator'
 export { PlanApprovalPanel } from './components/plan-approval-panel'
+export { SessionInfoPanel } from './components/session-info-panel'
 
 // Hooks
 export { useSession } from './hooks/use-session'

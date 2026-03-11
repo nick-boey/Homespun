@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { SessionInfoPanel } from './session-info-panel'
-import type { ClaudeSession } from '@/api/generated'
+import type { ClaudeSession } from '@/types/signalr'
 
 // Mock hooks
 import { useMobile } from '@/hooks/use-mobile'
@@ -111,13 +111,22 @@ describe('SessionInfoPanel', () => {
     projectId: 'proj-789',
     workingDirectory: '/workdir',
     model: 'opus',
-    mode: 1, // Build mode
+    mode: 'Build',
+    status: 'Running',
+    createdAt: new Date().toISOString(),
+    lastActivityAt: new Date().toISOString(),
+    totalCostUsd: 0,
+    totalDurationMs: 0,
+    hasPendingPlanApproval: false,
+    contextClearMarkers: [],
     messages: [
       {
         id: 'msg-1',
         sessionId: 'session-123',
-        role: 1,
-        content: [{ type: 0, text: 'Hello' }],
+        role: 'User',
+        content: [{ type: 'Text', text: 'Hello', isStreaming: false, index: 0 }],
+        createdAt: new Date().toISOString(),
+        isStreaming: false,
       },
     ],
   }

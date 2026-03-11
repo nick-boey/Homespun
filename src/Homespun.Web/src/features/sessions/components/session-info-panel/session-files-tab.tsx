@@ -1,5 +1,6 @@
 import { FileText, FilePlus, FileX, FileDiff, FileCode } from 'lucide-react'
-import type { ClaudeSession, FileChangeInfo } from '@/api/generated'
+import type { FileChangeInfo } from '@/api/generated'
+import type { ClaudeSession } from '@/types/signalr'
 import { useChangedFiles } from '@/features/sessions/hooks'
 import { cn } from '@/lib/utils'
 import { Skeleton } from '@/components/ui/skeleton'

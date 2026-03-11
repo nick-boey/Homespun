@@ -36,7 +36,7 @@ describe('usePlanFiles', () => {
 
   it('returns empty array when workingDirectory is missing', async () => {
     const session = createMockSession({
-      workingDirectory: null,
+      workingDirectory: undefined,
     })
 
     const { result } = renderHook(() => usePlanFiles(session), { wrapper })

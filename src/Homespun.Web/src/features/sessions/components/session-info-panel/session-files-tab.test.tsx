@@ -15,7 +15,7 @@ describe('SessionFilesTab', () => {
   })
 
   const sessionNoDir = createMockSession({
-    workingDirectory: null,
+    workingDirectory: undefined,
   })
 
   it('shows empty state when no working directory', () => {

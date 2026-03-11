@@ -1,5 +1,5 @@
 import { FileText, GitMerge } from 'lucide-react'
-import type { ClaudeSession, ClaudeSessionStatus } from '@/api/generated'
+import type { ClaudeSession, ClaudeSessionStatus } from '@/types/signalr'
 import { useIssue } from '@/features/issues/hooks/use-issue'
 import { getStatusLabel, getStatusColorClass, getTypeLabel } from '@/lib/issue-constants'
 import { cn } from '@/lib/utils'
@@ -8,26 +8,14 @@ import { Button } from '@/components/ui/button'
 import { useState } from 'react'
 import { ApplyAgentChangesDialog } from '@/features/issues/components/apply-agent-changes-dialog'
 
-// Session status enum values from backend
-const SessionStatus = {
-  Starting: 0,
-  RunningHooks: 1,
-  Running: 2,
-  WaitingForInput: 3,
-  WaitingForQuestionAnswer: 4,
-  WaitingForPlanExecution: 5,
-  Stopped: 6,
-  Error: 7,
-} as const
-
 function isActiveStatus(status: ClaudeSessionStatus | undefined): boolean {
   return (
-    status === SessionStatus.Starting ||
-    status === SessionStatus.RunningHooks ||
-    status === SessionStatus.Running ||
-    status === SessionStatus.WaitingForInput ||
-    status === SessionStatus.WaitingForQuestionAnswer ||
-    status === SessionStatus.WaitingForPlanExecution
+    status === 'Starting' ||
+    status === 'RunningHooks' ||
+    status === 'Running' ||
+    status === 'WaitingForInput' ||
+    status === 'WaitingForQuestionAnswer' ||
+    status === 'WaitingForPlanExecution'
   )
 }
 

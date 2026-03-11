@@ -17,11 +17,14 @@ import {
   useStopSession,
   useSessionSettings,
   useChangeSessionSettings,
+  SessionInfoPanel,
 } from '@/features/sessions'
 import { useAnswerQuestion } from '@/features/questions'
 import { useClaudeCodeHub } from '@/providers/signalr-provider'
-import { ArrowLeft, AlertCircle, RefreshCw, StopCircle } from 'lucide-react'
+import { ArrowLeft, AlertCircle, RefreshCw, StopCircle, PanelRight } from 'lucide-react'
 import { ScrollToBottom } from '@/components/ui/scroll-to-bottom'
+import { useMobile } from '@/hooks/use-mobile'
+import { cn } from '@/lib/utils'
 import { Sessions } from '@/api'
 import { toast } from 'sonner'
 import type { ModelSelection } from '@/stores/session-settings-store'
@@ -49,6 +52,8 @@ function SessionChat() {
   const [isSending, setIsSending] = useState(false)
   const [isProcessingAnswer, setIsProcessingAnswer] = useState(false)
   const [showStopDialog, setShowStopDialog] = useState(false)
+  const [infoPanelOpen, setInfoPanelOpen] = useState(false)
+  const isMobile = useMobile()
 
   // Get session settings (mode/model) from server or cache
   const { mode, model } = useSessionSettings(sessionId, session)
@@ -138,6 +143,11 @@ function SessionChat() {
     setShowStopDialog(false)
   }, [])
 
+  // Toggle info panel
+  const handleToggleInfoPanel = useCallback(() => {
+    setInfoPanelOpen((prev) => !prev)
+  }, [])
+
   // Auto-scroll to bottom when new messages arrive or when pending question appears
   useEffect(() => {
     if (scrollContainerRef.current) {
@@ -225,13 +235,20 @@ function SessionChat() {
   }
 
   return (
-    <div className="flex h-full flex-col">
+    <div
+      className={cn(
+        'flex h-full flex-col',
+        !isMobile && infoPanelOpen && 'md:mr-80' // 320px right margin for desktop panel
+      )}
+    >
       <SessionHeader
         sessionId={sessionId}
         session={session}
         entityTitle={entityInfo?.title}
         onStop={handleStop}
         isStopPending={stopSession.isPending}
+        onToggleInfoPanel={handleToggleInfoPanel}
+        infoPanelOpen={infoPanelOpen}
       />
       {/* Messages area - flex-1 takes remaining space */}
       <div className="relative mt-4 min-h-0 flex-1">
@@ -295,6 +312,15 @@ function SessionChat() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Session info panel */}
+      {session && (
+        <SessionInfoPanel
+          session={session}
+          isOpen={infoPanelOpen}
+          onOpenChange={setInfoPanelOpen}
+        />
+      )}
     </div>
   )
 }
@@ -312,6 +338,8 @@ interface SessionHeaderProps {
   entityTitle?: string
   onStop?: () => void
   isStopPending?: boolean
+  onToggleInfoPanel?: () => void
+  infoPanelOpen?: boolean
 }
 
 /**
@@ -333,6 +361,8 @@ function SessionHeader({
   entityTitle,
   onStop,
   isStopPending,
+  onToggleInfoPanel,
+  infoPanelOpen,
 }: SessionHeaderProps) {
   // Determine if stop button should be shown
   const showStopButton =
@@ -362,18 +392,31 @@ function SessionHeader({
           )}
         </div>
       </div>
-      {showStopButton && (
-        <Button
-          variant="destructive"
-          size="sm"
-          onClick={onStop}
-          disabled={isStopPending}
-          className="h-8"
-        >
-          <StopCircle className="mr-2 h-4 w-4" />
-          Stop
-        </Button>
-      )}
+      <div className="flex items-center gap-2">
+        {showStopButton && (
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={onStop}
+            disabled={isStopPending}
+            className="h-8"
+          >
+            <StopCircle className="mr-2 h-4 w-4" />
+            Stop
+          </Button>
+        )}
+        {onToggleInfoPanel && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onToggleInfoPanel}
+            className={cn('h-10 w-10', infoPanelOpen && 'bg-accent')}
+            aria-label={infoPanelOpen ? 'Close info panel' : 'Open info panel'}
+          >
+            <PanelRight className="h-5 w-5" />
+          </Button>
+        )}
+      </div>
     </div>
   )
 }

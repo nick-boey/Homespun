@@ -67,6 +67,7 @@ vi.mock('@/features/sessions', () => ({
     isChanging: false,
     error: null,
   })),
+  SessionInfoPanel: vi.fn(() => null),
 }))
 
 vi.mock('@/features/questions', () => ({
