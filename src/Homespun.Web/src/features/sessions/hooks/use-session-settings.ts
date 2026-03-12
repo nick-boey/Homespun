@@ -1,4 +1,5 @@
 import { useSessionSettingsStore, type ModelSelection } from '@/stores/session-settings-store'
+import { normalizeSessionMode } from '@/lib/utils/session-mode'
 import type { ClaudeSession, SessionMode } from '@/types/signalr'
 
 /**
@@ -17,8 +18,9 @@ export function useSessionSettings(
   const cachedSettings = useSessionSettingsStore((s) => s.sessions[sessionId])
 
   // Prefer server data, fall back to cache, then defaults
+  // Use normalizeSessionMode to handle numeric values from SignalR (C# enum serialization)
   return {
-    mode: (session?.mode ?? cachedSettings?.mode ?? 'Build') as SessionMode,
+    mode: normalizeSessionMode(session?.mode ?? cachedSettings?.mode),
     model: (session?.model ?? cachedSettings?.model ?? 'opus') as ModelSelection,
   }
 }

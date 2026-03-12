@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useClaudeCodeHub } from '@/providers/signalr-provider'
 import { useSessionSettingsStore } from '@/stores/session-settings-store'
+import { normalizeSessionMode } from '@/lib/utils/session-mode'
 import type { ClaudeSession } from '@/types/signalr'
 
 export interface UseSessionResult {
@@ -95,12 +96,14 @@ export function useSession(sessionId: string): UseSessionResult {
       model: string
     ) => {
       if (updatedSessionId === sessionId) {
+        // Normalize mode to handle numeric values from SignalR (C# enum serialization)
+        const normalizedMode = normalizeSessionMode(mode)
         setSession((prevSession) => {
           if (!prevSession || prevSession.id !== sessionId) return prevSession
-          return { ...prevSession, mode, model }
+          return { ...prevSession, mode: normalizedMode, model }
         })
         // Sync to per-session settings cache
-        useSessionSettingsStore.getState().updateSession(sessionId, mode, model)
+        useSessionSettingsStore.getState().updateSession(sessionId, normalizedMode, model)
       }
     }
 
