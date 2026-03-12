@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { toApiSessionMode, fromApiSessionMode } from './session-mode'
+import { toApiSessionMode, fromApiSessionMode, normalizeSessionMode } from './session-mode'
 import { SessionMode as ApiSessionMode } from '@/api'
 
 describe('Session Mode Utilities', () => {
@@ -20,6 +20,33 @@ describe('Session Mode Utilities', () => {
 
     it('returns Build when API mode is 1', () => {
       expect(fromApiSessionMode(1 as ApiSessionMode)).toBe('Build')
+    })
+  })
+
+  describe('normalizeSessionMode', () => {
+    it('converts 0 to Plan', () => {
+      expect(normalizeSessionMode(0)).toBe('Plan')
+    })
+
+    it('converts 1 to Build', () => {
+      expect(normalizeSessionMode(1)).toBe('Build')
+    })
+
+    it('passes through Plan string', () => {
+      expect(normalizeSessionMode('Plan')).toBe('Plan')
+    })
+
+    it('passes through Build string', () => {
+      expect(normalizeSessionMode('Build')).toBe('Build')
+    })
+
+    it('defaults to Build for undefined', () => {
+      expect(normalizeSessionMode(undefined)).toBe('Build')
+    })
+
+    it('defaults to Build for unknown values', () => {
+      expect(normalizeSessionMode(99)).toBe('Build')
+      expect(normalizeSessionMode('Unknown')).toBe('Build')
     })
   })
 })

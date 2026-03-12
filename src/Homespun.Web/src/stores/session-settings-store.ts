@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { devtools } from 'zustand/middleware'
+import { normalizeSessionMode } from '@/lib/utils/session-mode'
 import type { SessionMode } from '@/types/signalr'
 
 export type ModelSelection = 'opus' | 'sonnet' | 'haiku'
@@ -16,8 +17,8 @@ interface SessionSettingsState {
   // Initialize settings for a new session (called when agent starts)
   initSession: (sessionId: string, mode: SessionMode, model: ModelSelection) => void
 
-  // Update settings from server data
-  updateSession: (sessionId: string, mode: SessionMode, model: string) => void
+  // Update settings from server data (mode can be numeric from SignalR)
+  updateSession: (sessionId: string, mode: string | number | undefined, model: string) => void
 
   // Get settings for a session (returns undefined if not cached)
   getSession: (sessionId: string) => SessionSettings | undefined
@@ -45,7 +46,10 @@ export const useSessionSettingsStore = create<SessionSettingsState>()(
           (state) => ({
             sessions: {
               ...state.sessions,
-              [sessionId]: { mode, model: model as ModelSelection },
+              [sessionId]: {
+                mode: normalizeSessionMode(mode),
+                model: model as ModelSelection,
+              },
             },
           }),
           undefined,

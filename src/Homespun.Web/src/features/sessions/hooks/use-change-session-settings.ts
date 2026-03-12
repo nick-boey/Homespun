@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react'
+import { toast } from 'sonner'
 import { useClaudeCodeHub } from '@/providers/signalr-provider'
 import { useSessionSettingsStore, type ModelSelection } from '@/stores/session-settings-store'
 import type { SessionMode } from '@/types/signalr'
@@ -47,7 +48,9 @@ export function useChangeSessionSettings(sessionId: string): UseChangeSessionSet
             .getState()
             .updateSession(sessionId, currentSettings.mode, currentSettings.model)
         }
-        setError(err instanceof Error ? err.message : 'Failed to change mode')
+        const errorMessage = err instanceof Error ? err.message : 'Failed to change mode'
+        setError(errorMessage)
+        toast.error(errorMessage)
       } finally {
         setIsChanging(false)
       }
@@ -82,7 +85,9 @@ export function useChangeSessionSettings(sessionId: string): UseChangeSessionSet
             .getState()
             .updateSession(sessionId, currentSettings.mode, currentSettings.model)
         }
-        setError(err instanceof Error ? err.message : 'Failed to change model')
+        const errorMessage = err instanceof Error ? err.message : 'Failed to change model'
+        setError(errorMessage)
+        toast.error(errorMessage)
       } finally {
         setIsChanging(false)
       }
