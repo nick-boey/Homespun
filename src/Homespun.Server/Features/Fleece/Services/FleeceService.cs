@@ -263,6 +263,7 @@ public sealed class FleeceService : IFleeceService, IDisposable
         int? priority = null,
         ExecutionMode? executionMode = null,
         string? workingBranchId = null,
+        string? assignedTo = null,
         CancellationToken ct = default)
     {
         var cache = await EnsureCacheLoadedAsync(projectPath, ct);
@@ -287,6 +288,7 @@ public sealed class FleeceService : IFleeceService, IDisposable
                 priority: priority,
                 executionMode: executionMode,
                 workingBranchId: workingBranchId,
+                assignedTo: assignedTo,
                 cancellationToken: ct);
 
             // Update the in-memory cache immediately
@@ -309,6 +311,7 @@ public sealed class FleeceService : IFleeceService, IDisposable
                         priority: priority,
                         executionMode: executionMode,
                         workingBranchId: workingBranchId,
+                        assignedTo: assignedTo,
                         cancellationToken: innerCt);
                 },
                 QueuedAt: DateTimeOffset.UtcNow
@@ -322,6 +325,7 @@ public sealed class FleeceService : IFleeceService, IDisposable
             if (priority != null) changes.Add($"priority={priority}");
             if (executionMode != null) changes.Add($"executionMode={executionMode}");
             if (workingBranchId != null) changes.Add($"workingBranchId='{workingBranchId}'");
+            if (assignedTo != null) changes.Add($"assignedTo='{assignedTo}'");
 
             _logger.LogInformation(
                 "Updated issue '{IssueId}': {Changes}",

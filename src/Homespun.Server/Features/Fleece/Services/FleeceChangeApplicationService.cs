@@ -395,6 +395,7 @@ public class FleeceChangeApplicationService : IFleeceChangeApplicationService
             modifiedIssue.Priority,
             modifiedIssue.ExecutionMode,
             modifiedIssue.WorkingBranchId,
+            modifiedIssue.AssignedTo,
             cancellationToken);
 
         // Update parent relationships if changed
@@ -467,6 +468,7 @@ public class FleeceChangeApplicationService : IFleeceChangeApplicationService
             ParseInt(updates.GetValueOrDefault("Priority")),
             ParseEnum<ExecutionMode>(updates.GetValueOrDefault("ExecutionMode")),
             updates.GetValueOrDefault("WorkingBranchId")?.ToString(),
+            updates.GetValueOrDefault("AssignedTo")?.ToString(),
             cancellationToken);
 
         // Return the updated issue

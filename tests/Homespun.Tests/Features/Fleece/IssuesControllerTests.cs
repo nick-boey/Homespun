@@ -275,7 +275,8 @@ public class IssuesControllerTests
             .Setup(x => x.UpdateIssueAsync(
                 It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(),
                 It.IsAny<IssueStatus?>(), It.IsAny<IssueType?>(), It.IsAny<string?>(),
-                It.IsAny<int?>(), It.IsAny<ExecutionMode?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                It.IsAny<int?>(), It.IsAny<ExecutionMode?>(), It.IsAny<string?>(),
+                It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(issue);
 
         var request = new UpdateIssueRequest { ProjectId = TestProject.Id, Title = "Updated Issue" };
@@ -305,7 +306,8 @@ public class IssuesControllerTests
             .Setup(x => x.UpdateIssueAsync(
                 It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(),
                 It.IsAny<IssueStatus?>(), It.IsAny<IssueType?>(), It.IsAny<string?>(),
-                It.IsAny<int?>(), It.IsAny<ExecutionMode?>(), It.IsAny<string?>()))
+                It.IsAny<int?>(), It.IsAny<ExecutionMode?>(), It.IsAny<string?>(),
+                It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((Issue?)null);
 
         var request = new UpdateIssueRequest { ProjectId = TestProject.Id, Title = "Updated Issue" };
@@ -704,6 +706,155 @@ public class IssuesControllerTests
                 null,  // No initial message
                 default),
             Times.Once);
+    }
+
+    #endregion
+
+    #region Update AssignedTo Tests
+
+    [Test]
+    public async Task Update_PassesAssignedToToFleeceService()
+    {
+        // Arrange
+        var issueId = "ABC123";
+        var assignedEmail = "dev@example.com";
+        var currentIssue = CreateTestIssue(issueId, "Original Issue");
+        var updatedIssue = new Issue
+        {
+            Id = issueId,
+            Title = "Original Issue",
+            Type = IssueType.Task,
+            Status = IssueStatus.Open,
+            AssignedTo = assignedEmail,
+            LastUpdate = DateTimeOffset.UtcNow
+        };
+
+        _projectServiceMock
+            .Setup(x => x.GetByIdAsync(TestProject.Id))
+            .ReturnsAsync(TestProject);
+        _fleeceServiceMock
+            .Setup(x => x.GetIssueAsync(TestProject.LocalPath, issueId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(currentIssue);
+        _fleeceServiceMock
+            .Setup(x => x.UpdateIssueAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(),
+                It.IsAny<IssueStatus?>(), It.IsAny<IssueType?>(), It.IsAny<string?>(),
+                It.IsAny<int?>(), It.IsAny<ExecutionMode?>(), It.IsAny<string?>(),
+                It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(updatedIssue);
+
+        var request = new UpdateIssueRequest
+        {
+            ProjectId = TestProject.Id,
+            AssignedTo = assignedEmail
+        };
+
+        // Act
+        await _controller.Update(issueId, request);
+
+        // Assert - verify that the assignedTo was passed to UpdateIssueAsync
+        _fleeceServiceMock.Verify(
+            x => x.UpdateIssueAsync(
+                TestProject.LocalPath,
+                issueId,
+                request.Title,
+                request.Status,
+                request.Type,
+                request.Description,
+                request.Priority,
+                request.ExecutionMode,
+                request.WorkingBranchId,
+                assignedEmail,
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    #endregion
+
+    #region GetProjectAssignees Tests
+
+    [Test]
+    public async Task GetProjectAssignees_ReturnsUniqueAssignees()
+    {
+        // Arrange
+        var issues = new List<Issue>
+        {
+            new Issue { Id = "1", Title = "Issue 1", Type = IssueType.Task, Status = IssueStatus.Open, AssignedTo = "alice@example.com", LastUpdate = DateTimeOffset.UtcNow },
+            new Issue { Id = "2", Title = "Issue 2", Type = IssueType.Task, Status = IssueStatus.Open, AssignedTo = "bob@example.com", LastUpdate = DateTimeOffset.UtcNow },
+            new Issue { Id = "3", Title = "Issue 3", Type = IssueType.Task, Status = IssueStatus.Open, AssignedTo = "alice@example.com", LastUpdate = DateTimeOffset.UtcNow }, // Duplicate
+            new Issue { Id = "4", Title = "Issue 4", Type = IssueType.Task, Status = IssueStatus.Open, AssignedTo = null, LastUpdate = DateTimeOffset.UtcNow } // No assignee
+        };
+
+        _projectServiceMock
+            .Setup(x => x.GetByIdAsync(TestProject.Id))
+            .ReturnsAsync(TestProject);
+        _fleeceServiceMock
+            .Setup(x => x.ListIssuesAsync(TestProject.LocalPath, null, null, null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(issues);
+        _dataStoreMock
+            .Setup(x => x.UserEmail)
+            .Returns((string?)null);
+
+        // Act
+        var result = await _controller.GetProjectAssignees(TestProject.Id);
+
+        // Assert
+        Assert.That(result.Result, Is.TypeOf<OkObjectResult>());
+        var okResult = (OkObjectResult)result.Result!;
+        var assignees = (List<string>)okResult.Value!;
+
+        Assert.That(assignees, Has.Count.EqualTo(2));
+        Assert.That(assignees, Contains.Item("alice@example.com"));
+        Assert.That(assignees, Contains.Item("bob@example.com"));
+    }
+
+    [Test]
+    public async Task GetProjectAssignees_IncludesCurrentUser()
+    {
+        // Arrange
+        var issues = new List<Issue>
+        {
+            new Issue { Id = "1", Title = "Issue 1", Type = IssueType.Task, Status = IssueStatus.Open, AssignedTo = "alice@example.com", LastUpdate = DateTimeOffset.UtcNow }
+        };
+        var currentUserEmail = "currentuser@example.com";
+
+        _projectServiceMock
+            .Setup(x => x.GetByIdAsync(TestProject.Id))
+            .ReturnsAsync(TestProject);
+        _fleeceServiceMock
+            .Setup(x => x.ListIssuesAsync(TestProject.LocalPath, null, null, null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(issues);
+        _dataStoreMock
+            .Setup(x => x.UserEmail)
+            .Returns(currentUserEmail);
+
+        // Act
+        var result = await _controller.GetProjectAssignees(TestProject.Id);
+
+        // Assert
+        Assert.That(result.Result, Is.TypeOf<OkObjectResult>());
+        var okResult = (OkObjectResult)result.Result!;
+        var assignees = (List<string>)okResult.Value!;
+
+        Assert.That(assignees, Contains.Item(currentUserEmail));
+        Assert.That(assignees, Contains.Item("alice@example.com"));
+        // Current user should be first in the list
+        Assert.That(assignees[0], Is.EqualTo(currentUserEmail));
+    }
+
+    [Test]
+    public async Task GetProjectAssignees_ProjectNotFound_Returns404()
+    {
+        // Arrange
+        _projectServiceMock
+            .Setup(x => x.GetByIdAsync(It.IsAny<string>()))
+            .ReturnsAsync((Project?)null);
+
+        // Act
+        var result = await _controller.GetProjectAssignees("nonexistent");
+
+        // Assert
+        Assert.That(result.Result, Is.TypeOf<NotFoundObjectResult>());
     }
 
     #endregion

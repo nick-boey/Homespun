@@ -81,6 +81,41 @@ public class IssuesController(
     }
 
     /// <summary>
+    /// Get unique assignees for a project's issues.
+    /// Returns all unique email addresses found in issue assignments, plus the current user if configured.
+    /// </summary>
+    [HttpGet("projects/{projectId}/issues/assignees")]
+    [ProducesResponseType<List<string>>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<List<string>>> GetProjectAssignees(string projectId)
+    {
+        var project = await projectService.GetByIdAsync(projectId);
+        if (project == null)
+        {
+            return NotFound("Project not found");
+        }
+
+        // Get all issues (including those with terminal statuses) to collect all assignees
+        var issues = await fleeceService.ListIssuesAsync(project.LocalPath);
+        var assignees = issues
+            .Where(i => !string.IsNullOrWhiteSpace(i.AssignedTo))
+            .Select(i => i.AssignedTo!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(a => a, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        // Include current user email if configured and not already in list
+        if (!string.IsNullOrWhiteSpace(dataStore.UserEmail) &&
+            !assignees.Contains(dataStore.UserEmail, StringComparer.OrdinalIgnoreCase))
+        {
+            assignees.Insert(0, dataStore.UserEmail);
+        }
+
+        logger.LogDebug("Returning {Count} assignees for project {ProjectId}", assignees.Count, projectId);
+        return Ok(assignees);
+    }
+
+    /// <summary>
     /// Get an issue by ID.
     /// </summary>
     [HttpGet("issues/{issueId}")]
@@ -222,7 +257,8 @@ public class IssuesController(
             request.Description,
             request.Priority,
             request.ExecutionMode,
-            request.WorkingBranchId);
+            request.WorkingBranchId,
+            request.AssignedTo);
 
         if (issue == null)
         {

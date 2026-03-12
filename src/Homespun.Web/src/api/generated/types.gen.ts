@@ -859,6 +859,7 @@ export type UpdateIssueRequest = {
   priority?: number | null
   executionMode?: ExecutionMode
   workingBranchId?: string | null
+  assignedTo?: string | null
 }
 
 export type UpdateProjectRequest = {
@@ -878,8 +879,8 @@ export type UpdateSecretRequest = {
 }
 
 export type UpdateUserEmailRequest = {
-    email: string | null;
-};
+  email: string | null
+}
 
 export type UserQuestion = {
   question: string | null
@@ -889,8 +890,8 @@ export type UserQuestion = {
 }
 
 export type UserSettingsResponse = {
-    userEmail?: string | null;
-};
+  userEmail?: string | null
+}
 
 export type WorkerContainerDto = {
   containerId: string | null
@@ -1890,6 +1891,35 @@ export type GetApiProjectsByProjectIdIssuesReadyResponses = {
 
 export type GetApiProjectsByProjectIdIssuesReadyResponse =
   GetApiProjectsByProjectIdIssuesReadyResponses[keyof GetApiProjectsByProjectIdIssuesReadyResponses]
+
+export type GetApiProjectsByProjectIdIssuesAssigneesData = {
+  body?: never
+  path: {
+    projectId: string
+  }
+  query?: never
+  url: '/api/projects/{projectId}/issues/assignees'
+}
+
+export type GetApiProjectsByProjectIdIssuesAssigneesErrors = {
+  /**
+   * Not Found
+   */
+  404: ProblemDetails
+}
+
+export type GetApiProjectsByProjectIdIssuesAssigneesError =
+  GetApiProjectsByProjectIdIssuesAssigneesErrors[keyof GetApiProjectsByProjectIdIssuesAssigneesErrors]
+
+export type GetApiProjectsByProjectIdIssuesAssigneesResponses = {
+  /**
+   * OK
+   */
+  200: Array<string>
+}
+
+export type GetApiProjectsByProjectIdIssuesAssigneesResponse =
+  GetApiProjectsByProjectIdIssuesAssigneesResponses[keyof GetApiProjectsByProjectIdIssuesAssigneesResponses]
 
 export type DeleteApiIssuesByIssueIdData = {
   body?: never
@@ -3427,45 +3457,48 @@ export type PostApiSessionsByIdCancelIssueChangesResponses = {
 }
 
 export type GetApiSettingsUserData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/api/Settings/user';
-};
+  body?: never
+  path?: never
+  query?: never
+  url: '/api/Settings/user'
+}
 
 export type GetApiSettingsUserResponses = {
-    /**
-     * OK
-     */
-    200: UserSettingsResponse;
-};
+  /**
+   * OK
+   */
+  200: UserSettingsResponse
+}
 
-export type GetApiSettingsUserResponse = GetApiSettingsUserResponses[keyof GetApiSettingsUserResponses];
+export type GetApiSettingsUserResponse =
+  GetApiSettingsUserResponses[keyof GetApiSettingsUserResponses]
 
 export type PutApiSettingsUserEmailData = {
-    body?: UpdateUserEmailRequest;
-    path?: never;
-    query?: never;
-    url: '/api/Settings/user/email';
-};
+  body?: UpdateUserEmailRequest
+  path?: never
+  query?: never
+  url: '/api/Settings/user/email'
+}
 
 export type PutApiSettingsUserEmailErrors = {
-    /**
-     * Bad Request
-     */
-    400: ProblemDetails;
-};
+  /**
+   * Bad Request
+   */
+  400: ProblemDetails
+}
 
-export type PutApiSettingsUserEmailError = PutApiSettingsUserEmailErrors[keyof PutApiSettingsUserEmailErrors];
+export type PutApiSettingsUserEmailError =
+  PutApiSettingsUserEmailErrors[keyof PutApiSettingsUserEmailErrors]
 
 export type PutApiSettingsUserEmailResponses = {
-    /**
-     * OK
-     */
-    200: UserSettingsResponse;
-};
+  /**
+   * OK
+   */
+  200: UserSettingsResponse
+}
 
-export type PutApiSettingsUserEmailResponse = PutApiSettingsUserEmailResponses[keyof PutApiSettingsUserEmailResponses];
+export type PutApiSettingsUserEmailResponse =
+  PutApiSettingsUserEmailResponses[keyof PutApiSettingsUserEmailResponses]
 
 export type GetApiTelemetryConfigData = {
   body?: never

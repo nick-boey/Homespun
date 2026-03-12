@@ -10,6 +10,7 @@ import {
 } from '@/features/issues'
 import { MoveOperationType } from '@/features/issues/types'
 import { AgentLauncherDialog } from '@/features/agents'
+import { AssignIssueDialog } from '@/features/issues/components/assign-issue-popover'
 import { Issues } from '@/api'
 
 export const Route = createFileRoute('/projects/$projectId/issues/')({
@@ -35,6 +36,9 @@ function IssuesList() {
   // Agent launcher dialog state
   const [agentLauncherOpen, setAgentLauncherOpen] = useState(false)
   const [agentLauncherIssueId, setAgentLauncherIssueId] = useState<string | null>(null)
+
+  // Assign issue popover state
+  const [assignPopoverOpen, setAssignPopoverOpen] = useState(false)
 
   // Move operation state
   const [moveOperation, setMoveOperation] = useState<MoveOperationType | null>(null)
@@ -137,6 +141,12 @@ function IssuesList() {
     }
   }, [selectedIssueId])
 
+  const handleAssignIssue = useCallback(() => {
+    if (selectedIssueId) {
+      setAssignPopoverOpen(true)
+    }
+  }, [selectedIssueId])
+
   // Handler for running agent on a specific issue (from row actions)
   const handleRunAgent = useCallback((issueId: string) => {
     setAgentLauncherIssueId(issueId)
@@ -193,6 +203,7 @@ function IssuesList() {
         parentOfActive={moveOperation === MoveOperationType.AsParentOf}
         onEditIssue={() => handleEditIssue()}
         onOpenAgentLauncher={handleOpenAgentLauncher}
+        onAssignIssue={handleAssignIssue}
         depth={depth}
         onDepthChange={setDepth}
         searchQuery={searchQuery}
@@ -228,6 +239,16 @@ function IssuesList() {
           onOpenChange={setAgentLauncherOpen}
           projectId={projectId}
           issueId={agentLauncherIssueId}
+        />
+      )}
+
+      {/* Assign Issue Dialog */}
+      {selectedIssueId && (
+        <AssignIssueDialog
+          open={assignPopoverOpen}
+          onOpenChange={setAssignPopoverOpen}
+          projectId={projectId}
+          issueId={selectedIssueId}
         />
       )}
     </div>

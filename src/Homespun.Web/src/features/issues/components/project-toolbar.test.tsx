@@ -40,6 +40,7 @@ const defaultProps = {
   onMakeParent: vi.fn(),
   onEditIssue: vi.fn(),
   onOpenAgentLauncher: vi.fn(),
+  onAssignIssue: vi.fn(),
   depth: 3,
   onDepthChange: vi.fn(),
   searchQuery: '',
@@ -303,6 +304,32 @@ describe('ProjectToolbar', () => {
 
       await user.click(screen.getByRole('button', { name: /edit issue/i }))
       expect(onEditIssue).toHaveBeenCalled()
+    })
+  })
+
+  describe('Assign button', () => {
+    it('renders assign button', () => {
+      renderToolbar()
+      expect(screen.getByRole('button', { name: /assign issue/i })).toBeInTheDocument()
+    })
+
+    it('disables assign button when no issue is selected', () => {
+      renderToolbar({ selectedIssueId: null })
+      expect(screen.getByRole('button', { name: /assign issue/i })).toBeDisabled()
+    })
+
+    it('enables assign button when an issue is selected', () => {
+      renderToolbar({ selectedIssueId: 'issue-123' })
+      expect(screen.getByRole('button', { name: /assign issue/i })).not.toBeDisabled()
+    })
+
+    it('calls onAssignIssue when assign button is clicked', async () => {
+      const user = userEvent.setup()
+      const onAssignIssue = vi.fn()
+      renderToolbar({ selectedIssueId: 'issue-123', onAssignIssue })
+
+      await user.click(screen.getByRole('button', { name: /assign issue/i }))
+      expect(onAssignIssue).toHaveBeenCalled()
     })
   })
 
