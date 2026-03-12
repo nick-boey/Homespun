@@ -14,6 +14,7 @@ public class MockDataStore : IDataStore
     private readonly List<PullRequest> _pullRequests = [];
     private readonly List<string> _favoriteModels = [];
     private readonly List<AgentPrompt> _agentPrompts = [];
+    private string? _userEmail;
 
     public IReadOnlyList<Project> Projects
     {
@@ -220,6 +221,26 @@ public class MockDataStore : IDataStore
         lock (_lock)
         {
             _agentPrompts.RemoveAll(p => p.Id == promptId);
+        }
+        return Task.CompletedTask;
+    }
+
+    public string? UserEmail
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _userEmail;
+            }
+        }
+    }
+
+    public Task SetUserEmailAsync(string email)
+    {
+        lock (_lock)
+        {
+            _userEmail = email;
         }
         return Task.CompletedTask;
     }

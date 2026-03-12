@@ -127,6 +127,20 @@ public interface IDataStore
 
     #endregion
 
+    #region User Settings
+
+    /// <summary>
+    /// Gets the user email for issue assignment.
+    /// </summary>
+    string? UserEmail { get; }
+
+    /// <summary>
+    /// Sets the user email for issue assignment.
+    /// </summary>
+    Task SetUserEmailAsync(string email);
+
+    #endregion
+
     /// <summary>
     /// Saves any pending changes to disk.
     /// </summary>

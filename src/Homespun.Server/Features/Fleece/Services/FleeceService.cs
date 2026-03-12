@@ -186,6 +186,7 @@ public sealed class FleeceService : IFleeceService, IDisposable
         int? priority = null,
         ExecutionMode? executionMode = null,
         IssueStatus? status = null,
+        string? assignedTo = null,
         CancellationToken ct = default)
     {
         var cache = await EnsureCacheLoadedAsync(projectPath, ct);
@@ -199,6 +200,7 @@ public sealed class FleeceService : IFleeceService, IDisposable
             description: description,
             priority: priority,
             executionMode: executionMode,
+            assignedTo: assignedTo,
             cancellationToken: ct);
 
         // If a specific status was requested (other than the default Open), update the issue

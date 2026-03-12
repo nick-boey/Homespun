@@ -298,6 +298,26 @@ public class JsonDataStore : IDataStore
         }
     }
 
+    #region User Settings
+
+    public string? UserEmail => _data.UserEmail;
+
+    public async Task SetUserEmailAsync(string email)
+    {
+        await _lock.WaitAsync();
+        try
+        {
+            _data.UserEmail = email;
+            await SaveInternalAsync();
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    #endregion
+
     /// <summary>
     /// Internal data structure for JSON serialization.
     /// </summary>
@@ -307,5 +327,6 @@ public class JsonDataStore : IDataStore
         public List<PullRequest> PullRequests { get; set; } = [];
         public List<string> FavoriteModels { get; set; } = [];
         public List<AgentPrompt> AgentPrompts { get; set; } = [];
+        public string? UserEmail { get; set; }
     }
 }

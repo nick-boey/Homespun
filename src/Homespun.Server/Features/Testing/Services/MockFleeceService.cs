@@ -124,6 +124,7 @@ public class MockFleeceService : IFleeceService
         int? priority = null,
         ExecutionMode? executionMode = null,
         IssueStatus? status = null,
+        string? assignedTo = null,
         CancellationToken ct = default)
     {
         _logger.LogDebug("[Mock] CreateIssue '{Title}' in {ProjectPath}", title, projectPath);
@@ -138,6 +139,7 @@ public class MockFleeceService : IFleeceService
             Status = status ?? IssueStatus.Open,
             Priority = priority ?? 3,
             ExecutionMode = executionMode ?? ExecutionMode.Series,
+            AssignedTo = assignedTo,
             CreatedAt = now,
             LastUpdate = now
         };

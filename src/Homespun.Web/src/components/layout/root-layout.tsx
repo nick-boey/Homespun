@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { Outlet, useRouterState } from '@tanstack/react-router'
+import { Outlet, useRouterState, useNavigate } from '@tanstack/react-router'
 import { Sidebar } from './sidebar'
 import { Header } from './header'
 import { ErrorBoundary } from '@/components/error-boundary'
@@ -8,6 +8,7 @@ import { BreadcrumbProvider } from '@/hooks/use-breadcrumbs'
 import { useAppStore } from '@/stores/app-store'
 import { cn } from '@/lib/utils'
 import { NotificationProvider } from '@/features/notifications'
+import { useUserSettings } from '@/features/settings'
 
 export function RootLayout() {
   const sidebarOpen = useAppStore((state) => state.sidebarOpen)
@@ -98,7 +99,9 @@ export function RootLayout() {
             <main className="flex-1 overflow-auto p-3 md:p-6">
               <ErrorBoundary>
                 <React.Suspense fallback={<RouteLoadingFallback />}>
-                  <Outlet />
+                  <UserEmailGuard>
+                    <Outlet />
+                  </UserEmailGuard>
                 </React.Suspense>
               </ErrorBoundary>
             </main>
@@ -107,4 +110,40 @@ export function RootLayout() {
       </NotificationProvider>
     </BreadcrumbProvider>
   )
+}
+
+interface UserEmailGuardProps {
+  children: React.ReactNode
+}
+
+function UserEmailGuard({ children }: UserEmailGuardProps) {
+  const navigate = useNavigate()
+  const routerState = useRouterState()
+  const pathname = routerState.location.pathname
+  const { userEmail, isLoading } = useUserSettings()
+
+  // Skip redirect if already on settings page
+  const isSettingsPage = pathname === '/settings'
+
+  React.useEffect(() => {
+    // Only redirect if:
+    // - Not loading
+    // - No user email configured
+    // - Not already on settings page
+    if (!isLoading && !userEmail && !isSettingsPage) {
+      navigate({ to: '/settings' })
+    }
+  }, [isLoading, userEmail, isSettingsPage, navigate])
+
+  // Show loading spinner while checking user settings
+  if (isLoading) {
+    return <RouteLoadingFallback />
+  }
+
+  // If no email and not on settings page, show loading while redirect happens
+  if (!userEmail && !isSettingsPage) {
+    return <RouteLoadingFallback />
+  }
+
+  return <>{children}</>
 }

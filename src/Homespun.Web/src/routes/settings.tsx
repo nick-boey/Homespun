@@ -1,10 +1,18 @@
+import { useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { useBreadcrumbSetter } from '@/hooks/use-breadcrumbs'
-import { useGitHubInfo, useGitConfig } from '@/features/settings'
+import {
+  useGitHubInfo,
+  useGitConfig,
+  useUserSettings,
+  useUpdateUserEmail,
+} from '@/features/settings'
 import { GitHubAuthMethod } from '@/api'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import {
   Select,
   SelectContent,
@@ -24,6 +32,7 @@ import {
   Sun,
   Moon,
   Monitor,
+  Pencil,
 } from 'lucide-react'
 
 export const Route = createFileRoute('/settings')({
@@ -46,6 +55,8 @@ function Settings() {
       </div>
 
       <div className="grid gap-6">
+        <UserEmailSection />
+
         <ThemeSection />
 
         <GitHubAuthSection
@@ -347,6 +358,128 @@ function ThemeSection() {
             </SelectContent>
           </Select>
         </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function UserEmailSection() {
+  const { userEmail, isLoading, isError } = useUserSettings()
+  const { mutate: updateEmail, isPending } = useUpdateUserEmail()
+  const [isEditing, setIsEditing] = useState(false)
+  const [editValue, setEditValue] = useState('')
+
+  const handleEdit = () => {
+    setEditValue(userEmail ?? '')
+    setIsEditing(true)
+  }
+
+  const handleSave = () => {
+    if (editValue.trim()) {
+      updateEmail(editValue.trim())
+      setIsEditing(false)
+    }
+  }
+
+  const handleCancel = () => {
+    setIsEditing(false)
+    setEditValue('')
+  }
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <User className="h-5 w-5" />
+            <CardTitle>User Settings</CardTitle>
+          </div>
+          <CardDescription>Your personal settings for Homespun.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Skeleton className="h-4 w-48" />
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (isError) {
+    return (
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <User className="h-5 w-5" />
+            <CardTitle>User Settings</CardTitle>
+          </div>
+          <CardDescription>Your personal settings for Homespun.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="text-destructive flex items-center gap-2">
+            <AlertCircle className="h-4 w-4" />
+            <span>Failed to load user settings. Please try refreshing the page.</span>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <User className="h-5 w-5" />
+          <CardTitle>User Settings</CardTitle>
+        </div>
+        <CardDescription>Your personal settings for Homespun.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex items-center gap-3">
+          <span className="text-muted-foreground w-28 text-sm font-medium">
+            <Mail className="mr-1 inline h-4 w-4" />
+            Email:
+          </span>
+          {isEditing ? (
+            <div className="flex items-center gap-2">
+              <Input
+                type="email"
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                placeholder="Enter your email"
+                className="w-64"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleSave()
+                  if (e.key === 'Escape') handleCancel()
+                }}
+              />
+              <Button size="sm" onClick={handleSave} disabled={isPending || !editValue.trim()}>
+                Save
+              </Button>
+              <Button size="sm" variant="outline" onClick={handleCancel} disabled={isPending}>
+                Cancel
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-sm">
+                {userEmail ?? <span className="text-muted-foreground italic">Not configured</span>}
+              </span>
+              <Button size="sm" variant="ghost" onClick={handleEdit} className="h-6 w-6 p-0">
+                <Pencil className="h-3 w-3" />
+                <span className="sr-only">Edit email</span>
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {!userEmail && (
+          <div className="mt-4 border-t pt-4">
+            <p className="text-muted-foreground text-xs">
+              Your email is required. It will be used to assign issues created through Homespun to
+              you.
+            </p>
+          </div>
+        )}
       </CardContent>
     </Card>
   )

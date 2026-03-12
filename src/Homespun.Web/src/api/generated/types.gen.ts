@@ -877,12 +877,20 @@ export type UpdateSecretRequest = {
   value: string | null
 }
 
+export type UpdateUserEmailRequest = {
+    email: string | null;
+};
+
 export type UserQuestion = {
   question: string | null
   header: string | null
   options: Array<QuestionOption> | null
   multiSelect?: boolean
 }
+
+export type UserSettingsResponse = {
+    userEmail?: string | null;
+};
 
 export type WorkerContainerDto = {
   containerId: string | null
@@ -3417,6 +3425,47 @@ export type PostApiSessionsByIdCancelIssueChangesResponses = {
    */
   200: unknown
 }
+
+export type GetApiSettingsUserData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/Settings/user';
+};
+
+export type GetApiSettingsUserResponses = {
+    /**
+     * OK
+     */
+    200: UserSettingsResponse;
+};
+
+export type GetApiSettingsUserResponse = GetApiSettingsUserResponses[keyof GetApiSettingsUserResponses];
+
+export type PutApiSettingsUserEmailData = {
+    body?: UpdateUserEmailRequest;
+    path?: never;
+    query?: never;
+    url: '/api/Settings/user/email';
+};
+
+export type PutApiSettingsUserEmailErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetails;
+};
+
+export type PutApiSettingsUserEmailError = PutApiSettingsUserEmailErrors[keyof PutApiSettingsUserEmailErrors];
+
+export type PutApiSettingsUserEmailResponses = {
+    /**
+     * OK
+     */
+    200: UserSettingsResponse;
+};
+
+export type PutApiSettingsUserEmailResponse = PutApiSettingsUserEmailResponses[keyof PutApiSettingsUserEmailResponses];
 
 export type GetApiTelemetryConfigData = {
   body?: never

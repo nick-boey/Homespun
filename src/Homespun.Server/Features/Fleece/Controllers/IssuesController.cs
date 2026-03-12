@@ -4,6 +4,7 @@ using Homespun.Features.Fleece.Services;
 using Homespun.Features.Git;
 using Homespun.Features.Notifications;
 using Homespun.Features.Projects;
+using Homespun.Features.PullRequests.Data;
 using Homespun.Features.AgentOrchestration.Services;
 using Homespun.Shared.Models.Fleece;
 using Homespun.Shared.Models.Issues;
@@ -24,6 +25,7 @@ namespace Homespun.Features.Fleece.Controllers;
 public class IssuesController(
     IFleeceService fleeceService,
     IProjectService projectService,
+    IDataStore dataStore,
     IHubContext<NotificationHub> notificationHub,
     IIssueBranchResolverService branchResolverService,
     IIssueHistoryService historyService,
@@ -137,14 +139,15 @@ public class IssuesController(
             return NotFound("Project not found");
         }
 
-        // Create the issue first
+        // Create the issue first, with user email assignment if configured
         var issue = await fleeceService.CreateIssueAsync(
             project.LocalPath,
             request.Title,
             request.Type,
             request.Description,
             request.Priority,
-            request.ExecutionMode);
+            request.ExecutionMode,
+            assignedTo: dataStore.UserEmail);
 
         // Apply provided working branch ID if any
         if (!string.IsNullOrWhiteSpace(request.WorkingBranchId))

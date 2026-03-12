@@ -336,6 +336,7 @@ public class FleeceChangeApplicationService : IFleeceChangeApplicationService
                     change.ModifiedIssue.Priority,
                     change.ModifiedIssue.ExecutionMode,
                     change.ModifiedIssue.Status,
+                    change.ModifiedIssue.AssignedTo,
                     cancellationToken);
 
                 // Update additional fields if needed

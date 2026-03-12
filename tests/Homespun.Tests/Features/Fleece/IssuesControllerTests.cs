@@ -5,6 +5,7 @@ using Homespun.Features.Fleece.Services;
 using Homespun.Features.Git;
 using Homespun.Features.Notifications;
 using Homespun.Features.Projects;
+using Homespun.Features.PullRequests.Data;
 using Homespun.Features.AgentOrchestration.Services;
 using Homespun.Shared.Models.Fleece;
 using Homespun.Shared.Models.Projects;
@@ -26,6 +27,7 @@ public class IssuesControllerTests
 {
     private Mock<IFleeceService> _fleeceServiceMock = null!;
     private Mock<IProjectService> _projectServiceMock = null!;
+    private Mock<IDataStore> _dataStoreMock = null!;
     private Mock<IHubContext<NotificationHub>> _notificationHubMock = null!;
     private Mock<IIssueBranchResolverService> _branchResolverServiceMock = null!;
     private Mock<IIssueHistoryService> _historyServiceMock = null!;
@@ -62,6 +64,7 @@ public class IssuesControllerTests
     {
         _fleeceServiceMock = new Mock<IFleeceService>();
         _projectServiceMock = new Mock<IProjectService>();
+        _dataStoreMock = new Mock<IDataStore>();
         _notificationHubMock = new Mock<IHubContext<NotificationHub>>();
         _branchResolverServiceMock = new Mock<IIssueBranchResolverService>();
         _historyServiceMock = new Mock<IIssueHistoryService>();
@@ -82,6 +85,7 @@ public class IssuesControllerTests
         _controller = new IssuesController(
             _fleeceServiceMock.Object,
             _projectServiceMock.Object,
+            _dataStoreMock.Object,
             _notificationHubMock.Object,
             _branchResolverServiceMock.Object,
             _historyServiceMock.Object,
@@ -107,7 +111,8 @@ public class IssuesControllerTests
         _fleeceServiceMock
             .Setup(x => x.CreateIssueAsync(
                 It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IssueType>(),
-                It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<ExecutionMode?>()))
+                It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<ExecutionMode?>(),
+                It.IsAny<IssueStatus?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(issue);
 
         var request = new CreateIssueRequest { ProjectId = TestProject.Id, Title = "Test Issue" };
@@ -138,7 +143,8 @@ public class IssuesControllerTests
         _fleeceServiceMock
             .Setup(x => x.CreateIssueAsync(
                 It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IssueType>(),
-                It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<ExecutionMode?>()))
+                It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<ExecutionMode?>(),
+                It.IsAny<IssueStatus?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(issue);
 
         var request = new CreateIssueRequest { ProjectId = TestProject.Id, Title = "Test Issue" };
@@ -167,6 +173,85 @@ public class IssuesControllerTests
         _allClientsMock.Verify(
             x => x.SendCoreAsync(It.IsAny<string>(), It.IsAny<object?[]>(), default),
             Times.Never);
+    }
+
+    [Test]
+    public async Task Create_PassesUserEmailToFleeceService()
+    {
+        // Arrange
+        var issue = CreateTestIssue("ABC123", "Test Issue");
+        const string userEmail = "test@example.com";
+
+        _projectServiceMock
+            .Setup(x => x.GetByIdAsync(TestProject.Id))
+            .ReturnsAsync(TestProject);
+        _dataStoreMock
+            .Setup(x => x.UserEmail)
+            .Returns(userEmail);
+        _fleeceServiceMock
+            .Setup(x => x.CreateIssueAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IssueType>(),
+                It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<ExecutionMode?>(),
+                It.IsAny<IssueStatus?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(issue);
+
+        var request = new CreateIssueRequest { ProjectId = TestProject.Id, Title = "Test Issue" };
+
+        // Act
+        await _controller.Create(request);
+
+        // Assert - verify that the user email was passed to CreateIssueAsync
+        _fleeceServiceMock.Verify(
+            x => x.CreateIssueAsync(
+                TestProject.LocalPath,
+                request.Title,
+                request.Type,
+                request.Description,
+                request.Priority,
+                request.ExecutionMode,
+                It.IsAny<IssueStatus?>(),
+                userEmail,
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Test]
+    public async Task Create_WhenNoUserEmail_PassesNullToFleeceService()
+    {
+        // Arrange
+        var issue = CreateTestIssue("ABC123", "Test Issue");
+
+        _projectServiceMock
+            .Setup(x => x.GetByIdAsync(TestProject.Id))
+            .ReturnsAsync(TestProject);
+        _dataStoreMock
+            .Setup(x => x.UserEmail)
+            .Returns((string?)null);
+        _fleeceServiceMock
+            .Setup(x => x.CreateIssueAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IssueType>(),
+                It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<ExecutionMode?>(),
+                It.IsAny<IssueStatus?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(issue);
+
+        var request = new CreateIssueRequest { ProjectId = TestProject.Id, Title = "Test Issue" };
+
+        // Act
+        await _controller.Create(request);
+
+        // Assert - verify that null was passed as the assignedTo parameter
+        _fleeceServiceMock.Verify(
+            x => x.CreateIssueAsync(
+                TestProject.LocalPath,
+                request.Title,
+                request.Type,
+                request.Description,
+                request.Priority,
+                request.ExecutionMode,
+                It.IsAny<IssueStatus?>(),
+                (string?)null,
+                It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 
     #endregion
