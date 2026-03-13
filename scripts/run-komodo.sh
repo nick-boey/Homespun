@@ -121,6 +121,9 @@ if ! docker version >/dev/null 2>&1; then
 fi
 log_success "      Docker is available."
 
+# Ensure shared network exists (external: true in compose files)
+docker network create homespun-net 2>/dev/null || true
+
 log_info "[2/4] Checking configuration..."
 log_success "      Compose file: $COMPOSE_FILE"
 log_success "      Environment:  $ENV_FILE"

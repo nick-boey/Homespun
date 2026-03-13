@@ -168,8 +168,7 @@ services:
 
 networks:
   homespun-net:
-    driver: bridge
-    name: homespun-net
+    external: true
 
 volumes:
   loki-data:
