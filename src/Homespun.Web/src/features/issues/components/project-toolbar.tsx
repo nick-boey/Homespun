@@ -10,6 +10,7 @@ import {
   Minus,
   Plus,
   Search,
+  UserPlus,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
@@ -32,6 +33,7 @@ export interface ProjectToolbarProps {
   parentOfActive?: boolean
   onEditIssue: () => void
   onOpenAgentLauncher: () => void
+  onAssignIssue: () => void
   depth: number
   onDepthChange: (depth: number) => void
   searchQuery: string
@@ -53,6 +55,7 @@ export function ProjectToolbar({
   parentOfActive = false,
   onEditIssue,
   onOpenAgentLauncher,
+  onAssignIssue,
   depth,
   onDepthChange,
   searchQuery,
@@ -159,17 +162,30 @@ export function ProjectToolbar({
 
       <Separator orientation="vertical" className="mx-1 h-6" />
 
-      {/* Edit button */}
-      <Button
-        variant="outline"
-        size={buttonSize}
-        onClick={onEditIssue}
-        disabled={!hasIssueSelected}
-        aria-label="Edit issue"
-        title="Edit issue"
-      >
-        <Pencil className="h-4 w-4" />
-      </Button>
+      {/* Edit and Assign buttons group */}
+      <ButtonGroup>
+        <Button
+          variant="outline"
+          size={buttonSize}
+          onClick={onEditIssue}
+          disabled={!hasIssueSelected}
+          aria-label="Edit issue"
+          title="Edit issue"
+        >
+          <Pencil className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="outline"
+          size={buttonSize}
+          onClick={onAssignIssue}
+          disabled={!hasIssueSelected}
+          aria-label="Assign issue"
+          title="Assign issue"
+          data-testid="toolbar-assign-issue"
+        >
+          <UserPlus className="h-4 w-4" />
+        </Button>
+      </ButtonGroup>
 
       <Separator orientation="vertical" className="mx-1 h-6" />
 

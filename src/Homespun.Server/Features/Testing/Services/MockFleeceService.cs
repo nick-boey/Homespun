@@ -124,6 +124,7 @@ public class MockFleeceService : IFleeceService
         int? priority = null,
         ExecutionMode? executionMode = null,
         IssueStatus? status = null,
+        string? assignedTo = null,
         CancellationToken ct = default)
     {
         _logger.LogDebug("[Mock] CreateIssue '{Title}' in {ProjectPath}", title, projectPath);
@@ -138,6 +139,7 @@ public class MockFleeceService : IFleeceService
             Status = status ?? IssueStatus.Open,
             Priority = priority ?? 3,
             ExecutionMode = executionMode ?? ExecutionMode.Series,
+            AssignedTo = assignedTo,
             CreatedAt = now,
             LastUpdate = now
         };
@@ -161,6 +163,7 @@ public class MockFleeceService : IFleeceService
         int? priority = null,
         ExecutionMode? executionMode = null,
         string? workingBranchId = null,
+        string? assignedTo = null,
         CancellationToken ct = default)
     {
         _logger.LogDebug("[Mock] UpdateIssue {IssueId} in {ProjectPath}", issueId, projectPath);
@@ -197,7 +200,7 @@ public class MockFleeceService : IFleeceService
                 LinkedIssues = existing.LinkedIssues,
                 LinkedPR = existing.LinkedPR,
                 CreatedBy = existing.CreatedBy,
-                AssignedTo = existing.AssignedTo,
+                AssignedTo = assignedTo ?? existing.AssignedTo,
                 CreatedAt = existing.CreatedAt,
                 LastUpdate = DateTime.UtcNow
             };

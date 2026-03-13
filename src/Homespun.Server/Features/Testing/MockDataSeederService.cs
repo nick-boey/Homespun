@@ -59,6 +59,7 @@ public class MockDataSeederService : IHostedService
 
         try
         {
+            await SeedUserSettingsAsync();
             await SeedProjectsAsync();
             await SeedPullRequestsAsync();
             await SeedIssuesAsync();
@@ -182,6 +183,12 @@ public class MockDataSeederService : IHostedService
         }
 
         return $"/mock/projects/{projectId}";
+    }
+
+    private async Task SeedUserSettingsAsync()
+    {
+        await _dataStore.SetUserEmailAsync("demo@example.com");
+        _logger.LogDebug("Seeded user email: demo@example.com");
     }
 
     private async Task SeedProjectsAsync()

@@ -102,6 +102,11 @@ public class UpdateIssueRequest
     /// Optional working branch ID update.
     /// </summary>
     public string? WorkingBranchId { get; set; }
+
+    /// <summary>
+    /// Optional email of the user to assign the issue to.
+    /// </summary>
+    public string? AssignedTo { get; set; }
 }
 
 /// <summary>

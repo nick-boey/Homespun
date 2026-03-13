@@ -99,6 +99,7 @@ public interface IFleeceService
     /// <param name="priority">Optional priority (1-5).</param>
     /// <param name="executionMode">Optional execution mode for child issues (defaults to Series).</param>
     /// <param name="status">Optional initial status (defaults to Open).</param>
+    /// <param name="assignedTo">Optional email of the user to assign the issue to.</param>
     /// <param name="ct">Cancellation token</param>
     /// <returns>The created issue.</returns>
     Task<Issue> CreateIssueAsync(
@@ -109,6 +110,7 @@ public interface IFleeceService
         int? priority = null,
         ExecutionMode? executionMode = null,
         IssueStatus? status = null,
+        string? assignedTo = null,
         CancellationToken ct = default);
 
     /// <summary>
@@ -123,6 +125,7 @@ public interface IFleeceService
     /// <param name="priority">Optional new priority.</param>
     /// <param name="executionMode">Optional execution mode for child issues.</param>
     /// <param name="workingBranchId">Optional working branch ID.</param>
+    /// <param name="assignedTo">Optional email of the user to assign the issue to.</param>
     /// <param name="ct">Cancellation token</param>
     /// <returns>The updated issue, or null if not found.</returns>
     Task<Issue?> UpdateIssueAsync(
@@ -135,6 +138,7 @@ public interface IFleeceService
         int? priority = null,
         ExecutionMode? executionMode = null,
         string? workingBranchId = null,
+        string? assignedTo = null,
         CancellationToken ct = default);
 
     /// <summary>

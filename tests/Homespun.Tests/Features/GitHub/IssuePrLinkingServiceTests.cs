@@ -170,7 +170,7 @@ public class IssuePrLinkingServiceTests
 
         // Assert
         Assert.That(result, Is.EqualTo("hsp-123"));
-        _mockFleeceService.Verify(f => f.UpdateIssueAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<IssueStatus?>(), It.IsAny<IssueType?>(), It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<ExecutionMode?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+        _mockFleeceService.Verify(f => f.UpdateIssueAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<IssueStatus?>(), It.IsAny<IssueType?>(), It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<ExecutionMode?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Test]
@@ -215,7 +215,7 @@ public class IssuePrLinkingServiceTests
         await _dataStore.UpdatePullRequestAsync(pr);
 
         _mockFleeceService
-            .Setup(f => f.UpdateIssueAsync(project.LocalPath, "hsp-123", null, IssueStatus.Closed, null, null, null, null, null, It.IsAny<CancellationToken>()))
+            .Setup(f => f.UpdateIssueAsync(project.LocalPath, "hsp-123", null, IssueStatus.Closed, null, null, null, null, null, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Issue { Id = "hsp-123", Title = "Test Issue", Status = IssueStatus.Closed, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow });
 
         // Act
@@ -223,7 +223,7 @@ public class IssuePrLinkingServiceTests
 
         // Assert
         Assert.That(result, Is.True);
-        _mockFleeceService.Verify(f => f.UpdateIssueAsync(project.LocalPath, "hsp-123", null, IssueStatus.Closed, null, null, null, null, null, It.IsAny<CancellationToken>()), Times.Once);
+        _mockFleeceService.Verify(f => f.UpdateIssueAsync(project.LocalPath, "hsp-123", null, IssueStatus.Closed, null, null, null, null, null, null, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Test]
@@ -238,7 +238,7 @@ public class IssuePrLinkingServiceTests
 
         // Assert
         Assert.That(result, Is.False);
-        _mockFleeceService.Verify(f => f.UpdateIssueAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<IssueStatus?>(), It.IsAny<IssueType?>(), It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<ExecutionMode?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+        _mockFleeceService.Verify(f => f.UpdateIssueAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<IssueStatus?>(), It.IsAny<IssueType?>(), It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<ExecutionMode?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Test]
@@ -277,7 +277,7 @@ public class IssuePrLinkingServiceTests
             .ReturnsAsync(existingIssue);
 
         _mockFleeceService
-            .Setup(f => f.UpdateIssueAsync(project.LocalPath, "hsp-123", null, IssueStatus.Complete, null, null, null, null, null, It.IsAny<CancellationToken>()))
+            .Setup(f => f.UpdateIssueAsync(project.LocalPath, "hsp-123", null, IssueStatus.Complete, null, null, null, null, null, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Issue { Id = "hsp-123", Title = "Test Issue", Status = IssueStatus.Complete, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow });
 
         // Act
@@ -285,7 +285,7 @@ public class IssuePrLinkingServiceTests
 
         // Assert
         Assert.That(result, Is.True);
-        _mockFleeceService.Verify(f => f.UpdateIssueAsync(project.LocalPath, "hsp-123", null, IssueStatus.Complete, null, null, null, null, null, It.IsAny<CancellationToken>()), Times.Once);
+        _mockFleeceService.Verify(f => f.UpdateIssueAsync(project.LocalPath, "hsp-123", null, IssueStatus.Complete, null, null, null, null, null, null, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Test]
@@ -307,7 +307,7 @@ public class IssuePrLinkingServiceTests
             .ReturnsAsync(existingIssue);
 
         _mockFleeceService
-            .Setup(f => f.UpdateIssueAsync(project.LocalPath, "hsp-123", null, IssueStatus.Closed, null, null, null, null, null, It.IsAny<CancellationToken>()))
+            .Setup(f => f.UpdateIssueAsync(project.LocalPath, "hsp-123", null, IssueStatus.Closed, null, null, null, null, null, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Issue { Id = "hsp-123", Title = "Test Issue", Status = IssueStatus.Closed, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow });
 
         // Act
@@ -315,7 +315,7 @@ public class IssuePrLinkingServiceTests
 
         // Assert
         Assert.That(result, Is.True);
-        _mockFleeceService.Verify(f => f.UpdateIssueAsync(project.LocalPath, "hsp-123", null, IssueStatus.Closed, null, null, null, null, null, It.IsAny<CancellationToken>()), Times.Once);
+        _mockFleeceService.Verify(f => f.UpdateIssueAsync(project.LocalPath, "hsp-123", null, IssueStatus.Closed, null, null, null, null, null, null, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Test]
@@ -342,7 +342,7 @@ public class IssuePrLinkingServiceTests
             .ReturnsAsync(existingIssue);
 
         _mockFleeceService
-            .Setup(f => f.UpdateIssueAsync(project.LocalPath, "hsp-123", null, IssueStatus.Review, null, null, null, null, null, It.IsAny<CancellationToken>()))
+            .Setup(f => f.UpdateIssueAsync(project.LocalPath, "hsp-123", null, IssueStatus.Review, null, null, null, null, null, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Issue { Id = "hsp-123", Title = "Test Issue", Status = IssueStatus.Review, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow });
 
         // Act
@@ -350,7 +350,7 @@ public class IssuePrLinkingServiceTests
 
         // Assert
         Assert.That(result, Is.True);
-        _mockFleeceService.Verify(f => f.UpdateIssueAsync(project.LocalPath, "hsp-123", null, IssueStatus.Review, null, null, null, null, null, It.IsAny<CancellationToken>()), Times.Once);
+        _mockFleeceService.Verify(f => f.UpdateIssueAsync(project.LocalPath, "hsp-123", null, IssueStatus.Review, null, null, null, null, null, null, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Test]
@@ -376,7 +376,7 @@ public class IssuePrLinkingServiceTests
 
         // Assert
         Assert.That(result, Is.False);
-        _mockFleeceService.Verify(f => f.UpdateIssueAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<IssueStatus?>(), It.IsAny<IssueType?>(), It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<ExecutionMode?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+        _mockFleeceService.Verify(f => f.UpdateIssueAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<IssueStatus?>(), It.IsAny<IssueType?>(), It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<ExecutionMode?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Test]
@@ -387,7 +387,7 @@ public class IssuePrLinkingServiceTests
 
         // Assert
         Assert.That(result, Is.False);
-        _mockFleeceService.Verify(f => f.UpdateIssueAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<IssueStatus?>(), It.IsAny<IssueType?>(), It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<ExecutionMode?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+        _mockFleeceService.Verify(f => f.UpdateIssueAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<IssueStatus?>(), It.IsAny<IssueType?>(), It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<ExecutionMode?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Test]
@@ -405,7 +405,7 @@ public class IssuePrLinkingServiceTests
 
         // Assert
         Assert.That(result, Is.False);
-        _mockFleeceService.Verify(f => f.UpdateIssueAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<IssueStatus?>(), It.IsAny<IssueType?>(), It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<ExecutionMode?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+        _mockFleeceService.Verify(f => f.UpdateIssueAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<IssueStatus?>(), It.IsAny<IssueType?>(), It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<ExecutionMode?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     #endregion

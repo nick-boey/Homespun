@@ -4,6 +4,7 @@ using Homespun.Features.Fleece.Services;
 using Homespun.Features.Git;
 using Homespun.Features.Notifications;
 using Homespun.Features.Projects;
+using Homespun.Features.PullRequests.Data;
 using Homespun.Features.AgentOrchestration.Services;
 using Homespun.Shared.Models.Fleece;
 using Homespun.Shared.Models.Issues;
@@ -24,6 +25,7 @@ namespace Homespun.Features.Fleece.Controllers;
 public class IssuesController(
     IFleeceService fleeceService,
     IProjectService projectService,
+    IDataStore dataStore,
     IHubContext<NotificationHub> notificationHub,
     IIssueBranchResolverService branchResolverService,
     IIssueHistoryService historyService,
@@ -76,6 +78,41 @@ public class IssuesController(
         var response = issues.ToResponseList();
         logger.LogDebug("Returning {Count} ready issues for project {ProjectId}", response.Count, projectId);
         return Ok(response);
+    }
+
+    /// <summary>
+    /// Get unique assignees for a project's issues.
+    /// Returns all unique email addresses found in issue assignments, plus the current user if configured.
+    /// </summary>
+    [HttpGet("projects/{projectId}/issues/assignees")]
+    [ProducesResponseType<List<string>>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<List<string>>> GetProjectAssignees(string projectId)
+    {
+        var project = await projectService.GetByIdAsync(projectId);
+        if (project == null)
+        {
+            return NotFound("Project not found");
+        }
+
+        // Get all issues (including those with terminal statuses) to collect all assignees
+        var issues = await fleeceService.ListIssuesAsync(project.LocalPath);
+        var assignees = issues
+            .Where(i => !string.IsNullOrWhiteSpace(i.AssignedTo))
+            .Select(i => i.AssignedTo!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(a => a, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        // Include current user email if configured and not already in list
+        if (!string.IsNullOrWhiteSpace(dataStore.UserEmail) &&
+            !assignees.Contains(dataStore.UserEmail, StringComparer.OrdinalIgnoreCase))
+        {
+            assignees.Insert(0, dataStore.UserEmail);
+        }
+
+        logger.LogDebug("Returning {Count} assignees for project {ProjectId}", assignees.Count, projectId);
+        return Ok(assignees);
     }
 
     /// <summary>
@@ -137,14 +174,15 @@ public class IssuesController(
             return NotFound("Project not found");
         }
 
-        // Create the issue first
+        // Create the issue first, with user email assignment if configured
         var issue = await fleeceService.CreateIssueAsync(
             project.LocalPath,
             request.Title,
             request.Type,
             request.Description,
             request.Priority,
-            request.ExecutionMode);
+            request.ExecutionMode,
+            assignedTo: dataStore.UserEmail);
 
         // Apply provided working branch ID if any
         if (!string.IsNullOrWhiteSpace(request.WorkingBranchId))
@@ -219,7 +257,8 @@ public class IssuesController(
             request.Description,
             request.Priority,
             request.ExecutionMode,
-            request.WorkingBranchId);
+            request.WorkingBranchId,
+            request.AssignedTo);
 
         if (issue == null)
         {

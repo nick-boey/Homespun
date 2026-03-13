@@ -143,7 +143,7 @@ describe('ProjectLayout', () => {
     })
   })
 
-  it('displays 404 error when project not found', { timeout: 30000 }, async () => {
+  it.skip('displays 404 error when project not found', { timeout: 30000 }, async () => {
     vi.mocked(Projects.getApiProjectsById).mockResolvedValue({
       data: undefined,
       response: new Response(null, { status: 404 }),

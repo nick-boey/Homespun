@@ -24,3 +24,8 @@ export {
   type CreateIssueParams,
 } from './use-create-issue'
 export { useLinkedPrStatus } from './use-linked-pr-status'
+export {
+  useProjectAssignees,
+  projectAssigneesQueryKey,
+  type UseProjectAssigneesResult,
+} from './use-project-assignees'

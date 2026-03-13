@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { useBreadcrumbSetter } from '@/hooks/use-breadcrumbs'
 import { useIssue, useUpdateIssue } from '@/features/issues'
+import { AssigneeCombobox } from '@/features/issues/components/assignee-combobox'
 import { AgentLauncherDialog, useGenerateBranchId } from '@/features/agents'
 import { ISSUE_STATUS_OPTIONS, ISSUE_TYPE_OPTIONS } from '@/lib/issue-constants'
 import { ArrowLeft, Play, Sparkles } from 'lucide-react'
@@ -58,6 +59,7 @@ const issueSchema = z.object({
   executionMode: z.string(),
   workingBranchId: z.string().optional(),
   tags: z.string().optional(),
+  assignedTo: z.string().nullable().optional(),
 })
 
 type IssueFormData = z.infer<typeof issueSchema>
@@ -72,6 +74,7 @@ const issueToFormValues = (issue: IssueResponse): IssueFormData => ({
   executionMode: String(issue.executionMode ?? 0),
   workingBranchId: issue.workingBranchId ?? '',
   tags: issue.tags?.join(', ') ?? '',
+  assignedTo: issue.assignedTo ?? null,
 })
 
 /** Helper to check if form values differ from original */
@@ -84,7 +87,8 @@ const hasFormChanges = (currentValues: IssueFormData, originalValues: IssueFormD
     currentValues.priority !== originalValues.priority ||
     currentValues.executionMode !== originalValues.executionMode ||
     currentValues.workingBranchId !== originalValues.workingBranchId ||
-    currentValues.tags !== originalValues.tags
+    currentValues.tags !== originalValues.tags ||
+    currentValues.assignedTo !== originalValues.assignedTo
   )
 }
 
@@ -190,6 +194,7 @@ export default function EditIssue() {
       executionMode: '0',
       workingBranchId: '',
       tags: '',
+      assignedTo: null,
     },
   })
 
@@ -270,6 +275,7 @@ export default function EditIssue() {
           priority: data.priority && data.priority !== 'none' ? parseInt(data.priority) : undefined,
           executionMode: parseInt(data.executionMode) as ExecutionMode,
           workingBranchId: data.workingBranchId || undefined,
+          assignedTo: data.assignedTo || undefined,
         },
       })
     },
@@ -297,6 +303,7 @@ export default function EditIssue() {
         priority: data.priority && data.priority !== 'none' ? parseInt(data.priority) : undefined,
         executionMode: parseInt(data.executionMode) as ExecutionMode,
         workingBranchId: data.workingBranchId || undefined,
+        assignedTo: data.assignedTo || undefined,
       },
     })
   }, [form, issueId, projectId, updateIssueAndRun])
@@ -551,6 +558,25 @@ export default function EditIssue() {
             <Label htmlFor="tags">Tags</Label>
             <Input id="tags" placeholder="tag1, tag2, tag3" {...register('tags')} />
             <p className="text-muted-foreground text-sm">Comma-separated list of tags</p>
+          </div>
+
+          {/* Assigned To */}
+          <div className="space-y-2">
+            <Label htmlFor="assignedTo">Assigned To</Label>
+            <Controller
+              control={control}
+              name="assignedTo"
+              render={({ field }) => (
+                <AssigneeCombobox
+                  projectId={projectId}
+                  value={field.value ?? null}
+                  onChange={field.onChange}
+                />
+              )}
+            />
+            <p className="text-muted-foreground text-xs">
+              Email of the user assigned to this issue
+            </p>
           </div>
 
           {/* Action Buttons */}
