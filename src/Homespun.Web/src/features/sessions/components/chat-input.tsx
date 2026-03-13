@@ -212,7 +212,6 @@ function ChatInputTextareaWithSearch({
   const prevTriggerPos = useRef(-1)
   useEffect(() => {
     if (triggerState.triggerPosition !== prevTriggerPos.current && triggerState.active) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsSearchHidden(false)
     }
     prevTriggerPos.current = triggerState.triggerPosition
@@ -224,6 +223,12 @@ function ChatInputTextareaWithSearch({
       setCursorPosition(textareaRef.current.selectionStart ?? 0)
     }
   }, [textareaRef])
+
+  // Also update cursor position when value changes (for programmatic updates like fill())
+  // Set cursor to end of value when it changes externally
+  useEffect(() => {
+    setCursorPosition(value.length)
+  }, [value])
 
   // Handle selection from popup
   const handleSelect = useCallback(

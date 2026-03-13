@@ -2,7 +2,7 @@ import { createFileRoute, useParams, useNavigate, useBlocker, Link } from '@tans
 import { useForm, Controller } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useEffect, useCallback, useState, useMemo, useRef } from 'react'
+import { useEffect, useCallback, useState, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -173,9 +173,8 @@ function DescriptionTextareaWithSearch({
   value,
   onChange,
 }: DescriptionTextareaWithSearchProps) {
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
-
   const {
+    inputRef,
     triggerState,
     files,
     prs,
@@ -194,7 +193,7 @@ function DescriptionTextareaWithSearch({
   return (
     <div className="relative">
       <Textarea
-        ref={textareaRef}
+        ref={inputRef as React.RefObject<HTMLTextAreaElement>}
         id="description"
         value={value}
         onChange={(e) => onChange(e.target.value)}

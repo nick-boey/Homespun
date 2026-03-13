@@ -96,9 +96,10 @@ test.describe('Mention search', () => {
       await textarea.click()
       await textarea.fill('#123')
 
-      // Should filter to matching PR
-      await expect(page.getByText('#123')).toBeVisible()
-      await expect(page.getByText('#456')).not.toBeVisible()
+      // Should filter to matching PR - use popup listbox to avoid matching textarea content
+      const popup = page.getByRole('listbox', { name: /pr search results/i })
+      await expect(popup.getByText('#123')).toBeVisible()
+      await expect(popup.getByText('#456')).not.toBeVisible()
     })
 
     test('inserts PR reference on selection', async ({ page }) => {
