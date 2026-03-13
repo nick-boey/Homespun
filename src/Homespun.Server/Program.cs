@@ -13,6 +13,7 @@ using Homespun.Features.Observability;
 using Homespun.Features.Plans;
 using Homespun.Features.Projects;
 using Homespun.Features.PullRequests;
+using Homespun.Features.Search;
 using Homespun.Features.Secrets;
 using Homespun.Features.PullRequests.Data;
 using Homespun.Features.Shared.Services;
@@ -110,6 +111,11 @@ else
     builder.Services.AddSingleton<IGitHubClientWrapper, GitHubClientWrapper>();
     builder.Services.AddScoped<IGitHubService, GitHubService>();
     builder.Services.AddScoped<PullRequestWorkflowService>();
+
+    // Search services (for @ and # mention autocomplete)
+    builder.Services.AddScoped<IProjectFileService, ProjectFileService>();
+    builder.Services.AddScoped<IPrDataProvider, PrDataProvider>();
+    builder.Services.AddScoped<ISearchablePrService, SearchablePrService>();
 
     // Fleece services (file-based issue tracking)
     builder.Services.AddSingleton<IssueSerializationQueueService>();

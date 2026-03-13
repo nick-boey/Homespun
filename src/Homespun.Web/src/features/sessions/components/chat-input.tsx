@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { Send, Loader2, Shield, Sparkles, Hammer } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -12,9 +12,17 @@ import {
   PromptInputTextarea,
   PromptInputActions,
   PromptInputAction,
+  usePromptInput,
 } from '@/components/ui/prompt-input'
 import type { ModelSelection } from '@/stores/session-settings-store'
 import type { SessionMode } from '@/types/signalr'
+import {
+  useMentionTrigger,
+  useProjectFiles,
+  useSearchablePrs,
+  MentionSearchPopup,
+  type MentionSelection,
+} from '@/features/search'
 
 export interface ChatInputProps {
   onSend: (message: string, sessionMode: SessionMode, model: ModelSelection) => void
@@ -22,6 +30,7 @@ export interface ChatInputProps {
   sessionModel: ModelSelection
   onModeChange: (mode: SessionMode) => void
   onModelChange: (model: ModelSelection) => void
+  projectId?: string
   disabled?: boolean
   isLoading?: boolean
   placeholder?: string
@@ -39,6 +48,7 @@ export function ChatInput({
   sessionModel,
   onModeChange,
   onModelChange,
+  projectId = '',
   disabled = false,
   isLoading = false,
   placeholder = 'Type a message...',
@@ -134,7 +144,14 @@ export function ChatInput({
         </div>
       </PromptInputActions>
 
-      <PromptInputTextarea placeholder={placeholder} onKeyDown={handleTextareaKeyDown} />
+      {/* Textarea with search popup */}
+      <ChatInputTextareaWithSearch
+        projectId={projectId}
+        value={value}
+        setValue={setValue}
+        placeholder={placeholder}
+        onKeyDown={handleTextareaKeyDown}
+      />
 
       {/* Send button below textarea */}
       <PromptInputActions className="justify-end px-2 pb-2">
@@ -155,5 +172,144 @@ export function ChatInput({
         </PromptInputAction>
       </PromptInputActions>
     </PromptInput>
+  )
+}
+
+/**
+ * Internal component that wraps the textarea with mention search.
+ * Uses the PromptInput context to access the textarea ref.
+ */
+function ChatInputTextareaWithSearch({
+  projectId,
+  value,
+  setValue,
+  placeholder,
+  onKeyDown,
+}: {
+  projectId: string
+  value: string
+  setValue: (value: string) => void
+  placeholder: string
+  onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void
+}) {
+  const { textareaRef } = usePromptInput()
+  const [cursorPosition, setCursorPosition] = useState(0)
+  const [isSearchHidden, setIsSearchHidden] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  // Fetch data for search
+  const { files, isLoading: isLoadingFiles } = useProjectFiles(projectId)
+  const { prs, isLoading: isLoadingPrs } = useSearchablePrs(projectId)
+
+  // Detect trigger
+  const triggerState = useMentionTrigger(value, cursorPosition)
+
+  // Show popup when trigger is active
+  const isSearchOpen = triggerState.active && !isSearchHidden
+
+  // Reset hidden state when trigger position changes
+  // This is a valid pattern for resetting state based on derived values
+  const prevTriggerPos = useRef(-1)
+  useEffect(() => {
+    if (triggerState.triggerPosition !== prevTriggerPos.current && triggerState.active) {
+      setIsSearchHidden(false)
+    }
+    prevTriggerPos.current = triggerState.triggerPosition
+  }, [triggerState.triggerPosition, triggerState.active])
+
+  // Track cursor position
+  const handleCursorChange = useCallback(() => {
+    if (textareaRef.current) {
+      setCursorPosition(textareaRef.current.selectionStart ?? 0)
+    }
+  }, [textareaRef])
+
+  // Also update cursor position when value changes (for programmatic updates like fill())
+  // Set cursor to end of value when it changes externally
+  useEffect(() => {
+    setCursorPosition(value.length)
+  }, [value])
+
+  // Handle selection from popup
+  const handleSelect = useCallback(
+    (selection: MentionSelection) => {
+      if (!triggerState.active) return
+
+      const { triggerPosition, query } = triggerState
+      const beforeTrigger = value.slice(0, triggerPosition)
+      const afterQuery = value.slice(triggerPosition + 1 + query.length)
+
+      const insertion = selection.type === '@' ? `@{${selection.value}}` : `PR #${selection.value}`
+
+      const newValue = beforeTrigger + insertion + afterQuery
+      setValue(newValue)
+
+      const newCursorPos = triggerPosition + insertion.length
+      requestAnimationFrame(() => {
+        if (textareaRef.current) {
+          textareaRef.current.setSelectionRange(newCursorPos, newCursorPos)
+          textareaRef.current.focus()
+          setCursorPosition(newCursorPos)
+        }
+      })
+
+      setIsSearchHidden(true)
+    },
+    [triggerState, value, setValue, textareaRef]
+  )
+
+  // Close popup
+  const handleCloseSearch = useCallback(() => {
+    setIsSearchHidden(true)
+  }, [])
+
+  // Handle keyboard events for search
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      // If search is open, let the popup handle navigation keys
+      if (isSearchOpen && (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Escape')) {
+        // The popup handles these via document event listener
+        if (e.key === 'Escape') {
+          e.preventDefault()
+          handleCloseSearch()
+          return
+        }
+      }
+
+      // If search is open and Enter is pressed, don't submit the form
+      if (isSearchOpen && e.key === 'Enter') {
+        // Let the popup handle Enter for selection
+        return
+      }
+
+      onKeyDown(e)
+    },
+    [isSearchOpen, onKeyDown, handleCloseSearch]
+  )
+
+  return (
+    <div ref={containerRef} className="relative">
+      <PromptInputTextarea
+        placeholder={placeholder}
+        onKeyDown={handleKeyDown}
+        onSelect={handleCursorChange}
+        onClick={handleCursorChange}
+        onKeyUp={handleCursorChange}
+      />
+      {projectId && (
+        <MentionSearchPopup
+          open={isSearchOpen}
+          triggerType={triggerState.type ?? '@'}
+          query={triggerState.query}
+          files={files ?? []}
+          prs={prs ?? []}
+          onSelect={handleSelect}
+          onClose={handleCloseSearch}
+          isLoadingFiles={isLoadingFiles}
+          isLoadingPrs={isLoadingPrs}
+          className="bottom-full left-0 mb-1"
+        />
+      )}
+    </div>
   )
 }

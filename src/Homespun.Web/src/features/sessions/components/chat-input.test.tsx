@@ -1,7 +1,27 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ChatInput } from './chat-input'
+
+// Create a wrapper component for React Query
+function createWrapper() {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+      },
+    },
+  })
+  return function Wrapper({ children }: { children: React.ReactNode }) {
+    return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  }
+}
+
+// Custom render with wrapper
+function renderWithQuery(ui: React.ReactElement) {
+  return render(ui, { wrapper: createWrapper() })
+}
 
 describe('ChatInput', () => {
   const mockOnSend = vi.fn()
@@ -22,26 +42,26 @@ describe('ChatInput', () => {
 
   describe('rendering', () => {
     it('renders the textarea input', () => {
-      render(<ChatInput {...defaultProps} />)
+      renderWithQuery(<ChatInput {...defaultProps} />)
 
       expect(screen.getByPlaceholderText(/message/i)).toBeInTheDocument()
     })
 
     it('renders the send button', () => {
-      render(<ChatInput {...defaultProps} />)
+      renderWithQuery(<ChatInput {...defaultProps} />)
 
       expect(screen.getByRole('button', { name: /send/i })).toBeInTheDocument()
     })
 
     it('renders the session mode toggle button', () => {
-      render(<ChatInput {...defaultProps} />)
+      renderWithQuery(<ChatInput {...defaultProps} />)
 
       expect(screen.getByRole('button', { name: /toggle session mode/i })).toBeInTheDocument()
       expect(screen.getByText('Build')).toBeInTheDocument()
     })
 
     it('renders the model selector', () => {
-      render(<ChatInput {...defaultProps} />)
+      renderWithQuery(<ChatInput {...defaultProps} />)
 
       expect(screen.getByRole('button', { name: /model/i })).toBeInTheDocument()
     })
@@ -50,7 +70,7 @@ describe('ChatInput', () => {
   describe('sending messages', () => {
     it('calls onSend with message when send button is clicked', async () => {
       const user = userEvent.setup()
-      render(<ChatInput {...defaultProps} />)
+      renderWithQuery(<ChatInput {...defaultProps} />)
 
       const input = screen.getByPlaceholderText(/message/i)
       await user.type(input, 'Hello Claude')
@@ -61,7 +81,7 @@ describe('ChatInput', () => {
 
     it('calls onSend with message when Enter is pressed', async () => {
       const user = userEvent.setup()
-      render(<ChatInput {...defaultProps} />)
+      renderWithQuery(<ChatInput {...defaultProps} />)
 
       const input = screen.getByPlaceholderText(/message/i)
       await user.type(input, 'Hello Claude{Enter}')
@@ -71,7 +91,7 @@ describe('ChatInput', () => {
 
     it('does not send when Shift+Enter is pressed (adds new line)', async () => {
       const user = userEvent.setup()
-      render(<ChatInput {...defaultProps} />)
+      renderWithQuery(<ChatInput {...defaultProps} />)
 
       const input = screen.getByPlaceholderText(/message/i)
       await user.type(input, 'Line 1{Shift>}{Enter}{/Shift}Line 2')
@@ -82,7 +102,7 @@ describe('ChatInput', () => {
 
     it('clears input after sending', async () => {
       const user = userEvent.setup()
-      render(<ChatInput {...defaultProps} />)
+      renderWithQuery(<ChatInput {...defaultProps} />)
 
       const input = screen.getByPlaceholderText(/message/i)
       await user.type(input, 'Hello Claude{Enter}')
@@ -92,7 +112,7 @@ describe('ChatInput', () => {
 
     it('does not send empty messages', async () => {
       const user = userEvent.setup()
-      render(<ChatInput {...defaultProps} />)
+      renderWithQuery(<ChatInput {...defaultProps} />)
 
       await user.click(screen.getByRole('button', { name: /send/i }))
 
@@ -101,7 +121,7 @@ describe('ChatInput', () => {
 
     it('does not send whitespace-only messages', async () => {
       const user = userEvent.setup()
-      render(<ChatInput {...defaultProps} />)
+      renderWithQuery(<ChatInput {...defaultProps} />)
 
       const input = screen.getByPlaceholderText(/message/i)
       await user.type(input, '   {Enter}')
@@ -112,20 +132,20 @@ describe('ChatInput', () => {
 
   describe('disabled state', () => {
     it('disables the textarea when disabled prop is true', () => {
-      render(<ChatInput {...defaultProps} disabled />)
+      renderWithQuery(<ChatInput {...defaultProps} disabled />)
 
       expect(screen.getByPlaceholderText(/message/i)).toBeDisabled()
     })
 
     it('disables the send button when disabled', () => {
-      render(<ChatInput {...defaultProps} disabled />)
+      renderWithQuery(<ChatInput {...defaultProps} disabled />)
 
       expect(screen.getByRole('button', { name: /send/i })).toBeDisabled()
     })
 
     it('does not send messages when disabled', async () => {
       const user = userEvent.setup()
-      render(<ChatInput {...defaultProps} disabled />)
+      renderWithQuery(<ChatInput {...defaultProps} disabled />)
 
       const input = screen.getByPlaceholderText(/message/i)
       await user.type(input, 'Hello Claude', { skipClick: true })
@@ -136,7 +156,7 @@ describe('ChatInput', () => {
 
   describe('loading state', () => {
     it('shows loading indicator when isLoading is true', () => {
-      render(<ChatInput {...defaultProps} isLoading />)
+      renderWithQuery(<ChatInput {...defaultProps} isLoading />)
 
       expect(screen.getByTestId('send-loading')).toBeInTheDocument()
     })
@@ -144,14 +164,14 @@ describe('ChatInput', () => {
 
   describe('session mode toggle', () => {
     it('shows Build mode from props', () => {
-      render(<ChatInput {...defaultProps} sessionMode="Build" />)
+      renderWithQuery(<ChatInput {...defaultProps} sessionMode="Build" />)
 
       const toggleButton = screen.getByRole('button', { name: /toggle session mode/i })
       expect(toggleButton).toHaveTextContent('Build')
     })
 
     it('shows Plan mode from props', () => {
-      render(<ChatInput {...defaultProps} sessionMode="Plan" />)
+      renderWithQuery(<ChatInput {...defaultProps} sessionMode="Plan" />)
 
       const toggleButton = screen.getByRole('button', { name: /toggle session mode/i })
       expect(toggleButton).toHaveTextContent('Plan')
@@ -159,7 +179,7 @@ describe('ChatInput', () => {
 
     it('toggles to Plan mode when clicked from Build', async () => {
       const user = userEvent.setup()
-      render(<ChatInput {...defaultProps} sessionMode="Build" />)
+      renderWithQuery(<ChatInput {...defaultProps} sessionMode="Build" />)
 
       await user.click(screen.getByRole('button', { name: /toggle session mode/i }))
 
@@ -168,7 +188,7 @@ describe('ChatInput', () => {
 
     it('toggles to Build mode when clicked from Plan', async () => {
       const user = userEvent.setup()
-      render(<ChatInput {...defaultProps} sessionMode="Plan" />)
+      renderWithQuery(<ChatInput {...defaultProps} sessionMode="Plan" />)
 
       await user.click(screen.getByRole('button', { name: /toggle session mode/i }))
 
@@ -177,7 +197,7 @@ describe('ChatInput', () => {
 
     it('sends message with current session mode from props', async () => {
       const user = userEvent.setup()
-      render(<ChatInput {...defaultProps} sessionMode="Plan" />)
+      renderWithQuery(<ChatInput {...defaultProps} sessionMode="Plan" />)
 
       const input = screen.getByPlaceholderText(/message/i)
       await user.type(input, 'Hello{Enter}')
@@ -189,7 +209,7 @@ describe('ChatInput', () => {
   describe('keyboard shortcuts', () => {
     it('toggles from Build to Plan with Shift+Tab in textarea', async () => {
       const user = userEvent.setup()
-      render(<ChatInput {...defaultProps} sessionMode="Build" />)
+      renderWithQuery(<ChatInput {...defaultProps} sessionMode="Build" />)
 
       const input = screen.getByPlaceholderText(/message/i)
       await user.click(input)
@@ -200,7 +220,7 @@ describe('ChatInput', () => {
 
     it('toggles from Plan to Build with Shift+Tab in textarea', async () => {
       const user = userEvent.setup()
-      render(<ChatInput {...defaultProps} sessionMode="Plan" />)
+      renderWithQuery(<ChatInput {...defaultProps} sessionMode="Plan" />)
 
       const input = screen.getByPlaceholderText(/message/i)
       await user.click(input)
@@ -212,26 +232,26 @@ describe('ChatInput', () => {
 
   describe('model selector', () => {
     it('displays opus model from props', () => {
-      render(<ChatInput {...defaultProps} sessionModel="opus" />)
+      renderWithQuery(<ChatInput {...defaultProps} sessionModel="opus" />)
 
       expect(screen.getByRole('button', { name: /model/i })).toHaveTextContent(/opus/i)
     })
 
     it('displays sonnet model from props', () => {
-      render(<ChatInput {...defaultProps} sessionModel="sonnet" />)
+      renderWithQuery(<ChatInput {...defaultProps} sessionModel="sonnet" />)
 
       expect(screen.getByRole('button', { name: /model/i })).toHaveTextContent(/sonnet/i)
     })
 
     it('displays haiku model from props', () => {
-      render(<ChatInput {...defaultProps} sessionModel="haiku" />)
+      renderWithQuery(<ChatInput {...defaultProps} sessionModel="haiku" />)
 
       expect(screen.getByRole('button', { name: /model/i })).toHaveTextContent(/haiku/i)
     })
 
     it('calls onModelChange when sonnet is selected', async () => {
       const user = userEvent.setup()
-      render(<ChatInput {...defaultProps} sessionModel="opus" />)
+      renderWithQuery(<ChatInput {...defaultProps} sessionModel="opus" />)
 
       await user.click(screen.getByRole('button', { name: /model/i }))
       await user.click(screen.getByRole('menuitem', { name: /sonnet/i }))
@@ -241,7 +261,7 @@ describe('ChatInput', () => {
 
     it('calls onModelChange when haiku is selected', async () => {
       const user = userEvent.setup()
-      render(<ChatInput {...defaultProps} sessionModel="opus" />)
+      renderWithQuery(<ChatInput {...defaultProps} sessionModel="opus" />)
 
       await user.click(screen.getByRole('button', { name: /model/i }))
       await user.click(screen.getByRole('menuitem', { name: /haiku/i }))
@@ -251,7 +271,7 @@ describe('ChatInput', () => {
 
     it('sends message with current model from props', async () => {
       const user = userEvent.setup()
-      render(<ChatInput {...defaultProps} sessionModel="sonnet" />)
+      renderWithQuery(<ChatInput {...defaultProps} sessionModel="sonnet" />)
 
       const input = screen.getByPlaceholderText(/message/i)
       await user.type(input, 'Hello{Enter}')

@@ -6,6 +6,7 @@ using Homespun.Features.Gitgraph.Services;
 using Homespun.Features.GitHub;
 using Homespun.Features.Projects;
 using Homespun.Features.PullRequests.Data;
+using Homespun.Features.Search;
 using Homespun.Features.Secrets;
 using Homespun.Features.Testing.Services;
 using Microsoft.Extensions.Configuration;
@@ -70,6 +71,11 @@ public static class MockServiceExtensions
 
         // Git services
         services.AddSingleton<IGitCloneService, MockGitCloneService>();
+
+        // Search services (for @ and # mention autocomplete)
+        services.AddScoped<IProjectFileService, ProjectFileService>();
+        services.AddScoped<IPrDataProvider, PrDataProvider>();
+        services.AddScoped<ISearchablePrService, SearchablePrService>();
 
         // Claude Code services - use the real session store (already in-memory)
         services.AddSingleton<IClaudeSessionStore, ClaudeSessionStore>();
