@@ -22,7 +22,7 @@ function createIssue(overrides: Partial<IssueResponse> = {}): IssueResponse {
     status: 0, // Open
     type: 0, // Task
     parentIssues: [],
-    executionMode: 0, // Parallel
+    executionMode: 0, // Series
     ...overrides,
   }
 }
@@ -278,7 +278,7 @@ describe('computeLayout', () => {
 
   describe('parent-child relationships', () => {
     it('renders parent-child with correct lanes and parentLane', () => {
-      const parent = createIssue({ id: 'parent', executionMode: 0 }) // Parallel
+      const parent = createIssue({ id: 'parent', executionMode: 1 }) // Parallel
       const child = createIssue({ id: 'child', parentIssues: [{ parentIssue: 'parent' }] })
 
       const taskGraph: TaskGraphResponse = {
@@ -302,7 +302,7 @@ describe('computeLayout', () => {
     })
 
     it('renders series children with correct flags', () => {
-      const parent = createIssue({ id: 'parent', executionMode: 1 }) // Series
+      const parent = createIssue({ id: 'parent', executionMode: 0 }) // Series
       const child1 = createIssue({ id: 'child1', parentIssues: [{ parentIssue: 'parent' }] })
       const child2 = createIssue({ id: 'child2', parentIssues: [{ parentIssue: 'parent' }] })
 
@@ -363,7 +363,7 @@ describe('computeLayout', () => {
     })
 
     it('marks hidden parent indicator when parent is filtered', () => {
-      const parent = createIssue({ id: 'parent', executionMode: 0 }) // Parallel
+      const parent = createIssue({ id: 'parent', executionMode: 1 }) // Parallel
       const child = createIssue({ id: 'child', parentIssues: [{ parentIssue: 'parent' }] })
 
       const taskGraph: TaskGraphResponse = {
@@ -498,8 +498,8 @@ describe('computeLayout', () => {
   })
 
   describe('isSeriesChild flag computation', () => {
-    it('sets isSeriesChild=true when parent has executionMode=1 (Series)', () => {
-      const parent = createIssue({ id: 'parent', executionMode: 1 }) // Series
+    it('sets isSeriesChild=true when parent has executionMode=0 (Series)', () => {
+      const parent = createIssue({ id: 'parent', executionMode: 0 }) // Series
       const child = createIssue({ id: 'child', parentIssues: [{ parentIssue: 'parent' }] })
 
       const taskGraph: TaskGraphResponse = {
@@ -519,8 +519,8 @@ describe('computeLayout', () => {
       expect(childLine.isSeriesChild).toBe(true)
     })
 
-    it('sets isSeriesChild=false when parent has executionMode=0 (Parallel)', () => {
-      const parent = createIssue({ id: 'parent', executionMode: 0 }) // Parallel
+    it('sets isSeriesChild=false when parent has executionMode=1 (Parallel)', () => {
+      const parent = createIssue({ id: 'parent', executionMode: 1 }) // Parallel
       const child = createIssue({ id: 'child', parentIssues: [{ parentIssue: 'parent' }] })
 
       const taskGraph: TaskGraphResponse = {
@@ -563,7 +563,7 @@ describe('computeLayout', () => {
     })
 
     it('correctly identifies multiple children of series parent', () => {
-      const parent = createIssue({ id: 'parent', executionMode: 1 }) // Series
+      const parent = createIssue({ id: 'parent', executionMode: 0 }) // Series
       const child1 = createIssue({ id: 'child1', parentIssues: [{ parentIssue: 'parent' }] })
       const child2 = createIssue({ id: 'child2', parentIssues: [{ parentIssue: 'parent' }] })
       const child3 = createIssue({ id: 'child3', parentIssues: [{ parentIssue: 'parent' }] })
@@ -599,8 +599,8 @@ describe('computeLayout', () => {
     })
 
     it('handles mixed parallel and series parents in same graph', () => {
-      const parallelParent = createIssue({ id: 'parallel-parent', executionMode: 0 }) // Parallel
-      const seriesParent = createIssue({ id: 'series-parent', executionMode: 1 }) // Series
+      const parallelParent = createIssue({ id: 'parallel-parent', executionMode: 1 }) // Parallel
+      const seriesParent = createIssue({ id: 'series-parent', executionMode: 0 }) // Series
       const parallelChild = createIssue({
         id: 'parallel-child',
         parentIssues: [{ parentIssue: 'parallel-parent' }],
