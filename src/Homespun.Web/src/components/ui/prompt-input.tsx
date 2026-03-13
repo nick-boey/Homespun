@@ -205,4 +205,4 @@ function PromptInputAction({
   )
 }
 
-export { PromptInput, PromptInputTextarea, PromptInputActions, PromptInputAction }
+export { PromptInput, PromptInputTextarea, PromptInputActions, PromptInputAction, usePromptInput }

@@ -2,7 +2,7 @@ import { createFileRoute, useParams, useNavigate, useBlocker, Link } from '@tans
 import { useForm, Controller } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useEffect, useCallback, useState, useMemo } from 'react'
+import { useEffect, useCallback, useState, useMemo, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -36,6 +36,7 @@ import { ISSUE_STATUS_OPTIONS, ISSUE_TYPE_OPTIONS } from '@/lib/issue-constants'
 import { ArrowLeft, Play, Sparkles } from 'lucide-react'
 import type { IssueStatus, IssueType, ExecutionMode, IssueResponse } from '@/api'
 import { useBranchIdGenerationStore } from '@/features/issues/stores/branch-id-generation-store'
+import { useSearchableInput, MentionSearchPopup } from '@/features/search'
 
 export const Route = createFileRoute('/projects/$projectId/issues/$issueId/edit')({
   component: EditIssue,
@@ -156,6 +157,65 @@ function WorkingBranchField({ register, watch, setValue, issueId }: WorkingBranc
           ? 'AI is generating branch ID...'
           : 'AI-suggested or auto-generated from title'}
       </p>
+    </div>
+  )
+}
+
+interface DescriptionTextareaWithSearchProps {
+  projectId: string
+  value: string
+  onChange: (value: string) => void
+}
+
+/** Description textarea with @ and # mention search */
+function DescriptionTextareaWithSearch({
+  projectId,
+  value,
+  onChange,
+}: DescriptionTextareaWithSearchProps) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  const {
+    triggerState,
+    files,
+    prs,
+    isLoadingFiles,
+    isLoadingPrs,
+    isSearchOpen,
+    handleCursorChange,
+    handleSelect,
+    closeSearch,
+  } = useSearchableInput({
+    projectId,
+    value,
+    onChange,
+  })
+
+  return (
+    <div className="relative">
+      <Textarea
+        ref={textareaRef}
+        id="description"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onSelect={handleCursorChange}
+        onClick={handleCursorChange}
+        onKeyUp={handleCursorChange}
+        placeholder="Describe the issue (Markdown supported)"
+        className="min-h-[200px] font-mono"
+      />
+      <MentionSearchPopup
+        open={isSearchOpen}
+        triggerType={triggerState.type ?? '@'}
+        query={triggerState.query}
+        files={files}
+        prs={prs ?? []}
+        onSelect={handleSelect}
+        onClose={closeSearch}
+        isLoadingFiles={isLoadingFiles}
+        isLoadingPrs={isLoadingPrs}
+        className="bottom-full left-0 mb-1"
+      />
     </div>
   )
 }
@@ -413,11 +473,16 @@ export default function EditIssue() {
                 <TabsTrigger value="preview">Preview</TabsTrigger>
               </TabsList>
               <TabsContent value="edit">
-                <Textarea
-                  id="description"
-                  placeholder="Describe the issue (Markdown supported)"
-                  className="min-h-[200px] font-mono"
-                  {...register('description')}
+                <Controller
+                  control={control}
+                  name="description"
+                  render={({ field }) => (
+                    <DescriptionTextareaWithSearch
+                      projectId={projectId}
+                      value={field.value ?? ''}
+                      onChange={field.onChange}
+                    />
+                  )}
                 />
               </TabsContent>
               <TabsContent value="preview">

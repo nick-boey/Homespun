@@ -298,6 +298,7 @@ function SessionChat() {
           sessionModel={model}
           onModeChange={changeMode}
           onModelChange={changeModel}
+          projectId={session?.projectId}
           disabled={isProcessing || !isConnected}
           isLoading={isSending}
           placeholder={
