@@ -62,7 +62,7 @@ export interface SessionInfo {
   mode: string;
   model: string;
   permissionMode: string;
-  status: 'idle' | 'streaming' | 'closed';
+  status: 'idle' | 'streaming' | 'closed' | 'error';
   createdAt: string;
   lastActivityAt: string;
   lastMessageType?: LastMessageType;
@@ -89,7 +89,7 @@ export interface PlanFile {
 export interface ActiveSessionResponse {
   hasActiveSession: boolean;
   sessionId?: string;
-  status?: 'idle' | 'streaming' | 'closed';
+  status?: 'idle' | 'streaming' | 'closed' | 'error';
   mode?: string;
   model?: string;
   permissionMode?: string;

@@ -1086,6 +1086,7 @@ public class DockerAgentExecutionService : IAgentExecutionService, IAsyncDisposa
             "streaming" => ClaudeSessionStatus.Running,
             "idle" => ClaudeSessionStatus.WaitingForInput,
             "closed" => ClaudeSessionStatus.Stopped,
+            "error" => ClaudeSessionStatus.Error,
             _ => ClaudeSessionStatus.Running
         };
     }

@@ -37,6 +37,19 @@ export function setMockQueryMessages(query: MockQuery, messages: SDKMessage[]): 
   query._messages = messages;
 }
 
+/**
+ * Creates a mock query that never completes (blocks forever).
+ * Useful for tests that need to verify status before the forwarder finishes.
+ */
+export function createBlockingMockQuery(): MockQuery {
+  const mockQuery = createMockQuery();
+  (mockQuery as any)[Symbol.asyncIterator] = async function* () {
+    // Block forever — never yield, never return
+    await new Promise(() => {});
+  };
+  return mockQuery;
+}
+
 // For backward compatibility with existing tests
 export interface MockSDKSession {
   send: ReturnType<typeof vi.fn>;

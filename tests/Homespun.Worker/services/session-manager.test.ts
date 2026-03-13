@@ -1,5 +1,5 @@
 import { vi, type Mock } from 'vitest';
-import { createMockQuery, setMockQueryMessages, type MockQuery } from '../helpers/mock-sdk.js';
+import { createMockQuery, createBlockingMockQuery, setMockQueryMessages, type MockQuery } from '../helpers/mock-sdk.js';
 import { createAssistantMessage, createResultMessage, createSystemMessage } from '../helpers/test-fixtures.js';
 import { collectAsyncGenerator } from '../helpers/async-helpers.js';
 
@@ -131,6 +131,7 @@ describe('SessionManager', () => {
     });
 
     it('sets status to streaming after create', async () => {
+      setMockQuery(createBlockingMockQuery());
       const ws = await manager.create(baseOpts);
 
       expect(ws.status).toBe('streaming');
@@ -267,6 +268,107 @@ describe('SessionManager', () => {
       await expect(manager.send('no-such-id', 'msg')).rejects.toThrow(
         'Session no-such-id not found',
       );
+    });
+
+    it('creates new query with resume when resultReceived is true', async () => {
+      const ws = await manager.create({ prompt: 'init', model: 'sonnet', mode: 'Build' });
+      mockQuery.mockClear();
+
+      // Simulate that a result was received and conversationId was captured
+      ws.resultReceived = true;
+      ws.conversationId = 'conv-123';
+
+      // Set up a blocking mock query so the forwarder doesn't complete before assertions
+      setMockQuery(createBlockingMockQuery());
+
+      await manager.send(ws.id, 'follow up message');
+
+      // Should have called query() again with resume option
+      expect(mockQuery).toHaveBeenCalledOnce();
+      const args = mockQuery.mock.calls[0][0] as Record<string, unknown>;
+      const opts = args.options as Record<string, unknown>;
+      expect(opts.resume).toBe('conv-123');
+
+      // resultReceived should be reset
+      expect(ws.resultReceived).toBe(false);
+      expect(ws.status).toBe('streaming');
+    });
+
+    it('throws when resultReceived but no conversationId', async () => {
+      const ws = await manager.create({ prompt: 'init', model: 'sonnet', mode: 'Build' });
+      ws.resultReceived = true;
+      ws.conversationId = undefined;
+
+      await expect(manager.send(ws.id, 'msg')).rejects.toThrow(
+        'Cannot resume session',
+      );
+    });
+
+    it('uses inputController when resultReceived is false', async () => {
+      const ws = await manager.create({ prompt: 'init', model: 'sonnet', mode: 'Build' });
+      mockQuery.mockClear();
+
+      // resultReceived defaults to false
+      expect(ws.resultReceived).toBe(false);
+
+      await manager.send(ws.id, 'msg');
+
+      // Should NOT create a new query
+      expect(mockQuery).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('runQueryForwarder()', () => {
+    it('sets resultReceived and transitions to idle on result message', async () => {
+      setMockQueryMessages(mockQueryObj, [
+        createAssistantMessage(),
+        createResultMessage(),
+      ]);
+      const ws = await manager.create({ prompt: 'init', model: 'sonnet', mode: 'Build' });
+
+      // Drain the output channel via stream()
+      await collectAsyncGenerator(manager.stream(ws.id));
+
+      expect(ws.resultReceived).toBe(true);
+      expect(ws.status).toBe('idle');
+    });
+
+    it('sets status to error on genuine error before result', async () => {
+      // Create a mock query that throws an error
+      const errorQuery = createMockQuery();
+      (errorQuery as any)[Symbol.asyncIterator] = async function* () {
+        throw new Error('SDK crashed');
+      };
+      setMockQuery(errorQuery);
+
+      const ws = await manager.create({ prompt: 'init', model: 'sonnet', mode: 'Build' });
+
+      // Drain the output channel via stream()
+      const messages = await collectAsyncGenerator(manager.stream(ws.id));
+
+      expect(ws.status).toBe('error');
+      // Should push a synthetic error result
+      const errorResult = messages.find((m: any) => m.type === 'result' && m.is_error);
+      expect(errorResult).toBeDefined();
+    });
+
+    it('sets status to idle on error after result (post-result exit)', async () => {
+      // Create a mock query that yields a result then throws
+      const postResultQuery = createMockQuery();
+      (postResultQuery as any)[Symbol.asyncIterator] = async function* () {
+        yield createResultMessage();
+        throw new Error('Claude Code process exited with code 1');
+      };
+      setMockQuery(postResultQuery);
+
+      const ws = await manager.create({ prompt: 'init', model: 'sonnet', mode: 'Build' });
+
+      // Drain the output channel via stream()
+      await collectAsyncGenerator(manager.stream(ws.id));
+
+      // Should be idle, not error — the result was already received
+      expect(ws.status).toBe('idle');
+      expect(ws.resultReceived).toBe(true);
     });
   });
 
@@ -488,6 +590,7 @@ describe('SessionManager', () => {
 
   describe('list()', () => {
     it('maps all sessions to SessionInfo[] with correct fields', async () => {
+      setMockQuery(createBlockingMockQuery());
       await manager.create({ prompt: 'init', model: 'sonnet', mode: 'Plan' });
 
       const list = manager.list();
