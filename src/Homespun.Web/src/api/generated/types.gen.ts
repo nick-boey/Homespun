@@ -316,6 +316,11 @@ export const FileChangeStatus = {
 
 export type FileChangeStatus = (typeof FileChangeStatus)[keyof typeof FileChangeStatus]
 
+export type FileListResponse = {
+  files?: Array<string> | null
+  hash?: string | null
+}
+
 export type FleeceIssueSyncResult = {
   success?: boolean
   errorMessage?: string | null
@@ -594,6 +599,11 @@ export type PlanFileInfo = {
   preview?: string | null
 }
 
+export type PrListResponse = {
+  prs?: Array<SearchablePrResponse> | null
+  hash?: string | null
+}
+
 export type ProblemDetails = {
   type?: string | null
   title?: string | null
@@ -725,6 +735,12 @@ export type RunAgentResponse = {
   clonePath: string | null
 }
 
+export type SearchablePrResponse = {
+  number?: number
+  title?: string | null
+  branchName?: string | null
+}
+
 export type SecretInfo = {
   name: string | null
   lastModified?: string | null
@@ -737,6 +753,16 @@ export type SecretsListResponse = {
 export type SendMessageRequest = {
   message: string | null
   mode?: SessionMode
+}
+
+export type SessionBranchInfo = {
+  branchName?: string | null
+  commitSha?: string | null
+  commitMessage?: string | null
+  commitDate?: string | null
+  aheadCount?: number
+  behindCount?: number
+  hasUncommittedChanges?: boolean
 }
 
 export type SessionCacheSummary = {
@@ -1504,6 +1530,35 @@ export type PostApiClonesPullResponses = {
 }
 
 export type PostApiClonesPullResponse = PostApiClonesPullResponses[keyof PostApiClonesPullResponses]
+
+export type GetApiClonesSessionBranchInfoData = {
+  body?: never
+  path?: never
+  query?: {
+    workingDirectory?: string
+  }
+  url: '/api/Clones/session-branch-info'
+}
+
+export type GetApiClonesSessionBranchInfoErrors = {
+  /**
+   * Not Found
+   */
+  404: ProblemDetails
+}
+
+export type GetApiClonesSessionBranchInfoError =
+  GetApiClonesSessionBranchInfoErrors[keyof GetApiClonesSessionBranchInfoErrors]
+
+export type GetApiClonesSessionBranchInfoResponses = {
+  /**
+   * OK
+   */
+  200: SessionBranchInfo
+}
+
+export type GetApiClonesSessionBranchInfoResponse =
+  GetApiClonesSessionBranchInfoResponses[keyof GetApiClonesSessionBranchInfoResponses]
 
 export type GetApiContainersData = {
   body?: never
@@ -2627,6 +2682,68 @@ export type PutApiProjectsByIdResponses = {
 
 export type PutApiProjectsByIdResponse =
   PutApiProjectsByIdResponses[keyof PutApiProjectsByIdResponses]
+
+export type GetApiProjectsByProjectIdSearchFilesData = {
+  body?: never
+  path: {
+    projectId: string
+  }
+  query?: {
+    hash?: string
+  }
+  url: '/api/projects/{projectId}/search/files'
+}
+
+export type GetApiProjectsByProjectIdSearchFilesErrors = {
+  /**
+   * Not Found
+   */
+  404: ProblemDetails
+}
+
+export type GetApiProjectsByProjectIdSearchFilesError =
+  GetApiProjectsByProjectIdSearchFilesErrors[keyof GetApiProjectsByProjectIdSearchFilesErrors]
+
+export type GetApiProjectsByProjectIdSearchFilesResponses = {
+  /**
+   * OK
+   */
+  200: FileListResponse
+}
+
+export type GetApiProjectsByProjectIdSearchFilesResponse =
+  GetApiProjectsByProjectIdSearchFilesResponses[keyof GetApiProjectsByProjectIdSearchFilesResponses]
+
+export type GetApiProjectsByProjectIdSearchPrsData = {
+  body?: never
+  path: {
+    projectId: string
+  }
+  query?: {
+    hash?: string
+  }
+  url: '/api/projects/{projectId}/search/prs'
+}
+
+export type GetApiProjectsByProjectIdSearchPrsErrors = {
+  /**
+   * Not Found
+   */
+  404: ProblemDetails
+}
+
+export type GetApiProjectsByProjectIdSearchPrsError =
+  GetApiProjectsByProjectIdSearchPrsErrors[keyof GetApiProjectsByProjectIdSearchPrsErrors]
+
+export type GetApiProjectsByProjectIdSearchPrsResponses = {
+  /**
+   * OK
+   */
+  200: PrListResponse
+}
+
+export type GetApiProjectsByProjectIdSearchPrsResponse =
+  GetApiProjectsByProjectIdSearchPrsResponses[keyof GetApiProjectsByProjectIdSearchPrsResponses]
 
 export type GetApiProjectsByProjectIdPullRequestsData = {
   body?: never

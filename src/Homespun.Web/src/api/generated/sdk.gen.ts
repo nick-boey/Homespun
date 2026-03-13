@@ -52,6 +52,9 @@ import type {
   GetApiClonesExistsErrors,
   GetApiClonesExistsResponses,
   GetApiClonesResponses,
+  GetApiClonesSessionBranchInfoData,
+  GetApiClonesSessionBranchInfoErrors,
+  GetApiClonesSessionBranchInfoResponses,
   GetApiContainersData,
   GetApiContainersResponses,
   GetApiFleeceSyncByProjectIdBranchStatusData,
@@ -118,6 +121,12 @@ import type {
   GetApiProjectsByProjectIdPullRequestsOpenErrors,
   GetApiProjectsByProjectIdPullRequestsOpenResponses,
   GetApiProjectsByProjectIdPullRequestsResponses,
+  GetApiProjectsByProjectIdSearchFilesData,
+  GetApiProjectsByProjectIdSearchFilesErrors,
+  GetApiProjectsByProjectIdSearchFilesResponses,
+  GetApiProjectsByProjectIdSearchPrsData,
+  GetApiProjectsByProjectIdSearchPrsErrors,
+  GetApiProjectsByProjectIdSearchPrsResponses,
   GetApiProjectsByProjectIdSecretsData,
   GetApiProjectsByProjectIdSecretsResponses,
   GetApiProjectsData,
@@ -551,6 +560,16 @@ export class Clones {
       PostApiClonesPullErrors,
       ThrowOnError
     >({ url: '/api/Clones/pull', ...options })
+  }
+
+  public static getApiClonesSessionBranchInfo<ThrowOnError extends boolean = false>(
+    options?: Options<GetApiClonesSessionBranchInfoData, ThrowOnError>
+  ) {
+    return (options?.client ?? client).get<
+      GetApiClonesSessionBranchInfoResponses,
+      GetApiClonesSessionBranchInfoErrors,
+      ThrowOnError
+    >({ url: '/api/Clones/session-branch-info', ...options })
   }
 }
 
@@ -1060,6 +1079,28 @@ export class Projects {
         ...options.headers,
       },
     })
+  }
+}
+
+export class ProjectSearch {
+  public static getApiProjectsByProjectIdSearchFiles<ThrowOnError extends boolean = false>(
+    options: Options<GetApiProjectsByProjectIdSearchFilesData, ThrowOnError>
+  ) {
+    return (options.client ?? client).get<
+      GetApiProjectsByProjectIdSearchFilesResponses,
+      GetApiProjectsByProjectIdSearchFilesErrors,
+      ThrowOnError
+    >({ url: '/api/projects/{projectId}/search/files', ...options })
+  }
+
+  public static getApiProjectsByProjectIdSearchPrs<ThrowOnError extends boolean = false>(
+    options: Options<GetApiProjectsByProjectIdSearchPrsData, ThrowOnError>
+  ) {
+    return (options.client ?? client).get<
+      GetApiProjectsByProjectIdSearchPrsResponses,
+      GetApiProjectsByProjectIdSearchPrsErrors,
+      ThrowOnError
+    >({ url: '/api/projects/{projectId}/search/prs', ...options })
   }
 }
 
