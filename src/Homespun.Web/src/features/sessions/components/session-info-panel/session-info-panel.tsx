@@ -11,6 +11,7 @@ import { SessionPrTab } from './session-pr-tab'
 import { SessionTodosTab } from './session-todos-tab'
 import { SessionFilesTab } from './session-files-tab'
 import { SessionPlansTab } from './session-plans-tab'
+import { SessionBranchTab } from './session-branch-tab'
 
 interface SessionInfoPanelProps {
   session: ClaudeSession
@@ -54,6 +55,7 @@ export function SessionInfoPanel({
         <TabsTrigger value="todos">To-do's</TabsTrigger>
         <TabsTrigger value="files">Files</TabsTrigger>
         <TabsTrigger value="plans">Plans</TabsTrigger>
+        <TabsTrigger value="branch">Branch</TabsTrigger>
       </TabsList>
 
       <div className="flex-1 overflow-y-auto">
@@ -71,6 +73,9 @@ export function SessionInfoPanel({
         </TabsContent>
         <TabsContent value="plans" className="mt-0 p-4">
           <SessionPlansTab session={session} />
+        </TabsContent>
+        <TabsContent value="branch" className="mt-0 p-4">
+          <SessionBranchTab session={session} />
         </TabsContent>
       </div>
     </Tabs>
