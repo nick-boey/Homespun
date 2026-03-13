@@ -15,7 +15,7 @@ public class IssueResponse
     public IssueStatus Status { get; set; }
     public IssueType Type { get; set; }
     public int? Priority { get; set; }
-    public int? LinkedPR { get; set; }
+    public List<int> LinkedPRs { get; set; } = [];
     public List<string> LinkedIssues { get; set; } = [];
     public List<ParentIssueRefResponse> ParentIssues { get; set; } = [];
     public List<string> Tags { get; set; } = [];

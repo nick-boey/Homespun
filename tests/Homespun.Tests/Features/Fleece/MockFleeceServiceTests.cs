@@ -73,6 +73,17 @@ public class MockFleeceServiceTests
         Assert.That(issues, Has.Count.EqualTo(3));
     }
 
+    [Test]
+    public async Task CreateIssueAsync_VerifyType_ReturnsCorrectType()
+    {
+        var issue = await _service.CreateIssueAsync(ProjectPath, "Verify Issue", IssueType.Verify);
+
+        Assert.That(issue, Is.Not.Null);
+        Assert.That(issue.Title, Is.EqualTo("Verify Issue"));
+        Assert.That(issue.Type, Is.EqualTo(IssueType.Verify));
+        Assert.That(issue.Status, Is.EqualTo(IssueStatus.Open));
+    }
+
     #endregion
 
     #region Update Persistence
@@ -134,9 +145,8 @@ public class MockFleeceServiceTests
             Type = IssueType.Task,
             Status = IssueStatus.Open,
             Priority = 2,
-            Tags = ["tag1", "tag2"],
+            Tags = ["tag1", "tag2", "hsp-linked-pr=42"],
             LinkedIssues = ["linked-1"],
-            LinkedPR = 42,
             CreatedBy = "tester",
             AssignedTo = "dev",
             CreatedAt = DateTimeOffset.UtcNow,
@@ -145,9 +155,9 @@ public class MockFleeceServiceTests
 
         var updated = await _service.AddParentAsync(ProjectPath, "child-001", parent.Id);
 
-        Assert.That(updated.Tags, Is.EqualTo(new[] { "tag1", "tag2" }));
+        Assert.That(updated.Tags, Is.EqualTo(new[] { "tag1", "tag2", "hsp-linked-pr=42" }));
         Assert.That(updated.LinkedIssues, Is.EqualTo(new[] { "linked-1" }));
-        Assert.That(updated.LinkedPR, Is.EqualTo(42));
+        Assert.That(updated.LinkedPRs, Is.EqualTo(new[] { 42 }));
         Assert.That(updated.CreatedBy, Is.EqualTo("tester"));
         Assert.That(updated.AssignedTo, Is.EqualTo("dev"));
         Assert.That(updated.ParentIssues, Has.Count.EqualTo(1));
@@ -165,8 +175,7 @@ public class MockFleeceServiceTests
             Title = "Child",
             Type = IssueType.Task,
             Status = IssueStatus.Open,
-            Tags = ["preserved-tag"],
-            LinkedPR = 99,
+            Tags = ["preserved-tag", "hsp-linked-pr=99"],
             CreatedBy = "author",
             AssignedTo = "assignee",
             CreatedAt = DateTimeOffset.UtcNow,
@@ -177,8 +186,8 @@ public class MockFleeceServiceTests
 
         var retrieved = await _service.GetIssueAsync(ProjectPath, "child-002");
         Assert.That(retrieved, Is.Not.Null);
-        Assert.That(retrieved!.Tags, Is.EqualTo(new[] { "preserved-tag" }));
-        Assert.That(retrieved.LinkedPR, Is.EqualTo(99));
+        Assert.That(retrieved!.Tags, Is.EqualTo(new[] { "preserved-tag", "hsp-linked-pr=99" }));
+        Assert.That(retrieved.LinkedPRs, Is.EqualTo(new[] { 99 }));
         Assert.That(retrieved.CreatedBy, Is.EqualTo("author"));
         Assert.That(retrieved.AssignedTo, Is.EqualTo("assignee"));
     }
@@ -221,9 +230,8 @@ public class MockFleeceServiceTests
             Type = IssueType.Task,
             Status = IssueStatus.Open,
             Priority = 1,
-            Tags = ["important"],
+            Tags = ["important", "hsp-linked-pr=7"],
             LinkedIssues = ["ref-1", "ref-2"],
-            LinkedPR = 7,
             CreatedBy = "creator",
             AssignedTo = "worker",
             ParentIssues = [new ParentIssueRef { ParentIssue = "parent-x", SortOrder = "0" }],
@@ -234,9 +242,9 @@ public class MockFleeceServiceTests
         var updated = await _service.RemoveParentAsync(ProjectPath, "child-003", "parent-x");
 
         Assert.That(updated.ParentIssues, Has.Count.EqualTo(0));
-        Assert.That(updated.Tags, Is.EqualTo(new[] { "important" }));
+        Assert.That(updated.Tags, Is.EqualTo(new[] { "important", "hsp-linked-pr=7" }));
         Assert.That(updated.LinkedIssues, Is.EqualTo(new[] { "ref-1", "ref-2" }));
-        Assert.That(updated.LinkedPR, Is.EqualTo(7));
+        Assert.That(updated.LinkedPRs, Is.EqualTo(new[] { 7 }));
         Assert.That(updated.CreatedBy, Is.EqualTo("creator"));
         Assert.That(updated.AssignedTo, Is.EqualTo("worker"));
     }

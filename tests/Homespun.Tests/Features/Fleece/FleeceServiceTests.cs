@@ -71,6 +71,22 @@ public class FleeceServiceTests
     }
 
     [Test]
+    public async Task CreateIssueAsync_WithVerifyType_CreatesVerifyIssue()
+    {
+        // Arrange - Verify is a new issue type added in Fleece.Core v1.6.0
+        var title = "Verify Feature Works";
+        var type = IssueType.Verify;
+
+        // Act
+        var issue = await _service.CreateIssueAsync(_tempDir, title, type);
+
+        // Assert
+        Assert.That(issue, Is.Not.Null);
+        Assert.That(issue.Title, Is.EqualTo(title));
+        Assert.That(issue.Type, Is.EqualTo(IssueType.Verify));
+    }
+
+    [Test]
     public async Task CreateIssueAsync_WithDescription_SetsDescription()
     {
         // Arrange

@@ -107,7 +107,7 @@ const mockIssue: IssueResponse = {
   workingBranchId: 'feature/test',
   parentIssues: [],
   tags: ['test', 'urgent'],
-  linkedPR: null,
+  linkedPRs: [],
   linkedIssues: [],
   createdAt: '2024-01-01T00:00:00Z',
   lastUpdate: '2024-01-01T00:00:00Z',

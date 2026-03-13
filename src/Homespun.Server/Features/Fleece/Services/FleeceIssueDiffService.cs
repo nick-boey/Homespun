@@ -195,8 +195,8 @@ public class FleeceIssueDiffService : IFleeceIssueDiffService
         if (original.Priority != modified.Priority)
             changedFields.Add("Priority");
 
-        if (original.LinkedPR != modified.LinkedPR)
-            changedFields.Add("LinkedPR");
+        if (!Enumerable.SequenceEqual(original.LinkedPRs.OrderBy(x => x), modified.LinkedPRs.OrderBy(x => x)))
+            changedFields.Add("LinkedPRs");
 
         if (!Enumerable.SequenceEqual(original.LinkedIssues.OrderBy(x => x), modified.LinkedIssues.OrderBy(x => x)))
             changedFields.Add("LinkedIssues");

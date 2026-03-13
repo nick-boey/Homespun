@@ -122,6 +122,7 @@ describe('Issue Type Constants', () => {
       expect(ISSUE_TYPE.Chore).toBe(2)
       expect(ISSUE_TYPE.Feature).toBe(3)
       expect(ISSUE_TYPE.Idea).toBe(4)
+      expect(ISSUE_TYPE.Verify).toBe(5)
     })
   })
 
@@ -132,6 +133,7 @@ describe('Issue Type Constants', () => {
       expect(ISSUE_TYPE_LABELS[2]).toBe('Chore')
       expect(ISSUE_TYPE_LABELS[3]).toBe('Feature')
       expect(ISSUE_TYPE_LABELS[4]).toBe('Idea')
+      expect(ISSUE_TYPE_LABELS[5]).toBe('Verify')
     })
 
     it('should have labels for all defined types', () => {
@@ -155,6 +157,9 @@ describe('Issue Type Constants', () => {
 
       const featureOption = ISSUE_TYPE_OPTIONS.find((o) => o.value === '3')
       expect(featureOption?.label).toBe('Feature')
+
+      const verifyOption = ISSUE_TYPE_OPTIONS.find((o) => o.value === '5')
+      expect(verifyOption?.label).toBe('Verify')
     })
   })
 
@@ -165,6 +170,7 @@ describe('Issue Type Constants', () => {
       expect(getTypeLabel(2)).toBe('Chore')
       expect(getTypeLabel(3)).toBe('Feature')
       expect(getTypeLabel(4)).toBe('Idea')
+      expect(getTypeLabel(5)).toBe('Verify')
     })
 
     it('should return Task for undefined or null', () => {
