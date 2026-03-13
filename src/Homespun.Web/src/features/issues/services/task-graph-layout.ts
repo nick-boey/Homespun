@@ -282,8 +282,8 @@ function computeHiddenParentInfo(
         if (parentInGroup && !visibleIds.has(parentRef.parentIssue.toLowerCase())) {
           // Parent was filtered out
           hasHiddenParent = true
-          // ExecutionMode: 0 = Parallel, 1 = Series
-          hiddenParentIsSeriesMode = parentNode.issue?.executionMode === 1
+          // ExecutionMode: 0 = Series, 1 = Parallel
+          hiddenParentIsSeriesMode = parentNode.issue?.executionMode === 0
         }
       }
     }
@@ -453,8 +453,8 @@ function renderGroup(
     if (!node.issue?.id) continue
 
     const parentNode = parentByNode.get(node.issue.id.toLowerCase())
-    // ExecutionMode: 0 = Parallel, 1 = Series
-    if (parentNode?.issue?.id && parentNode.issue?.executionMode === 1) {
+    // ExecutionMode: 0 = Series, 1 = Parallel
+    if (parentNode?.issue?.id && parentNode.issue?.executionMode === 0) {
       seriesChildLaneByParent.set(parentNode.issue.id.toLowerCase(), (node.lane ?? 0) - minLane)
     }
   }
@@ -486,8 +486,8 @@ function renderGroup(
     // Also check hidden parent for nodes whose visible parent was filtered out
     const seriesHiddenParent = hiddenParentByNode.get(nodeId)
     const isSeriesChild =
-      (parentNode != null && parentNode.issue?.executionMode === 1) ||
-      (seriesHiddenParent != null && seriesHiddenParent.issue?.executionMode === 1)
+      (parentNode != null && parentNode.issue?.executionMode === 0) ||
+      (seriesHiddenParent != null && seriesHiddenParent.issue?.executionMode === 0)
 
     // Compute DrawTopLine (uses base lanes for calculations)
     let drawTopLine = false
@@ -501,8 +501,8 @@ function renderGroup(
 
         const prevHiddenParentCheck = hiddenParentByNode.get(prevNodeId)
         const prevIsSeriesChild =
-          (prevParentNode != null && prevParentNode.issue?.executionMode === 1) ||
-          (prevHiddenParentCheck != null && prevHiddenParentCheck.issue?.executionMode === 1)
+          (prevParentNode != null && prevParentNode.issue?.executionMode === 0) ||
+          (prevHiddenParentCheck != null && prevHiddenParentCheck.issue?.executionMode === 0)
 
         // Previous node is a parallel child whose junction is at this node's lane
         if (
@@ -528,7 +528,7 @@ function renderGroup(
         // Check for series siblings with same hidden parent (when visible parent is filtered out)
         if (!drawTopLine) {
           const currentHiddenParent = hiddenParentByNode.get(nodeId)
-          if (currentHiddenParent?.issue?.executionMode === 1) {
+          if (currentHiddenParent?.issue?.executionMode === 0) {
             const prevHiddenParent = hiddenParentByNode.get(prevNodeId)
             if (
               prevHiddenParent?.issue?.id &&
@@ -545,13 +545,13 @@ function renderGroup(
     // Compute DrawBottomLine:
     // - For nodes with visible series parent: always true (connects to the visible parent)
     // - For nodes with hidden series parent: true only if there's a next sibling with same hidden parent
-    const hasVisibleSeriesParent = parentNode != null && parentNode.issue?.executionMode === 1
+    const hasVisibleSeriesParent = parentNode != null && parentNode.issue?.executionMode === 0
     let drawBottomLine = hasVisibleSeriesParent
 
     // For nodes with hidden series parent, check if there's a next sibling
     if (!drawBottomLine) {
       const bottomLineHiddenParent = hiddenParentByNode.get(nodeId)
-      if (bottomLineHiddenParent?.issue?.executionMode === 1) {
+      if (bottomLineHiddenParent?.issue?.executionMode === 0) {
         // Check if there's a next sibling with same hidden parent
         for (let j = i + 1; j < group.length; j++) {
           const nextHiddenParent = hiddenParentByNode.get(group[j].issue?.id?.toLowerCase() ?? '')
