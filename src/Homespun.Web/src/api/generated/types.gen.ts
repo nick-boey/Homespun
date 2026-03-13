@@ -748,14 +748,14 @@ export type SendMessageRequest = {
 }
 
 export type SessionBranchInfo = {
-    branchName?: string | null;
-    commitSha?: string | null;
-    commitMessage?: string | null;
-    commitDate?: string | null;
-    aheadCount?: number;
-    behindCount?: number;
-    hasUncommittedChanges?: boolean;
-};
+  branchName?: string | null
+  commitSha?: string | null
+  commitMessage?: string | null
+  commitDate?: string | null
+  aheadCount?: number
+  behindCount?: number
+  hasUncommittedChanges?: boolean
+}
 
 export type SessionCacheSummary = {
   sessionId?: string | null
@@ -1524,31 +1524,33 @@ export type PostApiClonesPullResponses = {
 export type PostApiClonesPullResponse = PostApiClonesPullResponses[keyof PostApiClonesPullResponses]
 
 export type GetApiClonesSessionBranchInfoData = {
-    body?: never;
-    path?: never;
-    query?: {
-        workingDirectory?: string;
-    };
-    url: '/api/Clones/session-branch-info';
-};
+  body?: never
+  path?: never
+  query?: {
+    workingDirectory?: string
+  }
+  url: '/api/Clones/session-branch-info'
+}
 
 export type GetApiClonesSessionBranchInfoErrors = {
-    /**
-     * Not Found
-     */
-    404: ProblemDetails;
-};
+  /**
+   * Not Found
+   */
+  404: ProblemDetails
+}
 
-export type GetApiClonesSessionBranchInfoError = GetApiClonesSessionBranchInfoErrors[keyof GetApiClonesSessionBranchInfoErrors];
+export type GetApiClonesSessionBranchInfoError =
+  GetApiClonesSessionBranchInfoErrors[keyof GetApiClonesSessionBranchInfoErrors]
 
 export type GetApiClonesSessionBranchInfoResponses = {
-    /**
-     * OK
-     */
-    200: SessionBranchInfo;
-};
+  /**
+   * OK
+   */
+  200: SessionBranchInfo
+}
 
-export type GetApiClonesSessionBranchInfoResponse = GetApiClonesSessionBranchInfoResponses[keyof GetApiClonesSessionBranchInfoResponses];
+export type GetApiClonesSessionBranchInfoResponse =
+  GetApiClonesSessionBranchInfoResponses[keyof GetApiClonesSessionBranchInfoResponses]
 
 export type GetApiContainersData = {
   body?: never
