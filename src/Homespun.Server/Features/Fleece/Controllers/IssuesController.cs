@@ -248,6 +248,15 @@ public class IssuesController(
             return NotFound("Issue not found");
         }
 
+        // Auto-assign current user if issue has no assignee and request doesn't specify one
+        var assignedTo = request.AssignedTo;
+        if (string.IsNullOrWhiteSpace(currentIssue.AssignedTo) &&
+            string.IsNullOrWhiteSpace(request.AssignedTo) &&
+            !string.IsNullOrWhiteSpace(dataStore.UserEmail))
+        {
+            assignedTo = dataStore.UserEmail;
+        }
+
         var issue = await fleeceService.UpdateIssueAsync(
             project.LocalPath,
             issueId,
@@ -258,7 +267,7 @@ public class IssuesController(
             request.Priority,
             request.ExecutionMode,
             request.WorkingBranchId,
-            request.AssignedTo);
+            assignedTo);
 
         if (issue == null)
         {
