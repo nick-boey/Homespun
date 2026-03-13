@@ -52,9 +52,6 @@ import type {
   GetApiClonesExistsErrors,
   GetApiClonesExistsResponses,
   GetApiClonesResponses,
-  GetApiClonesSessionBranchInfoData,
-  GetApiClonesSessionBranchInfoErrors,
-  GetApiClonesSessionBranchInfoResponses,
   GetApiContainersData,
   GetApiContainersResponses,
   GetApiFleeceSyncByProjectIdBranchStatusData,
@@ -121,12 +118,6 @@ import type {
   GetApiProjectsByProjectIdPullRequestsOpenErrors,
   GetApiProjectsByProjectIdPullRequestsOpenResponses,
   GetApiProjectsByProjectIdPullRequestsResponses,
-  GetApiProjectsByProjectIdSearchFilesData,
-  GetApiProjectsByProjectIdSearchFilesErrors,
-  GetApiProjectsByProjectIdSearchFilesResponses,
-  GetApiProjectsByProjectIdSearchPrsData,
-  GetApiProjectsByProjectIdSearchPrsErrors,
-  GetApiProjectsByProjectIdSearchPrsResponses,
   GetApiProjectsByProjectIdSecretsData,
   GetApiProjectsByProjectIdSecretsResponses,
   GetApiProjectsData,
@@ -221,6 +212,9 @@ import type {
   PostApiOrchestrationGenerateBranchIdData,
   PostApiOrchestrationGenerateBranchIdErrors,
   PostApiOrchestrationGenerateBranchIdResponses,
+  PostApiProjectsByProjectIdFullRefreshData,
+  PostApiProjectsByProjectIdFullRefreshErrors,
+  PostApiProjectsByProjectIdFullRefreshResponses,
   PostApiProjectsByProjectIdIssuesHistoryRedoData,
   PostApiProjectsByProjectIdIssuesHistoryRedoErrors,
   PostApiProjectsByProjectIdIssuesHistoryRedoResponses,
@@ -557,16 +551,6 @@ export class Clones {
       PostApiClonesPullErrors,
       ThrowOnError
     >({ url: '/api/Clones/pull', ...options })
-  }
-
-  public static getApiClonesSessionBranchInfo<ThrowOnError extends boolean = false>(
-    options?: Options<GetApiClonesSessionBranchInfoData, ThrowOnError>
-  ) {
-    return (options?.client ?? client).get<
-      GetApiClonesSessionBranchInfoResponses,
-      GetApiClonesSessionBranchInfoErrors,
-      ThrowOnError
-    >({ url: '/api/Clones/session-branch-info', ...options })
   }
 }
 
@@ -1079,28 +1063,6 @@ export class Projects {
   }
 }
 
-export class ProjectSearch {
-  public static getApiProjectsByProjectIdSearchFiles<ThrowOnError extends boolean = false>(
-    options: Options<GetApiProjectsByProjectIdSearchFilesData, ThrowOnError>
-  ) {
-    return (options.client ?? client).get<
-      GetApiProjectsByProjectIdSearchFilesResponses,
-      GetApiProjectsByProjectIdSearchFilesErrors,
-      ThrowOnError
-    >({ url: '/api/projects/{projectId}/search/files', ...options })
-  }
-
-  public static getApiProjectsByProjectIdSearchPrs<ThrowOnError extends boolean = false>(
-    options: Options<GetApiProjectsByProjectIdSearchPrsData, ThrowOnError>
-  ) {
-    return (options.client ?? client).get<
-      GetApiProjectsByProjectIdSearchPrsResponses,
-      GetApiProjectsByProjectIdSearchPrsErrors,
-      ThrowOnError
-    >({ url: '/api/projects/{projectId}/search/prs', ...options })
-  }
-}
-
 export class PullRequests {
   public static getApiProjectsByProjectIdPullRequests<ThrowOnError extends boolean = false>(
     options: Options<GetApiProjectsByProjectIdPullRequestsData, ThrowOnError>
@@ -1174,6 +1136,16 @@ export class PullRequests {
       PostApiProjectsByProjectIdSyncErrors,
       ThrowOnError
     >({ url: '/api/projects/{projectId}/sync', ...options })
+  }
+
+  public static postApiProjectsByProjectIdFullRefresh<ThrowOnError extends boolean = false>(
+    options: Options<PostApiProjectsByProjectIdFullRefreshData, ThrowOnError>
+  ) {
+    return (options.client ?? client).post<
+      PostApiProjectsByProjectIdFullRefreshResponses,
+      PostApiProjectsByProjectIdFullRefreshErrors,
+      ThrowOnError
+    >({ url: '/api/projects/{projectId}/full-refresh', ...options })
   }
 
   public static getApiProjectsByProjectIdPullRequestsOpen<ThrowOnError extends boolean = false>(

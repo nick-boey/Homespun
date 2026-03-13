@@ -1,6 +1,8 @@
 using Homespun.Features.Fleece;
 using Homespun.Features.Fleece.Services;
+using Homespun.Features.Gitgraph.Services;
 using Homespun.Features.PullRequests.Data;
+using Homespun.Shared.Models.GitHub;
 using Homespun.Shared.Models.PullRequests;
 using Microsoft.AspNetCore.Mvc;
 
@@ -16,6 +18,7 @@ public class PullRequestsController(
     IDataStore dataStore,
     IGitHubService gitHubService,
     IFleeceService fleeceService,
+    IGraphCacheService graphCacheService,
     PullRequestWorkflowService workflowService) : ControllerBase
 {
     /// <summary>
@@ -148,6 +151,55 @@ public class PullRequestsController(
         }
 
         var result = await gitHubService.SyncPullRequestsAsync(projectId);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Full refresh of all pull requests from GitHub (open, closed, merged).
+    /// Invalidates cache and fetches fresh data.
+    /// </summary>
+    [HttpPost("projects/{projectId}/full-refresh")]
+    [ProducesResponseType<FullRefreshResult>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<FullRefreshResult>> FullRefresh(string projectId)
+    {
+        var project = dataStore.GetProject(projectId);
+        if (project == null)
+        {
+            return NotFound("Project not found");
+        }
+
+        var result = new FullRefreshResult { RefreshedAt = DateTime.UtcNow };
+
+        try
+        {
+            // Invalidate existing cache first
+            await graphCacheService.InvalidateCacheAsync(projectId);
+
+            // Fetch all open PRs from GitHub
+            var openPrs = await gitHubService.GetOpenPullRequestsAsync(projectId);
+            result.OpenPrs = openPrs.Count;
+
+            // Fetch all closed PRs from GitHub (merged + closed)
+            var closedPrs = await gitHubService.GetClosedPullRequestsAsync(projectId);
+            result.ClosedPrs = closedPrs.Count;
+
+            // Cache the fresh data
+            if (!string.IsNullOrEmpty(project.LocalPath))
+            {
+                await graphCacheService.CachePRDataAsync(projectId, project.LocalPath, openPrs, closedPrs);
+            }
+
+            // Run incremental sync to update tracked PRs and link issues
+            var syncResult = await gitHubService.SyncPullRequestsAsync(projectId);
+            result.LinkedIssues = syncResult.Imported + syncResult.Updated;
+            result.Errors = syncResult.Errors;
+        }
+        catch (Exception ex)
+        {
+            result.Errors.Add(ex.Message);
+        }
+
         return Ok(result);
     }
 
