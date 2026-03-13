@@ -5,7 +5,7 @@
  * Maps SDK message types to A2A Messages, Tasks, and TaskStatusUpdateEvents.
  */
 
-import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
+import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import type {
   Task,
   Message,
@@ -15,7 +15,7 @@ import type {
   HomespunMessageMetadata,
   InputRequiredMetadata,
   QuestionData,
-} from '../types/a2a.js';
+} from "../types/a2a.js";
 import {
   createTask,
   createMessage,
@@ -23,9 +23,9 @@ import {
   createDataPart,
   createTaskStatusUpdate,
   A2A_MIME_TYPES,
-} from '../types/a2a.js';
-import type { ControlEvent } from './session-manager.js';
-import { randomUUID } from 'node:crypto';
+} from "../types/a2a.js";
+import type { ControlEvent } from "./session-manager.js";
+import { randomUUID } from "node:crypto";
 
 /**
  * Translation context containing task and context IDs
@@ -39,11 +39,8 @@ export interface TranslationContext {
  * Creates the initial A2A Task event when a session starts.
  * Maps to the 'session_started' event in the old format.
  */
-export function createInitialTask(
-  taskId: string,
-  contextId: string,
-): Task {
-  return createTask(taskId, contextId, 'submitted');
+export function createInitialTask(taskId: string, contextId: string): Task {
+  return createTask(taskId, contextId, "submitted");
 }
 
 /**
@@ -53,7 +50,7 @@ export function createInitialTask(
 export function createWorkingStatus(
   ctx: TranslationContext,
 ): TaskStatusUpdateEvent {
-  return createTaskStatusUpdate(ctx.taskId, ctx.contextId, 'working', false);
+  return createTaskStatusUpdate(ctx.taskId, ctx.contextId, "working", false);
 }
 
 /**
@@ -67,37 +64,37 @@ export function translateSdkMessage(
   const messageId = randomUUID();
 
   switch (msg.type) {
-    case 'assistant': {
+    case "assistant": {
       const parts = translateContentBlocks((msg as any).message?.content ?? []);
       return createMessage(
         messageId,
-        'agent',
+        "agent",
         parts,
         ctx.contextId,
         ctx.taskId,
         {
-          sdkMessageType: 'assistant',
+          sdkMessageType: "assistant",
           parentToolUseId: (msg as any).parent_tool_use_id,
         } satisfies HomespunMessageMetadata,
       );
     }
 
-    case 'user': {
+    case "user": {
       const parts = translateContentBlocks((msg as any).message?.content ?? []);
       return createMessage(
         messageId,
-        'user',
+        "user",
         parts,
         ctx.contextId,
         ctx.taskId,
         {
-          sdkMessageType: 'user',
+          sdkMessageType: "user",
           parentToolUseId: (msg as any).parent_tool_use_id,
         } satisfies HomespunMessageMetadata,
       );
     }
 
-    case 'system': {
+    case "system": {
       // System messages contain initialization info - emit as agent message with metadata
       const systemMsg = msg as any;
       const data: Record<string, unknown> = {
@@ -105,40 +102,45 @@ export function translateSdkMessage(
       };
       if (systemMsg.model) data.model = systemMsg.model;
       if (systemMsg.tools) data.tools = systemMsg.tools;
-      if (systemMsg.permissionMode) data.permissionMode = systemMsg.permissionMode;
+      if (systemMsg.permissionMode)
+        data.permissionMode = systemMsg.permissionMode;
 
       return createMessage(
         messageId,
-        'agent',
-        [createDataPart(data, { kind: 'system' })],
+        "agent",
+        [createDataPart(data, { kind: "system" })],
         ctx.contextId,
         ctx.taskId,
         {
-          sdkMessageType: 'system',
+          sdkMessageType: "system",
         } satisfies HomespunMessageMetadata,
       );
     }
 
-    case 'stream_event': {
+    case "stream_event": {
       // Stream events contain partial content - emit as agent message
       const streamMsg = msg as any;
       const eventData = streamMsg.event ?? {};
 
       return createMessage(
         messageId,
-        'agent',
-        [createDataPart(eventData as Record<string, unknown>, { kind: 'stream_event' })],
+        "agent",
+        [
+          createDataPart(eventData as Record<string, unknown>, {
+            kind: "stream_event",
+          }),
+        ],
         ctx.contextId,
         ctx.taskId,
         {
-          sdkMessageType: 'stream_event',
+          sdkMessageType: "stream_event",
           isStreaming: true,
           parentToolUseId: streamMsg.parent_tool_use_id,
         } satisfies HomespunMessageMetadata,
       );
     }
 
-    case 'result': {
+    case "result": {
       // Result is translated to TaskStatusUpdateEvent, not Message
       return null;
     }
@@ -147,8 +149,12 @@ export function translateSdkMessage(
       // Unknown message type - emit as data part
       return createMessage(
         messageId,
-        'agent',
-        [createDataPart(msg as unknown as Record<string, unknown>, { kind: 'unknown' })],
+        "agent",
+        [
+          createDataPart(msg as unknown as Record<string, unknown>, {
+            kind: "unknown",
+          }),
+        ],
         ctx.contextId,
         ctx.taskId,
         {
@@ -167,38 +173,38 @@ function translateContentBlocks(content: unknown[]): Part[] {
 
   return content.map((block: any): Part => {
     switch (block.type) {
-      case 'text':
-        return createTextPart(block.text ?? '');
+      case "text":
+        return createTextPart(block.text ?? "");
 
-      case 'thinking':
+      case "thinking":
         return createDataPart(
           { thinking: block.thinking },
-          { kind: 'thinking', isThinking: true },
+          { kind: "thinking", isThinking: true },
         );
 
-      case 'tool_use':
+      case "tool_use":
         return createDataPart(
           {
             toolName: block.name,
             toolUseId: block.id,
             input: block.input,
           },
-          { kind: 'tool_use' },
+          { kind: "tool_use" },
         );
 
-      case 'tool_result':
+      case "tool_result":
         return createDataPart(
           {
             toolUseId: block.tool_use_id,
             content: block.content,
             isError: block.is_error,
           },
-          { kind: 'tool_result' },
+          { kind: "tool_result" },
         );
 
       default:
         // Unknown block type - preserve as data
-        return createDataPart(block, { kind: 'unknown_block' });
+        return createDataPart(block, { kind: "unknown_block" });
     }
   });
 }
@@ -212,7 +218,7 @@ export function translateResultToStatus(
 ): TaskStatusUpdateEvent {
   const resultMsg = msg as any;
   const isError = resultMsg.is_error ?? false;
-  const state: TaskState = isError ? 'failed' : 'completed';
+  const state: TaskState = isError ? "failed" : "completed";
 
   // Create a summary message for the status
   const summaryParts: Part[] = [];
@@ -222,23 +228,28 @@ export function translateResultToStatus(
   }
 
   // Include result metadata
-  summaryParts.push(createDataPart({
-    subtype: resultMsg.subtype,
-    durationMs: resultMsg.duration_ms,
-    durationApiMs: resultMsg.duration_api_ms,
-    numTurns: resultMsg.num_turns,
-    totalCostUsd: resultMsg.total_cost_usd,
-    usage: resultMsg.usage,
-    errors: resultMsg.errors,
-  }, { kind: 'result_metadata' }));
+  summaryParts.push(
+    createDataPart(
+      {
+        subtype: resultMsg.subtype,
+        durationMs: resultMsg.duration_ms,
+        durationApiMs: resultMsg.duration_api_ms,
+        numTurns: resultMsg.num_turns,
+        totalCostUsd: resultMsg.total_cost_usd,
+        usage: resultMsg.usage,
+        errors: resultMsg.errors,
+      },
+      { kind: "result_metadata" },
+    ),
+  );
 
   const statusMessage = createMessage(
     randomUUID(),
-    'agent',
+    "agent",
     summaryParts,
     ctx.contextId,
     ctx.taskId,
-    { sdkMessageType: 'result' },
+    { sdkMessageType: "result" },
   );
 
   return createTaskStatusUpdate(
@@ -258,37 +269,37 @@ export function translateControlEvent(
   event: ControlEvent,
   ctx: TranslationContext,
 ): TaskStatusUpdateEvent {
-  const inputType: InputRequiredMetadata['inputType'] =
-    event.type === 'question_pending' ? 'question' : 'plan-approval';
+  const inputType: InputRequiredMetadata["inputType"] =
+    event.type === "question_pending" ? "question" : "plan-approval";
 
   let metadata: InputRequiredMetadata;
   let statusMessageParts: Part[];
 
-  if (event.type === 'question_pending') {
+  if (event.type === "question_pending") {
     const questions = (event.data as { questions: QuestionData[] }).questions;
     metadata = {
-      inputType: 'question',
+      inputType: "question",
       questions,
     };
     statusMessageParts = [
-      createTextPart('User input required'),
-      createDataPart({ questions }, { kind: 'questions' }),
+      createTextPart("User input required"),
+      createDataPart({ questions }, { kind: "questions" }),
     ];
   } else {
     const plan = (event.data as { plan: string }).plan;
     metadata = {
-      inputType: 'plan-approval',
+      inputType: "plan-approval",
       plan,
     };
     statusMessageParts = [
-      createTextPart('Plan approval required'),
-      createDataPart({ plan }, { kind: 'plan' }),
+      createTextPart("Plan approval required"),
+      createDataPart({ plan }, { kind: "plan" }),
     ];
   }
 
   const statusMessage = createMessage(
     randomUUID(),
-    'agent',
+    "agent",
     statusMessageParts,
     ctx.contextId,
     ctx.taskId,
@@ -298,7 +309,7 @@ export function translateControlEvent(
   return createTaskStatusUpdate(
     ctx.taskId,
     ctx.contextId,
-    'input-required',
+    "input-required",
     false, // not final - waiting for input
     statusMessage,
     metadata as unknown as Record<string, unknown>,
@@ -315,20 +326,20 @@ export function createErrorStatus(
 ): TaskStatusUpdateEvent {
   const statusMessage = createMessage(
     randomUUID(),
-    'agent',
+    "agent",
     [
       createTextPart(errorMessage),
-      createDataPart({ code: errorCode }, { kind: 'error' }),
+      createDataPart({ code: errorCode }, { kind: "error" }),
     ],
     ctx.contextId,
     ctx.taskId,
-    { sdkMessageType: 'error' },
+    { sdkMessageType: "error" },
   );
 
   return createTaskStatusUpdate(
     ctx.taskId,
     ctx.contextId,
-    'failed',
+    "failed",
     true, // final
     statusMessage,
     { errorCode },
@@ -340,19 +351,23 @@ export function createErrorStatus(
  */
 export function getEventKind(
   event: SDKMessage | ControlEvent,
-): 'task' | 'message' | 'status-update' {
-  if ('type' in event && 'data' in event) {
+): "task" | "message" | "status-update" {
+  if ("type" in event && "data" in event) {
     // Control event
     const controlType = (event as ControlEvent).type;
-    if (controlType === 'question_pending' || controlType === 'plan_pending') {
-      return 'status-update';
+    if (
+      controlType === "question_pending" ||
+      controlType === "plan_pending" ||
+      controlType === "status_resumed"
+    ) {
+      return "status-update";
     }
   }
 
   const sdkMsg = event as SDKMessage;
-  if (sdkMsg.type === 'result') {
-    return 'status-update';
+  if (sdkMsg.type === "result") {
+    return "status-update";
   }
 
-  return 'message';
+  return "message";
 }

@@ -5,9 +5,9 @@
  * Translates Claude Agent SDK messages to A2A protocol format.
  */
 
-import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
-import { isControlEvent, type ControlEvent } from './session-manager.js';
-import type { SessionManager } from './session-manager.js';
+import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
+import { isControlEvent, type ControlEvent } from "./session-manager.js";
+import type { SessionManager } from "./session-manager.js";
 import {
   createInitialTask,
   createWorkingStatus,
@@ -16,9 +16,9 @@ import {
   translateControlEvent,
   createErrorStatus,
   type TranslationContext,
-} from './a2a-translator.js';
-import type { A2AStreamEvent } from '../types/a2a.js';
-import { info, debug } from '../utils/logger.js';
+} from "./a2a-translator.js";
+import type { A2AStreamEvent } from "../types/a2a.js";
+import { info, debug } from "../utils/logger.js";
 
 /**
  * Formats tool parameters for debug logging.
@@ -26,25 +26,25 @@ import { info, debug } from '../utils/logger.js';
  * Objects/arrays shown as [Object] or [Array(N)].
  */
 function formatToolParams(input: unknown): string {
-  if (!input || typeof input !== 'object') return '';
+  if (!input || typeof input !== "object") return "";
 
   const params: string[] = [];
   for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
     if (value === undefined || value === null) {
       continue;
-    } else if (typeof value === 'string') {
-      const truncated = value.length > 50 ? value.slice(0, 50) + '...' : value;
+    } else if (typeof value === "string") {
+      const truncated = value.length > 50 ? value.slice(0, 50) + "..." : value;
       params.push(`${key}="${truncated}"`);
-    } else if (typeof value === 'number' || typeof value === 'boolean') {
+    } else if (typeof value === "number" || typeof value === "boolean") {
       params.push(`${key}=${value}`);
     } else if (Array.isArray(value)) {
       params.push(`${key}=[Array(${value.length})]`);
-    } else if (typeof value === 'object') {
+    } else if (typeof value === "object") {
       params.push(`${key}=[Object]`);
     }
   }
 
-  return params.length > 0 ? params.join(' ') : '';
+  return params.length > 0 ? params.join(" ") : "";
 }
 
 /**
@@ -61,19 +61,19 @@ function extractContentSummary(msg: unknown, maxLength: number): string {
 
   const content = assistantMsg.message?.content;
   if (!content || !Array.isArray(content)) {
-    return '';
+    return "";
   }
 
   const textParts: string[] = [];
   for (const block of content) {
-    if (block.type === 'text' && block.text) {
+    if (block.type === "text" && block.text) {
       textParts.push(block.text);
     }
   }
 
-  const fullText = textParts.join(' ').replace(/\s+/g, ' ').trim();
+  const fullText = textParts.join(" ").replace(/\s+/g, " ").trim();
   if (fullText.length > maxLength) {
-    return fullText.slice(0, maxLength) + '...';
+    return fullText.slice(0, maxLength) + "...";
   }
   return fullText;
 }
@@ -110,7 +110,7 @@ export async function* streamSessionEvents(
     const errorEvent = createErrorStatus(
       errorCtx,
       `Session ${sessionId} not found`,
-      'SESSION_NOT_FOUND',
+      "SESSION_NOT_FOUND",
     );
     yield formatSSE(errorEvent.kind, errorEvent);
     return;
@@ -142,10 +142,23 @@ export async function* streamSessionEvents(
       }
 
       if (isControlEvent(event)) {
-        // Control events (question_pending, plan_pending) -> TaskStatusUpdateEvent with input-required
         const controlEvent = event as ControlEvent;
+
+        if (controlEvent.type === "status_resumed") {
+          // Emit working status when resuming from question/plan
+          info(
+            `A2A state transition: input-required → working (sessionId: ${sessionId})`,
+          );
+          const workingStatus = createWorkingStatus(ctx);
+          yield formatSSE(workingStatus.kind, workingStatus);
+          continue;
+        }
+
+        // Control events (question_pending, plan_pending) -> TaskStatusUpdateEvent with input-required
         info(`A2A control event: type='${controlEvent.type}'`);
-        info(`A2A state transition: working → input-required (sessionId: ${sessionId})`);
+        info(
+          `A2A state transition: working → input-required (sessionId: ${sessionId})`,
+        );
 
         const statusUpdate = translateControlEvent(controlEvent, ctx);
         yield formatSSE(statusUpdate.kind, statusUpdate);
@@ -154,16 +167,20 @@ export async function* streamSessionEvents(
 
       const msg = event as SDKMessage;
 
-      if (msg.type === 'system') {
-        info(`A2A system message: subtype='${(msg as any).subtype}', permissionMode='${(msg as any).permissionMode || 'N/A'}'`);
+      if (msg.type === "system") {
+        info(
+          `A2A system message: subtype='${(msg as any).subtype}', permissionMode='${(msg as any).permissionMode || "N/A"}'`,
+        );
       }
 
-      if (msg.type === 'result') {
+      if (msg.type === "result") {
         // Result -> TaskStatusUpdateEvent with completed/failed, final: true
         const r = msg as any;
         info(`A2A result: subtype='${r.subtype}', is_error=${r.is_error}`);
-        const finalState = r.is_error ? 'failed' : 'completed';
-        info(`A2A state transition: working → ${finalState} (sessionId: ${sessionId})`);
+        const finalState = r.is_error ? "failed" : "completed";
+        info(
+          `A2A state transition: working → ${finalState} (sessionId: ${sessionId})`,
+        );
 
         const statusUpdate = translateResultToStatus(msg, ctx);
         yield formatSSE(statusUpdate.kind, statusUpdate);
@@ -174,18 +191,18 @@ export async function* streamSessionEvents(
       const a2aMessage = translateSdkMessage(msg, ctx);
       if (a2aMessage) {
         // Log tool executions at DEBUG level with parameter details
-        if (msg.type === 'stream_event') {
+        if (msg.type === "stream_event") {
           const streamMsg = msg as any;
           const eventData = streamMsg.event;
-          if (eventData?.type === 'tool_invocation') {
-            const toolName = eventData.name || 'unknown';
+          if (eventData?.type === "tool_invocation") {
+            const toolName = eventData.name || "unknown";
             const params = formatToolParams(eventData.input);
             debug(`Tool: ${toolName} ${params} (sessionId: ${sessionId})`);
           }
         }
 
         // Log assistant message content summary
-        if (msg.type === 'assistant') {
+        if (msg.type === "assistant") {
           const summary = extractContentSummary(msg, 200);
           if (summary) {
             debug(`Assistant: ${summary} (sessionId: ${sessionId})`);
@@ -197,7 +214,7 @@ export async function* streamSessionEvents(
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    const errorEvent = createErrorStatus(ctx, message, 'AGENT_ERROR');
+    const errorEvent = createErrorStatus(ctx, message, "AGENT_ERROR");
     yield formatSSE(errorEvent.kind, errorEvent);
   }
 }
