@@ -18,7 +18,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 2,
+  "id": null,
   "links": [],
   "panels": [
     {
@@ -595,5 +595,5 @@
   "timezone": "browser",
   "title": "Homespun Logs",
   "uid": "homespun-logs",
-  "version": 5
+  "version": 1
 }
