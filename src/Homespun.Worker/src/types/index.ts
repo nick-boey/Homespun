@@ -3,7 +3,7 @@
 export interface StartSessionRequest {
   prompt: string;
   model: string;
-  mode: 'Plan' | 'Build';
+  mode: "Plan" | "Build";
   systemPrompt?: string;
   resumeSessionId?: string;
   workingDirectory?: string;
@@ -12,7 +12,7 @@ export interface StartSessionRequest {
 export interface SendMessageRequest {
   message: string;
   model?: string;
-  mode?: 'Plan' | 'Build';
+  mode?: "Plan" | "Build";
 }
 
 export interface AnswerQuestionRequest {
@@ -54,7 +54,15 @@ export interface FileReadRequest {
 
 // Response types
 
-export type LastMessageType = 'system' | 'assistant' | 'user' | 'stream_event' | 'result' | 'question_pending' | 'plan_pending';
+export type LastMessageType =
+  | "system"
+  | "assistant"
+  | "user"
+  | "stream_event"
+  | "result"
+  | "question_pending"
+  | "plan_pending"
+  | "status_resumed";
 
 export interface SessionInfo {
   sessionId: string;
@@ -62,7 +70,7 @@ export interface SessionInfo {
   mode: string;
   model: string;
   permissionMode: string;
-  status: 'idle' | 'streaming' | 'closed' | 'error';
+  status: "idle" | "streaming" | "closed" | "error";
   createdAt: string;
   lastActivityAt: string;
   lastMessageType?: LastMessageType;
@@ -73,7 +81,7 @@ export interface ContainerInfo {
   issueId: string;
   projectId: string;
   projectName: string;
-  status: 'idle' | 'active';
+  status: "idle" | "active";
 }
 
 export interface FileReadResponse {
@@ -89,7 +97,7 @@ export interface PlanFile {
 export interface ActiveSessionResponse {
   hasActiveSession: boolean;
   sessionId?: string;
-  status?: 'idle' | 'streaming' | 'closed' | 'error';
+  status?: "idle" | "streaming" | "closed" | "error";
   mode?: string;
   model?: string;
   permissionMode?: string;
