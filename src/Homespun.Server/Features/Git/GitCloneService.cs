@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Homespun.Shared.Models.Git;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -1211,5 +1212,71 @@ public class GitCloneService(ICommandRunner commandRunner, ILogger<GitCloneServi
             // Don't fail the clone creation, just return the clone path
             return clonePath;
         }
+    }
+
+    public async Task<SessionBranchInfo?> GetSessionBranchInfoAsync(string clonePath)
+    {
+        var gitRepoPath = GetGitRepoPath(clonePath);
+
+        // Get current branch name
+        var branchResult = await commandRunner.RunAsync("git", "rev-parse --abbrev-ref HEAD", gitRepoPath);
+        if (!branchResult.Success)
+        {
+            logger.LogWarning("Failed to get branch name for {ClonePath}: {Error}", clonePath, branchResult.Error);
+            return null;
+        }
+
+        var branchName = branchResult.Output.Trim();
+
+        // Get commit info: sha, subject, and date
+        var commitResult = await commandRunner.RunAsync("git", "log -1 --format=%h|%s|%ci", gitRepoPath);
+        string? commitSha = null;
+        string? commitMessage = null;
+        DateTime? commitDate = null;
+
+        if (commitResult.Success)
+        {
+            var parts = commitResult.Output.Trim().Split('|', 3);
+            if (parts.Length >= 1) commitSha = parts[0];
+            if (parts.Length >= 2) commitMessage = parts[1];
+            if (parts.Length >= 3 && DateTime.TryParse(parts[2], out var date))
+            {
+                commitDate = date;
+            }
+        }
+
+        // Get ahead/behind count relative to upstream
+        var divergenceResult = await commandRunner.RunAsync(
+            "git",
+            "rev-list --left-right --count @{upstream}...HEAD",
+            gitRepoPath);
+
+        int aheadCount = 0;
+        int behindCount = 0;
+
+        if (divergenceResult.Success)
+        {
+            var divergenceParts = divergenceResult.Output.Trim().Split('\t', StringSplitOptions.RemoveEmptyEntries);
+            if (divergenceParts.Length >= 2)
+            {
+                int.TryParse(divergenceParts[0], out behindCount);
+                int.TryParse(divergenceParts[1], out aheadCount);
+            }
+        }
+
+        // Check for uncommitted changes
+        var statusResult = await commandRunner.RunAsync("git", "status --porcelain", gitRepoPath);
+        var hasUncommittedChanges = statusResult.Success && !string.IsNullOrWhiteSpace(statusResult.Output);
+
+        return new SessionBranchInfo
+        {
+            BranchName = branchName == "HEAD" ? null : branchName, // Detached HEAD returns "HEAD"
+            CommitSha = commitSha,
+            CommitMessage = commitMessage,
+            CommitDate = commitDate,
+            AheadCount = aheadCount,
+            BehindCount = behindCount,
+            HasUncommittedChanges = hasUncommittedChanges
+        };
     }
 }

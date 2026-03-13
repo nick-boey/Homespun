@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using Homespun.Shared.Models.Git;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -426,6 +427,45 @@ public class MockGitCloneService : IGitCloneService
 
         // Use the regular CreateCloneAsync method
         return CreateCloneAsync(repoPath, branchName, createBranch: true, baseBranch: "main");
+    }
+
+    public Task<SessionBranchInfo?> GetSessionBranchInfoAsync(string clonePath)
+    {
+        _logger.LogDebug("[Mock] GetSessionBranchInfoAsync in {ClonePath}", clonePath);
+
+        // Try to find the clone and return its branch info
+        foreach (var clones in _clonesByRepo.Values)
+        {
+            lock (clones)
+            {
+                var clone = clones.FirstOrDefault(w => w.Path == clonePath);
+                if (clone != null)
+                {
+                    return Task.FromResult<SessionBranchInfo?>(new SessionBranchInfo
+                    {
+                        BranchName = clone.Branch?.Replace("refs/heads/", ""),
+                        CommitSha = clone.HeadCommit?[..7],
+                        CommitMessage = "Mock commit message",
+                        CommitDate = DateTime.UtcNow,
+                        AheadCount = 1,
+                        BehindCount = 0,
+                        HasUncommittedChanges = false
+                    });
+                }
+            }
+        }
+
+        // Return a default session branch info
+        return Task.FromResult<SessionBranchInfo?>(new SessionBranchInfo
+        {
+            BranchName = "main",
+            CommitSha = "abc1234",
+            CommitMessage = "Mock commit",
+            CommitDate = DateTime.UtcNow,
+            AheadCount = 0,
+            BehindCount = 0,
+            HasUncommittedChanges = false
+        });
     }
 
     /// <summary>

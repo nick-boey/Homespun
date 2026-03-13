@@ -1,4 +1,5 @@
 using Homespun.Features.Projects;
+using Homespun.Shared.Models.Git;
 using Homespun.Shared.Models.Sessions;
 using Microsoft.AspNetCore.Mvc;
 
@@ -162,6 +163,22 @@ public class ClonesController(
             return BadRequest("Failed to pull latest");
         }
         return NoContent();
+    }
+
+    /// <summary>
+    /// Get branch and commit information for a session's working directory.
+    /// </summary>
+    [HttpGet("session-branch-info")]
+    [ProducesResponseType<SessionBranchInfo>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<SessionBranchInfo>> GetSessionBranchInfo([FromQuery] string workingDirectory)
+    {
+        var info = await cloneService.GetSessionBranchInfoAsync(workingDirectory);
+        if (info == null)
+        {
+            return NotFound();
+        }
+        return Ok(info);
     }
 }
 

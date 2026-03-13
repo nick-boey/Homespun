@@ -1003,6 +1003,162 @@ public class GitCloneServiceTests
 
     #endregion
 
+    #region GetSessionBranchInfoAsync Tests
+
+    [Test]
+    public async Task GetSessionBranchInfoAsync_Success_ReturnsFullBranchInfo()
+    {
+        // Arrange
+        var clonePath = Path.Combine(_tempDir, "clone", "workdir");
+        Directory.CreateDirectory(clonePath);
+
+        // Mock branch name
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", clonePath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "feature/test-branch" });
+
+        // Mock commit info (sha|subject|date)
+        _mockRunner.Setup(r => r.RunAsync("git", "log -1 --format=%h|%s|%ci", clonePath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "abc1234|Add new feature|2024-03-15 10:30:00 +0000" });
+
+        // Mock ahead/behind count
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-list --left-right --count @{upstream}...HEAD", clonePath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "2\t3" });
+
+        // Mock status check
+        _mockRunner.Setup(r => r.RunAsync("git", "status --porcelain", clonePath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = " M file.txt" });
+
+        // Act
+        var result = await _service.GetSessionBranchInfoAsync(clonePath);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.BranchName, Is.EqualTo("feature/test-branch"));
+        Assert.That(result.CommitSha, Is.EqualTo("abc1234"));
+        Assert.That(result.CommitMessage, Is.EqualTo("Add new feature"));
+        Assert.That(result.CommitDate, Is.Not.Null);
+        Assert.That(result.BehindCount, Is.EqualTo(2));
+        Assert.That(result.AheadCount, Is.EqualTo(3));
+        Assert.That(result.HasUncommittedChanges, Is.True);
+    }
+
+    [Test]
+    public async Task GetSessionBranchInfoAsync_NoUpstream_ReturnsZeroAheadBehind()
+    {
+        // Arrange
+        var clonePath = Path.Combine(_tempDir, "clone", "workdir");
+        Directory.CreateDirectory(clonePath);
+
+        // Mock branch name
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", clonePath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "feature/local-only" });
+
+        // Mock commit info
+        _mockRunner.Setup(r => r.RunAsync("git", "log -1 --format=%h|%s|%ci", clonePath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "def5678|Local changes|2024-03-16 12:00:00 +0000" });
+
+        // Mock ahead/behind - fails when no upstream
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-list --left-right --count @{upstream}...HEAD", clonePath))
+            .ReturnsAsync(new CommandResult { Success = false, Error = "fatal: no upstream configured" });
+
+        // Mock status check - clean
+        _mockRunner.Setup(r => r.RunAsync("git", "status --porcelain", clonePath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "" });
+
+        // Act
+        var result = await _service.GetSessionBranchInfoAsync(clonePath);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.BranchName, Is.EqualTo("feature/local-only"));
+        Assert.That(result.AheadCount, Is.EqualTo(0));
+        Assert.That(result.BehindCount, Is.EqualTo(0));
+        Assert.That(result.HasUncommittedChanges, Is.False);
+    }
+
+    [Test]
+    public async Task GetSessionBranchInfoAsync_BranchCommandFails_ReturnsNull()
+    {
+        // Arrange
+        var clonePath = Path.Combine(_tempDir, "clone", "workdir");
+        Directory.CreateDirectory(clonePath);
+
+        // Mock branch name failure
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", clonePath))
+            .ReturnsAsync(new CommandResult { Success = false, Error = "fatal: not a git repository" });
+
+        // Act
+        var result = await _service.GetSessionBranchInfoAsync(clonePath);
+
+        // Assert
+        Assert.That(result, Is.Null);
+    }
+
+    [Test]
+    public async Task GetSessionBranchInfoAsync_DetachedHead_ReturnsNullBranchName()
+    {
+        // Arrange
+        var clonePath = Path.Combine(_tempDir, "clone", "workdir");
+        Directory.CreateDirectory(clonePath);
+
+        // Mock detached HEAD
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", clonePath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "HEAD" });
+
+        // Mock commit info
+        _mockRunner.Setup(r => r.RunAsync("git", "log -1 --format=%h|%s|%ci", clonePath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "abc1234|Detached commit|2024-03-17 09:00:00 +0000" });
+
+        // Mock ahead/behind - fails when detached
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-list --left-right --count @{upstream}...HEAD", clonePath))
+            .ReturnsAsync(new CommandResult { Success = false, Error = "fatal: no upstream configured" });
+
+        // Mock status check
+        _mockRunner.Setup(r => r.RunAsync("git", "status --porcelain", clonePath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "" });
+
+        // Act
+        var result = await _service.GetSessionBranchInfoAsync(clonePath);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.BranchName, Is.Null); // Detached HEAD returns null branch name
+        Assert.That(result.CommitSha, Is.EqualTo("abc1234"));
+    }
+
+    [Test]
+    public async Task GetSessionBranchInfoAsync_WithMultipleUncommittedChanges_HasUncommittedChangesTrue()
+    {
+        // Arrange
+        var clonePath = Path.Combine(_tempDir, "clone", "workdir");
+        Directory.CreateDirectory(clonePath);
+
+        // Mock branch name
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-parse --abbrev-ref HEAD", clonePath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "main" });
+
+        // Mock commit info
+        _mockRunner.Setup(r => r.RunAsync("git", "log -1 --format=%h|%s|%ci", clonePath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "ghi9012|Main commit|2024-03-18 15:00:00 +0000" });
+
+        // Mock ahead/behind
+        _mockRunner.Setup(r => r.RunAsync("git", "rev-list --left-right --count @{upstream}...HEAD", clonePath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "0\t0" });
+
+        // Mock status check - multiple changes
+        _mockRunner.Setup(r => r.RunAsync("git", "status --porcelain", clonePath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = "M  file1.txt\n?? file2.txt\nA  file3.txt" });
+
+        // Act
+        var result = await _service.GetSessionBranchInfoAsync(clonePath);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.HasUncommittedChanges, Is.True);
+    }
+
+    #endregion
+
     #region DeleteRemoteBranchAsync Tests
 
     [Test]

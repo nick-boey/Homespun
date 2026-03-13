@@ -1,3 +1,5 @@
+using Homespun.Shared.Models.Git;
+
 namespace Homespun.Features.Git;
 
 /// <summary>
@@ -194,4 +196,11 @@ public interface IGitCloneService
     /// <param name="repoPath">Path to the main repository</param>
     /// <returns>Path to the created clone's workdir, or null if failed</returns>
     Task<string?> CreateIssueModifyCloneAsync(string repoPath);
+
+    /// <summary>
+    /// Gets branch and commit information for a session's working directory.
+    /// </summary>
+    /// <param name="clonePath">Path to the clone/working directory</param>
+    /// <returns>Session branch info, or null if the path is not a valid git repository</returns>
+    Task<SessionBranchInfo?> GetSessionBranchInfoAsync(string clonePath);
 }
