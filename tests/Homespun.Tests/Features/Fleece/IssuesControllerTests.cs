@@ -710,6 +710,289 @@ public class IssuesControllerTests
 
     #endregion
 
+    #region Update Auto-Assign Tests
+
+    [Test]
+    public async Task Update_WhenIssueHasNoAssignee_AutoAssignsCurrentUser()
+    {
+        // Arrange
+        var issueId = "ABC123";
+        var currentUserEmail = "currentuser@example.com";
+        var currentIssue = new Issue
+        {
+            Id = issueId,
+            Title = "Original Issue",
+            Type = IssueType.Task,
+            Status = IssueStatus.Open,
+            AssignedTo = null, // No current assignee
+            LastUpdate = DateTimeOffset.UtcNow
+        };
+        var updatedIssue = new Issue
+        {
+            Id = issueId,
+            Title = "Updated Issue",
+            Type = IssueType.Task,
+            Status = IssueStatus.Open,
+            AssignedTo = currentUserEmail,
+            LastUpdate = DateTimeOffset.UtcNow
+        };
+
+        _projectServiceMock
+            .Setup(x => x.GetByIdAsync(TestProject.Id))
+            .ReturnsAsync(TestProject);
+        _dataStoreMock
+            .Setup(x => x.UserEmail)
+            .Returns(currentUserEmail);
+        _fleeceServiceMock
+            .Setup(x => x.GetIssueAsync(TestProject.LocalPath, issueId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(currentIssue);
+        _fleeceServiceMock
+            .Setup(x => x.UpdateIssueAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(),
+                It.IsAny<IssueStatus?>(), It.IsAny<IssueType?>(), It.IsAny<string?>(),
+                It.IsAny<int?>(), It.IsAny<ExecutionMode?>(), It.IsAny<string?>(),
+                It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(updatedIssue);
+
+        var request = new UpdateIssueRequest
+        {
+            ProjectId = TestProject.Id,
+            Title = "Updated Issue"
+            // AssignedTo is null (not provided)
+        };
+
+        // Act
+        await _controller.Update(issueId, request);
+
+        // Assert - verify that the current user email was auto-assigned
+        _fleeceServiceMock.Verify(
+            x => x.UpdateIssueAsync(
+                TestProject.LocalPath,
+                issueId,
+                request.Title,
+                request.Status,
+                request.Type,
+                request.Description,
+                request.Priority,
+                request.ExecutionMode,
+                request.WorkingBranchId,
+                currentUserEmail, // Should be auto-assigned
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Test]
+    public async Task Update_WhenIssueHasNoAssignee_AndNoCurrentUser_DoesNotAutoAssign()
+    {
+        // Arrange
+        var issueId = "ABC123";
+        var currentIssue = new Issue
+        {
+            Id = issueId,
+            Title = "Original Issue",
+            Type = IssueType.Task,
+            Status = IssueStatus.Open,
+            AssignedTo = null, // No current assignee
+            LastUpdate = DateTimeOffset.UtcNow
+        };
+        var updatedIssue = new Issue
+        {
+            Id = issueId,
+            Title = "Updated Issue",
+            Type = IssueType.Task,
+            Status = IssueStatus.Open,
+            AssignedTo = null,
+            LastUpdate = DateTimeOffset.UtcNow
+        };
+
+        _projectServiceMock
+            .Setup(x => x.GetByIdAsync(TestProject.Id))
+            .ReturnsAsync(TestProject);
+        _dataStoreMock
+            .Setup(x => x.UserEmail)
+            .Returns((string?)null); // No current user configured
+        _fleeceServiceMock
+            .Setup(x => x.GetIssueAsync(TestProject.LocalPath, issueId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(currentIssue);
+        _fleeceServiceMock
+            .Setup(x => x.UpdateIssueAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(),
+                It.IsAny<IssueStatus?>(), It.IsAny<IssueType?>(), It.IsAny<string?>(),
+                It.IsAny<int?>(), It.IsAny<ExecutionMode?>(), It.IsAny<string?>(),
+                It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(updatedIssue);
+
+        var request = new UpdateIssueRequest
+        {
+            ProjectId = TestProject.Id,
+            Title = "Updated Issue"
+            // AssignedTo is null (not provided)
+        };
+
+        // Act
+        await _controller.Update(issueId, request);
+
+        // Assert - verify that null was passed (no auto-assignment)
+        _fleeceServiceMock.Verify(
+            x => x.UpdateIssueAsync(
+                TestProject.LocalPath,
+                issueId,
+                request.Title,
+                request.Status,
+                request.Type,
+                request.Description,
+                request.Priority,
+                request.ExecutionMode,
+                request.WorkingBranchId,
+                (string?)null, // Should remain null
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Test]
+    public async Task Update_WhenIssueAlreadyHasAssignee_DoesNotOverwrite()
+    {
+        // Arrange
+        var issueId = "ABC123";
+        var existingAssignee = "existing@example.com";
+        var currentUserEmail = "currentuser@example.com";
+        var currentIssue = new Issue
+        {
+            Id = issueId,
+            Title = "Original Issue",
+            Type = IssueType.Task,
+            Status = IssueStatus.Open,
+            AssignedTo = existingAssignee, // Already has assignee
+            LastUpdate = DateTimeOffset.UtcNow
+        };
+        var updatedIssue = new Issue
+        {
+            Id = issueId,
+            Title = "Updated Issue",
+            Type = IssueType.Task,
+            Status = IssueStatus.Open,
+            AssignedTo = existingAssignee,
+            LastUpdate = DateTimeOffset.UtcNow
+        };
+
+        _projectServiceMock
+            .Setup(x => x.GetByIdAsync(TestProject.Id))
+            .ReturnsAsync(TestProject);
+        _dataStoreMock
+            .Setup(x => x.UserEmail)
+            .Returns(currentUserEmail);
+        _fleeceServiceMock
+            .Setup(x => x.GetIssueAsync(TestProject.LocalPath, issueId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(currentIssue);
+        _fleeceServiceMock
+            .Setup(x => x.UpdateIssueAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(),
+                It.IsAny<IssueStatus?>(), It.IsAny<IssueType?>(), It.IsAny<string?>(),
+                It.IsAny<int?>(), It.IsAny<ExecutionMode?>(), It.IsAny<string?>(),
+                It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(updatedIssue);
+
+        var request = new UpdateIssueRequest
+        {
+            ProjectId = TestProject.Id,
+            Title = "Updated Issue"
+            // AssignedTo is null (not provided - meaning "don't change")
+        };
+
+        // Act
+        await _controller.Update(issueId, request);
+
+        // Assert - verify that null was passed (not the current user)
+        // When request.AssignedTo is null and issue already has assignee,
+        // don't override with current user
+        _fleeceServiceMock.Verify(
+            x => x.UpdateIssueAsync(
+                TestProject.LocalPath,
+                issueId,
+                request.Title,
+                request.Status,
+                request.Type,
+                request.Description,
+                request.Priority,
+                request.ExecutionMode,
+                request.WorkingBranchId,
+                (string?)null, // Should be null to preserve existing assignee
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Test]
+    public async Task Update_WhenRequestExplicitlySetsAssignee_UsesRequestValue()
+    {
+        // Arrange
+        var issueId = "ABC123";
+        var requestAssignee = "requested@example.com";
+        var currentUserEmail = "currentuser@example.com";
+        var currentIssue = new Issue
+        {
+            Id = issueId,
+            Title = "Original Issue",
+            Type = IssueType.Task,
+            Status = IssueStatus.Open,
+            AssignedTo = null, // No current assignee
+            LastUpdate = DateTimeOffset.UtcNow
+        };
+        var updatedIssue = new Issue
+        {
+            Id = issueId,
+            Title = "Updated Issue",
+            Type = IssueType.Task,
+            Status = IssueStatus.Open,
+            AssignedTo = requestAssignee,
+            LastUpdate = DateTimeOffset.UtcNow
+        };
+
+        _projectServiceMock
+            .Setup(x => x.GetByIdAsync(TestProject.Id))
+            .ReturnsAsync(TestProject);
+        _dataStoreMock
+            .Setup(x => x.UserEmail)
+            .Returns(currentUserEmail);
+        _fleeceServiceMock
+            .Setup(x => x.GetIssueAsync(TestProject.LocalPath, issueId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(currentIssue);
+        _fleeceServiceMock
+            .Setup(x => x.UpdateIssueAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(),
+                It.IsAny<IssueStatus?>(), It.IsAny<IssueType?>(), It.IsAny<string?>(),
+                It.IsAny<int?>(), It.IsAny<ExecutionMode?>(), It.IsAny<string?>(),
+                It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(updatedIssue);
+
+        var request = new UpdateIssueRequest
+        {
+            ProjectId = TestProject.Id,
+            Title = "Updated Issue",
+            AssignedTo = requestAssignee // Explicitly set
+        };
+
+        // Act
+        await _controller.Update(issueId, request);
+
+        // Assert - verify that the request value was used, not auto-assigned
+        _fleeceServiceMock.Verify(
+            x => x.UpdateIssueAsync(
+                TestProject.LocalPath,
+                issueId,
+                request.Title,
+                request.Status,
+                request.Type,
+                request.Description,
+                request.Priority,
+                request.ExecutionMode,
+                request.WorkingBranchId,
+                requestAssignee, // Should use the request value
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    #endregion
+
     #region Update AssignedTo Tests
 
     [Test]
