@@ -126,7 +126,7 @@ describe('SessionManager Logging', () => {
 
       // Assert
       expect(info).toHaveBeenCalledWith(
-        expect.stringContaining('Session status changed: streaming → idle (sessionId: test-session-123, reason: stream_complete)')
+        expect.stringContaining('Session status changed: streaming → idle (sessionId: test-session-123, reason: query_completed)')
       );
     });
 

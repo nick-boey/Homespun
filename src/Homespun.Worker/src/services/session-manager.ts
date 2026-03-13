@@ -138,11 +138,14 @@ interface WorkerSession {
   mode: string;
   model: string;
   permissionMode: SdkPermissionMode;
-  status: 'idle' | 'streaming' | 'closed';
+  status: 'idle' | 'streaming' | 'closed' | 'error';
   createdAt: Date;
   lastActivityAt: Date;
   lastMessageType?: LastMessageType;
   lastMessageSubtype?: string;
+  resultReceived: boolean;
+  systemPrompt?: string;
+  workingDirectory?: string;
 }
 
 /**
@@ -260,7 +263,7 @@ export class SessionManager {
    * Helper method to log status changes with consistent format.
    * Updates the session status and logs the transition.
    */
-  private logStatusChange(session: WorkerSession, newStatus: 'idle' | 'streaming' | 'closed', reason: string): void {
+  private logStatusChange(session: WorkerSession, newStatus: WorkerSession['status'], reason: string): void {
     const previousStatus = session.status;
     session.status = newStatus;
     info(`Session status changed: ${previousStatus} → ${newStatus} (sessionId: ${session.id}, reason: ${reason})`);
@@ -346,6 +349,9 @@ export class SessionManager {
       status: 'idle', // Initialize as idle, will change to streaming below
       createdAt: new Date(),
       lastActivityAt: new Date(),
+      resultReceived: false,
+      systemPrompt: opts.systemPrompt,
+      workingDirectory: opts.workingDirectory,
     };
 
     this.sessions.set(id, workerSession);
@@ -371,69 +377,7 @@ export class SessionManager {
     }
 
     // Background task: forward SDK query messages to the output channel
-    (async () => {
-      try {
-        info(`Query processing started (sessionId: ${id})`);
-        let messageCount = 0;
-        for await (const msg of q) {
-          outputChannel.push(msg);
-          messageCount++;
-        }
-        const duration = Date.now() - startTime;
-        info(`Query processing completed (sessionId: ${id}, messageCount: ${messageCount}, duration: ${duration}ms)`);
-      } catch (err) {
-        const duration = Date.now() - startTime;
-        const errorDetails = {
-          message: err instanceof Error ? err.message : String(err),
-          stack: err instanceof Error ? err.stack : undefined,
-          type: err?.constructor?.name || 'Unknown',
-          sessionId: id,
-          sessionOptions: {
-            mode: opts.mode,
-            model: opts.model,
-            permissionMode: sessionOptions.permissionMode,
-            workingDirectory: sessionOptions.cwd,
-          },
-          timestamp: new Date().toISOString(),
-          duration,
-        };
-
-        error(`query forwarder error for session '${id}' - ${JSON.stringify(errorDetails)}`);
-
-        // Capture debug information
-        const debugInfo = await captureDebugInfo(this.sessions.size);
-
-        // Push a synthetic error result with enhanced debug information
-        outputChannel.push({
-          type: 'result',
-          subtype: 'error_during_execution',
-          session_id: id,
-          is_error: true,
-          duration_ms: duration,
-          duration_api_ms: 0,
-          num_turns: 0,
-          total_cost_usd: 0,
-          usage: { input_tokens: 0, output_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 },
-          result: errorDetails.message,
-          errors: [errorDetails.message],
-          debug: {
-            stack: errorDetails.stack,
-            errorType: errorDetails.type,
-            lastStderr: debugInfo.lastStderr.slice(-10), // Last 10 lines for the result
-            diagnostics: {
-              memory: debugInfo.diagnostics.memory,
-              uptime: debugInfo.diagnostics.uptime,
-              sessionCount: debugInfo.sessionCount,
-            },
-            sessionOptions: errorDetails.sessionOptions,
-          },
-        } as unknown as SDKMessage);
-      } finally {
-        outputChannel.complete();
-        // Cleanup debug log watcher
-        debugLogWatcher?.close();
-      }
-    })();
+    this.runQueryForwarder(workerSession, q, outputChannel, startTime, opts, sessionOptions, debugMonitor, debugLogPath, debugLogWatcher);
 
     return workerSession;
   }
@@ -540,6 +484,104 @@ export class SessionManager {
         updatedInput: input,
       };
     };
+  }
+
+  /**
+   * Runs the background query forwarder that reads SDK messages and pushes them
+   * to the output channel. Handles result detection and clean shutdown.
+   */
+  private runQueryForwarder(
+    session: WorkerSession,
+    q: Query,
+    outputChannel: OutputChannel,
+    startTime: number,
+    opts: { mode: string; model: string; systemPrompt?: string; workingDirectory?: string },
+    sessionOptions: Record<string, unknown>,
+    debugMonitor: FileMonitor,
+    debugLogPath: string,
+    debugLogWatcher: any,
+  ): void {
+    (async () => {
+      try {
+        info(`Query processing started (sessionId: ${session.id})`);
+        let messageCount = 0;
+        for await (const msg of q) {
+          outputChannel.push(msg);
+          messageCount++;
+
+          // Detect result message — close input so CLI can exit cleanly
+          if (msg.type === 'result') {
+            session.resultReceived = true;
+            session.inputController.close();
+            info(`Result received, input closed for clean CLI exit (sessionId: ${session.id})`);
+          }
+        }
+        const duration = Date.now() - startTime;
+        info(`Query processing completed (sessionId: ${session.id}, messageCount: ${messageCount}, duration: ${duration}ms)`);
+        this.logStatusChange(session, 'idle', 'query_completed');
+      } catch (err) {
+        const duration = Date.now() - startTime;
+        const errorMessage = err instanceof Error ? err.message : String(err);
+
+        if (session.resultReceived) {
+          // Error after a successful result — the CLI exited after producing output.
+          // This is expected behavior, not a real error.
+          info(`Post-result CLI exit (sessionId: ${session.id}, duration: ${duration}ms, error: ${errorMessage})`);
+          this.logStatusChange(session, 'idle', 'post_result_exit');
+        } else {
+          // Genuine error before any result was produced
+          const errorDetails = {
+            message: errorMessage,
+            stack: err instanceof Error ? err.stack : undefined,
+            type: err?.constructor?.name || 'Unknown',
+            sessionId: session.id,
+            sessionOptions: {
+              mode: opts.mode,
+              model: opts.model,
+              permissionMode: sessionOptions.permissionMode,
+              workingDirectory: sessionOptions.cwd,
+            },
+            timestamp: new Date().toISOString(),
+            duration,
+          };
+
+          error(`query forwarder error for session '${session.id}' - ${JSON.stringify(errorDetails)}`);
+          this.logStatusChange(session, 'error', 'query_error');
+
+          // Capture debug information
+          const debugInfo = await captureDebugInfo(this.sessions.size);
+
+          // Push a synthetic error result
+          outputChannel.push({
+            type: 'result',
+            subtype: 'error_during_execution',
+            session_id: session.id,
+            is_error: true,
+            duration_ms: duration,
+            duration_api_ms: 0,
+            num_turns: 0,
+            total_cost_usd: 0,
+            usage: { input_tokens: 0, output_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 },
+            result: errorDetails.message,
+            errors: [errorDetails.message],
+            debug: {
+              stack: errorDetails.stack,
+              errorType: errorDetails.type,
+              lastStderr: debugInfo.lastStderr.slice(-10),
+              diagnostics: {
+                memory: debugInfo.diagnostics.memory,
+                uptime: debugInfo.diagnostics.uptime,
+                sessionCount: debugInfo.sessionCount,
+              },
+              sessionOptions: errorDetails.sessionOptions,
+            },
+          } as unknown as SDKMessage);
+        }
+      } finally {
+        outputChannel.complete();
+        debugLogWatcher?.close();
+      }
+    })();
   }
 
   /**
@@ -704,7 +746,92 @@ export class SessionManager {
     }
 
     ws.lastActivityAt = new Date();
-    ws.inputController.send(message);
+
+    if (ws.resultReceived) {
+      // Previous CLI process exited after producing a result.
+      // Start a new query() with resume to continue the conversation.
+      info(`send() - previous query completed, starting new query with resume (sessionId='${sessionId}', conversationId='${ws.conversationId}')`);
+
+      if (!ws.conversationId) {
+        throw new Error(`Cannot resume session ${sessionId}: no conversationId available`);
+      }
+
+      const isPlan = ws.mode.toLowerCase() === 'plan';
+      const common = buildCommonOptions(ws.model, ws.systemPrompt, ws.workingDirectory);
+      const canUseTool = this.createCanUseToolCallback(sessionId);
+
+      const newSessionOptions: Record<string, unknown> = {
+        ...common,
+        canUseTool,
+        resume: ws.conversationId,
+      };
+
+      if (isPlan) {
+        newSessionOptions.permissionMode = 'plan';
+        newSessionOptions.allowedTools = PLAN_MODE_TOOLS;
+      } else {
+        newSessionOptions.permissionMode = 'bypassPermissions';
+        newSessionOptions.allowDangerouslySkipPermissions = true;
+      }
+
+      const newInputController = new InputController();
+      const newOutputChannel = new OutputChannel();
+
+      // Create input stream that yields the new message then waits for more
+      async function* createResumeInputStream(initialMessage: string, controller: InputController): AsyncGenerator<SDKUserMessage> {
+        yield {
+          type: 'user',
+          session_id: '',
+          message: {
+            role: 'user',
+            content: [{ type: 'text', text: initialMessage }],
+          },
+          parent_tool_use_id: null,
+        };
+        for await (const msg of controller) {
+          yield msg;
+        }
+      }
+
+      const newQuery = query({
+        prompt: createResumeInputStream(message, newInputController),
+        options: newSessionOptions as Parameters<typeof query>[0]['options'],
+      });
+
+      // Update session state
+      ws.query = newQuery;
+      ws.inputController = newInputController;
+      ws.outputChannel = newOutputChannel;
+      ws.resultReceived = false;
+
+      this.logStatusChange(ws, 'streaming', 'resumed_with_new_query');
+
+      // Start new forwarder
+      const startTime = Date.now();
+      const debugLogPath = '/home/homespun/.claude/debug/claude_sdk_debug.log';
+      const debugMonitor = new FileMonitor(debugLogPath);
+      let debugLogWatcher: any;
+      if (existsSync(debugLogPath)) {
+        debugLogWatcher = watch(debugLogPath, { persistent: false }, async (eventType) => {
+          if (eventType === 'change') {
+            const newLines = await debugMonitor.readNewLines();
+            newLines.forEach(line => {
+              info(`[SDK Debug] ${line} (sessionId: ${sessionId})`);
+            });
+          }
+        });
+      }
+
+      this.runQueryForwarder(
+        ws, newQuery, newOutputChannel, startTime,
+        { mode: ws.mode, model: ws.model, systemPrompt: ws.systemPrompt, workingDirectory: ws.workingDirectory },
+        newSessionOptions, debugMonitor, debugLogPath, debugLogWatcher,
+      );
+    } else {
+      // CLI process still running — send via input controller
+      ws.inputController.send(message);
+    }
+
     this.logStatusChange(ws, 'streaming', 'message_sent');
 
     return ws;
@@ -756,7 +883,10 @@ export class SessionManager {
         yield event;
       }
     } finally {
-      this.logStatusChange(ws, 'idle', 'stream_complete');
+      // Don't overwrite error status — it indicates a genuine failure
+      if (ws.status !== 'error') {
+        this.logStatusChange(ws, 'idle', 'stream_complete');
+      }
     }
   }
 
