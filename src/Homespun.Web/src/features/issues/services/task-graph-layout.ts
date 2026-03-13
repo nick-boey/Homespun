@@ -44,6 +44,7 @@ export interface TaskGraphIssueRenderLine {
   hasDescription: boolean
   linkedPr: TaskGraphLinkedPr | null
   agentStatus: AgentStatusData | null
+  assignedTo: string | null
   drawLane0Connector: boolean
   isLastLane0Connector: boolean
   drawLane0PassThrough: boolean
@@ -626,6 +627,7 @@ function renderGroup(
       hasDescription: !!(node.issue.description && node.issue.description.trim()),
       linkedPr,
       agentStatus,
+      assignedTo: node.issue.assignedTo ?? null,
       drawLane0Connector: false,
       isLastLane0Connector: false,
       drawLane0PassThrough: false,

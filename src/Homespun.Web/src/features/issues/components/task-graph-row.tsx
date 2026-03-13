@@ -24,6 +24,17 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { Badge } from '@/components/ui/badge'
+
+/**
+ * Extracts the username portion from an email address.
+ * Returns the part before the '@' symbol, or the full string if no '@' is present.
+ */
+function getDisplayName(email: string | null | undefined): string | null {
+  if (!email) return null
+  const atIndex = email.indexOf('@')
+  return atIndex > 0 ? email.substring(0, atIndex) : email
+}
 
 interface TaskGraphIssueRowProps extends HTMLAttributes<HTMLDivElement> {
   line: TaskGraphIssueRenderLine
@@ -186,6 +197,13 @@ export const TaskGraphIssueRow = memo(
 
           {/* Title - no truncation to allow full horizontal scroll */}
           <span className="text-sm whitespace-nowrap">{line.title || 'Untitled'}</span>
+
+          {/* Assignee badge */}
+          {line.assignedTo && (
+            <Badge variant="outline" className="shrink-0 text-[10px]">
+              {getDisplayName(line.assignedTo)}
+            </Badge>
+          )}
 
           {/* Spacer */}
           <div className="flex-1" />

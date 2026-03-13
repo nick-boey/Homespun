@@ -36,6 +36,7 @@ describe('TaskGraphNodeSvg', () => {
     marker: TaskGraphMarkerType.Open,
     linkedPr: null,
     agentStatus: null,
+    assignedTo: null,
     ...overrides,
   })
 

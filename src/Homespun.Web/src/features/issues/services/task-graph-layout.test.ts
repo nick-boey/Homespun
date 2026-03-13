@@ -59,6 +59,7 @@ describe('computeLayout', () => {
         hasDescription: false,
         linkedPr: null,
         agentStatus: null,
+        assignedTo: null,
         drawLane0Connector: false,
         isLastLane0Connector: false,
         drawLane0PassThrough: false,
@@ -497,6 +498,40 @@ describe('computeLayout', () => {
     })
   })
 
+  describe('assignedTo field', () => {
+    it('includes assignedTo when issue has assignee', () => {
+      const issue = createIssue({ id: 'abc123', assignedTo: 'user@example.com' })
+      const taskGraph: TaskGraphResponse = {
+        nodes: [createNode(issue, 0, 0)],
+        mergedPrs: [],
+        hasMorePastPrs: false,
+        agentStatuses: {},
+        linkedPrs: {},
+      }
+
+      const result = computeLayout(taskGraph)
+      const line = result[0] as TaskGraphIssueRenderLine
+
+      expect(line.assignedTo).toBe('user@example.com')
+    })
+
+    it('sets assignedTo to null when issue has no assignee', () => {
+      const issue = createIssue({ id: 'abc123' })
+      const taskGraph: TaskGraphResponse = {
+        nodes: [createNode(issue, 0, 0)],
+        mergedPrs: [],
+        hasMorePastPrs: false,
+        agentStatuses: {},
+        linkedPrs: {},
+      }
+
+      const result = computeLayout(taskGraph)
+      const line = result[0] as TaskGraphIssueRenderLine
+
+      expect(line.assignedTo).toBeNull()
+    })
+  })
+
   describe('isSeriesChild flag computation', () => {
     it('sets isSeriesChild=true when parent has executionMode=0 (Series)', () => {
       const parent = createIssue({ id: 'parent', executionMode: 0 }) // Series
@@ -658,6 +693,67 @@ describe('computeLayout', () => {
 
       // Branch name should be generated from type and workingBranchId
       expect(line.branchName).toBe('task/my-branch+abc123')
+    })
+  })
+
+  describe('assignedTo field passthrough', () => {
+    it('includes assignedTo when issue has an assigned user', () => {
+      const issue = createIssue({
+        id: 'abc123',
+        title: 'Test Issue',
+        assignedTo: 'user@example.com',
+      })
+      const taskGraph: TaskGraphResponse = {
+        nodes: [createNode(issue, 0, 0)],
+        mergedPrs: [],
+        hasMorePastPrs: false,
+        agentStatuses: {},
+        linkedPrs: {},
+      }
+
+      const result = computeLayout(taskGraph)
+      const line = result[0] as TaskGraphIssueRenderLine
+
+      expect(line.assignedTo).toBe('user@example.com')
+    })
+
+    it('sets assignedTo to null when issue has no assigned user', () => {
+      const issue = createIssue({
+        id: 'abc123',
+        title: 'Test Issue',
+      })
+      const taskGraph: TaskGraphResponse = {
+        nodes: [createNode(issue, 0, 0)],
+        mergedPrs: [],
+        hasMorePastPrs: false,
+        agentStatuses: {},
+        linkedPrs: {},
+      }
+
+      const result = computeLayout(taskGraph)
+      const line = result[0] as TaskGraphIssueRenderLine
+
+      expect(line.assignedTo).toBeNull()
+    })
+
+    it('sets assignedTo to null when assignedTo is undefined', () => {
+      const issue = createIssue({
+        id: 'abc123',
+        title: 'Test Issue',
+        assignedTo: undefined,
+      })
+      const taskGraph: TaskGraphResponse = {
+        nodes: [createNode(issue, 0, 0)],
+        mergedPrs: [],
+        hasMorePastPrs: false,
+        agentStatuses: {},
+        linkedPrs: {},
+      }
+
+      const result = computeLayout(taskGraph)
+      const line = result[0] as TaskGraphIssueRenderLine
+
+      expect(line.assignedTo).toBeNull()
     })
   })
 })

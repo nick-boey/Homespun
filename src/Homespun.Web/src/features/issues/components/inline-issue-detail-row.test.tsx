@@ -28,6 +28,7 @@ function createRenderLine(
     hasDescription: true,
     linkedPr: null,
     agentStatus: null,
+    assignedTo: null,
     drawLane0Connector: false,
     isLastLane0Connector: false,
     drawLane0PassThrough: false,
