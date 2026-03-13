@@ -221,6 +221,9 @@ import type {
   PostApiOrchestrationGenerateBranchIdData,
   PostApiOrchestrationGenerateBranchIdErrors,
   PostApiOrchestrationGenerateBranchIdResponses,
+  PostApiProjectsByProjectIdFullRefreshData,
+  PostApiProjectsByProjectIdFullRefreshErrors,
+  PostApiProjectsByProjectIdFullRefreshResponses,
   PostApiProjectsByProjectIdIssuesHistoryRedoData,
   PostApiProjectsByProjectIdIssuesHistoryRedoErrors,
   PostApiProjectsByProjectIdIssuesHistoryRedoResponses,
@@ -1174,6 +1177,16 @@ export class PullRequests {
       PostApiProjectsByProjectIdSyncErrors,
       ThrowOnError
     >({ url: '/api/projects/{projectId}/sync', ...options })
+  }
+
+  public static postApiProjectsByProjectIdFullRefresh<ThrowOnError extends boolean = false>(
+    options: Options<PostApiProjectsByProjectIdFullRefreshData, ThrowOnError>
+  ) {
+    return (options.client ?? client).post<
+      PostApiProjectsByProjectIdFullRefreshResponses,
+      PostApiProjectsByProjectIdFullRefreshErrors,
+      ThrowOnError
+    >({ url: '/api/projects/{projectId}/full-refresh', ...options })
   }
 
   public static getApiProjectsByProjectIdPullRequestsOpen<ThrowOnError extends boolean = false>(

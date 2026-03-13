@@ -11,3 +11,5 @@ export {
 } from './use-merged-pull-requests'
 
 export { useSyncPullRequests, type UseSyncPullRequestsResult } from './use-sync-pull-requests'
+
+export { useFullRefresh, type UseFullRefreshResult } from './use-full-refresh'

@@ -341,6 +341,14 @@ export type FleecePullResult = {
   nonFleeceChangedFiles?: Array<string> | null
 }
 
+export type FullRefreshResult = {
+  openPrs?: number
+  closedPrs?: number
+  linkedIssues?: number
+  refreshedAt?: string
+  errors?: Array<string> | null
+}
+
 export type GenerateBranchIdRequest = {
   title?: string | null
 }
@@ -2911,6 +2919,35 @@ export type PostApiProjectsByProjectIdSyncResponses = {
 
 export type PostApiProjectsByProjectIdSyncResponse =
   PostApiProjectsByProjectIdSyncResponses[keyof PostApiProjectsByProjectIdSyncResponses]
+
+export type PostApiProjectsByProjectIdFullRefreshData = {
+  body?: never
+  path: {
+    projectId: string
+  }
+  query?: never
+  url: '/api/projects/{projectId}/full-refresh'
+}
+
+export type PostApiProjectsByProjectIdFullRefreshErrors = {
+  /**
+   * Not Found
+   */
+  404: ProblemDetails
+}
+
+export type PostApiProjectsByProjectIdFullRefreshError =
+  PostApiProjectsByProjectIdFullRefreshErrors[keyof PostApiProjectsByProjectIdFullRefreshErrors]
+
+export type PostApiProjectsByProjectIdFullRefreshResponses = {
+  /**
+   * OK
+   */
+  200: FullRefreshResult
+}
+
+export type PostApiProjectsByProjectIdFullRefreshResponse =
+  PostApiProjectsByProjectIdFullRefreshResponses[keyof PostApiProjectsByProjectIdFullRefreshResponses]
 
 export type GetApiProjectsByProjectIdPullRequestsOpenData = {
   body?: never
