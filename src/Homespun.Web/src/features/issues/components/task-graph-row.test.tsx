@@ -68,6 +68,7 @@ describe('TaskGraphIssueRow', () => {
     hasDescription: true,
     linkedPr: null,
     agentStatus: null,
+    assignedTo: null,
     drawLane0Connector: false,
     isLastLane0Connector: false,
     drawLane0PassThrough: false,
@@ -264,5 +265,48 @@ describe('TaskGraphIssueRow', () => {
     render(<TaskGraphIssueRow {...defaultProps} />)
 
     expect(mockUseLinkedPrStatus).toHaveBeenCalledWith('proj-123', undefined, true)
+  })
+
+  describe('assignee badge', () => {
+    it('does not show badge when assignedTo is null', () => {
+      vi.spyOn(prStatusHook, 'useLinkedPrStatus').mockReturnValue(
+        createMockQueryResult<IssuePullRequestStatus | null>(null)
+      )
+
+      render(<TaskGraphIssueRow {...defaultProps} />)
+
+      expect(screen.queryByText('user')).not.toBeInTheDocument()
+    })
+
+    it('shows username portion of email in badge when assignedTo has email', () => {
+      vi.spyOn(prStatusHook, 'useLinkedPrStatus').mockReturnValue(
+        createMockQueryResult<IssuePullRequestStatus | null>(null)
+      )
+
+      const lineWithAssignee = {
+        ...mockLine,
+        assignedTo: 'testuser@example.com',
+      }
+
+      render(<TaskGraphIssueRow {...defaultProps} line={lineWithAssignee} />)
+
+      expect(screen.getByText('testuser')).toBeInTheDocument()
+      expect(screen.queryByText('testuser@example.com')).not.toBeInTheDocument()
+    })
+
+    it('shows full value when assignedTo has no @ symbol', () => {
+      vi.spyOn(prStatusHook, 'useLinkedPrStatus').mockReturnValue(
+        createMockQueryResult<IssuePullRequestStatus | null>(null)
+      )
+
+      const lineWithAssignee = {
+        ...mockLine,
+        assignedTo: 'plainusername',
+      }
+
+      render(<TaskGraphIssueRow {...defaultProps} line={lineWithAssignee} />)
+
+      expect(screen.getByText('plainusername')).toBeInTheDocument()
+    })
   })
 })
