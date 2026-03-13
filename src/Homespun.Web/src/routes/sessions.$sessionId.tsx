@@ -18,10 +18,19 @@ import {
   useSessionSettings,
   useChangeSessionSettings,
   SessionInfoPanel,
+  useSessionNavigation,
 } from '@/features/sessions'
 import { useAnswerQuestion } from '@/features/questions'
 import { useClaudeCodeHub } from '@/providers/signalr-provider'
-import { ArrowLeft, AlertCircle, RefreshCw, StopCircle, PanelRight } from 'lucide-react'
+import {
+  ArrowLeft,
+  AlertCircle,
+  RefreshCw,
+  StopCircle,
+  PanelRight,
+  ChevronLeft,
+  ChevronRight,
+} from 'lucide-react'
 import { ScrollToBottom } from '@/components/ui/scroll-to-bottom'
 import { useMobile } from '@/hooks/use-mobile'
 import { cn } from '@/lib/utils'
@@ -368,6 +377,9 @@ function SessionHeader({
   const showStopButton =
     session && session.status !== 'Stopped' && session.status !== 'Error' && onStop
 
+  // Session navigation
+  const { previousSessionId, nextSessionId, hasPrevious, hasNext } = useSessionNavigation(sessionId)
+
   return (
     <div className="flex items-center justify-between gap-2">
       <div className="flex min-w-0 items-center gap-2 md:gap-4">
@@ -377,6 +389,55 @@ function SessionHeader({
             <ArrowLeft className="h-5 w-5" />
           </Link>
         </Button>
+        {/* Session navigation buttons */}
+        <div className="flex shrink-0 items-center">
+          {hasPrevious ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              asChild
+              className="h-10 w-10"
+              aria-label="Go to previous session"
+            >
+              <Link to="/sessions/$sessionId" params={{ sessionId: previousSessionId! }}>
+                <ChevronLeft className="h-5 w-5" />
+              </Link>
+            </Button>
+          ) : (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-10 w-10"
+              disabled
+              aria-label="No previous session"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </Button>
+          )}
+          {hasNext ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              asChild
+              className="h-10 w-10"
+              aria-label="Go to next session"
+            >
+              <Link to="/sessions/$sessionId" params={{ sessionId: nextSessionId! }}>
+                <ChevronRight className="h-5 w-5" />
+              </Link>
+            </Button>
+          ) : (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-10 w-10"
+              disabled
+              aria-label="No next session"
+            >
+              <ChevronRight className="h-5 w-5" />
+            </Button>
+          )}
+        </div>
         <div className="min-w-0">
           <h1 className="truncate text-lg font-semibold md:text-2xl">
             {entityTitle || `Session ${sessionId.slice(0, 8)}...`}

@@ -16,9 +16,26 @@ vi.mock('@tanstack/react-router', () => ({
     })
   }),
   useParams: () => ({ sessionId: 'test-session-id' }),
-  Link: ({ children, to }: { children: React.ReactNode; to: string }) => (
-    <a href={to}>{children}</a>
-  ),
+  Link: ({
+    children,
+    to,
+    params,
+    ...rest
+  }: {
+    children: React.ReactNode
+    to: string
+    params?: { sessionId: string }
+    [key: string]: unknown
+  }) => {
+    // Handle parameterized routes
+    const href = params?.sessionId ? to.replace('$sessionId', params.sessionId) : to
+    // Pass through other props like aria-label, className, etc.
+    return (
+      <a href={href} {...rest}>
+        {children}
+      </a>
+    )
+  },
 }))
 
 vi.mock('@/api', () => ({
@@ -68,6 +85,13 @@ vi.mock('@/features/sessions', () => ({
     error: null,
   })),
   SessionInfoPanel: vi.fn(() => null),
+  useSessionNavigation: vi.fn(() => ({
+    previousSessionId: null,
+    nextSessionId: null,
+    hasPrevious: false,
+    hasNext: false,
+    isLoading: false,
+  })),
 }))
 
 vi.mock('@/features/questions', () => ({
@@ -829,5 +853,166 @@ describe('SessionChat - Stop Button Functionality', () => {
 
     const stopButton = await screen.findByRole('button', { name: /stop/i })
     expect(stopButton).toBeInTheDocument()
+  })
+})
+
+describe('SessionChat - Session Navigation', () => {
+  const mockSession = {
+    id: 'test-session-id',
+    entityId: 'issue-123',
+    projectId: 'project-123',
+    workingDirectory: '/test/dir',
+    model: 'claude-3-5-sonnet',
+    mode: 'Build' as const,
+    status: 'WaitingForInput' as const,
+    createdAt: '2024-01-01T00:00:00Z',
+    lastActivityAt: '2024-01-01T00:00:00Z',
+    messages: [],
+    totalCostUsd: 0,
+    totalDurationMs: 0,
+    hasPendingPlanApproval: false,
+    contextClearMarkers: [],
+  }
+
+  beforeEach(async () => {
+    vi.clearAllMocks()
+
+    const { useSession, useEntityInfo, useSessionNavigation } = vi.mocked(
+      await import('@/features/sessions')
+    )
+    useSession.mockReturnValue({
+      session: mockSession,
+      isLoading: false,
+      isNotFound: false,
+      error: undefined,
+      refetch: vi.fn(),
+    })
+    ;(useEntityInfo as Mock).mockReturnValue({
+      data: { type: 'issue', title: 'Test Issue', id: 'issue-123' },
+      isLoading: false,
+      error: null,
+    })
+    ;(useSessionNavigation as Mock).mockReturnValue({
+      previousSessionId: null,
+      nextSessionId: null,
+      hasPrevious: false,
+      hasNext: false,
+      isLoading: false,
+    })
+  })
+
+  it('should render previous and next navigation buttons', async () => {
+    render(<SessionChat />)
+
+    const prevButton = await screen.findByRole('button', { name: /previous session/i })
+    const nextButton = await screen.findByRole('button', { name: /next session/i })
+
+    expect(prevButton).toBeInTheDocument()
+    expect(nextButton).toBeInTheDocument()
+  })
+
+  it('should disable previous button when no previous session exists', async () => {
+    const { useSessionNavigation } = vi.mocked(await import('@/features/sessions'))
+    ;(useSessionNavigation as Mock).mockReturnValue({
+      previousSessionId: null,
+      nextSessionId: 'session-next',
+      hasPrevious: false,
+      hasNext: true,
+      isLoading: false,
+    })
+
+    render(<SessionChat />)
+
+    const prevButton = await screen.findByRole('button', { name: /no previous session/i })
+    expect(prevButton).toBeDisabled()
+  })
+
+  it('should disable next button when no next session exists', async () => {
+    const { useSessionNavigation } = vi.mocked(await import('@/features/sessions'))
+    ;(useSessionNavigation as Mock).mockReturnValue({
+      previousSessionId: 'session-prev',
+      nextSessionId: null,
+      hasPrevious: true,
+      hasNext: false,
+      isLoading: false,
+    })
+
+    render(<SessionChat />)
+
+    const nextButton = await screen.findByRole('button', { name: /no next session/i })
+    expect(nextButton).toBeDisabled()
+  })
+
+  it('should link to correct previous session when available', async () => {
+    const { useSessionNavigation } = vi.mocked(await import('@/features/sessions'))
+    ;(useSessionNavigation as Mock).mockReturnValue({
+      previousSessionId: 'session-prev-123',
+      nextSessionId: null,
+      hasPrevious: true,
+      hasNext: false,
+      isLoading: false,
+    })
+
+    render(<SessionChat />)
+
+    // When hasPrevious is true, it renders as a link using asChild
+    const prevLink = await screen.findByLabelText(/go to previous session/i)
+    expect(prevLink).toHaveAttribute('href', '/sessions/session-prev-123')
+  })
+
+  it('should link to correct next session when available', async () => {
+    const { useSessionNavigation } = vi.mocked(await import('@/features/sessions'))
+    ;(useSessionNavigation as Mock).mockReturnValue({
+      previousSessionId: null,
+      nextSessionId: 'session-next-456',
+      hasPrevious: false,
+      hasNext: true,
+      isLoading: false,
+    })
+
+    render(<SessionChat />)
+
+    // When hasNext is true, it renders as a link using asChild
+    const nextLink = await screen.findByLabelText(/go to next session/i)
+    expect(nextLink).toHaveAttribute('href', '/sessions/session-next-456')
+  })
+
+  it('should disable both buttons when no navigation targets exist', async () => {
+    const { useSessionNavigation } = vi.mocked(await import('@/features/sessions'))
+    ;(useSessionNavigation as Mock).mockReturnValue({
+      previousSessionId: null,
+      nextSessionId: null,
+      hasPrevious: false,
+      hasNext: false,
+      isLoading: false,
+    })
+
+    render(<SessionChat />)
+
+    const prevButton = await screen.findByRole('button', { name: /no previous session/i })
+    const nextButton = await screen.findByRole('button', { name: /no next session/i })
+
+    expect(prevButton).toBeDisabled()
+    expect(nextButton).toBeDisabled()
+  })
+
+  it('should enable both buttons when both navigation targets exist', async () => {
+    const { useSessionNavigation } = vi.mocked(await import('@/features/sessions'))
+    ;(useSessionNavigation as Mock).mockReturnValue({
+      previousSessionId: 'session-prev',
+      nextSessionId: 'session-next',
+      hasPrevious: true,
+      hasNext: true,
+      isLoading: false,
+    })
+
+    render(<SessionChat />)
+
+    // When navigation targets exist, they render as links using asChild
+    const prevLink = await screen.findByLabelText(/go to previous session/i)
+    const nextLink = await screen.findByLabelText(/go to next session/i)
+
+    expect(prevLink).toHaveAttribute('href', '/sessions/session-prev')
+    expect(nextLink).toHaveAttribute('href', '/sessions/session-next')
   })
 })
