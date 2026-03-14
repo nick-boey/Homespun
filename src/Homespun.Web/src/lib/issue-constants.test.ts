@@ -16,25 +16,27 @@ describe('Issue Status Constants', () => {
   describe('ISSUE_STATUS', () => {
     it('should have correct enum values matching C# Fleece.Core.Models.IssueStatus', () => {
       // These values MUST match the C# enum to ensure React displays match Blazor
-      expect(ISSUE_STATUS.Open).toBe(0)
-      expect(ISSUE_STATUS.Progress).toBe(1)
-      expect(ISSUE_STATUS.Review).toBe(2)
-      expect(ISSUE_STATUS.Complete).toBe(3)
-      expect(ISSUE_STATUS.Archived).toBe(4)
-      expect(ISSUE_STATUS.Closed).toBe(5)
-      expect(ISSUE_STATUS.Deleted).toBe(6)
+      expect(ISSUE_STATUS.Draft).toBe(0)
+      expect(ISSUE_STATUS.Open).toBe(1)
+      expect(ISSUE_STATUS.Progress).toBe(2)
+      expect(ISSUE_STATUS.Review).toBe(3)
+      expect(ISSUE_STATUS.Complete).toBe(4)
+      expect(ISSUE_STATUS.Archived).toBe(5)
+      expect(ISSUE_STATUS.Closed).toBe(6)
+      expect(ISSUE_STATUS.Deleted).toBe(7)
     })
   })
 
   describe('ISSUE_STATUS_LABELS', () => {
     it('should have labels for all status values', () => {
-      expect(ISSUE_STATUS_LABELS[0]).toBe('Open')
-      expect(ISSUE_STATUS_LABELS[1]).toBe('In Progress')
-      expect(ISSUE_STATUS_LABELS[2]).toBe('Review')
-      expect(ISSUE_STATUS_LABELS[3]).toBe('Complete')
-      expect(ISSUE_STATUS_LABELS[4]).toBe('Archived')
-      expect(ISSUE_STATUS_LABELS[5]).toBe('Closed')
-      expect(ISSUE_STATUS_LABELS[6]).toBe('Deleted')
+      expect(ISSUE_STATUS_LABELS[0]).toBe('Draft')
+      expect(ISSUE_STATUS_LABELS[1]).toBe('Open')
+      expect(ISSUE_STATUS_LABELS[2]).toBe('In Progress')
+      expect(ISSUE_STATUS_LABELS[3]).toBe('Review')
+      expect(ISSUE_STATUS_LABELS[4]).toBe('Complete')
+      expect(ISSUE_STATUS_LABELS[5]).toBe('Archived')
+      expect(ISSUE_STATUS_LABELS[6]).toBe('Closed')
+      expect(ISSUE_STATUS_LABELS[7]).toBe('Deleted')
     })
 
     it('should have labels for all defined statuses', () => {
@@ -56,34 +58,38 @@ describe('Issue Status Constants', () => {
 
   describe('ISSUE_STATUS_OPTIONS', () => {
     it('should have correct value-label pairs', () => {
-      const openOption = ISSUE_STATUS_OPTIONS.find((o) => o.value === '0')
+      const draftOption = ISSUE_STATUS_OPTIONS.find((o) => o.value === '0')
+      expect(draftOption?.label).toBe('Draft')
+
+      const openOption = ISSUE_STATUS_OPTIONS.find((o) => o.value === '1')
       expect(openOption?.label).toBe('Open')
 
-      const progressOption = ISSUE_STATUS_OPTIONS.find((o) => o.value === '1')
+      const progressOption = ISSUE_STATUS_OPTIONS.find((o) => o.value === '2')
       expect(progressOption?.label).toBe('In Progress')
 
-      const reviewOption = ISSUE_STATUS_OPTIONS.find((o) => o.value === '2')
+      const reviewOption = ISSUE_STATUS_OPTIONS.find((o) => o.value === '3')
       expect(reviewOption?.label).toBe('Review')
 
-      const completeOption = ISSUE_STATUS_OPTIONS.find((o) => o.value === '3')
+      const completeOption = ISSUE_STATUS_OPTIONS.find((o) => o.value === '4')
       expect(completeOption?.label).toBe('Complete')
     })
 
     it('should not include Deleted status in dropdown options', () => {
-      const deletedOption = ISSUE_STATUS_OPTIONS.find((o) => o.value === '6')
+      const deletedOption = ISSUE_STATUS_OPTIONS.find((o) => o.value === '7')
       expect(deletedOption).toBeUndefined()
     })
   })
 
   describe('getStatusLabel', () => {
     it('should return correct labels for valid statuses', () => {
-      expect(getStatusLabel(0)).toBe('Open')
-      expect(getStatusLabel(1)).toBe('In Progress')
-      expect(getStatusLabel(2)).toBe('Review')
-      expect(getStatusLabel(3)).toBe('Complete')
-      expect(getStatusLabel(4)).toBe('Archived')
-      expect(getStatusLabel(5)).toBe('Closed')
-      expect(getStatusLabel(6)).toBe('Deleted')
+      expect(getStatusLabel(0)).toBe('Draft')
+      expect(getStatusLabel(1)).toBe('Open')
+      expect(getStatusLabel(2)).toBe('In Progress')
+      expect(getStatusLabel(3)).toBe('Review')
+      expect(getStatusLabel(4)).toBe('Complete')
+      expect(getStatusLabel(5)).toBe('Archived')
+      expect(getStatusLabel(6)).toBe('Closed')
+      expect(getStatusLabel(7)).toBe('Deleted')
     })
 
     it('should return Unknown for undefined or null', () => {
@@ -99,16 +105,17 @@ describe('Issue Status Constants', () => {
 
   describe('getStatusColorClass', () => {
     it('should return color classes for valid statuses', () => {
-      expect(getStatusColorClass(0)).toContain('blue')
-      expect(getStatusColorClass(1)).toContain('yellow')
-      expect(getStatusColorClass(2)).toContain('purple')
-      expect(getStatusColorClass(3)).toContain('green')
+      expect(getStatusColorClass(0)).toContain('gray') // Draft
+      expect(getStatusColorClass(1)).toContain('blue') // Open
+      expect(getStatusColorClass(2)).toContain('yellow') // Progress
+      expect(getStatusColorClass(3)).toContain('purple') // Review
+      expect(getStatusColorClass(4)).toContain('green') // Complete
     })
 
     it('should return default color for undefined or null', () => {
       const defaultColor = getStatusColorClass(undefined)
-      expect(defaultColor).toBe(ISSUE_STATUS_COLORS[0])
-      expect(getStatusColorClass(null)).toBe(ISSUE_STATUS_COLORS[0])
+      expect(defaultColor).toBe(ISSUE_STATUS_COLORS[ISSUE_STATUS.Draft])
+      expect(getStatusColorClass(null)).toBe(ISSUE_STATUS_COLORS[ISSUE_STATUS.Draft])
     })
   })
 })
