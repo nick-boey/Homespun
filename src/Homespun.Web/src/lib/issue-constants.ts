@@ -3,7 +3,7 @@
  *
  * These values must match the C# enum definitions in Fleece.Core.Models:
  *
- * IssueStatus: Open=0, Progress=1, Review=2, Complete=3, Archived=4, Closed=5, Deleted=6
+ * IssueStatus: Draft=0, Open=1, Progress=2, Review=3, Complete=4, Archived=5, Closed=6, Deleted=7
  * IssueType: Task=0, Bug=1, Chore=2, Feature=3, Idea=4, Verify=5
  */
 
@@ -11,13 +11,14 @@
  * Issue status enum values matching Fleece.Core.Models.IssueStatus
  */
 export const ISSUE_STATUS = {
-  Open: 0,
-  Progress: 1,
-  Review: 2,
-  Complete: 3,
-  Archived: 4,
-  Closed: 5,
-  Deleted: 6,
+  Draft: 0,
+  Open: 1,
+  Progress: 2,
+  Review: 3,
+  Complete: 4,
+  Archived: 5,
+  Closed: 6,
+  Deleted: 7,
 } as const
 
 export type IssueStatusValue = (typeof ISSUE_STATUS)[keyof typeof ISSUE_STATUS]
@@ -26,6 +27,7 @@ export type IssueStatusValue = (typeof ISSUE_STATUS)[keyof typeof ISSUE_STATUS]
  * Issue status display labels
  */
 export const ISSUE_STATUS_LABELS: Record<number, string> = {
+  [ISSUE_STATUS.Draft]: 'Draft',
   [ISSUE_STATUS.Open]: 'Open',
   [ISSUE_STATUS.Progress]: 'In Progress',
   [ISSUE_STATUS.Review]: 'Review',
@@ -39,6 +41,7 @@ export const ISSUE_STATUS_LABELS: Record<number, string> = {
  * Issue status color classes for badges
  */
 export const ISSUE_STATUS_COLORS: Record<number, string> = {
+  [ISSUE_STATUS.Draft]: 'bg-gray-500/20 text-gray-700 dark:text-gray-400',
   [ISSUE_STATUS.Open]: 'bg-blue-500/20 text-blue-700 dark:text-blue-400',
   [ISSUE_STATUS.Progress]: 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400',
   [ISSUE_STATUS.Review]: 'bg-purple-500/20 text-purple-700 dark:text-purple-400',
@@ -53,6 +56,7 @@ export const ISSUE_STATUS_COLORS: Record<number, string> = {
  * Ordered by typical workflow progression.
  */
 export const ISSUE_STATUS_OPTIONS = [
+  { value: String(ISSUE_STATUS.Draft), label: 'Draft' },
   { value: String(ISSUE_STATUS.Open), label: 'Open' },
   { value: String(ISSUE_STATUS.Progress), label: 'In Progress' },
   { value: String(ISSUE_STATUS.Review), label: 'Review' },
@@ -110,8 +114,8 @@ export function getStatusLabel(status: number | undefined | null): string {
  * Helper function to get status color class with fallback
  */
 export function getStatusColorClass(status: number | undefined | null): string {
-  if (status === undefined || status === null) return ISSUE_STATUS_COLORS[ISSUE_STATUS.Open]
-  return ISSUE_STATUS_COLORS[status] ?? ISSUE_STATUS_COLORS[ISSUE_STATUS.Open]
+  if (status === undefined || status === null) return ISSUE_STATUS_COLORS[ISSUE_STATUS.Draft]
+  return ISSUE_STATUS_COLORS[status] ?? ISSUE_STATUS_COLORS[ISSUE_STATUS.Draft]
 }
 
 /**

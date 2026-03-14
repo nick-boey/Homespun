@@ -4,6 +4,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Issues, type IssueResponse, IssueStatus, IssueType, ExecutionMode } from '@/api'
+import { ISSUE_STATUS, ISSUE_TYPE } from '@/lib/issue-constants'
 import EditIssue from './projects.$projectId.issues.$issueId.edit'
 
 // Mock the API
@@ -494,13 +495,13 @@ describe('EditIssue Page', () => {
   })
 
   it('initializes form with correct status and type from API response', async () => {
-    // Create an issue with specific type (Chore = 2) and status (Progress = 1)
-    // C# IssueStatus: Open=0, Progress=1, Review=2, Complete=3, Archived=4, Closed=5, Deleted=6
+    // Create an issue with specific type (Chore) and status (Progress)
+    // C# IssueStatus: Draft=0, Open=1, Progress=2, Review=3, Complete=4, Archived=5, Closed=6, Deleted=7
     // C# IssueType: Task=0, Bug=1, Chore=2, Feature=3, Idea=4
     const issueWithChoreType: IssueResponse = {
       ...mockIssue,
-      status: 1, // Progress (In Progress)
-      type: 2, // Chore
+      status: ISSUE_STATUS.Progress, // In Progress
+      type: ISSUE_TYPE.Chore,
       priority: 2,
     }
 
@@ -540,8 +541,8 @@ describe('EditIssue Page', () => {
       expect(Issues.putApiIssuesByIssueId).toHaveBeenCalledWith(
         expect.objectContaining({
           body: expect.objectContaining({
-            status: 1, // Progress (In Progress)
-            type: 2, // Chore
+            status: ISSUE_STATUS.Progress,
+            type: ISSUE_TYPE.Chore,
             priority: 2,
           }),
         })
@@ -551,12 +552,12 @@ describe('EditIssue Page', () => {
 
   it('sends correct status and type values when saving', async () => {
     // Start with a Chore type issue
-    // C# IssueStatus: Open=0, Progress=1, Review=2, Complete=3, Archived=4, Closed=5, Deleted=6
+    // C# IssueStatus: Draft=0, Open=1, Progress=2, Review=3, Complete=4, Archived=5, Closed=6, Deleted=7
     // C# IssueType: Task=0, Bug=1, Chore=2, Feature=3, Idea=4
     const issueWithChoreType: IssueResponse = {
       ...mockIssue,
-      status: 1, // Progress (In Progress)
-      type: 2, // Chore
+      status: ISSUE_STATUS.Progress, // In Progress
+      type: ISSUE_TYPE.Chore,
     }
 
     vi.mocked(Issues.getApiIssuesByIssueId).mockResolvedValue({
@@ -594,8 +595,8 @@ describe('EditIssue Page', () => {
       expect(Issues.putApiIssuesByIssueId).toHaveBeenCalledWith(
         expect.objectContaining({
           body: expect.objectContaining({
-            status: 1, // Progress (In Progress)
-            type: 2, // Chore
+            status: ISSUE_STATUS.Progress,
+            type: ISSUE_TYPE.Chore,
           }),
         })
       )
