@@ -247,13 +247,13 @@ public class FleeceChangeDetectionService : IFleeceChangeDetectionService
             });
         }
 
-        if (original.LinkedPR != modified.LinkedPR)
+        if (!AreIntListsEqual(original.LinkedPRs, modified.LinkedPRs))
         {
             changes.Add(new FieldChangeDto
             {
-                FieldName = "LinkedPR",
-                OldValue = original.LinkedPR?.ToString(),
-                NewValue = modified.LinkedPR?.ToString()
+                FieldName = "LinkedPRs",
+                OldValue = string.Join(", ", original.LinkedPRs),
+                NewValue = string.Join(", ", modified.LinkedPRs)
             });
         }
 
@@ -356,6 +356,17 @@ public class FleeceChangeDetectionService : IFleeceChangeDetectionService
 
         var set1 = list1.OrderBy(s => s).ToList();
         var set2 = list2.OrderBy(s => s).ToList();
+
+        return set1.SequenceEqual(set2);
+    }
+
+    private bool AreIntListsEqual(IReadOnlyList<int> list1, IReadOnlyList<int> list2)
+    {
+        if (list1.Count != list2.Count)
+            return false;
+
+        var set1 = list1.OrderBy(x => x).ToList();
+        var set2 = list2.OrderBy(x => x).ToList();
 
         return set1.SequenceEqual(set2);
     }

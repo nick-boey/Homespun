@@ -198,7 +198,6 @@ public class MockFleeceService : IFleeceService
                 ParentIssues = existing.ParentIssues,
                 Tags = existing.Tags,
                 LinkedIssues = existing.LinkedIssues,
-                LinkedPR = existing.LinkedPR,
                 CreatedBy = existing.CreatedBy,
                 AssignedTo = assignedTo ?? existing.AssignedTo,
                 CreatedAt = existing.CreatedAt,
@@ -244,7 +243,6 @@ public class MockFleeceService : IFleeceService
                 ParentIssues = existing.ParentIssues,
                 Tags = existing.Tags,
                 LinkedIssues = existing.LinkedIssues,
-                LinkedPR = existing.LinkedPR,
                 CreatedBy = existing.CreatedBy,
                 AssignedTo = existing.AssignedTo,
                 CreatedAt = existing.CreatedAt,
@@ -294,7 +292,6 @@ public class MockFleeceService : IFleeceService
                 ParentIssues = newParentIssues,
                 Tags = existing.Tags,
                 LinkedIssues = existing.LinkedIssues,
-                LinkedPR = existing.LinkedPR,
                 CreatedBy = existing.CreatedBy,
                 AssignedTo = existing.AssignedTo,
                 CreatedAt = existing.CreatedAt,
@@ -344,7 +341,6 @@ public class MockFleeceService : IFleeceService
                 ParentIssues = newParentIssues,
                 Tags = existing.Tags,
                 LinkedIssues = existing.LinkedIssues,
-                LinkedPR = existing.LinkedPR,
                 CreatedBy = existing.CreatedBy,
                 AssignedTo = existing.AssignedTo,
                 CreatedAt = existing.CreatedAt,
@@ -466,7 +462,6 @@ public class MockFleeceService : IFleeceService
                 ParentIssues = newParentIssues,
                 Tags = existing.Tags,
                 LinkedIssues = existing.LinkedIssues,
-                LinkedPR = existing.LinkedPR,
                 CreatedBy = existing.CreatedBy,
                 AssignedTo = existing.AssignedTo,
                 CreatedAt = existing.CreatedAt,
@@ -566,7 +561,6 @@ public class MockFleeceService : IFleeceService
                 ParentIssues = newCurrentParents,
                 Tags = currentIssue.Tags,
                 LinkedIssues = currentIssue.LinkedIssues,
-                LinkedPR = currentIssue.LinkedPR,
                 CreatedBy = currentIssue.CreatedBy,
                 AssignedTo = currentIssue.AssignedTo,
                 CreatedAt = currentIssue.CreatedAt,
@@ -596,7 +590,6 @@ public class MockFleeceService : IFleeceService
                 ParentIssues = newTargetParents,
                 Tags = targetIssue.Tags,
                 LinkedIssues = targetIssue.LinkedIssues,
-                LinkedPR = targetIssue.LinkedPR,
                 CreatedBy = targetIssue.CreatedBy,
                 AssignedTo = targetIssue.AssignedTo,
                 CreatedAt = targetIssue.CreatedAt,
@@ -719,7 +712,8 @@ internal class MockIssueServiceAdapter : IIssueService
         var mockStorage = new InMemoryStorageService(issues);
         var idGenerator = new Sha256IdGenerator();
         var gitConfigService = new GitConfigService();
-        _innerService = new IssueService(mockStorage, idGenerator, gitConfigService);
+        var tagService = new TagService();
+        _innerService = new IssueService(mockStorage, idGenerator, gitConfigService, tagService);
     }
 
     // Delegate all methods to the inner IssueService which has full graph implementation
@@ -740,8 +734,9 @@ internal class MockIssueServiceAdapter : IIssueService
         IReadOnlyList<string>? tags = null,
         int? linkedPr = null,
         bool includeTerminal = false,
+        IReadOnlyList<(string Key, string Value)>? keyedTags = null,
         CancellationToken cancellationToken = default)
-        => _innerService.FilterAsync(status, type, priority, assignedTo, tags, linkedPr, includeTerminal, cancellationToken);
+        => _innerService.FilterAsync(status, type, priority, assignedTo, tags, linkedPr, includeTerminal, keyedTags, cancellationToken);
 
     public Task<IReadOnlyList<Issue>> SearchAsync(string searchTerm, CancellationToken cancellationToken = default)
         => _innerService.SearchAsync(searchTerm, cancellationToken);
@@ -798,6 +793,9 @@ internal class MockIssueServiceAdapter : IIssueService
 
     public Task<TaskGraph> BuildTaskGraphLayoutAsync(CancellationToken cancellationToken = default)
         => _innerService.BuildTaskGraphLayoutAsync(cancellationToken);
+
+    public Task<TaskGraph> BuildFilteredTaskGraphLayoutAsync(IReadOnlySet<string> issueIds, CancellationToken cancellationToken = default)
+        => _innerService.BuildFilteredTaskGraphLayoutAsync(issueIds, cancellationToken);
 }
 
 /// <summary>

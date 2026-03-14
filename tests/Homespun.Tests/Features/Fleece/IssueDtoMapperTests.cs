@@ -19,10 +19,9 @@ public class IssueDtoMapperTests
             Status = IssueStatus.Progress,
             Type = IssueType.Bug,
             Priority = 2,
-            LinkedPR = 42,
             LinkedIssues = ["linked1", "linked2"],
             ParentIssues = [new ParentIssueRef { ParentIssue = "parent1", SortOrder = "a0" }],
-            Tags = ["tag1"],
+            Tags = ["tag1", "hsp-linked-pr=42"],
             WorkingBranchId = "fix/test",
             ExecutionMode = ExecutionMode.Parallel,
             CreatedBy = "testuser",
@@ -43,12 +42,13 @@ public class IssueDtoMapperTests
             Assert.That(response.Status, Is.EqualTo(IssueStatus.Progress));
             Assert.That(response.Type, Is.EqualTo(IssueType.Bug));
             Assert.That(response.Priority, Is.EqualTo(2));
-            Assert.That(response.LinkedPR, Is.EqualTo(42));
+            Assert.That(response.LinkedPRs, Is.EqualTo(new[] { 42 }));
             Assert.That(response.LinkedIssues, Is.EqualTo(new[] { "linked1", "linked2" }));
             Assert.That(response.ParentIssues, Has.Count.EqualTo(1));
             Assert.That(response.ParentIssues[0].ParentIssue, Is.EqualTo("parent1"));
             Assert.That(response.ParentIssues[0].SortOrder, Is.EqualTo("a0"));
-            Assert.That(response.Tags, Is.EqualTo(new[] { "tag1" }));
+            // Tags include all tags including keyed tags; LinkedPRs are extracted from hsp-linked-pr=N keyed tags
+            Assert.That(response.Tags, Is.EqualTo(new[] { "tag1", "hsp-linked-pr=42" }));
             Assert.That(response.WorkingBranchId, Is.EqualTo("fix/test"));
             Assert.That(response.ExecutionMode, Is.EqualTo(ExecutionMode.Parallel));
             Assert.That(response.CreatedBy, Is.EqualTo("testuser"));
@@ -80,7 +80,7 @@ public class IssueDtoMapperTests
             Assert.That(response.Id, Is.EqualTo("def456"));
             Assert.That(response.Description, Is.Null);
             Assert.That(response.Priority, Is.Null);
-            Assert.That(response.LinkedPR, Is.Null);
+            Assert.That(response.LinkedPRs, Is.Empty);
             Assert.That(response.WorkingBranchId, Is.Null);
             Assert.That(response.CreatedBy, Is.Null);
             Assert.That(response.AssignedTo, Is.Null);

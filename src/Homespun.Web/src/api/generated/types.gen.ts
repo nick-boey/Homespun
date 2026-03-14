@@ -444,7 +444,7 @@ export type IssueDto = {
   status?: IssueStatus
   type?: IssueType
   priority?: number | null
-  linkedPR?: number | null
+  linkedPRs?: Array<number> | null
   linkedIssues?: Array<string> | null
   parentIssues?: Array<ParentIssueRef> | null
   tags?: Array<string> | null
@@ -495,7 +495,7 @@ export type IssueResponse = {
   status?: IssueStatus
   type?: IssueType
   priority?: number | null
-  linkedPR?: number | null
+  linkedPRs?: Array<number> | null
   linkedIssues?: Array<string> | null
   parentIssues?: Array<ParentIssueRefResponse> | null
   tags?: Array<string> | null
@@ -515,6 +515,7 @@ export const IssueStatus = {
   4: 4,
   5: 5,
   6: 6,
+  7: 7,
 } as const
 
 export type IssueStatus = (typeof IssueStatus)[keyof typeof IssueStatus]
@@ -525,6 +526,7 @@ export const IssueType = {
   2: 2,
   3: 3,
   4: 4,
+  5: 5,
 } as const
 
 export type IssueType = (typeof IssueType)[keyof typeof IssueType]

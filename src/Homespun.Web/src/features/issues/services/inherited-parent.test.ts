@@ -11,7 +11,7 @@ function createIssue(id: string, parentIssueId?: string, sortOrder?: string): Is
     status: 0,
     type: 0,
     priority: null,
-    linkedPR: null,
+    linkedPRs: [],
     linkedIssues: null,
     parentIssues: parentIssueId
       ? [{ parentIssue: parentIssueId, sortOrder: sortOrder ?? 'V' }]

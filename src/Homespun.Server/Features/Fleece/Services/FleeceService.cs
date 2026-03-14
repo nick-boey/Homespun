@@ -22,6 +22,7 @@ public sealed class FleeceService : IFleeceService, IDisposable
     private readonly IJsonlSerializer _serializer;
     private readonly IIdGenerator _idGenerator;
     private readonly IGitConfigService _gitConfigService;
+    private readonly ITagService _tagService;
     private readonly IIssueSerializationQueue _serializationQueue;
     private readonly IIssueHistoryService _historyService;
     private readonly ILogger<FleeceService> _logger;
@@ -38,6 +39,7 @@ public sealed class FleeceService : IFleeceService, IDisposable
         _serializer = new JsonlSerializer();
         _idGenerator = new Sha256IdGenerator();
         _gitConfigService = new GitConfigService();
+        _tagService = new TagService();
     }
 
     private IIssueService GetOrCreateIssueService(string projectPath)
@@ -48,8 +50,7 @@ public sealed class FleeceService : IFleeceService, IDisposable
 
             var schemaValidator = new SchemaValidator();
             var storageService = new JsonlStorageService(path, _serializer, schemaValidator);
-            // Note: ChangeService was removed in Fleece.Core v1.2.0
-            return new IssueService(storageService, _idGenerator, _gitConfigService);
+            return new IssueService(storageService, _idGenerator, _gitConfigService, _tagService);
         });
     }
 
@@ -852,7 +853,8 @@ public sealed class FleeceService : IFleeceService, IDisposable
         var issueService = new global::Fleece.Core.Services.IssueService(
             mockStorage,
             _idGenerator,
-            _gitConfigService);
+            _gitConfigService,
+            _tagService);
 
         var taskGraph = await issueService.BuildTaskGraphLayoutAsync(ct);
 

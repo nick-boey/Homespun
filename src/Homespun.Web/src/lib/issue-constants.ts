@@ -4,7 +4,7 @@
  * These values must match the C# enum definitions in Fleece.Core.Models:
  *
  * IssueStatus: Open=0, Progress=1, Review=2, Complete=3, Archived=4, Closed=5, Deleted=6
- * IssueType: Task=0, Bug=1, Chore=2, Feature=3, Idea=4
+ * IssueType: Task=0, Bug=1, Chore=2, Feature=3, Idea=4, Verify=5
  */
 
 /**
@@ -70,6 +70,7 @@ export const ISSUE_TYPE = {
   Chore: 2,
   Feature: 3,
   Idea: 4,
+  Verify: 5,
 } as const
 
 export type IssueTypeValue = (typeof ISSUE_TYPE)[keyof typeof ISSUE_TYPE]
@@ -83,6 +84,7 @@ export const ISSUE_TYPE_LABELS: Record<number, string> = {
   [ISSUE_TYPE.Chore]: 'Chore',
   [ISSUE_TYPE.Feature]: 'Feature',
   [ISSUE_TYPE.Idea]: 'Idea',
+  [ISSUE_TYPE.Verify]: 'Verify',
 }
 
 /**
@@ -93,6 +95,7 @@ export const ISSUE_TYPE_OPTIONS = [
   { value: String(ISSUE_TYPE.Bug), label: 'Bug' },
   { value: String(ISSUE_TYPE.Chore), label: 'Chore' },
   { value: String(ISSUE_TYPE.Feature), label: 'Feature' },
+  { value: String(ISSUE_TYPE.Verify), label: 'Verify' },
 ]
 
 /**

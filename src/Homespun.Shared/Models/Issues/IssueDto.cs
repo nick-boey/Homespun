@@ -13,7 +13,7 @@ public class IssueDto
     public IssueStatus Status { get; set; }
     public IssueType Type { get; set; }
     public int? Priority { get; set; }
-    public int? LinkedPR { get; set; }
+    public List<int> LinkedPRs { get; set; } = [];
     public List<string> LinkedIssues { get; set; } = [];
     public List<ParentIssueRef> ParentIssues { get; set; } = [];
     public List<string> Tags { get; set; } = [];
@@ -40,7 +40,7 @@ public static class IssueDtoExtensions
             Status = issue.Status,
             Type = issue.Type,
             Priority = issue.Priority,
-            LinkedPR = issue.LinkedPR,
+            LinkedPRs = issue.LinkedPRs.ToList(),
             LinkedIssues = issue.LinkedIssues.ToList(),
             ParentIssues = issue.ParentIssues.ToList(),
             Tags = issue.Tags.ToList(),

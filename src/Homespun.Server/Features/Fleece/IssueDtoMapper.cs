@@ -18,7 +18,7 @@ public static class IssueDtoMapper
             Status = issue.Status,
             Type = issue.Type,
             Priority = issue.Priority,
-            LinkedPR = issue.LinkedPR,
+            LinkedPRs = issue.LinkedPRs.ToList(),
             LinkedIssues = issue.LinkedIssues.ToList(),
             ParentIssues = issue.ParentIssues.Select(p => new ParentIssueRefResponse
             {

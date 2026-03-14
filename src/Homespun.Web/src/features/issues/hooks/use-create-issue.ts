@@ -90,7 +90,7 @@ export function useCreateIssue(options: UseCreateIssueOptions): UseCreateIssueRe
             status: 0, // Open
             type,
             priority: null,
-            linkedPR: null,
+            linkedPRs: [],
             linkedIssues: null,
             parentIssues: parentIssueId
               ? [{ parentIssue: parentIssueId, sortOrder: parentSortOrder ?? 'a' }]
