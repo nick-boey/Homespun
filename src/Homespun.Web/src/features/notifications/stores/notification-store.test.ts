@@ -20,7 +20,7 @@ describe('NotificationStore', () => {
     it('adds a notification to the store', () => {
       const notification: NotificationDto = {
         id: 'test-1',
-        type: 'Info',
+        type: 'info',
         title: 'Test Notification',
         message: 'This is a test message',
         createdAt: new Date().toISOString(),
@@ -38,7 +38,7 @@ describe('NotificationStore', () => {
     it('increments unread count when adding notification', () => {
       const notification: NotificationDto = {
         id: 'test-1',
-        type: 'Info',
+        type: 'info',
         title: 'Test',
         message: 'Test message',
         createdAt: new Date().toISOString(),
@@ -53,7 +53,7 @@ describe('NotificationStore', () => {
     it('adds notifications at the beginning (reverse chronological)', () => {
       const notification1: NotificationDto = {
         id: 'test-1',
-        type: 'Info',
+        type: 'info',
         title: 'First',
         message: 'First message',
         createdAt: '2024-01-01T00:00:00Z',
@@ -61,7 +61,7 @@ describe('NotificationStore', () => {
       }
       const notification2: NotificationDto = {
         id: 'test-2',
-        type: 'Warning',
+        type: 'warning',
         title: 'Second',
         message: 'Second message',
         createdAt: '2024-01-02T00:00:00Z',
@@ -80,7 +80,7 @@ describe('NotificationStore', () => {
     it('prevents duplicates with same deduplicationKey', () => {
       const notification: NotificationDto = {
         id: 'test-1',
-        type: 'Info',
+        type: 'info',
         title: 'Test',
         message: 'Test message',
         createdAt: new Date().toISOString(),
@@ -102,7 +102,7 @@ describe('NotificationStore', () => {
       for (let i = 0; i < 55; i++) {
         store.addNotification({
           id: `test-${i}`,
-          type: 'Info',
+          type: 'info',
           title: `Notification ${i}`,
           message: `Message ${i}`,
           createdAt: new Date().toISOString(),
@@ -118,7 +118,7 @@ describe('NotificationStore', () => {
     it('removes a notification by id', () => {
       const notification: NotificationDto = {
         id: 'test-1',
-        type: 'Info',
+        type: 'info',
         title: 'Test',
         message: 'Test message',
         createdAt: new Date().toISOString(),
@@ -135,7 +135,7 @@ describe('NotificationStore', () => {
     it('decrements unread count when dismissing unread notification', () => {
       const notification: NotificationDto = {
         id: 'test-1',
-        type: 'Info',
+        type: 'info',
         title: 'Test',
         message: 'Test message',
         createdAt: new Date().toISOString(),
@@ -153,7 +153,7 @@ describe('NotificationStore', () => {
     it('does not decrement unread count when dismissing read notification', () => {
       const notification: NotificationDto = {
         id: 'test-1',
-        type: 'Info',
+        type: 'info',
         title: 'Test',
         message: 'Test message',
         createdAt: new Date().toISOString(),
@@ -174,7 +174,7 @@ describe('NotificationStore', () => {
     it('marks a notification as read', () => {
       const notification: NotificationDto = {
         id: 'test-1',
-        type: 'Info',
+        type: 'info',
         title: 'Test',
         message: 'Test message',
         createdAt: new Date().toISOString(),
@@ -191,7 +191,7 @@ describe('NotificationStore', () => {
     it('decrements unread count when marking as read', () => {
       const notification: NotificationDto = {
         id: 'test-1',
-        type: 'Info',
+        type: 'info',
         title: 'Test',
         message: 'Test message',
         createdAt: new Date().toISOString(),
@@ -209,7 +209,7 @@ describe('NotificationStore', () => {
     it('does not decrement unread count when already read', () => {
       const notification: NotificationDto = {
         id: 'test-1',
-        type: 'Info',
+        type: 'info',
         title: 'Test',
         message: 'Test message',
         createdAt: new Date().toISOString(),
@@ -230,7 +230,7 @@ describe('NotificationStore', () => {
       const store = useNotificationStore.getState()
       store.addNotification({
         id: 'test-1',
-        type: 'Info',
+        type: 'info',
         title: 'Test 1',
         message: 'Message 1',
         createdAt: new Date().toISOString(),
@@ -238,7 +238,7 @@ describe('NotificationStore', () => {
       })
       store.addNotification({
         id: 'test-2',
-        type: 'Warning',
+        type: 'warning',
         title: 'Test 2',
         message: 'Message 2',
         createdAt: new Date().toISOString(),
@@ -258,7 +258,7 @@ describe('NotificationStore', () => {
       const store = useNotificationStore.getState()
       store.addNotification({
         id: 'test-1',
-        type: 'Info',
+        type: 'info',
         title: 'Test 1',
         message: 'Message 1',
         createdAt: new Date().toISOString(),
@@ -266,7 +266,7 @@ describe('NotificationStore', () => {
       })
       store.addNotification({
         id: 'test-2',
-        type: 'Warning',
+        type: 'warning',
         title: 'Test 2',
         message: 'Message 2',
         createdAt: new Date().toISOString(),
@@ -285,7 +285,7 @@ describe('NotificationStore', () => {
       const notifications: NotificationDto[] = [
         {
           id: 'test-1',
-          type: 'Info',
+          type: 'info',
           title: 'Test 1',
           message: 'Message 1',
           createdAt: new Date().toISOString(),
@@ -293,7 +293,7 @@ describe('NotificationStore', () => {
         },
         {
           id: 'test-2',
-          type: 'Warning',
+          type: 'warning',
           title: 'Test 2',
           message: 'Message 2',
           createdAt: new Date().toISOString(),
@@ -334,7 +334,7 @@ describe('NotificationStore', () => {
       const store = useNotificationStore.getState()
       store.addNotification({
         id: 'test-1',
-        type: 'Info',
+        type: 'info',
         title: 'Project 1 Notification',
         message: 'Message 1',
         projectId: 'project-1',
@@ -343,7 +343,7 @@ describe('NotificationStore', () => {
       })
       store.addNotification({
         id: 'test-2',
-        type: 'Warning',
+        type: 'warning',
         title: 'Project 2 Notification',
         message: 'Message 2',
         projectId: 'project-2',
@@ -352,7 +352,7 @@ describe('NotificationStore', () => {
       })
       store.addNotification({
         id: 'test-3',
-        type: 'Info',
+        type: 'info',
         title: 'Global Notification',
         message: 'Message 3',
         createdAt: new Date().toISOString(),
@@ -372,7 +372,7 @@ describe('NotificationStore', () => {
       const store = useNotificationStore.getState()
       store.addNotification({
         id: 'test-1',
-        type: 'Info',
+        type: 'info',
         title: 'Test 1',
         message: 'Message 1',
         projectId: 'project-1',
@@ -381,7 +381,7 @@ describe('NotificationStore', () => {
       })
       store.addNotification({
         id: 'test-2',
-        type: 'Warning',
+        type: 'warning',
         title: 'Test 2',
         message: 'Message 2',
         createdAt: new Date().toISOString(),

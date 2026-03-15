@@ -92,16 +92,16 @@ export function NotificationItem({
 
 function getNotificationIcon(type: NotificationType) {
   switch (type) {
-    case 'Warning':
+    case 'warning':
       return (
         <AlertTriangle
           data-testid="notification-icon-warning"
           className="h-5 w-5 text-yellow-500"
         />
       )
-    case 'ActionRequired':
+    case 'actionRequired':
       return <AlertCircle data-testid="notification-icon-action" className="h-5 w-5 text-red-500" />
-    case 'Info':
+    case 'info':
     default:
       return <Info data-testid="notification-icon-info" className="h-5 w-5 text-blue-500" />
   }

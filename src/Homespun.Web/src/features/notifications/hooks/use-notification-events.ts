@@ -70,7 +70,7 @@ export function useNotificationEvents(options: UseNotificationEventsOptions = {}
     (issueProjectId: string, changeType: IssueChangeType, issueId: string) => {
       const notification: NotificationDto = {
         id: `issue-${issueId}-${changeType}-${Date.now()}`,
-        type: 'Info',
+        type: 'info',
         title: `Issue ${changeType}`,
         message: getIssueChangeMessage(changeType, issueId),
         projectId: issueProjectId,
@@ -144,11 +144,11 @@ export function useNotificationEvents(options: UseNotificationEventsOptions = {}
 
 function getToastFunction(type: NotificationType) {
   switch (type) {
-    case 'Warning':
+    case 'warning':
       return toast.warning
-    case 'ActionRequired':
+    case 'actionRequired':
       return toast.error
-    case 'Info':
+    case 'info':
     default:
       return toast.info
   }
@@ -156,11 +156,11 @@ function getToastFunction(type: NotificationType) {
 
 function getIssueChangeMessage(changeType: IssueChangeType, issueId: string): string {
   switch (changeType) {
-    case 'Created':
+    case 'created':
       return `A new issue has been created (${issueId})`
-    case 'Updated':
+    case 'updated':
       return `Issue ${issueId} has been updated`
-    case 'Deleted':
+    case 'deleted':
       return `Issue ${issueId} has been deleted`
     default:
       return `Issue ${issueId} changed`

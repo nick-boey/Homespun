@@ -12,8 +12,8 @@ vi.mock('@/providers/signalr-provider', () => ({
 const createMockMessage = (id: string, text: string): ClaudeMessage => ({
   id,
   sessionId: 'session-123',
-  role: 'User',
-  content: [{ type: 'Text', text, isStreaming: false, index: 0 }],
+  role: 'user',
+  content: [{ type: 'text', text, isStreaming: false, index: 0 }],
   createdAt: '2024-01-01T00:00:00Z',
   isStreaming: false,
 })
@@ -224,7 +224,7 @@ describe('useSessionMessages', () => {
     })
 
     expect(result.current.messages).toHaveLength(2)
-    expect(result.current.messages[1].role).toBe('User')
+    expect(result.current.messages[1].role).toBe('user')
     expect(result.current.messages[1].content[0].text).toBe('New user message')
   })
 

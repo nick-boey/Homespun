@@ -158,7 +158,7 @@ export function createClaudeCodeHubMethods(connection: HubConnection): ClaudeCod
   return {
     joinSession: (sessionId: string) => connection.invoke('JoinSession', sessionId),
     leaveSession: (sessionId: string) => connection.invoke('LeaveSession', sessionId),
-    sendMessage: (sessionId: string, message: string, mode: SessionMode = 'Build') =>
+    sendMessage: (sessionId: string, message: string, mode: SessionMode = 'build') =>
       connection.invoke('SendMessage', sessionId, message, mode),
     stopSession: (sessionId: string) => connection.invoke('StopSession', sessionId),
     interruptSession: (sessionId: string) => connection.invoke('InterruptSession', sessionId),

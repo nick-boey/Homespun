@@ -81,7 +81,7 @@ vi.mock('@/features/sessions', () => ({
     mutate: vi.fn(),
     isPending: false,
   })),
-  useSessionSettings: vi.fn(() => ({ mode: 'Build', model: 'opus' })),
+  useSessionSettings: vi.fn(() => ({ mode: 'build', model: 'opus' })),
   useChangeSessionSettings: vi.fn(() => ({
     changeMode: vi.fn(),
     changeModel: vi.fn(),
@@ -171,8 +171,8 @@ describe('SessionChat - Message Sending', () => {
     projectId: 'project-123',
     workingDirectory: '/test/dir',
     model: 'claude-3-5-sonnet',
-    mode: 'Build' as const,
-    status: 'WaitingForInput' as const,
+    mode: 'build' as const,
+    status: 'waitingForInput' as const,
     createdAt: '2024-01-01T00:00:00Z',
     lastActivityAt: '2024-01-01T00:00:00Z',
     messages: [],
@@ -228,7 +228,7 @@ describe('SessionChat - Message Sending', () => {
       <div data-testid="chat-input">
         <button
           data-testid="send-button"
-          onClick={() => onSend('Test message', 'Build', 'opus')}
+          onClick={() => onSend('Test message', 'build', 'opus')}
           disabled={disabled || isLoading}
         >
           Send
@@ -316,7 +316,7 @@ describe('SessionChat - Message Sending', () => {
   it('should disable send button when session is processing', async () => {
     const { useSession } = vi.mocked(await import('@/features/sessions'))
     useSession.mockReturnValue({
-      session: { ...mockSession, status: 'Running', mode: 'Build' as const },
+      session: { ...mockSession, status: 'running', mode: 'build' as const },
       isLoading: false,
       isNotFound: false,
       error: undefined,
@@ -377,7 +377,7 @@ describe('SessionChat - Message Sending', () => {
       <div data-testid="chat-input">
         <button
           data-testid="send-button"
-          onClick={() => onSend('Test message', 'Plan', 'opus')}
+          onClick={() => onSend('Test message', 'plan', 'opus')}
           disabled={disabled || isLoading}
         >
           Send
@@ -416,7 +416,7 @@ describe('SessionChat - Message Sending', () => {
       <div data-testid="chat-input">
         <button
           data-testid="send-button"
-          onClick={() => onSend('Test message', 'Build', 'opus')}
+          onClick={() => onSend('Test message', 'build', 'opus')}
           disabled={disabled || isLoading}
         >
           Send
@@ -475,7 +475,7 @@ describe('SessionChat - Message Sending', () => {
 
     // Set session as processing
     useSession.mockReturnValue({
-      session: { ...mockSession, status: 'Running', mode: 'Build' as const },
+      session: { ...mockSession, status: 'running', mode: 'build' as const },
       isLoading: false,
       isNotFound: false,
       error: undefined,
@@ -571,7 +571,7 @@ describe('SessionChat - Message Sending', () => {
           data-testid="send-button"
           onClick={() => {
             messageCount++
-            onSend(`Message ${messageCount}`, 'Build', 'opus')
+            onSend(`Message ${messageCount}`, 'build', 'opus')
           }}
           disabled={disabled || isLoading}
         >
@@ -616,8 +616,8 @@ describe('SessionChat - Entity Title Display', () => {
     projectId: 'project-123',
     workingDirectory: '/test/dir',
     model: 'claude-3-5-sonnet',
-    mode: 'Build' as const,
-    status: 'WaitingForInput' as const,
+    mode: 'build' as const,
+    status: 'waitingForInput' as const,
     createdAt: '2024-01-01T00:00:00Z',
     lastActivityAt: '2024-01-01T00:00:00Z',
     messages: [],
@@ -720,8 +720,8 @@ describe('SessionChat - Stop Button Functionality', () => {
     projectId: 'project-123',
     workingDirectory: '/test/dir',
     model: 'claude-3-5-sonnet',
-    mode: 'Build' as const,
-    status: 'WaitingForInput' as const,
+    mode: 'build' as const,
+    status: 'waitingForInput' as const,
     createdAt: '2024-01-01T00:00:00Z',
     lastActivityAt: '2024-01-01T00:00:00Z',
     messages: [],
@@ -757,7 +757,7 @@ describe('SessionChat - Stop Button Functionality', () => {
   })
 
   it('should not display stop button for stopped session', async () => {
-    const stoppedSession = { ...mockSession, status: 'Stopped' as const }
+    const stoppedSession = { ...mockSession, status: 'stopped' as const }
     const { useSession } = vi.mocked(await import('@/features/sessions'))
     useSession.mockReturnValue({
       session: stoppedSession,
@@ -773,7 +773,7 @@ describe('SessionChat - Stop Button Functionality', () => {
   })
 
   it('should not display stop button for error session', async () => {
-    const errorSession = { ...mockSession, status: 'Error' as const }
+    const errorSession = { ...mockSession, status: 'error' as const }
     const { useSession } = vi.mocked(await import('@/features/sessions'))
     useSession.mockReturnValue({
       session: errorSession,
@@ -867,8 +867,8 @@ describe('SessionChat - Session Navigation', () => {
     projectId: 'project-123',
     workingDirectory: '/test/dir',
     model: 'claude-3-5-sonnet',
-    mode: 'Build' as const,
-    status: 'WaitingForInput' as const,
+    mode: 'build' as const,
+    status: 'waitingForInput' as const,
     createdAt: '2024-01-01T00:00:00Z',
     lastActivityAt: '2024-01-01T00:00:00Z',
     messages: [],

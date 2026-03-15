@@ -102,9 +102,9 @@ function SessionChat() {
 
   // Determine if the session is processing (not accepting input)
   const isProcessing =
-    session?.status === 'Running' ||
-    session?.status === 'RunningHooks' ||
-    session?.status === 'Starting'
+    session?.status === 'running' ||
+    session?.status === 'runningHooks' ||
+    session?.status === 'starting'
 
   // Handle sending messages
   const handleSend = useCallback(
@@ -165,7 +165,7 @@ function SessionChat() {
 
   // Clear processing answer state when session status changes or question is cleared
   useEffect(() => {
-    if (session?.status !== 'WaitingForQuestionAnswer' && isProcessingAnswer) {
+    if (session?.status !== 'waitingForQuestionAnswer' && isProcessingAnswer) {
       setIsProcessingAnswer(false)
     }
     // Also clear if no pending question
@@ -370,7 +370,7 @@ function SessionHeader({
 }: SessionHeaderProps) {
   // Determine if stop button should be shown
   const showStopButton =
-    session && session.status !== 'Stopped' && session.status !== 'Error' && onStop
+    session && session.status !== 'stopped' && session.status !== 'error' && onStop
 
   // Session navigation
   const { previousSessionId, nextSessionId, hasPrevious, hasNext } = useSessionNavigation(sessionId)
@@ -480,16 +480,16 @@ function SessionHeader({
 function SessionStatusBadge({ status }: { status: string }) {
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'Running':
-      case 'RunningHooks':
+      case 'running':
+      case 'runningHooks':
         return 'bg-green-500/20 text-green-700'
-      case 'WaitingForInput':
-      case 'WaitingForQuestionAnswer':
-      case 'WaitingForPlanExecution':
+      case 'waitingForInput':
+      case 'waitingForQuestionAnswer':
+      case 'waitingForPlanExecution':
         return 'bg-yellow-500/20 text-yellow-700'
-      case 'Stopped':
+      case 'stopped':
         return 'bg-gray-500/20 text-gray-700'
-      case 'Error':
+      case 'error':
         return 'bg-red-500/20 text-red-700'
       default:
         return 'bg-blue-500/20 text-blue-700'

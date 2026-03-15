@@ -23,9 +23,9 @@ export interface UseSessionMessagesResult {
   addUserMessage: (text: string) => void
 }
 
-function capitalizeRole(role: string): ClaudeMessageRole {
-  if (role.toLowerCase() === 'user') return 'User'
-  return 'Assistant'
+function normalizeRole(role: string): ClaudeMessageRole {
+  if (role.toLowerCase() === 'user') return 'user'
+  return 'assistant'
 }
 
 // Message state and actions
@@ -85,7 +85,7 @@ function messagesReducer(state: MessagesState, action: MessagesAction): Messages
     }
     case 'UPDATE_MESSAGE_BY_TOOL_ID': {
       const messageIndex = state.messages.findIndex((m) =>
-        m.content.some((c) => c.type === 'ToolUse' && c.toolUseId === action.toolCallId)
+        m.content.some((c) => c.type === 'toolUse' && c.toolUseId === action.toolCallId)
       )
       if (messageIndex === -1) return state
       const updatedMessages = [...state.messages]
@@ -129,8 +129,8 @@ export function useSessionMessages({
       const newMessage: ClaudeMessage = {
         id: event.messageId,
         sessionId,
-        role: capitalizeRole(event.role),
-        content: [{ type: 'Text', text: '', isStreaming: true, index: 0 }],
+        role: normalizeRole(event.role),
+        content: [{ type: 'text', text: '', isStreaming: true, index: 0 }],
         createdAt: new Date(event.timestamp).toISOString(),
         isStreaming: true,
       }
@@ -149,11 +149,11 @@ export function useSessionMessages({
         const updatedContent = [...message.content]
 
         // Find the text content block or create one
-        let textContentIndex = updatedContent.findIndex((c) => c.type === 'Text' && c.isStreaming)
+        let textContentIndex = updatedContent.findIndex((c) => c.type === 'text' && c.isStreaming)
         if (textContentIndex === -1) {
           textContentIndex = updatedContent.length
           updatedContent.push({
-            type: 'Text',
+            type: 'text',
             text: '',
             isStreaming: true,
             index: textContentIndex,
@@ -193,7 +193,7 @@ export function useSessionMessages({
       const fallbackMessage: ClaudeMessage = {
         id: messageId,
         sessionId,
-        role: 'Assistant',
+        role: 'assistant',
         content: [],
         createdAt: new Date(event.timestamp).toISOString(),
         isStreaming: true,
@@ -208,7 +208,7 @@ export function useSessionMessages({
           content: [
             ...message.content,
             {
-              type: 'ToolUse' as const,
+              type: 'toolUse' as const,
               toolName: event.toolCallName,
               toolUseId: event.toolCallId,
               isStreaming: true,
@@ -229,7 +229,7 @@ export function useSessionMessages({
       updater: (message) => ({
         ...message,
         content: message.content.map((c) => {
-          if (c.type === 'ToolUse' && c.toolUseId === event.toolCallId) {
+          if (c.type === 'toolUse' && c.toolUseId === event.toolCallId) {
             return {
               ...c,
               toolInput: (c.toolInput ?? '') + event.delta,
@@ -249,7 +249,7 @@ export function useSessionMessages({
       updater: (message) => ({
         ...message,
         content: message.content.map((c) => {
-          if (c.type === 'ToolUse' && c.toolUseId === event.toolCallId) {
+          if (c.type === 'toolUse' && c.toolUseId === event.toolCallId) {
             return { ...c, isStreaming: false }
           }
           return c
@@ -266,7 +266,7 @@ export function useSessionMessages({
       updater: (message) => ({
         ...message,
         content: message.content.map((c) => {
-          if (c.type === 'ToolUse' && c.toolUseId === event.toolCallId) {
+          if (c.type === 'toolUse' && c.toolUseId === event.toolCallId) {
             return {
               ...c,
               toolResult: event.content,
@@ -285,8 +285,8 @@ export function useSessionMessages({
       const newMessage: ClaudeMessage = {
         id: `user-${Date.now()}`,
         sessionId,
-        role: 'User',
-        content: [{ type: 'Text', text, isStreaming: false, index: 0 }],
+        role: 'user',
+        content: [{ type: 'text', text, isStreaming: false, index: 0 }],
         createdAt: new Date().toISOString(),
         isStreaming: false,
       }

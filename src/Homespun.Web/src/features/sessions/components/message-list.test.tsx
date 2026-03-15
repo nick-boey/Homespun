@@ -18,7 +18,7 @@ const createMessage = (
   overrides: Partial<ClaudeMessage> & { id: string; role: ClaudeMessage['role'] }
 ): ClaudeMessage => ({
   sessionId: 'session-123',
-  content: [{ type: 'Text', text: 'Test message', isStreaming: false, index: 0 }],
+  content: [{ type: 'text', text: 'Test message', isStreaming: false, index: 0 }],
   createdAt: '2024-01-01T12:00:00Z',
   isStreaming: false,
   ...overrides,
@@ -35,8 +35,8 @@ describe('MessageList', () => {
     const messages: ClaudeMessage[] = [
       createMessage({
         id: 'msg-1',
-        role: 'User',
-        content: [{ type: 'Text', text: 'Hello, Claude!', isStreaming: false, index: 0 }],
+        role: 'user',
+        content: [{ type: 'text', text: 'Hello, Claude!', isStreaming: false, index: 0 }],
       }),
     ]
 
@@ -51,8 +51,8 @@ describe('MessageList', () => {
     const messages: ClaudeMessage[] = [
       createMessage({
         id: 'msg-1',
-        role: 'Assistant',
-        content: [{ type: 'Text', text: 'Hello! How can I help?', isStreaming: false, index: 0 }],
+        role: 'assistant',
+        content: [{ type: 'text', text: 'Hello! How can I help?', isStreaming: false, index: 0 }],
       }),
     ]
 
@@ -66,9 +66,9 @@ describe('MessageList', () => {
     const messages: ClaudeMessage[] = [
       createMessage({
         id: 'msg-1',
-        role: 'Assistant',
+        role: 'assistant',
         content: [
-          { type: 'Text', text: '**Bold** and *italic* text', isStreaming: false, index: 0 },
+          { type: 'text', text: '**Bold** and *italic* text', isStreaming: false, index: 0 },
         ],
       }),
     ]
@@ -83,18 +83,18 @@ describe('MessageList', () => {
     const messages: ClaudeMessage[] = [
       createMessage({
         id: 'msg-1',
-        role: 'User',
-        content: [{ type: 'Text', text: 'First message', isStreaming: false, index: 0 }],
+        role: 'user',
+        content: [{ type: 'text', text: 'First message', isStreaming: false, index: 0 }],
       }),
       createMessage({
         id: 'msg-2',
-        role: 'Assistant',
-        content: [{ type: 'Text', text: 'Second message', isStreaming: false, index: 0 }],
+        role: 'assistant',
+        content: [{ type: 'text', text: 'Second message', isStreaming: false, index: 0 }],
       }),
       createMessage({
         id: 'msg-3',
-        role: 'User',
-        content: [{ type: 'Text', text: 'Third message', isStreaming: false, index: 0 }],
+        role: 'user',
+        content: [{ type: 'text', text: 'Third message', isStreaming: false, index: 0 }],
       }),
     ]
 
@@ -111,8 +111,8 @@ describe('MessageList', () => {
     const messages: ClaudeMessage[] = [
       createMessage({
         id: 'msg-1',
-        role: 'Assistant',
-        content: [{ type: 'Text', text: 'Typing...', isStreaming: true, index: 0 }],
+        role: 'assistant',
+        content: [{ type: 'text', text: 'Typing...', isStreaming: true, index: 0 }],
         isStreaming: true,
       }),
     ]
@@ -127,8 +127,8 @@ describe('MessageList', () => {
     const messages: ClaudeMessage[] = [
       createMessage({
         id: 'msg-1',
-        role: 'User',
-        content: [{ type: 'Text', text: 'Hello', isStreaming: false, index: 0 }],
+        role: 'user',
+        content: [{ type: 'text', text: 'Hello', isStreaming: false, index: 0 }],
         createdAt: '2024-01-01T12:00:00Z',
       }),
     ]
@@ -146,10 +146,10 @@ describe('MessageList', () => {
     const messages: ClaudeMessage[] = [
       createMessage({
         id: 'msg-1',
-        role: 'Assistant',
+        role: 'assistant',
         content: [
-          { type: 'Text', text: 'Here is some text', isStreaming: false, index: 0 },
-          { type: 'Text', text: 'And more text', isStreaming: false, index: 1 },
+          { type: 'text', text: 'Here is some text', isStreaming: false, index: 0 },
+          { type: 'text', text: 'And more text', isStreaming: false, index: 1 },
         ],
       }),
     ]
@@ -164,10 +164,10 @@ describe('MessageList', () => {
     const messages: ClaudeMessage[] = [
       createMessage({
         id: 'msg-1',
-        role: 'Assistant',
+        role: 'assistant',
         content: [
-          { type: 'ToolUse', toolName: 'read_file', isStreaming: false, index: 0 },
-          { type: 'Text', text: 'I read the file.', isStreaming: false, index: 1 },
+          { type: 'toolUse', toolName: 'read_file', isStreaming: false, index: 0 },
+          { type: 'text', text: 'I read the file.', isStreaming: false, index: 1 },
         ],
       }),
     ]
@@ -183,8 +183,8 @@ describe('MessageList', () => {
     const messages: ClaudeMessage[] = [
       createMessage({
         id: 'msg-1',
-        role: 'User',
-        content: [{ type: 'Text', text: 'User message', isStreaming: false, index: 0 }],
+        role: 'user',
+        content: [{ type: 'text', text: 'User message', isStreaming: false, index: 0 }],
       }),
     ]
 
@@ -198,8 +198,8 @@ describe('MessageList', () => {
     const messages: ClaudeMessage[] = [
       createMessage({
         id: 'msg-1',
-        role: 'Assistant',
-        content: [{ type: 'Text', text: 'Assistant message', isStreaming: false, index: 0 }],
+        role: 'assistant',
+        content: [{ type: 'text', text: 'Assistant message', isStreaming: false, index: 0 }],
       }),
     ]
 
@@ -221,10 +221,10 @@ describe('MessageList', () => {
       const messages: ClaudeMessage[] = [
         createMessage({
           id: 'msg-1',
-          role: 'Assistant',
+          role: 'assistant',
           content: [
             {
-              type: 'ToolUse',
+              type: 'toolUse',
               toolName: 'read_file',
               toolUseId: 'tool-1',
               isStreaming: false,
@@ -234,10 +234,10 @@ describe('MessageList', () => {
         }),
         createMessage({
           id: 'msg-2',
-          role: 'User', // Tool results come with User role from backend
+          role: 'user', // Tool results come with User role from backend
           content: [
             {
-              type: 'ToolResult',
+              type: 'toolResult',
               toolResult: 'File contents',
               toolUseId: 'tool-1',
               isStreaming: false,
@@ -260,16 +260,16 @@ describe('MessageList', () => {
       const messages: ClaudeMessage[] = [
         createMessage({
           id: 'msg-1',
-          role: 'User',
+          role: 'user',
           content: [
             {
-              type: 'Text',
+              type: 'text',
               text: 'User message with tool result',
               isStreaming: false,
               index: 0,
             },
             {
-              type: 'ToolResult',
+              type: 'toolResult',
               toolResult: 'Success',
               toolUseId: 'tool-1',
               isStreaming: false,
@@ -296,9 +296,9 @@ describe('MessageList', () => {
       const messages: ClaudeMessage[] = [
         createMessage({
           id: 'msg-1',
-          role: 'User',
+          role: 'user',
           content: [
-            { type: 'Text', text: '# Heading\n**Bold** text', isStreaming: false, index: 0 },
+            { type: 'text', text: '# Heading\n**Bold** text', isStreaming: false, index: 0 },
           ],
         }),
       ]
@@ -316,8 +316,8 @@ describe('MessageList', () => {
       const messages: ClaudeMessage[] = [
         createMessage({
           id: 'msg-1',
-          role: 'Assistant',
-          content: [{ type: 'Text', text: '# Responsive heading', isStreaming: false, index: 0 }],
+          role: 'assistant',
+          content: [{ type: 'text', text: '# Responsive heading', isStreaming: false, index: 0 }],
         }),
       ]
 
@@ -335,10 +335,10 @@ describe('MessageList', () => {
       const messages: ClaudeMessage[] = [
         createMessage({
           id: 'msg-1',
-          role: 'User',
+          role: 'user',
           content: [
             {
-              type: 'Text',
+              type: 'text',
               text: 'User message with inherited prose colors',
               isStreaming: false,
               index: 0,
@@ -358,8 +358,8 @@ describe('MessageList', () => {
       const messages: ClaudeMessage[] = [
         createMessage({
           id: 'msg-1',
-          role: 'User',
-          content: [{ type: 'Text', text: 'Test message', isStreaming: false, index: 0 }],
+          role: 'user',
+          content: [{ type: 'text', text: 'Test message', isStreaming: false, index: 0 }],
         }),
       ]
 
@@ -447,8 +447,8 @@ describe('MessageList', () => {
 
       // The text content is rendered
       expect(screen.getByText('I will write a file')).toBeInTheDocument()
-      // Tool use without results is filtered out, so tool name won't be visible
-      expect(screen.queryByText('write_file')).not.toBeInTheDocument()
+      // Tool use is rendered in the tool execution group
+      expect(screen.getByText('write_file')).toBeInTheDocument()
     })
 
     it('renders tool result content with string enum type', () => {

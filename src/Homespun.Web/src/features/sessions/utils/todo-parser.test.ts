@@ -13,10 +13,10 @@ function createTodoWriteMessage(
   return {
     id: 'msg-1',
     sessionId: 'session-1',
-    role: 'Assistant',
+    role: 'assistant',
     content: [
       {
-        type: 'ToolUse',
+        type: 'toolUse',
         toolName: 'TodoWrite',
         toolInput: JSON.stringify({ todos }),
         index: 0,
@@ -39,17 +39,17 @@ describe('parseTodosFromMessages', () => {
       {
         id: 'msg-1',
         sessionId: 'session-1',
-        role: 'Assistant',
-        content: [{ type: 'Text', text: 'Hello there', index: 0, isStreaming: false }],
+        role: 'assistant',
+        content: [{ type: 'text', text: 'Hello there', index: 0, isStreaming: false }],
         createdAt: new Date().toISOString(),
         isStreaming: false,
       },
       {
         id: 'msg-2',
         sessionId: 'session-1',
-        role: 'Assistant',
+        role: 'assistant',
         content: [
-          { type: 'ToolUse', toolName: 'Bash', toolInput: 'ls', index: 0, isStreaming: false },
+          { type: 'toolUse', toolName: 'Bash', toolInput: 'ls', index: 0, isStreaming: false },
         ],
         createdAt: new Date().toISOString(),
         isStreaming: false,
@@ -120,8 +120,8 @@ describe('parseTodosFromMessages', () => {
       {
         id: 'msg-2',
         sessionId: 'session-1',
-        role: 'Assistant',
-        content: [{ type: 'Text', text: 'Let me work on this', index: 0, isStreaming: false }],
+        role: 'assistant',
+        content: [{ type: 'text', text: 'Let me work on this', index: 0, isStreaming: false }],
         createdAt: new Date().toISOString(),
         isStreaming: false,
       },
@@ -142,10 +142,10 @@ describe('parseTodosFromMessages', () => {
       {
         id: 'msg-1',
         sessionId: 'session-1',
-        role: 'Assistant',
+        role: 'assistant',
         content: [
           {
-            type: 'ToolUse',
+            type: 'toolUse',
             toolName: 'TodoWrite',
             toolInput: 'not valid json',
             index: 0,
@@ -166,10 +166,10 @@ describe('parseTodosFromMessages', () => {
       {
         id: 'msg-1',
         sessionId: 'session-1',
-        role: 'Assistant',
+        role: 'assistant',
         content: [
           {
-            type: 'ToolUse',
+            type: 'toolUse',
             toolName: 'TodoWrite',
             toolInput: undefined,
             index: 0,
@@ -190,10 +190,10 @@ describe('parseTodosFromMessages', () => {
       {
         id: 'msg-1',
         sessionId: 'session-1',
-        role: 'Assistant',
+        role: 'assistant',
         content: [
           {
-            type: 'ToolUse',
+            type: 'toolUse',
             toolName: 'TodoWrite',
             toolInput: JSON.stringify({ todos: [] }),
             index: 0,
@@ -214,10 +214,10 @@ describe('parseTodosFromMessages', () => {
       {
         id: 'msg-1',
         sessionId: 'session-1',
-        role: 'Assistant',
+        role: 'assistant',
         content: [
           {
-            type: 'ToolUse',
+            type: 'toolUse',
             toolName: 'TodoWrite',
             toolInput: JSON.stringify({
               todos: [
@@ -246,10 +246,10 @@ describe('parseTodosFromMessages', () => {
       {
         id: 'msg-1',
         sessionId: 'session-1',
-        role: 'Assistant',
+        role: 'assistant',
         content: [
           {
-            type: 'ToolUse',
+            type: 'toolUse',
             toolName: 'TodoWrite',
             toolInput: JSON.stringify({
               todos: [
@@ -292,11 +292,11 @@ describe('parseTodosFromMessages', () => {
       {
         id: 'msg-1',
         sessionId: 'session-1',
-        role: 'Assistant',
+        role: 'assistant',
         content: [
-          { type: 'Text', text: 'Let me update the todos', index: 0, isStreaming: false },
+          { type: 'text', text: 'Let me update the todos', index: 0, isStreaming: false },
           {
-            type: 'ToolUse',
+            type: 'toolUse',
             toolName: 'TodoWrite',
             toolInput: JSON.stringify({
               todos: [
@@ -310,7 +310,7 @@ describe('parseTodosFromMessages', () => {
             index: 1,
             isStreaming: false,
           },
-          { type: 'Text', text: 'Updated!', index: 2, isStreaming: false },
+          { type: 'text', text: 'Updated!', index: 2, isStreaming: false },
         ],
         createdAt: new Date().toISOString(),
         isStreaming: false,

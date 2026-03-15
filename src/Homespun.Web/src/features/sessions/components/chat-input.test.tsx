@@ -30,7 +30,7 @@ describe('ChatInput', () => {
 
   const defaultProps = {
     onSend: mockOnSend,
-    sessionMode: 'Build' as const,
+    sessionMode: 'build' as const,
     sessionModel: 'opus' as const,
     onModeChange: mockOnModeChange,
     onModelChange: mockOnModelChange,
@@ -76,7 +76,7 @@ describe('ChatInput', () => {
       await user.type(input, 'Hello Claude')
       await user.click(screen.getByRole('button', { name: /send/i }))
 
-      expect(mockOnSend).toHaveBeenCalledWith('Hello Claude', 'Build', 'opus')
+      expect(mockOnSend).toHaveBeenCalledWith('Hello Claude', 'build', 'opus')
     })
 
     it('calls onSend with message when Enter is pressed', async () => {
@@ -86,7 +86,7 @@ describe('ChatInput', () => {
       const input = screen.getByPlaceholderText(/message/i)
       await user.type(input, 'Hello Claude{Enter}')
 
-      expect(mockOnSend).toHaveBeenCalledWith('Hello Claude', 'Build', 'opus')
+      expect(mockOnSend).toHaveBeenCalledWith('Hello Claude', 'build', 'opus')
     })
 
     it('does not send when Shift+Enter is pressed (adds new line)', async () => {
@@ -164,14 +164,14 @@ describe('ChatInput', () => {
 
   describe('session mode toggle', () => {
     it('shows Build mode from props', () => {
-      renderWithQuery(<ChatInput {...defaultProps} sessionMode="Build" />)
+      renderWithQuery(<ChatInput {...defaultProps} sessionMode="build" />)
 
       const toggleButton = screen.getByRole('button', { name: /toggle session mode/i })
       expect(toggleButton).toHaveTextContent('Build')
     })
 
     it('shows Plan mode from props', () => {
-      renderWithQuery(<ChatInput {...defaultProps} sessionMode="Plan" />)
+      renderWithQuery(<ChatInput {...defaultProps} sessionMode="plan" />)
 
       const toggleButton = screen.getByRole('button', { name: /toggle session mode/i })
       expect(toggleButton).toHaveTextContent('Plan')
@@ -179,54 +179,54 @@ describe('ChatInput', () => {
 
     it('toggles to Plan mode when clicked from Build', async () => {
       const user = userEvent.setup()
-      renderWithQuery(<ChatInput {...defaultProps} sessionMode="Build" />)
+      renderWithQuery(<ChatInput {...defaultProps} sessionMode="build" />)
 
       await user.click(screen.getByRole('button', { name: /toggle session mode/i }))
 
-      expect(mockOnModeChange).toHaveBeenCalledWith('Plan')
+      expect(mockOnModeChange).toHaveBeenCalledWith('plan')
     })
 
     it('toggles to Build mode when clicked from Plan', async () => {
       const user = userEvent.setup()
-      renderWithQuery(<ChatInput {...defaultProps} sessionMode="Plan" />)
+      renderWithQuery(<ChatInput {...defaultProps} sessionMode="plan" />)
 
       await user.click(screen.getByRole('button', { name: /toggle session mode/i }))
 
-      expect(mockOnModeChange).toHaveBeenCalledWith('Build')
+      expect(mockOnModeChange).toHaveBeenCalledWith('build')
     })
 
     it('sends message with current session mode from props', async () => {
       const user = userEvent.setup()
-      renderWithQuery(<ChatInput {...defaultProps} sessionMode="Plan" />)
+      renderWithQuery(<ChatInput {...defaultProps} sessionMode="plan" />)
 
       const input = screen.getByPlaceholderText(/message/i)
       await user.type(input, 'Hello{Enter}')
 
-      expect(mockOnSend).toHaveBeenCalledWith('Hello', 'Plan', 'opus')
+      expect(mockOnSend).toHaveBeenCalledWith('Hello', 'plan', 'opus')
     })
   })
 
   describe('keyboard shortcuts', () => {
     it('toggles from Build to Plan with Shift+Tab in textarea', async () => {
       const user = userEvent.setup()
-      renderWithQuery(<ChatInput {...defaultProps} sessionMode="Build" />)
+      renderWithQuery(<ChatInput {...defaultProps} sessionMode="build" />)
 
       const input = screen.getByPlaceholderText(/message/i)
       await user.click(input)
       await user.keyboard('{Shift>}{Tab}{/Shift}')
 
-      expect(mockOnModeChange).toHaveBeenCalledWith('Plan')
+      expect(mockOnModeChange).toHaveBeenCalledWith('plan')
     })
 
     it('toggles from Plan to Build with Shift+Tab in textarea', async () => {
       const user = userEvent.setup()
-      renderWithQuery(<ChatInput {...defaultProps} sessionMode="Plan" />)
+      renderWithQuery(<ChatInput {...defaultProps} sessionMode="plan" />)
 
       const input = screen.getByPlaceholderText(/message/i)
       await user.click(input)
       await user.keyboard('{Shift>}{Tab}{/Shift}')
 
-      expect(mockOnModeChange).toHaveBeenCalledWith('Build')
+      expect(mockOnModeChange).toHaveBeenCalledWith('build')
     })
   })
 
@@ -276,7 +276,7 @@ describe('ChatInput', () => {
       const input = screen.getByPlaceholderText(/message/i)
       await user.type(input, 'Hello{Enter}')
 
-      expect(mockOnSend).toHaveBeenCalledWith('Hello', 'Build', 'sonnet')
+      expect(mockOnSend).toHaveBeenCalledWith('Hello', 'build', 'sonnet')
     })
   })
 })

@@ -22,7 +22,7 @@ export function parseTodosFromMessages(messages: ClaudeMessage[]): SessionTodoIt
   // Find all TodoWrite tool use blocks across all messages
   const allTodoWrites = messages
     .flatMap((msg) => msg.content || [])
-    .filter((content) => content.type === 'ToolUse' && content.toolName === 'TodoWrite')
+    .filter((content) => content.type === 'toolUse' && content.toolName === 'TodoWrite')
 
   if (allTodoWrites.length === 0) {
     return []

@@ -15,8 +15,8 @@ const mockSession: ClaudeSession = {
   projectId: 'project-456',
   workingDirectory: '/path/to/project',
   model: 'opus',
-  mode: 'Build',
-  status: 'WaitingForPlanExecution',
+  mode: 'build',
+  status: 'waitingForPlanExecution',
   createdAt: '2024-01-01T00:00:00Z',
   lastActivityAt: '2024-01-01T01:00:00Z',
   messages: [],
@@ -171,7 +171,7 @@ describe('usePlanApproval', () => {
       const handler = statusChangedCall![1]
 
       act(() => {
-        handler('session-123', 'Running' as ClaudeSessionStatus, false)
+        handler('session-123', 'running' as ClaudeSessionStatus, false)
       })
 
       expect(result.current.hasPendingPlan).toBe(false)
@@ -190,7 +190,7 @@ describe('usePlanApproval', () => {
       const initialPlanContent = result.current.planContent
 
       act(() => {
-        handler('other-session', 'Running' as ClaudeSessionStatus, false)
+        handler('other-session', 'running' as ClaudeSessionStatus, false)
       })
 
       // Should remain unchanged
@@ -207,7 +207,7 @@ describe('usePlanApproval', () => {
       const handler = statusChangedCall![1]
 
       act(() => {
-        handler('session-123', 'WaitingForPlanExecution' as ClaudeSessionStatus, true)
+        handler('session-123', 'waitingForPlanExecution' as ClaudeSessionStatus, true)
       })
 
       // Should remain with plan
