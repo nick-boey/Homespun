@@ -21,3 +21,7 @@ export { useEnrichedSessions } from './hooks/use-enriched-sessions'
 export { useSessionSettings } from './hooks/use-session-settings'
 export { useChangeSessionSettings } from './hooks/use-change-session-settings'
 export { useSessionNavigation } from './hooks/use-session-navigation'
+export { useIssueContext } from './hooks/use-issue-context'
+
+// Utils
+export { renderPromptTemplate, type PromptContext } from './utils/render-prompt-template'

@@ -182,7 +182,18 @@ public class ClaudeCodeHub(IClaudeSessionService sessionService, IMessageCacheSt
     /// <param name="mode">The new session mode</param>
     public async Task SetSessionMode(string sessionId, SessionMode mode)
     {
-        await sessionService.SetSessionModeAsync(sessionId, mode);
+        try
+        {
+            await sessionService.SetSessionModeAsync(sessionId, mode);
+        }
+        catch (KeyNotFoundException)
+        {
+            throw new HubException("Session not found");
+        }
+        catch (Exception ex)
+        {
+            throw new HubException($"Failed to set session mode: {ex.Message}");
+        }
     }
 
     /// <summary>
@@ -192,7 +203,18 @@ public class ClaudeCodeHub(IClaudeSessionService sessionService, IMessageCacheSt
     /// <param name="model">The new model</param>
     public async Task SetSessionModel(string sessionId, string model)
     {
-        await sessionService.SetSessionModelAsync(sessionId, model);
+        try
+        {
+            await sessionService.SetSessionModelAsync(sessionId, model);
+        }
+        catch (KeyNotFoundException)
+        {
+            throw new HubException("Session not found");
+        }
+        catch (Exception ex)
+        {
+            throw new HubException($"Failed to set session model: {ex.Message}");
+        }
     }
 }
 

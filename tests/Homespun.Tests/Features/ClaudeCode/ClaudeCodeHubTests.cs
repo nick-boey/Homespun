@@ -148,4 +148,108 @@ public class ClaudeCodeHubTests
     }
 
     #endregion
+
+    #region SetSessionMode Tests
+
+    [Test]
+    public async Task SetSessionMode_ValidSession_CallsService()
+    {
+        // Arrange
+        var sessionId = "test-session";
+        _sessionServiceMock
+            .Setup(x => x.SetSessionModeAsync(sessionId, SessionMode.Plan, It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        // Act
+        await _hub.SetSessionMode(sessionId, SessionMode.Plan);
+
+        // Assert
+        _sessionServiceMock.Verify(
+            x => x.SetSessionModeAsync(sessionId, SessionMode.Plan, It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Test]
+    public void SetSessionMode_SessionNotFound_ThrowsHubException()
+    {
+        // Arrange
+        var sessionId = "nonexistent-session";
+        _sessionServiceMock
+            .Setup(x => x.SetSessionModeAsync(sessionId, SessionMode.Plan, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new KeyNotFoundException($"Session with ID {sessionId} not found"));
+
+        // Act & Assert
+        var ex = Assert.ThrowsAsync<HubException>(
+            async () => await _hub.SetSessionMode(sessionId, SessionMode.Plan));
+        Assert.That(ex.Message, Does.Contain("Session not found"));
+    }
+
+    [Test]
+    public void SetSessionMode_ServiceThrowsException_ThrowsHubException()
+    {
+        // Arrange
+        var sessionId = "test-session";
+        _sessionServiceMock
+            .Setup(x => x.SetSessionModeAsync(sessionId, SessionMode.Plan, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("Something went wrong"));
+
+        // Act & Assert
+        var ex = Assert.ThrowsAsync<HubException>(
+            async () => await _hub.SetSessionMode(sessionId, SessionMode.Plan));
+        Assert.That(ex.Message, Does.Contain("Failed to set session mode"));
+    }
+
+    #endregion
+
+    #region SetSessionModel Tests
+
+    [Test]
+    public async Task SetSessionModel_ValidSession_CallsService()
+    {
+        // Arrange
+        var sessionId = "test-session";
+        _sessionServiceMock
+            .Setup(x => x.SetSessionModelAsync(sessionId, "sonnet", It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        // Act
+        await _hub.SetSessionModel(sessionId, "sonnet");
+
+        // Assert
+        _sessionServiceMock.Verify(
+            x => x.SetSessionModelAsync(sessionId, "sonnet", It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Test]
+    public void SetSessionModel_SessionNotFound_ThrowsHubException()
+    {
+        // Arrange
+        var sessionId = "nonexistent-session";
+        _sessionServiceMock
+            .Setup(x => x.SetSessionModelAsync(sessionId, "sonnet", It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new KeyNotFoundException($"Session with ID {sessionId} not found"));
+
+        // Act & Assert
+        var ex = Assert.ThrowsAsync<HubException>(
+            async () => await _hub.SetSessionModel(sessionId, "sonnet"));
+        Assert.That(ex.Message, Does.Contain("Session not found"));
+    }
+
+    [Test]
+    public void SetSessionModel_ServiceThrowsException_ThrowsHubException()
+    {
+        // Arrange
+        var sessionId = "test-session";
+        _sessionServiceMock
+            .Setup(x => x.SetSessionModelAsync(sessionId, "sonnet", It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("Something went wrong"));
+
+        // Act & Assert
+        var ex = Assert.ThrowsAsync<HubException>(
+            async () => await _hub.SetSessionModel(sessionId, "sonnet"));
+        Assert.That(ex.Message, Does.Contain("Failed to set session model"));
+    }
+
+    #endregion
 }
