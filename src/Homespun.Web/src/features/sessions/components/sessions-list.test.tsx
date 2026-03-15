@@ -48,15 +48,8 @@ vi.mock('@tanstack/react-router', () => ({
   },
 }))
 
-vi.mock('@/providers/signalr-provider', () => ({
-  useClaudeCodeHub: vi.fn(() => ({
-    connection: null,
-    status: 'disconnected',
-    error: undefined,
-    methods: null,
-    isConnected: false,
-    isReconnecting: false,
-  })),
+vi.mock('../hooks/use-sessions-signalr', () => ({
+  useSessionsSignalR: vi.fn(),
 }))
 
 vi.mock('../hooks/use-sessions', () => ({

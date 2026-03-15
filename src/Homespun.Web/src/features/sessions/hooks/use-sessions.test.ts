@@ -1,11 +1,17 @@
-import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest'
-import { renderHook, waitFor } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest'
+import { renderHook, waitFor, act } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createElement, type ReactNode } from 'react'
 import { Sessions } from '@/api'
 import type { SessionSummary } from '@/api/generated'
 import { ClaudeSessionStatus, SessionMode } from '@/api/generated'
-import { useSessions, useStopSession, sessionsQueryKey } from './use-sessions'
+import {
+  useSessions,
+  useStopSession,
+  sessionsQueryKey,
+  invalidateAllSessionsQueries,
+  allSessionsCountQueryKey,
+} from './use-sessions'
 
 vi.mock('@/api', () => ({
   Sessions: {
@@ -166,5 +172,90 @@ describe('useStopSession', () => {
     })
 
     expect(result.current.error).toBeDefined()
+  })
+})
+
+describe('invalidateAllSessionsQueries', () => {
+  it('invalidates sessions query key', async () => {
+    const queryClient = new QueryClient()
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+
+    await invalidateAllSessionsQueries(queryClient)
+
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: sessionsQueryKey })
+  })
+
+  it('invalidates all-sessions-count query key', async () => {
+    const queryClient = new QueryClient()
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+
+    await invalidateAllSessionsQueries(queryClient)
+
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: allSessionsCountQueryKey })
+  })
+
+  it('invalidates project-sessions queries via predicate', async () => {
+    const queryClient = new QueryClient()
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+
+    await invalidateAllSessionsQueries(queryClient)
+
+    // Check that predicate-based invalidation was called
+    const predicateCall = invalidateSpy.mock.calls.find(
+      (call) => typeof call[0]?.predicate === 'function'
+    )
+    expect(predicateCall).toBeDefined()
+
+    // Test the predicate function
+    const predicate = predicateCall![0]!.predicate!
+    expect(predicate({ queryKey: ['project-sessions', 'project-1'] } as never)).toBe(true)
+    expect(predicate({ queryKey: ['project-sessions', 'project-2'] } as never)).toBe(true)
+    expect(predicate({ queryKey: ['other-query'] } as never)).toBe(false)
+  })
+})
+
+describe('useSessions polling', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('refetches every 5 seconds', async () => {
+    const mockGetApiSessions = Sessions.getApiSessions as Mock
+    mockGetApiSessions.mockResolvedValue({ data: mockSessions })
+
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+      },
+    })
+    const wrapper = ({ children }: { children: ReactNode }) =>
+      createElement(QueryClientProvider, { client: queryClient }, children)
+
+    renderHook(() => useSessions(), { wrapper })
+
+    // Wait for initial fetch
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+
+    expect(mockGetApiSessions).toHaveBeenCalledTimes(1)
+
+    // Advance 5 seconds
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000)
+    })
+
+    expect(mockGetApiSessions).toHaveBeenCalledTimes(2)
+
+    // Advance another 5 seconds
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000)
+    })
+
+    expect(mockGetApiSessions).toHaveBeenCalledTimes(3)
   })
 })

@@ -13,7 +13,14 @@ export { SessionInfoPanel } from './components/session-info-panel'
 // Hooks
 export { useSession } from './hooks/use-session'
 export { useSessionMessages } from './hooks/use-session-messages'
-export { useSessions, useStopSession, sessionsQueryKey } from './hooks/use-sessions'
+export {
+  useSessions,
+  useStopSession,
+  sessionsQueryKey,
+  allSessionsCountQueryKey,
+  invalidateAllSessionsQueries,
+} from './hooks/use-sessions'
+export { useSessionsSignalR } from './hooks/use-sessions-signalr'
 export { useApprovePlan } from './hooks/use-approve-plan'
 export { usePlanApproval } from './hooks/use-plan-approval'
 export { useEntityInfo } from './hooks/use-entity-info'
