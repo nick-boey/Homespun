@@ -34,6 +34,7 @@ public class IssuesController(
     IGitCloneService cloneService,
     IBranchIdBackgroundService branchIdBackgroundService,
     IFleeceChangeApplicationService changeApplicationService,
+    IFleeceIssuesSyncService fleeceIssuesSyncService,
     ILogger<IssuesController> logger) : ControllerBase
 {
     /// <summary>
@@ -454,6 +455,23 @@ public class IssuesController(
             var baseBranch = !string.IsNullOrEmpty(request.BaseBranch)
                 ? request.BaseBranch
                 : project.DefaultBranch;
+
+            // Pull latest changes on main repo before creating clone
+            logger.LogInformation("Pulling latest changes from {BaseBranch} before creating clone", baseBranch);
+            var pullResult = await fleeceIssuesSyncService.PullFleeceOnlyAsync(
+                project.LocalPath,
+                baseBranch,
+                HttpContext.RequestAborted);
+
+            if (!pullResult.Success)
+            {
+                logger.LogWarning("Auto-pull failed before clone creation: {Error}, continuing anyway", pullResult.ErrorMessage);
+            }
+            else if (pullResult.WasBehindRemote)
+            {
+                logger.LogInformation("Pulled {Commits} commits and merged {Issues} issues before clone creation",
+                    pullResult.CommitsPulled, pullResult.IssuesMerged);
+            }
 
             logger.LogInformation("Creating clone for branch {BranchName} from base {BaseBranch}", branchName, baseBranch);
 
