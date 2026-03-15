@@ -13,6 +13,13 @@ export interface NotificationHubEvents {
   onNotificationAdded?: (notification: NotificationDto) => void
   onNotificationDismissed?: (notificationId: string) => void
   onIssuesChanged?: (projectId: string, changeType: IssueChangeType, issueId: string) => void
+  onBranchIdGenerated?: (
+    issueId: string,
+    projectId: string,
+    branchId: string,
+    wasAiGenerated: boolean
+  ) => void
+  onBranchIdGenerationFailed?: (issueId: string, projectId: string, error: string) => void
 }
 
 // ============================================================================
@@ -43,6 +50,8 @@ export function registerNotificationHubEvents(
   register('NotificationAdded', handlers.onNotificationAdded)
   register('NotificationDismissed', handlers.onNotificationDismissed)
   register('IssuesChanged', handlers.onIssuesChanged)
+  register('BranchIdGenerated', handlers.onBranchIdGenerated)
+  register('BranchIdGenerationFailed', handlers.onBranchIdGenerationFailed)
 
   // Return cleanup function
   return () => {

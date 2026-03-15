@@ -49,6 +49,7 @@ export {
   type UseCreateIssueReturn,
   type CreateIssueParams,
 } from './hooks'
+export { useBranchIdGenerationEvents, type UseBranchIdGenerationEventsOptions } from './hooks'
 
 // Services
 export {

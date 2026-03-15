@@ -59,6 +59,60 @@ describe('registerNotificationHubEvents', () => {
     expect(mockConnection.on).toHaveBeenCalledWith('IssuesChanged', expect.any(Function))
   })
 
+  it('registers branch ID generation events', () => {
+    const handlers: NotificationHubEvents = {
+      onBranchIdGenerated: vi.fn(),
+      onBranchIdGenerationFailed: vi.fn(),
+    }
+
+    registerNotificationHubEvents(mockConnection, handlers)
+
+    expect(mockConnection.on).toHaveBeenCalledWith('BranchIdGenerated', expect.any(Function))
+    expect(mockConnection.on).toHaveBeenCalledWith('BranchIdGenerationFailed', expect.any(Function))
+  })
+
+  it('calls onBranchIdGenerated with correct parameters', () => {
+    const onBranchIdGenerated = vi.fn()
+    const handlers: NotificationHubEvents = { onBranchIdGenerated }
+
+    registerNotificationHubEvents(mockConnection, handlers)
+
+    mockConnection.simulateEvent(
+      'BranchIdGenerated',
+      'issue-1',
+      'project-1',
+      'feature/my-branch',
+      true
+    )
+
+    expect(onBranchIdGenerated).toHaveBeenCalledWith(
+      'issue-1',
+      'project-1',
+      'feature/my-branch',
+      true
+    )
+  })
+
+  it('calls onBranchIdGenerationFailed with correct parameters', () => {
+    const onBranchIdGenerationFailed = vi.fn()
+    const handlers: NotificationHubEvents = { onBranchIdGenerationFailed }
+
+    registerNotificationHubEvents(mockConnection, handlers)
+
+    mockConnection.simulateEvent(
+      'BranchIdGenerationFailed',
+      'issue-1',
+      'project-1',
+      'AI generation failed'
+    )
+
+    expect(onBranchIdGenerationFailed).toHaveBeenCalledWith(
+      'issue-1',
+      'project-1',
+      'AI generation failed'
+    )
+  })
+
   it('calls onNotificationAdded when notification is received', () => {
     const onNotificationAdded = vi.fn()
     const handlers: NotificationHubEvents = { onNotificationAdded }
