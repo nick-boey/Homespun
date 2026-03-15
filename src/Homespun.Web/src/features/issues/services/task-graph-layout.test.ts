@@ -67,6 +67,7 @@ describe('computeLayout', () => {
         lane0Color: null,
         hasHiddenParent: false,
         hiddenParentIsSeriesMode: false,
+        executionMode: ExecutionMode.SERIES,
       }
       expect(isIssueRenderLine(line)).toBe(true)
       expect(isPrRenderLine(line)).toBe(false)
@@ -758,6 +759,68 @@ describe('computeLayout', () => {
       const line = result[0] as TaskGraphIssueRenderLine
 
       expect(line.assignedTo).toBeNull()
+    })
+  })
+
+  describe('executionMode field passthrough', () => {
+    it('passes through executionMode=series correctly', () => {
+      const issue = createIssue({
+        id: 'abc123',
+        title: 'Test Issue',
+        executionMode: ExecutionMode.SERIES,
+      })
+      const taskGraph: TaskGraphResponse = {
+        nodes: [createNode(issue, 0, 0)],
+        mergedPrs: [],
+        hasMorePastPrs: false,
+        agentStatuses: {},
+        linkedPrs: {},
+      }
+
+      const result = computeLayout(taskGraph)
+      const line = result[0] as TaskGraphIssueRenderLine
+
+      expect(line.executionMode).toBe(ExecutionMode.SERIES)
+    })
+
+    it('passes through executionMode=parallel correctly', () => {
+      const issue = createIssue({
+        id: 'abc123',
+        title: 'Test Issue',
+        executionMode: ExecutionMode.PARALLEL,
+      })
+      const taskGraph: TaskGraphResponse = {
+        nodes: [createNode(issue, 0, 0)],
+        mergedPrs: [],
+        hasMorePastPrs: false,
+        agentStatuses: {},
+        linkedPrs: {},
+      }
+
+      const result = computeLayout(taskGraph)
+      const line = result[0] as TaskGraphIssueRenderLine
+
+      expect(line.executionMode).toBe(ExecutionMode.PARALLEL)
+    })
+
+    it('defaults executionMode to series when undefined', () => {
+      const issue = createIssue({
+        id: 'abc123',
+        title: 'Test Issue',
+      })
+      delete (issue as Partial<typeof issue>).executionMode
+      const taskGraph: TaskGraphResponse = {
+        nodes: [createNode(issue, 0, 0)],
+        mergedPrs: [],
+        hasMorePastPrs: false,
+        agentStatuses: {},
+        linkedPrs: {},
+      }
+
+      const result = computeLayout(taskGraph)
+      const line = result[0] as TaskGraphIssueRenderLine
+
+      expect(line.executionMode).toBe(ExecutionMode.SERIES)
     })
   })
 })

@@ -7,7 +7,7 @@ import { render } from '@testing-library/react'
 import { TaskGraphNodeSvg, getTypeColor } from './task-graph-svg'
 import type { TaskGraphIssueRenderLine } from '../services'
 import { TaskGraphMarkerType } from '../services'
-import { IssueType, IssueStatus, ClaudeSessionStatus } from '@/api'
+import { IssueType, IssueStatus, ClaudeSessionStatus, ExecutionMode } from '@/api'
 
 describe('TaskGraphNodeSvg', () => {
   const createMockLine = (
@@ -38,6 +38,7 @@ describe('TaskGraphNodeSvg', () => {
     linkedPr: null,
     agentStatus: null,
     assignedTo: null,
+    executionMode: ExecutionMode.SERIES,
     ...overrides,
   })
 

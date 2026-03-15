@@ -1,11 +1,11 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { TaskGraphIssueRow } from './task-graph-row'
 import { TaskGraphMarkerType } from '../services'
 import type { TaskGraphIssueRenderLine } from '../services'
 import type { UseQueryResult } from '@tanstack/react-query'
 import type { IssuePullRequestStatus } from '@/api'
-import { IssueType, IssueStatus } from '@/api'
+import { IssueType, IssueStatus, ExecutionMode } from '@/api'
 import * as prStatusHook from '../hooks/use-linked-pr-status'
 
 // Mock the hooks
@@ -76,6 +76,7 @@ describe('TaskGraphIssueRow', () => {
     lane0Color: null,
     hasHiddenParent: false,
     hiddenParentIsSeriesMode: false,
+    executionMode: ExecutionMode.SERIES,
   }
 
   const defaultProps = {
@@ -308,6 +309,90 @@ describe('TaskGraphIssueRow', () => {
       render(<TaskGraphIssueRow {...defaultProps} line={lineWithAssignee} />)
 
       expect(screen.getByText('plainusername')).toBeInTheDocument()
+    })
+  })
+
+  describe('execution mode toggle', () => {
+    it('renders toggle button with correct mode for Series (executionMode=0)', () => {
+      vi.spyOn(prStatusHook, 'useLinkedPrStatus').mockReturnValue(
+        createMockQueryResult<IssuePullRequestStatus | null>(null)
+      )
+
+      const lineWithSeriesMode = {
+        ...mockLine,
+        executionMode: ExecutionMode.SERIES,
+      }
+
+      render(<TaskGraphIssueRow {...defaultProps} line={lineWithSeriesMode} />)
+
+      const toggleButton = screen.getByRole('button', { name: 'Series execution mode' })
+      expect(toggleButton).toBeInTheDocument()
+    })
+
+    it('renders toggle button with correct mode for Parallel', () => {
+      vi.spyOn(prStatusHook, 'useLinkedPrStatus').mockReturnValue(
+        createMockQueryResult<IssuePullRequestStatus | null>(null)
+      )
+
+      const lineWithParallelMode = {
+        ...mockLine,
+        executionMode: ExecutionMode.PARALLEL,
+      }
+
+      render(<TaskGraphIssueRow {...defaultProps} line={lineWithParallelMode} />)
+
+      const toggleButton = screen.getByRole('button', { name: 'Parallel execution mode' })
+      expect(toggleButton).toBeInTheDocument()
+    })
+
+    it('calls onExecutionModeChange with (issueId, newMode) when toggled from Series to Parallel', () => {
+      vi.spyOn(prStatusHook, 'useLinkedPrStatus').mockReturnValue(
+        createMockQueryResult<IssuePullRequestStatus | null>(null)
+      )
+
+      const onExecutionModeChange = vi.fn()
+      const lineWithSeriesMode = {
+        ...mockLine,
+        executionMode: ExecutionMode.SERIES,
+      }
+
+      render(
+        <TaskGraphIssueRow
+          {...defaultProps}
+          line={lineWithSeriesMode}
+          onExecutionModeChange={onExecutionModeChange}
+        />
+      )
+
+      const toggleButton = screen.getByRole('button', { name: 'Series execution mode' })
+      fireEvent.click(toggleButton)
+
+      expect(onExecutionModeChange).toHaveBeenCalledWith('test-123', ExecutionMode.PARALLEL)
+    })
+
+    it('calls onExecutionModeChange with (issueId, newMode) when toggled from Parallel to Series', () => {
+      vi.spyOn(prStatusHook, 'useLinkedPrStatus').mockReturnValue(
+        createMockQueryResult<IssuePullRequestStatus | null>(null)
+      )
+
+      const onExecutionModeChange = vi.fn()
+      const lineWithParallelMode = {
+        ...mockLine,
+        executionMode: ExecutionMode.PARALLEL,
+      }
+
+      render(
+        <TaskGraphIssueRow
+          {...defaultProps}
+          line={lineWithParallelMode}
+          onExecutionModeChange={onExecutionModeChange}
+        />
+      )
+
+      const toggleButton = screen.getByRole('button', { name: 'Parallel execution mode' })
+      fireEvent.click(toggleButton)
+
+      expect(onExecutionModeChange).toHaveBeenCalledWith('test-123', ExecutionMode.SERIES)
     })
   })
 })

@@ -17,7 +17,7 @@ import {
 } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
-import { IssueType, IssueStatus } from '@/api'
+import { IssueType, IssueStatus, ExecutionMode } from '@/api'
 import { useSignalR } from '@/hooks/use-signalr'
 import { registerNotificationHubEvents } from '@/lib/signalr/notification-hub'
 import { ErrorFallback } from '@/components/error-boundary'
@@ -722,6 +722,16 @@ export const TaskGraphView = memo(
       [updateIssue, projectId]
     )
 
+    const handleExecutionModeChange = useCallback(
+      async (issueId: string, newMode: ExecutionMode) => {
+        await updateIssue({
+          issueId,
+          data: { projectId, executionMode: newMode },
+        })
+      },
+      [updateIssue, projectId]
+    )
+
     // ============================================================================
     // Inline Editor Row Rendering
     // ============================================================================
@@ -966,6 +976,7 @@ export const TaskGraphView = memo(
                     onClick={() => handleRowClick(line.issueId)}
                     onTypeChange={handleTypeChange}
                     onStatusChange={handleStatusChange}
+                    onExecutionModeChange={handleExecutionModeChange}
                     isMoveSource={moveSourceIssueId === line.issueId}
                     isMoveOperationActive={!!moveOperation}
                     aria-rowindex={index + 1}

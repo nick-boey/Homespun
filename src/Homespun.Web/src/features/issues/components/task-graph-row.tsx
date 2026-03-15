@@ -4,7 +4,7 @@
 
 import { memo, forwardRef, type HTMLAttributes } from 'react'
 import { cn } from '@/lib/utils'
-import { IssueType, IssueStatus } from '@/api'
+import { IssueType, IssueStatus, ExecutionMode } from '@/api'
 import { ISSUE_STATUS_LABELS, ISSUE_TYPE_LABELS } from '@/lib/issue-constants'
 import {
   TaskGraphNodeSvg,
@@ -18,6 +18,7 @@ import type { TaskGraphIssueRenderLine, TaskGraphPrRenderLine } from '../service
 import { TaskGraphMarkerType } from '../services'
 import { IssueRowActions } from './issue-row-actions'
 import { PrStatusIndicator } from './pr-status-indicator'
+import { ExecutionModeToggle } from './execution-mode-toggle'
 import { useLinkedPrStatus } from '../hooks/use-linked-pr-status'
 import {
   DropdownMenu,
@@ -56,6 +57,8 @@ interface TaskGraphIssueRowProps extends HTMLAttributes<HTMLDivElement> {
   onTypeChange?: (issueId: string, newType: IssueType) => void
   /** Callback for changing issue status */
   onStatusChange?: (issueId: string, newStatus: IssueStatus) => void
+  /** Callback for changing execution mode */
+  onExecutionModeChange?: (issueId: string, newMode: ExecutionMode) => void
 }
 
 /**
@@ -78,6 +81,7 @@ export const TaskGraphIssueRow = memo(
       isMoveOperationActive = false,
       onTypeChange,
       onStatusChange,
+      onExecutionModeChange,
       className,
       ...props
     },
@@ -196,6 +200,19 @@ export const TaskGraphIssueRow = memo(
             </DropdownMenuContent>
           </DropdownMenu>
 
+          {/* Execution mode toggle */}
+          <ExecutionModeToggle
+            executionMode={line.executionMode}
+            onToggle={() =>
+              onExecutionModeChange?.(
+                line.issueId,
+                line.executionMode === ExecutionMode.SERIES
+                  ? ExecutionMode.PARALLEL
+                  : ExecutionMode.SERIES
+              )
+            }
+          />
+
           {/* Title - no truncation to allow full horizontal scroll */}
           <span className="text-sm whitespace-nowrap">{line.title || 'Untitled'}</span>
 
@@ -208,13 +225,6 @@ export const TaskGraphIssueRow = memo(
 
           {/* Spacer */}
           <div className="flex-1" />
-
-          {/* Series indicator */}
-          {line.isSeriesChild && (
-            <span className="text-muted-foreground shrink-0 text-xs" title="Series execution mode">
-              ↓
-            </span>
-          )}
 
           {/* Linked PR indicator */}
           {line.linkedPr && (
