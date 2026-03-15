@@ -2,7 +2,7 @@ import { createFileRoute, useParams, useNavigate, useBlocker, Link } from '@tans
 import { useForm, Controller } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useEffect, useCallback, useState, useMemo } from 'react'
+import { useEffect, useCallback, useState, useMemo, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -238,6 +238,8 @@ export default function EditIssue() {
   const [apiError, setApiError] = useState<string | null>(null)
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false)
   const [agentLauncherOpen, setAgentLauncherOpen] = useState(false)
+  // Ref to track whether we're navigating after agent start (synchronous update)
+  const skipBlockerRef = useRef(false)
 
   // Listen for branch ID generation events
   // useBranchIdGenerationEvents(projectId)
@@ -320,8 +322,17 @@ export default function EditIssue() {
   })
 
   // Navigation blocker for unsaved changes - only block if actual changes exist
+  // Use shouldBlockFn for dynamic evaluation at navigation time
   const blocker = useBlocker({
-    condition: hasActualChanges && !updateIssue.isPending && !updateIssueAndRun.isPending,
+    shouldBlockFn: () => {
+      // Skip blocker when navigating after agent start
+      if (skipBlockerRef.current) return false
+      // Don't block while mutations are pending
+      if (updateIssue.isPending || updateIssueAndRun.isPending) return false
+      // Block if there are actual changes
+      return hasActualChanges
+    },
+    withResolver: true,
   })
 
   // Handle blocked navigation
@@ -390,6 +401,15 @@ export default function EditIssue() {
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [handleSubmit, onSubmit])
+
+  const handleAgentStart = useCallback(() => {
+    // Skip the navigation blocker since we've already saved
+    skipBlockerRef.current = true
+    navigate({
+      to: '/projects/$projectId/issues',
+      params: { projectId },
+    })
+  }, [navigate, projectId])
 
   const handleCancel = () => {
     navigate({
@@ -706,6 +726,7 @@ export default function EditIssue() {
         onOpenChange={setAgentLauncherOpen}
         projectId={projectId}
         issueId={issueId}
+        onAgentStart={handleAgentStart}
       />
     </div>
   )

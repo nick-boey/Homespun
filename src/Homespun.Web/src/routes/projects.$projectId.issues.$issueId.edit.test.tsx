@@ -35,8 +35,10 @@ vi.mock('@tanstack/react-router', async () => {
     ...actual,
     useNavigate: () => mockNavigate,
     useParams: () => mockUseParams(),
-    useBlocker: (config: { condition: boolean }) => {
-      mockUseBlocker(config)
+    useBlocker: (config: { shouldBlockFn?: () => boolean }) => {
+      // Call the shouldBlockFn to get the current blocking state for test assertions
+      const isBlocking = config.shouldBlockFn ? config.shouldBlockFn() : false
+      mockUseBlocker({ condition: isBlocking })
       // Don't auto-trigger blocked status - return idle to prevent dialog from showing
       return {
         status: 'idle',
@@ -68,11 +70,13 @@ vi.mock('@/features/agents', () => ({
     onOpenChange,
     projectId,
     issueId,
+    onAgentStart,
   }: {
     open: boolean
     onOpenChange: (open: boolean) => void
     projectId: string
     issueId: string
+    onAgentStart?: () => void
   }) => {
     // Track when the component is rendered with specific open state
     React.useEffect(() => {
@@ -87,7 +91,12 @@ vi.mock('@/features/agents', () => ({
         data-issue-id={issueId}
         style={{ display: open ? 'block' : 'none' }}
       >
-        {open && <button onClick={() => onOpenChange(false)}>Close Agent Launcher</button>}
+        {open && (
+          <>
+            <button onClick={() => onOpenChange(false)}>Close Agent Launcher</button>
+            <button onClick={() => onAgentStart?.()}>Start Agent</button>
+          </>
+        )}
       </div>
     )
   },
@@ -983,6 +992,52 @@ describe('EditIssue Page', () => {
         error: undefined,
         request: new Request('http://test'),
         response: new Response(),
+      })
+    })
+
+    it('navigates to issues page after agent is started via Save & Run Agent', async () => {
+      vi.mocked(Issues.getApiIssuesByIssueId).mockResolvedValue({
+        data: mockIssue,
+        error: undefined,
+        request: new Request('http://test'),
+        response: new Response(),
+      })
+
+      vi.mocked(Issues.putApiIssuesByIssueId).mockResolvedValue({
+        data: mockIssue,
+        error: undefined,
+        request: new Request('http://test'),
+        response: new Response(),
+      })
+
+      const user = userEvent.setup()
+      render(<EditIssue />, { wrapper: createWrapper() })
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/title/i)).toBeInTheDocument()
+      })
+
+      // Click Save & Run Agent
+      const saveAndRunButton = screen.getByRole('button', { name: /save & run agent/i })
+      await user.click(saveAndRunButton)
+
+      // Wait for dialog to open
+      await waitFor(() => {
+        const dialog = screen.getByTestId('agent-launcher-dialog')
+        expect(dialog).toHaveAttribute('data-open', 'true')
+      })
+
+      // Clear mockNavigate to track only new calls
+      mockNavigate.mockClear()
+
+      // Click Start Agent button to trigger onAgentStart callback
+      const startAgentButton = screen.getByText('Start Agent')
+      await user.click(startAgentButton)
+
+      // Verify navigation to issues page
+      expect(mockNavigate).toHaveBeenCalledWith({
+        to: '/projects/$projectId/issues',
+        params: { projectId: 'project-1' },
       })
     })
   })

@@ -189,7 +189,69 @@ test.describe.serial('Save and Run Agent', () => {
     // Dialog should close after launching
     await expect(agentDialog).not.toBeVisible()
 
-    // Should stay on the edit page (no navigation happens when starting with a prompt)
+    // Should navigate to issues page after starting agent
+    await expect(page).toHaveURL('/projects/demo-project/issues')
+  })
+
+  test('does not show unsaved changes dialog after starting agent', async ({ page }) => {
+    // Navigate to the issues page
+    await page.goto('/projects/demo-project/issues')
+
+    // Wait for the issues list to load
+    await page.waitForLoadState('networkidle')
+
+    // Find an issue to edit - use one not modified by previous tests
+    const issueRow = page
+      .locator('[role="row"]')
+      .filter({ hasText: 'Add request validation' })
+      .first()
+    await expect(issueRow).toBeVisible()
+
+    // Click the Edit button within this row
+    const editButton = issueRow.locator('button[aria-label="Edit"]')
+    await editButton.click()
+
+    // Wait for navigation to edit page
     await expect(page).toHaveURL(/\/issues\/.*\/edit/)
+
+    // Wait for form to load
+    const titleInput = page.getByLabel('Title')
+    await expect(titleInput).toBeVisible()
+
+    // Make a change to the issue
+    await titleInput.fill('Updated title for testing unsaved changes')
+
+    // Click Save & Run Agent button
+    const saveAndRunButton = page.getByRole('button', { name: 'Save & Run Agent' })
+    await saveAndRunButton.click()
+
+    // Wait for agent launcher dialog
+    const agentDialog = page.locator('[role="dialog"]').filter({ hasText: 'Run Agent' })
+    await expect(agentDialog).toBeVisible({ timeout: 10000 })
+
+    // Select a prompt
+    const promptSelector = agentDialog.locator('button[role="combobox"]').first()
+    await promptSelector.click()
+
+    // Select first prompt option
+    const promptOption = page.getByRole('option').first()
+    await promptOption.click()
+
+    // Click Start Agent
+    const startButton = agentDialog.getByRole('button', { name: 'Start Agent' })
+    await expect(startButton).not.toBeDisabled()
+    await startButton.click()
+
+    // Dialog should close after launching
+    await expect(agentDialog).not.toBeVisible()
+
+    // Should navigate to issues page without showing unsaved changes dialog
+    await expect(page).toHaveURL('/projects/demo-project/issues')
+
+    // Verify no unsaved changes dialog appeared (it would block navigation if it did)
+    const unsavedDialog = page
+      .locator('[role="alertdialog"]')
+      .filter({ hasText: 'Unsaved Changes' })
+    await expect(unsavedDialog).not.toBeVisible()
   })
 })
