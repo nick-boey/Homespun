@@ -910,7 +910,7 @@ public class MockClaudeSessionService : IClaudeSessionService
     }
 
     /// <inheritdoc />
-    public Task SetSessionModeAsync(string sessionId, SessionMode mode, CancellationToken cancellationToken = default)
+    public async Task SetSessionModeAsync(string sessionId, SessionMode mode, CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("[Mock] SetSessionMode for session {SessionId} to {Mode}", sessionId, mode);
 
@@ -924,11 +924,11 @@ public class MockClaudeSessionService : IClaudeSessionService
         session.LastActivityAt = DateTime.UtcNow;
         _sessionStore.Update(session);
 
-        return Task.CompletedTask;
+        await _hubContext.BroadcastSessionModeModelChanged(sessionId, session.Mode, session.Model);
     }
 
     /// <inheritdoc />
-    public Task SetSessionModelAsync(string sessionId, string model, CancellationToken cancellationToken = default)
+    public async Task SetSessionModelAsync(string sessionId, string model, CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("[Mock] SetSessionModel for session {SessionId} to {Model}", sessionId, model);
 
@@ -942,6 +942,6 @@ public class MockClaudeSessionService : IClaudeSessionService
         session.LastActivityAt = DateTime.UtcNow;
         _sessionStore.Update(session);
 
-        return Task.CompletedTask;
+        await _hubContext.BroadcastSessionModeModelChanged(sessionId, session.Mode, session.Model);
     }
 }

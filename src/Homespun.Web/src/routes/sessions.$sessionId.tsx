@@ -18,6 +18,7 @@ import {
   useChangeSessionSettings,
   SessionInfoPanel,
   useSessionNavigation,
+  useIssueContext,
 } from '@/features/sessions'
 import { useAnswerQuestion } from '@/features/questions'
 import { useClaudeCodeHub } from '@/providers/signalr-provider'
@@ -70,6 +71,9 @@ function SessionChat() {
 
   // Fetch entity info
   const { data: entityInfo } = useEntityInfo(session?.entityId, session?.projectId)
+
+  // Fetch issue context for prompt template rendering
+  const { data: issueContext } = useIssueContext(session?.entityId, session?.projectId)
 
   // Stop session mutation
   const stopSession = useStopSession()
@@ -303,6 +307,7 @@ function SessionChat() {
           placeholder={
             !isConnected ? 'Connecting...' : isProcessing ? 'Processing...' : 'Type a message...'
           }
+          issueContext={issueContext}
         />
       </div>
 

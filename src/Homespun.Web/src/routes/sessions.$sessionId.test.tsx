@@ -77,6 +77,7 @@ vi.mock('@/features/sessions', () => ({
   })),
   PlanApprovalPanel: vi.fn(() => null),
   useEntityInfo: vi.fn(),
+  useIssueContext: vi.fn(() => ({ data: null, isLoading: false })),
   useStopSession: vi.fn(() => ({
     mutate: vi.fn(),
     isPending: false,
