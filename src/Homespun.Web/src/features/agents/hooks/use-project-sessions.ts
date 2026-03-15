@@ -1,25 +1,25 @@
 import { useQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
-import { Sessions } from '@/api'
-import type { SessionSummary, ClaudeSessionStatus } from '@/api/generated/types.gen'
+import { Sessions, ClaudeSessionStatus } from '@/api'
+import type { SessionSummary } from '@/api/generated/types.gen'
 
 export const projectSessionsQueryKey = (projectId: string) =>
   ['project-sessions', projectId] as const
 
 // Session statuses that indicate the session is active
-// Based on ClaudeSessionStatus enum in types.gen.ts
+// Based on ClaudeSessionStatus enum
 const ACTIVE_STATUSES: ClaudeSessionStatus[] = [
-  0, // Starting
-  1, // RunningHooks
-  2, // Running
-  3, // WaitingForInput
+  ClaudeSessionStatus.STARTING,
+  ClaudeSessionStatus.RUNNING_HOOKS,
+  ClaudeSessionStatus.RUNNING,
+  ClaudeSessionStatus.WAITING_FOR_INPUT,
 ]
 
 // Session statuses that indicate the session is actively processing
 const PROCESSING_STATUSES: ClaudeSessionStatus[] = [
-  0, // Starting
-  1, // RunningHooks
-  2, // Running
+  ClaudeSessionStatus.STARTING,
+  ClaudeSessionStatus.RUNNING_HOOKS,
+  ClaudeSessionStatus.RUNNING,
 ]
 
 /**

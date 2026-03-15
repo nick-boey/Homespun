@@ -4,6 +4,7 @@ import { QueryClientProvider, QueryClient } from '@tanstack/react-query'
 import { useChangedFiles } from './use-changed-files'
 import { Clones } from '@/api'
 import type { FileChangeInfo } from '@/api/generated'
+import { FileChangeStatus } from '@/api/generated'
 import { createMockSession } from '@/test/test-utils'
 
 vi.mock('@/api', () => ({
@@ -50,19 +51,19 @@ describe('useChangedFiles', () => {
         filePath: 'src/components/Button.tsx',
         additions: 25,
         deletions: 5,
-        status: 1, // Modified
+        status: FileChangeStatus.MODIFIED,
       },
       {
         filePath: 'src/components/NewComponent.tsx',
         additions: 100,
         deletions: 0,
-        status: 0, // Added
+        status: FileChangeStatus.ADDED,
       },
       {
         filePath: 'src/components/OldComponent.tsx',
         additions: 0,
         deletions: 50,
-        status: 2, // Deleted
+        status: FileChangeStatus.DELETED,
       },
     ]
 

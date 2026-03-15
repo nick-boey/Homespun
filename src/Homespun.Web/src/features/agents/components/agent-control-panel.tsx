@@ -4,29 +4,39 @@ import { Button } from '@/components/ui/button'
 import { Loader } from '@/components/ui/loader'
 import { ThinkingBar } from '@/components/ui/thinking-bar'
 import { cn } from '@/lib/utils'
-import { Sessions } from '@/api'
+import { Sessions, SessionMode, ClaudeSessionStatus } from '@/api'
 import { sessionsQueryKey } from '@/features/sessions/hooks/use-sessions'
 import { projectSessionsQueryKey } from '../hooks'
-import type { ClaudeSession, ClaudeSessionStatus } from '@/api/generated/types.gen'
+import type {
+  ClaudeSession,
+  ClaudeSessionStatus as ClaudeSessionStatusType,
+} from '@/api/generated/types.gen'
 
-const MODE_LABELS: Record<number, string> = {
-  0: 'Plan',
-  1: 'Build',
+const MODE_LABELS: Record<string, string> = {
+  [SessionMode.PLAN]: 'Plan',
+  [SessionMode.BUILD]: 'Build',
 }
 
-const STATUS_TEXT: Record<number, string> = {
-  0: 'Starting',
-  1: 'Running hooks',
-  2: 'Working',
-  3: 'Waiting for input',
-  4: 'Paused',
-  5: 'Stopped',
-  6: 'Error',
-  7: 'Completed',
+const STATUS_TEXT: Record<string, string> = {
+  [ClaudeSessionStatus.STARTING]: 'Starting',
+  [ClaudeSessionStatus.RUNNING_HOOKS]: 'Running hooks',
+  [ClaudeSessionStatus.RUNNING]: 'Working',
+  [ClaudeSessionStatus.WAITING_FOR_INPUT]: 'Waiting for input',
+  [ClaudeSessionStatus.WAITING_FOR_QUESTION_ANSWER]: 'Paused',
+  [ClaudeSessionStatus.WAITING_FOR_PLAN_EXECUTION]: 'Waiting for plan',
+  [ClaudeSessionStatus.STOPPED]: 'Stopped',
+  [ClaudeSessionStatus.ERROR]: 'Error',
 }
 
 // Active statuses where controls should be shown
-const ACTIVE_STATUSES = [0, 1, 2, 3, 4]
+const ACTIVE_STATUSES: ClaudeSessionStatusType[] = [
+  ClaudeSessionStatus.STARTING,
+  ClaudeSessionStatus.RUNNING_HOOKS,
+  ClaudeSessionStatus.RUNNING,
+  ClaudeSessionStatus.WAITING_FOR_INPUT,
+  ClaudeSessionStatus.WAITING_FOR_QUESTION_ANSWER,
+  ClaudeSessionStatus.WAITING_FOR_PLAN_EXECUTION,
+]
 
 interface AgentControlPanelProps {
   session: ClaudeSession
@@ -75,11 +85,11 @@ export function AgentControlPanel({
     },
   })
 
-  const status = session.status as ClaudeSessionStatus
-  const isActive = ACTIVE_STATUSES.includes(status as number)
-  const isRunning = status === 2
-  const isPaused = status === 4
-  const isWaiting = status === 3
+  const status = session.status as ClaudeSessionStatusType
+  const isActive = ACTIVE_STATUSES.includes(status)
+  const isRunning = status === ClaudeSessionStatus.RUNNING
+  const isPaused = status === ClaudeSessionStatus.WAITING_FOR_QUESTION_ANSWER
+  const isWaiting = status === ClaudeSessionStatus.WAITING_FOR_INPUT
 
   // Format duration
   const formatDuration = (ms?: number) => {
@@ -128,32 +138,36 @@ export function AgentControlPanel({
           {getModelName(session.model)}
         </span>
         <span className="bg-muted rounded px-2 py-0.5">
-          {MODE_LABELS[session.mode as number] ?? 'Unknown'}
+          {MODE_LABELS[session.mode] ?? 'Unknown'}
         </span>
       </div>
 
       {/* Status display */}
       <div className="flex items-center gap-3">
         {/* Starting state */}
-        {status === 0 && (
+        {status === ClaudeSessionStatus.STARTING && (
           <div className="flex items-center gap-2">
             <Loader variant="dots" size="sm" />
-            <span className="text-muted-foreground text-sm">{STATUS_TEXT[0]}</span>
+            <span className="text-muted-foreground text-sm">
+              {STATUS_TEXT[ClaudeSessionStatus.STARTING]}
+            </span>
           </div>
         )}
 
         {/* Running hooks */}
-        {status === 1 && (
+        {status === ClaudeSessionStatus.RUNNING_HOOKS && (
           <div className="flex items-center gap-2">
             <Loader variant="pulse" size="sm" />
-            <span className="text-muted-foreground text-sm">{STATUS_TEXT[1]}</span>
+            <span className="text-muted-foreground text-sm">
+              {STATUS_TEXT[ClaudeSessionStatus.RUNNING_HOOKS]}
+            </span>
           </div>
         )}
 
         {/* Running - show ThinkingBar */}
         {isRunning && (
           <ThinkingBar
-            text={STATUS_TEXT[2]}
+            text={STATUS_TEXT[ClaudeSessionStatus.RUNNING]}
             onStop={handleStop}
             stopLabel="Stop"
             className="flex-1"
@@ -164,7 +178,9 @@ export function AgentControlPanel({
         {isWaiting && (
           <div className="flex items-center gap-2">
             <Loader variant="pulse-dot" size="sm" />
-            <span className="text-muted-foreground text-sm">{STATUS_TEXT[3]}</span>
+            <span className="text-muted-foreground text-sm">
+              {STATUS_TEXT[ClaudeSessionStatus.WAITING_FOR_INPUT]}
+            </span>
           </div>
         )}
 
@@ -172,7 +188,9 @@ export function AgentControlPanel({
         {isPaused && (
           <div className="flex items-center gap-2">
             <Pause className="text-muted-foreground h-4 w-4" />
-            <span className="text-muted-foreground text-sm">{STATUS_TEXT[4]}</span>
+            <span className="text-muted-foreground text-sm">
+              {STATUS_TEXT[ClaudeSessionStatus.WAITING_FOR_QUESTION_ANSWER]}
+            </span>
           </div>
         )}
       </div>

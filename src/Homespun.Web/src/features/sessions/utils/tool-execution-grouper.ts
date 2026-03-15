@@ -4,6 +4,7 @@ import type {
   ToolExecutionGroup,
   MessageDisplayItem,
 } from '@/types/tool-execution'
+import { ClaudeMessageRole } from '@/api'
 
 /**
  * Groups tool executions from a list of Claude messages
@@ -47,13 +48,19 @@ export function groupToolExecutions(messages: ClaudeMessage[]): MessageDisplayIt
     const hasOnlyToolResults = message.content.every((c) => c.contentType === 'tool_result')
 
     // Skip user messages that only contain tool results (they've been matched)
-    if (hasOnlyToolResults && message.role === 0) {
+    // Support both numeric (legacy), PascalCase (SignalR), and camelCase (new API) role formats
+    const role = String(message.role)
+    const isUserRole = role === ClaudeMessageRole.USER || role === '0' || role === 'User'
+    const isAssistantRole =
+      role === ClaudeMessageRole.ASSISTANT || role === '1' || role === 'Assistant'
+
+    if (hasOnlyToolResults && isUserRole) {
       processedMessageIds.add(message.id)
       return
     }
 
     // For non-assistant messages (user messages), end any current group
-    if (message.role !== 1 && currentGroup) {
+    if (!isAssistantRole && currentGroup) {
       displayItems.push({ type: 'toolGroup', group: currentGroup })
       currentGroup = null
     }

@@ -4,6 +4,7 @@
 
 import { memo, forwardRef, type HTMLAttributes } from 'react'
 import { cn } from '@/lib/utils'
+import { IssueType, IssueStatus } from '@/api'
 import { ISSUE_STATUS_LABELS, ISSUE_TYPE_LABELS } from '@/lib/issue-constants'
 import {
   TaskGraphNodeSvg,
@@ -52,9 +53,9 @@ interface TaskGraphIssueRowProps extends HTMLAttributes<HTMLDivElement> {
   /** Whether a move operation is in progress (any issue is being moved) */
   isMoveOperationActive?: boolean
   /** Callback for changing issue type */
-  onTypeChange?: (issueId: string, newType: number) => void
+  onTypeChange?: (issueId: string, newType: IssueType) => void
   /** Callback for changing issue status */
-  onStatusChange?: (issueId: string, newStatus: number) => void
+  onStatusChange?: (issueId: string, newStatus: IssueStatus) => void
 }
 
 /**
@@ -147,19 +148,19 @@ export const TaskGraphIssueRow = memo(
                 onClick={(e) => e.stopPropagation()}
                 title="Click to change type"
               >
-                {ISSUE_TYPE_LABELS[line.issueType] ?? 'Task'}
+                {ISSUE_TYPE_LABELS[line.issueType as IssueType] ?? 'Task'}
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" onClick={(e) => e.stopPropagation()}>
               {Object.entries(ISSUE_TYPE_LABELS).map(([value, label]) => (
                 <DropdownMenuItem
                   key={value}
-                  onClick={() => onTypeChange?.(line.issueId, Number(value))}
-                  className={cn('text-xs', Number(value) === line.issueType && 'bg-accent')}
+                  onClick={() => onTypeChange?.(line.issueId, value as IssueType)}
+                  className={cn('text-xs', value === line.issueType && 'bg-accent')}
                 >
                   <span
                     className="mr-2 inline-block h-2 w-2 rounded-full"
-                    style={{ backgroundColor: getTypeColor(Number(value)) }}
+                    style={{ backgroundColor: getTypeColor(value as IssueType) }}
                   />
                   {label}
                 </DropdownMenuItem>
@@ -179,15 +180,15 @@ export const TaskGraphIssueRow = memo(
                 onClick={(e) => e.stopPropagation()}
                 title="Click to change status"
               >
-                {ISSUE_STATUS_LABELS[line.status] ?? 'Open'}
+                {ISSUE_STATUS_LABELS[line.status as IssueStatus] ?? 'Open'}
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" onClick={(e) => e.stopPropagation()}>
               {Object.entries(ISSUE_STATUS_LABELS).map(([value, label]) => (
                 <DropdownMenuItem
                   key={value}
-                  onClick={() => onStatusChange?.(line.issueId, Number(value))}
-                  className={cn('text-xs', Number(value) === line.status && 'bg-accent')}
+                  onClick={() => onStatusChange?.(line.issueId, value as IssueStatus)}
+                  className={cn('text-xs', value === line.status && 'bg-accent')}
                 >
                   {label}
                 </DropdownMenuItem>

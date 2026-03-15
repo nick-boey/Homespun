@@ -3,18 +3,19 @@ import { Clock, Coins } from 'lucide-react'
 import { ThinkingBar } from '@/components/ui/thinking-bar'
 import { Loader } from '@/components/ui/loader'
 import { cn } from '@/lib/utils'
-import type { ClaudeSessionStatus } from '@/api/generated/types.gen'
+import { ClaudeSessionStatus } from '@/api'
+import type { ClaudeSessionStatus as ClaudeSessionStatusType } from '@/api/generated/types.gen'
 
 // Status labels
-const STATUS_TEXT: Record<number, string> = {
-  0: 'Starting',
-  1: 'Running hooks',
-  2: 'Working',
-  3: 'Waiting for input',
-  4: 'Paused',
-  5: 'Stopped',
-  6: 'Error',
-  7: 'Completed',
+const STATUS_TEXT: Record<string, string> = {
+  [ClaudeSessionStatus.STARTING]: 'Starting',
+  [ClaudeSessionStatus.RUNNING_HOOKS]: 'Running hooks',
+  [ClaudeSessionStatus.RUNNING]: 'Working',
+  [ClaudeSessionStatus.WAITING_FOR_INPUT]: 'Waiting for input',
+  [ClaudeSessionStatus.WAITING_FOR_QUESTION_ANSWER]: 'Paused',
+  [ClaudeSessionStatus.WAITING_FOR_PLAN_EXECUTION]: 'Waiting for plan',
+  [ClaudeSessionStatus.STOPPED]: 'Stopped',
+  [ClaudeSessionStatus.ERROR]: 'Error',
 }
 
 /** Format duration from start time to now */
@@ -35,7 +36,7 @@ function formatDuration(startTime: Date): string {
 }
 
 interface AgentStatusIndicatorProps {
-  status: ClaudeSessionStatus
+  status: ClaudeSessionStatusType
   isActive: boolean
   onStop?: () => void
   tokenCount?: number
@@ -80,14 +81,16 @@ export function AgentStatusIndicator({
   }
 
   const statusText = STATUS_TEXT[status] ?? 'Unknown'
-  const isWaiting = status === 3 || status === 4
+  const isWaiting =
+    status === ClaudeSessionStatus.WAITING_FOR_INPUT ||
+    status === ClaudeSessionStatus.WAITING_FOR_QUESTION_ANSWER
 
   return (
     <div className={cn('flex flex-col gap-2', className)}>
       {/* Main status display */}
       <div className="flex items-center gap-3">
         {/* Starting state - show Loader */}
-        {status === 0 && (
+        {status === ClaudeSessionStatus.STARTING && (
           <div className="flex items-center gap-2">
             <Loader variant="dots" size="sm" />
             <span className="text-muted-foreground text-sm">{statusText}</span>
@@ -95,7 +98,7 @@ export function AgentStatusIndicator({
         )}
 
         {/* Running hooks state - show Loader */}
-        {status === 1 && (
+        {status === ClaudeSessionStatus.RUNNING_HOOKS && (
           <div className="flex items-center gap-2">
             <Loader variant="pulse" size="sm" />
             <span className="text-muted-foreground text-sm">{statusText}</span>
@@ -103,7 +106,7 @@ export function AgentStatusIndicator({
         )}
 
         {/* Running state - show ThinkingBar */}
-        {status === 2 && (
+        {status === ClaudeSessionStatus.RUNNING && (
           <ThinkingBar text={statusText} onStop={onStop} stopLabel="Stop" className="flex-1" />
         )}
 

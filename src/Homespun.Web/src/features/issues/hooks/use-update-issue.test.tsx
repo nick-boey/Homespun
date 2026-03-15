@@ -36,7 +36,7 @@ describe('useUpdateIssue', () => {
     const updatedIssue: IssueResponse = {
       id: 'issue-123',
       title: 'Updated Title',
-      status: IssueStatus[1],
+      status: IssueStatus.PROGRESS,
     }
 
     vi.mocked(Issues.putApiIssuesByIssueId).mockResolvedValue({
@@ -57,7 +57,7 @@ describe('useUpdateIssue', () => {
         data: {
           projectId: 'project-1',
           title: 'Updated Title',
-          status: 1,
+          status: IssueStatus.PROGRESS,
         },
       })
     })
@@ -71,7 +71,7 @@ describe('useUpdateIssue', () => {
       body: {
         projectId: 'project-1',
         title: 'Updated Title',
-        status: 1,
+        status: IssueStatus.PROGRESS,
       },
     })
     expect(onSuccess).toHaveBeenCalledWith(updatedIssue)

@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MessageList } from './message-list'
 import type { ClaudeMessage } from '@/types/signalr'
+import { ClaudeContentType, ClaudeMessageRole } from '@/api'
 
 // Mock the markdown component to avoid shiki async issues in tests
 vi.mock('@/components/ui/markdown', () => ({
@@ -375,33 +376,41 @@ describe('MessageList', () => {
     })
   })
 
-  // Tests for handling numeric enum values from backend
-  describe('numeric enum handling', () => {
-    it('renders text content when type is numeric 0 (Text)', () => {
+  // Tests for string enum values
+  describe('enum value handling', () => {
+    it('renders text content with string enum type', () => {
       const messages: ClaudeMessage[] = [
         createMessage({
           id: 'msg-1',
-          role: 'Assistant',
+          role: ClaudeMessageRole.ASSISTANT,
           content: [
-            // @ts-expect-error - testing numeric enum from backend
-            { type: 0, text: 'Message with numeric type', isStreaming: false, index: 0 },
+            {
+              type: ClaudeContentType.TEXT,
+              text: 'Message with string enum type',
+              isStreaming: false,
+              index: 0,
+            },
           ],
         }),
       ]
 
       render(<MessageList messages={messages} />)
 
-      expect(screen.getByText('Message with numeric type')).toBeInTheDocument()
+      expect(screen.getByText('Message with string enum type')).toBeInTheDocument()
     })
 
-    it('renders thinking content when type is numeric 1 (Thinking)', () => {
+    it('renders thinking content with string enum type', () => {
       const messages: ClaudeMessage[] = [
         createMessage({
           id: 'msg-1',
-          role: 'Assistant',
+          role: ClaudeMessageRole.ASSISTANT,
           content: [
-            // @ts-expect-error - testing numeric enum from backend
-            { type: 1, thinking: 'Thinking about something', isStreaming: false, index: 0 },
+            {
+              type: ClaudeContentType.THINKING,
+              thinking: 'Thinking about something',
+              isStreaming: false,
+              index: 0,
+            },
           ],
         }),
       ]
@@ -411,20 +420,25 @@ describe('MessageList', () => {
       expect(screen.getByText('Thinking about something')).toBeInTheDocument()
     })
 
-    it('renders tool use content when type is numeric 2 (ToolUse)', () => {
+    it('renders tool use content with string enum type', () => {
       const messages: ClaudeMessage[] = [
         createMessage({
           id: 'msg-1',
-          role: 'Assistant',
+          role: ClaudeMessageRole.ASSISTANT,
           content: [
             {
-              type: 'Text',
+              type: ClaudeContentType.TEXT,
               text: 'I will write a file',
               isStreaming: false,
               index: 0,
             },
-            // @ts-expect-error - testing numeric enum from backend
-            { type: 2, toolName: 'write_file', toolUseId: 'tool-1', isStreaming: false, index: 1 },
+            {
+              type: ClaudeContentType.TOOL_USE,
+              toolName: 'write_file',
+              toolUseId: 'tool-1',
+              isStreaming: false,
+              index: 1,
+            },
           ],
         }),
       ]
@@ -437,20 +451,25 @@ describe('MessageList', () => {
       expect(screen.queryByText('write_file')).not.toBeInTheDocument()
     })
 
-    it('renders tool result content when type is numeric 3 (ToolResult)', () => {
+    it('renders tool result content with string enum type', () => {
       const messages: ClaudeMessage[] = [
         createMessage({
           id: 'msg-1',
-          role: 'User',
+          role: ClaudeMessageRole.USER,
           content: [
             {
-              type: 'Text',
+              type: ClaudeContentType.TEXT,
               text: 'Here is the result',
               isStreaming: false,
               index: 0,
             },
-            // @ts-expect-error - testing numeric enum from backend
-            { type: 3, toolResult: 'Success', toolUseId: 'tool-1', isStreaming: false, index: 1 },
+            {
+              type: ClaudeContentType.TOOL_RESULT,
+              toolResult: 'Success',
+              toolUseId: 'tool-1',
+              isStreaming: false,
+              index: 1,
+            },
           ],
         }),
       ]
@@ -463,14 +482,18 @@ describe('MessageList', () => {
       expect(screen.queryByText(/Tool result/)).not.toBeInTheDocument()
     })
 
-    it('renders user message correctly when role is numeric 0 (User)', () => {
+    it('renders user message correctly with string enum role', () => {
       const messages: ClaudeMessage[] = [
         createMessage({
           id: 'msg-1',
-          // @ts-expect-error - testing numeric enum from backend
-          role: 0,
+          role: ClaudeMessageRole.USER,
           content: [
-            { type: 'Text', text: 'User message with numeric role', isStreaming: false, index: 0 },
+            {
+              type: ClaudeContentType.TEXT,
+              text: 'User message with string role',
+              isStreaming: false,
+              index: 0,
+            },
           ],
         }),
       ]
@@ -479,19 +502,18 @@ describe('MessageList', () => {
 
       const messageElement = screen.getByTestId('message-msg-1')
       expect(messageElement).toHaveClass('justify-end') // User messages are right-aligned
-      expect(screen.getByText('User message with numeric role')).toBeInTheDocument()
+      expect(screen.getByText('User message with string role')).toBeInTheDocument()
     })
 
-    it('renders assistant message correctly when role is numeric 1 (Assistant)', () => {
+    it('renders assistant message correctly with string enum role', () => {
       const messages: ClaudeMessage[] = [
         createMessage({
           id: 'msg-1',
-          // @ts-expect-error - testing numeric enum from backend
-          role: 1,
+          role: ClaudeMessageRole.ASSISTANT,
           content: [
             {
-              type: 'Text',
-              text: 'Assistant message with numeric role',
+              type: ClaudeContentType.TEXT,
+              text: 'Assistant message with string role',
               isStreaming: false,
               index: 0,
             },
@@ -505,16 +527,14 @@ describe('MessageList', () => {
       expect(messageElement).toHaveClass('justify-start') // Assistant messages are left-aligned
     })
 
-    it('handles mixed numeric and string enum values', () => {
+    it('handles multiple content types in a single message', () => {
       const messages: ClaudeMessage[] = [
         createMessage({
           id: 'msg-1',
-          // @ts-expect-error - testing numeric enum from backend
-          role: 1, // numeric Assistant
+          role: ClaudeMessageRole.ASSISTANT,
           content: [
-            // @ts-expect-error - testing numeric enum from backend
-            { type: 0, text: 'First part', isStreaming: false, index: 0 }, // numeric Text
-            { type: 'ToolUse', toolName: 'test_tool', isStreaming: false, index: 1 }, // string ToolUse
+            { type: ClaudeContentType.TEXT, text: 'First part', isStreaming: false, index: 0 },
+            { type: ClaudeContentType.TEXT, text: 'Second part', isStreaming: false, index: 1 },
           ],
         }),
       ]
@@ -522,7 +542,7 @@ describe('MessageList', () => {
       render(<MessageList messages={messages} />)
 
       expect(screen.getByText('First part')).toBeInTheDocument()
-      expect(screen.getByText(/test_tool/)).toBeInTheDocument()
+      expect(screen.getByText('Second part')).toBeInTheDocument()
     })
   })
 })

@@ -1,5 +1,6 @@
 import { FileText, FilePlus, FileX, FileDiff, FileCode } from 'lucide-react'
-import type { FileChangeInfo } from '@/api/generated'
+import type { FileChangeInfo, FileChangeStatus as FileChangeStatusType } from '@/api/generated'
+import { FileChangeStatus } from '@/api'
 import type { ClaudeSession } from '@/types/signalr'
 import { useChangedFiles } from '@/features/sessions/hooks'
 import { cn } from '@/lib/utils'
@@ -9,10 +10,10 @@ interface SessionFilesTabProps {
   session: ClaudeSession
 }
 
-// Map numeric status to meaningful labels and icons
-const getFileStatusInfo = (status?: number) => {
+// Map status to meaningful labels and icons
+const getFileStatusInfo = (status?: FileChangeStatusType) => {
   switch (status) {
-    case 0: // Added
+    case FileChangeStatus.ADDED:
       return {
         icon: FilePlus,
         label: 'Added',
@@ -20,7 +21,7 @@ const getFileStatusInfo = (status?: number) => {
         bgColor: 'bg-green-500/10',
         borderColor: 'border-green-500/20',
       }
-    case 1: // Modified
+    case FileChangeStatus.MODIFIED:
       return {
         icon: FileDiff,
         label: 'Modified',
@@ -28,7 +29,7 @@ const getFileStatusInfo = (status?: number) => {
         bgColor: 'bg-yellow-500/10',
         borderColor: 'border-yellow-500/20',
       }
-    case 2: // Deleted
+    case FileChangeStatus.DELETED:
       return {
         icon: FileX,
         label: 'Deleted',
@@ -36,7 +37,7 @@ const getFileStatusInfo = (status?: number) => {
         bgColor: 'bg-red-500/10',
         borderColor: 'border-red-500/20',
       }
-    case 3: // Renamed
+    case FileChangeStatus.RENAMED:
       return {
         icon: FileCode,
         label: 'Renamed',
@@ -104,8 +105,8 @@ export function SessionFilesTab({ session }: SessionFilesTabProps) {
   }
 
   // Group files by status
-  const groupedFiles = files.reduce<Record<number, FileChangeInfo[]>>((acc, file) => {
-    const status = file.status ?? -1
+  const groupedFiles = files.reduce<Record<string, FileChangeInfo[]>>((acc, file) => {
+    const status = file.status ?? 'unknown'
     if (!acc[status]) {
       acc[status] = []
     }
@@ -122,7 +123,7 @@ export function SessionFilesTab({ session }: SessionFilesTabProps) {
 
       {/* Files grouped by status */}
       {Object.entries(groupedFiles).map(([status, statusFiles]) => {
-        const statusInfo = getFileStatusInfo(Number(status))
+        const statusInfo = getFileStatusInfo(status as FileChangeStatusType)
         const Icon = statusInfo.icon
 
         return (

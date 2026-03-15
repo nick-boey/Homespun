@@ -12,36 +12,41 @@ import type {
   ClaudeMessageRole,
   PendingQuestion,
 } from '@/types/signalr'
+import { ClaudeContentType as ContentTypeEnum, ClaudeMessageRole as RoleEnum } from '@/api'
 import { useState, useMemo } from 'react'
 import { groupToolExecutions } from '../utils/tool-execution-grouper'
 import { convertSignalRMessages } from '../utils/signalr-message-adapter'
 import { ToolExecutionGroupDisplay } from './tool-execution-group'
 
-// Backend sends numeric enum values, but TypeScript types expect strings.
-// These maps normalize both forms to the string representation.
-const ContentTypeMap: Record<number | string, ClaudeContentType> = {
-  0: 'Text',
-  1: 'Thinking',
-  2: 'ToolUse',
-  3: 'ToolResult',
+// Backend may send camelCase string enum values (from API) or PascalCase (from SignalR).
+// These maps normalize all forms to the PascalCase string representation for internal use.
+const ContentTypeMap: Record<string, ClaudeContentType> = {
+  // camelCase (from API)
+  [ContentTypeEnum.TEXT]: 'Text',
+  [ContentTypeEnum.THINKING]: 'Thinking',
+  [ContentTypeEnum.TOOL_USE]: 'ToolUse',
+  [ContentTypeEnum.TOOL_RESULT]: 'ToolResult',
+  // PascalCase (from SignalR)
   Text: 'Text',
   Thinking: 'Thinking',
   ToolUse: 'ToolUse',
   ToolResult: 'ToolResult',
 }
 
-const RoleMap: Record<number | string, ClaudeMessageRole> = {
-  0: 'User',
-  1: 'Assistant',
+const RoleMap: Record<string, ClaudeMessageRole> = {
+  // camelCase (from API)
+  [RoleEnum.USER]: 'User',
+  [RoleEnum.ASSISTANT]: 'Assistant',
+  // PascalCase (from SignalR)
   User: 'User',
   Assistant: 'Assistant',
 }
 
-function normalizeContentType(type: number | string): ClaudeContentType {
+function normalizeContentType(type: string): ClaudeContentType {
   return ContentTypeMap[type] ?? 'Text'
 }
 
-function normalizeRole(role: number | string): ClaudeMessageRole {
+function normalizeRole(role: string): ClaudeMessageRole {
   return RoleMap[role] ?? 'User'
 }
 

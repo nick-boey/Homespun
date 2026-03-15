@@ -1,10 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Issues } from '@/api'
+import { Issues, ConflictResolutionStrategy } from '@/api'
 import type {
   ApplyAgentChangesRequest,
   ApplyAgentChangesResponse,
   ResolveConflictsRequest,
-} from '@/api/generated'
+} from '@/api'
 import { toast } from 'sonner'
 
 export function useApplyAgentChanges(issueId: string) {
@@ -60,7 +60,7 @@ export function usePreviewAgentChanges(issueId: string, sessionId: string, proje
           projectId,
           sessionId,
           dryRun: true,
-          conflictStrategy: 3, // Manual
+          conflictStrategy: ConflictResolutionStrategy.MANUAL,
         },
       })
 

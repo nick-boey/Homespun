@@ -3,8 +3,7 @@ import { useEffect, useRef, useCallback, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useBreadcrumbSetter } from '@/hooks/use-breadcrumbs'
-import { toApiSessionMode, fromApiSessionMode } from '@/lib/utils/session-mode'
-import type { SessionMode as ApiSessionMode } from '@/api'
+import { toApiSessionMode, normalizeSessionMode } from '@/lib/utils/session-mode'
 import {
   useSession,
   useSessionMessages,
@@ -357,12 +356,7 @@ interface SessionHeaderProps {
  * to a display-friendly string.
  */
 function getModeDisplayString(mode: string | number): string {
-  // Handle numeric values from SignalR/API
-  if (typeof mode === 'number') {
-    return fromApiSessionMode(mode as ApiSessionMode)
-  }
-  // Handle string values (already "Plan" or "Build")
-  return mode
+  return normalizeSessionMode(mode)
 }
 
 function SessionHeader({

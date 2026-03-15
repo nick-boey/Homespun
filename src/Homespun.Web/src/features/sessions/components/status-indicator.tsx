@@ -1,5 +1,5 @@
 import { cn } from '@/lib/utils'
-import type { ClaudeSessionStatus } from '@/api/generated/types.gen'
+import { ClaudeSessionStatus } from '@/api'
 
 interface StatusIndicatorProps {
   status: ClaudeSessionStatus | undefined
@@ -7,34 +7,22 @@ interface StatusIndicatorProps {
   className?: string
 }
 
-// Status enum values from backend
-const SessionStatus = {
-  Starting: 0,
-  RunningHooks: 1,
-  Running: 2,
-  WaitingForInput: 3,
-  WaitingForQuestionAnswer: 4,
-  WaitingForPlanExecution: 5,
-  Stopped: 6,
-  Error: 7,
-} as const
-
 function getStatusColor(status: ClaudeSessionStatus | undefined): string {
   switch (status) {
-    case SessionStatus.Starting:
+    case ClaudeSessionStatus.STARTING:
       return 'bg-yellow-500'
-    case SessionStatus.RunningHooks:
-    case SessionStatus.Running:
+    case ClaudeSessionStatus.RUNNING_HOOKS:
+    case ClaudeSessionStatus.RUNNING:
       return 'bg-green-500'
-    case SessionStatus.WaitingForInput:
+    case ClaudeSessionStatus.WAITING_FOR_INPUT:
       return 'bg-yellow-500'
-    case SessionStatus.WaitingForQuestionAnswer:
+    case ClaudeSessionStatus.WAITING_FOR_QUESTION_ANSWER:
       return 'bg-purple-500'
-    case SessionStatus.WaitingForPlanExecution:
+    case ClaudeSessionStatus.WAITING_FOR_PLAN_EXECUTION:
       return 'bg-orange-500'
-    case SessionStatus.Error:
+    case ClaudeSessionStatus.ERROR:
       return 'bg-red-500'
-    case SessionStatus.Stopped:
+    case ClaudeSessionStatus.STOPPED:
     default:
       return 'bg-gray-400'
   }
@@ -42,12 +30,12 @@ function getStatusColor(status: ClaudeSessionStatus | undefined): string {
 
 function isActiveStatus(status: ClaudeSessionStatus | undefined): boolean {
   return (
-    status === SessionStatus.Starting ||
-    status === SessionStatus.RunningHooks ||
-    status === SessionStatus.Running ||
-    status === SessionStatus.WaitingForInput ||
-    status === SessionStatus.WaitingForQuestionAnswer ||
-    status === SessionStatus.WaitingForPlanExecution
+    status === ClaudeSessionStatus.STARTING ||
+    status === ClaudeSessionStatus.RUNNING_HOOKS ||
+    status === ClaudeSessionStatus.RUNNING ||
+    status === ClaudeSessionStatus.WAITING_FOR_INPUT ||
+    status === ClaudeSessionStatus.WAITING_FOR_QUESTION_ANSWER ||
+    status === ClaudeSessionStatus.WAITING_FOR_PLAN_EXECUTION
   )
 }
 

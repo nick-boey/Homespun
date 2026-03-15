@@ -4,6 +4,8 @@
  */
 
 import { memo } from 'react'
+import { ClaudeSessionStatus, IssueType } from '@/api'
+import type { IssueType as IssueTypeEnum } from '@/api'
 import type { TaskGraphIssueRenderLine } from '../services'
 
 // Constants matching TimelineSvgRenderer.cs
@@ -13,63 +15,43 @@ export const NODE_RADIUS = 6
 export const LINE_STROKE_WIDTH = 2
 
 /** Type colors matching the issue acceptance criteria */
-const TYPE_COLORS: Record<number, string> = {
-  0: '#3b82f6', // Task: Blue
-  1: '#ef4444', // Bug: Red
-  2: '#6b7280', // Chore: Gray
-  3: '#22c55e', // Feature: Green
-  4: '#8b5cf6', // Idea: Purple
+const TYPE_COLORS: Record<string, string> = {
+  [IssueType.TASK]: '#3b82f6', // Task: Blue
+  [IssueType.BUG]: '#ef4444', // Bug: Red
+  [IssueType.CHORE]: '#6b7280', // Chore: Gray
+  [IssueType.FEATURE]: '#22c55e', // Feature: Green
+  [IssueType.IDEA]: '#8b5cf6', // Idea: Purple
+  [IssueType.VERIFY]: '#3b82f6', // Verify: Blue (same as Task)
 }
 
-export function getTypeColor(issueType: number): string {
-  return TYPE_COLORS[issueType] ?? TYPE_COLORS[0]
+export function getTypeColor(issueType: IssueTypeEnum): string {
+  return TYPE_COLORS[issueType] ?? TYPE_COLORS[IssueType.TASK]
 }
 
 /**
  * Maps agent status to ring color based on status value.
  * Returns null if no ring should be shown.
- * Handles both string status names and numeric values.
+ * Handles string status values.
  */
 function getAgentStatusColor(status: string | null): string | null {
   if (!status) return null
 
-  // Map string status names to colors
-  const statusMap: Record<string, string | null> = {
-    Starting: '#3b82f6', // Blue
-    RunningHooks: '#3b82f6', // Blue
-    Running: '#3b82f6', // Blue
-    WaitingForInput: '#eab308', // Yellow
-    WaitingForQuestionAnswer: '#eab308', // Yellow
-    WaitingForPlanExecution: '#eab308', // Yellow
-    Error: '#ef4444', // Red
-    Stopped: null, // No ring
+  // Map status to colors using the enum values
+  switch (status) {
+    case ClaudeSessionStatus.STARTING:
+    case ClaudeSessionStatus.RUNNING_HOOKS:
+    case ClaudeSessionStatus.RUNNING:
+      return '#3b82f6' // Blue
+    case ClaudeSessionStatus.WAITING_FOR_INPUT:
+    case ClaudeSessionStatus.WAITING_FOR_QUESTION_ANSWER:
+    case ClaudeSessionStatus.WAITING_FOR_PLAN_EXECUTION:
+      return '#eab308' // Yellow
+    case ClaudeSessionStatus.ERROR:
+      return '#ef4444' // Red
+    case ClaudeSessionStatus.STOPPED:
+    default:
+      return null // No ring for Stopped or unknown status
   }
-
-  // First check if it's a string status name
-  if (status in statusMap) {
-    return statusMap[status]
-  }
-
-  // Fall back to numeric parsing for backward compatibility
-  const statusNum = parseInt(status)
-  if (!isNaN(statusNum)) {
-    switch (statusNum) {
-      case 0: // Starting
-      case 1: // RunningHooks
-      case 2: // Running
-        return '#3b82f6' // Blue
-      case 3: // WaitingForInput
-      case 4: // WaitingForQuestionAnswer
-      case 5: // WaitingForPlanExecution
-        return '#eab308' // Yellow
-      case 7: // Error
-        return '#ef4444' // Red
-      default:
-        return null // No ring for Stopped (6) or unknown status
-    }
-  }
-
-  return null // Unknown status
 }
 
 export function calculateSvgWidth(maxLanes: number): number {

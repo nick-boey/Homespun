@@ -2,25 +2,38 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 import { act, renderHook } from '@testing-library/react'
 import { useKeyboardNavigation } from './use-keyboard-navigation'
 import { KeyboardEditMode, EditCursorPosition, type TaskGraphRenderLine } from '../types'
+import { IssueType } from '@/api'
 
 describe('useKeyboardNavigation', () => {
   const mockRenderLines: TaskGraphRenderLine[] = [
-    { issueId: 'issue-1', title: 'First Issue', lane: 0, issueType: 0, isActionable: true },
+    {
+      issueId: 'issue-1',
+      title: 'First Issue',
+      lane: 0,
+      issueType: IssueType.TASK,
+      isActionable: true,
+    },
     {
       issueId: 'issue-2',
       title: 'Second Issue',
       lane: 1,
       parentLane: 0,
-      issueType: 1,
+      issueType: IssueType.BUG,
       isActionable: false,
     },
-    { issueId: 'issue-3', title: 'Third Issue', lane: 0, issueType: 0, isActionable: true },
+    {
+      issueId: 'issue-3',
+      title: 'Third Issue',
+      lane: 0,
+      issueType: IssueType.TASK,
+      isActionable: true,
+    },
     {
       issueId: 'issue-4',
       title: 'Fourth Issue',
       lane: 2,
       parentLane: 1,
-      issueType: 2,
+      issueType: IssueType.CHORE,
       isActionable: false,
     },
   ]

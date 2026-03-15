@@ -40,7 +40,7 @@ describe('PullRequestsTab', () => {
       pullRequest: {
         number: 123,
         title: 'Add new feature',
-        status: PullRequestStatus[1],
+        status: PullRequestStatus.READY_FOR_REVIEW,
         branchName: 'feature/new-feature',
         htmlUrl: 'https://github.com/owner/repo/pull/123',
         checksPassing: true,
@@ -48,7 +48,7 @@ describe('PullRequestsTab', () => {
         approvalCount: 0,
         changesRequestedCount: 0,
       },
-      status: PullRequestStatus[1],
+      status: PullRequestStatus.READY_FOR_REVIEW,
       time: 3600,
     },
   ]
@@ -58,7 +58,7 @@ describe('PullRequestsTab', () => {
       pullRequest: {
         number: 120,
         title: 'Merged feature',
-        status: PullRequestStatus[2],
+        status: PullRequestStatus.MERGED,
         branchName: 'feature/merged',
         htmlUrl: 'https://github.com/owner/repo/pull/120',
         mergedAt: '2024-01-15T10:00:00Z',

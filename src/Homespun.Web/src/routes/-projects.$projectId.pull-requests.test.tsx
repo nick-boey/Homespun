@@ -39,11 +39,11 @@ describe('PullRequestsPage', () => {
           pullRequest: {
             number: 123,
             title: 'Test PR',
-            status: PullRequestStatus[1],
+            status: PullRequestStatus.READY_FOR_REVIEW,
             branchName: 'feature/test',
             htmlUrl: 'https://github.com/owner/repo/pull/123',
           },
-          status: PullRequestStatus[1],
+          status: PullRequestStatus.READY_FOR_REVIEW,
           time: 0,
         },
       ],

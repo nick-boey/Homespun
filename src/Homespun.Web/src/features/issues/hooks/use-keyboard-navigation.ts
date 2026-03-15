@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
+import { IssueType } from '@/api'
 import {
   KeyboardEditMode,
   EditCursorPosition,
@@ -22,7 +23,7 @@ export interface UseKeyboardNavigationOptions {
   /** Callback fired when an issue is created and should be opened for description editing. */
   onIssueCreatedForEdit?: (issueId: string) => Promise<void>
   /** Callback fired when type cycling should be performed on the selected issue. */
-  onCycleIssueType?: (issueId: string, currentType: number) => Promise<void>
+  onCycleIssueType?: (issueId: string, currentType: IssueType) => Promise<void>
   /** Callback fired when a sibling move is requested (J/K keys). */
   onSiblingMoveRequested?: (issueId: string, direction: 'Up' | 'Down') => Promise<void>
 }

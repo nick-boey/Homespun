@@ -3,12 +3,13 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { PromptCard } from './prompt-card'
 import type { AgentPrompt } from '@/api/generated/types.gen'
+import { SessionMode } from '@/api/generated/types.gen'
 
 const mockPrompt: AgentPrompt = {
   id: 'prompt-1',
   name: 'Test Prompt',
   initialMessage: 'This is a test system prompt with some content.',
-  mode: 1,
+  mode: SessionMode.BUILD,
   projectId: 'proj-1',
   updatedAt: '2024-01-15T10:00:00Z',
 }
@@ -27,8 +28,8 @@ describe('PromptCard', () => {
     expect(screen.getByText('Build')).toBeInTheDocument()
   })
 
-  it('displays Plan mode badge for mode 0', () => {
-    const planPrompt = { ...mockPrompt, mode: 0 as const }
+  it('displays Plan mode badge for mode Plan', () => {
+    const planPrompt = { ...mockPrompt, mode: SessionMode.PLAN }
     render(<PromptCard prompt={planPrompt} onEdit={vi.fn()} onDelete={vi.fn()} />)
 
     expect(screen.getByText('Plan')).toBeInTheDocument()

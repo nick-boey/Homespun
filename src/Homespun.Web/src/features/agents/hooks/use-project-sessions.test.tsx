@@ -2,15 +2,19 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useProjectSessions, useActiveSessionCount } from './use-project-sessions'
-import { Sessions } from '@/api'
+import { Sessions, SessionMode, ClaudeSessionStatus } from '@/api'
 import type { ReactNode } from 'react'
 import type { SessionSummary } from '@/api/generated/types.gen'
 
-vi.mock('@/api', () => ({
-  Sessions: {
-    getApiSessionsProjectByProjectId: vi.fn(),
-  },
-}))
+vi.mock('@/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/api')>()
+  return {
+    ...actual,
+    Sessions: {
+      getApiSessionsProjectByProjectId: vi.fn(),
+    },
+  }
+})
 
 const mockGetProjectSessions = vi.mocked(Sessions.getApiSessionsProjectByProjectId)
 
@@ -30,8 +34,8 @@ function createSessionSummary(overrides: Partial<SessionSummary> = {}): SessionS
     entityId: 'entity-1',
     projectId: 'project-123',
     model: 'sonnet',
-    mode: 1 as const,
-    status: 2 as const,
+    mode: SessionMode.BUILD,
+    status: ClaudeSessionStatus.RUNNING,
     ...overrides,
   }
 }
@@ -57,13 +61,13 @@ describe('useProjectSessions', () => {
       createSessionSummary({
         id: 'session-1',
         entityId: 'issue-1',
-        status: 2 as const, // Running
+        status: ClaudeSessionStatus.RUNNING,
       }),
       createSessionSummary({
         id: 'session-2',
         entityId: 'issue-2',
         model: 'opus',
-        status: 3 as const, // WaitingForInput
+        status: ClaudeSessionStatus.WAITING_FOR_INPUT,
       }),
     ]
 
@@ -100,9 +104,9 @@ describe('useActiveSessionCount', () => {
 
   it('returns count of active sessions', async () => {
     const mockSessions: SessionSummary[] = [
-      createSessionSummary({ id: 'session-1', status: 2 as const }), // Running - active
-      createSessionSummary({ id: 'session-2', status: 3 as const }), // WaitingForInput - active
-      createSessionSummary({ id: 'session-3', status: 5 as const }), // Stopped - not active
+      createSessionSummary({ id: 'session-1', status: ClaudeSessionStatus.RUNNING }), // active
+      createSessionSummary({ id: 'session-2', status: ClaudeSessionStatus.WAITING_FOR_INPUT }), // active
+      createSessionSummary({ id: 'session-3', status: ClaudeSessionStatus.STOPPED }), // not active
     ]
 
     mockGetProjectSessions.mockResolvedValueOnce(createMockResponse(mockSessions))
@@ -118,7 +122,7 @@ describe('useActiveSessionCount', () => {
 
   it('returns hasActive as true when there are active sessions', async () => {
     const mockSessions: SessionSummary[] = [
-      createSessionSummary({ id: 'session-1', status: 2 as const }), // Running
+      createSessionSummary({ id: 'session-1', status: ClaudeSessionStatus.RUNNING }),
     ]
 
     mockGetProjectSessions.mockResolvedValueOnce(createMockResponse(mockSessions))
@@ -134,7 +138,7 @@ describe('useActiveSessionCount', () => {
 
   it('returns isProcessing as true when sessions are running', async () => {
     const mockSessions: SessionSummary[] = [
-      createSessionSummary({ id: 'session-1', status: 2 as const }), // Running
+      createSessionSummary({ id: 'session-1', status: ClaudeSessionStatus.RUNNING }),
     ]
 
     mockGetProjectSessions.mockResolvedValueOnce(createMockResponse(mockSessions))
@@ -150,7 +154,7 @@ describe('useActiveSessionCount', () => {
 
   it('returns isProcessing as false when sessions are waiting', async () => {
     const mockSessions: SessionSummary[] = [
-      createSessionSummary({ id: 'session-1', status: 3 as const }), // WaitingForInput
+      createSessionSummary({ id: 'session-1', status: ClaudeSessionStatus.WAITING_FOR_INPUT }),
     ]
 
     mockGetProjectSessions.mockResolvedValueOnce(createMockResponse(mockSessions))

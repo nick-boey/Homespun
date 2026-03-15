@@ -5,6 +5,7 @@
 import { memo, useCallback, useState } from 'react'
 import { Copy, Pencil, Play, X, ExternalLink } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { IssueStatus } from '@/api'
 import { ISSUE_STATUS_LABELS, ISSUE_STATUS_COLORS, ISSUE_TYPE_LABELS } from '@/lib/issue-constants'
 import { Button } from '@/components/ui/button'
 import { Markdown } from '@/components/ui/markdown'
@@ -91,10 +92,10 @@ export const InlineIssueDetailRow = memo(function InlineIssueDetailRow({
         <span
           className={cn(
             'shrink-0 rounded px-1.5 py-0.5 text-xs font-medium',
-            ISSUE_STATUS_COLORS[line.status] ?? ISSUE_STATUS_COLORS[0]
+            ISSUE_STATUS_COLORS[line.status as IssueStatus] ?? ISSUE_STATUS_COLORS[IssueStatus.OPEN]
           )}
         >
-          {ISSUE_STATUS_LABELS[line.status] ?? 'Open'}
+          {ISSUE_STATUS_LABELS[line.status as IssueStatus] ?? 'Open'}
         </span>
 
         {/* Spacer */}

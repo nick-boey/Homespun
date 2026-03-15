@@ -3,6 +3,7 @@ import { renderHook, waitFor, act } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useUpdatePrompt } from './use-update-prompt'
 import { AgentPrompts } from '@/api'
+import { SessionMode } from '@/api/generated/types.gen'
 
 vi.mock('@/api', () => ({
   AgentPrompts: {
@@ -32,7 +33,7 @@ describe('useUpdatePrompt', () => {
       id: 'prompt-1',
       name: 'Updated Prompt',
       initialMessage: 'Updated message',
-      mode: 1,
+      mode: SessionMode.BUILD,
       projectId: 'proj-1',
     }
     vi.mocked(AgentPrompts.putApiAgentPromptsById).mockResolvedValue({
@@ -49,7 +50,7 @@ describe('useUpdatePrompt', () => {
         id: 'prompt-1',
         name: 'Updated Prompt',
         initialMessage: 'Updated message',
-        mode: 1,
+        mode: SessionMode.BUILD,
       })
     })
 
@@ -58,7 +59,7 @@ describe('useUpdatePrompt', () => {
       body: {
         name: 'Updated Prompt',
         initialMessage: 'Updated message',
-        mode: 1,
+        mode: SessionMode.BUILD,
       },
     })
     expect(onSuccess).toHaveBeenCalledWith(updatedPrompt)

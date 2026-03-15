@@ -26,31 +26,19 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useClaudeCodeHub } from '@/providers/signalr-provider'
 import { registerClaudeCodeHubEvents } from '@/lib/signalr/claude-code-hub'
-import type { ClaudeSessionStatus } from '@/api/generated/types.gen'
+import { ClaudeSessionStatus } from '@/api'
 import { useQueryClient } from '@tanstack/react-query'
-
-// Status enum values from backend
-const SessionStatus = {
-  Starting: 0,
-  RunningHooks: 1,
-  Running: 2,
-  WaitingForInput: 3,
-  WaitingForQuestionAnswer: 4,
-  WaitingForPlanExecution: 5,
-  Stopped: 6,
-  Error: 7,
-} as const
 
 type StatusFilter = 'all' | 'active' | 'stopped' | 'error'
 
 function isActiveStatus(status: ClaudeSessionStatus | undefined): boolean {
   return (
-    status === SessionStatus.Starting ||
-    status === SessionStatus.RunningHooks ||
-    status === SessionStatus.Running ||
-    status === SessionStatus.WaitingForInput ||
-    status === SessionStatus.WaitingForQuestionAnswer ||
-    status === SessionStatus.WaitingForPlanExecution
+    status === ClaudeSessionStatus.STARTING ||
+    status === ClaudeSessionStatus.RUNNING_HOOKS ||
+    status === ClaudeSessionStatus.RUNNING ||
+    status === ClaudeSessionStatus.WAITING_FOR_INPUT ||
+    status === ClaudeSessionStatus.WAITING_FOR_QUESTION_ANSWER ||
+    status === ClaudeSessionStatus.WAITING_FOR_PLAN_EXECUTION
   )
 }
 
@@ -113,12 +101,14 @@ export function SessionsList() {
     if (activeTab === 'active') {
       filtered = filtered.filter(
         (s) =>
-          s.session.status !== SessionStatus.Stopped && s.session.status !== SessionStatus.Error
+          s.session.status !== ClaudeSessionStatus.STOPPED &&
+          s.session.status !== ClaudeSessionStatus.ERROR
       )
     } else {
       filtered = filtered.filter(
         (s) =>
-          s.session.status === SessionStatus.Stopped || s.session.status === SessionStatus.Error
+          s.session.status === ClaudeSessionStatus.STOPPED ||
+          s.session.status === ClaudeSessionStatus.ERROR
       )
     }
 
@@ -130,10 +120,10 @@ export function SessionsList() {
           return isActiveStatus(status)
         }
         if (statusFilter === 'stopped') {
-          return status === SessionStatus.Stopped
+          return status === ClaudeSessionStatus.STOPPED
         }
         if (statusFilter === 'error') {
-          return status === SessionStatus.Error
+          return status === ClaudeSessionStatus.ERROR
         }
         return true
       })
@@ -206,10 +196,14 @@ export function SessionsList() {
   }
 
   const activeSessions = sessions.filter(
-    (s) => s.session.status !== SessionStatus.Stopped && s.session.status !== SessionStatus.Error
+    (s) =>
+      s.session.status !== ClaudeSessionStatus.STOPPED &&
+      s.session.status !== ClaudeSessionStatus.ERROR
   )
   const archivedSessions = sessions.filter(
-    (s) => s.session.status === SessionStatus.Stopped || s.session.status === SessionStatus.Error
+    (s) =>
+      s.session.status === ClaudeSessionStatus.STOPPED ||
+      s.session.status === ClaudeSessionStatus.ERROR
   )
 
   return (

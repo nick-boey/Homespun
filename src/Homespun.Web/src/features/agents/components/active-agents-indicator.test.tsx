@@ -2,16 +2,20 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ActiveAgentsIndicator } from './active-agents-indicator'
-import { Sessions } from '@/api'
+import { Sessions, SessionMode, ClaudeSessionStatus } from '@/api'
 import type { ReactNode } from 'react'
 import type { SessionSummary } from '@/api/generated/types.gen'
 
-vi.mock('@/api', () => ({
-  Sessions: {
-    getApiSessionsProjectByProjectId: vi.fn(),
-    getApiSessions: vi.fn(),
-  },
-}))
+vi.mock('@/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/api')>()
+  return {
+    ...actual,
+    Sessions: {
+      getApiSessionsProjectByProjectId: vi.fn(),
+      getApiSessions: vi.fn(),
+    },
+  }
+})
 
 // Mock TanStack Router Link component
 vi.mock('@tanstack/react-router', async () => {
@@ -41,8 +45,8 @@ function createSessionSummary(overrides: Partial<SessionSummary> = {}): SessionS
     entityId: 'entity-1',
     projectId: 'project-1',
     model: 'sonnet',
-    mode: 1 as const,
-    status: 2 as const,
+    mode: SessionMode.BUILD,
+    status: ClaudeSessionStatus.RUNNING,
     ...overrides,
   }
 }
@@ -67,10 +71,16 @@ describe('ActiveAgentsIndicator', () => {
     it('shows multiple status indicators for different agent states', async () => {
       mockGetAllSessions.mockResolvedValueOnce(
         createMockResponse([
-          createSessionSummary({ id: 'session-1', status: 2 as const }), // Running
-          createSessionSummary({ id: 'session-2', status: 3 as const }), // WaitingForInput
-          createSessionSummary({ id: 'session-3', status: 4 as const }), // WaitingForQuestionAnswer
-          createSessionSummary({ id: 'session-4', status: 5 as const }), // WaitingForPlanExecution
+          createSessionSummary({ id: 'session-1', status: ClaudeSessionStatus.RUNNING }),
+          createSessionSummary({ id: 'session-2', status: ClaudeSessionStatus.WAITING_FOR_INPUT }),
+          createSessionSummary({
+            id: 'session-3',
+            status: ClaudeSessionStatus.WAITING_FOR_QUESTION_ANSWER,
+          }),
+          createSessionSummary({
+            id: 'session-4',
+            status: ClaudeSessionStatus.WAITING_FOR_PLAN_EXECUTION,
+          }),
         ])
       )
 
@@ -98,8 +108,8 @@ describe('ActiveAgentsIndicator', () => {
     it('hides status indicators with zero counts', async () => {
       mockGetAllSessions.mockResolvedValueOnce(
         createMockResponse([
-          createSessionSummary({ id: 'session-1', status: 2 as const }), // Running
-          createSessionSummary({ id: 'session-2', status: 2 as const }), // Running
+          createSessionSummary({ id: 'session-1', status: ClaudeSessionStatus.RUNNING }),
+          createSessionSummary({ id: 'session-2', status: ClaudeSessionStatus.RUNNING }),
         ])
       )
 
@@ -121,8 +131,8 @@ describe('ActiveAgentsIndicator', () => {
     it('shows error status with correct color', async () => {
       mockGetAllSessions.mockResolvedValueOnce(
         createMockResponse([
-          createSessionSummary({ id: 'session-1', status: 7 as const }), // Error
-          createSessionSummary({ id: 'session-2', status: 2 as const }), // Running
+          createSessionSummary({ id: 'session-1', status: ClaudeSessionStatus.ERROR }),
+          createSessionSummary({ id: 'session-2', status: ClaudeSessionStatus.RUNNING }),
         ])
       )
 
@@ -139,11 +149,17 @@ describe('ActiveAgentsIndicator', () => {
     it('shows correct colors for each status type', async () => {
       mockGetAllSessions.mockResolvedValueOnce(
         createMockResponse([
-          createSessionSummary({ id: 'session-1', status: 2 as const }), // Running
-          createSessionSummary({ id: 'session-2', status: 3 as const }), // WaitingForInput
-          createSessionSummary({ id: 'session-3', status: 4 as const }), // WaitingForQuestionAnswer
-          createSessionSummary({ id: 'session-4', status: 5 as const }), // WaitingForPlanExecution
-          createSessionSummary({ id: 'session-5', status: 7 as const }), // Error
+          createSessionSummary({ id: 'session-1', status: ClaudeSessionStatus.RUNNING }),
+          createSessionSummary({ id: 'session-2', status: ClaudeSessionStatus.WAITING_FOR_INPUT }),
+          createSessionSummary({
+            id: 'session-3',
+            status: ClaudeSessionStatus.WAITING_FOR_QUESTION_ANSWER,
+          }),
+          createSessionSummary({
+            id: 'session-4',
+            status: ClaudeSessionStatus.WAITING_FOR_PLAN_EXECUTION,
+          }),
+          createSessionSummary({ id: 'session-5', status: ClaudeSessionStatus.ERROR }),
         ])
       )
 
@@ -162,9 +178,9 @@ describe('ActiveAgentsIndicator', () => {
     it('shows pinging animation only for working status', async () => {
       mockGetAllSessions.mockResolvedValueOnce(
         createMockResponse([
-          createSessionSummary({ id: 'session-1', status: 2 as const }), // Running
-          createSessionSummary({ id: 'session-2', status: 3 as const }), // WaitingForInput
-          createSessionSummary({ id: 'session-3', status: 7 as const }), // Error
+          createSessionSummary({ id: 'session-1', status: ClaudeSessionStatus.RUNNING }),
+          createSessionSummary({ id: 'session-2', status: ClaudeSessionStatus.WAITING_FOR_INPUT }),
+          createSessionSummary({ id: 'session-3', status: ClaudeSessionStatus.ERROR }),
         ])
       )
 
@@ -186,7 +202,9 @@ describe('ActiveAgentsIndicator', () => {
 
     it('navigates to global sessions page when clicked', async () => {
       mockGetAllSessions.mockResolvedValueOnce(
-        createMockResponse([createSessionSummary({ id: 'session-1', status: 2 as const })])
+        createMockResponse([
+          createSessionSummary({ id: 'session-1', status: ClaudeSessionStatus.RUNNING }),
+        ])
       )
 
       render(<ActiveAgentsIndicator />, { wrapper: createWrapper() })

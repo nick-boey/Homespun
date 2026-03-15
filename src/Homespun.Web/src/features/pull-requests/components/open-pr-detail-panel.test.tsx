@@ -9,7 +9,7 @@ describe('OpenPrDetailPanel', () => {
     number: 123,
     title: 'Add new feature',
     body: 'This is a description of the PR.',
-    status: PullRequestStatus[1],
+    status: PullRequestStatus.READY_FOR_REVIEW,
     branchName: 'feature/new-feature',
     htmlUrl: 'https://github.com/owner/repo/pull/123',
     createdAt: '2024-01-15T10:00:00Z',
@@ -33,7 +33,7 @@ describe('OpenPrDetailPanel', () => {
 
   it('renders PR status badge', () => {
     render(<OpenPrDetailPanel pr={mockPr} />)
-    expect(screen.getByText('Open')).toBeInTheDocument()
+    expect(screen.getByText('Ready for Review')).toBeInTheDocument()
   })
 
   it('renders CI status badge', () => {

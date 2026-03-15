@@ -19,7 +19,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import type { AgentPrompt, SessionMode } from '@/api/generated/types.gen'
+import { SessionMode } from '@/api'
+import type { AgentPrompt, SessionMode as SessionModeType } from '@/api/generated/types.gen'
 
 export interface PromptCardProps {
   prompt: AgentPrompt
@@ -28,19 +29,19 @@ export interface PromptCardProps {
   isDeleting?: boolean
 }
 
-function getModeLabel(mode: SessionMode | undefined): string {
+function getModeLabel(mode: SessionModeType | undefined): string {
   switch (mode) {
-    case 0:
+    case SessionMode.PLAN:
       return 'Plan'
-    case 1:
+    case SessionMode.BUILD:
       return 'Build'
     default:
       return 'Build'
   }
 }
 
-function getModeVariant(mode: SessionMode | undefined): 'default' | 'secondary' {
-  return mode === 0 ? 'secondary' : 'default'
+function getModeVariant(mode: SessionModeType | undefined): 'default' | 'secondary' {
+  return mode === SessionMode.PLAN ? 'secondary' : 'default'
 }
 
 function formatDate(dateString: string | undefined): string {

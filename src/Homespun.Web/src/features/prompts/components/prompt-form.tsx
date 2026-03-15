@@ -15,12 +15,13 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Markdown } from '@/components/ui/markdown'
-import type { AgentPrompt, SessionMode } from '@/api/generated/types.gen'
+import { SessionMode } from '@/api'
+import type { AgentPrompt } from '@/api'
 
 const promptSchema = z.object({
   name: z.string().min(1, 'Prompt name is required'),
   initialMessage: z.string().optional(),
-  mode: z.number().min(0).max(1),
+  mode: z.enum([SessionMode.PLAN, SessionMode.BUILD]),
 })
 
 type PromptFormData = z.infer<typeof promptSchema>
@@ -47,7 +48,7 @@ export function PromptForm({ prompt, onSubmit, onCancel, isSubmitting }: PromptF
     defaultValues: {
       name: prompt?.name ?? '',
       initialMessage: prompt?.initialMessage ?? '',
-      mode: prompt?.mode ?? 1,
+      mode: prompt?.mode ?? SessionMode.BUILD,
     },
   })
 
@@ -56,7 +57,7 @@ export function PromptForm({ prompt, onSubmit, onCancel, isSubmitting }: PromptF
       reset({
         name: prompt.name ?? '',
         initialMessage: prompt.initialMessage ?? '',
-        mode: prompt.mode ?? 1,
+        mode: prompt.mode ?? SessionMode.BUILD,
       })
     }
   }, [prompt, reset])
@@ -78,20 +79,17 @@ export function PromptForm({ prompt, onSubmit, onCancel, isSubmitting }: PromptF
 
       <div className="space-y-2">
         <Label htmlFor="mode">Mode</Label>
-        <Select
-          value={String(mode)}
-          onValueChange={(value) => setValue('mode', parseInt(value) as SessionMode)}
-        >
+        <Select value={mode} onValueChange={(value) => setValue('mode', value as SessionMode)}>
           <SelectTrigger>
             <SelectValue placeholder="Select mode" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="1">Build (Full access)</SelectItem>
-            <SelectItem value="0">Plan (Read-only)</SelectItem>
+            <SelectItem value={SessionMode.BUILD}>Build (Full access)</SelectItem>
+            <SelectItem value={SessionMode.PLAN}>Plan (Read-only)</SelectItem>
           </SelectContent>
         </Select>
         <p className="text-muted-foreground text-xs">
-          {mode === 0
+          {mode === SessionMode.PLAN
             ? 'Plan mode is read-only and cannot modify files.'
             : 'Build mode has full access to create and modify files.'}
         </p>

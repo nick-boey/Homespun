@@ -1,10 +1,13 @@
 import { useMemo } from 'react'
 import { useSessions } from './use-sessions'
-import type { ClaudeSessionStatus } from '@/api/generated'
+import { ClaudeSessionStatus } from '@/api'
 
 // Running states that should be excluded from navigation targets
-// 0: Starting, 1: RunningHooks, 2: Running
-const RUNNING_STATUSES: ClaudeSessionStatus[] = [0, 1, 2]
+const RUNNING_STATUSES: ClaudeSessionStatus[] = [
+  ClaudeSessionStatus.STARTING,
+  ClaudeSessionStatus.RUNNING_HOOKS,
+  ClaudeSessionStatus.RUNNING,
+]
 
 export interface SessionNavigation {
   previousSessionId: string | null

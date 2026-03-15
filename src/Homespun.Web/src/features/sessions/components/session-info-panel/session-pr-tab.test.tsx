@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react'
 import { SessionPrTab } from './session-pr-tab'
 import { useIssuePrStatus } from '@/features/sessions/hooks'
 import type { IssuePullRequestStatus } from '@/api/generated'
+import { PullRequestStatus } from '@/api/generated'
 import { createMockSession } from '@/test/test-utils'
 
 vi.mock('@/features/sessions/hooks', () => ({
@@ -77,7 +78,7 @@ describe('SessionPrTab', () => {
       prNumber: 42,
       prUrl: 'https://github.com/test/repo/pull/42',
       branchName: 'feature/test-branch',
-      status: 1, // Open
+      status: PullRequestStatus.READY_FOR_REVIEW,
       checksPassing: true,
       isApproved: true,
       approvalCount: 2,
@@ -109,7 +110,7 @@ describe('SessionPrTab', () => {
       prNumber: 43,
       prUrl: 'https://github.com/test/repo/pull/43',
       branchName: 'feature/conflicts',
-      status: 1,
+      status: PullRequestStatus.CONFLICT,
       hasConflicts: true,
       checksPassing: false,
       isApproved: false,
@@ -135,7 +136,7 @@ describe('SessionPrTab', () => {
       prNumber: 44,
       prUrl: 'https://github.com/test/repo/pull/44',
       branchName: 'feature/running-checks',
-      status: 1,
+      status: PullRequestStatus.IN_PROGRESS,
       checksRunning: true,
       checksPassing: false,
       checksFailing: false,
@@ -158,7 +159,7 @@ describe('SessionPrTab', () => {
       prNumber: 45,
       prUrl: 'https://github.com/test/repo/pull/45',
       branchName: 'feature/merged',
-      status: 3, // Merged
+      status: PullRequestStatus.MERGED,
     }
 
     vi.mocked(useIssuePrStatus).mockReturnValue({
@@ -177,7 +178,7 @@ describe('SessionPrTab', () => {
       prNumber: 46,
       prUrl: 'https://github.com/test/repo/pull/46',
       branchName: 'feature/closed',
-      status: 2, // Closed
+      status: PullRequestStatus.CLOSED,
     }
 
     vi.mocked(useIssuePrStatus).mockReturnValue({

@@ -11,10 +11,12 @@ vi.mock('@/api', () => ({
     postApiIssues: vi.fn(),
   },
   IssueType: {
-    0: 0,
-    1: 1,
-    2: 2,
-    3: 3,
+    TASK: 'task',
+    BUG: 'bug',
+    CHORE: 'chore',
+    FEATURE: 'feature',
+    IDEA: 'idea',
+    VERIFY: 'verify',
   },
 }))
 
@@ -45,7 +47,7 @@ describe('useCreateIssue', () => {
     const mockIssue: IssueResponse = {
       id: 'abc123',
       title: 'Test Issue',
-      type: IssueType[0],
+      type: IssueType.TASK,
     }
 
     vi.mocked(Issues.postApiIssues).mockResolvedValueOnce({
@@ -67,7 +69,7 @@ describe('useCreateIssue', () => {
         body: {
           projectId: 'proj-1',
           title: 'Test Issue',
-          type: 0,
+          type: IssueType.TASK,
           parentIssueId: undefined,
           childIssueId: undefined,
         },
@@ -79,7 +81,7 @@ describe('useCreateIssue', () => {
     const mockIssue: IssueResponse = {
       id: 'abc123',
       title: 'New Child Issue',
-      type: IssueType[0],
+      type: IssueType.TASK,
     }
 
     vi.mocked(Issues.postApiIssues).mockResolvedValueOnce({
@@ -102,7 +104,7 @@ describe('useCreateIssue', () => {
         body: {
           projectId: 'proj-1',
           title: 'New Child Issue',
-          type: 0,
+          type: IssueType.TASK,
           parentIssueId: 'parent-123',
           childIssueId: undefined,
         },
@@ -114,7 +116,7 @@ describe('useCreateIssue', () => {
     const mockIssue: IssueResponse = {
       id: 'abc123',
       title: 'New Parent Issue',
-      type: IssueType[0],
+      type: IssueType.TASK,
     }
 
     vi.mocked(Issues.postApiIssues).mockResolvedValueOnce({
@@ -137,7 +139,7 @@ describe('useCreateIssue', () => {
         body: {
           projectId: 'proj-1',
           title: 'New Parent Issue',
-          type: 0,
+          type: IssueType.TASK,
           parentIssueId: undefined,
           childIssueId: 'child-123',
         },
@@ -149,7 +151,7 @@ describe('useCreateIssue', () => {
     const mockIssue: IssueResponse = {
       id: 'abc123',
       title: 'Test Issue',
-      type: IssueType[0],
+      type: IssueType.TASK,
     }
 
     vi.mocked(Issues.postApiIssues).mockResolvedValueOnce({
@@ -173,7 +175,7 @@ describe('useCreateIssue', () => {
     const mockIssue: IssueResponse = {
       id: 'abc123',
       title: 'Test Issue',
-      type: IssueType[0],
+      type: IssueType.TASK,
     }
 
     vi.mocked(Issues.postApiIssues).mockResolvedValueOnce({
@@ -217,7 +219,7 @@ describe('useCreateIssue', () => {
     })
 
     resolvePromise({
-      data: { id: 'abc123', title: 'Test', type: IssueType[0] } as IssueResponse,
+      data: { id: 'abc123', title: 'Test', type: IssueType.TASK } as IssueResponse,
       request: {} as Request,
       response: {} as Response,
     })
@@ -243,7 +245,7 @@ describe('useCreateIssue', () => {
     const mockIssue: IssueResponse = {
       id: 'abc123',
       title: 'Bug Fix',
-      type: IssueType[1], // Bug
+      type: IssueType.BUG,
     }
 
     vi.mocked(Issues.postApiIssues).mockResolvedValueOnce({
@@ -258,13 +260,13 @@ describe('useCreateIssue', () => {
 
     await result.current.createIssue({
       title: 'Bug Fix',
-      type: IssueType[1],
+      type: IssueType.BUG,
     })
 
     await waitFor(() => {
       expect(vi.mocked(Issues.postApiIssues)).toHaveBeenCalledWith({
         body: expect.objectContaining({
-          type: 1,
+          type: IssueType.BUG,
         }),
       })
     })

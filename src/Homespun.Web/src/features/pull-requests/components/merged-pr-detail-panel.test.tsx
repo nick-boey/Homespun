@@ -9,7 +9,7 @@ describe('MergedPrDetailPanel', () => {
     number: 120,
     title: 'Add feature X',
     body: 'This PR adds feature X.',
-    status: PullRequestStatus[2],
+    status: PullRequestStatus.MERGED,
     branchName: 'feature/feature-x',
     htmlUrl: 'https://github.com/owner/repo/pull/120',
     mergedAt: '2024-01-20T15:30:00Z',

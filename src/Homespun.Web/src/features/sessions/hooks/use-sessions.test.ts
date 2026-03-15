@@ -3,7 +3,8 @@ import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createElement, type ReactNode } from 'react'
 import { Sessions } from '@/api'
-import type { SessionSummary, ClaudeSessionStatus, SessionMode } from '@/api/generated'
+import type { SessionSummary } from '@/api/generated'
+import { ClaudeSessionStatus, SessionMode } from '@/api/generated'
 import { useSessions, useStopSession, sessionsQueryKey } from './use-sessions'
 
 vi.mock('@/api', () => ({
@@ -19,8 +20,8 @@ const mockSessions: SessionSummary[] = [
     entityId: 'issue-1',
     projectId: 'project-1',
     model: 'sonnet',
-    mode: 1 as SessionMode,
-    status: 2 as ClaudeSessionStatus,
+    mode: SessionMode.BUILD,
+    status: ClaudeSessionStatus.RUNNING,
     createdAt: '2024-01-01T10:00:00Z',
     lastActivityAt: '2024-01-01T10:30:00Z',
     messageCount: 15,
@@ -33,8 +34,8 @@ const mockSessions: SessionSummary[] = [
     entityId: 'issue-2',
     projectId: 'project-1',
     model: 'opus',
-    mode: 0 as SessionMode,
-    status: 6 as ClaudeSessionStatus,
+    mode: SessionMode.PLAN,
+    status: ClaudeSessionStatus.STOPPED,
     createdAt: '2024-01-01T09:00:00Z',
     lastActivityAt: '2024-01-01T09:15:00Z',
     messageCount: 5,

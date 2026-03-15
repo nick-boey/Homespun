@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react'
 import { SessionFilesTab } from './session-files-tab'
 import { useChangedFiles } from '@/features/sessions/hooks'
 import type { FileChangeInfo } from '@/api/generated'
+import { FileChangeStatus } from '@/api/generated'
 import { createMockSession } from '@/test/test-utils'
 
 vi.mock('@/features/sessions/hooks', () => ({
@@ -72,31 +73,31 @@ describe('SessionFilesTab', () => {
         filePath: 'src/components/Button.tsx',
         additions: 25,
         deletions: 5,
-        status: 1, // Modified
+        status: FileChangeStatus.MODIFIED,
       },
       {
         filePath: 'src/components/NewComponent.tsx',
         additions: 100,
         deletions: 0,
-        status: 0, // Added
+        status: FileChangeStatus.ADDED,
       },
       {
         filePath: 'src/components/AnotherNewComponent.tsx',
         additions: 50,
         deletions: 0,
-        status: 0, // Added
+        status: FileChangeStatus.ADDED,
       },
       {
         filePath: 'src/components/OldComponent.tsx',
         additions: 0,
         deletions: 75,
-        status: 2, // Deleted
+        status: FileChangeStatus.DELETED,
       },
       {
         filePath: 'src/components/RenamedComponent.tsx',
         additions: 10,
         deletions: 10,
-        status: 3, // Renamed
+        status: FileChangeStatus.RENAMED,
       },
     ]
 
@@ -161,7 +162,7 @@ describe('SessionFilesTab', () => {
     const mockFiles: FileChangeInfo[] = [
       {
         filePath: 'src/no-stats.txt',
-        status: 1,
+        status: FileChangeStatus.MODIFIED,
         // No additions/deletions
       },
     ]

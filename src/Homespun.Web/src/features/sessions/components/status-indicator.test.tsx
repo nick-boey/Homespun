@@ -1,37 +1,23 @@
 import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { StatusIndicator } from './status-indicator'
-import type { ClaudeSessionStatus } from '@/api/generated/types.gen'
-
-// Status enum values from backend
-const SessionStatus = {
-  Starting: 0,
-  RunningHooks: 1,
-  Running: 2,
-  WaitingForInput: 3,
-  WaitingForQuestionAnswer: 4,
-  WaitingForPlanExecution: 5,
-  Stopped: 6,
-  Error: 7,
-} as const
+import { ClaudeSessionStatus } from '@/api/generated/types.gen'
 
 describe('StatusIndicator', () => {
   it('renders with correct color for each status', () => {
     const statusTests = [
-      { status: SessionStatus.Starting, expectedColor: 'bg-yellow-500' },
-      { status: SessionStatus.RunningHooks, expectedColor: 'bg-green-500' },
-      { status: SessionStatus.Running, expectedColor: 'bg-green-500' },
-      { status: SessionStatus.WaitingForInput, expectedColor: 'bg-yellow-500' },
-      { status: SessionStatus.WaitingForQuestionAnswer, expectedColor: 'bg-purple-500' },
-      { status: SessionStatus.WaitingForPlanExecution, expectedColor: 'bg-orange-500' },
-      { status: SessionStatus.Stopped, expectedColor: 'bg-gray-400' },
-      { status: SessionStatus.Error, expectedColor: 'bg-red-500' },
+      { status: ClaudeSessionStatus.STARTING, expectedColor: 'bg-yellow-500' },
+      { status: ClaudeSessionStatus.RUNNING_HOOKS, expectedColor: 'bg-green-500' },
+      { status: ClaudeSessionStatus.RUNNING, expectedColor: 'bg-green-500' },
+      { status: ClaudeSessionStatus.WAITING_FOR_INPUT, expectedColor: 'bg-yellow-500' },
+      { status: ClaudeSessionStatus.WAITING_FOR_QUESTION_ANSWER, expectedColor: 'bg-purple-500' },
+      { status: ClaudeSessionStatus.WAITING_FOR_PLAN_EXECUTION, expectedColor: 'bg-orange-500' },
+      { status: ClaudeSessionStatus.STOPPED, expectedColor: 'bg-gray-400' },
+      { status: ClaudeSessionStatus.ERROR, expectedColor: 'bg-red-500' },
     ]
 
     statusTests.forEach(({ status, expectedColor }) => {
-      const { container, rerender } = render(
-        <StatusIndicator status={status as ClaudeSessionStatus} />
-      )
+      const { container, rerender } = render(<StatusIndicator status={status} />)
 
       const indicator = container.querySelector('.rounded-full')
       expect(indicator).toHaveClass(expectedColor)
@@ -42,18 +28,16 @@ describe('StatusIndicator', () => {
 
   it('shows animation for active statuses', () => {
     const activeStatuses = [
-      SessionStatus.Starting,
-      SessionStatus.RunningHooks,
-      SessionStatus.Running,
-      SessionStatus.WaitingForInput,
-      SessionStatus.WaitingForQuestionAnswer,
-      SessionStatus.WaitingForPlanExecution,
+      ClaudeSessionStatus.STARTING,
+      ClaudeSessionStatus.RUNNING_HOOKS,
+      ClaudeSessionStatus.RUNNING,
+      ClaudeSessionStatus.WAITING_FOR_INPUT,
+      ClaudeSessionStatus.WAITING_FOR_QUESTION_ANSWER,
+      ClaudeSessionStatus.WAITING_FOR_PLAN_EXECUTION,
     ]
 
     activeStatuses.forEach((status) => {
-      const { container, rerender } = render(
-        <StatusIndicator status={status as ClaudeSessionStatus} />
-      )
+      const { container, rerender } = render(<StatusIndicator status={status} />)
 
       const pulseElement = container.querySelector('.animate-pulse')
       expect(pulseElement).toBeInTheDocument()
@@ -63,12 +47,10 @@ describe('StatusIndicator', () => {
   })
 
   it('does not show animation for inactive statuses', () => {
-    const inactiveStatuses = [SessionStatus.Stopped, SessionStatus.Error]
+    const inactiveStatuses = [ClaudeSessionStatus.STOPPED, ClaudeSessionStatus.ERROR]
 
     inactiveStatuses.forEach((status) => {
-      const { container, rerender } = render(
-        <StatusIndicator status={status as ClaudeSessionStatus} />
-      )
+      const { container, rerender } = render(<StatusIndicator status={status} />)
 
       const pulseElement = container.querySelector('.animate-pulse')
       expect(pulseElement).not.toBeInTheDocument()
@@ -78,18 +60,14 @@ describe('StatusIndicator', () => {
   })
 
   it('renders with default size', () => {
-    const { container } = render(
-      <StatusIndicator status={SessionStatus.Running as ClaudeSessionStatus} />
-    )
+    const { container } = render(<StatusIndicator status={ClaudeSessionStatus.RUNNING} />)
 
     const indicator = container.querySelector('.rounded-full')
     expect(indicator).toHaveClass('h-2', 'w-2')
   })
 
   it('renders with custom size', () => {
-    const { container } = render(
-      <StatusIndicator status={SessionStatus.Running as ClaudeSessionStatus} size="sm" />
-    )
+    const { container } = render(<StatusIndicator status={ClaudeSessionStatus.RUNNING} size="sm" />)
 
     const indicator = container.querySelector('.rounded-full')
     expect(indicator).toHaveClass('h-1.5', 'w-1.5')
@@ -104,12 +82,7 @@ describe('StatusIndicator', () => {
   })
 
   it('renders with custom className', () => {
-    render(
-      <StatusIndicator
-        status={SessionStatus.Running as ClaudeSessionStatus}
-        className="custom-class"
-      />
-    )
+    render(<StatusIndicator status={ClaudeSessionStatus.RUNNING} className="custom-class" />)
 
     const wrapper = screen.getByTestId('status-indicator')
     expect(wrapper).toHaveClass('custom-class')
@@ -117,15 +90,13 @@ describe('StatusIndicator', () => {
 
   it('has different animation speeds for different statuses', () => {
     const statusAnimations = [
-      { status: SessionStatus.Starting, animationClass: 'animate-pulse' },
-      { status: SessionStatus.Running, animationClass: 'animate-pulse' },
-      { status: SessionStatus.WaitingForQuestionAnswer, animationClass: 'animate-pulse' },
+      { status: ClaudeSessionStatus.STARTING, animationClass: 'animate-pulse' },
+      { status: ClaudeSessionStatus.RUNNING, animationClass: 'animate-pulse' },
+      { status: ClaudeSessionStatus.WAITING_FOR_QUESTION_ANSWER, animationClass: 'animate-pulse' },
     ]
 
     statusAnimations.forEach(({ status, animationClass }) => {
-      const { container, rerender } = render(
-        <StatusIndicator status={status as ClaudeSessionStatus} />
-      )
+      const { container, rerender } = render(<StatusIndicator status={status} />)
 
       const animatedElement = container.querySelector(`.${animationClass}`)
       expect(animatedElement).toBeInTheDocument()
@@ -135,9 +106,7 @@ describe('StatusIndicator', () => {
   })
 
   it('maintains consistent structure for accessibility', () => {
-    const { container } = render(
-      <StatusIndicator status={SessionStatus.Running as ClaudeSessionStatus} />
-    )
+    const { container } = render(<StatusIndicator status={ClaudeSessionStatus.RUNNING} />)
 
     // Should have a relative container
     const relativeContainer = container.querySelector('.relative')

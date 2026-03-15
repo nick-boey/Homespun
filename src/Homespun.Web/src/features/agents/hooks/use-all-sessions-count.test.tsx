@@ -2,15 +2,19 @@ import { describe, it, expect, vi } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useAllSessionsCount } from './use-all-sessions-count'
-import { Sessions } from '@/api'
-import type { SessionSummary, ClaudeSessionStatus } from '@/api/generated/types.gen'
+import { Sessions, SessionMode, ClaudeSessionStatus } from '@/api'
+import type { SessionSummary } from '@/api/generated/types.gen'
 
 // Mock the API module
-vi.mock('@/api', () => ({
-  Sessions: {
-    getApiSessions: vi.fn(),
-  },
-}))
+vi.mock('@/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/api')>()
+  return {
+    ...actual,
+    Sessions: {
+      getApiSessions: vi.fn(),
+    },
+  }
+})
 
 describe('useAllSessionsCount', () => {
   const createWrapper = () => {
@@ -28,13 +32,16 @@ describe('useAllSessionsCount', () => {
     )
   }
 
-  const mockSession = (id: string, status: number): SessionSummary => ({
+  const mockSession = (
+    id: string,
+    status: (typeof ClaudeSessionStatus)[keyof typeof ClaudeSessionStatus]
+  ): SessionSummary => ({
     id,
-    status: status as ClaudeSessionStatus,
+    status: status,
     entityId: null,
     projectId: 'test-project',
     model: null,
-    mode: 0, // Using numeric value for SessionMode
+    mode: SessionMode.PLAN,
     createdAt: new Date().toISOString(),
     lastActivityAt: undefined,
     messageCount: 0,
@@ -73,10 +80,10 @@ describe('useAllSessionsCount', () => {
 
   it('should count working sessions correctly', async () => {
     const sessions: SessionSummary[] = [
-      mockSession('1', 0), // Starting
-      mockSession('2', 1), // RunningHooks
-      mockSession('3', 2), // Running
-      mockSession('4', 3), // WaitingForInput (not working)
+      mockSession('1', ClaudeSessionStatus.STARTING),
+      mockSession('2', ClaudeSessionStatus.RUNNING_HOOKS),
+      mockSession('3', ClaudeSessionStatus.RUNNING),
+      mockSession('4', ClaudeSessionStatus.WAITING_FOR_INPUT), // not working
     ]
 
     vi.mocked(Sessions.getApiSessions).mockResolvedValueOnce({
@@ -100,10 +107,10 @@ describe('useAllSessionsCount', () => {
 
   it('should count waiting sessions correctly', async () => {
     const sessions: SessionSummary[] = [
-      mockSession('1', 3), // WaitingForInput
-      mockSession('2', 4), // WaitingForQuestionAnswer
-      mockSession('3', 5), // WaitingForPlanExecution
-      mockSession('4', 0), // Starting (not waiting)
+      mockSession('1', ClaudeSessionStatus.WAITING_FOR_INPUT),
+      mockSession('2', ClaudeSessionStatus.WAITING_FOR_QUESTION_ANSWER),
+      mockSession('3', ClaudeSessionStatus.WAITING_FOR_PLAN_EXECUTION),
+      mockSession('4', ClaudeSessionStatus.STARTING), // not waiting
     ]
 
     vi.mocked(Sessions.getApiSessions).mockResolvedValueOnce({
@@ -127,13 +134,13 @@ describe('useAllSessionsCount', () => {
 
   it('should count granular waiting status types correctly', async () => {
     const sessions: SessionSummary[] = [
-      mockSession('1', 3), // WaitingForInput
-      mockSession('2', 3), // WaitingForInput
-      mockSession('3', 4), // WaitingForQuestionAnswer
-      mockSession('4', 5), // WaitingForPlanExecution
-      mockSession('5', 5), // WaitingForPlanExecution
-      mockSession('6', 5), // WaitingForPlanExecution
-      mockSession('7', 0), // Starting (not waiting)
+      mockSession('1', ClaudeSessionStatus.WAITING_FOR_INPUT),
+      mockSession('2', ClaudeSessionStatus.WAITING_FOR_INPUT),
+      mockSession('3', ClaudeSessionStatus.WAITING_FOR_QUESTION_ANSWER),
+      mockSession('4', ClaudeSessionStatus.WAITING_FOR_PLAN_EXECUTION),
+      mockSession('5', ClaudeSessionStatus.WAITING_FOR_PLAN_EXECUTION),
+      mockSession('6', ClaudeSessionStatus.WAITING_FOR_PLAN_EXECUTION),
+      mockSession('7', ClaudeSessionStatus.STARTING), // not waiting
     ]
 
     vi.mocked(Sessions.getApiSessions).mockResolvedValueOnce({
@@ -158,9 +165,9 @@ describe('useAllSessionsCount', () => {
 
   it('should count error sessions correctly', async () => {
     const sessions: SessionSummary[] = [
-      mockSession('1', 7), // Error
-      mockSession('2', 7), // Error
-      mockSession('3', 0), // Starting (not error)
+      mockSession('1', ClaudeSessionStatus.ERROR),
+      mockSession('2', ClaudeSessionStatus.ERROR),
+      mockSession('3', ClaudeSessionStatus.STARTING), // not error
     ]
 
     vi.mocked(Sessions.getApiSessions).mockResolvedValueOnce({
@@ -184,11 +191,11 @@ describe('useAllSessionsCount', () => {
 
   it('should calculate totalActive correctly (working + waiting)', async () => {
     const sessions: SessionSummary[] = [
-      mockSession('1', 0), // Starting (working)
-      mockSession('2', 1), // RunningHooks (working)
-      mockSession('3', 3), // WaitingForInput (waiting)
-      mockSession('4', 4), // WaitingForQuestionAnswer (waiting)
-      mockSession('5', 7), // Error (not included in active)
+      mockSession('1', ClaudeSessionStatus.STARTING), // working
+      mockSession('2', ClaudeSessionStatus.RUNNING_HOOKS), // working
+      mockSession('3', ClaudeSessionStatus.WAITING_FOR_INPUT), // waiting
+      mockSession('4', ClaudeSessionStatus.WAITING_FOR_QUESTION_ANSWER), // waiting
+      mockSession('5', ClaudeSessionStatus.ERROR), // not included in active
     ]
 
     vi.mocked(Sessions.getApiSessions).mockResolvedValueOnce({

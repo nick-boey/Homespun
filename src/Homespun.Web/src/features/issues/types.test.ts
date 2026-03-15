@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { TaskGraphNodeResponse } from '@/api/generated/types.gen'
+import { IssueType } from '@/api'
 import {
   KeyboardEditMode,
   MoveOperationType,
@@ -84,7 +85,7 @@ describe('toRenderLines', () => {
         issue: {
           id: 'issue-1',
           title: 'First Issue',
-          type: 0,
+          type: IssueType.TASK,
         },
         lane: 0,
         row: 0,
@@ -94,7 +95,7 @@ describe('toRenderLines', () => {
         issue: {
           id: 'issue-2',
           title: 'Second Issue',
-          type: 1,
+          type: IssueType.BUG,
           parentIssues: [{ parentIssue: 'issue-1', sortOrder: 'a' }],
         },
         lane: 1,
@@ -111,7 +112,7 @@ describe('toRenderLines', () => {
       title: 'First Issue',
       lane: 0,
       parentLane: undefined,
-      issueType: 0,
+      issueType: IssueType.TASK,
       isActionable: true,
     })
     expect(result[1]).toEqual({
@@ -119,7 +120,7 @@ describe('toRenderLines', () => {
       title: 'Second Issue',
       lane: 1,
       parentLane: 0,
-      issueType: 1,
+      issueType: IssueType.BUG,
       isActionable: false,
     })
   })
@@ -130,7 +131,7 @@ describe('toRenderLines', () => {
         issue: {
           id: 'issue-1',
           title: 'Valid Issue',
-          type: 0,
+          type: IssueType.TASK,
         },
         lane: 0,
         row: 0,
@@ -139,7 +140,7 @@ describe('toRenderLines', () => {
       {
         issue: {
           title: 'Issue without ID',
-          type: 0,
+          type: IssueType.TASK,
         },
         lane: 1,
         row: 1,
@@ -179,7 +180,7 @@ describe('toRenderLines', () => {
       title: '',
       lane: 0,
       parentLane: undefined,
-      issueType: 0,
+      issueType: IssueType.TASK,
       isActionable: false,
     })
   })

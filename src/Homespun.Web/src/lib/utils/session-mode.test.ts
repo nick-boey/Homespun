@@ -4,32 +4,40 @@ import { SessionMode as ApiSessionMode } from '@/api'
 
 describe('Session Mode Utilities', () => {
   describe('toApiSessionMode', () => {
-    it('returns 0 when mode is Plan', () => {
-      expect(toApiSessionMode('Plan')).toBe(0)
+    it('returns plan when mode is Plan', () => {
+      expect(toApiSessionMode('Plan')).toBe(ApiSessionMode.PLAN)
     })
 
-    it('returns 1 when mode is Build', () => {
-      expect(toApiSessionMode('Build')).toBe(1)
+    it('returns build when mode is Build', () => {
+      expect(toApiSessionMode('Build')).toBe(ApiSessionMode.BUILD)
     })
   })
 
   describe('fromApiSessionMode', () => {
-    it('returns Plan when API mode is 0', () => {
-      expect(fromApiSessionMode(0 as ApiSessionMode)).toBe('Plan')
+    it('returns Plan when API mode is plan', () => {
+      expect(fromApiSessionMode(ApiSessionMode.PLAN)).toBe('Plan')
     })
 
-    it('returns Build when API mode is 1', () => {
-      expect(fromApiSessionMode(1 as ApiSessionMode)).toBe('Build')
+    it('returns Build when API mode is build', () => {
+      expect(fromApiSessionMode(ApiSessionMode.BUILD)).toBe('Build')
     })
   })
 
   describe('normalizeSessionMode', () => {
-    it('converts 0 to Plan', () => {
-      expect(normalizeSessionMode(0)).toBe('Plan')
+    it('converts plan string to Plan', () => {
+      expect(normalizeSessionMode('plan')).toBe('Plan')
     })
 
-    it('converts 1 to Build', () => {
-      expect(normalizeSessionMode(1)).toBe('Build')
+    it('converts build string to Build', () => {
+      expect(normalizeSessionMode('build')).toBe('Build')
+    })
+
+    it('converts ApiSessionMode.PLAN to Plan', () => {
+      expect(normalizeSessionMode(ApiSessionMode.PLAN)).toBe('Plan')
+    })
+
+    it('converts ApiSessionMode.BUILD to Build', () => {
+      expect(normalizeSessionMode(ApiSessionMode.BUILD)).toBe('Build')
     })
 
     it('passes through Plan string', () => {
@@ -45,8 +53,12 @@ describe('Session Mode Utilities', () => {
     })
 
     it('defaults to Build for unknown values', () => {
-      expect(normalizeSessionMode(99)).toBe('Build')
       expect(normalizeSessionMode('Unknown')).toBe('Build')
+    })
+
+    it('handles legacy numeric values for backwards compatibility', () => {
+      expect(normalizeSessionMode(0)).toBe('Plan')
+      expect(normalizeSessionMode(1)).toBe('Build')
     })
   })
 })
