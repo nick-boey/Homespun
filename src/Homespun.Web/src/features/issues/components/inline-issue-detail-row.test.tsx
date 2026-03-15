@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { InlineIssueDetailRow } from './inline-issue-detail-row'
 import type { TaskGraphIssueRenderLine } from '../services'
 import { TaskGraphMarkerType } from '../services'
-import { IssueStatus, IssueType } from '@/api'
+import { IssueStatus, IssueType, ExecutionMode } from '@/api'
 
 // Helper to create a mock render line
 function createRenderLine(
@@ -36,6 +36,7 @@ function createRenderLine(
     lane0Color: null,
     hasHiddenParent: false,
     hiddenParentIsSeriesMode: false,
+    executionMode: ExecutionMode.SERIES,
     ...overrides,
   }
 }

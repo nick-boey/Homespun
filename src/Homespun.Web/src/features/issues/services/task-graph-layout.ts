@@ -12,6 +12,7 @@ import type {
   AgentStatusData,
   IssueType as IssueTypeEnum,
   IssueStatus as IssueStatusEnum,
+  ExecutionMode as ExecutionModeEnum,
 } from '@/api'
 import { ExecutionMode, IssueStatus, IssueType } from '@/api'
 import { getPriorityColor } from './priority-colors'
@@ -54,6 +55,7 @@ export interface TaskGraphIssueRenderLine {
   lane0Color: string | null
   hasHiddenParent: boolean
   hiddenParentIsSeriesMode: boolean
+  executionMode: ExecutionModeEnum
 }
 
 export interface TaskGraphSeparatorRenderLine {
@@ -639,6 +641,7 @@ function renderGroup(
       lane0Color: groupLane0Color,
       hasHiddenParent,
       hiddenParentIsSeriesMode,
+      executionMode: node.issue.executionMode ?? ExecutionMode.SERIES,
     })
   }
 }
