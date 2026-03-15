@@ -4,16 +4,21 @@ import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { PromptsList } from './prompts-list'
 import { AgentPrompts } from '@/api'
+import { SessionMode } from '@/api/generated/types.gen'
 
-vi.mock('@/api', () => ({
-  AgentPrompts: {
-    getApiAgentPromptsProjectByProjectId: vi.fn(),
-    postApiAgentPrompts: vi.fn(),
-    putApiAgentPromptsById: vi.fn(),
-    deleteApiAgentPromptsById: vi.fn(),
-    getApiAgentPromptsAvailableForProjectByProjectId: vi.fn(),
-  },
-}))
+vi.mock('@/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/api')>()
+  return {
+    ...actual,
+    AgentPrompts: {
+      getApiAgentPromptsProjectByProjectId: vi.fn(),
+      postApiAgentPrompts: vi.fn(),
+      putApiAgentPromptsById: vi.fn(),
+      deleteApiAgentPromptsById: vi.fn(),
+      getApiAgentPromptsAvailableForProjectByProjectId: vi.fn(),
+    },
+  }
+})
 
 function createWrapper() {
   const queryClient = new QueryClient({
@@ -56,8 +61,8 @@ describe('PromptsList', () => {
   it('renders list of prompts', async () => {
     vi.mocked(AgentPrompts.getApiAgentPromptsProjectByProjectId).mockResolvedValue({
       data: [
-        { id: '1', name: 'First Prompt', initialMessage: 'Content 1', mode: 1 },
-        { id: '2', name: 'Second Prompt', initialMessage: 'Content 2', mode: 0 },
+        { id: '1', name: 'First Prompt', initialMessage: 'Content 1', mode: SessionMode.BUILD },
+        { id: '2', name: 'Second Prompt', initialMessage: 'Content 2', mode: SessionMode.PLAN },
       ],
     } as never)
 
@@ -90,9 +95,9 @@ describe('PromptsList', () => {
   it('shows count when prompts exist', async () => {
     vi.mocked(AgentPrompts.getApiAgentPromptsProjectByProjectId).mockResolvedValue({
       data: [
-        { id: '1', name: 'First', mode: 1 },
-        { id: '2', name: 'Second', mode: 0 },
-        { id: '3', name: 'Third', mode: 1 },
+        { id: '1', name: 'First', mode: SessionMode.BUILD },
+        { id: '2', name: 'Second', mode: SessionMode.PLAN },
+        { id: '3', name: 'Third', mode: SessionMode.BUILD },
       ],
     } as never)
 

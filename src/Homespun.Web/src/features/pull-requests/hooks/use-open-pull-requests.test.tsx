@@ -37,7 +37,7 @@ describe('useOpenPullRequests', () => {
         pullRequest: {
           number: 123,
           title: 'Add new feature',
-          status: PullRequestStatus[0],
+          status: PullRequestStatus.IN_PROGRESS,
           branchName: 'feature/new-feature',
           htmlUrl: 'https://github.com/owner/repo/pull/123',
           checksPassing: true,
@@ -45,7 +45,7 @@ describe('useOpenPullRequests', () => {
           approvalCount: 0,
           changesRequestedCount: 0,
         },
-        status: PullRequestStatus[0],
+        status: PullRequestStatus.IN_PROGRESS,
         time: 3600,
       },
     ]

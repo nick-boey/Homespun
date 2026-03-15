@@ -69,7 +69,7 @@ describe('useNotificationEvents', () => {
     const notifications: NotificationDto[] = [
       {
         id: 'test-1',
-        type: 'Info',
+        type: 'info',
         title: 'Test',
         message: 'Test message',
         createdAt: new Date().toISOString(),
@@ -98,7 +98,7 @@ describe('useNotificationEvents', () => {
 
     const notification: NotificationDto = {
       id: 'new-notification',
-      type: 'Warning',
+      type: 'warning',
       title: 'New Warning',
       message: 'Something needs attention',
       createdAt: new Date().toISOString(),
@@ -127,7 +127,7 @@ describe('useNotificationEvents', () => {
 
     const notification: NotificationDto = {
       id: 'toast-test',
-      type: 'Info',
+      type: 'info',
       title: 'Toast Test',
       message: 'This should show a toast',
       createdAt: new Date().toISOString(),
@@ -164,7 +164,7 @@ describe('useNotificationEvents', () => {
 
     const notification: NotificationDto = {
       id: 'no-toast',
-      type: 'Info',
+      type: 'info',
       title: 'No Toast',
       message: 'This should not show a toast',
       createdAt: new Date().toISOString(),
@@ -182,7 +182,7 @@ describe('useNotificationEvents', () => {
     // Add notification first
     useNotificationStore.getState().addNotification({
       id: 'to-dismiss',
-      type: 'Info',
+      type: 'info',
       title: 'To Dismiss',
       message: 'This will be dismissed',
       createdAt: new Date().toISOString(),
@@ -225,7 +225,7 @@ describe('useNotificationEvents', () => {
 
     renderHook(() => useNotificationEvents())
 
-    issueChangedHandler('project-1', 'Created', 'issue-123')
+    issueChangedHandler('project-1', 'created', 'issue-123')
 
     await waitFor(() => {
       const notifications = useNotificationStore.getState().notifications

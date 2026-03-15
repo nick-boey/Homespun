@@ -10,12 +10,12 @@ import { ApplyAgentChangesDialog } from '@/features/issues/components/apply-agen
 
 function isActiveStatus(status: ClaudeSessionStatus | undefined): boolean {
   return (
-    status === 'Starting' ||
-    status === 'RunningHooks' ||
-    status === 'Running' ||
-    status === 'WaitingForInput' ||
-    status === 'WaitingForQuestionAnswer' ||
-    status === 'WaitingForPlanExecution'
+    status === 'starting' ||
+    status === 'runningHooks' ||
+    status === 'running' ||
+    status === 'waitingForInput' ||
+    status === 'waitingForQuestionAnswer' ||
+    status === 'waitingForPlanExecution'
   )
 }
 

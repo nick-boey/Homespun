@@ -1,4 +1,5 @@
 import type { ClientTelemetryEvent, ClientTelemetryBatch } from '@/api/generated'
+import { TelemetryEventType } from '@/api'
 import { TelemetryBatcher } from './telemetry-batcher'
 
 export interface TelemetryConfig {
@@ -7,14 +8,6 @@ export interface TelemetryConfig {
   batchSize?: number
   flushInterval?: number
 }
-
-// Event type constants matching backend enum
-const TelemetryEventType = {
-  PageView: 0,
-  Event: 1,
-  Exception: 2,
-  Dependency: 3,
-} as const
 
 /**
  * Main telemetry service for tracking client-side events
@@ -47,7 +40,7 @@ export class TelemetryService {
     if (!this.config.enabled) return
 
     const event: ClientTelemetryEvent = {
-      type: TelemetryEventType.PageView,
+      type: TelemetryEventType.PAGE_VIEW,
       name: url,
       timestamp: new Date().toISOString(),
       properties:
@@ -69,7 +62,7 @@ export class TelemetryService {
     if (!this.config.enabled) return
 
     const event: ClientTelemetryEvent = {
-      type: TelemetryEventType.Event,
+      type: TelemetryEventType.EVENT,
       name,
       timestamp: new Date().toISOString(),
       properties,
@@ -102,7 +95,7 @@ export class TelemetryService {
     }
 
     const event: ClientTelemetryEvent = {
-      type: TelemetryEventType.Exception,
+      type: TelemetryEventType.EXCEPTION,
       name: errorName,
       timestamp: new Date().toISOString(),
       properties: errorProperties,
@@ -127,7 +120,7 @@ export class TelemetryService {
     if (!this.config.enabled) return
 
     const event: ClientTelemetryEvent = {
-      type: TelemetryEventType.Dependency,
+      type: TelemetryEventType.DEPENDENCY,
       name,
       timestamp: new Date().toISOString(),
       durationMs: duration,

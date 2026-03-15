@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { AgentStatusIndicator } from './agent-status-indicator'
+import { ClaudeSessionStatus } from '@/api'
 
 describe('AgentStatusIndicator', () => {
   beforeEach(() => {
@@ -9,34 +10,19 @@ describe('AgentStatusIndicator', () => {
   })
 
   it('renders ThinkingBar when agent is running', () => {
-    render(
-      <AgentStatusIndicator
-        status={2} // Running
-        isActive={true}
-      />
-    )
+    render(<AgentStatusIndicator status={ClaudeSessionStatus.RUNNING} isActive={true} />)
 
     expect(screen.getByText(/working/i)).toBeInTheDocument()
   })
 
   it('shows Loader when agent is starting', () => {
-    render(
-      <AgentStatusIndicator
-        status={0} // Starting
-        isActive={true}
-      />
-    )
+    render(<AgentStatusIndicator status={ClaudeSessionStatus.STARTING} isActive={true} />)
 
     expect(screen.getByText(/starting/i)).toBeInTheDocument()
   })
 
   it('shows waiting state when agent is waiting for input', () => {
-    render(
-      <AgentStatusIndicator
-        status={3} // WaitingForInput
-        isActive={true}
-      />
-    )
+    render(<AgentStatusIndicator status={ClaudeSessionStatus.WAITING_FOR_INPUT} isActive={true} />)
 
     expect(screen.getByText(/waiting/i)).toBeInTheDocument()
   })
@@ -46,11 +32,7 @@ describe('AgentStatusIndicator', () => {
     const onStop = vi.fn()
 
     render(
-      <AgentStatusIndicator
-        status={2} // Running
-        isActive={true}
-        onStop={onStop}
-      />
+      <AgentStatusIndicator status={ClaudeSessionStatus.RUNNING} isActive={true} onStop={onStop} />
     )
 
     const stopButton = screen.getByRole('button', { name: /stop/i })
@@ -60,7 +42,13 @@ describe('AgentStatusIndicator', () => {
   })
 
   it('displays token count when provided', () => {
-    render(<AgentStatusIndicator status={2} isActive={true} tokenCount={1500} />)
+    render(
+      <AgentStatusIndicator
+        status={ClaudeSessionStatus.RUNNING}
+        isActive={true}
+        tokenCount={1500}
+      />
+    )
 
     expect(screen.getByText(/1,500/)).toBeInTheDocument()
   })
@@ -68,7 +56,7 @@ describe('AgentStatusIndicator', () => {
   it('displays duration when provided', () => {
     render(
       <AgentStatusIndicator
-        status={2}
+        status={ClaudeSessionStatus.RUNNING}
         isActive={true}
         startTime={new Date(Date.now() - 65000)} // 65 seconds ago
       />
@@ -80,10 +68,7 @@ describe('AgentStatusIndicator', () => {
 
   it('renders nothing when not active', () => {
     const { container } = render(
-      <AgentStatusIndicator
-        status={5} // Stopped
-        isActive={false}
-      />
+      <AgentStatusIndicator status={ClaudeSessionStatus.STOPPED} isActive={false} />
     )
 
     expect(container.firstChild).toBeNull()

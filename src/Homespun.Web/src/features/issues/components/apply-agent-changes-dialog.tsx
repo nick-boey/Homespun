@@ -22,8 +22,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { cn } from '@/lib/utils'
 import { useApplyAgentChanges, usePreviewAgentChanges } from '../hooks/use-apply-agent-changes'
-import { ChangeType, ConflictResolutionStrategy } from '@/api/generated'
-import type { IssueChangeDto, IssueConflictDto } from '@/api/generated'
+import { ChangeType, ConflictResolutionStrategy } from '@/api'
+import type { IssueChangeDto, IssueConflictDto } from '@/api'
 
 interface ApplyAgentChangesDialogProps {
   open: boolean
@@ -66,8 +66,8 @@ export function ApplyAgentChangesDialog({
         sessionId,
         dryRun: false,
         conflictStrategy: preview?.conflicts?.length
-          ? ConflictResolutionStrategy[3] // Manual
-          : ConflictResolutionStrategy[0], // AgentWins
+          ? ConflictResolutionStrategy.MANUAL
+          : ConflictResolutionStrategy.AGENT_WINS,
       },
       {
         onSuccess: (data) => {
@@ -84,9 +84,9 @@ export function ApplyAgentChangesDialog({
     if (!preview?.changes) return { createdCount: 0, updatedCount: 0, deletedCount: 0 }
 
     return {
-      createdCount: preview.changes.filter((c) => c.changeType === ChangeType[0]).length, // Created
-      updatedCount: preview.changes.filter((c) => c.changeType === ChangeType[1]).length, // Updated
-      deletedCount: preview.changes.filter((c) => c.changeType === ChangeType[2]).length, // Deleted
+      createdCount: preview.changes.filter((c) => c.changeType === ChangeType.CREATED).length,
+      updatedCount: preview.changes.filter((c) => c.changeType === ChangeType.UPDATED).length,
+      deletedCount: preview.changes.filter((c) => c.changeType === ChangeType.DELETED).length,
     }
   }, [preview])
 
@@ -220,11 +220,11 @@ interface ChangeItemProps {
 function ChangeItem({ change, expanded, onToggle }: ChangeItemProps) {
   const getChangeIcon = (type: ChangeType | undefined) => {
     switch (type) {
-      case ChangeType[0]: // Created
+      case ChangeType.CREATED:
         return <CheckCircle2 className="h-4 w-4 text-green-600" />
-      case ChangeType[1]: // Updated
+      case ChangeType.UPDATED:
         return <GitMerge className="h-4 w-4 text-blue-600" />
-      case ChangeType[2]: // Deleted
+      case ChangeType.DELETED:
         return <XCircle className="h-4 w-4 text-red-600" />
       default:
         return null
@@ -233,11 +233,11 @@ function ChangeItem({ change, expanded, onToggle }: ChangeItemProps) {
 
   const getChangeBadge = (type: ChangeType | undefined) => {
     switch (type) {
-      case ChangeType[0]: // Created
+      case ChangeType.CREATED:
         return <Badge className="bg-green-100 text-green-700">Created</Badge>
-      case ChangeType[1]: // Updated
+      case ChangeType.UPDATED:
         return <Badge className="bg-blue-100 text-blue-700">Updated</Badge>
-      case ChangeType[2]: // Deleted
+      case ChangeType.DELETED:
         return <Badge className="bg-red-100 text-red-700">Deleted</Badge>
       default:
         return null

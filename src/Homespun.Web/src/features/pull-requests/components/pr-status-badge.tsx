@@ -8,39 +8,42 @@ export interface PrStatusBadgeProps {
   className?: string
 }
 
-const STATUS_CONFIG: Record<number, { label: string; bgColor: string; textColor: string }> = {
-  [PullRequestStatus[0]]: {
-    label: 'Draft',
+const STATUS_CONFIG: Record<
+  PullRequestStatus,
+  { label: string; bgColor: string; textColor: string }
+> = {
+  [PullRequestStatus.IN_PROGRESS]: {
+    label: 'In Progress',
     bgColor: 'bg-gray-500/20',
     textColor: 'text-gray-700 dark:text-gray-400',
   },
-  [PullRequestStatus[1]]: {
-    label: 'Open',
+  [PullRequestStatus.READY_FOR_REVIEW]: {
+    label: 'Ready for Review',
     bgColor: 'bg-green-500/20',
     textColor: 'text-green-700 dark:text-green-400',
   },
-  [PullRequestStatus[2]]: {
+  [PullRequestStatus.CHECKS_FAILING]: {
+    label: 'Checks Failing',
+    bgColor: 'bg-red-500/20',
+    textColor: 'text-red-700 dark:text-red-400',
+  },
+  [PullRequestStatus.CONFLICT]: {
+    label: 'Conflict',
+    bgColor: 'bg-orange-500/20',
+    textColor: 'text-orange-700 dark:text-orange-400',
+  },
+  [PullRequestStatus.READY_FOR_MERGING]: {
+    label: 'Ready for Merging',
+    bgColor: 'bg-blue-500/20',
+    textColor: 'text-blue-700 dark:text-blue-400',
+  },
+  [PullRequestStatus.MERGED]: {
     label: 'Merged',
     bgColor: 'bg-purple-500/20',
     textColor: 'text-purple-700 dark:text-purple-400',
   },
-  [PullRequestStatus[3]]: {
+  [PullRequestStatus.CLOSED]: {
     label: 'Closed',
-    bgColor: 'bg-red-500/20',
-    textColor: 'text-red-700 dark:text-red-400',
-  },
-  [PullRequestStatus[4]]: {
-    label: 'Changes Requested',
-    bgColor: 'bg-orange-500/20',
-    textColor: 'text-orange-700 dark:text-orange-400',
-  },
-  [PullRequestStatus[5]]: {
-    label: 'Approved',
-    bgColor: 'bg-blue-500/20',
-    textColor: 'text-blue-700 dark:text-blue-400',
-  },
-  [PullRequestStatus[6]]: {
-    label: 'Review Required',
     bgColor: 'bg-yellow-500/20',
     textColor: 'text-yellow-700 dark:text-yellow-400',
   },

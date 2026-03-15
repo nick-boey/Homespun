@@ -8,7 +8,7 @@ describe('PrRow', () => {
   const mockPr: PullRequestInfo = {
     number: 123,
     title: 'Add new feature',
-    status: PullRequestStatus[1],
+    status: PullRequestStatus.READY_FOR_REVIEW,
     branchName: 'feature/new-feature',
     htmlUrl: 'https://github.com/owner/repo/pull/123',
     checksPassing: true,
@@ -25,7 +25,7 @@ describe('PrRow', () => {
 
   it('renders status badge', () => {
     render(<PrRow pr={mockPr} onSelect={vi.fn()} />)
-    expect(screen.getByText('Open')).toBeInTheDocument()
+    expect(screen.getByText('Ready for Review')).toBeInTheDocument()
   })
 
   it('renders CI status badge', () => {

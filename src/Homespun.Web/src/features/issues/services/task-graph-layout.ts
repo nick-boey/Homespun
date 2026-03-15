@@ -10,7 +10,10 @@ import type {
   TaskGraphNodeResponse,
   TaskGraphLinkedPr,
   AgentStatusData,
+  IssueType as IssueTypeEnum,
+  IssueStatus as IssueStatusEnum,
 } from '@/api'
+import { ExecutionMode, IssueStatus, IssueType } from '@/api'
 import { getPriorityColor } from './priority-colors'
 import { generateBranchName } from './branch-name'
 
@@ -39,8 +42,8 @@ export interface TaskGraphIssueRenderLine {
   drawTopLine: boolean
   drawBottomLine: boolean
   seriesConnectorFromLane: number | null
-  issueType: number
-  status: number
+  issueType: IssueTypeEnum
+  status: IssueStatusEnum
   hasDescription: boolean
   linkedPr: TaskGraphLinkedPr | null
   agentStatus: AgentStatusData | null
@@ -283,8 +286,7 @@ function computeHiddenParentInfo(
         if (parentInGroup && !visibleIds.has(parentRef.parentIssue.toLowerCase())) {
           // Parent was filtered out
           hasHiddenParent = true
-          // ExecutionMode: 0 = Series, 1 = Parallel
-          hiddenParentIsSeriesMode = parentNode.issue?.executionMode === 0
+          hiddenParentIsSeriesMode = parentNode.issue?.executionMode === ExecutionMode.SERIES
         }
       }
     }
@@ -454,8 +456,7 @@ function renderGroup(
     if (!node.issue?.id) continue
 
     const parentNode = parentByNode.get(node.issue.id.toLowerCase())
-    // ExecutionMode: 0 = Series, 1 = Parallel
-    if (parentNode?.issue?.id && parentNode.issue?.executionMode === 0) {
+    if (parentNode?.issue?.id && parentNode.issue?.executionMode === ExecutionMode.SERIES) {
       seriesChildLaneByParent.set(parentNode.issue.id.toLowerCase(), (node.lane ?? 0) - minLane)
     }
   }
@@ -487,8 +488,9 @@ function renderGroup(
     // Also check hidden parent for nodes whose visible parent was filtered out
     const seriesHiddenParent = hiddenParentByNode.get(nodeId)
     const isSeriesChild =
-      (parentNode != null && parentNode.issue?.executionMode === 0) ||
-      (seriesHiddenParent != null && seriesHiddenParent.issue?.executionMode === 0)
+      (parentNode != null && parentNode.issue?.executionMode === ExecutionMode.SERIES) ||
+      (seriesHiddenParent != null &&
+        seriesHiddenParent.issue?.executionMode === ExecutionMode.SERIES)
 
     // Compute DrawTopLine (uses base lanes for calculations)
     let drawTopLine = false
@@ -502,8 +504,10 @@ function renderGroup(
 
         const prevHiddenParentCheck = hiddenParentByNode.get(prevNodeId)
         const prevIsSeriesChild =
-          (prevParentNode != null && prevParentNode.issue?.executionMode === 0) ||
-          (prevHiddenParentCheck != null && prevHiddenParentCheck.issue?.executionMode === 0)
+          (prevParentNode != null &&
+            prevParentNode.issue?.executionMode === ExecutionMode.SERIES) ||
+          (prevHiddenParentCheck != null &&
+            prevHiddenParentCheck.issue?.executionMode === ExecutionMode.SERIES)
 
         // Previous node is a parallel child whose junction is at this node's lane
         if (
@@ -529,7 +533,7 @@ function renderGroup(
         // Check for series siblings with same hidden parent (when visible parent is filtered out)
         if (!drawTopLine) {
           const currentHiddenParent = hiddenParentByNode.get(nodeId)
-          if (currentHiddenParent?.issue?.executionMode === 0) {
+          if (currentHiddenParent?.issue?.executionMode === ExecutionMode.SERIES) {
             const prevHiddenParent = hiddenParentByNode.get(prevNodeId)
             if (
               prevHiddenParent?.issue?.id &&
@@ -546,13 +550,14 @@ function renderGroup(
     // Compute DrawBottomLine:
     // - For nodes with visible series parent: always true (connects to the visible parent)
     // - For nodes with hidden series parent: true only if there's a next sibling with same hidden parent
-    const hasVisibleSeriesParent = parentNode != null && parentNode.issue?.executionMode === 0
+    const hasVisibleSeriesParent =
+      parentNode != null && parentNode.issue?.executionMode === ExecutionMode.SERIES
     let drawBottomLine = hasVisibleSeriesParent
 
     // For nodes with hidden series parent, check if there's a next sibling
     if (!drawBottomLine) {
       const bottomLineHiddenParent = hiddenParentByNode.get(nodeId)
-      if (bottomLineHiddenParent?.issue?.executionMode === 0) {
+      if (bottomLineHiddenParent?.issue?.executionMode === ExecutionMode.SERIES) {
         // Check if there's a next sibling with same hidden parent
         for (let j = i + 1; j < group.length; j++) {
           const nextHiddenParent = hiddenParentByNode.get(group[j].issue?.id?.toLowerCase() ?? '')
@@ -622,8 +627,8 @@ function renderGroup(
       drawTopLine,
       drawBottomLine,
       seriesConnectorFromLane,
-      issueType: node.issue.type ?? 0,
-      status: node.issue.status ?? 0,
+      issueType: node.issue.type ?? IssueType.TASK,
+      status: node.issue.status ?? IssueStatus.DRAFT,
       hasDescription: !!(node.issue.description && node.issue.description.trim()),
       linkedPr,
       agentStatus,
@@ -641,12 +646,11 @@ function renderGroup(
 function getMarker(node: TaskGraphNodeResponse): TaskGraphMarkerType {
   const status = node.issue?.status
 
-  // IssueStatus: 0 = Open, 1 = Complete, 2 = Closed, 3 = Archived
   switch (status) {
-    case 1: // Complete
+    case IssueStatus.COMPLETE:
       return TaskGraphMarkerType.Complete
-    case 2: // Closed
-    case 3: // Archived
+    case IssueStatus.CLOSED:
+    case IssueStatus.ARCHIVED:
       return TaskGraphMarkerType.Closed
     default:
       return node.isActionable ? TaskGraphMarkerType.Actionable : TaskGraphMarkerType.Open

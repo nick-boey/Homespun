@@ -2,15 +2,16 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import React from 'react'
 import { SessionCard } from './session-card'
-import type { SessionSummary, ClaudeSessionStatus } from '@/api/generated/types.gen'
+import type { SessionSummary } from '@/api/generated/types.gen'
+import { SessionMode, ClaudeSessionStatus } from '@/api/generated/types.gen'
 
 const mockSession: SessionSummary = {
   id: 'test-session-id',
   entityId: 'issue-123',
   projectId: 'project-1',
   model: 'claude-3.5-sonnet',
-  mode: 1, // Build
-  status: 2, // Running
+  mode: SessionMode.BUILD,
+  status: ClaudeSessionStatus.RUNNING,
   createdAt: new Date().toISOString(),
   lastActivityAt: new Date().toISOString(),
   messageCount: 0,
@@ -94,7 +95,7 @@ describe('SessionCard', () => {
   it('shows Plan mode correctly', () => {
     render(
       <SessionCard
-        session={{ ...mockSession, mode: 0 }}
+        session={{ ...mockSession, mode: SessionMode.PLAN }}
         entityTitle="Test"
         entityType="issue"
         projectName="Test Project"
@@ -107,7 +108,7 @@ describe('SessionCard', () => {
   it('hides Stop button for stopped sessions', () => {
     render(
       <SessionCard
-        session={{ ...mockSession, status: 6 }} // Stopped
+        session={{ ...mockSession, status: ClaudeSessionStatus.STOPPED }}
         entityTitle="Test"
         entityType="issue"
         projectName="Test Project"
@@ -121,7 +122,7 @@ describe('SessionCard', () => {
   it('shows error state correctly', () => {
     render(
       <SessionCard
-        session={{ ...mockSession, status: 7 }} // Error
+        session={{ ...mockSession, status: ClaudeSessionStatus.ERROR }}
         entityTitle="Test"
         entityType="issue"
         projectName="Test Project"
@@ -200,18 +201,18 @@ describe('SessionCard', () => {
 
   it('shows different status animations', () => {
     const statusTests = [
-      { status: 0, label: 'Starting' }, // Starting
-      { status: 1, label: 'Running Hooks' }, // RunningHooks
-      { status: 2, label: 'Running' }, // Running
-      { status: 3, label: 'Waiting' }, // WaitingForInput
-      { status: 4, label: 'Question' }, // WaitingForQuestionAnswer
-      { status: 5, label: 'Plan Ready' }, // WaitingForPlanExecution
+      { status: ClaudeSessionStatus.STARTING, label: 'Starting' },
+      { status: ClaudeSessionStatus.RUNNING_HOOKS, label: 'Running Hooks' },
+      { status: ClaudeSessionStatus.RUNNING, label: 'Running' },
+      { status: ClaudeSessionStatus.WAITING_FOR_INPUT, label: 'Waiting' },
+      { status: ClaudeSessionStatus.WAITING_FOR_QUESTION_ANSWER, label: 'Question' },
+      { status: ClaudeSessionStatus.WAITING_FOR_PLAN_EXECUTION, label: 'Plan Ready' },
     ]
 
     statusTests.forEach(({ status, label }) => {
       const { rerender } = render(
         <SessionCard
-          session={{ ...mockSession, status: status as ClaudeSessionStatus }}
+          session={{ ...mockSession, status }}
           entityTitle="Test"
           entityType="issue"
           projectName="Test Project"

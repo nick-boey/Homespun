@@ -17,6 +17,7 @@ import {
 } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
+import { IssueType, IssueStatus } from '@/api'
 import { useSignalR } from '@/hooks/use-signalr'
 import { registerNotificationHubEvents } from '@/lib/signalr/notification-hub'
 import { ErrorFallback } from '@/components/error-boundary'
@@ -702,20 +703,20 @@ export const TaskGraphView = memo(
     // ============================================================================
 
     const handleTypeChange = useCallback(
-      async (issueId: string, newType: number) => {
+      async (issueId: string, newType: IssueType) => {
         await updateIssue({
           issueId,
-          data: { projectId, type: newType as 0 | 1 | 2 | 3 | 4 },
+          data: { projectId, type: newType },
         })
       },
       [updateIssue, projectId]
     )
 
     const handleStatusChange = useCallback(
-      async (issueId: string, newStatus: number) => {
+      async (issueId: string, newStatus: IssueStatus) => {
         await updateIssue({
           issueId,
-          data: { projectId, status: newStatus as 0 | 1 | 2 | 3 | 4 | 5 | 6 },
+          data: { projectId, status: newStatus },
         })
       },
       [updateIssue, projectId]
@@ -748,8 +749,8 @@ export const TaskGraphView = memo(
             <span
               className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium"
               style={{
-                backgroundColor: `${getTypeColor(0)}20`,
-                color: getTypeColor(0),
+                backgroundColor: `${getTypeColor(IssueType.TASK)}20`,
+                color: getTypeColor(IssueType.TASK),
               }}
             >
               Task
@@ -881,8 +882,8 @@ export const TaskGraphView = memo(
                     <span
                       className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium"
                       style={{
-                        backgroundColor: `${getTypeColor(0)}20`,
-                        color: getTypeColor(0),
+                        backgroundColor: `${getTypeColor(IssueType.TASK)}20`,
+                        color: getTypeColor(IssueType.TASK),
                       }}
                     >
                       Task

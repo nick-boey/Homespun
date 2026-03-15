@@ -45,7 +45,7 @@ export function useStartAgent() {
     onSuccess: (session, params) => {
       // Cache initial mode/model for this session for immediate display
       if (session.id) {
-        const mode = params.mode !== undefined ? fromApiSessionMode(params.mode) : 'Build'
+        const mode = params.mode !== undefined ? fromApiSessionMode(params.mode) : 'build'
         useSessionSettingsStore
           .getState()
           .initSession(session.id, mode, (params.model ?? 'opus') as ModelSelection)
@@ -56,7 +56,7 @@ export function useStartAgent() {
         sessionId: session.id || '',
         entityId: params.entityId,
         projectId: params.projectId,
-        mode: (params.mode ?? 'Build').toString(),
+        mode: (params.mode ?? 'build').toString(),
         model: params.model || '',
         hasInitialMessage: params.initialMessage ? 'true' : 'false',
       })
@@ -69,7 +69,7 @@ export function useStartAgent() {
       telemetry.trackEvent('agent_launch_failed', {
         entityId: params.entityId,
         projectId: params.projectId,
-        mode: (params.mode ?? 'Build').toString(),
+        mode: (params.mode ?? 'build').toString(),
         error: error.message || 'Unknown error',
       })
     },

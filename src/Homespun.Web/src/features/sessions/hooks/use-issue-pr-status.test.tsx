@@ -4,6 +4,7 @@ import { QueryClientProvider, QueryClient } from '@tanstack/react-query'
 import { useIssuePrStatus } from './use-issue-pr-status'
 import { IssuePrStatus } from '@/api'
 import type { IssuePullRequestStatus } from '@/api/generated'
+import { PullRequestStatus } from '@/api/generated'
 import { createMockSession } from '@/test/test-utils'
 
 vi.mock('@/api', () => ({
@@ -49,7 +50,7 @@ describe('useIssuePrStatus', () => {
       prNumber: 42,
       prUrl: 'https://github.com/test/repo/pull/42',
       branchName: 'feature/test',
-      status: 1, // Open
+      status: PullRequestStatus.READY_FOR_REVIEW,
       checksPassing: true,
       isApproved: true,
       approvalCount: 2,

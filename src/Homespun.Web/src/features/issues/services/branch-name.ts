@@ -6,14 +6,16 @@
  * Example: task/my-feature+abc123
  */
 
+import { IssueType } from '@/api'
 import type { IssueResponse } from '@/api'
 
-const ISSUE_TYPE_PREFIXES: Record<number, string> = {
-  0: 'task', // Task
-  1: 'feature', // Feature
-  2: 'bug', // Bug
-  3: 'chore', // Chore
-  4: 'epic', // Epic
+const ISSUE_TYPE_PREFIXES: Record<IssueType, string> = {
+  [IssueType.TASK]: 'task',
+  [IssueType.FEATURE]: 'feature',
+  [IssueType.BUG]: 'bug',
+  [IssueType.CHORE]: 'chore',
+  [IssueType.IDEA]: 'idea',
+  [IssueType.VERIFY]: 'verify',
 }
 
 /**
@@ -25,7 +27,7 @@ const ISSUE_TYPE_PREFIXES: Record<number, string> = {
 export function generateBranchName(issue: IssueResponse | null | undefined): string | null {
   if (!issue?.id) return null
 
-  const typePrefix = ISSUE_TYPE_PREFIXES[issue.type ?? 0] ?? 'task'
+  const typePrefix = ISSUE_TYPE_PREFIXES[issue.type ?? IssueType.TASK] ?? 'task'
   const branchId = issue.workingBranchId || slugify(issue.title ?? '')
 
   if (!branchId) {

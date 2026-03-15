@@ -4,23 +4,28 @@ import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createElement, type ReactNode } from 'react'
 import { Issues, PullRequests } from '@/api'
-import type { SessionSummary, ClaudeSessionStatus, SessionMode } from '@/api/generated/types.gen'
+import type { SessionSummary } from '@/api/generated/types.gen'
+import { ClaudeSessionStatus, SessionMode } from '@/api/generated/types.gen'
 import { SessionsList } from './sessions-list'
 import { useSessions, useStopSession } from '../hooks/use-sessions'
 import { useProjects } from '@/features/projects'
 
-vi.mock('@/api', () => ({
-  Sessions: {
-    getApiSessions: vi.fn(),
-    deleteApiSessionsById: vi.fn(),
-  },
-  Issues: {
-    getApiIssuesByIssueId: vi.fn(),
-  },
-  PullRequests: {
-    getApiPullRequestsById: vi.fn(),
-  },
-}))
+vi.mock('@/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/api')>()
+  return {
+    ...actual,
+    Sessions: {
+      getApiSessions: vi.fn(),
+      deleteApiSessionsById: vi.fn(),
+    },
+    Issues: {
+      getApiIssuesByIssueId: vi.fn(),
+    },
+    PullRequests: {
+      getApiPullRequestsById: vi.fn(),
+    },
+  }
+})
 
 vi.mock('@tanstack/react-router', () => ({
   Link: ({
@@ -68,28 +73,28 @@ vi.mock('@/features/projects', () => ({
   useProjects: vi.fn(),
 }))
 
-// Active session (Running status = 2)
+// Active session (Running status)
 const activeSession: SessionSummary = {
   id: 'session-1',
   entityId: 'issue-abc123',
   projectId: 'project-1',
   model: 'sonnet',
-  mode: 1 as SessionMode,
-  status: 2 as ClaudeSessionStatus, // Running
+  mode: SessionMode.BUILD,
+  status: ClaudeSessionStatus.RUNNING,
   createdAt: '2024-01-01T10:00:00Z',
   lastActivityAt: '2024-01-01T10:30:00Z',
   messageCount: 15,
   totalCostUsd: 0.25,
 }
 
-// Archived sessions (Stopped = 6, Error = 7)
+// Archived sessions (Stopped, Error)
 const stoppedSession: SessionSummary = {
   id: 'session-2',
   entityId: 'issue-def456',
   projectId: 'project-2',
   model: 'opus',
-  mode: 0 as SessionMode,
-  status: 6 as ClaudeSessionStatus, // Stopped
+  mode: SessionMode.PLAN,
+  status: ClaudeSessionStatus.STOPPED,
   createdAt: '2024-01-01T09:00:00Z',
   lastActivityAt: '2024-01-01T09:15:00Z',
   messageCount: 5,
@@ -101,8 +106,8 @@ const errorSession: SessionSummary = {
   entityId: 'issue-ghi789',
   projectId: 'project-1',
   model: 'sonnet',
-  mode: 1 as SessionMode,
-  status: 7 as ClaudeSessionStatus, // Error
+  mode: SessionMode.BUILD,
+  status: ClaudeSessionStatus.ERROR,
   createdAt: '2024-01-02T08:00:00Z',
   lastActivityAt: '2024-01-02T08:05:00Z',
   messageCount: 2,

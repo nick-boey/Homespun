@@ -2,15 +2,19 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useStartAgent } from './use-start-agent'
-import { Sessions } from '@/api'
+import { Sessions, SessionMode, ClaudeSessionStatus } from '@/api'
 import type { ReactNode } from 'react'
 import type { ClaudeSession } from '@/api/generated/types.gen'
 
-vi.mock('@/api', () => ({
-  Sessions: {
-    postApiSessions: vi.fn(),
-  },
-}))
+vi.mock('@/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/api')>()
+  return {
+    ...actual,
+    Sessions: {
+      postApiSessions: vi.fn(),
+    },
+  }
+})
 
 const mockPostApiSessions = vi.mocked(Sessions.postApiSessions)
 
@@ -31,8 +35,8 @@ function createMockSession(overrides: Partial<ClaudeSession> = {}): ClaudeSessio
     projectId: 'project-789',
     workingDirectory: '/workdir',
     model: 'sonnet',
-    mode: 1 as const, // Build mode
-    status: 0 as const,
+    mode: SessionMode.BUILD,
+    status: ClaudeSessionStatus.STARTING,
     ...overrides,
   }
 }
@@ -64,7 +68,7 @@ describe('useStartAgent', () => {
     result.current.mutate({
       entityId: 'issue-456',
       projectId: 'project-789',
-      mode: 1,
+      mode: SessionMode.BUILD,
       model: 'sonnet',
       workingDirectory: '/workdir',
       systemPrompt: 'Test prompt',
@@ -78,7 +82,7 @@ describe('useStartAgent', () => {
       body: {
         entityId: 'issue-456',
         projectId: 'project-789',
-        mode: 1,
+        mode: SessionMode.BUILD,
         model: 'sonnet',
         workingDirectory: '/workdir',
         systemPrompt: 'Test prompt',
@@ -99,7 +103,7 @@ describe('useStartAgent', () => {
     result.current.mutate({
       entityId: 'issue-456',
       projectId: 'project-789',
-      mode: 1,
+      mode: SessionMode.BUILD,
       model: 'sonnet',
       workingDirectory: '/workdir',
     })
@@ -121,7 +125,7 @@ describe('useStartAgent', () => {
     result.current.mutate({
       entityId: 'issue-456',
       projectId: 'project-789',
-      mode: 1,
+      mode: SessionMode.BUILD,
       model: 'sonnet',
       workingDirectory: '/workdir',
     })
@@ -143,7 +147,7 @@ describe('useStartAgent', () => {
     result.current.mutate({
       entityId: 'issue-456',
       projectId: 'project-789',
-      mode: 1,
+      mode: SessionMode.BUILD,
       model: 'sonnet',
       workingDirectory: '/workdir',
       initialMessage: 'Build the feature',
@@ -157,7 +161,7 @@ describe('useStartAgent', () => {
       body: {
         entityId: 'issue-456',
         projectId: 'project-789',
-        mode: 1,
+        mode: SessionMode.BUILD,
         model: 'sonnet',
         workingDirectory: '/workdir',
         systemPrompt: undefined,

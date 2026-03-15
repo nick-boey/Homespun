@@ -3,14 +3,18 @@ import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createElement, type ReactNode } from 'react'
 import { useTaskGraph, taskGraphQueryKey } from './use-task-graph'
-import { Graph } from '@/api'
+import { Graph, IssueStatus, IssueType, ExecutionMode } from '@/api'
 import type { TaskGraphResponse } from '@/api'
 
-vi.mock('@/api', () => ({
-  Graph: {
-    getApiGraphByProjectIdTaskgraphData: vi.fn(),
-  },
-}))
+vi.mock('@/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/api')>()
+  return {
+    ...actual,
+    Graph: {
+      getApiGraphByProjectIdTaskgraphData: vi.fn(),
+    },
+  }
+})
 
 function createWrapper() {
   const queryClient = new QueryClient({
@@ -29,10 +33,10 @@ const mockTaskGraphResponse: TaskGraphResponse = {
         id: 'abc123',
         title: 'Test Issue',
         description: 'Test description',
-        status: 0, // Open
-        type: 0, // Task
+        status: IssueStatus.OPEN,
+        type: IssueType.TASK,
         parentIssues: [],
-        executionMode: 0, // Parallel
+        executionMode: ExecutionMode.SERIES,
       },
       lane: 0,
       row: 0,

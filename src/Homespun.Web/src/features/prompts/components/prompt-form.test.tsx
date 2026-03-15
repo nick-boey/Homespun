@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { PromptForm } from './prompt-form'
 import type { AgentPrompt } from '@/api/generated/types.gen'
+import { SessionMode } from '@/api/generated/types.gen'
 
 describe('PromptForm', () => {
   it('renders empty form for creating new prompt', () => {
@@ -18,7 +19,7 @@ describe('PromptForm', () => {
       id: 'prompt-1',
       name: 'Existing Prompt',
       initialMessage: 'Existing content',
-      mode: 0,
+      mode: SessionMode.PLAN,
     }
     render(<PromptForm prompt={existingPrompt} onSubmit={vi.fn()} onCancel={vi.fn()} />)
 
@@ -54,7 +55,7 @@ describe('PromptForm', () => {
       expect(onSubmit).toHaveBeenCalledWith({
         name: 'My New Prompt',
         initialMessage: 'System prompt content',
-        mode: 1,
+        mode: SessionMode.BUILD,
       })
     })
   })

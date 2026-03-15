@@ -73,7 +73,7 @@ export function useChangeSessionSettings(sessionId: string): UseChangeSessionSet
       if (currentSettings) {
         useSessionSettingsStore.getState().updateSession(sessionId, currentSettings.mode, model)
       } else {
-        useSessionSettingsStore.getState().initSession(sessionId, 'Build', model)
+        useSessionSettingsStore.getState().initSession(sessionId, 'build', model)
       }
 
       try {

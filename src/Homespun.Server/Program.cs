@@ -1,3 +1,5 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Homespun.Features.AgentOrchestration.Services;
 using Homespun.Features.ClaudeCode.Hubs;
 using Homespun.Features.ClaudeCode.Services;
@@ -16,6 +18,7 @@ using Homespun.Features.PullRequests;
 using Homespun.Features.Search;
 using Homespun.Features.Secrets;
 using Homespun.Features.PullRequests.Data;
+using Homespun.Features.Shared;
 using Homespun.Features.Shared.Services;
 using Homespun.Features.SignalR;
 using Homespun.Features.Testing;
@@ -256,13 +259,26 @@ builder.Services.AddSingleton<ISignalRUrlProvider, SignalRUrlProvider>();
 // Plans service (reads plan files from .claude/plans directory)
 builder.Services.AddSingleton<IPlansService, PlansService>();
 
-builder.Services.AddSignalR();
+builder.Services.AddSignalR()
+    .AddJsonProtocol(options =>
+    {
+        options.PayloadSerializerOptions.Converters.Add(
+            new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
+    });
 builder.Services.AddHealthChecks();
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.Converters.Add(
+            new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
+    });
 
 // Add Swagger/OpenAPI
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SchemaFilter<EnumSchemaFilter>();
+});
 
 // Configure CORS for Blazor WASM client
 builder.Services.AddCors(options =>

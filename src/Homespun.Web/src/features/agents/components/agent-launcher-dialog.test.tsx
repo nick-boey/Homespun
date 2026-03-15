@@ -3,18 +3,22 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AgentLauncherDialog } from './agent-launcher-dialog'
-import { AgentPrompts, Issues } from '@/api'
+import { AgentPrompts, Issues, SessionMode } from '@/api'
 import type { ReactNode } from 'react'
 import type { AgentPrompt, RunAgentResponse } from '@/api/generated/types.gen'
 
-vi.mock('@/api', () => ({
-  AgentPrompts: {
-    getApiAgentPromptsAvailableForProjectByProjectId: vi.fn(),
-  },
-  Issues: {
-    postApiIssuesByIssueIdRun: vi.fn(),
-  },
-}))
+vi.mock('@/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/api')>()
+  return {
+    ...actual,
+    AgentPrompts: {
+      getApiAgentPromptsAvailableForProjectByProjectId: vi.fn(),
+    },
+    Issues: {
+      postApiIssuesByIssueIdRun: vi.fn(),
+    },
+  }
+})
 
 // Mock useNavigate from tanstack router
 const mockNavigate = vi.fn()
@@ -52,13 +56,13 @@ const mockPrompts: AgentPrompt[] = [
     id: 'prompt-1',
     name: 'Build Feature',
     initialMessage: 'Build the feature',
-    mode: 1 as const,
+    mode: SessionMode.BUILD,
   },
   {
     id: 'prompt-2',
     name: 'Plan Task',
     initialMessage: 'Create a plan',
-    mode: 0 as const,
+    mode: SessionMode.PLAN,
   },
 ]
 
@@ -445,13 +449,13 @@ describe('AgentLauncherDialog', () => {
         id: 'prompt-1',
         name: 'Build Feature',
         initialMessage: 'Build the feature',
-        mode: 1 as const,
+        mode: SessionMode.BUILD,
       },
       {
         id: 'prompt-2',
         name: 'Build Another',
         initialMessage: 'Build another feature',
-        mode: 1 as const,
+        mode: SessionMode.BUILD,
       },
     ]
     mockGetAgentPrompts.mockResolvedValue(createMockResponse(buildOnlyPrompts))

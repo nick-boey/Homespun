@@ -37,7 +37,7 @@ describe('NotificationDropdown', () => {
   it('shows badge with unread count when there are unread notifications', () => {
     useNotificationStore.getState().addNotification({
       id: 'test-1',
-      type: 'Info',
+      type: 'info',
       title: 'Test',
       message: 'Test message',
       createdAt: new Date().toISOString(),
@@ -77,7 +77,7 @@ describe('NotificationDropdown', () => {
     const user = userEvent.setup()
     useNotificationStore.getState().addNotification({
       id: 'test-1',
-      type: 'Info',
+      type: 'info',
       title: 'First Notification',
       message: 'First message',
       createdAt: new Date().toISOString(),
@@ -85,7 +85,7 @@ describe('NotificationDropdown', () => {
     })
     useNotificationStore.getState().addNotification({
       id: 'test-2',
-      type: 'Warning',
+      type: 'warning',
       title: 'Second Notification',
       message: 'Second message',
       createdAt: new Date().toISOString(),
@@ -104,7 +104,7 @@ describe('NotificationDropdown', () => {
     const user = userEvent.setup()
     useNotificationStore.getState().addNotification({
       id: 'test-1',
-      type: 'Info',
+      type: 'info',
       title: 'Test',
       message: 'Test message',
       createdAt: new Date().toISOString(),
@@ -123,7 +123,7 @@ describe('NotificationDropdown', () => {
     const user = userEvent.setup()
     useNotificationStore.getState().addNotification({
       id: 'test-1',
-      type: 'Info',
+      type: 'info',
       title: 'Test',
       message: 'Test message',
       createdAt: new Date().toISOString(),
@@ -142,7 +142,7 @@ describe('NotificationDropdown', () => {
     const user = userEvent.setup()
     useNotificationStore.getState().addNotification({
       id: 'test-1',
-      type: 'Info',
+      type: 'info',
       title: 'Test',
       message: 'Test message',
       createdAt: new Date().toISOString(),
@@ -164,7 +164,7 @@ describe('NotificationDropdown', () => {
     for (let i = 0; i < 15; i++) {
       useNotificationStore.getState().addNotification({
         id: `test-${i}`,
-        type: 'Info',
+        type: 'info',
         title: `Test ${i}`,
         message: `Message ${i}`,
         createdAt: new Date().toISOString(),
@@ -181,7 +181,7 @@ describe('NotificationDropdown', () => {
     const user = userEvent.setup()
     useNotificationStore.getState().addNotification({
       id: 'project-notification',
-      type: 'Info',
+      type: 'info',
       title: 'Project Specific',
       message: 'For project-1',
       projectId: 'project-1',
@@ -190,7 +190,7 @@ describe('NotificationDropdown', () => {
     })
     useNotificationStore.getState().addNotification({
       id: 'other-notification',
-      type: 'Info',
+      type: 'info',
       title: 'Other Project',
       message: 'For project-2',
       projectId: 'project-2',
@@ -199,7 +199,7 @@ describe('NotificationDropdown', () => {
     })
     useNotificationStore.getState().addNotification({
       id: 'global-notification',
-      type: 'Info',
+      type: 'info',
       title: 'Global',
       message: 'No project',
       createdAt: new Date().toISOString(),

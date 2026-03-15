@@ -37,7 +37,7 @@ describe('useMergedPullRequests', () => {
         pullRequest: {
           number: 120,
           title: 'Merged feature',
-          status: PullRequestStatus[2],
+          status: PullRequestStatus.MERGED,
           branchName: 'feature/merged',
           htmlUrl: 'https://github.com/owner/repo/pull/120',
           mergedAt: '2024-01-15T10:00:00Z',

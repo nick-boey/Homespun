@@ -32,9 +32,20 @@ import { useBreadcrumbSetter } from '@/hooks/use-breadcrumbs'
 import { useIssue, useUpdateIssue } from '@/features/issues'
 import { AssigneeCombobox } from '@/features/issues/components/assignee-combobox'
 import { AgentLauncherDialog, useGenerateBranchId } from '@/features/agents'
-import { ISSUE_STATUS_OPTIONS, ISSUE_TYPE_OPTIONS } from '@/lib/issue-constants'
+import {
+  ISSUE_STATUS_OPTIONS,
+  ISSUE_TYPE_OPTIONS,
+  ISSUE_STATUS,
+  ISSUE_TYPE,
+} from '@/lib/issue-constants'
 import { ArrowLeft, Play, Sparkles } from 'lucide-react'
-import type { IssueStatus, IssueType, ExecutionMode, IssueResponse } from '@/api'
+import { ExecutionMode } from '@/api'
+import type {
+  IssueStatus,
+  IssueType,
+  ExecutionMode as ExecutionModeType,
+  IssueResponse,
+} from '@/api'
 import { useBranchIdGenerationStore } from '@/features/issues/stores/branch-id-generation-store'
 import { useSearchableInput, MentionSearchPopup } from '@/features/search'
 
@@ -69,10 +80,10 @@ type IssueFormData = z.infer<typeof issueSchema>
 const issueToFormValues = (issue: IssueResponse): IssueFormData => ({
   title: issue.title ?? '',
   description: issue.description ?? '',
-  status: String(issue.status ?? 0),
-  type: String(issue.type ?? 0),
+  status: issue.status ?? '',
+  type: issue.type ?? '',
   priority: issue.priority != null ? String(issue.priority) : 'none',
-  executionMode: String(issue.executionMode ?? 0),
+  executionMode: issue.executionMode ?? ExecutionMode.SERIES,
   workingBranchId: issue.workingBranchId ?? '',
   tags: issue.tags?.join(', ') ?? '',
   assignedTo: issue.assignedTo ?? null,
@@ -247,10 +258,10 @@ export default function EditIssue() {
     defaultValues: {
       title: '',
       description: '',
-      status: '0',
-      type: '0',
+      status: ISSUE_STATUS.DRAFT,
+      type: ISSUE_TYPE.TASK,
       priority: 'none',
-      executionMode: '0',
+      executionMode: ExecutionMode.SERIES,
       workingBranchId: '',
       tags: '',
       assignedTo: null,
@@ -329,10 +340,10 @@ export default function EditIssue() {
           projectId,
           title: data.title,
           description: data.description || undefined,
-          status: parseInt(data.status) as IssueStatus,
-          type: parseInt(data.type) as IssueType,
+          status: data.status as IssueStatus,
+          type: data.type as IssueType,
           priority: data.priority && data.priority !== 'none' ? parseInt(data.priority) : undefined,
-          executionMode: parseInt(data.executionMode) as ExecutionMode,
+          executionMode: data.executionMode as ExecutionModeType,
           workingBranchId: data.workingBranchId || undefined,
           assignedTo: data.assignedTo || undefined,
         },
@@ -357,10 +368,10 @@ export default function EditIssue() {
         projectId,
         title: data.title,
         description: data.description || undefined,
-        status: parseInt(data.status) as IssueStatus,
-        type: parseInt(data.type) as IssueType,
+        status: data.status as IssueStatus,
+        type: data.type as IssueType,
         priority: data.priority && data.priority !== 'none' ? parseInt(data.priority) : undefined,
-        executionMode: parseInt(data.executionMode) as ExecutionMode,
+        executionMode: data.executionMode as ExecutionModeType,
         workingBranchId: data.workingBranchId || undefined,
         assignedTo: data.assignedTo || undefined,
       },
@@ -600,8 +611,8 @@ export default function EditIssue() {
                       <SelectValue placeholder="Select mode" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="0">Series</SelectItem>
-                      <SelectItem value="1">Parallel</SelectItem>
+                      <SelectItem value={ExecutionMode.SERIES}>Series</SelectItem>
+                      <SelectItem value={ExecutionMode.PARALLEL}>Parallel</SelectItem>
                     </SelectContent>
                   </Select>
                 )}

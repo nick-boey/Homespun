@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi, afterEach, type Mock } from 'vitest'
 import { TelemetryBatcher } from './telemetry-batcher'
-import type { ClientTelemetryEvent } from '@/api/generated'
+import { TelemetryEventType, type ClientTelemetryEvent } from '@/api/generated'
 
 // Mock the session manager
 vi.mock('./session-manager', () => ({
@@ -30,7 +30,7 @@ describe('TelemetryBatcher', () => {
   describe('addEvent', () => {
     it('adds events to the buffer', () => {
       const event: ClientTelemetryEvent = {
-        type: 1, // Event
+        type: TelemetryEventType.EVENT, // Event
         name: 'test-event',
         timestamp: new Date().toISOString(),
       }
@@ -46,7 +46,7 @@ describe('TelemetryBatcher', () => {
 
       for (let i = 0; i < 5; i++) {
         events.push({
-          type: 1,
+          type: TelemetryEventType.EVENT,
           name: `event-${i}`,
           timestamp: new Date().toISOString(),
         })
@@ -66,7 +66,7 @@ describe('TelemetryBatcher', () => {
       batcher.stop()
 
       const event: ClientTelemetryEvent = {
-        type: 1,
+        type: TelemetryEventType.EVENT,
         name: 'test-event',
         timestamp: new Date().toISOString(),
       }
@@ -83,8 +83,8 @@ describe('TelemetryBatcher', () => {
   describe('flush', () => {
     it('sends all pending events immediately', async () => {
       const events: ClientTelemetryEvent[] = [
-        { type: 1, name: 'event-1', timestamp: new Date().toISOString() },
-        { type: 1, name: 'event-2', timestamp: new Date().toISOString() },
+        { type: TelemetryEventType.EVENT, name: 'event-1', timestamp: new Date().toISOString() },
+        { type: TelemetryEventType.EVENT, name: 'event-2', timestamp: new Date().toISOString() },
       ]
 
       events.forEach((e) => batcher.addEvent(e))
@@ -106,7 +106,7 @@ describe('TelemetryBatcher', () => {
 
     it('clears buffer after successful flush', async () => {
       const event: ClientTelemetryEvent = {
-        type: 1,
+        type: TelemetryEventType.EVENT,
         name: 'test-event',
         timestamp: new Date().toISOString(),
       }
@@ -129,7 +129,7 @@ describe('TelemetryBatcher', () => {
         .mockResolvedValueOnce(undefined)
 
       const event: ClientTelemetryEvent = {
-        type: 1,
+        type: TelemetryEventType.EVENT,
         name: 'test-event',
         timestamp: new Date().toISOString(),
       }
@@ -156,7 +156,7 @@ describe('TelemetryBatcher', () => {
       sendFn.mockRejectedValue(new Error('Network error'))
 
       const event: ClientTelemetryEvent = {
-        type: 1,
+        type: TelemetryEventType.EVENT,
         name: 'test-event',
         timestamp: new Date().toISOString(),
       }
@@ -179,7 +179,7 @@ describe('TelemetryBatcher', () => {
   describe('automatic flushing', () => {
     it('flushes automatically after flushInterval', async () => {
       const event: ClientTelemetryEvent = {
-        type: 1,
+        type: TelemetryEventType.EVENT,
         name: 'test-event',
         timestamp: new Date().toISOString(),
       }
@@ -200,7 +200,7 @@ describe('TelemetryBatcher', () => {
       // Fill buffer to trigger immediate send
       for (let i = 0; i < 5; i++) {
         batcher.addEvent({
-          type: 1,
+          type: TelemetryEventType.EVENT,
           name: `event-${i}`,
           timestamp: new Date().toISOString(),
         })
@@ -210,7 +210,7 @@ describe('TelemetryBatcher', () => {
 
       // Add another event
       batcher.addEvent({
-        type: 1,
+        type: TelemetryEventType.EVENT,
         name: 'event-after',
         timestamp: new Date().toISOString(),
       })
@@ -232,7 +232,7 @@ describe('TelemetryBatcher', () => {
   describe('stop', () => {
     it('prevents new events from being added', () => {
       const event: ClientTelemetryEvent = {
-        type: 1,
+        type: TelemetryEventType.EVENT,
         name: 'test-event',
         timestamp: new Date().toISOString(),
       }
@@ -247,7 +247,7 @@ describe('TelemetryBatcher', () => {
 
     it('clears pending timer', () => {
       const event: ClientTelemetryEvent = {
-        type: 1,
+        type: TelemetryEventType.EVENT,
         name: 'test-event',
         timestamp: new Date().toISOString(),
       }
@@ -272,7 +272,7 @@ describe('TelemetryBatcher', () => {
       } as Navigator
 
       const event: ClientTelemetryEvent = {
-        type: 1,
+        type: TelemetryEventType.EVENT,
         name: 'test-event',
         timestamp: new Date().toISOString(),
       }
@@ -302,7 +302,7 @@ describe('TelemetryBatcher', () => {
       }
 
       const event: ClientTelemetryEvent = {
-        type: 1,
+        type: TelemetryEventType.EVENT,
         name: 'test-event',
         timestamp: new Date().toISOString(),
       }

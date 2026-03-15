@@ -7,6 +7,7 @@ import { useProjects } from '@/features/projects'
 import { Issues, PullRequests } from '@/api'
 import React, { type ReactNode } from 'react'
 import type { SessionSummary } from '@/api/generated/types.gen'
+import { SessionMode, ClaudeSessionStatus } from '@/api/generated/types.gen'
 
 // Mock dependencies
 vi.mock('./use-sessions')
@@ -34,8 +35,8 @@ describe('useEnrichedSessions', () => {
       entityId: 'issue-123',
       projectId: 'project-1',
       model: 'claude-3.5-sonnet',
-      mode: 1,
-      status: 2,
+      mode: SessionMode.BUILD,
+      status: ClaudeSessionStatus.RUNNING,
       createdAt: new Date().toISOString(),
       lastActivityAt: new Date().toISOString(),
       messageCount: 0,
@@ -46,8 +47,8 @@ describe('useEnrichedSessions', () => {
       entityId: 'pr-456',
       projectId: 'project-2',
       model: 'claude-3.5-sonnet',
-      mode: 0,
-      status: 6,
+      mode: SessionMode.PLAN,
+      status: ClaudeSessionStatus.STOPPED,
       createdAt: new Date().toISOString(),
       lastActivityAt: new Date().toISOString(),
       messageCount: 0,

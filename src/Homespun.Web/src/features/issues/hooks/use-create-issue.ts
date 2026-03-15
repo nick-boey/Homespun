@@ -9,8 +9,8 @@
 
 import { useState, useCallback, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { Issues } from '@/api'
-import type { IssueResponse, IssueType, TaskGraphResponse, TaskGraphNodeResponse } from '@/api'
+import { Issues, IssueStatus, IssueType, ExecutionMode } from '@/api'
+import type { IssueResponse, TaskGraphResponse, TaskGraphNodeResponse } from '@/api'
 import { taskGraphQueryKey } from './use-task-graph'
 import { useTelemetry } from '@/hooks/use-telemetry'
 
@@ -68,7 +68,7 @@ export function useCreateIssue(options: UseCreateIssueOptions): UseCreateIssueRe
 
   const createIssue = useCallback(
     async (params: CreateIssueParams): Promise<IssueResponse> => {
-      const { title, type = 0, parentIssueId, childIssueId, parentSortOrder } = params
+      const { title, type = IssueType.TASK, parentIssueId, childIssueId, parentSortOrder } = params
 
       setIsCreating(true)
       setError(null)
@@ -87,7 +87,7 @@ export function useCreateIssue(options: UseCreateIssueOptions): UseCreateIssueRe
             id: tempId,
             title,
             description: null,
-            status: 0, // Open
+            status: IssueStatus.OPEN,
             type,
             priority: null,
             linkedPRs: [],
@@ -97,7 +97,7 @@ export function useCreateIssue(options: UseCreateIssueOptions): UseCreateIssueRe
               : null,
             tags: null,
             workingBranchId: null,
-            executionMode: 0, // Series
+            executionMode: ExecutionMode.SERIES,
             createdBy: null,
             assignedTo: null,
             lastUpdate: new Date().toISOString(),

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 import { TelemetryService } from './telemetry-service'
-import type { ClientTelemetryBatch } from '@/api/generated'
+import { TelemetryEventType, type ClientTelemetryBatch } from '@/api/generated'
 
 // Mock session manager
 vi.mock('./session-manager', () => ({
@@ -63,7 +63,7 @@ describe('TelemetryService', () => {
       expect(body.sessionId).toBe('test-session-id')
       expect(body.events).toHaveLength(1)
       expect(body.events![0]).toMatchObject({
-        type: 0, // PageView
+        type: TelemetryEventType.PAGE_VIEW,
         name: '/dashboard',
         properties: {
           title: 'Dashboard',
@@ -103,7 +103,7 @@ describe('TelemetryService', () => {
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body) as ClientTelemetryBatch
       expect(body.events![0]).toMatchObject({
-        type: 1, // Event
+        type: TelemetryEventType.EVENT,
         name: 'button_click',
         properties: {
           buttonId: 'create-project',
@@ -130,7 +130,7 @@ describe('TelemetryService', () => {
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body) as ClientTelemetryBatch
       expect(body.events![0]).toMatchObject({
-        type: 2, // Exception
+        type: TelemetryEventType.EXCEPTION,
         name: 'Error: Test error',
         properties: {
           message: 'Test error',
@@ -155,7 +155,7 @@ describe('TelemetryService', () => {
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body) as ClientTelemetryBatch
       expect(body.events![0]).toMatchObject({
-        type: 3, // Dependency
+        type: TelemetryEventType.DEPENDENCY,
         name: 'GET /api/projects',
         durationMs: 1234,
         success: true,

@@ -2,15 +2,19 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useAgentPrompts } from './use-agent-prompts'
-import { AgentPrompts } from '@/api'
+import { AgentPrompts, SessionMode } from '@/api'
 import type { ReactNode } from 'react'
 import type { AgentPrompt } from '@/api/generated/types.gen'
 
-vi.mock('@/api', () => ({
-  AgentPrompts: {
-    getApiAgentPromptsAvailableForProjectByProjectId: vi.fn(),
-  },
-}))
+vi.mock('@/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/api')>()
+  return {
+    ...actual,
+    AgentPrompts: {
+      getApiAgentPromptsAvailableForProjectByProjectId: vi.fn(),
+    },
+  }
+})
 
 const mockGetAgentPrompts = vi.mocked(AgentPrompts.getApiAgentPromptsAvailableForProjectByProjectId)
 
@@ -45,14 +49,14 @@ describe('useAgentPrompts', () => {
         id: 'prompt-1',
         name: 'Build Prompt',
         initialMessage: 'Start building...',
-        mode: 1 as const, // Build
+        mode: SessionMode.BUILD,
         projectId: 'project-123',
       },
       {
         id: 'prompt-2',
         name: 'Plan Prompt',
         initialMessage: 'Create a plan...',
-        mode: 0 as const, // Plan
+        mode: SessionMode.PLAN,
         projectId: null, // Global prompt
       },
     ]

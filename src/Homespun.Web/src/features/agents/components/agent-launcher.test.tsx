@@ -3,18 +3,22 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AgentLauncher } from './agent-launcher'
-import { AgentPrompts, Sessions } from '@/api'
+import { AgentPrompts, Sessions, SessionMode, ClaudeSessionStatus } from '@/api'
 import type { ReactNode } from 'react'
 import type { AgentPrompt, ClaudeSession } from '@/api/generated/types.gen'
 
-vi.mock('@/api', () => ({
-  AgentPrompts: {
-    getApiAgentPromptsAvailableForProjectByProjectId: vi.fn(),
-  },
-  Sessions: {
-    postApiSessions: vi.fn(),
-  },
-}))
+vi.mock('@/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/api')>()
+  return {
+    ...actual,
+    AgentPrompts: {
+      getApiAgentPromptsAvailableForProjectByProjectId: vi.fn(),
+    },
+    Sessions: {
+      postApiSessions: vi.fn(),
+    },
+  }
+})
 
 // Mock useNavigate from tanstack router
 const mockNavigate = vi.fn()
@@ -52,13 +56,13 @@ const mockPrompts: AgentPrompt[] = [
     id: 'prompt-1',
     name: 'Build Feature',
     initialMessage: 'Build the feature',
-    mode: 1 as const, // Build
+    mode: SessionMode.BUILD,
   },
   {
     id: 'prompt-2',
     name: 'Plan Task',
     initialMessage: 'Create a plan',
-    mode: 0 as const, // Plan
+    mode: SessionMode.PLAN,
   },
 ]
 
@@ -69,8 +73,8 @@ function createMockSession(overrides: Partial<ClaudeSession> = {}): ClaudeSessio
     projectId: 'project-123',
     workingDirectory: '/workdir',
     model: 'sonnet',
-    mode: 1 as const,
-    status: 0 as const,
+    mode: SessionMode.BUILD,
+    status: ClaudeSessionStatus.STARTING,
     ...overrides,
   }
 }
@@ -279,14 +283,14 @@ describe('AgentLauncher', () => {
     // Click start button
     await user.click(screen.getByRole('button', { name: /start agent/i }))
 
-    // Should create session with Plan mode (0) and no system prompt
+    // Should create session with Plan mode and no system prompt
     await waitFor(() => {
       expect(mockPostApiSessions).toHaveBeenCalledWith({
         body: expect.objectContaining({
           entityId: 'issue-456',
           projectId: 'project-123',
           workingDirectory: '/workdir',
-          mode: 0, // Plan mode
+          mode: SessionMode.PLAN,
           systemPrompt: undefined,
         }),
       })

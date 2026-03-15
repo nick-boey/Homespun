@@ -87,8 +87,8 @@ describe('registerClaudeCodeHubEvents', () => {
       projectId: 'project-1',
       workingDirectory: '/test',
       model: 'claude-3',
-      mode: 'Build',
-      status: 'Running',
+      mode: 'build',
+      status: 'running',
       createdAt: new Date().toISOString(),
       lastActivityAt: new Date().toISOString(),
       messages: [],
@@ -160,15 +160,15 @@ describe('createClaudeCodeHubMethods', () => {
 
     await methods.sendMessage('session-1', 'Hello')
 
-    expect(mockConnection.invoke).toHaveBeenCalledWith('SendMessage', 'session-1', 'Hello', 'Build')
+    expect(mockConnection.invoke).toHaveBeenCalledWith('SendMessage', 'session-1', 'Hello', 'build')
   })
 
-  it('creates sendMessage method with Plan mode', async () => {
+  it('creates sendMessage method with plan mode', async () => {
     const methods = createClaudeCodeHubMethods(mockConnection)
 
-    await methods.sendMessage('session-1', 'Hello', 'Plan')
+    await methods.sendMessage('session-1', 'Hello', 'plan')
 
-    expect(mockConnection.invoke).toHaveBeenCalledWith('SendMessage', 'session-1', 'Hello', 'Plan')
+    expect(mockConnection.invoke).toHaveBeenCalledWith('SendMessage', 'session-1', 'Hello', 'plan')
   })
 
   it('creates stopSession method', async () => {

@@ -5,11 +5,15 @@ import { BaseBranchSelector } from './base-branch-selector'
 import { Clones } from '@/api'
 import type { BranchInfo } from '@/api'
 
-vi.mock('@/api', () => ({
-  Clones: {
-    getApiClonesBranches: vi.fn(),
-  },
-}))
+vi.mock('@/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/api')>()
+  return {
+    ...actual,
+    Clones: {
+      getApiClonesBranches: vi.fn(),
+    },
+  }
+})
 
 describe('BaseBranchSelector', () => {
   let queryClient: QueryClient

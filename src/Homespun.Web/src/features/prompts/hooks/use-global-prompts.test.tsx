@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useGlobalPrompts } from './use-global-prompts'
 import { AgentPrompts } from '@/api'
 import type { AgentPrompt } from '@/api/generated/types.gen'
+import { SessionMode } from '@/api/generated/types.gen'
 
 // Mock the API module
 vi.mock('@/api', () => ({
@@ -36,7 +37,7 @@ describe('useGlobalPrompts', () => {
         id: '1',
         name: 'Global Prompt 1',
         initialMessage: 'Test message',
-        mode: 0 as const,
+        mode: SessionMode.PLAN,
         projectId: null,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -45,7 +46,7 @@ describe('useGlobalPrompts', () => {
         id: '2',
         name: 'Project Prompt',
         initialMessage: 'Project message',
-        mode: 1 as const,
+        mode: SessionMode.BUILD,
         projectId: 'project-123',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -54,7 +55,7 @@ describe('useGlobalPrompts', () => {
         id: '3',
         name: 'Global Prompt 2',
         initialMessage: 'Another message',
-        mode: 0 as const,
+        mode: SessionMode.PLAN,
         projectId: null,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),

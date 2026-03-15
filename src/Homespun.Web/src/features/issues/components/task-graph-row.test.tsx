@@ -5,6 +5,7 @@ import { TaskGraphMarkerType } from '../services'
 import type { TaskGraphIssueRenderLine } from '../services'
 import type { UseQueryResult } from '@tanstack/react-query'
 import type { IssuePullRequestStatus } from '@/api'
+import { IssueType, IssueStatus } from '@/api'
 import * as prStatusHook from '../hooks/use-linked-pr-status'
 
 // Mock the hooks
@@ -63,8 +64,8 @@ describe('TaskGraphIssueRow', () => {
     drawTopLine: true,
     drawBottomLine: true,
     seriesConnectorFromLane: null,
-    issueType: 1,
-    status: 1,
+    issueType: IssueType.BUG,
+    status: IssueStatus.OPEN,
     hasDescription: true,
     linkedPr: null,
     agentStatus: null,

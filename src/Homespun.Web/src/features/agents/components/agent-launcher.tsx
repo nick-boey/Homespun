@@ -11,7 +11,8 @@ import {
 } from '@/components/ui/select'
 import { Loader } from '@/components/ui/loader'
 import { useStartAgent, useAgentPrompts } from '../hooks'
-import type { ClaudeSession, SessionMode } from '@/api/generated/types.gen'
+import { SessionMode } from '@/api'
+import type { ClaudeSession } from '@/api/generated/types.gen'
 
 const MODELS = [
   { value: 'opus', label: 'Opus' },
@@ -29,7 +30,7 @@ const NO_PROMPT_OPTION = {
   id: NO_PROMPT_ID,
   name: 'None - Start without prompt (Plan mode)',
   initialMessage: undefined,
-  mode: 0, // SessionMode.Plan
+  mode: SessionMode.PLAN,
 } as const
 
 // TODO: Join this with the agent-launcher-dialog

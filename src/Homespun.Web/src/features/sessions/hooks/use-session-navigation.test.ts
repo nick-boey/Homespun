@@ -3,14 +3,19 @@ import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createElement, type ReactNode } from 'react'
 import { Sessions } from '@/api'
-import type { SessionSummary, ClaudeSessionStatus, SessionMode } from '@/api/generated'
+import type { SessionSummary } from '@/api/generated'
+import { ClaudeSessionStatus, SessionMode } from '@/api/generated'
 import { useSessionNavigation } from './use-session-navigation'
 
-vi.mock('@/api', () => ({
-  Sessions: {
-    getApiSessions: vi.fn(),
-  },
-}))
+vi.mock('@/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/api')>()
+  return {
+    ...actual,
+    Sessions: {
+      getApiSessions: vi.fn(),
+    },
+  }
+})
 
 function createMockSession(
   id: string,
@@ -22,7 +27,7 @@ function createMockSession(
     entityId: `entity-${id}`,
     projectId: 'project-1',
     model: 'sonnet',
-    mode: 1 as SessionMode,
+    mode: SessionMode.BUILD,
     status,
     createdAt: '2024-01-01T00:00:00Z',
     lastActivityAt: lastActivityAt ?? undefined,
@@ -54,9 +59,9 @@ describe('useSessionNavigation', () => {
     // Sessions sorted by lastActivityAt descending:
     // session-1 (newest) -> session-2 (current) -> session-3 (oldest)
     const mockSessions: SessionSummary[] = [
-      createMockSession('session-1', 6 as ClaudeSessionStatus, '2024-01-03T10:00:00Z'), // Stopped, newest
-      createMockSession('session-2', 6 as ClaudeSessionStatus, '2024-01-02T10:00:00Z'), // Stopped, current
-      createMockSession('session-3', 6 as ClaudeSessionStatus, '2024-01-01T10:00:00Z'), // Stopped, oldest
+      createMockSession('session-1', ClaudeSessionStatus.STOPPED, '2024-01-03T10:00:00Z'), // Stopped, newest
+      createMockSession('session-2', ClaudeSessionStatus.STOPPED, '2024-01-02T10:00:00Z'), // Stopped, current
+      createMockSession('session-3', ClaudeSessionStatus.STOPPED, '2024-01-01T10:00:00Z'), // Stopped, oldest
     ]
 
     const mockGetApiSessions = Sessions.getApiSessions as Mock
@@ -80,9 +85,9 @@ describe('useSessionNavigation', () => {
 
   it('returns null when at the start of navigation (no newer session)', async () => {
     const mockSessions: SessionSummary[] = [
-      createMockSession('session-1', 6 as ClaudeSessionStatus, '2024-01-03T10:00:00Z'), // current, newest
-      createMockSession('session-2', 6 as ClaudeSessionStatus, '2024-01-02T10:00:00Z'),
-      createMockSession('session-3', 6 as ClaudeSessionStatus, '2024-01-01T10:00:00Z'),
+      createMockSession('session-1', ClaudeSessionStatus.STOPPED, '2024-01-03T10:00:00Z'), // current, newest
+      createMockSession('session-2', ClaudeSessionStatus.STOPPED, '2024-01-02T10:00:00Z'),
+      createMockSession('session-3', ClaudeSessionStatus.STOPPED, '2024-01-01T10:00:00Z'),
     ]
 
     const mockGetApiSessions = Sessions.getApiSessions as Mock
@@ -104,9 +109,9 @@ describe('useSessionNavigation', () => {
 
   it('returns null when at the end of navigation (no older session)', async () => {
     const mockSessions: SessionSummary[] = [
-      createMockSession('session-1', 6 as ClaudeSessionStatus, '2024-01-03T10:00:00Z'),
-      createMockSession('session-2', 6 as ClaudeSessionStatus, '2024-01-02T10:00:00Z'),
-      createMockSession('session-3', 6 as ClaudeSessionStatus, '2024-01-01T10:00:00Z'), // current, oldest
+      createMockSession('session-1', ClaudeSessionStatus.STOPPED, '2024-01-03T10:00:00Z'),
+      createMockSession('session-2', ClaudeSessionStatus.STOPPED, '2024-01-02T10:00:00Z'),
+      createMockSession('session-3', ClaudeSessionStatus.STOPPED, '2024-01-01T10:00:00Z'), // current, oldest
     ]
 
     const mockGetApiSessions = Sessions.getApiSessions as Mock
@@ -128,9 +133,9 @@ describe('useSessionNavigation', () => {
 
   it('filters out Running sessions from navigation targets', async () => {
     const mockSessions: SessionSummary[] = [
-      createMockSession('session-1', 2 as ClaudeSessionStatus, '2024-01-03T10:00:00Z'), // Running - should be excluded
-      createMockSession('session-2', 6 as ClaudeSessionStatus, '2024-01-02T10:00:00Z'), // Stopped - current
-      createMockSession('session-3', 6 as ClaudeSessionStatus, '2024-01-01T10:00:00Z'), // Stopped
+      createMockSession('session-1', ClaudeSessionStatus.RUNNING, '2024-01-03T10:00:00Z'), // Running - should be excluded
+      createMockSession('session-2', ClaudeSessionStatus.STOPPED, '2024-01-02T10:00:00Z'), // Stopped - current
+      createMockSession('session-3', ClaudeSessionStatus.STOPPED, '2024-01-01T10:00:00Z'), // Stopped
     ]
 
     const mockGetApiSessions = Sessions.getApiSessions as Mock
@@ -153,9 +158,9 @@ describe('useSessionNavigation', () => {
 
   it('filters out RunningHooks sessions from navigation targets', async () => {
     const mockSessions: SessionSummary[] = [
-      createMockSession('session-1', 1 as ClaudeSessionStatus, '2024-01-03T10:00:00Z'), // RunningHooks - should be excluded
-      createMockSession('session-2', 6 as ClaudeSessionStatus, '2024-01-02T10:00:00Z'), // Stopped - current
-      createMockSession('session-3', 6 as ClaudeSessionStatus, '2024-01-01T10:00:00Z'), // Stopped
+      createMockSession('session-1', ClaudeSessionStatus.RUNNING_HOOKS, '2024-01-03T10:00:00Z'), // RunningHooks - should be excluded
+      createMockSession('session-2', ClaudeSessionStatus.STOPPED, '2024-01-02T10:00:00Z'), // Stopped - current
+      createMockSession('session-3', ClaudeSessionStatus.STOPPED, '2024-01-01T10:00:00Z'), // Stopped
     ]
 
     const mockGetApiSessions = Sessions.getApiSessions as Mock
@@ -175,9 +180,9 @@ describe('useSessionNavigation', () => {
 
   it('filters out Starting sessions from navigation targets', async () => {
     const mockSessions: SessionSummary[] = [
-      createMockSession('session-1', 0 as ClaudeSessionStatus, '2024-01-03T10:00:00Z'), // Starting - should be excluded
-      createMockSession('session-2', 6 as ClaudeSessionStatus, '2024-01-02T10:00:00Z'), // Stopped - current
-      createMockSession('session-3', 6 as ClaudeSessionStatus, '2024-01-01T10:00:00Z'), // Stopped
+      createMockSession('session-1', ClaudeSessionStatus.STARTING, '2024-01-03T10:00:00Z'), // Starting - should be excluded
+      createMockSession('session-2', ClaudeSessionStatus.STOPPED, '2024-01-02T10:00:00Z'), // Stopped - current
+      createMockSession('session-3', ClaudeSessionStatus.STOPPED, '2024-01-01T10:00:00Z'), // Stopped
     ]
 
     const mockGetApiSessions = Sessions.getApiSessions as Mock
@@ -197,8 +202,8 @@ describe('useSessionNavigation', () => {
 
   it('includes WaitingForInput sessions as navigation targets', async () => {
     const mockSessions: SessionSummary[] = [
-      createMockSession('session-1', 3 as ClaudeSessionStatus, '2024-01-03T10:00:00Z'), // WaitingForInput - should be included
-      createMockSession('session-2', 6 as ClaudeSessionStatus, '2024-01-02T10:00:00Z'), // Stopped - current
+      createMockSession('session-1', ClaudeSessionStatus.WAITING_FOR_INPUT, '2024-01-03T10:00:00Z'), // WaitingForInput - should be included
+      createMockSession('session-2', ClaudeSessionStatus.STOPPED, '2024-01-02T10:00:00Z'), // Stopped - current
     ]
 
     const mockGetApiSessions = Sessions.getApiSessions as Mock
@@ -218,8 +223,12 @@ describe('useSessionNavigation', () => {
 
   it('includes WaitingForQuestionAnswer sessions as navigation targets', async () => {
     const mockSessions: SessionSummary[] = [
-      createMockSession('session-1', 4 as ClaudeSessionStatus, '2024-01-03T10:00:00Z'), // WaitingForQuestionAnswer
-      createMockSession('session-2', 6 as ClaudeSessionStatus, '2024-01-02T10:00:00Z'), // Stopped - current
+      createMockSession(
+        'session-1',
+        ClaudeSessionStatus.WAITING_FOR_QUESTION_ANSWER,
+        '2024-01-03T10:00:00Z'
+      ), // WaitingForQuestionAnswer
+      createMockSession('session-2', ClaudeSessionStatus.STOPPED, '2024-01-02T10:00:00Z'), // Stopped - current
     ]
 
     const mockGetApiSessions = Sessions.getApiSessions as Mock
@@ -239,8 +248,12 @@ describe('useSessionNavigation', () => {
 
   it('includes WaitingForPlanExecution sessions as navigation targets', async () => {
     const mockSessions: SessionSummary[] = [
-      createMockSession('session-1', 5 as ClaudeSessionStatus, '2024-01-03T10:00:00Z'), // WaitingForPlanExecution
-      createMockSession('session-2', 6 as ClaudeSessionStatus, '2024-01-02T10:00:00Z'), // Stopped - current
+      createMockSession(
+        'session-1',
+        ClaudeSessionStatus.WAITING_FOR_PLAN_EXECUTION,
+        '2024-01-03T10:00:00Z'
+      ), // WaitingForPlanExecution
+      createMockSession('session-2', ClaudeSessionStatus.STOPPED, '2024-01-02T10:00:00Z'), // Stopped - current
     ]
 
     const mockGetApiSessions = Sessions.getApiSessions as Mock
@@ -260,8 +273,8 @@ describe('useSessionNavigation', () => {
 
   it('includes Error sessions as navigation targets', async () => {
     const mockSessions: SessionSummary[] = [
-      createMockSession('session-1', 7 as ClaudeSessionStatus, '2024-01-03T10:00:00Z'), // Error
-      createMockSession('session-2', 6 as ClaudeSessionStatus, '2024-01-02T10:00:00Z'), // Stopped - current
+      createMockSession('session-1', ClaudeSessionStatus.ERROR, '2024-01-03T10:00:00Z'), // Error
+      createMockSession('session-2', ClaudeSessionStatus.STOPPED, '2024-01-02T10:00:00Z'), // Stopped - current
     ]
 
     const mockGetApiSessions = Sessions.getApiSessions as Mock
@@ -282,7 +295,7 @@ describe('useSessionNavigation', () => {
   it('excludes current session from navigation targets', async () => {
     // Even if only one session exists (the current one), both buttons should be disabled
     const mockSessions: SessionSummary[] = [
-      createMockSession('session-1', 6 as ClaudeSessionStatus, '2024-01-01T10:00:00Z'),
+      createMockSession('session-1', ClaudeSessionStatus.STOPPED, '2024-01-01T10:00:00Z'),
     ]
 
     const mockGetApiSessions = Sessions.getApiSessions as Mock
@@ -338,9 +351,9 @@ describe('useSessionNavigation', () => {
 
   it('handles sessions with null lastActivityAt (treated as oldest)', async () => {
     const mockSessions: SessionSummary[] = [
-      createMockSession('session-1', 6 as ClaudeSessionStatus, '2024-01-02T10:00:00Z'), // Stopped
-      createMockSession('session-2', 6 as ClaudeSessionStatus, null), // Stopped, null timestamp - oldest
-      createMockSession('session-3', 6 as ClaudeSessionStatus, '2024-01-01T10:00:00Z'), // Stopped - current
+      createMockSession('session-1', ClaudeSessionStatus.STOPPED, '2024-01-02T10:00:00Z'), // Stopped
+      createMockSession('session-2', ClaudeSessionStatus.STOPPED, null), // Stopped, null timestamp - oldest
+      createMockSession('session-3', ClaudeSessionStatus.STOPPED, '2024-01-01T10:00:00Z'), // Stopped - current
     ]
 
     const mockGetApiSessions = Sessions.getApiSessions as Mock
@@ -364,9 +377,9 @@ describe('useSessionNavigation', () => {
 
   it('navigates correctly when all other sessions are running', async () => {
     const mockSessions: SessionSummary[] = [
-      createMockSession('session-1', 2 as ClaudeSessionStatus, '2024-01-03T10:00:00Z'), // Running
-      createMockSession('session-2', 6 as ClaudeSessionStatus, '2024-01-02T10:00:00Z'), // Stopped - current
-      createMockSession('session-3', 0 as ClaudeSessionStatus, '2024-01-01T10:00:00Z'), // Starting
+      createMockSession('session-1', ClaudeSessionStatus.RUNNING, '2024-01-03T10:00:00Z'), // Running
+      createMockSession('session-2', ClaudeSessionStatus.STOPPED, '2024-01-02T10:00:00Z'), // Stopped - current
+      createMockSession('session-3', ClaudeSessionStatus.STARTING, '2024-01-01T10:00:00Z'), // Starting
     ]
 
     const mockGetApiSessions = Sessions.getApiSessions as Mock
@@ -389,12 +402,12 @@ describe('useSessionNavigation', () => {
 
   it('skips multiple running sessions to find valid targets', async () => {
     const mockSessions: SessionSummary[] = [
-      createMockSession('session-1', 6 as ClaudeSessionStatus, '2024-01-05T10:00:00Z'), // Stopped - valid previous
-      createMockSession('session-2', 2 as ClaudeSessionStatus, '2024-01-04T10:00:00Z'), // Running - skip
-      createMockSession('session-3', 1 as ClaudeSessionStatus, '2024-01-03T10:00:00Z'), // RunningHooks - skip
-      createMockSession('session-4', 6 as ClaudeSessionStatus, '2024-01-02T10:00:00Z'), // Stopped - current
-      createMockSession('session-5', 0 as ClaudeSessionStatus, '2024-01-01T09:00:00Z'), // Starting - skip
-      createMockSession('session-6', 6 as ClaudeSessionStatus, '2024-01-01T08:00:00Z'), // Stopped - valid next
+      createMockSession('session-1', ClaudeSessionStatus.STOPPED, '2024-01-05T10:00:00Z'), // Stopped - valid previous
+      createMockSession('session-2', ClaudeSessionStatus.RUNNING, '2024-01-04T10:00:00Z'), // Running - skip
+      createMockSession('session-3', ClaudeSessionStatus.RUNNING_HOOKS, '2024-01-03T10:00:00Z'), // RunningHooks - skip
+      createMockSession('session-4', ClaudeSessionStatus.STOPPED, '2024-01-02T10:00:00Z'), // Stopped - current
+      createMockSession('session-5', ClaudeSessionStatus.STARTING, '2024-01-01T09:00:00Z'), // Starting - skip
+      createMockSession('session-6', ClaudeSessionStatus.STOPPED, '2024-01-01T08:00:00Z'), // Stopped - valid next
     ]
 
     const mockGetApiSessions = Sessions.getApiSessions as Mock

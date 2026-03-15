@@ -3,14 +3,18 @@ import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import * as React from 'react'
 import { useGitHubInfo } from './use-github-info'
-import { GitHubInfo } from '@/api'
+import { GitHubInfo, GitHubAuthMethod } from '@/api'
 
-vi.mock('@/api', () => ({
-  GitHubInfo: {
-    getApiGithubStatus: vi.fn(),
-    getApiGithubAuthStatus: vi.fn(),
-  },
-}))
+vi.mock('@/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/api')>()
+  return {
+    ...actual,
+    GitHubInfo: {
+      getApiGithubStatus: vi.fn(),
+      getApiGithubAuthStatus: vi.fn(),
+    },
+  }
+})
 
 function createWrapper() {
   const queryClient = new QueryClient({
@@ -56,7 +60,7 @@ describe('useGitHubInfo', () => {
       isAuthenticated: true,
       username: 'testuser',
       message: 'Authenticated with GitHub',
-      authMethod: 1,
+      authMethod: GitHubAuthMethod.TOKEN,
     }
 
     vi.mocked(GitHubInfo.getApiGithubStatus).mockResolvedValue({
@@ -117,7 +121,7 @@ describe('useGitHubInfo', () => {
       isAuthenticated: false,
       username: null,
       errorMessage: 'Not authenticated',
-      authMethod: 0,
+      authMethod: GitHubAuthMethod.NONE,
     }
 
     vi.mocked(GitHubInfo.getApiGithubStatus).mockResolvedValue({

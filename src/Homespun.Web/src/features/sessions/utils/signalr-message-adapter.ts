@@ -12,16 +12,16 @@ function convertContent(content: SignalRContent): ClaudeMessageContent {
   let contentType: ClaudeMessageContent['contentType']
 
   switch (content.type) {
-    case 'Text':
+    case 'text':
       contentType = 'text'
       break
-    case 'ToolUse':
+    case 'toolUse':
       contentType = 'tool_use'
       break
-    case 'ToolResult':
+    case 'toolResult':
       contentType = 'tool_result'
       break
-    case 'Thinking':
+    case 'thinking':
       contentType = 'thinking'
       break
     default:
@@ -65,10 +65,10 @@ function convertContent(content: SignalRContent): ClaudeMessageContent {
  * Converts a SignalR message to our tool execution message format
  */
 export function convertSignalRMessage(message: SignalRMessage): ClaudeMessage {
-  // Map role - SignalR uses "User"/"Assistant", we need numeric values
+  // Map role - SignalR uses "user"/"assistant", we need numeric values
   const roleMap: Record<string, number> = {
-    User: 0,
-    Assistant: 1,
+    user: 0,
+    assistant: 1,
   }
 
   return {

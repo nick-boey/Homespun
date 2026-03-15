@@ -1,3 +1,4 @@
+import { IssueType } from '@/api'
 import type { TaskGraphNodeResponse } from '@/api/generated/types.gen'
 
 /**
@@ -122,7 +123,7 @@ export interface TaskGraphRenderLine {
   /** The parent lane (column) if this issue has a parent. */
   parentLane?: number
   /** The issue type. */
-  issueType: number
+  issueType: IssueType
   /** Whether this issue is actionable (next in sequence). */
   isActionable: boolean
 }
@@ -140,7 +141,7 @@ export function toRenderLines(nodes: TaskGraphNodeResponse[]): TaskGraphRenderLi
       parentLane: node.issue?.parentIssues?.[0]?.parentIssue
         ? findParentLane(nodes, node.issue.parentIssues[0].parentIssue)
         : undefined,
-      issueType: node.issue!.type ?? 0,
+      issueType: node.issue!.type ?? IssueType.TASK,
       isActionable: node.isActionable ?? false,
     }))
 }

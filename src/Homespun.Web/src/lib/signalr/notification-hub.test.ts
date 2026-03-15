@@ -67,7 +67,7 @@ describe('registerNotificationHubEvents', () => {
 
     const mockNotification: NotificationDto = {
       id: 'notif-1',
-      type: 'Info',
+      type: 'info',
       title: 'Test',
       message: 'Test message',
       createdAt: new Date().toISOString(),

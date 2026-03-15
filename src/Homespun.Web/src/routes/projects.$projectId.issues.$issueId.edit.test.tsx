@@ -101,10 +101,10 @@ const mockIssue: IssueResponse = {
   id: 'issue-123',
   title: 'Test Issue',
   description: 'Test description',
-  status: IssueStatus[0], // Open
-  type: IssueType[0], // Task
+  status: IssueStatus.DRAFT,
+  type: IssueType.TASK,
   priority: 3,
-  executionMode: ExecutionMode[0], // Series
+  executionMode: ExecutionMode.SERIES,
   workingBranchId: 'feature/test',
   parentIssues: [],
   tags: ['test', 'urgent'],
@@ -500,8 +500,8 @@ describe('EditIssue Page', () => {
     // C# IssueType: Task=0, Bug=1, Chore=2, Feature=3, Idea=4
     const issueWithChoreType: IssueResponse = {
       ...mockIssue,
-      status: ISSUE_STATUS.Progress, // In Progress
-      type: ISSUE_TYPE.Chore,
+      status: ISSUE_STATUS.PROGRESS, // In Progress
+      type: ISSUE_TYPE.CHORE,
       priority: 2,
     }
 
@@ -541,8 +541,8 @@ describe('EditIssue Page', () => {
       expect(Issues.putApiIssuesByIssueId).toHaveBeenCalledWith(
         expect.objectContaining({
           body: expect.objectContaining({
-            status: ISSUE_STATUS.Progress,
-            type: ISSUE_TYPE.Chore,
+            status: ISSUE_STATUS.PROGRESS,
+            type: ISSUE_TYPE.CHORE,
             priority: 2,
           }),
         })
@@ -556,8 +556,8 @@ describe('EditIssue Page', () => {
     // C# IssueType: Task=0, Bug=1, Chore=2, Feature=3, Idea=4
     const issueWithChoreType: IssueResponse = {
       ...mockIssue,
-      status: ISSUE_STATUS.Progress, // In Progress
-      type: ISSUE_TYPE.Chore,
+      status: ISSUE_STATUS.PROGRESS, // In Progress
+      type: ISSUE_TYPE.CHORE,
     }
 
     vi.mocked(Issues.getApiIssuesByIssueId).mockResolvedValue({
@@ -595,8 +595,8 @@ describe('EditIssue Page', () => {
       expect(Issues.putApiIssuesByIssueId).toHaveBeenCalledWith(
         expect.objectContaining({
           body: expect.objectContaining({
-            status: ISSUE_STATUS.Progress,
-            type: ISSUE_TYPE.Chore,
+            status: ISSUE_STATUS.PROGRESS,
+            type: ISSUE_TYPE.CHORE,
           }),
         })
       )

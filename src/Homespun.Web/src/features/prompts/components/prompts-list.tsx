@@ -11,6 +11,7 @@ import { PromptCard } from './prompt-card'
 import { PromptForm } from './prompt-form'
 import { PromptCardSkeleton } from './prompt-card-skeleton'
 import { PromptsEmptyState } from './prompts-empty-state'
+import { SessionMode } from '@/api'
 import type { AgentPrompt } from '@/api/generated/types.gen'
 
 export interface PromptsListProps {
@@ -70,22 +71,30 @@ export function PromptsList({ projectId, isGlobal = false }: PromptsListProps) {
     await deletePrompt.mutateAsync(promptId)
   }
 
-  const handleCreate = async (data: { name: string; initialMessage?: string; mode: number }) => {
+  const handleCreate = async (data: {
+    name: string
+    initialMessage?: string
+    mode: SessionMode
+  }) => {
     await createPrompt.mutateAsync({
       name: data.name,
       initialMessage: data.initialMessage,
-      mode: data.mode as 0 | 1,
+      mode: data.mode,
       projectId: isGlobal ? null : projectId,
     })
   }
 
-  const handleUpdate = async (data: { name: string; initialMessage?: string; mode: number }) => {
+  const handleUpdate = async (data: {
+    name: string
+    initialMessage?: string
+    mode: SessionMode
+  }) => {
     if (!editingPrompt?.id) return
     await updatePrompt.mutateAsync({
       id: editingPrompt.id,
       name: data.name,
       initialMessage: data.initialMessage,
-      mode: data.mode as 0 | 1,
+      mode: data.mode,
     })
   }
 

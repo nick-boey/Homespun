@@ -1,29 +1,27 @@
 import { useQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
-import { Sessions } from '@/api'
-import type { SessionSummary, ClaudeSessionStatus } from '@/api/generated/types.gen'
+import { Sessions, ClaudeSessionStatus } from '@/api'
+import type { SessionSummary } from '@/api/generated/types.gen'
 
 // Status groupings as per requirements
 const WORKING_STATUSES: ClaudeSessionStatus[] = [
-  0, // Starting
-  1, // RunningHooks
-  2, // Running
+  ClaudeSessionStatus.STARTING,
+  ClaudeSessionStatus.RUNNING_HOOKS,
+  ClaudeSessionStatus.RUNNING,
 ]
 
 const WAITING_STATUSES: ClaudeSessionStatus[] = [
-  3, // WaitingForInput
-  4, // WaitingForQuestionAnswer
-  5, // WaitingForPlanExecution
+  ClaudeSessionStatus.WAITING_FOR_INPUT,
+  ClaudeSessionStatus.WAITING_FOR_QUESTION_ANSWER,
+  ClaudeSessionStatus.WAITING_FOR_PLAN_EXECUTION,
 ]
 
-const ERROR_STATUSES: ClaudeSessionStatus[] = [
-  7, // Error
-]
+const ERROR_STATUSES: ClaudeSessionStatus[] = [ClaudeSessionStatus.ERROR]
 
 // Individual waiting status types
-const WAITING_FOR_INPUT_STATUS: ClaudeSessionStatus = 3
-const WAITING_FOR_ANSWER_STATUS: ClaudeSessionStatus = 4
-const WAITING_FOR_PLAN_STATUS: ClaudeSessionStatus = 5
+const WAITING_FOR_INPUT_STATUS = ClaudeSessionStatus.WAITING_FOR_INPUT
+const WAITING_FOR_ANSWER_STATUS = ClaudeSessionStatus.WAITING_FOR_QUESTION_ANSWER
+const WAITING_FOR_PLAN_STATUS = ClaudeSessionStatus.WAITING_FOR_PLAN_EXECUTION
 
 export const allSessionsCountQueryKey = ['all-sessions-count'] as const
 

@@ -64,7 +64,7 @@ export function ChatInput({
   }, [value, disabled, onSend, sessionMode, sessionModel])
 
   const toggleSessionMode = useCallback(() => {
-    const newMode = sessionMode === 'Build' ? 'Plan' : 'Build'
+    const newMode = sessionMode === 'build' ? 'plan' : 'build'
     onModeChange(newMode)
   }, [sessionMode, onModeChange])
 
@@ -106,7 +106,7 @@ export function ChatInput({
             className="gap-1"
             aria-label="Toggle session mode"
           >
-            {sessionMode === 'Build' ? (
+            {sessionMode === 'build' ? (
               <>
                 <Hammer className="h-4 w-4" />
                 <span>Build</span>

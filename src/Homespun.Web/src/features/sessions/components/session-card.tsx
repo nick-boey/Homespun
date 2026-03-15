@@ -4,7 +4,11 @@ import { Card, CardHeader, CardTitle, CardDescription, CardAction } from '@/comp
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { StatusIndicator } from './status-indicator'
-import type { SessionSummary, ClaudeSessionStatus } from '@/api/generated/types.gen'
+import { ClaudeSessionStatus, SessionMode } from '@/api'
+import type {
+  SessionSummary,
+  ClaudeSessionStatus as ClaudeSessionStatusType,
+} from '@/api/generated/types.gen'
 
 interface SessionCardProps {
   session: SessionSummary
@@ -16,35 +20,23 @@ interface SessionCardProps {
   isStopPending?: boolean
 }
 
-// Status enum values from backend
-const SessionStatus = {
-  Starting: 0,
-  RunningHooks: 1,
-  Running: 2,
-  WaitingForInput: 3,
-  WaitingForQuestionAnswer: 4,
-  WaitingForPlanExecution: 5,
-  Stopped: 6,
-  Error: 7,
-} as const
-
-function getStatusLabel(status: ClaudeSessionStatus | undefined): string {
+function getStatusLabel(status: ClaudeSessionStatusType | undefined): string {
   switch (status) {
-    case SessionStatus.Starting:
+    case ClaudeSessionStatus.STARTING:
       return 'Starting'
-    case SessionStatus.RunningHooks:
+    case ClaudeSessionStatus.RUNNING_HOOKS:
       return 'Running Hooks'
-    case SessionStatus.Running:
+    case ClaudeSessionStatus.RUNNING:
       return 'Running'
-    case SessionStatus.WaitingForInput:
+    case ClaudeSessionStatus.WAITING_FOR_INPUT:
       return 'Waiting'
-    case SessionStatus.WaitingForQuestionAnswer:
+    case ClaudeSessionStatus.WAITING_FOR_QUESTION_ANSWER:
       return 'Question'
-    case SessionStatus.WaitingForPlanExecution:
+    case ClaudeSessionStatus.WAITING_FOR_PLAN_EXECUTION:
       return 'Plan Ready'
-    case SessionStatus.Stopped:
+    case ClaudeSessionStatus.STOPPED:
       return 'Stopped'
-    case SessionStatus.Error:
+    case ClaudeSessionStatus.ERROR:
       return 'Error'
     default:
       return 'Unknown'
@@ -52,33 +44,33 @@ function getStatusLabel(status: ClaudeSessionStatus | undefined): string {
 }
 
 function getStatusVariant(
-  status: ClaudeSessionStatus | undefined
+  status: ClaudeSessionStatusType | undefined
 ): 'default' | 'secondary' | 'destructive' | 'outline' {
   switch (status) {
-    case SessionStatus.Running:
-    case SessionStatus.RunningHooks:
+    case ClaudeSessionStatus.RUNNING:
+    case ClaudeSessionStatus.RUNNING_HOOKS:
       return 'default'
-    case SessionStatus.Starting:
-    case SessionStatus.WaitingForInput:
-    case SessionStatus.WaitingForQuestionAnswer:
-    case SessionStatus.WaitingForPlanExecution:
+    case ClaudeSessionStatus.STARTING:
+    case ClaudeSessionStatus.WAITING_FOR_INPUT:
+    case ClaudeSessionStatus.WAITING_FOR_QUESTION_ANSWER:
+    case ClaudeSessionStatus.WAITING_FOR_PLAN_EXECUTION:
       return 'secondary'
-    case SessionStatus.Error:
+    case ClaudeSessionStatus.ERROR:
       return 'destructive'
-    case SessionStatus.Stopped:
+    case ClaudeSessionStatus.STOPPED:
     default:
       return 'outline'
   }
 }
 
-function isActiveStatus(status: ClaudeSessionStatus | undefined): boolean {
+function isActiveStatus(status: ClaudeSessionStatusType | undefined): boolean {
   return (
-    status === SessionStatus.Starting ||
-    status === SessionStatus.RunningHooks ||
-    status === SessionStatus.Running ||
-    status === SessionStatus.WaitingForInput ||
-    status === SessionStatus.WaitingForQuestionAnswer ||
-    status === SessionStatus.WaitingForPlanExecution
+    status === ClaudeSessionStatus.STARTING ||
+    status === ClaudeSessionStatus.RUNNING_HOOKS ||
+    status === ClaudeSessionStatus.RUNNING ||
+    status === ClaudeSessionStatus.WAITING_FOR_INPUT ||
+    status === ClaudeSessionStatus.WAITING_FOR_QUESTION_ANSWER ||
+    status === ClaudeSessionStatus.WAITING_FOR_PLAN_EXECUTION
   )
 }
 
@@ -105,8 +97,8 @@ function formatRelativeTime(dateString: string | undefined): string {
   return 'just now'
 }
 
-function getModeLabel(mode: number): string {
-  return mode === 0 ? 'Plan' : 'Build'
+function getModeLabel(mode: string): string {
+  return mode === SessionMode.PLAN ? 'Plan' : 'Build'
 }
 
 function getModelName(model: string | null): string {

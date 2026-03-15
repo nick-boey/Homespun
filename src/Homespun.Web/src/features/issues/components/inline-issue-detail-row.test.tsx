@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { InlineIssueDetailRow } from './inline-issue-detail-row'
 import type { TaskGraphIssueRenderLine } from '../services'
 import { TaskGraphMarkerType } from '../services'
-import { ISSUE_STATUS, ISSUE_TYPE } from '@/lib/issue-constants'
+import { IssueStatus, IssueType } from '@/api'
 
 // Helper to create a mock render line
 function createRenderLine(
@@ -24,8 +24,8 @@ function createRenderLine(
     drawTopLine: false,
     drawBottomLine: false,
     seriesConnectorFromLane: null,
-    issueType: ISSUE_TYPE.Task,
-    status: ISSUE_STATUS.Open,
+    issueType: IssueType.TASK,
+    status: IssueStatus.OPEN,
     hasDescription: true,
     linkedPr: null,
     agentStatus: null,
@@ -65,25 +65,25 @@ describe('InlineIssueDetailRow', () => {
     })
 
     it('renders type badge for bug', () => {
-      const line = createRenderLine({ issueType: ISSUE_TYPE.Bug })
+      const line = createRenderLine({ issueType: IssueType.BUG })
       render(<InlineIssueDetailRow {...defaultProps} line={line} />)
       expect(screen.getByText('Bug')).toBeInTheDocument()
     })
 
     it('renders type badge for chore', () => {
-      const line = createRenderLine({ issueType: ISSUE_TYPE.Chore })
+      const line = createRenderLine({ issueType: IssueType.CHORE })
       render(<InlineIssueDetailRow {...defaultProps} line={line} />)
       expect(screen.getByText('Chore')).toBeInTheDocument()
     })
 
     it('renders type badge for feature', () => {
-      const line = createRenderLine({ issueType: ISSUE_TYPE.Feature })
+      const line = createRenderLine({ issueType: IssueType.FEATURE })
       render(<InlineIssueDetailRow {...defaultProps} line={line} />)
       expect(screen.getByText('Feature')).toBeInTheDocument()
     })
 
     it('renders type badge for idea', () => {
-      const line = createRenderLine({ issueType: ISSUE_TYPE.Idea })
+      const line = createRenderLine({ issueType: IssueType.IDEA })
       render(<InlineIssueDetailRow {...defaultProps} line={line} />)
       expect(screen.getByText('Idea')).toBeInTheDocument()
     })
@@ -94,19 +94,19 @@ describe('InlineIssueDetailRow', () => {
     })
 
     it('renders status badge for in progress', () => {
-      const line = createRenderLine({ status: ISSUE_STATUS.Progress })
+      const line = createRenderLine({ status: IssueStatus.PROGRESS })
       render(<InlineIssueDetailRow {...defaultProps} line={line} />)
       expect(screen.getByText('In Progress')).toBeInTheDocument()
     })
 
     it('renders status badge for in review', () => {
-      const line = createRenderLine({ status: ISSUE_STATUS.Review })
+      const line = createRenderLine({ status: IssueStatus.REVIEW })
       render(<InlineIssueDetailRow {...defaultProps} line={line} />)
       expect(screen.getByText('Review')).toBeInTheDocument()
     })
 
     it('renders status badge for complete', () => {
-      const line = createRenderLine({ status: ISSUE_STATUS.Complete })
+      const line = createRenderLine({ status: IssueStatus.COMPLETE })
       render(<InlineIssueDetailRow {...defaultProps} line={line} />)
       expect(screen.getByText('Complete')).toBeInTheDocument()
     })

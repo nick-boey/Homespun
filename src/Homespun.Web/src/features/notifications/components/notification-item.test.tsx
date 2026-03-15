@@ -7,7 +7,7 @@ import type { AppNotification } from '../stores/notification-store'
 describe('NotificationItem', () => {
   const baseNotification: AppNotification = {
     id: 'test-1',
-    type: 'Info',
+    type: 'info',
     title: 'Test Notification',
     message: 'This is a test message',
     createdAt: new Date().toISOString(),
@@ -87,14 +87,14 @@ describe('NotificationItem', () => {
   })
 
   it('shows correct icon for Warning type', () => {
-    const warningNotification = { ...baseNotification, type: 'Warning' as const }
+    const warningNotification = { ...baseNotification, type: 'warning' as const }
     render(<NotificationItem notification={warningNotification} />)
 
     expect(screen.getByTestId('notification-icon-warning')).toBeInTheDocument()
   })
 
   it('shows correct icon for ActionRequired type', () => {
-    const actionNotification = { ...baseNotification, type: 'ActionRequired' as const }
+    const actionNotification = { ...baseNotification, type: 'actionRequired' as const }
     render(<NotificationItem notification={actionNotification} />)
 
     expect(screen.getByTestId('notification-icon-action')).toBeInTheDocument()

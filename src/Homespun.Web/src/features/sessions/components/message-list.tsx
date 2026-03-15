@@ -12,37 +12,42 @@ import type {
   ClaudeMessageRole,
   PendingQuestion,
 } from '@/types/signalr'
+import { ClaudeContentType as ContentTypeEnum, ClaudeMessageRole as RoleEnum } from '@/api'
 import { useState, useMemo } from 'react'
 import { groupToolExecutions } from '../utils/tool-execution-grouper'
 import { convertSignalRMessages } from '../utils/signalr-message-adapter'
 import { ToolExecutionGroupDisplay } from './tool-execution-group'
 
-// Backend sends numeric enum values, but TypeScript types expect strings.
-// These maps normalize both forms to the string representation.
-const ContentTypeMap: Record<number | string, ClaudeContentType> = {
-  0: 'Text',
-  1: 'Thinking',
-  2: 'ToolUse',
-  3: 'ToolResult',
-  Text: 'Text',
-  Thinking: 'Thinking',
-  ToolUse: 'ToolUse',
-  ToolResult: 'ToolResult',
+// Backend sends camelCase string enum values from both API and SignalR.
+// These maps normalize all forms to camelCase for internal use.
+const ContentTypeMap: Record<string, ClaudeContentType> = {
+  // camelCase (canonical)
+  [ContentTypeEnum.TEXT]: 'text',
+  [ContentTypeEnum.THINKING]: 'thinking',
+  [ContentTypeEnum.TOOL_USE]: 'toolUse',
+  [ContentTypeEnum.TOOL_RESULT]: 'toolResult',
+  // PascalCase (legacy fallback)
+  Text: 'text',
+  Thinking: 'thinking',
+  ToolUse: 'toolUse',
+  ToolResult: 'toolResult',
 }
 
-const RoleMap: Record<number | string, ClaudeMessageRole> = {
-  0: 'User',
-  1: 'Assistant',
-  User: 'User',
-  Assistant: 'Assistant',
+const RoleMap: Record<string, ClaudeMessageRole> = {
+  // camelCase (canonical)
+  [RoleEnum.USER]: 'user',
+  [RoleEnum.ASSISTANT]: 'assistant',
+  // PascalCase (legacy fallback)
+  User: 'user',
+  Assistant: 'assistant',
 }
 
-function normalizeContentType(type: number | string): ClaudeContentType {
-  return ContentTypeMap[type] ?? 'Text'
+function normalizeContentType(type: string): ClaudeContentType {
+  return ContentTypeMap[type] ?? 'text'
 }
 
-function normalizeRole(role: number | string): ClaudeMessageRole {
-  return RoleMap[role] ?? 'User'
+function normalizeRole(role: string): ClaudeMessageRole {
+  return RoleMap[role] ?? 'user'
 }
 
 export interface MessageListProps {
@@ -139,12 +144,12 @@ interface MessageItemProps {
  */
 function isAssistantSideMessage(message: ClaudeMessage): boolean {
   const role = normalizeRole(message.role)
-  if (role === 'Assistant') return true
+  if (role === 'assistant') return true
 
   // Tool result messages should be displayed on the assistant side
   // They contain results from tool calls made by the assistant
   const hasOnlyToolResults = message.content.every(
-    (c) => normalizeContentType(c.type) === 'ToolResult'
+    (c) => normalizeContentType(c.type) === 'toolResult'
   )
   if (hasOnlyToolResults && message.content.length > 0) return true
 
@@ -158,7 +163,7 @@ function MessageItem({ message }: MessageItemProps) {
   // Filter out tool-related content as they're handled by ToolExecutionGroupDisplay
   const nonToolContent = message.content.filter((c) => {
     const type = normalizeContentType(c.type)
-    return type !== 'ToolUse' && type !== 'ToolResult'
+    return type !== 'toolUse' && type !== 'toolResult'
   })
 
   // Don't render if only tool content
@@ -219,7 +224,7 @@ function ContentBlock({ content }: ContentBlockProps) {
   })
 
   switch (contentType) {
-    case 'Text':
+    case 'text':
       // All text messages are rendered with Markdown for consistent styling
       return (
         <Markdown className={cn(responsiveProse, 'max-w-none break-words')}>
@@ -227,21 +232,21 @@ function ContentBlock({ content }: ContentBlockProps) {
         </Markdown>
       )
 
-    case 'ToolUse':
+    case 'toolUse':
       return (
         <div className="bg-muted/50 my-1 overflow-hidden rounded border p-2 text-sm">
           <span className="font-mono text-xs break-all">🔧 {content.toolName}</span>
         </div>
       )
 
-    case 'ToolResult':
+    case 'toolResult':
       return (
         <div className="bg-muted/50 my-1 overflow-hidden rounded border p-2 text-sm">
           <span className="text-muted-foreground text-xs">Tool result</span>
         </div>
       )
 
-    case 'Thinking':
+    case 'thinking':
       return (
         <div className="text-muted-foreground my-1 text-sm break-words italic">
           {content.thinking}

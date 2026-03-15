@@ -2,6 +2,7 @@ import { GitPullRequest, CheckCircle, X, Loader, ExternalLink, AlertCircle } fro
 import type { ClaudeSession } from '@/types/signalr'
 import { useIssuePrStatus } from '@/features/sessions/hooks'
 import { Skeleton } from '@/components/ui/skeleton'
+import { PullRequestStatus } from '@/api'
 
 interface SessionPrTabProps {
   session: ClaudeSession
@@ -59,16 +60,14 @@ export function SessionPrTab({ session }: SessionPrTabProps) {
 
   // Determine PR status
   const getStatusBadge = () => {
-    if (prStatus.status === 3) {
-      // Merged
+    if (prStatus.status === PullRequestStatus.MERGED) {
       return (
         <span className="rounded bg-purple-500/20 px-2 py-1 text-xs font-medium text-purple-700 dark:text-purple-400">
           Merged
         </span>
       )
     }
-    if (prStatus.status === 2) {
-      // Closed
+    if (prStatus.status === PullRequestStatus.CLOSED) {
       return (
         <span className="rounded bg-gray-500/20 px-2 py-1 text-xs font-medium text-gray-700 dark:text-gray-400">
           Closed

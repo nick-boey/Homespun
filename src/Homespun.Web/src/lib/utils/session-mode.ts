@@ -1,32 +1,40 @@
 import { SessionMode as ApiSessionMode } from '@/api'
+import type { SessionMode } from '@/types/signalr'
 
 /**
  * Convert frontend session mode to API enum value
- * @param mode - Frontend mode string ('Plan' or 'Build')
- * @returns API SessionMode enum value (0 for Plan, 1 for Build)
+ * @param mode - Frontend mode string ('plan' or 'build')
+ * @returns API SessionMode enum value ('plan' or 'build')
  */
-export function toApiSessionMode(mode: 'Plan' | 'Build'): ApiSessionMode {
-  return mode === 'Plan' ? 0 : 1
+export function toApiSessionMode(mode: SessionMode): ApiSessionMode {
+  return mode === 'plan' ? ApiSessionMode.PLAN : ApiSessionMode.BUILD
 }
 
 /**
  * Convert API session mode enum to frontend string
- * @param mode - API SessionMode enum value
- * @returns Frontend mode string ('Plan' or 'Build')
+ * @param mode - API SessionMode enum value ('plan' or 'build')
+ * @returns Frontend mode string ('plan' or 'build')
  */
-export function fromApiSessionMode(mode: ApiSessionMode): 'Plan' | 'Build' {
-  return mode === 0 ? 'Plan' : 'Build'
+export function fromApiSessionMode(mode: ApiSessionMode): SessionMode {
+  return mode === ApiSessionMode.PLAN ? 'plan' : 'build'
 }
 
 /**
- * Normalize session mode from either numeric (SignalR) or string format to frontend string.
- * Handles the type mismatch between backend C# enum (serialized as integer) and frontend TypeScript strings.
+ * Normalize session mode to frontend string.
+ * With string enum serialization, this is simpler - just map various formats to camelCase.
  *
- * @param mode - Session mode as number (0 = Plan, 1 = Build) or string ('Plan' | 'Build')
- * @returns Normalized frontend mode string ('Plan' or 'Build'), defaults to 'Build' for undefined
+ * @param mode - Session mode as string ('plan' | 'build' | 'Plan' | 'Build')
+ * @returns Normalized frontend mode string ('plan' or 'build'), defaults to 'build' for undefined
  */
-export function normalizeSessionMode(mode: string | number | undefined): 'Plan' | 'Build' {
-  if (mode === 0 || mode === 'Plan') return 'Plan'
-  if (mode === 1 || mode === 'Build') return 'Build'
-  return 'Build' // default
+export function normalizeSessionMode(mode: string | number | undefined): SessionMode {
+  // Handle string enum values (new format: 'plan' | 'build')
+  if (mode === 'plan' || mode === ApiSessionMode.PLAN) return 'plan'
+  if (mode === 'build' || mode === ApiSessionMode.BUILD) return 'build'
+  // Also handle legacy PascalCase for backwards compatibility
+  if (mode === 'Plan') return 'plan'
+  if (mode === 'Build') return 'build'
+  // Handle legacy numeric format for backwards compatibility with stored data
+  if (mode === 0) return 'plan'
+  if (mode === 1) return 'build'
+  return 'build' // default
 }

@@ -7,21 +7,21 @@
 // Session Types
 // ============================================================================
 
-export type SessionMode = 'Plan' | 'Build'
+export type SessionMode = 'plan' | 'build'
 
 export type ClaudeSessionStatus =
-  | 'Starting'
-  | 'RunningHooks'
-  | 'Running'
-  | 'WaitingForInput'
-  | 'WaitingForQuestionAnswer'
-  | 'WaitingForPlanExecution'
-  | 'Stopped'
-  | 'Error'
+  | 'starting'
+  | 'runningHooks'
+  | 'running'
+  | 'waitingForInput'
+  | 'waitingForQuestionAnswer'
+  | 'waitingForPlanExecution'
+  | 'stopped'
+  | 'error'
 
-export type ClaudeMessageRole = 'User' | 'Assistant'
+export type ClaudeMessageRole = 'user' | 'assistant'
 
-export type ClaudeContentType = 'Text' | 'Thinking' | 'ToolUse' | 'ToolResult'
+export type ClaudeContentType = 'text' | 'thinking' | 'toolUse' | 'toolResult'
 
 export interface ToolResultData {
   // Generic tool result data - structure varies by tool
@@ -97,7 +97,7 @@ export interface ClaudeSession {
 // Notification Types
 // ============================================================================
 
-export type NotificationType = 'Info' | 'Warning' | 'ActionRequired'
+export type NotificationType = 'info' | 'warning' | 'actionRequired'
 
 export interface NotificationDto {
   id: string
@@ -111,7 +111,7 @@ export interface NotificationDto {
   deduplicationKey?: string
 }
 
-export type IssueChangeType = 'Created' | 'Updated' | 'Deleted'
+export type IssueChangeType = 'created' | 'updated' | 'deleted'
 
 // ============================================================================
 // AG-UI Event Types

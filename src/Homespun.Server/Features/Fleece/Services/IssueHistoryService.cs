@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Fleece.Core.Models;
 using Homespun.Shared.Models.Fleece;
 
@@ -24,7 +25,8 @@ public sealed class IssueHistoryService : IIssueHistoryService
         _jsonOptions = new JsonSerializerOptions
         {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            WriteIndented = false
+            WriteIndented = false,
+            Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
         };
     }
 

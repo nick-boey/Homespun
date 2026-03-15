@@ -62,18 +62,18 @@ export type BranchStatusResult = {
 }
 
 export const ChangeType = {
-  0: 0,
-  1: 1,
-  2: 2,
+  CREATED: 'created',
+  UPDATED: 'updated',
+  DELETED: 'deleted',
 } as const
 
 export type ChangeType = (typeof ChangeType)[keyof typeof ChangeType]
 
 export const ClaudeContentType = {
-  0: 0,
-  1: 1,
-  2: 2,
-  3: 3,
+  TEXT: 'text',
+  THINKING: 'thinking',
+  TOOL_USE: 'toolUse',
+  TOOL_RESULT: 'toolResult',
 } as const
 
 export type ClaudeContentType = (typeof ClaudeContentType)[keyof typeof ClaudeContentType]
@@ -101,7 +101,7 @@ export type ClaudeMessageContent = {
   index?: number
 }
 
-export const ClaudeMessageRole = { 0: 0, 1: 1 } as const
+export const ClaudeMessageRole = { USER: 'user', ASSISTANT: 'assistant' } as const
 
 export type ClaudeMessageRole = (typeof ClaudeMessageRole)[keyof typeof ClaudeMessageRole]
 
@@ -133,14 +133,14 @@ export type ClaudeSession = {
 }
 
 export const ClaudeSessionStatus = {
-  0: 0,
-  1: 1,
-  2: 2,
-  3: 3,
-  4: 4,
-  5: 5,
-  6: 6,
-  7: 7,
+  STARTING: 'starting',
+  RUNNING_HOOKS: 'runningHooks',
+  RUNNING: 'running',
+  WAITING_FOR_INPUT: 'waitingForInput',
+  WAITING_FOR_QUESTION_ANSWER: 'waitingForQuestionAnswer',
+  WAITING_FOR_PLAN_EXECUTION: 'waitingForPlanExecution',
+  STOPPED: 'stopped',
+  ERROR: 'error',
 } as const
 
 export type ClaudeSessionStatus = (typeof ClaudeSessionStatus)[keyof typeof ClaudeSessionStatus]
@@ -179,9 +179,9 @@ export type CloneInfo = {
 }
 
 export const ConflictChoice = {
-  0: 0,
-  1: 1,
-  2: 2,
+  USE_MAIN: 'useMain',
+  USE_AGENT: 'useAgent',
+  CUSTOM: 'custom',
 } as const
 
 export type ConflictChoice = (typeof ConflictChoice)[keyof typeof ConflictChoice]
@@ -192,10 +192,10 @@ export type ConflictResolution = {
 }
 
 export const ConflictResolutionStrategy = {
-  0: 0,
-  1: 1,
-  2: 2,
-  3: 3,
+  MANUAL: 'manual',
+  AGENT_WINS: 'agentWins',
+  MAIN_WINS: 'mainWins',
+  ABORT: 'abort',
 } as const
 
 export type ConflictResolutionStrategy =
@@ -277,7 +277,7 @@ export type CreateSessionRequest = {
   } | null
 }
 
-export const ExecutionMode = { 0: 0, 1: 1 } as const
+export const ExecutionMode = { SERIES: 'series', PARALLEL: 'parallel' } as const
 
 export type ExecutionMode = (typeof ExecutionMode)[keyof typeof ExecutionMode]
 
@@ -308,10 +308,10 @@ export type FileChangeInfo = {
 }
 
 export const FileChangeStatus = {
-  0: 0,
-  1: 1,
-  2: 2,
-  3: 3,
+  ADDED: 'added',
+  MODIFIED: 'modified',
+  DELETED: 'deleted',
+  RENAMED: 'renamed',
 } as const
 
 export type FileChangeStatus = (typeof FileChangeStatus)[keyof typeof FileChangeStatus]
@@ -366,10 +366,10 @@ export type GitConfigResponse = {
 }
 
 export const GitHubAuthMethod = {
-  0: 0,
-  1: 1,
-  2: 2,
-  3: 3,
+  NONE: 'none',
+  TOKEN: 'token',
+  GH_CLI: 'ghCli',
+  BOTH: 'both',
 } as const
 
 export type GitHubAuthMethod = (typeof GitHubAuthMethod)[keyof typeof GitHubAuthMethod]
@@ -508,25 +508,25 @@ export type IssueResponse = {
 }
 
 export const IssueStatus = {
-  0: 0,
-  1: 1,
-  2: 2,
-  3: 3,
-  4: 4,
-  5: 5,
-  6: 6,
-  7: 7,
+  DRAFT: 'draft',
+  OPEN: 'open',
+  PROGRESS: 'progress',
+  REVIEW: 'review',
+  COMPLETE: 'complete',
+  ARCHIVED: 'archived',
+  CLOSED: 'closed',
+  DELETED: 'deleted',
 } as const
 
 export type IssueStatus = (typeof IssueStatus)[keyof typeof IssueStatus]
 
 export const IssueType = {
-  0: 0,
-  1: 1,
-  2: 2,
-  3: 3,
-  4: 4,
-  5: 5,
+  TASK: 'task',
+  BUG: 'bug',
+  CHORE: 'chore',
+  FEATURE: 'feature',
+  IDEA: 'idea',
+  VERIFY: 'verify',
 } as const
 
 export type IssueType = (typeof IssueType)[keyof typeof IssueType]
@@ -537,7 +537,7 @@ export type MergedPullRequestDetails = {
   linkedIssue?: IssueResponse
 }
 
-export const MoveDirection = { 0: 0, 1: 1 } as const
+export const MoveDirection = { UP: 'up', DOWN: 'down' } as const
 
 export type MoveDirection = (typeof MoveDirection)[keyof typeof MoveDirection]
 
@@ -559,18 +559,18 @@ export type NotificationDto = {
 }
 
 export const NotificationType = {
-  0: 0,
-  1: 1,
-  2: 2,
+  INFO: 'info',
+  WARNING: 'warning',
+  ACTION_REQUIRED: 'actionRequired',
 } as const
 
 export type NotificationType = (typeof NotificationType)[keyof typeof NotificationType]
 
 export const OpenPullRequestStatus = {
-  0: 0,
-  1: 1,
-  2: 2,
-  3: 3,
+  IN_DEVELOPMENT: 'inDevelopment',
+  READY_FOR_REVIEW: 'readyForReview',
+  HAS_REVIEW_COMMENTS: 'hasReviewComments',
+  APPROVED: 'approved',
 } as const
 
 export type OpenPullRequestStatus =
@@ -667,13 +667,13 @@ export type PullRequestInfo = {
 }
 
 export const PullRequestStatus = {
-  0: 0,
-  1: 1,
-  2: 2,
-  3: 3,
-  4: 4,
-  5: 5,
-  6: 6,
+  IN_PROGRESS: 'inProgress',
+  READY_FOR_REVIEW: 'readyForReview',
+  CHECKS_FAILING: 'checksFailing',
+  CONFLICT: 'conflict',
+  READY_FOR_MERGING: 'readyForMerging',
+  MERGED: 'merged',
+  CLOSED: 'closed',
 } as const
 
 export type PullRequestStatus = (typeof PullRequestStatus)[keyof typeof PullRequestStatus]
@@ -778,7 +778,7 @@ export type SessionCacheSummary = {
   model?: string | null
 }
 
-export const SessionMode = { 0: 0, 1: 1 } as const
+export const SessionMode = { PLAN: 'plan', BUILD: 'build' } as const
 
 export type SessionMode = (typeof SessionMode)[keyof typeof SessionMode]
 
@@ -805,7 +805,7 @@ export type SessionTestRequest = {
   systemPrompt?: string | null
 }
 
-export const SessionType = { 0: 0, 1: 1 } as const
+export const SessionType = { STANDARD: 'standard', ISSUE_MODIFY: 'issueModify' } as const
 
 export type SessionType = (typeof SessionType)[keyof typeof SessionType]
 
@@ -865,10 +865,10 @@ export type TelemetryConfigDto = {
 }
 
 export const TelemetryEventType = {
-  0: 0,
-  1: 1,
-  2: 2,
-  3: 3,
+  PAGE_VIEW: 'pageView',
+  EVENT: 'event',
+  EXCEPTION: 'exception',
+  DEPENDENCY: 'dependency',
 } as const
 
 export type TelemetryEventType = (typeof TelemetryEventType)[keyof typeof TelemetryEventType]

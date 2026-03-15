@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { computeInheritedParentInfo } from './inherited-parent'
 import type { TaskGraphResponse, TaskGraphNodeResponse, IssueResponse } from '@/api'
+import { IssueStatus, IssueType, ExecutionMode } from '@/api'
 
 // Helper to create a mock issue
 function createIssue(id: string, parentIssueId?: string, sortOrder?: string): IssueResponse {
@@ -8,8 +9,8 @@ function createIssue(id: string, parentIssueId?: string, sortOrder?: string): Is
     id,
     title: `Issue ${id}`,
     description: null,
-    status: 0,
-    type: 0,
+    status: IssueStatus.OPEN,
+    type: IssueType.TASK,
     priority: null,
     linkedPRs: [],
     linkedIssues: null,
@@ -18,7 +19,7 @@ function createIssue(id: string, parentIssueId?: string, sortOrder?: string): Is
       : [],
     tags: null,
     workingBranchId: null,
-    executionMode: 0,
+    executionMode: ExecutionMode.SERIES,
     createdBy: null,
     assignedTo: null,
     lastUpdate: undefined,

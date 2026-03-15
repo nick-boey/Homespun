@@ -15,8 +15,8 @@ const mockSession: ClaudeSession = {
   projectId: 'project-456',
   workingDirectory: '/path/to/project',
   model: 'opus',
-  mode: 'Build',
-  status: 'Running',
+  mode: 'build',
+  status: 'running',
   createdAt: '2024-01-01T00:00:00Z',
   lastActivityAt: '2024-01-01T01:00:00Z',
   messages: [],
@@ -171,13 +171,13 @@ describe('useSession', () => {
     expect(sessionStateCall).toBeDefined()
 
     const handler = sessionStateCall![1]
-    const updatedSession = { ...mockSession, status: 'Stopped' as const }
+    const updatedSession = { ...mockSession, status: 'stopped' as const }
 
     act(() => {
       handler(updatedSession)
     })
 
-    expect(result.current.session?.status).toBe('Stopped')
+    expect(result.current.session?.status).toBe('stopped')
   })
 
   it('cleans up event handlers on unmount', async () => {

@@ -7,6 +7,7 @@ import { render } from '@testing-library/react'
 import { TaskGraphNodeSvg, getTypeColor } from './task-graph-svg'
 import type { TaskGraphIssueRenderLine } from '../services'
 import { TaskGraphMarkerType } from '../services'
+import { IssueType, IssueStatus, ClaudeSessionStatus } from '@/api'
 
 describe('TaskGraphNodeSvg', () => {
   const createMockLine = (
@@ -14,8 +15,8 @@ describe('TaskGraphNodeSvg', () => {
   ): TaskGraphIssueRenderLine => ({
     type: 'issue',
     issueId: 'test-id',
-    issueType: 0, // Task
-    status: 0, // Open
+    issueType: IssueType.TASK,
+    status: IssueStatus.OPEN,
     title: 'Test Issue',
     description: null,
     branchName: null,
@@ -54,7 +55,7 @@ describe('TaskGraphNodeSvg', () => {
       const line = createMockLine({
         agentStatus: {
           isActive: false,
-          status: '2', // Running
+          status: ClaudeSessionStatus.RUNNING,
           sessionId: 'session-123',
         },
       })
@@ -66,13 +67,9 @@ describe('TaskGraphNodeSvg', () => {
 
     it('should render blue ring for running states', () => {
       const runningStates = [
-        // Test both numeric and string formats
-        '0',
-        '1',
-        '2', // Starting, RunningHooks, Running
-        'Starting',
-        'RunningHooks',
-        'Running',
+        ClaudeSessionStatus.STARTING,
+        ClaudeSessionStatus.RUNNING_HOOKS,
+        ClaudeSessionStatus.RUNNING,
       ]
 
       runningStates.forEach((status) => {
@@ -98,13 +95,9 @@ describe('TaskGraphNodeSvg', () => {
 
     it('should render yellow ring for waiting states', () => {
       const waitingStates = [
-        // Test both numeric and string formats
-        '3',
-        '4',
-        '5', // WaitingForInput, WaitingForQuestionAnswer, WaitingForPlanExecution
-        'WaitingForInput',
-        'WaitingForQuestionAnswer',
-        'WaitingForPlanExecution',
+        ClaudeSessionStatus.WAITING_FOR_INPUT,
+        ClaudeSessionStatus.WAITING_FOR_QUESTION_ANSWER,
+        ClaudeSessionStatus.WAITING_FOR_PLAN_EXECUTION,
       ]
 
       waitingStates.forEach((status) => {
@@ -129,45 +122,37 @@ describe('TaskGraphNodeSvg', () => {
     })
 
     it('should render red ring for error state', () => {
-      const errorStates = ['7', 'Error'] // Test both formats
-
-      errorStates.forEach((status) => {
-        const line = createMockLine({
-          agentStatus: {
-            isActive: true,
-            status,
-            sessionId: 'session-123',
-          },
-        })
-        const { container } = render(<TaskGraphNodeSvg line={line} maxLanes={1} />)
-
-        const circles = container.querySelectorAll('circle')
-        expect(circles).toHaveLength(2)
-
-        const ring = circles[0]
-        expect(ring).toHaveAttribute('stroke', '#ef4444') // Red
-        expect(ring).toHaveAttribute('stroke-width', '2')
-        expect(ring).toHaveAttribute('opacity', '0.6')
-        expect(ring).toHaveClass('animate-pulse')
+      const line = createMockLine({
+        agentStatus: {
+          isActive: true,
+          status: ClaudeSessionStatus.ERROR,
+          sessionId: 'session-123',
+        },
       })
+      const { container } = render(<TaskGraphNodeSvg line={line} maxLanes={1} />)
+
+      const circles = container.querySelectorAll('circle')
+      expect(circles).toHaveLength(2)
+
+      const ring = circles[0]
+      expect(ring).toHaveAttribute('stroke', '#ef4444') // Red
+      expect(ring).toHaveAttribute('stroke-width', '2')
+      expect(ring).toHaveAttribute('opacity', '0.6')
+      expect(ring).toHaveClass('animate-pulse')
     })
 
     it('should not render ring for stopped state', () => {
-      const stoppedStates = ['6', 'Stopped'] // Test both formats
-
-      stoppedStates.forEach((status) => {
-        const line = createMockLine({
-          agentStatus: {
-            isActive: true,
-            status,
-            sessionId: 'session-123',
-          },
-        })
-        const { container } = render(<TaskGraphNodeSvg line={line} maxLanes={1} />)
-
-        const circles = container.querySelectorAll('circle')
-        expect(circles).toHaveLength(1) // Only the main node
+      const line = createMockLine({
+        agentStatus: {
+          isActive: true,
+          status: ClaudeSessionStatus.STOPPED,
+          sessionId: 'session-123',
+        },
       })
+      const { container } = render(<TaskGraphNodeSvg line={line} maxLanes={1} />)
+
+      const circles = container.querySelectorAll('circle')
+      expect(circles).toHaveLength(1) // Only the main node
     })
 
     it('should not render ring for unknown status', () => {
@@ -202,7 +187,7 @@ describe('TaskGraphNodeSvg', () => {
       const line = createMockLine({
         agentStatus: {
           isActive: true,
-          status: '2', // Running
+          status: ClaudeSessionStatus.RUNNING,
           sessionId: 'session-123',
         },
       })
@@ -222,7 +207,7 @@ describe('TaskGraphNodeSvg', () => {
         marker: TaskGraphMarkerType.Actionable,
         agentStatus: {
           isActive: true,
-          status: 'Running',
+          status: ClaudeSessionStatus.RUNNING,
           sessionId: 'session-123',
         },
       })
@@ -242,7 +227,7 @@ describe('TaskGraphNodeSvg', () => {
         marker: TaskGraphMarkerType.Actionable,
         agentStatus: {
           isActive: false,
-          status: 'Stopped',
+          status: ClaudeSessionStatus.STOPPED,
           sessionId: 'session-123',
         },
       })
@@ -359,15 +344,15 @@ describe('TaskGraphNodeSvg', () => {
 
   describe('type colors', () => {
     it('should return correct colors for each issue type', () => {
-      expect(getTypeColor(0)).toBe('#3b82f6') // Task: Blue
-      expect(getTypeColor(1)).toBe('#ef4444') // Bug: Red
-      expect(getTypeColor(2)).toBe('#6b7280') // Chore: Gray
-      expect(getTypeColor(3)).toBe('#22c55e') // Feature: Green
-      expect(getTypeColor(4)).toBe('#8b5cf6') // Idea: Purple
+      expect(getTypeColor(IssueType.TASK)).toBe('#3b82f6') // Task: Blue
+      expect(getTypeColor(IssueType.BUG)).toBe('#ef4444') // Bug: Red
+      expect(getTypeColor(IssueType.CHORE)).toBe('#6b7280') // Chore: Gray
+      expect(getTypeColor(IssueType.FEATURE)).toBe('#22c55e') // Feature: Green
+      expect(getTypeColor(IssueType.IDEA)).toBe('#8b5cf6') // Idea: Purple
     })
 
     it('should return default color for unknown issue type', () => {
-      expect(getTypeColor(99)).toBe('#3b82f6') // Default to Task color
+      expect(getTypeColor('unknown' as IssueType)).toBe('#3b82f6') // Default to Task color
     })
   })
 })

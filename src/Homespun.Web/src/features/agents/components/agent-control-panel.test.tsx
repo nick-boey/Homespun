@@ -3,16 +3,20 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AgentControlPanel } from './agent-control-panel'
-import { Sessions } from '@/api'
+import { Sessions, SessionMode, ClaudeSessionStatus } from '@/api'
 import type { ReactNode } from 'react'
 import type { ClaudeSession } from '@/api/generated/types.gen'
 
-vi.mock('@/api', () => ({
-  Sessions: {
-    deleteApiSessionsById: vi.fn(),
-    postApiSessionsByIdInterrupt: vi.fn(),
-  },
-}))
+vi.mock('@/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/api')>()
+  return {
+    ...actual,
+    Sessions: {
+      deleteApiSessionsById: vi.fn(),
+      postApiSessionsByIdInterrupt: vi.fn(),
+    },
+  }
+})
 
 const mockDeleteSession = vi.mocked(Sessions.deleteApiSessionsById)
 const mockInterruptSession = vi.mocked(Sessions.postApiSessionsByIdInterrupt)
@@ -43,8 +47,8 @@ const mockSession: ClaudeSession = {
   entityId: 'issue-456',
   projectId: 'project-789',
   model: 'sonnet',
-  mode: 1 as const, // Build
-  status: 2 as const, // Running
+  mode: SessionMode.BUILD,
+  status: ClaudeSessionStatus.RUNNING,
   workingDirectory: '/workdir',
   createdAt: new Date().toISOString(),
   totalCostUsd: 0.05,
@@ -137,7 +141,7 @@ describe('AgentControlPanel', () => {
   })
 
   it('hides control buttons when session is stopped', () => {
-    const stoppedSession: ClaudeSession = { ...mockSession, status: 5 as const }
+    const stoppedSession: ClaudeSession = { ...mockSession, status: ClaudeSessionStatus.STOPPED }
 
     render(<AgentControlPanel session={stoppedSession} />, { wrapper: createWrapper() })
 

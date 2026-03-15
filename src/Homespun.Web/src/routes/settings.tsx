@@ -213,13 +213,13 @@ function getAuthMethodLabel(
   method: (typeof GitHubAuthMethod)[keyof typeof GitHubAuthMethod] | undefined
 ): string {
   switch (method) {
-    case GitHubAuthMethod[0]:
+    case GitHubAuthMethod.NONE:
       return 'None'
-    case GitHubAuthMethod[1]:
+    case GitHubAuthMethod.TOKEN:
       return 'Token (GITHUB_TOKEN)'
-    case GitHubAuthMethod[2]:
+    case GitHubAuthMethod.GH_CLI:
       return 'GitHub CLI (gh auth)'
-    case GitHubAuthMethod[3]:
+    case GitHubAuthMethod.BOTH:
       return 'Both (Token + CLI)'
     default:
       return 'Unknown'

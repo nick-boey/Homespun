@@ -3,6 +3,7 @@ import { renderHook, waitFor, act } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useCreatePrompt } from './use-create-prompt'
 import { AgentPrompts } from '@/api'
+import { SessionMode } from '@/api/generated/types.gen'
 
 vi.mock('@/api', () => ({
   AgentPrompts: {
@@ -32,7 +33,7 @@ describe('useCreatePrompt', () => {
       id: 'new-prompt-1',
       name: 'New Prompt',
       initialMessage: 'System message',
-      mode: 1,
+      mode: SessionMode.BUILD,
       projectId: 'proj-1',
     }
     vi.mocked(AgentPrompts.postApiAgentPrompts).mockResolvedValue({
@@ -48,7 +49,7 @@ describe('useCreatePrompt', () => {
       await result.current.mutateAsync({
         name: 'New Prompt',
         initialMessage: 'System message',
-        mode: 1,
+        mode: SessionMode.BUILD,
         projectId: 'proj-1',
       })
     })
@@ -57,7 +58,7 @@ describe('useCreatePrompt', () => {
       body: {
         name: 'New Prompt',
         initialMessage: 'System message',
-        mode: 1,
+        mode: SessionMode.BUILD,
         projectId: 'proj-1',
       },
     })
