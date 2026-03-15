@@ -8,9 +8,11 @@ using Homespun.Features.Projects;
 using Homespun.Features.PullRequests.Data;
 using Homespun.Features.AgentOrchestration.Services;
 using Homespun.Shared.Models.Fleece;
+using Homespun.Shared.Models.Issues;
 using Homespun.Shared.Models.Projects;
 using Homespun.Shared.Models.Sessions;
 using Homespun.Shared.Requests;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
@@ -36,6 +38,7 @@ public class IssuesControllerTests
     private Mock<IGitCloneService> _cloneServiceMock = null!;
     private Mock<IBranchIdBackgroundService> _branchIdBackgroundServiceMock = null!;
     private Mock<IFleeceChangeApplicationService> _changeApplicationServiceMock = null!;
+    private Mock<IFleeceIssuesSyncService> _fleeceIssuesSyncServiceMock = null!;
     private Mock<ILogger<IssuesController>> _loggerMock = null!;
     private Mock<IHubClients> _clientsMock = null!;
     private Mock<IClientProxy> _allClientsMock = null!;
@@ -73,6 +76,7 @@ public class IssuesControllerTests
         _cloneServiceMock = new Mock<IGitCloneService>();
         _branchIdBackgroundServiceMock = new Mock<IBranchIdBackgroundService>();
         _changeApplicationServiceMock = new Mock<IFleeceChangeApplicationService>();
+        _fleeceIssuesSyncServiceMock = new Mock<IFleeceIssuesSyncService>();
         _loggerMock = new Mock<ILogger<IssuesController>>();
         _clientsMock = new Mock<IHubClients>();
         _allClientsMock = new Mock<IClientProxy>();
@@ -94,7 +98,14 @@ public class IssuesControllerTests
             _cloneServiceMock.Object,
             _branchIdBackgroundServiceMock.Object,
             _changeApplicationServiceMock.Object,
+            _fleeceIssuesSyncServiceMock.Object,
             NullLogger<IssuesController>.Instance);
+
+        // Set up HTTP context for controller
+        _controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext()
+        };
     }
 
     #region Create Tests
@@ -560,6 +571,14 @@ public class IssuesControllerTests
         _cloneServiceMock
             .Setup(x => x.GetClonePathForBranchAsync(It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync((string?)null); // No existing clone
+        _fleeceIssuesSyncServiceMock
+            .Setup(x => x.PullFleeceOnlyAsync(TestProject.LocalPath, TestProject.DefaultBranch, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new FleecePullResult(
+                Success: true,
+                ErrorMessage: null,
+                IssuesMerged: 0,
+                WasBehindRemote: false,
+                CommitsPulled: 0));
         _cloneServiceMock
             .Setup(x => x.CreateCloneAsync(TestProject.LocalPath, It.IsAny<string>(), true, TestProject.DefaultBranch))
             .ReturnsAsync("/path/to/new-clone");
@@ -705,6 +724,345 @@ public class IssuesControllerTests
                 It.IsAny<string>(),
                 null,  // No initial message
                 default),
+            Times.Once);
+    }
+
+    [Test]
+    public async Task RunAgent_WhenCreatingNewClone_PullsLatestFromMainRepoFirst()
+    {
+        // Arrange
+        var issueId = "ABC123";
+        var issue = CreateTestIssue(issueId, "Test Issue");
+        var prompt = new AgentPrompt { Id = "prompt-1", Name = "Build", Mode = SessionMode.Build };
+        var session = new ClaudeSession
+        {
+            Id = "session-123",
+            EntityId = issueId,
+            ProjectId = TestProject.Id,
+            WorkingDirectory = "/path/to/new-clone",
+            Model = "sonnet",
+            Mode = SessionMode.Build
+        };
+
+        _projectServiceMock
+            .Setup(x => x.GetByIdAsync(TestProject.Id))
+            .ReturnsAsync(TestProject);
+        _fleeceServiceMock
+            .Setup(x => x.GetIssueAsync(TestProject.LocalPath, issueId))
+            .ReturnsAsync(issue);
+        _agentPromptServiceMock
+            .Setup(x => x.GetPrompt("prompt-1"))
+            .Returns(prompt);
+        _branchResolverServiceMock
+            .Setup(x => x.ResolveIssueBranchAsync(TestProject.Id, issueId))
+            .ReturnsAsync((string?)null);
+        _cloneServiceMock
+            .Setup(x => x.GetClonePathForBranchAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync((string?)null); // No existing clone
+        _fleeceIssuesSyncServiceMock
+            .Setup(x => x.PullFleeceOnlyAsync(TestProject.LocalPath, TestProject.DefaultBranch, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new FleecePullResult(
+                Success: true,
+                ErrorMessage: null,
+                IssuesMerged: 2,
+                WasBehindRemote: true,
+                CommitsPulled: 3));
+        _cloneServiceMock
+            .Setup(x => x.CreateCloneAsync(TestProject.LocalPath, It.IsAny<string>(), true, TestProject.DefaultBranch))
+            .ReturnsAsync("/path/to/new-clone");
+        _sessionServiceMock
+            .Setup(x => x.StartSessionAsync(
+                issueId, TestProject.Id, "/path/to/new-clone", SessionMode.Build, It.IsAny<string>(), null, default))
+            .ReturnsAsync(session);
+
+        var request = new RunAgentRequest { ProjectId = TestProject.Id, PromptId = "prompt-1" };
+
+        // Act
+        var result = await _controller.RunAgent(issueId, request);
+
+        // Assert
+        Assert.That(result.Result, Is.TypeOf<OkObjectResult>());
+
+        // Verify PullFleeceOnlyAsync was called with project.LocalPath and project.DefaultBranch
+        _fleeceIssuesSyncServiceMock.Verify(
+            x => x.PullFleeceOnlyAsync(TestProject.LocalPath, TestProject.DefaultBranch, It.IsAny<CancellationToken>()),
+            Times.Once);
+
+        // Verify CreateCloneAsync was called after
+        _cloneServiceMock.Verify(
+            x => x.CreateCloneAsync(TestProject.LocalPath, It.IsAny<string>(), true, TestProject.DefaultBranch),
+            Times.Once);
+    }
+
+    [Test]
+    public async Task RunAgent_WhenPullFails_ContinuesToCreateCloneAndSession()
+    {
+        // Arrange
+        var issueId = "ABC123";
+        var issue = CreateTestIssue(issueId, "Test Issue");
+        var prompt = new AgentPrompt { Id = "prompt-1", Name = "Build", Mode = SessionMode.Build };
+        var session = new ClaudeSession
+        {
+            Id = "session-123",
+            EntityId = issueId,
+            ProjectId = TestProject.Id,
+            WorkingDirectory = "/path/to/new-clone",
+            Model = "sonnet",
+            Mode = SessionMode.Build
+        };
+
+        _projectServiceMock
+            .Setup(x => x.GetByIdAsync(TestProject.Id))
+            .ReturnsAsync(TestProject);
+        _fleeceServiceMock
+            .Setup(x => x.GetIssueAsync(TestProject.LocalPath, issueId))
+            .ReturnsAsync(issue);
+        _agentPromptServiceMock
+            .Setup(x => x.GetPrompt("prompt-1"))
+            .Returns(prompt);
+        _branchResolverServiceMock
+            .Setup(x => x.ResolveIssueBranchAsync(TestProject.Id, issueId))
+            .ReturnsAsync((string?)null);
+        _cloneServiceMock
+            .Setup(x => x.GetClonePathForBranchAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync((string?)null); // No existing clone
+        _fleeceIssuesSyncServiceMock
+            .Setup(x => x.PullFleeceOnlyAsync(TestProject.LocalPath, TestProject.DefaultBranch, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new FleecePullResult(
+                Success: false,
+                ErrorMessage: "Network error",
+                IssuesMerged: 0,
+                WasBehindRemote: false,
+                CommitsPulled: 0));
+        _cloneServiceMock
+            .Setup(x => x.CreateCloneAsync(TestProject.LocalPath, It.IsAny<string>(), true, TestProject.DefaultBranch))
+            .ReturnsAsync("/path/to/new-clone");
+        _sessionServiceMock
+            .Setup(x => x.StartSessionAsync(
+                issueId, TestProject.Id, "/path/to/new-clone", SessionMode.Build, It.IsAny<string>(), null, default))
+            .ReturnsAsync(session);
+
+        var request = new RunAgentRequest { ProjectId = TestProject.Id, PromptId = "prompt-1" };
+
+        // Act
+        var result = await _controller.RunAgent(issueId, request);
+
+        // Assert - should still succeed despite pull failure
+        Assert.That(result.Result, Is.TypeOf<OkObjectResult>());
+        var okResult = (OkObjectResult)result.Result!;
+        var response = (RunAgentResponse)okResult.Value!;
+        Assert.That(response.SessionId, Is.EqualTo("session-123"));
+
+        // Verify CreateCloneAsync was still called
+        _cloneServiceMock.Verify(
+            x => x.CreateCloneAsync(TestProject.LocalPath, It.IsAny<string>(), true, TestProject.DefaultBranch),
+            Times.Once);
+
+        // Verify session was started
+        _sessionServiceMock.Verify(
+            x => x.StartSessionAsync(
+                issueId, TestProject.Id, "/path/to/new-clone", SessionMode.Build, It.IsAny<string>(), null, default),
+            Times.Once);
+    }
+
+    [Test]
+    public async Task RunAgent_WhenUsingExistingClone_DoesNotPullMainRepo()
+    {
+        // Arrange
+        var issueId = "ABC123";
+        var issue = CreateTestIssue(issueId, "Test Issue");
+        var prompt = new AgentPrompt { Id = "prompt-1", Name = "Build", Mode = SessionMode.Build };
+        var session = new ClaudeSession
+        {
+            Id = "session-123",
+            EntityId = issueId,
+            ProjectId = TestProject.Id,
+            WorkingDirectory = "/path/to/existing-clone",
+            Model = "sonnet",
+            Mode = SessionMode.Build
+        };
+
+        _projectServiceMock
+            .Setup(x => x.GetByIdAsync(TestProject.Id))
+            .ReturnsAsync(TestProject);
+        _fleeceServiceMock
+            .Setup(x => x.GetIssueAsync(TestProject.LocalPath, issueId))
+            .ReturnsAsync(issue);
+        _agentPromptServiceMock
+            .Setup(x => x.GetPrompt("prompt-1"))
+            .Returns(prompt);
+        _branchResolverServiceMock
+            .Setup(x => x.ResolveIssueBranchAsync(TestProject.Id, issueId))
+            .ReturnsAsync((string?)null);
+        _cloneServiceMock
+            .Setup(x => x.GetClonePathForBranchAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync("/path/to/existing-clone"); // Clone exists
+        _sessionServiceMock
+            .Setup(x => x.StartSessionAsync(
+                issueId, TestProject.Id, "/path/to/existing-clone", SessionMode.Build, It.IsAny<string>(), null, default))
+            .ReturnsAsync(session);
+
+        var request = new RunAgentRequest { ProjectId = TestProject.Id, PromptId = "prompt-1" };
+
+        // Act
+        var result = await _controller.RunAgent(issueId, request);
+
+        // Assert
+        Assert.That(result.Result, Is.TypeOf<OkObjectResult>());
+
+        // Verify PullFleeceOnlyAsync was NOT called since clone already exists
+        _fleeceIssuesSyncServiceMock.Verify(
+            x => x.PullFleeceOnlyAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+
+        // Verify CreateCloneAsync was NOT called
+        _cloneServiceMock.Verify(
+            x => x.CreateCloneAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<string?>()),
+            Times.Never);
+    }
+
+    [Test]
+    public async Task RunAgent_PullsWithCorrectBaseBranch_WhenCustomBaseBranchProvided()
+    {
+        // Arrange
+        var issueId = "ABC123";
+        var issue = CreateTestIssue(issueId, "Test Issue");
+        var customBaseBranch = "develop";
+        var prompt = new AgentPrompt { Id = "prompt-1", Name = "Build", Mode = SessionMode.Build };
+        var session = new ClaudeSession
+        {
+            Id = "session-123",
+            EntityId = issueId,
+            ProjectId = TestProject.Id,
+            WorkingDirectory = "/path/to/new-clone",
+            Model = "sonnet",
+            Mode = SessionMode.Build
+        };
+
+        _projectServiceMock
+            .Setup(x => x.GetByIdAsync(TestProject.Id))
+            .ReturnsAsync(TestProject);
+        _fleeceServiceMock
+            .Setup(x => x.GetIssueAsync(TestProject.LocalPath, issueId))
+            .ReturnsAsync(issue);
+        _agentPromptServiceMock
+            .Setup(x => x.GetPrompt("prompt-1"))
+            .Returns(prompt);
+        _branchResolverServiceMock
+            .Setup(x => x.ResolveIssueBranchAsync(TestProject.Id, issueId))
+            .ReturnsAsync((string?)null);
+        _cloneServiceMock
+            .Setup(x => x.GetClonePathForBranchAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync((string?)null); // No existing clone
+        _fleeceIssuesSyncServiceMock
+            .Setup(x => x.PullFleeceOnlyAsync(TestProject.LocalPath, customBaseBranch, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new FleecePullResult(
+                Success: true,
+                ErrorMessage: null,
+                IssuesMerged: 0,
+                WasBehindRemote: false,
+                CommitsPulled: 0));
+        _cloneServiceMock
+            .Setup(x => x.CreateCloneAsync(TestProject.LocalPath, It.IsAny<string>(), true, customBaseBranch))
+            .ReturnsAsync("/path/to/new-clone");
+        _sessionServiceMock
+            .Setup(x => x.StartSessionAsync(
+                issueId, TestProject.Id, "/path/to/new-clone", SessionMode.Build, It.IsAny<string>(), null, default))
+            .ReturnsAsync(session);
+
+        var request = new RunAgentRequest
+        {
+            ProjectId = TestProject.Id,
+            PromptId = "prompt-1",
+            BaseBranch = customBaseBranch // Custom base branch provided
+        };
+
+        // Act
+        var result = await _controller.RunAgent(issueId, request);
+
+        // Assert
+        Assert.That(result.Result, Is.TypeOf<OkObjectResult>());
+
+        // Verify PullFleeceOnlyAsync was called with the custom base branch, not project.DefaultBranch
+        _fleeceIssuesSyncServiceMock.Verify(
+            x => x.PullFleeceOnlyAsync(TestProject.LocalPath, customBaseBranch, It.IsAny<CancellationToken>()),
+            Times.Once);
+
+        // Verify CreateCloneAsync was called with the custom base branch
+        _cloneServiceMock.Verify(
+            x => x.CreateCloneAsync(TestProject.LocalPath, It.IsAny<string>(), true, customBaseBranch),
+            Times.Once);
+    }
+
+    [Test]
+    public async Task RunAgent_PullsWithDefaultBranch_WhenNoBaseBranchProvided()
+    {
+        // Arrange
+        var issueId = "ABC123";
+        var issue = CreateTestIssue(issueId, "Test Issue");
+        var prompt = new AgentPrompt { Id = "prompt-1", Name = "Build", Mode = SessionMode.Build };
+        var session = new ClaudeSession
+        {
+            Id = "session-123",
+            EntityId = issueId,
+            ProjectId = TestProject.Id,
+            WorkingDirectory = "/path/to/new-clone",
+            Model = "sonnet",
+            Mode = SessionMode.Build
+        };
+
+        _projectServiceMock
+            .Setup(x => x.GetByIdAsync(TestProject.Id))
+            .ReturnsAsync(TestProject);
+        _fleeceServiceMock
+            .Setup(x => x.GetIssueAsync(TestProject.LocalPath, issueId))
+            .ReturnsAsync(issue);
+        _agentPromptServiceMock
+            .Setup(x => x.GetPrompt("prompt-1"))
+            .Returns(prompt);
+        _branchResolverServiceMock
+            .Setup(x => x.ResolveIssueBranchAsync(TestProject.Id, issueId))
+            .ReturnsAsync((string?)null);
+        _cloneServiceMock
+            .Setup(x => x.GetClonePathForBranchAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync((string?)null); // No existing clone
+        _fleeceIssuesSyncServiceMock
+            .Setup(x => x.PullFleeceOnlyAsync(TestProject.LocalPath, TestProject.DefaultBranch, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new FleecePullResult(
+                Success: true,
+                ErrorMessage: null,
+                IssuesMerged: 0,
+                WasBehindRemote: false,
+                CommitsPulled: 0));
+        _cloneServiceMock
+            .Setup(x => x.CreateCloneAsync(TestProject.LocalPath, It.IsAny<string>(), true, TestProject.DefaultBranch))
+            .ReturnsAsync("/path/to/new-clone");
+        _sessionServiceMock
+            .Setup(x => x.StartSessionAsync(
+                issueId, TestProject.Id, "/path/to/new-clone", SessionMode.Build, It.IsAny<string>(), null, default))
+            .ReturnsAsync(session);
+
+        var request = new RunAgentRequest
+        {
+            ProjectId = TestProject.Id,
+            PromptId = "prompt-1"
+            // No BaseBranch provided - should use project.DefaultBranch
+        };
+
+        // Act
+        var result = await _controller.RunAgent(issueId, request);
+
+        // Assert
+        Assert.That(result.Result, Is.TypeOf<OkObjectResult>());
+
+        // Verify PullFleeceOnlyAsync was called with project.DefaultBranch (which is "main")
+        _fleeceIssuesSyncServiceMock.Verify(
+            x => x.PullFleeceOnlyAsync(TestProject.LocalPath, TestProject.DefaultBranch, It.IsAny<CancellationToken>()),
+            Times.Once);
+
+        // Verify CreateCloneAsync was called with project.DefaultBranch
+        _cloneServiceMock.Verify(
+            x => x.CreateCloneAsync(TestProject.LocalPath, It.IsAny<string>(), true, TestProject.DefaultBranch),
             Times.Once);
     }
 
