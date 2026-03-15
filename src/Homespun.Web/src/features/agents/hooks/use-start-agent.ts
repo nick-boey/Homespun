@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Sessions } from '@/api'
 import type { ClaudeSession, CreateSessionRequest, SessionMode } from '@/api/generated/types.gen'
-import { sessionsQueryKey } from '@/features/sessions/hooks/use-sessions'
+import { invalidateAllSessionsQueries } from '@/features/sessions/hooks/use-sessions'
 import { useTelemetry } from '@/hooks/use-telemetry'
 import { useSessionSettingsStore, type ModelSelection } from '@/stores/session-settings-store'
 import { fromApiSessionMode } from '@/lib/utils/session-mode'
@@ -61,8 +61,8 @@ export function useStartAgent() {
         hasInitialMessage: params.initialMessage ? 'true' : 'false',
       })
 
-      // Invalidate sessions query to refresh the list
-      queryClient.invalidateQueries({ queryKey: sessionsQueryKey })
+      // Invalidate all session queries to refresh all session displays
+      invalidateAllSessionsQueries(queryClient)
     },
     onError: (error: Error, params) => {
       // Track failed agent launch

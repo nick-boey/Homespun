@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Issues } from '@/api'
 import type { RunAgentResponse } from '@/api/generated/types.gen'
-import { sessionsQueryKey } from '@/features/sessions/hooks/use-sessions'
+import { invalidateAllSessionsQueries } from '@/features/sessions/hooks/use-sessions'
 
 export interface RunAgentParams {
   /** The issue ID to run the agent on */
@@ -62,8 +62,8 @@ export function useRunAgent() {
       }
     },
     onSuccess: () => {
-      // Invalidate sessions query to refresh the list
-      queryClient.invalidateQueries({ queryKey: sessionsQueryKey })
+      // Invalidate all session queries to refresh all session displays
+      invalidateAllSessionsQueries(queryClient)
     },
   })
 }

@@ -1,7 +1,8 @@
-import { useState, useMemo, useEffect, useCallback } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { AlertCircle, RefreshCw, Terminal } from 'lucide-react'
 import { useEnrichedSessions } from '../hooks/use-enriched-sessions'
-import { useStopSession, sessionsQueryKey } from '../hooks/use-sessions'
+import { useStopSession } from '../hooks/use-sessions'
+import { useSessionsSignalR } from '../hooks/use-sessions-signalr'
 import { SessionCard } from './session-card'
 import { SessionsEmptyState } from './sessions-empty-state'
 import { SessionCardSkeleton } from './session-card-skeleton'
@@ -24,10 +25,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { useClaudeCodeHub } from '@/providers/signalr-provider'
-import { registerClaudeCodeHubEvents } from '@/lib/signalr/claude-code-hub'
 import { ClaudeSessionStatus } from '@/api'
-import { useQueryClient } from '@tanstack/react-query'
 
 type StatusFilter = 'all' | 'active' | 'stopped' | 'error'
 
@@ -45,34 +43,13 @@ function isActiveStatus(status: ClaudeSessionStatus | undefined): boolean {
 export function SessionsList() {
   const { sessions, isLoading, isError, refetch } = useEnrichedSessions()
   const stopSession = useStopSession()
-  const queryClient = useQueryClient()
-  const { connection, isConnected } = useClaudeCodeHub()
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [activeTab, setActiveTab] = useState<'active' | 'archived'>('active')
   const [sessionToStop, setSessionToStop] = useState<string | null>(null)
 
   // Subscribe to SignalR events for real-time updates
-  useEffect(() => {
-    if (!connection || !isConnected) return
-
-    const cleanup = registerClaudeCodeHubEvents(connection, {
-      onSessionStarted: () => {
-        queryClient.invalidateQueries({ queryKey: sessionsQueryKey })
-      },
-      onSessionStopped: () => {
-        queryClient.invalidateQueries({ queryKey: sessionsQueryKey })
-      },
-      onSessionStatusChanged: () => {
-        queryClient.invalidateQueries({ queryKey: sessionsQueryKey })
-      },
-      onSessionError: () => {
-        queryClient.invalidateQueries({ queryKey: sessionsQueryKey })
-      },
-    })
-
-    return cleanup
-  }, [connection, isConnected, queryClient])
+  useSessionsSignalR()
 
   const handleStopSession = useCallback(
     (sessionId: string) => {
