@@ -17,5 +17,6 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     restoreMocks: true,
+    exclude: ['**/live/**', '**/node_modules/**'],
   },
 });
