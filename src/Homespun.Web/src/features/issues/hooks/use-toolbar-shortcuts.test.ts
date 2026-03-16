@@ -203,4 +203,34 @@ describe('useToolbarShortcuts', () => {
     dispatchKeyDown('u')
     expect(callbacksWithEnabled.onUndo).toHaveBeenCalled()
   })
+
+  it('calls onToggleFilter when f is pressed', () => {
+    const onToggleFilter = vi.fn()
+    renderHook(() => useToolbarShortcuts({ ...callbacks, onToggleFilter }))
+
+    dispatchKeyDown('f')
+    expect(onToggleFilter).toHaveBeenCalled()
+  })
+
+  it('does not call onToggleFilter when f is pressed with shift', () => {
+    const onToggleFilter = vi.fn()
+    renderHook(() => useToolbarShortcuts({ ...callbacks, onToggleFilter }))
+
+    dispatchKeyDown('f', { shiftKey: true })
+    expect(onToggleFilter).not.toHaveBeenCalled()
+  })
+
+  it('does not call onToggleFilter when f is pressed with ctrl', () => {
+    const onToggleFilter = vi.fn()
+    renderHook(() => useToolbarShortcuts({ ...callbacks, onToggleFilter }))
+
+    dispatchKeyDown('f', { ctrlKey: true })
+    expect(onToggleFilter).not.toHaveBeenCalled()
+  })
+
+  it('does nothing when onToggleFilter is undefined and f is pressed', () => {
+    // Just ensure it doesn't throw
+    renderHook(() => useToolbarShortcuts(callbacks))
+    expect(() => dispatchKeyDown('f')).not.toThrow()
+  })
 })

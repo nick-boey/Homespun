@@ -29,6 +29,8 @@ import {
   isSeparatorRenderLine,
   isLoadMoreRenderLine,
   computeInheritedParentInfo,
+  applyFilter,
+  type ParsedFilter,
 } from '../services'
 import { useTaskGraph, taskGraphQueryKey, useCreateIssue, useUpdateIssue } from '../hooks'
 import {
@@ -64,6 +66,10 @@ export interface TaskGraphViewProps {
   onMoveComplete?: (targetIssueId: string) => void
   /** Called when move operation is cancelled */
   onMoveCancel?: () => void
+  /** Applied filter for client-side filtering */
+  appliedFilter?: ParsedFilter | null
+  /** Called when filter match count changes */
+  onFilterMatchCountChange?: (count: number) => void
   className?: string
 }
 
@@ -100,6 +106,8 @@ export const TaskGraphView = memo(
       moveSourceIssueId,
       onMoveComplete,
       onMoveCancel,
+      appliedFilter,
+      onFilterMatchCountChange,
       className,
     },
     ref
@@ -139,10 +147,46 @@ export const TaskGraphView = memo(
     })
 
     // Compute render lines from task graph
-    const renderLines = useMemo(() => {
+    const unfilteredRenderLines = useMemo(() => {
       if (!taskGraph) return []
       return computeLayout(taskGraph, depth)
     }, [taskGraph, depth])
+
+    // Build a lookup of issue IDs to their full issue data for filtering
+    const issueDataMap = useMemo(() => {
+      if (!taskGraph?.nodes) return new Map()
+      const map = new Map()
+      for (const node of taskGraph.nodes) {
+        if (node.issue) {
+          map.set(node.issue.id, node.issue)
+        }
+      }
+      return map
+    }, [taskGraph])
+
+    // Apply filter to render lines (keeping separators and PRs for context)
+    const renderLines = useMemo(() => {
+      if (!appliedFilter) return unfilteredRenderLines
+
+      return unfilteredRenderLines.filter((line) => {
+        // Always keep non-issue lines (PRs, separators, load more)
+        if (!isIssueRenderLine(line)) return true
+
+        // Get the full issue data for filtering
+        const issueData = issueDataMap.get(line.issueId)
+        if (!issueData) return true // Keep if we can't find the issue
+
+        return applyFilter(issueData, appliedFilter)
+      })
+    }, [unfilteredRenderLines, appliedFilter, issueDataMap])
+
+    // Report filter match count
+    useEffect(() => {
+      if (!appliedFilter || !onFilterMatchCountChange) return
+
+      const matchCount = renderLines.filter(isIssueRenderLine).length
+      onFilterMatchCountChange(matchCount)
+    }, [renderLines, appliedFilter, onFilterMatchCountChange])
 
     // Compute max lanes for SVG sizing
     const maxLanes = useMemo(() => {

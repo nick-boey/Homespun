@@ -12,6 +12,7 @@ export interface ToolbarShortcutCallbacks {
   onNextMatch: () => void
   onPreviousMatch: () => void
   onEmbedSearch: () => void
+  onToggleFilter?: () => void
   canUndo?: boolean
   canRedo?: boolean
 }
@@ -39,6 +40,7 @@ export function useToolbarShortcuts(callbacks: ToolbarShortcutCallbacks) {
     onFocusSearch,
     onNextMatch,
     onPreviousMatch,
+    onToggleFilter,
     canUndo = true,
     canRedo = true,
   } = callbacks
@@ -134,6 +136,15 @@ export function useToolbarShortcuts(callbacks: ToolbarShortcutCallbacks) {
         onNextMatch()
         return
       }
+
+      // Toggle filter: f
+      if (!shiftKey && !ctrlKey && !metaKey && key === 'f') {
+        if (onToggleFilter) {
+          event.preventDefault()
+          onToggleFilter()
+        }
+        return
+      }
     },
     [
       onCreateAbove,
@@ -146,6 +157,7 @@ export function useToolbarShortcuts(callbacks: ToolbarShortcutCallbacks) {
       onFocusSearch,
       onNextMatch,
       onPreviousMatch,
+      onToggleFilter,
       canUndo,
       canRedo,
     ]

@@ -422,6 +422,110 @@ describe('ProjectToolbar', () => {
     })
   })
 
+  describe('Filter button', () => {
+    it('renders filter button', () => {
+      renderToolbar()
+      expect(screen.getByRole('button', { name: /filter issues/i })).toBeInTheDocument()
+    })
+
+    it('calls onToggleFilter when filter button is clicked', async () => {
+      const user = userEvent.setup()
+      const onToggleFilter = vi.fn()
+      renderToolbar({ onToggleFilter })
+
+      await user.click(screen.getByRole('button', { name: /filter issues/i }))
+      expect(onToggleFilter).toHaveBeenCalled()
+    })
+
+    it('shows active ring when filterActive is true', () => {
+      renderToolbar({ filterActive: true })
+      const filterButton = screen.getByRole('button', { name: /filter issues/i })
+      expect(filterButton).toHaveClass('ring-2')
+    })
+
+    it('shows match count badge when filter is active with query', () => {
+      renderToolbar({ filterActive: true, filterQuery: 'status:open', filterMatchCount: 5 })
+      expect(screen.getByTestId('filter-match-count')).toHaveTextContent('5')
+    })
+
+    it('does not show match count badge when filter query is empty', () => {
+      renderToolbar({ filterActive: true, filterQuery: '', filterMatchCount: 5 })
+      expect(screen.queryByTestId('filter-match-count')).not.toBeInTheDocument()
+    })
+  })
+
+  describe('Filter panel', () => {
+    it('does not render filter panel when filterActive is false', () => {
+      renderToolbar({ filterActive: false })
+      expect(screen.queryByTestId('filter-panel')).not.toBeInTheDocument()
+    })
+
+    it('renders filter panel when filterActive is true', () => {
+      renderToolbar({ filterActive: true })
+      expect(screen.getByTestId('filter-panel')).toBeInTheDocument()
+    })
+
+    it('renders filter input', () => {
+      renderToolbar({ filterActive: true })
+      expect(screen.getByTestId('filter-input')).toBeInTheDocument()
+    })
+
+    it('displays filter query value', () => {
+      renderToolbar({ filterActive: true, filterQuery: 'status:open' })
+      expect(screen.getByTestId('filter-input')).toHaveValue('status:open')
+    })
+
+    it('calls onFilterChange when filter input changes', async () => {
+      const user = userEvent.setup()
+      const onFilterChange = vi.fn()
+      renderToolbar({ filterActive: true, onFilterChange })
+
+      await user.type(screen.getByTestId('filter-input'), 'test')
+      expect(onFilterChange).toHaveBeenCalled()
+    })
+
+    it('calls onApplyFilter when Enter is pressed', async () => {
+      const user = userEvent.setup()
+      const onApplyFilter = vi.fn()
+      renderToolbar({ filterActive: true, onApplyFilter })
+
+      const filterInput = screen.getByTestId('filter-input')
+      await user.click(filterInput)
+      await user.keyboard('{Enter}')
+      expect(onApplyFilter).toHaveBeenCalled()
+    })
+
+    it('calls onToggleFilter when Escape is pressed', async () => {
+      const user = userEvent.setup()
+      const onToggleFilter = vi.fn()
+      renderToolbar({ filterActive: true, onToggleFilter })
+
+      const filterInput = screen.getByTestId('filter-input')
+      await user.click(filterInput)
+      await user.keyboard('{Escape}')
+      expect(onToggleFilter).toHaveBeenCalled()
+    })
+
+    it('renders close button in filter panel', () => {
+      renderToolbar({ filterActive: true })
+      expect(screen.getByTestId('filter-close-button')).toBeInTheDocument()
+    })
+
+    it('calls onToggleFilter when close button is clicked', async () => {
+      const user = userEvent.setup()
+      const onToggleFilter = vi.fn()
+      renderToolbar({ filterActive: true, onToggleFilter })
+
+      await user.click(screen.getByTestId('filter-close-button'))
+      expect(onToggleFilter).toHaveBeenCalled()
+    })
+
+    it('renders filter help button', () => {
+      renderToolbar({ filterActive: true })
+      expect(screen.getByTestId('filter-help-button')).toBeInTheDocument()
+    })
+  })
+
   describe('Toolbar layout', () => {
     it('has sticky positioning class', () => {
       renderToolbar()
