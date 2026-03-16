@@ -48,25 +48,21 @@ public static class TimelineSvgRenderer
     /// Maps agent status to ring color based on status value.
     /// Returns null if no ring should be shown.
     /// </summary>
-    private static string? GetAgentStatusColor(string status)
+    private static string? GetAgentStatusColor(ClaudeSessionStatus status)
     {
-        if (Enum.TryParse<ClaudeSessionStatus>(status, out var sessionStatus))
+        return status switch
         {
-            return sessionStatus switch
-            {
-                ClaudeSessionStatus.Starting or
-                ClaudeSessionStatus.RunningHooks or
-                ClaudeSessionStatus.Running => "#3b82f6", // Blue
+            ClaudeSessionStatus.Starting or
+            ClaudeSessionStatus.RunningHooks or
+            ClaudeSessionStatus.Running => "#3b82f6", // Blue
 
-                ClaudeSessionStatus.WaitingForInput or
-                ClaudeSessionStatus.WaitingForQuestionAnswer or
-                ClaudeSessionStatus.WaitingForPlanExecution => "#eab308", // Yellow
+            ClaudeSessionStatus.WaitingForInput or
+            ClaudeSessionStatus.WaitingForQuestionAnswer or
+            ClaudeSessionStatus.WaitingForPlanExecution => "#eab308", // Yellow
 
-                ClaudeSessionStatus.Error => "#ef4444", // Red
-                _ => null // No ring for Stopped or unknown status
-            };
-        }
-        return null;
+            ClaudeSessionStatus.Error => "#ef4444", // Red
+            _ => null // No ring for Stopped or unknown status
+        };
     }
 
     public static string GenerateDividerRowSvg(

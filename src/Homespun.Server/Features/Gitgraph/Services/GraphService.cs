@@ -432,7 +432,7 @@ public class GraphService(
         return new AgentStatusData
         {
             IsActive = session.Status.IsActive(),
-            Status = session.Status.ToString(),
+            Status = session.Status,
             SessionId = session.Id
         };
     }

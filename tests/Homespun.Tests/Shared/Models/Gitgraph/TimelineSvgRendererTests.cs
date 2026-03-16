@@ -42,7 +42,7 @@ public class TimelineSvgRendererTests
         var agentStatus = new AgentStatusData
         {
             IsActive = false,
-            Status = ClaudeSessionStatus.Running.ToString(),
+            Status = ClaudeSessionStatus.Running,
             SessionId = "test-session"
         };
 
@@ -72,7 +72,7 @@ public class TimelineSvgRendererTests
         var agentStatus = new AgentStatusData
         {
             IsActive = true,
-            Status = status.ToString(),
+            Status = status,
             SessionId = "test-session"
         };
 
@@ -105,7 +105,7 @@ public class TimelineSvgRendererTests
         var agentStatus = new AgentStatusData
         {
             IsActive = true,
-            Status = status.ToString(),
+            Status = status,
             SessionId = "test-session"
         };
 
@@ -135,7 +135,7 @@ public class TimelineSvgRendererTests
         var agentStatus = new AgentStatusData
         {
             IsActive = true,
-            Status = ClaudeSessionStatus.Error.ToString(),
+            Status = ClaudeSessionStatus.Error,
             SessionId = "test-session"
         };
 
@@ -165,34 +165,7 @@ public class TimelineSvgRendererTests
         var agentStatus = new AgentStatusData
         {
             IsActive = true,
-            Status = ClaudeSessionStatus.Stopped.ToString(),
-            SessionId = "test-session"
-        };
-
-        // Act
-        var svg = TimelineSvgRenderer.GenerateTaskGraphCircleSvg(
-            nodeLane: TestNodeLane,
-            parentLane: null,
-            isFirstChild: false,
-            maxLanes: TestMaxLanes,
-            nodeColor: TestNodeColor,
-            isOutlineOnly: false,
-            isActionable: false,
-            agentStatus: agentStatus);
-
-        // Assert - Should only have the main node circle, no ring
-        var circleCount = CountSvgElements(svg, "circle");
-        Assert.That(circleCount, Is.EqualTo(1), "Should only render the main node circle");
-    }
-
-    [Test]
-    public void GenerateTaskGraphCircleSvg_WithInvalidStatus_DoesNotRenderRing()
-    {
-        // Arrange
-        var agentStatus = new AgentStatusData
-        {
-            IsActive = true,
-            Status = "InvalidStatus",
+            Status = ClaudeSessionStatus.Stopped,
             SessionId = "test-session"
         };
 
@@ -219,7 +192,7 @@ public class TimelineSvgRendererTests
         var agentStatus = new AgentStatusData
         {
             IsActive = true,
-            Status = ClaudeSessionStatus.Running.ToString(),
+            Status = ClaudeSessionStatus.Running,
             SessionId = "test-session"
         };
 
@@ -247,7 +220,7 @@ public class TimelineSvgRendererTests
         var agentStatus = new AgentStatusData
         {
             IsActive = true,
-            Status = ClaudeSessionStatus.Running.ToString(),
+            Status = ClaudeSessionStatus.Running,
             SessionId = "test-session"
         };
 
@@ -273,7 +246,7 @@ public class TimelineSvgRendererTests
         var agentStatus = new AgentStatusData
         {
             IsActive = true,
-            Status = ClaudeSessionStatus.Running.ToString(),
+            Status = ClaudeSessionStatus.Running,
             SessionId = "test-session"
         };
 
