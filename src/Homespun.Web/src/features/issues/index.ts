@@ -66,3 +66,4 @@ export {
 } from './services'
 export { getPriorityColor } from './services'
 export { generateBranchName } from './services'
+export { parseFilterQuery, applyFilter, type ParsedFilter } from './services'

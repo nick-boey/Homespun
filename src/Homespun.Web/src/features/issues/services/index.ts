@@ -21,3 +21,6 @@ export { generateBranchName } from './branch-name'
 
 // Inherited parent computation
 export { computeInheritedParentInfo, type InheritedParentInfo } from './inherited-parent'
+
+// Filter query parser
+export { parseFilterQuery, applyFilter, type ParsedFilter } from './filter-query-parser'

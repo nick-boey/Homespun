@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useMemo } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -9,6 +9,7 @@ import {
   type TaskGraphViewRef,
 } from '@/features/issues'
 import { MoveOperationType } from '@/features/issues/types'
+import { parseFilterQuery, type ParsedFilter } from '@/features/issues/services'
 import { AgentLauncherDialog } from '@/features/agents'
 import { AssignIssueDialog } from '@/features/issues/components/assign-issue-popover'
 import { Issues } from '@/api'
@@ -25,6 +26,9 @@ function IssuesList() {
   // Ref to TaskGraphView for imperative actions
   const taskGraphRef = useRef<TaskGraphViewRef>(null)
 
+  // Ref to filter input for focus management
+  const filterInputRef = useRef<HTMLInputElement>(null)
+
   // State
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null)
   const [depth, setDepth] = useState(3)
@@ -32,6 +36,20 @@ function IssuesList() {
 
   // Compute search match count from rendered issues
   const [searchMatchCount] = useState(0)
+
+  // Filter state
+  const [filterActive, setFilterActive] = useState(false)
+  const [filterQuery, setFilterQuery] = useState('')
+  const [appliedFilterQuery, setAppliedFilterQuery] = useState('')
+
+  // Parse the applied filter query
+  const appliedFilter: ParsedFilter | null = useMemo(() => {
+    if (!appliedFilterQuery.trim()) return null
+    return parseFilterQuery(appliedFilterQuery)
+  }, [appliedFilterQuery])
+
+  // Filter match count (will be updated by TaskGraphView)
+  const [filterMatchCount, setFilterMatchCount] = useState(0)
 
   // Agent launcher dialog state
   const [agentLauncherOpen, setAgentLauncherOpen] = useState(false)
@@ -174,6 +192,32 @@ function IssuesList() {
     console.log('Embed search')
   }, [])
 
+  // Filter handlers
+  const handleToggleFilter = useCallback(() => {
+    setFilterActive((prev) => {
+      const newState = !prev
+      if (newState) {
+        // Opening filter panel - focus the input after render
+        setTimeout(() => {
+          filterInputRef.current?.focus()
+        }, 0)
+      } else {
+        // Closing filter panel - clear the filter
+        setFilterQuery('')
+        setAppliedFilterQuery('')
+      }
+      return newState
+    })
+  }, [])
+
+  const handleFilterChange = useCallback((query: string) => {
+    setFilterQuery(query)
+  }, [])
+
+  const handleApplyFilter = useCallback(() => {
+    setAppliedFilterQuery(filterQuery)
+  }, [filterQuery])
+
   // Register keyboard shortcuts
   useToolbarShortcuts({
     onCreateAbove: handleCreateAbove,
@@ -187,6 +231,7 @@ function IssuesList() {
     onNextMatch: handleNextMatch,
     onPreviousMatch: handlePreviousMatch,
     onEmbedSearch: handleEmbedSearch,
+    onToggleFilter: handleToggleFilter,
   })
 
   return (
@@ -212,6 +257,13 @@ function IssuesList() {
         onNextMatch={handleNextMatch}
         onPreviousMatch={handlePreviousMatch}
         onEmbedSearch={handleEmbedSearch}
+        filterActive={filterActive}
+        filterQuery={filterQuery}
+        onToggleFilter={handleToggleFilter}
+        onFilterChange={handleFilterChange}
+        onApplyFilter={handleApplyFilter}
+        filterMatchCount={filterMatchCount}
+        filterInputRef={filterInputRef}
       />
 
       {/* Task Graph View */}
@@ -229,6 +281,8 @@ function IssuesList() {
           moveSourceIssueId={moveSourceIssueId}
           onMoveComplete={handleMoveComplete}
           onMoveCancel={handleMoveCancel}
+          appliedFilter={appliedFilter}
+          onFilterMatchCountChange={setFilterMatchCount}
         />
       </div>
 
