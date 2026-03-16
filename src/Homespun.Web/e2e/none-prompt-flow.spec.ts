@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test'
 
 test.describe('None Prompt Flow', () => {
+  // Each test uses a different issue to avoid conflicts from concurrent agent prevention
   test('None option is always available in agent launcher dialog', async ({ page }) => {
     // Navigate to projects page
     await page.goto('/projects')
@@ -8,8 +9,12 @@ test.describe('None Prompt Flow', () => {
     // Click on the first project
     await page.locator('[data-testid="project-card-link"]').first().click()
 
-    // Click on the first issue to select it
-    await page.locator('[data-testid="task-graph-issue-row"]').first().click()
+    // Select "Add dark mode support" issue to avoid conflicts with other tests
+    await page
+      .locator('[data-testid="task-graph-issue-row"]')
+      .filter({ hasText: 'Add dark mode support' })
+      .first()
+      .click()
 
     // Click the run agent button
     await page.click('[data-testid="toolbar-run-agent"]')
@@ -36,8 +41,12 @@ test.describe('None Prompt Flow', () => {
     // Click on the first project
     await page.locator('[data-testid="project-card-link"]').first().click()
 
-    // Click on the first issue to select it
-    await page.locator('[data-testid="task-graph-issue-row"]').first().click()
+    // Select "Improve mobile responsiveness" issue to avoid conflicts with other tests
+    await page
+      .locator('[data-testid="task-graph-issue-row"]')
+      .filter({ hasText: 'Improve mobile responsiveness' })
+      .first()
+      .click()
 
     // Click the run agent button
     await page.click('[data-testid="toolbar-run-agent"]')
@@ -71,8 +80,12 @@ test.describe('None Prompt Flow', () => {
     // Click on the first project
     await page.locator('[data-testid="project-card-link"]').first().click()
 
-    // Click on the first issue to select it
-    await page.locator('[data-testid="task-graph-issue-row"]').first().click()
+    // Select "Fix login timeout bug" issue to avoid conflicts with other tests
+    await page
+      .locator('[data-testid="task-graph-issue-row"]')
+      .filter({ hasText: 'Fix login timeout bug' })
+      .first()
+      .click()
 
     // Click the run agent button
     await page.click('[data-testid="toolbar-run-agent"]')

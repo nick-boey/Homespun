@@ -71,7 +71,7 @@ export const InlineIssueDetailRow = memo(function InlineIssueDetailRow({
     if (line.agentStatus?.sessionId) {
       onOpenSession?.(line.agentStatus.sessionId)
     }
-  }, [onOpenSession, line.agentStatus?.sessionId])
+  }, [onOpenSession, line.agentStatus])
 
   // Determine if an agent session is active on this issue
   const hasActiveSession = useMemo(
