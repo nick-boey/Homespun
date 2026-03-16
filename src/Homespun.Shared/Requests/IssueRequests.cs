@@ -1,4 +1,5 @@
 using Fleece.Core.Models;
+using Homespun.Shared.Models.Sessions;
 
 namespace Homespun.Shared.Requests;
 
@@ -215,4 +216,25 @@ public class RunAgentResponse
     /// The clone path where the agent is working.
     /// </summary>
     public required string ClonePath { get; set; }
+}
+
+/// <summary>
+/// Response model when an agent is already running on the issue.
+/// </summary>
+public class AgentAlreadyRunningResponse
+{
+    /// <summary>
+    /// The existing session ID.
+    /// </summary>
+    public required string SessionId { get; set; }
+
+    /// <summary>
+    /// The status of the existing session.
+    /// </summary>
+    public required ClaudeSessionStatus Status { get; set; }
+
+    /// <summary>
+    /// A human-readable message explaining why the request was rejected.
+    /// </summary>
+    public required string Message { get; set; }
 }

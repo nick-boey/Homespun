@@ -58,6 +58,8 @@ export interface TaskGraphViewProps {
   onSelectIssue?: (issueId: string | null) => void
   onEditIssue?: (issueId: string) => void
   onRunAgent?: (issueId: string) => void
+  /** Called when clicking the Open Session button to navigate to an existing session */
+  onOpenSession?: (sessionId: string) => void
   /** Active move operation type (AsChildOf or AsParentOf) */
   moveOperation?: MoveOperationType | null
   /** Source issue ID for the move operation */
@@ -102,6 +104,7 @@ export const TaskGraphView = memo(
       onSelectIssue,
       onEditIssue,
       onRunAgent,
+      onOpenSession,
       moveOperation,
       moveSourceIssueId,
       onMoveComplete,
@@ -1017,6 +1020,7 @@ export const TaskGraphView = memo(
                     onToggleExpand={() => toggleExpanded(line.issueId)}
                     onEdit={onEditIssue}
                     onRunAgent={onRunAgent}
+                    onOpenSession={onOpenSession}
                     onClick={() => handleRowClick(line.issueId)}
                     onTypeChange={handleTypeChange}
                     onStatusChange={handleStatusChange}
@@ -1036,6 +1040,7 @@ export const TaskGraphView = memo(
                     maxLanes={maxLanes}
                     onEdit={onEditIssue}
                     onRunAgent={onRunAgent}
+                    onOpenSession={onOpenSession}
                     onClose={() => toggleExpanded(line.issueId)}
                   />
                 )}

@@ -1066,6 +1066,201 @@ public class IssuesControllerTests
             Times.Once);
     }
 
+    [Test]
+    public async Task RunAgent_ReturnsConflict_WhenActiveSessionExists()
+    {
+        // Arrange
+        var issueId = "ABC123";
+        var issue = CreateTestIssue(issueId, "Test Issue");
+        var existingSession = new ClaudeSession
+        {
+            Id = "existing-session-123",
+            EntityId = issueId,
+            ProjectId = TestProject.Id,
+            WorkingDirectory = "/path/to/clone",
+            Model = "sonnet",
+            Mode = SessionMode.Build,
+            Status = ClaudeSessionStatus.Running // Active status
+        };
+
+        _projectServiceMock
+            .Setup(x => x.GetByIdAsync(TestProject.Id))
+            .ReturnsAsync(TestProject);
+        _fleeceServiceMock
+            .Setup(x => x.GetIssueAsync(TestProject.LocalPath, issueId))
+            .ReturnsAsync(issue);
+        _sessionServiceMock
+            .Setup(x => x.GetSessionByEntityId(issueId))
+            .Returns(existingSession);
+
+        var request = new RunAgentRequest { ProjectId = TestProject.Id, PromptId = "prompt-1" };
+
+        // Act
+        var result = await _controller.RunAgent(issueId, request);
+
+        // Assert
+        Assert.That(result.Result, Is.TypeOf<ConflictObjectResult>());
+        var conflictResult = (ConflictObjectResult)result.Result!;
+        var response = (AgentAlreadyRunningResponse)conflictResult.Value!;
+        Assert.That(response.SessionId, Is.EqualTo("existing-session-123"));
+        Assert.That(response.Status, Is.EqualTo(ClaudeSessionStatus.Running));
+        Assert.That(response.Message, Is.EqualTo("An agent is already running on this issue"));
+    }
+
+    [Test]
+    public async Task RunAgent_Succeeds_WhenNoActiveSessionExists()
+    {
+        // Arrange
+        var issueId = "ABC123";
+        var issue = CreateTestIssue(issueId, "Test Issue");
+        var prompt = new AgentPrompt { Id = "prompt-1", Name = "Build", Mode = SessionMode.Build };
+        var session = new ClaudeSession
+        {
+            Id = "session-123",
+            EntityId = issueId,
+            ProjectId = TestProject.Id,
+            WorkingDirectory = "/path/to/clone",
+            Model = "sonnet",
+            Mode = SessionMode.Build
+        };
+
+        _projectServiceMock
+            .Setup(x => x.GetByIdAsync(TestProject.Id))
+            .ReturnsAsync(TestProject);
+        _fleeceServiceMock
+            .Setup(x => x.GetIssueAsync(TestProject.LocalPath, issueId))
+            .ReturnsAsync(issue);
+        _sessionServiceMock
+            .Setup(x => x.GetSessionByEntityId(issueId))
+            .Returns((ClaudeSession?)null); // No existing session
+        _agentPromptServiceMock
+            .Setup(x => x.GetPrompt("prompt-1"))
+            .Returns(prompt);
+        _branchResolverServiceMock
+            .Setup(x => x.ResolveIssueBranchAsync(TestProject.Id, issueId))
+            .ReturnsAsync((string?)null);
+        _cloneServiceMock
+            .Setup(x => x.GetClonePathForBranchAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync("/path/to/clone");
+        _sessionServiceMock
+            .Setup(x => x.StartSessionAsync(
+                issueId, TestProject.Id, "/path/to/clone", SessionMode.Build, It.IsAny<string>(), null, default))
+            .ReturnsAsync(session);
+
+        var request = new RunAgentRequest { ProjectId = TestProject.Id, PromptId = "prompt-1" };
+
+        // Act
+        var result = await _controller.RunAgent(issueId, request);
+
+        // Assert
+        Assert.That(result.Result, Is.TypeOf<OkObjectResult>());
+        var okResult = (OkObjectResult)result.Result!;
+        var response = (RunAgentResponse)okResult.Value!;
+        Assert.That(response.SessionId, Is.EqualTo("session-123"));
+    }
+
+    [Test]
+    public async Task RunAgent_Succeeds_WhenSessionExistsButStopped()
+    {
+        // Arrange
+        var issueId = "ABC123";
+        var issue = CreateTestIssue(issueId, "Test Issue");
+        var stoppedSession = new ClaudeSession
+        {
+            Id = "stopped-session-123",
+            EntityId = issueId,
+            ProjectId = TestProject.Id,
+            WorkingDirectory = "/path/to/clone",
+            Model = "sonnet",
+            Mode = SessionMode.Build,
+            Status = ClaudeSessionStatus.Stopped // Not active
+        };
+        var prompt = new AgentPrompt { Id = "prompt-1", Name = "Build", Mode = SessionMode.Build };
+        var newSession = new ClaudeSession
+        {
+            Id = "new-session-456",
+            EntityId = issueId,
+            ProjectId = TestProject.Id,
+            WorkingDirectory = "/path/to/clone",
+            Model = "sonnet",
+            Mode = SessionMode.Build
+        };
+
+        _projectServiceMock
+            .Setup(x => x.GetByIdAsync(TestProject.Id))
+            .ReturnsAsync(TestProject);
+        _fleeceServiceMock
+            .Setup(x => x.GetIssueAsync(TestProject.LocalPath, issueId))
+            .ReturnsAsync(issue);
+        _sessionServiceMock
+            .Setup(x => x.GetSessionByEntityId(issueId))
+            .Returns(stoppedSession); // Session exists but is stopped
+        _agentPromptServiceMock
+            .Setup(x => x.GetPrompt("prompt-1"))
+            .Returns(prompt);
+        _branchResolverServiceMock
+            .Setup(x => x.ResolveIssueBranchAsync(TestProject.Id, issueId))
+            .ReturnsAsync((string?)null);
+        _cloneServiceMock
+            .Setup(x => x.GetClonePathForBranchAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync("/path/to/clone");
+        _sessionServiceMock
+            .Setup(x => x.StartSessionAsync(
+                issueId, TestProject.Id, "/path/to/clone", SessionMode.Build, It.IsAny<string>(), null, default))
+            .ReturnsAsync(newSession);
+
+        var request = new RunAgentRequest { ProjectId = TestProject.Id, PromptId = "prompt-1" };
+
+        // Act
+        var result = await _controller.RunAgent(issueId, request);
+
+        // Assert - should succeed because the existing session is stopped
+        Assert.That(result.Result, Is.TypeOf<OkObjectResult>());
+        var okResult = (OkObjectResult)result.Result!;
+        var response = (RunAgentResponse)okResult.Value!;
+        Assert.That(response.SessionId, Is.EqualTo("new-session-456"));
+    }
+
+    [Test]
+    public async Task RunAgent_ReturnsConflict_WhenSessionIsWaitingForInput()
+    {
+        // Arrange
+        var issueId = "ABC123";
+        var issue = CreateTestIssue(issueId, "Test Issue");
+        var waitingSession = new ClaudeSession
+        {
+            Id = "waiting-session-123",
+            EntityId = issueId,
+            ProjectId = TestProject.Id,
+            WorkingDirectory = "/path/to/clone",
+            Model = "sonnet",
+            Mode = SessionMode.Build,
+            Status = ClaudeSessionStatus.WaitingForInput // Still active
+        };
+
+        _projectServiceMock
+            .Setup(x => x.GetByIdAsync(TestProject.Id))
+            .ReturnsAsync(TestProject);
+        _fleeceServiceMock
+            .Setup(x => x.GetIssueAsync(TestProject.LocalPath, issueId))
+            .ReturnsAsync(issue);
+        _sessionServiceMock
+            .Setup(x => x.GetSessionByEntityId(issueId))
+            .Returns(waitingSession);
+
+        var request = new RunAgentRequest { ProjectId = TestProject.Id, PromptId = "prompt-1" };
+
+        // Act
+        var result = await _controller.RunAgent(issueId, request);
+
+        // Assert
+        Assert.That(result.Result, Is.TypeOf<ConflictObjectResult>());
+        var conflictResult = (ConflictObjectResult)result.Result!;
+        var response = (AgentAlreadyRunningResponse)conflictResult.Value!;
+        Assert.That(response.SessionId, Is.EqualTo("waiting-session-123"));
+        Assert.That(response.Status, Is.EqualTo(ClaudeSessionStatus.WaitingForInput));
+    }
+
     #endregion
 
     #region Update Auto-Assign Tests

@@ -171,6 +171,14 @@ function IssuesList() {
     setAgentLauncherOpen(true)
   }, [])
 
+  // Handler for opening an existing session
+  const handleOpenSession = useCallback(
+    (sessionId: string) => {
+      navigate({ to: '/sessions/$sessionId', params: { sessionId } })
+    },
+    [navigate]
+  )
+
   const handleFocusSearch = useCallback(() => {
     // Focus the search input in toolbar
     const searchInput = document.querySelector<HTMLInputElement>('input[type="search"]')
@@ -277,6 +285,7 @@ function IssuesList() {
           onSelectIssue={setSelectedIssueId}
           onEditIssue={handleEditIssue}
           onRunAgent={handleRunAgent}
+          onOpenSession={handleOpenSession}
           moveOperation={moveOperation}
           moveSourceIssueId={moveSourceIssueId}
           onMoveComplete={handleMoveComplete}

@@ -2,7 +2,7 @@
  * InlineIssueDetailRow - Expanded inline details for an issue in the task graph.
  */
 
-import { memo, useCallback, useState } from 'react'
+import { memo, useCallback, useState, useMemo } from 'react'
 import { Copy, Pencil, Play, X, ExternalLink } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { IssueStatus } from '@/api'
@@ -25,6 +25,8 @@ export interface InlineIssueDetailRowProps {
   maxLanes: number
   onEdit?: (issueId: string) => void
   onRunAgent?: (issueId: string) => void
+  /** Called when clicking the Open Session button to navigate to an existing session */
+  onOpenSession?: (sessionId: string) => void
   onClose?: () => void
 }
 
@@ -37,6 +39,7 @@ export const InlineIssueDetailRow = memo(function InlineIssueDetailRow({
   maxLanes,
   onEdit,
   onRunAgent,
+  onOpenSession,
   onClose,
 }: InlineIssueDetailRowProps) {
   const [copied, setCopied] = useState(false)
@@ -63,6 +66,18 @@ export const InlineIssueDetailRow = memo(function InlineIssueDetailRow({
   const handleRunAgent = useCallback(() => {
     onRunAgent?.(line.issueId)
   }, [onRunAgent, line.issueId])
+
+  const handleOpenSession = useCallback(() => {
+    if (line.agentStatus?.sessionId) {
+      onOpenSession?.(line.agentStatus.sessionId)
+    }
+  }, [onOpenSession, line.agentStatus?.sessionId])
+
+  // Determine if an agent session is active on this issue
+  const hasActiveSession = useMemo(
+    () => line.agentStatus?.isActive && line.agentStatus.sessionId,
+    [line.agentStatus?.isActive, line.agentStatus?.sessionId]
+  )
 
   return (
     <div
@@ -204,16 +219,29 @@ export const InlineIssueDetailRow = memo(function InlineIssueDetailRow({
           <Pencil className="mr-1.5 h-4 w-4" />
           Edit
         </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleRunAgent}
-          aria-label="Run Agent"
-          className="min-h-[44px] px-4"
-        >
-          <Play className="mr-1.5 h-4 w-4" />
-          Run Agent
-        </Button>
+        {hasActiveSession ? (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleOpenSession}
+            aria-label="Open Session"
+            className="min-h-[44px] px-4"
+          >
+            <ExternalLink className="mr-1.5 h-4 w-4" />
+            Open Session
+          </Button>
+        ) : (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRunAgent}
+            aria-label="Run Agent"
+            className="min-h-[44px] px-4"
+          >
+            <Play className="mr-1.5 h-4 w-4" />
+            Run Agent
+          </Button>
+        )}
       </div>
     </div>
   )
