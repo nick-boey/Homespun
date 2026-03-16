@@ -1,3 +1,5 @@
+using Homespun.Shared.Models.Sessions;
+
 namespace Homespun.Shared.Models.Gitgraph;
 
 /// <summary>
@@ -11,9 +13,9 @@ public class AgentStatusData
     public bool IsActive { get; set; }
 
     /// <summary>
-    /// The session status (e.g., "Running", "WaitingForInput", "Starting").
+    /// The session status.
     /// </summary>
-    public required string Status { get; set; }
+    public required ClaudeSessionStatus Status { get; set; }
 
     /// <summary>
     /// The session ID for reference.

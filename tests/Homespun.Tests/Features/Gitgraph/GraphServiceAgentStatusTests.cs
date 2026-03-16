@@ -4,6 +4,7 @@ using Homespun.Features.Fleece.Services;
 using Homespun.Features.Gitgraph.Services;
 using Homespun.Features.Projects;
 using Homespun.Features.Testing;
+using Homespun.Shared.Models.Sessions;
 using Microsoft.Extensions.Logging;
 using Moq;
 
@@ -136,7 +137,7 @@ public class GraphServiceAgentStatusTests
         Assert.That(issueCommit, Is.Not.Null);
         Assert.That(issueCommit!.AgentStatus, Is.Not.Null);
         Assert.That(issueCommit.AgentStatus!.IsActive, Is.True);
-        Assert.That(issueCommit.AgentStatus.Status, Is.EqualTo("Running"));
+        Assert.That(issueCommit.AgentStatus.Status, Is.EqualTo(ClaudeSessionStatus.Running));
         Assert.That(issueCommit.AgentStatus.SessionId, Is.EqualTo(session.Id));
     }
 
@@ -185,7 +186,7 @@ public class GraphServiceAgentStatusTests
         Assert.That(prCommit, Is.Not.Null, "PR commit should exist in graph");
         Assert.That(prCommit!.AgentStatus, Is.Not.Null, "PR commit should have agent status");
         Assert.That(prCommit.AgentStatus!.IsActive, Is.True);
-        Assert.That(prCommit.AgentStatus.Status, Is.EqualTo("Running"));
+        Assert.That(prCommit.AgentStatus.Status, Is.EqualTo(ClaudeSessionStatus.Running));
         Assert.That(prCommit.AgentStatus.SessionId, Is.EqualTo(session.Id));
     }
 
@@ -280,12 +281,12 @@ public class GraphServiceAgentStatusTests
         var issueCommit = jsonData.Commits.FirstOrDefault(c => c.IssueId == "hsp-123");
         Assert.That(issueCommit, Is.Not.Null);
         Assert.That(issueCommit!.AgentStatus, Is.Not.Null);
-        Assert.That(issueCommit.AgentStatus!.Status, Is.EqualTo("Running"));
+        Assert.That(issueCommit.AgentStatus!.Status, Is.EqualTo(ClaudeSessionStatus.Running));
 
         var prCommit = jsonData.Commits.FirstOrDefault(c => c.PullRequestNumber == 42);
         Assert.That(prCommit, Is.Not.Null);
         Assert.That(prCommit!.AgentStatus, Is.Not.Null);
-        Assert.That(prCommit.AgentStatus!.Status, Is.EqualTo("WaitingForInput"));
+        Assert.That(prCommit.AgentStatus!.Status, Is.EqualTo(ClaudeSessionStatus.WaitingForInput));
     }
 
     [Test]
@@ -342,7 +343,7 @@ public class GraphServiceAgentStatusTests
         Assert.That(prCommit, Is.Not.Null);
         Assert.That(prCommit!.AgentStatus, Is.Not.Null);
         Assert.That(prCommit.AgentStatus!.IsActive, Is.False);
-        Assert.That(prCommit.AgentStatus.Status, Is.EqualTo("Stopped"));
+        Assert.That(prCommit.AgentStatus.Status, Is.EqualTo(ClaudeSessionStatus.Stopped));
     }
 
     #endregion
@@ -370,7 +371,7 @@ public class GraphServiceAgentStatusTests
         Assert.That(issueCommit, Is.Not.Null);
         Assert.That(issueCommit!.AgentStatus, Is.Not.Null);
         Assert.That(issueCommit.AgentStatus!.IsActive, Is.True);
-        Assert.That(issueCommit.AgentStatus.Status, Is.EqualTo("Running"));
+        Assert.That(issueCommit.AgentStatus.Status, Is.EqualTo(ClaudeSessionStatus.Running));
         Assert.That(issueCommit.AgentStatus.SessionId, Is.EqualTo(newerSession.Id));
     }
 
@@ -396,7 +397,7 @@ public class GraphServiceAgentStatusTests
         Assert.That(prCommit, Is.Not.Null);
         Assert.That(prCommit!.AgentStatus, Is.Not.Null);
         Assert.That(prCommit.AgentStatus!.SessionId, Is.EqualTo(newerSession.Id));
-        Assert.That(prCommit.AgentStatus.Status, Is.EqualTo("WaitingForInput"));
+        Assert.That(prCommit.AgentStatus.Status, Is.EqualTo(ClaudeSessionStatus.WaitingForInput));
     }
 
     #endregion

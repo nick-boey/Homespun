@@ -193,14 +193,7 @@ export const TaskGraphNodeSvg = memo(function TaskGraphNodeSvg({
       {/* Agent status ring */}
       {line.agentStatus?.isActive &&
         (() => {
-          console.log('Agent status for issue:', {
-            issueId: line.issueId,
-            isActive: line.agentStatus.isActive,
-            status: line.agentStatus.status,
-            rawAgentStatus: line.agentStatus,
-          })
           const color = getAgentStatusColor(line.agentStatus.status)
-          console.log('Agent status color:', color)
           return color ? (
             <circle
               cx={cx}
