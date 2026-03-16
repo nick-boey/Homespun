@@ -29,3 +29,7 @@ export {
   projectAssigneesQueryKey,
   type UseProjectAssigneesResult,
 } from './use-project-assignees'
+export {
+  useBranchIdGenerationEvents,
+  type UseBranchIdGenerationEventsOptions,
+} from './use-branch-id-generation-events'

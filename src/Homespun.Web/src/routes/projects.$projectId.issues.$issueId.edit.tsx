@@ -29,7 +29,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { useBreadcrumbSetter } from '@/hooks/use-breadcrumbs'
-import { useIssue, useUpdateIssue } from '@/features/issues'
+import { useIssue, useUpdateIssue, useBranchIdGenerationEvents } from '@/features/issues'
 import { AssigneeCombobox } from '@/features/issues/components/assignee-combobox'
 import { AgentLauncherDialog, useGenerateBranchId } from '@/features/agents'
 import {
@@ -242,7 +242,7 @@ export default function EditIssue() {
   const skipBlockerRef = useRef(false)
 
   // Listen for branch ID generation events
-  // useBranchIdGenerationEvents(projectId)
+  useBranchIdGenerationEvents({ projectId })
 
   useBreadcrumbSetter(
     [

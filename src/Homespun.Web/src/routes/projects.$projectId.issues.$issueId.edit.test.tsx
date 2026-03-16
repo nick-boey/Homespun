@@ -61,6 +61,19 @@ vi.mock('@tanstack/react-router', async () => {
   }
 })
 
+// Mock SignalR provider
+vi.mock('@/providers/signalr-provider', () => ({
+  useNotificationHub: () => ({
+    connection: {
+      on: vi.fn(),
+      off: vi.fn(),
+    },
+    status: 'connected',
+    isConnected: true,
+    isReconnecting: false,
+  }),
+}))
+
 // Mock agent features
 const mockAgentLauncherRender = vi.fn()
 
