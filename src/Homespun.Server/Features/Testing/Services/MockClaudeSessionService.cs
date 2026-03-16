@@ -4,7 +4,6 @@ using Homespun.Features.ClaudeCode.Services;
 using Homespun.Shared.Models.Sessions;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
-using PermissionMode = Homespun.ClaudeAgentSdk.PermissionMode;
 
 namespace Homespun.Features.Testing.Services;
 

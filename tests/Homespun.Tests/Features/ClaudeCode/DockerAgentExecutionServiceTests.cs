@@ -1333,24 +1333,6 @@ public class AnswerQuestionAsyncTests
         await service.DisposeAsync();
     }
 
-    [Test]
-    public async Task LocalAnswerQuestionAsync_AlwaysReturnsFalse()
-    {
-        // Arrange
-        var loggerMock = new Mock<ILogger<LocalAgentExecutionService>>();
-        var factoryLoggerMock = new Mock<ILogger<SessionOptionsFactory>>();
-        var optionsFactory = new SessionOptionsFactory(factoryLoggerMock.Object);
-        var service = new LocalAgentExecutionService(optionsFactory, loggerMock.Object);
-
-        // Act
-        var result = await service.AnswerQuestionAsync("any-session",
-            new Dictionary<string, string> { { "q", "a" } });
-
-        // Assert - local mode always returns false
-        Assert.That(result, Is.False);
-
-        await service.DisposeAsync();
-    }
 }
 
 /// <summary>
@@ -1382,23 +1364,6 @@ public class ApprovePlanAsyncTests
         await service.DisposeAsync();
     }
 
-    [Test]
-    public async Task LocalApprovePlanAsync_AlwaysReturnsFalse()
-    {
-        // Arrange
-        var loggerMock = new Mock<ILogger<LocalAgentExecutionService>>();
-        var factoryLoggerMock = new Mock<ILogger<SessionOptionsFactory>>();
-        var optionsFactory = new SessionOptionsFactory(factoryLoggerMock.Object);
-        var service = new LocalAgentExecutionService(optionsFactory, loggerMock.Object);
-
-        // Act
-        var result = await service.ApprovePlanAsync("any-session", true, true);
-
-        // Assert - local mode always returns false
-        Assert.That(result, Is.False);
-
-        await service.DisposeAsync();
-    }
 }
 
 /// <summary>

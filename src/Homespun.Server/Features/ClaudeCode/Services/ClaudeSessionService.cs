@@ -1,11 +1,9 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
-using Homespun.ClaudeAgentSdk;
 using Homespun.Features.ClaudeCode.Hubs;
 using Homespun.Features.Fleece.Services;
 using Microsoft.AspNetCore.SignalR;
 using AGUIEvents = Homespun.Shared.Models.Sessions;
-using SdkPermissionMode = Homespun.ClaudeAgentSdk.PermissionMode;
 
 namespace Homespun.Features.ClaudeCode.Services;
 
@@ -92,7 +90,6 @@ internal class ContentBlockState
 public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
 {
     private readonly IClaudeSessionStore _sessionStore;
-    private readonly SessionOptionsFactory _optionsFactory;
     private readonly ILogger<ClaudeSessionService> _logger;
     private readonly IHubContext<ClaudeCodeHub> _hubContext;
     private readonly IClaudeSessionDiscovery _sessionDiscovery;
@@ -103,18 +100,12 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
     private readonly IAgentExecutionService _agentExecutionService;
     private readonly IAGUIEventService _agUIEventService;
     private readonly IFleeceIssueTransitionService _fleeceTransitionService;
-    private readonly ConcurrentDictionary<string, ClaudeAgentOptions> _sessionOptions = new();
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _sessionCts = new();
 
     /// <summary>
     /// Maps session ID -> current run ID for AG-UI events.
     /// </summary>
     private readonly ConcurrentDictionary<string, string> _sessionRunIds = new();
-
-    /// <summary>
-    /// Maps session ID -> persistent SDK client for streaming mode interactions.
-    /// </summary>
-    private readonly ConcurrentDictionary<string, ClaudeSdkClient> _sessionClients = new();
 
     /// <summary>
     /// Maps session ID -> task source for signaling when question answers are received.
@@ -134,7 +125,6 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
 
     public ClaudeSessionService(
         IClaudeSessionStore sessionStore,
-        SessionOptionsFactory optionsFactory,
         ILogger<ClaudeSessionService> logger,
         IHubContext<ClaudeCodeHub> hubContext,
         IClaudeSessionDiscovery sessionDiscovery,
@@ -147,7 +137,6 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         IFleeceIssueTransitionService fleeceTransitionService)
     {
         _sessionStore = sessionStore;
-        _optionsFactory = optionsFactory;
         _logger = logger;
         _hubContext = hubContext;
         _sessionDiscovery = sessionDiscovery;
@@ -231,13 +220,8 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                 sessionId, hookOutputs.Count, combinedSystemPrompt?.Length ?? 0);
         }
 
-        // Create and store the SDK options with combined system prompt
-        var options = _optionsFactory.Create(mode, workingDirectory, model, combinedSystemPrompt);
-        // Map session mode to SDK permission mode: Plan -> Plan, Build -> BypassPermissions
-        options.PermissionMode = mode == SessionMode.Plan ? PermissionMode.Plan : PermissionMode.BypassPermissions;
-        options.IncludePartialMessages = true; // Enable streaming with --print mode
-        _sessionOptions[sessionId] = options;
-
+        // Store combined system prompt in session for use by agent execution service
+        session.SystemPrompt = combinedSystemPrompt;
         session.Status = ClaudeSessionStatus.WaitingForInput;
         _logger.LogInformation("Session {SessionId} initialized and ready", sessionId);
 
@@ -306,18 +290,6 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             Messages = []
         };
 
-        // Create SDK options with Resume flag
-        var options = _optionsFactory.Create(
-            session.Mode,
-            workingDirectory,
-            session.Model,
-            session.SystemPrompt);
-        // Map session mode to SDK permission mode: Plan -> Plan, Build -> BypassPermissions
-        options.PermissionMode = session.Mode == SessionMode.Plan ? PermissionMode.Plan : PermissionMode.BypassPermissions;
-        options.IncludePartialMessages = true;
-        options.Resume = sessionId; // THIS IS THE KEY - tells Claude CLI to resume
-
-        _sessionOptions[newSessionId] = options;
         _sessionCts[newSessionId] = new CancellationTokenSource();
         _sessionStore.Add(session);
 
@@ -389,11 +361,6 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         if (session.Status == ClaudeSessionStatus.Stopped || session.Status == ClaudeSessionStatus.Error)
         {
             throw new InvalidOperationException($"Session {sessionId} is not active (status: {session.Status})");
-        }
-
-        if (!_sessionOptions.TryGetValue(sessionId, out var baseOptions))
-        {
-            throw new InvalidOperationException($"No options found for session {sessionId}");
         }
 
         _logger.LogInformation("Sending message to session {SessionId} with mode {Mode}", sessionId, mode);
@@ -1894,24 +1861,10 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             }
         }
 
-        // Dispose any active client
-        if (_sessionClients.TryRemove(sessionId, out var client))
-        {
-            try
-            {
-                await client.DisposeAsync();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Error disposing client for session {SessionId}", sessionId);
-            }
-        }
-
         // Remove any pending question answer sources
         _questionAnswerSources.TryRemove(sessionId, out _);
 
-        // Remove stored options and tool use tracking
-        _sessionOptions.TryRemove(sessionId, out _);
+        // Remove tool use tracking
         _sessionToolUses.TryRemove(sessionId, out _);
 
         // Update session status and remove from store
@@ -1998,9 +1951,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
 
         // NOTE: We intentionally do NOT remove:
         // - _agentSessionIds (needed for next SendMessageAsync to route correctly)
-        // - _sessionOptions (needed for next message)
         // - _sessionToolUses (tool tracking continuity)
-        // - _sessionClients (if any)
         // - _sessionStore entry (session stays alive)
 
         // Clear any pending question answer sources (question is now moot)
@@ -2205,22 +2156,10 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         }
         _sessionCts.Clear();
 
-        // Dispose all active clients
-        foreach (var client in _sessionClients.Values)
-        {
-            try
-            {
-                await client.DisposeAsync();
-            }
-            catch { }
-        }
-        _sessionClients.Clear();
-
         // Clear pending question answer sources
         _questionAnswerSources.Clear();
 
-        // Clear stored options and tool use tracking
-        _sessionOptions.Clear();
+        // Clear tool use tracking
         _sessionToolUses.Clear();
 
         // Clear agent session ID mappings

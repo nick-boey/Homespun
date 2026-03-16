@@ -31,7 +31,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY Homespun.sln ./
 COPY src/Homespun.Server/Homespun.Server.csproj src/Homespun.Server/
 COPY src/Homespun.Shared/Homespun.Shared.csproj src/Homespun.Shared/
-COPY src/Homespun.ClaudeAgentSdk/Homespun.ClaudeAgentSdk.csproj src/Homespun.ClaudeAgentSdk/
 COPY tests/Homespun.Tests/Homespun.Tests.csproj tests/Homespun.Tests/
 
 # Restore dependencies

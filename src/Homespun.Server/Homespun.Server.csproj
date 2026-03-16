@@ -25,7 +25,6 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\Homespun.ClaudeAgentSdk\Homespun.ClaudeAgentSdk.csproj" />
         <ProjectReference Include="..\Homespun.Shared\Homespun.Shared.csproj" />
     </ItemGroup>
 
