@@ -233,4 +233,53 @@ describe('useToolbarShortcuts', () => {
     renderHook(() => useToolbarShortcuts(callbacks))
     expect(() => dispatchKeyDown('f')).not.toThrow()
   })
+
+  it('calls onFocusFilterAtEnd when f is pressed and filter is already active', () => {
+    const onToggleFilter = vi.fn()
+    const onFocusFilterAtEnd = vi.fn()
+    renderHook(() =>
+      useToolbarShortcuts({
+        ...callbacks,
+        onToggleFilter,
+        isFilterActive: true,
+        onFocusFilterAtEnd,
+      })
+    )
+
+    dispatchKeyDown('f')
+    expect(onFocusFilterAtEnd).toHaveBeenCalled()
+    expect(onToggleFilter).not.toHaveBeenCalled()
+  })
+
+  it('calls onToggleFilter when f is pressed and filter is not active', () => {
+    const onToggleFilter = vi.fn()
+    const onFocusFilterAtEnd = vi.fn()
+    renderHook(() =>
+      useToolbarShortcuts({
+        ...callbacks,
+        onToggleFilter,
+        isFilterActive: false,
+        onFocusFilterAtEnd,
+      })
+    )
+
+    dispatchKeyDown('f')
+    expect(onToggleFilter).toHaveBeenCalled()
+    expect(onFocusFilterAtEnd).not.toHaveBeenCalled()
+  })
+
+  it('falls back to onToggleFilter when filter is active but onFocusFilterAtEnd is not provided', () => {
+    const onToggleFilter = vi.fn()
+    renderHook(() =>
+      useToolbarShortcuts({
+        ...callbacks,
+        onToggleFilter,
+        isFilterActive: true,
+        // onFocusFilterAtEnd not provided
+      })
+    )
+
+    dispatchKeyDown('f')
+    expect(onToggleFilter).toHaveBeenCalled()
+  })
 })

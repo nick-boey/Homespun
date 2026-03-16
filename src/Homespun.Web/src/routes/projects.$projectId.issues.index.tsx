@@ -6,6 +6,7 @@ import {
   ProjectToolbar,
   useToolbarShortcuts,
   taskGraphQueryKey,
+  useDefaultFilter,
   type TaskGraphViewRef,
 } from '@/features/issues'
 import { MoveOperationType } from '@/features/issues/types'
@@ -23,6 +24,9 @@ function IssuesList() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
 
+  // Get default filter configuration
+  const { defaultFilterQuery, userEmail } = useDefaultFilter()
+
   // Ref to TaskGraphView for imperative actions
   const taskGraphRef = useRef<TaskGraphViewRef>(null)
 
@@ -37,16 +41,21 @@ function IssuesList() {
   // Compute search match count from rendered issues
   const [searchMatchCount] = useState(0)
 
-  // Filter state
-  const [filterActive, setFilterActive] = useState(false)
-  const [filterQuery, setFilterQuery] = useState('')
-  const [appliedFilterQuery, setAppliedFilterQuery] = useState('')
+  // Filter state - default to showing filter panel with default filters
+  const [filterActive, setFilterActive] = useState(true)
+  const [filterQuery, setFilterQuery] = useState(defaultFilterQuery)
+  const [appliedFilterQuery, setAppliedFilterQuery] = useState(defaultFilterQuery)
 
-  // Parse the applied filter query
+  // Parse the applied filter query and resolve "me" keyword
   const appliedFilter: ParsedFilter | null = useMemo(() => {
     if (!appliedFilterQuery.trim()) return null
-    return parseFilterQuery(appliedFilterQuery)
-  }, [appliedFilterQuery])
+    const filter = parseFilterQuery(appliedFilterQuery)
+    // Resolve the "me" keyword with the current user's email
+    if (filter.assigneeMe && userEmail) {
+      filter.resolvedMeEmail = userEmail
+    }
+    return filter
+  }, [appliedFilterQuery, userEmail])
 
   // Filter match count (will be updated by TaskGraphView)
   const [filterMatchCount, setFilterMatchCount] = useState(0)
@@ -226,6 +235,15 @@ function IssuesList() {
     setAppliedFilterQuery(filterQuery)
   }, [filterQuery])
 
+  // Focus filter input with cursor at end (for 'f' key when filter is already active)
+  const handleFocusFilterAtEnd = useCallback(() => {
+    if (filterInputRef.current) {
+      filterInputRef.current.focus()
+      const len = filterInputRef.current.value.length
+      filterInputRef.current.setSelectionRange(len, len)
+    }
+  }, [])
+
   // Register keyboard shortcuts
   useToolbarShortcuts({
     onCreateAbove: handleCreateAbove,
@@ -240,6 +258,8 @@ function IssuesList() {
     onPreviousMatch: handlePreviousMatch,
     onEmbedSearch: handleEmbedSearch,
     onToggleFilter: handleToggleFilter,
+    isFilterActive: filterActive,
+    onFocusFilterAtEnd: handleFocusFilterAtEnd,
   })
 
   return (

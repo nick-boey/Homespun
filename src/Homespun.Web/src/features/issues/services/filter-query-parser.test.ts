@@ -274,6 +274,54 @@ describe('parseFilterQuery', () => {
       expect(result.errors).toContain("Invalid priority value: 'abc'")
     })
   })
+
+  describe('is:next filter parsing', () => {
+    it('parses is:next', () => {
+      const result = parseFilterQuery('is:next')
+      expect(result.isNext).toBe(true)
+    })
+
+    it('parses is:actionable as alias', () => {
+      const result = parseFilterQuery('is:actionable')
+      expect(result.isNext).toBe(true)
+    })
+
+    it('combines with other filters', () => {
+      const result = parseFilterQuery('is:next status:open')
+      expect(result.isNext).toBe(true)
+      expect(result.status).toEqual([IssueStatus.OPEN])
+    })
+
+    it('adds error for unknown is value', () => {
+      const result = parseFilterQuery('is:unknown')
+      expect(result.errors).toContain("Unknown 'is' filter value: 'unknown'")
+    })
+  })
+
+  describe('assigned:me special keyword', () => {
+    it('parses assigned:me as special keyword', () => {
+      const result = parseFilterQuery('assigned:me')
+      expect(result.assigneeMe).toBe(true)
+      expect(result.assignee).toBeUndefined()
+    })
+
+    it('parses assignee:me as alias', () => {
+      const result = parseFilterQuery('assignee:me')
+      expect(result.assigneeMe).toBe(true)
+    })
+
+    it('mixes assigned:me with other assignees', () => {
+      const result = parseFilterQuery('assigned:me,john')
+      expect(result.assigneeMe).toBe(true)
+      expect(result.assignee).toEqual(['john'])
+    })
+
+    it('combines with other filters', () => {
+      const result = parseFilterQuery('is:next assigned:me')
+      expect(result.isNext).toBe(true)
+      expect(result.assigneeMe).toBe(true)
+    })
+  })
 })
 
 describe('applyFilter', () => {
@@ -502,6 +550,64 @@ describe('applyFilter', () => {
         errors: [],
       }
       expect(applyFilter(issue, filter)).toBe(false)
+    })
+  })
+
+  describe('assignee:me filtering with resolved email', () => {
+    it('matches issue when assignedTo matches resolved email', () => {
+      const issue = createIssue({ assignedTo: 'john@example.com' })
+      const filter: ParsedFilter = {
+        assigneeMe: true,
+        resolvedMeEmail: 'john@example.com',
+        freeText: [],
+        errors: [],
+      }
+      expect(applyFilter(issue, filter)).toBe(true)
+    })
+
+    it('does not match issue when assignedTo differs from resolved email', () => {
+      const issue = createIssue({ assignedTo: 'alice@example.com' })
+      const filter: ParsedFilter = {
+        assigneeMe: true,
+        resolvedMeEmail: 'john@example.com',
+        freeText: [],
+        errors: [],
+      }
+      expect(applyFilter(issue, filter)).toBe(false)
+    })
+
+    it('does not match issue with no assignee', () => {
+      const issue = createIssue({ assignedTo: null })
+      const filter: ParsedFilter = {
+        assigneeMe: true,
+        resolvedMeEmail: 'john@example.com',
+        freeText: [],
+        errors: [],
+      }
+      expect(applyFilter(issue, filter)).toBe(false)
+    })
+
+    it('is case insensitive for email comparison', () => {
+      const issue = createIssue({ assignedTo: 'John@Example.COM' })
+      const filter: ParsedFilter = {
+        assigneeMe: true,
+        resolvedMeEmail: 'john@example.com',
+        freeText: [],
+        errors: [],
+      }
+      expect(applyFilter(issue, filter)).toBe(true)
+    })
+
+    it('skips assigneeMe check if resolvedMeEmail is not provided', () => {
+      const issue = createIssue({ assignedTo: 'john@example.com' })
+      const filter: ParsedFilter = {
+        assigneeMe: true,
+        // No resolvedMeEmail - should not filter
+        freeText: [],
+        errors: [],
+      }
+      // When resolvedMeEmail is not set, assigneeMe filter is ignored
+      expect(applyFilter(issue, filter)).toBe(true)
     })
   })
 })

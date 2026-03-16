@@ -39,6 +39,19 @@ export function FilterHelpPopover({ trigger }: FilterHelpPopoverProps) {
         </PopoverHeader>
         <div className="mt-3 space-y-3 text-sm">
           <section>
+            <h4 className="mb-1 font-medium">Special Filters</h4>
+            <ul className="text-muted-foreground space-y-0.5 text-xs">
+              <li>
+                <code className="bg-muted rounded px-1">is:next</code> - Show actionable (next)
+                issues
+              </li>
+              <li>
+                <code className="bg-muted rounded px-1">assigned:me</code> - Issues assigned to you
+              </li>
+            </ul>
+          </section>
+
+          <section>
             <h4 className="mb-1 font-medium">Field Filters</h4>
             <ul className="text-muted-foreground space-y-0.5 text-xs">
               <li>

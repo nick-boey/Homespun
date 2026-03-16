@@ -30,6 +30,7 @@ export {
 } from './types'
 
 // Hooks
+export { useDefaultFilter, type UseDefaultFilterResult } from './hooks'
 export { useIssueHistory } from './hooks'
 export { useToolbarShortcuts, type ToolbarShortcutCallbacks } from './hooks'
 export {
