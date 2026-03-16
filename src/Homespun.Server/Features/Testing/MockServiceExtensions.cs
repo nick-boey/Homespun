@@ -145,35 +145,9 @@ public static class MockServiceExtensions
         MockModeOptions options,
         IConfiguration configuration)
     {
-        // Register agent execution service based on configuration
-        services.Configure<AgentExecutionOptions>(
-            configuration.GetSection(AgentExecutionOptions.SectionName));
-
-        var agentExecutionMode = configuration
-            .GetSection(AgentExecutionOptions.SectionName)
-            .GetValue<AgentExecutionMode>("Mode");
-
-        Console.WriteLine($"[AgentExecution] MockLive mode: Configured mode = {agentExecutionMode}");
-
-        switch (agentExecutionMode)
-        {
-            case AgentExecutionMode.Docker:
-                Console.WriteLine("[AgentExecution] Registering DockerAgentExecutionService");
-                services.Configure<DockerAgentExecutionOptions>(
-                    configuration.GetSection(DockerAgentExecutionOptions.SectionName));
-                services.PostConfigure<DockerAgentExecutionOptions>(opts =>
-                {
-                    var hostPath = Environment.GetEnvironmentVariable("HSP_HOST_DATA_PATH");
-                    if (!string.IsNullOrEmpty(hostPath))
-                        opts.HostDataPath = hostPath;
-                });
-                services.AddSingleton<IAgentExecutionService, DockerAgentExecutionService>();
-                break;
-            default:
-                Console.WriteLine("[AgentExecution] Registering LocalAgentExecutionService (default)");
-                services.AddSingleton<IAgentExecutionService, LocalAgentExecutionService>();
-                break;
-        }
+        // Register MockAgentExecutionService for mock mode
+        Console.WriteLine("[AgentExecution] MockLive mode: Registering MockAgentExecutionService");
+        services.AddSingleton<IAgentExecutionService, MockAgentExecutionService>();
 
         // Determine working directory for live sessions
         // Use /data/test-workspace in container (via HOMESPUN_DATA_PATH), otherwise home directory

@@ -1,4 +1,3 @@
-using Homespun.ClaudeAgentSdk;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Shared.Models.Sessions;
 using Moq;

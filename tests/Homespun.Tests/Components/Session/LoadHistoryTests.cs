@@ -1,5 +1,3 @@
-using Homespun.ClaudeAgentSdk;
-
 namespace Homespun.Tests.Components.Session;
 
 /// <summary>

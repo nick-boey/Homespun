@@ -6,11 +6,6 @@ namespace Homespun.Features.ClaudeCode.Services;
 public enum AgentExecutionMode
 {
     /// <summary>
-    /// Run agents in-process using the ClaudeAgentSdk directly.
-    /// </summary>
-    Local,
-
-    /// <summary>
     /// Run agents in Docker containers using Docker-outside-of-Docker (DooD).
     /// </summary>
     Docker
@@ -26,7 +21,7 @@ public class AgentExecutionOptions
     /// <summary>
     /// The execution mode to use for running agents.
     /// </summary>
-    public AgentExecutionMode Mode { get; set; } = AgentExecutionMode.Local;
+    public AgentExecutionMode Mode { get; set; } = AgentExecutionMode.Docker;
 
     /// <summary>
     /// Maximum duration for an agent session.

@@ -1,4 +1,4 @@
-using Homespun.ClaudeAgentSdk;
+using Homespun.Features.ClaudeCode.Data;
 using Homespun.Shared.Models.Sessions;
 
 namespace Homespun.Features.ClaudeCode.Services;

@@ -86,7 +86,6 @@ if (mockModeOptions.Enabled)
     builder.Services.AddSingleton<INotificationService, NotificationService>();
     builder.Services.AddScoped<IBreadcrumbService, BreadcrumbService>();
     builder.Services.AddSingleton<IAgentStartupTracker, AgentStartupTracker>();
-    builder.Services.AddSingleton<SessionOptionsFactory>();
     builder.Services.AddScoped<PullRequestDataService>();
     builder.Services.AddScoped<PullRequestWorkflowService>();
     builder.Services.AddSingleton<ITodoParser, TodoParser>();
@@ -159,11 +158,8 @@ else
 
     // Claude Code SDK services
     builder.Services.AddSingleton<IClaudeSessionStore, ClaudeSessionStore>();
-    builder.Services.AddSingleton<SessionOptionsFactory>();
 
-    // Agent Execution service - register based on configuration
-    builder.Services.Configure<AgentExecutionOptions>(
-        builder.Configuration.GetSection(AgentExecutionOptions.SectionName));
+    // Agent Execution service - Docker mode with container discovery and recovery
     builder.Services.Configure<DockerAgentExecutionOptions>(
         builder.Configuration.GetSection(DockerAgentExecutionOptions.SectionName));
     builder.Services.PostConfigure<DockerAgentExecutionOptions>(options =>
@@ -172,31 +168,18 @@ else
         if (!string.IsNullOrEmpty(hostPath))
             options.HostDataPath = hostPath;
     });
-    var agentExecutionMode = builder.Configuration
-        .GetSection(AgentExecutionOptions.SectionName)
-        .GetValue<AgentExecutionMode>("Mode");
-
-    switch (agentExecutionMode)
+    builder.Services.AddSingleton<IAgentExecutionService, DockerAgentExecutionService>();
+    builder.Services.AddSingleton<IContainerDiscoveryService, ContainerDiscoveryService>();
+    builder.Services.AddHostedService(sp =>
     {
-        case AgentExecutionMode.Docker:
-            builder.Services.AddSingleton<IAgentExecutionService, DockerAgentExecutionService>();
-            // Container discovery and recovery services for server restart
-            builder.Services.AddSingleton<IContainerDiscoveryService, ContainerDiscoveryService>();
-            builder.Services.AddHostedService(sp =>
-            {
-                var discoveryService = sp.GetRequiredService<IContainerDiscoveryService>();
-                var executionService = sp.GetRequiredService<IAgentExecutionService>() as DockerAgentExecutionService;
-                var logger = sp.GetRequiredService<ILogger<ContainerRecoveryHostedService>>();
-                return new ContainerRecoveryHostedService(
-                    discoveryService,
-                    container => executionService?.RegisterDiscoveredContainer(container),
-                    logger);
-            });
-            break;
-        default:
-            builder.Services.AddSingleton<IAgentExecutionService, LocalAgentExecutionService>();
-            break;
-    }
+        var discoveryService = sp.GetRequiredService<IContainerDiscoveryService>();
+        var executionService = sp.GetRequiredService<IAgentExecutionService>() as DockerAgentExecutionService;
+        var logger = sp.GetRequiredService<ILogger<ContainerRecoveryHostedService>>();
+        return new ContainerRecoveryHostedService(
+            discoveryService,
+            container => executionService?.RegisterDiscoveredContainer(container),
+            logger);
+    });
 
     // Session discovery service - reads from Claude's native session storage at ~/.claude/projects/
     builder.Services.AddSingleton<IClaudeSessionDiscovery>(sp =>

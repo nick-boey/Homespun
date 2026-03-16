@@ -1,5 +1,4 @@
 using System.Text.Json;
-using Homespun.ClaudeAgentSdk;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.ClaudeCode.Settings;
 using Homespun.Shared.Models.Sessions;
