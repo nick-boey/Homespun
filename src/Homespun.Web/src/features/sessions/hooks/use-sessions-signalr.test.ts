@@ -12,12 +12,13 @@ vi.mock('@/providers/signalr-provider', () => ({
   useClaudeCodeHub: vi.fn(),
 }))
 
-// Mock the invalidateAllSessionsQueries function
+// Mock the invalidate functions
 vi.mock('./use-sessions', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./use-sessions')>()
   return {
     ...actual,
     invalidateAllSessionsQueries: vi.fn(),
+    invalidateTaskGraphQueries: vi.fn(),
   }
 })
 
@@ -250,5 +251,87 @@ describe('useSessionsSignalR', () => {
     await waitFor(() => {
       expect(useSessions.invalidateAllSessionsQueries).toHaveBeenCalled()
     })
+  })
+
+  it('invalidates task graph queries on SessionStarted event', async () => {
+    vi.mocked(signalrProvider.useClaudeCodeHub).mockReturnValue({
+      connection: mockConnection,
+      isConnected: true,
+      status: 'connected',
+      error: undefined,
+      methods: null,
+      isReconnecting: false,
+    } as ReturnType<typeof signalrProvider.useClaudeCodeHub>)
+
+    renderHook(() => useSessionsSignalR(), { wrapper: createWrapper() })
+
+    mockConnection.simulateEvent('SessionStarted', { id: 'session-1' })
+
+    await waitFor(() => {
+      expect(useSessions.invalidateTaskGraphQueries).toHaveBeenCalled()
+    })
+  })
+
+  it('invalidates task graph queries on SessionStatusChanged event', async () => {
+    vi.mocked(signalrProvider.useClaudeCodeHub).mockReturnValue({
+      connection: mockConnection,
+      isConnected: true,
+      status: 'connected',
+      error: undefined,
+      methods: null,
+      isReconnecting: false,
+    } as ReturnType<typeof signalrProvider.useClaudeCodeHub>)
+
+    renderHook(() => useSessionsSignalR(), { wrapper: createWrapper() })
+
+    mockConnection.simulateEvent('SessionStatusChanged', 'session-1', 'running', false)
+
+    await waitFor(() => {
+      expect(useSessions.invalidateTaskGraphQueries).toHaveBeenCalled()
+    })
+  })
+
+  it('invalidates task graph queries on SessionStopped event', async () => {
+    vi.mocked(signalrProvider.useClaudeCodeHub).mockReturnValue({
+      connection: mockConnection,
+      isConnected: true,
+      status: 'connected',
+      error: undefined,
+      methods: null,
+      isReconnecting: false,
+    } as ReturnType<typeof signalrProvider.useClaudeCodeHub>)
+
+    renderHook(() => useSessionsSignalR(), { wrapper: createWrapper() })
+
+    mockConnection.simulateEvent('SessionStopped', 'session-1')
+
+    await waitFor(() => {
+      expect(useSessions.invalidateTaskGraphQueries).toHaveBeenCalled()
+    })
+  })
+
+  it('does not invalidate task graph queries on SessionError event', async () => {
+    vi.mocked(signalrProvider.useClaudeCodeHub).mockReturnValue({
+      connection: mockConnection,
+      isConnected: true,
+      status: 'connected',
+      error: undefined,
+      methods: null,
+      isReconnecting: false,
+    } as ReturnType<typeof signalrProvider.useClaudeCodeHub>)
+
+    renderHook(() => useSessionsSignalR(), { wrapper: createWrapper() })
+
+    // Clear any previous calls
+    vi.mocked(useSessions.invalidateTaskGraphQueries).mockClear()
+
+    mockConnection.simulateEvent('SessionError', 'session-1', 'Error message', null, false)
+
+    await waitFor(() => {
+      expect(useSessions.invalidateAllSessionsQueries).toHaveBeenCalled()
+    })
+
+    // SessionError should not invalidate task graphs
+    expect(useSessions.invalidateTaskGraphQueries).not.toHaveBeenCalled()
   })
 })

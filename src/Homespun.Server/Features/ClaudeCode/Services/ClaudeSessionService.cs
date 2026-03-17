@@ -495,9 +495,9 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                 await _messageCache.AppendMessageAsync(sessionId, messageContext.CurrentAssistantMessage, linkedCts.Token);
             }
 
-            // Only set to WaitingForInput if we're not in a special waiting state
-            if (session.Status != ClaudeSessionStatus.WaitingForQuestionAnswer &&
-                session.Status != ClaudeSessionStatus.WaitingForPlanExecution)
+            // Only transition to WaitingForInput if currently Running
+            // This prevents race conditions where special states were set during processing
+            if (session.Status == ClaudeSessionStatus.Running)
             {
                 session.Status = ClaudeSessionStatus.WaitingForInput;
                 await _hubContext.BroadcastSessionStatusChanged(sessionId, session.Status);
@@ -1193,6 +1193,22 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         CancellationToken cancellationToken)
     {
         _logger.LogInformation("plan_pending control event received for session {SessionId}", sessionId);
+
+        // Guard: Don't process plan_pending if we're already waiting for plan execution
+        // or if we've already approved a plan and are executing (Running with plan content but no pending approval)
+        // This prevents stale plan_pending events from reverting the UI back to "Awaiting plan execution"
+        if (session.Status == ClaudeSessionStatus.WaitingForPlanExecution)
+        {
+            _logger.LogDebug("Ignoring plan_pending for session {SessionId}: already waiting for plan execution", sessionId);
+            return;
+        }
+        if (session.Status == ClaudeSessionStatus.Running &&
+            !string.IsNullOrEmpty(session.PlanContent) &&
+            !session.HasPendingPlanApproval)
+        {
+            _logger.LogDebug("Ignoring plan_pending for session {SessionId}: plan already approved and executing", sessionId);
+            return;
+        }
 
         try
         {

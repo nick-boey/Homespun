@@ -3138,4 +3138,92 @@ public class ClaudeSessionServiceStatusBroadcastTests
 
     #endregion
 
+    #region Plan Execution Guard Tests
+
+    [Test]
+    public async Task HandlePlanPendingFromWorker_WhenPlanAlreadyApproved_IgnoresMessage()
+    {
+        // Arrange - Start a session and manually simulate a state where a plan was approved
+        var session = await _service.StartSessionAsync(
+            "entity-1", "project-1", "/test/path", SessionMode.Plan, "sonnet");
+
+        // Simulate a state where user has approved a plan and it's now executing
+        // (Running with plan content stored, but HasPendingPlanApproval = false)
+        session.Status = ClaudeSessionStatus.Running;
+        session.PlanContent = "# Test Plan\n\n1. Step one";
+        session.HasPendingPlanApproval = false;
+
+        var planJson = """{"plan": "# Another Plan\n\n1. Different step"}""";
+
+        // Simulate a stale plan_pending message arriving during plan execution
+        _agentExecutionServiceMock
+            .Setup(s => s.StartSessionAsync(It.IsAny<AgentStartRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(CreateSdkMessageStream(
+                new SdkSystemMessage("agent-1", null, "session_started", null, null),
+                new SdkPlanPendingMessage("agent-1", planJson),
+                new SdkResultMessage("agent-1", null, null, 0, 0, false, 0, 0, null)));
+
+        await _service.SendMessageAsync(session.Id, "Continue execution");
+
+        // Assert - Status should remain WaitingForInput (set at end of SendMessageAsync),
+        // NOT revert to WaitingForPlanExecution because we ignore stale plan_pending
+        Assert.That(session.Status, Is.EqualTo(ClaudeSessionStatus.WaitingForInput),
+            "Status should be WaitingForInput, not WaitingForPlanExecution - stale plan_pending should be ignored");
+        // Original plan content should be preserved
+        Assert.That(session.PlanContent, Is.EqualTo("# Test Plan\n\n1. Step one"),
+            "Original plan content should be preserved");
+    }
+
+    #endregion
+
+    #region Status Transition Tests
+
+    [Test]
+    public async Task SendMessageAsync_WhenStatusNotRunning_DoesNotChangeToWaitingForInput()
+    {
+        // Arrange - Start a session
+        var session = await _service.StartSessionAsync(
+            "entity-1", "project-1", "/test/path", SessionMode.Plan, "sonnet");
+
+        // Set up a message stream that sets the session to WaitingForQuestionAnswer during processing
+        var questionsJson = """{"questions": [{"question": "What color?", "header": "Color", "options": [{"label": "Red", "description": "Red color"}], "multiSelect": false}]}""";
+        _agentExecutionServiceMock
+            .Setup(s => s.StartSessionAsync(It.IsAny<AgentStartRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(CreateSdkMessageStream(
+                new SdkSystemMessage("agent-1", null, "session_started", null, null),
+                new SdkQuestionPendingMessage("agent-1", questionsJson),
+                new SdkResultMessage("agent-1", null, null, 0, 0, false, 0, 0, null)));
+
+        // Act
+        await _service.SendMessageAsync(session.Id, "Test message");
+
+        // Assert - Status should be WaitingForQuestionAnswer, not WaitingForInput
+        Assert.That(session.Status, Is.EqualTo(ClaudeSessionStatus.WaitingForQuestionAnswer),
+            "Status should remain WaitingForQuestionAnswer, not revert to WaitingForInput");
+    }
+
+    [Test]
+    public async Task SendMessageAsync_WhenStatusIsRunning_ChangesToWaitingForInput()
+    {
+        // Arrange - Start a session
+        var session = await _service.StartSessionAsync(
+            "entity-1", "project-1", "/test/path", SessionMode.Build, "sonnet");
+
+        // Set up a simple message stream that doesn't change status during processing
+        _agentExecutionServiceMock
+            .Setup(s => s.StartSessionAsync(It.IsAny<AgentStartRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(CreateSdkMessageStream(
+                new SdkSystemMessage("agent-1", null, "session_started", null, null),
+                new SdkResultMessage("agent-1", null, null, 0, 0, false, 0, 0, null)));
+
+        // Act
+        await _service.SendMessageAsync(session.Id, "Test message");
+
+        // Assert - Status should transition to WaitingForInput after message processing
+        Assert.That(session.Status, Is.EqualTo(ClaudeSessionStatus.WaitingForInput),
+            "Status should be WaitingForInput after successful message processing");
+    }
+
+    #endregion
+
 }
