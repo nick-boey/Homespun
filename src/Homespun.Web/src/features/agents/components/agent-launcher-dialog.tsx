@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate } from '@tanstack/react-router'
-import { Play, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react'
+import { Play, ChevronDown, ChevronUp, AlertCircle, ExternalLink } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -20,6 +20,7 @@ import { Loader } from '@/components/ui/loader'
 import { Label } from '@/components/ui/label'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { useRunAgent, useAgentPrompts } from '../hooks'
+import { isAgentConflictError } from '../hooks/use-run-agent'
 import { useProject } from '@/features/projects'
 import { BaseBranchSelector } from './base-branch-selector'
 import type { RunAgentResult } from '../hooks/use-run-agent'
@@ -87,6 +88,9 @@ export function AgentLauncherDialog({
   })
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false)
 
+  // Conflict state - when an agent is already running on this issue
+  const [conflictSessionId, setConflictSessionId] = useState<string | null>(null)
+
   // Compute effective base branch - use selected value or fall back to project default
   const effectiveBaseBranch = useMemo(() => {
     return selectedBaseBranch || project?.defaultBranch || ''
@@ -134,6 +138,9 @@ export function AgentLauncherDialog({
 
   // Handle start - call server-side run agent endpoint
   const handleStart = useCallback(async () => {
+    // Clear any previous conflict state
+    setConflictSessionId(null)
+
     try {
       const result = await runAgent.mutateAsync({
         issueId,
@@ -151,6 +158,11 @@ export function AgentLauncherDialog({
       onAgentStart?.(result)
       onOpenChange(false) // Close dialog on success
     } catch (e) {
+      // Handle conflict error - agent already running
+      if (isAgentConflictError(e)) {
+        setConflictSessionId(e.sessionId)
+        return // Don't propagate error, we'll show UI for this
+      }
       onError?.(e as Error)
     }
   }, [
@@ -165,6 +177,14 @@ export function AgentLauncherDialog({
     onError,
     navigate,
   ])
+
+  // Handle navigating to the existing session
+  const handleOpenExistingSession = useCallback(() => {
+    if (conflictSessionId) {
+      navigate({ to: '/sessions/$sessionId', params: { sessionId: conflictSessionId } })
+      onOpenChange(false)
+    }
+  }, [conflictSessionId, navigate, onOpenChange])
 
   // Combined loading states
   const isLoading = projectLoading || promptsLoading || runAgent.isPending
@@ -200,6 +220,32 @@ export function AgentLauncherDialog({
                 <p className="text-destructive text-sm font-medium">Failed to load prompts</p>
                 <p className="text-muted-foreground text-xs">{error.message}</p>
               </div>
+            </div>
+          )}
+
+          {/* Conflict state - agent already running */}
+          {conflictSessionId && (
+            <div className="flex flex-col gap-3 rounded-md border border-amber-500/50 bg-amber-500/10 p-4">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-5 w-5 flex-shrink-0 text-amber-600 dark:text-amber-400" />
+                <div>
+                  <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                    Agent already running
+                  </p>
+                  <p className="text-xs text-amber-700 dark:text-amber-300">
+                    An agent session is already active on this issue.
+                  </p>
+                </div>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5 self-start"
+                onClick={handleOpenExistingSession}
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+                Open Existing Session
+              </Button>
             </div>
           )}
 

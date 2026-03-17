@@ -106,4 +106,71 @@ describe('IssueRowActions', () => {
       })
     })
   })
+
+  describe('active session behavior', () => {
+    it('shows Run Agent button when no active session', () => {
+      render(<IssueRowActions {...defaultProps} activeSessionId={null} />)
+      expect(screen.getByRole('button', { name: /run agent/i })).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /open session/i })).not.toBeInTheDocument()
+    })
+
+    it('shows Open Session button when active session exists', () => {
+      render(<IssueRowActions {...defaultProps} activeSessionId="session-123" />)
+      expect(screen.getByRole('button', { name: /open session/i })).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /run agent/i })).not.toBeInTheDocument()
+    })
+
+    it('calls onOpenSession with sessionId when Open Session button is clicked', async () => {
+      const user = userEvent.setup()
+      const onOpenSession = vi.fn()
+      render(
+        <IssueRowActions
+          {...defaultProps}
+          activeSessionId="session-123"
+          onOpenSession={onOpenSession}
+        />
+      )
+
+      await user.click(screen.getByRole('button', { name: /open session/i }))
+      expect(onOpenSession).toHaveBeenCalledWith('session-123')
+    })
+
+    it('calls onRunAgent when Run Agent button is clicked (no active session)', async () => {
+      const user = userEvent.setup()
+      const onRunAgent = vi.fn()
+      const onOpenSession = vi.fn()
+      render(
+        <IssueRowActions
+          {...defaultProps}
+          activeSessionId={null}
+          onRunAgent={onRunAgent}
+          onOpenSession={onOpenSession}
+        />
+      )
+
+      await user.click(screen.getByRole('button', { name: /run agent/i }))
+      expect(onRunAgent).toHaveBeenCalledWith('abc123')
+      expect(onOpenSession).not.toHaveBeenCalled()
+    })
+
+    it('stops event propagation when clicking Open Session button', async () => {
+      const user = userEvent.setup()
+      const onContainerClick = vi.fn()
+      const onOpenSession = vi.fn()
+
+      render(
+        <div onClick={onContainerClick}>
+          <IssueRowActions
+            {...defaultProps}
+            activeSessionId="session-123"
+            onOpenSession={onOpenSession}
+          />
+        </div>
+      )
+
+      await user.click(screen.getByRole('button', { name: /open session/i }))
+      expect(onOpenSession).toHaveBeenCalled()
+      expect(onContainerClick).not.toHaveBeenCalled()
+    })
+  })
 })

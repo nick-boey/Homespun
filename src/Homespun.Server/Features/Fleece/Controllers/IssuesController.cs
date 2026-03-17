@@ -411,6 +411,7 @@ public class IssuesController(
     [ProducesResponseType<RunAgentResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<AgentAlreadyRunningResponse>(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<RunAgentResponse>> RunAgent(string issueId, [FromBody] RunAgentRequest request)
     {
         // Fetch project
@@ -425,6 +426,18 @@ public class IssuesController(
         if (issue == null)
         {
             return NotFound("Issue not found");
+        }
+
+        // Check for existing active session on this issue
+        var existingSession = sessionService.GetSessionByEntityId(issueId);
+        if (existingSession != null && existingSession.Status.IsActive())
+        {
+            return Conflict(new AgentAlreadyRunningResponse
+            {
+                SessionId = existingSession.Id,
+                Status = existingSession.Status,
+                Message = "An agent is already running on this issue"
+            });
         }
 
         // Fetch prompt (if provided)

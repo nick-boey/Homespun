@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Issues } from '@/api'
+import { Issues, ClaudeSessionStatus } from '@/api'
 import type { RunAgentResponse } from '@/api/generated/types.gen'
 import { invalidateAllSessionsQueries } from '@/features/sessions/hooks/use-sessions'
 
@@ -25,6 +25,37 @@ export interface RunAgentResult {
   clonePath: string
 }
 
+/** Error type for when an agent is already running on the issue */
+export interface AgentConflictError extends Error {
+  name: 'AgentConflictError'
+  sessionId: string
+  status: ClaudeSessionStatus
+}
+
+/** Create an AgentConflictError */
+function createAgentConflictError(
+  sessionId: string,
+  status: ClaudeSessionStatus
+): AgentConflictError {
+  const error = new Error('An agent is already running on this issue') as AgentConflictError
+  error.name = 'AgentConflictError'
+  error.sessionId = sessionId
+  error.status = status
+  return error
+}
+
+/** Type guard to check if an error is an AgentConflictError */
+export function isAgentConflictError(error: unknown): error is AgentConflictError {
+  return (
+    error !== null &&
+    typeof error === 'object' &&
+    'name' in error &&
+    error.name === 'AgentConflictError' &&
+    'sessionId' in error &&
+    'status' in error
+  )
+}
+
 /**
  * Hook to run an agent on an issue using the server-side endpoint.
  *
@@ -48,6 +79,21 @@ export function useRunAgent() {
           baseBranch: params.baseBranch,
         },
       })
+
+      // Check for 409 Conflict (agent already running)
+      // The response object contains the raw Response, so we check the status
+      if (response.response?.status === 409 && response.error) {
+        // Extract conflict data from the error response
+        const conflictData = response.error as unknown as {
+          sessionId?: string
+          status?: ClaudeSessionStatus
+          message?: string
+        }
+        throw createAgentConflictError(
+          conflictData.sessionId ?? '',
+          conflictData.status ?? ClaudeSessionStatus.RUNNING
+        )
+      }
 
       if (response.error || !response.data) {
         throw new Error(response.error?.detail ?? 'Failed to run agent')

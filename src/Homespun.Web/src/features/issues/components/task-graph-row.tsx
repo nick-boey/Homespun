@@ -48,6 +48,8 @@ interface TaskGraphIssueRowProps extends HTMLAttributes<HTMLDivElement> {
   onToggleExpand?: () => void
   onEdit?: (issueId: string) => void
   onRunAgent?: (issueId: string) => void
+  /** Called when clicking the Open Session button */
+  onOpenSession?: (sessionId: string) => void
   showActions?: boolean
   /** Whether this issue is the source of a move operation */
   isMoveSource?: boolean
@@ -76,6 +78,7 @@ export const TaskGraphIssueRow = memo(
       onToggleExpand,
       onEdit,
       onRunAgent,
+      onOpenSession,
       showActions = true,
       isMoveSource = false,
       isMoveOperationActive = false,
@@ -252,8 +255,10 @@ export const TaskGraphIssueRow = memo(
             <IssueRowActions
               issueId={line.issueId}
               isExpanded={isExpanded}
+              activeSessionId={line.agentStatus?.isActive ? line.agentStatus.sessionId : null}
               onEdit={onEdit}
               onRunAgent={onRunAgent}
+              onOpenSession={onOpenSession}
               onExpand={onToggleExpand}
             />
           )}
