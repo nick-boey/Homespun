@@ -54,6 +54,8 @@ bld/
 [Oo]bj/
 [Ll]og/
 [Ll]ogs/
+# But include Claude skills with "logs" in the name
+!.claude/skills/logs/
 
 # Visual Studio 2015/2017 cache/options directory
 .vs/
