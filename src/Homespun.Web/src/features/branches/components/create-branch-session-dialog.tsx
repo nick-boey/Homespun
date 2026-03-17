@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -25,7 +25,7 @@ export interface CreateBranchSessionDialogProps {
 
 // Git branch name validation
 // Invalid characters: space, ~, ^, :, ?, *, [, \, @{, ..
-const INVALID_BRANCH_CHARS = /[\s~^:?*\[\]\\]|@\{|\.{2,}/
+const INVALID_BRANCH_CHARS = /[\s~^:?*[\]\\]|@\{|\.{2,}/
 const INVALID_START_END = /^[./]|[./]$/
 
 function validateBranchName(name: string): string | null {
@@ -52,16 +52,12 @@ function DialogContentInner({
   onSessionCreated,
   onError,
 }: Omit<CreateBranchSessionDialogProps, 'open'>) {
+  // Initialize state with default values - no need for useEffect reset
+  // since this component only renders when dialog is open
   const [branchName, setBranchName] = useState('')
   const [validationError, setValidationError] = useState<string | null>(null)
 
   const createBranchSession = useCreateBranchSession()
-
-  // Reset form when dialog opens
-  useEffect(() => {
-    setBranchName('')
-    setValidationError(null)
-  }, [])
 
   const handleBranchNameChange = useCallback(
     (value: string) => {
