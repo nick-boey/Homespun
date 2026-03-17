@@ -189,6 +189,9 @@ import type {
   PostApiClonesPullErrors,
   PostApiClonesPullResponses,
   PostApiClonesResponses,
+  PostApiClonesSessionData,
+  PostApiClonesSessionErrors,
+  PostApiClonesSessionResponses,
   PostApiFleeceSyncByProjectIdPullData,
   PostApiFleeceSyncByProjectIdPullErrors,
   PostApiFleeceSyncByProjectIdPullResponses,
@@ -504,6 +507,23 @@ export class Clones {
       ThrowOnError
     >({
       url: '/api/Clones',
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options?.headers,
+      },
+    })
+  }
+
+  public static postApiClonesSession<ThrowOnError extends boolean = false>(
+    options?: Options<PostApiClonesSessionData, ThrowOnError>
+  ) {
+    return (options?.client ?? client).post<
+      PostApiClonesSessionResponses,
+      PostApiClonesSessionErrors,
+      ThrowOnError
+    >({
+      url: '/api/Clones/session',
       ...options,
       headers: {
         'Content-Type': 'application/json',

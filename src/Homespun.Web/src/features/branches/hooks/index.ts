@@ -13,3 +13,9 @@ export {
   getRemoteOnlyBranches,
   getLocalBranches,
 } from './use-branches'
+
+export {
+  useCreateBranchSession,
+  type CreateBranchSessionParams,
+  type CreateBranchSessionResult,
+} from './use-create-branch-session'

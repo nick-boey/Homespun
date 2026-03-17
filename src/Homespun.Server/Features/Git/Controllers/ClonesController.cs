@@ -1,6 +1,9 @@
+using Homespun.Features.ClaudeCode.Services;
+using Homespun.Features.Fleece.Services;
 using Homespun.Features.Projects;
 using Homespun.Shared.Models.Git;
 using Homespun.Shared.Models.Sessions;
+using Homespun.Shared.Requests;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Homespun.Features.Git.Controllers;
@@ -13,7 +16,10 @@ namespace Homespun.Features.Git.Controllers;
 [Produces("application/json")]
 public class ClonesController(
     IGitCloneService cloneService,
-    IProjectService projectService) : ControllerBase
+    IProjectService projectService,
+    IFleeceIssuesSyncService fleeceIssuesSyncService,
+    IClaudeSessionService sessionService,
+    ILogger<ClonesController> logger) : ControllerBase
 {
     /// <summary>
     /// List clones for a project.
@@ -180,57 +186,109 @@ public class ClonesController(
         }
         return Ok(info);
     }
+
+    /// <summary>
+    /// Create a new session on a branch.
+    /// This endpoint handles the complete flow:
+    /// 1. Pulls latest changes on the base branch
+    /// 2. Creates or gets existing clone for the branch
+    /// 3. Pulls clone to get remote changes (in case branch exists remotely)
+    /// 4. Creates a session in Plan mode
+    /// </summary>
+    [HttpPost("session")]
+    [ProducesResponseType<CreateBranchSessionResponse>(StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<CreateBranchSessionResponse>> CreateBranchSession([FromBody] CreateBranchSessionRequest request)
+    {
+        // Validate project exists
+        var project = await projectService.GetByIdAsync(request.ProjectId);
+        if (project == null)
+        {
+            return NotFound("Project not found");
+        }
+
+        // Validate branch name is not empty
+        if (string.IsNullOrWhiteSpace(request.BranchName))
+        {
+            return BadRequest("Branch name is required");
+        }
+
+        var branchName = request.BranchName.Trim();
+        var baseBranch = !string.IsNullOrEmpty(request.BaseBranch)
+            ? request.BaseBranch
+            : project.DefaultBranch;
+
+        // Pull latest changes on main repo before creating clone
+        logger.LogInformation("Pulling latest changes from {BaseBranch} before creating clone", baseBranch);
+        var pullResult = await fleeceIssuesSyncService.PullFleeceOnlyAsync(
+            project.LocalPath,
+            baseBranch,
+            HttpContext.RequestAborted);
+
+        if (!pullResult.Success)
+        {
+            logger.LogWarning("Auto-pull failed before clone creation: {Error}, continuing anyway", pullResult.ErrorMessage);
+        }
+        else if (pullResult.WasBehindRemote)
+        {
+            logger.LogInformation("Pulled {Commits} commits and merged {Issues} issues before clone creation",
+                pullResult.CommitsPulled, pullResult.IssuesMerged);
+        }
+
+        // Get or create clone for the branch
+        string? clonePath = await cloneService.GetClonePathForBranchAsync(project.LocalPath, branchName);
+
+        if (string.IsNullOrEmpty(clonePath))
+        {
+            // Clone doesn't exist, create it
+            logger.LogInformation("Creating clone for branch {BranchName} from base {BaseBranch}", branchName, baseBranch);
+
+            clonePath = await cloneService.CreateCloneAsync(
+                project.LocalPath,
+                branchName,
+                createBranch: true,
+                baseBranch: baseBranch);
+
+            if (string.IsNullOrEmpty(clonePath))
+            {
+                return BadRequest("Failed to create clone for branch");
+            }
+
+            logger.LogInformation("Created clone at {ClonePath} for branch {BranchName}", clonePath, branchName);
+        }
+        else
+        {
+            logger.LogInformation("Using existing clone at {ClonePath} for branch {BranchName}", clonePath, branchName);
+        }
+
+        // Pull the clone to get remote changes (in case branch exists remotely)
+        var clonePullSuccess = await cloneService.PullLatestAsync(clonePath);
+        if (!clonePullSuccess)
+        {
+            logger.LogWarning("Failed to pull latest changes for clone at {ClonePath}, continuing anyway", clonePath);
+        }
+
+        // Determine model
+        var model = project.DefaultModel ?? "sonnet";
+
+        // Create session in Plan mode using branch name as entity ID
+        var session = await sessionService.StartSessionAsync(
+            branchName,
+            request.ProjectId,
+            clonePath,
+            SessionMode.Plan,
+            model,
+            systemPrompt: null);
+
+        return Created(
+            string.Empty,
+            new CreateBranchSessionResponse
+            {
+                SessionId = session.Id,
+                BranchName = branchName,
+                ClonePath = clonePath
+            });
+    }
 }
 
-/// <summary>
-/// Request model for creating a clone.
-/// </summary>
-public class CreateCloneRequest
-{
-    /// <summary>
-    /// The project ID.
-    /// </summary>
-    public required string ProjectId { get; set; }
-
-    /// <summary>
-    /// The branch name.
-    /// </summary>
-    public required string BranchName { get; set; }
-
-    /// <summary>
-    /// Whether to create a new branch.
-    /// </summary>
-    public bool CreateBranch { get; set; }
-
-    /// <summary>
-    /// Base branch for the new branch (if creating).
-    /// </summary>
-    public string? BaseBranch { get; set; }
-}
-
-/// <summary>
-/// Response model for creating a clone.
-/// </summary>
-public class CreateCloneResponse
-{
-    /// <summary>
-    /// The path to the created clone.
-    /// </summary>
-    public required string Path { get; set; }
-
-    /// <summary>
-    /// The branch name.
-    /// </summary>
-    public required string BranchName { get; set; }
-}
-
-/// <summary>
-/// Response model for checking clone existence.
-/// </summary>
-public class CloneExistsResponse
-{
-    /// <summary>
-    /// Whether the clone exists.
-    /// </summary>
-    public bool Exists { get; set; }
-}

@@ -208,6 +208,18 @@ export type CreateAgentPromptRequest = {
   projectId?: string | null
 }
 
+export type CreateBranchSessionRequest = {
+  projectId: string | null
+  branchName: string | null
+  baseBranch?: string | null
+}
+
+export type CreateBranchSessionResponse = {
+  sessionId: string | null
+  branchName: string | null
+  clonePath: string | null
+}
+
 export type CreateCloneRequest = {
   projectId: string | null
   branchName: string | null
@@ -1400,6 +1412,36 @@ export type PostApiClonesResponses = {
 }
 
 export type PostApiClonesResponse = PostApiClonesResponses[keyof PostApiClonesResponses]
+
+export type PostApiClonesSessionData = {
+  body?: CreateBranchSessionRequest
+  path?: never
+  query?: never
+  url: '/api/Clones/session'
+}
+
+export type PostApiClonesSessionErrors = {
+  /**
+   * Bad Request
+   */
+  400: ProblemDetails
+  /**
+   * Not Found
+   */
+  404: ProblemDetails
+}
+
+export type PostApiClonesSessionError = PostApiClonesSessionErrors[keyof PostApiClonesSessionErrors]
+
+export type PostApiClonesSessionResponses = {
+  /**
+   * Created
+   */
+  201: CreateBranchSessionResponse
+}
+
+export type PostApiClonesSessionResponse =
+  PostApiClonesSessionResponses[keyof PostApiClonesSessionResponses]
 
 export type GetApiClonesExistsData = {
   body?: never
