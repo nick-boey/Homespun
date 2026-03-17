@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { clearIssueFilter } from './utils/test-helpers'
 
 test.describe('None Prompt Flow', () => {
   // Each test uses a different issue to avoid conflicts from concurrent agent prevention
@@ -8,6 +9,10 @@ test.describe('None Prompt Flow', () => {
 
     // Click on the first project
     await page.locator('[data-testid="project-card-link"]').first().click()
+
+    // Wait for page to load and clear the default filter to show all issues
+    await page.waitForLoadState('networkidle')
+    await clearIssueFilter(page)
 
     // Select "Add dark mode support" issue to avoid conflicts with other tests
     await page
@@ -41,6 +46,10 @@ test.describe('None Prompt Flow', () => {
     // Click on the first project
     await page.locator('[data-testid="project-card-link"]').first().click()
 
+    // Wait for page to load and clear the default filter to show all issues
+    await page.waitForLoadState('networkidle')
+    await clearIssueFilter(page)
+
     // Select "Improve mobile responsiveness" issue to avoid conflicts with other tests
     await page
       .locator('[data-testid="task-graph-issue-row"]')
@@ -66,11 +75,11 @@ test.describe('None Prompt Flow', () => {
     // Verify navigation to session page
     await page.waitForURL(/\/sessions\/[a-zA-Z0-9-]+/)
 
-    // Verify we're on a session page
-    await expect(page.getByRole('heading', { name: /Session/ })).toBeVisible()
-
-    // Verify prompt input is available
+    // Verify we're on a session page by checking the prompt input is available
     await expect(page.getByPlaceholder(/Type a message/i)).toBeVisible()
+
+    // Verify session controls are visible
+    await expect(page.getByRole('button', { name: /Stop/ })).toBeVisible()
   })
 
   test('can add custom prompt after starting with None', async ({ page }) => {
@@ -79,6 +88,10 @@ test.describe('None Prompt Flow', () => {
 
     // Click on the first project
     await page.locator('[data-testid="project-card-link"]').first().click()
+
+    // Wait for page to load and clear the default filter to show all issues
+    await page.waitForLoadState('networkidle')
+    await clearIssueFilter(page)
 
     // Select "Fix login timeout bug" issue to avoid conflicts with other tests
     await page
