@@ -74,3 +74,29 @@ export async function waitForStableStatus(page: Page, stabilityDuration = 6000) 
   // The status indicator polls every 5 seconds, so wait for at least one full cycle
   await page.waitForTimeout(stabilityDuration)
 }
+
+/**
+ * Clear the filter on the issues page so all issues are visible.
+ * This is needed because the page now has a default filter applied.
+ */
+export async function clearIssueFilter(page: Page) {
+  // Wait for the filter input to be visible (it's shown by default now)
+  const filterInput = page.locator('[data-testid="filter-input"]')
+
+  // Wait up to 5 seconds for filter input to appear
+  try {
+    await filterInput.waitFor({ state: 'visible', timeout: 5000 })
+  } catch {
+    // Filter panel might not be visible, press 'f' to open it
+    await page.keyboard.press('f')
+    await page.waitForTimeout(500)
+  }
+
+  // Now clear the filter - triple-click to select all and then type empty
+  await filterInput.click({ clickCount: 3 })
+  await page.keyboard.press('Backspace')
+  await filterInput.press('Enter')
+
+  // Wait for issues to load after filter is cleared
+  await page.waitForTimeout(500)
+}

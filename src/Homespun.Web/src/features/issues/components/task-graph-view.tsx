@@ -30,6 +30,7 @@ import {
   isLoadMoreRenderLine,
   computeInheritedParentInfo,
   applyFilter,
+  TaskGraphMarkerType,
   type ParsedFilter,
 } from '../services'
 import { useTaskGraph, taskGraphQueryKey, useCreateIssue, useUpdateIssue } from '../hooks'
@@ -174,6 +175,13 @@ export const TaskGraphView = memo(
       return unfilteredRenderLines.filter((line) => {
         // Always keep non-issue lines (PRs, separators, load more)
         if (!isIssueRenderLine(line)) return true
+
+        // Handle isNext filter - check if issue is actionable via marker
+        if (appliedFilter.isNext) {
+          if (line.marker !== TaskGraphMarkerType.Actionable) {
+            return false
+          }
+        }
 
         // Get the full issue data for filtering
         const issueData = issueDataMap.get(line.issueId)

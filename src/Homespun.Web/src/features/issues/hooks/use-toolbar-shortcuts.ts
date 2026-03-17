@@ -13,6 +13,10 @@ export interface ToolbarShortcutCallbacks {
   onPreviousMatch: () => void
   onEmbedSearch: () => void
   onToggleFilter?: () => void
+  /** Whether the filter panel is currently active/visible */
+  isFilterActive?: boolean
+  /** Focus the filter input with cursor at the end */
+  onFocusFilterAtEnd?: () => void
   canUndo?: boolean
   canRedo?: boolean
 }
@@ -41,6 +45,8 @@ export function useToolbarShortcuts(callbacks: ToolbarShortcutCallbacks) {
     onNextMatch,
     onPreviousMatch,
     onToggleFilter,
+    isFilterActive = false,
+    onFocusFilterAtEnd,
     canUndo = true,
     canRedo = true,
   } = callbacks
@@ -138,9 +144,12 @@ export function useToolbarShortcuts(callbacks: ToolbarShortcutCallbacks) {
       }
 
       // Toggle filter: f
+      // If filter is already open, focus input at end; otherwise toggle
       if (!shiftKey && !ctrlKey && !metaKey && key === 'f') {
-        if (onToggleFilter) {
-          event.preventDefault()
+        event.preventDefault()
+        if (isFilterActive && onFocusFilterAtEnd) {
+          onFocusFilterAtEnd()
+        } else if (onToggleFilter) {
           onToggleFilter()
         }
         return
@@ -158,6 +167,8 @@ export function useToolbarShortcuts(callbacks: ToolbarShortcutCallbacks) {
       onNextMatch,
       onPreviousMatch,
       onToggleFilter,
+      isFilterActive,
+      onFocusFilterAtEnd,
       canUndo,
       canRedo,
     ]

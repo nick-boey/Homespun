@@ -20,9 +20,12 @@ export interface ParsedFilter {
   typeNegated?: IssueType[]
   priority?: number[]
   assignee?: string[]
+  assigneeMe?: boolean
+  resolvedMeEmail?: string
   tags?: string[]
   linkedPr?: number[]
   id?: string[]
+  isNext?: boolean
   freeText: string[]
   errors: string[]
 }
@@ -65,6 +68,7 @@ const KNOWN_FIELDS = new Set([
   'tags',
   'pr',
   'id',
+  'is',
 ])
 
 /**
@@ -180,6 +184,9 @@ function parseToken(token: string, result: ParsedFilter): void {
     case 'id':
       parseIdFilter(value, result)
       break
+    case 'is':
+      parseIsFilter(value, result)
+      break
     default:
       // Unknown field - treat as keyed tag (project:value => project=value)
       if (!KNOWN_FIELDS.has(field)) {
@@ -265,14 +272,19 @@ function parsePriorityFilter(value: string, result: ParsedFilter): void {
 
 /**
  * Parses assignee filter values.
+ * Handles the special "me" keyword to filter by current user.
  */
 function parseAssigneeFilter(value: string, result: ParsedFilter): void {
   const values = value.split(',').map((v) => v.trim())
 
   for (const v of values) {
     if (!v) continue
-    if (!result.assignee) result.assignee = []
-    result.assignee.push(v)
+    if (v.toLowerCase() === 'me') {
+      result.assigneeMe = true
+    } else {
+      if (!result.assignee) result.assignee = []
+      result.assignee.push(v)
+    }
   }
 }
 
@@ -315,6 +327,23 @@ function parseIdFilter(value: string, result: ParsedFilter): void {
     if (!v) continue
     if (!result.id) result.id = []
     result.id.push(v)
+  }
+}
+
+/**
+ * Parses "is" filter values (e.g., is:next, is:actionable).
+ */
+function parseIsFilter(value: string, result: ParsedFilter): void {
+  const v = value.trim().toLowerCase()
+
+  switch (v) {
+    case 'next':
+    case 'actionable':
+      result.isNext = true
+      break
+    default:
+      result.errors.push(`Unknown 'is' filter value: '${value}'`)
+      break
   }
 }
 
@@ -368,6 +397,16 @@ export function applyFilter(issue: IssueResponse, filter: ParsedFilter): boolean
     const assignedLower = issue.assignedTo.toLowerCase()
     const matches = filter.assignee.some((a) => assignedLower.includes(a.toLowerCase()))
     if (!matches) {
+      return false
+    }
+  }
+
+  // Assignee:me filter with resolved email
+  if (filter.assigneeMe && filter.resolvedMeEmail) {
+    if (!issue.assignedTo) {
+      return false
+    }
+    if (issue.assignedTo.toLowerCase() !== filter.resolvedMeEmail.toLowerCase()) {
       return false
     }
   }

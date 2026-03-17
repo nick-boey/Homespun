@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { clearIssueFilter } from './utils/test-helpers'
 
 test.describe.serial('Save and Run Agent', () => {
   test('saves issue and opens agent launcher dialog', async ({ page }) => {
@@ -8,10 +9,13 @@ test.describe.serial('Save and Run Agent', () => {
     // Wait for the issues list to load
     await page.waitForLoadState('networkidle')
 
-    // Find the first Feature issue row - use one that exists in mock data
+    // Clear the default filter to show all issues
+    await clearIssueFilter(page)
+
+    // Find the Write API documentation chore (ISSUE-006) which isn't modified by other tests
     const issueRow = page
       .locator('[role="row"]')
-      .filter({ hasText: 'Add dark mode support' })
+      .filter({ hasText: 'Write API documentation' })
       .first()
     await expect(issueRow).toBeVisible()
 
@@ -29,8 +33,9 @@ test.describe.serial('Save and Run Agent', () => {
     const titleInput = page.getByLabel('Title')
     await expect(titleInput).toBeVisible()
 
-    // Make a change to the issue
-    await titleInput.fill('Feature: Enhanced homepage with new design')
+    // Make a change to the description instead of title to avoid breaking subsequent tests
+    const descriptionInput = page.getByLabel('Description')
+    await descriptionInput.fill('Updated description for save and run test')
 
     // Find and click the Save & Run Agent button
     const saveAndRunButton = page.getByRole('button', { name: 'Save & Run Agent' })
@@ -63,6 +68,9 @@ test.describe.serial('Save and Run Agent', () => {
 
     // Wait for the issues list to load
     await page.waitForLoadState('networkidle')
+
+    // Clear the default filter to show all issues
+    await clearIssueFilter(page)
 
     // Find a different issue to avoid conflicts - use ISSUE-002 (Improve mobile responsiveness)
     const issueRow = page
@@ -101,10 +109,13 @@ test.describe.serial('Save and Run Agent', () => {
     // Wait for the issues list to load
     await page.waitForLoadState('networkidle')
 
-    // Find a Bug issue to avoid conflicts - use ISSUE-003 (Fix login timeout bug)
+    // Clear the default filter to show all issues
+    await clearIssueFilter(page)
+
+    // Find Set up API monitoring chore (ISSUE-013) which isn't modified by other tests
     const issueRow = page
       .locator('[role="row"]')
-      .filter({ hasText: 'Fix login timeout bug' })
+      .filter({ hasText: 'Set up API monitoring' })
       .first()
     await expect(issueRow).toBeVisible()
 
@@ -115,9 +126,9 @@ test.describe.serial('Save and Run Agent', () => {
     // Wait for navigation to edit page
     await expect(page).toHaveURL(/\/issues\/.*\/edit/)
 
-    // Make a change
-    const titleInput = page.getByLabel('Title')
-    await titleInput.fill('Feature: Updated homepage design')
+    // Make a change to description instead of title to avoid affecting other tests
+    const descriptionInput = page.getByLabel('Description')
+    await descriptionInput.fill('Updated description for save test')
 
     // Click regular Save button
     const saveButton = page.getByRole('button', { name: 'Save Changes' })
@@ -137,6 +148,9 @@ test.describe.serial('Save and Run Agent', () => {
 
     // Wait for the issues list to load
     await page.waitForLoadState('networkidle')
+
+    // Clear the default filter to show all issues
+    await clearIssueFilter(page)
 
     // Find a different Task issue - use one that exists in mock data
     const issueRow = page
@@ -200,11 +214,11 @@ test.describe.serial('Save and Run Agent', () => {
     // Wait for the issues list to load
     await page.waitForLoadState('networkidle')
 
-    // Find an issue to edit - use one not modified by previous tests
-    const issueRow = page
-      .locator('[role="row"]')
-      .filter({ hasText: 'Add request validation' })
-      .first()
+    // Clear the default filter to show all issues
+    await clearIssueFilter(page)
+
+    // Find Add rate limiting task (ISSUE-012) which isn't modified by other tests
+    const issueRow = page.locator('[role="row"]').filter({ hasText: 'Add rate limiting' }).first()
     await expect(issueRow).toBeVisible()
 
     // Click the Edit button within this row
@@ -215,11 +229,11 @@ test.describe.serial('Save and Run Agent', () => {
     await expect(page).toHaveURL(/\/issues\/.*\/edit/)
 
     // Wait for form to load
-    const titleInput = page.getByLabel('Title')
-    await expect(titleInput).toBeVisible()
+    const descriptionInput = page.getByLabel('Description')
+    await expect(descriptionInput).toBeVisible()
 
-    // Make a change to the issue
-    await titleInput.fill('Updated title for testing unsaved changes')
+    // Make a change to description instead of title to avoid affecting test stability
+    await descriptionInput.fill('Updated description for unsaved changes test')
 
     // Click Save & Run Agent button
     const saveAndRunButton = page.getByRole('button', { name: 'Save & Run Agent' })
