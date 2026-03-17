@@ -5,9 +5,10 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useBreadcrumbSetter } from '@/hooks/use-breadcrumbs'
 import { useCreateProject } from '@/features/projects'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Github, FolderGit2 } from 'lucide-react'
 import { useState } from 'react'
 
 export const Route = createFileRoute('/projects/new')({
@@ -16,7 +17,7 @@ export const Route = createFileRoute('/projects/new')({
 
 const projectSchema = z.object({
   name: z.string().min(1, 'Project name is required'),
-  ownerRepo: z.string().min(1, 'Repository URL or owner/repo is required'),
+  ownerRepo: z.string().optional(),
   defaultBranch: z.string(),
 })
 
@@ -26,6 +27,7 @@ export default function NewProject() {
   useBreadcrumbSetter([{ title: 'Projects', url: '/' }, { title: 'New Project' }], [])
   const navigate = useNavigate()
   const [apiError, setApiError] = useState<string | null>(null)
+  const [projectType, setProjectType] = useState<'github' | 'local'>('github')
 
   const form = useForm<ProjectFormData>({
     resolver: zodResolver(projectSchema),
@@ -53,9 +55,21 @@ export default function NewProject() {
 
   const onSubmit = (data: ProjectFormData) => {
     setApiError(null)
+
+    // Validate based on project type
+    if (projectType === 'github' && !data.ownerRepo) {
+      setApiError('Repository is required for GitHub projects')
+      return
+    }
+
+    if (projectType === 'local' && !/^[a-zA-Z0-9_-]+$/.test(data.name)) {
+      setApiError('Project name must use only letters, numbers, hyphens, and underscores')
+      return
+    }
+
     createProject.mutate({
       name: data.name,
-      ownerRepo: data.ownerRepo,
+      ownerRepo: projectType === 'github' ? data.ownerRepo : undefined,
       defaultBranch: data.defaultBranch || 'main',
     })
   }
@@ -81,6 +95,19 @@ export default function NewProject() {
           </div>
         )}
 
+        <Tabs value={projectType} onValueChange={(v) => setProjectType(v as 'github' | 'local')}>
+          <TabsList>
+            <TabsTrigger value="github">
+              <Github className="mr-2 h-4 w-4" />
+              GitHub Repository
+            </TabsTrigger>
+            <TabsTrigger value="local">
+              <FolderGit2 className="mr-2 h-4 w-4" />
+              Local Project
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+
         <div className="space-y-2">
           <Label htmlFor="name">Project Name</Label>
           <Input
@@ -92,21 +119,30 @@ export default function NewProject() {
           {errors.name && <p className="text-destructive text-sm">{errors.name.message}</p>}
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="ownerRepo">Repository</Label>
-          <Input
-            id="ownerRepo"
-            placeholder="owner/repo or https://github.com/owner/repo"
-            aria-invalid={!!errors.ownerRepo}
-            {...register('ownerRepo')}
-          />
-          {errors.ownerRepo && (
-            <p className="text-destructive text-sm">{errors.ownerRepo.message}</p>
-          )}
+        {projectType === 'github' && (
+          <div className="space-y-2">
+            <Label htmlFor="ownerRepo">Repository</Label>
+            <Input
+              id="ownerRepo"
+              placeholder="owner/repo or https://github.com/owner/repo"
+              aria-invalid={!!errors.ownerRepo}
+              {...register('ownerRepo')}
+            />
+            {errors.ownerRepo && (
+              <p className="text-destructive text-sm">{errors.ownerRepo.message}</p>
+            )}
+            <p className="text-muted-foreground text-sm">
+              GitHub repository in owner/repo format or full URL
+            </p>
+          </div>
+        )}
+
+        {projectType === 'local' && (
           <p className="text-muted-foreground text-sm">
-            GitHub repository in owner/repo format or full URL
+            Creates a new local git repository. Project name must use only letters, numbers,
+            hyphens, and underscores.
           </p>
-        </div>
+        )}
 
         <div className="space-y-2">
           <Label htmlFor="defaultBranch">Default Branch</Label>

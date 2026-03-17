@@ -83,6 +83,14 @@ describe('ProjectCard', () => {
     expect(screen.getByText('Local Project')).toBeInTheDocument()
   })
 
+  it('displays Local badge for projects without GitHub info', () => {
+    render(<ProjectCard {...defaultProps} project={mockProjectWithoutGitHub} />)
+
+    // Should show Local badge instead of GitHub owner/repo
+    const localBadge = screen.getByText('Local')
+    expect(localBadge).toBeInTheDocument()
+  })
+
   it('renders updated timestamp', () => {
     render(<ProjectCard {...defaultProps} />)
 

@@ -287,3 +287,128 @@ describe('NewProject Page', () => {
     expect(backButton).toHaveAttribute('href', '/')
   })
 })
+
+describe('NewProject Page - Local Projects', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('renders tabs for GitHub and Local project types', () => {
+    render(<NewProject />, { wrapper: createWrapper() })
+
+    expect(screen.getByRole('tab', { name: /github repository/i })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /local project/i })).toBeInTheDocument()
+  })
+
+  it('defaults to GitHub project type with repository field visible', () => {
+    render(<NewProject />, { wrapper: createWrapper() })
+
+    const githubTab = screen.getByRole('tab', { name: /github repository/i })
+    expect(githubTab).toHaveAttribute('data-state', 'active')
+    expect(screen.getByLabelText(/repository/i)).toBeInTheDocument()
+  })
+
+  it('hides repository field when Local tab is selected', async () => {
+    const user = userEvent.setup()
+    render(<NewProject />, { wrapper: createWrapper() })
+
+    const localTab = screen.getByRole('tab', { name: /local project/i })
+    await user.click(localTab)
+
+    expect(screen.queryByLabelText(/repository/i)).not.toBeInTheDocument()
+    expect(screen.getByText(/creates a new local git repository/i)).toBeInTheDocument()
+  })
+
+  it('creates local project without ownerRepo when Local is selected', async () => {
+    const mockProject = {
+      id: 'local-project-id',
+      name: 'my-local-project',
+      localPath: '/path/to/local-project',
+      defaultBranch: 'main',
+    }
+
+    vi.mocked(Projects.postApiProjects).mockResolvedValue({
+      data: mockProject,
+      error: undefined,
+      request: new Request('http://test'),
+      response: new Response(),
+    })
+
+    const user = userEvent.setup()
+    render(<NewProject />, { wrapper: createWrapper() })
+
+    // Switch to Local tab
+    const localTab = screen.getByRole('tab', { name: /local project/i })
+    await user.click(localTab)
+
+    // Fill in project name
+    const nameInput = screen.getByLabelText(/project name/i)
+    await user.type(nameInput, 'my-local-project')
+
+    // Submit the form
+    const submitButton = screen.getByRole('button', { name: /create project/i })
+    await user.click(submitButton)
+
+    await waitFor(() => {
+      expect(Projects.postApiProjects).toHaveBeenCalledWith({
+        body: {
+          name: 'my-local-project',
+          ownerRepo: undefined,
+          defaultBranch: 'main',
+        },
+      })
+    })
+
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith({
+        to: '/projects/$projectId',
+        params: { projectId: 'local-project-id' },
+      })
+    })
+  })
+
+  it('validates local project name allows only alphanumeric, hyphens, underscores', async () => {
+    const user = userEvent.setup()
+    render(<NewProject />, { wrapper: createWrapper() })
+
+    // Switch to Local tab
+    const localTab = screen.getByRole('tab', { name: /local project/i })
+    await user.click(localTab)
+
+    // Enter an invalid project name with special characters
+    const nameInput = screen.getByLabelText(/project name/i)
+    await user.type(nameInput, 'my project@name!')
+
+    // Submit the form
+    const submitButton = screen.getByRole('button', { name: /create project/i })
+    await user.click(submitButton)
+
+    await waitFor(() => {
+      const alert = screen.getByRole('alert')
+      expect(alert).toHaveTextContent(
+        /project name must use only letters, numbers, hyphens, and underscores/i
+      )
+    })
+  })
+
+  it('still requires ownerRepo when GitHub tab is selected', async () => {
+    const user = userEvent.setup()
+    render(<NewProject />, { wrapper: createWrapper() })
+
+    // Ensure GitHub tab is selected (default)
+    const githubTab = screen.getByRole('tab', { name: /github repository/i })
+    expect(githubTab).toHaveAttribute('data-state', 'active')
+
+    // Fill in project name but not repository
+    const nameInput = screen.getByLabelText(/project name/i)
+    await user.type(nameInput, 'My Project')
+
+    // Submit the form
+    const submitButton = screen.getByRole('button', { name: /create project/i })
+    await user.click(submitButton)
+
+    await waitFor(() => {
+      expect(screen.getByText(/repository.*required/i)).toBeInTheDocument()
+    })
+  })
+})
