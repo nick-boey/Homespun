@@ -119,6 +119,17 @@ tests/
 
 **Do not under any circumstances stop a container called `homespun` or `homespun-prod`.**
 
+### Accessing Application Logs
+
+Workers can query application logs from Loki at `http://homespun-loki:3100`.
+
+**Verify connectivity:**
+```bash
+curl -s 'http://homespun-loki:3100/ready'
+```
+
+For detailed log analysis with LogQL queries, use the `/logs` skill.
+
 ## React Frontend Development
 
 ### Technology Stack
