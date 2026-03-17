@@ -1,13 +1,16 @@
 import { useState } from 'react'
-import { RefreshCw, GitBranch } from 'lucide-react'
+import { useNavigate } from '@tanstack/react-router'
+import { RefreshCw, GitBranch, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { BranchCard } from './branch-card'
 import { BranchCardSkeleton } from './branch-card-skeleton'
 import { RemoteBranchRow } from './remote-branch-row'
 import { BranchesEmptyState } from './branches-empty-state'
+import { CreateBranchSessionDialog } from './create-branch-session-dialog'
 import { ErrorFallback } from '@/components/error-boundary'
 import { useClones, useDeleteClone, usePullClone, useCreateClone } from '../hooks/use-clones'
 import { useBranches, getRemoteOnlyBranches } from '../hooks/use-branches'
+import type { CreateBranchSessionResult } from '../hooks/use-create-branch-session'
 import type { BranchInfo, CloneInfo } from '@/api/generated/types.gen'
 
 export interface BranchesListProps {
@@ -16,6 +19,8 @@ export interface BranchesListProps {
 }
 
 export function BranchesList({ projectId, repoPath }: BranchesListProps) {
+  const navigate = useNavigate()
+
   const {
     data: clones,
     isLoading: clonesLoading,
@@ -40,6 +45,12 @@ export function BranchesList({ projectId, repoPath }: BranchesListProps) {
   const [deletingClones, setDeletingClones] = useState<Set<string>>(new Set())
   const [creatingBranches, setCreatingBranches] = useState<Set<string>>(new Set())
   const [isRefreshingAll, setIsRefreshingAll] = useState(false)
+  const [isNewSessionDialogOpen, setIsNewSessionDialogOpen] = useState(false)
+
+  const handleSessionCreated = (result: CreateBranchSessionResult) => {
+    // Navigate to the session page
+    navigate({ to: '/sessions/$sessionId', params: { sessionId: result.sessionId } })
+  }
 
   const isLoading = clonesLoading || branchesLoading
   const isError = clonesError || branchesError
@@ -127,10 +138,16 @@ export function BranchesList({ projectId, repoPath }: BranchesListProps) {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">Local Worktrees</h2>
-          <Button variant="outline" size="sm" disabled>
-            <RefreshCw className="mr-2 h-4 w-4" />
-            Refresh All
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" disabled>
+              <Plus className="mr-2 h-4 w-4" />
+              New Session
+            </Button>
+            <Button variant="outline" size="sm" disabled>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Refresh All
+            </Button>
+          </div>
         </div>
         <div className="grid gap-3">
           <BranchCardSkeleton />
@@ -176,16 +193,29 @@ export function BranchesList({ projectId, repoPath }: BranchesListProps) {
               <span className="text-muted-foreground text-sm font-normal">({clones.length})</span>
             )}
           </h2>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleRefreshAll}
-            disabled={isRefreshingAll || !hasLocalWorktrees}
-          >
-            <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshingAll ? 'animate-spin' : ''}`} />
-            Refresh All
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => setIsNewSessionDialogOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              New Session
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRefreshAll}
+              disabled={isRefreshingAll || !hasLocalWorktrees}
+            >
+              <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshingAll ? 'animate-spin' : ''}`} />
+              Refresh All
+            </Button>
+          </div>
         </div>
+
+        <CreateBranchSessionDialog
+          open={isNewSessionDialogOpen}
+          onOpenChange={setIsNewSessionDialogOpen}
+          projectId={projectId}
+          onSessionCreated={handleSessionCreated}
+        />
 
         {hasLocalWorktrees ? (
           <div className="grid gap-3">

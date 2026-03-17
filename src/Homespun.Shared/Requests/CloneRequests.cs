@@ -52,3 +52,45 @@ public class CloneExistsResponse
     /// </summary>
     public bool Exists { get; set; }
 }
+
+/// <summary>
+/// Request model for creating a branch session.
+/// </summary>
+public class CreateBranchSessionRequest
+{
+    /// <summary>
+    /// The project ID.
+    /// </summary>
+    public required string ProjectId { get; set; }
+
+    /// <summary>
+    /// The branch name for the session.
+    /// </summary>
+    public required string BranchName { get; set; }
+
+    /// <summary>
+    /// Base branch for the new branch. Defaults to project's default branch.
+    /// </summary>
+    public string? BaseBranch { get; set; }
+}
+
+/// <summary>
+/// Response model for creating a branch session.
+/// </summary>
+public class CreateBranchSessionResponse
+{
+    /// <summary>
+    /// The created session ID.
+    /// </summary>
+    public required string SessionId { get; set; }
+
+    /// <summary>
+    /// The branch name.
+    /// </summary>
+    public required string BranchName { get; set; }
+
+    /// <summary>
+    /// The path to the clone.
+    /// </summary>
+    public required string ClonePath { get; set; }
+}

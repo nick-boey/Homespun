@@ -5,10 +5,12 @@ export {
   RemoteBranchRow,
   BranchesEmptyState,
   BranchesList,
+  CreateBranchSessionDialog,
   type BranchCardProps,
   type RemoteBranchRowProps,
   type BranchesEmptyStateProps,
   type BranchesListProps,
+  type CreateBranchSessionDialogProps,
 } from './components'
 
 // Hooks
@@ -23,4 +25,7 @@ export {
   branchesQueryKey,
   getRemoteOnlyBranches,
   getLocalBranches,
+  useCreateBranchSession,
+  type CreateBranchSessionParams,
+  type CreateBranchSessionResult,
 } from './hooks'
