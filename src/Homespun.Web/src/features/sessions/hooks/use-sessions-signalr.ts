@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useClaudeCodeHub } from '@/providers/signalr-provider'
 import { registerClaudeCodeHubEvents } from '@/lib/signalr/claude-code-hub'
-import { invalidateAllSessionsQueries } from './use-sessions'
+import { invalidateAllSessionsQueries, invalidateTaskGraphQueries } from './use-sessions'
 
 /**
  * Hook that subscribes to SignalR session events and invalidates all session queries.
@@ -27,10 +27,17 @@ export function useSessionsSignalR(): void {
       invalidateAllSessionsQueries(queryClient)
     }
 
+    // Session lifecycle events should also invalidate task graphs
+    // since task graph nodes show agent status rings
+    const invalidateSessionAndTaskGraphs = () => {
+      invalidateAllSessionsQueries(queryClient)
+      invalidateTaskGraphQueries(queryClient)
+    }
+
     const cleanup = registerClaudeCodeHubEvents(connection, {
-      onSessionStarted: invalidate,
-      onSessionStopped: invalidate,
-      onSessionStatusChanged: invalidate,
+      onSessionStarted: invalidateSessionAndTaskGraphs,
+      onSessionStopped: invalidateSessionAndTaskGraphs,
+      onSessionStatusChanged: invalidateSessionAndTaskGraphs,
       onSessionError: invalidate,
       onSessionResultReceived: invalidate,
       onSessionModeModelChanged: invalidate,

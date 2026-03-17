@@ -20,6 +20,16 @@ export async function invalidateAllSessionsQueries(queryClient: QueryClient): Pr
   ])
 }
 
+/**
+ * Invalidates all task graph queries.
+ * Task graphs display agent status rings that need updating when session status changes.
+ */
+export async function invalidateTaskGraphQueries(queryClient: QueryClient): Promise<void> {
+  await queryClient.invalidateQueries({
+    predicate: (query) => Array.isArray(query.queryKey) && query.queryKey[0] === 'taskGraph',
+  })
+}
+
 export function useSessions() {
   return useQuery({
     queryKey: sessionsQueryKey,

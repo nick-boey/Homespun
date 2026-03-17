@@ -10,6 +10,7 @@ import {
   useStopSession,
   sessionsQueryKey,
   invalidateAllSessionsQueries,
+  invalidateTaskGraphQueries,
   allSessionsCountQueryKey,
 } from './use-sessions'
 
@@ -211,6 +212,43 @@ describe('invalidateAllSessionsQueries', () => {
     expect(predicate({ queryKey: ['project-sessions', 'project-1'] } as never)).toBe(true)
     expect(predicate({ queryKey: ['project-sessions', 'project-2'] } as never)).toBe(true)
     expect(predicate({ queryKey: ['other-query'] } as never)).toBe(false)
+  })
+})
+
+describe('invalidateTaskGraphQueries', () => {
+  it('invalidates task graph queries via predicate', async () => {
+    const queryClient = new QueryClient()
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+
+    await invalidateTaskGraphQueries(queryClient)
+
+    // Check that predicate-based invalidation was called
+    const predicateCall = invalidateSpy.mock.calls.find(
+      (call) => typeof call[0]?.predicate === 'function'
+    )
+    expect(predicateCall).toBeDefined()
+
+    // Test the predicate function
+    const predicate = predicateCall![0]!.predicate!
+    expect(predicate({ queryKey: ['taskGraph', 'project-1'] } as never)).toBe(true)
+    expect(predicate({ queryKey: ['taskGraph', 'project-2'] } as never)).toBe(true)
+    expect(predicate({ queryKey: ['other-query'] } as never)).toBe(false)
+    expect(predicate({ queryKey: ['sessions'] } as never)).toBe(false)
+  })
+
+  it('does not match non-array query keys', async () => {
+    const queryClient = new QueryClient()
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+
+    await invalidateTaskGraphQueries(queryClient)
+
+    const predicateCall = invalidateSpy.mock.calls.find(
+      (call) => typeof call[0]?.predicate === 'function'
+    )
+    const predicate = predicateCall![0]!.predicate!
+
+    // Non-array query keys should not match
+    expect(predicate({ queryKey: 'taskGraph' } as never)).toBe(false)
   })
 })
 
