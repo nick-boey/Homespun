@@ -495,25 +495,11 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                 await _messageCache.AppendMessageAsync(sessionId, messageContext.CurrentAssistantMessage, linkedCts.Token);
             }
 
-            // Only transition to WaitingForInput if currently Running or in a recoverable waiting state.
-            // This prevents race conditions where special states were set during processing.
-            if (session.Status == ClaudeSessionStatus.WaitingForQuestionAnswer)
-            {
-                // Question flow will handle the state transition — leave status as-is
-            }
-            else if (session.Status == ClaudeSessionStatus.WaitingForPlanExecution && session.HasPendingPlanApproval)
-            {
-                // The SSE stream ended while plan approval was still pending (e.g. worker connection
-                // lost or worker timed out). Recover to WaitingForInput so the session doesn't get
-                // stuck permanently. Plan content is preserved so the user can still approve via
-                // ApprovePlanAsync, which handles the dead-worker case via ExecutePlanAsync.
-                _logger.LogWarning(
-                    "Session {SessionId} SSE stream ended while plan approval was still pending — recovering to WaitingForInput",
-                    sessionId);
-                session.Status = ClaudeSessionStatus.WaitingForInput;
-                await _hubContext.BroadcastSessionStatusChanged(sessionId, session.Status);
-            }
-            else if (session.Status == ClaudeSessionStatus.Running)
+            // Only transition to WaitingForInput if currently Running.
+            // This prevents race conditions where special states (WaitingForPlanExecution,
+            // WaitingForQuestionAnswer) were set during processing — those flows handle
+            // their own state transitions.
+            if (session.Status == ClaudeSessionStatus.Running)
             {
                 session.Status = ClaudeSessionStatus.WaitingForInput;
                 await _hubContext.BroadcastSessionStatusChanged(sessionId, session.Status);
