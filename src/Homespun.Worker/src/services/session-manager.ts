@@ -827,8 +827,10 @@ export class SessionManager {
       `setMode - mode updated to '${mode}', permissionMode='${newPermissionMode}' (sessionId='${sessionId}')`,
     );
 
-    // Update permission mode on the SDK query if available
-    if (ws.query.setPermissionMode) {
+    // Update permission mode on the SDK query if available.
+    // Skip if the query has already completed (resultReceived) — calling
+    // setPermissionMode on an exited CLI process will hang indefinitely.
+    if (!ws.resultReceived && ws.query.setPermissionMode) {
       await ws.query.setPermissionMode(newPermissionMode);
       info(
         `setMode - setPermissionMode('${newPermissionMode}') applied (sessionId='${sessionId}')`,
@@ -889,8 +891,11 @@ export class SessionManager {
       info(
         `mode updated to '${ws.mode}', permissionMode='${ws.permissionMode}'`,
       );
-      // Update permission mode on the query if possible
-      if (ws.query.setPermissionMode) {
+      // Only update the running query's permission mode if it's still active.
+      // If resultReceived is true, the CLI process has exited and
+      // setPermissionMode will hang. The new query (created below) will
+      // use the updated ws.permissionMode instead.
+      if (!ws.resultReceived && ws.query.setPermissionMode) {
         await ws.query.setPermissionMode(ws.permissionMode);
         info(`setPermissionMode('${ws.permissionMode}') applied`);
       }
