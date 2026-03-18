@@ -3,6 +3,7 @@ import { FolderGit2, Github, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { Card, CardHeader, CardTitle, CardDescription, CardAction } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -68,11 +69,16 @@ export function ProjectCard({ project, onDelete }: ProjectCardProps) {
         </Link>
         <CardDescription className="space-y-1">
           <span className="block font-mono text-xs">{project.localPath}</span>
-          {project.gitHubOwner && project.gitHubRepo && (
+          {project.gitHubOwner && project.gitHubRepo ? (
             <span className="flex items-center gap-1.5 text-xs">
               <Github className="h-3.5 w-3.5" />
               {project.gitHubOwner}/{project.gitHubRepo}
             </span>
+          ) : (
+            <Badge variant="secondary" className="text-xs">
+              <FolderGit2 className="mr-1 h-3 w-3" />
+              Local
+            </Badge>
           )}
           {project.updatedAt && (
             <span className="text-muted-foreground/70 block text-xs">
