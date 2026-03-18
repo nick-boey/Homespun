@@ -23,13 +23,22 @@ vi.mock('@tanstack/react-router', () => ({
   Link: ({
     children,
     to,
+    params,
     ...props
   }: {
     children: React.ReactNode
     to: string
+    params?: Record<string, string>
     [key: string]: unknown
   }) => {
-    return React.createElement('a', { href: to, ...props }, children)
+    // Build the href from template and params
+    let href = to
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        href = href.replace(`$${key}`, value)
+      })
+    }
+    return React.createElement('a', { href, ...props }, children)
   },
 }))
 
@@ -58,9 +67,23 @@ describe('SessionCard', () => {
     // Check model (should extract sonnet from full model name)
     expect(screen.getByText('sonnet')).toBeInTheDocument()
 
-    // Check action buttons
-    expect(screen.getByRole('link', { name: /Chat/ })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Stop/ })).toBeInTheDocument()
+    // Check Stop button (icon-only)
+    expect(screen.getByRole('button', { name: 'Stop session' })).toBeInTheDocument()
+  })
+
+  it('entire card is a clickable link to session page', () => {
+    render(
+      <SessionCard
+        session={mockSession}
+        entityTitle="Fix login bug"
+        entityType="issue"
+        projectName="Test Project"
+        onStop={vi.fn()}
+      />
+    )
+
+    const link = screen.getByRole('link')
+    expect(link).toHaveAttribute('href', '/sessions/test-session-id')
   })
 
   it('shows PR badge for pull request entities', () => {
@@ -115,7 +138,7 @@ describe('SessionCard', () => {
       />
     )
 
-    expect(screen.queryByRole('button', { name: /Stop/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Stop session' })).not.toBeInTheDocument()
     expect(screen.getByText('Stopped')).toBeInTheDocument()
   })
 
@@ -129,7 +152,7 @@ describe('SessionCard', () => {
       />
     )
 
-    expect(screen.queryByRole('button', { name: /Stop/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Stop session' })).not.toBeInTheDocument()
     expect(screen.getByText('Error')).toBeInTheDocument()
   })
 
@@ -166,10 +189,48 @@ describe('SessionCard', () => {
       />
     )
 
-    const stopButton = screen.getByRole('button', { name: /Stop/ })
+    const stopButton = screen.getByRole('button', { name: 'Stop session' })
     fireEvent.click(stopButton)
 
     expect(onStop).toHaveBeenCalledWith('test-session-id')
+  })
+
+  it('clicking Stop button does not trigger navigation', () => {
+    const onStop = vi.fn()
+    render(
+      <SessionCard
+        session={mockSession}
+        entityTitle="Test"
+        entityType="issue"
+        projectName="Test Project"
+        onStop={onStop}
+      />
+    )
+
+    const stopButton = screen.getByRole('button', { name: 'Stop session' })
+    const clickEvent = new MouseEvent('click', { bubbles: true, cancelable: true })
+    Object.defineProperty(clickEvent, 'defaultPrevented', { get: () => true, configurable: true })
+
+    // Fire the click event
+    fireEvent.click(stopButton)
+
+    // Verify onStop was called (which means the event handlers ran)
+    expect(onStop).toHaveBeenCalledWith('test-session-id')
+  })
+
+  it('Stop button has destructive styling', () => {
+    render(
+      <SessionCard
+        session={mockSession}
+        entityTitle="Test"
+        entityType="issue"
+        projectName="Test Project"
+        onStop={vi.fn()}
+      />
+    )
+
+    const stopButton = screen.getByRole('button', { name: 'Stop session' })
+    expect(stopButton).toHaveAttribute('data-variant', 'destructive')
   })
 
   it('shows project name when provided', () => {

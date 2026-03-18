@@ -3,7 +3,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 
 export function SessionCardSkeleton() {
   return (
-    <Card>
+    <Card className="relative">
+      <Skeleton className="absolute top-2 right-2 h-8 w-8 rounded-md" />
       <CardHeader>
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1 space-y-2">
@@ -11,7 +12,7 @@ export function SessionCardSkeleton() {
               <Skeleton className="h-5 w-12" />
               <Skeleton className="h-4 w-24" />
             </div>
-            <Skeleton className="h-5 w-48" />
+            <Skeleton className="h-5 w-full" />
           </div>
           <Skeleton className="h-6 w-16" />
         </div>
@@ -26,10 +27,6 @@ export function SessionCardSkeleton() {
             <Skeleton className="h-4 w-28" />
           </div>
           <Skeleton className="h-4 w-24" />
-        </div>
-        <div className="mt-4 flex items-center gap-2">
-          <Skeleton className="h-8 w-16" />
-          <Skeleton className="h-8 w-16" />
         </div>
       </CardHeader>
     </Card>

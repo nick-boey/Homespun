@@ -143,7 +143,7 @@ export function SessionsList() {
             </TabsList>
           </Tabs>
         </div>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4">
           {[1, 2, 3, 4, 5, 6].map((i) => (
             <SessionCardSkeleton key={i} />
           ))}
@@ -285,7 +285,7 @@ function SessionsGrid({ groupedSessions, onStopSession, isStopPending }: Session
                 ({projectSessions.length} session{projectSessions.length !== 1 ? 's' : ''})
               </span>
             </h3>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-4">
               {projectSessions.map((enrichedSession) => (
                 <SessionCard
                   key={enrichedSession.session.id}

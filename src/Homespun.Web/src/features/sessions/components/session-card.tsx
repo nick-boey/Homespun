@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router'
 import { MessageSquare, Square } from 'lucide-react'
-import { Card, CardHeader, CardTitle, CardDescription, CardAction } from '@/components/ui/card'
+import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { StatusIndicator } from './status-indicator'
@@ -121,81 +121,82 @@ export function SessionCard({
   const displayTitle = entityTitle || session.entityId || 'Unknown Entity'
   const isActive = isActiveStatus(session.status)
 
+  const handleStopClick = (event: React.MouseEvent) => {
+    event.preventDefault()
+    event.stopPropagation()
+    if (session.id) {
+      onStop?.(session.id)
+    }
+  }
+
   return (
-    <Card className="hover:bg-muted/50 transition-colors">
-      <CardHeader>
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <div className="mb-1 flex items-center gap-2">
-              <Badge variant="outline" className="text-xs">
-                {entityType === 'pr' ? 'PR' : 'Issue'}
-              </Badge>
-              {projectName && <span className="text-muted-foreground text-xs">{projectName}</span>}
-              {projectName && session.entityId && (
-                <span className="text-muted-foreground text-xs">•</span>
-              )}
-              {session.entityId && (
-                <span className="text-muted-foreground text-xs">{session.entityId}</span>
-              )}
+    <Link to="/sessions/$sessionId" params={{ sessionId: session.id ?? '' }}>
+      <Card className="hover:bg-muted/50 relative transition-colors">
+        {isActive && onStop && (
+          <Button
+            variant="destructive"
+            size="icon-sm"
+            className="absolute top-2 right-2 z-10"
+            onClick={handleStopClick}
+            disabled={isStopPending}
+            aria-label="Stop session"
+          >
+            <Square className="h-3 w-3" />
+          </Button>
+        )}
+        <CardHeader>
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <div className="mb-1 flex items-center gap-2">
+                <Badge variant="outline" className="text-xs">
+                  {entityType === 'pr' ? 'PR' : 'Issue'}
+                </Badge>
+                {projectName && (
+                  <span className="text-muted-foreground text-xs">{projectName}</span>
+                )}
+                {projectName && session.entityId && (
+                  <span className="text-muted-foreground text-xs">•</span>
+                )}
+                {session.entityId && (
+                  <span className="text-muted-foreground text-xs">{session.entityId}</span>
+                )}
+              </div>
+              <CardTitle className="text-base">{displayTitle}</CardTitle>
             </div>
-            <CardTitle className="line-clamp-2 text-base">{displayTitle}</CardTitle>
-          </div>
-          <div className="flex items-center gap-2">
-            <Badge variant={getStatusVariant(session.status)} className="flex items-center gap-1.5">
-              <StatusIndicator status={session.status} size="sm" />
-              {getStatusLabel(session.status)}
-            </Badge>
-          </div>
-        </div>
-        <CardDescription className="mt-3 space-y-2">
-          <div className="flex items-center gap-4 text-xs">
-            <div className="flex items-center gap-1">
-              <Badge variant="secondary" className="text-xs">
-                {getModeLabel(session.mode)}
-              </Badge>
-            </div>
-            <span className="text-muted-foreground">{getModelName(session.model)}</span>
-          </div>
-          <div className="text-muted-foreground flex items-center gap-4 text-xs">
-            {session.createdAt && <span>Started {formatRelativeTime(session.createdAt)}</span>}
-            {session.lastActivityAt && (
-              <span>Active {formatRelativeTime(session.lastActivityAt)}</span>
-            )}
-          </div>
-          {messageCount !== undefined && (
-            <div className="text-muted-foreground flex items-center gap-1 text-xs">
-              <MessageSquare className="h-3 w-3" />
-              <span>{messageCount} messages</span>
-            </div>
-          )}
-        </CardDescription>
-        <CardAction>
-          <div className="flex items-center gap-2">
-            <Link
-              to="/sessions/$sessionId"
-              params={{ sessionId: session.id ?? '' }}
-              className="inline-flex"
-            >
-              <Button variant="ghost" size="sm">
-                <MessageSquare className="mr-1 h-3 w-3" />
-                Chat
-              </Button>
-            </Link>
-            {isActive && onStop && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => session.id && onStop(session.id)}
-                disabled={isStopPending}
-                aria-label="Stop session"
+            <div className="flex items-center gap-2">
+              <Badge
+                variant={getStatusVariant(session.status)}
+                className="flex items-center gap-1.5"
               >
-                <Square className="mr-1 h-3 w-3" />
-                Stop
-              </Button>
-            )}
+                <StatusIndicator status={session.status} size="sm" />
+                {getStatusLabel(session.status)}
+              </Badge>
+            </div>
           </div>
-        </CardAction>
-      </CardHeader>
-    </Card>
+          <CardDescription className="mt-3 space-y-2">
+            <div className="flex items-center gap-4 text-xs">
+              <div className="flex items-center gap-1">
+                <Badge variant="secondary" className="text-xs">
+                  {getModeLabel(session.mode)}
+                </Badge>
+              </div>
+              <span className="text-muted-foreground">{getModelName(session.model)}</span>
+            </div>
+            <div className="text-muted-foreground flex items-center gap-4 text-xs">
+              {session.createdAt && <span>Started {formatRelativeTime(session.createdAt)}</span>}
+              {session.lastActivityAt && (
+                <span>Active {formatRelativeTime(session.lastActivityAt)}</span>
+              )}
+            </div>
+            {messageCount !== undefined && (
+              <div className="text-muted-foreground flex items-center gap-1 text-xs">
+                <MessageSquare className="h-3 w-3" />
+                <span>{messageCount} messages</span>
+              </div>
+            )}
+          </CardDescription>
+        </CardHeader>
+      </Card>
+    </Link>
   )
 }

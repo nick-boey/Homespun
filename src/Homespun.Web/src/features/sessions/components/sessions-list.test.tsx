@@ -291,16 +291,16 @@ describe('SessionsList', () => {
     expect(screen.getByText('Error')).toBeInTheDocument()
   })
 
-  it('navigates to session on row click', async () => {
+  it('navigates to session on card click', async () => {
     render(<SessionsList />, { wrapper: createWrapper() })
 
     await waitFor(() => {
       expect(screen.getByText('Fix login bug')).toBeInTheDocument()
     })
 
-    // Check that chat button is a link
-    const chatLink = screen.getByRole('link', { name: /Chat/i })
-    expect(chatLink).toHaveAttribute('href', '/sessions/session-1')
+    // Check that the card is wrapped in a link
+    const sessionLink = screen.getByRole('link')
+    expect(sessionLink).toHaveAttribute('href', '/sessions/session-1')
   })
 
   it('shows stop action for active sessions', async () => {
