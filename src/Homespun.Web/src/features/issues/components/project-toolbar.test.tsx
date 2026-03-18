@@ -49,6 +49,7 @@ const defaultProps = {
   onNextMatch: vi.fn(),
   onPreviousMatch: vi.fn(),
   onEmbedSearch: vi.fn(),
+  onApplyDefaultFilter: vi.fn(),
 }
 
 function renderToolbar(props = {}) {
@@ -454,15 +455,31 @@ describe('ProjectToolbar', () => {
     })
   })
 
+  describe('My Tasks button', () => {
+    it('renders My Tasks button', () => {
+      renderToolbar()
+      expect(screen.getByTestId('toolbar-my-tasks-button')).toBeInTheDocument()
+    })
+
+    it('calls onApplyDefaultFilter when My Tasks button is clicked', async () => {
+      const user = userEvent.setup()
+      const onApplyDefaultFilter = vi.fn()
+      renderToolbar({ onApplyDefaultFilter })
+
+      await user.click(screen.getByTestId('toolbar-my-tasks-button'))
+      expect(onApplyDefaultFilter).toHaveBeenCalled()
+    })
+  })
+
   describe('Filter panel', () => {
     it('does not render filter panel when filterActive is false', () => {
       renderToolbar({ filterActive: false })
-      expect(screen.queryByTestId('filter-panel')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('filter-input')).not.toBeInTheDocument()
     })
 
-    it('renders filter panel when filterActive is true', () => {
+    it('renders filter input inline when filterActive is true', () => {
       renderToolbar({ filterActive: true })
-      expect(screen.getByTestId('filter-panel')).toBeInTheDocument()
+      expect(screen.getByTestId('filter-input')).toBeInTheDocument()
     })
 
     it('renders filter input', () => {
