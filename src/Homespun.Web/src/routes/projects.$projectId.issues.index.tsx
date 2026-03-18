@@ -41,10 +41,10 @@ function IssuesList() {
   // Compute search match count from rendered issues
   const [searchMatchCount] = useState(0)
 
-  // Filter state - default to showing filter panel with default filters
-  const [filterActive, setFilterActive] = useState(true)
-  const [filterQuery, setFilterQuery] = useState(defaultFilterQuery)
-  const [appliedFilterQuery, setAppliedFilterQuery] = useState(defaultFilterQuery)
+  // Filter state - default to no filter on page load
+  const [filterActive, setFilterActive] = useState(false)
+  const [filterQuery, setFilterQuery] = useState('')
+  const [appliedFilterQuery, setAppliedFilterQuery] = useState('')
 
   // Parse the applied filter query and resolve "me" keyword
   const appliedFilter: ParsedFilter | null = useMemo(() => {
@@ -235,6 +235,13 @@ function IssuesList() {
     setAppliedFilterQuery(filterQuery)
   }, [filterQuery])
 
+  const handleApplyDefaultFilter = useCallback(() => {
+    setFilterActive(true)
+    setFilterQuery(defaultFilterQuery)
+    setAppliedFilterQuery(defaultFilterQuery)
+    setTimeout(() => filterInputRef.current?.focus(), 0)
+  }, [defaultFilterQuery])
+
   // Focus filter input with cursor at end (for 'f' key when filter is already active)
   const handleFocusFilterAtEnd = useCallback(() => {
     if (filterInputRef.current) {
@@ -292,6 +299,7 @@ function IssuesList() {
         onApplyFilter={handleApplyFilter}
         filterMatchCount={filterMatchCount}
         filterInputRef={filterInputRef}
+        onApplyDefaultFilter={handleApplyDefaultFilter}
       />
 
       {/* Task Graph View */}
