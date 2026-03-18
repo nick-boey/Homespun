@@ -69,7 +69,7 @@ test.describe('AG-UI Sessions', () => {
       }
     })
 
-    test('session cards have action buttons', async ({ page }) => {
+    test('session cards are clickable for navigation', async ({ page }) => {
       await page.goto('/sessions')
       await page.waitForLoadState('networkidle')
 
@@ -80,9 +80,9 @@ test.describe('AG-UI Sessions', () => {
       if (cardCount > 0) {
         const firstCard = cards.first()
 
-        // Check for "Chat" button/link
-        const chatButton = firstCard.locator('text=Chat')
-        await expect(chatButton).toBeVisible()
+        // Check that the card is wrapped in a link (entire card is clickable)
+        const cardLink = firstCard.locator('xpath=ancestor::a[contains(@href, "/sessions/")]')
+        await expect(cardLink).toBeVisible()
       }
     })
 
