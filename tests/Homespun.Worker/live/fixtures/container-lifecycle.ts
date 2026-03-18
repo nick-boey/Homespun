@@ -13,7 +13,7 @@ import net from "node:net";
 const execAsync = promisify(exec);
 
 export interface ContainerConfig {
-  /** Docker image name (default: homespun-worker:latest) */
+  /** Docker image name (default: homespun-worker:local) */
   imageName: string;
   /** Container name prefix (will be suffixed with UUID) */
   containerNamePrefix: string;
@@ -50,7 +50,7 @@ export interface ContainerHandle {
 }
 
 const DEFAULT_CONFIG: ContainerConfig = {
-  imageName: "homespun-worker:latest",
+  imageName: "homespun-worker:local",
   containerNamePrefix: "homespun-live-test",
   port: 0, // Dynamic allocation
 };
@@ -196,11 +196,11 @@ export async function verifyPrerequisites(): Promise<void> {
 
   // Check image exists
   const { stdout: images } = await execAsync(
-    "docker images homespun-worker:latest -q"
+    "docker images homespun-worker:local -q"
   );
   if (!images.trim()) {
     throw new Error(
-      "homespun-worker:latest image not found. Build it with: docker build -t homespun-worker:latest ./src/Homespun.Worker"
+      "homespun-worker:local image not found. Build it with: docker build -t homespun-worker:local ./src/Homespun.Worker"
     );
   }
 

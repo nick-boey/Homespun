@@ -11,8 +11,8 @@
     "dev": "tsx src/index.ts",
     "test": "vitest",
     "test:run": "vitest run",
-    "test:live": "vitest run --config ../../tests/Homespun.Worker/live/vitest.config.live.ts",
-    "test:live:watch": "vitest --config ../../tests/Homespun.Worker/live/vitest.config.live.ts"
+    "test:live": "vitest run --config vitest.config.live.ts",
+    "test:live:watch": "vitest --config vitest.config.live.ts"
   },
   "dependencies": {
     "@a2a-js/sdk": "^0.3.10",
