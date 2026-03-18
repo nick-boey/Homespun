@@ -41,4 +41,12 @@ public class AgentPrompt
     /// When the agent prompt was last updated.
     /// </summary>
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+    /// <summary>
+    /// Optional session type that restricts this prompt to specialized session workflows.
+    /// When set, the prompt is excluded from standard prompt lists and used only for its
+    /// specific session type (e.g., IssueModify prompts are only used by the Issues Agent).
+    /// Null means this is a standard prompt available for normal agent sessions.
+    /// </summary>
+    public SessionType? SessionType { get; set; }
 }

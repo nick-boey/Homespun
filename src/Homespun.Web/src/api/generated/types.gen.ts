@@ -4,6 +4,18 @@ export type ClientOptions = {
   baseUrl: `${string}://${string}` | (string & {})
 }
 
+export type AcceptIssuesAgentChangesResponse = {
+  success?: boolean
+  message?: string | null
+  redirectUrl?: string | null
+}
+
+export type AgentAlreadyRunningResponse = {
+  sessionId: string | null
+  status: ClaudeSessionStatus
+  message: string | null
+}
+
 export type AgentPrompt = {
   id?: string | null
   name?: string | null
@@ -12,11 +24,12 @@ export type AgentPrompt = {
   projectId?: string | null
   createdAt?: string
   updatedAt?: string
+  sessionType?: SessionType
 }
 
 export type AgentStatusData = {
   isActive?: boolean
-  status: string | null
+  status: ClaudeSessionStatus
   sessionId: string | null
 }
 
@@ -245,6 +258,17 @@ export type CreateIssueRequest = {
   childIssueId?: string | null
 }
 
+export type CreateIssuesAgentSessionRequest = {
+  projectId: string | null
+  model?: string | null
+}
+
+export type CreateIssuesAgentSessionResponse = {
+  sessionId: string | null
+  branchName: string | null
+  clonePath: string | null
+}
+
 export type CreateNotificationRequest = {
   type?: NotificationType
   title: string | null
@@ -447,6 +471,19 @@ export type IssueConflictDto = {
   baseIssue?: IssueDto
   mainIssue?: IssueDto
   agentIssue?: IssueDto
+}
+
+export type IssueDiffResponse = {
+  mainBranchGraph: TaskGraphResponse
+  sessionBranchGraph: TaskGraphResponse
+  changes: Array<IssueChangeDto> | null
+  summary: IssueDiffSummary
+}
+
+export type IssueDiffSummary = {
+  created?: number
+  updated?: number
+  deleted?: number
 }
 
 export type IssueDto = {
@@ -807,14 +844,7 @@ export type SessionSummary = {
   totalCostUsd?: number
   containerId?: string | null
   containerName?: string | null
-}
-
-export type SessionTestRequest = {
-  prompt: string | null
-  workingDirectory?: string | null
-  mode?: SessionMode
-  model?: string | null
-  systemPrompt?: string | null
+  sessionType?: SessionType
 }
 
 export const SessionType = { STANDARD: 'standard', ISSUE_MODIFY: 'issueModify' } as const
@@ -1209,98 +1239,6 @@ export type PostApiAgentPromptsEnsureDefaultsResponses = {
 export type PostApiAgentPromptsEnsureDefaultsResponse =
   PostApiAgentPromptsEnsureDefaultsResponses[keyof PostApiAgentPromptsEnsureDefaultsResponses]
 
-export type GetTestAgentCliTestData = {
-  body?: never
-  path?: never
-  query?: {
-    prompt?: string
-  }
-  url: '/test/agent/cli-test'
-}
-
-export type GetTestAgentCliTestResponses = {
-  /**
-   * OK
-   */
-  200: unknown
-}
-
-export type PostTestAgentSessionTestData = {
-  body?: SessionTestRequest
-  path?: never
-  query?: never
-  url: '/test/agent/session-test'
-}
-
-export type PostTestAgentSessionTestResponses = {
-  /**
-   * OK
-   */
-  200: unknown
-}
-
-export type GetTestAgentSubprocessTestData = {
-  body?: never
-  path?: never
-  query?: {
-    prompt?: string
-  }
-  url: '/test/agent/subprocess-test'
-}
-
-export type GetTestAgentSubprocessTestResponses = {
-  /**
-   * OK
-   */
-  200: unknown
-}
-
-export type GetTestAgentSubprocessStdinTestData = {
-  body?: never
-  path?: never
-  query?: {
-    prompt?: string
-  }
-  url: '/test/agent/subprocess-stdin-test'
-}
-
-export type GetTestAgentSubprocessStdinTestResponses = {
-  /**
-   * OK
-   */
-  200: unknown
-}
-
-export type GetTestAgentToolCallData = {
-  body?: never
-  path?: never
-  query?: never
-  url: '/test/agent/tool-call'
-}
-
-export type GetTestAgentToolCallResponses = {
-  /**
-   * OK
-   */
-  200: unknown
-}
-
-export type GetTestAgentSignalrStreamData = {
-  body?: never
-  path?: never
-  query?: {
-    prompt?: string
-  }
-  url: '/test/agent/signalr-stream'
-}
-
-export type GetTestAgentSignalrStreamResponses = {
-  /**
-   * OK
-   */
-  200: unknown
-}
-
 export type PostApiClientTelemetryData = {
   body?: ClientTelemetryBatch
   path?: never
@@ -1412,36 +1350,6 @@ export type PostApiClonesResponses = {
 }
 
 export type PostApiClonesResponse = PostApiClonesResponses[keyof PostApiClonesResponses]
-
-export type PostApiClonesSessionData = {
-  body?: CreateBranchSessionRequest
-  path?: never
-  query?: never
-  url: '/api/Clones/session'
-}
-
-export type PostApiClonesSessionErrors = {
-  /**
-   * Bad Request
-   */
-  400: ProblemDetails
-  /**
-   * Not Found
-   */
-  404: ProblemDetails
-}
-
-export type PostApiClonesSessionError = PostApiClonesSessionErrors[keyof PostApiClonesSessionErrors]
-
-export type PostApiClonesSessionResponses = {
-  /**
-   * Created
-   */
-  201: CreateBranchSessionResponse
-}
-
-export type PostApiClonesSessionResponse =
-  PostApiClonesSessionResponses[keyof PostApiClonesSessionResponses]
 
 export type GetApiClonesExistsData = {
   body?: never
@@ -1603,6 +1511,36 @@ export type GetApiClonesSessionBranchInfoResponses = {
 
 export type GetApiClonesSessionBranchInfoResponse =
   GetApiClonesSessionBranchInfoResponses[keyof GetApiClonesSessionBranchInfoResponses]
+
+export type PostApiClonesSessionData = {
+  body?: CreateBranchSessionRequest
+  path?: never
+  query?: never
+  url: '/api/Clones/session'
+}
+
+export type PostApiClonesSessionErrors = {
+  /**
+   * Bad Request
+   */
+  400: ProblemDetails
+  /**
+   * Not Found
+   */
+  404: ProblemDetails
+}
+
+export type PostApiClonesSessionError = PostApiClonesSessionErrors[keyof PostApiClonesSessionErrors]
+
+export type PostApiClonesSessionResponses = {
+  /**
+   * Created
+   */
+  201: CreateBranchSessionResponse
+}
+
+export type PostApiClonesSessionResponse =
+  PostApiClonesSessionResponses[keyof PostApiClonesSessionResponses]
 
 export type GetApiContainersData = {
   body?: never
@@ -2263,6 +2201,10 @@ export type PostApiIssuesByIssueIdRunErrors = {
    * Not Found
    */
   404: ProblemDetails
+  /**
+   * Conflict
+   */
+  409: AgentAlreadyRunningResponse
 }
 
 export type PostApiIssuesByIssueIdRunError =
@@ -2430,6 +2372,132 @@ export type PostApiProjectsByProjectIdIssuesHistoryRedoResponses = {
 
 export type PostApiProjectsByProjectIdIssuesHistoryRedoResponse =
   PostApiProjectsByProjectIdIssuesHistoryRedoResponses[keyof PostApiProjectsByProjectIdIssuesHistoryRedoResponses]
+
+export type PostApiIssuesAgentSessionData = {
+  body?: CreateIssuesAgentSessionRequest
+  path?: never
+  query?: never
+  url: '/api/issues-agent/session'
+}
+
+export type PostApiIssuesAgentSessionErrors = {
+  /**
+   * Bad Request
+   */
+  400: ProblemDetails
+  /**
+   * Not Found
+   */
+  404: ProblemDetails
+}
+
+export type PostApiIssuesAgentSessionError =
+  PostApiIssuesAgentSessionErrors[keyof PostApiIssuesAgentSessionErrors]
+
+export type PostApiIssuesAgentSessionResponses = {
+  /**
+   * Created
+   */
+  201: CreateIssuesAgentSessionResponse
+}
+
+export type PostApiIssuesAgentSessionResponse =
+  PostApiIssuesAgentSessionResponses[keyof PostApiIssuesAgentSessionResponses]
+
+export type GetApiIssuesAgentBySessionIdDiffData = {
+  body?: never
+  path: {
+    sessionId: string
+  }
+  query?: never
+  url: '/api/issues-agent/{sessionId}/diff'
+}
+
+export type GetApiIssuesAgentBySessionIdDiffErrors = {
+  /**
+   * Bad Request
+   */
+  400: ProblemDetails
+  /**
+   * Not Found
+   */
+  404: ProblemDetails
+}
+
+export type GetApiIssuesAgentBySessionIdDiffError =
+  GetApiIssuesAgentBySessionIdDiffErrors[keyof GetApiIssuesAgentBySessionIdDiffErrors]
+
+export type GetApiIssuesAgentBySessionIdDiffResponses = {
+  /**
+   * OK
+   */
+  200: IssueDiffResponse
+}
+
+export type GetApiIssuesAgentBySessionIdDiffResponse =
+  GetApiIssuesAgentBySessionIdDiffResponses[keyof GetApiIssuesAgentBySessionIdDiffResponses]
+
+export type PostApiIssuesAgentBySessionIdAcceptData = {
+  body?: never
+  path: {
+    sessionId: string
+  }
+  query?: never
+  url: '/api/issues-agent/{sessionId}/accept'
+}
+
+export type PostApiIssuesAgentBySessionIdAcceptErrors = {
+  /**
+   * Bad Request
+   */
+  400: ProblemDetails
+  /**
+   * Not Found
+   */
+  404: ProblemDetails
+}
+
+export type PostApiIssuesAgentBySessionIdAcceptError =
+  PostApiIssuesAgentBySessionIdAcceptErrors[keyof PostApiIssuesAgentBySessionIdAcceptErrors]
+
+export type PostApiIssuesAgentBySessionIdAcceptResponses = {
+  /**
+   * OK
+   */
+  200: AcceptIssuesAgentChangesResponse
+}
+
+export type PostApiIssuesAgentBySessionIdAcceptResponse =
+  PostApiIssuesAgentBySessionIdAcceptResponses[keyof PostApiIssuesAgentBySessionIdAcceptResponses]
+
+export type PostApiIssuesAgentBySessionIdCancelData = {
+  body?: never
+  path: {
+    sessionId: string
+  }
+  query?: never
+  url: '/api/issues-agent/{sessionId}/cancel'
+}
+
+export type PostApiIssuesAgentBySessionIdCancelErrors = {
+  /**
+   * Not Found
+   */
+  404: ProblemDetails
+}
+
+export type PostApiIssuesAgentBySessionIdCancelError =
+  PostApiIssuesAgentBySessionIdCancelErrors[keyof PostApiIssuesAgentBySessionIdCancelErrors]
+
+export type PostApiIssuesAgentBySessionIdCancelResponses = {
+  /**
+   * OK
+   */
+  200: AcceptIssuesAgentChangesResponse
+}
+
+export type PostApiIssuesAgentBySessionIdCancelResponse =
+  PostApiIssuesAgentBySessionIdCancelResponses[keyof PostApiIssuesAgentBySessionIdCancelResponses]
 
 export type GetApiNotificationsData = {
   body?: never

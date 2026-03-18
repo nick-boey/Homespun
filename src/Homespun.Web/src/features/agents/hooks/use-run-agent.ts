@@ -96,7 +96,12 @@ export function useRunAgent() {
       }
 
       if (response.error || !response.data) {
-        throw new Error(response.error?.detail ?? 'Failed to run agent')
+        // Extract error message - detail is only on ProblemDetails type
+        const errorMessage =
+          response.error && 'detail' in response.error && typeof response.error.detail === 'string'
+            ? response.error.detail
+            : 'Failed to run agent'
+        throw new Error(errorMessage)
       }
 
       const data = response.data as RunAgentResponse

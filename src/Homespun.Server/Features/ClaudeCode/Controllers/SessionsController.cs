@@ -391,7 +391,8 @@ public class SessionsController(
             MessageCount = session.Messages.Count,
             TotalCostUsd = session.TotalCostUsd,
             ContainerId = container?.ContainerId,
-            ContainerName = container?.ContainerName
+            ContainerName = container?.ContainerName,
+            SessionType = session.SessionType
         };
     }
 }

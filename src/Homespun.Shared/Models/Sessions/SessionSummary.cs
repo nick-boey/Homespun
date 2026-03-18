@@ -25,4 +25,9 @@ public class SessionSummary
     /// Container name hosting this session, if running in a container.
     /// </summary>
     public string? ContainerName { get; init; }
+
+    /// <summary>
+    /// The type of session (Standard or IssueModify).
+    /// </summary>
+    public SessionType SessionType { get; init; } = SessionType.Standard;
 }

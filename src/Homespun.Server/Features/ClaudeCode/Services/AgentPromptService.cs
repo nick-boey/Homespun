@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using Homespun.Features.PullRequests.Data;
+using Homespun.Shared.Models.Sessions;
 
 namespace Homespun.Features.ClaudeCode.Services;
 
@@ -18,14 +19,17 @@ public partial class AgentPromptService : IAgentPromptService
     public IReadOnlyList<AgentPrompt> GetAllPrompts()
     {
         return _dataStore.AgentPrompts
-            .Where(p => p.ProjectId == null)
+            .Where(p => p.ProjectId == null && p.SessionType == null)
             .ToList()
             .AsReadOnly();
     }
 
     public IReadOnlyList<AgentPrompt> GetProjectPrompts(string projectId)
     {
-        return _dataStore.GetAgentPromptsByProject(projectId);
+        return _dataStore.GetAgentPromptsByProject(projectId)
+            .Where(p => p.SessionType == null)
+            .ToList()
+            .AsReadOnly();
     }
 
     public IReadOnlyList<AgentPrompt> GetPromptsForProject(string projectId)
@@ -53,6 +57,12 @@ public partial class AgentPromptService : IAgentPromptService
             .Where(g => !projectPromptNames.Contains(g.Name))
             .ToList()
             .AsReadOnly();
+    }
+
+    public AgentPrompt? GetPromptBySessionType(SessionType sessionType)
+    {
+        return _dataStore.AgentPrompts
+            .FirstOrDefault(p => p.SessionType == sessionType);
     }
 
     public AgentPrompt? GetPrompt(string id)
@@ -160,13 +170,38 @@ public partial class AgentPromptService : IAgentPromptService
         }
 
         // Create IssueModify prompt if it doesn't exist
-        if (!existingPrompts.Any(p => p.Name.Equals("IssueModify", StringComparison.OrdinalIgnoreCase)))
+        // Check all prompts (including session-type-specific ones)
+        var hasIssueModify = _dataStore.AgentPrompts
+            .Any(p => p.Name.Equals("IssueModify", StringComparison.OrdinalIgnoreCase));
+        if (!hasIssueModify)
         {
-            await CreatePromptAsync(
+            await CreateSessionTypePromptAsync(
                 "IssueModify",
                 GetDefaultIssueModifyMessage(),
-                SessionMode.Build);
+                SessionMode.Build,
+                SessionType.IssueModify);
         }
+    }
+
+    private async Task<AgentPrompt> CreateSessionTypePromptAsync(
+        string name,
+        string? initialMessage,
+        SessionMode mode,
+        SessionType sessionType)
+    {
+        var prompt = new AgentPrompt
+        {
+            Name = name,
+            InitialMessage = initialMessage,
+            Mode = mode,
+            ProjectId = null,
+            SessionType = sessionType,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        await _dataStore.AddAgentPromptAsync(prompt);
+        return prompt;
     }
 
     private static string GetDefaultPlanMessage()

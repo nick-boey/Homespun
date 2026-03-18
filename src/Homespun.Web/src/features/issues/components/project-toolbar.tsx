@@ -15,6 +15,7 @@ import {
   Filter,
   X,
   SquareUser,
+  ListTodo,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
@@ -38,6 +39,7 @@ export interface ProjectToolbarProps {
   parentOfActive?: boolean
   onEditIssue: () => void
   onOpenAgentLauncher: () => void
+  onOpenIssuesAgent: () => void
   onAssignIssue: () => void
   depth: number
   onDepthChange: (depth: number) => void
@@ -76,6 +78,7 @@ export function ProjectToolbar({
   parentOfActive = false,
   onEditIssue,
   onOpenAgentLauncher,
+  onOpenIssuesAgent,
   onAssignIssue,
   depth,
   onDepthChange,
@@ -230,17 +233,29 @@ export function ProjectToolbar({
 
       <Separator orientation="vertical" className="mx-1 h-6" />
 
-      {/* Agent Run button */}
-      <Button
-        variant="outline"
-        size={buttonSize}
-        onClick={onOpenAgentLauncher}
-        aria-label="Run agent (e)"
-        title="Run agent (e)"
-        data-testid="toolbar-run-agent"
-      >
-        <Play className="h-4 w-4" />
-      </Button>
+      {/* Agent buttons group */}
+      <ButtonGroup>
+        <Button
+          variant="outline"
+          size={buttonSize}
+          onClick={onOpenAgentLauncher}
+          aria-label="Run agent (e)"
+          title="Run agent (e)"
+          data-testid="toolbar-run-agent"
+        >
+          <Play className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="outline"
+          size={buttonSize}
+          onClick={onOpenIssuesAgent}
+          aria-label="Issues Agent"
+          title="Issues Agent - AI assistant for modifying issues"
+          data-testid="toolbar-issues-agent"
+        >
+          <ListTodo className="h-4 w-4" />
+        </Button>
+      </ButtonGroup>
 
       <Separator orientation="vertical" className="mx-1 h-6" />
 

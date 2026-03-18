@@ -1,10 +1,10 @@
 import { Link } from '@tanstack/react-router'
-import { MessageSquare, Square } from 'lucide-react'
-import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { MessageSquare, Square, FileCheck } from 'lucide-react'
+import { Card, CardHeader, CardTitle, CardDescription, CardAction } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { StatusIndicator } from './status-indicator'
-import { ClaudeSessionStatus, SessionMode } from '@/api'
+import { ClaudeSessionStatus, SessionMode, SessionType } from '@/api'
 import type {
   SessionSummary,
   ClaudeSessionStatus as ClaudeSessionStatusType,
@@ -129,28 +129,30 @@ export function SessionCard({
     }
   }
 
+  const handleLinkClick = (event: React.MouseEvent) => {
+    event.preventDefault()
+    event.stopPropagation()
+  }
+
   return (
     <Link to="/sessions/$sessionId" params={{ sessionId: session.id ?? '' }}>
       <Card className="hover:bg-muted/50 relative transition-colors">
-        {isActive && onStop && (
-          <Button
-            variant="destructive"
-            size="icon-sm"
-            className="absolute top-2 right-2 z-10"
-            onClick={handleStopClick}
-            disabled={isStopPending}
-            aria-label="Stop session"
-          >
-            <Square className="h-3 w-3" />
-          </Button>
-        )}
         <CardHeader>
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0 flex-1">
               <div className="mb-1 flex items-center gap-2">
-                <Badge variant="outline" className="text-xs">
-                  {entityType === 'pr' ? 'PR' : 'Issue'}
-                </Badge>
+                {session.sessionType === SessionType.ISSUE_MODIFY ? (
+                  <Badge
+                    variant="outline"
+                    className="border-purple-500 bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300"
+                  >
+                    Issues Agent
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="text-xs">
+                    {entityType === 'pr' ? 'PR' : 'Issue'}
+                  </Badge>
+                )}
                 {projectName && (
                   <span className="text-muted-foreground text-xs">{projectName}</span>
                 )}
@@ -161,7 +163,7 @@ export function SessionCard({
                   <span className="text-muted-foreground text-xs">{session.entityId}</span>
                 )}
               </div>
-              <CardTitle className="text-base">{displayTitle}</CardTitle>
+              <CardTitle className="line-clamp-2 text-base">{displayTitle}</CardTitle>
             </div>
             <div className="flex items-center gap-2">
               <Badge
@@ -195,6 +197,34 @@ export function SessionCard({
               </div>
             )}
           </CardDescription>
+          <CardAction>
+            <div className="flex items-center gap-2">
+              {session.sessionType === SessionType.ISSUE_MODIFY && (
+                <Link
+                  to="/sessions/$sessionId/issue-diff"
+                  params={{ sessionId: session.id ?? '' }}
+                  className="inline-flex"
+                  onClick={handleLinkClick}
+                >
+                  <Button variant="ghost" size="sm">
+                    <FileCheck className="mr-1 h-3 w-3" />
+                    Review Changes
+                  </Button>
+                </Link>
+              )}
+              {isActive && onStop && (
+                <Button
+                  variant="destructive"
+                  size="icon-sm"
+                  onClick={handleStopClick}
+                  disabled={isStopPending}
+                  aria-label="Stop session"
+                >
+                  <Square className="h-3 w-3" />
+                </Button>
+              )}
+            </div>
+          </CardAction>
         </CardHeader>
       </Card>
     </Link>

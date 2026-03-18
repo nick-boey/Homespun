@@ -70,6 +70,8 @@ export interface PendingQuestion {
   createdAt: string
 }
 
+export type SessionType = 'standard' | 'issueModify'
+
 export interface ClaudeSession {
   id: string
   entityId: string
@@ -86,6 +88,7 @@ export interface ClaudeSession {
   systemPrompt?: string
   totalCostUsd: number
   totalDurationMs: number
+  sessionType?: SessionType
   pendingQuestion?: PendingQuestion
   planFilePath?: string
   planContent?: string

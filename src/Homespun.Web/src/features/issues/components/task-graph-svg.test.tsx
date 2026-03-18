@@ -160,7 +160,8 @@ describe('TaskGraphNodeSvg', () => {
       const line = createMockLine({
         agentStatus: {
           isActive: true,
-          status: '99', // Unknown
+          // Test with an unknown status value (cast to bypass type safety for edge case testing)
+          status: '99' as unknown as ClaudeSessionStatus,
           sessionId: 'session-123',
         },
       })
@@ -174,7 +175,8 @@ describe('TaskGraphNodeSvg', () => {
       const line = createMockLine({
         agentStatus: {
           isActive: true,
-          status: null,
+          // Test with null status (cast to bypass type safety for edge case testing)
+          status: null as unknown as ClaudeSessionStatus,
           sessionId: 'session-123',
         },
       })

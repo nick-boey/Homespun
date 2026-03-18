@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.PullRequests.Data;
+using Homespun.Shared.Models.Sessions;
 using Microsoft.Extensions.Logging;
 
 namespace Homespun.Features.Testing.Services;
@@ -23,9 +24,9 @@ public partial class MockAgentPromptService : IAgentPromptService
 
     public IReadOnlyList<AgentPrompt> GetAllPrompts()
     {
-        _logger.LogDebug("[Mock] GetAllPrompts (global only)");
+        _logger.LogDebug("[Mock] GetAllPrompts (global only, excluding session-type prompts)");
         return _dataStore.AgentPrompts
-            .Where(p => p.ProjectId == null)
+            .Where(p => p.ProjectId == null && p.SessionType == null)
             .ToList()
             .AsReadOnly();
     }
@@ -33,7 +34,17 @@ public partial class MockAgentPromptService : IAgentPromptService
     public IReadOnlyList<AgentPrompt> GetProjectPrompts(string projectId)
     {
         _logger.LogDebug("[Mock] GetProjectPrompts {ProjectId}", projectId);
-        return _dataStore.GetAgentPromptsByProject(projectId);
+        return _dataStore.GetAgentPromptsByProject(projectId)
+            .Where(p => p.SessionType == null)
+            .ToList()
+            .AsReadOnly();
+    }
+
+    public AgentPrompt? GetPromptBySessionType(SessionType sessionType)
+    {
+        _logger.LogDebug("[Mock] GetPromptBySessionType {SessionType}", sessionType);
+        return _dataStore.AgentPrompts
+            .FirstOrDefault(p => p.SessionType == sessionType);
     }
 
     public IReadOnlyList<AgentPrompt> GetPromptsForProject(string projectId)

@@ -19,6 +19,7 @@ import { Route as SessionsSessionIdRouteImport } from './routes/sessions.$sessio
 import { Route as ProjectsNewRouteImport } from './routes/projects.new'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projectId'
 import { Route as ProjectsProjectIdIndexRouteImport } from './routes/projects.$projectId.index'
+import { Route as SessionsSessionIdIssueDiffRouteImport } from './routes/sessions.$sessionId.issue-diff'
 import { Route as ProjectsProjectIdSettingsRouteImport } from './routes/projects.$projectId.settings'
 import { Route as ProjectsProjectIdSecretsRouteImport } from './routes/projects.$projectId.secrets'
 import { Route as ProjectsProjectIdPullRequestsRouteImport } from './routes/projects.$projectId.pull-requests'
@@ -78,6 +79,12 @@ const ProjectsProjectIdIndexRoute = ProjectsProjectIdIndexRouteImport.update({
   path: '/',
   getParentRoute: () => ProjectsProjectIdRoute,
 } as any)
+const SessionsSessionIdIssueDiffRoute =
+  SessionsSessionIdIssueDiffRouteImport.update({
+    id: '/issue-diff',
+    path: '/issue-diff',
+    getParentRoute: () => SessionsSessionIdRoute,
+  } as any)
 const ProjectsProjectIdSettingsRoute =
   ProjectsProjectIdSettingsRouteImport.update({
     id: '/settings',
@@ -133,7 +140,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRoute
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/projects/new': typeof ProjectsNewRoute
-  '/sessions/$sessionId': typeof SessionsSessionIdRoute
+  '/sessions/$sessionId': typeof SessionsSessionIdRouteWithChildren
   '/projects/': typeof ProjectsIndexRoute
   '/sessions/': typeof SessionsIndexRoute
   '/projects/$projectId/branches': typeof ProjectsProjectIdBranchesRoute
@@ -142,6 +149,7 @@ export interface FileRoutesByFullPath {
   '/projects/$projectId/pull-requests': typeof ProjectsProjectIdPullRequestsRoute
   '/projects/$projectId/secrets': typeof ProjectsProjectIdSecretsRoute
   '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
+  '/sessions/$sessionId/issue-diff': typeof SessionsSessionIdIssueDiffRoute
   '/projects/$projectId/': typeof ProjectsProjectIdIndexRoute
   '/projects/$projectId/issues/': typeof ProjectsProjectIdIssuesIndexRoute
   '/projects/$projectId/issues/$issueId/edit': typeof ProjectsProjectIdIssuesIssueIdEditRoute
@@ -151,7 +159,7 @@ export interface FileRoutesByTo {
   '/prompts': typeof PromptsRoute
   '/settings': typeof SettingsRoute
   '/projects/new': typeof ProjectsNewRoute
-  '/sessions/$sessionId': typeof SessionsSessionIdRoute
+  '/sessions/$sessionId': typeof SessionsSessionIdRouteWithChildren
   '/projects': typeof ProjectsIndexRoute
   '/sessions': typeof SessionsIndexRoute
   '/projects/$projectId/branches': typeof ProjectsProjectIdBranchesRoute
@@ -159,6 +167,7 @@ export interface FileRoutesByTo {
   '/projects/$projectId/pull-requests': typeof ProjectsProjectIdPullRequestsRoute
   '/projects/$projectId/secrets': typeof ProjectsProjectIdSecretsRoute
   '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
+  '/sessions/$sessionId/issue-diff': typeof SessionsSessionIdIssueDiffRoute
   '/projects/$projectId': typeof ProjectsProjectIdIndexRoute
   '/projects/$projectId/issues': typeof ProjectsProjectIdIssuesIndexRoute
   '/projects/$projectId/issues/$issueId/edit': typeof ProjectsProjectIdIssuesIssueIdEditRoute
@@ -171,7 +180,7 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRoute
   '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/projects/new': typeof ProjectsNewRoute
-  '/sessions/$sessionId': typeof SessionsSessionIdRoute
+  '/sessions/$sessionId': typeof SessionsSessionIdRouteWithChildren
   '/projects/': typeof ProjectsIndexRoute
   '/sessions/': typeof SessionsIndexRoute
   '/projects/$projectId/branches': typeof ProjectsProjectIdBranchesRoute
@@ -180,6 +189,7 @@ export interface FileRoutesById {
   '/projects/$projectId/pull-requests': typeof ProjectsProjectIdPullRequestsRoute
   '/projects/$projectId/secrets': typeof ProjectsProjectIdSecretsRoute
   '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
+  '/sessions/$sessionId/issue-diff': typeof SessionsSessionIdIssueDiffRoute
   '/projects/$projectId/': typeof ProjectsProjectIdIndexRoute
   '/projects/$projectId/issues/': typeof ProjectsProjectIdIssuesIndexRoute
   '/projects/$projectId/issues/$issueId/edit': typeof ProjectsProjectIdIssuesIssueIdEditRoute
@@ -202,6 +212,7 @@ export interface FileRouteTypes {
     | '/projects/$projectId/pull-requests'
     | '/projects/$projectId/secrets'
     | '/projects/$projectId/settings'
+    | '/sessions/$sessionId/issue-diff'
     | '/projects/$projectId/'
     | '/projects/$projectId/issues/'
     | '/projects/$projectId/issues/$issueId/edit'
@@ -219,6 +230,7 @@ export interface FileRouteTypes {
     | '/projects/$projectId/pull-requests'
     | '/projects/$projectId/secrets'
     | '/projects/$projectId/settings'
+    | '/sessions/$sessionId/issue-diff'
     | '/projects/$projectId'
     | '/projects/$projectId/issues'
     | '/projects/$projectId/issues/$issueId/edit'
@@ -239,6 +251,7 @@ export interface FileRouteTypes {
     | '/projects/$projectId/pull-requests'
     | '/projects/$projectId/secrets'
     | '/projects/$projectId/settings'
+    | '/sessions/$sessionId/issue-diff'
     | '/projects/$projectId/'
     | '/projects/$projectId/issues/'
     | '/projects/$projectId/issues/$issueId/edit'
@@ -326,6 +339,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsProjectIdIndexRouteImport
       parentRoute: typeof ProjectsProjectIdRoute
     }
+    '/sessions/$sessionId/issue-diff': {
+      id: '/sessions/$sessionId/issue-diff'
+      path: '/issue-diff'
+      fullPath: '/sessions/$sessionId/issue-diff'
+      preLoaderRoute: typeof SessionsSessionIdIssueDiffRouteImport
+      parentRoute: typeof SessionsSessionIdRoute
+    }
     '/projects/$projectId/settings': {
       id: '/projects/$projectId/settings'
       path: '/settings'
@@ -385,13 +405,24 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface SessionsSessionIdRouteChildren {
+  SessionsSessionIdIssueDiffRoute: typeof SessionsSessionIdIssueDiffRoute
+}
+
+const SessionsSessionIdRouteChildren: SessionsSessionIdRouteChildren = {
+  SessionsSessionIdIssueDiffRoute: SessionsSessionIdIssueDiffRoute,
+}
+
+const SessionsSessionIdRouteWithChildren =
+  SessionsSessionIdRoute._addFileChildren(SessionsSessionIdRouteChildren)
+
 interface SessionsRouteChildren {
-  SessionsSessionIdRoute: typeof SessionsSessionIdRoute
+  SessionsSessionIdRoute: typeof SessionsSessionIdRouteWithChildren
   SessionsIndexRoute: typeof SessionsIndexRoute
 }
 
 const SessionsRouteChildren: SessionsRouteChildren = {
-  SessionsSessionIdRoute: SessionsSessionIdRoute,
+  SessionsSessionIdRoute: SessionsSessionIdRouteWithChildren,
   SessionsIndexRoute: SessionsIndexRoute,
 }
 
