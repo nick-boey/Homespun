@@ -56,12 +56,7 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
   }
 
   return (
-    <aside
-      className={cn(
-        'border-sidebar-border bg-sidebar flex h-full w-64 flex-col border-r',
-        className
-      )}
-    >
+    <aside className={cn('border-sidebar-border flex h-full w-64 flex-col border-r', className)}>
       <div className="border-sidebar-border flex h-14 items-center border-b px-4">
         <Link
           to="/"
@@ -73,7 +68,7 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
         </Link>
       </div>
 
-      <nav className="flex-1 space-y-1 p-3">
+      <nav className="bg-sidebar flex-1 space-y-1 p-3">
         <div className="mb-2">
           <h3 className="text-sidebar-foreground/60 mb-1 px-3 text-xs font-medium tracking-wider uppercase">
             Projects
@@ -129,7 +124,7 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
         </div>
       </nav>
 
-      <div className="border-sidebar-border border-t p-3">
+      <div className="bg-sidebar border-sidebar-border border-t p-3">
         <div className="text-sidebar-foreground/60 px-3 text-xs">Homespun v0.1.0</div>
       </div>
     </aside>
