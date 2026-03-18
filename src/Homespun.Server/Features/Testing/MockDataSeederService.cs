@@ -1,5 +1,6 @@
 using Fleece.Core.Models;
 using Homespun.Features.ClaudeCode.Services;
+using Homespun.Features.PullRequests.Data;
 using Homespun.Features.Testing.Services;
 using Microsoft.Extensions.Options;
 
@@ -7,18 +8,18 @@ namespace Homespun.Features.Testing;
 
 /// <summary>
 /// Hosted service that seeds demo data on application startup when mock mode is enabled.
+/// Uses the temporary data folder service for file-based storage.
 /// </summary>
 public class MockDataSeederService : IHostedService
 {
-    private readonly MockDataStore _dataStore;
-    private readonly MockFleeceService _fleeceService;
+    private readonly IDataStore _dataStore;
+    private readonly ITempDataFolderService _tempFolderService;
+    private readonly FleeceIssueSeeder _fleeceIssueSeeder;
     private readonly IAgentPromptService _agentPromptService;
     private readonly IClaudeSessionStore _sessionStore;
     private readonly IToolResultParser _toolResultParser;
     private readonly IJsonlSessionLoader _jsonlSessionLoader;
     private readonly ILogger<MockDataSeederService> _logger;
-    private readonly LiveClaudeTestOptions? _liveTestOptions;
-    private readonly List<string> _createdTempDirectories = [];
 
     /// <summary>
     /// Default path to look for JSONL session files when running in container.
@@ -34,23 +35,23 @@ public class MockDataSeederService : IHostedService
     private const string LocalTestSessionDataPath = "tests/data/sessions";
 
     public MockDataSeederService(
-        MockDataStore dataStore,
-        MockFleeceService fleeceService,
+        IDataStore dataStore,
+        ITempDataFolderService tempFolderService,
+        FleeceIssueSeeder fleeceIssueSeeder,
         IAgentPromptService agentPromptService,
         IClaudeSessionStore sessionStore,
         IToolResultParser toolResultParser,
         IJsonlSessionLoader jsonlSessionLoader,
-        ILogger<MockDataSeederService> logger,
-        IOptions<LiveClaudeTestOptions>? liveTestOptions = null)
+        ILogger<MockDataSeederService> logger)
     {
         _dataStore = dataStore;
-        _fleeceService = fleeceService;
+        _tempFolderService = tempFolderService;
+        _fleeceIssueSeeder = fleeceIssueSeeder;
         _agentPromptService = agentPromptService;
         _sessionStore = sessionStore;
         _toolResultParser = toolResultParser;
         _jsonlSessionLoader = jsonlSessionLoader;
         _logger = logger;
-        _liveTestOptions = liveTestOptions?.Value;
     }
 
     public async Task StartAsync(CancellationToken cancellationToken)
@@ -145,44 +146,25 @@ public class MockDataSeederService : IHostedService
 
     public Task StopAsync(CancellationToken cancellationToken)
     {
-        foreach (var dir in _createdTempDirectories)
-        {
-            try
-            {
-                if (Directory.Exists(dir))
-                {
-                    Directory.Delete(dir, recursive: true);
-                    _logger.LogDebug("Cleaned up temp mock directory: {Path}", dir);
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to clean up temp mock directory: {Path}", dir);
-            }
-        }
+        // Cleanup is handled by TempDataFolderService.Dispose()
         return Task.CompletedTask;
     }
 
     /// <summary>
-    /// Gets the local path for a mock project. When live Claude sessions are enabled,
-    /// creates a real temporary directory so that SubprocessCliTransport can validate it.
-    /// Otherwise returns a fake path for fully-mocked mode.
+    /// Gets the local path for a mock project using the temp folder service.
+    /// Creates the project directory with minimal structure if it doesn't exist.
     /// </summary>
-    private string GetMockProjectPath(string projectId)
+    private string GetMockProjectPath(string projectId, string projectName)
     {
-        if (!string.IsNullOrEmpty(_liveTestOptions?.TestWorkingDirectory))
+        var projectPath = _tempFolderService.GetProjectPath(projectId);
+
+        // Create project structure if it doesn't exist
+        if (!Directory.Exists(projectPath))
         {
-            var tempDir = Path.Combine(Path.GetTempPath(), "homespun-mock", projectId);
-            if (!Directory.Exists(tempDir))
-            {
-                Directory.CreateDirectory(tempDir);
-                _createdTempDirectories.Add(tempDir);
-                _logger.LogDebug("Created temp directory for mock project {ProjectId}: {Path}", projectId, tempDir);
-            }
-            return tempDir;
+            _fleeceIssueSeeder.CreateMinimalProjectStructure(projectPath, projectName);
         }
 
-        return $"/mock/projects/{projectId}";
+        return projectPath;
     }
 
     private async Task SeedUserSettingsAsync()
@@ -198,28 +180,28 @@ public class MockDataSeederService : IHostedService
         {
             Id = "demo-project",
             Name = "Demo Project",
-            LocalPath = GetMockProjectPath("demo-project"),
+            LocalPath = GetMockProjectPath("demo-project", "Demo Project"),
             GitHubOwner = "demo-org",
             GitHubRepo = "demo-project",
             DefaultBranch = "main",
             DefaultModel = "sonnet"
         };
         await _dataStore.AddProjectAsync(demoProject);
-        _logger.LogDebug("Seeded demo project: {ProjectName}", demoProject.Name);
+        _logger.LogDebug("Seeded demo project: {ProjectName} at {Path}", demoProject.Name, demoProject.LocalPath);
 
         // Demo Project 2: A sample app
         var sampleApp = new Project
         {
             Id = "sample-app",
             Name = "Sample Application",
-            LocalPath = GetMockProjectPath("sample-app"),
+            LocalPath = GetMockProjectPath("sample-app", "Sample Application"),
             GitHubOwner = "demo-org",
             GitHubRepo = "sample-app",
             DefaultBranch = "main",
             DefaultModel = "sonnet"
         };
         await _dataStore.AddProjectAsync(sampleApp);
-        _logger.LogDebug("Seeded sample app project: {ProjectName}", sampleApp.Name);
+        _logger.LogDebug("Seeded sample app project: {ProjectName} at {Path}", sampleApp.Name, sampleApp.LocalPath);
     }
 
     private async Task SeedPullRequestsAsync()
@@ -318,13 +300,13 @@ public class MockDataSeederService : IHostedService
         _logger.LogDebug("Seeded {Count} pull requests", 6);
     }
 
-    private Task SeedIssuesAsync()
+    private async Task SeedIssuesAsync()
     {
         var now = DateTimeOffset.UtcNow;
 
         // Issues for Demo Project - matches the graph dependency tree
         // Note: Issue has init-only properties, so we use object initializers
-        var issues = new List<Issue>
+        var demoIssues = new List<Issue>
         {
             // Orphan issues (no parents)
             new()
@@ -572,14 +554,14 @@ public class MockDataSeederService : IHostedService
             }
         };
 
-        var demoProjectPath = GetMockProjectPath("demo-project");
-        foreach (var issue in issues)
-        {
-            _fleeceService.SeedIssue(demoProjectPath, issue);
-        }
+        // Seed issues for demo-project using FleeceIssueSeeder
+        var demoProjectPath = _tempFolderService.GetProjectPath("demo-project");
+        await _fleeceIssueSeeder.SeedIssuesAsync(demoProjectPath, demoIssues);
+        _logger.LogDebug("Seeded {Count} issues to {ProjectPath}", demoIssues.Count, demoProjectPath);
 
-        _logger.LogDebug("Seeded {Count} issues", issues.Count);
-        return Task.CompletedTask;
+        // Seed empty issues file for sample-app (no issues)
+        var sampleAppPath = _tempFolderService.GetProjectPath("sample-app");
+        await _fleeceIssueSeeder.SeedIssuesAsync(sampleAppPath, []);
     }
 
     private async Task SeedAgentPromptsAsync()
