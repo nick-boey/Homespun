@@ -52,9 +52,9 @@ public class IssuesAgentController(
             return NotFound("Project not found");
         }
 
-        // Generate branch name: issues-agent/{timestamp}
+        // Generate branch name: issues-agent-{timestamp}
         var timestamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
-        var branchName = $"issues-agent/{timestamp}";
+        var branchName = $"issues-agent-{timestamp}";
 
         // Pull latest from main branch before creating clone
         var baseBranch = project.DefaultBranch;
