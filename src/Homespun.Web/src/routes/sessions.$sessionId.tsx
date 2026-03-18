@@ -30,11 +30,12 @@ import {
   PanelRight,
   ChevronLeft,
   ChevronRight,
+  FileCheck,
 } from 'lucide-react'
 import { ScrollToBottom } from '@/components/ui/scroll-to-bottom'
 import { useMobile } from '@/hooks/use-mobile'
 import { cn } from '@/lib/utils'
-import { Sessions } from '@/api'
+import { Sessions, SessionType } from '@/api'
 import { toast } from 'sonner'
 import type { ModelSelection } from '@/stores/session-settings-store'
 import type { SessionMode } from '@/types/signalr'
@@ -348,6 +349,7 @@ interface SessionHeaderProps {
     mode: string | number
     status: string
     model: string
+    sessionType?: string
   } | null
   entityTitle?: string
   onStop?: () => void
@@ -454,6 +456,14 @@ function SessionHeader({
         </div>
       </div>
       <div className="flex items-center gap-2">
+        {session?.sessionType === SessionType.ISSUE_MODIFY && (
+          <Button variant="outline" size="sm" asChild className="h-8">
+            <Link to="/sessions/$sessionId/issue-diff" params={{ sessionId }}>
+              <FileCheck className="mr-2 h-4 w-4" />
+              Review Changes
+            </Link>
+          </Button>
+        )}
         {showStopButton && (
           <Button
             variant="destructive"

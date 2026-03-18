@@ -1,3 +1,4 @@
+using Homespun.Shared.Models.Sessions;
 
 namespace Homespun.Features.ClaudeCode.Services;
 
@@ -63,4 +64,12 @@ public interface IAgentPromptService
     /// Ensures default agent prompts (Plan, Build, Rebase) exist as global prompts.
     /// </summary>
     Task EnsureDefaultPromptsAsync();
+
+    /// <summary>
+    /// Gets a prompt by its session type.
+    /// Used to retrieve specialized prompts like IssueModify.
+    /// </summary>
+    /// <param name="sessionType">The session type to find a prompt for.</param>
+    /// <returns>The prompt for the session type, or null if not found.</returns>
+    AgentPrompt? GetPromptBySessionType(SessionType sessionType);
 }

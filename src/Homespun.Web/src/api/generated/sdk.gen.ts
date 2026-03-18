@@ -80,6 +80,9 @@ import type {
   GetApiIssuePrStatusByProjectIdByIssueIdData,
   GetApiIssuePrStatusByProjectIdByIssueIdErrors,
   GetApiIssuePrStatusByProjectIdByIssueIdResponses,
+  GetApiIssuesAgentBySessionIdDiffData,
+  GetApiIssuesAgentBySessionIdDiffErrors,
+  GetApiIssuesAgentBySessionIdDiffResponses,
   GetApiIssuesByIssueIdData,
   GetApiIssuesByIssueIdErrors,
   GetApiIssuesByIssueIdResolvedBranchData,
@@ -163,16 +166,6 @@ import type {
   GetApiSettingsUserResponses,
   GetApiTelemetryConfigData,
   GetApiTelemetryConfigResponses,
-  GetTestAgentCliTestData,
-  GetTestAgentCliTestResponses,
-  GetTestAgentSignalrStreamData,
-  GetTestAgentSignalrStreamResponses,
-  GetTestAgentSubprocessStdinTestData,
-  GetTestAgentSubprocessStdinTestResponses,
-  GetTestAgentSubprocessTestData,
-  GetTestAgentSubprocessTestResponses,
-  GetTestAgentToolCallData,
-  GetTestAgentToolCallResponses,
   PostApiAgentPromptsData,
   PostApiAgentPromptsEnsureDefaultsData,
   PostApiAgentPromptsEnsureDefaultsResponses,
@@ -200,6 +193,15 @@ import type {
   PostApiFleeceSyncByProjectIdSyncResponses,
   PostApiGraphByProjectIdRefreshData,
   PostApiGraphByProjectIdRefreshResponses,
+  PostApiIssuesAgentBySessionIdAcceptData,
+  PostApiIssuesAgentBySessionIdAcceptErrors,
+  PostApiIssuesAgentBySessionIdAcceptResponses,
+  PostApiIssuesAgentBySessionIdCancelData,
+  PostApiIssuesAgentBySessionIdCancelErrors,
+  PostApiIssuesAgentBySessionIdCancelResponses,
+  PostApiIssuesAgentSessionData,
+  PostApiIssuesAgentSessionErrors,
+  PostApiIssuesAgentSessionResponses,
   PostApiIssuesByChildIdSetParentData,
   PostApiIssuesByChildIdSetParentErrors,
   PostApiIssuesByChildIdSetParentResponses,
@@ -263,8 +265,6 @@ import type {
   PostApiSessionsData,
   PostApiSessionsErrors,
   PostApiSessionsResponses,
-  PostTestAgentSessionTestData,
-  PostTestAgentSessionTestResponses,
   PutApiAgentPromptsByIdData,
   PutApiAgentPromptsByIdErrors,
   PutApiAgentPromptsByIdResponses,
@@ -393,73 +393,6 @@ export class AgentPrompts {
   }
 }
 
-export class AgentTest {
-  public static getTestAgentCliTest<ThrowOnError extends boolean = false>(
-    options?: Options<GetTestAgentCliTestData, ThrowOnError>
-  ) {
-    return (options?.client ?? client).get<GetTestAgentCliTestResponses, unknown, ThrowOnError>({
-      url: '/test/agent/cli-test',
-      ...options,
-    })
-  }
-
-  public static postTestAgentSessionTest<ThrowOnError extends boolean = false>(
-    options?: Options<PostTestAgentSessionTestData, ThrowOnError>
-  ) {
-    return (options?.client ?? client).post<
-      PostTestAgentSessionTestResponses,
-      unknown,
-      ThrowOnError
-    >({
-      url: '/test/agent/session-test',
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options?.headers,
-      },
-    })
-  }
-
-  public static getTestAgentSubprocessTest<ThrowOnError extends boolean = false>(
-    options?: Options<GetTestAgentSubprocessTestData, ThrowOnError>
-  ) {
-    return (options?.client ?? client).get<
-      GetTestAgentSubprocessTestResponses,
-      unknown,
-      ThrowOnError
-    >({ url: '/test/agent/subprocess-test', ...options })
-  }
-
-  public static getTestAgentSubprocessStdinTest<ThrowOnError extends boolean = false>(
-    options?: Options<GetTestAgentSubprocessStdinTestData, ThrowOnError>
-  ) {
-    return (options?.client ?? client).get<
-      GetTestAgentSubprocessStdinTestResponses,
-      unknown,
-      ThrowOnError
-    >({ url: '/test/agent/subprocess-stdin-test', ...options })
-  }
-
-  public static getTestAgentToolCall<ThrowOnError extends boolean = false>(
-    options?: Options<GetTestAgentToolCallData, ThrowOnError>
-  ) {
-    return (options?.client ?? client).get<GetTestAgentToolCallResponses, unknown, ThrowOnError>({
-      url: '/test/agent/tool-call',
-      ...options,
-    })
-  }
-
-  public static getTestAgentSignalrStream<ThrowOnError extends boolean = false>(
-    options?: Options<GetTestAgentSignalrStreamData, ThrowOnError>
-  ) {
-    return (options?.client ?? client).get<
-      GetTestAgentSignalrStreamResponses,
-      unknown,
-      ThrowOnError
-    >({ url: '/test/agent/signalr-stream', ...options })
-  }
-}
-
 export class ClientTelemetry {
   public static postApiClientTelemetry<ThrowOnError extends boolean = false>(
     options?: Options<PostApiClientTelemetryData, ThrowOnError>
@@ -507,23 +440,6 @@ export class Clones {
       ThrowOnError
     >({
       url: '/api/Clones',
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options?.headers,
-      },
-    })
-  }
-
-  public static postApiClonesSession<ThrowOnError extends boolean = false>(
-    options?: Options<PostApiClonesSessionData, ThrowOnError>
-  ) {
-    return (options?.client ?? client).post<
-      PostApiClonesSessionResponses,
-      PostApiClonesSessionErrors,
-      ThrowOnError
-    >({
-      url: '/api/Clones/session',
       ...options,
       headers: {
         'Content-Type': 'application/json',
@@ -590,6 +506,23 @@ export class Clones {
       GetApiClonesSessionBranchInfoErrors,
       ThrowOnError
     >({ url: '/api/Clones/session-branch-info', ...options })
+  }
+
+  public static postApiClonesSession<ThrowOnError extends boolean = false>(
+    options?: Options<PostApiClonesSessionData, ThrowOnError>
+  ) {
+    return (options?.client ?? client).post<
+      PostApiClonesSessionResponses,
+      PostApiClonesSessionErrors,
+      ThrowOnError
+    >({
+      url: '/api/Clones/session',
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options?.headers,
+      },
+    })
   }
 }
 
@@ -946,6 +879,55 @@ export class Issues {
       PostApiProjectsByProjectIdIssuesHistoryRedoErrors,
       ThrowOnError
     >({ url: '/api/projects/{projectId}/issues/history/redo', ...options })
+  }
+}
+
+export class IssuesAgent {
+  public static postApiIssuesAgentSession<ThrowOnError extends boolean = false>(
+    options?: Options<PostApiIssuesAgentSessionData, ThrowOnError>
+  ) {
+    return (options?.client ?? client).post<
+      PostApiIssuesAgentSessionResponses,
+      PostApiIssuesAgentSessionErrors,
+      ThrowOnError
+    >({
+      url: '/api/issues-agent/session',
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options?.headers,
+      },
+    })
+  }
+
+  public static getApiIssuesAgentBySessionIdDiff<ThrowOnError extends boolean = false>(
+    options: Options<GetApiIssuesAgentBySessionIdDiffData, ThrowOnError>
+  ) {
+    return (options.client ?? client).get<
+      GetApiIssuesAgentBySessionIdDiffResponses,
+      GetApiIssuesAgentBySessionIdDiffErrors,
+      ThrowOnError
+    >({ url: '/api/issues-agent/{sessionId}/diff', ...options })
+  }
+
+  public static postApiIssuesAgentBySessionIdAccept<ThrowOnError extends boolean = false>(
+    options: Options<PostApiIssuesAgentBySessionIdAcceptData, ThrowOnError>
+  ) {
+    return (options.client ?? client).post<
+      PostApiIssuesAgentBySessionIdAcceptResponses,
+      PostApiIssuesAgentBySessionIdAcceptErrors,
+      ThrowOnError
+    >({ url: '/api/issues-agent/{sessionId}/accept', ...options })
+  }
+
+  public static postApiIssuesAgentBySessionIdCancel<ThrowOnError extends boolean = false>(
+    options: Options<PostApiIssuesAgentBySessionIdCancelData, ThrowOnError>
+  ) {
+    return (options.client ?? client).post<
+      PostApiIssuesAgentBySessionIdCancelResponses,
+      PostApiIssuesAgentBySessionIdCancelErrors,
+      ThrowOnError
+    >({ url: '/api/issues-agent/{sessionId}/cancel', ...options })
   }
 }
 
