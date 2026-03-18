@@ -18,6 +18,7 @@ import {
 import {
   waitForCompletion,
   waitForInputRequired,
+  waitForEvent,
   extractSessionId,
   findAgentText,
   type SSEEvent,
@@ -90,15 +91,13 @@ describe("Worker Container - Questions and Planning", () => {
     }
 
     // Wait for input-required (question pending)
-    const { event: questionEvent, events: events1 } = await waitForInputRequired(
-      body,
-      180000
-    );
+    const { event: questionEvent, events: events1 } =
+      await waitForInputRequired(body, 180000);
 
     console.log("Events received before input-required:", events1.length);
     console.log(
       "Input-required event:",
-      JSON.stringify(questionEvent.data, null, 2)
+      JSON.stringify(questionEvent.data, null, 2),
     );
 
     // Get session ID
@@ -115,10 +114,10 @@ describe("Worker Container - Questions and Planning", () => {
 
     // Find the Mains and Sides questions
     const mainsQuestion = questions.find((q) =>
-      q.header.toLowerCase().includes("main")
+      q.header.toLowerCase().includes("main"),
     );
     const sidesQuestion = questions.find((q) =>
-      q.header.toLowerCase().includes("side")
+      q.header.toLowerCase().includes("side"),
     );
 
     expect(mainsQuestion, "Should have a Mains question").toBeDefined();
@@ -136,7 +135,7 @@ describe("Worker Container - Questions and Planning", () => {
             Sides: "fries,salad",
           },
         }),
-      }
+      },
     );
 
     expect(answerResponse.status).toBe(200);
@@ -153,7 +152,7 @@ describe("Worker Container - Questions and Planning", () => {
         body: JSON.stringify({
           message: "Continue with the plan",
         }),
-      }
+      },
     );
 
     expect(messagesResponse.status).toBe(200);
@@ -165,7 +164,7 @@ describe("Worker Container - Questions and Planning", () => {
     // Wait for input-required (plan pending)
     const { event: planEvent, events: events2 } = await waitForInputRequired(
       body2,
-      180000
+      180000,
     );
 
     console.log("Events received before plan:", events2.length);
@@ -188,7 +187,7 @@ describe("Worker Container - Questions and Planning", () => {
           approved: true,
           keepContext: false,
         }),
-      }
+      },
     );
 
     expect(approveResponse.status).toBe(200);
@@ -215,28 +214,35 @@ describe("Worker Container - Questions and Planning", () => {
       throw new Error("Response body is null");
     }
 
-    const { events: events3 } = await waitForCompletion(body3, 180000);
-    assertHasCompletedStatus(events3);
+    // Wait for new session to either enter input-required (plan approval) or complete directly.
+    // In Plan mode, simple Q&A tasks may complete without needing plan approval.
+    const { event: newSessionEvent, events: events3 } = await waitForEvent(
+      body3,
+      (event) => {
+        if (event.event !== "status-update") return false;
+        const data = event.data as TaskStatusUpdate;
+        return data.status.state === "input-required" || data.final === true;
+      },
+      180000,
+    );
 
-    // The agent should NOT know about the number 15 because context was cleared
+    // Agent text is available now
     const agentTexts = findAgentText(events3);
     console.log("New session response:");
     console.log(agentTexts.join("\n---\n"));
 
     // Check that agent does NOT mention "15"
     const mentions15 = agentTexts.some(
-      (text) => text.includes("15") || text.includes("fifteen")
+      (text) => text.includes("15") || text.includes("fifteen"),
     );
 
-    // If context was properly cleared, the agent shouldn't know about 15
-    // Note: This is a soft assertion since the agent might guess
     if (mentions15) {
       console.log(
-        "WARNING: Agent mentioned '15' - context may not have been fully cleared"
+        "WARNING: Agent mentioned '15' - context may not have been fully cleared",
       );
     } else {
       console.log(
-        "SUCCESS: Agent did not mention '15' - context was properly cleared"
+        "SUCCESS: Agent did not mention '15' - context was properly cleared",
       );
     }
 
@@ -247,12 +253,35 @@ describe("Worker Container - Questions and Planning", () => {
         text.toLowerCase().includes("no previous") ||
         text.toLowerCase().includes("not aware") ||
         text.toLowerCase().includes("no context") ||
-        text.toLowerCase().includes("new conversation")
+        text.toLowerCase().includes("new conversation"),
     );
 
     expect(
       indicatesNoContext || !mentions15,
-      "Agent should either not mention 15 or indicate lack of context"
+      "Agent should either not mention 15 or indicate lack of context",
     ).toBe(true);
+
+    const newSessionEventData = newSessionEvent.data as TaskStatusUpdate;
+    if (newSessionEventData.status.state === "input-required") {
+      // Approve the plan to let the new session complete cleanly
+      const newSessionId = extractSessionId(events3);
+      expect(newSessionId, "Should have new session ID").toBeDefined();
+      const approveNewPlanResponse = await fetch(
+        container.workerUrl + "/api/sessions/" + newSessionId + "/approve-plan",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ approved: true, keepContext: true }),
+        },
+      );
+      expect(approveNewPlanResponse.status).toBe(200);
+
+      // Now wait for final completion
+      const { events: events3final } = await waitForCompletion(body3, 180000);
+      assertHasCompletedStatus(events3final);
+    } else {
+      // Session completed directly without plan approval
+      assertHasCompletedStatus(events3);
+    }
   }, 900000); // 15 minutes for this complex multi-step test
 });

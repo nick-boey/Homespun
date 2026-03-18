@@ -495,8 +495,10 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                 await _messageCache.AppendMessageAsync(sessionId, messageContext.CurrentAssistantMessage, linkedCts.Token);
             }
 
-            // Only transition to WaitingForInput if currently Running
-            // This prevents race conditions where special states were set during processing
+            // Only transition to WaitingForInput if currently Running.
+            // This prevents race conditions where special states (WaitingForPlanExecution,
+            // WaitingForQuestionAnswer) were set during processing — those flows handle
+            // their own state transitions.
             if (session.Status == ClaudeSessionStatus.Running)
             {
                 session.Status = ClaudeSessionStatus.WaitingForInput;
@@ -1761,7 +1763,13 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             throw new InvalidOperationException($"Session {sessionId} not found");
         }
 
-        if (session.Status != ClaudeSessionStatus.WaitingForPlanExecution)
+        // Allow approval from WaitingForInput when HasPendingPlanApproval is set — this handles
+        // the recovery case where the SSE stream ended prematurely (worker connection lost) while
+        // plan approval was still pending. The post-loop code transitions to WaitingForInput in
+        // that scenario, preserving plan content so the user can still approve/reject.
+        var canApprovePlan = session.Status == ClaudeSessionStatus.WaitingForPlanExecution ||
+                             (session.Status == ClaudeSessionStatus.WaitingForInput && session.HasPendingPlanApproval);
+        if (!canApprovePlan)
         {
             throw new InvalidOperationException($"Session {sessionId} is not waiting for plan approval (status: {session.Status})");
         }

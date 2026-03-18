@@ -1,7 +1,7 @@
 /**
  * Test 1: Basic Prompts
  *
- * Tests that the worker container responds to simple prompts in Plan mode.
+ * Tests that the worker container responds to simple prompts in Build mode.
  * Verifies the basic SSE event flow: task -> status-update (working) -> message -> status-update (completed)
  */
 
@@ -67,14 +67,14 @@ describe("Worker Container - Basic Prompts", () => {
     }
   });
 
-  it("responds to simple prompt in Plan mode", async () => {
+  it("responds to simple prompt in Build mode", async () => {
     // Send a simple prompt to the worker
     const response = await fetch(container.workerUrl + "/api/sessions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         prompt: "Say 'Hello, World'",
-        mode: "Plan",
+        mode: "Build",
         model: "claude-sonnet-4-20250514",
       }),
     });

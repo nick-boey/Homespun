@@ -125,27 +125,34 @@ export async function waitForEvent(
   timeoutMs = 120000
 ): Promise<{ event: SSEEvent; events: SSEEvent[] }> {
   const events: SSEEvent[] = [];
-  const startTime = Date.now();
 
-  for await (const event of parseStreamingSSE(readable)) {
-    events.push(event);
-
-    if (predicate(event)) {
-      return { event, events };
+  const iterateStream = async (): Promise<{ event: SSEEvent; events: SSEEvent[] }> => {
+    for await (const event of parseStreamingSSE(readable)) {
+      events.push(event);
+      if (predicate(event)) {
+        return { event, events };
+      }
     }
+    throw new Error(
+      "Stream ended without matching event. Events received: " +
+        JSON.stringify(events.slice(-5))
+    );
+  };
 
-    if (Date.now() - startTime > timeoutMs) {
-      throw new Error(
-        "Timeout waiting for event matching predicate. Events received: " +
-          JSON.stringify(events.slice(-5))
-      );
-    }
-  }
-
-  throw new Error(
-    "Stream ended without matching event. Events received: " +
-      JSON.stringify(events.slice(-5))
+  const timeout = new Promise<never>((_, reject) =>
+    setTimeout(
+      () =>
+        reject(
+          new Error(
+            `Timeout after ${timeoutMs}ms waiting for event. Events received: ` +
+              JSON.stringify(events.slice(-5))
+          )
+        ),
+      timeoutMs
+    )
   );
+
+  return Promise.race([iterateStream(), timeout]);
 }
 
 /**
