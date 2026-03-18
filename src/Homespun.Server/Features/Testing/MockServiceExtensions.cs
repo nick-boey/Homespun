@@ -32,13 +32,35 @@ public static class MockServiceExtensions
         MockModeOptions options,
         IConfiguration? configuration = null)
     {
-        // Register the mock data store as both concrete and interface type
-        services.AddSingleton<MockDataStore>();
-        services.AddSingleton<IDataStore>(sp => sp.GetRequiredService<MockDataStore>());
+        // Register the temporary data folder service - creates temp folder structure
+        services.AddSingleton<TempDataFolderService>();
+        services.AddSingleton<ITempDataFolderService>(sp => sp.GetRequiredService<TempDataFolderService>());
 
-        // Register mock Fleece service (needs to be accessible by transition service)
+        // Register the FleeceIssueSeeder for seeding issues to JSONL files
+        services.AddSingleton<FleeceIssueSeeder>();
+
+        // Register real JsonDataStore with temp file path
+        services.AddSingleton<IDataStore>(sp =>
+        {
+            var tempFolder = sp.GetRequiredService<ITempDataFolderService>();
+            var logger = sp.GetRequiredService<ILogger<JsonDataStore>>();
+            return new JsonDataStore(tempFolder.DataFilePath, logger);
+        });
+
+        // Register real FleeceService with supporting services
+        // Issue serialization queue (background service for persistence)
+        services.AddSingleton<IssueSerializationQueueService>();
+        services.AddSingleton<IIssueSerializationQueue>(sp => sp.GetRequiredService<IssueSerializationQueueService>());
+        services.AddHostedService(sp => sp.GetRequiredService<IssueSerializationQueueService>());
+
+        // Issue history service (for undo/redo - uses real file-based implementation)
+        services.AddSingleton<IIssueHistoryService, IssueHistoryService>();
+
+        // Register real FleeceService (reads/writes to temp .fleece directories)
+        services.AddSingleton<IFleeceService, FleeceService>();
+
+        // Keep MockFleeceService available for backward compatibility if needed
         services.AddSingleton<MockFleeceService>();
-        services.AddSingleton<IFleeceService>(sp => sp.GetRequiredService<MockFleeceService>());
 
         // Core services
         services.AddSingleton<ICommandRunner, MockCommandRunner>();
@@ -59,11 +81,12 @@ public static class MockServiceExtensions
         // Container query service
         services.AddScoped<IContainerQueryService, MockContainerQueryService>();
 
-        // Fleece services (transition service depends on MockFleeceService)
+        // Fleece services
+        // Transition service depends on IFleeceService (now using real FleeceService)
         services.AddScoped<IFleeceIssueTransitionService, MockFleeceIssueTransitionService>();
         services.AddSingleton<IFleeceIssuesSyncService, MockFleeceIssuesSyncService>();
         services.AddScoped<IIssueBranchResolverService, IssueBranchResolverService>();
-        services.AddSingleton<IIssueHistoryService, IssueHistoryService>();
+        // IIssueHistoryService already registered above with FleeceService
         services.AddScoped<IFleeceIssueDiffService, FleeceIssueDiffService>();
         services.AddScoped<IFleeceChangeDetectionService, MockFleeceChangeDetectionService>();
         services.AddScoped<IFleeceConflictDetectionService, MockFleeceConflictDetectionService>();
@@ -105,22 +128,13 @@ public static class MockServiceExtensions
         services.AddSingleton<IBranchIdGeneratorService, BranchIdGeneratorService>();
         services.AddSingleton<IBranchIdBackgroundService, BranchIdBackgroundService>();
 
-        // Message cache store - use real implementation
-        // In container: /data/sessions, locally: ~/.homespun/sessions (consistent with Program.cs)
-        var dataPath = Environment.GetEnvironmentVariable("HOMESPUN_DATA_PATH");
-        string messageCacheDir;
-        if (!string.IsNullOrEmpty(dataPath))
-        {
-            var dataDirectory = Path.GetDirectoryName(dataPath);
-            messageCacheDir = Path.Combine(dataDirectory!, "sessions");
-        }
-        else
-        {
-            var homespunDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".homespun");
-            messageCacheDir = Path.Combine(homespunDir, "sessions");
-        }
+        // Message cache store - use temp folder's sessions directory
         services.AddSingleton<IMessageCacheStore>(sp =>
-            new MessageCacheStore(messageCacheDir, sp.GetRequiredService<ILogger<MessageCacheStore>>()));
+        {
+            var tempFolder = sp.GetRequiredService<ITempDataFolderService>();
+            var logger = sp.GetRequiredService<ILogger<MessageCacheStore>>();
+            return new MessageCacheStore(tempFolder.SessionsPath, logger);
+        });
 
         // Graph service
         services.AddScoped<IGraphService, MockGraphService>();
