@@ -64,6 +64,22 @@ vi.mock('@/providers/signalr-provider', () => ({
   })),
 }))
 
+vi.mock('@/features/sessions/hooks/use-historical-session-messages', () => ({
+  useHistoricalSessionMessages: vi.fn(() => ({
+    messages: [],
+    isLoading: false,
+    error: null,
+  })),
+}))
+
+vi.mock('@/features/sessions/hooks/use-clear-context', () => ({
+  useClearContext: vi.fn(() => ({
+    clearContext: vi.fn(),
+    isPending: false,
+    error: null,
+  })),
+}))
+
 vi.mock('@/features/sessions', () => ({
   useSession: vi.fn(),
   useSessionMessages: vi.fn(() => ({ messages: [], addUserMessage: vi.fn() })),
@@ -96,6 +112,16 @@ vi.mock('@/features/sessions', () => ({
     hasPrevious: false,
     hasNext: false,
     isLoading: false,
+  })),
+  useHistoricalSessionMessages: vi.fn(() => ({
+    messages: [],
+    isLoading: false,
+    error: null,
+  })),
+  useClearContext: vi.fn(() => ({
+    clearContext: vi.fn(),
+    isPending: false,
+    error: null,
   })),
 }))
 

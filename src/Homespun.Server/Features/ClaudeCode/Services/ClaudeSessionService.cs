@@ -2398,4 +2398,49 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
 
         _logger.LogInformation("Session {SessionId} model changed to {Model}", sessionId, model);
     }
+
+    /// <inheritdoc />
+    public async Task<ClaudeSession> ClearContextAndStartNewAsync(
+        string currentSessionId,
+        string? initialPrompt = null,
+        CancellationToken cancellationToken = default)
+    {
+        var currentSession = _sessionStore.GetById(currentSessionId);
+        if (currentSession == null)
+        {
+            throw new KeyNotFoundException($"Session with ID {currentSessionId} not found");
+        }
+
+        _logger.LogInformation(
+            "Clearing context for session {SessionId}, entity {EntityId}, and starting new session",
+            currentSessionId, currentSession.EntityId);
+
+        // Stop the current session but preserve it in the message cache for history
+        await StopSessionAsync(currentSessionId, cancellationToken);
+
+        // Create a new session for the same entity/project with fresh context
+        var newSession = await StartSessionAsync(
+            currentSession.EntityId,
+            currentSession.ProjectId,
+            currentSession.WorkingDirectory,
+            currentSession.Mode,
+            currentSession.Model,
+            currentSession.SystemPrompt,
+            cancellationToken);
+
+        // Broadcast the context cleared event
+        await _hubContext.BroadcastSessionContextCleared(currentSessionId, newSession);
+
+        _logger.LogInformation(
+            "Context cleared. Old session: {OldSessionId}, New session: {NewSessionId}",
+            currentSessionId, newSession.Id);
+
+        // If an initial prompt was provided, send it to start the session
+        if (!string.IsNullOrWhiteSpace(initialPrompt))
+        {
+            await SendMessageAsync(newSession.Id, initialPrompt, newSession.Mode, null, cancellationToken);
+        }
+
+        return newSession;
+    }
 }

@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useClaudeCodeHub } from '@/providers/signalr-provider'
 import { registerClaudeCodeHubEvents } from '@/lib/signalr/claude-code-hub'
 import { invalidateAllSessionsQueries, invalidateTaskGraphQueries } from './use-sessions'
+import { sessionHistoryQueryKey } from './use-session-history'
 
 /**
  * Hook that subscribes to SignalR session events and invalidates all session queries.
@@ -15,6 +16,7 @@ import { invalidateAllSessionsQueries, invalidateTaskGraphQueries } from './use-
  * - SessionError: When a session encounters an error
  * - SessionResultReceived: When session results are received
  * - SessionModeModelChanged: When session mode or model changes
+ * - SessionContextCleared: When context is cleared and a new session starts
  */
 export function useSessionsSignalR(): void {
   const queryClient = useQueryClient()
@@ -34,6 +36,21 @@ export function useSessionsSignalR(): void {
       invalidateTaskGraphQueries(queryClient)
     }
 
+    // When context is cleared, we need to invalidate session history as well
+    const invalidateOnContextCleared = (
+      _oldSessionId: string,
+      newSession: { projectId?: string; entityId?: string }
+    ) => {
+      invalidateAllSessionsQueries(queryClient)
+      invalidateTaskGraphQueries(queryClient)
+      // Invalidate session history for this entity to show the new session
+      if (newSession.projectId && newSession.entityId) {
+        queryClient.invalidateQueries({
+          queryKey: sessionHistoryQueryKey(newSession.projectId, newSession.entityId),
+        })
+      }
+    }
+
     const cleanup = registerClaudeCodeHubEvents(connection, {
       onSessionStarted: invalidateSessionAndTaskGraphs,
       onSessionStopped: invalidateSessionAndTaskGraphs,
@@ -41,6 +58,7 @@ export function useSessionsSignalR(): void {
       onSessionError: invalidate,
       onSessionResultReceived: invalidate,
       onSessionModeModelChanged: invalidate,
+      onSessionContextCleared: invalidateOnContextCleared,
     })
 
     return cleanup

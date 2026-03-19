@@ -943,4 +943,43 @@ public class MockClaudeSessionService : IClaudeSessionService
 
         await _hubContext.BroadcastSessionModeModelChanged(sessionId, session.Mode, session.Model);
     }
+
+    /// <inheritdoc />
+    public async Task<ClaudeSession> ClearContextAndStartNewAsync(
+        string currentSessionId,
+        string? initialPrompt = null,
+        CancellationToken cancellationToken = default)
+    {
+        _logger.LogDebug("[Mock] ClearContextAndStartNew for session {SessionId}", currentSessionId);
+
+        var currentSession = _sessionStore.GetById(currentSessionId);
+        if (currentSession == null)
+        {
+            throw new KeyNotFoundException($"Session with ID {currentSessionId} not found");
+        }
+
+        // Stop the current session
+        await StopSessionAsync(currentSessionId, cancellationToken);
+
+        // Start a new session with the same entity/project
+        var newSession = await StartSessionAsync(
+            currentSession.EntityId,
+            currentSession.ProjectId,
+            currentSession.WorkingDirectory,
+            currentSession.Mode,
+            currentSession.Model,
+            currentSession.SystemPrompt,
+            cancellationToken);
+
+        // If an initial prompt was provided, send it as the first message
+        if (!string.IsNullOrEmpty(initialPrompt))
+        {
+            await SendMessageAsync(newSession.Id, initialPrompt, newSession.Mode, newSession.Model, cancellationToken);
+        }
+
+        // Broadcast the context cleared event
+        await _hubContext.BroadcastSessionContextCleared(currentSessionId, newSession);
+
+        return newSession;
+    }
 }
