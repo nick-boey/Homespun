@@ -3,7 +3,7 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import React from 'react'
 import { SessionCard } from './session-card'
 import type { SessionSummary } from '@/api/generated/types.gen'
-import { SessionMode, ClaudeSessionStatus } from '@/api/generated/types.gen'
+import { SessionMode, ClaudeSessionStatus, SessionType } from '@/api/generated/types.gen'
 
 const mockSession: SessionSummary = {
   id: 'test-session-id',
@@ -335,5 +335,88 @@ describe('SessionCard', () => {
     expect(screen.getByText('issue-123')).toBeInTheDocument()
     // Check that bullet separator is not shown
     expect(screen.queryByText('•')).not.toBeInTheDocument()
+  })
+
+  it('shows Review Changes button for ISSUE_MODIFY sessions', () => {
+    render(
+      <SessionCard
+        session={{ ...mockSession, sessionType: SessionType.ISSUE_MODIFY }}
+        entityTitle="Issues Agent"
+        entityType="issue"
+        projectName="Test Project"
+      />
+    )
+
+    expect(screen.getByRole('button', { name: /Review Changes/i })).toBeInTheDocument()
+  })
+
+  it('does not show Review Changes button for non-ISSUE_MODIFY sessions', () => {
+    render(
+      <SessionCard
+        session={{ ...mockSession, sessionType: undefined }}
+        entityTitle="Regular Session"
+        entityType="issue"
+        projectName="Test Project"
+      />
+    )
+
+    expect(screen.queryByRole('button', { name: /Review Changes/i })).not.toBeInTheDocument()
+  })
+
+  it('Review Changes link has correct href', () => {
+    render(
+      <SessionCard
+        session={{ ...mockSession, sessionType: SessionType.ISSUE_MODIFY }}
+        entityTitle="Issues Agent"
+        entityType="issue"
+        projectName="Test Project"
+      />
+    )
+
+    // The link wrapping the button should have the correct href
+    const reviewButton = screen.getByRole('button', { name: /Review Changes/i })
+    const reviewLink = reviewButton.closest('a')
+    expect(reviewLink).toHaveAttribute('href', '/sessions/test-session-id/issue-diff')
+  })
+
+  it('clicking Review Changes does not prevent navigation', () => {
+    render(
+      <SessionCard
+        session={{ ...mockSession, sessionType: SessionType.ISSUE_MODIFY }}
+        entityTitle="Issues Agent"
+        entityType="issue"
+        projectName="Test Project"
+      />
+    )
+
+    const reviewButton = screen.getByRole('button', { name: /Review Changes/i })
+    const reviewLink = reviewButton.closest('a')!
+
+    // Create a spy for preventDefault
+    const preventDefaultSpy = vi.fn()
+    const clickEvent = new MouseEvent('click', { bubbles: true, cancelable: true })
+    Object.defineProperty(clickEvent, 'preventDefault', { value: preventDefaultSpy })
+
+    // Fire the click event
+    reviewLink.dispatchEvent(clickEvent)
+
+    // The event should NOT have preventDefault called (so navigation can proceed)
+    expect(preventDefaultSpy).not.toHaveBeenCalled()
+  })
+
+  it('shows Issues Agent badge for ISSUE_MODIFY sessions', () => {
+    render(
+      <SessionCard
+        session={{ ...mockSession, sessionType: SessionType.ISSUE_MODIFY }}
+        entityTitle="Test Title"
+        entityType="issue"
+        projectName="Test Project"
+      />
+    )
+
+    // Find the badge specifically (not the title)
+    const badge = screen.getByText('Issues Agent')
+    expect(badge).toBeInTheDocument()
+    expect(badge.getAttribute('data-slot')).toBe('badge')
   })
 })

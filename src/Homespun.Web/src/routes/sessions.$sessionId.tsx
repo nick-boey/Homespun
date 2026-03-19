@@ -1,4 +1,4 @@
-import { createFileRoute, useParams, Link } from '@tanstack/react-router'
+import { createFileRoute, useParams, Link, Outlet, useRouterState } from '@tanstack/react-router'
 import { useEffect, useRef, useCallback, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -51,11 +51,30 @@ import {
 } from '@/components/ui/alert-dialog'
 
 export const Route = createFileRoute('/sessions/$sessionId')({
-  component: SessionChat,
+  component: SessionLayout,
 })
 
-function SessionChat() {
+/**
+ * Layout component that either renders the session chat or child routes (like issue-diff).
+ * This wrapper ensures we don't violate React's rules of hooks.
+ */
+function SessionLayout() {
   const { sessionId } = useParams({ from: '/sessions/$sessionId' })
+  const currentPath = useRouterState({ select: (s) => s.location.pathname })
+
+  // Check if we're at a child route (like issue-diff)
+  const isChildRoute = currentPath !== `/sessions/${sessionId}`
+
+  // If we're at a child route, render the Outlet for child content
+  if (isChildRoute) {
+    return <Outlet />
+  }
+
+  // Render the session chat content
+  return <SessionChat sessionId={sessionId} />
+}
+
+function SessionChat({ sessionId }: { sessionId: string }) {
   const { session, isLoading, isNotFound, error, refetch } = useSession(sessionId)
   const { isConnected } = useClaudeCodeHub()
   const scrollContainerRef = useRef<HTMLDivElement>(null)

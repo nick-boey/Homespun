@@ -16,6 +16,8 @@ vi.mock('@tanstack/react-router', () => ({
     })
   }),
   useParams: () => ({ sessionId: 'test-session-id' }),
+  useRouterState: () => '/sessions/test-session-id',
+  Outlet: () => null,
   Link: ({
     children,
     to,
