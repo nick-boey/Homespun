@@ -112,6 +112,17 @@ public class GitCloneService(ICommandRunner commandRunner, ILogger<GitCloneServi
             return null;
         }
 
+        // After checkout succeeds, copy unstaged .fleece changes
+        try
+        {
+            await CopyFleeceChangesAsync(repoPath, workdirPath);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error copying .fleece changes to clone");
+            // Don't fail the clone creation
+        }
+
         logger.LogInformation("Created clone at {ClonePath} for branch {BranchName}", clonePath, branchName);
 
         // Return the workdir path (the actual git repository) for Docker mounting
@@ -736,6 +747,44 @@ public class GitCloneService(ICommandRunner commandRunner, ILogger<GitCloneServi
     }
 
     /// <summary>
+    /// Copies unstaged .fleece/ changes from the main repo to a clone.
+    /// </summary>
+    private async Task CopyFleeceChangesAsync(string repoPath, string clonePath)
+    {
+        // Check for unstaged .fleece/ changes in main repo
+        var statusResult = await commandRunner.RunAsync("git", "status --porcelain -- .fleece/", repoPath);
+
+        if (statusResult.Success && !string.IsNullOrWhiteSpace(statusResult.Output))
+        {
+            logger.LogInformation("Copying unstaged .fleece changes from {RepoPath} to clone at {ClonePath}",
+                repoPath, clonePath);
+
+            var sourceFleecePath = Path.Combine(repoPath, ".fleece");
+            var destFleecePath = Path.Combine(clonePath, ".fleece");
+
+            Directory.CreateDirectory(destFleecePath);
+
+            var rsyncResult = await commandRunner.RunAsync(
+                "rsync",
+                $"-av --exclude=.git \"{sourceFleecePath}/\" \"{destFleecePath}/\"",
+                repoPath);
+
+            if (rsyncResult.Success)
+            {
+                logger.LogInformation("Successfully copied .fleece changes to clone");
+            }
+            else
+            {
+                logger.LogWarning("Failed to copy .fleece changes to clone: {Error}", rsyncResult.Error);
+            }
+        }
+        else
+        {
+            logger.LogDebug("No unstaged .fleece changes to copy");
+        }
+    }
+
+    /// <summary>
     /// Deletes a directory recursively, clearing read-only file attributes first.
     /// Required on Windows where git creates read-only files in .git/objects.
     /// </summary>
@@ -1161,57 +1210,6 @@ public class GitCloneService(ICommandRunner commandRunner, ILogger<GitCloneServi
 
         // Both additions and deletions means modified
         return FileChangeStatus.Modified;
-    }
-
-    public async Task<string?> CreateIssueModifyCloneAsync(string repoPath)
-    {
-        // Generate timestamp-based branch name
-        var timestamp = DateTime.UtcNow.ToString("yyyyMMddTHHmmss");
-        var branchName = $"hsp/agent+{timestamp}";
-
-        // Create the clone from main branch
-        var clonePath = await CreateCloneAsync(repoPath, branchName, createBranch: true, baseBranch: "main");
-
-        if (clonePath == null)
-        {
-            return null;
-        }
-
-        try
-        {
-            // Check for unstaged .fleece/ changes in main repo
-            var statusResult = await commandRunner.RunAsync("git", "status --porcelain -- .fleece/", repoPath);
-
-            if (statusResult.Success && !string.IsNullOrWhiteSpace(statusResult.Output))
-            {
-                // Copy unstaged .fleece/ changes to the clone
-                var sourceFleecePath = Path.Combine(repoPath, ".fleece");
-                var destFleecePath = Path.Combine(clonePath, ".fleece");
-
-                // Ensure destination directory exists
-                Directory.CreateDirectory(destFleecePath);
-
-                // Use rsync to copy the files, preserving timestamps and excluding .git
-                var rsyncResult = await commandRunner.RunAsync(
-                    "rsync",
-                    $"-av --exclude=.git \"{sourceFleecePath}/\" \"{destFleecePath}/\"",
-                    repoPath);
-
-                if (!rsyncResult.Success)
-                {
-                    logger.LogWarning("Failed to copy .fleece changes to clone: {Error}", rsyncResult.Error);
-                    // Don't fail the clone creation, just log the warning
-                }
-            }
-
-            return clonePath;
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Error copying .fleece changes to clone");
-            // Don't fail the clone creation, just return the clone path
-            return clonePath;
-        }
     }
 
     public async Task<SessionBranchInfo?> GetSessionBranchInfoAsync(string clonePath)

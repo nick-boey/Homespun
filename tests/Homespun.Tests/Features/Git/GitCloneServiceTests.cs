@@ -2435,58 +2435,17 @@ public class GitCloneServiceTests
 
     #endregion
 
-    #region CreateIssueModifyCloneAsync Tests
+    #region CreateCloneAsync - Fleece Copying Tests
 
     [Test]
-    public async Task CreateIssueModifyCloneAsync_CreatesCloneWithCorrectBranchName()
+    public async Task CreateCloneAsync_CopiesUnstagedFleeceChanges()
     {
         // Arrange
         var repoPath = Path.Combine(_tempDir, "repo");
         Directory.CreateDirectory(repoPath);
+        var branchName = "feature/fleece-test";
 
-        // Mock git remote get-url
-        _mockRunner.Setup(x => x.RunAsync("git", "remote get-url origin", repoPath))
-            .ReturnsAsync(new CommandResult { Success = true, Output = "https://github.com/test/repo.git" });
-
-        // Mock git branch creation - verify branch name starts with hsp/agent+
-        _mockRunner.Setup(x => x.RunAsync("git", It.Is<string>(cmd => cmd.StartsWith("branch \"hsp/agent+") && cmd.EndsWith("\" \"main\"")), repoPath))
-            .ReturnsAsync(new CommandResult { Success = true });
-
-        // Mock git clone
-        _mockRunner.Setup(x => x.RunAsync("git", It.Is<string>(cmd => cmd.StartsWith("clone --local")), repoPath))
-            .ReturnsAsync(new CommandResult { Success = true });
-
-        // Mock git remote set-url
-        _mockRunner.Setup(x => x.RunAsync("git", It.Is<string>(cmd => cmd.StartsWith("remote set-url")), It.IsAny<string>()))
-            .ReturnsAsync(new CommandResult { Success = true });
-
-        // Mock git checkout
-        _mockRunner.Setup(x => x.RunAsync("git", It.Is<string>(cmd => cmd.StartsWith("checkout \"hsp/agent+")), It.IsAny<string>()))
-            .ReturnsAsync(new CommandResult { Success = true });
-
-        // Mock git status - no unstaged changes
-        _mockRunner.Setup(x => x.RunAsync("git", "status --porcelain -- .fleece/", repoPath))
-            .ReturnsAsync(new CommandResult { Success = true, Output = "" });
-
-        // Act
-        var result = await _service.CreateIssueModifyCloneAsync(repoPath);
-
-        // Assert
-        Assert.That(result, Is.Not.Null);
-        Assert.That(result, Does.Contain("workdir"));
-
-        // Verify branch creation was called with correct pattern
-        _mockRunner.Verify(x => x.RunAsync("git", It.Is<string>(cmd => cmd.StartsWith("branch \"hsp/agent+") && cmd.Contains("+") && cmd.EndsWith("\" \"main\"")), repoPath), Times.Once);
-    }
-
-    [Test]
-    public async Task CreateIssueModifyCloneAsync_CopiesUnstagedFleeceFiles()
-    {
-        // Arrange
-        var repoPath = Path.Combine(_tempDir, "repo");
-        Directory.CreateDirectory(repoPath);
-
-        SetupSuccessfulCloneCommands(repoPath);
+        SetupSuccessfulCloneCommands(repoPath, branchName);
 
         // Mock git status to show unstaged .fleece files
         _mockRunner.Setup(x => x.RunAsync("git", "status --porcelain -- .fleece/", repoPath))
@@ -2497,7 +2456,7 @@ public class GitCloneServiceTests
             .ReturnsAsync(new CommandResult { Success = true });
 
         // Act
-        var result = await _service.CreateIssueModifyCloneAsync(repoPath);
+        var result = await _service.CreateCloneAsync(repoPath, branchName);
 
         // Assert
         Assert.That(result, Is.Not.Null);
@@ -2507,20 +2466,21 @@ public class GitCloneServiceTests
     }
 
     [Test]
-    public async Task CreateIssueModifyCloneAsync_DoesNotCopyIfNoUnstagedChanges()
+    public async Task CreateCloneAsync_DoesNotCopyIfNoUnstagedFleeceChanges()
     {
         // Arrange
         var repoPath = Path.Combine(_tempDir, "repo");
         Directory.CreateDirectory(repoPath);
+        var branchName = "feature/no-fleece";
 
-        SetupSuccessfulCloneCommands(repoPath);
+        SetupSuccessfulCloneCommands(repoPath, branchName);
 
         // Mock git status to show no unstaged changes
         _mockRunner.Setup(x => x.RunAsync("git", "status --porcelain -- .fleece/", repoPath))
             .ReturnsAsync(new CommandResult { Success = true, Output = "" });
 
         // Act
-        var result = await _service.CreateIssueModifyCloneAsync(repoPath);
+        var result = await _service.CreateCloneAsync(repoPath, branchName);
 
         // Assert
         Assert.That(result, Is.Not.Null);
@@ -2530,40 +2490,61 @@ public class GitCloneServiceTests
     }
 
     [Test]
-    public async Task CreateIssueModifyCloneAsync_CleansUpOnFailure()
+    public async Task CreateCloneAsync_ContinuesIfFleeceCopyFails()
     {
         // Arrange
         var repoPath = Path.Combine(_tempDir, "repo");
         Directory.CreateDirectory(repoPath);
+        var branchName = "feature/fleece-fail";
 
-        // Mock git remote get-url
-        _mockRunner.Setup(x => x.RunAsync("git", "remote get-url origin", repoPath))
-            .ReturnsAsync(new CommandResult { Success = true, Output = "https://github.com/test/repo.git" });
+        SetupSuccessfulCloneCommands(repoPath, branchName);
 
-        // Mock git branch creation
-        _mockRunner.Setup(x => x.RunAsync("git", It.Is<string>(cmd => cmd.StartsWith("branch")), repoPath))
-            .ReturnsAsync(new CommandResult { Success = true });
+        // Mock git status to show unstaged .fleece files
+        _mockRunner.Setup(x => x.RunAsync("git", "status --porcelain -- .fleece/", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true, Output = " M .fleece/issues/test123.json" });
 
-        // Setup clone to fail
-        _mockRunner.Setup(x => x.RunAsync("git", It.Is<string>(cmd => cmd.StartsWith("clone")), repoPath))
-            .ReturnsAsync(new CommandResult { Success = false, Error = "Clone failed" });
+        // Mock rsync to fail
+        _mockRunner.Setup(x => x.RunAsync("rsync", It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync(new CommandResult { Success = false, Error = "rsync failed" });
 
         // Act
-        var result = await _service.CreateIssueModifyCloneAsync(repoPath);
+        var result = await _service.CreateCloneAsync(repoPath, branchName);
 
-        // Assert
-        Assert.That(result, Is.Null);
+        // Assert - clone should still succeed even if fleece copy fails
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result, Does.Contain("workdir"));
     }
 
-    private void SetupSuccessfulCloneCommands(string repoPath)
+    [Test]
+    public async Task CreateCloneAsync_HandlesFleeceStatusCheckFailure()
+    {
+        // Arrange
+        var repoPath = Path.Combine(_tempDir, "repo");
+        Directory.CreateDirectory(repoPath);
+        var branchName = "feature/status-fail";
+
+        SetupSuccessfulCloneCommands(repoPath, branchName);
+
+        // Mock git status to fail
+        _mockRunner.Setup(x => x.RunAsync("git", "status --porcelain -- .fleece/", repoPath))
+            .ReturnsAsync(new CommandResult { Success = false, Error = "git status failed" });
+
+        // Act
+        var result = await _service.CreateCloneAsync(repoPath, branchName);
+
+        // Assert - clone should still succeed even if status check fails
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result, Does.Contain("workdir"));
+
+        // Verify rsync was NOT called since status check failed
+        _mockRunner.Verify(x => x.RunAsync("rsync", It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+    }
+
+    private void SetupSuccessfulCloneCommands(string repoPath, string branchName)
     {
         // Mock git remote get-url
         _mockRunner.Setup(x => x.RunAsync("git", "remote get-url origin", repoPath))
             .ReturnsAsync(new CommandResult { Success = true, Output = "https://github.com/test/repo.git" });
-
-        // Mock git branch creation
-        _mockRunner.Setup(x => x.RunAsync("git", It.Is<string>(cmd => cmd.StartsWith("branch")), repoPath))
-            .ReturnsAsync(new CommandResult { Success = true });
 
         // Mock git clone
         _mockRunner.Setup(x => x.RunAsync("git", It.Is<string>(cmd => cmd.StartsWith("clone")), repoPath))
@@ -2574,7 +2555,7 @@ public class GitCloneServiceTests
             .ReturnsAsync(new CommandResult { Success = true });
 
         // Mock git checkout
-        _mockRunner.Setup(x => x.RunAsync("git", It.Is<string>(cmd => cmd.StartsWith("checkout")), It.IsAny<string>()))
+        _mockRunner.Setup(x => x.RunAsync("git", $"checkout \"{branchName}\"", It.IsAny<string>()))
             .ReturnsAsync(new CommandResult { Success = true });
     }
 

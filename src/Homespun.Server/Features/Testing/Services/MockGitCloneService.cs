@@ -417,18 +417,6 @@ public class MockGitCloneService : IGitCloneService
         return Task.FromResult(new List<FileChangeInfo>());
     }
 
-    public Task<string?> CreateIssueModifyCloneAsync(string repoPath)
-    {
-        _logger.LogDebug("[Mock] CreateIssueModifyCloneAsync in {RepoPath}", repoPath);
-
-        // Generate timestamp-based branch name
-        var timestamp = DateTime.UtcNow.ToString("yyyyMMddTHHmmss");
-        var branchName = $"hsp/agent+{timestamp}";
-
-        // Use the regular CreateCloneAsync method
-        return CreateCloneAsync(repoPath, branchName, createBranch: true, baseBranch: "main");
-    }
-
     public Task<SessionBranchInfo?> GetSessionBranchInfoAsync(string clonePath)
     {
         _logger.LogDebug("[Mock] GetSessionBranchInfoAsync in {ClonePath}", clonePath);
