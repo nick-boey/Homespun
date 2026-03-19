@@ -128,6 +128,7 @@ public partial class AgentPromptService : IAgentPromptService
                 "description" => context.Description ?? string.Empty,
                 "branch" => context.Branch,
                 "type" => context.Type,
+                "context" => context.Context ?? string.Empty,
                 _ => match.Value // Keep unknown placeholders as-is
             };
         });

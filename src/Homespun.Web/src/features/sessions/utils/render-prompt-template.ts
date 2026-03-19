@@ -8,13 +8,15 @@ export interface PromptContext {
   description: string
   branch: string
   type: string
+  /** Issue hierarchy showing ancestors and direct children */
+  context?: string
 }
 
 /**
  * Renders a prompt template by replacing placeholders with context values.
  * Placeholders use the format {{name}} and are case-insensitive.
  *
- * Supported placeholders: {{title}}, {{id}}, {{description}}, {{branch}}, {{type}}
+ * Supported placeholders: {{title}}, {{id}}, {{description}}, {{branch}}, {{type}}, {{context}}
  *
  * @param template - The template string with placeholders, or null/undefined
  * @param context - The context values to substitute
@@ -26,10 +28,13 @@ export function renderPromptTemplate(
 ): string {
   if (!template) return ''
 
+  // List of known placeholder keys
+  const knownKeys = ['title', 'id', 'description', 'branch', 'type', 'context']
+
   return template.replace(/\{\{(\w+)\}\}/gi, (match, placeholder) => {
     const key = placeholder.toLowerCase() as keyof PromptContext
-    if (key in context) {
-      return context[key]
+    if (knownKeys.includes(key)) {
+      return context[key] ?? ''
     }
     // Preserve unknown placeholders
     return match

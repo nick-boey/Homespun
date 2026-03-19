@@ -182,6 +182,54 @@ public class AgentPromptServiceTests
     }
 
     [Test]
+    public void RenderTemplate_ReplacesContextPlaceholder()
+    {
+        // Arrange
+        var template = "## Issue Hierarchy\n{{context}}\n\n## Description\n{{description}}";
+        var treeContext = """
+            - parent1 [feature] [open] Parent Issue
+              - child1 [task] [progress] Current Issue
+            """;
+        var context = new PromptContext
+        {
+            Title = "Current Issue",
+            Id = "child1",
+            Branch = "feature/test",
+            Type = "task",
+            Description = "Test description",
+            Context = treeContext
+        };
+
+        // Act
+        var result = _service.RenderTemplate(template, context);
+
+        // Assert
+        var expected = $"## Issue Hierarchy\n{treeContext}\n\n## Description\nTest description";
+        Assert.That(result, Is.EqualTo(expected));
+    }
+
+    [Test]
+    public void RenderTemplate_ContextPlaceholder_ReturnsEmptyStringWhenNull()
+    {
+        // Arrange
+        var template = "Context: {{context}}";
+        var context = new PromptContext
+        {
+            Title = "Test",
+            Id = "123",
+            Branch = "main",
+            Type = "task",
+            Context = null
+        };
+
+        // Act
+        var result = _service.RenderTemplate(template, context);
+
+        // Assert
+        Assert.That(result, Is.EqualTo("Context: "));
+    }
+
+    [Test]
     public async Task CreatePromptAsync_CreatesGlobalPrompt()
     {
         // Act

@@ -99,4 +99,21 @@ describe('renderPromptTemplate', () => {
 ### Description
 Implement dark mode toggle`)
   })
+
+  it('replaces {{context}} placeholder with context value', () => {
+    const treeContext = `- parent1 [feature] [open] Parent Issue
+  - child1 [task] [progress] Current Issue`
+    const contextWithTree: PromptContext = {
+      ...mockContext,
+      context: treeContext,
+    }
+    const template = '## Hierarchy\n{{context}}\n\n## Title\n{{title}}'
+    const result = renderPromptTemplate(template, contextWithTree)
+    expect(result).toBe(`## Hierarchy\n${treeContext}\n\n## Title\nAdd dark mode`)
+  })
+
+  it('replaces {{context}} with empty string when undefined', () => {
+    const result = renderPromptTemplate('Context: {{context}}', mockContext)
+    expect(result).toBe('Context: ')
+  })
 })

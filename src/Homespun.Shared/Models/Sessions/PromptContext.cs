@@ -29,4 +29,10 @@ public class PromptContext
     /// The type (e.g., Feature, Bug, Task for issues; or "PullRequest" for PRs).
     /// </summary>
     public string Type { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The issue's hierarchical context showing ancestors and direct children.
+    /// Format: tree structure with each line showing "- id [type] [status] title"
+    /// </summary>
+    public string? Context { get; set; }
 }
