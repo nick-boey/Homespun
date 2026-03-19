@@ -130,7 +130,6 @@ export function SessionCard({
   }
 
   const handleLinkClick = (event: React.MouseEvent) => {
-    event.preventDefault()
     event.stopPropagation()
   }
 
