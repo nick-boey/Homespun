@@ -20,6 +20,8 @@ import {
   useSessionNavigation,
   useIssueContext,
 } from '@/features/sessions'
+import { useHistoricalSessionMessages } from '@/features/sessions/hooks/use-historical-session-messages'
+import { useClearContext } from '@/features/sessions/hooks/use-clear-context'
 import { useAnswerQuestion } from '@/features/questions'
 import { useClaudeCodeHub } from '@/providers/signalr-provider'
 import {
@@ -31,6 +33,8 @@ import {
   ChevronLeft,
   ChevronRight,
   FileCheck,
+  History,
+  Plus,
 } from 'lucide-react'
 import { ScrollToBottom } from '@/components/ui/scroll-to-bottom'
 import { useMobile } from '@/hooks/use-mobile'
@@ -82,7 +86,15 @@ function SessionChat({ sessionId }: { sessionId: string }) {
   const [isProcessingAnswer, setIsProcessingAnswer] = useState(false)
   const [showStopDialog, setShowStopDialog] = useState(false)
   const [infoPanelOpen, setInfoPanelOpen] = useState(false)
+  const [viewingHistoricalSessionId, setViewingHistoricalSessionId] = useState<string | null>(null)
   const isMobile = useMobile()
+
+  // Fetch historical session messages when viewing a past session
+  const { messages: historicalMessages, isLoading: isLoadingHistorical } =
+    useHistoricalSessionMessages(viewingHistoricalSessionId)
+
+  // Determine if we're viewing a historical session
+  const isViewingHistorical = viewingHistoricalSessionId !== null
 
   // Get session settings (mode/model) from server or cache
   const { mode, model } = useSessionSettings(sessionId, session)
@@ -97,6 +109,9 @@ function SessionChat({ sessionId }: { sessionId: string }) {
 
   // Stop session mutation
   const stopSession = useStopSession()
+
+  // Clear context and start new session
+  const { clearContext, isPending: isClearingContext } = useClearContext()
 
   // Get session messages with real-time updates
   const { messages, addUserMessage } = useSessionMessages({
@@ -179,6 +194,29 @@ function SessionChat({ sessionId }: { sessionId: string }) {
   const handleToggleInfoPanel = useCallback(() => {
     setInfoPanelOpen((prev) => !prev)
   }, [])
+
+  // Handle selecting a historical session to view
+  const handleSelectHistoricalSession = useCallback(
+    (selectedSessionId: string) => {
+      // If selecting the active session, clear historical view
+      if (selectedSessionId === sessionId) {
+        setViewingHistoricalSessionId(null)
+      } else {
+        setViewingHistoricalSessionId(selectedSessionId)
+      }
+    },
+    [sessionId]
+  )
+
+  // Return to active session
+  const handleReturnToActive = useCallback(() => {
+    setViewingHistoricalSessionId(null)
+  }, [])
+
+  // Handle starting a new session (clear context)
+  const handleNewSession = useCallback(() => {
+    clearContext(sessionId)
+  }, [clearContext, sessionId])
 
   // Auto-scroll to bottom when new messages arrive or when pending question appears
   useEffect(() => {
@@ -281,55 +319,82 @@ function SessionChat({ sessionId }: { sessionId: string }) {
         isStopPending={stopSession.isPending}
         onToggleInfoPanel={handleToggleInfoPanel}
         infoPanelOpen={infoPanelOpen}
+        onNewSession={handleNewSession}
+        isNewSessionPending={isClearingContext}
       />
+      {/* Historical session banner */}
+      {isViewingHistorical && (
+        <div className="mt-4 flex items-center justify-between rounded-lg border border-yellow-500/50 bg-yellow-500/10 px-4 py-2">
+          <div className="flex items-center gap-2">
+            <History className="h-4 w-4 text-yellow-600" />
+            <span className="text-sm text-yellow-700">Viewing historical session (read-only)</span>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleReturnToActive}
+            className="h-7 text-xs"
+          >
+            Return to active
+          </Button>
+        </div>
+      )}
       {/* Messages area - flex-1 takes remaining space */}
       <div className="relative mt-4 min-h-0 flex-1">
         <div
           ref={scrollContainerRef}
           className="border-border absolute inset-0 overflow-y-auto rounded-lg border"
         >
-          <MessageList
-            messages={messages}
-            isLoading={isLoading}
-            pendingQuestion={!isProcessingAnswer ? session?.pendingQuestion : undefined}
-            onAnswerQuestion={answerQuestion}
-            isSubmittingAnswer={isSubmittingAnswer}
-            isProcessingAnswer={isProcessingAnswer}
-          />
-          {/* Plan approval panel displayed inline after messages */}
-          {hasPendingPlan && planContent && (
-            <div className="p-4">
-              <PlanApprovalPanel
-                planContent={planContent}
-                planFilePath={planFilePath}
-                onApproveClearContext={approveClearContext}
-                onApproveKeepContext={approveKeepContext}
-                onReject={reject}
-                isLoading={isApprovingPlan}
-                error={approvalError}
+          {isViewingHistorical ? (
+            <MessageList messages={historicalMessages} isLoading={isLoadingHistorical} />
+          ) : (
+            <>
+              <MessageList
+                messages={messages}
+                isLoading={isLoading}
+                pendingQuestion={!isProcessingAnswer ? session?.pendingQuestion : undefined}
+                onAnswerQuestion={answerQuestion}
+                isSubmittingAnswer={isSubmittingAnswer}
+                isProcessingAnswer={isProcessingAnswer}
               />
-            </div>
+              {/* Plan approval panel displayed inline after messages */}
+              {hasPendingPlan && planContent && (
+                <div className="p-4">
+                  <PlanApprovalPanel
+                    planContent={planContent}
+                    planFilePath={planFilePath}
+                    onApproveClearContext={approveClearContext}
+                    onApproveKeepContext={approveKeepContext}
+                    onReject={reject}
+                    isLoading={isApprovingPlan}
+                    error={approvalError}
+                  />
+                </div>
+              )}
+            </>
           )}
         </div>
         <ScrollToBottom scrollRef={scrollContainerRef} />
       </div>
       {/* Chat input - sticky at bottom with safe area inset for mobile keyboards */}
-      <div className="bg-background sticky bottom-0 mt-3 pb-[env(safe-area-inset-bottom)] md:mt-4">
-        <ChatInput
-          onSend={handleSend}
-          sessionMode={mode}
-          sessionModel={model}
-          onModeChange={changeMode}
-          onModelChange={changeModel}
-          projectId={session?.projectId}
-          disabled={isProcessing || !isConnected}
-          isLoading={isSending}
-          placeholder={
-            !isConnected ? 'Connecting...' : isProcessing ? 'Processing...' : 'Type a message...'
-          }
-          issueContext={issueContext}
-        />
-      </div>
+      {!isViewingHistorical && (
+        <div className="bg-background sticky bottom-0 mt-3 pb-[env(safe-area-inset-bottom)] md:mt-4">
+          <ChatInput
+            onSend={handleSend}
+            sessionMode={mode}
+            sessionModel={model}
+            onModeChange={changeMode}
+            onModelChange={changeModel}
+            projectId={session?.projectId}
+            disabled={isProcessing || !isConnected}
+            isLoading={isSending}
+            placeholder={
+              !isConnected ? 'Connecting...' : isProcessing ? 'Processing...' : 'Type a message...'
+            }
+            issueContext={issueContext}
+          />
+        </div>
+      )}
 
       {/* Stop confirmation dialog */}
       <AlertDialog open={showStopDialog} onOpenChange={setShowStopDialog}>
@@ -353,6 +418,8 @@ function SessionChat({ sessionId }: { sessionId: string }) {
           session={session}
           isOpen={infoPanelOpen}
           onOpenChange={setInfoPanelOpen}
+          viewingHistoricalSessionId={viewingHistoricalSessionId}
+          onSelectHistoricalSession={handleSelectHistoricalSession}
         />
       )}
     </div>
@@ -375,6 +442,8 @@ interface SessionHeaderProps {
   isStopPending?: boolean
   onToggleInfoPanel?: () => void
   infoPanelOpen?: boolean
+  onNewSession?: () => void
+  isNewSessionPending?: boolean
 }
 
 /**
@@ -393,6 +462,8 @@ function SessionHeader({
   isStopPending,
   onToggleInfoPanel,
   infoPanelOpen,
+  onNewSession,
+  isNewSessionPending,
 }: SessionHeaderProps) {
   // Determine if stop button should be shown
   const showStopButton =
@@ -481,6 +552,18 @@ function SessionHeader({
               <FileCheck className="mr-2 h-4 w-4" />
               Review Changes
             </Link>
+          </Button>
+        )}
+        {onNewSession && session && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onNewSession}
+            disabled={isNewSessionPending}
+            className="h-8"
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            New Session
           </Button>
         )}
         {showStopButton && (

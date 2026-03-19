@@ -39,6 +39,7 @@ export interface ClaudeCodeHubEvents {
   onSessionModeModelChanged?: (sessionId: string, mode: SessionMode, model: string) => void
   onSessionResultReceived?: (sessionId: string, totalCostUsd: number, durationMs: number) => void
   onContextCleared?: (sessionId: string) => void
+  onSessionContextCleared?: (oldSessionId: string, newSession: ClaudeSession) => void
   onSessionError?: (
     sessionId: string,
     errorMessage: string,
@@ -97,6 +98,7 @@ export function registerClaudeCodeHubEvents(
   register('SessionModeModelChanged', handlers.onSessionModeModelChanged)
   register('SessionResultReceived', handlers.onSessionResultReceived)
   register('ContextCleared', handlers.onContextCleared)
+  register('SessionContextCleared', handlers.onSessionContextCleared)
   register('SessionError', handlers.onSessionError)
   register('SessionContainerRestarting', handlers.onSessionContainerRestarting)
   register('SessionContainerRestarted', handlers.onSessionContainerRestarted)
@@ -149,6 +151,7 @@ export interface ClaudeCodeHubMethods {
   restartSession(sessionId: string): Promise<ClaudeSession | null>
   setSessionMode(sessionId: string, mode: SessionMode): Promise<void>
   setSessionModel(sessionId: string, model: string): Promise<void>
+  clearContextAndStartNew(sessionId: string, initialPrompt?: string | null): Promise<ClaudeSession>
 }
 
 /**
@@ -185,5 +188,7 @@ export function createClaudeCodeHubMethods(connection: HubConnection): ClaudeCod
       connection.invoke('SetSessionMode', sessionId, mode),
     setSessionModel: (sessionId: string, model: string) =>
       connection.invoke('SetSessionModel', sessionId, model),
+    clearContextAndStartNew: (sessionId: string, initialPrompt?: string | null) =>
+      connection.invoke<ClaudeSession>('ClearContextAndStartNew', sessionId, initialPrompt),
   }
 }

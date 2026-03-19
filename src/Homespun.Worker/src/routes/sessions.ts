@@ -8,6 +8,7 @@ import type {
   SendMessageRequest,
   AnswerQuestionRequest,
   ApprovePlanRequest,
+  ClearContextRequest,
 } from '../types/index.js';
 import { info } from '../utils/logger.js';
 
@@ -218,6 +219,51 @@ export function createSessionsRoute(sessionManager: SessionManager) {
 
     await sessionManager.close(sessionId);
     return c.json({ ok: true, message: 'Session stopped', sessionId });
+  });
+
+  // POST /sessions/:id/clear-context - Clear context and start a new session (SSE stream)
+  sessions.post('/:id/clear-context', async (c) => {
+    const sessionId = c.req.param('id');
+    const body = await c.req.json<ClearContextRequest>();
+    info(`POST /sessions/${sessionId}/clear-context - mode=${body.mode}, model=${body.model}`);
+
+    c.header('Content-Type', 'text/event-stream');
+    c.header('Cache-Control', 'no-cache');
+    c.header('Connection', 'keep-alive');
+
+    return stream(c, async (s) => {
+      try {
+        const { newSession, oldSessionId } = await sessionManager.clearContextAndCreate(
+          sessionId,
+          {
+            prompt: body.prompt,
+            model: body.model,
+            mode: body.mode,
+            systemPrompt: body.systemPrompt,
+            workingDirectory: body.workingDirectory,
+          }
+        );
+
+        // Send initial event with new session info
+        await s.write(formatSSE('context_cleared', {
+          oldSessionId,
+          newSessionId: newSession.id,
+        }));
+
+        // Stream the new session events
+        for await (const chunk of streamSessionEvents(sessionManager, newSession.id)) {
+          await s.write(chunk);
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        await s.write(formatSSE('error', {
+          sessionId,
+          message,
+          code: 'CLEAR_CONTEXT_ERROR',
+          isRecoverable: false,
+        }));
+      }
+    });
   });
 
   // GET /sessions/:id/messages - Get message history for catch-up replay

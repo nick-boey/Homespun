@@ -12,12 +12,15 @@ import { SessionTodosTab } from './session-todos-tab'
 import { SessionFilesTab } from './session-files-tab'
 import { SessionPlansTab } from './session-plans-tab'
 import { SessionBranchTab } from './session-branch-tab'
+import { SessionHistoryTab } from './session-history-tab'
 
 interface SessionInfoPanelProps {
   session: ClaudeSession
   isOpen: boolean
   onOpenChange: (open: boolean) => void
   defaultOpen?: boolean
+  viewingHistoricalSessionId?: string | null
+  onSelectHistoricalSession?: (sessionId: string) => void
 }
 
 export function SessionInfoPanel({
@@ -25,6 +28,8 @@ export function SessionInfoPanel({
   isOpen,
   onOpenChange,
   defaultOpen = false,
+  viewingHistoricalSessionId,
+  onSelectHistoricalSession,
 }: SessionInfoPanelProps) {
   const isMobile = useMobile()
 
@@ -56,6 +61,7 @@ export function SessionInfoPanel({
         <TabsTrigger value="files">Files</TabsTrigger>
         <TabsTrigger value="plans">Plans</TabsTrigger>
         <TabsTrigger value="branch">Branch</TabsTrigger>
+        <TabsTrigger value="sessions">Sessions</TabsTrigger>
       </TabsList>
 
       <div className="flex-1 overflow-y-auto">
@@ -76,6 +82,14 @@ export function SessionInfoPanel({
         </TabsContent>
         <TabsContent value="branch" className="mt-0 p-4">
           <SessionBranchTab session={session} />
+        </TabsContent>
+        <TabsContent value="sessions" className="mt-0 p-4">
+          <SessionHistoryTab
+            session={session}
+            currentSessionId={session.id ?? undefined}
+            viewingHistoricalSessionId={viewingHistoricalSessionId}
+            onSelectSession={onSelectHistoricalSession}
+          />
         </TabsContent>
       </div>
     </Tabs>

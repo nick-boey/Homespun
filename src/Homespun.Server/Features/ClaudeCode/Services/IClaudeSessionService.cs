@@ -240,4 +240,18 @@ public interface IClaudeSessionService
     /// <param name="model">The new model</param>
     /// <param name="cancellationToken">Cancellation token</param>
     Task SetSessionModelAsync(string sessionId, string model, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Clears context and starts a new session for the same entity/project.
+    /// The old session is preserved in history but a fresh session is created.
+    /// This is useful when users want to start over without the previous conversation context.
+    /// </summary>
+    /// <param name="currentSessionId">The current session ID to clear</param>
+    /// <param name="initialPrompt">Optional initial prompt for the new session</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>The new session</returns>
+    Task<ClaudeSession> ClearContextAndStartNewAsync(
+        string currentSessionId,
+        string? initialPrompt = null,
+        CancellationToken cancellationToken = default);
 }

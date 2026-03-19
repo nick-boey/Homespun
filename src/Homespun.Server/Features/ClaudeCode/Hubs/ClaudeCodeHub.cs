@@ -215,6 +215,29 @@ public class ClaudeCodeHub(IClaudeSessionService sessionService, IMessageCacheSt
             throw new HubException($"Failed to set session model: {ex.Message}");
         }
     }
+
+    /// <summary>
+    /// Clears context and starts a new session for the same entity/project.
+    /// The old session is preserved in history but a fresh session is created.
+    /// </summary>
+    /// <param name="sessionId">The current session ID</param>
+    /// <param name="initialPrompt">Optional initial prompt for the new session</param>
+    /// <returns>The new session</returns>
+    public async Task<ClaudeSession> ClearContextAndStartNew(string sessionId, string? initialPrompt = null)
+    {
+        try
+        {
+            return await sessionService.ClearContextAndStartNewAsync(sessionId, initialPrompt);
+        }
+        catch (KeyNotFoundException)
+        {
+            throw new HubException("Session not found");
+        }
+        catch (Exception ex)
+        {
+            throw new HubException($"Failed to clear context and start new session: {ex.Message}");
+        }
+    }
 }
 
 /// <summary>
@@ -288,6 +311,21 @@ public static class ClaudeCodeHubExtensions
     {
         await hubContext.Clients.All.SendAsync("SessionModeModelChanged", sessionId, mode, model);
         await hubContext.Clients.Group($"session-{sessionId}").SendAsync("SessionModeModelChanged", sessionId, mode, model);
+    }
+
+    /// <summary>
+    /// Broadcasts when session context is cleared and a new session is started.
+    /// </summary>
+    public static async Task BroadcastSessionContextCleared(
+        this IHubContext<ClaudeCodeHub> hubContext,
+        string oldSessionId,
+        ClaudeSession newSession)
+    {
+        // Notify old session group about the transition
+        await hubContext.Clients.Group($"session-{oldSessionId}")
+            .SendAsync("SessionContextCleared", oldSessionId, newSession);
+        // Broadcast new session to all clients
+        await hubContext.Clients.All.SendAsync("SessionStarted", newSession);
     }
 
     /// <summary>

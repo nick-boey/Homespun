@@ -64,6 +64,12 @@ vi.mock('./session-branch-tab', () => ({
   ),
 }))
 
+vi.mock('./session-history-tab', () => ({
+  SessionHistoryTab: ({ session }: { session: ClaudeSession }) => (
+    <div data-testid="session-history-tab">Sessions Tab - {session.entityId}</div>
+  ),
+}))
+
 // Mock UI components
 vi.mock('@/components/ui/tabs', () => ({
   Tabs: ({
@@ -180,7 +186,7 @@ describe('SessionInfoPanel', () => {
   })
 
   describe('Tab Navigation', () => {
-    it('renders all 6 tabs', () => {
+    it('renders all 7 tabs', () => {
       render(<SessionInfoPanel session={mockSession} isOpen={true} onOpenChange={() => {}} />)
 
       expect(screen.getByTestId('tab-trigger-issue')).toBeInTheDocument()
@@ -189,6 +195,7 @@ describe('SessionInfoPanel', () => {
       expect(screen.getByTestId('tab-trigger-files')).toBeInTheDocument()
       expect(screen.getByTestId('tab-trigger-plans')).toBeInTheDocument()
       expect(screen.getByTestId('tab-trigger-branch')).toBeInTheDocument()
+      expect(screen.getByTestId('tab-trigger-sessions')).toBeInTheDocument()
     })
 
     it('shows issue tab by default', () => {

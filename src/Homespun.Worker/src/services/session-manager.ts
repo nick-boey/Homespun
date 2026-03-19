@@ -1148,4 +1148,53 @@ export class SessionManager {
     }
     return ws.outputChannel.getAllMessages();
   }
+
+  /**
+   * Clears context by closing an existing session and creating a new one.
+   * Returns the new session. The old session is closed but not deleted
+   * from history (handled by the server's message cache).
+   */
+  async clearContextAndCreate(
+    currentSessionId: string,
+    opts: {
+      prompt: string;
+      model: string;
+      mode: string;
+      systemPrompt?: string;
+      workingDirectory?: string;
+    },
+  ): Promise<{ newSession: WorkerSession; oldSessionId: string }> {
+    info(
+      `clearContextAndCreate - closing session '${currentSessionId}' and creating new session`,
+    );
+
+    // Close the existing session if it exists
+    const existingSession = this.sessions.get(currentSessionId);
+    if (existingSession) {
+      await this.close(currentSessionId);
+    } else {
+      info(
+        `clearContextAndCreate - no existing session found for '${currentSessionId}'`,
+      );
+    }
+
+    // Create a new session with fresh context (no resume)
+    const newSession = await this.create({
+      prompt: opts.prompt,
+      model: opts.model,
+      mode: opts.mode,
+      systemPrompt: opts.systemPrompt,
+      workingDirectory: opts.workingDirectory,
+      // No resumeSessionId - this is a fresh context
+    });
+
+    info(
+      `clearContextAndCreate - new session created: ${newSession.id} (previous: ${currentSessionId})`,
+    );
+
+    return {
+      newSession,
+      oldSessionId: currentSessionId,
+    };
+  }
 }

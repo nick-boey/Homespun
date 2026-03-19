@@ -25,6 +25,14 @@ export interface ApprovePlanRequest {
   feedback?: string;
 }
 
+export interface ClearContextRequest {
+  prompt: string;
+  model: string;
+  mode: "Plan" | "Build";
+  systemPrompt?: string;
+  workingDirectory?: string;
+}
+
 // SDK tool input types
 
 export interface QuestionOption {
