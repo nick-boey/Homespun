@@ -115,6 +115,14 @@ public class ClaudeSession
     public bool HasPendingPlanApproval { get; set; }
 
     /// <summary>
+    /// Indicates whether the user has explicitly approved a plan in this session.
+    /// Used to distinguish between plan content set by Write tool capture (pre-approval)
+    /// and plan content from a prior approval cycle, preventing the plan_pending guard
+    /// from incorrectly dropping the first plan event.
+    /// </summary>
+    public bool PlanHasBeenApproved { get; set; }
+
+    /// <summary>
     /// Timestamps when context was cleared during the session.
     /// Used to display separators between conversation segments.
     /// </summary>
