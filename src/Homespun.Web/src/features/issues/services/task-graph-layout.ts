@@ -17,6 +17,7 @@ import type {
 import { ExecutionMode, IssueStatus, IssueType } from '@/api'
 import { getPriorityColor } from './priority-colors'
 import { generateBranchName } from './branch-name'
+import { ViewMode } from '../types'
 
 // Marker types (matching C# enum)
 export const TaskGraphMarkerType = {
@@ -111,11 +112,14 @@ export function isLoadMoreRenderLine(
  * @param taskGraph - The task graph response to layout
  * @param maxDepth - Maximum depth (lane) to display. Default is 3 (shows lanes 0-3).
  *                   Use Infinity to show all levels.
+ * @param viewMode - View mode: 'next' (actionable at root) or 'tree' (traditional hierarchy).
+ *                   Default is 'next'.
  * @returns List of render lines for the task graph view
  */
 export function computeLayout(
   taskGraph: TaskGraphResponse | null | undefined,
-  maxDepth = 3
+  maxDepth = 3,
+  viewMode: ViewMode = ViewMode.Next
 ): TaskGraphRenderLine[] {
   if (!taskGraph) {
     return []
@@ -132,46 +136,51 @@ export function computeLayout(
   }
 
   const result: TaskGraphRenderLine[] = []
+  const isTreeView = viewMode === ViewMode.Tree
 
-  // Add load more button at the very top if there are more PRs
-  if (taskGraph.hasMorePastPrs) {
-    result.push({ type: 'loadMore' })
-  }
+  // In tree view, skip PRs, separators, and load more entirely
+  if (!isTreeView) {
+    // Add load more button at the very top if there are more PRs
+    if (taskGraph.hasMorePastPrs) {
+      result.push({ type: 'loadMore' })
+    }
 
-  // Add merged/closed PRs at the top with appropriate top/bottom line flags
-  const hasIssues = nodes.length > 0
-  for (let prIdx = 0; prIdx < mergedPrs.length; prIdx++) {
-    const pr = mergedPrs[prIdx]
-    const isFirstPr = prIdx === 0
-    const isLastPr = prIdx === mergedPrs.length - 1
+    // Add merged/closed PRs at the top with appropriate top/bottom line flags
+    const hasIssues = nodes.length > 0
+    for (let prIdx = 0; prIdx < mergedPrs.length; prIdx++) {
+      const pr = mergedPrs[prIdx]
+      const isFirstPr = prIdx === 0
+      const isLastPr = prIdx === mergedPrs.length - 1
 
-    // First PR: no top line (nothing above it)
-    // Last PR: has bottom line only if there are issues below
-    // Middle PRs: both top and bottom lines
-    const drawTopLine = !isFirstPr
-    const drawBottomLine = !isLastPr || (isLastPr && hasIssues)
+      // First PR: no top line (nothing above it)
+      // Last PR: has bottom line only if there are issues below
+      // Middle PRs: both top and bottom lines
+      const drawTopLine = !isFirstPr
+      const drawBottomLine = !isLastPr || (isLastPr && hasIssues)
 
-    result.push({
-      type: 'pr',
-      prNumber: pr.number ?? 0,
-      title: pr.title ?? '',
-      url: pr.url ?? null,
-      isMerged: pr.isMerged ?? false,
-      hasDescription: pr.hasDescription ?? false,
-      agentStatus: pr.agentStatus ?? null,
-      drawTopLine,
-      drawBottomLine,
-    })
-  }
+      result.push({
+        type: 'pr',
+        prNumber: pr.number ?? 0,
+        title: pr.title ?? '',
+        url: pr.url ?? null,
+        isMerged: pr.isMerged ?? false,
+        hasDescription: pr.hasDescription ?? false,
+        agentStatus: pr.agentStatus ?? null,
+        drawTopLine,
+        drawBottomLine,
+      })
+    }
 
-  // Add separator if we have PRs and issues
-  if (mergedPrs.length > 0 && nodes.length > 0) {
-    result.push({ type: 'separator' })
+    // Add separator if we have PRs and issues
+    if (mergedPrs.length > 0 && nodes.length > 0) {
+      result.push({ type: 'separator' })
+    }
   }
 
   // When merged PRs exist, offset all lanes by +1 to make room for the
   // vertical connector line in lane 0 that connects PRs to issues
-  const laneOffset = mergedPrs.length > 0 ? 1 : 0
+  // In tree view, no lane offset is needed
+  const laneOffset = !isTreeView && mergedPrs.length > 0 ? 1 : 0
 
   // Build lookup for hidden parent detection
   const allNodesByIssueId = new Map<string, TaskGraphNodeResponse>()
@@ -183,21 +192,44 @@ export function computeLayout(
 
   const groups = groupNodes(nodes)
   for (const group of groups) {
-    // Filter nodes by maxDepth within each group
-    // First compute minLane for this group to normalize lanes
-    const minLane = Math.min(...group.map((n) => n.lane ?? 0))
-    const visibleNodes = group.filter((n) => (n.lane ?? 0) - minLane <= maxDepth)
+    if (isTreeView) {
+      // Tree view: compute lanes from roots and filter by depth from root
+      const treeViewNodes = computeTreeViewLayout(group, maxDepth, allNodesByIssueId)
 
-    // Compute hidden parent info: which nodes have parents filtered out
-    const hiddenParentInfo = computeHiddenParentInfo(
-      visibleNodes,
-      group,
-      allNodesByIssueId,
-      minLane,
-      maxDepth
-    )
+      // Compute hidden parent info for tree view
+      const hiddenParentInfo = computeHiddenParentInfoTreeView(
+        treeViewNodes,
+        group,
+        allNodesByIssueId,
+        maxDepth
+      )
 
-    renderGroup(result, visibleNodes, group, agentStatuses, linkedPrs, laneOffset, hiddenParentInfo)
+      renderGroupTreeView(result, treeViewNodes, agentStatuses, linkedPrs, hiddenParentInfo)
+    } else {
+      // Filter nodes by maxDepth within each group
+      // First compute minLane for this group to normalize lanes
+      const minLane = Math.min(...group.map((n) => n.lane ?? 0))
+      const visibleNodes = group.filter((n) => (n.lane ?? 0) - minLane <= maxDepth)
+
+      // Compute hidden parent info: which nodes have parents filtered out
+      const hiddenParentInfo = computeHiddenParentInfo(
+        visibleNodes,
+        group,
+        allNodesByIssueId,
+        minLane,
+        maxDepth
+      )
+
+      renderGroup(
+        result,
+        visibleNodes,
+        group,
+        agentStatuses,
+        linkedPrs,
+        laneOffset,
+        hiddenParentInfo
+      )
+    }
   }
 
   // Post-process: connect merged PR vertical line at lane 0 to leftmost issue nodes
@@ -657,5 +689,301 @@ function getMarker(node: TaskGraphNodeResponse): TaskGraphMarkerType {
       return TaskGraphMarkerType.Closed
     default:
       return node.isActionable ? TaskGraphMarkerType.Actionable : TaskGraphMarkerType.Open
+  }
+}
+
+// ============================================================================
+// Tree View Layout Functions
+// ============================================================================
+
+/** Node with computed tree view lane */
+interface TreeViewNode {
+  node: TaskGraphNodeResponse
+  lane: number
+  parentLane: number | null
+  parentNode: TaskGraphNodeResponse | null
+}
+
+/**
+ * Computes tree view layout for a group of nodes.
+ * Uses BFS from roots to assign lanes (root=0, children=parent+1).
+ */
+function computeTreeViewLayout(
+  group: TaskGraphNodeResponse[],
+  maxDepth: number,
+  _allNodesByIssueId: Map<string, TaskGraphNodeResponse>
+): TreeViewNode[] {
+  if (group.length === 0) return []
+
+  // Build child map: parent ID -> child nodes
+  const childrenByParent = new Map<string, TaskGraphNodeResponse[]>()
+  const nodeById = new Map<string, TaskGraphNodeResponse>()
+
+  for (const node of group) {
+    if (!node.issue?.id) continue
+    nodeById.set(node.issue.id.toLowerCase(), node)
+  }
+
+  // Find roots (nodes with no parents in this group)
+  const roots: TaskGraphNodeResponse[] = []
+  for (const node of group) {
+    if (!node.issue?.id) continue
+
+    let hasParentInGroup = false
+    for (const parentRef of node.issue.parentIssues ?? []) {
+      if (parentRef.parentIssue && nodeById.has(parentRef.parentIssue.toLowerCase())) {
+        hasParentInGroup = true
+        const parentId = parentRef.parentIssue.toLowerCase()
+        const children = childrenByParent.get(parentId) ?? []
+        children.push(node)
+        childrenByParent.set(parentId, children)
+      }
+    }
+
+    if (!hasParentInGroup) {
+      roots.push(node)
+    }
+  }
+
+  // BFS from roots to assign lanes
+  const result: TreeViewNode[] = []
+  const visited = new Set<string>()
+  const queue: Array<{
+    node: TaskGraphNodeResponse
+    lane: number
+    parentNode: TaskGraphNodeResponse | null
+  }> = []
+
+  // Add roots to queue (lane 0)
+  for (const root of roots) {
+    if (root.issue?.id && !visited.has(root.issue.id.toLowerCase())) {
+      queue.push({ node: root, lane: 0, parentNode: null })
+      visited.add(root.issue.id.toLowerCase())
+    }
+  }
+
+  while (queue.length > 0) {
+    const { node, lane, parentNode } = queue.shift()!
+
+    // Filter by maxDepth
+    if (lane > maxDepth) continue
+
+    result.push({
+      node,
+      lane,
+      parentLane: parentNode
+        ? (result.find(
+            (r) => r.node.issue?.id?.toLowerCase() === parentNode.issue?.id?.toLowerCase()
+          )?.lane ?? null)
+        : null,
+      parentNode,
+    })
+
+    // Add children to queue
+    const nodeId = node.issue?.id?.toLowerCase()
+    if (nodeId) {
+      const children = childrenByParent.get(nodeId) ?? []
+      for (const child of children) {
+        if (child.issue?.id && !visited.has(child.issue.id.toLowerCase())) {
+          queue.push({ node: child, lane: lane + 1, parentNode: node })
+          visited.add(child.issue.id.toLowerCase())
+        }
+      }
+    }
+  }
+
+  return result
+}
+
+/**
+ * Computes hidden parent info for tree view nodes.
+ */
+function computeHiddenParentInfoTreeView(
+  treeViewNodes: TreeViewNode[],
+  allGroupNodes: TaskGraphNodeResponse[],
+  allNodesByIssueId: Map<string, TaskGraphNodeResponse>,
+  _maxDepth: number
+): Map<string, { hasHiddenParent: boolean; hiddenParentIsSeriesMode: boolean }> {
+  const result = new Map<string, { hasHiddenParent: boolean; hiddenParentIsSeriesMode: boolean }>()
+  const visibleIds = new Set(
+    treeViewNodes.map((t) => t.node.issue?.id?.toLowerCase()).filter(Boolean)
+  )
+
+  for (const treeNode of treeViewNodes) {
+    if (!treeNode.node.issue?.id) continue
+
+    let hasHiddenParent = false
+    let hiddenParentIsSeriesMode = false
+
+    // Check each parent reference
+    for (const parentRef of treeNode.node.issue.parentIssues ?? []) {
+      if (!parentRef.parentIssue) continue
+
+      // Find the parent node in all nodes (not just visible)
+      const parentNode = allNodesByIssueId.get(parentRef.parentIssue.toLowerCase())
+
+      if (parentNode) {
+        // Check if parent is in the group but filtered out
+        const parentInGroup = allGroupNodes.some(
+          (n) => n.issue?.id?.toLowerCase() === parentRef.parentIssue?.toLowerCase()
+        )
+
+        if (parentInGroup && !visibleIds.has(parentRef.parentIssue.toLowerCase())) {
+          hasHiddenParent = true
+          hiddenParentIsSeriesMode = parentNode.issue?.executionMode === ExecutionMode.SERIES
+        }
+      }
+    }
+
+    result.set(treeNode.node.issue.id.toLowerCase(), { hasHiddenParent, hiddenParentIsSeriesMode })
+  }
+
+  return result
+}
+
+/**
+ * Renders tree view nodes to render lines.
+ */
+function renderGroupTreeView(
+  result: TaskGraphRenderLine[],
+  treeViewNodes: TreeViewNode[],
+  agentStatuses: Record<string, AgentStatusData>,
+  linkedPrs: Record<string, TaskGraphLinkedPr>,
+  hiddenParentInfo?: Map<string, { hasHiddenParent: boolean; hiddenParentIsSeriesMode: boolean }>
+): void {
+  if (treeViewNodes.length === 0) return
+
+  // Pre-compute series child relationships and children count
+  const childrenCountByParent = new Map<string, number>()
+  const childrenRendered = new Map<string, number>()
+  const seriesChildLaneByParent = new Map<string, number>()
+
+  for (const treeNode of treeViewNodes) {
+    if (!treeNode.node.issue?.id) continue
+    if (!treeNode.parentNode?.issue?.id) continue
+
+    const parentId = treeNode.parentNode.issue.id.toLowerCase()
+    childrenCountByParent.set(parentId, (childrenCountByParent.get(parentId) ?? 0) + 1)
+
+    // Track series child lanes
+    if (treeNode.parentNode.issue.executionMode === ExecutionMode.SERIES) {
+      seriesChildLaneByParent.set(parentId, treeNode.lane)
+    }
+  }
+
+  for (let i = 0; i < treeViewNodes.length; i++) {
+    const treeNode = treeViewNodes[i]
+    const node = treeNode.node
+    if (!node.issue?.id) continue
+
+    const nodeId = node.issue.id.toLowerCase()
+    const lane = treeNode.lane
+    const marker = getMarker(node)
+    const parentNode = treeNode.parentNode
+    const parentLane = treeNode.parentLane
+
+    let isFirstChild = false
+    if (parentNode?.issue?.id && parentLane !== null && parentLane < lane) {
+      const parentId = parentNode.issue.id.toLowerCase()
+      const count = (childrenRendered.get(parentId) ?? 0) + 1
+      childrenRendered.set(parentId, count)
+      isFirstChild = count === 1
+    }
+
+    // Determine if this is a series child
+    const isSeriesChild =
+      parentNode != null && parentNode.issue?.executionMode === ExecutionMode.SERIES
+
+    // Compute DrawTopLine and DrawBottomLine for series children
+    let drawTopLine = false
+    let drawBottomLine = false
+
+    if (isSeriesChild && parentNode?.issue?.id) {
+      // For series children, connect vertically
+      // Check if there's a sibling series child above
+      if (i > 0) {
+        const prevTreeNode = treeViewNodes[i - 1]
+        if (
+          prevTreeNode.parentNode?.issue?.id?.toLowerCase() === parentNode.issue.id.toLowerCase() &&
+          prevTreeNode.parentNode?.issue?.executionMode === ExecutionMode.SERIES
+        ) {
+          drawTopLine = true
+        }
+      }
+
+      // Check if there's a sibling series child below
+      const nextTreeNode = treeViewNodes[i + 1]
+      if (
+        nextTreeNode &&
+        nextTreeNode.parentNode?.issue?.id?.toLowerCase() === parentNode.issue.id.toLowerCase() &&
+        nextTreeNode.parentNode?.issue?.executionMode === ExecutionMode.SERIES
+      ) {
+        drawBottomLine = true
+      }
+    }
+
+    // Compute SeriesConnectorFromLane
+    const childLane = seriesChildLaneByParent.get(nodeId)
+    const seriesConnectorFromLane = childLane != null ? childLane : null
+
+    // Get linked PR and agent status
+    const linkedPr =
+      linkedPrs[node.issue.id] ??
+      linkedPrs[node.issue.id.toLowerCase()] ??
+      linkedPrs[node.issue.id.toUpperCase()] ??
+      null
+    const agentStatus =
+      agentStatuses[node.issue.id] ??
+      agentStatuses[node.issue.id.toLowerCase()] ??
+      agentStatuses[node.issue.id.toUpperCase()] ??
+      null
+
+    // Get hidden parent info
+    let hasHiddenParent = false
+    let hiddenParentIsSeriesMode = false
+
+    if (hiddenParentInfo) {
+      const info = hiddenParentInfo.get(nodeId)
+      if (info) {
+        hasHiddenParent = info.hasHiddenParent
+        hiddenParentIsSeriesMode = info.hiddenParentIsSeriesMode
+
+        if (hasHiddenParent && hiddenParentIsSeriesMode && drawBottomLine) {
+          hasHiddenParent = false
+        }
+      }
+    }
+
+    // Generate branch name
+    const branchName = generateBranchName(node.issue)
+
+    result.push({
+      type: 'issue',
+      issueId: node.issue.id,
+      title: node.issue.title ?? '',
+      description: node.issue.description ?? null,
+      branchName,
+      lane,
+      marker,
+      parentLane,
+      isFirstChild,
+      isSeriesChild,
+      drawTopLine,
+      drawBottomLine,
+      seriesConnectorFromLane,
+      issueType: node.issue.type ?? IssueType.TASK,
+      status: node.issue.status ?? IssueStatus.DRAFT,
+      hasDescription: !!(node.issue.description && node.issue.description.trim()),
+      linkedPr,
+      agentStatus,
+      assignedTo: node.issue.assignedTo ?? null,
+      drawLane0Connector: false,
+      isLastLane0Connector: false,
+      drawLane0PassThrough: false,
+      lane0Color: null, // No lane 0 connector color in tree view
+      hasHiddenParent,
+      hiddenParentIsSeriesMode,
+      executionMode: node.issue.executionMode ?? ExecutionMode.SERIES,
+    })
   }
 }

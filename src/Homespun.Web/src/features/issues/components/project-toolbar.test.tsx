@@ -568,4 +568,45 @@ describe('ProjectToolbar', () => {
       expect(toolbar).toHaveClass('overflow-x-auto')
     })
   })
+
+  describe('View mode toggle', () => {
+    it('renders view mode toggle button', () => {
+      renderToolbar({ viewMode: 'next', onViewModeChange: vi.fn() })
+      expect(screen.getByTestId('toolbar-view-mode-toggle')).toBeInTheDocument()
+    })
+
+    it('shows "Next" label when in next view mode', () => {
+      renderToolbar({ viewMode: 'next', onViewModeChange: vi.fn() })
+      expect(screen.getByTestId('toolbar-view-mode-toggle')).toHaveAttribute(
+        'aria-label',
+        expect.stringContaining('Switch to tree view')
+      )
+    })
+
+    it('shows "Tree" label when in tree view mode', () => {
+      renderToolbar({ viewMode: 'tree', onViewModeChange: vi.fn() })
+      expect(screen.getByTestId('toolbar-view-mode-toggle')).toHaveAttribute(
+        'aria-label',
+        expect.stringContaining('Switch to next view')
+      )
+    })
+
+    it('calls onViewModeChange with tree when clicking in next mode', async () => {
+      const user = userEvent.setup()
+      const onViewModeChange = vi.fn()
+      renderToolbar({ viewMode: 'next', onViewModeChange })
+
+      await user.click(screen.getByTestId('toolbar-view-mode-toggle'))
+      expect(onViewModeChange).toHaveBeenCalledWith('tree')
+    })
+
+    it('calls onViewModeChange with next when clicking in tree mode', async () => {
+      const user = userEvent.setup()
+      const onViewModeChange = vi.fn()
+      renderToolbar({ viewMode: 'tree', onViewModeChange })
+
+      await user.click(screen.getByTestId('toolbar-view-mode-toggle'))
+      expect(onViewModeChange).toHaveBeenCalledWith('next')
+    })
+  })
 })
