@@ -823,4 +823,291 @@ describe('computeLayout', () => {
       expect(line.executionMode).toBe(ExecutionMode.SERIES)
     })
   })
+
+  describe('tree view mode', () => {
+    it('places root issues at lane 0 in tree view', () => {
+      // A root issue with no parent should be at lane 0
+      const root = createIssue({ id: 'root' })
+      const taskGraph: TaskGraphResponse = {
+        nodes: [createNode(root, 0, 0)],
+        mergedPrs: [],
+        hasMorePastPrs: false,
+        agentStatuses: {},
+        linkedPrs: {},
+      }
+
+      const result = computeLayout(taskGraph, 3, 'tree')
+
+      expect(result).toHaveLength(1)
+      const rootLine = result[0] as TaskGraphIssueRenderLine
+      expect(rootLine.lane).toBe(0)
+    })
+
+    it('places children at higher lanes than parents in tree view', () => {
+      // Parent at lane 0, child at lane 1
+      const parent = createIssue({ id: 'parent', executionMode: ExecutionMode.PARALLEL })
+      const child = createIssue({ id: 'child', parentIssues: [{ parentIssue: 'parent' }] })
+
+      const taskGraph: TaskGraphResponse = {
+        nodes: [createNode(parent, 1, 0), createNode(child, 0, 1)],
+        mergedPrs: [],
+        hasMorePastPrs: false,
+        agentStatuses: {},
+        linkedPrs: {},
+      }
+
+      const result = computeLayout(taskGraph, 3, 'tree')
+
+      const parentLine = result.find(
+        (l) => isIssueRenderLine(l) && l.issueId === 'parent'
+      ) as TaskGraphIssueRenderLine
+      const childLine = result.find(
+        (l) => isIssueRenderLine(l) && l.issueId === 'child'
+      ) as TaskGraphIssueRenderLine
+
+      expect(parentLine.lane).toBe(0)
+      expect(childLine.lane).toBe(1)
+      expect(childLine.parentLane).toBe(0)
+    })
+
+    it('omits merged PRs in tree view', () => {
+      const issue = createIssue({ id: 'issue1' })
+      const taskGraph: TaskGraphResponse = {
+        nodes: [createNode(issue, 0, 0)],
+        mergedPrs: [{ number: 1, title: 'PR', url: null, isMerged: true, hasDescription: false }],
+        hasMorePastPrs: false,
+        agentStatuses: {},
+        linkedPrs: {},
+      }
+
+      const result = computeLayout(taskGraph, 3, 'tree')
+
+      // Should not have PR lines or separator
+      const prLines = result.filter(isPrRenderLine)
+      const separatorLines = result.filter(isSeparatorRenderLine)
+
+      expect(prLines).toHaveLength(0)
+      expect(separatorLines).toHaveLength(0)
+      // Issues should be at lane 0 (no offset)
+      const issueLine = result.find(isIssueRenderLine) as TaskGraphIssueRenderLine
+      expect(issueLine.lane).toBe(0)
+    })
+
+    it('omits load more button in tree view', () => {
+      const issue = createIssue({ id: 'issue1' })
+      const taskGraph: TaskGraphResponse = {
+        nodes: [createNode(issue, 0, 0)],
+        mergedPrs: [{ number: 1, title: 'PR', url: null, isMerged: true, hasDescription: false }],
+        hasMorePastPrs: true,
+        agentStatuses: {},
+        linkedPrs: {},
+      }
+
+      const result = computeLayout(taskGraph, 3, 'tree')
+
+      const loadMoreLines = result.filter(isLoadMoreRenderLine)
+      expect(loadMoreLines).toHaveLength(0)
+    })
+
+    it('shows parent at lane 0 with grandchild at lane 2 in tree view', () => {
+      // Three-level hierarchy: grandparent -> parent -> child
+      const grandparent = createIssue({ id: 'grandparent', executionMode: ExecutionMode.PARALLEL })
+      const parent = createIssue({
+        id: 'parent',
+        parentIssues: [{ parentIssue: 'grandparent' }],
+        executionMode: ExecutionMode.PARALLEL,
+      })
+      const child = createIssue({
+        id: 'child',
+        parentIssues: [{ parentIssue: 'parent' }],
+      })
+
+      const taskGraph: TaskGraphResponse = {
+        nodes: [createNode(grandparent, 2, 0), createNode(parent, 1, 1), createNode(child, 0, 2)],
+        mergedPrs: [],
+        hasMorePastPrs: false,
+        agentStatuses: {},
+        linkedPrs: {},
+      }
+
+      const result = computeLayout(taskGraph, 3, 'tree')
+
+      const grandparentLine = result.find(
+        (l) => isIssueRenderLine(l) && l.issueId === 'grandparent'
+      ) as TaskGraphIssueRenderLine
+      const parentLine = result.find(
+        (l) => isIssueRenderLine(l) && l.issueId === 'parent'
+      ) as TaskGraphIssueRenderLine
+      const childLine = result.find(
+        (l) => isIssueRenderLine(l) && l.issueId === 'child'
+      ) as TaskGraphIssueRenderLine
+
+      expect(grandparentLine.lane).toBe(0)
+      expect(parentLine.lane).toBe(1)
+      expect(childLine.lane).toBe(2)
+    })
+
+    it('renders nodes in tree traversal order (BFS from roots)', () => {
+      // Parent with two children - children should come after parent
+      const parent = createIssue({ id: 'parent', executionMode: ExecutionMode.PARALLEL })
+      const child1 = createIssue({ id: 'child1', parentIssues: [{ parentIssue: 'parent' }] })
+      const child2 = createIssue({ id: 'child2', parentIssues: [{ parentIssue: 'parent' }] })
+
+      const taskGraph: TaskGraphResponse = {
+        nodes: [createNode(parent, 1, 0), createNode(child1, 0, 1), createNode(child2, 0, 2)],
+        mergedPrs: [],
+        hasMorePastPrs: false,
+        agentStatuses: {},
+        linkedPrs: {},
+      }
+
+      const result = computeLayout(taskGraph, 3, 'tree')
+
+      const issueLines = result.filter(isIssueRenderLine)
+      expect(issueLines).toHaveLength(3)
+      expect(issueLines[0].issueId).toBe('parent')
+      // Children should come after parent (order between siblings may vary)
+      expect(['child1', 'child2']).toContain(issueLines[1].issueId)
+      expect(['child1', 'child2']).toContain(issueLines[2].issueId)
+    })
+
+    it('handles multiple root nodes in tree view', () => {
+      // Two separate root issues
+      const root1 = createIssue({ id: 'root1' })
+      const root2 = createIssue({ id: 'root2' })
+
+      const taskGraph: TaskGraphResponse = {
+        nodes: [createNode(root1, 0, 0), createNode(root2, 0, 1)],
+        mergedPrs: [],
+        hasMorePastPrs: false,
+        agentStatuses: {},
+        linkedPrs: {},
+      }
+
+      const result = computeLayout(taskGraph, 3, 'tree')
+
+      expect(result).toHaveLength(2)
+      const root1Line = result.find(
+        (l) => isIssueRenderLine(l) && l.issueId === 'root1'
+      ) as TaskGraphIssueRenderLine
+      const root2Line = result.find(
+        (l) => isIssueRenderLine(l) && l.issueId === 'root2'
+      ) as TaskGraphIssueRenderLine
+
+      expect(root1Line.lane).toBe(0)
+      expect(root2Line.lane).toBe(0)
+    })
+
+    it('applies maxDepth filtering in tree view mode', () => {
+      // Parent at lane 0, child at lane 1, grandchild at lane 2
+      const parent = createIssue({ id: 'parent', executionMode: ExecutionMode.PARALLEL })
+      const child = createIssue({
+        id: 'child',
+        parentIssues: [{ parentIssue: 'parent' }],
+        executionMode: ExecutionMode.PARALLEL,
+      })
+      const grandchild = createIssue({
+        id: 'grandchild',
+        parentIssues: [{ parentIssue: 'child' }],
+      })
+
+      const taskGraph: TaskGraphResponse = {
+        nodes: [createNode(parent, 2, 0), createNode(child, 1, 1), createNode(grandchild, 0, 2)],
+        mergedPrs: [],
+        hasMorePastPrs: false,
+        agentStatuses: {},
+        linkedPrs: {},
+      }
+
+      // maxDepth=1 means show lanes 0 and 1 (parent and child, not grandchild)
+      const result = computeLayout(taskGraph, 1, 'tree')
+
+      const issueIds = result.filter(isIssueRenderLine).map((l) => l.issueId)
+      expect(issueIds).toContain('parent')
+      expect(issueIds).toContain('child')
+      expect(issueIds).not.toContain('grandchild')
+    })
+
+    it('shows node once when it has multiple parents (first traversal)', () => {
+      // Diamond pattern: root -> parent1, parent2 -> shared_child
+      const root = createIssue({ id: 'root', executionMode: ExecutionMode.PARALLEL })
+      const parent1 = createIssue({
+        id: 'parent1',
+        parentIssues: [{ parentIssue: 'root' }],
+        executionMode: ExecutionMode.PARALLEL,
+      })
+      const parent2 = createIssue({
+        id: 'parent2',
+        parentIssues: [{ parentIssue: 'root' }],
+        executionMode: ExecutionMode.PARALLEL,
+      })
+      const sharedChild = createIssue({
+        id: 'shared',
+        parentIssues: [{ parentIssue: 'parent1' }, { parentIssue: 'parent2' }],
+      })
+
+      const taskGraph: TaskGraphResponse = {
+        nodes: [
+          createNode(root, 2, 0),
+          createNode(parent1, 1, 1),
+          createNode(parent2, 1, 2),
+          createNode(sharedChild, 0, 3),
+        ],
+        mergedPrs: [],
+        hasMorePastPrs: false,
+        agentStatuses: {},
+        linkedPrs: {},
+      }
+
+      const result = computeLayout(taskGraph, 3, 'tree')
+
+      // The shared child should appear exactly once
+      const sharedLines = result.filter((l) => isIssueRenderLine(l) && l.issueId === 'shared')
+      expect(sharedLines).toHaveLength(1)
+    })
+
+    it('does not add lane0 connectors in tree view', () => {
+      const issue = createIssue({ id: 'issue1' })
+      const taskGraph: TaskGraphResponse = {
+        nodes: [createNode(issue, 0, 0)],
+        mergedPrs: [{ number: 1, title: 'PR', url: null, isMerged: true, hasDescription: false }],
+        hasMorePastPrs: false,
+        agentStatuses: {},
+        linkedPrs: {},
+      }
+
+      const result = computeLayout(taskGraph, 3, 'tree')
+
+      const issueLine = result.find(isIssueRenderLine) as TaskGraphIssueRenderLine
+      expect(issueLine.drawLane0Connector).toBe(false)
+      expect(issueLine.drawLane0PassThrough).toBe(false)
+    })
+
+    it('defaults to next view mode when no viewMode specified', () => {
+      const parent = createIssue({ id: 'parent', executionMode: ExecutionMode.PARALLEL })
+      const child = createIssue({ id: 'child', parentIssues: [{ parentIssue: 'parent' }] })
+
+      const taskGraph: TaskGraphResponse = {
+        nodes: [createNode(parent, 1, 0), createNode(child, 0, 1)],
+        mergedPrs: [],
+        hasMorePastPrs: false,
+        agentStatuses: {},
+        linkedPrs: {},
+      }
+
+      // No viewMode specified - should default to 'next' (child at lane 0, parent at lane 1)
+      const result = computeLayout(taskGraph, 3)
+
+      const parentLine = result.find(
+        (l) => isIssueRenderLine(l) && l.issueId === 'parent'
+      ) as TaskGraphIssueRenderLine
+      const childLine = result.find(
+        (l) => isIssueRenderLine(l) && l.issueId === 'child'
+      ) as TaskGraphIssueRenderLine
+
+      // In next view, original lanes are preserved
+      expect(childLine.lane).toBe(0)
+      expect(parentLine.lane).toBe(1)
+    })
+  })
 })
