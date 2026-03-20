@@ -79,15 +79,25 @@ public class FleeceChangeDetectionService : IFleeceChangeDetectionService
             throw new InvalidOperationException("Session does not have a working directory");
         }
 
-        _logger.LogInformation("Detecting changes for session {SessionId} in clone {ClonePath}", sessionId, clonePath);
+        _logger.LogInformation(
+            "Detecting changes for session {SessionId}: main branch path={MainPath}, clone path={ClonePath}",
+            sessionId, project.LocalPath, clonePath);
 
         // Load issues from main branch (using FleeceService cache)
         var mainIssues = await _fleeceService.ListIssuesAsync(project.LocalPath);
         var mainIssueMap = mainIssues.ToDictionary(i => i.Id, StringComparer.OrdinalIgnoreCase);
 
+        _logger.LogDebug(
+            "Loaded {MainCount} issues from main branch at {MainPath}",
+            mainIssues.Count, project.LocalPath);
+
         // Load issues from agent clone
         var agentIssues = await LoadIssuesFromPathAsync(clonePath, cancellationToken);
         var agentIssueMap = agentIssues.ToDictionary(i => i.Id, StringComparer.OrdinalIgnoreCase);
+
+        _logger.LogDebug(
+            "Loaded {AgentCount} issues from clone at {ClonePath}",
+            agentIssues.Count, clonePath);
 
         var changes = new List<IssueChangeDto>();
 
@@ -157,6 +167,8 @@ public class FleeceChangeDetectionService : IFleeceChangeDetectionService
     private async Task<List<Issue>> LoadIssuesFromPathAsync(string path, CancellationToken cancellationToken)
     {
         var fleeceDir = Path.Combine(path, ".fleece");
+        _logger.LogDebug("Looking for .fleece directory at {FleecePath}", fleeceDir);
+
         if (!Directory.Exists(fleeceDir))
         {
             _logger.LogWarning(".fleece directory not found at {Path}", fleeceDir);
@@ -165,6 +177,10 @@ public class FleeceChangeDetectionService : IFleeceChangeDetectionService
 
         var issues = new List<Issue>();
         var issueFiles = Directory.GetFiles(fleeceDir, "issues_*.jsonl");
+
+        _logger.LogDebug(
+            "Found {FileCount} issue files in {FleecePath}: {Files}",
+            issueFiles.Length, fleeceDir, string.Join(", ", issueFiles.Select(Path.GetFileName)));
 
         foreach (var file in issueFiles)
         {

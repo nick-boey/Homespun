@@ -1,5 +1,5 @@
 import { createFileRoute, useParams, useNavigate, Link } from '@tanstack/react-router'
-import { ArrowLeft, Check, X } from 'lucide-react'
+import { ArrowLeft, Check, RefreshCw, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Loader } from '@/components/ui/loader'
 import { useSession } from '@/features/sessions'
@@ -7,6 +7,7 @@ import {
   useIssuesDiff,
   useAcceptIssues,
   useCancelIssuesSession,
+  useRefreshIssuesDiff,
   IssueDiffView,
 } from '@/features/issues-agent'
 import { SessionType } from '@/api'
@@ -29,6 +30,7 @@ function IssueDiffPage() {
   // Mutations
   const acceptMutation = useAcceptIssues()
   const cancelMutation = useCancelIssuesSession()
+  const refreshMutation = useRefreshIssuesDiff()
 
   const isLoading = sessionLoading || diffLoading
   const error = sessionError || diffError
@@ -77,6 +79,15 @@ function IssueDiffPage() {
     navigate({ to: '/sessions/$sessionId', params: { sessionId } })
   }
 
+  const handleRefresh = async () => {
+    try {
+      await refreshMutation.mutateAsync(sessionId)
+      toast.success('Diff refreshed')
+    } catch {
+      toast.error('Failed to refresh diff')
+    }
+  }
+
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
@@ -90,8 +101,24 @@ function IssueDiffPage() {
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
+            onClick={handleRefresh}
+            disabled={
+              refreshMutation.isPending || cancelMutation.isPending || acceptMutation.isPending
+            }
+          >
+            {refreshMutation.isPending ? (
+              <Loader variant="circular" size="sm" />
+            ) : (
+              <RefreshCw className="mr-1 h-4 w-4" />
+            )}
+            Refresh
+          </Button>
+          <Button
+            variant="outline"
             onClick={handleCancel}
-            disabled={cancelMutation.isPending || acceptMutation.isPending}
+            disabled={
+              cancelMutation.isPending || acceptMutation.isPending || refreshMutation.isPending
+            }
           >
             {cancelMutation.isPending ? (
               <Loader variant="circular" size="sm" />
@@ -102,7 +129,12 @@ function IssueDiffPage() {
           </Button>
           <Button
             onClick={handleAccept}
-            disabled={acceptMutation.isPending || cancelMutation.isPending || !diff}
+            disabled={
+              acceptMutation.isPending ||
+              cancelMutation.isPending ||
+              refreshMutation.isPending ||
+              !diff
+            }
           >
             {acceptMutation.isPending ? (
               <Loader variant="circular" size="sm" />
