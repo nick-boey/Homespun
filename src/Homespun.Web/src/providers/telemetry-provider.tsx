@@ -45,7 +45,7 @@ export function TelemetryProvider({ children, enabled = true, endpoint }: Teleme
   useEffect(() => {
     if (serviceRef.current) {
       const location = routerState.location
-      const path = location.pathname + location.search
+      const path = location.href
       const title = document.title || path
       serviceRef.current.trackPageView(path, title)
     }

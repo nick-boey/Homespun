@@ -509,13 +509,18 @@ public class IssuesController(
         // Render the prompt template with issue context (if prompt exists)
         if (prompt != null)
         {
+            // Build hierarchical context (ancestors and direct children)
+            var allIssues = await fleeceService.ListIssuesAsync(project.LocalPath);
+            var treeContext = IssueTreeFormatter.FormatIssueTree(issue, allIssues);
+
             var promptContext = new PromptContext
             {
                 Title = issue.Title,
                 Id = issue.Id,
                 Description = issue.Description,
                 Branch = branchName,
-                Type = issue.Type.ToString()
+                Type = issue.Type.ToString(),
+                Context = treeContext
             };
 
             renderedMessage = agentPromptService.RenderTemplate(prompt.InitialMessage, promptContext);
