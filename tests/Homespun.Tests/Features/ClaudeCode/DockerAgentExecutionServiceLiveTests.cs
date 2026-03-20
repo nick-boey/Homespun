@@ -31,6 +31,13 @@ public class DockerAgentExecutionServiceLiveTests
             Assert.Ignore("CLAUDE_CODE_OAUTH_TOKEN not set — skipping live test");
         }
 
+        // Check if Docker is available before proceeding
+        var (dockerCheckExitCode, _, dockerCheckStderr) = await RunDockerAsync("info");
+        if (dockerCheckExitCode != 0)
+        {
+            Assert.Ignore($"Docker is not available — skipping live test: {dockerCheckStderr}");
+        }
+
         _tempDir = Path.Combine(Path.GetTempPath(), $"homespun-live-test-{Guid.NewGuid():N}");
         Directory.CreateDirectory(_tempDir);
         _claudeDir = Path.Combine(_tempDir, ".claude");
