@@ -300,22 +300,22 @@ export function useSessionMessages({
   useEffect(() => {
     if (!connection) return
 
-    connection.on('AGUITextMessageStart', handleTextMessageStart)
-    connection.on('AGUITextMessageContent', handleTextMessageContent)
-    connection.on('AGUITextMessageEnd', handleTextMessageEnd)
-    connection.on('AGUIToolCallStart', handleToolCallStart)
-    connection.on('AGUIToolCallArgs', handleToolCallArgs)
-    connection.on('AGUIToolCallEnd', handleToolCallEnd)
-    connection.on('AGUIToolCallResult', handleToolCallResult)
+    connection.on('AGUI_TextMessageStart', handleTextMessageStart)
+    connection.on('AGUI_TextMessageContent', handleTextMessageContent)
+    connection.on('AGUI_TextMessageEnd', handleTextMessageEnd)
+    connection.on('AGUI_ToolCallStart', handleToolCallStart)
+    connection.on('AGUI_ToolCallArgs', handleToolCallArgs)
+    connection.on('AGUI_ToolCallEnd', handleToolCallEnd)
+    connection.on('AGUI_ToolCallResult', handleToolCallResult)
 
     return () => {
-      connection.off('AGUITextMessageStart', handleTextMessageStart)
-      connection.off('AGUITextMessageContent', handleTextMessageContent)
-      connection.off('AGUITextMessageEnd', handleTextMessageEnd)
-      connection.off('AGUIToolCallStart', handleToolCallStart)
-      connection.off('AGUIToolCallArgs', handleToolCallArgs)
-      connection.off('AGUIToolCallEnd', handleToolCallEnd)
-      connection.off('AGUIToolCallResult', handleToolCallResult)
+      connection.off('AGUI_TextMessageStart', handleTextMessageStart)
+      connection.off('AGUI_TextMessageContent', handleTextMessageContent)
+      connection.off('AGUI_TextMessageEnd', handleTextMessageEnd)
+      connection.off('AGUI_ToolCallStart', handleToolCallStart)
+      connection.off('AGUI_ToolCallArgs', handleToolCallArgs)
+      connection.off('AGUI_ToolCallEnd', handleToolCallEnd)
+      connection.off('AGUI_ToolCallResult', handleToolCallResult)
     }
   }, [
     connection,
