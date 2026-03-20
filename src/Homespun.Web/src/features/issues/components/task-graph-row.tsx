@@ -147,7 +147,7 @@ export const TaskGraphIssueRow = memo(
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="shrink-0 cursor-pointer rounded px-1.5 py-0.5 text-[10px] font-medium transition-opacity hover:opacity-80"
+                className="w-14 shrink-0 cursor-pointer rounded px-1.5 py-0.5 text-[10px] font-medium transition-opacity hover:opacity-80"
                 style={{
                   backgroundColor: `${typeColor}20`,
                   color: typeColor,
@@ -181,7 +181,7 @@ export const TaskGraphIssueRow = memo(
               <button
                 type="button"
                 className={cn(
-                  'shrink-0 cursor-pointer rounded px-1.5 py-0.5 text-[10px] font-medium transition-opacity hover:opacity-80',
+                  'w-14 shrink-0 cursor-pointer rounded px-1.5 py-0.5 text-[10px] font-medium transition-opacity hover:opacity-80',
                   getStatusColor()
                 )}
                 onClick={(e) => e.stopPropagation()}
