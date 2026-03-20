@@ -158,11 +158,22 @@ public class IssuesAgentController(
             return NotFound("Project not found");
         }
 
+        logger.LogInformation(
+            "Getting diff for session {SessionId}: project={ProjectId}, mainPath={MainPath}, clonePath={ClonePath}",
+            sessionId, session.ProjectId, project.LocalPath, session.WorkingDirectory);
+
         // Detect changes using the FleeceChangeDetectionService
         var changes = await changeDetectionService.DetectChangesAsync(
             session.ProjectId,
             sessionId,
             HttpContext.RequestAborted);
+
+        logger.LogInformation(
+            "Detected {ChangeCount} changes for session {SessionId}: created={Created}, updated={Updated}, deleted={Deleted}",
+            changes.Count, sessionId,
+            changes.Count(c => c.ChangeType == ChangeType.Created),
+            changes.Count(c => c.ChangeType == ChangeType.Updated),
+            changes.Count(c => c.ChangeType == ChangeType.Deleted));
 
         // Build task graphs for both branches
         // Main branch graph
@@ -282,6 +293,79 @@ public class IssuesAgentController(
             Success = true,
             Message = "Session cancelled",
             RedirectUrl = $"/projects/{session.ProjectId}/issues"
+        });
+    }
+
+    /// <summary>
+    /// Refresh the issue diff by clearing the cache and re-reading from disk.
+    /// This ensures the latest changes are reflected in the diff.
+    /// </summary>
+    [HttpPost("{sessionId}/refresh-diff")]
+    [ProducesResponseType<IssueDiffResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<IssueDiffResponse>> RefreshDiff(string sessionId)
+    {
+        // Get session
+        var session = sessionService.GetSession(sessionId);
+        if (session == null)
+        {
+            return NotFound("Session not found");
+        }
+
+        // Validate session type
+        if (session.SessionType != SessionType.IssueModify)
+        {
+            return BadRequest("Session is not an Issues Agent session");
+        }
+
+        // Get project
+        var project = await projectService.GetByIdAsync(session.ProjectId);
+        if (project == null)
+        {
+            return NotFound("Project not found");
+        }
+
+        logger.LogInformation(
+            "Refreshing diff for session {SessionId}: clearing cache for main path {MainPath}",
+            sessionId, project.LocalPath);
+
+        // Clear the main branch cache to force re-reading from disk
+        await fleeceService.ReloadFromDiskAsync(project.LocalPath, HttpContext.RequestAborted);
+
+        // Now get the updated diff (same logic as GetDiff)
+        var changes = await changeDetectionService.DetectChangesAsync(
+            session.ProjectId,
+            sessionId,
+            HttpContext.RequestAborted);
+
+        logger.LogInformation(
+            "After refresh, detected {ChangeCount} changes for session {SessionId}",
+            changes.Count, sessionId);
+
+        // Build task graphs for both branches
+        var mainGraph = await graphService.BuildEnhancedTaskGraphAsync(session.ProjectId);
+        var mainGraphResponse = mainGraph ?? new TaskGraphResponse();
+
+        var sessionTaskGraph = await fleeceService.GetTaskGraphAsync(
+            session.WorkingDirectory,
+            HttpContext.RequestAborted);
+        var sessionGraphResponse = sessionTaskGraph?.ToResponse() ?? new TaskGraphResponse();
+
+        // Calculate summary
+        var summary = new IssueDiffSummary
+        {
+            Created = changes.Count(c => c.ChangeType == ChangeType.Created),
+            Updated = changes.Count(c => c.ChangeType == ChangeType.Updated),
+            Deleted = changes.Count(c => c.ChangeType == ChangeType.Deleted)
+        };
+
+        return Ok(new IssueDiffResponse
+        {
+            MainBranchGraph = mainGraphResponse,
+            SessionBranchGraph = sessionGraphResponse,
+            Changes = changes,
+            Summary = summary
         });
     }
 

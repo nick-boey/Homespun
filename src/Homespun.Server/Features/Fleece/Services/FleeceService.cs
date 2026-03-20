@@ -64,6 +64,7 @@ public sealed class FleeceService : IFleeceService, IDisposable
 
         if (!_cacheInitialized.TryGetValue(projectPath, out var initialized) || !initialized)
         {
+            _logger.LogDebug("Cache miss for project {ProjectPath}, loading from disk", projectPath);
             var service = GetOrCreateIssueService(projectPath);
             var allIssues = await service.GetAllAsync(ct);
             foreach (var issue in allIssues)
@@ -73,6 +74,10 @@ public sealed class FleeceService : IFleeceService, IDisposable
             _cacheInitialized[projectPath] = true;
 
             _logger.LogDebug("Loaded {Count} issues into cache for project: {ProjectPath}", allIssues.Count, projectPath);
+        }
+        else
+        {
+            _logger.LogDebug("Cache hit for project {ProjectPath}, returning {Count} cached issues", projectPath, cache.Count);
         }
 
         return cache;
