@@ -131,9 +131,7 @@ function IssueDiffPage() {
           </div>
         )}
 
-        {!isLoading && !error && diff && session && (
-          <IssueDiffView diff={diff} projectId={session.projectId ?? ''} />
-        )}
+        {!isLoading && !error && diff && session && <IssueDiffView diff={diff} />}
       </div>
     </div>
   )

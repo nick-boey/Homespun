@@ -1,25 +1,60 @@
+import { useMemo } from 'react'
 import { type IssueDiffResponse, type IssueChangeDto, ChangeType } from '@/api'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
-import { TaskGraphView } from '@/features/issues'
+import { StaticTaskGraphView, type FilteredIssue } from '@/features/issues'
 
 export interface IssueDiffViewProps {
   /** The diff data containing both graphs and changes */
   diff: IssueDiffResponse
-  /** The project ID for the task graphs */
-  projectId: string
 }
 
 /**
  * Side-by-side comparison of main branch and session branch issue graphs.
  * Shows changes highlighted with colors.
+ *
+ * Uses StaticTaskGraphView with pre-fetched graph data from the API response.
+ * Filters each graph to only show relevant changes:
+ * - Main branch: shows deleted issues (styled red)
+ * - Session branch: shows created (green) and updated (yellow) issues
  */
-export function IssueDiffView({ diff, projectId }: IssueDiffViewProps) {
-  const { changes, summary } = diff
+export function IssueDiffView({ diff }: IssueDiffViewProps) {
+  const { changes, summary, mainBranchGraph, sessionBranchGraph } = diff
 
   const createdCount = summary?.created ?? 0
   const updatedCount = summary?.updated ?? 0
   const deletedCount = summary?.deleted ?? 0
+
+  // Build filter arrays for each graph
+  const mainBranchFilter = useMemo((): FilteredIssue[] => {
+    if (!changes) return []
+
+    // Main branch shows deleted issues only
+    return changes
+      .filter((change) => change.changeType === ChangeType.DELETED)
+      .map((change) => ({
+        issueId: change.issueId ?? '',
+        changeType: 'deleted' as const,
+      }))
+      .filter((item) => item.issueId)
+  }, [changes])
+
+  const sessionBranchFilter = useMemo((): FilteredIssue[] => {
+    if (!changes) return []
+
+    // Session branch shows created and updated issues
+    return changes
+      .filter(
+        (change) =>
+          change.changeType === ChangeType.CREATED || change.changeType === ChangeType.UPDATED
+      )
+      .map((change) => ({
+        issueId: change.issueId ?? '',
+        changeType:
+          change.changeType === ChangeType.CREATED ? ('created' as const) : ('updated' as const),
+      }))
+      .filter((item) => item.issueId)
+  }, [changes])
 
   return (
     <div className="flex h-full flex-col gap-4">
@@ -54,7 +89,12 @@ export function IssueDiffView({ diff, projectId }: IssueDiffViewProps) {
             <h3 className="text-sm font-medium">Main Branch (current)</h3>
           </div>
           <div className="flex-1 overflow-auto p-2">
-            <TaskGraphView projectId={projectId} depth={10} searchQuery="" />
+            <StaticTaskGraphView
+              data={mainBranchGraph}
+              filterIssueIds={mainBranchFilter}
+              depth={10}
+              data-testid="main-branch-graph"
+            />
           </div>
         </div>
 
@@ -64,7 +104,12 @@ export function IssueDiffView({ diff, projectId }: IssueDiffViewProps) {
             <h3 className="text-sm font-medium">Your Changes</h3>
           </div>
           <div className="flex-1 overflow-auto p-2">
-            <TaskGraphView projectId={projectId} depth={10} searchQuery="" />
+            <StaticTaskGraphView
+              data={sessionBranchGraph}
+              filterIssueIds={sessionBranchFilter}
+              depth={10}
+              data-testid="session-branch-graph"
+            />
           </div>
         </div>
       </div>
