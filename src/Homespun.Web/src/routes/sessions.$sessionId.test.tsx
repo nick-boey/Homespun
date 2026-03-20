@@ -54,6 +54,7 @@ vi.mock('@/api', async (importOriginal) => {
 vi.mock('sonner', () => ({
   toast: {
     error: vi.fn(),
+    info: vi.fn(),
   },
 }))
 
@@ -1047,5 +1048,205 @@ describe('SessionChat - Session Navigation', () => {
 
     expect(prevLink).toHaveAttribute('href', '/sessions/session-prev')
     expect(nextLink).toHaveAttribute('href', '/sessions/session-next')
+  })
+})
+
+describe('SessionChat - Plan Rejection via Chat', () => {
+  const mockSessionsAPI = vi.mocked(Sessions)
+  const mockToast = vi.mocked(toast)
+  const mockAddUserMessage = vi.fn()
+  const mockReject = vi.fn()
+  const mockSession = {
+    id: 'test-session-id',
+    entityId: 'entity-123',
+    projectId: 'project-123',
+    workingDirectory: '/test/dir',
+    model: 'claude-3-5-sonnet',
+    mode: 'build' as const,
+    status: 'waitingForInput' as const,
+    createdAt: '2024-01-01T00:00:00Z',
+    lastActivityAt: '2024-01-01T00:00:00Z',
+    messages: [],
+    totalCostUsd: 0,
+    totalDurationMs: 0,
+    hasPendingPlanApproval: true,
+    contextClearMarkers: [],
+  }
+
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    mockAddUserMessage.mockClear()
+    mockReject.mockClear()
+
+    // Set up connected state by default
+    const { useClaudeCodeHub } = vi.mocked(await import('@/providers/signalr-provider'))
+    useClaudeCodeHub.mockReturnValue({
+      isConnected: true,
+      methods: null,
+      status: 'connected',
+      error: undefined,
+      connection: null,
+      isReconnecting: false,
+    })
+
+    const {
+      useSession,
+      ChatInput,
+      useSessionMessages,
+      useEntityInfo,
+      usePlanApproval,
+      useApprovePlan,
+    } = vi.mocked(await import('@/features/sessions'))
+
+    // Mock useEntityInfo to return a default value
+    ;(useEntityInfo as Mock).mockReturnValue({
+      data: null,
+      isLoading: false,
+      error: null,
+    })
+
+    // Mock useSessionMessages to return addUserMessage
+    useSessionMessages.mockReturnValue({
+      messages: [],
+      addUserMessage: mockAddUserMessage,
+    })
+
+    // Mock useSession to return a valid session with pending plan
+    useSession.mockReturnValue({
+      session: mockSession,
+      isLoading: false,
+      isNotFound: false,
+      error: undefined,
+      refetch: vi.fn(),
+    })
+
+    // Mock usePlanApproval to return pending plan state
+    ;(usePlanApproval as Mock).mockReturnValue({
+      hasPendingPlan: true,
+      planContent: 'Test plan content',
+      planFilePath: '/test/plan.md',
+    })
+
+    // Mock useApprovePlan with reject function
+    ;(useApprovePlan as Mock).mockReturnValue({
+      approveClearContext: vi.fn(),
+      approveKeepContext: vi.fn(),
+      reject: mockReject,
+      isLoading: false,
+      error: null,
+    })
+
+    // Mock ChatInput to capture onSend callback and display placeholder
+    ChatInput.mockImplementation(({ onSend, disabled, placeholder, isLoading }) => (
+      <div data-testid="chat-input">
+        <button
+          data-testid="send-button"
+          onClick={() => onSend('This needs more detail', 'build', 'opus')}
+          disabled={disabled || isLoading}
+        >
+          Send
+        </button>
+        <span data-testid="placeholder">{placeholder}</span>
+        {isLoading && <span data-testid="loading">Loading...</span>}
+      </div>
+    ))
+  })
+
+  it('should reject plan with message when pending plan exists', async () => {
+    const user = userEvent.setup()
+    mockReject.mockResolvedValueOnce(undefined)
+
+    render(<SessionChat />)
+
+    const sendButton = screen.getByTestId('send-button')
+    await user.click(sendButton)
+
+    // Verify reject was called with the message
+    await waitFor(() => {
+      expect(mockReject).toHaveBeenCalledWith('This needs more detail')
+    })
+
+    // Verify API was NOT called (message intercepted)
+    expect(mockSessionsAPI.postApiSessionsByIdMessages).not.toHaveBeenCalled()
+
+    // Verify addUserMessage was still called (optimistic update)
+    expect(mockAddUserMessage).toHaveBeenCalledWith('This needs more detail')
+  })
+
+  it('should send normal message when no pending plan', async () => {
+    const user = userEvent.setup()
+    const { usePlanApproval } = vi.mocked(await import('@/features/sessions'))
+    ;(usePlanApproval as Mock).mockReturnValue({
+      hasPendingPlan: false,
+      planContent: null,
+      planFilePath: null,
+    })
+
+    mockSessionsAPI.postApiSessionsByIdMessages = vi.fn().mockResolvedValueOnce({
+      data: {},
+      error: undefined,
+    })
+
+    render(<SessionChat />)
+
+    const sendButton = screen.getByTestId('send-button')
+    await user.click(sendButton)
+
+    // Verify reject was NOT called
+    expect(mockReject).not.toHaveBeenCalled()
+
+    // Verify API was called normally
+    await waitFor(() => {
+      expect(mockSessionsAPI.postApiSessionsByIdMessages).toHaveBeenCalled()
+    })
+  })
+
+  it('should show appropriate placeholder when plan is pending', async () => {
+    render(<SessionChat />)
+
+    const placeholder = screen.getByTestId('placeholder')
+    expect(placeholder).toHaveTextContent('Type feedback to modify the plan...')
+  })
+
+  it('should show info toast after successful plan rejection', async () => {
+    const user = userEvent.setup()
+    mockReject.mockResolvedValueOnce(undefined)
+
+    render(<SessionChat />)
+
+    const sendButton = screen.getByTestId('send-button')
+    await user.click(sendButton)
+
+    await waitFor(() => {
+      expect(mockToast.info).toHaveBeenCalledWith('Plan rejected with your feedback')
+    })
+  })
+
+  it('should show error toast when plan rejection fails', async () => {
+    const user = userEvent.setup()
+    mockReject.mockRejectedValueOnce(new Error('Network error'))
+
+    render(<SessionChat />)
+
+    const sendButton = screen.getByTestId('send-button')
+    await user.click(sendButton)
+
+    await waitFor(() => {
+      expect(mockToast.error).toHaveBeenCalledWith('Failed to reject plan')
+    })
+  })
+
+  it('should show normal placeholder when no pending plan', async () => {
+    const { usePlanApproval } = vi.mocked(await import('@/features/sessions'))
+    ;(usePlanApproval as Mock).mockReturnValue({
+      hasPendingPlan: false,
+      planContent: null,
+      planFilePath: null,
+    })
+
+    render(<SessionChat />)
+
+    const placeholder = screen.getByTestId('placeholder')
+    expect(placeholder).toHaveTextContent('Type a message...')
   })
 })

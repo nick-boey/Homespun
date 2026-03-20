@@ -150,10 +150,22 @@ function SessionChat({ sessionId }: { sessionId: string }) {
     async (message: string, sessionMode: SessionMode, _model: ModelSelection) => {
       if (!isConnected) return
 
-      setIsSending(true)
-
-      // Add user message optimistically
+      // Add user message optimistically (show in chat regardless of action)
       addUserMessage(message)
+
+      // Check if there's a pending plan - intercept and reject with feedback
+      if (hasPendingPlan) {
+        try {
+          await reject(message)
+          toast.info('Plan rejected with your feedback')
+        } catch {
+          toast.error('Failed to reject plan')
+        }
+        return
+      }
+
+      // Normal message sending flow
+      setIsSending(true)
 
       try {
         // Map our string SessionMode to API's numeric enum
@@ -173,7 +185,7 @@ function SessionChat({ sessionId }: { sessionId: string }) {
         setIsSending(false)
       }
     },
-    [isConnected, sessionId, addUserMessage]
+    [isConnected, sessionId, addUserMessage, hasPendingPlan, reject]
   )
 
   // Handle stop session
@@ -389,7 +401,13 @@ function SessionChat({ sessionId }: { sessionId: string }) {
             disabled={isProcessing || !isConnected}
             isLoading={isSending}
             placeholder={
-              !isConnected ? 'Connecting...' : isProcessing ? 'Processing...' : 'Type a message...'
+              !isConnected
+                ? 'Connecting...'
+                : isProcessing
+                  ? 'Processing...'
+                  : hasPendingPlan
+                    ? 'Type feedback to modify the plan...'
+                    : 'Type a message...'
             }
             issueContext={issueContext}
           />
