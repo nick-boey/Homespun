@@ -104,19 +104,19 @@ export function registerClaudeCodeHubEvents(
   register('SessionContainerRestarted', handlers.onSessionContainerRestarted)
 
   // AG-UI Events
-  register('AGUIRunStarted', handlers.onAGUIRunStarted)
-  register('AGUIRunFinished', handlers.onAGUIRunFinished)
-  register('AGUIRunError', handlers.onAGUIRunError)
-  register('AGUITextMessageStart', handlers.onAGUITextMessageStart)
-  register('AGUITextMessageContent', handlers.onAGUITextMessageContent)
-  register('AGUITextMessageEnd', handlers.onAGUITextMessageEnd)
-  register('AGUIToolCallStart', handlers.onAGUIToolCallStart)
-  register('AGUIToolCallArgs', handlers.onAGUIToolCallArgs)
-  register('AGUIToolCallEnd', handlers.onAGUIToolCallEnd)
-  register('AGUIToolCallResult', handlers.onAGUIToolCallResult)
-  register('AGUIStateSnapshot', handlers.onAGUIStateSnapshot)
-  register('AGUIStateDelta', handlers.onAGUIStateDelta)
-  register('AGUICustomEvent', handlers.onAGUICustomEvent)
+  register('AGUI_RunStarted', handlers.onAGUIRunStarted)
+  register('AGUI_RunFinished', handlers.onAGUIRunFinished)
+  register('AGUI_RunError', handlers.onAGUIRunError)
+  register('AGUI_TextMessageStart', handlers.onAGUITextMessageStart)
+  register('AGUI_TextMessageContent', handlers.onAGUITextMessageContent)
+  register('AGUI_TextMessageEnd', handlers.onAGUITextMessageEnd)
+  register('AGUI_ToolCallStart', handlers.onAGUIToolCallStart)
+  register('AGUI_ToolCallArgs', handlers.onAGUIToolCallArgs)
+  register('AGUI_ToolCallEnd', handlers.onAGUIToolCallEnd)
+  register('AGUI_ToolCallResult', handlers.onAGUIToolCallResult)
+  register('AGUI_StateSnapshot', handlers.onAGUIStateSnapshot)
+  register('AGUI_StateDelta', handlers.onAGUIStateDelta)
+  register('AGUI_Custom', handlers.onAGUICustomEvent)
 
   // Return cleanup function
   return () => {

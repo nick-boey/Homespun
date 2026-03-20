@@ -70,9 +70,9 @@ describe('registerClaudeCodeHubEvents', () => {
 
     registerClaudeCodeHubEvents(mockConnection, handlers)
 
-    expect(mockConnection.on).toHaveBeenCalledWith('AGUIRunStarted', expect.any(Function))
-    expect(mockConnection.on).toHaveBeenCalledWith('AGUITextMessageContent', expect.any(Function))
-    expect(mockConnection.on).toHaveBeenCalledWith('AGUIToolCallStart', expect.any(Function))
+    expect(mockConnection.on).toHaveBeenCalledWith('AGUI_RunStarted', expect.any(Function))
+    expect(mockConnection.on).toHaveBeenCalledWith('AGUI_TextMessageContent', expect.any(Function))
+    expect(mockConnection.on).toHaveBeenCalledWith('AGUI_ToolCallStart', expect.any(Function))
   })
 
   it('calls handlers when events are received', () => {

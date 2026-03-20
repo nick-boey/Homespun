@@ -183,7 +183,7 @@ describe('useSessionMessages', () => {
 
     // Simulate a real-time message via SignalR
     const textMessageStartCall = mockConnection.on.mock.calls.find(
-      (call) => call[0] === 'AGUITextMessageStart'
+      (call) => call[0] === 'AGUI_TextMessageStart'
     )
     expect(textMessageStartCall).toBeDefined()
 
