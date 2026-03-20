@@ -32,9 +32,9 @@ export const ExecutionModeToggle = memo(function ExecutionModeToggle({
 
   return (
     <Button
-      variant="ghost"
+      variant="outline"
       size="sm"
-      className="text-muted-foreground hover:text-foreground h-6 w-6 shrink-0 p-0"
+      className="text-muted-foreground hover:text-foreground h-[22px] w-6 shrink-0 p-0"
       onClick={handleClick}
       disabled={disabled}
       title={
