@@ -250,6 +250,7 @@ describe('SessionChat - Message Sending', () => {
       isLoading: false,
       isNotFound: false,
       error: undefined,
+      isJoined: true,
       refetch: vi.fn(),
     })
 
@@ -350,6 +351,7 @@ describe('SessionChat - Message Sending', () => {
       isLoading: false,
       isNotFound: false,
       error: undefined,
+      isJoined: true,
       refetch: vi.fn(),
     })
 
@@ -509,6 +511,7 @@ describe('SessionChat - Message Sending', () => {
       isLoading: false,
       isNotFound: false,
       error: undefined,
+      isJoined: true,
       refetch: vi.fn(),
     })
 
@@ -666,6 +669,7 @@ describe('SessionChat - Entity Title Display', () => {
       isLoading: false,
       isNotFound: false,
       error: undefined,
+      isJoined: true,
       refetch: vi.fn(),
     })
     ;(useEntityInfo as Mock).mockReturnValue({
@@ -727,6 +731,7 @@ describe('SessionChat - Entity Title Display', () => {
       isLoading: false,
       isNotFound: false,
       error: undefined,
+      isJoined: true,
       refetch: vi.fn(),
     })
     ;(useEntityInfo as Mock).mockReturnValue({
@@ -770,6 +775,7 @@ describe('SessionChat - Stop Button Functionality', () => {
       isLoading: false,
       isNotFound: false,
       error: undefined,
+      isJoined: true,
       refetch: vi.fn(),
     })
     ;(useEntityInfo as Mock).mockReturnValue({
@@ -794,6 +800,7 @@ describe('SessionChat - Stop Button Functionality', () => {
       isLoading: false,
       isNotFound: false,
       error: undefined,
+      isJoined: true,
       refetch: vi.fn(),
     })
 
@@ -810,6 +817,7 @@ describe('SessionChat - Stop Button Functionality', () => {
       isLoading: false,
       isNotFound: false,
       error: undefined,
+      isJoined: true,
       refetch: vi.fn(),
     })
 
@@ -919,6 +927,7 @@ describe('SessionChat - Session Navigation', () => {
       isLoading: false,
       isNotFound: false,
       error: undefined,
+      isJoined: true,
       refetch: vi.fn(),
     })
     ;(useEntityInfo as Mock).mockReturnValue({
@@ -1117,6 +1126,7 @@ describe('SessionChat - Plan Rejection via Chat', () => {
       isLoading: false,
       isNotFound: false,
       error: undefined,
+      isJoined: true,
       refetch: vi.fn(),
     })
 

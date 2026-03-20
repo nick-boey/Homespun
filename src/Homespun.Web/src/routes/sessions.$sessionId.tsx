@@ -79,7 +79,7 @@ function SessionLayout() {
 }
 
 function SessionChat({ sessionId }: { sessionId: string }) {
-  const { session, isLoading, isNotFound, error, refetch } = useSession(sessionId)
+  const { session, isLoading, isNotFound, error, refetch, isJoined } = useSession(sessionId)
   const { isConnected } = useClaudeCodeHub()
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [isSending, setIsSending] = useState(false)
@@ -148,7 +148,7 @@ function SessionChat({ sessionId }: { sessionId: string }) {
   // Handle sending messages
   const handleSend = useCallback(
     async (message: string, sessionMode: SessionMode, _model: ModelSelection) => {
-      if (!isConnected) return
+      if (!isConnected || !isJoined) return
 
       // Add user message optimistically (show in chat regardless of action)
       addUserMessage(message)
@@ -185,7 +185,7 @@ function SessionChat({ sessionId }: { sessionId: string }) {
         setIsSending(false)
       }
     },
-    [isConnected, sessionId, addUserMessage, hasPendingPlan, reject]
+    [isConnected, isJoined, sessionId, addUserMessage, hasPendingPlan, reject]
   )
 
   // Handle stop session
@@ -398,16 +398,18 @@ function SessionChat({ sessionId }: { sessionId: string }) {
             onModeChange={changeMode}
             onModelChange={changeModel}
             projectId={session?.projectId}
-            disabled={isProcessing || !isConnected}
+            disabled={isProcessing || !isConnected || !isJoined}
             isLoading={isSending}
             placeholder={
               !isConnected
                 ? 'Connecting...'
-                : isProcessing
-                  ? 'Processing...'
-                  : hasPendingPlan
-                    ? 'Type feedback to modify the plan...'
-                    : 'Type a message...'
+                : !isJoined
+                  ? 'Joining session...'
+                  : isProcessing
+                    ? 'Processing...'
+                    : hasPendingPlan
+                      ? 'Type feedback to modify the plan...'
+                      : 'Type a message...'
             }
             issueContext={issueContext}
           />

@@ -9,6 +9,9 @@ vi.mock('@/providers/signalr-provider', () => ({
   useClaudeCodeHub: vi.fn(),
 }))
 
+// Helper to flush pending promises
+const flushPromises = () => new Promise((resolve) => setTimeout(resolve, 0))
+
 const mockSession: ClaudeSession = {
   id: 'session-123',
   entityId: 'entity-123',
@@ -49,6 +52,7 @@ describe('useSession', () => {
         leaveSession: mockLeaveSession,
       },
       isConnected: true,
+      isReconnecting: false,
     })
   })
 
@@ -216,6 +220,237 @@ describe('useSession', () => {
     await waitFor(() => {
       expect(mockLeaveSession).toHaveBeenCalledWith('session-123')
       expect(mockJoinSession).toHaveBeenCalledWith('session-456')
+    })
+  })
+
+  describe('isJoined state', () => {
+    it('returns isJoined: true after successfully joining session', async () => {
+      mockGetSession.mockResolvedValueOnce(mockSession)
+      mockJoinSession.mockResolvedValueOnce(undefined)
+
+      const { result } = renderHook(() => useSession('session-123'))
+
+      // Initially not joined
+      expect(result.current.isJoined).toBe(false)
+
+      await waitFor(() => {
+        expect(result.current.isJoined).toBe(true)
+      })
+    })
+
+    it('returns isJoined: false when not connected', () => {
+      ;(useClaudeCodeHub as Mock).mockReturnValue({
+        connection: null,
+        methods: null,
+        isConnected: false,
+        isReconnecting: false,
+      })
+
+      const { result } = renderHook(() => useSession('session-123'))
+
+      expect(result.current.isJoined).toBe(false)
+    })
+
+    it('returns isJoined: false when joinSession fails', async () => {
+      mockGetSession.mockResolvedValueOnce(mockSession)
+      mockJoinSession.mockRejectedValueOnce(new Error('Failed to join'))
+
+      const { result } = renderHook(() => useSession('session-123'))
+
+      // Wait for join to be attempted
+      await flushPromises()
+
+      // isJoined should remain false since join failed
+      expect(result.current.isJoined).toBe(false)
+    })
+  })
+
+  describe('reconnection handling', () => {
+    it('sets isJoined to false when connection enters reconnecting state', async () => {
+      mockGetSession.mockResolvedValue(mockSession)
+      mockJoinSession.mockResolvedValue(undefined)
+
+      const { result, rerender } = renderHook(() => useSession('session-123'))
+
+      await waitFor(() => {
+        expect(result.current.isJoined).toBe(true)
+      })
+
+      // Simulate reconnecting state
+      ;(useClaudeCodeHub as Mock).mockReturnValue({
+        connection: mockConnection,
+        methods: {
+          getSession: mockGetSession,
+          joinSession: mockJoinSession,
+          leaveSession: mockLeaveSession,
+        },
+        isConnected: false,
+        isReconnecting: true,
+      })
+
+      rerender()
+
+      // isJoined should be false during reconnection
+      expect(result.current.isJoined).toBe(false)
+    })
+
+    it('re-joins session after connection recovers from reconnecting', async () => {
+      mockGetSession.mockResolvedValue(mockSession)
+      mockJoinSession.mockResolvedValue(undefined)
+
+      const { result, rerender } = renderHook(() => useSession('session-123'))
+
+      await waitFor(() => {
+        expect(result.current.isJoined).toBe(true)
+      })
+
+      // Clear mocks to track new calls
+      mockJoinSession.mockClear()
+
+      // Simulate reconnecting state
+      ;(useClaudeCodeHub as Mock).mockReturnValue({
+        connection: mockConnection,
+        methods: {
+          getSession: mockGetSession,
+          joinSession: mockJoinSession,
+          leaveSession: mockLeaveSession,
+        },
+        isConnected: false,
+        isReconnecting: true,
+      })
+
+      rerender()
+
+      expect(result.current.isJoined).toBe(false)
+
+      // Simulate reconnection complete - back to connected
+      ;(useClaudeCodeHub as Mock).mockReturnValue({
+        connection: mockConnection,
+        methods: {
+          getSession: mockGetSession,
+          joinSession: mockJoinSession,
+          leaveSession: mockLeaveSession,
+        },
+        isConnected: true,
+        isReconnecting: false,
+      })
+
+      rerender()
+
+      // Should have called joinSession again after reconnection
+      await waitFor(() => {
+        expect(mockJoinSession).toHaveBeenCalledWith('session-123')
+      })
+
+      await waitFor(() => {
+        expect(result.current.isJoined).toBe(true)
+      })
+    })
+
+    it('joins correct session after reconnect when sessionId changed during reconnect', async () => {
+      mockGetSession.mockResolvedValue(mockSession)
+      mockJoinSession.mockResolvedValue(undefined)
+      mockLeaveSession.mockResolvedValue(undefined)
+
+      const { result, rerender } = renderHook(({ sessionId }) => useSession(sessionId), {
+        initialProps: { sessionId: 'session-123' },
+      })
+
+      await waitFor(() => {
+        expect(result.current.isJoined).toBe(true)
+      })
+
+      mockJoinSession.mockClear()
+
+      // Simulate reconnecting state
+      ;(useClaudeCodeHub as Mock).mockReturnValue({
+        connection: mockConnection,
+        methods: {
+          getSession: mockGetSession,
+          joinSession: mockJoinSession,
+          leaveSession: mockLeaveSession,
+        },
+        isConnected: false,
+        isReconnecting: true,
+      })
+
+      rerender({ sessionId: 'session-123' })
+
+      // Change session ID during reconnection
+      const newSession = { ...mockSession, id: 'session-456' }
+      mockGetSession.mockResolvedValue(newSession)
+      rerender({ sessionId: 'session-456' })
+
+      // Simulate reconnection complete
+      ;(useClaudeCodeHub as Mock).mockReturnValue({
+        connection: mockConnection,
+        methods: {
+          getSession: mockGetSession,
+          joinSession: mockJoinSession,
+          leaveSession: mockLeaveSession,
+        },
+        isConnected: true,
+        isReconnecting: false,
+      })
+
+      rerender({ sessionId: 'session-456' })
+
+      // Should join the NEW session ID, not the old one
+      await waitFor(() => {
+        expect(mockJoinSession).toHaveBeenCalledWith('session-456')
+      })
+
+      // Should NOT have joined the old session
+      const joinCalls = mockJoinSession.mock.calls.filter((call) => call[0] === 'session-123')
+      expect(joinCalls.length).toBe(0)
+    })
+
+    it('does not attempt re-join if component unmounted during reconnection', async () => {
+      mockGetSession.mockResolvedValue(mockSession)
+      mockJoinSession.mockResolvedValue(undefined)
+
+      const { result, rerender, unmount } = renderHook(() => useSession('session-123'))
+
+      await waitFor(() => {
+        expect(result.current.isJoined).toBe(true)
+      })
+
+      mockJoinSession.mockClear()
+
+      // Simulate reconnecting state
+      ;(useClaudeCodeHub as Mock).mockReturnValue({
+        connection: mockConnection,
+        methods: {
+          getSession: mockGetSession,
+          joinSession: mockJoinSession,
+          leaveSession: mockLeaveSession,
+        },
+        isConnected: false,
+        isReconnecting: true,
+      })
+
+      rerender()
+
+      // Unmount during reconnection
+      unmount()
+
+      // Simulate reconnection complete after unmount
+      ;(useClaudeCodeHub as Mock).mockReturnValue({
+        connection: mockConnection,
+        methods: {
+          getSession: mockGetSession,
+          joinSession: mockJoinSession,
+          leaveSession: mockLeaveSession,
+        },
+        isConnected: true,
+        isReconnecting: false,
+      })
+
+      // Wait for any potential async operations
+      await flushPromises()
+
+      // Should NOT have called joinSession after reconnection since unmounted
+      expect(mockJoinSession).not.toHaveBeenCalled()
     })
   })
 })
