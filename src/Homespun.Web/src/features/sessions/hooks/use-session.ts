@@ -9,16 +9,20 @@ export interface UseSessionResult {
   isLoading: boolean
   isNotFound: boolean
   error: string | undefined
+  isJoined: boolean
   refetch: () => Promise<void>
 }
 
 export function useSession(sessionId: string): UseSessionResult {
-  const { connection, methods, isConnected } = useClaudeCodeHub()
+  const { connection, methods, isConnected, isReconnecting } = useClaudeCodeHub()
   const [session, setSession] = useState<ClaudeSession | null | undefined>(undefined)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | undefined>()
+  const [isJoined, setIsJoined] = useState(false)
   const hasJoinedRef = useRef(false)
   const currentSessionIdRef = useRef(sessionId)
+  const wasReconnectingRef = useRef(false)
+  const isMountedRef = useRef(true)
 
   const fetchSession = useCallback(async () => {
     if (!methods || !isConnected) {
@@ -42,6 +46,14 @@ export function useSession(sessionId: string): UseSessionResult {
     }
   }, [methods, isConnected, sessionId])
 
+  // Track mounted state for cleanup
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+    }
+  }, [])
+
   // Handle session ID changes
   useEffect(() => {
     const previousSessionId = currentSessionIdRef.current
@@ -51,6 +63,7 @@ export function useSession(sessionId: string): UseSessionResult {
     if (previousSessionId !== sessionId && hasJoinedRef.current && methods) {
       methods.leaveSession(previousSessionId).catch(() => {})
       hasJoinedRef.current = false
+      setIsJoined(false)
     }
   }, [sessionId, methods])
 
@@ -66,17 +79,61 @@ export function useSession(sessionId: string): UseSessionResult {
     methods
       .joinSession(sessionId)
       .then(() => {
-        hasJoinedRef.current = true
+        if (isMountedRef.current) {
+          hasJoinedRef.current = true
+          setIsJoined(true)
+        }
       })
-      .catch(() => {})
+      .catch(() => {
+        // Join failed, ensure isJoined stays false
+        if (isMountedRef.current) {
+          hasJoinedRef.current = false
+          setIsJoined(false)
+        }
+      })
 
     return () => {
       if (hasJoinedRef.current && methods) {
         methods.leaveSession(sessionId).catch(() => {})
         hasJoinedRef.current = false
+        setIsJoined(false)
       }
     }
   }, [isConnected, methods, sessionId, fetchSession])
+
+  // Handle reconnection - set isJoined to false during reconnection
+  // and re-join when connection recovers
+  useEffect(() => {
+    // When reconnecting starts, mark as not joined
+    if (isReconnecting) {
+      wasReconnectingRef.current = true
+      hasJoinedRef.current = false
+      setIsJoined(false)
+      return
+    }
+
+    // When transitioning from reconnecting to connected, re-join
+    if (wasReconnectingRef.current && isConnected && methods) {
+      wasReconnectingRef.current = false
+
+      // Re-join the current session
+      const currentSessionId = currentSessionIdRef.current
+      methods
+        .joinSession(currentSessionId)
+        .then(() => {
+          if (isMountedRef.current) {
+            hasJoinedRef.current = true
+            setIsJoined(true)
+          }
+        })
+        .catch(() => {
+          if (isMountedRef.current) {
+            hasJoinedRef.current = false
+            setIsJoined(false)
+          }
+        })
+    }
+  }, [isReconnecting, isConnected, methods])
 
   // Register event handlers
   useEffect(() => {
@@ -121,6 +178,7 @@ export function useSession(sessionId: string): UseSessionResult {
     isLoading,
     isNotFound: session === null,
     error,
+    isJoined,
     refetch: fetchSession,
   }
 }
