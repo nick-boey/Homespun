@@ -77,8 +77,31 @@ public class PlansService(ILogger<PlansService> logger) : IPlansService
         return await File.ReadAllTextAsync(filePath, ct);
     }
 
+    /// <summary>
+    /// Gets the plans directory path, checking both clone structure and regular project structure.
+    /// For clones (where workingDirectory ends with /workdir), .claude/plans is a sibling of workdir.
+    /// For regular projects, .claude/plans is a child of the working directory.
+    /// </summary>
     private static string GetPlansDirectory(string workingDirectory)
     {
+        var normalizedPath = workingDirectory.TrimEnd('/', '\\');
+
+        // Check if this is a clone workdir path (ends with "workdir")
+        if (normalizedPath.EndsWith("workdir", StringComparison.OrdinalIgnoreCase))
+        {
+            // Clone structure: {clonePath}/workdir -> check {clonePath}/.claude/plans
+            var parentDir = Path.GetDirectoryName(normalizedPath);
+            if (!string.IsNullOrEmpty(parentDir))
+            {
+                var clonePlansPath = Path.Combine(parentDir, ".claude", "plans");
+                if (Directory.Exists(clonePlansPath))
+                {
+                    return clonePlansPath;
+                }
+            }
+        }
+
+        // Fallback: regular project structure {workingDirectory}/.claude/plans
         return Path.Combine(workingDirectory, ".claude", "plans");
     }
 
