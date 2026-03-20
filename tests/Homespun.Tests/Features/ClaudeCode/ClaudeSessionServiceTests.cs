@@ -3148,9 +3148,10 @@ public class ClaudeSessionServiceStatusBroadcastTests
             "entity-1", "project-1", "/test/path", SessionMode.Plan, "sonnet");
 
         // Simulate a state where user has approved a plan and it's now executing
-        // (Running with plan content stored, but HasPendingPlanApproval = false)
+        // (Running with PlanHasBeenApproved = true, but HasPendingPlanApproval = false)
         session.Status = ClaudeSessionStatus.Running;
         session.PlanContent = "# Test Plan\n\n1. Step one";
+        session.PlanHasBeenApproved = true;
         session.HasPendingPlanApproval = false;
 
         var planJson = """{"plan": "# Another Plan\n\n1. Different step"}""";
@@ -3172,6 +3173,42 @@ public class ClaudeSessionServiceStatusBroadcastTests
         // Original plan content should be preserved
         Assert.That(session.PlanContent, Is.EqualTo("# Test Plan\n\n1. Step one"),
             "Original plan content should be preserved");
+    }
+
+    [Test]
+    public async Task HandlePlanPendingFromWorker_WhenPlanContentCapturedByWriteTool_StillProcessesPlanPending()
+    {
+        // Arrange - Start a session and simulate the Write tool capturing plan content
+        // before the plan_pending event arrives (the exact bug scenario)
+        var session = await _service.StartSessionAsync(
+            "entity-1", "project-1", "/test/path", SessionMode.Plan, "sonnet");
+
+        // Simulate Write tool having captured plan content (PlanContent is set)
+        // but user has NOT approved yet (PlanHasBeenApproved = false)
+        session.Status = ClaudeSessionStatus.Running;
+        session.PlanContent = "# Plan from Write tool\n\n1. Step one";
+        session.PlanHasBeenApproved = false;
+        session.HasPendingPlanApproval = false;
+
+        var planJson = """{"plan": "# Plan from ExitPlanMode\n\n1. Step one"}""";
+
+        // Simulate plan_pending arriving after Write tool captured content
+        _agentExecutionServiceMock
+            .Setup(s => s.StartSessionAsync(It.IsAny<AgentStartRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(CreateSdkMessageStream(
+                new SdkSystemMessage("agent-1", null, "session_started", null, null),
+                new SdkPlanPendingMessage("agent-1", planJson),
+                new SdkResultMessage("agent-1", null, null, 0, 0, false, 0, 0, null)));
+
+        await _service.SendMessageAsync(session.Id, "Write the plan");
+
+        // Assert - plan_pending should NOT be ignored; session should show pending plan approval
+        Assert.That(session.Status, Is.EqualTo(ClaudeSessionStatus.WaitingForPlanExecution),
+            "Status should be WaitingForPlanExecution - plan_pending must not be silently dropped when PlanContent was set by Write tool");
+        Assert.That(session.HasPendingPlanApproval, Is.True,
+            "HasPendingPlanApproval should be true - plan_pending must not be silently dropped when PlanContent was set by Write tool");
+        Assert.That(session.PlanContent, Is.EqualTo("# Plan from ExitPlanMode\n\n1. Step one"),
+            "PlanContent should be updated from the plan_pending event");
     }
 
     #endregion

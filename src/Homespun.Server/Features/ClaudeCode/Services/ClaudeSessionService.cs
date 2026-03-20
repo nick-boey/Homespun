@@ -1205,7 +1205,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             return;
         }
         if (session.Status == ClaudeSessionStatus.Running &&
-            !string.IsNullOrEmpty(session.PlanContent) &&
+            session.PlanHasBeenApproved &&
             !session.HasPendingPlanApproval)
         {
             _logger.LogDebug("Ignoring plan_pending for session {SessionId}: plan already approved and executing", sessionId);
@@ -1441,6 +1441,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         session.PlanContent = null;
         session.PlanFilePath = null;
         session.HasPendingPlanApproval = false;
+        session.PlanHasBeenApproved = false;
     }
 
     /// <summary>
@@ -1737,6 +1738,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         // Clear the WaitingForPlanExecution status
         session.Status = ClaudeSessionStatus.Running;
         session.HasPendingPlanApproval = false;
+        session.PlanHasBeenApproved = true;
         await _hubContext.BroadcastSessionStatusChanged(sessionId, session.Status, hasPendingPlanApproval: false);
 
         // Capture plan content before clearing
@@ -1781,6 +1783,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         // Clear the pending plan approval flag immediately (UI should hide plan controls)
         // Note: PlanContent/PlanFilePath are preserved for ExecutePlanAsync to use
         session.HasPendingPlanApproval = false;
+        session.PlanHasBeenApproved = true;
 
         if (approved)
         {
