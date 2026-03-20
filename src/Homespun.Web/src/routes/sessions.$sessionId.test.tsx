@@ -1126,6 +1126,7 @@ describe('SessionChat - Plan Rejection via Chat', () => {
       isLoading: false,
       isNotFound: false,
       error: undefined,
+      isJoined: true,
       refetch: vi.fn(),
     })
 
