@@ -139,6 +139,133 @@ public class PlansServiceTests
 
     #endregion
 
+    #region Clone Path Resolution Tests
+
+    [Test]
+    public async Task ListPlanFilesAsync_WithCloneWorkdirPath_FindsPlansInParentClaude()
+    {
+        // Arrange - Create clone structure: {clonePath}/workdir and {clonePath}/.claude/plans
+        var clonePath = Path.Combine(_tempDir, "clone");
+        var workdirPath = Path.Combine(clonePath, "workdir");
+        var clonePlansDir = Path.Combine(clonePath, ".claude", "plans");
+
+        Directory.CreateDirectory(workdirPath);
+        Directory.CreateDirectory(clonePlansDir);
+        await File.WriteAllTextAsync(Path.Combine(clonePlansDir, "clone-plan.md"), "# Clone Plan\nContent");
+
+        // Act
+        var result = await _service.ListPlanFilesAsync(workdirPath);
+
+        // Assert
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].FileName, Is.EqualTo("clone-plan.md"));
+    }
+
+    [Test]
+    public async Task ListPlanFilesAsync_WithCloneWorkdirPath_IgnoresWorkdirClaude()
+    {
+        // Arrange - Create both clone plans and workdir plans
+        var clonePath = Path.Combine(_tempDir, "clone");
+        var workdirPath = Path.Combine(clonePath, "workdir");
+        var clonePlansDir = Path.Combine(clonePath, ".claude", "plans");
+        var workdirPlansDir = Path.Combine(workdirPath, ".claude", "plans");
+
+        Directory.CreateDirectory(workdirPath);
+        Directory.CreateDirectory(clonePlansDir);
+        Directory.CreateDirectory(workdirPlansDir);
+
+        await File.WriteAllTextAsync(Path.Combine(clonePlansDir, "clone-plan.md"), "# Clone Plan");
+        await File.WriteAllTextAsync(Path.Combine(workdirPlansDir, "workdir-plan.md"), "# Workdir Plan");
+
+        // Act - Should find clone plans, not workdir plans
+        var result = await _service.ListPlanFilesAsync(workdirPath);
+
+        // Assert
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].FileName, Is.EqualTo("clone-plan.md"));
+    }
+
+    [Test]
+    public async Task ListPlanFilesAsync_WithRegularProjectPath_FindsPlansInWorkingDir()
+    {
+        // Arrange - Regular project structure (not ending in "workdir")
+        var projectPath = Path.Combine(_tempDir, "myproject");
+        var plansDir = Path.Combine(projectPath, ".claude", "plans");
+
+        Directory.CreateDirectory(projectPath);
+        Directory.CreateDirectory(plansDir);
+        await File.WriteAllTextAsync(Path.Combine(plansDir, "project-plan.md"), "# Project Plan");
+
+        // Act
+        var result = await _service.ListPlanFilesAsync(projectPath);
+
+        // Assert
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].FileName, Is.EqualTo("project-plan.md"));
+    }
+
+    [Test]
+    public async Task ListPlanFilesAsync_WithCloneWorkdirPath_NoClonePlans_FallsBackToWorkdir()
+    {
+        // Arrange - Clone structure but only workdir has plans
+        var clonePath = Path.Combine(_tempDir, "clone");
+        var workdirPath = Path.Combine(clonePath, "workdir");
+        var workdirPlansDir = Path.Combine(workdirPath, ".claude", "plans");
+
+        Directory.CreateDirectory(workdirPath);
+        Directory.CreateDirectory(workdirPlansDir);
+        await File.WriteAllTextAsync(Path.Combine(workdirPlansDir, "fallback-plan.md"), "# Fallback Plan");
+
+        // Act - Should fall back to workdir plans since clone plans don't exist
+        var result = await _service.ListPlanFilesAsync(workdirPath);
+
+        // Assert
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].FileName, Is.EqualTo("fallback-plan.md"));
+    }
+
+    [Test]
+    public async Task GetPlanContentAsync_WithCloneWorkdirPath_ReadsFromClonePlans()
+    {
+        // Arrange - Clone structure with plans
+        var clonePath = Path.Combine(_tempDir, "clone");
+        var workdirPath = Path.Combine(clonePath, "workdir");
+        var clonePlansDir = Path.Combine(clonePath, ".claude", "plans");
+
+        Directory.CreateDirectory(workdirPath);
+        Directory.CreateDirectory(clonePlansDir);
+        var expectedContent = "# Clone Plan\n\nThis is the clone plan content.";
+        await File.WriteAllTextAsync(Path.Combine(clonePlansDir, "plan.md"), expectedContent);
+
+        // Act
+        var result = await _service.GetPlanContentAsync(workdirPath, "plan.md");
+
+        // Assert
+        Assert.That(result, Is.EqualTo(expectedContent));
+    }
+
+    [Test]
+    public async Task ListPlanFilesAsync_WithTrailingSlash_HandlesCorrectly()
+    {
+        // Arrange - Clone structure with trailing slash on path
+        var clonePath = Path.Combine(_tempDir, "clone");
+        var workdirPath = Path.Combine(clonePath, "workdir");
+        var clonePlansDir = Path.Combine(clonePath, ".claude", "plans");
+
+        Directory.CreateDirectory(workdirPath);
+        Directory.CreateDirectory(clonePlansDir);
+        await File.WriteAllTextAsync(Path.Combine(clonePlansDir, "plan.md"), "# Plan");
+
+        // Act - Path with trailing slash
+        var result = await _service.ListPlanFilesAsync(workdirPath + "/");
+
+        // Assert
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].FileName, Is.EqualTo("plan.md"));
+    }
+
+    #endregion
+
     #region GetPlanContentAsync Tests
 
     [Test]
