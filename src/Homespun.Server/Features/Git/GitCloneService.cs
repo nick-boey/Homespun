@@ -762,25 +762,67 @@ public class GitCloneService(ICommandRunner commandRunner, ILogger<GitCloneServi
             var sourceFleecePath = Path.Combine(repoPath, ".fleece");
             var destFleecePath = Path.Combine(clonePath, ".fleece");
 
-            Directory.CreateDirectory(destFleecePath);
-
-            var rsyncResult = await commandRunner.RunAsync(
-                "rsync",
-                $"-av --exclude=.git \"{sourceFleecePath}/\" \"{destFleecePath}/\"",
-                repoPath);
-
-            if (rsyncResult.Success)
+            try
             {
+                CopyDirectory(sourceFleecePath, destFleecePath, name => name == ".git");
                 logger.LogInformation("Successfully copied .fleece changes to clone");
             }
-            else
+            catch (Exception ex)
             {
-                logger.LogWarning("Failed to copy .fleece changes to clone: {Error}", rsyncResult.Error);
+                logger.LogWarning("Failed to copy .fleece changes to clone: {Error}", ex.Message);
             }
         }
         else
         {
             logger.LogDebug("No unstaged .fleece changes to copy");
+        }
+    }
+
+    /// <summary>
+    /// Recursively copies a directory and its contents.
+    /// </summary>
+    /// <param name="sourceDir">The source directory path</param>
+    /// <param name="destDir">The destination directory path</param>
+    /// <param name="shouldExclude">Optional predicate to exclude files/directories by name</param>
+    private static void CopyDirectory(string sourceDir, string destDir, Func<string, bool>? shouldExclude = null)
+    {
+        if (!Directory.Exists(sourceDir))
+        {
+            return;
+        }
+
+        // Create the destination directory
+        Directory.CreateDirectory(destDir);
+
+        // Copy all files
+        foreach (var file in Directory.GetFiles(sourceDir))
+        {
+            var fileName = Path.GetFileName(file);
+            if (shouldExclude?.Invoke(fileName) == true)
+            {
+                continue;
+            }
+
+            var destFile = Path.Combine(destDir, fileName);
+            // Clear read-only attribute if the destination file exists
+            if (File.Exists(destFile))
+            {
+                File.SetAttributes(destFile, FileAttributes.Normal);
+            }
+            File.Copy(file, destFile, overwrite: true);
+        }
+
+        // Recursively copy subdirectories
+        foreach (var dir in Directory.GetDirectories(sourceDir))
+        {
+            var dirName = Path.GetFileName(dir);
+            if (shouldExclude?.Invoke(dirName) == true)
+            {
+                continue;
+            }
+
+            var destSubDir = Path.Combine(destDir, dirName);
+            CopyDirectory(dir, destSubDir, shouldExclude);
         }
     }
 
