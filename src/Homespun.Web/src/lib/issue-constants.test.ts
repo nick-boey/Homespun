@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   ISSUE_STATUS,
   ISSUE_STATUS_LABELS,
+  ISSUE_STATUS_COMPACT_LABELS,
   ISSUE_STATUS_COLORS,
   ISSUE_STATUS_OPTIONS,
   ISSUE_TYPE,
@@ -44,6 +45,28 @@ describe('Issue Status Constants', () => {
       Object.values(ISSUE_STATUS).forEach((value) => {
         expect(ISSUE_STATUS_LABELS[value]).toBeDefined()
         expect(typeof ISSUE_STATUS_LABELS[value]).toBe('string')
+      })
+    })
+  })
+
+  describe('ISSUE_STATUS_COMPACT_LABELS', () => {
+    it('should have compact "Progress" label instead of "In Progress"', () => {
+      expect(ISSUE_STATUS_COMPACT_LABELS[IssueStatus.PROGRESS]).toBe('Progress')
+    })
+
+    it('should match ISSUE_STATUS_LABELS for all other statuses', () => {
+      const statusesExceptProgress = Object.values(IssueStatus).filter(
+        (status) => status !== IssueStatus.PROGRESS
+      )
+      statusesExceptProgress.forEach((status) => {
+        expect(ISSUE_STATUS_COMPACT_LABELS[status]).toBe(ISSUE_STATUS_LABELS[status])
+      })
+    })
+
+    it('should have labels for all defined statuses', () => {
+      Object.values(ISSUE_STATUS).forEach((value) => {
+        expect(ISSUE_STATUS_COMPACT_LABELS[value]).toBeDefined()
+        expect(typeof ISSUE_STATUS_COMPACT_LABELS[value]).toBe('string')
       })
     })
   })
