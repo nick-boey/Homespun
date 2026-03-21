@@ -32,6 +32,7 @@ public class FleeceChangeDetectionService : IFleeceChangeDetectionService
     private readonly IClaudeSessionService _sessionService;
     private readonly IFleeceService _fleeceService;
     private readonly ILogger<FleeceChangeDetectionService> _logger;
+    private readonly IssueMerger _issueMerger = new();
 
     public FleeceChangeDetectionService(
         IProjectService projectService,
@@ -117,17 +118,21 @@ public class FleeceChangeDetectionService : IFleeceChangeDetectionService
             }
             else
             {
-                // Check if issue was modified
-                var fieldChanges = GetFieldChanges(mainIssue, agentIssue);
+                // Merge main and agent using LWW algorithm for field-level merging
+                var mergeResult = _issueMerger.Merge(mainIssue, agentIssue);
+                var mergedIssue = mergeResult.MergedIssue;
+
+                // Compare main to merged result to detect changes
+                var fieldChanges = GetFieldChanges(mainIssue, mergedIssue);
                 if (fieldChanges.Any())
                 {
                     changes.Add(new IssueChangeDto
                     {
-                        IssueId = agentIssue.Id,
+                        IssueId = mergedIssue.Id,
                         ChangeType = ChangeType.Updated,
-                        Title = agentIssue.Title,
+                        Title = mergedIssue.Title,
                         OriginalIssue = mainIssue.ToDto(),
-                        ModifiedIssue = agentIssue.ToDto(),
+                        ModifiedIssue = mergedIssue.ToDto(),
                         FieldChanges = fieldChanges
                     });
                 }

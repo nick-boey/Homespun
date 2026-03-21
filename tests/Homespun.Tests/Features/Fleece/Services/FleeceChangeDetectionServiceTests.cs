@@ -139,22 +139,41 @@ public class FleeceChangeDetectionServiceTests
         Directory.CreateDirectory(mainPath);
         Directory.CreateDirectory(clonePath);
 
+        var baseTime = DateTimeOffset.UtcNow.AddMinutes(-10);
+        var agentTime = DateTimeOffset.UtcNow;
+
         var originalIssue = new Issue
         {
             Id = "existing",
             Title = "Original Title",
+            TitleLastUpdate = baseTime,
+            TitleModifiedBy = "original",
             Status = IssueStatus.Open,
+            StatusLastUpdate = baseTime,
+            StatusModifiedBy = "original",
             Type = IssueType.Task,
-            LastUpdate = DateTimeOffset.UtcNow
+            TypeLastUpdate = baseTime,
+            TypeModifiedBy = "original",
+            LastUpdate = baseTime,
+            CreatedAt = baseTime,
+            CreatedBy = "original"
         };
 
         var modifiedIssue = new Issue
         {
             Id = "existing",
             Title = "Modified Title",
+            TitleLastUpdate = agentTime,
+            TitleModifiedBy = "agent",
             Status = IssueStatus.Progress,
+            StatusLastUpdate = agentTime,
+            StatusModifiedBy = "agent",
             Type = IssueType.Task,
-            LastUpdate = DateTimeOffset.UtcNow
+            TypeLastUpdate = baseTime,
+            TypeModifiedBy = "original",
+            LastUpdate = agentTime,
+            CreatedAt = baseTime,
+            CreatedBy = "original"
         };
 
         // Create the modified issue in clone
@@ -225,22 +244,41 @@ public class FleeceChangeDetectionServiceTests
         Directory.CreateDirectory(mainPath);
         Directory.CreateDirectory(clonePath);
 
+        var baseTime = DateTimeOffset.UtcNow.AddMinutes(-10);
+        var agentTime = DateTimeOffset.UtcNow;
+
         var originalIssue = new Issue
         {
             Id = "to-delete",
             Title = "Issue to Delete",
+            TitleLastUpdate = baseTime,
+            TitleModifiedBy = "original",
             Status = IssueStatus.Open,
+            StatusLastUpdate = baseTime,
+            StatusModifiedBy = "original",
             Type = IssueType.Task,
-            LastUpdate = DateTimeOffset.UtcNow
+            TypeLastUpdate = baseTime,
+            TypeModifiedBy = "original",
+            LastUpdate = baseTime,
+            CreatedAt = baseTime,
+            CreatedBy = "original"
         };
 
         var deletedIssue = new Issue
         {
             Id = "to-delete",
             Title = "Issue to Delete",
+            TitleLastUpdate = baseTime,
+            TitleModifiedBy = "original",
             Status = IssueStatus.Deleted,
+            StatusLastUpdate = agentTime,
+            StatusModifiedBy = "agent",
             Type = IssueType.Task,
-            LastUpdate = DateTimeOffset.UtcNow
+            TypeLastUpdate = baseTime,
+            TypeModifiedBy = "original",
+            LastUpdate = agentTime,
+            CreatedAt = baseTime,
+            CreatedBy = "original"
         };
 
         // Create the deleted issue in clone
@@ -390,31 +428,58 @@ public class FleeceChangeDetectionServiceTests
         Directory.CreateDirectory(mainPath);
         Directory.CreateDirectory(clonePath);
 
+        var baseTime = DateTimeOffset.UtcNow.AddMinutes(-10);
+        var agentTime = DateTimeOffset.UtcNow;
+
         var existingIssue = new Issue
         {
             Id = "existing",
             Title = "Existing Issue",
+            TitleLastUpdate = baseTime,
+            TitleModifiedBy = "original",
             Status = IssueStatus.Open,
+            StatusLastUpdate = baseTime,
+            StatusModifiedBy = "original",
             Type = IssueType.Task,
-            LastUpdate = DateTimeOffset.UtcNow
+            TypeLastUpdate = baseTime,
+            TypeModifiedBy = "original",
+            LastUpdate = baseTime,
+            CreatedAt = baseTime,
+            CreatedBy = "original"
         };
 
         var modifiedIssue = new Issue
         {
             Id = "existing",
             Title = "Modified Issue",
+            TitleLastUpdate = agentTime,
+            TitleModifiedBy = "agent",
             Status = IssueStatus.Progress,
+            StatusLastUpdate = agentTime,
+            StatusModifiedBy = "agent",
             Type = IssueType.Task,
-            LastUpdate = DateTimeOffset.UtcNow
+            TypeLastUpdate = baseTime,
+            TypeModifiedBy = "original",
+            LastUpdate = agentTime,
+            CreatedAt = baseTime,
+            CreatedBy = "original"
         };
 
         var newIssue = new Issue
         {
             Id = "new-one",
             Title = "New Issue",
+            TitleLastUpdate = agentTime,
+            TitleModifiedBy = "agent",
             Status = IssueStatus.Open,
+            StatusLastUpdate = agentTime,
+            StatusModifiedBy = "agent",
             Type = IssueType.Feature,
-            LastUpdate = DateTimeOffset.UtcNow
+            TypeLastUpdate = agentTime,
+            TypeModifiedBy = "agent",
+            LastUpdate = agentTime,
+            CreatedAt = agentTime,
+            CreatedBy = "agent"
         };
 
         // Create issues in clone
@@ -434,5 +499,294 @@ public class FleeceChangeDetectionServiceTests
         Assert.That(result, Has.Count.EqualTo(2));
         Assert.That(result.Any(c => c.ChangeType == ChangeType.Created && c.IssueId == "new-one"), Is.True);
         Assert.That(result.Any(c => c.ChangeType == ChangeType.Updated && c.IssueId == "existing"), Is.True);
+    }
+
+    [Test]
+    public async Task DetectChangesAsync_WhenBothSidesModifySameIssue_UsesMergedResult()
+    {
+        // Arrange
+        var projectId = "proj-1";
+        var sessionId = "session-1";
+        var mainPath = Path.Combine(_tempDir, "main");
+        var clonePath = Path.Combine(_tempDir, "clone");
+
+        Directory.CreateDirectory(mainPath);
+        Directory.CreateDirectory(clonePath);
+
+        var baseTime = DateTimeOffset.UtcNow.AddMinutes(-10);
+
+        // Main has newer title
+        var mainIssue = new Issue
+        {
+            Id = "merge-test",
+            Title = "Title from Main",
+            TitleLastUpdate = DateTimeOffset.UtcNow.AddMinutes(-2),
+            TitleModifiedBy = "main-user",
+            Status = IssueStatus.Open,
+            StatusLastUpdate = baseTime,
+            StatusModifiedBy = "original",
+            Type = IssueType.Task,
+            TypeLastUpdate = baseTime,
+            TypeModifiedBy = "original",
+            LastUpdate = DateTimeOffset.UtcNow.AddMinutes(-2),
+            CreatedAt = baseTime,
+            CreatedBy = "original"
+        };
+
+        // Agent has newer status
+        var agentIssue = new Issue
+        {
+            Id = "merge-test",
+            Title = "Original Title",
+            TitleLastUpdate = baseTime,
+            TitleModifiedBy = "original",
+            Status = IssueStatus.Progress,
+            StatusLastUpdate = DateTimeOffset.UtcNow.AddMinutes(-1),
+            StatusModifiedBy = "agent-user",
+            Type = IssueType.Task,
+            TypeLastUpdate = baseTime,
+            TypeModifiedBy = "original",
+            LastUpdate = DateTimeOffset.UtcNow.AddMinutes(-1),
+            CreatedAt = baseTime,
+            CreatedBy = "original"
+        };
+
+        await CreateFleeceIssueOnDiskAsync(clonePath, agentIssue);
+        SetupProjectAndSession(projectId, sessionId, mainPath, clonePath);
+
+        _fleeceServiceMock.Setup(x => x.ListIssuesAsync(mainPath, null, null, null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<Issue> { mainIssue });
+
+        // Act
+        var result = await _service.DetectChangesAsync(projectId, sessionId);
+
+        // Assert
+        Assert.That(result, Has.Count.EqualTo(1));
+        var change = result[0];
+        Assert.That(change.ChangeType, Is.EqualTo(ChangeType.Updated));
+        Assert.That(change.IssueId, Is.EqualTo("merge-test"));
+
+        // The merged result should have main's title (newer) and agent's status (newer)
+        Assert.That(change.ModifiedIssue!.Title, Is.EqualTo("Title from Main"));
+        Assert.That(change.ModifiedIssue!.Status, Is.EqualTo(IssueStatus.Progress));
+
+        // Original issue should be main state
+        Assert.That(change.OriginalIssue!.Title, Is.EqualTo("Title from Main"));
+        Assert.That(change.OriginalIssue!.Status, Is.EqualTo(IssueStatus.Open));
+
+        // Field changes should reflect main to merged diff
+        Assert.That(change.FieldChanges.Count, Is.EqualTo(1));
+        Assert.That(change.FieldChanges[0].FieldName, Is.EqualTo("Status"));
+        Assert.That(change.FieldChanges[0].OldValue, Is.EqualTo("Open"));
+        Assert.That(change.FieldChanges[0].NewValue, Is.EqualTo("Progress"));
+    }
+
+    [Test]
+    public async Task DetectChangesAsync_WhenMainHasNewerTimestamp_PreservesMainValue()
+    {
+        // Arrange
+        var projectId = "proj-1";
+        var sessionId = "session-1";
+        var mainPath = Path.Combine(_tempDir, "main");
+        var clonePath = Path.Combine(_tempDir, "clone");
+
+        Directory.CreateDirectory(mainPath);
+        Directory.CreateDirectory(clonePath);
+
+        var baseTime = DateTimeOffset.UtcNow.AddMinutes(-10);
+
+        // Main has newer title (should win)
+        var mainIssue = new Issue
+        {
+            Id = "main-wins",
+            Title = "Newer Title from Main",
+            TitleLastUpdate = DateTimeOffset.UtcNow,
+            TitleModifiedBy = "main-user",
+            Status = IssueStatus.Open,
+            StatusLastUpdate = baseTime,
+            StatusModifiedBy = "original",
+            Type = IssueType.Task,
+            TypeLastUpdate = baseTime,
+            TypeModifiedBy = "original",
+            LastUpdate = DateTimeOffset.UtcNow,
+            CreatedAt = baseTime,
+            CreatedBy = "original"
+        };
+
+        // Agent has older title (should lose)
+        var agentIssue = new Issue
+        {
+            Id = "main-wins",
+            Title = "Older Title from Agent",
+            TitleLastUpdate = baseTime.AddMinutes(1),
+            TitleModifiedBy = "agent-user",
+            Status = IssueStatus.Open,
+            StatusLastUpdate = baseTime,
+            StatusModifiedBy = "original",
+            Type = IssueType.Task,
+            TypeLastUpdate = baseTime,
+            TypeModifiedBy = "original",
+            LastUpdate = baseTime.AddMinutes(1),
+            CreatedAt = baseTime,
+            CreatedBy = "original"
+        };
+
+        await CreateFleeceIssueOnDiskAsync(clonePath, agentIssue);
+        SetupProjectAndSession(projectId, sessionId, mainPath, clonePath);
+
+        _fleeceServiceMock.Setup(x => x.ListIssuesAsync(mainPath, null, null, null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<Issue> { mainIssue });
+
+        // Act
+        var result = await _service.DetectChangesAsync(projectId, sessionId);
+
+        // Assert - no changes detected because merged equals main
+        Assert.That(result, Is.Empty);
+    }
+
+    [Test]
+    public async Task DetectChangesAsync_WhenAgentHasNewerTimestamp_PreservesAgentValue()
+    {
+        // Arrange
+        var projectId = "proj-1";
+        var sessionId = "session-1";
+        var mainPath = Path.Combine(_tempDir, "main");
+        var clonePath = Path.Combine(_tempDir, "clone");
+
+        Directory.CreateDirectory(mainPath);
+        Directory.CreateDirectory(clonePath);
+
+        var baseTime = DateTimeOffset.UtcNow.AddMinutes(-10);
+
+        // Main has older title
+        var mainIssue = new Issue
+        {
+            Id = "agent-wins",
+            Title = "Older Title from Main",
+            TitleLastUpdate = baseTime.AddMinutes(1),
+            TitleModifiedBy = "main-user",
+            Status = IssueStatus.Open,
+            StatusLastUpdate = baseTime,
+            StatusModifiedBy = "original",
+            Type = IssueType.Task,
+            TypeLastUpdate = baseTime,
+            TypeModifiedBy = "original",
+            LastUpdate = baseTime.AddMinutes(1),
+            CreatedAt = baseTime,
+            CreatedBy = "original"
+        };
+
+        // Agent has newer title (should win)
+        var agentIssue = new Issue
+        {
+            Id = "agent-wins",
+            Title = "Newer Title from Agent",
+            TitleLastUpdate = DateTimeOffset.UtcNow,
+            TitleModifiedBy = "agent-user",
+            Status = IssueStatus.Open,
+            StatusLastUpdate = baseTime,
+            StatusModifiedBy = "original",
+            Type = IssueType.Task,
+            TypeLastUpdate = baseTime,
+            TypeModifiedBy = "original",
+            LastUpdate = DateTimeOffset.UtcNow,
+            CreatedAt = baseTime,
+            CreatedBy = "original"
+        };
+
+        await CreateFleeceIssueOnDiskAsync(clonePath, agentIssue);
+        SetupProjectAndSession(projectId, sessionId, mainPath, clonePath);
+
+        _fleeceServiceMock.Setup(x => x.ListIssuesAsync(mainPath, null, null, null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<Issue> { mainIssue });
+
+        // Act
+        var result = await _service.DetectChangesAsync(projectId, sessionId);
+
+        // Assert - change detected because agent's title is newer
+        Assert.That(result, Has.Count.EqualTo(1));
+        var change = result[0];
+        Assert.That(change.ChangeType, Is.EqualTo(ChangeType.Updated));
+        Assert.That(change.ModifiedIssue!.Title, Is.EqualTo("Newer Title from Agent"));
+        Assert.That(change.FieldChanges.Any(f => f.FieldName == "Title"), Is.True);
+    }
+
+    [Test]
+    public async Task DetectChangesAsync_WhenDifferentFieldsModified_MergesBothChanges()
+    {
+        // Arrange
+        var projectId = "proj-1";
+        var sessionId = "session-1";
+        var mainPath = Path.Combine(_tempDir, "main");
+        var clonePath = Path.Combine(_tempDir, "clone");
+
+        Directory.CreateDirectory(mainPath);
+        Directory.CreateDirectory(clonePath);
+
+        var baseTime = DateTimeOffset.UtcNow.AddMinutes(-10);
+        var mainChangeTime = DateTimeOffset.UtcNow.AddMinutes(-3);
+        var agentChangeTime = DateTimeOffset.UtcNow.AddMinutes(-2);
+
+        // Main modified description
+        var mainIssue = new Issue
+        {
+            Id = "field-merge",
+            Title = "Original Title",
+            TitleLastUpdate = baseTime,
+            TitleModifiedBy = "original",
+            Description = "Description from Main",
+            DescriptionLastUpdate = mainChangeTime,
+            DescriptionModifiedBy = "main-user",
+            Status = IssueStatus.Open,
+            StatusLastUpdate = baseTime,
+            StatusModifiedBy = "original",
+            Type = IssueType.Task,
+            TypeLastUpdate = baseTime,
+            TypeModifiedBy = "original",
+            LastUpdate = mainChangeTime,
+            CreatedAt = baseTime,
+            CreatedBy = "original"
+        };
+
+        // Agent modified type
+        var agentIssue = new Issue
+        {
+            Id = "field-merge",
+            Title = "Original Title",
+            TitleLastUpdate = baseTime,
+            TitleModifiedBy = "original",
+            Description = "Original Description",
+            DescriptionLastUpdate = baseTime,
+            DescriptionModifiedBy = "original",
+            Status = IssueStatus.Open,
+            StatusLastUpdate = baseTime,
+            StatusModifiedBy = "original",
+            Type = IssueType.Bug,
+            TypeLastUpdate = agentChangeTime,
+            TypeModifiedBy = "agent-user",
+            LastUpdate = agentChangeTime,
+            CreatedAt = baseTime,
+            CreatedBy = "original"
+        };
+
+        await CreateFleeceIssueOnDiskAsync(clonePath, agentIssue);
+        SetupProjectAndSession(projectId, sessionId, mainPath, clonePath);
+
+        _fleeceServiceMock.Setup(x => x.ListIssuesAsync(mainPath, null, null, null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<Issue> { mainIssue });
+
+        // Act
+        var result = await _service.DetectChangesAsync(projectId, sessionId);
+
+        // Assert - merged result should have main's description and agent's type
+        Assert.That(result, Has.Count.EqualTo(1));
+        var change = result[0];
+        Assert.That(change.ChangeType, Is.EqualTo(ChangeType.Updated));
+        Assert.That(change.ModifiedIssue!.Description, Is.EqualTo("Description from Main"));
+        Assert.That(change.ModifiedIssue!.Type, Is.EqualTo(IssueType.Bug));
+
+        // Only Type should appear as a change (main to merged diff)
+        Assert.That(change.FieldChanges.Any(f => f.FieldName == "Type"), Is.True);
+        Assert.That(change.FieldChanges.All(f => f.FieldName != "Description"), Is.True);
     }
 }
