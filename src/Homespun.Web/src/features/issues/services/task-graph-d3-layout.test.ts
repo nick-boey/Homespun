@@ -294,6 +294,244 @@ describe('recalculateLayoutForExpansion', () => {
   })
 })
 
+describe('parallel parent vertical span post-processing', () => {
+  it('emits a continuous vertical span between first and last child rows', () => {
+    // Parent at lane 2, three children at lane 0 across three rows
+    const renderLines = [
+      createIssueRenderLine({
+        issueId: 'child-1',
+        lane: 0,
+        parentLane: 2,
+        isSeriesChild: false,
+        isFirstChild: true,
+      }),
+      createIssueRenderLine({
+        issueId: 'child-2',
+        lane: 0,
+        parentLane: 2,
+        isSeriesChild: false,
+        isFirstChild: false,
+      }),
+      createIssueRenderLine({
+        issueId: 'child-3',
+        lane: 0,
+        parentLane: 2,
+        isSeriesChild: false,
+        isFirstChild: false,
+      }),
+    ]
+    const result = computeD3Layout(renderLines, new Set(), new Map(), 3)
+
+    const spanEdge = result.edges.find((e) => e.id === 'parallel-vertical-span-lane2')
+    expect(spanEdge).toBeDefined()
+    expect(spanEdge!.type).toBe('parallelVertical')
+
+    // Span should go from bottom of first child row to top of last child row
+    const expectedStartY = ROW_HEIGHT // bottom of row 0
+    const expectedEndY = ROW_HEIGHT * 2 // top of row 2
+    const parentLaneX = LANE_WIDTH / 2 + 2 * LANE_WIDTH
+    expect(spanEdge!.path).toBe(
+      `M ${parentLaneX} ${expectedStartY} L ${parentLaneX} ${expectedEndY}`
+    )
+  })
+
+  it('does not emit a span for a single child', () => {
+    const renderLines = [
+      createIssueRenderLine({
+        issueId: 'child-1',
+        lane: 0,
+        parentLane: 2,
+        isSeriesChild: false,
+        isFirstChild: true,
+      }),
+    ]
+    const result = computeD3Layout(renderLines, new Set(), new Map(), 3)
+
+    const spanEdge = result.edges.find((e) => e.id.startsWith('parallel-vertical-span'))
+    expect(spanEdge).toBeUndefined()
+  })
+
+  it('does not emit a span for two adjacent children (no gap)', () => {
+    const renderLines = [
+      createIssueRenderLine({
+        issueId: 'child-1',
+        lane: 0,
+        parentLane: 2,
+        isSeriesChild: false,
+        isFirstChild: true,
+      }),
+      createIssueRenderLine({
+        issueId: 'child-2',
+        lane: 0,
+        parentLane: 2,
+        isSeriesChild: false,
+        isFirstChild: false,
+      }),
+    ]
+    const result = computeD3Layout(renderLines, new Set(), new Map(), 3)
+
+    // startY = ROW_HEIGHT (bottom of row 0), endY = ROW_HEIGHT (top of row 1) — equal, no span
+    const spanEdge = result.edges.find((e) => e.id.startsWith('parallel-vertical-span'))
+    expect(spanEdge).toBeUndefined()
+  })
+
+  it('emits a span that covers an inline editor gap between children', () => {
+    const renderLines = [
+      createIssueRenderLine({
+        issueId: 'child-1',
+        lane: 0,
+        parentLane: 2,
+        isSeriesChild: false,
+        isFirstChild: true,
+      }),
+      createIssueRenderLine({
+        issueId: 'child-2',
+        lane: 0,
+        parentLane: 2,
+        isSeriesChild: false,
+        isFirstChild: false,
+      }),
+    ]
+    // Insert editor below child-1, adding an extra ROW_HEIGHT between children
+    const result = computeD3Layout(renderLines, new Set(), new Map(), 3, {
+      referenceIssueId: 'child-1',
+      position: 'below',
+    })
+
+    const spanEdge = result.edges.find((e) => e.id.startsWith('parallel-vertical-span'))
+    expect(spanEdge).toBeDefined()
+
+    // child-1 row bottom = ROW_HEIGHT, editor adds ROW_HEIGHT, child-2 top = ROW_HEIGHT * 2
+    const expectedStartY = ROW_HEIGHT
+    const expectedEndY = ROW_HEIGHT * 2
+    const parentLaneX = LANE_WIDTH / 2 + 2 * LANE_WIDTH
+    expect(spanEdge!.path).toBe(
+      `M ${parentLaneX} ${expectedStartY} L ${parentLaneX} ${expectedEndY}`
+    )
+  })
+
+  it('tracks multiple parent lanes independently', () => {
+    const renderLines = [
+      createIssueRenderLine({
+        issueId: 'child-a1',
+        lane: 0,
+        parentLane: 1,
+        isSeriesChild: false,
+        isFirstChild: true,
+      }),
+      createIssueRenderLine({
+        issueId: 'child-b1',
+        lane: 0,
+        parentLane: 2,
+        isSeriesChild: false,
+        isFirstChild: true,
+      }),
+      createIssueRenderLine({
+        issueId: 'unrelated',
+        lane: 0,
+      }),
+      createIssueRenderLine({
+        issueId: 'child-a2',
+        lane: 0,
+        parentLane: 1,
+        isSeriesChild: false,
+        isFirstChild: false,
+      }),
+      createIssueRenderLine({
+        issueId: 'child-b2',
+        lane: 0,
+        parentLane: 2,
+        isSeriesChild: false,
+        isFirstChild: false,
+      }),
+    ]
+    const result = computeD3Layout(renderLines, new Set(), new Map(), 3)
+
+    const spanLane1 = result.edges.find((e) => e.id === 'parallel-vertical-span-lane1')
+    const spanLane2 = result.edges.find((e) => e.id === 'parallel-vertical-span-lane2')
+
+    expect(spanLane1).toBeDefined()
+    expect(spanLane2).toBeDefined()
+
+    // Lane 1: first child row 0 bottom (ROW_HEIGHT) to last child row 3 top (ROW_HEIGHT * 3)
+    const lane1X = LANE_WIDTH / 2 + 1 * LANE_WIDTH
+    expect(spanLane1!.path).toBe(`M ${lane1X} ${ROW_HEIGHT} L ${lane1X} ${ROW_HEIGHT * 3}`)
+
+    // Lane 2: first child row 1 bottom (ROW_HEIGHT * 2) to last child row 4 top (ROW_HEIGHT * 4)
+    const lane2X = LANE_WIDTH / 2 + 2 * LANE_WIDTH
+    expect(spanLane2!.path).toBe(`M ${lane2X} ${ROW_HEIGHT * 2} L ${lane2X} ${ROW_HEIGHT * 4}`)
+  })
+
+  it('does not emit a span for series children', () => {
+    const renderLines = [
+      createIssueRenderLine({
+        issueId: 'child-1',
+        lane: 0,
+        parentLane: 2,
+        isSeriesChild: true,
+        isFirstChild: true,
+      }),
+      createIssueRenderLine({
+        issueId: 'unrelated',
+        lane: 0,
+      }),
+      createIssueRenderLine({
+        issueId: 'child-2',
+        lane: 0,
+        parentLane: 2,
+        isSeriesChild: true,
+        isFirstChild: false,
+      }),
+    ]
+    const result = computeD3Layout(renderLines, new Set(), new Map(), 3)
+
+    const spanEdge = result.edges.find((e) => e.id.startsWith('parallel-vertical-span'))
+    expect(spanEdge).toBeUndefined()
+  })
+
+  it('accounts for expanded rows when computing span start', () => {
+    const renderLines = [
+      createIssueRenderLine({
+        issueId: 'child-1',
+        lane: 0,
+        parentLane: 2,
+        isSeriesChild: false,
+        isFirstChild: true,
+      }),
+      createIssueRenderLine({
+        issueId: 'unrelated',
+        lane: 0,
+      }),
+      createIssueRenderLine({
+        issueId: 'child-2',
+        lane: 0,
+        parentLane: 2,
+        isSeriesChild: false,
+        isFirstChild: false,
+      }),
+    ]
+
+    // Expand child-1 by 100px
+    const expandedIds = new Set(['child-1'])
+    const expandedHeights = new Map([['child-1', 100]])
+    const result = computeD3Layout(renderLines, expandedIds, expandedHeights, 3)
+
+    const spanEdge = result.edges.find((e) => e.id === 'parallel-vertical-span-lane2')
+    expect(spanEdge).toBeDefined()
+
+    // First child row: cumulativeY=0, rowHeight=ROW_HEIGHT+100, so rowBottom = ROW_HEIGHT + 100
+    // But span startY should be cumulativeY + ROW_HEIGHT (the collapsed portion bottom)
+    // Unrelated row: cumulativeY = ROW_HEIGHT + 100
+    // child-2 top: cumulativeY = ROW_HEIGHT + 100 + ROW_HEIGHT = ROW_HEIGHT * 2 + 100
+    const expectedStartY = ROW_HEIGHT
+    const expectedEndY = ROW_HEIGHT * 2 + 100
+    const parentLaneX = LANE_WIDTH / 2 + 2 * LANE_WIDTH
+    expect(spanEdge!.path).toBe(
+      `M ${parentLaneX} ${expectedStartY} L ${parentLaneX} ${expectedEndY}`
+    )
+  })
+})
+
 describe('getContentX', () => {
   it('computes content X offset based on max lanes', () => {
     expect(getContentX(1)).toBe(LANE_WIDTH + LANE_WIDTH / 2)

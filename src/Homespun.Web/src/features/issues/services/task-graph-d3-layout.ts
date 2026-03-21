@@ -104,6 +104,10 @@ export function computeD3Layout(
   const edges: D3TaskGraphEdge[] = []
   let cumulativeY = 0
 
+  // Track Y ranges for continuous parallel parent vertical lines
+  // Key: parentLane number, Value: { startY (rowBottom of first child), endY (rowTop of last child), color }
+  const parallelParentSpans = new Map<number, { startY: number; endY: number; color: string }>()
+
   const emitEditorNode = () => {
     nodes.push({
       type: 'inlineEditor',
@@ -156,6 +160,24 @@ export function computeD3Layout(
       // Generate edges for this node
       generateEdgesForNode(edges, line, x, y, cumulativeY, nodeColor)
 
+      // Collect parallel parent vertical spans for post-processing
+      if (!line.isSeriesChild && line.parentLane != null && line.parentLane > line.lane) {
+        if (line.isFirstChild) {
+          // Span starts at the bottom of the first child's collapsed row portion
+          parallelParentSpans.set(line.parentLane, {
+            startY: cumulativeY + ROW_HEIGHT,
+            endY: cumulativeY + ROW_HEIGHT,
+            color: nodeColor,
+          })
+        } else {
+          const existing = parallelParentSpans.get(line.parentLane)
+          if (existing) {
+            // Extend to the top of this child's row
+            existing.endY = cumulativeY
+          }
+        }
+      }
+
       // Insert editor below this issue if requested (after advancing past this row)
       if (
         editorPlacement?.position === 'below' &&
@@ -202,6 +224,19 @@ export function computeD3Layout(
     }
 
     cumulativeY += rowHeight
+  }
+
+  // Post-process: emit continuous vertical lines at parallel parent lanes
+  for (const [parentLane, span] of parallelParentSpans) {
+    if (span.endY > span.startY) {
+      const parentLaneX = getLaneCenterX(parentLane)
+      edges.push({
+        id: `parallel-vertical-span-lane${parentLane}`,
+        type: 'parallelVertical',
+        path: generateVerticalLine(parentLaneX, span.startY, span.endY),
+        color: span.color,
+      })
+    }
   }
 
   const totalWidth = LANE_WIDTH * Math.max(maxLanes, 1) + LANE_WIDTH / 2
