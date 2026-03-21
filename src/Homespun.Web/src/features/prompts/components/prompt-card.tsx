@@ -25,8 +25,11 @@ import type { AgentPrompt, SessionMode as SessionModeType } from '@/api/generate
 export interface PromptCardProps {
   prompt: AgentPrompt
   onEdit: (prompt: AgentPrompt) => void
-  onDelete: (promptId: string) => void
+  /** Handler for delete action - required when showDelete is true */
+  onDelete?: (promptId: string) => void
   isDeleting?: boolean
+  /** Whether to show the delete option (defaults to true) */
+  showDelete?: boolean
 }
 
 function getModeLabel(mode: SessionModeType | undefined): string {
@@ -63,11 +66,17 @@ function truncateText(text: string | undefined | null, maxLength: number): strin
   return text.slice(0, maxLength) + '...'
 }
 
-export function PromptCard({ prompt, onEdit, onDelete, isDeleting }: PromptCardProps) {
+export function PromptCard({
+  prompt,
+  onEdit,
+  onDelete,
+  isDeleting,
+  showDelete = true,
+}: PromptCardProps) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
 
   const handleDelete = () => {
-    if (prompt.id) {
+    if (prompt.id && onDelete) {
       onDelete(prompt.id)
     }
     setShowDeleteDialog(false)
@@ -96,13 +105,15 @@ export function PromptCard({ prompt, onEdit, onDelete, isDeleting }: PromptCardP
                     <Pencil className="mr-2 h-4 w-4" />
                     Edit
                   </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => setShowDeleteDialog(true)}
-                    className="text-destructive focus:text-destructive"
-                  >
-                    <Trash2 className="mr-2 h-4 w-4" />
-                    Delete
-                  </DropdownMenuItem>
+                  {showDelete && (
+                    <DropdownMenuItem
+                      onClick={() => setShowDeleteDialog(true)}
+                      className="text-destructive focus:text-destructive"
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Delete
+                    </DropdownMenuItem>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>

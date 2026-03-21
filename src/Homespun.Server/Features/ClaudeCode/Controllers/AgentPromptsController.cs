@@ -95,6 +95,18 @@ public class AgentPromptsController(IAgentPromptService agentPromptService) : Co
         await agentPromptService.EnsureDefaultPromptsAsync();
         return NoContent();
     }
+
+    /// <summary>
+    /// Gets all issue agent prompts (IssueModify and IssueAgentSystem).
+    /// These are specialized prompts for the Issues Agent workflow.
+    /// </summary>
+    [HttpGet("issue-agent-prompts")]
+    [ProducesResponseType<IReadOnlyList<AgentPrompt>>(StatusCodes.Status200OK)]
+    public ActionResult<IReadOnlyList<AgentPrompt>> GetIssueAgentPrompts()
+    {
+        var prompts = agentPromptService.GetIssueAgentPrompts();
+        return Ok(prompts);
+    }
 }
 
 public class CreateAgentPromptRequest

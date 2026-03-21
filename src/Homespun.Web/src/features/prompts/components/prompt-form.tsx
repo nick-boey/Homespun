@@ -31,9 +31,17 @@ export interface PromptFormProps {
   onSubmit: (data: PromptFormData) => Promise<void>
   onCancel: () => void
   isSubmitting?: boolean
+  /** Hide the name field (for editing fixed prompts like Issue Agent prompts) */
+  hideNameField?: boolean
 }
 
-export function PromptForm({ prompt, onSubmit, onCancel, isSubmitting }: PromptFormProps) {
+export function PromptForm({
+  prompt,
+  onSubmit,
+  onCancel,
+  isSubmitting,
+  hideNameField,
+}: PromptFormProps) {
   const [showPreview, setShowPreview] = useState(false)
 
   const {
@@ -71,11 +79,13 @@ export function PromptForm({ prompt, onSubmit, onCancel, isSubmitting }: PromptF
 
   return (
     <form onSubmit={handleFormSubmit} className="space-y-6">
-      <div className="space-y-2">
-        <Label htmlFor="name">Name</Label>
-        <Input id="name" placeholder="My Custom Prompt" {...register('name')} />
-        {errors.name && <p className="text-destructive text-sm">{errors.name.message}</p>}
-      </div>
+      {!hideNameField && (
+        <div className="space-y-2">
+          <Label htmlFor="name">Name</Label>
+          <Input id="name" placeholder="My Custom Prompt" {...register('name')} />
+          {errors.name && <p className="text-destructive text-sm">{errors.name.message}</p>}
+        </div>
+      )}
 
       <div className="space-y-2">
         <Label htmlFor="mode">Mode</Label>

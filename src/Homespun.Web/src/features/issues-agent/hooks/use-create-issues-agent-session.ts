@@ -5,6 +5,10 @@ import { sessionsQueryKey } from '@/features/sessions'
 export interface CreateIssuesAgentSessionParams {
   projectId: string
   model?: string
+  /** Optional selected issue ID to focus on */
+  selectedIssueId?: string
+  /** Optional user instructions for the agent */
+  userInstructions?: string
 }
 
 export interface CreateIssuesAgentSessionResult {
@@ -24,6 +28,8 @@ export function useCreateIssuesAgentSession() {
         body: {
           projectId: params.projectId,
           model: params.model,
+          selectedIssueId: params.selectedIssueId,
+          userInstructions: params.userInstructions,
         },
       })
 

@@ -11,6 +11,7 @@ import { PromptCard } from './prompt-card'
 import { PromptForm } from './prompt-form'
 import { PromptCardSkeleton } from './prompt-card-skeleton'
 import { PromptsEmptyState } from './prompts-empty-state'
+import { IssueAgentPromptsSection } from './issue-agent-prompts-section'
 import { SessionMode } from '@/api'
 import type { AgentPrompt } from '@/api/generated/types.gen'
 
@@ -209,6 +210,13 @@ export function PromptsList({ projectId, isGlobal = false }: PromptsListProps) {
         </div>
       ) : (
         <PromptsEmptyState />
+      )}
+
+      {/* Issue Agent Prompts section - only shown on global prompts page */}
+      {isGlobal && (
+        <div className="border-t pt-6">
+          <IssueAgentPromptsSection />
+        </div>
       )}
     </div>
   )
