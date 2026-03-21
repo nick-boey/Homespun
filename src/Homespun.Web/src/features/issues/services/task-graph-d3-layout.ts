@@ -26,11 +26,21 @@ import {
 } from './task-graph-edge-router'
 
 /**
+ * Describes where an inline editor should be inserted in the layout.
+ */
+export interface InlineEditorPlacement {
+  /** The issue ID that the editor is positioned relative to */
+  referenceIssueId: string
+  /** Whether the editor appears above or below the reference issue */
+  position: 'above' | 'below'
+}
+
+/**
  * A node with computed D3 position data.
  */
 export interface D3TaskGraphNode {
   // Original render line data
-  type: 'issue' | 'pr' | 'separator' | 'loadMore'
+  type: 'issue' | 'pr' | 'separator' | 'loadMore' | 'inlineEditor'
   line: TaskGraphRenderLine
 
   // Computed positions
@@ -87,11 +97,24 @@ export function computeD3Layout(
   renderLines: TaskGraphRenderLine[],
   expandedIds: Set<string>,
   expandedHeights: Map<string, number>,
-  maxLanes: number
+  maxLanes: number,
+  editorPlacement?: InlineEditorPlacement | null
 ): D3LayoutResult {
   const nodes: D3TaskGraphNode[] = []
   const edges: D3TaskGraphEdge[] = []
   let cumulativeY = 0
+
+  const emitEditorNode = () => {
+    nodes.push({
+      type: 'inlineEditor',
+      line: renderLines[0], // Placeholder — not used for rendering
+      x: 0,
+      y: cumulativeY + ROW_HEIGHT / 2,
+      contentY: cumulativeY,
+      rowHeight: ROW_HEIGHT,
+    })
+    cumulativeY += ROW_HEIGHT
+  }
 
   for (const line of renderLines) {
     let rowHeight = ROW_HEIGHT
@@ -99,6 +122,14 @@ export function computeD3Layout(
     let y = 0
 
     if (isIssueRenderLine(line)) {
+      // Insert editor above this issue if requested
+      if (
+        editorPlacement?.position === 'above' &&
+        editorPlacement.referenceIssueId === line.issueId
+      ) {
+        emitEditorNode()
+      }
+
       // Check if expanded
       const isExpanded = expandedIds.has(line.issueId)
       const expandedHeight = isExpanded ? (expandedHeights.get(line.issueId) ?? 0) : 0
@@ -124,6 +155,17 @@ export function computeD3Layout(
 
       // Generate edges for this node
       generateEdgesForNode(edges, line, x, y, cumulativeY, nodeColor)
+
+      // Insert editor below this issue if requested (after advancing past this row)
+      if (
+        editorPlacement?.position === 'below' &&
+        editorPlacement.referenceIssueId === line.issueId
+      ) {
+        cumulativeY += rowHeight
+        emitEditorNode()
+        // Skip the normal cumulativeY advance at end of loop iteration
+        continue
+      }
     } else if (isPrRenderLine(line)) {
       x = getLaneCenterX(0)
       y = cumulativeY + ROW_HEIGHT / 2

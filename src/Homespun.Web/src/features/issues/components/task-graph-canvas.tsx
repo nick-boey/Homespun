@@ -8,13 +8,11 @@
 import { memo, useRef, useMemo, useEffect, useCallback, useState, useLayoutEffect } from 'react'
 import { cn } from '@/lib/utils'
 import { IssueType, IssueStatus, ExecutionMode, ClaudeSessionStatus } from '@/api'
-import { computeD3Layout, getContentX } from '../services/task-graph-d3-layout'
 import {
-  animateNodes,
-  animateEdges,
-  animateSvgHeight,
-  TRANSITION_DURATION,
-} from '../services/task-graph-animations'
+  computeD3Layout,
+  getContentX,
+  type InlineEditorPlacement,
+} from '../services/task-graph-d3-layout'
 import {
   TaskGraphIssueRowContent,
   TaskGraphIssueExpandedContent,
@@ -22,8 +20,15 @@ import {
   TaskGraphSeparatorContent,
   TaskGraphLoadMoreContent,
 } from './task-graph-row-content'
-import { ROW_HEIGHT, NODE_RADIUS } from './task-graph-svg'
+import { InlineIssueEditor } from './inline-issue-editor'
+import { ROW_HEIGHT, NODE_RADIUS, getTypeColor } from './task-graph-svg'
 import { HiddenParentIndicator } from './task-graph-svg-elements'
+import {
+  KeyboardEditMode,
+  EditCursorPosition,
+  type PendingNewIssue,
+  type InlineEditState,
+} from '../types'
 import type {
   TaskGraphRenderLine,
   TaskGraphIssueRenderLine,
@@ -48,6 +53,16 @@ export interface TaskGraphCanvasProps {
   searchQuery?: string
   moveSourceIssueId?: string | null
   isMoveOperationActive?: boolean
+  // Inline editing props
+  pendingNewIssue?: PendingNewIssue | null
+  pendingEdit?: InlineEditState | null
+  editMode?: KeyboardEditMode
+  onTitleChange?: (title: string) => void
+  onSave?: () => void
+  onSaveAndEdit?: () => void
+  onCancelEdit?: () => void
+  onIndent?: () => void
+  onUnindent?: () => void
   className?: string
 }
 
@@ -95,6 +110,15 @@ export const TaskGraphCanvas = memo(function TaskGraphCanvas({
   searchQuery,
   moveSourceIssueId,
   isMoveOperationActive,
+  pendingNewIssue,
+  pendingEdit,
+  editMode,
+  onTitleChange,
+  onSave,
+  onSaveAndEdit,
+  onCancelEdit,
+  onIndent,
+  onUnindent,
   className,
 }: TaskGraphCanvasProps) {
   const svgRef = useRef<SVGSVGElement>(null)
@@ -105,10 +129,19 @@ export const TaskGraphCanvas = memo(function TaskGraphCanvas({
   // Track expanded content heights
   const [expandedHeights, setExpandedHeights] = useState<Map<string, number>>(new Map())
 
+  // Compute editor placement from pending state
+  const editorPlacement = useMemo((): InlineEditorPlacement | null => {
+    if (editMode !== KeyboardEditMode.CreatingNew || !pendingNewIssue?.referenceIssueId) return null
+    return {
+      referenceIssueId: pendingNewIssue.referenceIssueId,
+      position: pendingNewIssue.isAbove ? 'above' : 'below',
+    }
+  }, [editMode, pendingNewIssue])
+
   // Compute layout with D3
   const layout = useMemo(() => {
-    return computeD3Layout(renderLines, expandedIds, expandedHeights, maxLanes)
-  }, [renderLines, expandedIds, expandedHeights, maxLanes])
+    return computeD3Layout(renderLines, expandedIds, expandedHeights, maxLanes, editorPlacement)
+  }, [renderLines, expandedIds, expandedHeights, maxLanes, editorPlacement])
 
   // Content X offset (after the SVG lanes)
   const contentX = useMemo(() => getContentX(maxLanes), [maxLanes])
@@ -126,23 +159,13 @@ export const TaskGraphCanvas = memo(function TaskGraphCanvas({
     })
   }, [])
 
-  // Animate edges and nodes when layout changes
+  // Track previous layout for future animation support.
+  // D3 data-join animations are disabled because they conflict with
+  // React's DOM ownership — D3's enter/exit selections corrupt the
+  // opacity of React-rendered elements. React handles all rendering;
+  // animations can be re-added with CSS transitions or React-based
+  // animation libraries.
   useEffect(() => {
-    if (!edgesRef.current || !nodesRef.current) return
-
-    const prevLayout = prevLayoutRef.current
-    const shouldAnimate = prevLayout !== null
-
-    if (shouldAnimate) {
-      // Animate to new layout
-      animateEdges(edgesRef.current, layout.edges, TRANSITION_DURATION)
-      animateNodes(nodesRef.current, layout.nodes, TRANSITION_DURATION)
-
-      if (svgRef.current && prevLayout.totalHeight !== layout.totalHeight) {
-        animateSvgHeight(svgRef.current, layout.totalHeight, TRANSITION_DURATION)
-      }
-    }
-
     prevLayoutRef.current = layout
   }, [layout])
 
@@ -286,11 +309,61 @@ export const TaskGraphCanvas = memo(function TaskGraphCanvas({
 
       {/* Layer 3: foreignObject content */}
       <g className="content-layer">
-        {layout.nodes.map((node) => {
+        {layout.nodes.map((node, nodeIndex) => {
+          if (node.type === 'inlineEditor') {
+            return (
+              <foreignObject
+                key={`content-inline-editor-${nodeIndex}`}
+                x={contentX}
+                y={node.contentY}
+                width={`calc(100% - ${contentX}px)`}
+                height={ROW_HEIGHT}
+              >
+                <div
+                  data-testid="task-graph-inline-create-row"
+                  className={cn(
+                    'flex items-center gap-2 transition-colors',
+                    'bg-muted ring-primary/50 ring-2'
+                  )}
+                  style={{ height: ROW_HEIGHT }}
+                >
+                  {/* Type badge */}
+                  <span
+                    className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium"
+                    style={{
+                      backgroundColor: `${getTypeColor(IssueType.TASK)}20`,
+                      color: getTypeColor(IssueType.TASK),
+                    }}
+                  >
+                    Task
+                  </span>
+
+                  {/* Inline editor */}
+                  <InlineIssueEditor
+                    title={pendingNewIssue?.title ?? ''}
+                    onTitleChange={onTitleChange ?? (() => {})}
+                    onSave={onSave ?? (() => {})}
+                    onSaveAndEdit={onSaveAndEdit ?? (() => {})}
+                    onCancel={onCancelEdit ?? (() => {})}
+                    onIndent={onIndent ?? (() => {})}
+                    onUnindent={onUnindent ?? (() => {})}
+                    placeholder="Enter new issue title..."
+                    cursorPosition={EditCursorPosition.Start}
+                    showParentIndicator={!!pendingNewIssue?.pendingChildId}
+                    showChildIndicator={!!pendingNewIssue?.pendingParentId}
+                    isAbove={pendingNewIssue?.isAbove}
+                  />
+                </div>
+              </foreignObject>
+            )
+          }
+
           if (node.type === 'issue') {
             const line = node.line as TaskGraphIssueRenderLine
             const isSelected = selectedIssueId === line.issueId
             const isExpanded = expandedIds.has(line.issueId)
+            const isEditing =
+              editMode === KeyboardEditMode.EditingExisting && pendingEdit?.issueId === line.issueId
 
             return (
               <foreignObject
@@ -302,26 +375,69 @@ export const TaskGraphCanvas = memo(function TaskGraphCanvas({
                 overflow="visible"
               >
                 <div>
-                  <TaskGraphIssueRowContent
-                    line={line}
-                    projectId={projectId}
-                    isSelected={isSelected}
-                    isExpanded={isExpanded}
-                    searchQuery={searchQuery}
-                    onToggleExpand={() => onToggleExpand?.(line.issueId)}
-                    onEdit={onEditIssue}
-                    onRunAgent={onRunAgent}
-                    onOpenSession={onOpenSession}
-                    onTypeChange={onTypeChange}
-                    onStatusChange={onStatusChange}
-                    onExecutionModeChange={onExecutionModeChange}
-                    isMoveSource={moveSourceIssueId === line.issueId}
-                    isMoveOperationActive={isMoveOperationActive}
-                    onClick={() => handleRowClick(line.issueId)}
-                  />
+                  {isEditing && pendingEdit ? (
+                    <div
+                      data-testid="task-graph-issue-row"
+                      data-issue-id={line.issueId}
+                      className={cn(
+                        'flex items-center gap-2 transition-colors',
+                        'bg-muted ring-primary/50 ring-2'
+                      )}
+                      style={{ height: ROW_HEIGHT }}
+                    >
+                      {/* Type badge */}
+                      <span
+                        className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium"
+                        style={{
+                          backgroundColor: `${getTypeColor(line.issueType)}20`,
+                          color: getTypeColor(line.issueType),
+                        }}
+                      >
+                        {IssueType[line.issueType] ?? 'Task'}
+                      </span>
+
+                      {/* ID */}
+                      <span className="text-muted-foreground shrink-0 font-mono text-xs">
+                        {line.issueId.substring(0, 6)}
+                      </span>
+
+                      {/* Inline editor */}
+                      <InlineIssueEditor
+                        title={pendingEdit.title}
+                        onTitleChange={onTitleChange ?? (() => {})}
+                        onSave={onSave ?? (() => {})}
+                        onSaveAndEdit={onSaveAndEdit ?? (() => {})}
+                        onCancel={onCancelEdit ?? (() => {})}
+                        onIndent={() => {}}
+                        onUnindent={() => {}}
+                        placeholder="Enter issue title..."
+                        cursorPosition={pendingEdit.cursorPosition}
+                      />
+                    </div>
+                  ) : (
+                    <TaskGraphIssueRowContent
+                      line={line}
+                      projectId={projectId}
+                      isSelected={isSelected}
+                      isExpanded={isExpanded}
+                      searchQuery={searchQuery}
+                      onToggleExpand={() => onToggleExpand?.(line.issueId)}
+                      onEdit={onEditIssue}
+                      onRunAgent={onRunAgent}
+                      onOpenSession={onOpenSession}
+                      onTypeChange={onTypeChange}
+                      onStatusChange={onStatusChange}
+                      onExecutionModeChange={onExecutionModeChange}
+                      isMoveSource={moveSourceIssueId === line.issueId}
+                      isMoveOperationActive={isMoveOperationActive}
+                      onClick={() => handleRowClick(line.issueId)}
+                      data-testid="task-graph-issue-row"
+                      data-issue-id={line.issueId}
+                    />
+                  )}
 
                   {/* Expanded content */}
-                  {isExpanded && (
+                  {isExpanded && !isEditing && (
                     <ExpandedContentMeasurer
                       line={line}
                       onHeightChange={(h) => handleExpandedHeightChange(line.issueId, h)}

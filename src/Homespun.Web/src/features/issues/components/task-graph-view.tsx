@@ -25,9 +25,6 @@ import { IssueRowSkeleton } from './issue-row-skeleton'
 import {
   computeLayout,
   isIssueRenderLine,
-  isPrRenderLine,
-  isSeparatorRenderLine,
-  isLoadMoreRenderLine,
   computeInheritedParentInfo,
   applyFilter,
   TaskGraphMarkerType,
@@ -42,15 +39,7 @@ import {
   type PendingNewIssue,
   type InlineEditState,
 } from '../types'
-import {
-  TaskGraphIssueRow,
-  TaskGraphPrRow,
-  TaskGraphSeparatorRow,
-  TaskGraphLoadMoreRow,
-  TaskGraphExpandedDetails,
-} from './task-graph-row'
-import { InlineIssueEditor } from './inline-issue-editor'
-import { ROW_HEIGHT, LANE_WIDTH, getTypeColor } from './task-graph-svg'
+import { TaskGraphCanvas } from './task-graph-canvas'
 
 export interface TaskGraphViewProps {
   projectId: string
@@ -139,7 +128,6 @@ export const TaskGraphView = memo(
     const { createIssue } = useCreateIssue({
       projectId,
       onSuccess: () => {
-        // Reset edit mode after successful creation
         setEditMode(KeyboardEditMode.Viewing)
         setPendingNewIssue(null)
       },
@@ -278,7 +266,7 @@ export const TaskGraphView = memo(
 
     // Handle row click
     const handleRowClick = useCallback(
-      (issueId: string) => {
+      (issueId: string | null) => {
         // If in creating mode, clicking elsewhere cancels
         if (editMode === KeyboardEditMode.CreatingNew) {
           setEditMode(KeyboardEditMode.Viewing)
@@ -286,7 +274,7 @@ export const TaskGraphView = memo(
         }
 
         // If a move operation is active and clicking a different issue, complete the move
-        if (moveOperation && moveSourceIssueId && issueId !== moveSourceIssueId) {
+        if (moveOperation && moveSourceIssueId && issueId && issueId !== moveSourceIssueId) {
           onMoveComplete?.(issueId)
           return
         }
@@ -456,15 +444,35 @@ export const TaskGraphView = memo(
     }, [pendingNewIssue])
 
     const handleSave = useCallback(async () => {
+      if (editMode === KeyboardEditMode.EditingExisting && pendingEdit) {
+        // Save existing issue title
+        if (!pendingEdit.title.trim()) {
+          handleCancelEdit()
+          return
+        }
+        if (pendingEdit.title.trim() !== pendingEdit.originalTitle) {
+          try {
+            await updateIssue({
+              issueId: pendingEdit.issueId,
+              data: { projectId, title: pendingEdit.title.trim() },
+            })
+          } catch {
+            // Keep edit mode on error
+          }
+        } else {
+          handleCancelEdit()
+        }
+        containerRef.current?.focus()
+        return
+      }
+
+      // Save new issue
       if (!pendingNewIssue?.title.trim()) {
         handleCancelEdit()
         return
       }
 
       try {
-        // Determine parent ID and sort order:
-        // - If Tab/Shift+Tab was pressed, use pendingParentId/pendingChildId (explicit hierarchy)
-        // - Otherwise, use inherited parent for sibling creation
         const hasExplicitHierarchy =
           pendingNewIssue.pendingParentId || pendingNewIssue.pendingChildId
         const parentIssueId = hasExplicitHierarchy
@@ -480,23 +488,50 @@ export const TaskGraphView = memo(
           childIssueId: pendingNewIssue.pendingChildId,
           parentSortOrder,
         })
-        // Return focus to container after save
         containerRef.current?.focus()
       } catch {
         // Keep edit mode on error so user can retry
       }
-    }, [pendingNewIssue, createIssue, handleCancelEdit])
+    }, [
+      editMode,
+      pendingEdit,
+      pendingNewIssue,
+      createIssue,
+      updateIssue,
+      projectId,
+      handleCancelEdit,
+    ])
 
     const handleSaveAndEdit = useCallback(async () => {
+      if (editMode === KeyboardEditMode.EditingExisting && pendingEdit) {
+        // Save existing issue title then navigate to edit
+        if (!pendingEdit.title.trim()) {
+          handleCancelEdit()
+          return
+        }
+        if (pendingEdit.title.trim() !== pendingEdit.originalTitle) {
+          try {
+            await updateIssue({
+              issueId: pendingEdit.issueId,
+              data: { projectId, title: pendingEdit.title.trim() },
+            })
+            onEditIssue?.(pendingEdit.issueId)
+          } catch {
+            // Keep edit mode on error
+          }
+        } else {
+          onEditIssue?.(pendingEdit.issueId)
+        }
+        return
+      }
+
+      // Save new issue then navigate to edit
       if (!pendingNewIssue?.title.trim()) {
         handleCancelEdit()
         return
       }
 
       try {
-        // Determine parent ID and sort order:
-        // - If Tab/Shift+Tab was pressed, use pendingParentId/pendingChildId (explicit hierarchy)
-        // - Otherwise, use inherited parent for sibling creation
         const hasExplicitHierarchy =
           pendingNewIssue.pendingParentId || pendingNewIssue.pendingChildId
         const parentIssueId = hasExplicitHierarchy
@@ -512,14 +547,22 @@ export const TaskGraphView = memo(
           childIssueId: pendingNewIssue.pendingChildId,
           parentSortOrder,
         })
-        // Navigate to edit page for description
         if (issue?.id) {
           onEditIssue?.(issue.id)
         }
       } catch {
         // Keep edit mode on error so user can retry
       }
-    }, [pendingNewIssue, createIssue, handleCancelEdit, onEditIssue])
+    }, [
+      editMode,
+      pendingEdit,
+      pendingNewIssue,
+      createIssue,
+      updateIssue,
+      projectId,
+      handleCancelEdit,
+      onEditIssue,
+    ])
 
     // ============================================================================
     // Inline Editing Handlers (for existing issues)
@@ -795,66 +838,6 @@ export const TaskGraphView = memo(
     // Inline Editor Row Rendering
     // ============================================================================
 
-    const renderInlineEditor = useCallback(
-      (_lane: number) => {
-        if (!pendingNewIssue) return null
-
-        // Compute SVG width for lane offset
-        const svgWidth = LANE_WIDTH * maxLanes + 12
-
-        return (
-          <div
-            data-testid="task-graph-inline-create-row"
-            className={cn(
-              'flex items-center gap-2 transition-colors',
-              'bg-muted ring-primary/50 ring-2'
-            )}
-            style={{ height: ROW_HEIGHT }}
-          >
-            {/* SVG placeholder for alignment */}
-            <div style={{ width: svgWidth, flexShrink: 0 }} />
-
-            {/* Type badge */}
-            <span
-              className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium"
-              style={{
-                backgroundColor: `${getTypeColor(IssueType.TASK)}20`,
-                color: getTypeColor(IssueType.TASK),
-              }}
-            >
-              Task
-            </span>
-
-            {/* Inline editor */}
-            <InlineIssueEditor
-              title={pendingNewIssue.title}
-              onTitleChange={handleTitleChange}
-              onSave={handleSave}
-              onSaveAndEdit={handleSaveAndEdit}
-              onCancel={handleCancelEdit}
-              onIndent={handleIndent}
-              onUnindent={handleUnindent}
-              placeholder="Enter new issue title..."
-              cursorPosition={EditCursorPosition.Start}
-              showParentIndicator={!!pendingNewIssue.pendingChildId}
-              showChildIndicator={!!pendingNewIssue.pendingParentId}
-              isAbove={pendingNewIssue.isAbove}
-            />
-          </div>
-        )
-      },
-      [
-        pendingNewIssue,
-        maxLanes,
-        handleTitleChange,
-        handleSave,
-        handleSaveAndEdit,
-        handleCancelEdit,
-        handleIndent,
-        handleUnindent,
-      ]
-    )
-
     // ============================================================================
     // Rendering
     // ============================================================================
@@ -909,190 +892,33 @@ export const TaskGraphView = memo(
         )}
         onKeyDown={handleKeyDown}
       >
-        {renderLines.map((line, index) => {
-          if (isIssueRenderLine(line)) {
-            const isSelected = selectedIssueId === line.issueId
-            const isExpanded = expandedIds.has(line.issueId)
-            const isEditing =
-              editMode === KeyboardEditMode.EditingExisting && pendingEdit?.issueId === line.issueId
-
-            // Check if we should insert inline editor ABOVE this issue
-            const shouldInsertAbove =
-              editMode === KeyboardEditMode.CreatingNew &&
-              pendingNewIssue?.isAbove &&
-              pendingNewIssue?.referenceIssueId === line.issueId
-
-            // Check if we should insert inline editor BELOW this issue
-            const shouldInsertBelow =
-              editMode === KeyboardEditMode.CreatingNew &&
-              !pendingNewIssue?.isAbove &&
-              pendingNewIssue?.referenceIssueId === line.issueId
-
-            return (
-              <div key={line.issueId}>
-                {/* Insert inline editor ABOVE if creating above this issue */}
-                {shouldInsertAbove && renderInlineEditor(line.lane)}
-
-                {/* Issue row (or inline edit if editing existing) */}
-                {isEditing && pendingEdit ? (
-                  <div
-                    data-testid="task-graph-issue-row"
-                    data-issue-id={line.issueId}
-                    className={cn(
-                      'flex items-center gap-2 transition-colors',
-                      'bg-muted ring-primary/50 ring-2'
-                    )}
-                    style={{ height: ROW_HEIGHT }}
-                  >
-                    {/* SVG placeholder for alignment */}
-                    <div style={{ width: LANE_WIDTH * maxLanes + 12, flexShrink: 0 }} />
-
-                    {/* Type badge */}
-                    <span
-                      className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium"
-                      style={{
-                        backgroundColor: `${getTypeColor(IssueType.TASK)}20`,
-                        color: getTypeColor(IssueType.TASK),
-                      }}
-                    >
-                      Task
-                    </span>
-
-                    {/* ID */}
-                    <span className="text-muted-foreground shrink-0 font-mono text-xs">
-                      {line.issueId.substring(0, 6)}
-                    </span>
-
-                    {/* Inline editor */}
-                    <InlineIssueEditor
-                      title={pendingEdit.title}
-                      onTitleChange={handleTitleChange}
-                      onSave={async () => {
-                        if (!pendingEdit.title.trim()) {
-                          handleCancelEdit()
-                          return
-                        }
-                        // Only save if title changed
-                        if (pendingEdit.title.trim() !== pendingEdit.originalTitle) {
-                          try {
-                            await updateIssue({
-                              issueId: line.issueId,
-                              data: { projectId, title: pendingEdit.title.trim() },
-                            })
-                          } catch {
-                            // Keep edit mode on error
-                          }
-                        } else {
-                          handleCancelEdit()
-                        }
-                        containerRef.current?.focus()
-                      }}
-                      onSaveAndEdit={async () => {
-                        if (!pendingEdit.title.trim()) {
-                          handleCancelEdit()
-                          return
-                        }
-                        // Save title if changed, then navigate to edit
-                        if (pendingEdit.title.trim() !== pendingEdit.originalTitle) {
-                          try {
-                            await updateIssue({
-                              issueId: line.issueId,
-                              data: { projectId, title: pendingEdit.title.trim() },
-                            })
-                            onEditIssue?.(line.issueId)
-                          } catch {
-                            // Keep edit mode on error
-                          }
-                        } else {
-                          onEditIssue?.(line.issueId)
-                        }
-                      }}
-                      onCancel={handleCancelEdit}
-                      onIndent={() => {}}
-                      onUnindent={() => {}}
-                      placeholder="Enter issue title..."
-                      cursorPosition={pendingEdit.cursorPosition}
-                    />
-                  </div>
-                ) : (
-                  <TaskGraphIssueRow
-                    ref={(el) => {
-                      if (el) {
-                        rowRefs.current.set(line.issueId, el)
-                      } else {
-                        rowRefs.current.delete(line.issueId)
-                      }
-                    }}
-                    line={line}
-                    maxLanes={maxLanes}
-                    projectId={projectId}
-                    isSelected={isSelected}
-                    isExpanded={isExpanded}
-                    searchQuery={searchQuery}
-                    onToggleExpand={() => toggleExpanded(line.issueId)}
-                    onEdit={onEditIssue}
-                    onRunAgent={onRunAgent}
-                    onOpenSession={onOpenSession}
-                    onClick={() => handleRowClick(line.issueId)}
-                    onTypeChange={handleTypeChange}
-                    onStatusChange={handleStatusChange}
-                    onExecutionModeChange={handleExecutionModeChange}
-                    isMoveSource={moveSourceIssueId === line.issueId}
-                    isMoveOperationActive={!!moveOperation}
-                    aria-rowindex={index + 1}
-                    data-testid="task-graph-issue-row"
-                    data-issue-id={line.issueId}
-                  />
-                )}
-
-                {/* Expanded details */}
-                {isExpanded && !isEditing && (
-                  <TaskGraphExpandedDetails
-                    line={line}
-                    maxLanes={maxLanes}
-                    onEdit={onEditIssue}
-                    onRunAgent={onRunAgent}
-                    onOpenSession={onOpenSession}
-                    onClose={() => toggleExpanded(line.issueId)}
-                  />
-                )}
-
-                {/* Insert inline editor BELOW if creating below this issue */}
-                {shouldInsertBelow && renderInlineEditor(line.lane)}
-              </div>
-            )
-          }
-
-          if (isPrRenderLine(line)) {
-            return (
-              <TaskGraphPrRow
-                key={`pr-${line.prNumber}`}
-                line={line}
-                maxLanes={maxLanes}
-                aria-rowindex={index + 1}
-              />
-            )
-          }
-
-          if (isSeparatorRenderLine(line)) {
-            return <TaskGraphSeparatorRow key={`separator-${index}`} maxLanes={maxLanes} />
-          }
-
-          if (isLoadMoreRenderLine(line)) {
-            return (
-              <TaskGraphLoadMoreRow
-                key="load-more"
-                maxLanes={maxLanes}
-                onLoadMore={() => {
-                  // TODO: Implement load more PRs
-                  console.log('Load more PRs')
-                }}
-              />
-            )
-          }
-
-          return null
-        })}
+        <TaskGraphCanvas
+          renderLines={renderLines}
+          maxLanes={maxLanes}
+          projectId={projectId}
+          expandedIds={expandedIds}
+          selectedIssueId={selectedIssueId}
+          onSelectIssue={handleRowClick}
+          onToggleExpand={toggleExpanded}
+          onEditIssue={onEditIssue}
+          onRunAgent={onRunAgent}
+          onOpenSession={onOpenSession}
+          onTypeChange={handleTypeChange}
+          onStatusChange={handleStatusChange}
+          onExecutionModeChange={handleExecutionModeChange}
+          searchQuery={searchQuery}
+          moveSourceIssueId={moveSourceIssueId}
+          isMoveOperationActive={!!moveOperation}
+          pendingNewIssue={pendingNewIssue}
+          pendingEdit={pendingEdit}
+          editMode={editMode}
+          onTitleChange={handleTitleChange}
+          onSave={handleSave}
+          onSaveAndEdit={handleSaveAndEdit}
+          onCancelEdit={handleCancelEdit}
+          onIndent={handleIndent}
+          onUnindent={handleUnindent}
+        />
 
         {/* Search match count indicator (hidden, for accessibility) */}
         {searchQuery && (

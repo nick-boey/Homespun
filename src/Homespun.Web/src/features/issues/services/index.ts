@@ -34,6 +34,7 @@ export {
   type D3TaskGraphNode,
   type D3TaskGraphEdge,
   type D3LayoutResult,
+  type InlineEditorPlacement,
 } from './task-graph-d3-layout'
 
 // Edge routing for orthogonal paths
