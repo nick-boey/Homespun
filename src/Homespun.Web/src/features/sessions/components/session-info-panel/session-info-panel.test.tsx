@@ -84,19 +84,30 @@ vi.mock('@/components/ui/tabs', () => ({
       {children}
     </div>
   ),
-  TabsList: ({ children }: { children?: React.ReactNode }) => (
-    <div data-testid="tabs-list">{children}</div>
+  TabsList: ({
+    children,
+    className,
+  }: {
+    children?: React.ReactNode
+    className?: string
+    variant?: string
+  }) => (
+    <div data-testid="tabs-list" className={className}>
+      {children}
+    </div>
   ),
   TabsTrigger: ({
     children,
     value,
     onClick,
+    className,
   }: {
     children?: React.ReactNode
     value: string
     onClick?: () => void
+    className?: string
   }) => (
-    <button data-testid={`tab-trigger-${value}`} onClick={onClick}>
+    <button data-testid={`tab-trigger-${value}`} onClick={onClick} className={className}>
       {children}
     </button>
   ),
@@ -196,6 +207,32 @@ describe('SessionInfoPanel', () => {
       expect(screen.getByTestId('tab-trigger-plans')).toBeInTheDocument()
       expect(screen.getByTestId('tab-trigger-branch')).toBeInTheDocument()
       expect(screen.getByTestId('tab-trigger-sessions')).toBeInTheDocument()
+    })
+
+    it('has horizontal scroll enabled on tabs list', () => {
+      render(<SessionInfoPanel session={mockSession} isOpen={true} onOpenChange={() => {}} />)
+
+      const tabsList = screen.getByTestId('tabs-list')
+      expect(tabsList).toHaveClass('overflow-x-auto')
+      expect(tabsList).toHaveClass('scrollbar-thin')
+    })
+
+    it('prevents tab triggers from shrinking', () => {
+      render(<SessionInfoPanel session={mockSession} isOpen={true} onOpenChange={() => {}} />)
+
+      const tabTriggers = [
+        screen.getByTestId('tab-trigger-issue'),
+        screen.getByTestId('tab-trigger-pr'),
+        screen.getByTestId('tab-trigger-todos'),
+        screen.getByTestId('tab-trigger-files'),
+        screen.getByTestId('tab-trigger-plans'),
+        screen.getByTestId('tab-trigger-branch'),
+        screen.getByTestId('tab-trigger-sessions'),
+      ]
+
+      tabTriggers.forEach((trigger) => {
+        expect(trigger).toHaveClass('shrink-0')
+      })
     })
 
     it('shows issue tab by default', () => {

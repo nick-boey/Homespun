@@ -54,14 +54,31 @@ export function SessionInfoPanel({
 
   const content = (
     <Tabs defaultValue="issue" className="flex h-full flex-col">
-      <TabsList variant="line" className="w-full justify-start border-b px-4">
-        <TabsTrigger value="issue">Issue</TabsTrigger>
-        <TabsTrigger value="pr">PR</TabsTrigger>
-        <TabsTrigger value="todos">To-do's</TabsTrigger>
-        <TabsTrigger value="files">Files</TabsTrigger>
-        <TabsTrigger value="plans">Plans</TabsTrigger>
-        <TabsTrigger value="branch">Branch</TabsTrigger>
-        <TabsTrigger value="sessions">Sessions</TabsTrigger>
+      <TabsList
+        variant="line"
+        className="scrollbar-thin scrollbar-track-transparent scrollbar-thumb-muted w-full justify-start overflow-x-auto border-b px-4"
+      >
+        <TabsTrigger value="issue" className="shrink-0">
+          Issue
+        </TabsTrigger>
+        <TabsTrigger value="pr" className="shrink-0">
+          PR
+        </TabsTrigger>
+        <TabsTrigger value="todos" className="shrink-0">
+          To-do's
+        </TabsTrigger>
+        <TabsTrigger value="files" className="shrink-0">
+          Files
+        </TabsTrigger>
+        <TabsTrigger value="plans" className="shrink-0">
+          Plans
+        </TabsTrigger>
+        <TabsTrigger value="branch" className="shrink-0">
+          Branch
+        </TabsTrigger>
+        <TabsTrigger value="sessions" className="shrink-0">
+          Sessions
+        </TabsTrigger>
       </TabsList>
 
       <div className="flex-1 overflow-y-auto">
