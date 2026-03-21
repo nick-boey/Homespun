@@ -1,5 +1,6 @@
-using System.Text.Json;
 using Fleece.Core.Models;
+using Fleece.Core.Serialization;
+using Fleece.Core.Services;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Fleece.Services;
 using Homespun.Features.Git;
@@ -68,14 +69,19 @@ public class FleeceChangeDetectionServiceTests
             });
     }
 
-    private void CreateFleeceIssueOnDisk(string basePath, Issue issue)
+    private async Task CreateFleeceIssueOnDiskAsync(string basePath, Issue issue)
     {
-        var fleeceDir = Path.Combine(basePath, ".fleece");
-        Directory.CreateDirectory(fleeceDir);
+        var serializer = new JsonlSerializer();
+        var schemaValidator = new SchemaValidator();
+        var storage = new JsonlStorageService(basePath, serializer, schemaValidator);
 
-        var issueFile = Path.Combine(fleeceDir, "issues_test.jsonl");
-        var json = JsonSerializer.Serialize(issue, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
-        File.AppendAllText(issueFile, json + Environment.NewLine);
+        await storage.EnsureDirectoryExistsAsync(CancellationToken.None);
+
+        // Load existing issues and append the new one
+        var existingIssues = await storage.LoadIssuesAsync(CancellationToken.None);
+        var allIssues = existingIssues.ToList();
+        allIssues.Add(issue);
+        await storage.SaveIssuesAsync(allIssues, CancellationToken.None);
     }
 
     [Test]
@@ -103,7 +109,7 @@ public class FleeceChangeDetectionServiceTests
             Description = "A new feature",
             LastUpdate = DateTimeOffset.UtcNow
         };
-        CreateFleeceIssueOnDisk(clonePath, newIssue);
+        await CreateFleeceIssueOnDiskAsync(clonePath, newIssue);
 
         SetupProjectAndSession(projectId, sessionId, mainPath, clonePath);
 
@@ -152,7 +158,7 @@ public class FleeceChangeDetectionServiceTests
         };
 
         // Create the modified issue in clone
-        CreateFleeceIssueOnDisk(clonePath, modifiedIssue);
+        await CreateFleeceIssueOnDiskAsync(clonePath, modifiedIssue);
 
         SetupProjectAndSession(projectId, sessionId, mainPath, clonePath);
 
@@ -238,7 +244,7 @@ public class FleeceChangeDetectionServiceTests
         };
 
         // Create the deleted issue in clone
-        CreateFleeceIssueOnDisk(clonePath, deletedIssue);
+        await CreateFleeceIssueOnDiskAsync(clonePath, deletedIssue);
 
         SetupProjectAndSession(projectId, sessionId, mainPath, clonePath);
 
@@ -278,7 +284,7 @@ public class FleeceChangeDetectionServiceTests
         };
 
         // Create the same issue in clone
-        CreateFleeceIssueOnDisk(clonePath, issue);
+        await CreateFleeceIssueOnDiskAsync(clonePath, issue);
 
         SetupProjectAndSession(projectId, sessionId, mainPath, clonePath);
 
@@ -331,6 +337,48 @@ public class FleeceChangeDetectionServiceTests
     }
 
     [Test]
+    [TestCase(IssueStatus.Progress, Description = "Status serialized as 'progress' should be parsed")]
+    [TestCase(IssueStatus.Review, Description = "Status serialized as 'review' should be parsed")]
+    [TestCase(IssueStatus.Complete, Description = "Status serialized as 'complete' should be parsed")]
+    public async Task DetectChangesAsync_WhenIssueHasStringEnumStatus_ParsesCorrectly(IssueStatus status)
+    {
+        // Arrange
+        var projectId = "proj-1";
+        var sessionId = "session-1";
+        var mainPath = Path.Combine(_tempDir, "main");
+        var clonePath = Path.Combine(_tempDir, "clone");
+
+        Directory.CreateDirectory(mainPath);
+        Directory.CreateDirectory(clonePath);
+
+        // Create an issue with the specified status using JsonlSerializer (writes string enums)
+        var issue = new Issue
+        {
+            Id = "status-test",
+            Title = "Status Test Issue",
+            Status = status,
+            Type = IssueType.Task,
+            LastUpdate = DateTimeOffset.UtcNow
+        };
+        await CreateFleeceIssueOnDiskAsync(clonePath, issue);
+
+        SetupProjectAndSession(projectId, sessionId, mainPath, clonePath);
+
+        // Main branch has no issues
+        _fleeceServiceMock.Setup(x => x.ListIssuesAsync(mainPath, null, null, null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<Issue>());
+
+        // Act - This should not throw a JsonException when parsing string enum values
+        var result = await _service.DetectChangesAsync(projectId, sessionId);
+
+        // Assert
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].ChangeType, Is.EqualTo(ChangeType.Created));
+        Assert.That(result[0].IssueId, Is.EqualTo("status-test"));
+        Assert.That(result[0].ModifiedIssue!.Status, Is.EqualTo(status));
+    }
+
+    [Test]
     public async Task DetectChangesAsync_WithMultipleChanges_ReturnsAllChanges()
     {
         // Arrange
@@ -370,8 +418,8 @@ public class FleeceChangeDetectionServiceTests
         };
 
         // Create issues in clone
-        CreateFleeceIssueOnDisk(clonePath, modifiedIssue);
-        CreateFleeceIssueOnDisk(clonePath, newIssue);
+        await CreateFleeceIssueOnDiskAsync(clonePath, modifiedIssue);
+        await CreateFleeceIssueOnDiskAsync(clonePath, newIssue);
 
         SetupProjectAndSession(projectId, sessionId, mainPath, clonePath);
 

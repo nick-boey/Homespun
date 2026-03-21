@@ -1,5 +1,6 @@
-using System.Text.Json;
 using Fleece.Core.Models;
+using Fleece.Core.Serialization;
+using Fleece.Core.Services;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Git;
 using Homespun.Features.Projects;
@@ -30,7 +31,6 @@ public class FleeceChangeDetectionService : IFleeceChangeDetectionService
     private readonly IGitCloneService _cloneService;
     private readonly IClaudeSessionService _sessionService;
     private readonly IFleeceService _fleeceService;
-    private readonly JsonSerializerOptions _jsonOptions;
     private readonly ILogger<FleeceChangeDetectionService> _logger;
 
     public FleeceChangeDetectionService(
@@ -44,7 +44,6 @@ public class FleeceChangeDetectionService : IFleeceChangeDetectionService
         _cloneService = cloneService;
         _sessionService = sessionService;
         _fleeceService = fleeceService;
-        _jsonOptions = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
         _logger = logger;
     }
 
@@ -175,37 +174,24 @@ public class FleeceChangeDetectionService : IFleeceChangeDetectionService
             return [];
         }
 
-        var issues = new List<Issue>();
-        var issueFiles = Directory.GetFiles(fleeceDir, "issues_*.jsonl");
-
-        _logger.LogDebug(
-            "Found {FileCount} issue files in {FleecePath}: {Files}",
-            issueFiles.Length, fleeceDir, string.Join(", ", issueFiles.Select(Path.GetFileName)));
-
-        foreach (var file in issueFiles)
+        try
         {
-            try
-            {
-                var lines = await File.ReadAllLinesAsync(file, cancellationToken);
-                foreach (var line in lines)
-                {
-                    if (string.IsNullOrWhiteSpace(line))
-                        continue;
+            var serializer = new JsonlSerializer();
+            var schemaValidator = new SchemaValidator();
+            var storage = new JsonlStorageService(path, serializer, schemaValidator);
+            var issues = await storage.LoadIssuesAsync(cancellationToken);
 
-                    var issue = JsonSerializer.Deserialize<Issue>(line, _jsonOptions);
-                    if (issue != null)
-                    {
-                        issues.Add(issue);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error reading issue file {File}", file);
-            }
+            _logger.LogDebug(
+                "Loaded {IssueCount} issues from {FleecePath}",
+                issues.Count, fleeceDir);
+
+            return issues.ToList();
         }
-
-        return issues;
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading issues from {Path}", path);
+            return [];
+        }
     }
 
     private List<FieldChangeDto> GetFieldChanges(Issue original, Issue modified)
