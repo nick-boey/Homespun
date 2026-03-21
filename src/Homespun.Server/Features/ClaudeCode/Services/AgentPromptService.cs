@@ -65,6 +65,15 @@ public partial class AgentPromptService : IAgentPromptService
             .FirstOrDefault(p => p.SessionType == sessionType);
     }
 
+    public IReadOnlyList<AgentPrompt> GetIssueAgentPrompts()
+    {
+        return _dataStore.AgentPrompts
+            .Where(p => p.SessionType == SessionType.IssueModify
+                     || p.SessionType == SessionType.IssueAgentSystem)
+            .ToList()
+            .AsReadOnly();
+    }
+
     public AgentPrompt? GetPrompt(string id)
     {
         return _dataStore.GetAgentPrompt(id);
@@ -129,6 +138,8 @@ public partial class AgentPromptService : IAgentPromptService
                 "branch" => context.Branch,
                 "type" => context.Type,
                 "context" => context.Context ?? string.Empty,
+                "selectedissueid" => context.SelectedIssueId ?? string.Empty,
+                "userprompt" => context.UserPrompt ?? string.Empty,
                 _ => match.Value // Keep unknown placeholders as-is
             };
         });
@@ -181,6 +192,18 @@ public partial class AgentPromptService : IAgentPromptService
                 GetDefaultIssueModifyMessage(),
                 SessionMode.Build,
                 SessionType.IssueModify);
+        }
+
+        // Create IssueAgentSystem prompt if it doesn't exist
+        var hasIssueAgentSystem = _dataStore.AgentPrompts
+            .Any(p => p.Name.Equals("IssueAgentSystem", StringComparison.OrdinalIgnoreCase));
+        if (!hasIssueAgentSystem)
+        {
+            await CreateSessionTypePromptAsync(
+                "IssueAgentSystem",
+                GetDefaultIssueAgentSystemMessage(),
+                SessionMode.Build,
+                SessionType.IssueAgentSystem);
         }
     }
 
@@ -267,28 +290,74 @@ public partial class AgentPromptService : IAgentPromptService
         return """
             ## Issue Modification Request
 
-            You are an agent designed to modify Fleece issues based on user instructions.
-
-            IMPORTANT CONSTRAINTS:
-            - You may ONLY use the Fleece CLI tool to make modifications
-            - Do NOT write any files in the repository
-            - Do NOT make any code changes
-            - Focus solely on issue modifications using fleece commands
-
             {{#if selectedIssueId}}
             **Selected Issue:** {{selectedIssueId}}
+
+            First, use `fleece show {{selectedIssueId}} --json` to understand the current state of this issue.
             {{/if}}
 
-            Available fleece commands:
-            - fleece list --oneline - List all issues
-            - fleece show <id> --json - Show issue details
-            - fleece edit <id> -t <title> -s <status> -d <description> - Edit issue
-            - fleece create -t <title> -s <status> -y <type> - Create new issue
-            - fleece edit <id> --parent-issues <parent>:<order> - Set parent hierarchy
-            - fleece list --tree - View issue hierarchy
-            - fleece list --next - View task graph
+            **User Instructions:** {{userPrompt}}
 
-            User request: {{userPrompt}}
+            Please carry out the user's instructions using the fleece CLI commands.
+            """;
+    }
+
+    private static string GetDefaultIssueAgentSystemMessage()
+    {
+        return """
+            # Issue Agent System Prompt
+
+            You are an agent specialized in managing Fleece issues. Your role is to help users organize, modify, and maintain their issue tracking.
+
+            ## CONSTRAINTS
+
+            **IMPORTANT: You must follow these constraints strictly:**
+
+            1. **Only use the Fleece CLI** - All modifications must be done through `fleece` commands
+            2. **No file modifications** - Do NOT write, create, or modify any files in the repository
+            3. **No code changes** - Do NOT make any code changes or edits to source files
+            4. **Focus on issues only** - Your sole purpose is issue management
+
+            ## AVAILABLE COMMANDS
+
+            ### Viewing Issues
+            - `fleece list --oneline` - List all issues in compact format
+            - `fleece list --tree` - View issues as parent-child hierarchy
+            - `fleece list --next` - View task graph showing execution order
+            - `fleece show <id> --json` - Show full details of a specific issue
+
+            ### Modifying Issues
+            - `fleece edit <id> -t <title>` - Update issue title
+            - `fleece edit <id> -s <status>` - Update status (open, progress, review, complete, archived, closed)
+            - `fleece edit <id> -d <description>` - Update description
+            - `fleece edit <id> -y <type>` - Update type (task, bug, chore, feature)
+            - `fleece edit <id> --parent-issues <parent-id>:<lex-order>` - Set parent relationship
+
+            ### Creating Issues
+            - `fleece create -t <title> -s <status> -y <type>` - Create new issue
+            - `fleece create -t <title> -y <type> --parent-issues <parent-id>:<lex-order>` - Create as child of existing issue
+
+            ## BEST PRACTICES
+
+            1. **Always verify first** - Before modifying an issue, use `fleece show <id> --json` to understand its current state
+            2. **Use the hierarchy** - Break down large tasks into sub-tasks using parent-child relationships
+            3. **Status workflow** - Issues typically flow: open → progress → review → complete
+            4. **Be precise** - Make targeted changes based on user instructions
+            5. **Confirm changes** - After making changes, verify with `fleece show <id> --json`
+
+            ## ISSUE TYPES
+            - `task` - General work items
+            - `bug` - Defects or issues to fix
+            - `feature` - New functionality
+            - `chore` - Maintenance or housekeeping
+
+            ## STATUS VALUES
+            - `open` - Not yet started
+            - `progress` - Currently being worked on
+            - `review` - Ready for review
+            - `complete` - Finished
+            - `archived` - No longer relevant
+            - `closed` - Abandoned or won't fix
             """;
     }
 }

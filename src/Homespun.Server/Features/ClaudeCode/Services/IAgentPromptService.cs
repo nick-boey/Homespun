@@ -72,4 +72,10 @@ public interface IAgentPromptService
     /// <param name="sessionType">The session type to find a prompt for.</param>
     /// <returns>The prompt for the session type, or null if not found.</returns>
     AgentPrompt? GetPromptBySessionType(SessionType sessionType);
+
+    /// <summary>
+    /// Gets all issue agent prompts (IssueModify and IssueAgentSystem).
+    /// These are specialized prompts for the Issues Agent workflow.
+    /// </summary>
+    IReadOnlyList<AgentPrompt> GetIssueAgentPrompts();
 }

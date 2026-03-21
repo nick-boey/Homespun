@@ -16,7 +16,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
 import { Loader } from '@/components/ui/loader'
+import { useIssue } from '@/features/issues/hooks/use-issue'
 import {
   useCreateIssuesAgentSession,
   type CreateIssuesAgentSessionResult,
@@ -37,6 +40,8 @@ export interface IssuesAgentDialogProps {
   onOpenChange: (open: boolean) => void
   /** The project ID */
   projectId: string
+  /** Optional selected issue ID to focus on */
+  selectedIssueId?: string | null
   /** Callback when session is created */
   onSessionCreated?: (result: CreateIssuesAgentSessionResult) => void
   /** Callback when there's an error */
@@ -51,16 +56,34 @@ export function IssuesAgentDialog({
   open,
   onOpenChange,
   projectId,
+  selectedIssueId,
   onSessionCreated,
   onError,
 }: IssuesAgentDialogProps) {
   const navigate = useNavigate()
   const createSession = useCreateIssuesAgentSession()
 
+  // Fetch selected issue if provided
+  const { issue, isLoading: issueLoading } = useIssue(selectedIssueId ?? '', projectId)
+
   // Model selection state
   const [selectedModel, setSelectedModel] = useState<string>(() => {
     return localStorage.getItem(MODEL_STORAGE_KEY) ?? MODELS[0].value // Default to Sonnet
   })
+
+  // User instructions state
+  const [userInstructions, setUserInstructions] = useState('')
+
+  // Wrap onOpenChange to clear instructions when dialog closes
+  const handleOpenChange = useCallback(
+    (newOpen: boolean) => {
+      if (!newOpen) {
+        setUserInstructions('')
+      }
+      onOpenChange(newOpen)
+    },
+    [onOpenChange]
+  )
 
   // Persist model selection
   useEffect(() => {
@@ -72,17 +95,29 @@ export function IssuesAgentDialog({
       const result = await createSession.mutateAsync({
         projectId,
         model: selectedModel,
+        selectedIssueId: selectedIssueId ?? undefined,
+        userInstructions: userInstructions.trim() || undefined,
       })
 
       onSessionCreated?.(result)
 
       // Navigate to the session
       navigate({ to: '/sessions/$sessionId', params: { sessionId: result.sessionId } })
-      onOpenChange(false)
+      handleOpenChange(false)
     } catch (e) {
       onError?.(e as Error)
     }
-  }, [createSession, projectId, selectedModel, onSessionCreated, navigate, onOpenChange, onError])
+  }, [
+    createSession,
+    projectId,
+    selectedModel,
+    selectedIssueId,
+    userInstructions,
+    onSessionCreated,
+    navigate,
+    handleOpenChange,
+    onError,
+  ])
 
   // Don't render dialog content when closed
   if (!open) {
@@ -90,7 +125,7 @@ export function IssuesAgentDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -104,6 +139,48 @@ export function IssuesAgentDialog({
         </DialogHeader>
 
         <div className="space-y-4 py-4">
+          {/* Selected issue display */}
+          {selectedIssueId && (
+            <div className="bg-muted/50 rounded-md border p-3">
+              <div className="text-muted-foreground mb-1 text-xs font-medium">Selected Issue</div>
+              {issueLoading ? (
+                <div className="flex items-center gap-2">
+                  <Loader variant="circular" size="sm" />
+                  <span className="text-muted-foreground text-sm">Loading...</span>
+                </div>
+              ) : issue ? (
+                <div className="flex items-start gap-2">
+                  <code className="bg-muted rounded px-1.5 py-0.5 font-mono text-xs">
+                    {issue.id}
+                  </code>
+                  <span className="text-sm">{issue.title}</span>
+                </div>
+              ) : (
+                <div className="text-muted-foreground text-sm">Issue not found</div>
+              )}
+            </div>
+          )}
+
+          {/* Instructions textarea */}
+          <div className="space-y-2">
+            <Label htmlFor="instructions" className="text-sm font-medium">
+              Instructions
+            </Label>
+            <Textarea
+              id="instructions"
+              placeholder="What would you like the agent to do? (optional)"
+              value={userInstructions}
+              onChange={(e) => setUserInstructions(e.target.value)}
+              disabled={createSession.isPending}
+              className="min-h-[80px] resize-none"
+            />
+            <p className="text-muted-foreground text-xs">
+              {userInstructions.trim()
+                ? 'The agent will start with these instructions.'
+                : 'Leave empty to start an interactive session.'}
+            </p>
+          </div>
+
           {/* Main controls row */}
           <div className="flex items-center gap-2">
             {/* Model selector */}

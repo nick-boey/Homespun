@@ -47,6 +47,16 @@ public partial class MockAgentPromptService : IAgentPromptService
             .FirstOrDefault(p => p.SessionType == sessionType);
     }
 
+    public IReadOnlyList<AgentPrompt> GetIssueAgentPrompts()
+    {
+        _logger.LogDebug("[Mock] GetIssueAgentPrompts");
+        return _dataStore.AgentPrompts
+            .Where(p => p.SessionType == SessionType.IssueModify
+                     || p.SessionType == SessionType.IssueAgentSystem)
+            .ToList()
+            .AsReadOnly();
+    }
+
     public IReadOnlyList<AgentPrompt> GetPromptsForProject(string projectId)
     {
         _logger.LogDebug("[Mock] GetPromptsForProject {ProjectId}", projectId);
@@ -149,6 +159,9 @@ public partial class MockAgentPromptService : IAgentPromptService
                 "description" => context.Description ?? string.Empty,
                 "branch" => context.Branch,
                 "type" => context.Type,
+                "context" => context.Context ?? string.Empty,
+                "selectedissueid" => context.SelectedIssueId ?? string.Empty,
+                "userprompt" => context.UserPrompt ?? string.Empty,
                 _ => match.Value // Keep unknown placeholders as-is
             };
         });

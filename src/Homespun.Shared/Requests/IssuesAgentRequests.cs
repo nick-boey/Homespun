@@ -18,6 +18,18 @@ public class CreateIssuesAgentSessionRequest
     /// If not specified, defaults to project's default model.
     /// </summary>
     public string? Model { get; set; }
+
+    /// <summary>
+    /// Optional selected issue ID to focus on.
+    /// When provided, the prompt will be rendered with this issue's context.
+    /// </summary>
+    public string? SelectedIssueId { get; set; }
+
+    /// <summary>
+    /// Optional user instructions for the agent.
+    /// When provided, renders the IssueModify prompt and sends as initial message.
+    /// </summary>
+    public string? UserInstructions { get; set; }
 }
 
 /// <summary>

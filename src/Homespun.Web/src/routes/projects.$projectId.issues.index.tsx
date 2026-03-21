@@ -364,6 +364,7 @@ function IssuesList() {
         open={issuesAgentOpen}
         onOpenChange={setIssuesAgentOpen}
         projectId={projectId}
+        selectedIssueId={selectedIssueId}
       />
     </div>
   )

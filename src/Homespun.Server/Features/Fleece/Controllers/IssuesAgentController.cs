@@ -118,6 +118,36 @@ public class IssuesAgentController(
         // Set session type to IssueModify
         session.SessionType = SessionType.IssueModify;
 
+        // If user instructions are provided, render the IssueModify prompt and send as initial message
+        if (!string.IsNullOrWhiteSpace(request.UserInstructions))
+        {
+            var promptContext = new PromptContext
+            {
+                SelectedIssueId = request.SelectedIssueId,
+                UserPrompt = request.UserInstructions
+            };
+
+            var renderedPrompt = agentPromptService.RenderTemplate(prompt?.InitialMessage, promptContext);
+
+            if (!string.IsNullOrWhiteSpace(renderedPrompt))
+            {
+                logger.LogInformation("Sending initial message to Issues Agent session {SessionId}", session.Id);
+
+                // Send the initial message asynchronously (fire and forget)
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await sessionService.SendMessageAsync(session.Id, renderedPrompt, SessionMode.Build);
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.LogError(ex, "Failed to send initial message to Issues Agent session {SessionId}", session.Id);
+                    }
+                });
+            }
+        }
+
         return Created(
             string.Empty,
             new CreateIssuesAgentSessionResponse

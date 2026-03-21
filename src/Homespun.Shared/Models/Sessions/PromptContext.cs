@@ -35,4 +35,16 @@ public class PromptContext
     /// Format: tree structure with each line showing "- id [type] [status] title"
     /// </summary>
     public string? Context { get; set; }
+
+    /// <summary>
+    /// The selected issue ID for issue agent sessions.
+    /// Used with the {{selectedIssueId}} placeholder.
+    /// </summary>
+    public string? SelectedIssueId { get; set; }
+
+    /// <summary>
+    /// User-provided instructions/prompt for the agent.
+    /// Used with the {{userPrompt}} placeholder.
+    /// </summary>
+    public string? UserPrompt { get; set; }
 }

@@ -277,4 +277,147 @@ public class AgentPromptServiceTests
             Assert.That(prompt!.Name, Is.EqualTo("IssueModify"));
         });
     }
+
+    [Test]
+    public async Task GetIssueAgentPrompts_ReturnsBothIssueAgentPrompts()
+    {
+        // Arrange
+        await _service.EnsureDefaultPromptsAsync();
+
+        // Act
+        var prompts = _service.GetIssueAgentPrompts();
+
+        // Assert - should include both IssueModify and IssueAgentSystem
+        Assert.Multiple(() =>
+        {
+            Assert.That(prompts, Has.Count.EqualTo(2));
+            Assert.That(prompts.Any(p => p.Name == "IssueModify"), Is.True);
+            Assert.That(prompts.Any(p => p.Name == "IssueAgentSystem"), Is.True);
+            Assert.That(prompts.All(p => p.SessionType != null), Is.True);
+        });
+    }
+
+    [Test]
+    public async Task GetPromptBySessionType_ReturnsIssueAgentSystemPrompt()
+    {
+        // Arrange
+        await _service.EnsureDefaultPromptsAsync();
+
+        // Act
+        var prompt = _service.GetPromptBySessionType(SessionType.IssueAgentSystem);
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(prompt, Is.Not.Null);
+            Assert.That(prompt!.Name, Is.EqualTo("IssueAgentSystem"));
+            Assert.That(prompt.SessionType, Is.EqualTo(SessionType.IssueAgentSystem));
+            Assert.That(prompt.Mode, Is.EqualTo(SessionMode.Build));
+        });
+    }
+
+    [Test]
+    public async Task EnsureDefaultPromptsAsync_CreatesIssueAgentSystemPrompt()
+    {
+        // Act
+        await _service.EnsureDefaultPromptsAsync();
+
+        // Get IssueAgentSystem prompt directly from datastore
+        var issueAgentSystemPrompt = _dataStore.AgentPrompts
+            .FirstOrDefault(p => p.Name == "IssueAgentSystem");
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(issueAgentSystemPrompt, Is.Not.Null);
+            Assert.That(issueAgentSystemPrompt!.SessionType, Is.EqualTo(SessionType.IssueAgentSystem));
+            Assert.That(issueAgentSystemPrompt.InitialMessage, Is.Not.Null.And.Not.Empty);
+        });
+    }
+
+    [Test]
+    public void RenderTemplate_ReplacesSelectedIssueIdPlaceholder()
+    {
+        // Arrange
+        var template = "Selected Issue: {{selectedIssueId}}";
+        var context = new PromptContext
+        {
+            Title = "Test",
+            Id = "123",
+            Branch = "main",
+            Type = "task",
+            SelectedIssueId = "abc123"
+        };
+
+        // Act
+        var result = _service.RenderTemplate(template, context);
+
+        // Assert
+        Assert.That(result, Is.EqualTo("Selected Issue: abc123"));
+    }
+
+    [Test]
+    public void RenderTemplate_ReplacesUserPromptPlaceholder()
+    {
+        // Arrange
+        var template = "User Request: {{userPrompt}}";
+        var context = new PromptContext
+        {
+            Title = "Test",
+            Id = "123",
+            Branch = "main",
+            Type = "task",
+            UserPrompt = "Please organize the issues by type"
+        };
+
+        // Act
+        var result = _service.RenderTemplate(template, context);
+
+        // Assert
+        Assert.That(result, Is.EqualTo("User Request: Please organize the issues by type"));
+    }
+
+    [Test]
+    public void RenderTemplate_ReplacesAllNewPlaceholders()
+    {
+        // Arrange
+        var template = "Issue: {{selectedIssueId}}\nInstructions: {{userPrompt}}";
+        var context = new PromptContext
+        {
+            Title = "Test",
+            Id = "123",
+            Branch = "main",
+            Type = "task",
+            SelectedIssueId = "xyz789",
+            UserPrompt = "Update the status to complete"
+        };
+
+        // Act
+        var result = _service.RenderTemplate(template, context);
+
+        // Assert
+        Assert.That(result, Is.EqualTo("Issue: xyz789\nInstructions: Update the status to complete"));
+    }
+
+    [Test]
+    public void RenderTemplate_NewPlaceholders_ReturnsEmptyStringWhenNull()
+    {
+        // Arrange
+        var template = "Issue: {{selectedIssueId}}\nInstructions: {{userPrompt}}";
+        var context = new PromptContext
+        {
+            Title = "Test",
+            Id = "123",
+            Branch = "main",
+            Type = "task",
+            SelectedIssueId = null,
+            UserPrompt = null
+        };
+
+        // Act
+        var result = _service.RenderTemplate(template, context);
+
+        // Assert
+        Assert.That(result, Is.EqualTo("Issue: \nInstructions: "));
+    }
 }

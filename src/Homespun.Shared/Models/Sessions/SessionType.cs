@@ -13,5 +13,10 @@ public enum SessionType
     /// <summary>
     /// Issue modification session - specialized for modifying Fleece issues.
     /// </summary>
-    IssueModify
+    IssueModify,
+
+    /// <summary>
+    /// Issue agent system prompt - provides constraints and guidance for issue agent sessions.
+    /// </summary>
+    IssueAgentSystem
 }
