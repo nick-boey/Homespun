@@ -29,7 +29,6 @@ export function PromptsList({ projectId, isGlobal = false }: PromptsListProps) {
 
   const globalPromptsQuery = useGlobalPrompts()
   const projectPromptsQuery = useProjectPrompts(projectId || '')
-  const issueAgentPromptsQuery = useIssueAgentPrompts()
 
   const {
     data: prompts,
@@ -215,96 +214,9 @@ export function PromptsList({ projectId, isGlobal = false }: PromptsListProps) {
 
       {/* Issue Agent Prompts section - only shown on global prompts page */}
       {isGlobal && (
-        <IssueAgentPromptsSection
-          prompts={issueAgentPromptsQuery.data ?? []}
-          isLoading={issueAgentPromptsQuery.isLoading}
-          onEdit={handleEdit}
-          onRefresh={() => issueAgentPromptsQuery.refetch()}
-          isRefetching={issueAgentPromptsQuery.isRefetching}
-        />
-      )}
-    </div>
-  )
-}
-
-/**
- * Separate section for Issue Agent prompts.
- * These prompts are fixed (IssueModify and IssueAgentSystem) and cannot be deleted.
- */
-function IssueAgentPromptsSection({
-  prompts,
-  isLoading,
-  onEdit,
-  onRefresh,
-  isRefetching,
-}: {
-  prompts: AgentPrompt[]
-  isLoading: boolean
-  onEdit: (prompt: AgentPrompt) => void
-  onRefresh: () => void
-  isRefetching: boolean
-}) {
-  if (isLoading) {
-    return (
-      <div className="space-y-4 border-t pt-6">
-        <div className="flex items-center justify-between">
-          <h2 className="flex items-center gap-2 text-lg font-semibold">
-            <ListTodo className="h-5 w-5" />
-            Issue Agent Prompts
-          </h2>
+        <div className="border-t pt-6">
+          <IssueAgentPromptsSection />
         </div>
-        <div className="grid gap-4">
-          <PromptCardSkeleton />
-          <PromptCardSkeleton />
-        </div>
-      </div>
-    )
-  }
-
-  const hasPrompts = prompts.length > 0
-
-  return (
-    <div className="space-y-4 border-t pt-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="flex items-center gap-2 text-lg font-semibold">
-            <ListTodo className="h-5 w-5" />
-            Issue Agent Prompts
-            {hasPrompts && (
-              <span className="text-muted-foreground text-sm font-normal">({prompts.length})</span>
-            )}
-          </h2>
-          <p className="text-muted-foreground mt-1 text-sm">
-            Specialized prompts for the Issues Agent workflow. These prompts are fixed and cannot be
-            deleted.
-          </p>
-        </div>
-        <Button variant="outline" size="sm" onClick={onRefresh} disabled={isRefetching}>
-          <RefreshCw className={`mr-2 h-4 w-4 ${isRefetching ? 'animate-spin' : ''}`} />
-          Refresh
-        </Button>
-      </div>
-
-      {hasPrompts ? (
-        <div className="grid gap-4">
-          {prompts.map((prompt) => (
-            <PromptCard
-              key={prompt.id}
-              prompt={prompt}
-              onEdit={onEdit}
-              onDelete={() => {}}
-              showDelete={false}
-            />
-          ))}
-        </div>
-      ) : (
-        <Card>
-          <CardContent className="py-8 text-center">
-            <p className="text-muted-foreground text-sm">
-              No issue agent prompts found. They will be created automatically when needed.
-            </p>
-          </CardContent>
-        </Card>
       )}
     </div>
   )
