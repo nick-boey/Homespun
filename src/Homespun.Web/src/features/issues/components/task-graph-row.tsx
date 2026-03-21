@@ -5,7 +5,11 @@
 import { memo, forwardRef, type HTMLAttributes } from 'react'
 import { cn } from '@/lib/utils'
 import { IssueType, IssueStatus, ExecutionMode } from '@/api'
-import { ISSUE_STATUS_LABELS, ISSUE_TYPE_LABELS } from '@/lib/issue-constants'
+import {
+  ISSUE_STATUS_LABELS,
+  ISSUE_STATUS_COMPACT_LABELS,
+  ISSUE_TYPE_LABELS,
+} from '@/lib/issue-constants'
 import {
   TaskGraphNodeSvg,
   TaskGraphPrSvg,
@@ -187,7 +191,7 @@ export const TaskGraphIssueRow = memo(
                 onClick={(e) => e.stopPropagation()}
                 title="Click to change status"
               >
-                {ISSUE_STATUS_LABELS[line.status as IssueStatus] ?? 'Open'}
+                {ISSUE_STATUS_COMPACT_LABELS[line.status as IssueStatus] ?? 'Open'}
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" onClick={(e) => e.stopPropagation()}>

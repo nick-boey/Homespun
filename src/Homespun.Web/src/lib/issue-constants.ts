@@ -30,6 +30,20 @@ export const ISSUE_STATUS_LABELS: Record<IssueStatus, string> = {
 }
 
 /**
+ * Compact issue status display labels for space-constrained buttons
+ */
+export const ISSUE_STATUS_COMPACT_LABELS: Record<IssueStatus, string> = {
+  [IssueStatus.DRAFT]: 'Draft',
+  [IssueStatus.OPEN]: 'Open',
+  [IssueStatus.PROGRESS]: 'Progress',
+  [IssueStatus.REVIEW]: 'Review',
+  [IssueStatus.COMPLETE]: 'Complete',
+  [IssueStatus.ARCHIVED]: 'Archived',
+  [IssueStatus.CLOSED]: 'Closed',
+  [IssueStatus.DELETED]: 'Deleted',
+}
+
+/**
  * Issue status color classes for badges
  */
 export const ISSUE_STATUS_COLORS: Record<IssueStatus, string> = {
