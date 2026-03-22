@@ -1,6 +1,7 @@
 using Fleece.Core.Models;
 using Fleece.Core.Serialization;
 using Fleece.Core.Services;
+using Fleece.Core.Services.Interfaces;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Fleece.Services;
 using Homespun.Features.Git;
@@ -29,6 +30,7 @@ public class FleeceChangeDetectionIntegrationTests
     private Mock<IProjectService> _projectServiceMock = null!;
     private Mock<IClaudeSessionService> _sessionServiceMock = null!;
     private FleeceService _fleeceService = null!;
+    private IDiffService _diffService = null!;
     private FleeceChangeDetectionService _changeDetectionService = null!;
 
     [SetUp]
@@ -41,12 +43,15 @@ public class FleeceChangeDetectionIntegrationTests
         _sessionServiceMock = new Mock<IClaudeSessionService>();
 
         // Create a real FleeceService with actual disk operations
-        var serializationQueueMock = new Mock<IIssueSerializationQueue>();
-        var historyServiceMock = new Mock<IIssueHistoryService>();
+        var serializationQueueMock = new Mock<Homespun.Features.Fleece.Services.IIssueSerializationQueue>();
+        var historyServiceMock = new Mock<Homespun.Features.Fleece.Services.IIssueHistoryService>();
         _fleeceService = new FleeceService(
             serializationQueueMock.Object,
             historyServiceMock.Object,
             NullLogger<FleeceService>.Instance);
+
+        // Create real DiffService for integration tests
+        _diffService = new DiffService(new JsonlSerializer());
 
         // Create the change detection service with real dependencies
         _changeDetectionService = new FleeceChangeDetectionService(
@@ -54,6 +59,7 @@ public class FleeceChangeDetectionIntegrationTests
             _cloneService,
             _sessionServiceMock.Object,
             _fleeceService,
+            _diffService,
             NullLogger<FleeceChangeDetectionService>.Instance);
     }
 

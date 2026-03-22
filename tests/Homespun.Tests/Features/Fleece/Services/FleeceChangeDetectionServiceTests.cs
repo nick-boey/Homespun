@@ -1,6 +1,7 @@
 using Fleece.Core.Models;
 using Fleece.Core.Serialization;
 using Fleece.Core.Services;
+using Fleece.Core.Services.Interfaces;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Fleece.Services;
 using Homespun.Features.Git;
@@ -19,6 +20,7 @@ public class FleeceChangeDetectionServiceTests
     private Mock<IGitCloneService> _cloneServiceMock = null!;
     private Mock<IClaudeSessionService> _sessionServiceMock = null!;
     private Mock<IFleeceService> _fleeceServiceMock = null!;
+    private IDiffService _diffService = null!;
     private Mock<ILogger<FleeceChangeDetectionService>> _loggerMock = null!;
     private FleeceChangeDetectionService _service = null!;
     private string _tempDir = null!;
@@ -30,6 +32,7 @@ public class FleeceChangeDetectionServiceTests
         _cloneServiceMock = new Mock<IGitCloneService>();
         _sessionServiceMock = new Mock<IClaudeSessionService>();
         _fleeceServiceMock = new Mock<IFleeceService>();
+        _diffService = new DiffService(new JsonlSerializer());
         _loggerMock = new Mock<ILogger<FleeceChangeDetectionService>>();
 
         _service = new FleeceChangeDetectionService(
@@ -37,6 +40,7 @@ public class FleeceChangeDetectionServiceTests
             _cloneServiceMock.Object,
             _sessionServiceMock.Object,
             _fleeceServiceMock.Object,
+            _diffService,
             _loggerMock.Object);
 
         _tempDir = Path.Combine(Path.GetTempPath(), $"fleece-detection-test-{Guid.NewGuid():N}");
