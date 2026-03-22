@@ -6,6 +6,9 @@ import type {
   DeleteApiAgentPromptsByIdData,
   DeleteApiAgentPromptsByIdErrors,
   DeleteApiAgentPromptsByIdResponses,
+  DeleteApiClonesBulkData,
+  DeleteApiClonesBulkErrors,
+  DeleteApiClonesBulkResponses,
   DeleteApiClonesData,
   DeleteApiClonesErrors,
   DeleteApiClonesResponses,
@@ -49,6 +52,9 @@ import type {
   GetApiClonesChangedFilesData,
   GetApiClonesChangedFilesResponses,
   GetApiClonesData,
+  GetApiClonesEnrichedData,
+  GetApiClonesEnrichedErrors,
+  GetApiClonesEnrichedResponses,
   GetApiClonesErrors,
   GetApiClonesExistsData,
   GetApiClonesExistsErrors,
@@ -455,6 +461,33 @@ export class Clones {
       ThrowOnError
     >({
       url: '/api/Clones',
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options?.headers,
+      },
+    })
+  }
+
+  public static getApiClonesEnriched<ThrowOnError extends boolean = false>(
+    options?: Options<GetApiClonesEnrichedData, ThrowOnError>
+  ) {
+    return (options?.client ?? client).get<
+      GetApiClonesEnrichedResponses,
+      GetApiClonesEnrichedErrors,
+      ThrowOnError
+    >({ url: '/api/Clones/enriched', ...options })
+  }
+
+  public static deleteApiClonesBulk<ThrowOnError extends boolean = false>(
+    options?: Options<DeleteApiClonesBulkData, ThrowOnError>
+  ) {
+    return (options?.client ?? client).delete<
+      DeleteApiClonesBulkResponses,
+      DeleteApiClonesBulkErrors,
+      ThrowOnError
+    >({
+      url: '/api/Clones/bulk',
       ...options,
       headers: {
         'Content-Type': 'application/json',
