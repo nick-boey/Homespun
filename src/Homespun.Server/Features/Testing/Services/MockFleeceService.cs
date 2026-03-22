@@ -678,7 +678,7 @@ public class MockFleeceService : IFleeceService
         // Graph methods are now part of IIssueService in Fleece.Core v1.4.0
         var mockIssueService = new MockIssueServiceAdapter(includedIssues);
 
-        return mockIssueService.BuildTaskGraphLayoutAsync(ct);
+        return mockIssueService.BuildTaskGraphLayoutAsync(false, null, ct);
     }
 
     private string GenerateIssueId(IssueType type)
@@ -791,11 +791,14 @@ internal class MockIssueServiceAdapter : IIssueService
     public Task<IReadOnlyList<Issue>> GetNextIssuesAsync(string? parentId = null, CancellationToken cancellationToken = default)
         => _innerService.GetNextIssuesAsync(parentId, cancellationToken);
 
-    public Task<TaskGraph> BuildTaskGraphLayoutAsync(CancellationToken cancellationToken = default)
-        => _innerService.BuildTaskGraphLayoutAsync(cancellationToken);
+    public Task<TaskGraph> BuildTaskGraphLayoutAsync(bool showCompleted = false, string? parentId = null, CancellationToken cancellationToken = default)
+        => _innerService.BuildTaskGraphLayoutAsync(showCompleted, parentId, cancellationToken);
 
     public Task<TaskGraph> BuildFilteredTaskGraphLayoutAsync(IReadOnlySet<string> issueIds, CancellationToken cancellationToken = default)
         => _innerService.BuildFilteredTaskGraphLayoutAsync(issueIds, cancellationToken);
+
+    public Task<IReadOnlyList<Issue>> GetIssueHierarchyAsync(string issueId, bool ancestors = true, bool descendants = true, CancellationToken cancellationToken = default)
+        => _innerService.GetIssueHierarchyAsync(issueId, ancestors, descendants, cancellationToken);
 }
 
 /// <summary>
