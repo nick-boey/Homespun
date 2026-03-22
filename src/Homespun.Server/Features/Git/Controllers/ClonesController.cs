@@ -19,6 +19,7 @@ public class ClonesController(
     IProjectService projectService,
     IFleeceIssuesSyncService fleeceIssuesSyncService,
     IClaudeSessionService sessionService,
+    ICloneEnrichmentService cloneEnrichmentService,
     ILogger<ClonesController> logger) : ControllerBase
 {
     /// <summary>
@@ -37,6 +38,24 @@ public class ClonesController(
 
         var clones = await cloneService.ListClonesAsync(project.LocalPath);
         return Ok(clones);
+    }
+
+    /// <summary>
+    /// List enriched clones for a project with linked issue and PR data.
+    /// </summary>
+    [HttpGet("enriched")]
+    [ProducesResponseType<List<EnrichedCloneInfo>>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<List<EnrichedCloneInfo>>> ListEnriched([FromQuery] string projectId)
+    {
+        var project = await projectService.GetByIdAsync(projectId);
+        if (project == null)
+        {
+            return NotFound("Project not found");
+        }
+
+        var enrichedClones = await cloneEnrichmentService.EnrichClonesAsync(projectId, project.LocalPath);
+        return Ok(enrichedClones);
     }
 
     /// <summary>
@@ -92,6 +111,37 @@ public class ClonesController(
         }
 
         return NoContent();
+    }
+
+    /// <summary>
+    /// Bulk delete multiple clones.
+    /// </summary>
+    [HttpDelete("bulk")]
+    [ProducesResponseType<BulkDeleteClonesResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<BulkDeleteClonesResponse>> BulkDelete(
+        [FromQuery] string projectId,
+        [FromBody] BulkDeleteClonesRequest request)
+    {
+        var project = await projectService.GetByIdAsync(projectId);
+        if (project == null)
+        {
+            return NotFound("Project not found");
+        }
+
+        var results = new List<BulkDeleteResult>();
+        foreach (var clonePath in request.ClonePaths)
+        {
+            var success = await cloneService.RemoveCloneAsync(project.LocalPath, clonePath);
+            results.Add(new BulkDeleteResult
+            {
+                ClonePath = clonePath,
+                Success = success,
+                Error = success ? null : "Failed to remove clone"
+            });
+        }
+
+        return Ok(new BulkDeleteClonesResponse { Results = results });
     }
 
     /// <summary>
