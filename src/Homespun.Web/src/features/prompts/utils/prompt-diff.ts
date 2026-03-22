@@ -138,7 +138,7 @@ export function parsePrompts(json: string): ParseResult {
  */
 function isIssueAgentPrompt(prompt: ExportedPrompt): boolean {
   return (
-    prompt.sessionType === SessionType.ISSUE_MODIFY ||
+    prompt.sessionType === SessionType.ISSUE_AGENT_MODIFICATION ||
     prompt.sessionType === SessionType.ISSUE_AGENT_SYSTEM
   )
 }
