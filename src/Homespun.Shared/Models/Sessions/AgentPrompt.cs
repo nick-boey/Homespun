@@ -49,4 +49,10 @@ public class AgentPrompt
     /// Null means this is a standard prompt available for normal agent sessions.
     /// </summary>
     public SessionType? SessionType { get; set; }
+
+    /// <summary>
+    /// Indicates whether this prompt is a project-level override of a global prompt with the same name.
+    /// This is a computed property set at query time, not persisted.
+    /// </summary>
+    public bool IsOverride { get; set; }
 }

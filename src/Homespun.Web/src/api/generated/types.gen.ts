@@ -25,6 +25,7 @@ export type AgentPrompt = {
   createdAt?: string
   updatedAt?: string
   sessionType?: SessionType
+  isOverride?: boolean
 }
 
 export type AgentStatusData = {
