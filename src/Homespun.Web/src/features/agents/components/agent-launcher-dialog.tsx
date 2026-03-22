@@ -59,11 +59,10 @@ interface AgentLauncherDialogProps {
 /**
  * Dialog component for launching an agent on an issue.
  *
- * This component uses the server-side run agent endpoint which handles:
- * 1. Fetching issue data
- * 2. Resolving or creating the working branch/clone
- * 3. Rendering the prompt template with issue context
- * 4. Creating the session and sending the initial message
+ * This component uses the server-side run agent endpoint which:
+ * 1. Returns 202 Accepted immediately and closes the dialog
+ * 2. Handles clone creation and session startup in the background
+ * 3. Sends SignalR notifications when the agent is ready or fails
  */
 export function AgentLauncherDialog({
   open,
@@ -137,6 +136,7 @@ export function AgentLauncherDialog({
   }, [prompts, selectedPromptId])
 
   // Handle start - call server-side run agent endpoint
+  // Returns 202 Accepted immediately, dialog closes, and SignalR notifies when agent is ready
   const handleStart = useCallback(async () => {
     // Clear any previous conflict state
     setConflictSessionId(null)
@@ -150,15 +150,12 @@ export function AgentLauncherDialog({
         baseBranch: effectiveBaseBranch || undefined,
       })
 
-      // If None was selected, navigate to the session page
-      if (effectivePromptId === NONE_PROMPT_ID && result.sessionId) {
-        navigate({ to: '/sessions/$sessionId', params: { sessionId: result.sessionId } })
-      }
-
+      // Agent startup is now async - dialog closes immediately
+      // SignalR will notify when agent is ready via AgentStarting/SessionStarted events
       onAgentStart?.(result)
-      onOpenChange(false) // Close dialog on success
+      onOpenChange(false) // Close dialog immediately on 202 Accepted
     } catch (e) {
-      // Handle conflict error - agent already running
+      // Handle conflict error - agent already running or starting
       if (isAgentConflictError(e)) {
         setConflictSessionId(e.sessionId)
         return // Don't propagate error, we'll show UI for this
@@ -175,7 +172,6 @@ export function AgentLauncherDialog({
     onAgentStart,
     onOpenChange,
     onError,
-    navigate,
   ])
 
   // Handle navigating to the existing session

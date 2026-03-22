@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Issues, ClaudeSessionStatus } from '@/api'
-import type { RunAgentResponse } from '@/api/generated/types.gen'
+import type { RunAgentAcceptedResponse } from '@/api/generated/types.gen'
 import { invalidateAllSessionsQueries } from '@/features/sessions/hooks/use-sessions'
 
 export interface RunAgentParams {
@@ -17,12 +17,12 @@ export interface RunAgentParams {
 }
 
 export interface RunAgentResult {
-  /** The created session ID */
-  sessionId: string
+  /** The issue ID the agent is starting on */
+  issueId: string
   /** The branch name used for the session */
   branchName: string
-  /** The clone path where the agent is working */
-  clonePath: string
+  /** A human-readable message about the status */
+  message: string
 }
 
 /** Error type for when an agent is already running on the issue */
@@ -59,11 +59,10 @@ export function isAgentConflictError(error: unknown): error is AgentConflictErro
 /**
  * Hook to run an agent on an issue using the server-side endpoint.
  *
- * This endpoint handles the complete agent startup flow:
- * 1. Fetches issue data
- * 2. Resolves or creates the working branch/clone
- * 3. Fetches the prompt and renders the template with issue context
- * 4. Creates the session and sends the initial message
+ * This endpoint returns 202 Accepted immediately and handles agent startup in the background:
+ * 1. Validates project, issue, and prompt
+ * 2. Queues background work to create clone and start session
+ * 3. SignalR notifications inform when agent is ready or fails
  */
 export function useRunAgent() {
   const queryClient = useQueryClient()
@@ -104,16 +103,16 @@ export function useRunAgent() {
         throw new Error(errorMessage)
       }
 
-      const data = response.data as RunAgentResponse
+      const data = response.data as RunAgentAcceptedResponse
 
       return {
-        sessionId: data.sessionId ?? '',
+        issueId: data.issueId ?? '',
         branchName: data.branchName ?? '',
-        clonePath: data.clonePath ?? '',
+        message: data.message ?? 'Agent is starting',
       }
     },
     onSuccess: () => {
-      // Invalidate all session queries to refresh all session displays
+      // Invalidate all session queries to refresh session displays when agent starts
       invalidateAllSessionsQueries(queryClient)
     },
   })

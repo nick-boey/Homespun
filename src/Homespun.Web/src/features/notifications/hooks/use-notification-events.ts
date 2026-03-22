@@ -85,6 +85,46 @@ export function useNotificationEvents(options: UseNotificationEventsOptions = {}
     [addNotification, showToast]
   )
 
+  // Handle AgentStarting event - show info toast
+  const handleAgentStarting = useCallback(
+    (issueId: string, agentProjectId: string, branchName: string) => {
+      const notification: NotificationDto = {
+        id: `agent-starting-${issueId}-${Date.now()}`,
+        type: 'info',
+        title: 'Agent Starting',
+        message: `Agent is starting on branch ${branchName}...`,
+        projectId: agentProjectId,
+        createdAt: new Date().toISOString(),
+        isDismissible: true,
+        deduplicationKey: `agent-starting-${issueId}`,
+      }
+
+      addNotification(notification)
+      showToast(notification)
+    },
+    [addNotification, showToast]
+  )
+
+  // Handle AgentStartFailed event - show error toast
+  const handleAgentStartFailed = useCallback(
+    (issueId: string, agentProjectId: string, error: string) => {
+      const notification: NotificationDto = {
+        id: `agent-start-failed-${issueId}-${Date.now()}`,
+        type: 'actionRequired',
+        title: 'Agent Start Failed',
+        message: error,
+        projectId: agentProjectId,
+        createdAt: new Date().toISOString(),
+        isDismissible: true,
+        deduplicationKey: `agent-start-failed-${issueId}`,
+      }
+
+      addNotification(notification)
+      showToast(notification)
+    },
+    [addNotification, showToast]
+  )
+
   // Register/unregister event handlers
   useEffect(() => {
     if (!connection || !isConnected) return
@@ -92,11 +132,15 @@ export function useNotificationEvents(options: UseNotificationEventsOptions = {}
     connection.on('NotificationAdded', handleNotificationAdded)
     connection.on('NotificationDismissed', handleNotificationDismissed)
     connection.on('IssuesChanged', handleIssuesChanged)
+    connection.on('AgentStarting', handleAgentStarting)
+    connection.on('AgentStartFailed', handleAgentStartFailed)
 
     return () => {
       connection.off('NotificationAdded', handleNotificationAdded)
       connection.off('NotificationDismissed', handleNotificationDismissed)
       connection.off('IssuesChanged', handleIssuesChanged)
+      connection.off('AgentStarting', handleAgentStarting)
+      connection.off('AgentStartFailed', handleAgentStartFailed)
     }
   }, [
     connection,
@@ -104,6 +148,8 @@ export function useNotificationEvents(options: UseNotificationEventsOptions = {}
     handleNotificationAdded,
     handleNotificationDismissed,
     handleIssuesChanged,
+    handleAgentStarting,
+    handleAgentStartFailed,
   ])
 
   // Fetch active notifications on mount and join project group
