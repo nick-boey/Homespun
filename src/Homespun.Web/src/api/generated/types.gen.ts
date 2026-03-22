@@ -852,7 +852,7 @@ export type SessionSummary = {
 
 export const SessionType = {
   STANDARD: 'standard',
-  ISSUE_MODIFY: 'issueModify',
+  ISSUE_AGENT_MODIFICATION: 'issueAgentModification',
   ISSUE_AGENT_SYSTEM: 'issueAgentSystem',
 } as const
 

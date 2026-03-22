@@ -68,7 +68,7 @@ public partial class AgentPromptService : IAgentPromptService
     public IReadOnlyList<AgentPrompt> GetIssueAgentPrompts()
     {
         return _dataStore.AgentPrompts
-            .Where(p => p.SessionType == SessionType.IssueModify
+            .Where(p => p.SessionType == SessionType.IssueAgentModification
                      || p.SessionType == SessionType.IssueAgentSystem)
             .ToList()
             .AsReadOnly();
@@ -126,26 +126,46 @@ public partial class AgentPromptService : IAgentPromptService
 
         var result = template;
 
-        // Replace placeholders (case-insensitive)
+        // Handle {{#if placeholder}}content{{/if}} conditional blocks first
+        result = ConditionalRegex().Replace(result, match =>
+        {
+            var placeholder = match.Groups[1].Value.ToLowerInvariant();
+            var content = match.Groups[2].Value;
+
+            var value = GetPlaceholderValue(placeholder, context);
+
+            // If value is non-empty, include the content; otherwise remove the block
+            return string.IsNullOrEmpty(value) ? string.Empty : content;
+        });
+
+        // Replace simple {{placeholder}} placeholders (case-insensitive)
         result = PlaceholderRegex().Replace(result, match =>
         {
             var placeholder = match.Groups[1].Value.ToLowerInvariant();
-            return placeholder switch
-            {
-                "title" => context.Title,
-                "id" => context.Id,
-                "description" => context.Description ?? string.Empty,
-                "branch" => context.Branch,
-                "type" => context.Type,
-                "context" => context.Context ?? string.Empty,
-                "selectedissueid" => context.SelectedIssueId ?? string.Empty,
-                "userprompt" => context.UserPrompt ?? string.Empty,
-                _ => match.Value // Keep unknown placeholders as-is
-            };
+            return GetPlaceholderValue(placeholder, context) ?? match.Value;
         });
 
         return result;
     }
+
+    private static string? GetPlaceholderValue(string placeholder, PromptContext context)
+    {
+        return placeholder switch
+        {
+            "title" => context.Title,
+            "id" => context.Id,
+            "description" => context.Description ?? string.Empty,
+            "branch" => context.Branch,
+            "type" => context.Type,
+            "context" => context.Context ?? string.Empty,
+            "selectedissueid" => context.SelectedIssueId ?? string.Empty,
+            "userprompt" => context.UserPrompt ?? string.Empty,
+            _ => null // Return null for unknown placeholders
+        };
+    }
+
+    [GeneratedRegex(@"\{\{#if (\w+)\}\}(.*?)\{\{/if\}\}", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
+    private static partial Regex ConditionalRegex();
 
     [GeneratedRegex(@"\{\{(\w+)\}\}", RegexOptions.IgnoreCase)]
     private static partial Regex PlaceholderRegex();
@@ -181,17 +201,17 @@ public partial class AgentPromptService : IAgentPromptService
                 SessionMode.Build);
         }
 
-        // Create IssueModify prompt if it doesn't exist
+        // Create IssueAgentModification prompt if it doesn't exist
         // Check all prompts (including session-type-specific ones)
-        var hasIssueModify = _dataStore.AgentPrompts
-            .Any(p => p.Name.Equals("IssueModify", StringComparison.OrdinalIgnoreCase));
-        if (!hasIssueModify)
+        var hasIssueAgentModification = _dataStore.AgentPrompts
+            .Any(p => p.Name.Equals("IssueAgentModification", StringComparison.OrdinalIgnoreCase));
+        if (!hasIssueAgentModification)
         {
             await CreateSessionTypePromptAsync(
-                "IssueModify",
-                GetDefaultIssueModifyMessage(),
+                "IssueAgentModification",
+                GetDefaultIssueAgentModificationMessage(),
                 SessionMode.Build,
-                SessionType.IssueModify);
+                SessionType.IssueAgentModification);
         }
 
         // Create IssueAgentSystem prompt if it doesn't exist
@@ -285,20 +305,33 @@ public partial class AgentPromptService : IAgentPromptService
             """;
     }
 
-    private static string GetDefaultIssueModifyMessage()
+    private static string GetDefaultIssueAgentModificationMessage()
     {
         return """
             ## Issue Modification Request
 
+            You are an agent designed to modify Fleece issues based on user instructions.
+
+            IMPORTANT CONSTRAINTS:
+            - You may ONLY use the Fleece CLI tool to make modifications
+            - Do NOT write any files in the repository
+            - Do NOT make any code changes
+            - Focus solely on issue modifications using fleece commands
+
             {{#if selectedIssueId}}
             **Selected Issue:** {{selectedIssueId}}
-
-            First, use `fleece show {{selectedIssueId}} --json` to understand the current state of this issue.
             {{/if}}
 
-            **User Instructions:** {{userPrompt}}
+            Available fleece commands:
+            - fleece list --oneline - List all issues
+            - fleece show <id> --json - Show issue details
+            - fleece edit <id> -t <title> -s <status> -d <description> - Edit issue
+            - fleece create -t <title> -s <status> -y <type> - Create new issue
+            - fleece edit <id> --parent-issues <parent>:<order> - Set parent hierarchy
+            - fleece list --tree - View issue hierarchy
+            - fleece list --next - View task graph
 
-            Please carry out the user's instructions using the fleece CLI commands.
+            User request: {{userPrompt}}
             """;
     }
 

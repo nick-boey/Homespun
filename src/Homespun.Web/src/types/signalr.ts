@@ -70,7 +70,7 @@ export interface PendingQuestion {
   createdAt: string
 }
 
-export type SessionType = 'standard' | 'issueModify'
+export type SessionType = 'standard' | 'issueAgentModification' | 'issueAgentSystem'
 
 export interface ClaudeSession {
   id: string

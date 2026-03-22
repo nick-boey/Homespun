@@ -18,27 +18,27 @@ public class AgentPromptServiceTests
     }
 
     [Test]
-    public async Task GetAllPrompts_ExcludesIssueModifyPrompts()
+    public async Task GetAllPrompts_ExcludesIssueAgentModificationPrompts()
     {
-        // Arrange - create standard prompts and an IssueModify prompt
+        // Arrange - create standard prompts and an IssueAgentModification prompt
         await _service.EnsureDefaultPromptsAsync();
 
         // Act
         var prompts = _service.GetAllPrompts();
 
-        // Assert - should include Plan, Build, Rebase but not IssueModify
+        // Assert - should include Plan, Build, Rebase but not IssueAgentModification
         Assert.Multiple(() =>
         {
             Assert.That(prompts, Has.Count.EqualTo(3));
             Assert.That(prompts.Any(p => p.Name == "Plan"), Is.True);
             Assert.That(prompts.Any(p => p.Name == "Build"), Is.True);
             Assert.That(prompts.Any(p => p.Name == "Rebase"), Is.True);
-            Assert.That(prompts.Any(p => p.Name == "IssueModify"), Is.False);
+            Assert.That(prompts.Any(p => p.Name == "IssueAgentModification"), Is.False);
         });
     }
 
     [Test]
-    public async Task GetPromptsForProject_ExcludesIssueModifyPrompts()
+    public async Task GetPromptsForProject_ExcludesIssueAgentModificationPrompts()
     {
         // Arrange
         await _service.EnsureDefaultPromptsAsync();
@@ -50,25 +50,25 @@ public class AgentPromptServiceTests
         Assert.Multiple(() =>
         {
             Assert.That(prompts, Has.Count.EqualTo(3));
-            Assert.That(prompts.Any(p => p.Name == "IssueModify"), Is.False);
+            Assert.That(prompts.Any(p => p.Name == "IssueAgentModification"), Is.False);
         });
     }
 
     [Test]
-    public async Task GetPromptBySessionType_ReturnsIssueModifyPrompt()
+    public async Task GetPromptBySessionType_ReturnsIssueAgentModificationPrompt()
     {
         // Arrange
         await _service.EnsureDefaultPromptsAsync();
 
         // Act
-        var prompt = _service.GetPromptBySessionType(SessionType.IssueModify);
+        var prompt = _service.GetPromptBySessionType(SessionType.IssueAgentModification);
 
         // Assert
         Assert.Multiple(() =>
         {
             Assert.That(prompt, Is.Not.Null);
-            Assert.That(prompt!.Name, Is.EqualTo("IssueModify"));
-            Assert.That(prompt.SessionType, Is.EqualTo(SessionType.IssueModify));
+            Assert.That(prompt!.Name, Is.EqualTo("IssueAgentModification"));
+            Assert.That(prompt.SessionType, Is.EqualTo(SessionType.IssueAgentModification));
             Assert.That(prompt.Mode, Is.EqualTo(SessionMode.Build));
         });
     }
@@ -84,20 +84,20 @@ public class AgentPromptServiceTests
     }
 
     [Test]
-    public async Task EnsureDefaultPromptsAsync_SetsSessionTypeOnIssueModifyPrompt()
+    public async Task EnsureDefaultPromptsAsync_SetsSessionTypeOnIssueAgentModificationPrompt()
     {
         // Act
         await _service.EnsureDefaultPromptsAsync();
 
-        // Get IssueModify prompt directly from datastore (bypassing filter)
-        var issueModifyPrompt = _dataStore.AgentPrompts
-            .FirstOrDefault(p => p.Name == "IssueModify");
+        // Get IssueAgentModification prompt directly from datastore (bypassing filter)
+        var issueAgentModificationPrompt = _dataStore.AgentPrompts
+            .FirstOrDefault(p => p.Name == "IssueAgentModification");
 
         // Assert
         Assert.Multiple(() =>
         {
-            Assert.That(issueModifyPrompt, Is.Not.Null);
-            Assert.That(issueModifyPrompt!.SessionType, Is.EqualTo(SessionType.IssueModify));
+            Assert.That(issueAgentModificationPrompt, Is.Not.Null);
+            Assert.That(issueAgentModificationPrompt!.SessionType, Is.EqualTo(SessionType.IssueAgentModification));
         });
     }
 
@@ -122,11 +122,11 @@ public class AgentPromptServiceTests
         var projectId = "test-project";
         var prompt = new AgentPrompt
         {
-            Id = "proj-issue-modify",
-            Name = "ProjectIssueModify",
+            Id = "proj-issue-agent-modification",
+            Name = "ProjectIssueAgentModification",
             Mode = SessionMode.Build,
             ProjectId = projectId,
-            SessionType = SessionType.IssueModify
+            SessionType = SessionType.IssueAgentModification
         };
         await _dataStore.AddAgentPromptAsync(prompt);
 
@@ -263,18 +263,18 @@ public class AgentPromptServiceTests
     [Test]
     public async Task GetPrompt_ReturnsByIdIncludingSessionTypePrompts()
     {
-        // Arrange - create IssueModify prompt
+        // Arrange - create IssueAgentModification prompt
         await _service.EnsureDefaultPromptsAsync();
-        var issueModifyPrompt = _service.GetPromptBySessionType(SessionType.IssueModify);
+        var issueAgentModificationPrompt = _service.GetPromptBySessionType(SessionType.IssueAgentModification);
 
         // Act - get by ID (should still work even for session-type prompts)
-        var prompt = _service.GetPrompt(issueModifyPrompt!.Id);
+        var prompt = _service.GetPrompt(issueAgentModificationPrompt!.Id);
 
         // Assert
         Assert.Multiple(() =>
         {
             Assert.That(prompt, Is.Not.Null);
-            Assert.That(prompt!.Name, Is.EqualTo("IssueModify"));
+            Assert.That(prompt!.Name, Is.EqualTo("IssueAgentModification"));
         });
     }
 
@@ -287,11 +287,11 @@ public class AgentPromptServiceTests
         // Act
         var prompts = _service.GetIssueAgentPrompts();
 
-        // Assert - should include both IssueModify and IssueAgentSystem
+        // Assert - should include both IssueAgentModification and IssueAgentSystem
         Assert.Multiple(() =>
         {
             Assert.That(prompts, Has.Count.EqualTo(2));
-            Assert.That(prompts.Any(p => p.Name == "IssueModify"), Is.True);
+            Assert.That(prompts.Any(p => p.Name == "IssueAgentModification"), Is.True);
             Assert.That(prompts.Any(p => p.Name == "IssueAgentSystem"), Is.True);
             Assert.That(prompts.All(p => p.SessionType != null), Is.True);
         });
@@ -419,5 +419,128 @@ public class AgentPromptServiceTests
 
         // Assert
         Assert.That(result, Is.EqualTo("Issue: \nInstructions: "));
+    }
+
+    [Test]
+    public void RenderTemplate_ConditionalBlock_IncludesContentWhenValuePresent()
+    {
+        // Arrange
+        var template = "{{#if selectedIssueId}}**Selected Issue:** {{selectedIssueId}}{{/if}}";
+        var context = new PromptContext
+        {
+            Title = "Test",
+            Id = "123",
+            Branch = "main",
+            Type = "task",
+            SelectedIssueId = "abc123"
+        };
+
+        // Act
+        var result = _service.RenderTemplate(template, context);
+
+        // Assert
+        Assert.That(result, Is.EqualTo("**Selected Issue:** abc123"));
+    }
+
+    [Test]
+    public void RenderTemplate_ConditionalBlock_RemovesBlockWhenValueNull()
+    {
+        // Arrange
+        var template = "Before{{#if selectedIssueId}}\n**Selected Issue:** {{selectedIssueId}}{{/if}}\nAfter";
+        var context = new PromptContext
+        {
+            Title = "Test",
+            Id = "123",
+            Branch = "main",
+            Type = "task",
+            SelectedIssueId = null
+        };
+
+        // Act
+        var result = _service.RenderTemplate(template, context);
+
+        // Assert
+        Assert.That(result, Is.EqualTo("Before\nAfter"));
+    }
+
+    [Test]
+    public void RenderTemplate_ConditionalBlock_RemovesBlockWhenValueEmpty()
+    {
+        // Arrange
+        var template = "Before{{#if selectedIssueId}}\n**Selected Issue:** {{selectedIssueId}}{{/if}}\nAfter";
+        var context = new PromptContext
+        {
+            Title = "Test",
+            Id = "123",
+            Branch = "main",
+            Type = "task",
+            SelectedIssueId = ""
+        };
+
+        // Act
+        var result = _service.RenderTemplate(template, context);
+
+        // Assert
+        Assert.That(result, Is.EqualTo("Before\nAfter"));
+    }
+
+    [Test]
+    public void RenderTemplate_ConditionalBlock_WithMultipleLines()
+    {
+        // Arrange
+        var template = """
+            {{#if selectedIssueId}}
+            **Selected Issue:** {{selectedIssueId}}
+
+            First, use `fleece show {{selectedIssueId}} --json` to understand the current state.
+            {{/if}}
+
+            User request: {{userPrompt}}
+            """;
+        var context = new PromptContext
+        {
+            Title = "Test",
+            Id = "123",
+            Branch = "main",
+            Type = "task",
+            SelectedIssueId = "xyz789",
+            UserPrompt = "Update the status"
+        };
+
+        // Act
+        var result = _service.RenderTemplate(template, context);
+
+        // Assert
+        var expected = """
+
+            **Selected Issue:** xyz789
+
+            First, use `fleece show xyz789 --json` to understand the current state.
+
+
+            User request: Update the status
+            """;
+        Assert.That(result, Is.EqualTo(expected));
+    }
+
+    [Test]
+    public async Task IssueAgentModificationPrompt_ContainsExpectedContent()
+    {
+        // Arrange
+        await _service.EnsureDefaultPromptsAsync();
+
+        // Act
+        var prompt = _service.GetPromptBySessionType(SessionType.IssueAgentModification);
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(prompt, Is.Not.Null);
+            Assert.That(prompt!.InitialMessage, Does.Contain("Issue Modification Request"));
+            Assert.That(prompt.InitialMessage, Does.Contain("IMPORTANT CONSTRAINTS"));
+            Assert.That(prompt.InitialMessage, Does.Contain("fleece"));
+            Assert.That(prompt.InitialMessage, Does.Contain("{{userPrompt}}"));
+            Assert.That(prompt.InitialMessage, Does.Contain("{{#if selectedIssueId}}"));
+        });
     }
 }

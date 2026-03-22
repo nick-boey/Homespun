@@ -566,7 +566,7 @@ function SessionHeader({
         </div>
       </div>
       <div className="flex items-center gap-2">
-        {session?.sessionType === SessionType.ISSUE_MODIFY && (
+        {session?.sessionType === SessionType.ISSUE_AGENT_MODIFICATION && (
           <Button variant="outline" size="sm" asChild className="h-8">
             <Link to="/sessions/$sessionId/issue-diff" params={{ sessionId }}>
               <FileCheck className="mr-2 h-4 w-4" />

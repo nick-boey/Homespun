@@ -35,8 +35,8 @@ function IssueDiffPage() {
   const isLoading = sessionLoading || diffLoading
   const error = sessionError || diffError
 
-  // Validate this is an IssueModify session
-  if (session && session.sessionType !== SessionType.ISSUE_MODIFY) {
+  // Validate this is an IssueAgentModification session
+  if (session && session.sessionType !== SessionType.ISSUE_AGENT_MODIFICATION) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4">
         <p className="text-muted-foreground">This is not an Issues Agent session.</p>

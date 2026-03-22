@@ -5,7 +5,7 @@ import type { AgentPrompt } from '@/api/generated/types.gen'
 export const issueAgentPromptsQueryKey = ['prompts', 'issue-agent'] as const
 
 /**
- * Hook for fetching issue agent prompts (IssueModify and IssueAgentSystem).
+ * Hook for fetching issue agent prompts (IssueAgentModification and IssueAgentSystem).
  * These are specialized prompts for the Issues Agent workflow.
  */
 export function useIssueAgentPrompts() {

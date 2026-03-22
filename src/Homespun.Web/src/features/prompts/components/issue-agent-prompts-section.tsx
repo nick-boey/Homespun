@@ -11,7 +11,7 @@ import { SessionMode } from '@/api'
 import type { AgentPrompt } from '@/api/generated/types.gen'
 
 /**
- * Section displaying Issue Agent prompts (IssueModify and IssueAgentSystem).
+ * Section displaying Issue Agent prompts (IssueAgentModification and IssueAgentSystem).
  * These are specialized prompts for the Issues Agent workflow.
  * Only editing is allowed - no create or delete.
  */
