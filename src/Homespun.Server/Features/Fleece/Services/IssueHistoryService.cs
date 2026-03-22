@@ -7,7 +7,8 @@ namespace Homespun.Features.Fleece.Services;
 
 /// <summary>
 /// Service for managing issue history, enabling undo/redo functionality.
-/// Stores full issue snapshots as timestamped JSONL files in the .fleece/history/ folder.
+/// Stores full issue snapshots as timestamped JSONL files in the .history/ folder
+/// (sibling to the main git working directory, outside of version control).
 /// </summary>
 public sealed class IssueHistoryService : IIssueHistoryService
 {
@@ -32,9 +33,18 @@ public sealed class IssueHistoryService : IIssueHistoryService
 
     /// <summary>
     /// Gets the history folder path for a project.
+    /// History is stored at the project root level (sibling to the main git working directory)
+    /// to avoid committing large snapshot files to git.
     /// </summary>
-    private static string GetHistoryPath(string projectPath) =>
-        Path.Combine(projectPath, ".fleece", HistoryFolderName);
+    private static string GetHistoryPath(string projectPath)
+    {
+        var projectRoot = Path.GetDirectoryName(projectPath);
+        if (string.IsNullOrEmpty(projectRoot))
+        {
+            throw new InvalidOperationException($"Cannot determine parent directory of {projectPath}");
+        }
+        return Path.Combine(projectRoot, $".{HistoryFolderName}");
+    }
 
     /// <summary>
     /// Gets the current state file path.
@@ -43,10 +53,10 @@ public sealed class IssueHistoryService : IIssueHistoryService
         Path.Combine(GetHistoryPath(projectPath), CurrentStateFileName);
 
     /// <summary>
-    /// Converts a timestamp to a filesystem-safe filename (replacing : with -).
+    /// Converts a timestamp to a filesystem-safe filename (replacing : and . with -).
     /// </summary>
     private static string TimestampToFilename(string timestamp) =>
-        timestamp.Replace(":", "-");
+        timestamp.Replace(":", "-").Replace(".", "-");
 
     /// <summary>
     /// Converts a filesystem-safe filename back to a timestamp.

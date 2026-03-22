@@ -5,7 +5,8 @@ namespace Homespun.Features.Fleece.Services;
 
 /// <summary>
 /// Service for managing issue history, enabling undo/redo functionality.
-/// Persists full issue snapshots as timestamped JSONL files in the .fleece/history/ folder.
+/// Persists full issue snapshots as timestamped JSONL files in the .history/ folder
+/// (sibling to the main git working directory, outside of version control).
 /// </summary>
 public interface IIssueHistoryService
 {
