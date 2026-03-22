@@ -35,15 +35,28 @@ public partial class AgentPromptService : IAgentPromptService
     public IReadOnlyList<AgentPrompt> GetPromptsForProject(string projectId)
     {
         var projectPrompts = GetProjectPrompts(projectId);
+        var globalPrompts = GetAllPrompts();
+
+        var globalPromptNames = globalPrompts
+            .Select(g => g.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
         var projectPromptNames = projectPrompts
             .Select(p => p.Name)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        var globalPrompts = GetAllPrompts()
+        // Mark project prompts that override global prompts
+        foreach (var prompt in projectPrompts)
+        {
+            prompt.IsOverride = globalPromptNames.Contains(prompt.Name);
+        }
+
+        // Include only global prompts that are not overridden
+        var nonOverriddenGlobalPrompts = globalPrompts
             .Where(g => !projectPromptNames.Contains(g.Name))
             .ToList();
 
-        return projectPrompts.Concat(globalPrompts).ToList().AsReadOnly();
+        return projectPrompts.Concat(nonOverriddenGlobalPrompts).ToList().AsReadOnly();
     }
 
     public IReadOnlyList<AgentPrompt> GetGlobalPromptsNotOverridden(string projectId)

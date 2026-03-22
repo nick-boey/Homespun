@@ -420,8 +420,23 @@ public sealed class WorkflowExecutionService : IWorkflowExecutionService, IDispo
     {
         foreach (var cts in _executionCts.Values)
         {
-            cts.Cancel();
-            cts.Dispose();
+            try
+            {
+                cts.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+                // CTS was already disposed, ignore
+            }
+
+            try
+            {
+                cts.Dispose();
+            }
+            catch (ObjectDisposedException)
+            {
+                // CTS was already disposed, ignore
+            }
         }
 
         _executionCts.Clear();

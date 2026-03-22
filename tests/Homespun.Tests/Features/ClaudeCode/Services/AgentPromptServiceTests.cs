@@ -543,4 +543,124 @@ public class AgentPromptServiceTests
             Assert.That(prompt.InitialMessage, Does.Contain("{{#if selectedIssueId}}"));
         });
     }
+
+    [Test]
+    public async Task GetPromptsForProject_IsOverrideTrue_WhenProjectPromptShadowsGlobalPrompt()
+    {
+        // Arrange - create global prompts first
+        await _service.EnsureDefaultPromptsAsync();
+
+        // Create a project prompt with the same name as a global prompt (Build)
+        var projectId = "test-project";
+        var projectPrompt = new AgentPrompt
+        {
+            Id = "proj-build",
+            Name = "Build",
+            InitialMessage = "Custom project build message",
+            Mode = SessionMode.Build,
+            ProjectId = projectId
+        };
+        await _dataStore.AddAgentPromptAsync(projectPrompt);
+
+        // Act
+        var prompts = _service.GetPromptsForProject(projectId);
+
+        // Assert - the project's Build prompt should have IsOverride = true
+        var buildPrompt = prompts.FirstOrDefault(p => p.Name == "Build");
+        Assert.Multiple(() =>
+        {
+            Assert.That(buildPrompt, Is.Not.Null);
+            Assert.That(buildPrompt!.ProjectId, Is.EqualTo(projectId));
+            Assert.That(buildPrompt.IsOverride, Is.True);
+        });
+    }
+
+    [Test]
+    public async Task GetPromptsForProject_IsOverrideFalse_ForGlobalPrompts()
+    {
+        // Arrange
+        await _service.EnsureDefaultPromptsAsync();
+        var projectId = "test-project";
+
+        // Act
+        var prompts = _service.GetPromptsForProject(projectId);
+
+        // Assert - all prompts should have IsOverride = false (no project prompts exist)
+        Assert.Multiple(() =>
+        {
+            Assert.That(prompts, Has.Count.EqualTo(3)); // Plan, Build, Rebase
+            Assert.That(prompts.All(p => p.IsOverride == false), Is.True);
+        });
+    }
+
+    [Test]
+    public async Task GetPromptsForProject_IsOverrideFalse_ForProjectPromptsWithUniqueNames()
+    {
+        // Arrange
+        await _service.EnsureDefaultPromptsAsync();
+        var projectId = "test-project";
+
+        // Create a project prompt with a unique name
+        var projectPrompt = new AgentPrompt
+        {
+            Id = "proj-custom",
+            Name = "CustomProjectPrompt",
+            InitialMessage = "Custom project message",
+            Mode = SessionMode.Build,
+            ProjectId = projectId
+        };
+        await _dataStore.AddAgentPromptAsync(projectPrompt);
+
+        // Act
+        var prompts = _service.GetPromptsForProject(projectId);
+
+        // Assert - custom prompt should have IsOverride = false (no global prompt with same name)
+        var customPrompt = prompts.FirstOrDefault(p => p.Name == "CustomProjectPrompt");
+        Assert.Multiple(() =>
+        {
+            Assert.That(customPrompt, Is.Not.Null);
+            Assert.That(customPrompt!.IsOverride, Is.False);
+        });
+    }
+
+    [Test]
+    public async Task GetAllPrompts_IsOverrideAlwaysFalse()
+    {
+        // Arrange
+        await _service.EnsureDefaultPromptsAsync();
+
+        // Act
+        var prompts = _service.GetAllPrompts();
+
+        // Assert - global prompts should never have IsOverride = true
+        Assert.That(prompts.All(p => p.IsOverride == false), Is.True);
+    }
+
+    [Test]
+    public async Task GetProjectPrompts_IsOverrideAlwaysFalse()
+    {
+        // Arrange
+        var projectId = "test-project";
+        await _service.EnsureDefaultPromptsAsync();
+
+        // Create a project prompt that shadows a global prompt
+        var projectPrompt = new AgentPrompt
+        {
+            Id = "proj-build",
+            Name = "Build",
+            Mode = SessionMode.Build,
+            ProjectId = projectId
+        };
+        await _dataStore.AddAgentPromptAsync(projectPrompt);
+
+        // Act - GetProjectPrompts only returns project-scoped prompts, not merged list
+        var prompts = _service.GetProjectPrompts(projectId);
+
+        // Assert - IsOverride is only set in GetPromptsForProject context
+        Assert.Multiple(() =>
+        {
+            Assert.That(prompts, Has.Count.EqualTo(1));
+            Assert.That(prompts[0].IsOverride, Is.False);
+        });
+    }
 }
