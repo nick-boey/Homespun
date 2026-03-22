@@ -4,3 +4,4 @@ export { useIssueAgentPrompts, issueAgentPromptsQueryKey } from './use-issue-age
 export { useCreatePrompt } from './use-create-prompt'
 export { useUpdatePrompt } from './use-update-prompt'
 export { useDeletePrompt } from './use-delete-prompt'
+export { useApplyPromptChanges } from './use-apply-prompt-changes'
