@@ -136,7 +136,7 @@ export function MentionSearchPopup({
   return (
     <div
       className={cn(
-        'bg-popover text-popover-foreground absolute z-50 w-80 rounded-md border shadow-md',
+        'bg-popover text-popover-foreground absolute z-50 w-full rounded-md border shadow-md',
         className
       )}
       role="listbox"

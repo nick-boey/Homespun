@@ -94,7 +94,14 @@ export function useSearchableInput({
       const afterQuery = value.slice(triggerPosition + 1 + query.length)
 
       // Format the insertion based on type
-      const insertion = selection.type === '@' ? `@{${selection.value}}` : `PR #${selection.value}`
+      let insertion: string
+      if (selection.type === '@') {
+        // Use quotes only if the file path contains spaces
+        const hasSpaces = selection.value.includes(' ')
+        insertion = hasSpaces ? `@"${selection.value}"` : `@${selection.value}`
+      } else {
+        insertion = `PR #${selection.value}`
+      }
 
       const newValue = beforeTrigger + insertion + afterQuery
       onChange(newValue)
