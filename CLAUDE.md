@@ -108,6 +108,7 @@ tests/
 ### Feature Slices
 
 - **Fleece**: Integration with Fleece issue tracking - JSONL-based storage in `.fleece/` directory
+  - **Version Sync Required**: When updating the `Fleece.Core` NuGet package version in `Homespun.Server.csproj` and `Homespun.Shared.csproj`, you must also update the `Fleece.Cli` version in `Dockerfile.base` to match
 - **ClaudeCode**: Claude Code SDK session management - supports Plan (read-only) and Build (full access) modes
 - **Commands**: Shell command execution abstraction
 - **Git**: Git clone creation, management, and rebase operations
