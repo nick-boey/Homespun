@@ -3,6 +3,7 @@
  */
 
 import '@testing-library/jest-dom/vitest'
+import 'vitest-canvas-mock'
 import './mocks/telemetry'
 
 // Mock window.matchMedia for components that use media queries
