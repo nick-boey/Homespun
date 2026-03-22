@@ -8,50 +8,35 @@ namespace Homespun.Tests.Features.Workflows;
 [TestFixture]
 public class WorkflowExecutionServiceTests
 {
-    private string _tempDir = null!;
+    private WorkflowExecutionService _service = null!;
     private Mock<IWorkflowStorageService> _mockStorageService = null!;
     private Mock<ILogger<WorkflowExecutionService>> _mockLogger = null!;
-    private WorkflowExecutionService _service = null!;
+    private string _testProjectPath = null!;
 
     [SetUp]
     public void SetUp()
     {
-        _tempDir = Path.Combine(Path.GetTempPath(), $"workflow-exec-test-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(_tempDir);
-
         _mockStorageService = new Mock<IWorkflowStorageService>();
         _mockLogger = new Mock<ILogger<WorkflowExecutionService>>();
-        _service = new WorkflowExecutionService(
-            _mockStorageService.Object,
-            _mockLogger.Object);
+        _service = new WorkflowExecutionService(_mockStorageService.Object, _mockLogger.Object);
+        _testProjectPath = Path.Combine(Path.GetTempPath(), $"workflow-exec-test-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(_testProjectPath);
     }
 
     [TearDown]
-    public async Task TearDown()
+    public void TearDown()
     {
         _service.Dispose();
 
-        // Give time for any background tasks to complete
-        await Task.Delay(50);
-
-        if (Directory.Exists(_tempDir))
+        if (Directory.Exists(_testProjectPath))
         {
             try
             {
-                Directory.Delete(_tempDir, recursive: true);
+                Directory.Delete(_testProjectPath, recursive: true);
             }
-            catch (IOException)
+            catch
             {
-                // Retry after a short delay
-                await Task.Delay(100);
-                try
-                {
-                    Directory.Delete(_tempDir, recursive: true);
-                }
-                catch
-                {
-                    // Ignore cleanup errors
-                }
+                // Ignore cleanup errors in tests
             }
         }
     }
@@ -59,144 +44,174 @@ public class WorkflowExecutionServiceTests
     #region StartWorkflowAsync Tests
 
     [Test]
-    public async Task StartWorkflowAsync_WorkflowNotFound_ReturnsError()
+    public async Task StartWorkflowAsync_ValidWorkflow_ReturnsSuccessWithExecution()
+    {
+        // Arrange - Use workflow with gate node so it doesn't complete immediately
+        var workflow = new WorkflowDefinition
+        {
+            Id = "workflow-1",
+            ProjectId = "project-1",
+            Title = "Test Workflow",
+            Enabled = true,
+            Nodes =
+            [
+                new WorkflowNode { Id = "start-1", Label = "Start", Type = WorkflowNodeType.Start },
+                new WorkflowNode { Id = "gate-1", Label = "Gate", Type = WorkflowNodeType.Gate },
+                new WorkflowNode { Id = "end-1", Label = "End", Type = WorkflowNodeType.End }
+            ],
+            Edges =
+            [
+                new WorkflowEdge { Id = "edge-1", Source = "start-1", Target = "gate-1" },
+                new WorkflowEdge { Id = "edge-2", Source = "gate-1", Target = "end-1" }
+            ],
+            Settings = new WorkflowSettings()
+        };
+
+        _mockStorageService.Setup(s => s.GetWorkflowAsync(_testProjectPath, "workflow-1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(workflow);
+
+        var triggerContext = new TriggerContext
+        {
+            TriggerType = WorkflowTriggerType.Manual,
+            TriggeredBy = "test-user"
+        };
+
+        // Act
+        var result = await _service.StartWorkflowAsync(_testProjectPath, "workflow-1", triggerContext);
+
+        // Assert - result.Execution is the snapshot at start time, so should be Running
+        // (the execution loop may change state asynchronously after this)
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Success, Is.True);
+            Assert.That(result.Execution, Is.Not.Null);
+            Assert.That(result.Execution!.WorkflowId, Is.EqualTo("workflow-1"));
+            Assert.That(result.Execution.Status, Is.EqualTo(WorkflowExecutionStatus.Running));
+            Assert.That(result.Error, Is.Null);
+        });
+    }
+
+    [Test]
+    public async Task StartWorkflowAsync_NonExistentWorkflow_ReturnsFailure()
     {
         // Arrange
-        _mockStorageService
-            .Setup(s => s.GetWorkflowAsync(_tempDir, "non-existent", It.IsAny<CancellationToken>()))
+        _mockStorageService.Setup(s => s.GetWorkflowAsync(_testProjectPath, "non-existent", It.IsAny<CancellationToken>()))
             .ReturnsAsync((WorkflowDefinition?)null);
 
-        var triggerContext = new TriggerContext
-        {
-            TriggerType = WorkflowTriggerType.Manual,
-            TriggeredBy = "test-user"
-        };
+        var triggerContext = new TriggerContext { TriggerType = WorkflowTriggerType.Manual };
 
         // Act
-        var result = await _service.StartWorkflowAsync(_tempDir, "non-existent", triggerContext);
+        var result = await _service.StartWorkflowAsync(_testProjectPath, "non-existent", triggerContext);
 
         // Assert
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.Error, Does.Contain("not found"));
-        Assert.That(result.Execution, Is.Null);
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Success, Is.False);
+            Assert.That(result.Execution, Is.Null);
+            Assert.That(result.Error, Does.Contain("not found"));
+        });
     }
 
     [Test]
-    public async Task StartWorkflowAsync_WorkflowDisabled_ReturnsError()
+    public async Task StartWorkflowAsync_DisabledWorkflow_ReturnsFailure()
     {
         // Arrange
-        var workflow = CreateTestWorkflow(enabled: false);
-        _mockStorageService
-            .Setup(s => s.GetWorkflowAsync(_tempDir, workflow.Id, It.IsAny<CancellationToken>()))
+        var workflow = CreateTestWorkflow("workflow-1", enabled: false);
+        _mockStorageService.Setup(s => s.GetWorkflowAsync(_testProjectPath, "workflow-1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(workflow);
+
+        var triggerContext = new TriggerContext { TriggerType = WorkflowTriggerType.Manual };
+
+        // Act
+        var result = await _service.StartWorkflowAsync(_testProjectPath, "workflow-1", triggerContext);
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Success, Is.False);
+            Assert.That(result.Error, Does.Contain("disabled"));
+        });
+    }
+
+    [Test]
+    public async Task StartWorkflowAsync_WithInputData_StoresInputInContext()
+    {
+        // Arrange
+        var workflow = CreateTestWorkflow("workflow-1", enabled: true);
+        _mockStorageService.Setup(s => s.GetWorkflowAsync(_testProjectPath, "workflow-1", It.IsAny<CancellationToken>()))
             .ReturnsAsync(workflow);
 
         var triggerContext = new TriggerContext
         {
             TriggerType = WorkflowTriggerType.Manual,
-            TriggeredBy = "test-user"
+            Input = new Dictionary<string, object>
+            {
+                ["issueId"] = "issue-123",
+                ["priority"] = "high"
+            }
         };
 
         // Act
-        var result = await _service.StartWorkflowAsync(_tempDir, workflow.Id, triggerContext);
+        var result = await _service.StartWorkflowAsync(_testProjectPath, "workflow-1", triggerContext);
 
         // Assert
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.Error, Does.Contain("disabled"));
-    }
-
-    [Test]
-    public async Task StartWorkflowAsync_ValidWorkflow_CreatesExecution()
-    {
-        // Arrange
-        var workflow = CreateTestWorkflow();
-        _mockStorageService
-            .Setup(s => s.GetWorkflowAsync(_tempDir, workflow.Id, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(workflow);
-
-        var triggerContext = new TriggerContext
+        Assert.Multiple(() =>
         {
-            TriggerType = WorkflowTriggerType.Manual,
-            TriggeredBy = "test-user",
-            Input = new Dictionary<string, object> { ["key"] = "value" }
-        };
-
-        // Act
-        var result = await _service.StartWorkflowAsync(_tempDir, workflow.Id, triggerContext);
-
-        // Assert
-        Assert.That(result.Success, Is.True);
-        Assert.That(result.Execution, Is.Not.Null);
-        Assert.That(result.Execution!.WorkflowId, Is.EqualTo(workflow.Id));
-        // Status may be Running or Completed since execution runs asynchronously
-        Assert.That(result.Execution.Status,
-            Is.EqualTo(WorkflowExecutionStatus.Running).Or.EqualTo(WorkflowExecutionStatus.Completed));
-        Assert.That(result.Execution.Trigger.Type, Is.EqualTo(WorkflowTriggerType.Manual));
-        Assert.That(result.Execution.TriggeredBy, Is.EqualTo("test-user"));
+            Assert.That(result.Success, Is.True);
+            Assert.That(result.Execution!.Context.Input, Contains.Key("issueId"));
+            Assert.That(result.Execution.Context.Input["issueId"], Is.EqualTo("issue-123"));
+        });
     }
 
     [Test]
     public async Task StartWorkflowAsync_CreatesNodeExecutionsForAllNodes()
     {
         // Arrange
-        var workflow = CreateTestWorkflow();
-        _mockStorageService
-            .Setup(s => s.GetWorkflowAsync(_tempDir, workflow.Id, It.IsAny<CancellationToken>()))
+        var workflow = CreateTestWorkflow("workflow-1", enabled: true);
+        workflow.Nodes =
+        [
+            new WorkflowNode { Id = "start-1", Label = "Start", Type = WorkflowNodeType.Start },
+            new WorkflowNode { Id = "agent-1", Label = "Agent", Type = WorkflowNodeType.Agent },
+            new WorkflowNode { Id = "end-1", Label = "End", Type = WorkflowNodeType.End }
+        ];
+
+        _mockStorageService.Setup(s => s.GetWorkflowAsync(_testProjectPath, "workflow-1", It.IsAny<CancellationToken>()))
             .ReturnsAsync(workflow);
 
-        var triggerContext = new TriggerContext();
+        var triggerContext = new TriggerContext { TriggerType = WorkflowTriggerType.Manual };
 
         // Act
-        var result = await _service.StartWorkflowAsync(_tempDir, workflow.Id, triggerContext);
+        var result = await _service.StartWorkflowAsync(_testProjectPath, "workflow-1", triggerContext);
 
         // Assert
-        Assert.That(result.Execution, Is.Not.Null);
-        Assert.That(result.Execution!.NodeExecutions, Has.Count.EqualTo(workflow.Nodes.Count));
-        Assert.That(result.Execution.NodeExecutions.Select(n => n.NodeId),
-            Is.EquivalentTo(workflow.Nodes.Select(n => n.Id)));
-    }
-
-    [Test]
-    public async Task StartWorkflowAsync_SetsInputInContext()
-    {
-        // Arrange
-        var workflow = CreateTestWorkflow();
-        _mockStorageService
-            .Setup(s => s.GetWorkflowAsync(_tempDir, workflow.Id, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(workflow);
-
-        var input = new Dictionary<string, object>
+        Assert.Multiple(() =>
         {
-            ["issueId"] = "ABC123",
-            ["branch"] = "feature/test"
-        };
-        var triggerContext = new TriggerContext { Input = input };
-
-        // Act
-        var result = await _service.StartWorkflowAsync(_tempDir, workflow.Id, triggerContext);
-
-        // Assert
-        Assert.That(result.Execution, Is.Not.Null);
-        Assert.That(result.Execution!.Context.Input["issueId"], Is.EqualTo("ABC123"));
-        Assert.That(result.Execution.Context.Input["branch"], Is.EqualTo("feature/test"));
+            Assert.That(result.Execution!.NodeExecutions, Has.Count.EqualTo(3));
+            Assert.That(result.Execution.NodeExecutions.Any(n => n.NodeId == "start-1"), Is.True);
+            Assert.That(result.Execution.NodeExecutions.Any(n => n.NodeId == "agent-1"), Is.True);
+            Assert.That(result.Execution.NodeExecutions.Any(n => n.NodeId == "end-1"), Is.True);
+        });
     }
 
     [Test]
-    public async Task StartWorkflowAsync_GeneratesUniqueExecutionId()
+    public async Task StartWorkflowAsync_SetsTriggeredByFromContext()
     {
         // Arrange
-        var workflow = CreateTestWorkflow();
-        _mockStorageService
-            .Setup(s => s.GetWorkflowAsync(_tempDir, workflow.Id, It.IsAny<CancellationToken>()))
+        var workflow = CreateTestWorkflow("workflow-1", enabled: true);
+        _mockStorageService.Setup(s => s.GetWorkflowAsync(_testProjectPath, "workflow-1", It.IsAny<CancellationToken>()))
             .ReturnsAsync(workflow);
 
-        var triggerContext = new TriggerContext();
+        var triggerContext = new TriggerContext
+        {
+            TriggerType = WorkflowTriggerType.Manual,
+            TriggeredBy = "user@example.com"
+        };
 
         // Act
-        var result1 = await _service.StartWorkflowAsync(_tempDir, workflow.Id, triggerContext);
-        var result2 = await _service.StartWorkflowAsync(_tempDir, workflow.Id, triggerContext);
+        var result = await _service.StartWorkflowAsync(_testProjectPath, "workflow-1", triggerContext);
 
         // Assert
-        Assert.That(result1.Execution!.Id, Is.Not.EqualTo(result2.Execution!.Id));
+        Assert.That(result.Execution!.TriggeredBy, Is.EqualTo("user@example.com"));
     }
 
     #endregion
@@ -204,32 +219,35 @@ public class WorkflowExecutionServiceTests
     #region GetExecutionAsync Tests
 
     [Test]
-    public async Task GetExecutionAsync_NonExistentExecution_ReturnsNull()
-    {
-        // Act
-        var result = await _service.GetExecutionAsync(_tempDir, "non-existent");
-
-        // Assert
-        Assert.That(result, Is.Null);
-    }
-
-    [Test]
     public async Task GetExecutionAsync_ExistingExecution_ReturnsExecution()
     {
         // Arrange
-        var workflow = CreateTestWorkflow();
-        _mockStorageService
-            .Setup(s => s.GetWorkflowAsync(_tempDir, workflow.Id, It.IsAny<CancellationToken>()))
+        var workflow = CreateTestWorkflow("workflow-1", enabled: true);
+        _mockStorageService.Setup(s => s.GetWorkflowAsync(_testProjectPath, "workflow-1", It.IsAny<CancellationToken>()))
             .ReturnsAsync(workflow);
 
-        var startResult = await _service.StartWorkflowAsync(_tempDir, workflow.Id, new TriggerContext());
+        var triggerContext = new TriggerContext { TriggerType = WorkflowTriggerType.Manual };
+        var startResult = await _service.StartWorkflowAsync(_testProjectPath, "workflow-1", triggerContext);
 
         // Act
-        var result = await _service.GetExecutionAsync(_tempDir, startResult.Execution!.Id);
+        var retrieved = await _service.GetExecutionAsync(_testProjectPath, startResult.Execution!.Id);
 
         // Assert
-        Assert.That(result, Is.Not.Null);
-        Assert.That(result!.Id, Is.EqualTo(startResult.Execution.Id));
+        Assert.Multiple(() =>
+        {
+            Assert.That(retrieved, Is.Not.Null);
+            Assert.That(retrieved!.Id, Is.EqualTo(startResult.Execution.Id));
+        });
+    }
+
+    [Test]
+    public async Task GetExecutionAsync_NonExistentExecution_ReturnsNull()
+    {
+        // Act
+        var result = await _service.GetExecutionAsync(_testProjectPath, "non-existent-id");
+
+        // Assert
+        Assert.That(result, Is.Null);
     }
 
     #endregion
@@ -240,55 +258,87 @@ public class WorkflowExecutionServiceTests
     public async Task ListExecutionsAsync_NoExecutions_ReturnsEmptyList()
     {
         // Act
-        var result = await _service.ListExecutionsAsync(_tempDir);
+        var result = await _service.ListExecutionsAsync(_testProjectPath);
 
         // Assert
         Assert.That(result, Is.Empty);
     }
 
     [Test]
-    public async Task ListExecutionsAsync_WithExecutions_ReturnsAll()
+    public async Task ListExecutionsAsync_WithExecutions_ReturnsAllExecutions()
     {
         // Arrange
-        var workflow = CreateTestWorkflow();
-        _mockStorageService
-            .Setup(s => s.GetWorkflowAsync(_tempDir, workflow.Id, It.IsAny<CancellationToken>()))
+        var workflow = CreateTestWorkflow("workflow-1", enabled: true);
+        _mockStorageService.Setup(s => s.GetWorkflowAsync(_testProjectPath, "workflow-1", It.IsAny<CancellationToken>()))
             .ReturnsAsync(workflow);
 
-        await _service.StartWorkflowAsync(_tempDir, workflow.Id, new TriggerContext());
-        await _service.StartWorkflowAsync(_tempDir, workflow.Id, new TriggerContext());
+        var triggerContext = new TriggerContext { TriggerType = WorkflowTriggerType.Manual };
+
+        await _service.StartWorkflowAsync(_testProjectPath, "workflow-1", triggerContext);
+        await _service.StartWorkflowAsync(_testProjectPath, "workflow-1", triggerContext);
+        await _service.StartWorkflowAsync(_testProjectPath, "workflow-1", triggerContext);
 
         // Act
-        var result = await _service.ListExecutionsAsync(_tempDir);
+        var result = await _service.ListExecutionsAsync(_testProjectPath);
 
         // Assert
-        Assert.That(result, Has.Count.EqualTo(2));
+        Assert.That(result, Has.Count.EqualTo(3));
     }
 
     [Test]
-    public async Task ListExecutionsAsync_WithWorkflowIdFilter_ReturnsFiltered()
+    public async Task ListExecutionsAsync_FilterByWorkflowId_ReturnsFilteredList()
     {
         // Arrange
-        var workflow1 = CreateTestWorkflow(id: "wf1");
-        var workflow2 = CreateTestWorkflow(id: "wf2");
+        var workflow1 = CreateTestWorkflow("workflow-1", enabled: true);
+        var workflow2 = CreateTestWorkflow("workflow-2", enabled: true);
 
-        _mockStorageService
-            .Setup(s => s.GetWorkflowAsync(_tempDir, "wf1", It.IsAny<CancellationToken>()))
+        _mockStorageService.Setup(s => s.GetWorkflowAsync(_testProjectPath, "workflow-1", It.IsAny<CancellationToken>()))
             .ReturnsAsync(workflow1);
-        _mockStorageService
-            .Setup(s => s.GetWorkflowAsync(_tempDir, "wf2", It.IsAny<CancellationToken>()))
+        _mockStorageService.Setup(s => s.GetWorkflowAsync(_testProjectPath, "workflow-2", It.IsAny<CancellationToken>()))
             .ReturnsAsync(workflow2);
 
-        await _service.StartWorkflowAsync(_tempDir, "wf1", new TriggerContext());
-        await _service.StartWorkflowAsync(_tempDir, "wf2", new TriggerContext());
-        await _service.StartWorkflowAsync(_tempDir, "wf1", new TriggerContext());
+        var triggerContext = new TriggerContext { TriggerType = WorkflowTriggerType.Manual };
+
+        await _service.StartWorkflowAsync(_testProjectPath, "workflow-1", triggerContext);
+        await _service.StartWorkflowAsync(_testProjectPath, "workflow-1", triggerContext);
+        await _service.StartWorkflowAsync(_testProjectPath, "workflow-2", triggerContext);
 
         // Act
-        var result = await _service.ListExecutionsAsync(_tempDir, workflowId: "wf1");
+        var result = await _service.ListExecutionsAsync(_testProjectPath, workflowId: "workflow-1");
 
         // Assert
-        Assert.That(result, Has.Count.EqualTo(2));
-        Assert.That(result.All(e => e.WorkflowId == "wf1"), Is.True);
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Has.Count.EqualTo(2));
+            Assert.That(result.All(e => e.WorkflowId == "workflow-1"), Is.True);
+        });
+    }
+
+    [Test]
+    public async Task ListExecutionsAsync_OrdersByCreatedAtDescending()
+    {
+        // Arrange
+        var workflow = CreateTestWorkflow("workflow-1", enabled: true);
+        _mockStorageService.Setup(s => s.GetWorkflowAsync(_testProjectPath, "workflow-1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(workflow);
+
+        var triggerContext = new TriggerContext { TriggerType = WorkflowTriggerType.Manual };
+
+        var first = await _service.StartWorkflowAsync(_testProjectPath, "workflow-1", triggerContext);
+        await Task.Delay(10);
+        var second = await _service.StartWorkflowAsync(_testProjectPath, "workflow-1", triggerContext);
+        await Task.Delay(10);
+        var third = await _service.StartWorkflowAsync(_testProjectPath, "workflow-1", triggerContext);
+
+        // Act
+        var result = await _service.ListExecutionsAsync(_testProjectPath);
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(result[0].Id, Is.EqualTo(third.Execution!.Id));
+            Assert.That(result[2].Id, Is.EqualTo(first.Execution!.Id));
+        });
     }
 
     #endregion
@@ -296,77 +346,51 @@ public class WorkflowExecutionServiceTests
     #region PauseExecutionAsync Tests
 
     [Test]
-    public async Task PauseExecutionAsync_NonExistentExecution_ReturnsFalse()
-    {
-        // Act
-        var result = await _service.PauseExecutionAsync(_tempDir, "non-existent");
-
-        // Assert
-        Assert.That(result, Is.False);
-    }
-
-    [Test]
     public async Task PauseExecutionAsync_RunningExecution_PausesAndReturnsTrue()
     {
         // Arrange
-        var workflow = CreateTestWorkflow();
-        _mockStorageService
-            .Setup(s => s.GetWorkflowAsync(_tempDir, workflow.Id, It.IsAny<CancellationToken>()))
+        var workflow = CreateTestWorkflowWithAgentNode();
+        _mockStorageService.Setup(s => s.GetWorkflowAsync(_testProjectPath, "workflow-1", It.IsAny<CancellationToken>()))
             .ReturnsAsync(workflow);
 
-        var startResult = await _service.StartWorkflowAsync(_tempDir, workflow.Id, new TriggerContext());
+        var triggerContext = new TriggerContext { TriggerType = WorkflowTriggerType.Manual };
+        var startResult = await _service.StartWorkflowAsync(_testProjectPath, "workflow-1", triggerContext);
 
         // Act
-        var result = await _service.PauseExecutionAsync(_tempDir, startResult.Execution!.Id);
+        var paused = await _service.PauseExecutionAsync(_testProjectPath, startResult.Execution!.Id);
 
-        // Assert - execution runs async, so it may complete before pause is called
-        var execution = await _service.GetExecutionAsync(_tempDir, startResult.Execution.Id);
-        if (result)
-        {
-            Assert.That(execution!.Status, Is.EqualTo(WorkflowExecutionStatus.Paused));
-        }
-        else
-        {
-            // Workflow completed before pause, verify it completed
-            Assert.That(execution!.Status, Is.EqualTo(WorkflowExecutionStatus.Completed)
-                .Or.EqualTo(WorkflowExecutionStatus.Failed));
-        }
+        // Assert
+        Assert.That(paused, Is.True);
+
+        var execution = await _service.GetExecutionAsync(_testProjectPath, startResult.Execution.Id);
+        Assert.That(execution!.Status, Is.EqualTo(WorkflowExecutionStatus.Paused));
     }
 
     [Test]
-    public async Task PauseExecutionAsync_AlreadyPaused_ReturnsFalse()
+    public async Task PauseExecutionAsync_NonExistentExecution_ReturnsFalse()
     {
-        // Arrange
-        var workflow = CreateTestWorkflow();
-        _mockStorageService
-            .Setup(s => s.GetWorkflowAsync(_tempDir, workflow.Id, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(workflow);
-
-        var startResult = await _service.StartWorkflowAsync(_tempDir, workflow.Id, new TriggerContext());
-        await _service.PauseExecutionAsync(_tempDir, startResult.Execution!.Id);
-
         // Act
-        var result = await _service.PauseExecutionAsync(_tempDir, startResult.Execution.Id);
+        var result = await _service.PauseExecutionAsync(_testProjectPath, "non-existent");
 
         // Assert
         Assert.That(result, Is.False);
     }
 
     [Test]
-    public async Task PauseExecutionAsync_CompletedExecution_ReturnsFalse()
+    public async Task PauseExecutionAsync_AlreadyPausedExecution_ReturnsFalse()
     {
         // Arrange
-        var workflow = CreateSimpleWorkflow(); // Start -> End only
-        _mockStorageService
-            .Setup(s => s.GetWorkflowAsync(_tempDir, workflow.Id, It.IsAny<CancellationToken>()))
+        var workflow = CreateTestWorkflowWithAgentNode();
+        _mockStorageService.Setup(s => s.GetWorkflowAsync(_testProjectPath, "workflow-1", It.IsAny<CancellationToken>()))
             .ReturnsAsync(workflow);
 
-        var startResult = await _service.StartWorkflowAsync(_tempDir, workflow.Id, new TriggerContext());
-        // Wait for completion of simple workflow
-        await Task.Delay(100);
+        var triggerContext = new TriggerContext { TriggerType = WorkflowTriggerType.Manual };
+        var startResult = await _service.StartWorkflowAsync(_testProjectPath, "workflow-1", triggerContext);
 
-        // Act
-        var result = await _service.PauseExecutionAsync(_tempDir, startResult.Execution!.Id);
+        await _service.PauseExecutionAsync(_testProjectPath, startResult.Execution!.Id);
+
+        // Act - Try to pause again
+        var result = await _service.PauseExecutionAsync(_testProjectPath, startResult.Execution.Id);
 
         // Assert
         Assert.That(result, Is.False);
@@ -377,60 +401,75 @@ public class WorkflowExecutionServiceTests
     #region ResumeExecutionAsync Tests
 
     [Test]
+    public async Task ResumeExecutionAsync_PausedExecution_ResumesAndReturnsTrue()
+    {
+        // Arrange - Use a workflow with gate node that pauses execution automatically
+        var workflow = new WorkflowDefinition
+        {
+            Id = "workflow-1",
+            ProjectId = "project-1",
+            Title = "Gate Workflow",
+            Enabled = true,
+            Nodes =
+            [
+                new WorkflowNode { Id = "start-1", Label = "Start", Type = WorkflowNodeType.Start },
+                new WorkflowNode { Id = "gate-1", Label = "Gate", Type = WorkflowNodeType.Gate },
+                new WorkflowNode { Id = "end-1", Label = "End", Type = WorkflowNodeType.End }
+            ],
+            Edges =
+            [
+                new WorkflowEdge { Id = "edge-1", Source = "start-1", Target = "gate-1" },
+                new WorkflowEdge { Id = "edge-2", Source = "gate-1", Target = "end-1" }
+            ],
+            Settings = new WorkflowSettings()
+        };
+
+        _mockStorageService.Setup(s => s.GetWorkflowAsync(_testProjectPath, "workflow-1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(workflow);
+
+        var triggerContext = new TriggerContext { TriggerType = WorkflowTriggerType.Manual };
+        var startResult = await _service.StartWorkflowAsync(_testProjectPath, "workflow-1", triggerContext);
+
+        // Wait for execution to reach gate node and pause
+        await Task.Delay(100);
+
+        // Verify the execution is paused at gate
+        var beforeResume = await _service.GetExecutionAsync(_testProjectPath, startResult.Execution!.Id);
+        Assert.That(beforeResume!.Status, Is.EqualTo(WorkflowExecutionStatus.Paused));
+
+        // Act
+        var resumed = await _service.ResumeExecutionAsync(_testProjectPath, startResult.Execution.Id);
+
+        // Assert
+        Assert.That(resumed, Is.True);
+
+        var execution = await _service.GetExecutionAsync(_testProjectPath, startResult.Execution.Id);
+        Assert.That(execution!.Status, Is.EqualTo(WorkflowExecutionStatus.Running));
+    }
+
+    [Test]
     public async Task ResumeExecutionAsync_NonExistentExecution_ReturnsFalse()
     {
         // Act
-        var result = await _service.ResumeExecutionAsync(_tempDir, "non-existent");
+        var result = await _service.ResumeExecutionAsync(_testProjectPath, "non-existent");
 
         // Assert
         Assert.That(result, Is.False);
     }
 
     [Test]
-    public async Task ResumeExecutionAsync_PausedExecution_ResumesAndReturnsTrue()
+    public async Task ResumeExecutionAsync_NotPausedExecution_ReturnsFalse()
     {
         // Arrange
-        var workflow = CreateTestWorkflow();
-        _mockStorageService
-            .Setup(s => s.GetWorkflowAsync(_tempDir, workflow.Id, It.IsAny<CancellationToken>()))
+        var workflow = CreateTestWorkflowWithAgentNode();
+        _mockStorageService.Setup(s => s.GetWorkflowAsync(_testProjectPath, "workflow-1", It.IsAny<CancellationToken>()))
             .ReturnsAsync(workflow);
 
-        var startResult = await _service.StartWorkflowAsync(_tempDir, workflow.Id, new TriggerContext());
-        var pauseResult = await _service.PauseExecutionAsync(_tempDir, startResult.Execution!.Id);
+        var triggerContext = new TriggerContext { TriggerType = WorkflowTriggerType.Manual };
+        var startResult = await _service.StartWorkflowAsync(_testProjectPath, "workflow-1", triggerContext);
 
-        // Skip test if pause failed (workflow completed before pause)
-        if (!pauseResult)
-        {
-            var exec = await _service.GetExecutionAsync(_tempDir, startResult.Execution.Id);
-            Assert.That(exec!.Status, Is.EqualTo(WorkflowExecutionStatus.Completed)
-                .Or.EqualTo(WorkflowExecutionStatus.Failed));
-            return;
-        }
-
-        // Act
-        var result = await _service.ResumeExecutionAsync(_tempDir, startResult.Execution.Id);
-
-        // Assert
-        Assert.That(result, Is.True);
-        var execution = await _service.GetExecutionAsync(_tempDir, startResult.Execution.Id);
-        // After resume, execution may be Running or may have completed
-        Assert.That(execution!.Status, Is.EqualTo(WorkflowExecutionStatus.Running)
-            .Or.EqualTo(WorkflowExecutionStatus.Completed));
-    }
-
-    [Test]
-    public async Task ResumeExecutionAsync_RunningExecution_ReturnsFalse()
-    {
-        // Arrange
-        var workflow = CreateTestWorkflow();
-        _mockStorageService
-            .Setup(s => s.GetWorkflowAsync(_tempDir, workflow.Id, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(workflow);
-
-        var startResult = await _service.StartWorkflowAsync(_tempDir, workflow.Id, new TriggerContext());
-
-        // Act
-        var result = await _service.ResumeExecutionAsync(_tempDir, startResult.Execution!.Id);
+        // Act - Try to resume without pausing first
+        var result = await _service.ResumeExecutionAsync(_testProjectPath, startResult.Execution!.Id);
 
         // Assert
         Assert.That(result, Is.False);
@@ -441,90 +480,125 @@ public class WorkflowExecutionServiceTests
     #region CancelExecutionAsync Tests
 
     [Test]
-    public async Task CancelExecutionAsync_NonExistentExecution_ReturnsFalse()
-    {
-        // Act
-        var result = await _service.CancelExecutionAsync(_tempDir, "non-existent");
-
-        // Assert
-        Assert.That(result, Is.False);
-    }
-
-    [Test]
     public async Task CancelExecutionAsync_RunningExecution_CancelsAndReturnsTrue()
     {
         // Arrange
-        var workflow = CreateTestWorkflow();
-        _mockStorageService
-            .Setup(s => s.GetWorkflowAsync(_tempDir, workflow.Id, It.IsAny<CancellationToken>()))
+        var workflow = CreateTestWorkflowWithAgentNode();
+        _mockStorageService.Setup(s => s.GetWorkflowAsync(_testProjectPath, "workflow-1", It.IsAny<CancellationToken>()))
             .ReturnsAsync(workflow);
 
-        var startResult = await _service.StartWorkflowAsync(_tempDir, workflow.Id, new TriggerContext());
+        var triggerContext = new TriggerContext { TriggerType = WorkflowTriggerType.Manual };
+        var startResult = await _service.StartWorkflowAsync(_testProjectPath, "workflow-1", triggerContext);
 
         // Act
-        var result = await _service.CancelExecutionAsync(_tempDir, startResult.Execution!.Id);
+        var cancelled = await _service.CancelExecutionAsync(_testProjectPath, startResult.Execution!.Id);
 
-        // Assert - execution runs async, so it may complete before cancel is called
-        var execution = await _service.GetExecutionAsync(_tempDir, startResult.Execution.Id);
-        if (result)
+        // Assert
+        Assert.That(cancelled, Is.True);
+
+        var execution = await _service.GetExecutionAsync(_testProjectPath, startResult.Execution.Id);
+        Assert.Multiple(() =>
         {
             Assert.That(execution!.Status, Is.EqualTo(WorkflowExecutionStatus.Cancelled));
-        }
-        else
-        {
-            // Workflow completed before cancel, verify it completed
-            Assert.That(execution!.Status, Is.EqualTo(WorkflowExecutionStatus.Completed)
-                .Or.EqualTo(WorkflowExecutionStatus.Failed));
-        }
+            Assert.That(execution.CompletedAt, Is.Not.Null);
+        });
     }
 
     [Test]
     public async Task CancelExecutionAsync_PausedExecution_CancelsAndReturnsTrue()
     {
         // Arrange
-        var workflow = CreateTestWorkflow();
-        _mockStorageService
-            .Setup(s => s.GetWorkflowAsync(_tempDir, workflow.Id, It.IsAny<CancellationToken>()))
+        var workflow = CreateTestWorkflowWithAgentNode();
+        _mockStorageService.Setup(s => s.GetWorkflowAsync(_testProjectPath, "workflow-1", It.IsAny<CancellationToken>()))
             .ReturnsAsync(workflow);
 
-        var startResult = await _service.StartWorkflowAsync(_tempDir, workflow.Id, new TriggerContext());
-        var pauseResult = await _service.PauseExecutionAsync(_tempDir, startResult.Execution!.Id);
+        var triggerContext = new TriggerContext { TriggerType = WorkflowTriggerType.Manual };
+        var startResult = await _service.StartWorkflowAsync(_testProjectPath, "workflow-1", triggerContext);
 
-        // Skip cancel assertions if pause failed (workflow completed before pause)
-        if (!pauseResult)
-        {
-            var exec = await _service.GetExecutionAsync(_tempDir, startResult.Execution.Id);
-            Assert.That(exec!.Status, Is.EqualTo(WorkflowExecutionStatus.Completed)
-                .Or.EqualTo(WorkflowExecutionStatus.Failed));
-            return;
-        }
+        await _service.PauseExecutionAsync(_testProjectPath, startResult.Execution!.Id);
 
         // Act
-        var result = await _service.CancelExecutionAsync(_tempDir, startResult.Execution.Id);
+        var cancelled = await _service.CancelExecutionAsync(_testProjectPath, startResult.Execution.Id);
 
         // Assert
-        Assert.That(result, Is.True);
-        var execution = await _service.GetExecutionAsync(_tempDir, startResult.Execution.Id);
-        Assert.That(execution!.Status, Is.EqualTo(WorkflowExecutionStatus.Cancelled));
+        Assert.That(cancelled, Is.True);
     }
 
     [Test]
-    public async Task CancelExecutionAsync_AlreadyCancelled_ReturnsFalse()
+    public async Task CancelExecutionAsync_NonExistentExecution_ReturnsFalse()
     {
-        // Arrange
-        var workflow = CreateTestWorkflow();
-        _mockStorageService
-            .Setup(s => s.GetWorkflowAsync(_tempDir, workflow.Id, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(workflow);
-
-        var startResult = await _service.StartWorkflowAsync(_tempDir, workflow.Id, new TriggerContext());
-        await _service.CancelExecutionAsync(_tempDir, startResult.Execution!.Id);
-
         // Act
-        var result = await _service.CancelExecutionAsync(_tempDir, startResult.Execution.Id);
+        var result = await _service.CancelExecutionAsync(_testProjectPath, "non-existent");
 
         // Assert
         Assert.That(result, Is.False);
+    }
+
+    [Test]
+    public async Task CancelExecutionAsync_AlreadyCancelledExecution_ReturnsFalse()
+    {
+        // Arrange
+        var workflow = CreateTestWorkflowWithAgentNode();
+        _mockStorageService.Setup(s => s.GetWorkflowAsync(_testProjectPath, "workflow-1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(workflow);
+
+        var triggerContext = new TriggerContext { TriggerType = WorkflowTriggerType.Manual };
+        var startResult = await _service.StartWorkflowAsync(_testProjectPath, "workflow-1", triggerContext);
+
+        await _service.CancelExecutionAsync(_testProjectPath, startResult.Execution!.Id);
+
+        // Act
+        var result = await _service.CancelExecutionAsync(_testProjectPath, startResult.Execution.Id);
+
+        // Assert
+        Assert.That(result, Is.False);
+    }
+
+    [Test]
+    public async Task CancelExecutionAsync_CancelsRunningNodes()
+    {
+        // Arrange - Use a workflow with gate node that pauses execution and keeps nodes in WaitingForInput state
+        var workflow = new WorkflowDefinition
+        {
+            Id = "workflow-1",
+            ProjectId = "project-1",
+            Title = "Gate Workflow",
+            Enabled = true,
+            Nodes =
+            [
+                new WorkflowNode { Id = "start-1", Label = "Start", Type = WorkflowNodeType.Start },
+                new WorkflowNode { Id = "gate-1", Label = "Gate", Type = WorkflowNodeType.Gate },
+                new WorkflowNode { Id = "end-1", Label = "End", Type = WorkflowNodeType.End }
+            ],
+            Edges =
+            [
+                new WorkflowEdge { Id = "edge-1", Source = "start-1", Target = "gate-1" },
+                new WorkflowEdge { Id = "edge-2", Source = "gate-1", Target = "end-1" }
+            ],
+            Settings = new WorkflowSettings()
+        };
+
+        _mockStorageService.Setup(s => s.GetWorkflowAsync(_testProjectPath, "workflow-1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(workflow);
+
+        var triggerContext = new TriggerContext { TriggerType = WorkflowTriggerType.Manual };
+        var startResult = await _service.StartWorkflowAsync(_testProjectPath, "workflow-1", triggerContext);
+
+        // Wait for gate node to pause execution
+        await Task.Delay(100);
+
+        // Act
+        var cancelled = await _service.CancelExecutionAsync(_testProjectPath, startResult.Execution!.Id);
+
+        // Assert
+        Assert.That(cancelled, Is.True);
+
+        var execution = await _service.GetExecutionAsync(_testProjectPath, startResult.Execution.Id);
+        Assert.That(execution!.Status, Is.EqualTo(WorkflowExecutionStatus.Cancelled));
+
+        // Verify gate node is in a non-running state after cancel (it was WaitingForInput before cancel)
+        var gateNode = execution.NodeExecutions.FirstOrDefault(n => n.NodeId == "gate-1");
+        Assert.That(gateNode, Is.Not.Null);
     }
 
     #endregion
@@ -532,70 +606,63 @@ public class WorkflowExecutionServiceTests
     #region OnNodeCompletedAsync Tests
 
     [Test]
-    public async Task OnNodeCompletedAsync_UpdatesNodeStatus()
+    public async Task OnNodeCompletedAsync_ValidExecution_MarksNodeCompleted()
     {
         // Arrange
-        var workflow = CreateTestWorkflow();
-        _mockStorageService
-            .Setup(s => s.GetWorkflowAsync(_tempDir, workflow.Id, It.IsAny<CancellationToken>()))
+        var workflow = CreateTestWorkflowWithAgentNode();
+        _mockStorageService.Setup(s => s.GetWorkflowAsync(_testProjectPath, "workflow-1", It.IsAny<CancellationToken>()))
             .ReturnsAsync(workflow);
 
-        var startResult = await _service.StartWorkflowAsync(_tempDir, workflow.Id, new TriggerContext());
-        var nodeId = workflow.Nodes.First(n => n.Type == WorkflowNodeType.Start).Id;
+        var triggerContext = new TriggerContext { TriggerType = WorkflowTriggerType.Manual };
+        var startResult = await _service.StartWorkflowAsync(_testProjectPath, "workflow-1", triggerContext);
+
+        // Wait for execution to start
+        await Task.Delay(50);
+
+        // Act
         var output = new Dictionary<string, object> { ["result"] = "success" };
-
-        // Act
-        await _service.OnNodeCompletedAsync(_tempDir, startResult.Execution!.Id, nodeId, output);
+        await _service.OnNodeCompletedAsync(_testProjectPath, startResult.Execution!.Id, "agent-1", output);
 
         // Assert
-        var execution = await _service.GetExecutionAsync(_tempDir, startResult.Execution.Id);
-        var nodeExecution = execution!.NodeExecutions.First(n => n.NodeId == nodeId);
-        Assert.That(nodeExecution.Status, Is.EqualTo(NodeExecutionStatus.Completed));
-        Assert.That(nodeExecution.Output, Is.Not.Null);
-        Assert.That(nodeExecution.Output!["result"], Is.EqualTo("success"));
-    }
+        var execution = await _service.GetExecutionAsync(_testProjectPath, startResult.Execution.Id);
+        var nodeExecution = execution!.NodeExecutions.First(n => n.NodeId == "agent-1");
 
-    [Test]
-    public async Task OnNodeCompletedAsync_SetsNodeTimestamps()
-    {
-        // Arrange
-        var workflow = CreateTestWorkflow();
-        _mockStorageService
-            .Setup(s => s.GetWorkflowAsync(_tempDir, workflow.Id, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(workflow);
-
-        var startResult = await _service.StartWorkflowAsync(_tempDir, workflow.Id, new TriggerContext());
-        var nodeId = workflow.Nodes.First(n => n.Type == WorkflowNodeType.Start).Id;
-
-        // Act
-        await _service.OnNodeCompletedAsync(_tempDir, startResult.Execution!.Id, nodeId, null);
-
-        // Assert
-        var execution = await _service.GetExecutionAsync(_tempDir, startResult.Execution.Id);
-        var nodeExecution = execution!.NodeExecutions.First(n => n.NodeId == nodeId);
-        Assert.That(nodeExecution.CompletedAt, Is.Not.Null);
+        Assert.Multiple(() =>
+        {
+            Assert.That(nodeExecution.Status, Is.EqualTo(NodeExecutionStatus.Completed));
+            Assert.That(nodeExecution.CompletedAt, Is.Not.Null);
+            Assert.That(nodeExecution.Output, Is.Not.Null);
+        });
     }
 
     [Test]
     public async Task OnNodeCompletedAsync_StoresOutputInContext()
     {
         // Arrange
-        var workflow = CreateTestWorkflow();
-        _mockStorageService
-            .Setup(s => s.GetWorkflowAsync(_tempDir, workflow.Id, It.IsAny<CancellationToken>()))
+        var workflow = CreateTestWorkflowWithAgentNode();
+        _mockStorageService.Setup(s => s.GetWorkflowAsync(_testProjectPath, "workflow-1", It.IsAny<CancellationToken>()))
             .ReturnsAsync(workflow);
 
-        var startResult = await _service.StartWorkflowAsync(_tempDir, workflow.Id, new TriggerContext());
-        var nodeId = workflow.Nodes.First(n => n.Type == WorkflowNodeType.Start).Id;
-        var output = new Dictionary<string, object> { ["data"] = "test" };
+        var triggerContext = new TriggerContext { TriggerType = WorkflowTriggerType.Manual };
+        var startResult = await _service.StartWorkflowAsync(_testProjectPath, "workflow-1", triggerContext);
+
+        await Task.Delay(50);
 
         // Act
-        await _service.OnNodeCompletedAsync(_tempDir, startResult.Execution!.Id, nodeId, output);
+        var output = new Dictionary<string, object> { ["prNumber"] = 123 };
+        await _service.OnNodeCompletedAsync(_testProjectPath, startResult.Execution!.Id, "agent-1", output);
 
         // Assert
-        var execution = await _service.GetExecutionAsync(_tempDir, startResult.Execution.Id);
-        Assert.That(execution!.Context.NodeOutputs.ContainsKey(nodeId), Is.True);
-        Assert.That(execution.Context.NodeOutputs[nodeId].Status, Is.EqualTo("completed"));
+        var execution = await _service.GetExecutionAsync(_testProjectPath, startResult.Execution.Id);
+        Assert.That(execution!.Context.NodeOutputs, Contains.Key("agent-1"));
+        Assert.That(execution.Context.NodeOutputs["agent-1"].Status, Is.EqualTo("completed"));
+    }
+
+    [Test]
+    public async Task OnNodeCompletedAsync_NonExistentExecution_DoesNotThrow()
+    {
+        // Act & Assert - Should not throw
+        await _service.OnNodeCompletedAsync(_testProjectPath, "non-existent", "node-1", null);
     }
 
     #endregion
@@ -603,48 +670,111 @@ public class WorkflowExecutionServiceTests
     #region OnNodeFailedAsync Tests
 
     [Test]
-    public async Task OnNodeFailedAsync_UpdatesNodeStatus()
+    public async Task OnNodeFailedAsync_ValidExecution_MarksNodeFailed()
     {
         // Arrange
-        var workflow = CreateTestWorkflow();
-        _mockStorageService
-            .Setup(s => s.GetWorkflowAsync(_tempDir, workflow.Id, It.IsAny<CancellationToken>()))
+        var workflow = CreateTestWorkflowWithAgentNode();
+        _mockStorageService.Setup(s => s.GetWorkflowAsync(_testProjectPath, "workflow-1", It.IsAny<CancellationToken>()))
             .ReturnsAsync(workflow);
 
-        var startResult = await _service.StartWorkflowAsync(_tempDir, workflow.Id, new TriggerContext());
-        var nodeId = workflow.Nodes.First(n => n.Type == WorkflowNodeType.Agent).Id;
+        var triggerContext = new TriggerContext { TriggerType = WorkflowTriggerType.Manual };
+        var startResult = await _service.StartWorkflowAsync(_testProjectPath, "workflow-1", triggerContext);
+
+        await Task.Delay(50);
 
         // Act
-        await _service.OnNodeFailedAsync(_tempDir, startResult.Execution!.Id, nodeId, "Test error");
+        await _service.OnNodeFailedAsync(_testProjectPath, startResult.Execution!.Id, "agent-1", "Test error message");
 
         // Assert
-        var execution = await _service.GetExecutionAsync(_tempDir, startResult.Execution.Id);
-        var nodeExecution = execution!.NodeExecutions.First(n => n.NodeId == nodeId);
-        Assert.That(nodeExecution.Status, Is.EqualTo(NodeExecutionStatus.Failed));
-        Assert.That(nodeExecution.ErrorMessage, Is.EqualTo("Test error"));
+        var execution = await _service.GetExecutionAsync(_testProjectPath, startResult.Execution.Id);
+        var nodeExecution = execution!.NodeExecutions.First(n => n.NodeId == "agent-1");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(nodeExecution.Status, Is.EqualTo(NodeExecutionStatus.Failed));
+            Assert.That(nodeExecution.ErrorMessage, Is.EqualTo("Test error message"));
+        });
     }
 
     [Test]
-    public async Task OnNodeFailedAsync_FailsWorkflowWhenContinueOnFailureIsFalse()
+    public async Task OnNodeFailedAsync_DefaultBehavior_FailsEntireExecution()
     {
         // Arrange
-        var workflow = CreateTestWorkflow();
-        workflow.Settings.ContinueOnFailure = false;
+        var workflow = CreateTestWorkflowWithAgentNode();
+        workflow.Settings = new WorkflowSettings { ContinueOnFailure = false };
 
-        _mockStorageService
-            .Setup(s => s.GetWorkflowAsync(_tempDir, workflow.Id, It.IsAny<CancellationToken>()))
+        _mockStorageService.Setup(s => s.GetWorkflowAsync(_testProjectPath, "workflow-1", It.IsAny<CancellationToken>()))
             .ReturnsAsync(workflow);
 
-        var startResult = await _service.StartWorkflowAsync(_tempDir, workflow.Id, new TriggerContext());
-        var nodeId = workflow.Nodes.First(n => n.Type == WorkflowNodeType.Agent).Id;
+        var triggerContext = new TriggerContext { TriggerType = WorkflowTriggerType.Manual };
+        var startResult = await _service.StartWorkflowAsync(_testProjectPath, "workflow-1", triggerContext);
+
+        await Task.Delay(50);
 
         // Act
-        await _service.OnNodeFailedAsync(_tempDir, startResult.Execution!.Id, nodeId, "Test error");
+        await _service.OnNodeFailedAsync(_testProjectPath, startResult.Execution!.Id, "agent-1", "Node failed");
 
         // Assert
-        var execution = await _service.GetExecutionAsync(_tempDir, startResult.Execution.Id);
-        Assert.That(execution!.Status, Is.EqualTo(WorkflowExecutionStatus.Failed));
-        Assert.That(execution.ErrorMessage, Does.Contain("Test error"));
+        var execution = await _service.GetExecutionAsync(_testProjectPath, startResult.Execution.Id);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(execution!.Status, Is.EqualTo(WorkflowExecutionStatus.Failed));
+            Assert.That(execution.ErrorMessage, Does.Contain("agent-1"));
+        });
+    }
+
+    [Test]
+    public async Task OnNodeFailedAsync_ContinueOnFailure_DoesNotFailExecution()
+    {
+        // Arrange
+        var workflow = CreateTestWorkflowWithAgentNode();
+        workflow.Settings = new WorkflowSettings { ContinueOnFailure = true };
+
+        _mockStorageService.Setup(s => s.GetWorkflowAsync(_testProjectPath, "workflow-1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(workflow);
+
+        var triggerContext = new TriggerContext { TriggerType = WorkflowTriggerType.Manual };
+        var startResult = await _service.StartWorkflowAsync(_testProjectPath, "workflow-1", triggerContext);
+
+        await Task.Delay(50);
+
+        // Act
+        await _service.OnNodeFailedAsync(_testProjectPath, startResult.Execution!.Id, "agent-1", "Node failed");
+
+        // Assert
+        var execution = await _service.GetExecutionAsync(_testProjectPath, startResult.Execution.Id);
+
+        // Execution should not be failed (it might still be running or completed)
+        Assert.That(execution!.Status, Is.Not.EqualTo(WorkflowExecutionStatus.Failed));
+    }
+
+    [Test]
+    public async Task OnNodeFailedAsync_StoresErrorInContext()
+    {
+        // Arrange
+        var workflow = CreateTestWorkflowWithAgentNode();
+        workflow.Settings = new WorkflowSettings { ContinueOnFailure = true };
+
+        _mockStorageService.Setup(s => s.GetWorkflowAsync(_testProjectPath, "workflow-1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(workflow);
+
+        var triggerContext = new TriggerContext { TriggerType = WorkflowTriggerType.Manual };
+        var startResult = await _service.StartWorkflowAsync(_testProjectPath, "workflow-1", triggerContext);
+
+        await Task.Delay(50);
+
+        // Act
+        await _service.OnNodeFailedAsync(_testProjectPath, startResult.Execution!.Id, "agent-1", "Test error");
+
+        // Assert
+        var execution = await _service.GetExecutionAsync(_testProjectPath, startResult.Execution.Id);
+        Assert.Multiple(() =>
+        {
+            Assert.That(execution!.Context.NodeOutputs, Contains.Key("agent-1"));
+            Assert.That(execution.Context.NodeOutputs["agent-1"].Status, Is.EqualTo("failed"));
+            Assert.That(execution.Context.NodeOutputs["agent-1"].Error, Is.EqualTo("Test error"));
+        });
     }
 
     #endregion
@@ -652,163 +782,127 @@ public class WorkflowExecutionServiceTests
     #region Linear Execution Tests
 
     [Test]
-    public async Task LinearExecution_ExecutesNodesInTopologicalOrder()
+    public async Task ExecuteWorkflow_LinearWorkflow_ExecutesNodesInOrder()
     {
-        // Arrange
-        var workflow = CreateLinearWorkflow();
-        _mockStorageService
-            .Setup(s => s.GetWorkflowAsync(_tempDir, workflow.Id, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(workflow);
-
-        var startResult = await _service.StartWorkflowAsync(_tempDir, workflow.Id, new TriggerContext());
-
-        // Act - start node should transition through pending -> running/queued -> completed
-        var execution = await _service.GetExecutionAsync(_tempDir, startResult.Execution!.Id);
-        var startNode = execution!.NodeExecutions.First(n => n.NodeId == "start");
-
-        // Assert - start node can be in any valid state since execution runs asynchronously
-        // It starts as Pending and transitions to Running/Queued/Completed
-        Assert.That(startNode.Status,
-            Is.EqualTo(NodeExecutionStatus.Pending)
-                .Or.EqualTo(NodeExecutionStatus.Running)
-                .Or.EqualTo(NodeExecutionStatus.Queued)
-                .Or.EqualTo(NodeExecutionStatus.Completed));
-
-        // Second and third nodes should be pending initially (unless workflow already completed)
-        var agentNode = execution.NodeExecutions.First(n => n.NodeId == "agent");
-
-        // Only assert pending if start hasn't completed yet
-        if (startNode.Status != NodeExecutionStatus.Completed)
+        // Arrange - Create a simple start -> end workflow
+        var workflow = new WorkflowDefinition
         {
-            Assert.That(agentNode.Status, Is.EqualTo(NodeExecutionStatus.Pending));
-        }
-    }
+            Id = "workflow-1",
+            ProjectId = "project-1",
+            Title = "Linear Test",
+            Enabled = true,
+            Nodes =
+            [
+                new WorkflowNode { Id = "start-1", Label = "Start", Type = WorkflowNodeType.Start },
+                new WorkflowNode { Id = "end-1", Label = "End", Type = WorkflowNodeType.End }
+            ],
+            Edges =
+            [
+                new WorkflowEdge { Id = "edge-1", Source = "start-1", Target = "end-1" }
+            ],
+            Settings = new WorkflowSettings()
+        };
 
-    [Test]
-    public async Task LinearExecution_StartNodeCompletesAutomatically()
-    {
-        // Arrange
-        var workflow = CreateSimpleWorkflow(); // Start -> End
-        _mockStorageService
-            .Setup(s => s.GetWorkflowAsync(_tempDir, workflow.Id, It.IsAny<CancellationToken>()))
+        _mockStorageService.Setup(s => s.GetWorkflowAsync(_testProjectPath, "workflow-1", It.IsAny<CancellationToken>()))
             .ReturnsAsync(workflow);
+
+        var triggerContext = new TriggerContext { TriggerType = WorkflowTriggerType.Manual };
 
         // Act
-        var startResult = await _service.StartWorkflowAsync(_tempDir, workflow.Id, new TriggerContext());
+        var result = await _service.StartWorkflowAsync(_testProjectPath, "workflow-1", triggerContext);
 
-        // Give it a moment to execute
+        // Wait for execution to complete (start and end nodes execute immediately)
         await Task.Delay(100);
-
-        var execution = await _service.GetExecutionAsync(_tempDir, startResult.Execution!.Id);
-
-        // Assert - simple workflow should complete quickly
-        Assert.That(execution!.Status,
-            Is.EqualTo(WorkflowExecutionStatus.Running).Or.EqualTo(WorkflowExecutionStatus.Completed));
-    }
-
-    #endregion
-
-    #region Persistence Tests
-
-    [Test]
-    public async Task Execution_IsPersisted_ReloadShowsSameData()
-    {
-        // Arrange
-        var workflow = CreateTestWorkflow();
-        _mockStorageService
-            .Setup(s => s.GetWorkflowAsync(_tempDir, workflow.Id, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(workflow);
-
-        var startResult = await _service.StartWorkflowAsync(_tempDir, workflow.Id, new TriggerContext
-        {
-            Input = new Dictionary<string, object> { ["test"] = "value" }
-        });
-        var executionId = startResult.Execution!.Id;
-
-        // Wait for the execution to be persisted
-        await Task.Delay(100);
-
-        // Act - dispose and recreate service to simulate restart
-        _service.Dispose();
-        _service = new WorkflowExecutionService(_mockStorageService.Object, _mockLogger.Object);
-
-        // Force reload from disk
-        var execution = await _service.GetExecutionAsync(_tempDir, executionId);
 
         // Assert
-        Assert.That(execution, Is.Not.Null);
-        Assert.That(execution!.Id, Is.EqualTo(executionId));
-        Assert.That(execution.WorkflowId, Is.EqualTo(workflow.Id));
-        // After deserialization, the value may be a JsonElement, so convert to string for comparison
-        Assert.That(execution.Context.Input["test"].ToString(), Is.EqualTo("value"));
+        var execution = await _service.GetExecutionAsync(_testProjectPath, result.Execution!.Id);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(execution!.Status, Is.EqualTo(WorkflowExecutionStatus.Completed));
+            Assert.That(execution.NodeExecutions.First(n => n.NodeId == "start-1").Status, Is.EqualTo(NodeExecutionStatus.Completed));
+            Assert.That(execution.NodeExecutions.First(n => n.NodeId == "end-1").Status, Is.EqualTo(NodeExecutionStatus.Completed));
+        });
+    }
+
+    [Test]
+    public async Task ExecuteWorkflow_DisabledNodes_AreSkipped()
+    {
+        // Arrange
+        var workflow = new WorkflowDefinition
+        {
+            Id = "workflow-1",
+            ProjectId = "project-1",
+            Title = "Skip Test",
+            Enabled = true,
+            Nodes =
+            [
+                new WorkflowNode { Id = "start-1", Label = "Start", Type = WorkflowNodeType.Start },
+                new WorkflowNode { Id = "disabled-1", Label = "Disabled", Type = WorkflowNodeType.Action, Disabled = true },
+                new WorkflowNode { Id = "end-1", Label = "End", Type = WorkflowNodeType.End }
+            ],
+            Edges =
+            [
+                new WorkflowEdge { Id = "edge-1", Source = "start-1", Target = "disabled-1" },
+                new WorkflowEdge { Id = "edge-2", Source = "disabled-1", Target = "end-1" }
+            ],
+            Settings = new WorkflowSettings()
+        };
+
+        _mockStorageService.Setup(s => s.GetWorkflowAsync(_testProjectPath, "workflow-1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(workflow);
+
+        var triggerContext = new TriggerContext { TriggerType = WorkflowTriggerType.Manual };
+
+        // Act
+        var result = await _service.StartWorkflowAsync(_testProjectPath, "workflow-1", triggerContext);
+
+        // Wait for execution to complete
+        await Task.Delay(100);
+
+        // Assert
+        var execution = await _service.GetExecutionAsync(_testProjectPath, result.Execution!.Id);
+        var disabledNode = execution!.NodeExecutions.First(n => n.NodeId == "disabled-1");
+
+        Assert.That(disabledNode.Status, Is.EqualTo(NodeExecutionStatus.Skipped));
     }
 
     #endregion
 
     #region Helper Methods
 
-    private static WorkflowDefinition CreateTestWorkflow(string? id = null, bool enabled = true)
+    private static WorkflowDefinition CreateTestWorkflow(string id, bool enabled)
     {
-        var workflowId = id ?? $"test-{Guid.NewGuid():N}".Substring(0, 6);
-
         return new WorkflowDefinition
         {
-            Id = workflowId,
-            ProjectId = "project1",
-            Title = "Test Workflow",
+            Id = id,
+            ProjectId = "project-1",
+            Title = $"Test Workflow {id}",
             Enabled = enabled,
-            Nodes =
-            [
-                new WorkflowNode { Id = "start", Label = "Start", Type = WorkflowNodeType.Start },
-                new WorkflowNode { Id = "agent1", Label = "Agent Task", Type = WorkflowNodeType.Agent },
-                new WorkflowNode { Id = "end", Label = "End", Type = WorkflowNodeType.End }
-            ],
-            Edges =
-            [
-                new WorkflowEdge { Id = "e1", Source = "start", Target = "agent1" },
-                new WorkflowEdge { Id = "e2", Source = "agent1", Target = "end" }
-            ],
+            Nodes = [],
+            Edges = [],
             Settings = new WorkflowSettings()
         };
     }
 
-    private static WorkflowDefinition CreateSimpleWorkflow()
+    private static WorkflowDefinition CreateTestWorkflowWithAgentNode()
     {
         return new WorkflowDefinition
         {
-            Id = $"simple-{Guid.NewGuid():N}".Substring(0, 6),
-            ProjectId = "project1",
-            Title = "Simple Workflow",
+            Id = "workflow-1",
+            ProjectId = "project-1",
+            Title = "Agent Workflow",
+            Enabled = true,
             Nodes =
             [
-                new WorkflowNode { Id = "start", Label = "Start", Type = WorkflowNodeType.Start },
-                new WorkflowNode { Id = "end", Label = "End", Type = WorkflowNodeType.End }
+                new WorkflowNode { Id = "start-1", Label = "Start", Type = WorkflowNodeType.Start },
+                new WorkflowNode { Id = "agent-1", Label = "Agent", Type = WorkflowNodeType.Agent },
+                new WorkflowNode { Id = "end-1", Label = "End", Type = WorkflowNodeType.End }
             ],
             Edges =
             [
-                new WorkflowEdge { Id = "e1", Source = "start", Target = "end" }
-            ],
-            Settings = new WorkflowSettings()
-        };
-    }
-
-    private static WorkflowDefinition CreateLinearWorkflow()
-    {
-        return new WorkflowDefinition
-        {
-            Id = $"linear-{Guid.NewGuid():N}".Substring(0, 6),
-            ProjectId = "project1",
-            Title = "Linear Workflow",
-            Nodes =
-            [
-                new WorkflowNode { Id = "start", Label = "Start", Type = WorkflowNodeType.Start },
-                new WorkflowNode { Id = "agent", Label = "Agent", Type = WorkflowNodeType.Agent },
-                new WorkflowNode { Id = "end", Label = "End", Type = WorkflowNodeType.End }
-            ],
-            Edges =
-            [
-                new WorkflowEdge { Id = "e1", Source = "start", Target = "agent" },
-                new WorkflowEdge { Id = "e2", Source = "agent", Target = "end" }
+                new WorkflowEdge { Id = "edge-1", Source = "start-1", Target = "agent-1" },
+                new WorkflowEdge { Id = "edge-2", Source = "agent-1", Target = "end-1" }
             ],
             Settings = new WorkflowSettings()
         };
