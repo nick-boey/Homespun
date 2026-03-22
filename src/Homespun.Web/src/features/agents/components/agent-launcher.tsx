@@ -151,6 +151,7 @@ export function AgentLauncher({
             {prompts?.map((prompt) => (
               <SelectItem key={prompt.id} value={prompt.id ?? ''}>
                 {prompt.name}
+                {prompt.isOverride && ' (project)'}
               </SelectItem>
             ))}
           </SelectContent>

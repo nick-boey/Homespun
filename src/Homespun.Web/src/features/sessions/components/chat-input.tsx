@@ -193,6 +193,7 @@ export function ChatInput({
                     onClick={() => handlePromptSelect(prompt.id ?? '')}
                   >
                     {prompt.name}
+                    {prompt.isOverride && ' (project)'}
                   </DropdownMenuItem>
                 ))}
                 {(!prompts || prompts.length === 0) && (
