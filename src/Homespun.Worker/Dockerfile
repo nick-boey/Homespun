@@ -5,6 +5,7 @@
 # Extends the shared base image with worker-specific tooling:
 #   - .NET SDKs 8 and 9 (base has 10)
 #   - C# Language Server for LSP support
+#   - TypeScript Language Server (vtsls) for LSP support
 #   - Playwright 1.58.2 browsers for E2E tests
 # =============================================================================
 
@@ -45,9 +46,17 @@ ENV DOTNET_PRINT_TELEMETRY_MESSAGE=false
 # Install C# Language Server for LSP support (not in base image)
 RUN dotnet tool install csharp-ls --tool-path /usr/local/bin
 
+# Install TypeScript Language Server for LSP support
+RUN --mount=type=cache,target=/root/.npm \
+    npm install -g @vtsls/language-server typescript
+
 # Install C# LSP plugin for Claude Code
 RUN claude plugin marketplace add anthropics/claude-plugins-official \
     && claude plugin install csharp-lsp@claude-plugins-official
+
+# Install TypeScript LSP plugin for Claude Code
+RUN claude plugin marketplace add Piebald-AI/claude-code-lsps \
+    && claude plugin install vtsls@claude-code-lsps
 
 # Install Playwright browsers for E2E tests
 # The Node.js @playwright/mcp in base image installs browsers for its version, but E2E tests use
