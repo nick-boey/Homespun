@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { RouterProvider, createRouter } from '@tanstack/react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { SignalRProvider } from '@/providers/signalr-provider'
+import { GlobalSessionsProvider } from '@/providers/global-sessions-provider'
 import { Toaster } from '@/components/ui/sonner'
 import { configureApiClient } from '@/api'
 import './index.css'
@@ -37,8 +38,10 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <SignalRProvider>
-        <RouterProvider router={router} />
-        <Toaster position="bottom-right" closeButton richColors />
+        <GlobalSessionsProvider>
+          <RouterProvider router={router} />
+          <Toaster position="bottom-right" closeButton richColors />
+        </GlobalSessionsProvider>
       </SignalRProvider>
     </QueryClientProvider>
   </StrictMode>
