@@ -29,6 +29,7 @@ export { useSessionSettings } from './hooks/use-session-settings'
 export { useChangeSessionSettings } from './hooks/use-change-session-settings'
 export { useSessionNavigation } from './hooks/use-session-navigation'
 export { useIssueContext } from './hooks/use-issue-context'
+export { useSessionShortcuts } from './hooks/use-session-shortcuts'
 
 // Utils
 export { renderPromptTemplate, type PromptContext } from './utils/render-prompt-template'

@@ -17,6 +17,7 @@ vi.mock('@tanstack/react-router', () => ({
   }),
   useParams: () => ({ sessionId: 'test-session-id' }),
   useRouterState: () => '/sessions/test-session-id',
+  useNavigate: () => vi.fn(),
   Outlet: () => null,
   Link: ({
     children,
@@ -126,6 +127,7 @@ vi.mock('@/features/sessions', () => ({
     isPending: false,
     error: null,
   })),
+  useSessionShortcuts: vi.fn(),
 }))
 
 vi.mock('@/features/questions', () => ({
@@ -870,7 +872,12 @@ describe('SessionChat - Stop Button Functionality', () => {
     const confirmButton = screen.getByTestId('dialog-action')
     await user.click(confirmButton)
 
-    expect(mockStopMutate).toHaveBeenCalledWith('test-session-id')
+    expect(mockStopMutate).toHaveBeenCalledWith(
+      'test-session-id',
+      expect.objectContaining({
+        onSuccess: expect.any(Function),
+      })
+    )
   })
 
   it('should disable stop button while stop is pending', async () => {
