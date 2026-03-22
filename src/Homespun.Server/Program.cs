@@ -111,6 +111,7 @@ else
     builder.Services.AddSingleton<ICommandRunner, CommandRunner>();
     builder.Services.AddSingleton<IGitCloneService, GitCloneService>();
     builder.Services.AddSingleton<IMergeStatusCacheService, MergeStatusCacheService>();
+    builder.Services.AddScoped<ICloneEnrichmentService, CloneEnrichmentService>();
     builder.Services.AddScoped<PullRequestDataService>();
     builder.Services.AddSingleton<IGitHubClientWrapper, GitHubClientWrapper>();
     builder.Services.AddScoped<IGitHubService, GitHubService>();
