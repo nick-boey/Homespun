@@ -1,20 +1,16 @@
-import { useState, useMemo } from 'react'
+import { useState } from 'react'
 import { Plus, RefreshCw, MessageSquare } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useProjectPrompts } from '../hooks/use-project-prompts'
 import { useGlobalPrompts } from '../hooks/use-global-prompts'
-import { useIssueAgentPrompts } from '../hooks/use-issue-agent-prompts'
 import { useCreatePrompt } from '../hooks/use-create-prompt'
 import { useUpdatePrompt } from '../hooks/use-update-prompt'
 import { useDeletePrompt } from '../hooks/use-delete-prompt'
-import { useApplyPromptChanges } from '../hooks/use-apply-prompt-changes'
 import { PromptCard } from './prompt-card'
 import { PromptForm } from './prompt-form'
 import { PromptCardSkeleton } from './prompt-card-skeleton'
 import { PromptsEmptyState } from './prompts-empty-state'
-import { PromptsCodeEditor } from './prompts-code-editor'
 import { IssueAgentPromptsSection } from './issue-agent-prompts-section'
 import { SessionMode } from '@/api'
 import type { AgentPrompt } from '@/api/generated/types.gen'
@@ -25,17 +21,14 @@ export interface PromptsListProps {
 }
 
 type ViewMode = 'list' | 'create' | 'edit'
-type EditorMode = 'cards' | 'code'
 
 export function PromptsList({ projectId, isGlobal = false }: PromptsListProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('list')
-  const [editorMode, setEditorMode] = useState<EditorMode>('cards')
   const [editingPrompt, setEditingPrompt] = useState<AgentPrompt | null>(null)
   const [deletingPromptId, setDeletingPromptId] = useState<string | null>(null)
 
   const globalPromptsQuery = useGlobalPrompts()
   const projectPromptsQuery = useProjectPrompts(projectId || '')
-  const issueAgentPromptsQuery = useIssueAgentPrompts()
 
   const {
     data: prompts,
@@ -43,17 +36,6 @@ export function PromptsList({ projectId, isGlobal = false }: PromptsListProps) {
     refetch,
     isRefetching,
   } = isGlobal ? globalPromptsQuery : projectPromptsQuery
-
-  // Combine prompts for code editor view when on global page
-  const allPromptsForCodeEditor = useMemo(() => {
-    if (!isGlobal) {
-      return prompts ?? []
-    }
-    // Combine global prompts + issue agent prompts for global page
-    const regularPrompts = prompts ?? []
-    const issuePrompts = issueAgentPromptsQuery.data ?? []
-    return [...regularPrompts, ...issuePrompts]
-  }, [isGlobal, prompts, issueAgentPromptsQuery.data])
 
   const createPrompt = useCreatePrompt({
     projectId: isGlobal ? undefined : projectId,
@@ -78,11 +60,6 @@ export function PromptsList({ projectId, isGlobal = false }: PromptsListProps) {
     onError: () => {
       setDeletingPromptId(null)
     },
-  })
-
-  const applyPromptChanges = useApplyPromptChanges({
-    projectId: isGlobal ? undefined : projectId,
-    isGlobal,
   })
 
   const handleEdit = (prompt: AgentPrompt) => {
@@ -212,54 +189,35 @@ export function PromptsList({ projectId, isGlobal = false }: PromptsListProps) {
             <RefreshCw className={`mr-2 h-4 w-4 ${isRefetching ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
-          {editorMode === 'cards' && (
-            <Button size="sm" onClick={() => setViewMode('create')}>
-              <Plus className="mr-2 h-4 w-4" />
-              New Prompt
-            </Button>
-          )}
+          <Button size="sm" onClick={() => setViewMode('create')}>
+            <Plus className="mr-2 h-4 w-4" />
+            New Prompt
+          </Button>
         </div>
       </div>
 
-      <Tabs value={editorMode} onValueChange={(value) => setEditorMode(value as EditorMode)}>
-        <TabsList>
-          <TabsTrigger value="cards">Cards</TabsTrigger>
-          <TabsTrigger value="code">Code</TabsTrigger>
-        </TabsList>
+      {hasPrompts ? (
+        <div className="grid gap-4">
+          {prompts.map((prompt) => (
+            <PromptCard
+              key={prompt.id}
+              prompt={prompt}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+              isDeleting={deletingPromptId === prompt.id}
+            />
+          ))}
+        </div>
+      ) : (
+        <PromptsEmptyState />
+      )}
 
-        <TabsContent value="cards">
-          {hasPrompts ? (
-            <div className="grid gap-4">
-              {prompts.map((prompt) => (
-                <PromptCard
-                  key={prompt.id}
-                  prompt={prompt}
-                  onEdit={handleEdit}
-                  onDelete={handleDelete}
-                  isDeleting={deletingPromptId === prompt.id}
-                />
-              ))}
-            </div>
-          ) : (
-            <PromptsEmptyState />
-          )}
-
-          {/* Issue Agent Prompts section - only shown on global prompts page */}
-          {isGlobal && (
-            <div className="mt-6 border-t pt-6">
-              <IssueAgentPromptsSection />
-            </div>
-          )}
-        </TabsContent>
-
-        <TabsContent value="code">
-          <PromptsCodeEditor
-            prompts={allPromptsForCodeEditor}
-            onApply={applyPromptChanges.mutateAsync}
-            isApplying={applyPromptChanges.isPending}
-          />
-        </TabsContent>
-      </Tabs>
+      {/* Issue Agent Prompts section - only shown on global prompts page */}
+      {isGlobal && (
+        <div className="border-t pt-6">
+          <IssueAgentPromptsSection />
+        </div>
+      )}
     </div>
   )
 }
