@@ -74,7 +74,7 @@ test.describe('Mention search', () => {
       await page.getByText('src/index.ts').click()
 
       // Should insert formatted reference
-      await expect(textarea).toHaveValue('@{src/index.ts}')
+      await expect(textarea).toHaveValue('@src/index.ts')
     })
 
     test('shows PR search popup when typing #', async ({ page }) => {
