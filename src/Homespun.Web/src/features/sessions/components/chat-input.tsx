@@ -301,7 +301,15 @@ function ChatInputTextareaWithSearch({
       const beforeTrigger = value.slice(0, triggerPosition)
       const afterQuery = value.slice(triggerPosition + 1 + query.length)
 
-      const insertion = selection.type === '@' ? `@{${selection.value}}` : `PR #${selection.value}`
+      // Format the insertion based on type
+      let insertion: string
+      if (selection.type === '@') {
+        // Use quotes only if the file path contains spaces
+        const hasSpaces = selection.value.includes(' ')
+        insertion = hasSpaces ? `@"${selection.value}"` : `@${selection.value}`
+      } else {
+        insertion = `PR #${selection.value}`
+      }
 
       const newValue = beforeTrigger + insertion + afterQuery
       setValue(newValue)

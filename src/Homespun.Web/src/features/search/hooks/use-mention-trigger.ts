@@ -74,10 +74,29 @@ export function detectMentionTrigger(value: string, cursorPosition: number): Men
   // Extract the query (text after trigger up to cursor)
   const query = textBeforeCursor.slice(lastTriggerIndex + 1)
 
-  // Check if this is a completed reference (e.g., @{path} or PR #123 with space after)
-  // For @, if the query starts with { and contains }, it's completed
-  if (lastTriggerType === '@' && query.startsWith('{') && query.includes('}')) {
-    return INACTIVE_STATE
+  // Check if this is a completed reference based on trigger type
+  if (lastTriggerType === '@') {
+    // For @ triggers:
+    // - If query starts with ", check if there's a closing " (quoted path complete)
+    // - Otherwise, if query contains any whitespace, it's complete
+    if (query.startsWith('"')) {
+      // Quoted path - complete when closing quote is found
+      const closingQuoteIndex = query.indexOf('"', 1)
+      if (closingQuoteIndex !== -1) {
+        return INACTIVE_STATE
+      }
+    } else {
+      // Unquoted path - complete when any whitespace is encountered
+      if (/\s/.test(query)) {
+        return INACTIVE_STATE
+      }
+    }
+  } else if (lastTriggerType === '#') {
+    // For # triggers:
+    // - Any whitespace in query means trigger is complete (PR numbers don't have spaces)
+    if (/\s/.test(query)) {
+      return INACTIVE_STATE
+    }
   }
 
   return {

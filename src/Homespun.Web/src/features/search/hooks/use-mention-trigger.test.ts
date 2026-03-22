@@ -117,10 +117,21 @@ describe('detectMentionTrigger', () => {
       expect(result.active).toBe(false)
     })
 
-    it('returns inactive when trigger is followed by completed reference', () => {
-      // After selecting a file, the reference becomes @{path/to/file}
-      // The cursor should be after the closing brace
-      const result = detectMentionTrigger('@{src/utils.ts} ', 16)
+    it('returns inactive when @ reference is followed by space (unquoted path)', () => {
+      // After typing a file path and adding a space, search should end
+      const result = detectMentionTrigger('@src/utils.ts ', 14)
+      expect(result.active).toBe(false)
+    })
+
+    it('returns inactive when quoted @ reference is complete', () => {
+      // Quoted path with closing quote means reference is complete
+      const result = detectMentionTrigger('@"src/file name.ts" ', 20)
+      expect(result.active).toBe(false)
+    })
+
+    it('returns inactive when # is followed by space', () => {
+      // Space immediately after # should deactivate
+      const result = detectMentionTrigger('# 123', 5)
       expect(result.active).toBe(false)
     })
 
@@ -162,6 +173,74 @@ describe('detectMentionTrigger', () => {
         query: 'file',
         triggerPosition: 5,
       })
+    })
+  })
+
+  describe('file trigger completion (new format)', () => {
+    it('remains active for @filepath without trailing space', () => {
+      const result = detectMentionTrigger('@src/file.ts', 12)
+      expect(result.active).toBe(true)
+      expect(result.query).toBe('src/file.ts')
+    })
+
+    it('becomes inactive after whitespace for @filepath', () => {
+      const result = detectMentionTrigger('@src/file.ts ', 13)
+      expect(result.active).toBe(false)
+    })
+
+    it('becomes inactive after tab for @filepath', () => {
+      const result = detectMentionTrigger('@src/file.ts\t', 13)
+      expect(result.active).toBe(false)
+    })
+
+    it('becomes inactive after newline for @filepath', () => {
+      const result = detectMentionTrigger('@src/file.ts\nmore text', 13)
+      expect(result.active).toBe(false)
+    })
+
+    it('remains active inside quoted path with spaces', () => {
+      // Unclosed quote means we're still typing
+      const result = detectMentionTrigger('@"src/my file', 13)
+      expect(result.active).toBe(true)
+      expect(result.query).toBe('"src/my file')
+    })
+
+    it('becomes inactive when quoted path is closed', () => {
+      const result = detectMentionTrigger('@"src/my file.ts"', 17)
+      expect(result.active).toBe(false)
+    })
+
+    it('remains active for partial path before space', () => {
+      // Cursor is right after "ts" before the space
+      const result = detectMentionTrigger('@src/file.ts more', 12)
+      expect(result.active).toBe(true)
+      expect(result.query).toBe('src/file.ts')
+    })
+  })
+
+  describe('PR trigger completion (no spaces)', () => {
+    it('becomes inactive when space follows #', () => {
+      // Space immediately after # should deactivate trigger
+      const result = detectMentionTrigger('# 123', 2)
+      expect(result.active).toBe(false)
+    })
+
+    it('stays active for #123 without space', () => {
+      const result = detectMentionTrigger('#123', 4)
+      expect(result.active).toBe(true)
+      expect(result.query).toBe('123')
+    })
+
+    it('becomes inactive when cursor is after space in # query', () => {
+      // Cursor is after the space following #
+      const result = detectMentionTrigger('See # more', 6)
+      expect(result.active).toBe(false)
+    })
+
+    it('stays active for # at end of input', () => {
+      const result = detectMentionTrigger('See #', 5)
+      expect(result.active).toBe(true)
+      expect(result.query).toBe('')
     })
   })
 })
