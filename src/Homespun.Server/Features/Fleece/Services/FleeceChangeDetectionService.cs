@@ -83,8 +83,12 @@ public class FleeceChangeDetectionService : IFleeceChangeDetectionService
             "Detecting changes for session {SessionId}: main branch path={MainPath}, clone path={ClonePath}",
             sessionId, project.LocalPath, clonePath);
 
-        // Load issues from main branch (using FleeceService cache)
-        var mainIssues = await _fleeceService.ListIssuesAsync(project.LocalPath);
+        // Load issues from main branch using direct disk read (not FleeceService cache).
+        // This ensures consistent loading logic with agent clone - both load ALL issues
+        // without filtering. FleeceService.ListIssuesAsync() applies default filtering
+        // that excludes terminal statuses (Deleted, Archived, Closed, Complete), which
+        // would cause issues with those statuses to incorrectly appear as "Created".
+        var mainIssues = await LoadIssuesFromPathAsync(project.LocalPath, cancellationToken);
         var mainIssueMap = mainIssues.ToDictionary(i => i.Id, StringComparer.OrdinalIgnoreCase);
 
         _logger.LogDebug(
