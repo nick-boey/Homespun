@@ -24,7 +24,7 @@ import {
   createTaskStatusUpdate,
   A2A_MIME_TYPES,
 } from "../types/a2a.js";
-import type { ControlEvent } from "./session-manager.js";
+import type { ControlEvent, WorkflowCompleteEventData } from "./session-manager.js";
 import { randomUUID } from "node:crypto";
 
 /**
@@ -262,13 +262,57 @@ export function translateResultToStatus(
 }
 
 /**
- * Translates a control event (question_pending or plan_pending) to A2A TaskStatusUpdateEvent.
- * These map to 'input-required' state in A2A.
+ * Translates a control event (question_pending, plan_pending, or workflow_complete) to A2A TaskStatusUpdateEvent.
+ * question_pending and plan_pending map to 'input-required' state.
+ * workflow_complete maps to 'completed' state.
  */
 export function translateControlEvent(
   event: ControlEvent,
   ctx: TranslationContext,
 ): TaskStatusUpdateEvent {
+  // Handle workflow_complete separately as it represents task completion
+  if (event.type === "workflow_complete") {
+    const data = event.data as WorkflowCompleteEventData;
+    const statusMessageParts: Part[] = [
+      createTextPart(data.completion.summary),
+      createDataPart(
+        {
+          status: data.completion.status,
+          outputs: data.completion.outputs,
+          artifacts: data.completion.artifacts,
+          workflowContext: data.workflowContext,
+        },
+        { kind: "workflow_complete" },
+      ),
+    ];
+
+    const statusMessage = createMessage(
+      randomUUID(),
+      "agent",
+      statusMessageParts,
+      ctx.contextId,
+      ctx.taskId,
+      { sdkMessageType: "workflow_complete" },
+    );
+
+    // Map completion status to A2A task state
+    const state: TaskState =
+      data.completion.status === "success" ? "completed" : "completed";
+
+    return createTaskStatusUpdate(
+      ctx.taskId,
+      ctx.contextId,
+      state,
+      true, // final - workflow node is complete
+      statusMessage,
+      {
+        workflowStatus: data.completion.status,
+        nodeId: data.workflowContext.nodeId,
+        executionId: data.workflowContext.executionId,
+      },
+    );
+  }
+
   const inputType: InputRequiredMetadata["inputType"] =
     event.type === "question_pending" ? "question" : "plan-approval";
 
@@ -358,7 +402,8 @@ export function getEventKind(
     if (
       controlType === "question_pending" ||
       controlType === "plan_pending" ||
-      controlType === "status_resumed"
+      controlType === "status_resumed" ||
+      controlType === "workflow_complete"
     ) {
       return "status-update";
     }

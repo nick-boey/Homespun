@@ -290,6 +290,64 @@ describe("A2A Translator", () => {
       expect(typeof (status.metadata as any).plan).toBe("string");
       expect((status.metadata as any).plan).toBe("# My Plan\n\n1. Step one");
     });
+
+    it("translates workflow_complete to completed status", () => {
+      const event: ControlEvent = {
+        type: "workflow_complete",
+        data: {
+          workflowContext: {
+            executionId: "exec-123",
+            nodeId: "node-456",
+            workflowId: "workflow-789",
+            projectPath: "/path/to/project",
+          },
+          completion: {
+            status: "success",
+            outputs: { prNumber: 123 },
+            summary: "Created PR #123",
+            artifacts: [
+              { name: "Pull Request", path: "https://github.com/org/repo/pull/123", type: "pr" },
+            ],
+          },
+        },
+      };
+
+      const status = translateControlEvent(event, ctx);
+
+      expect(status.kind).toBe("status-update");
+      expect(status.status.state).toBe("completed");
+      expect(status.final).toBe(true);
+      expect((status.metadata as any)?.workflowStatus).toBe("success");
+      expect((status.metadata as any)?.nodeId).toBe("node-456");
+      expect((status.metadata as any)?.executionId).toBe("exec-123");
+    });
+
+    it("includes workflow completion summary in message", () => {
+      const event: ControlEvent = {
+        type: "workflow_complete",
+        data: {
+          workflowContext: {
+            executionId: "exec-123",
+            nodeId: "node-456",
+            workflowId: "workflow-789",
+            projectPath: "/path/to/project",
+          },
+          completion: {
+            status: "partial",
+            outputs: { filesModified: 5 },
+            summary: "Modified 5 files but tests are failing",
+          },
+        },
+      };
+
+      const status = translateControlEvent(event, ctx);
+
+      expect(status.status.message).toBeDefined();
+      expect(status.status.message?.parts[0].kind).toBe("text");
+      expect((status.status.message?.parts[0] as any).text).toBe(
+        "Modified 5 files but tests are failing",
+      );
+    });
   });
 
   describe("createErrorStatus", () => {
@@ -330,6 +388,27 @@ describe("A2A Translator", () => {
       const event: ControlEvent = {
         type: "status_resumed",
         data: {},
+      };
+
+      expect(getEventKind(event)).toBe("status-update");
+    });
+
+    it("returns status-update for workflow_complete control events", () => {
+      const event: ControlEvent = {
+        type: "workflow_complete",
+        data: {
+          workflowContext: {
+            executionId: "exec-123",
+            nodeId: "node-456",
+            workflowId: "workflow-789",
+            projectPath: "/path/to/project",
+          },
+          completion: {
+            status: "success",
+            outputs: {},
+            summary: "Done",
+          },
+        },
       };
 
       expect(getEventKind(event)).toBe("status-update");
