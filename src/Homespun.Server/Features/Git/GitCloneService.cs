@@ -747,35 +747,36 @@ public class GitCloneService(ICommandRunner commandRunner, ILogger<GitCloneServi
     }
 
     /// <summary>
-    /// Copies unstaged .fleece/ changes from the main repo to a clone.
+    /// Syncs the .fleece/ directory from the main repo to a clone.
+    /// Always deletes and copies the full .fleece directory to ensure consistency.
     /// </summary>
-    private async Task CopyFleeceChangesAsync(string repoPath, string clonePath)
+    private Task CopyFleeceChangesAsync(string repoPath, string clonePath)
     {
-        // Check for unstaged .fleece/ changes in main repo
-        var statusResult = await commandRunner.RunAsync("git", "status --porcelain -- .fleece/", repoPath);
+        var sourceFleecePath = Path.Combine(repoPath, ".fleece");
+        var destFleecePath = Path.Combine(clonePath, ".fleece");
 
-        if (statusResult.Success && !string.IsNullOrWhiteSpace(statusResult.Output))
+        // Skip if source .fleece doesn't exist
+        if (!Directory.Exists(sourceFleecePath))
         {
-            logger.LogInformation("Copying unstaged .fleece changes from {RepoPath} to clone at {ClonePath}",
-                repoPath, clonePath);
-
-            var sourceFleecePath = Path.Combine(repoPath, ".fleece");
-            var destFleecePath = Path.Combine(clonePath, ".fleece");
-
-            try
-            {
-                CopyDirectory(sourceFleecePath, destFleecePath, name => name == ".git");
-                logger.LogInformation("Successfully copied .fleece changes to clone");
-            }
-            catch (Exception ex)
-            {
-                logger.LogWarning("Failed to copy .fleece changes to clone: {Error}", ex.Message);
-            }
+            logger.LogDebug("No .fleece directory to copy from {RepoPath}", repoPath);
+            return Task.CompletedTask;
         }
-        else
+
+        logger.LogInformation("Syncing .fleece directory from {RepoPath} to clone at {ClonePath}",
+            repoPath, clonePath);
+
+        // Delete existing .fleece in clone (from git checkout)
+        if (Directory.Exists(destFleecePath))
         {
-            logger.LogDebug("No unstaged .fleece changes to copy");
+            ForceDeleteDirectory(destFleecePath);
+            logger.LogDebug("Deleted existing .fleece directory from clone");
         }
+
+        // Copy the full .fleece directory from main
+        CopyDirectory(sourceFleecePath, destFleecePath, name => name == ".git");
+        logger.LogInformation("Successfully synced .fleece directory to clone");
+
+        return Task.CompletedTask;
     }
 
     /// <summary>

@@ -2438,7 +2438,7 @@ public class GitCloneServiceTests
     #region CreateCloneAsync - Fleece Copying Tests
 
     [Test]
-    public async Task CreateCloneAsync_CopiesUnstagedFleeceChanges()
+    public async Task CreateCloneAsync_AlwaysCopiesFleeceDirectory()
     {
         // Arrange
         var repoPath = Path.Combine(_tempDir, "repo");
@@ -2453,10 +2453,6 @@ public class GitCloneServiceTests
         File.WriteAllText(Path.Combine(sourceIssuesPath, "new456.json"), "{\"id\": \"new456\"}");
 
         SetupSuccessfulCloneCommands(repoPath, branchName);
-
-        // Mock git status to show unstaged .fleece files
-        _mockRunner.Setup(x => x.RunAsync("git", "status --porcelain -- .fleece/", repoPath))
-            .ReturnsAsync(new CommandResult { Success = true, Output = " M .fleece/issues/test123.json\n?? .fleece/issues/new456.json" });
 
         // Act
         var result = await _service.CreateCloneAsync(repoPath, branchName);
@@ -2473,24 +2469,28 @@ public class GitCloneServiceTests
     }
 
     [Test]
-    public async Task CreateCloneAsync_DoesNotCopyIfNoUnstagedFleeceChanges()
+    public async Task CreateCloneAsync_DeletesExistingFleeceBeforeCopy()
     {
         // Arrange
         var repoPath = Path.Combine(_tempDir, "repo");
         Directory.CreateDirectory(repoPath);
-        var branchName = "feature/no-fleece";
+        var branchName = "feature/delete-fleece";
 
-        // Create source .fleece directory with files
+        // Create source .fleece directory with new content
         var sourceFleecePath = Path.Combine(repoPath, ".fleece");
         var sourceIssuesPath = Path.Combine(sourceFleecePath, "issues");
         Directory.CreateDirectory(sourceIssuesPath);
-        File.WriteAllText(Path.Combine(sourceIssuesPath, "test123.json"), "{\"id\": \"test123\"}");
+        File.WriteAllText(Path.Combine(sourceIssuesPath, "main-issue.json"), "{\"id\": \"main-issue\"}");
 
         SetupSuccessfulCloneCommands(repoPath, branchName);
 
-        // Mock git status to show no unstaged changes (all changes are staged)
-        _mockRunner.Setup(x => x.RunAsync("git", "status --porcelain -- .fleece/", repoPath))
-            .ReturnsAsync(new CommandResult { Success = true, Output = "" });
+        // Pre-create destination directory with different content (simulating git checkout state)
+        var parentDir = Path.GetDirectoryName(repoPath);
+        var clonesDir = Path.Combine(parentDir!, ".clones");
+        var clonePath = Path.Combine(clonesDir, GitCloneService.SanitizeBranchNameForClone(branchName), "workdir");
+        var destFleecePath = Path.Combine(clonePath, ".fleece", "issues");
+        Directory.CreateDirectory(destFleecePath);
+        File.WriteAllText(Path.Combine(destFleecePath, "branch-issue.json"), "{\"id\": \"branch-issue\"}");
 
         // Act
         var result = await _service.CreateCloneAsync(repoPath, branchName);
@@ -2498,66 +2498,66 @@ public class GitCloneServiceTests
         // Assert
         Assert.That(result, Is.Not.Null);
 
-        // Verify .fleece directory was NOT copied (no unstaged changes)
-        var destFleecePath = Path.Combine(result!, ".fleece");
-        Assert.That(Directory.Exists(destFleecePath), Is.False, "Destination .fleece directory should not exist when no unstaged changes");
+        // Verify old file was deleted and new file was copied
+        var resultFleecePath = Path.Combine(result!, ".fleece");
+        var resultIssuesPath = Path.Combine(resultFleecePath, "issues");
+        Assert.That(File.Exists(Path.Combine(resultIssuesPath, "main-issue.json")), Is.True, "main-issue.json should be copied from main");
+        Assert.That(File.Exists(Path.Combine(resultIssuesPath, "branch-issue.json")), Is.False, "branch-issue.json should have been deleted");
     }
 
     [Test]
-    public async Task CreateCloneAsync_ContinuesIfFleeceCopyFails()
+    public async Task CreateCloneAsync_SkipsFleeceWhenSourceDoesNotExist()
     {
         // Arrange
         var repoPath = Path.Combine(_tempDir, "repo");
         Directory.CreateDirectory(repoPath);
-        var branchName = "feature/fleece-fail";
+        var branchName = "feature/no-fleece-source";
 
-        // Note: We do NOT create the .fleece directory to simulate a copy failure
-        // (the copy will fail gracefully because source doesn't exist)
+        // Note: We do NOT create the .fleece directory
+        // The copy should be skipped gracefully
 
         SetupSuccessfulCloneCommands(repoPath, branchName);
-
-        // Mock git status to show unstaged .fleece files (even though directory doesn't exist)
-        _mockRunner.Setup(x => x.RunAsync("git", "status --porcelain -- .fleece/", repoPath))
-            .ReturnsAsync(new CommandResult { Success = true, Output = " M .fleece/issues/test123.json" });
 
         // Act
         var result = await _service.CreateCloneAsync(repoPath, branchName);
 
-        // Assert - clone should still succeed even if fleece copy fails
+        // Assert - clone should still succeed when no .fleece exists
         Assert.That(result, Is.Not.Null);
         Assert.That(result, Does.Contain("workdir"));
+
+        // Verify no .fleece directory was created
+        var destFleecePath = Path.Combine(result!, ".fleece");
+        Assert.That(Directory.Exists(destFleecePath), Is.False, "Destination .fleece directory should not exist when source doesn't exist");
     }
 
     [Test]
-    public async Task CreateCloneAsync_HandlesFleeceStatusCheckFailure()
+    public async Task CreateCloneAsync_CopiesFleeceEvenWithCommittedChangesOnly()
     {
         // Arrange
         var repoPath = Path.Combine(_tempDir, "repo");
         Directory.CreateDirectory(repoPath);
-        var branchName = "feature/status-fail";
+        var branchName = "feature/committed-only";
 
         // Create source .fleece directory with files
+        // These files simulate a state where .fleece is committed (no unstaged changes)
         var sourceFleecePath = Path.Combine(repoPath, ".fleece");
         var sourceIssuesPath = Path.Combine(sourceFleecePath, "issues");
         Directory.CreateDirectory(sourceIssuesPath);
-        File.WriteAllText(Path.Combine(sourceIssuesPath, "test123.json"), "{\"id\": \"test123\"}");
+        File.WriteAllText(Path.Combine(sourceIssuesPath, "committed.json"), "{\"id\": \"committed\"}");
 
         SetupSuccessfulCloneCommands(repoPath, branchName);
-
-        // Mock git status to fail
-        _mockRunner.Setup(x => x.RunAsync("git", "status --porcelain -- .fleece/", repoPath))
-            .ReturnsAsync(new CommandResult { Success = false, Error = "git status failed" });
 
         // Act
         var result = await _service.CreateCloneAsync(repoPath, branchName);
 
-        // Assert - clone should still succeed even if status check fails
+        // Assert - .fleece should ALWAYS be copied regardless of git status
         Assert.That(result, Is.Not.Null);
         Assert.That(result, Does.Contain("workdir"));
 
-        // Verify .fleece was NOT copied since status check failed
+        // Verify .fleece WAS copied even without unstaged changes
         var destFleecePath = Path.Combine(result!, ".fleece");
-        Assert.That(Directory.Exists(destFleecePath), Is.False, "Destination .fleece directory should not exist when status check fails");
+        Assert.That(Directory.Exists(destFleecePath), Is.True, "Destination .fleece directory should exist even with committed changes only");
+        Assert.That(File.Exists(Path.Combine(destFleecePath, "issues", "committed.json")), Is.True, "committed.json should be copied");
     }
 
     [Test]
@@ -2580,10 +2580,6 @@ public class GitCloneServiceTests
         File.WriteAllText(Path.Combine(sourceNestedPath, "deep.json"), "{\"deep\": true}");
 
         SetupSuccessfulCloneCommands(repoPath, branchName);
-
-        // Mock git status to show unstaged .fleece files
-        _mockRunner.Setup(x => x.RunAsync("git", "status --porcelain -- .fleece/", repoPath))
-            .ReturnsAsync(new CommandResult { Success = true, Output = " M .fleece/issues/test123.json" });
 
         // Act
         var result = await _service.CreateCloneAsync(repoPath, branchName);
@@ -2619,10 +2615,6 @@ public class GitCloneServiceTests
         File.WriteAllText(Path.Combine(sourceGitPath, "config"), "git config file");
 
         SetupSuccessfulCloneCommands(repoPath, branchName);
-
-        // Mock git status to show unstaged .fleece files
-        _mockRunner.Setup(x => x.RunAsync("git", "status --porcelain -- .fleece/", repoPath))
-            .ReturnsAsync(new CommandResult { Success = true, Output = " M .fleece/issues/test123.json" });
 
         // Act
         var result = await _service.CreateCloneAsync(repoPath, branchName);
@@ -2660,10 +2652,6 @@ public class GitCloneServiceTests
         var destFleecePath = Path.Combine(clonePath, ".fleece", "issues");
         Directory.CreateDirectory(destFleecePath);
         File.WriteAllText(Path.Combine(destFleecePath, "test123.json"), "{\"id\": \"test123\", \"updated\": false}");
-
-        // Mock git status to show unstaged .fleece files
-        _mockRunner.Setup(x => x.RunAsync("git", "status --porcelain -- .fleece/", repoPath))
-            .ReturnsAsync(new CommandResult { Success = true, Output = " M .fleece/issues/test123.json" });
 
         // Act
         var result = await _service.CreateCloneAsync(repoPath, branchName);
