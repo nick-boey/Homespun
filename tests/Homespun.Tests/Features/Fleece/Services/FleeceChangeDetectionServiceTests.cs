@@ -71,16 +71,21 @@ public class FleeceChangeDetectionServiceTests
 
     private async Task CreateFleeceIssueOnDiskAsync(string basePath, Issue issue)
     {
+        await SaveIssuesAsync(basePath, [issue]);
+    }
+
+    private async Task SaveIssuesAsync(string basePath, List<Issue> issues)
+    {
         var serializer = new JsonlSerializer();
         var schemaValidator = new SchemaValidator();
         var storage = new JsonlStorageService(basePath, serializer, schemaValidator);
 
         await storage.EnsureDirectoryExistsAsync(CancellationToken.None);
 
-        // Load existing issues and append the new one
+        // Load existing issues and append the new ones
         var existingIssues = await storage.LoadIssuesAsync(CancellationToken.None);
         var allIssues = existingIssues.ToList();
-        allIssues.Add(issue);
+        allIssues.AddRange(issues);
         await storage.SaveIssuesAsync(allIssues, CancellationToken.None);
     }
 
@@ -113,9 +118,7 @@ public class FleeceChangeDetectionServiceTests
 
         SetupProjectAndSession(projectId, sessionId, mainPath, clonePath);
 
-        // Main branch has no issues
-        _fleeceServiceMock.Setup(x => x.ListIssuesAsync(mainPath, null, null, null, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<Issue>());
+        // Main branch has no issues - empty .fleece directory created above
 
         // Act
         var result = await _service.DetectChangesAsync(projectId, sessionId);
@@ -176,14 +179,13 @@ public class FleeceChangeDetectionServiceTests
             CreatedBy = "original"
         };
 
+        // Create the original issue in main
+        await CreateFleeceIssueOnDiskAsync(mainPath, originalIssue);
+
         // Create the modified issue in clone
         await CreateFleeceIssueOnDiskAsync(clonePath, modifiedIssue);
 
         SetupProjectAndSession(projectId, sessionId, mainPath, clonePath);
-
-        // Main branch has the original issue
-        _fleeceServiceMock.Setup(x => x.ListIssuesAsync(mainPath, null, null, null, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<Issue> { originalIssue });
 
         // Act
         var result = await _service.DetectChangesAsync(projectId, sessionId);
@@ -210,8 +212,6 @@ public class FleeceChangeDetectionServiceTests
         Directory.CreateDirectory(clonePath);
         // Deliberately not creating .fleece directory
 
-        SetupProjectAndSession(projectId, sessionId, mainPath, clonePath);
-
         var mainIssue = new Issue
         {
             Id = "main-issue",
@@ -221,8 +221,10 @@ public class FleeceChangeDetectionServiceTests
             LastUpdate = DateTimeOffset.UtcNow
         };
 
-        _fleeceServiceMock.Setup(x => x.ListIssuesAsync(mainPath, null, null, null, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<Issue> { mainIssue });
+        // Write issues to main (this creates the .fleece directory)
+        await CreateFleeceIssueOnDiskAsync(mainPath, mainIssue);
+
+        SetupProjectAndSession(projectId, sessionId, mainPath, clonePath);
 
         // Act
         var result = await _service.DetectChangesAsync(projectId, sessionId);
@@ -281,14 +283,13 @@ public class FleeceChangeDetectionServiceTests
             CreatedBy = "original"
         };
 
+        // Create the original issue in main
+        await CreateFleeceIssueOnDiskAsync(mainPath, originalIssue);
+
         // Create the deleted issue in clone
         await CreateFleeceIssueOnDiskAsync(clonePath, deletedIssue);
 
         SetupProjectAndSession(projectId, sessionId, mainPath, clonePath);
-
-        // Main branch has the original issue
-        _fleeceServiceMock.Setup(x => x.ListIssuesAsync(mainPath, null, null, null, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<Issue> { originalIssue });
 
         // Act
         var result = await _service.DetectChangesAsync(projectId, sessionId);
@@ -321,14 +322,11 @@ public class FleeceChangeDetectionServiceTests
             LastUpdate = DateTimeOffset.UtcNow
         };
 
-        // Create the same issue in clone
+        // Create the same issue in main and clone
+        await CreateFleeceIssueOnDiskAsync(mainPath, issue);
         await CreateFleeceIssueOnDiskAsync(clonePath, issue);
 
         SetupProjectAndSession(projectId, sessionId, mainPath, clonePath);
-
-        // Main branch has the same issue
-        _fleeceServiceMock.Setup(x => x.ListIssuesAsync(mainPath, null, null, null, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<Issue> { issue });
 
         // Act
         var result = await _service.DetectChangesAsync(projectId, sessionId);
@@ -400,11 +398,10 @@ public class FleeceChangeDetectionServiceTests
         };
         await CreateFleeceIssueOnDiskAsync(clonePath, issue);
 
-        SetupProjectAndSession(projectId, sessionId, mainPath, clonePath);
+        // Create empty .fleece directory in main (no issues)
+        Directory.CreateDirectory(Path.Combine(mainPath, ".fleece"));
 
-        // Main branch has no issues
-        _fleeceServiceMock.Setup(x => x.ListIssuesAsync(mainPath, null, null, null, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<Issue>());
+        SetupProjectAndSession(projectId, sessionId, mainPath, clonePath);
 
         // Act - This should not throw a JsonException when parsing string enum values
         var result = await _service.DetectChangesAsync(projectId, sessionId);
@@ -482,15 +479,14 @@ public class FleeceChangeDetectionServiceTests
             CreatedBy = "agent"
         };
 
+        // Create existing issue in main
+        await CreateFleeceIssueOnDiskAsync(mainPath, existingIssue);
+
         // Create issues in clone
         await CreateFleeceIssueOnDiskAsync(clonePath, modifiedIssue);
         await CreateFleeceIssueOnDiskAsync(clonePath, newIssue);
 
         SetupProjectAndSession(projectId, sessionId, mainPath, clonePath);
-
-        // Main branch has the original issue
-        _fleeceServiceMock.Setup(x => x.ListIssuesAsync(mainPath, null, null, null, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<Issue> { existingIssue });
 
         // Act
         var result = await _service.DetectChangesAsync(projectId, sessionId);
@@ -551,11 +547,11 @@ public class FleeceChangeDetectionServiceTests
             CreatedBy = "original"
         };
 
+        // Create issues on disk
+        await CreateFleeceIssueOnDiskAsync(mainPath, mainIssue);
         await CreateFleeceIssueOnDiskAsync(clonePath, agentIssue);
-        SetupProjectAndSession(projectId, sessionId, mainPath, clonePath);
 
-        _fleeceServiceMock.Setup(x => x.ListIssuesAsync(mainPath, null, null, null, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<Issue> { mainIssue });
+        SetupProjectAndSession(projectId, sessionId, mainPath, clonePath);
 
         // Act
         var result = await _service.DetectChangesAsync(projectId, sessionId);
@@ -631,11 +627,11 @@ public class FleeceChangeDetectionServiceTests
             CreatedBy = "original"
         };
 
+        // Create issues on disk
+        await CreateFleeceIssueOnDiskAsync(mainPath, mainIssue);
         await CreateFleeceIssueOnDiskAsync(clonePath, agentIssue);
-        SetupProjectAndSession(projectId, sessionId, mainPath, clonePath);
 
-        _fleeceServiceMock.Setup(x => x.ListIssuesAsync(mainPath, null, null, null, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<Issue> { mainIssue });
+        SetupProjectAndSession(projectId, sessionId, mainPath, clonePath);
 
         // Act
         var result = await _service.DetectChangesAsync(projectId, sessionId);
@@ -694,11 +690,11 @@ public class FleeceChangeDetectionServiceTests
             CreatedBy = "original"
         };
 
+        // Create issues on disk
+        await CreateFleeceIssueOnDiskAsync(mainPath, mainIssue);
         await CreateFleeceIssueOnDiskAsync(clonePath, agentIssue);
-        SetupProjectAndSession(projectId, sessionId, mainPath, clonePath);
 
-        _fleeceServiceMock.Setup(x => x.ListIssuesAsync(mainPath, null, null, null, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<Issue> { mainIssue });
+        SetupProjectAndSession(projectId, sessionId, mainPath, clonePath);
 
         // Act
         var result = await _service.DetectChangesAsync(projectId, sessionId);
@@ -769,11 +765,11 @@ public class FleeceChangeDetectionServiceTests
             CreatedBy = "original"
         };
 
+        // Create issues on disk
+        await CreateFleeceIssueOnDiskAsync(mainPath, mainIssue);
         await CreateFleeceIssueOnDiskAsync(clonePath, agentIssue);
-        SetupProjectAndSession(projectId, sessionId, mainPath, clonePath);
 
-        _fleeceServiceMock.Setup(x => x.ListIssuesAsync(mainPath, null, null, null, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<Issue> { mainIssue });
+        SetupProjectAndSession(projectId, sessionId, mainPath, clonePath);
 
         // Act
         var result = await _service.DetectChangesAsync(projectId, sessionId);
