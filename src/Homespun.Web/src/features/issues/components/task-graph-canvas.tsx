@@ -7,6 +7,7 @@
 
 import { memo, useRef, useMemo, useEffect, useCallback, useState, useLayoutEffect } from 'react'
 import { cn } from '@/lib/utils'
+import { ISSUE_TYPE_LABELS } from '@/lib/issue-constants'
 import { IssueType, IssueStatus, ExecutionMode, ClaudeSessionStatus } from '@/api'
 import {
   computeD3Layout,
@@ -393,7 +394,7 @@ export const TaskGraphCanvas = memo(function TaskGraphCanvas({
                           color: getTypeColor(line.issueType),
                         }}
                       >
-                        {IssueType[line.issueType] ?? 'Task'}
+                        {ISSUE_TYPE_LABELS[line.issueType] ?? 'Task'}
                       </span>
 
                       {/* ID */}
