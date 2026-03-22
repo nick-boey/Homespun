@@ -507,15 +507,39 @@ public class WorkflowExecutionServiceTests
     [Test]
     public async Task CancelExecutionAsync_PausedExecution_CancelsAndReturnsTrue()
     {
-        // Arrange
-        var workflow = CreateTestWorkflowWithAgentNode();
+        // Arrange - Use a workflow with gate node that pauses execution automatically
+        var workflow = new WorkflowDefinition
+        {
+            Id = "workflow-1",
+            ProjectId = "project-1",
+            Title = "Gate Workflow",
+            Enabled = true,
+            Nodes =
+            [
+                new WorkflowNode { Id = "start-1", Label = "Start", Type = WorkflowNodeType.Start },
+                new WorkflowNode { Id = "gate-1", Label = "Gate", Type = WorkflowNodeType.Gate },
+                new WorkflowNode { Id = "end-1", Label = "End", Type = WorkflowNodeType.End }
+            ],
+            Edges =
+            [
+                new WorkflowEdge { Id = "edge-1", Source = "start-1", Target = "gate-1" },
+                new WorkflowEdge { Id = "edge-2", Source = "gate-1", Target = "end-1" }
+            ],
+            Settings = new WorkflowSettings()
+        };
+
         _mockStorageService.Setup(s => s.GetWorkflowAsync(_testProjectPath, "workflow-1", It.IsAny<CancellationToken>()))
             .ReturnsAsync(workflow);
 
         var triggerContext = new TriggerContext { TriggerType = WorkflowTriggerType.Manual };
         var startResult = await _service.StartWorkflowAsync(_testProjectPath, "workflow-1", triggerContext);
 
-        await _service.PauseExecutionAsync(_testProjectPath, startResult.Execution!.Id);
+        // Wait for execution to reach gate node and pause
+        await Task.Delay(100);
+
+        // Verify the execution is paused
+        var beforeCancel = await _service.GetExecutionAsync(_testProjectPath, startResult.Execution!.Id);
+        Assert.That(beforeCancel!.Status, Is.EqualTo(WorkflowExecutionStatus.Paused));
 
         // Act
         var cancelled = await _service.CancelExecutionAsync(_testProjectPath, startResult.Execution.Id);
