@@ -93,19 +93,19 @@ public class IssuesAgentController(
 
         logger.LogInformation("Created Issues Agent clone at {ClonePath}", clonePath);
 
-        // Get the IssueModify prompt
-        var prompt = agentPromptService.GetPromptBySessionType(SessionType.IssueModify);
-        if (prompt == null)
-        {
-            // Ensure default prompts exist
-            await agentPromptService.EnsureDefaultPromptsAsync();
-            prompt = agentPromptService.GetPromptBySessionType(SessionType.IssueModify);
-        }
+        // Ensure default prompts exist
+        await agentPromptService.EnsureDefaultPromptsAsync();
+
+        // Get the IssueAgentModification prompt for initial message
+        var modificationPrompt = agentPromptService.GetPromptBySessionType(SessionType.IssueAgentModification);
+
+        // Get the IssueAgentSystem prompt for system prompt
+        var systemPromptTemplate = agentPromptService.GetPromptBySessionType(SessionType.IssueAgentSystem);
 
         // Determine model
         var model = request.Model ?? project.DefaultModel ?? "sonnet";
 
-        // Create session with IssueModify type
+        // Create session with IssueAgentModification type and system prompt
         // Use branch name as entity ID (like CreateBranchSession)
         var session = await sessionService.StartSessionAsync(
             branchName,
@@ -113,12 +113,12 @@ public class IssuesAgentController(
             clonePath,
             SessionMode.Build,  // Build mode needed for Bash/fleece CLI
             model,
-            systemPrompt: null);
+            systemPrompt: systemPromptTemplate?.InitialMessage);
 
-        // Set session type to IssueModify
-        session.SessionType = SessionType.IssueModify;
+        // Set session type to IssueAgentModification
+        session.SessionType = SessionType.IssueAgentModification;
 
-        // If user instructions are provided, render the IssueModify prompt and send as initial message
+        // If user instructions are provided, render the IssueAgentModification prompt and send as initial message
         if (!string.IsNullOrWhiteSpace(request.UserInstructions))
         {
             var promptContext = new PromptContext
@@ -127,7 +127,7 @@ public class IssuesAgentController(
                 UserPrompt = request.UserInstructions
             };
 
-            var renderedPrompt = agentPromptService.RenderTemplate(prompt?.InitialMessage, promptContext);
+            var renderedPrompt = agentPromptService.RenderTemplate(modificationPrompt?.InitialMessage, promptContext);
 
             if (!string.IsNullOrWhiteSpace(renderedPrompt))
             {
@@ -176,7 +176,7 @@ public class IssuesAgentController(
         }
 
         // Validate session type
-        if (session.SessionType != SessionType.IssueModify)
+        if (session.SessionType != SessionType.IssueAgentModification)
         {
             return BadRequest("Session is not an Issues Agent session");
         }
@@ -252,7 +252,7 @@ public class IssuesAgentController(
         }
 
         // Validate session type
-        if (session.SessionType != SessionType.IssueModify)
+        if (session.SessionType != SessionType.IssueAgentModification)
         {
             return BadRequest("Session is not an Issues Agent session");
         }
@@ -344,7 +344,7 @@ public class IssuesAgentController(
         }
 
         // Validate session type
-        if (session.SessionType != SessionType.IssueModify)
+        if (session.SessionType != SessionType.IssueAgentModification)
         {
             return BadRequest("Session is not an Issues Agent session");
         }

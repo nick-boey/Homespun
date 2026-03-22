@@ -51,7 +51,7 @@ public partial class MockAgentPromptService : IAgentPromptService
     {
         _logger.LogDebug("[Mock] GetIssueAgentPrompts");
         return _dataStore.AgentPrompts
-            .Where(p => p.SessionType == SessionType.IssueModify
+            .Where(p => p.SessionType == SessionType.IssueAgentModification
                      || p.SessionType == SessionType.IssueAgentSystem)
             .ToList()
             .AsReadOnly();

@@ -27,7 +27,7 @@ public class CreateIssuesAgentSessionRequest
 
     /// <summary>
     /// Optional user instructions for the agent.
-    /// When provided, renders the IssueModify prompt and sends as initial message.
+    /// When provided, renders the IssueAgentModification prompt and sends as initial message.
     /// </summary>
     public string? UserInstructions { get; set; }
 }

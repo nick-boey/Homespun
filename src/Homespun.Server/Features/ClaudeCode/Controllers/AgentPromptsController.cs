@@ -97,7 +97,7 @@ public class AgentPromptsController(IAgentPromptService agentPromptService) : Co
     }
 
     /// <summary>
-    /// Gets all issue agent prompts (IssueModify and IssueAgentSystem).
+    /// Gets all issue agent prompts (IssueAgentModification and IssueAgentSystem).
     /// These are specialized prompts for the Issues Agent workflow.
     /// </summary>
     [HttpGet("issue-agent-prompts")]

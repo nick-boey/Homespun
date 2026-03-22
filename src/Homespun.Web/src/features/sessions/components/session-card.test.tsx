@@ -337,10 +337,10 @@ describe('SessionCard', () => {
     expect(screen.queryByText('•')).not.toBeInTheDocument()
   })
 
-  it('shows Review Changes button for ISSUE_MODIFY sessions', () => {
+  it('shows Review Changes button for ISSUE_AGENT_MODIFICATION sessions', () => {
     render(
       <SessionCard
-        session={{ ...mockSession, sessionType: SessionType.ISSUE_MODIFY }}
+        session={{ ...mockSession, sessionType: SessionType.ISSUE_AGENT_MODIFICATION }}
         entityTitle="Issues Agent"
         entityType="issue"
         projectName="Test Project"
@@ -350,7 +350,7 @@ describe('SessionCard', () => {
     expect(screen.getByRole('button', { name: /Review Changes/i })).toBeInTheDocument()
   })
 
-  it('does not show Review Changes button for non-ISSUE_MODIFY sessions', () => {
+  it('does not show Review Changes button for non-ISSUE_AGENT_MODIFICATION sessions', () => {
     render(
       <SessionCard
         session={{ ...mockSession, sessionType: undefined }}
@@ -366,7 +366,7 @@ describe('SessionCard', () => {
   it('Review Changes link has correct href', () => {
     render(
       <SessionCard
-        session={{ ...mockSession, sessionType: SessionType.ISSUE_MODIFY }}
+        session={{ ...mockSession, sessionType: SessionType.ISSUE_AGENT_MODIFICATION }}
         entityTitle="Issues Agent"
         entityType="issue"
         projectName="Test Project"
@@ -382,7 +382,7 @@ describe('SessionCard', () => {
   it('clicking Review Changes does not prevent navigation', () => {
     render(
       <SessionCard
-        session={{ ...mockSession, sessionType: SessionType.ISSUE_MODIFY }}
+        session={{ ...mockSession, sessionType: SessionType.ISSUE_AGENT_MODIFICATION }}
         entityTitle="Issues Agent"
         entityType="issue"
         projectName="Test Project"
@@ -404,10 +404,10 @@ describe('SessionCard', () => {
     expect(preventDefaultSpy).not.toHaveBeenCalled()
   })
 
-  it('shows Issues Agent badge for ISSUE_MODIFY sessions', () => {
+  it('shows Issues Agent badge for ISSUE_AGENT_MODIFICATION sessions', () => {
     render(
       <SessionCard
-        session={{ ...mockSession, sessionType: SessionType.ISSUE_MODIFY }}
+        session={{ ...mockSession, sessionType: SessionType.ISSUE_AGENT_MODIFICATION }}
         entityTitle="Test Title"
         entityType="issue"
         projectName="Test Project"

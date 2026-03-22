@@ -83,7 +83,7 @@ public class ClaudeSession
     public long TotalDurationMs { get; set; }
 
     /// <summary>
-    /// The type of session (Standard or IssueModify).
+    /// The type of session (Standard or IssueAgentModification).
     /// </summary>
     public SessionType SessionType { get; set; } = SessionType.Standard;
 

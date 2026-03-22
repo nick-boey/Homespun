@@ -140,7 +140,7 @@ export function SessionCard({
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0 flex-1">
               <div className="mb-1 flex items-center gap-2">
-                {session.sessionType === SessionType.ISSUE_MODIFY ? (
+                {session.sessionType === SessionType.ISSUE_AGENT_MODIFICATION ? (
                   <Badge
                     variant="outline"
                     className="border-purple-500 bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300"
@@ -198,7 +198,7 @@ export function SessionCard({
           </CardDescription>
           <CardAction>
             <div className="flex items-center gap-2">
-              {session.sessionType === SessionType.ISSUE_MODIFY && (
+              {session.sessionType === SessionType.ISSUE_AGENT_MODIFICATION && (
                 <Link
                   to="/sessions/$sessionId/issue-diff"
                   params={{ sessionId: session.id ?? '' }}
