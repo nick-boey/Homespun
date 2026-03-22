@@ -240,6 +240,7 @@ else
     builder.Services.AddScoped<IWorkflowService, WorkflowService>();
     builder.Services.AddSingleton<IWorkflowStorageService, WorkflowStorageService>();
     builder.Services.AddSingleton<IWorkflowExecutionService, WorkflowExecutionService>();
+    builder.Services.AddSingleton<IWorkflowContextStore, WorkflowContextStore>();
 }
 
 // SignalR URL provider (uses internal URL in Docker, localhost in development)
