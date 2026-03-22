@@ -1,4 +1,6 @@
 using Fleece.Core.Models;
+using Fleece.Core.Serialization;
+using Fleece.Core.Services;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Git;
 using Homespun.Features.Projects;
@@ -43,6 +45,7 @@ public class FleeceChangeApplicationService : IFleeceChangeApplicationService
     private readonly IFleeceChangeDetectionService _changeDetectionService;
     private readonly IFleeceConflictDetectionService _conflictDetectionService;
     private readonly ILogger<FleeceChangeApplicationService> _logger;
+    private readonly IssueMerger _issueMerger = new();
 
     // Store pending conflicts for manual resolution
     private readonly Dictionary<string, List<IssueConflictDto>> _pendingConflicts = new();
@@ -171,7 +174,16 @@ public class FleeceChangeApplicationService : IFleeceChangeApplicationService
                 };
             }
 
-            // Apply changes
+            // Use file merge approach for AgentWins strategy (the common case)
+            // This uses IssueMerger with field-level LWW merging, which is the proven
+            // approach used by FleeceIssuesSyncService
+            if (conflictStrategy == ConflictResolutionStrategy.AgentWins)
+            {
+                return await ApplyChangesViaFileMergeAsync(
+                    project.LocalPath, session.WorkingDirectory, cancellationToken);
+            }
+
+            // Apply changes one-by-one for other strategies
             var appliedChanges = new List<IssueChangeDto>();
             var errors = new List<string>();
 
@@ -495,6 +507,245 @@ public class FleeceChangeApplicationService : IFleeceChangeApplicationService
             return result;
 
         return null;
+    }
+
+    /// <summary>
+    /// Applies changes using file-based merging with IssueMerger (field-level LWW).
+    /// This is the proven approach used by FleeceIssuesSyncService.
+    /// </summary>
+    private async Task<ApplyAgentChangesResponse> ApplyChangesViaFileMergeAsync(
+        string mainPath,
+        string agentClonePath,
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation(
+            "Applying changes via file merge: main={MainPath}, agent={AgentPath}",
+            mainPath, agentClonePath);
+
+        try
+        {
+            // Load issues from main branch
+            var mainIssues = await LoadIssuesFromPathAsync(mainPath, cancellationToken);
+            var mainIssueMap = mainIssues.ToDictionary(i => i.Id, StringComparer.OrdinalIgnoreCase);
+
+            _logger.LogDebug("Loaded {Count} issues from main branch", mainIssues.Count);
+
+            // Load issues from agent clone
+            var agentIssues = await LoadIssuesFromPathAsync(agentClonePath, cancellationToken);
+            var agentIssueMap = agentIssues.ToDictionary(i => i.Id, StringComparer.OrdinalIgnoreCase);
+
+            _logger.LogDebug("Loaded {Count} issues from agent clone", agentIssues.Count);
+
+            // Collect all issue IDs from both sides
+            var allIssueIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var issue in mainIssues)
+                allIssueIds.Add(issue.Id);
+            foreach (var issue in agentIssues)
+                allIssueIds.Add(issue.Id);
+
+            // Merge issues using IssueMerger (field-level LWW)
+            var mergedIssues = new List<Issue>();
+            var appliedChanges = new List<IssueChangeDto>();
+
+            foreach (var issueId in allIssueIds)
+            {
+                var hasMain = mainIssueMap.TryGetValue(issueId, out var mainIssue);
+                var hasAgent = agentIssueMap.TryGetValue(issueId, out var agentIssue);
+
+                if (hasMain && hasAgent)
+                {
+                    // Both sides have the issue - merge using IssueMerger (LWW per field)
+                    var mergeResult = _issueMerger.Merge(mainIssue!, agentIssue!);
+                    mergedIssues.Add(mergeResult.MergedIssue);
+
+                    // Check if there are actual differences from main
+                    if (HasDifferences(mainIssue!, mergeResult.MergedIssue))
+                    {
+                        appliedChanges.Add(CreateChangeDto(
+                            mergeResult.MergedIssue,
+                            ChangeType.Updated,
+                            mainIssue!,
+                            mergeResult.MergedIssue));
+                    }
+                }
+                else if (hasAgent)
+                {
+                    // Only agent has it - new issue created by agent
+                    mergedIssues.Add(agentIssue!);
+                    appliedChanges.Add(CreateChangeDto(
+                        agentIssue!,
+                        ChangeType.Created,
+                        null,
+                        agentIssue!));
+                }
+                else
+                {
+                    // Only main has it - keep it (agent didn't touch it)
+                    mergedIssues.Add(mainIssue!);
+                }
+            }
+
+            // Save merged result to main branch
+            var serializer = new JsonlSerializer();
+            var schemaValidator = new SchemaValidator();
+            var storage = new JsonlStorageService(mainPath, serializer, schemaValidator);
+            await storage.SaveIssuesAsync(mergedIssues, cancellationToken);
+
+            _logger.LogInformation("Saved {Count} merged issues to main branch", mergedIssues.Count);
+
+            // Clear the FleeceService cache so it picks up the new state
+            await _fleeceService.ReloadFromDiskAsync(mainPath, cancellationToken);
+
+            return new ApplyAgentChangesResponse
+            {
+                Success = true,
+                Message = $"Applied {appliedChanges.Count} changes successfully",
+                Changes = appliedChanges,
+                Conflicts = []
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error applying changes via file merge");
+            return new ApplyAgentChangesResponse
+            {
+                Success = false,
+                Message = $"Error applying changes: {ex.Message}"
+            };
+        }
+    }
+
+    /// <summary>
+    /// Loads issues directly from disk at the given path.
+    /// </summary>
+    private async Task<List<Issue>> LoadIssuesFromPathAsync(string path, CancellationToken cancellationToken)
+    {
+        var fleeceDir = Path.Combine(path, ".fleece");
+
+        if (!Directory.Exists(fleeceDir))
+        {
+            _logger.LogWarning(".fleece directory not found at {Path}", fleeceDir);
+            return [];
+        }
+
+        try
+        {
+            var serializer = new JsonlSerializer();
+            var schemaValidator = new SchemaValidator();
+            var storage = new JsonlStorageService(path, serializer, schemaValidator);
+            var issues = await storage.LoadIssuesAsync(cancellationToken);
+            return issues.ToList();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading issues from {Path}", path);
+            return [];
+        }
+    }
+
+    /// <summary>
+    /// Checks if there are actual differences between two issues.
+    /// </summary>
+    private static bool HasDifferences(Issue original, Issue merged)
+    {
+        // Compare key fields that represent meaningful changes
+        return original.Title != merged.Title ||
+               original.Description != merged.Description ||
+               original.Status != merged.Status ||
+               original.Type != merged.Type ||
+               original.Priority != merged.Priority ||
+               original.ExecutionMode != merged.ExecutionMode ||
+               original.WorkingBranchId != merged.WorkingBranchId ||
+               original.AssignedTo != merged.AssignedTo ||
+               !AreParentIssuesEqual(original.ParentIssues, merged.ParentIssues) ||
+               !AreLinkedPRsEqual(original.LinkedPRs, merged.LinkedPRs);
+    }
+
+    private static bool AreParentIssuesEqual(IReadOnlyList<ParentIssueRef> list1, IReadOnlyList<ParentIssueRef> list2)
+    {
+        if (list1.Count != list2.Count)
+            return false;
+
+        var set1 = list1.Select(p => $"{p.ParentIssue}:{p.SortOrder}").OrderBy(s => s).ToList();
+        var set2 = list2.Select(p => $"{p.ParentIssue}:{p.SortOrder}").OrderBy(s => s).ToList();
+
+        return set1.SequenceEqual(set2);
+    }
+
+    private static bool AreLinkedPRsEqual(IReadOnlyList<int> list1, IReadOnlyList<int> list2)
+    {
+        if (list1.Count != list2.Count)
+            return false;
+
+        return list1.OrderBy(x => x).SequenceEqual(list2.OrderBy(x => x));
+    }
+
+    /// <summary>
+    /// Creates an IssueChangeDto from an issue and change type.
+    /// </summary>
+    private static IssueChangeDto CreateChangeDto(
+        Issue issue,
+        ChangeType changeType,
+        Issue? originalIssue,
+        Issue modifiedIssue)
+    {
+        return new IssueChangeDto
+        {
+            IssueId = issue.Id,
+            ChangeType = changeType,
+            Title = issue.Title,
+            OriginalIssue = originalIssue?.ToDto(),
+            ModifiedIssue = modifiedIssue.ToDto(),
+            FieldChanges = changeType == ChangeType.Created
+                ? GetAllFieldsAsChanges(modifiedIssue)
+                : GetFieldChanges(originalIssue!, modifiedIssue)
+        };
+    }
+
+    private static List<FieldChangeDto> GetAllFieldsAsChanges(Issue issue)
+    {
+        return
+        [
+            new() { FieldName = "Title", OldValue = null, NewValue = issue.Title },
+            new() { FieldName = "Description", OldValue = null, NewValue = issue.Description },
+            new() { FieldName = "Status", OldValue = null, NewValue = issue.Status.ToString() },
+            new() { FieldName = "Type", OldValue = null, NewValue = issue.Type.ToString() },
+            new() { FieldName = "Priority", OldValue = null, NewValue = issue.Priority?.ToString() },
+            new() { FieldName = "ExecutionMode", OldValue = null, NewValue = issue.ExecutionMode.ToString() },
+            new() { FieldName = "WorkingBranchId", OldValue = null, NewValue = issue.WorkingBranchId },
+            new() { FieldName = "AssignedTo", OldValue = null, NewValue = issue.AssignedTo }
+        ];
+    }
+
+    private static List<FieldChangeDto> GetFieldChanges(Issue original, Issue modified)
+    {
+        var changes = new List<FieldChangeDto>();
+
+        if (original.Title != modified.Title)
+            changes.Add(new FieldChangeDto { FieldName = "Title", OldValue = original.Title, NewValue = modified.Title });
+
+        if (original.Description != modified.Description)
+            changes.Add(new FieldChangeDto { FieldName = "Description", OldValue = original.Description, NewValue = modified.Description });
+
+        if (original.Status != modified.Status)
+            changes.Add(new FieldChangeDto { FieldName = "Status", OldValue = original.Status.ToString(), NewValue = modified.Status.ToString() });
+
+        if (original.Type != modified.Type)
+            changes.Add(new FieldChangeDto { FieldName = "Type", OldValue = original.Type.ToString(), NewValue = modified.Type.ToString() });
+
+        if (original.Priority != modified.Priority)
+            changes.Add(new FieldChangeDto { FieldName = "Priority", OldValue = original.Priority?.ToString(), NewValue = modified.Priority?.ToString() });
+
+        if (original.ExecutionMode != modified.ExecutionMode)
+            changes.Add(new FieldChangeDto { FieldName = "ExecutionMode", OldValue = original.ExecutionMode.ToString(), NewValue = modified.ExecutionMode.ToString() });
+
+        if (original.WorkingBranchId != modified.WorkingBranchId)
+            changes.Add(new FieldChangeDto { FieldName = "WorkingBranchId", OldValue = original.WorkingBranchId, NewValue = modified.WorkingBranchId });
+
+        if (original.AssignedTo != modified.AssignedTo)
+            changes.Add(new FieldChangeDto { FieldName = "AssignedTo", OldValue = original.AssignedTo, NewValue = modified.AssignedTo });
+
+        return changes;
     }
 }
 
