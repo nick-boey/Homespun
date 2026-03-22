@@ -94,3 +94,46 @@ public class CreateBranchSessionResponse
     /// </summary>
     public required string ClonePath { get; set; }
 }
+
+/// <summary>
+/// Request model for bulk deleting clones.
+/// </summary>
+public class BulkDeleteClonesRequest
+{
+    /// <summary>
+    /// The paths of clones to delete.
+    /// </summary>
+    public required List<string> ClonePaths { get; set; }
+}
+
+/// <summary>
+/// Response model for bulk deleting clones.
+/// </summary>
+public class BulkDeleteClonesResponse
+{
+    /// <summary>
+    /// Results for each clone deletion attempt.
+    /// </summary>
+    public required List<BulkDeleteResult> Results { get; set; }
+}
+
+/// <summary>
+/// Result of a single clone deletion attempt.
+/// </summary>
+public class BulkDeleteResult
+{
+    /// <summary>
+    /// The path of the clone that was attempted to be deleted.
+    /// </summary>
+    public required string ClonePath { get; set; }
+
+    /// <summary>
+    /// Whether the deletion was successful.
+    /// </summary>
+    public bool Success { get; set; }
+
+    /// <summary>
+    /// Error message if the deletion failed.
+    /// </summary>
+    public string? Error { get; set; }
+}
