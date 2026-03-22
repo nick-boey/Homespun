@@ -74,6 +74,20 @@ export type BranchStatusResult = {
   commitsAhead?: number
 }
 
+export type BulkDeleteClonesRequest = {
+  clonePaths: Array<string> | null
+}
+
+export type BulkDeleteClonesResponse = {
+  results: Array<BulkDeleteResult> | null
+}
+
+export type BulkDeleteResult = {
+  clonePath: string | null
+  success?: boolean
+  error?: string | null
+}
+
 export const ChangeType = {
   CREATED: 'created',
   UPDATED: 'updated',
@@ -314,6 +328,30 @@ export type CreateSessionRequest = {
   metadata?: {
     [key: string]: string
   } | null
+}
+
+export type EnrichedCloneInfo = {
+  clone: CloneInfo
+  linkedIssueId?: string | null
+  linkedIssue?: EnrichedIssueInfo
+  linkedPr?: EnrichedPrInfo
+  isDeletable?: boolean
+  deletionReason?: string | null
+  isIssuesAgentClone?: boolean
+}
+
+export type EnrichedIssueInfo = {
+  id: string | null
+  title: string | null
+  status: string | null
+  type?: string | null
+}
+
+export type EnrichedPrInfo = {
+  number?: number
+  title: string | null
+  status: PullRequestStatus
+  htmlUrl?: string | null
 }
 
 export const ExecutionMode = { SERIES: 'series', PARALLEL: 'parallel' } as const
@@ -1019,6 +1057,16 @@ export type CloneInfoWritable = {
   expectedBranch?: string | null
 }
 
+export type EnrichedCloneInfoWritable = {
+  clone: CloneInfoWritable
+  linkedIssueId?: string | null
+  linkedIssue?: EnrichedIssueInfo
+  linkedPr?: EnrichedPrInfo
+  isDeletable?: boolean
+  deletionReason?: string | null
+  isIssuesAgentClone?: boolean
+}
+
 export type IssuePullRequestStatusWritable = {
   prNumber?: number
   prUrl: string | null
@@ -1374,6 +1422,62 @@ export type PostApiClonesResponses = {
 }
 
 export type PostApiClonesResponse = PostApiClonesResponses[keyof PostApiClonesResponses]
+
+export type GetApiClonesEnrichedData = {
+  body?: never
+  path?: never
+  query?: {
+    projectId?: string
+  }
+  url: '/api/Clones/enriched'
+}
+
+export type GetApiClonesEnrichedErrors = {
+  /**
+   * Not Found
+   */
+  404: ProblemDetails
+}
+
+export type GetApiClonesEnrichedError = GetApiClonesEnrichedErrors[keyof GetApiClonesEnrichedErrors]
+
+export type GetApiClonesEnrichedResponses = {
+  /**
+   * OK
+   */
+  200: Array<EnrichedCloneInfo>
+}
+
+export type GetApiClonesEnrichedResponse =
+  GetApiClonesEnrichedResponses[keyof GetApiClonesEnrichedResponses]
+
+export type DeleteApiClonesBulkData = {
+  body?: BulkDeleteClonesRequest
+  path?: never
+  query?: {
+    projectId?: string
+  }
+  url: '/api/Clones/bulk'
+}
+
+export type DeleteApiClonesBulkErrors = {
+  /**
+   * Not Found
+   */
+  404: ProblemDetails
+}
+
+export type DeleteApiClonesBulkError = DeleteApiClonesBulkErrors[keyof DeleteApiClonesBulkErrors]
+
+export type DeleteApiClonesBulkResponses = {
+  /**
+   * OK
+   */
+  200: BulkDeleteClonesResponse
+}
+
+export type DeleteApiClonesBulkResponse =
+  DeleteApiClonesBulkResponses[keyof DeleteApiClonesBulkResponses]
 
 export type GetApiClonesExistsData = {
   body?: never
