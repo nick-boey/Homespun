@@ -53,7 +53,7 @@ export function createSessionsRoute(sessionManager: SessionManager) {
   // POST /sessions - Start or resume a session (SSE stream)
   sessions.post('/', async (c) => {
     const body = await c.req.json<StartSessionRequest>();
-    info(`POST /sessions - mode=${body.mode}, model=${body.model}, workingDirectory=${body.workingDirectory}, resumeSessionId=${body.resumeSessionId || 'none'}`);
+    info(`POST /sessions - mode=${body.mode}, model=${body.model}, workingDirectory=${body.workingDirectory}, resumeSessionId=${body.resumeSessionId || 'none'}, hasWorkflowContext=${!!body.workflowContext}`);
 
     c.header('Content-Type', 'text/event-stream');
     c.header('Cache-Control', 'no-cache');
@@ -68,6 +68,7 @@ export function createSessionsRoute(sessionManager: SessionManager) {
           systemPrompt: body.systemPrompt,
           workingDirectory: body.workingDirectory,
           resumeSessionId: body.resumeSessionId,
+          workflowContext: body.workflowContext,
         });
 
         for await (const chunk of streamSessionEvents(sessionManager, ws.id)) {
