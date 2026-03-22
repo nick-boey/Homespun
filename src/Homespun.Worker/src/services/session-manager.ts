@@ -11,7 +11,13 @@ import type {
   UserQuestion,
   ApprovePlanRequest,
   LastMessageType,
+  WorkflowSessionContext,
 } from "../types/index.js";
+import {
+  WORKFLOW_COMPLETE_TOOL,
+  isValidWorkflowCompleteInput,
+  type WorkflowCompleteInput,
+} from "../tools/workflow-tools.js";
 import { randomUUID } from "node:crypto";
 import { info, error, warn, debug } from "../utils/logger.js";
 import {
@@ -39,11 +45,22 @@ export function mapMode(value: string | undefined): SdkPermissionMode {
 
 // --- OutputChannel types ---
 
+/**
+ * Data payload for workflow_complete control event.
+ */
+export interface WorkflowCompleteEventData {
+  /** The workflow context from the session */
+  workflowContext: WorkflowSessionContext;
+  /** The completion data from the agent */
+  completion: WorkflowCompleteInput;
+}
+
 export interface ControlEvent {
-  type: "question_pending" | "plan_pending" | "status_resumed";
+  type: "question_pending" | "plan_pending" | "status_resumed" | "workflow_complete";
   data:
     | { questions: UserQuestion[] }
     | { plan: string }
+    | WorkflowCompleteEventData
     | Record<string, never>;
 }
 
@@ -53,7 +70,10 @@ export function isControlEvent(event: OutputEvent): event is ControlEvent {
   if (!("type" in event) || !("data" in event)) return false;
   const t = (event as ControlEvent).type;
   return (
-    t === "question_pending" || t === "plan_pending" || t === "status_resumed"
+    t === "question_pending" ||
+    t === "plan_pending" ||
+    t === "status_resumed" ||
+    t === "workflow_complete"
   );
 }
 
@@ -169,6 +189,8 @@ interface WorkerSession {
   resultReceived: boolean;
   systemPrompt?: string;
   workingDirectory?: string;
+  /** Workflow context when running as part of a workflow execution */
+  workflowContext?: WorkflowSessionContext;
 }
 
 /**
@@ -331,6 +353,7 @@ export class SessionManager {
     systemPrompt?: string;
     workingDirectory?: string;
     resumeSessionId?: string;
+    workflowContext?: WorkflowSessionContext;
   }): Promise<WorkerSession> {
     const id = randomUUID();
     const isPlan = opts.mode.toLowerCase() === "plan";
@@ -338,7 +361,7 @@ export class SessionManager {
 
     // Log comprehensive session creation details
     info(
-      `Creating session ${id} - mode='${opts.mode}', isPlan=${isPlan}, model='${opts.model}', workingDirectory='${opts.workingDirectory || process.env.WORKING_DIRECTORY || "/workdir"}', systemPromptLength=${opts.systemPrompt?.length || 0}, resumeSessionId='${opts.resumeSessionId}'`,
+      `Creating session ${id} - mode='${opts.mode}', isPlan=${isPlan}, model='${opts.model}', workingDirectory='${opts.workingDirectory || process.env.WORKING_DIRECTORY || "/workdir"}', systemPromptLength=${opts.systemPrompt?.length || 0}, resumeSessionId='${opts.resumeSessionId}', hasWorkflowContext=${!!opts.workflowContext}`,
     );
 
     const common = buildCommonOptions(
@@ -418,6 +441,7 @@ export class SessionManager {
       resultReceived: false,
       systemPrompt: opts.systemPrompt,
       workingDirectory: opts.workingDirectory,
+      workflowContext: opts.workflowContext,
     };
 
     this.sessions.set(id, workerSession);
@@ -574,6 +598,57 @@ export class SessionManager {
         }
 
         return result;
+      }
+
+      // Handle WorkflowComplete tool - only enabled when session has workflowContext
+      if (toolName === WORKFLOW_COMPLETE_TOOL) {
+        const ws = this.sessions.get(sessionId);
+
+        // Only allow WorkflowComplete when session has workflow context
+        if (!ws?.workflowContext) {
+          info(
+            `WorkflowComplete denied - no workflow context (sessionId: ${sessionId})`,
+          );
+          return {
+            behavior: "deny",
+            message:
+              "WorkflowComplete tool can only be used in workflow sessions",
+          };
+        }
+
+        // Validate the input
+        if (!isValidWorkflowCompleteInput(input)) {
+          info(
+            `WorkflowComplete denied - invalid input (sessionId: ${sessionId})`,
+          );
+          return {
+            behavior: "deny",
+            message:
+              "Invalid WorkflowComplete input: requires status, outputs, and summary",
+          };
+        }
+
+        const completionInput = input as WorkflowCompleteInput;
+
+        // Emit workflow_complete control event to SSE stream
+        // This notifies the server that the workflow node has completed
+        ws.outputChannel.push({
+          type: "workflow_complete",
+          data: {
+            workflowContext: ws.workflowContext,
+            completion: completionInput,
+          },
+        });
+
+        info(
+          `emitted workflow_complete for session '${sessionId}' - status='${completionInput.status}', nodeId='${ws.workflowContext.nodeId}'`,
+        );
+
+        // Allow the tool to execute - this signals session completion
+        return {
+          behavior: "allow",
+          updatedInput: input,
+        };
       }
 
       // Allow other tools
