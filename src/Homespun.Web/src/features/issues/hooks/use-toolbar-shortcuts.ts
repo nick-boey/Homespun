@@ -1,4 +1,5 @@
 import { useEffect, useCallback } from 'react'
+import { isInputElement } from '@/lib/utils/is-input-element'
 
 export interface ToolbarShortcutCallbacks {
   onCreateAbove: () => void
@@ -19,17 +20,6 @@ export interface ToolbarShortcutCallbacks {
   onFocusFilterAtEnd?: () => void
   canUndo?: boolean
   canRedo?: boolean
-}
-
-function isInputElement(element: EventTarget | null): boolean {
-  if (!element || !(element instanceof HTMLElement)) return false
-  const tagName = element.tagName.toLowerCase()
-  return (
-    tagName === 'input' ||
-    tagName === 'textarea' ||
-    tagName === 'select' ||
-    element.isContentEditable
-  )
 }
 
 export function useToolbarShortcuts(callbacks: ToolbarShortcutCallbacks) {

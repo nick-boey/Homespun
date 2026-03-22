@@ -1,4 +1,11 @@
-import { createFileRoute, useParams, Link, Outlet, useRouterState } from '@tanstack/react-router'
+import {
+  createFileRoute,
+  useParams,
+  Link,
+  Outlet,
+  useRouterState,
+  useNavigate,
+} from '@tanstack/react-router'
 import { useEffect, useRef, useCallback, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -19,6 +26,7 @@ import {
   SessionInfoPanel,
   useSessionNavigation,
   useIssueContext,
+  useSessionShortcuts,
 } from '@/features/sessions'
 import { useHistoricalSessionMessages } from '@/features/sessions/hooks/use-historical-session-messages'
 import { useClearContext } from '@/features/sessions/hooks/use-clear-context'
@@ -79,6 +87,7 @@ function SessionLayout() {
 }
 
 function SessionChat({ sessionId }: { sessionId: string }) {
+  const navigate = useNavigate()
   const { session, isLoading, isNotFound, error, refetch, isJoined } = useSession(sessionId)
   const { isConnected } = useClaudeCodeHub()
   const scrollContainerRef = useRef<HTMLDivElement>(null)
@@ -194,13 +203,24 @@ function SessionChat({ sessionId }: { sessionId: string }) {
   }, [])
 
   const confirmStop = useCallback(() => {
-    stopSession.mutate(sessionId)
+    stopSession.mutate(sessionId, {
+      onSuccess: () => navigate({ to: '/sessions' }),
+    })
     setShowStopDialog(false)
-  }, [stopSession, sessionId])
+  }, [stopSession, sessionId, navigate])
 
   const cancelStop = useCallback(() => {
     setShowStopDialog(false)
   }, [])
+
+  // Determine if the session can be stopped
+  const canStop = !!session && session.status !== 'stopped' && session.status !== 'error'
+
+  // Enable CTRL+C shortcut to stop session
+  useSessionShortcuts({
+    onStopSession: handleStop,
+    canStop,
+  })
 
   // Toggle info panel
   const handleToggleInfoPanel = useCallback(() => {
