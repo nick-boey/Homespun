@@ -89,6 +89,9 @@ export function PromptCard({
           <div className="flex items-center justify-between">
             <CardTitle className="text-base font-medium">
               {prompt.name || 'Untitled Prompt'}
+              {prompt.isOverride && (
+                <span className="text-muted-foreground ml-1 font-normal">(project)</span>
+              )}
             </CardTitle>
             <div className="flex items-center gap-2">
               <Badge variant={getModeVariant(prompt.mode)}>{getModeLabel(prompt.mode)}</Badge>

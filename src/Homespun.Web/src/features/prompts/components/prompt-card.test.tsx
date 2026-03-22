@@ -102,4 +102,35 @@ describe('PromptCard', () => {
     // Should not have Global badge
     expect(screen.queryByText('Global')).not.toBeInTheDocument()
   })
+
+  it('displays (project) suffix for override prompts', () => {
+    const overridePrompt = { ...mockPrompt, isOverride: true }
+    render(<PromptCard prompt={overridePrompt} onEdit={vi.fn()} onDelete={vi.fn()} />)
+
+    expect(screen.getByText('Test Prompt')).toBeInTheDocument()
+    expect(screen.getByText('(project)')).toBeInTheDocument()
+  })
+
+  it('does not display (project) suffix when isOverride is false', () => {
+    const normalPrompt = { ...mockPrompt, isOverride: false }
+    render(<PromptCard prompt={normalPrompt} onEdit={vi.fn()} onDelete={vi.fn()} />)
+
+    expect(screen.getByText('Test Prompt')).toBeInTheDocument()
+    expect(screen.queryByText('(project)')).not.toBeInTheDocument()
+  })
+
+  it('does not display (project) suffix when isOverride is undefined', () => {
+    render(<PromptCard prompt={mockPrompt} onEdit={vi.fn()} onDelete={vi.fn()} />)
+
+    expect(screen.getByText('Test Prompt')).toBeInTheDocument()
+    expect(screen.queryByText('(project)')).not.toBeInTheDocument()
+  })
+
+  it('styles (project) suffix with muted color', () => {
+    const overridePrompt = { ...mockPrompt, isOverride: true }
+    render(<PromptCard prompt={overridePrompt} onEdit={vi.fn()} onDelete={vi.fn()} />)
+
+    const suffix = screen.getByText('(project)')
+    expect(suffix).toHaveClass('text-muted-foreground')
+  })
 })

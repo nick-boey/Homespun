@@ -484,4 +484,50 @@ describe('AgentLauncherDialog', () => {
     const options = screen.getAllByRole('option')
     expect(options[0]).toHaveTextContent('None - Start without prompt (Plan mode)')
   })
+
+  it('displays (project) suffix for override prompts in dropdown', async () => {
+    const promptsWithOverride: AgentPrompt[] = [
+      {
+        id: 'prompt-1',
+        name: 'Build Feature',
+        initialMessage: 'Build the feature',
+        mode: SessionMode.BUILD,
+        isOverride: true,
+      },
+      {
+        id: 'prompt-2',
+        name: 'Plan Task',
+        initialMessage: 'Create a plan',
+        mode: SessionMode.PLAN,
+        isOverride: false,
+      },
+    ]
+    mockGetAgentPrompts.mockResolvedValue(createMockResponse(promptsWithOverride))
+
+    const user = userEvent.setup()
+    render(
+      <AgentLauncherDialog
+        open={true}
+        onOpenChange={() => {}}
+        projectId="project-123"
+        issueId="issue-456"
+      />,
+      { wrapper: createWrapper() }
+    )
+
+    // Wait for prompts to load
+    await waitFor(() => {
+      expect(screen.getByRole('combobox', { name: /prompt/i })).toBeInTheDocument()
+    })
+
+    // Open the prompt dropdown
+    const promptSelect = screen.getByRole('combobox', { name: /prompt/i })
+    await user.click(promptSelect)
+
+    // Should show (project) suffix for override prompt
+    expect(screen.getByText(/Build Feature \(project\)/)).toBeInTheDocument()
+    // Should not show (project) suffix for non-override prompt
+    expect(screen.getByText('Plan Task')).toBeInTheDocument()
+    expect(screen.queryByText(/Plan Task \(project\)/)).not.toBeInTheDocument()
+  })
 })

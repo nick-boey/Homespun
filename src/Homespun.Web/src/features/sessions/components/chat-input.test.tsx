@@ -1,8 +1,32 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ChatInput } from './chat-input'
+import { AgentPrompts, SessionMode } from '@/api'
+import type { AgentPrompt } from '@/api/generated/types.gen'
+
+vi.mock('@/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/api')>()
+  return {
+    ...actual,
+    AgentPrompts: {
+      getApiAgentPromptsAvailableForProjectByProjectId: vi.fn(),
+    },
+  }
+})
+
+const mockGetAgentPrompts = vi.mocked(AgentPrompts.getApiAgentPromptsAvailableForProjectByProjectId)
+
+// Helper to create mock API response
+function createMockResponse<T>(data: T) {
+  return {
+    data,
+    error: undefined,
+    request: new Request('http://localhost/api/test'),
+    response: new Response(),
+  }
+}
 
 // Create a wrapper component for React Query
 function createWrapper() {
@@ -38,6 +62,8 @@ describe('ChatInput', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    // Default to empty prompts
+    mockGetAgentPrompts.mockResolvedValue(createMockResponse([]))
   })
 
   describe('rendering', () => {
@@ -277,6 +303,58 @@ describe('ChatInput', () => {
       await user.type(input, 'Hello{Enter}')
 
       expect(mockOnSend).toHaveBeenCalledWith('Hello', 'build', 'sonnet')
+    })
+  })
+
+  describe('prompt dropdown', () => {
+    const issueContext = {
+      id: 'issue-1',
+      title: 'Test Issue',
+      description: 'Test description',
+      branch: 'feature/test-branch',
+      type: 'Task',
+    }
+
+    it('displays (project) suffix for override prompts in dropdown', async () => {
+      const promptsWithOverride: AgentPrompt[] = [
+        {
+          id: 'prompt-1',
+          name: 'Build Feature',
+          initialMessage: 'Build the feature',
+          mode: SessionMode.BUILD,
+          isOverride: true,
+        },
+        {
+          id: 'prompt-2',
+          name: 'Plan Task',
+          initialMessage: 'Create a plan',
+          mode: SessionMode.PLAN,
+          isOverride: false,
+        },
+      ]
+      mockGetAgentPrompts.mockResolvedValue(createMockResponse(promptsWithOverride))
+
+      const user = userEvent.setup()
+      renderWithQuery(
+        <ChatInput {...defaultProps} projectId="project-123" issueContext={issueContext} />
+      )
+
+      // Wait for prompts to load and button to be enabled
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /prompt/i })).toBeInTheDocument()
+      })
+
+      // Open the prompt dropdown
+      const promptButton = screen.getByRole('button', { name: /prompt/i })
+      await user.click(promptButton)
+
+      // Should show (project) suffix for override prompt
+      await waitFor(() => {
+        expect(screen.getByText(/Build Feature \(project\)/)).toBeInTheDocument()
+      })
+      // Should not show (project) suffix for non-override prompt
+      expect(screen.getByText('Plan Task')).toBeInTheDocument()
+      expect(screen.queryByText(/Plan Task \(project\)/)).not.toBeInTheDocument()
     })
   })
 })
