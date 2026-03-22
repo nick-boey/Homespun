@@ -45,7 +45,7 @@ describe('serializePrompts', () => {
         name: 'Issue Modify',
         initialMessage: 'Modify issues',
         mode: SessionMode.BUILD,
-        sessionType: SessionType.ISSUE_MODIFY,
+        sessionType: SessionType.ISSUE_AGENT_MODIFICATION,
       },
     ]
 
@@ -57,7 +57,7 @@ describe('serializePrompts', () => {
       name: 'Issue Modify',
       initialMessage: 'Modify issues',
       mode: SessionMode.BUILD,
-      sessionType: SessionType.ISSUE_MODIFY,
+      sessionType: SessionType.ISSUE_AGENT_MODIFICATION,
     })
   })
 
@@ -197,14 +197,14 @@ describe('parsePrompts', () => {
         id: 'prompt-1',
         name: 'Issue Modify',
         mode: SessionMode.BUILD,
-        sessionType: SessionType.ISSUE_MODIFY,
+        sessionType: SessionType.ISSUE_AGENT_MODIFICATION,
       },
     ])
 
     const result = parsePrompts(json)
     expect(result.success).toBe(true)
     if (result.success) {
-      expect(result.data[0].sessionType).toBe(SessionType.ISSUE_MODIFY)
+      expect(result.data[0].sessionType).toBe(SessionType.ISSUE_AGENT_MODIFICATION)
     }
   })
 })
@@ -261,7 +261,7 @@ describe('calculateDiff', () => {
         id: 'issue-prompt-1',
         name: 'Issue Modify',
         mode: SessionMode.BUILD,
-        sessionType: SessionType.ISSUE_MODIFY,
+        sessionType: SessionType.ISSUE_AGENT_MODIFICATION,
       },
     ]
     const edited: ExportedPrompt[] = []
@@ -348,7 +348,7 @@ describe('calculateDiff', () => {
         name: 'Issue Modify',
         initialMessage: 'Old Message',
         mode: SessionMode.BUILD,
-        sessionType: SessionType.ISSUE_MODIFY,
+        sessionType: SessionType.ISSUE_AGENT_MODIFICATION,
       },
     ]
     const edited: ExportedPrompt[] = [
@@ -357,7 +357,7 @@ describe('calculateDiff', () => {
         name: 'Issue Modify',
         initialMessage: 'New Message',
         mode: SessionMode.BUILD,
-        sessionType: SessionType.ISSUE_MODIFY,
+        sessionType: SessionType.ISSUE_AGENT_MODIFICATION,
       },
     ]
 
