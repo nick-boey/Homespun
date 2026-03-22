@@ -35,6 +35,8 @@ public class IssuesController(
     IBranchIdBackgroundService branchIdBackgroundService,
     IFleeceChangeApplicationService changeApplicationService,
     IFleeceIssuesSyncService fleeceIssuesSyncService,
+    IAgentStartBackgroundService agentStartBackgroundService,
+    IAgentStartupTracker agentStartupTracker,
     ILogger<IssuesController> logger) : ControllerBase
 {
     /// <summary>
@@ -401,18 +403,20 @@ public class IssuesController(
 
     /// <summary>
     /// Run an agent on an issue.
-    /// This endpoint handles the complete agent startup flow:
-    /// 1. Fetches issue data
-    /// 2. Resolves or creates the working branch/clone
-    /// 3. Fetches the prompt and renders the template with issue context
-    /// 4. Creates the session and sends the initial message
+    /// This endpoint returns 202 Accepted immediately and handles the agent startup in the background:
+    /// 1. Validates project, issue, and prompt existence
+    /// 2. Queues background work to:
+    ///    - Create/resolve the working branch/clone
+    ///    - Render the prompt template with issue context
+    ///    - Create the session and send the initial message
+    /// 3. Clients receive SignalR notifications when the agent is ready or fails
     /// </summary>
     [HttpPost("issues/{issueId}/run")]
-    [ProducesResponseType<RunAgentResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<RunAgentAcceptedResponse>(StatusCodes.Status202Accepted)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType<AgentAlreadyRunningResponse>(StatusCodes.Status409Conflict)]
-    public async Task<ActionResult<RunAgentResponse>> RunAgent(string issueId, [FromBody] RunAgentRequest request)
+    public async Task<ActionResult<RunAgentAcceptedResponse>> RunAgent(string issueId, [FromBody] RunAgentRequest request)
     {
         // Fetch project
         var project = await projectService.GetByIdAsync(request.ProjectId);
@@ -440,127 +444,57 @@ public class IssuesController(
             });
         }
 
-        // Fetch prompt (if provided)
-        AgentPrompt? prompt = null;
-        string? renderedMessage = null;
-        SessionMode mode = SessionMode.Plan; // Default for None
-
+        // Validate prompt exists (if provided)
         if (!string.IsNullOrEmpty(request.PromptId))
         {
-            prompt = agentPromptService.GetPrompt(request.PromptId);
+            var prompt = agentPromptService.GetPrompt(request.PromptId);
             if (prompt == null)
             {
                 return NotFound("Prompt not found");
             }
-            mode = prompt.Mode;
+        }
+
+        // Try to atomically mark as starting to prevent race conditions
+        if (!agentStartupTracker.TryMarkAsStarting(issueId))
+        {
+            return Conflict(new AgentAlreadyRunningResponse
+            {
+                SessionId = string.Empty,
+                Status = ClaudeSessionStatus.Starting,
+                Message = "Agent is already starting on this issue"
+            });
         }
 
         // Resolve branch name - check for existing branch first, then generate from issue
         var branchName = await branchResolverService.ResolveIssueBranchAsync(request.ProjectId, issueId)
             ?? BranchNameGenerator.GenerateBranchName(issue);
 
-        // Get or create clone for the branch
-        string? clonePath = await cloneService.GetClonePathForBranchAsync(project.LocalPath, branchName);
-
-        if (string.IsNullOrEmpty(clonePath))
-        {
-            // Clone doesn't exist, create it
-            var baseBranch = !string.IsNullOrEmpty(request.BaseBranch)
-                ? request.BaseBranch
-                : project.DefaultBranch;
-
-            // Pull latest changes on main repo before creating clone
-            logger.LogInformation("Pulling latest changes from {BaseBranch} before creating clone", baseBranch);
-            var pullResult = await fleeceIssuesSyncService.PullFleeceOnlyAsync(
-                project.LocalPath,
-                baseBranch,
-                HttpContext.RequestAborted);
-
-            if (!pullResult.Success)
-            {
-                logger.LogWarning("Auto-pull failed before clone creation: {Error}, continuing anyway", pullResult.ErrorMessage);
-            }
-            else if (pullResult.WasBehindRemote)
-            {
-                logger.LogInformation("Pulled {Commits} commits and merged {Issues} issues before clone creation",
-                    pullResult.CommitsPulled, pullResult.IssuesMerged);
-            }
-
-            logger.LogInformation("Creating clone for branch {BranchName} from base {BaseBranch}", branchName, baseBranch);
-
-            clonePath = await cloneService.CreateCloneAsync(
-                project.LocalPath,
-                branchName,
-                createBranch: true,
-                baseBranch: baseBranch);
-
-            if (string.IsNullOrEmpty(clonePath))
-            {
-                return BadRequest("Failed to create clone for issue branch");
-            }
-
-            logger.LogInformation("Created clone at {ClonePath} for issue {IssueId}", clonePath, issueId);
-        }
-        else
-        {
-            logger.LogInformation("Using existing clone at {ClonePath} for branch {BranchName}", clonePath, branchName);
-        }
-
-        // Render the prompt template with issue context (if prompt exists)
-        if (prompt != null)
-        {
-            // Build hierarchical context (ancestors and direct children)
-            var allIssues = await fleeceService.ListIssuesAsync(project.LocalPath);
-            var treeContext = IssueTreeFormatter.FormatIssueTree(issue, allIssues);
-
-            var promptContext = new PromptContext
-            {
-                Title = issue.Title,
-                Id = issue.Id,
-                Description = issue.Description,
-                Branch = branchName,
-                Type = issue.Type.ToString(),
-                Context = treeContext
-            };
-
-            renderedMessage = agentPromptService.RenderTemplate(prompt.InitialMessage, promptContext);
-        }
-
         // Determine model
         var model = request.Model ?? project.DefaultModel ?? "sonnet";
 
-        // Create session
-        var session = await sessionService.StartSessionAsync(
-            issueId,
-            request.ProjectId,
-            clonePath,
-            mode,
-            model,
-            systemPrompt: null);
-
-        // Send the rendered initial message to start agent work
-        if (!string.IsNullOrWhiteSpace(renderedMessage))
+        // Queue background agent startup
+        await agentStartBackgroundService.QueueAgentStartAsync(new AgentOrchestration.Services.AgentStartRequest
         {
-            // Fire and forget - the message will be processed asynchronously
-            // and clients will receive updates via SignalR
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    await sessionService.SendMessageAsync(session.Id, renderedMessage, mode);
-                }
-                catch (Exception ex)
-                {
-                    logger.LogError(ex, "Error sending initial message for session {SessionId}", session.Id);
-                }
-            });
-        }
+            IssueId = issueId,
+            ProjectId = request.ProjectId,
+            ProjectLocalPath = project.LocalPath,
+            ProjectDefaultBranch = project.DefaultBranch,
+            Issue = issue,
+            PromptId = request.PromptId,
+            BaseBranch = request.BaseBranch,
+            Model = model,
+            BranchName = branchName
+        });
 
-        return Ok(new RunAgentResponse
+        logger.LogInformation(
+            "Agent startup queued for issue {IssueId} with branch {BranchName}",
+            issueId, branchName);
+
+        return Accepted(new RunAgentAcceptedResponse
         {
-            SessionId = session.Id,
+            IssueId = issueId,
             BranchName = branchName,
-            ClonePath = clonePath
+            Message = "Agent is starting"
         });
     }
 

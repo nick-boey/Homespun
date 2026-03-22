@@ -32,4 +32,20 @@ public interface INotificationHubClient
     /// <param name="projectId">The ID of the project.</param>
     /// <param name="error">The error message.</param>
     Task BranchIdGenerationFailed(string issueId, string projectId, string error);
+
+    /// <summary>
+    /// Notifies clients when an agent is starting for an issue.
+    /// </summary>
+    /// <param name="issueId">The ID of the issue.</param>
+    /// <param name="projectId">The ID of the project.</param>
+    /// <param name="branchName">The branch name being used.</param>
+    Task AgentStarting(string issueId, string projectId, string branchName);
+
+    /// <summary>
+    /// Notifies clients when agent startup fails for an issue.
+    /// </summary>
+    /// <param name="issueId">The ID of the issue.</param>
+    /// <param name="projectId">The ID of the project.</param>
+    /// <param name="error">The error message.</param>
+    Task AgentStartFailed(string issueId, string projectId, string error);
 }

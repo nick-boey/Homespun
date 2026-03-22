@@ -222,13 +222,14 @@ else
     builder.Services.AddSingleton<IRebaseAgentService, RebaseAgentService>();
     builder.Services.AddSingleton<ITodoParser, TodoParser>();
 
-    // Agent Orchestration services (mini-prompts, branch ID generation)
+    // Agent Orchestration services (mini-prompts, branch ID generation, agent startup)
     builder.Services.Configure<MiniPromptOptions>(
         builder.Configuration.GetSection(MiniPromptOptions.SectionName));
     builder.Services.AddHttpClient("MiniPrompt");
     builder.Services.AddSingleton<IMiniPromptService, MiniPromptService>();
     builder.Services.AddSingleton<IBranchIdGeneratorService, BranchIdGeneratorService>();
     builder.Services.AddSingleton<IBranchIdBackgroundService, BranchIdBackgroundService>();
+    builder.Services.AddSingleton<IAgentStartBackgroundService, AgentStartBackgroundService>();
 
     // GitHub sync polling service (PR sync, review polling, issue linking)
     builder.Services.Configure<GitHubSyncPollingOptions>(

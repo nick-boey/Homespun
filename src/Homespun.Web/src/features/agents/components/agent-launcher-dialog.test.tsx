@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AgentLauncherDialog } from './agent-launcher-dialog'
 import { AgentPrompts, Issues, SessionMode } from '@/api'
 import type { ReactNode } from 'react'
-import type { AgentPrompt, RunAgentResponse } from '@/api/generated/types.gen'
+import type { AgentPrompt, RunAgentAcceptedResponse } from '@/api/generated/types.gen'
 
 vi.mock('@/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/api')>()
@@ -66,11 +66,13 @@ const mockPrompts: AgentPrompt[] = [
   },
 ]
 
-function createMockRunAgentResponse(overrides: Partial<RunAgentResponse> = {}): RunAgentResponse {
+function createMockRunAgentResponse(
+  overrides: Partial<RunAgentAcceptedResponse> = {}
+): RunAgentAcceptedResponse {
   return {
-    sessionId: 'session-123',
+    issueId: 'issue-456',
     branchName: 'feature/test-123',
-    clonePath: '/clones/project-123/feature-test-123',
+    message: 'Agent is starting',
     ...overrides,
   }
 }
@@ -195,12 +197,12 @@ describe('AgentLauncherDialog', () => {
       })
     })
 
-    // Should have called onAgentStart with the result
+    // Should have called onAgentStart with the result (now 202 Accepted response)
     await waitFor(() => {
       expect(onAgentStart).toHaveBeenCalledWith({
-        sessionId: 'session-123',
+        issueId: 'issue-456',
         branchName: 'feature/test-123',
-        clonePath: '/clones/project-123/feature-test-123',
+        message: 'Agent is starting',
       })
     })
   })
@@ -397,12 +399,13 @@ describe('AgentLauncherDialog', () => {
     expect(options[0]).toHaveTextContent('None - Start without prompt (Plan mode)')
   })
 
-  it('navigates to session page when None is selected', async () => {
+  it('sends null promptId when None is selected', async () => {
     const user = userEvent.setup()
+    const onOpenChange = vi.fn()
     render(
       <AgentLauncherDialog
         open={true}
-        onOpenChange={() => {}}
+        onOpenChange={onOpenChange}
         projectId="project-123"
         issueId="issue-456"
       />,
@@ -433,12 +436,9 @@ describe('AgentLauncherDialog', () => {
       })
     })
 
-    // Should navigate to session page
+    // Dialog should close immediately (async startup)
     await waitFor(() => {
-      expect(mockNavigate).toHaveBeenCalledWith({
-        to: '/sessions/$sessionId',
-        params: { sessionId: 'session-123' },
-      })
+      expect(onOpenChange).toHaveBeenCalledWith(false)
     })
   })
 

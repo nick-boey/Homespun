@@ -91,4 +91,38 @@ public static class NotificationHubExtensions
         await hubContext.Clients.Group($"project-{projectId}")
             .SendAsync("IssuesChanged", projectId, changeType, issueId);
     }
+
+    /// <summary>
+    /// Broadcasts when an agent is starting for an issue.
+    /// </summary>
+    public static async Task BroadcastAgentStarting(
+        this IHubContext<NotificationHub> hubContext,
+        string issueId,
+        string projectId,
+        string branchName)
+    {
+        // Send to all clients
+        await hubContext.Clients.All.SendAsync("AgentStarting", issueId, projectId, branchName);
+
+        // Also send to project-specific group
+        await hubContext.Clients.Group($"project-{projectId}")
+            .SendAsync("AgentStarting", issueId, projectId, branchName);
+    }
+
+    /// <summary>
+    /// Broadcasts when agent startup fails for an issue.
+    /// </summary>
+    public static async Task BroadcastAgentStartFailed(
+        this IHubContext<NotificationHub> hubContext,
+        string issueId,
+        string projectId,
+        string error)
+    {
+        // Send to all clients
+        await hubContext.Clients.All.SendAsync("AgentStartFailed", issueId, projectId, error);
+
+        // Also send to project-specific group
+        await hubContext.Clients.Group($"project-{projectId}")
+            .SendAsync("AgentStartFailed", issueId, projectId, error);
+    }
 }

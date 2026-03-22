@@ -776,17 +776,17 @@ export type ResumeSessionRequest = {
   workingDirectory: string | null
 }
 
+export type RunAgentAcceptedResponse = {
+  issueId: string | null
+  branchName: string | null
+  message?: string | null
+}
+
 export type RunAgentRequest = {
   projectId: string | null
   promptId: string | null
   model?: string | null
   baseBranch?: string | null
-}
-
-export type RunAgentResponse = {
-  sessionId: string | null
-  branchName: string | null
-  clonePath: string | null
 }
 
 export type SearchablePrResponse = {
@@ -2236,9 +2236,9 @@ export type PostApiIssuesByIssueIdRunError =
 
 export type PostApiIssuesByIssueIdRunResponses = {
   /**
-   * OK
+   * Accepted
    */
-  200: RunAgentResponse
+  202: RunAgentAcceptedResponse
 }
 
 export type PostApiIssuesByIssueIdRunResponse =

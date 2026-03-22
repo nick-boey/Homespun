@@ -238,3 +238,25 @@ public class AgentAlreadyRunningResponse
     /// </summary>
     public required string Message { get; set; }
 }
+
+/// <summary>
+/// Response model for accepted agent start request (202 Accepted).
+/// The agent startup will proceed in the background.
+/// </summary>
+public class RunAgentAcceptedResponse
+{
+    /// <summary>
+    /// The issue ID the agent is starting on.
+    /// </summary>
+    public required string IssueId { get; set; }
+
+    /// <summary>
+    /// The branch name being used for the agent session.
+    /// </summary>
+    public required string BranchName { get; set; }
+
+    /// <summary>
+    /// A human-readable message about the status.
+    /// </summary>
+    public string Message { get; set; } = "Agent is starting";
+}
