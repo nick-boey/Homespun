@@ -36,6 +36,10 @@ export interface StaticTaskGraphViewProps {
   viewMode?: ViewMode
   /** Additional CSS classes */
   className?: string
+  /** Currently selected issue ID */
+  selectedIssueId?: string | null
+  /** Callback when an issue is selected */
+  onSelectIssue?: (issueId: string) => void
 }
 
 /**
@@ -48,6 +52,8 @@ export const StaticTaskGraphView = memo(function StaticTaskGraphView({
   depth = 10,
   viewMode = ViewMode.Next,
   className,
+  selectedIssueId,
+  onSelectIssue,
 }: StaticTaskGraphViewProps) {
   // Compute render lines from task graph data
   const renderLines = useMemo(() => {
@@ -116,6 +122,8 @@ export const StaticTaskGraphView = memo(function StaticTaskGraphView({
           line={line}
           maxLanes={maxLanes}
           changeType={filterMap?.get(line.issueId.toLowerCase())}
+          isSelected={selectedIssueId?.toLowerCase() === line.issueId.toLowerCase()}
+          onClick={onSelectIssue ? () => onSelectIssue(line.issueId) : undefined}
         />
       ))}
     </div>
@@ -126,6 +134,8 @@ interface StaticIssueRowProps {
   line: TaskGraphIssueRenderLine
   maxLanes: number
   changeType?: ChangeType
+  isSelected?: boolean
+  onClick?: () => void
 }
 
 /**
@@ -135,6 +145,8 @@ const StaticIssueRow = memo(function StaticIssueRow({
   line,
   maxLanes,
   changeType,
+  isSelected,
+  onClick,
 }: StaticIssueRowProps) {
   const typeColor = getTypeColor(line.issueType)
 
@@ -158,8 +170,26 @@ const StaticIssueRow = memo(function StaticIssueRow({
     <div
       data-testid="static-task-graph-issue-row"
       data-issue-id={line.issueId}
-      className={cn('flex items-center gap-2', borderClass)}
+      className={cn(
+        'flex items-center gap-2',
+        borderClass,
+        onClick && 'hover:bg-accent/50 cursor-pointer',
+        isSelected && 'ring-primary ring-2 ring-inset'
+      )}
       style={{ height: ROW_HEIGHT }}
+      onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={
+        onClick
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                onClick()
+              }
+            }
+          : undefined
+      }
     >
       {/* SVG graph visualization */}
       <TaskGraphNodeSvg line={line} maxLanes={maxLanes} />

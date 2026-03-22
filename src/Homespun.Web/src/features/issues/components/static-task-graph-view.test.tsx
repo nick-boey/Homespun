@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { StaticTaskGraphView, type FilteredIssue } from './static-task-graph-view'
 import type { TaskGraphResponse, TaskGraphNodeResponse } from '@/api'
 import { IssueType, IssueStatus, ExecutionMode } from '@/api'
@@ -210,5 +210,85 @@ describe('StaticTaskGraphView', () => {
     // Container should not be focusable
     const container = screen.getByTestId('static-task-graph')
     expect(container).not.toHaveAttribute('tabindex')
+  })
+
+  it('highlights selected issue with ring styling', () => {
+    const data = createMockTaskGraph([
+      { issue: { id: 'issue-1', title: 'First Issue' } },
+      { issue: { id: 'issue-2', title: 'Second Issue' } },
+    ])
+
+    render(<StaticTaskGraphView data={data} selectedIssueId="issue-1" />)
+
+    const rows = screen.getAllByTestId('static-task-graph-issue-row')
+    expect(rows[0]).toHaveClass('ring-2')
+    expect(rows[0]).toHaveClass('ring-primary')
+    expect(rows[1]).not.toHaveClass('ring-2')
+  })
+
+  it('calls onSelectIssue when row clicked', () => {
+    const data = createMockTaskGraph([{ issue: { id: 'issue-1', title: 'First Issue' } }])
+    const onSelectIssue = vi.fn()
+
+    render(<StaticTaskGraphView data={data} onSelectIssue={onSelectIssue} />)
+
+    const row = screen.getByTestId('static-task-graph-issue-row')
+    fireEvent.click(row)
+
+    expect(onSelectIssue).toHaveBeenCalledWith('issue-1')
+  })
+
+  it('shows cursor-pointer when onSelectIssue provided', () => {
+    const data = createMockTaskGraph([{ issue: { id: 'issue-1', title: 'First Issue' } }])
+    const onSelectIssue = vi.fn()
+
+    render(<StaticTaskGraphView data={data} onSelectIssue={onSelectIssue} />)
+
+    const row = screen.getByTestId('static-task-graph-issue-row')
+    expect(row).toHaveClass('cursor-pointer')
+  })
+
+  it('does not show cursor-pointer when onSelectIssue not provided', () => {
+    const data = createMockTaskGraph([{ issue: { id: 'issue-1', title: 'First Issue' } }])
+
+    render(<StaticTaskGraphView data={data} />)
+
+    const row = screen.getByTestId('static-task-graph-issue-row')
+    expect(row).not.toHaveClass('cursor-pointer')
+  })
+
+  it('supports keyboard navigation with Enter key', () => {
+    const data = createMockTaskGraph([{ issue: { id: 'issue-1', title: 'First Issue' } }])
+    const onSelectIssue = vi.fn()
+
+    render(<StaticTaskGraphView data={data} onSelectIssue={onSelectIssue} />)
+
+    const row = screen.getByTestId('static-task-graph-issue-row')
+    fireEvent.keyDown(row, { key: 'Enter' })
+
+    expect(onSelectIssue).toHaveBeenCalledWith('issue-1')
+  })
+
+  it('supports keyboard navigation with Space key', () => {
+    const data = createMockTaskGraph([{ issue: { id: 'issue-1', title: 'First Issue' } }])
+    const onSelectIssue = vi.fn()
+
+    render(<StaticTaskGraphView data={data} onSelectIssue={onSelectIssue} />)
+
+    const row = screen.getByTestId('static-task-graph-issue-row')
+    fireEvent.keyDown(row, { key: ' ' })
+
+    expect(onSelectIssue).toHaveBeenCalledWith('issue-1')
+  })
+
+  it('has button role and tabindex when clickable', () => {
+    const data = createMockTaskGraph([{ issue: { id: 'issue-1', title: 'First Issue' } }])
+    const onSelectIssue = vi.fn()
+
+    render(<StaticTaskGraphView data={data} onSelectIssue={onSelectIssue} />)
+
+    const row = screen.getByTestId('static-task-graph-issue-row')
+    expect(row).toHaveAttribute('role', 'button')
+    expect(row).toHaveAttribute('tabindex', '0')
   })
 })
