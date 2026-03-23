@@ -75,6 +75,12 @@ public class GitCloneService(ICommandRunner commandRunner, ILogger<GitCloneServi
         {
             var baseRef = baseBranch ?? "HEAD";
 
+            // If using a non-default base branch, ensure it's available locally
+            if (baseBranch != null)
+            {
+                await EnsureBranchAvailableAsync(repoPath, baseBranch);
+            }
+
             var branchResult = await commandRunner.RunAsync("git", $"branch \"{branchName}\" \"{baseRef}\"", repoPath);
             if (!branchResult.Success && !branchResult.Error.Contains("already exists"))
             {
@@ -1319,5 +1325,18 @@ public class GitCloneService(ICommandRunner commandRunner, ILogger<GitCloneServi
             BehindCount = behindCount,
             HasUncommittedChanges = hasUncommittedChanges
         };
+    }
+
+    public async Task EnsureBranchAvailableAsync(string repoPath, string branchName)
+    {
+        // Check if branch exists locally
+        var localBranches = await ListLocalBranchesAsync(repoPath);
+        if (localBranches.Any(b => b.ShortName == branchName))
+        {
+            return;
+        }
+
+        // Fetch the branch from remote
+        await commandRunner.RunAsync("git", $"fetch origin {branchName}:{branchName}", repoPath);
     }
 }

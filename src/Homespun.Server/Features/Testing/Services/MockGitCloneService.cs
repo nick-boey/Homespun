@@ -456,6 +456,13 @@ public class MockGitCloneService : IGitCloneService
         });
     }
 
+    public Task EnsureBranchAvailableAsync(string repoPath, string branchName)
+    {
+        _logger.LogDebug("[Mock] EnsureBranchAvailable {BranchName} in {RepoPath}", branchName, repoPath);
+        // In mock, this is a no-op - branches are always considered available
+        return Task.CompletedTask;
+    }
+
     /// <summary>
     /// Clears all tracked data. Useful for test isolation.
     /// </summary>
