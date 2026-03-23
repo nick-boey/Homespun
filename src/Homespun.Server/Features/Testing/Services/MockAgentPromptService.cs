@@ -61,15 +61,28 @@ public partial class MockAgentPromptService : IAgentPromptService
     {
         _logger.LogDebug("[Mock] GetPromptsForProject {ProjectId}", projectId);
         var projectPrompts = GetProjectPrompts(projectId);
+        var globalPrompts = GetAllPrompts();
+
+        var globalPromptNames = globalPrompts
+            .Select(g => g.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
         var projectPromptNames = projectPrompts
             .Select(p => p.Name)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        var globalPrompts = GetAllPrompts()
+        // Mark project prompts that override global prompts
+        foreach (var prompt in projectPrompts)
+        {
+            prompt.IsOverride = globalPromptNames.Contains(prompt.Name);
+        }
+
+        // Include only global prompts that are not overridden
+        var nonOverriddenGlobalPrompts = globalPrompts
             .Where(g => !projectPromptNames.Contains(g.Name))
             .ToList();
 
-        return projectPrompts.Concat(globalPrompts).ToList().AsReadOnly();
+        return projectPrompts.Concat(nonOverriddenGlobalPrompts).ToList().AsReadOnly();
     }
 
     public IReadOnlyList<AgentPrompt> GetGlobalPromptsNotOverridden(string projectId)
@@ -139,6 +152,33 @@ public partial class MockAgentPromptService : IAgentPromptService
     {
         _logger.LogDebug("[Mock] DeletePrompt {Id}", id);
         await _dataStore.RemoveAgentPromptAsync(id);
+    }
+
+    public async Task<AgentPrompt> CreateOverrideAsync(string globalPromptId, string projectId, string? initialMessage)
+    {
+        _logger.LogDebug("[Mock] CreateOverride {GlobalPromptId} for {ProjectId}", globalPromptId, projectId);
+
+        var globalPrompt = _dataStore.GetAgentPrompt(globalPromptId)
+            ?? throw new InvalidOperationException($"Agent prompt with ID '{globalPromptId}' not found.");
+
+        if (globalPrompt.ProjectId != null)
+        {
+            throw new InvalidOperationException("Cannot create override from a non-global prompt. Only global prompts can be overridden.");
+        }
+
+        var overridePrompt = new AgentPrompt
+        {
+            Id = Guid.NewGuid().ToString("N")[..6],
+            Name = globalPrompt.Name,
+            InitialMessage = initialMessage ?? globalPrompt.InitialMessage,
+            Mode = globalPrompt.Mode,
+            ProjectId = projectId,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        await _dataStore.AddAgentPromptAsync(overridePrompt);
+        return overridePrompt;
     }
 
     public string? RenderTemplate(string? template, PromptContext context)

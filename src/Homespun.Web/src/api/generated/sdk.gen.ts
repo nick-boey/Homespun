@@ -35,6 +35,9 @@ import type {
   DeleteApiSessionsByIdResponses,
   DeleteApiSessionsEntityByEntityIdData,
   DeleteApiSessionsEntityByEntityIdResponses,
+  DeleteApiWorkflowsByWorkflowIdData,
+  DeleteApiWorkflowsByWorkflowIdErrors,
+  DeleteApiWorkflowsByWorkflowIdResponses,
   GetApiAgentPromptsAvailableForProjectByProjectIdData,
   GetApiAgentPromptsAvailableForProjectByProjectIdResponses,
   GetApiAgentPromptsByIdData,
@@ -65,6 +68,12 @@ import type {
   GetApiClonesSessionBranchInfoResponses,
   GetApiContainersData,
   GetApiContainersResponses,
+  GetApiExecutionsByExecutionIdContextData,
+  GetApiExecutionsByExecutionIdContextErrors,
+  GetApiExecutionsByExecutionIdContextResponses,
+  GetApiExecutionsByExecutionIdData,
+  GetApiExecutionsByExecutionIdErrors,
+  GetApiExecutionsByExecutionIdResponses,
   GetApiFleeceSyncByProjectIdBranchStatusData,
   GetApiFleeceSyncByProjectIdBranchStatusErrors,
   GetApiFleeceSyncByProjectIdBranchStatusResponses,
@@ -140,6 +149,9 @@ import type {
   GetApiProjectsByProjectIdSearchPrsResponses,
   GetApiProjectsByProjectIdSecretsData,
   GetApiProjectsByProjectIdSecretsResponses,
+  GetApiProjectsByProjectIdWorkflowsData,
+  GetApiProjectsByProjectIdWorkflowsErrors,
+  GetApiProjectsByProjectIdWorkflowsResponses,
   GetApiProjectsData,
   GetApiProjectsResponses,
   GetApiPullRequestsByIdData,
@@ -174,6 +186,15 @@ import type {
   GetApiSettingsUserResponses,
   GetApiTelemetryConfigData,
   GetApiTelemetryConfigResponses,
+  GetApiWorkflowsByWorkflowIdData,
+  GetApiWorkflowsByWorkflowIdErrors,
+  GetApiWorkflowsByWorkflowIdExecutionsData,
+  GetApiWorkflowsByWorkflowIdExecutionsErrors,
+  GetApiWorkflowsByWorkflowIdExecutionsResponses,
+  GetApiWorkflowsByWorkflowIdResponses,
+  PostApiAgentPromptsCreateOverrideData,
+  PostApiAgentPromptsCreateOverrideErrors,
+  PostApiAgentPromptsCreateOverrideResponses,
   PostApiAgentPromptsData,
   PostApiAgentPromptsEnsureDefaultsData,
   PostApiAgentPromptsEnsureDefaultsResponses,
@@ -193,6 +214,9 @@ import type {
   PostApiClonesSessionData,
   PostApiClonesSessionErrors,
   PostApiClonesSessionResponses,
+  PostApiExecutionsByExecutionIdCancelData,
+  PostApiExecutionsByExecutionIdCancelErrors,
+  PostApiExecutionsByExecutionIdCancelResponses,
   PostApiFleeceSyncByProjectIdPullData,
   PostApiFleeceSyncByProjectIdPullErrors,
   PostApiFleeceSyncByProjectIdPullResponses,
@@ -276,6 +300,12 @@ import type {
   PostApiSessionsData,
   PostApiSessionsErrors,
   PostApiSessionsResponses,
+  PostApiWorkflowsByWorkflowIdExecuteData,
+  PostApiWorkflowsByWorkflowIdExecuteErrors,
+  PostApiWorkflowsByWorkflowIdExecuteResponses,
+  PostApiWorkflowsData,
+  PostApiWorkflowsErrors,
+  PostApiWorkflowsResponses,
   PutApiAgentPromptsByIdData,
   PutApiAgentPromptsByIdErrors,
   PutApiAgentPromptsByIdResponses,
@@ -294,6 +324,9 @@ import type {
   PutApiSettingsUserEmailData,
   PutApiSettingsUserEmailErrors,
   PutApiSettingsUserEmailResponses,
+  PutApiWorkflowsByWorkflowIdData,
+  PutApiWorkflowsByWorkflowIdErrors,
+  PutApiWorkflowsByWorkflowIdResponses,
 } from './types.gen'
 
 export type Options<
@@ -411,6 +444,23 @@ export class AgentPrompts {
       unknown,
       ThrowOnError
     >({ url: '/api/agent-prompts/issue-agent-prompts', ...options })
+  }
+
+  public static postApiAgentPromptsCreateOverride<ThrowOnError extends boolean = false>(
+    options?: Options<PostApiAgentPromptsCreateOverrideData, ThrowOnError>
+  ) {
+    return (options?.client ?? client).post<
+      PostApiAgentPromptsCreateOverrideResponses,
+      PostApiAgentPromptsCreateOverrideErrors,
+      ThrowOnError
+    >({
+      url: '/api/agent-prompts/create-override',
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options?.headers,
+      },
+    })
   }
 }
 
@@ -1586,5 +1636,135 @@ export class TelemetryConfig {
       url: '/api/TelemetryConfig',
       ...options,
     })
+  }
+}
+
+export class Workflows {
+  public static postApiWorkflows<ThrowOnError extends boolean = false>(
+    options?: Options<PostApiWorkflowsData, ThrowOnError>
+  ) {
+    return (options?.client ?? client).post<
+      PostApiWorkflowsResponses,
+      PostApiWorkflowsErrors,
+      ThrowOnError
+    >({
+      url: '/api/workflows',
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options?.headers,
+      },
+    })
+  }
+
+  public static getApiProjectsByProjectIdWorkflows<ThrowOnError extends boolean = false>(
+    options: Options<GetApiProjectsByProjectIdWorkflowsData, ThrowOnError>
+  ) {
+    return (options.client ?? client).get<
+      GetApiProjectsByProjectIdWorkflowsResponses,
+      GetApiProjectsByProjectIdWorkflowsErrors,
+      ThrowOnError
+    >({ url: '/api/projects/{projectId}/workflows', ...options })
+  }
+
+  public static deleteApiWorkflowsByWorkflowId<ThrowOnError extends boolean = false>(
+    options: Options<DeleteApiWorkflowsByWorkflowIdData, ThrowOnError>
+  ) {
+    return (options.client ?? client).delete<
+      DeleteApiWorkflowsByWorkflowIdResponses,
+      DeleteApiWorkflowsByWorkflowIdErrors,
+      ThrowOnError
+    >({ url: '/api/workflows/{workflowId}', ...options })
+  }
+
+  public static getApiWorkflowsByWorkflowId<ThrowOnError extends boolean = false>(
+    options: Options<GetApiWorkflowsByWorkflowIdData, ThrowOnError>
+  ) {
+    return (options.client ?? client).get<
+      GetApiWorkflowsByWorkflowIdResponses,
+      GetApiWorkflowsByWorkflowIdErrors,
+      ThrowOnError
+    >({ url: '/api/workflows/{workflowId}', ...options })
+  }
+
+  public static putApiWorkflowsByWorkflowId<ThrowOnError extends boolean = false>(
+    options: Options<PutApiWorkflowsByWorkflowIdData, ThrowOnError>
+  ) {
+    return (options.client ?? client).put<
+      PutApiWorkflowsByWorkflowIdResponses,
+      PutApiWorkflowsByWorkflowIdErrors,
+      ThrowOnError
+    >({
+      url: '/api/workflows/{workflowId}',
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+    })
+  }
+
+  public static postApiWorkflowsByWorkflowIdExecute<ThrowOnError extends boolean = false>(
+    options: Options<PostApiWorkflowsByWorkflowIdExecuteData, ThrowOnError>
+  ) {
+    return (options.client ?? client).post<
+      PostApiWorkflowsByWorkflowIdExecuteResponses,
+      PostApiWorkflowsByWorkflowIdExecuteErrors,
+      ThrowOnError
+    >({
+      url: '/api/workflows/{workflowId}/execute',
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+    })
+  }
+
+  public static getApiWorkflowsByWorkflowIdExecutions<ThrowOnError extends boolean = false>(
+    options: Options<GetApiWorkflowsByWorkflowIdExecutionsData, ThrowOnError>
+  ) {
+    return (options.client ?? client).get<
+      GetApiWorkflowsByWorkflowIdExecutionsResponses,
+      GetApiWorkflowsByWorkflowIdExecutionsErrors,
+      ThrowOnError
+    >({ url: '/api/workflows/{workflowId}/executions', ...options })
+  }
+
+  public static getApiExecutionsByExecutionId<ThrowOnError extends boolean = false>(
+    options: Options<GetApiExecutionsByExecutionIdData, ThrowOnError>
+  ) {
+    return (options.client ?? client).get<
+      GetApiExecutionsByExecutionIdResponses,
+      GetApiExecutionsByExecutionIdErrors,
+      ThrowOnError
+    >({ url: '/api/executions/{executionId}', ...options })
+  }
+
+  public static postApiExecutionsByExecutionIdCancel<ThrowOnError extends boolean = false>(
+    options: Options<PostApiExecutionsByExecutionIdCancelData, ThrowOnError>
+  ) {
+    return (options.client ?? client).post<
+      PostApiExecutionsByExecutionIdCancelResponses,
+      PostApiExecutionsByExecutionIdCancelErrors,
+      ThrowOnError
+    >({
+      url: '/api/executions/{executionId}/cancel',
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+    })
+  }
+
+  public static getApiExecutionsByExecutionIdContext<ThrowOnError extends boolean = false>(
+    options: Options<GetApiExecutionsByExecutionIdContextData, ThrowOnError>
+  ) {
+    return (options.client ?? client).get<
+      GetApiExecutionsByExecutionIdContextResponses,
+      GetApiExecutionsByExecutionIdContextErrors,
+      ThrowOnError
+    >({ url: '/api/executions/{executionId}/context', ...options })
   }
 }

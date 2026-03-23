@@ -78,4 +78,14 @@ public interface IAgentPromptService
     /// These are specialized prompts for the Issues Agent workflow.
     /// </summary>
     IReadOnlyList<AgentPrompt> GetIssueAgentPrompts();
+
+    /// <summary>
+    /// Creates a project-scoped prompt that overrides a global prompt.
+    /// Copies the name and mode from the global prompt.
+    /// </summary>
+    /// <param name="globalPromptId">The ID of the global prompt to override.</param>
+    /// <param name="projectId">The project ID to scope the new prompt to.</param>
+    /// <param name="initialMessage">Optional custom message. If null, copies from the global prompt.</param>
+    /// <returns>The newly created project-scoped prompt.</returns>
+    Task<AgentPrompt> CreateOverrideAsync(string globalPromptId, string projectId, string? initialMessage);
 }
