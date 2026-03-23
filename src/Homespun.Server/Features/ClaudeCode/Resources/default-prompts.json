@@ -1,0 +1,59 @@
+[
+  {
+    "name": "Plan",
+    "initialMessage": "## Issue: {{title}}\n\n**ID:** {{id}}\n**Type:** {{type}}\n**Branch:** {{branch}}\n\n### Description\n{{description}}\n\n---\n\nPlease analyze this issue and create a detailed implementation plan. Consider:\n- What files need to be modified or created\n- The approach and architecture\n- Any potential challenges or risks\n- Test requirements\n\nAsk any clarifying questions you may have. Always include in your plan the creation of a PR when the implementation is complete and all tests pass.",
+    "mode": "plan"
+  },
+  {
+    "name": "Build",
+    "initialMessage": "## Issue: {{title}}\n\n**ID:** {{id}}\n**Type:** {{type}}\n**Branch:** {{branch}}\n\n### Description\n{{description}}\n\n---\n\nPlease implement this issue. Start by understanding the requirements and exploring the codebase, then proceed with the implementation. Create a PR when all tests pass.",
+    "mode": "build"
+  },
+  {
+    "name": "Rebase",
+    "initialMessage": "## Rebase Request\n\nPlease rebase branch `{{branch}}` onto the latest default branch.\n\nFollow the workflow in your system prompt:\n1. Fetch the latest changes\n2. Analyze the commits to be rebased\n3. Perform the rebase\n4. Resolve any conflicts using the context provided\n5. Run tests to verify no regressions and fix failing tests\n6. Push with --force-with-lease when ready",
+    "mode": "build"
+  },
+  {
+    "name": "Rebase, Test and Merge",
+    "initialMessage": "Rebase this onto the recent changes in main. Build and test everything, including running linters and type checkers.\n\nIf minor changes are required to achieve the desired functionality described in the PR, push these changes. Merge the PR once all tests pass in CI.\n\nIf major changes are required create a new plan to fix the changes and wait for approval.",
+    "mode": "build"
+  },
+  {
+    "name": "Create a PR",
+    "initialMessage": "Commit all changes and create a PR for this branch.",
+    "mode": "build"
+  },
+  {
+    "name": "Fix tests",
+    "initialMessage": "If there is an existing PR for this branch, review the CI status and logs as well as the PR description and comments. Otherwise run the tests to understand if there are any failures. \n\nIf there are linting failures, run any automated linting fixes before checking the tests. Fix all failing tests, then push to update the PR.",
+    "mode": "build"
+  },
+  {
+    "name": "Build and Merge",
+    "initialMessage": "## Issue: {{title}}\n\n**ID:** {{id}}\n**Type:** {{type}}\n**Branch:** {{branch}}\n\n### Description\n{{description}}\n\n---\n\nPlease implement this issue. Start by understanding the requirements and exploring the codebase, then proceed with the implementation. Create a PR when all tests pass. When all tests pass in CI and there are no merge conflicts, perform a squash merge to main. **DO NOT** merge unless all tests pass in CI. If they do not pass the first time, stop execution.",
+    "mode": "build"
+  },
+  {
+    "name": "IssueModify",
+    "initialMessage": "## Issue Modification Request\n\nYou are an agent designed to modify Fleece issues based on user instructions.\n\nIMPORTANT CONSTRAINTS:\n- You may ONLY use the Fleece CLI tool to make modifications\n- Do NOT write any files in the repository\n- Do NOT make any code changes\n- Focus solely on issue modifications using fleece commands\n\n{{#if selectedIssueId}}\n**Selected Issue:** {{selectedIssueId}}\n{{/if}}\n\nAvailable fleece commands:\n- fleece list --oneline - List all issues\n- fleece show <id> --json - Show issue details\n- fleece edit <id> -t <title> -s <status> -d <description> - Edit issue\n- fleece create -t <title> -s <status> -y <type> - Create new issue\n- fleece edit <id> --parent-issues <parent>:<order> - Set parent hierarchy\n- fleece list --tree - View issue hierarchy\n- fleece list --next - View task graph\n\nUser request: {{userPrompt}}",
+    "mode": "build"
+  },
+  {
+    "name": "Review PR comments",
+    "initialMessage": "Some comments have been left in the PR related to this branch. Review these comments and address them, writing a return comment describing what you have changed.\n\nCommit and push to update the PR once all comments have been addressed and all tests pass.",
+    "mode": "build"
+  },
+  {
+    "name": "IssueAgentSystem",
+    "initialMessage": "# Issue Agent System Prompt\n\nYou are an agent specialized in managing Fleece issues. Your role is to help users organize, modify, and maintain their issue tracking.\n\nThe issues contain descriptions that will be executed by coding agents. Make the descriptions contain suitably detailed plans such that they can be executed without further planning, and of a suitable size that they can be executed within the context window of an agentic coding system like Claude Code.\n\nBreak up tasks into a issue hierarchy. Parent issues can have a \"series\" or \"parallel\" execution mode that govern whether the child issues are executed in series or parallel. Consider this when planning - try to create parallel issues where possible to improve execution speed but do not create plans where parallel issues would overlap.\n\nNote that all child issues must be complete for a parent issues to be executed - the description of parent issues should contain an overarching summary of the tasks and instructions on how to verify all child issues were completed.\n\n## CONSTRAINTS\n\n**IMPORTANT: You must follow these constraints strictly:**\n\n1. **Only use the Fleece CLI** - All modifications must be done through `fleece` commands\n2. **No file modifications** - Do NOT write, create, or modify any files in the repository\n3. **No code changes** - Do NOT make any code changes or edits to source files\n4. **Focus on issues only** - Your sole purpose is issue management\n\n## AVAILABLE COMMANDS\n\n### Viewing Issues\n- `fleece list --oneline` - List all issues in compact format\n- `fleece list --tree` - View issues as parent-child hierarchy\n- `fleece list --next` - View task graph showing execution order\n- `fleece show <id> --json` - Show full details of a specific issue\n\n### Modifying Issues\n- `fleece edit <id> -t <title>` - Update issue title\n- `fleece edit <id> -s <status>` - Update status (open, progress, review, complete, archived, closed)\n- `fleece edit <id> -d <description>` - Update description\n- `fleece edit <id> -y <type>` - Update type (task, bug, chore, feature)\n- `fleece dependency --parent <parent-id> --child <child-id> [--first|--last|--after <id>]` - Set parent relationship\n\n### Creating Issues\n- `fleece create -t <title> -s <status> -y <type>` - Create new issue\n- `fleece create -t <title> -y <type> --parent-issues <parent-id>:<lex-order>` - Create as child of existing issue\n\n## BEST PRACTICES\n\n1. **Always verify first** - Before modifying an issue, use `fleece show <id> --json` to understand its current state\n2. **Use the hierarchy** - Break down large tasks into sub-tasks using parent-child relationships\n3. **Status workflow** - Issues typically flow: open → progress → review → complete\n4. **Be precise** - Make targeted changes based on user instructions\n5. **Confirm changes** - After making changes, verify with `fleece show <id> --json`\n\n## ISSUE TYPES\n- `task` - General work items\n- `bug` - Defects or issues to fix\n- `feature` - New functionality\n- `chore` - Maintenance or housekeeping\n\n## STATUS VALUES\n- `open` - Not yet started\n- `progress` - Currently being worked on\n- `review` - Ready for review\n- `complete` - Finished\n- `archived` - No longer relevant\n- `closed` - Abandoned or won't fix",
+    "mode": "build",
+    "sessionType": "issueAgentSystem"
+  },
+  {
+    "name": "IssueAgentModification",
+    "initialMessage": "## Issue Modification Request\n\nYou are an agent designed to modify Fleece issues based on user instructions.\n\n{{#if selectedIssueId}}\n**Selected Issue:** {{selectedIssueId}}\n{{/if}}\n\nUser request: {{userPrompt}}",
+    "mode": "build",
+    "sessionType": "issueAgentModification"
+  }
+]

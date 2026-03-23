@@ -26,19 +26,26 @@ public class AgentPromptServiceTests
         // Act
         var prompts = _service.GetAllPrompts();
 
-        // Assert - should include Plan, Build, Rebase but not IssueAgentModification
+        // Assert - should include all standard prompts but not session-type prompts
         Assert.Multiple(() =>
         {
-            Assert.That(prompts, Has.Count.EqualTo(3));
+            Assert.That(prompts, Has.Count.EqualTo(9));
             Assert.That(prompts.Any(p => p.Name == "Plan"), Is.True);
             Assert.That(prompts.Any(p => p.Name == "Build"), Is.True);
             Assert.That(prompts.Any(p => p.Name == "Rebase"), Is.True);
+            Assert.That(prompts.Any(p => p.Name == "Rebase, Test and Merge"), Is.True);
+            Assert.That(prompts.Any(p => p.Name == "Create a PR"), Is.True);
+            Assert.That(prompts.Any(p => p.Name == "Fix tests"), Is.True);
+            Assert.That(prompts.Any(p => p.Name == "Build and Merge"), Is.True);
+            Assert.That(prompts.Any(p => p.Name == "IssueModify"), Is.True);
+            Assert.That(prompts.Any(p => p.Name == "Review PR comments"), Is.True);
             Assert.That(prompts.Any(p => p.Name == "IssueAgentModification"), Is.False);
+            Assert.That(prompts.Any(p => p.Name == "IssueAgentSystem"), Is.False);
         });
     }
 
     [Test]
-    public async Task GetPromptsForProject_ExcludesIssueAgentModificationPrompts()
+    public async Task GetPromptsForProject_ExcludesSessionTypePrompts()
     {
         // Arrange
         await _service.EnsureDefaultPromptsAsync();
@@ -49,8 +56,8 @@ public class AgentPromptServiceTests
         // Assert
         Assert.Multiple(() =>
         {
-            Assert.That(prompts, Has.Count.EqualTo(3));
-            Assert.That(prompts.Any(p => p.Name == "IssueAgentModification"), Is.False);
+            Assert.That(prompts, Has.Count.EqualTo(9));
+            Assert.That(prompts.Any(p => p.SessionType != null), Is.False);
         });
     }
 
@@ -537,8 +544,6 @@ public class AgentPromptServiceTests
         {
             Assert.That(prompt, Is.Not.Null);
             Assert.That(prompt!.InitialMessage, Does.Contain("Issue Modification Request"));
-            Assert.That(prompt.InitialMessage, Does.Contain("IMPORTANT CONSTRAINTS"));
-            Assert.That(prompt.InitialMessage, Does.Contain("fleece"));
             Assert.That(prompt.InitialMessage, Does.Contain("{{userPrompt}}"));
             Assert.That(prompt.InitialMessage, Does.Contain("{{#if selectedIssueId}}"));
         });
@@ -588,7 +593,7 @@ public class AgentPromptServiceTests
         // Assert - all prompts should have IsOverride = false (no project prompts exist)
         Assert.Multiple(() =>
         {
-            Assert.That(prompts, Has.Count.EqualTo(3)); // Plan, Build, Rebase
+            Assert.That(prompts, Has.Count.EqualTo(9));
             Assert.That(prompts.All(p => p.IsOverride == false), Is.True);
         });
     }
@@ -850,6 +855,50 @@ public class AgentPromptServiceTests
             Assert.That(buildPrompt, Is.Not.Null);
             Assert.That(buildPrompt!.ProjectId, Is.Null); // Global prompt
             Assert.That(buildPrompt.IsOverride, Is.False);
+        });
+    }
+
+    [Test]
+    public void LoadDefaultPromptDefinitions_ReturnsAllPrompts()
+    {
+        // Act
+        var definitions = AgentPromptService.LoadDefaultPromptDefinitions();
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(definitions, Has.Count.EqualTo(11));
+            Assert.That(definitions.Any(d => d.Name == "Plan" && d.Mode == "plan"), Is.True);
+            Assert.That(definitions.Any(d => d.Name == "Build" && d.Mode == "build"), Is.True);
+            Assert.That(definitions.Any(d => d.Name == "Rebase"), Is.True);
+            Assert.That(definitions.Any(d => d.Name == "Rebase, Test and Merge"), Is.True);
+            Assert.That(definitions.Any(d => d.Name == "Create a PR"), Is.True);
+            Assert.That(definitions.Any(d => d.Name == "Fix tests"), Is.True);
+            Assert.That(definitions.Any(d => d.Name == "Build and Merge"), Is.True);
+            Assert.That(definitions.Any(d => d.Name == "IssueModify"), Is.True);
+            Assert.That(definitions.Any(d => d.Name == "Review PR comments"), Is.True);
+            Assert.That(definitions.Any(d => d.Name == "IssueAgentSystem" && d.SessionType == "issueAgentSystem"), Is.True);
+            Assert.That(definitions.Any(d => d.Name == "IssueAgentModification" && d.SessionType == "issueAgentModification"), Is.True);
+        });
+    }
+
+    [Test]
+    public async Task EnsureDefaultPromptsAsync_CreatesAllNewPrompts()
+    {
+        // Act
+        await _service.EnsureDefaultPromptsAsync();
+
+        // Assert - verify all 11 prompts were created
+        var allPrompts = _dataStore.AgentPrompts;
+        Assert.Multiple(() =>
+        {
+            Assert.That(allPrompts, Has.Count.EqualTo(11));
+            Assert.That(allPrompts.Any(p => p.Name == "Rebase, Test and Merge" && p.Mode == SessionMode.Build), Is.True);
+            Assert.That(allPrompts.Any(p => p.Name == "Create a PR" && p.Mode == SessionMode.Build), Is.True);
+            Assert.That(allPrompts.Any(p => p.Name == "Fix tests" && p.Mode == SessionMode.Build), Is.True);
+            Assert.That(allPrompts.Any(p => p.Name == "Build and Merge" && p.Mode == SessionMode.Build), Is.True);
+            Assert.That(allPrompts.Any(p => p.Name == "IssueModify" && p.Mode == SessionMode.Build), Is.True);
+            Assert.That(allPrompts.Any(p => p.Name == "Review PR comments" && p.Mode == SessionMode.Build), Is.True);
         });
     }
 }

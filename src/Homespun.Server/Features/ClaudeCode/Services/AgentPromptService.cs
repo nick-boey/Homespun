@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using Homespun.Features.PullRequests.Data;
 using Homespun.Shared.Models.Sessions;
@@ -234,58 +235,28 @@ public partial class AgentPromptService : IAgentPromptService
 
     public async Task EnsureDefaultPromptsAsync()
     {
-        var existingPrompts = GetAllPrompts();
+        var definitions = LoadDefaultPromptDefinitions();
+        var allExistingPrompts = _dataStore.AgentPrompts;
 
-        // Create Plan prompt if it doesn't exist
-        if (!existingPrompts.Any(p => p.Name == "Plan"))
+        foreach (var def in definitions)
         {
-            await CreatePromptAsync(
-                "Plan",
-                GetDefaultPlanMessage(),
-                SessionMode.Plan);
-        }
+            var sessionType = ParseSessionType(def.SessionType);
+            var mode = ParseSessionMode(def.Mode);
 
-        // Create Build prompt if it doesn't exist
-        if (!existingPrompts.Any(p => p.Name == "Build"))
-        {
-            await CreatePromptAsync(
-                "Build",
-                GetDefaultBuildMessage(),
-                SessionMode.Build);
-        }
+            var exists = allExistingPrompts.Any(p =>
+                p.Name.Equals(def.Name, StringComparison.OrdinalIgnoreCase));
 
-        // Create Rebase prompt if it doesn't exist
-        if (!existingPrompts.Any(p => p.Name.Equals("Rebase", StringComparison.OrdinalIgnoreCase)))
-        {
-            await CreatePromptAsync(
-                "Rebase",
-                GetDefaultRebaseMessage(),
-                SessionMode.Build);
-        }
-
-        // Create IssueAgentModification prompt if it doesn't exist
-        // Check all prompts (including session-type-specific ones)
-        var hasIssueAgentModification = _dataStore.AgentPrompts
-            .Any(p => p.Name.Equals("IssueAgentModification", StringComparison.OrdinalIgnoreCase));
-        if (!hasIssueAgentModification)
-        {
-            await CreateSessionTypePromptAsync(
-                "IssueAgentModification",
-                GetDefaultIssueAgentModificationMessage(),
-                SessionMode.Build,
-                SessionType.IssueAgentModification);
-        }
-
-        // Create IssueAgentSystem prompt if it doesn't exist
-        var hasIssueAgentSystem = _dataStore.AgentPrompts
-            .Any(p => p.Name.Equals("IssueAgentSystem", StringComparison.OrdinalIgnoreCase));
-        if (!hasIssueAgentSystem)
-        {
-            await CreateSessionTypePromptAsync(
-                "IssueAgentSystem",
-                GetDefaultIssueAgentSystemMessage(),
-                SessionMode.Build,
-                SessionType.IssueAgentSystem);
+            if (!exists)
+            {
+                if (sessionType != null)
+                {
+                    await CreateSessionTypePromptAsync(def.Name, def.InitialMessage, mode, sessionType.Value);
+                }
+                else
+                {
+                    await CreatePromptAsync(def.Name, def.InitialMessage, mode);
+                }
+            }
         }
     }
 
@@ -310,149 +281,25 @@ public partial class AgentPromptService : IAgentPromptService
         return prompt;
     }
 
-    private static string GetDefaultPlanMessage()
+    internal static IReadOnlyList<DefaultPromptDefinition> LoadDefaultPromptDefinitions()
     {
-        return """
-            ## Issue: {{title}}
-
-            **ID:** {{id}}
-            **Type:** {{type}}
-            **Branch:** {{branch}}
-
-            ### Description
-            {{description}}
-
-            ---
-
-            Please analyze this issue and create a detailed implementation plan. Consider:
-            - What files need to be modified or created
-            - The approach and architecture
-            - Any potential challenges or risks
-            - Test requirements
-            """;
+        var assemblyDir = Path.GetDirectoryName(typeof(AgentPromptService).Assembly.Location)!;
+        var jsonPath = Path.Combine(assemblyDir, "Features", "ClaudeCode", "Resources", "default-prompts.json");
+        var json = File.ReadAllText(jsonPath);
+        return JsonSerializer.Deserialize<List<DefaultPromptDefinition>>(json, new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        }) ?? [];
     }
 
-    private static string GetDefaultBuildMessage()
-    {
-        return """
-            ## Issue: {{title}}
+    internal static SessionMode ParseSessionMode(string mode) =>
+        mode.Equals("plan", StringComparison.OrdinalIgnoreCase) ? SessionMode.Plan : SessionMode.Build;
 
-            **ID:** {{id}}
-            **Type:** {{type}}
-            **Branch:** {{branch}}
-
-            ### Description
-            {{description}}
-
-            ---
-
-            Please implement this issue. Start by understanding the requirements and exploring the codebase, then proceed with the implementation.
-            """;
-    }
-
-    private static string GetDefaultRebaseMessage()
-    {
-        return """
-            ## Rebase Request
-
-            Please rebase branch `{{branch}}` onto the latest default branch.
-
-            Follow the workflow in your system prompt:
-            1. Fetch the latest changes
-            2. Analyze the commits to be rebased
-            3. Perform the rebase
-            4. Resolve any conflicts using the context provided
-            5. Run tests to verify no regressions
-            6. Push with --force-with-lease when ready
-            """;
-    }
-
-    private static string GetDefaultIssueAgentModificationMessage()
-    {
-        return """
-            ## Issue Modification Request
-
-            You are an agent designed to modify Fleece issues based on user instructions.
-
-            IMPORTANT CONSTRAINTS:
-            - You may ONLY use the Fleece CLI tool to make modifications
-            - Do NOT write any files in the repository
-            - Do NOT make any code changes
-            - Focus solely on issue modifications using fleece commands
-
-            {{#if selectedIssueId}}
-            **Selected Issue:** {{selectedIssueId}}
-            {{/if}}
-
-            Available fleece commands:
-            - fleece list --oneline - List all issues
-            - fleece show <id> --json - Show issue details
-            - fleece edit <id> -t <title> -s <status> -d <description> - Edit issue
-            - fleece create -t <title> -s <status> -y <type> - Create new issue
-            - fleece edit <id> --parent-issues <parent>:<order> - Set parent hierarchy
-            - fleece list --tree - View issue hierarchy
-            - fleece list --next - View task graph
-
-            User request: {{userPrompt}}
-            """;
-    }
-
-    private static string GetDefaultIssueAgentSystemMessage()
-    {
-        return """
-            # Issue Agent System Prompt
-
-            You are an agent specialized in managing Fleece issues. Your role is to help users organize, modify, and maintain their issue tracking.
-
-            ## CONSTRAINTS
-
-            **IMPORTANT: You must follow these constraints strictly:**
-
-            1. **Only use the Fleece CLI** - All modifications must be done through `fleece` commands
-            2. **No file modifications** - Do NOT write, create, or modify any files in the repository
-            3. **No code changes** - Do NOT make any code changes or edits to source files
-            4. **Focus on issues only** - Your sole purpose is issue management
-
-            ## AVAILABLE COMMANDS
-
-            ### Viewing Issues
-            - `fleece list --oneline` - List all issues in compact format
-            - `fleece list --tree` - View issues as parent-child hierarchy
-            - `fleece list --next` - View task graph showing execution order
-            - `fleece show <id> --json` - Show full details of a specific issue
-
-            ### Modifying Issues
-            - `fleece edit <id> -t <title>` - Update issue title
-            - `fleece edit <id> -s <status>` - Update status (open, progress, review, complete, archived, closed)
-            - `fleece edit <id> -d <description>` - Update description
-            - `fleece edit <id> -y <type>` - Update type (task, bug, chore, feature)
-            - `fleece edit <id> --parent-issues <parent-id>:<lex-order>` - Set parent relationship
-
-            ### Creating Issues
-            - `fleece create -t <title> -s <status> -y <type>` - Create new issue
-            - `fleece create -t <title> -y <type> --parent-issues <parent-id>:<lex-order>` - Create as child of existing issue
-
-            ## BEST PRACTICES
-
-            1. **Always verify first** - Before modifying an issue, use `fleece show <id> --json` to understand its current state
-            2. **Use the hierarchy** - Break down large tasks into sub-tasks using parent-child relationships
-            3. **Status workflow** - Issues typically flow: open → progress → review → complete
-            4. **Be precise** - Make targeted changes based on user instructions
-            5. **Confirm changes** - After making changes, verify with `fleece show <id> --json`
-
-            ## ISSUE TYPES
-            - `task` - General work items
-            - `bug` - Defects or issues to fix
-            - `feature` - New functionality
-            - `chore` - Maintenance or housekeeping
-
-            ## STATUS VALUES
-            - `open` - Not yet started
-            - `progress` - Currently being worked on
-            - `review` - Ready for review
-            - `complete` - Finished
-            - `archived` - No longer relevant
-            - `closed` - Abandoned or won't fix
-            """;
-    }
+    internal static SessionType? ParseSessionType(string? sessionType) =>
+        sessionType?.ToLowerInvariant() switch
+        {
+            "issueagentmodification" => SessionType.IssueAgentModification,
+            "issueagentsystem" => SessionType.IssueAgentSystem,
+            _ => null
+        };
 }
