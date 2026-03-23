@@ -243,6 +243,9 @@ else
     // Workflow services
     builder.Services.AddScoped<IWorkflowService, WorkflowService>();
     builder.Services.AddSingleton<IWorkflowStorageService, WorkflowStorageService>();
+    builder.Services.AddSingleton<IStepExecutor, AgentStepExecutor>();
+    builder.Services.AddSingleton<IStepExecutor, ServerActionStepExecutor>();
+    builder.Services.AddSingleton<IStepExecutor, GateStepExecutor>();
     builder.Services.AddSingleton<IWorkflowExecutionService, WorkflowExecutionService>();
     builder.Services.AddSingleton<IWorkflowContextStore, WorkflowContextStore>();
 }
