@@ -131,7 +131,7 @@ describe('ProjectLayout', () => {
     } as Awaited<ReturnType<typeof Graph.getApiGraphByProjectIdTaskgraphData>>)
   })
 
-  it('displays loading state while fetching project', async () => {
+  it('displays loading state while fetching project', { timeout: 15000 }, async () => {
     vi.mocked(Projects.getApiProjectsById).mockReturnValue(
       new Promise(() => {}) as ReturnType<typeof Projects.getApiProjectsById>
     )

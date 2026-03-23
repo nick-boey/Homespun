@@ -64,6 +64,7 @@ describe('SessionManager', () => {
     mockQueryObj = createMockQuery();
     setMockQuery(mockQueryObj);
     setCapturedCanUseTool(undefined);
+    mockQuery.mockClear();
 
     // Reset mock implementations after restoreMocks clears them
     mockQuery.mockImplementation((...args: any[]) => {
