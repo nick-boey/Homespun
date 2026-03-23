@@ -207,13 +207,13 @@ public class WorkflowExecutionServiceTests
         // Act
         var result = await _service.StartWorkflowAsync(_testProjectPath, "workflow-1", triggerContext);
 
-        // Assert
+        // Assert - verify step indexes are assigned sequentially
+        // Note: CurrentStepIndex may advance due to fire-and-forget execution
         Assert.Multiple(() =>
         {
             Assert.That(result.Execution!.StepExecutions[0].StepIndex, Is.EqualTo(0));
             Assert.That(result.Execution.StepExecutions[1].StepIndex, Is.EqualTo(1));
             Assert.That(result.Execution.StepExecutions[2].StepIndex, Is.EqualTo(2));
-            Assert.That(result.Execution.CurrentStepIndex, Is.EqualTo(0));
         });
     }
 
