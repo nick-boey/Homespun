@@ -18,7 +18,7 @@ public class AgentPromptServiceTests
     }
 
     [Test]
-    public async Task GetAllPrompts_ExcludesIssueAgentModificationPrompts()
+    public async Task GetAllPrompts_ExcludesIssueAgentModificationAndCategoryPrompts()
     {
         // Arrange - create standard prompts and an IssueAgentModification prompt
         await _service.EnsureDefaultPromptsAsync();
@@ -26,10 +26,10 @@ public class AgentPromptServiceTests
         // Act
         var prompts = _service.GetAllPrompts();
 
-        // Assert - should include all standard prompts but not session-type prompts
+        // Assert - should include all standard prompts but not session-type or IssueAgent category prompts
         Assert.Multiple(() =>
         {
-            Assert.That(prompts, Has.Count.EqualTo(9));
+            Assert.That(prompts, Has.Count.EqualTo(8));
             Assert.That(prompts.Any(p => p.Name == "Plan"), Is.True);
             Assert.That(prompts.Any(p => p.Name == "Build"), Is.True);
             Assert.That(prompts.Any(p => p.Name == "Rebase"), Is.True);
@@ -37,15 +37,15 @@ public class AgentPromptServiceTests
             Assert.That(prompts.Any(p => p.Name == "Create a PR"), Is.True);
             Assert.That(prompts.Any(p => p.Name == "Fix tests"), Is.True);
             Assert.That(prompts.Any(p => p.Name == "Build and Merge"), Is.True);
-            Assert.That(prompts.Any(p => p.Name == "IssueModify"), Is.True);
             Assert.That(prompts.Any(p => p.Name == "Review PR comments"), Is.True);
+            Assert.That(prompts.Any(p => p.Name == "IssueModify"), Is.False);
             Assert.That(prompts.Any(p => p.Name == "IssueAgentModification"), Is.False);
             Assert.That(prompts.Any(p => p.Name == "IssueAgentSystem"), Is.False);
         });
     }
 
     [Test]
-    public async Task GetPromptsForProject_ExcludesSessionTypePrompts()
+    public async Task GetPromptsForProject_ExcludesSessionTypeAndNonStandardCategoryPrompts()
     {
         // Arrange
         await _service.EnsureDefaultPromptsAsync();
@@ -53,11 +53,12 @@ public class AgentPromptServiceTests
         // Act
         var prompts = _service.GetPromptsForProject("test-project");
 
-        // Assert
+        // Assert - excludes session-type prompts and IssueAgent category prompts
         Assert.Multiple(() =>
         {
-            Assert.That(prompts, Has.Count.EqualTo(9));
+            Assert.That(prompts, Has.Count.EqualTo(8));
             Assert.That(prompts.Any(p => p.SessionType != null), Is.False);
+            Assert.That(prompts.Any(p => p.Category != PromptCategory.Standard), Is.False);
         });
     }
 
@@ -593,7 +594,7 @@ public class AgentPromptServiceTests
         // Assert - all prompts should have IsOverride = false (no project prompts exist)
         Assert.Multiple(() =>
         {
-            Assert.That(prompts, Has.Count.EqualTo(9));
+            Assert.That(prompts, Has.Count.EqualTo(8));
             Assert.That(prompts.All(p => p.IsOverride == false), Is.True);
         });
     }
@@ -875,7 +876,7 @@ public class AgentPromptServiceTests
             Assert.That(definitions.Any(d => d.Name == "Create a PR"), Is.True);
             Assert.That(definitions.Any(d => d.Name == "Fix tests"), Is.True);
             Assert.That(definitions.Any(d => d.Name == "Build and Merge"), Is.True);
-            Assert.That(definitions.Any(d => d.Name == "IssueModify"), Is.True);
+            Assert.That(definitions.Any(d => d.Name == "IssueModify" && d.Category == "IssueAgent"), Is.True);
             Assert.That(definitions.Any(d => d.Name == "Review PR comments"), Is.True);
             Assert.That(definitions.Any(d => d.Name == "IssueAgentSystem" && d.SessionType == "issueAgentSystem"), Is.True);
             Assert.That(definitions.Any(d => d.Name == "IssueAgentModification" && d.SessionType == "issueAgentModification"), Is.True);
@@ -899,6 +900,170 @@ public class AgentPromptServiceTests
             Assert.That(allPrompts.Any(p => p.Name == "Build and Merge" && p.Mode == SessionMode.Build), Is.True);
             Assert.That(allPrompts.Any(p => p.Name == "IssueModify" && p.Mode == SessionMode.Build), Is.True);
             Assert.That(allPrompts.Any(p => p.Name == "Review PR comments" && p.Mode == SessionMode.Build), Is.True);
+        });
+    }
+
+    [Test]
+    public async Task EnsureDefaultPromptsAsync_SetsCategoryOnIssueModifyPrompt()
+    {
+        // Act
+        await _service.EnsureDefaultPromptsAsync();
+
+        // Assert - IssueModify should have IssueAgent category
+        var issueModifyPrompt = _dataStore.AgentPrompts
+            .FirstOrDefault(p => p.Name == "IssueModify");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(issueModifyPrompt, Is.Not.Null);
+            Assert.That(issueModifyPrompt!.Category, Is.EqualTo(PromptCategory.IssueAgent));
+            Assert.That(issueModifyPrompt.SessionType, Is.Null);
+        });
+    }
+
+    [Test]
+    public async Task EnsureDefaultPromptsAsync_StandardPromptsHaveStandardCategory()
+    {
+        // Act
+        await _service.EnsureDefaultPromptsAsync();
+
+        // Assert - standard prompts should have Standard category
+        var buildPrompt = _dataStore.AgentPrompts.First(p => p.Name == "Build");
+        var planPrompt = _dataStore.AgentPrompts.First(p => p.Name == "Plan");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(buildPrompt.Category, Is.EqualTo(PromptCategory.Standard));
+            Assert.That(planPrompt.Category, Is.EqualTo(PromptCategory.Standard));
+        });
+    }
+
+    [Test]
+    public async Task EnsureDefaultPromptsAsync_MigratesExistingPromptCategory()
+    {
+        // Arrange - create IssueModify prompt with Standard category (pre-migration state)
+        var prompt = new AgentPrompt
+        {
+            Id = "old-im",
+            Name = "IssueModify",
+            InitialMessage = "old message",
+            Mode = SessionMode.Build,
+            Category = PromptCategory.Standard
+        };
+        await _dataStore.AddAgentPromptAsync(prompt);
+
+        // Act - EnsureDefaults should migrate category
+        await _service.EnsureDefaultPromptsAsync();
+
+        // Assert
+        var updated = _dataStore.AgentPrompts.First(p => p.Name == "IssueModify");
+        Assert.That(updated.Category, Is.EqualTo(PromptCategory.IssueAgent));
+    }
+
+    [Test]
+    public async Task GetAllPrompts_ExcludesIssueAgentCategoryPrompts()
+    {
+        // Arrange
+        await _service.EnsureDefaultPromptsAsync();
+
+        // Act
+        var prompts = _service.GetAllPrompts();
+
+        // Assert - IssueModify has IssueAgent category and should be excluded
+        Assert.Multiple(() =>
+        {
+            Assert.That(prompts, Has.Count.EqualTo(8));
+            Assert.That(prompts.Any(p => p.Name == "IssueModify"), Is.False);
+            Assert.That(prompts.Any(p => p.Name == "Plan"), Is.True);
+            Assert.That(prompts.Any(p => p.Name == "Build"), Is.True);
+        });
+    }
+
+    [Test]
+    public async Task GetIssueAgentUserPrompts_ReturnsOnlyIssueAgentCategoryPrompts()
+    {
+        // Arrange
+        await _service.EnsureDefaultPromptsAsync();
+
+        // Act
+        var prompts = _service.GetIssueAgentUserPrompts();
+
+        // Assert - should include only IssueModify (IssueAgent category, no SessionType)
+        Assert.Multiple(() =>
+        {
+            Assert.That(prompts, Has.Count.EqualTo(1));
+            Assert.That(prompts[0].Name, Is.EqualTo("IssueModify"));
+            Assert.That(prompts[0].Category, Is.EqualTo(PromptCategory.IssueAgent));
+            Assert.That(prompts[0].SessionType, Is.Null);
+        });
+    }
+
+    [Test]
+    public async Task GetIssueAgentPromptsForProject_ReturnsMergedPromptsWithOverrideDetection()
+    {
+        // Arrange
+        await _service.EnsureDefaultPromptsAsync();
+        var projectId = "test-project";
+
+        // Create a project-level IssueAgent prompt that overrides IssueModify
+        var projectPrompt = new AgentPrompt
+        {
+            Id = "proj-im",
+            Name = "IssueModify",
+            InitialMessage = "Custom project issue modify message",
+            Mode = SessionMode.Build,
+            ProjectId = projectId,
+            Category = PromptCategory.IssueAgent
+        };
+        await _dataStore.AddAgentPromptAsync(projectPrompt);
+
+        // Act
+        var prompts = _service.GetIssueAgentPromptsForProject(projectId);
+
+        // Assert - should include the project override, not the global
+        Assert.Multiple(() =>
+        {
+            Assert.That(prompts, Has.Count.EqualTo(1));
+            var issueModify = prompts.First(p => p.Name == "IssueModify");
+            Assert.That(issueModify.ProjectId, Is.EqualTo(projectId));
+            Assert.That(issueModify.IsOverride, Is.True);
+            Assert.That(issueModify.InitialMessage, Is.EqualTo("Custom project issue modify message"));
+        });
+    }
+
+    [Test]
+    public async Task GetIssueAgentPromptsForProject_ReturnsGlobalPromptsWhenNoProjectOverride()
+    {
+        // Arrange
+        await _service.EnsureDefaultPromptsAsync();
+
+        // Act
+        var prompts = _service.GetIssueAgentPromptsForProject("test-project");
+
+        // Assert - should include the global IssueModify prompt
+        Assert.Multiple(() =>
+        {
+            Assert.That(prompts, Has.Count.EqualTo(1));
+            Assert.That(prompts[0].Name, Is.EqualTo("IssueModify"));
+            Assert.That(prompts[0].ProjectId, Is.Null);
+            Assert.That(prompts[0].IsOverride, Is.False);
+        });
+    }
+
+    [Test]
+    public async Task GetPromptsForProject_ExcludesIssueAgentCategoryPrompts()
+    {
+        // Arrange
+        await _service.EnsureDefaultPromptsAsync();
+
+        // Act
+        var prompts = _service.GetPromptsForProject("test-project");
+
+        // Assert - IssueModify (IssueAgent category) should not appear
+        Assert.Multiple(() =>
+        {
+            Assert.That(prompts, Has.Count.EqualTo(8));
+            Assert.That(prompts.Any(p => p.Name == "IssueModify"), Is.False);
         });
     }
 }

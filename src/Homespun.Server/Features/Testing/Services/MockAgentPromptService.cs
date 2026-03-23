@@ -24,9 +24,9 @@ public partial class MockAgentPromptService : IAgentPromptService
 
     public IReadOnlyList<AgentPrompt> GetAllPrompts()
     {
-        _logger.LogDebug("[Mock] GetAllPrompts (global only, excluding session-type prompts)");
+        _logger.LogDebug("[Mock] GetAllPrompts (global only, excluding session-type and non-standard category prompts)");
         return _dataStore.AgentPrompts
-            .Where(p => p.ProjectId == null && p.SessionType == null)
+            .Where(p => p.ProjectId == null && p.SessionType == null && p.Category == PromptCategory.Standard)
             .ToList()
             .AsReadOnly();
     }
@@ -35,7 +35,7 @@ public partial class MockAgentPromptService : IAgentPromptService
     {
         _logger.LogDebug("[Mock] GetProjectPrompts {ProjectId}", projectId);
         return _dataStore.GetAgentPromptsByProject(projectId)
-            .Where(p => p.SessionType == null)
+            .Where(p => p.SessionType == null && p.Category == PromptCategory.Standard)
             .ToList()
             .AsReadOnly();
     }
@@ -55,6 +55,50 @@ public partial class MockAgentPromptService : IAgentPromptService
                      || p.SessionType == SessionType.IssueAgentSystem)
             .ToList()
             .AsReadOnly();
+    }
+
+    public IReadOnlyList<AgentPrompt> GetIssueAgentUserPrompts()
+    {
+        _logger.LogDebug("[Mock] GetIssueAgentUserPrompts");
+        return _dataStore.AgentPrompts
+            .Where(p => p.Category == PromptCategory.IssueAgent && p.SessionType == null && p.ProjectId == null)
+            .ToList()
+            .AsReadOnly();
+    }
+
+    public IReadOnlyList<AgentPrompt> GetIssueAgentProjectPrompts(string projectId)
+    {
+        _logger.LogDebug("[Mock] GetIssueAgentProjectPrompts {ProjectId}", projectId);
+        return _dataStore.GetAgentPromptsByProject(projectId)
+            .Where(p => p.Category == PromptCategory.IssueAgent && p.SessionType == null)
+            .ToList()
+            .AsReadOnly();
+    }
+
+    public IReadOnlyList<AgentPrompt> GetIssueAgentPromptsForProject(string projectId)
+    {
+        _logger.LogDebug("[Mock] GetIssueAgentPromptsForProject {ProjectId}", projectId);
+        var projectPrompts = GetIssueAgentProjectPrompts(projectId);
+        var globalPrompts = GetIssueAgentUserPrompts();
+
+        var globalPromptNames = globalPrompts
+            .Select(g => g.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var projectPromptNames = projectPrompts
+            .Select(p => p.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var prompt in projectPrompts)
+        {
+            prompt.IsOverride = globalPromptNames.Contains(prompt.Name);
+        }
+
+        var nonOverriddenGlobalPrompts = globalPrompts
+            .Where(g => !projectPromptNames.Contains(g.Name))
+            .ToList();
+
+        return projectPrompts.Concat(nonOverriddenGlobalPrompts).ToList().AsReadOnly();
     }
 
     public IReadOnlyList<AgentPrompt> GetPromptsForProject(string projectId)
@@ -110,9 +154,10 @@ public partial class MockAgentPromptService : IAgentPromptService
         return CreatePromptAsync(name, initialMessage, mode, projectId: null);
     }
 
-    public async Task<AgentPrompt> CreatePromptAsync(string name, string? initialMessage, SessionMode mode, string? projectId)
+    public async Task<AgentPrompt> CreatePromptAsync(string name, string? initialMessage, SessionMode mode, string? projectId,
+        PromptCategory category = PromptCategory.Standard)
     {
-        _logger.LogDebug("[Mock] CreatePrompt {Name} (ProjectId: {ProjectId})", name, projectId ?? "global");
+        _logger.LogDebug("[Mock] CreatePrompt {Name} (ProjectId: {ProjectId}, Category: {Category})", name, projectId ?? "global", category);
 
         var prompt = new AgentPrompt
         {
@@ -121,6 +166,7 @@ public partial class MockAgentPromptService : IAgentPromptService
             InitialMessage = initialMessage,
             Mode = mode,
             ProjectId = projectId,
+            Category = category,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };
@@ -245,24 +291,35 @@ public partial class MockAgentPromptService : IAgentPromptService
 
         foreach (var def in definitions)
         {
-            var exists = allExistingPrompts.Any(p =>
+            var existing = allExistingPrompts.FirstOrDefault(p =>
                 p.Name.Equals(def.Name, StringComparison.OrdinalIgnoreCase));
 
-            if (!exists)
-            {
-                var sessionType = AgentPromptService.ParseSessionType(def.SessionType);
-                var mode = AgentPromptService.ParseSessionMode(def.Mode);
+            var sessionType = AgentPromptService.ParseSessionType(def.SessionType);
+            var mode = AgentPromptService.ParseSessionMode(def.Mode);
+            var category = AgentPromptService.ParsePromptCategory(def.Category);
 
-                await _dataStore.AddAgentPromptAsync(new AgentPrompt
+            if (existing != null)
+            {
+                if (existing.Category != category)
                 {
-                    Name = def.Name,
-                    InitialMessage = def.InitialMessage,
-                    Mode = mode,
-                    SessionType = sessionType,
-                    CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow
-                });
+                    existing.Category = category;
+                    existing.UpdatedAt = DateTime.UtcNow;
+                    await _dataStore.UpdateAgentPromptAsync(existing);
+                }
+
+                continue;
             }
+
+            await _dataStore.AddAgentPromptAsync(new AgentPrompt
+            {
+                Name = def.Name,
+                InitialMessage = def.InitialMessage,
+                Mode = mode,
+                SessionType = sessionType,
+                Category = category,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            });
         }
     }
 

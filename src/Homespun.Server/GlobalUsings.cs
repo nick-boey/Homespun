@@ -30,6 +30,7 @@ global using ClaudeModelInfo = Homespun.Shared.Models.Sessions.ClaudeModelInfo;
 global using DiscoveredSession = Homespun.Shared.Models.Sessions.DiscoveredSession;
 global using SessionMetadata = Homespun.Shared.Models.Sessions.SessionMetadata;
 global using AgentPrompt = Homespun.Shared.Models.Sessions.AgentPrompt;
+global using PromptCategory = Homespun.Shared.Models.Sessions.PromptCategory;
 global using SessionSummary = Homespun.Shared.Models.Sessions.SessionSummary;
 global using SessionTodoItem = Homespun.Shared.Models.Sessions.SessionTodoItem;
 global using TodoStatus = Homespun.Shared.Models.Sessions.TodoStatus;

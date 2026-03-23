@@ -9,4 +9,5 @@ public class DefaultPromptDefinition
     public string Mode { get; set; } = "build";
     public string? InitialMessage { get; set; }
     public string? SessionType { get; set; }
+    public string? Category { get; set; }
 }
