@@ -155,6 +155,7 @@ public static class MockServiceExtensions
         services.AddScoped<IIssuePrStatusService, IssuePrStatusService>();
 
         // Workflow services
+        services.AddSingleton<IWorkflowTemplateService, WorkflowTemplateService>();
         services.AddSingleton<IWorkflowStorageService, WorkflowStorageService>();
         services.AddSingleton<IStepExecutor, AgentStepExecutor>();
         services.AddSingleton<IStepExecutor, ServerActionStepExecutor>();
