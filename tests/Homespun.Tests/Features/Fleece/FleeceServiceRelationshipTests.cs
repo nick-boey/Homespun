@@ -354,5 +354,96 @@ public class FleeceServiceRelationshipTests
         Assert.That(result.OpenChildren[0].Id, Is.EqualTo(child1.Id));
     }
 
+    [Test]
+    public async Task GetBlockingIssuesAsync_ParallelParent_DoesNotBlockOnPriorSiblings()
+    {
+        // Arrange - create a parent with Parallel execution mode and two open children
+        var parent = await _service.CreateIssueAsync(_tempDir, "Parallel Parent", IssueType.Feature,
+            executionMode: ExecutionMode.Parallel);
+        var child1 = await _service.CreateIssueAsync(_tempDir, "Child 1 (Open)", IssueType.Task);
+        var child2 = await _service.CreateIssueAsync(_tempDir, "Child 2 (Open)", IssueType.Task);
+
+        await _service.AddParentAsync(_tempDir, child1.Id, parent.Id, sortOrder: "a");
+        await _service.AddParentAsync(_tempDir, child2.Id, parent.Id, sortOrder: "b");
+
+        // Act - check blocking issues for child2 (which has an open prior sibling child1)
+        var result = await _service.GetBlockingIssuesAsync(_tempDir, child2.Id);
+
+        // Assert - should NOT be blocked because parent is Parallel
+        Assert.That(result.OpenPriorSiblings, Is.Empty);
+        Assert.That(result.IsBlocked, Is.False);
+    }
+
+    [Test]
+    public async Task GetBlockingIssuesAsync_SeriesParent_BlocksOnPriorSiblings()
+    {
+        // Arrange - create a parent with Series execution mode (default) and two open children
+        var parent = await _service.CreateIssueAsync(_tempDir, "Series Parent", IssueType.Feature,
+            executionMode: ExecutionMode.Series);
+        var child1 = await _service.CreateIssueAsync(_tempDir, "Child 1 (Open)", IssueType.Task);
+        var child2 = await _service.CreateIssueAsync(_tempDir, "Child 2 (Open)", IssueType.Task);
+
+        await _service.AddParentAsync(_tempDir, child1.Id, parent.Id, sortOrder: "a");
+        await _service.AddParentAsync(_tempDir, child2.Id, parent.Id, sortOrder: "b");
+
+        // Act - check blocking issues for child2
+        var result = await _service.GetBlockingIssuesAsync(_tempDir, child2.Id);
+
+        // Assert - should be blocked because parent is Series
+        Assert.That(result.IsBlocked, Is.True);
+        Assert.That(result.OpenPriorSiblings, Has.Count.EqualTo(1));
+        Assert.That(result.OpenPriorSiblings[0].Id, Is.EqualTo(child1.Id));
+    }
+
+    [Test]
+    public async Task GetBlockingIssuesAsync_ParallelParent_StillBlocksOnOpenChildren()
+    {
+        // Arrange - issue under a parallel parent still blocked by its own open children
+        var grandparent = await _service.CreateIssueAsync(_tempDir, "Grandparent", IssueType.Feature,
+            executionMode: ExecutionMode.Parallel);
+        var parent = await _service.CreateIssueAsync(_tempDir, "Parent", IssueType.Task);
+        var child = await _service.CreateIssueAsync(_tempDir, "Child (Open)", IssueType.Task);
+
+        await _service.AddParentAsync(_tempDir, parent.Id, grandparent.Id, sortOrder: "a");
+        await _service.AddParentAsync(_tempDir, child.Id, parent.Id, sortOrder: "a");
+
+        // Act - check blocking issues for parent (has an open child)
+        var result = await _service.GetBlockingIssuesAsync(_tempDir, parent.Id);
+
+        // Assert - should be blocked by open child, even though grandparent is Parallel
+        Assert.That(result.IsBlocked, Is.True);
+        Assert.That(result.OpenChildren, Has.Count.EqualTo(1));
+        Assert.That(result.OpenChildren[0].Id, Is.EqualTo(child.Id));
+    }
+
+    [Test]
+    public async Task GetBlockingIssuesAsync_MixedParents_OnlyBlocksForSeriesParents()
+    {
+        // Arrange - issue has two parents: one Parallel and one Series
+        var parallelParent = await _service.CreateIssueAsync(_tempDir, "Parallel Parent", IssueType.Feature,
+            executionMode: ExecutionMode.Parallel);
+        var seriesParent = await _service.CreateIssueAsync(_tempDir, "Series Parent", IssueType.Feature,
+            executionMode: ExecutionMode.Series);
+
+        var siblingUnderParallel = await _service.CreateIssueAsync(_tempDir, "Parallel Sibling", IssueType.Task);
+        var siblingUnderSeries = await _service.CreateIssueAsync(_tempDir, "Series Sibling", IssueType.Task);
+        var target = await _service.CreateIssueAsync(_tempDir, "Target Issue", IssueType.Task);
+
+        // target has prior siblings under both parents
+        await _service.AddParentAsync(_tempDir, siblingUnderParallel.Id, parallelParent.Id, sortOrder: "a");
+        await _service.AddParentAsync(_tempDir, target.Id, parallelParent.Id, sortOrder: "b");
+
+        await _service.AddParentAsync(_tempDir, siblingUnderSeries.Id, seriesParent.Id, sortOrder: "a");
+        await _service.AddParentAsync(_tempDir, target.Id, seriesParent.Id, sortOrder: "b");
+
+        // Act
+        var result = await _service.GetBlockingIssuesAsync(_tempDir, target.Id);
+
+        // Assert - only the series parent's prior sibling should block
+        Assert.That(result.IsBlocked, Is.True);
+        Assert.That(result.OpenPriorSiblings, Has.Count.EqualTo(1));
+        Assert.That(result.OpenPriorSiblings[0].Id, Is.EqualTo(siblingUnderSeries.Id));
+    }
+
     #endregion
 }
