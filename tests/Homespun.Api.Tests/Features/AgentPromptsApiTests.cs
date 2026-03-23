@@ -260,6 +260,27 @@ public class AgentPromptsApiTests
     }
 
     [Test]
+    public async Task GetIssueAgentPromptsForProject_ReturnsIssueAgentPrompts()
+    {
+        // Arrange
+        var projectId = "issue-agent-test-project";
+
+        // Act
+        var response = await _client.GetAsync($"/api/agent-prompts/issue-agent/available/{projectId}");
+
+        // Assert
+        response.EnsureSuccessStatusCode();
+        var prompts = await response.Content.ReadFromJsonAsync<List<AgentPrompt>>(JsonOptions);
+        Assert.Multiple(() =>
+        {
+            Assert.That(prompts, Is.Not.Null);
+            Assert.That(prompts!, Has.Count.GreaterThanOrEqualTo(1));
+            Assert.That(prompts!.Any(p => p.Name == "IssueModify"), Is.True);
+            Assert.That(prompts!.All(p => p.Category == PromptCategory.IssueAgent), Is.True);
+        });
+    }
+
+    [Test]
     public async Task RemoveOverride_GlobalPromptAppearsInProjectPrompts_AfterRemoval()
     {
         // Arrange - Create an override

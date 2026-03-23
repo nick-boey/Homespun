@@ -20,7 +20,7 @@ public partial class AgentPromptService : IAgentPromptService
     public IReadOnlyList<AgentPrompt> GetAllPrompts()
     {
         return _dataStore.AgentPrompts
-            .Where(p => p.ProjectId == null && p.SessionType == null)
+            .Where(p => p.ProjectId == null && p.SessionType == null && p.Category == PromptCategory.Standard)
             .ToList()
             .AsReadOnly();
     }
@@ -28,7 +28,7 @@ public partial class AgentPromptService : IAgentPromptService
     public IReadOnlyList<AgentPrompt> GetProjectPrompts(string projectId)
     {
         return _dataStore.GetAgentPromptsByProject(projectId)
-            .Where(p => p.SessionType == null)
+            .Where(p => p.SessionType == null && p.Category == PromptCategory.Standard)
             .ToList()
             .AsReadOnly();
     }
@@ -88,6 +88,49 @@ public partial class AgentPromptService : IAgentPromptService
             .AsReadOnly();
     }
 
+    public IReadOnlyList<AgentPrompt> GetIssueAgentUserPrompts()
+    {
+        return _dataStore.AgentPrompts
+            .Where(p => p.Category == PromptCategory.IssueAgent && p.SessionType == null && p.ProjectId == null)
+            .ToList()
+            .AsReadOnly();
+    }
+
+    public IReadOnlyList<AgentPrompt> GetIssueAgentProjectPrompts(string projectId)
+    {
+        return _dataStore.GetAgentPromptsByProject(projectId)
+            .Where(p => p.Category == PromptCategory.IssueAgent && p.SessionType == null)
+            .ToList()
+            .AsReadOnly();
+    }
+
+    public IReadOnlyList<AgentPrompt> GetIssueAgentPromptsForProject(string projectId)
+    {
+        var projectPrompts = GetIssueAgentProjectPrompts(projectId);
+        var globalPrompts = GetIssueAgentUserPrompts();
+
+        var globalPromptNames = globalPrompts
+            .Select(g => g.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var projectPromptNames = projectPrompts
+            .Select(p => p.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        // Mark project prompts that override global prompts
+        foreach (var prompt in projectPrompts)
+        {
+            prompt.IsOverride = globalPromptNames.Contains(prompt.Name);
+        }
+
+        // Include only global prompts that are not overridden
+        var nonOverriddenGlobalPrompts = globalPrompts
+            .Where(g => !projectPromptNames.Contains(g.Name))
+            .ToList();
+
+        return projectPrompts.Concat(nonOverriddenGlobalPrompts).ToList().AsReadOnly();
+    }
+
     public AgentPrompt? GetPrompt(string id)
     {
         return _dataStore.GetAgentPrompt(id);
@@ -98,7 +141,8 @@ public partial class AgentPromptService : IAgentPromptService
         return CreatePromptAsync(name, initialMessage, mode, projectId: null);
     }
 
-    public async Task<AgentPrompt> CreatePromptAsync(string name, string? initialMessage, SessionMode mode, string? projectId)
+    public async Task<AgentPrompt> CreatePromptAsync(string name, string? initialMessage, SessionMode mode, string? projectId,
+        PromptCategory category = PromptCategory.Standard)
     {
         var prompt = new AgentPrompt
         {
@@ -106,6 +150,7 @@ public partial class AgentPromptService : IAgentPromptService
             InitialMessage = initialMessage,
             Mode = mode,
             ProjectId = projectId,
+            Category = category,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };
@@ -242,20 +287,31 @@ public partial class AgentPromptService : IAgentPromptService
         {
             var sessionType = ParseSessionType(def.SessionType);
             var mode = ParseSessionMode(def.Mode);
+            var category = ParsePromptCategory(def.Category);
 
-            var exists = allExistingPrompts.Any(p =>
+            var existing = allExistingPrompts.FirstOrDefault(p =>
                 p.Name.Equals(def.Name, StringComparison.OrdinalIgnoreCase));
 
-            if (!exists)
+            if (existing != null)
             {
-                if (sessionType != null)
+                // Migration: update category on existing prompts if it changed
+                if (existing.Category != category)
                 {
-                    await CreateSessionTypePromptAsync(def.Name, def.InitialMessage, mode, sessionType.Value);
+                    existing.Category = category;
+                    existing.UpdatedAt = DateTime.UtcNow;
+                    await _dataStore.UpdateAgentPromptAsync(existing);
                 }
-                else
-                {
-                    await CreatePromptAsync(def.Name, def.InitialMessage, mode);
-                }
+
+                continue;
+            }
+
+            if (sessionType != null)
+            {
+                await CreateSessionTypePromptAsync(def.Name, def.InitialMessage, mode, sessionType.Value, category);
+            }
+            else
+            {
+                await CreateCategorizedPromptAsync(def.Name, def.InitialMessage, mode, category);
             }
         }
     }
@@ -264,7 +320,8 @@ public partial class AgentPromptService : IAgentPromptService
         string name,
         string? initialMessage,
         SessionMode mode,
-        SessionType sessionType)
+        SessionType sessionType,
+        PromptCategory category = PromptCategory.Standard)
     {
         var prompt = new AgentPrompt
         {
@@ -273,6 +330,28 @@ public partial class AgentPromptService : IAgentPromptService
             Mode = mode,
             ProjectId = null,
             SessionType = sessionType,
+            Category = category,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        await _dataStore.AddAgentPromptAsync(prompt);
+        return prompt;
+    }
+
+    private async Task<AgentPrompt> CreateCategorizedPromptAsync(
+        string name,
+        string? initialMessage,
+        SessionMode mode,
+        PromptCategory category)
+    {
+        var prompt = new AgentPrompt
+        {
+            Name = name,
+            InitialMessage = initialMessage,
+            Mode = mode,
+            ProjectId = null,
+            Category = category,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };
@@ -301,5 +380,12 @@ public partial class AgentPromptService : IAgentPromptService
             "issueagentmodification" => SessionType.IssueAgentModification,
             "issueagentsystem" => SessionType.IssueAgentSystem,
             _ => null
+        };
+
+    internal static PromptCategory ParsePromptCategory(string? category) =>
+        category?.ToLowerInvariant() switch
+        {
+            "issueagent" => PromptCategory.IssueAgent,
+            _ => PromptCategory.Standard
         };
 }

@@ -42,7 +42,8 @@ public interface IAgentPromptService
     /// <summary>
     /// Creates a new agent prompt, optionally scoped to a project.
     /// </summary>
-    Task<AgentPrompt> CreatePromptAsync(string name, string? initialMessage, SessionMode mode, string? projectId);
+    Task<AgentPrompt> CreatePromptAsync(string name, string? initialMessage, SessionMode mode, string? projectId,
+        PromptCategory category = PromptCategory.Standard);
 
     /// <summary>
     /// Updates an existing agent prompt.
@@ -78,6 +79,23 @@ public interface IAgentPromptService
     /// These are specialized prompts for the Issues Agent workflow.
     /// </summary>
     IReadOnlyList<AgentPrompt> GetIssueAgentPrompts();
+
+    /// <summary>
+    /// Gets global prompts with Category = IssueAgent (excluding SessionType prompts).
+    /// These are user-selectable prompts for issue agent sessions.
+    /// </summary>
+    IReadOnlyList<AgentPrompt> GetIssueAgentUserPrompts();
+
+    /// <summary>
+    /// Gets project-scoped prompts with Category = IssueAgent (excluding SessionType prompts).
+    /// </summary>
+    IReadOnlyList<AgentPrompt> GetIssueAgentProjectPrompts(string projectId);
+
+    /// <summary>
+    /// Gets merged issue agent prompts for a project context: project-specific IssueAgent prompts,
+    /// plus global IssueAgent prompts that are not overridden by project prompts (matched by name, case-insensitive).
+    /// </summary>
+    IReadOnlyList<AgentPrompt> GetIssueAgentPromptsForProject(string projectId);
 
     /// <summary>
     /// Creates a project-scoped prompt that overrides a global prompt.

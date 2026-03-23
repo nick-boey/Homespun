@@ -53,7 +53,8 @@ public class AgentPromptsController(IAgentPromptService agentPromptService) : Co
             request.Name,
             request.InitialMessage,
             request.Mode,
-            request.ProjectId);
+            request.ProjectId,
+            request.Category);
 
         return CreatedAtAction(nameof(GetById), new { id = prompt.Id }, prompt);
     }
@@ -105,6 +106,18 @@ public class AgentPromptsController(IAgentPromptService agentPromptService) : Co
     public ActionResult<IReadOnlyList<AgentPrompt>> GetIssueAgentPrompts()
     {
         var prompts = agentPromptService.GetIssueAgentPrompts();
+        return Ok(prompts);
+    }
+
+    /// <summary>
+    /// Gets issue agent prompts available for a project, including project overrides
+    /// and non-overridden global issue agent prompts.
+    /// </summary>
+    [HttpGet("issue-agent/available/{projectId}")]
+    [ProducesResponseType<IReadOnlyList<AgentPrompt>>(StatusCodes.Status200OK)]
+    public ActionResult<IReadOnlyList<AgentPrompt>> GetIssueAgentPromptsForProject(string projectId)
+    {
+        var prompts = agentPromptService.GetIssueAgentPromptsForProject(projectId);
         return Ok(prompts);
     }
 
@@ -175,6 +188,7 @@ public class CreateAgentPromptRequest
     public string? InitialMessage { get; set; }
     public SessionMode Mode { get; set; }
     public string? ProjectId { get; set; }
+    public PromptCategory Category { get; set; } = PromptCategory.Standard;
 }
 
 public class UpdateAgentPromptRequest
@@ -182,6 +196,7 @@ public class UpdateAgentPromptRequest
     public required string Name { get; set; }
     public string? InitialMessage { get; set; }
     public SessionMode Mode { get; set; }
+    public PromptCategory Category { get; set; } = PromptCategory.Standard;
 }
 
 public class CreateOverrideRequest

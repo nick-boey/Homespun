@@ -51,6 +51,12 @@ public class AgentPrompt
     public SessionType? SessionType { get; set; }
 
     /// <summary>
+    /// Categorizes the prompt to distinguish between standard and specialized prompt types.
+    /// Standard prompts appear in normal prompt lists; IssueAgent prompts appear in issue agent prompt lists.
+    /// </summary>
+    public PromptCategory Category { get; set; } = PromptCategory.Standard;
+
+    /// <summary>
     /// Indicates whether this prompt is a project-level override of a global prompt with the same name.
     /// This is a computed property set at query time, not persisted.
     /// </summary>
