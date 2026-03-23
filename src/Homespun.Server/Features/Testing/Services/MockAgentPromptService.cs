@@ -181,6 +181,33 @@ public partial class MockAgentPromptService : IAgentPromptService
         return overridePrompt;
     }
 
+    public async Task<AgentPrompt> RemoveOverrideAsync(string promptId)
+    {
+        _logger.LogDebug("[Mock] RemoveOverride {PromptId}", promptId);
+
+        var prompt = _dataStore.GetAgentPrompt(promptId)
+            ?? throw new InvalidOperationException($"Agent prompt with ID '{promptId}' not found.");
+
+        if (prompt.ProjectId == null)
+        {
+            throw new InvalidOperationException("Cannot remove override: prompt is not a project prompt.");
+        }
+
+        // Find the global prompt with the same name
+        var globalPrompt = GetAllPrompts()
+            .FirstOrDefault(p => p.Name.Equals(prompt.Name, StringComparison.OrdinalIgnoreCase));
+
+        if (globalPrompt == null)
+        {
+            throw new InvalidOperationException($"Cannot remove override: prompt '{prompt.Name}' is not an override of a global prompt.");
+        }
+
+        // Delete the project prompt
+        await _dataStore.RemoveAgentPromptAsync(promptId);
+
+        return globalPrompt;
+    }
+
     public string? RenderTemplate(string? template, PromptContext context)
     {
         if (string.IsNullOrEmpty(template))

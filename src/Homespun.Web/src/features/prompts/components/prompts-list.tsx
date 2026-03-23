@@ -11,6 +11,7 @@ import { useUpdatePrompt } from '../hooks/use-update-prompt'
 import { useDeletePrompt } from '../hooks/use-delete-prompt'
 import { useApplyPromptChanges } from '../hooks/use-apply-prompt-changes'
 import { useCreateOverride } from '../hooks/use-create-override'
+import { useRemoveOverride } from '../hooks/use-remove-override'
 import { PromptCard } from './prompt-card'
 import { PromptForm } from './prompt-form'
 import { PromptCardSkeleton } from './prompt-card-skeleton'
@@ -33,6 +34,7 @@ export function PromptsList({ projectId, isGlobal = false }: PromptsListProps) {
   const [editorMode, setEditorMode] = useState<EditorMode>('cards')
   const [editingPrompt, setEditingPrompt] = useState<AgentPrompt | null>(null)
   const [deletingPromptId, setDeletingPromptId] = useState<string | null>(null)
+  const [removingOverrideId, setRemovingOverrideId] = useState<string | null>(null)
 
   const globalPromptsQuery = useGlobalPrompts()
   const projectPromptsQuery = useProjectPrompts(projectId || '')
@@ -94,6 +96,16 @@ export function PromptsList({ projectId, isGlobal = false }: PromptsListProps) {
     },
   })
 
+  const removeOverride = useRemoveOverride({
+    projectId: projectId || '',
+    onSuccess: () => {
+      setRemovingOverrideId(null)
+    },
+    onError: () => {
+      setRemovingOverrideId(null)
+    },
+  })
+
   // Helper to determine if a prompt is a global prompt (not project-scoped and not already an override)
   const isGlobalPrompt = (prompt: AgentPrompt | null): boolean => {
     if (!prompt) return false
@@ -109,6 +121,11 @@ export function PromptsList({ projectId, isGlobal = false }: PromptsListProps) {
   const handleDelete = async (promptId: string) => {
     setDeletingPromptId(promptId)
     await deletePrompt.mutateAsync(promptId)
+  }
+
+  const handleRemoveOverride = async (promptId: string) => {
+    setRemovingOverrideId(promptId)
+    await removeOverride.mutateAsync(promptId)
   }
 
   const handleCreate = async (data: {
@@ -267,6 +284,8 @@ export function PromptsList({ projectId, isGlobal = false }: PromptsListProps) {
                   onEdit={handleEdit}
                   onDelete={handleDelete}
                   isDeleting={deletingPromptId === prompt.id}
+                  onRemoveOverride={!isGlobal && projectId ? handleRemoveOverride : undefined}
+                  isRemovingOverride={removingOverrideId === prompt.id}
                 />
               ))}
             </div>
