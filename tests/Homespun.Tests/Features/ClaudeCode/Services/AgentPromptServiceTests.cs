@@ -663,4 +663,98 @@ public class AgentPromptServiceTests
             Assert.That(prompts[0].IsOverride, Is.False);
         });
     }
+
+    [Test]
+    public async Task CreateOverrideAsync_CreatesProjectPromptFromGlobalPrompt()
+    {
+        // Arrange
+        await _service.EnsureDefaultPromptsAsync();
+        var globalBuildPrompt = _service.GetAllPrompts().First(p => p.Name == "Build");
+        var projectId = "test-project";
+
+        // Act
+        var overridePrompt = await _service.CreateOverrideAsync(globalBuildPrompt.Id, projectId, null);
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(overridePrompt, Is.Not.Null);
+            Assert.That(overridePrompt.Name, Is.EqualTo("Build"));
+            Assert.That(overridePrompt.ProjectId, Is.EqualTo(projectId));
+            Assert.That(overridePrompt.Mode, Is.EqualTo(globalBuildPrompt.Mode));
+            Assert.That(overridePrompt.InitialMessage, Is.EqualTo(globalBuildPrompt.InitialMessage));
+            Assert.That(overridePrompt.Id, Is.Not.EqualTo(globalBuildPrompt.Id)); // Should be a new ID
+        });
+    }
+
+    [Test]
+    public async Task CreateOverrideAsync_UsesProvidedInitialMessage()
+    {
+        // Arrange
+        await _service.EnsureDefaultPromptsAsync();
+        var globalBuildPrompt = _service.GetAllPrompts().First(p => p.Name == "Build");
+        var projectId = "test-project";
+        var customMessage = "Custom override message for this project";
+
+        // Act
+        var overridePrompt = await _service.CreateOverrideAsync(globalBuildPrompt.Id, projectId, customMessage);
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(overridePrompt.InitialMessage, Is.EqualTo(customMessage));
+            Assert.That(overridePrompt.Name, Is.EqualTo("Build"));
+            Assert.That(overridePrompt.Mode, Is.EqualTo(globalBuildPrompt.Mode));
+        });
+    }
+
+    [Test]
+    public async Task CreateOverrideAsync_ThrowsWhenGlobalPromptNotFound()
+    {
+        // Arrange
+        var projectId = "test-project";
+
+        // Act & Assert
+        var ex = Assert.ThrowsAsync<InvalidOperationException>(
+            () => _service.CreateOverrideAsync("non-existent-id", projectId, null));
+
+        Assert.That(ex!.Message, Does.Contain("not found"));
+    }
+
+    [Test]
+    public async Task CreateOverrideAsync_ThrowsWhenPromptIsNotGlobal()
+    {
+        // Arrange
+        var projectId = "test-project";
+        var projectPrompt = await _service.CreatePromptAsync("ProjectPrompt", "Test", SessionMode.Build, projectId);
+
+        // Act & Assert
+        var ex = Assert.ThrowsAsync<InvalidOperationException>(
+            () => _service.CreateOverrideAsync(projectPrompt.Id, "another-project", null));
+
+        Assert.That(ex!.Message, Does.Contain("global prompt"));
+    }
+
+    [Test]
+    public async Task CreateOverrideAsync_ProjectPromptAppearsInGetPromptsForProject()
+    {
+        // Arrange
+        await _service.EnsureDefaultPromptsAsync();
+        var globalBuildPrompt = _service.GetAllPrompts().First(p => p.Name == "Build");
+        var projectId = "test-project";
+
+        // Act
+        await _service.CreateOverrideAsync(globalBuildPrompt.Id, projectId, "Custom message");
+        var projectPrompts = _service.GetPromptsForProject(projectId);
+
+        // Assert
+        var buildPrompt = projectPrompts.FirstOrDefault(p => p.Name == "Build");
+        Assert.Multiple(() =>
+        {
+            Assert.That(buildPrompt, Is.Not.Null);
+            Assert.That(buildPrompt!.ProjectId, Is.EqualTo(projectId));
+            Assert.That(buildPrompt.IsOverride, Is.True);
+            Assert.That(buildPrompt.InitialMessage, Is.EqualTo("Custom message"));
+        });
+    }
 }

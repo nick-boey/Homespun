@@ -89,6 +89,11 @@ export type BulkDeleteResult = {
   error?: string | null
 }
 
+export type CancelWorkflowExecutionRequest = {
+  projectId: string | null
+  reason?: string | null
+}
+
 export const ChangeType = {
   CREATED: 'created',
   UPDATED: 'updated',
@@ -207,6 +212,23 @@ export type CloneInfo = {
   readonly folderName?: string | null
 }
 
+export const ComparisonOperator = {
+  EQUALS: 'equals',
+  NOT_EQUALS: 'notEquals',
+  GREATER_THAN: 'greaterThan',
+  LESS_THAN: 'lessThan',
+  GREATER_THAN_OR_EQUALS: 'greaterThanOrEquals',
+  LESS_THAN_OR_EQUALS: 'lessThanOrEquals',
+  CONTAINS: 'contains',
+  STARTS_WITH: 'startsWith',
+  ENDS_WITH: 'endsWith',
+  MATCHES: 'matches',
+  IS_EMPTY: 'isEmpty',
+  IS_NOT_EMPTY: 'isNotEmpty',
+} as const
+
+export type ComparisonOperator = (typeof ComparisonOperator)[keyof typeof ComparisonOperator]
+
 export const ConflictChoice = {
   USE_MAIN: 'useMain',
   USE_AGENT: 'useAgent',
@@ -297,6 +319,12 @@ export type CreateNotificationRequest = {
   deduplicationKey?: string | null
 }
 
+export type CreateOverrideRequest = {
+  globalPromptId: string | null
+  projectId: string | null
+  initialMessage?: string | null
+}
+
 export type CreateProjectRequest = {
   ownerRepo?: string | null
   name?: string | null
@@ -331,6 +359,34 @@ export type CreateSessionRequest = {
   } | null
 }
 
+export type CreateWorkflowRequest = {
+  projectId: string | null
+  title: string | null
+  description?: string | null
+  nodes?: Array<WorkflowNode> | null
+  edges?: Array<WorkflowEdge> | null
+  trigger?: WorkflowTrigger
+  settings?: WorkflowSettings
+  enabled?: boolean
+}
+
+export type EdgeCondition = {
+  type?: EdgeConditionType
+  field?: string | null
+  operator?: ComparisonOperator
+  value?: string | null
+  expression?: string | null
+}
+
+export const EdgeConditionType = {
+  FIELD_COMPARISON: 'fieldComparison',
+  CONTAINS: 'contains',
+  EXPRESSION: 'expression',
+  ALWAYS: 'always',
+} as const
+
+export type EdgeConditionType = (typeof EdgeConditionType)[keyof typeof EdgeConditionType]
+
 export type EnrichedCloneInfo = {
   clone: CloneInfo
   linkedIssueId?: string | null
@@ -355,9 +411,61 @@ export type EnrichedPrInfo = {
   htmlUrl?: string | null
 }
 
+export type EventFilter = {
+  issueTypes?: Array<string> | null
+  issueStatuses?: Array<string> | null
+  branchPatterns?: Array<string> | null
+  tags?: Array<string> | null
+  expression?: string | null
+}
+
+export type EventTriggerConfig = {
+  eventTypes?: Array<WorkflowEventType> | null
+  filter?: EventFilter
+}
+
+export type ExecuteWorkflowRequest = {
+  projectId: string | null
+  input?: {
+    [key: string]: unknown
+  } | null
+  environment?: {
+    [key: string]: string
+  } | null
+  dryRun?: boolean
+}
+
+export type ExecutionListResponse = {
+  executions?: Array<ExecutionSummary> | null
+  totalCount?: number
+}
+
 export const ExecutionMode = { SERIES: 'series', PARALLEL: 'parallel' } as const
 
 export type ExecutionMode = (typeof ExecutionMode)[keyof typeof ExecutionMode]
+
+export type ExecutionSummary = {
+  id: string | null
+  workflowId: string | null
+  workflowTitle: string | null
+  status?: WorkflowExecutionStatus
+  triggerType?: WorkflowTriggerType
+  createdAt?: string
+  startedAt?: string | null
+  completedAt?: string | null
+  durationMs?: number | null
+  triggeredBy?: string | null
+  errorMessage?: string | null
+}
+
+export type ExecutionTriggerInfo = {
+  type?: WorkflowTriggerType
+  eventType?: WorkflowEventType
+  eventData?: {
+    [key: string]: unknown
+  } | null
+  timestamp?: string
+}
 
 export type FieldChangeDto = {
   fieldName: string | null
@@ -637,6 +745,61 @@ export type MoveSeriesSiblingRequest = {
   direction?: MoveDirection
 }
 
+export type NodeExecution = {
+  nodeId: string | null
+  status?: NodeExecutionStatus
+  retryCount?: number
+  startedAt?: string | null
+  completedAt?: string | null
+  durationMs?: number | null
+  output?: {
+    [key: string]: unknown
+  } | null
+  errorMessage?: string | null
+  logs?: Array<NodeExecutionLog> | null
+  sessionId?: string | null
+}
+
+export type NodeExecutionLog = {
+  timestamp?: string
+  level?: NodeLogLevel
+  message: string | null
+  data?: {
+    [key: string]: unknown
+  } | null
+}
+
+export const NodeExecutionStatus = {
+  PENDING: 'pending',
+  QUEUED: 'queued',
+  RUNNING: 'running',
+  WAITING_FOR_INPUT: 'waitingForInput',
+  COMPLETED: 'completed',
+  FAILED: 'failed',
+  SKIPPED: 'skipped',
+  CANCELLED: 'cancelled',
+} as const
+
+export type NodeExecutionStatus = (typeof NodeExecutionStatus)[keyof typeof NodeExecutionStatus]
+
+export const NodeLogLevel = {
+  DEBUG: 'debug',
+  INFO: 'info',
+  WARNING: 'warning',
+  ERROR: 'error',
+} as const
+
+export type NodeLogLevel = (typeof NodeLogLevel)[keyof typeof NodeLogLevel]
+
+export type NodeOutput = {
+  status: string | null
+  data?: {
+    [key: string]: unknown
+  } | null
+  error?: string | null
+  completedAt?: string
+}
+
 export type NotificationDto = {
   id: string | null
   type: NotificationType
@@ -828,6 +991,12 @@ export type RunAgentRequest = {
   baseBranch?: string | null
 }
 
+export type ScheduleTriggerConfig = {
+  cronExpression: string | null
+  timezone?: string | null
+  skipIfRunning?: boolean
+}
+
 export type SearchablePrResponse = {
   number?: number
   title?: string | null
@@ -901,6 +1070,22 @@ export type SetParentRequest = {
   projectId: string | null
   parentIssueId: string | null
   addToExisting?: boolean
+}
+
+export type StoredWorkflowContext = {
+  executionId: string | null
+  workflowId: string | null
+  workingDirectory: string | null
+  triggerData?: unknown
+  nodeOutputs?: {
+    [key: string]: NodeOutput
+  } | null
+  variables?: {
+    [key: string]: unknown
+  } | null
+  artifacts?: Array<WorkflowArtifact> | null
+  createdAt?: string
+  updatedAt?: string
 }
 
 export type SyncResult = {
@@ -1006,6 +1191,17 @@ export type UpdateUserEmailRequest = {
   email: string | null
 }
 
+export type UpdateWorkflowRequest = {
+  projectId: string | null
+  title?: string | null
+  description?: string | null
+  nodes?: Array<WorkflowNode> | null
+  edges?: Array<WorkflowEdge> | null
+  trigger?: WorkflowTrigger
+  settings?: WorkflowSettings
+  enabled?: boolean | null
+}
+
 export type UserQuestion = {
   question: string | null
   header: string | null
@@ -1015,6 +1211,12 @@ export type UserQuestion = {
 
 export type UserSettingsResponse = {
   userEmail?: string | null
+}
+
+export type WebhookTriggerConfig = {
+  secret?: string | null
+  contentType?: string | null
+  pathParameters?: Array<string> | null
 }
 
 export type WorkerContainerDto = {
@@ -1032,6 +1234,192 @@ export type WorkerContainerDto = {
   hasPendingQuestion?: boolean
   hasPendingPlanApproval?: boolean
 }
+
+export type WorkflowArtifact = {
+  name: string | null
+  path: string | null
+  type: string | null
+  size?: number | null
+  contentType?: string | null
+  createdAt?: string
+  metadata?: {
+    [key: string]: unknown
+  } | null
+}
+
+export type WorkflowContext = {
+  input?: {
+    [key: string]: unknown
+  } | null
+  variables?: {
+    [key: string]: unknown
+  } | null
+  nodeOutputs?: {
+    [key: string]: NodeOutput
+  } | null
+  environment?: {
+    [key: string]: string
+  } | null
+  secrets?: {
+    [key: string]: string
+  } | null
+}
+
+export type WorkflowDefinition = {
+  id: string | null
+  projectId: string | null
+  title: string | null
+  description?: string | null
+  nodes?: Array<WorkflowNode> | null
+  edges?: Array<WorkflowEdge> | null
+  trigger?: WorkflowTrigger
+  settings?: WorkflowSettings
+  enabled?: boolean
+  version?: number
+  createdAt?: string
+  updatedAt?: string
+  createdBy?: string | null
+}
+
+export type WorkflowEdge = {
+  id: string | null
+  source: string | null
+  target: string | null
+  sourceHandle?: string | null
+  targetHandle?: string | null
+  type?: WorkflowEdgeType
+  label?: string | null
+  condition?: EdgeCondition
+  animated?: boolean
+}
+
+export const WorkflowEdgeType = {
+  DEFAULT: 'default',
+  CONDITIONAL: 'conditional',
+  ERROR: 'error',
+} as const
+
+export type WorkflowEdgeType = (typeof WorkflowEdgeType)[keyof typeof WorkflowEdgeType]
+
+export const WorkflowEventType = {
+  ISSUE_CREATED: 'issueCreated',
+  ISSUE_STATUS_CHANGED: 'issueStatusChanged',
+  ISSUE_ASSIGNED: 'issueAssigned',
+  PULL_REQUEST_OPENED: 'pullRequestOpened',
+  PULL_REQUEST_MERGED: 'pullRequestMerged',
+  PULL_REQUEST_REVIEW_REQUESTED: 'pullRequestReviewRequested',
+  PULL_REQUEST_CHECKS_COMPLETED: 'pullRequestChecksCompleted',
+  AGENT_SESSION_COMPLETED: 'agentSessionCompleted',
+  AGENT_SESSION_FAILED: 'agentSessionFailed',
+  BRANCH_CREATED: 'branchCreated',
+  BRANCH_MERGED: 'branchMerged',
+  CUSTOM: 'custom',
+} as const
+
+export type WorkflowEventType = (typeof WorkflowEventType)[keyof typeof WorkflowEventType]
+
+export type WorkflowExecution = {
+  id: string | null
+  workflowId: string | null
+  workflowVersion?: number
+  projectId: string | null
+  status?: WorkflowExecutionStatus
+  trigger: ExecutionTriggerInfo
+  context?: WorkflowContext
+  nodeExecutions?: Array<NodeExecution> | null
+  createdAt?: string
+  startedAt?: string | null
+  completedAt?: string | null
+  errorMessage?: string | null
+  triggeredBy?: string | null
+}
+
+export type WorkflowExecutionResponse = {
+  executionId: string | null
+  workflowId: string | null
+  status?: WorkflowExecutionStatus
+  message?: string | null
+}
+
+export const WorkflowExecutionStatus = {
+  QUEUED: 'queued',
+  RUNNING: 'running',
+  PAUSED: 'paused',
+  COMPLETED: 'completed',
+  FAILED: 'failed',
+  CANCELLED: 'cancelled',
+  TIMED_OUT: 'timedOut',
+} as const
+
+export type WorkflowExecutionStatus =
+  (typeof WorkflowExecutionStatus)[keyof typeof WorkflowExecutionStatus]
+
+export type WorkflowListResponse = {
+  workflows?: Array<WorkflowSummary> | null
+  totalCount?: number
+}
+
+export type WorkflowNode = {
+  id: string | null
+  label: string | null
+  type?: WorkflowNodeType
+  positionX?: number
+  positionY?: number
+  config?: unknown
+  description?: string | null
+  disabled?: boolean
+  timeoutSeconds?: number | null
+}
+
+export const WorkflowNodeType = {
+  START: 'start',
+  AGENT: 'agent',
+  GATE: 'gate',
+  ACTION: 'action',
+  TRANSFORM: 'transform',
+  END: 'end',
+} as const
+
+export type WorkflowNodeType = (typeof WorkflowNodeType)[keyof typeof WorkflowNodeType]
+
+export type WorkflowSettings = {
+  maxConcurrentNodes?: number
+  defaultTimeoutSeconds?: number
+  continueOnFailure?: boolean
+  retryOnFailure?: boolean
+  maxRetryAttempts?: number
+  retryDelaySeconds?: number
+}
+
+export type WorkflowSummary = {
+  id: string | null
+  title: string | null
+  description?: string | null
+  enabled?: boolean
+  triggerType?: WorkflowTriggerType
+  nodeCount?: number
+  version?: number
+  updatedAt?: string
+  lastExecutionStatus?: WorkflowExecutionStatus
+  lastExecutedAt?: string | null
+}
+
+export type WorkflowTrigger = {
+  type?: WorkflowTriggerType
+  enabled?: boolean
+  eventConfig?: EventTriggerConfig
+  scheduleConfig?: ScheduleTriggerConfig
+  webhookConfig?: WebhookTriggerConfig
+}
+
+export const WorkflowTriggerType = {
+  MANUAL: 'manual',
+  EVENT: 'event',
+  SCHEDULED: 'scheduled',
+  WEBHOOK: 'webhook',
+} as const
+
+export type WorkflowTriggerType = (typeof WorkflowTriggerType)[keyof typeof WorkflowTriggerType]
 
 export type BranchInfoWritable = {
   name?: string | null
@@ -1311,6 +1699,37 @@ export type GetApiAgentPromptsIssueAgentPromptsResponses = {
 
 export type GetApiAgentPromptsIssueAgentPromptsResponse =
   GetApiAgentPromptsIssueAgentPromptsResponses[keyof GetApiAgentPromptsIssueAgentPromptsResponses]
+
+export type PostApiAgentPromptsCreateOverrideData = {
+  body?: CreateOverrideRequest
+  path?: never
+  query?: never
+  url: '/api/agent-prompts/create-override'
+}
+
+export type PostApiAgentPromptsCreateOverrideErrors = {
+  /**
+   * Bad Request
+   */
+  400: ProblemDetails
+  /**
+   * Not Found
+   */
+  404: ProblemDetails
+}
+
+export type PostApiAgentPromptsCreateOverrideError =
+  PostApiAgentPromptsCreateOverrideErrors[keyof PostApiAgentPromptsCreateOverrideErrors]
+
+export type PostApiAgentPromptsCreateOverrideResponses = {
+  /**
+   * Created
+   */
+  201: AgentPrompt
+}
+
+export type PostApiAgentPromptsCreateOverrideResponse =
+  PostApiAgentPromptsCreateOverrideResponses[keyof PostApiAgentPromptsCreateOverrideResponses]
 
 export type PostApiClientTelemetryData = {
   body?: ClientTelemetryBatch
@@ -3944,3 +4363,307 @@ export type GetApiTelemetryConfigResponses = {
 
 export type GetApiTelemetryConfigResponse =
   GetApiTelemetryConfigResponses[keyof GetApiTelemetryConfigResponses]
+
+export type PostApiWorkflowsData = {
+  body?: CreateWorkflowRequest
+  path?: never
+  query?: never
+  url: '/api/workflows'
+}
+
+export type PostApiWorkflowsErrors = {
+  /**
+   * Bad Request
+   */
+  400: ProblemDetails
+  /**
+   * Not Found
+   */
+  404: ProblemDetails
+}
+
+export type PostApiWorkflowsError = PostApiWorkflowsErrors[keyof PostApiWorkflowsErrors]
+
+export type PostApiWorkflowsResponses = {
+  /**
+   * Created
+   */
+  201: WorkflowDefinition
+}
+
+export type PostApiWorkflowsResponse = PostApiWorkflowsResponses[keyof PostApiWorkflowsResponses]
+
+export type GetApiProjectsByProjectIdWorkflowsData = {
+  body?: never
+  path: {
+    projectId: string
+  }
+  query?: never
+  url: '/api/projects/{projectId}/workflows'
+}
+
+export type GetApiProjectsByProjectIdWorkflowsErrors = {
+  /**
+   * Not Found
+   */
+  404: ProblemDetails
+}
+
+export type GetApiProjectsByProjectIdWorkflowsError =
+  GetApiProjectsByProjectIdWorkflowsErrors[keyof GetApiProjectsByProjectIdWorkflowsErrors]
+
+export type GetApiProjectsByProjectIdWorkflowsResponses = {
+  /**
+   * OK
+   */
+  200: WorkflowListResponse
+}
+
+export type GetApiProjectsByProjectIdWorkflowsResponse =
+  GetApiProjectsByProjectIdWorkflowsResponses[keyof GetApiProjectsByProjectIdWorkflowsResponses]
+
+export type DeleteApiWorkflowsByWorkflowIdData = {
+  body?: never
+  path: {
+    workflowId: string
+  }
+  query?: {
+    projectId?: string
+  }
+  url: '/api/workflows/{workflowId}'
+}
+
+export type DeleteApiWorkflowsByWorkflowIdErrors = {
+  /**
+   * Not Found
+   */
+  404: ProblemDetails
+}
+
+export type DeleteApiWorkflowsByWorkflowIdError =
+  DeleteApiWorkflowsByWorkflowIdErrors[keyof DeleteApiWorkflowsByWorkflowIdErrors]
+
+export type DeleteApiWorkflowsByWorkflowIdResponses = {
+  /**
+   * No Content
+   */
+  204: void
+}
+
+export type DeleteApiWorkflowsByWorkflowIdResponse =
+  DeleteApiWorkflowsByWorkflowIdResponses[keyof DeleteApiWorkflowsByWorkflowIdResponses]
+
+export type GetApiWorkflowsByWorkflowIdData = {
+  body?: never
+  path: {
+    workflowId: string
+  }
+  query?: {
+    projectId?: string
+  }
+  url: '/api/workflows/{workflowId}'
+}
+
+export type GetApiWorkflowsByWorkflowIdErrors = {
+  /**
+   * Not Found
+   */
+  404: ProblemDetails
+}
+
+export type GetApiWorkflowsByWorkflowIdError =
+  GetApiWorkflowsByWorkflowIdErrors[keyof GetApiWorkflowsByWorkflowIdErrors]
+
+export type GetApiWorkflowsByWorkflowIdResponses = {
+  /**
+   * OK
+   */
+  200: WorkflowDefinition
+}
+
+export type GetApiWorkflowsByWorkflowIdResponse =
+  GetApiWorkflowsByWorkflowIdResponses[keyof GetApiWorkflowsByWorkflowIdResponses]
+
+export type PutApiWorkflowsByWorkflowIdData = {
+  body?: UpdateWorkflowRequest
+  path: {
+    workflowId: string
+  }
+  query?: never
+  url: '/api/workflows/{workflowId}'
+}
+
+export type PutApiWorkflowsByWorkflowIdErrors = {
+  /**
+   * Not Found
+   */
+  404: ProblemDetails
+}
+
+export type PutApiWorkflowsByWorkflowIdError =
+  PutApiWorkflowsByWorkflowIdErrors[keyof PutApiWorkflowsByWorkflowIdErrors]
+
+export type PutApiWorkflowsByWorkflowIdResponses = {
+  /**
+   * OK
+   */
+  200: WorkflowDefinition
+}
+
+export type PutApiWorkflowsByWorkflowIdResponse =
+  PutApiWorkflowsByWorkflowIdResponses[keyof PutApiWorkflowsByWorkflowIdResponses]
+
+export type PostApiWorkflowsByWorkflowIdExecuteData = {
+  body?: ExecuteWorkflowRequest
+  path: {
+    workflowId: string
+  }
+  query?: never
+  url: '/api/workflows/{workflowId}/execute'
+}
+
+export type PostApiWorkflowsByWorkflowIdExecuteErrors = {
+  /**
+   * Bad Request
+   */
+  400: ProblemDetails
+  /**
+   * Not Found
+   */
+  404: ProblemDetails
+}
+
+export type PostApiWorkflowsByWorkflowIdExecuteError =
+  PostApiWorkflowsByWorkflowIdExecuteErrors[keyof PostApiWorkflowsByWorkflowIdExecuteErrors]
+
+export type PostApiWorkflowsByWorkflowIdExecuteResponses = {
+  /**
+   * Accepted
+   */
+  202: WorkflowExecutionResponse
+}
+
+export type PostApiWorkflowsByWorkflowIdExecuteResponse =
+  PostApiWorkflowsByWorkflowIdExecuteResponses[keyof PostApiWorkflowsByWorkflowIdExecuteResponses]
+
+export type GetApiWorkflowsByWorkflowIdExecutionsData = {
+  body?: never
+  path: {
+    workflowId: string
+  }
+  query?: {
+    projectId?: string
+  }
+  url: '/api/workflows/{workflowId}/executions'
+}
+
+export type GetApiWorkflowsByWorkflowIdExecutionsErrors = {
+  /**
+   * Not Found
+   */
+  404: ProblemDetails
+}
+
+export type GetApiWorkflowsByWorkflowIdExecutionsError =
+  GetApiWorkflowsByWorkflowIdExecutionsErrors[keyof GetApiWorkflowsByWorkflowIdExecutionsErrors]
+
+export type GetApiWorkflowsByWorkflowIdExecutionsResponses = {
+  /**
+   * OK
+   */
+  200: ExecutionListResponse
+}
+
+export type GetApiWorkflowsByWorkflowIdExecutionsResponse =
+  GetApiWorkflowsByWorkflowIdExecutionsResponses[keyof GetApiWorkflowsByWorkflowIdExecutionsResponses]
+
+export type GetApiExecutionsByExecutionIdData = {
+  body?: never
+  path: {
+    executionId: string
+  }
+  query?: {
+    projectId?: string
+  }
+  url: '/api/executions/{executionId}'
+}
+
+export type GetApiExecutionsByExecutionIdErrors = {
+  /**
+   * Not Found
+   */
+  404: ProblemDetails
+}
+
+export type GetApiExecutionsByExecutionIdError =
+  GetApiExecutionsByExecutionIdErrors[keyof GetApiExecutionsByExecutionIdErrors]
+
+export type GetApiExecutionsByExecutionIdResponses = {
+  /**
+   * OK
+   */
+  200: WorkflowExecution
+}
+
+export type GetApiExecutionsByExecutionIdResponse =
+  GetApiExecutionsByExecutionIdResponses[keyof GetApiExecutionsByExecutionIdResponses]
+
+export type PostApiExecutionsByExecutionIdCancelData = {
+  body?: CancelWorkflowExecutionRequest
+  path: {
+    executionId: string
+  }
+  query?: never
+  url: '/api/executions/{executionId}/cancel'
+}
+
+export type PostApiExecutionsByExecutionIdCancelErrors = {
+  /**
+   * Not Found
+   */
+  404: ProblemDetails
+}
+
+export type PostApiExecutionsByExecutionIdCancelError =
+  PostApiExecutionsByExecutionIdCancelErrors[keyof PostApiExecutionsByExecutionIdCancelErrors]
+
+export type PostApiExecutionsByExecutionIdCancelResponses = {
+  /**
+   * OK
+   */
+  200: WorkflowExecutionResponse
+}
+
+export type PostApiExecutionsByExecutionIdCancelResponse =
+  PostApiExecutionsByExecutionIdCancelResponses[keyof PostApiExecutionsByExecutionIdCancelResponses]
+
+export type GetApiExecutionsByExecutionIdContextData = {
+  body?: never
+  path: {
+    executionId: string
+  }
+  query?: {
+    projectId?: string
+  }
+  url: '/api/executions/{executionId}/context'
+}
+
+export type GetApiExecutionsByExecutionIdContextErrors = {
+  /**
+   * Not Found
+   */
+  404: ProblemDetails
+}
+
+export type GetApiExecutionsByExecutionIdContextError =
+  GetApiExecutionsByExecutionIdContextErrors[keyof GetApiExecutionsByExecutionIdContextErrors]
+
+export type GetApiExecutionsByExecutionIdContextResponses = {
+  /**
+   * OK
+   */
+  200: StoredWorkflowContext
+}
+
+export type GetApiExecutionsByExecutionIdContextResponse =
+  GetApiExecutionsByExecutionIdContextResponses[keyof GetApiExecutionsByExecutionIdContextResponses]

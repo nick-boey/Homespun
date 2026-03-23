@@ -10,6 +10,7 @@ import { useCreatePrompt } from '../hooks/use-create-prompt'
 import { useUpdatePrompt } from '../hooks/use-update-prompt'
 import { useDeletePrompt } from '../hooks/use-delete-prompt'
 import { useApplyPromptChanges } from '../hooks/use-apply-prompt-changes'
+import { useCreateOverride } from '../hooks/use-create-override'
 import { PromptCard } from './prompt-card'
 import { PromptForm } from './prompt-form'
 import { PromptCardSkeleton } from './prompt-card-skeleton'
@@ -85,6 +86,21 @@ export function PromptsList({ projectId, isGlobal = false }: PromptsListProps) {
     isGlobal,
   })
 
+  const createOverride = useCreateOverride({
+    projectId: projectId || '',
+    onSuccess: () => {
+      setViewMode('list')
+      setEditingPrompt(null)
+    },
+  })
+
+  // Helper to determine if a prompt is a global prompt (not project-scoped and not already an override)
+  const isGlobalPrompt = (prompt: AgentPrompt | null): boolean => {
+    if (!prompt) return false
+    // A global prompt has no projectId and is not marked as an override
+    return !prompt.projectId && !prompt.isOverride
+  }
+
   const handleEdit = (prompt: AgentPrompt) => {
     setEditingPrompt(prompt)
     setViewMode('edit')
@@ -114,12 +130,23 @@ export function PromptsList({ projectId, isGlobal = false }: PromptsListProps) {
     mode: SessionMode
   }) => {
     if (!editingPrompt?.id) return
-    await updatePrompt.mutateAsync({
-      id: editingPrompt.id,
-      name: data.name,
-      initialMessage: data.initialMessage,
-      mode: data.mode,
-    })
+
+    // If we're on the project prompts page and editing a global prompt,
+    // create an override instead of updating the global prompt directly
+    if (!isGlobal && projectId && isGlobalPrompt(editingPrompt)) {
+      await createOverride.mutateAsync({
+        globalPromptId: editingPrompt.id,
+        projectId: projectId,
+        initialMessage: data.initialMessage,
+      })
+    } else {
+      await updatePrompt.mutateAsync({
+        id: editingPrompt.id,
+        name: data.name,
+        initialMessage: data.initialMessage,
+        mode: data.mode,
+      })
+    }
   }
 
   const handleCancel = () => {
@@ -175,11 +202,14 @@ export function PromptsList({ projectId, isGlobal = false }: PromptsListProps) {
   }
 
   if (viewMode === 'edit' && editingPrompt) {
+    const isCreatingOverride = !isGlobal && projectId && isGlobalPrompt(editingPrompt)
     return (
       <div className="space-y-6">
         <div className="flex items-center gap-2">
           <MessageSquare className="h-5 w-5" />
-          <h2 className="text-lg font-semibold">Edit Prompt</h2>
+          <h2 className="text-lg font-semibold">
+            {isCreatingOverride ? 'Create Project Override' : 'Edit Prompt'}
+          </h2>
         </div>
         <Card>
           <CardContent className="pt-6">
@@ -187,7 +217,7 @@ export function PromptsList({ projectId, isGlobal = false }: PromptsListProps) {
               prompt={editingPrompt}
               onSubmit={handleUpdate}
               onCancel={handleCancel}
-              isSubmitting={updatePrompt.isPending}
+              isSubmitting={updatePrompt.isPending || createOverride.isPending}
             />
           </CardContent>
         </Card>

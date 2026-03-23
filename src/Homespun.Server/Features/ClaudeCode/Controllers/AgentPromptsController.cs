@@ -107,6 +107,35 @@ public class AgentPromptsController(IAgentPromptService agentPromptService) : Co
         var prompts = agentPromptService.GetIssueAgentPrompts();
         return Ok(prompts);
     }
+
+    /// <summary>
+    /// Creates a project-scoped prompt that overrides a global prompt.
+    /// Copies the name and mode from the global prompt.
+    /// </summary>
+    [HttpPost("create-override")]
+    [ProducesResponseType<AgentPrompt>(StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<AgentPrompt>> CreateOverride([FromBody] CreateOverrideRequest request)
+    {
+        var globalPrompt = agentPromptService.GetPrompt(request.GlobalPromptId);
+        if (globalPrompt == null)
+        {
+            return NotFound($"Global prompt with ID '{request.GlobalPromptId}' not found.");
+        }
+
+        if (globalPrompt.ProjectId != null)
+        {
+            return BadRequest("Cannot create override from a non-global prompt. Only global prompts can be overridden.");
+        }
+
+        var overridePrompt = await agentPromptService.CreateOverrideAsync(
+            request.GlobalPromptId,
+            request.ProjectId,
+            request.InitialMessage);
+
+        return CreatedAtAction(nameof(GetById), new { id = overridePrompt.Id }, overridePrompt);
+    }
 }
 
 public class CreateAgentPromptRequest
@@ -122,4 +151,11 @@ public class UpdateAgentPromptRequest
     public required string Name { get; set; }
     public string? InitialMessage { get; set; }
     public SessionMode Mode { get; set; }
+}
+
+public class CreateOverrideRequest
+{
+    public required string GlobalPromptId { get; set; }
+    public required string ProjectId { get; set; }
+    public string? InitialMessage { get; set; }
 }

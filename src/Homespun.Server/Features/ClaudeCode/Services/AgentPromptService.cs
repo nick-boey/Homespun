@@ -132,6 +132,30 @@ public partial class AgentPromptService : IAgentPromptService
         await _dataStore.RemoveAgentPromptAsync(id);
     }
 
+    public async Task<AgentPrompt> CreateOverrideAsync(string globalPromptId, string projectId, string? initialMessage)
+    {
+        var globalPrompt = _dataStore.GetAgentPrompt(globalPromptId)
+            ?? throw new InvalidOperationException($"Agent prompt with ID '{globalPromptId}' not found.");
+
+        if (globalPrompt.ProjectId != null)
+        {
+            throw new InvalidOperationException("Cannot create override from a non-global prompt. Only global prompts can be overridden.");
+        }
+
+        var overridePrompt = new AgentPrompt
+        {
+            Name = globalPrompt.Name,
+            InitialMessage = initialMessage ?? globalPrompt.InitialMessage,
+            Mode = globalPrompt.Mode,
+            ProjectId = projectId,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        await _dataStore.AddAgentPromptAsync(overridePrompt);
+        return overridePrompt;
+    }
+
     public string? RenderTemplate(string? template, PromptContext context)
     {
         if (template == null)

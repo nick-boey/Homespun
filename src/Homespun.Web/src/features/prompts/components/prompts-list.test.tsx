@@ -16,6 +16,7 @@ vi.mock('@/api', async (importOriginal) => {
       putApiAgentPromptsById: vi.fn(),
       deleteApiAgentPromptsById: vi.fn(),
       getApiAgentPromptsAvailableForProjectByProjectId: vi.fn(),
+      postApiAgentPromptsCreateOverride: vi.fn(),
     },
   }
 })
@@ -180,6 +181,80 @@ describe('PromptsList', () => {
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /apply/i })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /revert/i })).toBeInTheDocument()
+    })
+  })
+
+  it('shows Create Project Override title when editing global prompt from project page', async () => {
+    const user = userEvent.setup()
+
+    // A global prompt has no projectId and isOverride is false
+    vi.mocked(AgentPrompts.getApiAgentPromptsProjectByProjectId).mockResolvedValue({
+      data: [
+        {
+          id: 'global-build',
+          name: 'Global Build Prompt',
+          initialMessage: 'Global build message',
+          mode: SessionMode.BUILD,
+          projectId: null,
+          isOverride: false,
+        },
+      ],
+    } as never)
+
+    render(<PromptsList projectId="proj-1" />, { wrapper: createWrapper() })
+
+    await waitFor(() => {
+      expect(screen.getByText('Global Build Prompt')).toBeInTheDocument()
+    })
+
+    // Click the actions dropdown first
+    const actionsButton = screen.getByRole('button', { name: /actions/i })
+    await user.click(actionsButton)
+
+    // Click the Edit menu item
+    const editMenuItem = await screen.findByRole('menuitem', { name: /edit/i })
+    await user.click(editMenuItem)
+
+    // Should show the create override title
+    await waitFor(() => {
+      expect(screen.getByText('Create Project Override')).toBeInTheDocument()
+    })
+  })
+
+  it('shows Edit Prompt title when editing project-specific prompt', async () => {
+    const user = userEvent.setup()
+
+    // A project prompt has projectId set
+    vi.mocked(AgentPrompts.getApiAgentPromptsProjectByProjectId).mockResolvedValue({
+      data: [
+        {
+          id: 'proj-build',
+          name: 'Project Build Prompt',
+          initialMessage: 'Project build message',
+          mode: SessionMode.BUILD,
+          projectId: 'proj-1',
+          isOverride: true,
+        },
+      ],
+    } as never)
+
+    render(<PromptsList projectId="proj-1" />, { wrapper: createWrapper() })
+
+    await waitFor(() => {
+      expect(screen.getByText('Project Build Prompt')).toBeInTheDocument()
+    })
+
+    // Click the actions dropdown first
+    const actionsButton = screen.getByRole('button', { name: /actions/i })
+    await user.click(actionsButton)
+
+    // Click the Edit menu item
+    const editMenuItem = await screen.findByRole('menuitem', { name: /edit/i })
+    await user.click(editMenuItem)
+
+    // Should show regular edit title
+    await waitFor(() => {
+      expect(screen.getByText('Edit Prompt')).toBeInTheDocument()
     })
   })
 })
