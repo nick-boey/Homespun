@@ -719,12 +719,20 @@ public class MockFleeceService : IFleeceService
         var children = await GetChildrenAsync(projectPath, issueId, ct);
         var openChildren = children.Where(c => IsOpenStatus(c.Status)).ToList();
 
-        // Get open prior siblings
+        // Get open prior siblings (only for parents with Series execution mode)
         var openPriorSiblings = new List<Issue>();
 
         foreach (var parentRef in issue.ParentIssues)
         {
             var parentId = parentRef.ParentIssue;
+
+            // Skip prior sibling check for parallel parents — parallel children can run concurrently
+            var parentIssue = snapshot.FirstOrDefault(i => i.Id == parentId);
+            if (parentIssue?.ExecutionMode == ExecutionMode.Parallel)
+            {
+                continue;
+            }
+
             var targetSortOrder = parentRef.SortOrder ?? "0";
 
             var priorSiblings = snapshot
