@@ -161,6 +161,9 @@ public static class MockServiceExtensions
         services.AddSingleton<IStepExecutor, GateStepExecutor>();
         services.AddSingleton<IWorkflowExecutionService, WorkflowExecutionService>();
         services.AddSingleton<IWorkflowContextStore, WorkflowContextStore>();
+        services.AddSingleton<IWorkflowSessionCallback, WorkflowSessionCallback>();
+        services.AddSingleton(sp =>
+            new Lazy<IWorkflowSessionCallback>(() => sp.GetRequiredService<IWorkflowSessionCallback>()));
 
         // JSONL session loader for loading real session data
         services.AddSingleton<IJsonlSessionLoader, JsonlSessionLoader>();

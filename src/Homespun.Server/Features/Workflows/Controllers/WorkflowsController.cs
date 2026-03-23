@@ -374,5 +374,52 @@ public class WorkflowsController(
         return Ok(context);
     }
 
+    /// <summary>
+    /// Signal step completion or failure from a session.
+    /// </summary>
+    [HttpPost("executions/{executionId}/steps/{stepId}/signal")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> SignalStep(
+        string executionId,
+        string stepId,
+        [FromBody] WorkflowStepSignalRequest request)
+    {
+        var project = await projectService.GetByIdAsync(request.ProjectId);
+        if (project == null)
+        {
+            return NotFound("Project not found");
+        }
+
+        var execution = await workflowExecutionService.GetExecutionAsync(project.LocalPath, executionId);
+        if (execution == null)
+        {
+            return NotFound("Execution not found");
+        }
+
+        if (request.Status == "fail")
+        {
+            var errorMessage = request.Message ?? "Step reported failure";
+            await workflowExecutionService.OnStepFailedAsync(
+                project.LocalPath, executionId, stepId, errorMessage);
+
+            logger.LogInformation(
+                "Step {StepId} signaled failure in execution {ExecutionId}: {Message}",
+                stepId, executionId, errorMessage);
+        }
+        else
+        {
+            await workflowExecutionService.OnStepCompletedAsync(
+                project.LocalPath, executionId, stepId, request.Data);
+
+            logger.LogInformation(
+                "Step {StepId} signaled completion in execution {ExecutionId}",
+                stepId, executionId);
+        }
+
+        return Ok();
+    }
+
     #endregion
 }

@@ -1,9 +1,9 @@
 // Request DTOs matching the current AgentWorker contracts
 
-import type { WorkflowSessionContext, WorkflowCompleteInput } from "../tools/workflow-tools.js";
+import type { WorkflowSessionContext, WorkflowCompleteInput, WorkflowSignalInput } from "../tools/workflow-tools.js";
 
 // Re-export workflow types for convenience
-export type { WorkflowSessionContext, WorkflowCompleteInput };
+export type { WorkflowSessionContext, WorkflowCompleteInput, WorkflowSignalInput };
 
 export interface StartSessionRequest {
   prompt: string;
@@ -75,6 +75,7 @@ export type LastMessageType =
   | "user"
   | "stream_event"
   | "result"
+  | "workflow_signal"
   | "question_pending"
   | "plan_pending"
   | "status_resumed"

@@ -307,7 +307,7 @@ export function translateControlEvent(
       statusMessage,
       {
         workflowStatus: data.completion.status,
-        nodeId: data.workflowContext.nodeId,
+        stepId: data.workflowContext.stepId,
         executionId: data.workflowContext.executionId,
       },
     );

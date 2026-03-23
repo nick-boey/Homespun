@@ -1,6 +1,7 @@
 using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Fleece.Services;
+using Homespun.Features.Workflows.Services;
 using Homespun.Shared.Models.Sessions;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
@@ -68,7 +69,8 @@ public class ClaudeSessionServiceTests
             _messageCacheMock.Object,
             _agentExecutionServiceMock.Object,
             _agUIEventServiceMock.Object,
-            _fleeceTransitionServiceMock.Object);
+            _fleeceTransitionServiceMock.Object,
+            new Lazy<IWorkflowSessionCallback>(() => new Mock<IWorkflowSessionCallback>().Object));
     }
 
     [Test]
@@ -465,7 +467,8 @@ public class ClaudeSessionServiceMessageTests
             _messageCacheMock.Object,
             _agentExecutionServiceMock.Object,
             _agUIEventServiceMock.Object,
-            _fleeceTransitionServiceMock.Object);
+            _fleeceTransitionServiceMock.Object,
+            new Lazy<IWorkflowSessionCallback>(() => new Mock<IWorkflowSessionCallback>().Object));
     }
 
     [Test]
@@ -668,7 +671,8 @@ public class ClaudeSessionServiceModeTests
             _messageCacheMock.Object,
             _agentExecutionServiceMock.Object,
             _agUIEventServiceMock.Object,
-            _fleeceTransitionServiceMock.Object);
+            _fleeceTransitionServiceMock.Object,
+            new Lazy<IWorkflowSessionCallback>(() => new Mock<IWorkflowSessionCallback>().Object));
     }
 
     [TestCase(SessionMode.Plan)]
@@ -806,7 +810,8 @@ public class ClaudeSessionServicePlanCaptureTests
             _messageCacheMock.Object,
             _agentExecutionServiceMock.Object,
             _agUIEventServiceMock.Object,
-            _fleeceTransitionServiceMock.Object);
+            _fleeceTransitionServiceMock.Object,
+            new Lazy<IWorkflowSessionCallback>(() => new Mock<IWorkflowSessionCallback>().Object));
     }
 
     [Test]
@@ -938,7 +943,8 @@ public class ClaudeSessionServiceResumeTests
             _messageCacheMock.Object,
             _agentExecutionServiceMock.Object,
             _agUIEventServiceMock.Object,
-            _fleeceTransitionServiceMock.Object);
+            _fleeceTransitionServiceMock.Object,
+            new Lazy<IWorkflowSessionCallback>(() => new Mock<IWorkflowSessionCallback>().Object));
     }
 
     [TearDown]
@@ -1199,7 +1205,8 @@ public class ClaudeSessionServicePlanExecutionTests
             _messageCacheMock.Object,
             _agentExecutionServiceMock.Object,
             _agUIEventServiceMock.Object,
-            _fleeceTransitionServiceMock.Object);
+            _fleeceTransitionServiceMock.Object,
+            new Lazy<IWorkflowSessionCallback>(() => new Mock<IWorkflowSessionCallback>().Object));
     }
 
     /// <summary>
@@ -1406,7 +1413,8 @@ public class ClaudeSessionServiceQuestionPendingTests
             _messageCacheMock.Object,
             _agentExecutionServiceMock.Object,
             _agUIEventServiceMock.Object,
-            _fleeceTransitionServiceMock.Object);
+            _fleeceTransitionServiceMock.Object,
+            new Lazy<IWorkflowSessionCallback>(() => new Mock<IWorkflowSessionCallback>().Object));
     }
 
     private static async IAsyncEnumerable<SdkMessage> CreateSdkMessageStream(params SdkMessage[] messages)
@@ -1590,7 +1598,8 @@ public class ClaudeSessionServicePlanApprovalTests
             _messageCacheMock.Object,
             _agentExecutionServiceMock.Object,
             _agUIEventServiceMock.Object,
-            _fleeceTransitionServiceMock.Object);
+            _fleeceTransitionServiceMock.Object,
+            new Lazy<IWorkflowSessionCallback>(() => new Mock<IWorkflowSessionCallback>().Object));
     }
 
     private static async IAsyncEnumerable<SdkMessage> CreateSdkMessageStream(params SdkMessage[] messages)
@@ -2087,7 +2096,8 @@ public class ClaudeSessionServiceToolResultDetectionTests
             _messageCacheMock.Object,
             _agentExecutionServiceMock.Object,
             _agUIEventServiceMock.Object,
-            _fleeceTransitionServiceMock.Object);
+            _fleeceTransitionServiceMock.Object,
+            new Lazy<IWorkflowSessionCallback>(() => new Mock<IWorkflowSessionCallback>().Object));
     }
 
     private static async IAsyncEnumerable<SdkMessage> CreateSdkMessageStream(params SdkMessage[] messages)
@@ -2441,7 +2451,8 @@ public class ClaudeSessionServiceCloneStateTests
             _messageCacheMock.Object,
             _agentExecutionServiceMock.Object,
             _agUIEventServiceMock.Object,
-            _fleeceTransitionServiceMock.Object);
+            _fleeceTransitionServiceMock.Object,
+            new Lazy<IWorkflowSessionCallback>(() => new Mock<IWorkflowSessionCallback>().Object));
     }
 
     [Test]
@@ -2767,7 +2778,8 @@ public class ClaudeSessionServiceStatusBroadcastTests
             _messageCacheMock.Object,
             _agentExecutionServiceMock.Object,
             _agUIEventServiceMock.Object,
-            _fleeceTransitionServiceMock.Object);
+            _fleeceTransitionServiceMock.Object,
+            new Lazy<IWorkflowSessionCallback>(() => new Mock<IWorkflowSessionCallback>().Object));
     }
 
     private static async IAsyncEnumerable<SdkMessage> CreateSdkMessageStream(params SdkMessage[] messages)

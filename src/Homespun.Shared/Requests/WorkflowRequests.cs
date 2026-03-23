@@ -148,6 +148,32 @@ public class RetryWorkflowExecutionRequest
 }
 
 /// <summary>
+/// Request model for signaling step completion or failure from a session.
+/// </summary>
+public class WorkflowStepSignalRequest
+{
+    /// <summary>
+    /// The project ID.
+    /// </summary>
+    public required string ProjectId { get; set; }
+
+    /// <summary>
+    /// Step outcome: "success" or "fail".
+    /// </summary>
+    public required string Status { get; set; }
+
+    /// <summary>
+    /// Output data for workflow context.
+    /// </summary>
+    public Dictionary<string, object>? Data { get; set; }
+
+    /// <summary>
+    /// Summary of what was done.
+    /// </summary>
+    public string? Message { get; set; }
+}
+
+/// <summary>
 /// Request model for approving a gate in a workflow execution.
 /// </summary>
 public class ApproveGateRequest

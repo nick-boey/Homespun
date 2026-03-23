@@ -100,6 +100,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
     private readonly IAgentExecutionService _agentExecutionService;
     private readonly IAGUIEventService _agUIEventService;
     private readonly IFleeceIssueTransitionService _fleeceTransitionService;
+    private readonly Lazy<Features.Workflows.Services.IWorkflowSessionCallback> _workflowSessionCallback;
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _sessionCts = new();
 
     /// <summary>
@@ -134,7 +135,8 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         IMessageCacheStore messageCache,
         IAgentExecutionService agentExecutionService,
         IAGUIEventService agUIEventService,
-        IFleeceIssueTransitionService fleeceTransitionService)
+        IFleeceIssueTransitionService fleeceTransitionService,
+        Lazy<Features.Workflows.Services.IWorkflowSessionCallback> workflowSessionCallback)
     {
         _sessionStore = sessionStore;
         _logger = logger;
@@ -147,6 +149,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         _agentExecutionService = agentExecutionService;
         _agUIEventService = agUIEventService;
         _fleeceTransitionService = fleeceTransitionService;
+        _workflowSessionCallback = workflowSessionCallback;
     }
 
     /// <inheritdoc />
@@ -607,6 +610,10 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                     // Broadcast AG-UI run error event
                     var runErrorEvent = _agUIEventService.CreateRunError(errorMessage, resultMsg.Subtype);
                     await _hubContext.BroadcastAGUIRunError(sessionId, runErrorEvent);
+
+                    // Notify workflow engine of session failure
+                    await _workflowSessionCallback.Value.HandleSessionFailedAsync(
+                        sessionId, errorMessage, CancellationToken.None);
                 }
 
                 // Update metadata with the actual Claude session ID if it changed
@@ -633,6 +640,11 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                     var runId = _sessionRunIds.GetValueOrDefault(sessionId) ?? Guid.NewGuid().ToString();
                     var runFinishedEvent = _agUIEventService.CreateRunFinished(sessionId, runId, resultMsg.Result);
                     await _hubContext.BroadcastAGUIRunFinished(sessionId, runFinishedEvent);
+
+                    // Notify workflow engine of implicit session completion
+                    // (only fires if session is still registered — a workflow_signal call will have already unregistered it)
+                    await _workflowSessionCallback.Value.HandleSessionCompletedAsync(
+                        sessionId, CancellationToken.None);
                 }
                 break;
         }
@@ -761,6 +773,14 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                         await HandleExitPlanModeCompletedAsync(sessionId, session, content, CancellationToken.None);
                     }
 
+                    // Check for workflow_signal tool
+                    if (content.Type == ClaudeContentType.ToolUse &&
+                        content.ToolName == "workflow_signal" &&
+                        !string.IsNullOrEmpty(content.ToolInput))
+                    {
+                        await HandleWorkflowSignalToolAsync(sessionId, content, CancellationToken.None);
+                    }
+
                     // Capture plan content from Write tool
                     if (content.ToolName?.Equals("Write", StringComparison.OrdinalIgnoreCase) == true)
                     {
@@ -803,6 +823,14 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                 if (content.ToolName?.Equals("ExitPlanMode", StringComparison.OrdinalIgnoreCase) == true)
                 {
                     await HandleExitPlanModeCompletedAsync(sessionId, session, content, cancellationToken);
+                }
+
+                // Check for workflow_signal tool
+                if (content.Type == ClaudeContentType.ToolUse &&
+                    content.ToolName == "workflow_signal" &&
+                    !string.IsNullOrEmpty(content.ToolInput))
+                {
+                    await HandleWorkflowSignalToolAsync(sessionId, content, cancellationToken);
                 }
 
                 // Capture plan content from Write tool
@@ -1024,6 +1052,54 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         }
 
         return content;
+    }
+
+    /// <summary>
+    /// Handles a workflow_signal tool call by parsing the input and forwarding to the workflow callback.
+    /// </summary>
+    private async Task HandleWorkflowSignalToolAsync(
+        string sessionId,
+        ClaudeMessageContent toolUseContent,
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("workflow_signal tool detected in session {SessionId}", sessionId);
+
+        try
+        {
+            if (string.IsNullOrEmpty(toolUseContent.ToolInput))
+            {
+                return;
+            }
+
+            var input = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(toolUseContent.ToolInput);
+
+            var status = input.TryGetProperty("status", out var statusProp)
+                ? statusProp.GetString() ?? "success"
+                : "success";
+
+            var message = input.TryGetProperty("message", out var messageProp)
+                ? messageProp.GetString()
+                : null;
+
+            Dictionary<string, object>? data = null;
+            if (input.TryGetProperty("data", out var dataProp) && dataProp.ValueKind == System.Text.Json.JsonValueKind.Object)
+            {
+                data = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(dataProp.GetRawText());
+            }
+
+            var signal = new Features.Workflows.Services.WorkflowSignalResult
+            {
+                Status = status,
+                Data = data,
+                Message = message
+            };
+
+            await _workflowSessionCallback.Value.HandleWorkflowSignalAsync(sessionId, signal, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error handling workflow_signal tool in session {SessionId}", sessionId);
+        }
     }
 
     /// <summary>

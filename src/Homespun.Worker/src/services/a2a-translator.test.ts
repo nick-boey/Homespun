@@ -297,7 +297,7 @@ describe("A2A Translator", () => {
         data: {
           workflowContext: {
             executionId: "exec-123",
-            nodeId: "node-456",
+            stepId: "node-456",
             workflowId: "workflow-789",
             projectPath: "/path/to/project",
           },
@@ -318,7 +318,7 @@ describe("A2A Translator", () => {
       expect(status.status.state).toBe("completed");
       expect(status.final).toBe(true);
       expect((status.metadata as any)?.workflowStatus).toBe("success");
-      expect((status.metadata as any)?.nodeId).toBe("node-456");
+      expect((status.metadata as any)?.stepId).toBe("node-456");
       expect((status.metadata as any)?.executionId).toBe("exec-123");
     });
 
@@ -328,7 +328,7 @@ describe("A2A Translator", () => {
         data: {
           workflowContext: {
             executionId: "exec-123",
-            nodeId: "node-456",
+            stepId: "node-456",
             workflowId: "workflow-789",
             projectPath: "/path/to/project",
           },
@@ -399,7 +399,7 @@ describe("A2A Translator", () => {
         data: {
           workflowContext: {
             executionId: "exec-123",
-            nodeId: "node-456",
+            stepId: "node-456",
             workflowId: "workflow-789",
             projectPath: "/path/to/project",
           },
