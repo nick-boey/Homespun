@@ -63,11 +63,28 @@ public class AgentStartBackgroundService(
         var fleeceService = scope.ServiceProvider.GetRequiredService<IFleeceService>();
         var fleeceIssuesSyncService = scope.ServiceProvider.GetRequiredService<IFleeceIssuesSyncService>();
         var hubContext = scope.ServiceProvider.GetRequiredService<IHubContext<NotificationHub>>();
+        var baseBranchResolver = scope.ServiceProvider.GetRequiredService<IBaseBranchResolver>();
 
         using var cts = new CancellationTokenSource(_startupTimeout);
 
         try
         {
+            // Step 0: Resolve base branch and check for blocking issues
+            var resolution = await baseBranchResolver.ResolveBaseBranchAsync(request, cts.Token);
+            if (resolution.Error != null)
+            {
+                // Blocked by open issues - notify failure without starting
+                logger.LogWarning(
+                    "Agent start blocked for issue {IssueId}: {Error}",
+                    request.IssueId, resolution.Error);
+                startupTracker.MarkAsFailed(request.IssueId, resolution.Error);
+                await hubContext.BroadcastAgentStartFailed(
+                    request.IssueId, request.ProjectId, resolution.Error);
+                return;
+            }
+
+            var resolvedBaseBranch = resolution.BaseBranch!;
+
             // Broadcast agent starting
             await hubContext.BroadcastAgentStarting(request.IssueId, request.ProjectId, request.BranchName);
 
@@ -81,10 +98,8 @@ public class AgentStartBackgroundService(
 
             if (string.IsNullOrEmpty(clonePath))
             {
-                // Clone doesn't exist, create it
-                var baseBranch = !string.IsNullOrEmpty(request.BaseBranch)
-                    ? request.BaseBranch
-                    : request.ProjectDefaultBranch;
+                // Clone doesn't exist, create it using the resolved base branch
+                var baseBranch = resolvedBaseBranch;
 
                 // Pull latest changes on main repo before creating clone
                 logger.LogInformation(
