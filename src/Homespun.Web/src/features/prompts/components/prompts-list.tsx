@@ -3,7 +3,7 @@ import { Plus, RefreshCw, MessageSquare } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { useProjectPrompts } from '../hooks/use-project-prompts'
+import { useMergedProjectPrompts } from '../hooks/use-merged-project-prompts'
 import { useGlobalPrompts } from '../hooks/use-global-prompts'
 import { useIssueAgentPrompts } from '../hooks/use-issue-agent-prompts'
 import { useCreatePrompt } from '../hooks/use-create-prompt'
@@ -37,7 +37,7 @@ export function PromptsList({ projectId, isGlobal = false }: PromptsListProps) {
   const [removingOverrideId, setRemovingOverrideId] = useState<string | null>(null)
 
   const globalPromptsQuery = useGlobalPrompts()
-  const projectPromptsQuery = useProjectPrompts(projectId || '')
+  const mergedProjectPromptsQuery = useMergedProjectPrompts(projectId || '')
   const issueAgentPromptsQuery = useIssueAgentPrompts()
 
   const {
@@ -45,7 +45,16 @@ export function PromptsList({ projectId, isGlobal = false }: PromptsListProps) {
     isLoading,
     refetch,
     isRefetching,
-  } = isGlobal ? globalPromptsQuery : projectPromptsQuery
+  } = isGlobal ? globalPromptsQuery : mergedProjectPromptsQuery
+
+  // Split prompts into project-scoped and inherited global for visual grouping
+  const { projectPrompts, inheritedGlobalPrompts } = useMemo(() => {
+    if (isGlobal || !prompts) return { projectPrompts: prompts ?? [], inheritedGlobalPrompts: [] }
+    return {
+      projectPrompts: prompts.filter((p) => !!p.projectId || !!p.isOverride),
+      inheritedGlobalPrompts: prompts.filter((p) => !p.projectId && !p.isOverride),
+    }
+  }, [isGlobal, prompts])
 
   // Combine prompts for code editor view when on global page
   const allPromptsForCodeEditor = useMemo(() => {
@@ -276,24 +285,65 @@ export function PromptsList({ projectId, isGlobal = false }: PromptsListProps) {
 
         <TabsContent value="cards">
           {hasPrompts ? (
-            <div className="grid gap-4">
-              {prompts.map((prompt) => {
-                // On project page, hide delete for global prompts (they must be deleted from global page)
-                const canDelete = isGlobal || !!prompt.projectId || !!prompt.isOverride
-                return (
+            isGlobal ? (
+              <div className="grid gap-4">
+                {prompts.map((prompt) => (
                   <PromptCard
                     key={prompt.id}
                     prompt={prompt}
                     onEdit={handleEdit}
                     onDelete={handleDelete}
                     isDeleting={deletingPromptId === prompt.id}
-                    showDelete={canDelete}
-                    onRemoveOverride={!isGlobal && projectId ? handleRemoveOverride : undefined}
-                    isRemovingOverride={removingOverrideId === prompt.id}
+                    showDelete
                   />
-                )
-              })}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {projectPrompts.length > 0 && (
+                  <div>
+                    <h3 className="text-muted-foreground mb-3 text-sm font-medium">
+                      Project Prompts
+                    </h3>
+                    <div className="grid gap-4">
+                      {projectPrompts.map((prompt) => (
+                        <PromptCard
+                          key={prompt.id}
+                          prompt={prompt}
+                          onEdit={handleEdit}
+                          onDelete={handleDelete}
+                          isDeleting={deletingPromptId === prompt.id}
+                          showDelete
+                          onRemoveOverride={projectId ? handleRemoveOverride : undefined}
+                          isRemovingOverride={removingOverrideId === prompt.id}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {inheritedGlobalPrompts.length > 0 && (
+                  <div>
+                    <h3 className="text-muted-foreground mb-3 text-sm font-medium">
+                      Inherited Global Prompts
+                    </h3>
+                    <div className="grid gap-4">
+                      {inheritedGlobalPrompts.map((prompt) => (
+                        <PromptCard
+                          key={prompt.id}
+                          prompt={prompt}
+                          onEdit={handleEdit}
+                          onDelete={handleDelete}
+                          isDeleting={deletingPromptId === prompt.id}
+                          showDelete={false}
+                          onRemoveOverride={projectId ? handleRemoveOverride : undefined}
+                          isRemovingOverride={removingOverrideId === prompt.id}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
           ) : (
             <PromptsEmptyState />
           )}

@@ -13,10 +13,10 @@ vi.mock('@/api', async (importOriginal) => {
     AgentPrompts: {
       getApiAgentPrompts: vi.fn(),
       getApiAgentPromptsProjectByProjectId: vi.fn(),
+      getApiAgentPromptsAvailableForProjectByProjectId: vi.fn(),
       postApiAgentPrompts: vi.fn(),
       putApiAgentPromptsById: vi.fn(),
       deleteApiAgentPromptsById: vi.fn(),
-      getApiAgentPromptsAvailableForProjectByProjectId: vi.fn(),
       postApiAgentPromptsCreateOverride: vi.fn(),
     },
   }
@@ -36,7 +36,7 @@ function createWrapper() {
 
 describe('PromptsList', () => {
   it('renders loading state', () => {
-    vi.mocked(AgentPrompts.getApiAgentPromptsProjectByProjectId).mockReturnValue(
+    vi.mocked(AgentPrompts.getApiAgentPromptsAvailableForProjectByProjectId).mockReturnValue(
       new Promise(() => {}) as never
     )
 
@@ -49,7 +49,7 @@ describe('PromptsList', () => {
   })
 
   it('renders empty state when no prompts', async () => {
-    vi.mocked(AgentPrompts.getApiAgentPromptsProjectByProjectId).mockResolvedValue({
+    vi.mocked(AgentPrompts.getApiAgentPromptsAvailableForProjectByProjectId).mockResolvedValue({
       data: [],
     } as never)
 
@@ -61,10 +61,22 @@ describe('PromptsList', () => {
   })
 
   it('renders list of prompts', async () => {
-    vi.mocked(AgentPrompts.getApiAgentPromptsProjectByProjectId).mockResolvedValue({
+    vi.mocked(AgentPrompts.getApiAgentPromptsAvailableForProjectByProjectId).mockResolvedValue({
       data: [
-        { id: '1', name: 'First Prompt', initialMessage: 'Content 1', mode: SessionMode.BUILD },
-        { id: '2', name: 'Second Prompt', initialMessage: 'Content 2', mode: SessionMode.PLAN },
+        {
+          id: '1',
+          name: 'First Prompt',
+          initialMessage: 'Content 1',
+          mode: SessionMode.BUILD,
+          projectId: 'proj-1',
+        },
+        {
+          id: '2',
+          name: 'Second Prompt',
+          initialMessage: 'Content 2',
+          mode: SessionMode.PLAN,
+          projectId: 'proj-1',
+        },
       ],
     } as never)
 
@@ -78,7 +90,7 @@ describe('PromptsList', () => {
 
   it('shows create form when New Prompt is clicked', async () => {
     const user = userEvent.setup()
-    vi.mocked(AgentPrompts.getApiAgentPromptsProjectByProjectId).mockResolvedValue({
+    vi.mocked(AgentPrompts.getApiAgentPromptsAvailableForProjectByProjectId).mockResolvedValue({
       data: [],
     } as never)
 
@@ -95,11 +107,11 @@ describe('PromptsList', () => {
   })
 
   it('shows count when prompts exist', async () => {
-    vi.mocked(AgentPrompts.getApiAgentPromptsProjectByProjectId).mockResolvedValue({
+    vi.mocked(AgentPrompts.getApiAgentPromptsAvailableForProjectByProjectId).mockResolvedValue({
       data: [
-        { id: '1', name: 'First', mode: SessionMode.BUILD },
-        { id: '2', name: 'Second', mode: SessionMode.PLAN },
-        { id: '3', name: 'Third', mode: SessionMode.BUILD },
+        { id: '1', name: 'First', mode: SessionMode.BUILD, projectId: 'proj-1' },
+        { id: '2', name: 'Second', mode: SessionMode.PLAN, projectId: 'proj-1' },
+        { id: '3', name: 'Third', mode: SessionMode.BUILD, projectId: 'proj-1' },
       ],
     } as never)
 
@@ -111,7 +123,7 @@ describe('PromptsList', () => {
   })
 
   it('renders Cards and Code tabs', async () => {
-    vi.mocked(AgentPrompts.getApiAgentPromptsProjectByProjectId).mockResolvedValue({
+    vi.mocked(AgentPrompts.getApiAgentPromptsAvailableForProjectByProjectId).mockResolvedValue({
       data: [],
     } as never)
 
@@ -124,8 +136,8 @@ describe('PromptsList', () => {
   })
 
   it('defaults to Cards view', async () => {
-    vi.mocked(AgentPrompts.getApiAgentPromptsProjectByProjectId).mockResolvedValue({
-      data: [{ id: '1', name: 'Test Prompt', mode: SessionMode.BUILD }],
+    vi.mocked(AgentPrompts.getApiAgentPromptsAvailableForProjectByProjectId).mockResolvedValue({
+      data: [{ id: '1', name: 'Test Prompt', mode: SessionMode.BUILD, projectId: 'proj-1' }],
     } as never)
 
     render(<PromptsList projectId="proj-1" />, { wrapper: createWrapper() })
@@ -142,8 +154,16 @@ describe('PromptsList', () => {
 
   it('switches to Code view on tab click', async () => {
     const user = userEvent.setup()
-    vi.mocked(AgentPrompts.getApiAgentPromptsProjectByProjectId).mockResolvedValue({
-      data: [{ id: '1', name: 'Test Prompt', initialMessage: 'Hello', mode: SessionMode.BUILD }],
+    vi.mocked(AgentPrompts.getApiAgentPromptsAvailableForProjectByProjectId).mockResolvedValue({
+      data: [
+        {
+          id: '1',
+          name: 'Test Prompt',
+          initialMessage: 'Hello',
+          mode: SessionMode.BUILD,
+          projectId: 'proj-1',
+        },
+      ],
     } as never)
 
     render(<PromptsList projectId="proj-1" />, { wrapper: createWrapper() })
@@ -165,7 +185,7 @@ describe('PromptsList', () => {
 
   it('Code view shows Apply and Revert buttons', async () => {
     const user = userEvent.setup()
-    vi.mocked(AgentPrompts.getApiAgentPromptsProjectByProjectId).mockResolvedValue({
+    vi.mocked(AgentPrompts.getApiAgentPromptsAvailableForProjectByProjectId).mockResolvedValue({
       data: [],
     } as never)
 
@@ -189,7 +209,7 @@ describe('PromptsList', () => {
     const user = userEvent.setup()
 
     // A global prompt has no projectId and isOverride is false
-    vi.mocked(AgentPrompts.getApiAgentPromptsProjectByProjectId).mockResolvedValue({
+    vi.mocked(AgentPrompts.getApiAgentPromptsAvailableForProjectByProjectId).mockResolvedValue({
       data: [
         {
           id: 'global-build',
@@ -225,7 +245,7 @@ describe('PromptsList', () => {
   it('hides delete option for global prompts on project page', async () => {
     const user = userEvent.setup()
 
-    vi.mocked(AgentPrompts.getApiAgentPromptsProjectByProjectId).mockResolvedValue({
+    vi.mocked(AgentPrompts.getApiAgentPromptsAvailableForProjectByProjectId).mockResolvedValue({
       data: [
         {
           id: 'global-build',
@@ -256,7 +276,7 @@ describe('PromptsList', () => {
   it('shows delete option for project prompts on project page', async () => {
     const user = userEvent.setup()
 
-    vi.mocked(AgentPrompts.getApiAgentPromptsProjectByProjectId).mockResolvedValue({
+    vi.mocked(AgentPrompts.getApiAgentPromptsAvailableForProjectByProjectId).mockResolvedValue({
       data: [
         {
           id: 'proj-build',
@@ -315,7 +335,7 @@ describe('PromptsList', () => {
     const user = userEvent.setup()
 
     // A project prompt has projectId set
-    vi.mocked(AgentPrompts.getApiAgentPromptsProjectByProjectId).mockResolvedValue({
+    vi.mocked(AgentPrompts.getApiAgentPromptsAvailableForProjectByProjectId).mockResolvedValue({
       data: [
         {
           id: 'proj-build',
@@ -346,5 +366,118 @@ describe('PromptsList', () => {
     await waitFor(() => {
       expect(screen.getByText('Edit Prompt')).toBeInTheDocument()
     })
+  })
+
+  it('shows section headers for project and inherited global prompts', async () => {
+    vi.mocked(AgentPrompts.getApiAgentPromptsAvailableForProjectByProjectId).mockResolvedValue({
+      data: [
+        {
+          id: 'proj-1-prompt',
+          name: 'Project Prompt',
+          initialMessage: 'Project message',
+          mode: SessionMode.BUILD,
+          projectId: 'proj-1',
+          isOverride: false,
+        },
+        {
+          id: 'override-prompt',
+          name: 'Override Prompt',
+          initialMessage: 'Override message',
+          mode: SessionMode.BUILD,
+          projectId: 'proj-1',
+          isOverride: true,
+        },
+        {
+          id: 'global-prompt',
+          name: 'Global Prompt',
+          initialMessage: 'Global message',
+          mode: SessionMode.PLAN,
+          projectId: null,
+          isOverride: false,
+        },
+      ],
+    } as never)
+
+    render(<PromptsList projectId="proj-1" />, { wrapper: createWrapper() })
+
+    await waitFor(() => {
+      expect(screen.getByText('Project Prompts')).toBeInTheDocument()
+      expect(screen.getByText('Inherited Global Prompts')).toBeInTheDocument()
+    })
+
+    // All prompts should be visible
+    expect(screen.getByText('Project Prompt')).toBeInTheDocument()
+    expect(screen.getByText('Override Prompt')).toBeInTheDocument()
+    expect(screen.getByText('Global Prompt')).toBeInTheDocument()
+  })
+
+  it('hides Project Prompts header when only global prompts exist', async () => {
+    vi.mocked(AgentPrompts.getApiAgentPromptsAvailableForProjectByProjectId).mockResolvedValue({
+      data: [
+        {
+          id: 'global-prompt',
+          name: 'Global Prompt',
+          initialMessage: 'Global message',
+          mode: SessionMode.PLAN,
+          projectId: null,
+          isOverride: false,
+        },
+      ],
+    } as never)
+
+    render(<PromptsList projectId="proj-1" />, { wrapper: createWrapper() })
+
+    await waitFor(() => {
+      expect(screen.getByText('Inherited Global Prompts')).toBeInTheDocument()
+    })
+
+    expect(screen.queryByText('Project Prompts')).not.toBeInTheDocument()
+  })
+
+  it('hides Inherited Global Prompts header when only project prompts exist', async () => {
+    vi.mocked(AgentPrompts.getApiAgentPromptsAvailableForProjectByProjectId).mockResolvedValue({
+      data: [
+        {
+          id: 'proj-prompt',
+          name: 'Project Prompt',
+          initialMessage: 'Project message',
+          mode: SessionMode.BUILD,
+          projectId: 'proj-1',
+          isOverride: false,
+        },
+      ],
+    } as never)
+
+    render(<PromptsList projectId="proj-1" />, { wrapper: createWrapper() })
+
+    await waitFor(() => {
+      expect(screen.getByText('Project Prompts')).toBeInTheDocument()
+    })
+
+    expect(screen.queryByText('Inherited Global Prompts')).not.toBeInTheDocument()
+  })
+
+  it('does not show section headers on global page', async () => {
+    vi.mocked(AgentPrompts.getApiAgentPrompts).mockResolvedValue({
+      data: [
+        {
+          id: 'global-1',
+          name: 'Global Prompt',
+          initialMessage: 'Message',
+          mode: SessionMode.BUILD,
+          projectId: null,
+          isOverride: false,
+        },
+      ],
+    } as never)
+
+    render(<PromptsList isGlobal />, { wrapper: createWrapper() })
+
+    await waitFor(() => {
+      expect(screen.getByText('Global Prompt')).toBeInTheDocument()
+    })
+
+    expect(screen.queryByText('Project Prompts')).not.toBeInTheDocument()
+    expect(screen.queryByText('Inherited Global Prompts')).not.toBeInTheDocument()
   })
 })

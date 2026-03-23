@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { AgentPrompts } from '@/api'
 import { projectPromptsQueryKey } from './use-project-prompts'
+import { mergedProjectPromptsQueryKey } from './use-merged-project-prompts'
 import { agentPromptsQueryKey } from '@/features/agents/hooks/use-agent-prompts'
 
 interface UseDeletePromptOptions {
@@ -28,6 +29,9 @@ export function useDeletePrompt(options: UseDeletePromptOptions) {
       if (options.projectId) {
         queryClient.invalidateQueries({
           queryKey: projectPromptsQueryKey(options.projectId),
+        })
+        queryClient.invalidateQueries({
+          queryKey: mergedProjectPromptsQueryKey(options.projectId),
         })
         queryClient.invalidateQueries({
           queryKey: agentPromptsQueryKey(options.projectId),

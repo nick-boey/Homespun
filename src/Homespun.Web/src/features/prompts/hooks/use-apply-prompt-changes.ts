@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { AgentPrompts } from '@/api'
 import { projectPromptsQueryKey } from './use-project-prompts'
+import { mergedProjectPromptsQueryKey } from './use-merged-project-prompts'
 import { globalPromptsQueryKey } from './use-global-prompts'
 import { issueAgentPromptsQueryKey } from './use-issue-agent-prompts'
 import { agentPromptsQueryKey } from '@/features/agents/hooks/use-agent-prompts'
@@ -75,6 +76,9 @@ export function useApplyPromptChanges(options: UseApplyPromptChangesOptions) {
       } else if (projectId) {
         queryClient.invalidateQueries({
           queryKey: projectPromptsQueryKey(projectId),
+        })
+        queryClient.invalidateQueries({
+          queryKey: mergedProjectPromptsQueryKey(projectId),
         })
         queryClient.invalidateQueries({
           queryKey: agentPromptsQueryKey(projectId),
