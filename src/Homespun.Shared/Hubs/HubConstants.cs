@@ -7,4 +7,5 @@ public static class HubConstants
 {
     public const string ClaudeCodeHub = "/hubs/claudecode";
     public const string NotificationHub = "/hubs/notifications";
+    public const string WorkflowHub = "/hubs/workflows";
 }
