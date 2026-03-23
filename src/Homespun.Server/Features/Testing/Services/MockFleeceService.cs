@@ -615,6 +615,136 @@ public class MockFleeceService : IFleeceService
         return Task.CompletedTask;
     }
 
+    public Task<Issue?> GetPriorSiblingAsync(string projectPath, string issueId, CancellationToken ct = default)
+    {
+        _logger.LogDebug("[Mock] GetPriorSibling for {IssueId} in {ProjectPath}", issueId, projectPath);
+
+        if (!_issuesByProject.TryGetValue(projectPath, out var issues))
+        {
+            return Task.FromResult<Issue?>(null);
+        }
+
+        List<Issue> snapshot;
+        lock (issues)
+        {
+            snapshot = issues.ToList();
+        }
+
+        var issue = snapshot.FirstOrDefault(i => i.Id == issueId);
+        if (issue == null || issue.ParentIssues.Count == 0)
+        {
+            return Task.FromResult<Issue?>(null);
+        }
+
+        // For each parent, find the immediate prior sibling
+        foreach (var parentRef in issue.ParentIssues)
+        {
+            var parentId = parentRef.ParentIssue;
+            var targetSortOrder = parentRef.SortOrder ?? "0";
+
+            var priorSibling = snapshot
+                .Where(i => i.Id != issueId && i.ParentIssues.Any(p => p.ParentIssue == parentId))
+                .Select(i => new
+                {
+                    Issue = i,
+                    SortOrder = i.ParentIssues.First(p => p.ParentIssue == parentId).SortOrder ?? "0"
+                })
+                .Where(s => string.Compare(s.SortOrder, targetSortOrder, StringComparison.Ordinal) < 0)
+                .OrderByDescending(s => s.SortOrder, StringComparer.Ordinal)
+                .FirstOrDefault();
+
+            if (priorSibling != null)
+            {
+                return Task.FromResult<Issue?>(priorSibling.Issue);
+            }
+        }
+
+        return Task.FromResult<Issue?>(null);
+    }
+
+    public Task<IReadOnlyList<Issue>> GetChildrenAsync(string projectPath, string issueId, CancellationToken ct = default)
+    {
+        _logger.LogDebug("[Mock] GetChildren for {IssueId} in {ProjectPath}", issueId, projectPath);
+
+        if (!_issuesByProject.TryGetValue(projectPath, out var issues))
+        {
+            return Task.FromResult<IReadOnlyList<Issue>>(Array.Empty<Issue>());
+        }
+
+        List<Issue> snapshot;
+        lock (issues)
+        {
+            snapshot = issues.ToList();
+        }
+
+        var children = snapshot
+            .Where(i => i.ParentIssues.Any(p => p.ParentIssue == issueId))
+            .Select(i => new
+            {
+                Issue = i,
+                SortOrder = i.ParentIssues.First(p => p.ParentIssue == issueId).SortOrder ?? "0"
+            })
+            .OrderBy(c => c.SortOrder, StringComparer.Ordinal)
+            .Select(c => c.Issue)
+            .ToList();
+
+        return Task.FromResult<IReadOnlyList<Issue>>(children);
+    }
+
+    public async Task<BlockingIssuesResult> GetBlockingIssuesAsync(string projectPath, string issueId, CancellationToken ct = default)
+    {
+        _logger.LogDebug("[Mock] GetBlockingIssues for {IssueId} in {ProjectPath}", issueId, projectPath);
+
+        if (!_issuesByProject.TryGetValue(projectPath, out var issues))
+        {
+            return new BlockingIssuesResult([], []);
+        }
+
+        List<Issue> snapshot;
+        lock (issues)
+        {
+            snapshot = issues.ToList();
+        }
+
+        var issue = snapshot.FirstOrDefault(i => i.Id == issueId);
+        if (issue == null)
+        {
+            return new BlockingIssuesResult([], []);
+        }
+
+        bool IsOpenStatus(IssueStatus status) =>
+            status is IssueStatus.Open or IssueStatus.Progress or IssueStatus.Review;
+
+        // Get open children
+        var children = await GetChildrenAsync(projectPath, issueId, ct);
+        var openChildren = children.Where(c => IsOpenStatus(c.Status)).ToList();
+
+        // Get open prior siblings
+        var openPriorSiblings = new List<Issue>();
+
+        foreach (var parentRef in issue.ParentIssues)
+        {
+            var parentId = parentRef.ParentIssue;
+            var targetSortOrder = parentRef.SortOrder ?? "0";
+
+            var priorSiblings = snapshot
+                .Where(i => i.Id != issueId && i.ParentIssues.Any(p => p.ParentIssue == parentId))
+                .Where(i =>
+                {
+                    var sibSortOrder = i.ParentIssues.First(p => p.ParentIssue == parentId).SortOrder ?? "0";
+                    return string.Compare(sibSortOrder, targetSortOrder, StringComparison.Ordinal) < 0;
+                })
+                .Where(i => IsOpenStatus(i.Status))
+                .ToList();
+
+            openPriorSiblings.AddRange(priorSiblings);
+        }
+
+        openPriorSiblings = openPriorSiblings.DistinctBy(i => i.Id).ToList();
+
+        return new BlockingIssuesResult(openChildren, openPriorSiblings);
+    }
+
     /// <summary>
     /// Seeds an issue directly for testing/demo purposes.
     /// </summary>

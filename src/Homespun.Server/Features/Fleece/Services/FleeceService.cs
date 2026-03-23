@@ -180,6 +180,114 @@ public sealed class FleeceService : IFleeceService, IDisposable
             .ToList();
     }
 
+    public async Task<Issue?> GetPriorSiblingAsync(string projectPath, string issueId, CancellationToken ct = default)
+    {
+        var cache = await EnsureCacheLoadedAsync(projectPath, ct);
+
+        // Get the target issue
+        if (!cache.TryGetValue(issueId, out var issue))
+        {
+            return null;
+        }
+
+        // If no parents, there can be no siblings
+        if (issue.ParentIssues.Count == 0)
+        {
+            return null;
+        }
+
+        // For each parent, find the immediate prior sibling
+        foreach (var parentRef in issue.ParentIssues)
+        {
+            var parentId = parentRef.ParentIssue;
+            var targetSortOrder = parentRef.SortOrder ?? "0";
+
+            // Find all siblings under the same parent
+            var siblings = cache.Values
+                .Where(i => i.Id != issueId && i.ParentIssues.Any(p => p.ParentIssue == parentId))
+                .Select(i => new
+                {
+                    Issue = i,
+                    SortOrder = i.ParentIssues.First(p => p.ParentIssue == parentId).SortOrder ?? "0"
+                })
+                .Where(s => string.Compare(s.SortOrder, targetSortOrder, StringComparison.Ordinal) < 0)
+                .OrderByDescending(s => s.SortOrder, StringComparer.Ordinal)
+                .FirstOrDefault();
+
+            if (siblings != null)
+            {
+                return siblings.Issue;
+            }
+        }
+
+        return null;
+    }
+
+    public async Task<IReadOnlyList<Issue>> GetChildrenAsync(string projectPath, string issueId, CancellationToken ct = default)
+    {
+        var cache = await EnsureCacheLoadedAsync(projectPath, ct);
+
+        // Find all issues that have this issueId as a parent
+        var children = cache.Values
+            .Where(i => i.ParentIssues.Any(p => p.ParentIssue == issueId))
+            .Select(i => new
+            {
+                Issue = i,
+                SortOrder = i.ParentIssues.First(p => p.ParentIssue == issueId).SortOrder ?? "0"
+            })
+            .OrderBy(c => c.SortOrder, StringComparer.Ordinal)
+            .Select(c => c.Issue)
+            .ToList();
+
+        return children;
+    }
+
+    public async Task<BlockingIssuesResult> GetBlockingIssuesAsync(string projectPath, string issueId, CancellationToken ct = default)
+    {
+        var cache = await EnsureCacheLoadedAsync(projectPath, ct);
+
+        // Get the target issue
+        if (!cache.TryGetValue(issueId, out var issue))
+        {
+            return new BlockingIssuesResult([], []);
+        }
+
+        // Define open statuses that would block
+        bool IsOpenStatus(IssueStatus status) =>
+            status is IssueStatus.Open or IssueStatus.Progress or IssueStatus.Review;
+
+        // Get open children
+        var children = await GetChildrenAsync(projectPath, issueId, ct);
+        var openChildren = children.Where(c => IsOpenStatus(c.Status)).ToList();
+
+        // Get open prior siblings
+        var openPriorSiblings = new List<Issue>();
+
+        foreach (var parentRef in issue.ParentIssues)
+        {
+            var parentId = parentRef.ParentIssue;
+            var targetSortOrder = parentRef.SortOrder ?? "0";
+
+            // Find all prior siblings under this parent
+            var priorSiblings = cache.Values
+                .Where(i => i.Id != issueId && i.ParentIssues.Any(p => p.ParentIssue == parentId))
+                .Where(i =>
+                {
+                    var sibSortOrder = i.ParentIssues.First(p => p.ParentIssue == parentId).SortOrder ?? "0";
+                    return string.Compare(sibSortOrder, targetSortOrder, StringComparison.Ordinal) < 0;
+                })
+                .Where(i => IsOpenStatus(i.Status))
+                .ToList();
+
+            openPriorSiblings.AddRange(priorSiblings);
+        }
+
+        // Remove duplicates (in case issue has multiple parents with overlapping siblings)
+        openPriorSiblings = openPriorSiblings.DistinctBy(i => i.Id).ToList();
+
+        return new BlockingIssuesResult(openChildren, openPriorSiblings);
+    }
+
     #endregion
 
     #region Write Operations

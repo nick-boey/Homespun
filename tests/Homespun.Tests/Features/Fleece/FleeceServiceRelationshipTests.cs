@@ -1,0 +1,358 @@
+using Fleece.Core.Models;
+using Homespun.Features.Fleece.Services;
+using Microsoft.Extensions.Logging;
+using Moq;
+
+namespace Homespun.Tests.Features.Fleece;
+
+[TestFixture]
+public class FleeceServiceRelationshipTests
+{
+    private string _tempDir = null!;
+    private Mock<ILogger<FleeceService>> _mockLogger = null!;
+    private Mock<IIssueSerializationQueue> _mockQueue = null!;
+    private Mock<IIssueHistoryService> _mockHistoryService = null!;
+    private FleeceService _service = null!;
+
+    [SetUp]
+    public void SetUp()
+    {
+        _tempDir = Path.Combine(Path.GetTempPath(), $"fleece-test-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(_tempDir);
+
+        _mockLogger = new Mock<ILogger<FleeceService>>();
+        _mockQueue = new Mock<IIssueSerializationQueue>();
+        _mockQueue
+            .Setup(q => q.EnqueueAsync(It.IsAny<IssueWriteOperation>(), It.IsAny<CancellationToken>()))
+            .Returns(ValueTask.CompletedTask);
+
+        _mockHistoryService = new Mock<IIssueHistoryService>();
+        _mockHistoryService
+            .Setup(h => h.RecordSnapshotAsync(
+                It.IsAny<string>(),
+                It.IsAny<IReadOnlyList<Issue>>(),
+                It.IsAny<string>(),
+                It.IsAny<string?>(),
+                It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        _service = new FleeceService(_mockQueue.Object, _mockHistoryService.Object, _mockLogger.Object);
+    }
+
+    [TearDown]
+    public void TearDown()
+    {
+        _service.Dispose();
+
+        if (Directory.Exists(_tempDir))
+        {
+            Directory.Delete(_tempDir, recursive: true);
+        }
+    }
+
+    #region GetPriorSiblingAsync Tests
+
+    [Test]
+    public async Task GetPriorSiblingAsync_WithNoSiblings_ReturnsNull()
+    {
+        // Arrange - create a single issue with a parent (but no siblings)
+        var parent = await _service.CreateIssueAsync(_tempDir, "Parent Issue", IssueType.Feature);
+        var child = await _service.CreateIssueAsync(_tempDir, "Child Issue", IssueType.Task);
+        await _service.AddParentAsync(_tempDir, child.Id, parent.Id, sortOrder: "a");
+
+        // Act
+        var result = await _service.GetPriorSiblingAsync(_tempDir, child.Id);
+
+        // Assert
+        Assert.That(result, Is.Null);
+    }
+
+    [Test]
+    public async Task GetPriorSiblingAsync_WithPriorSiblings_ReturnsImmediatePrior()
+    {
+        // Arrange - create a parent with three children in series
+        var parent = await _service.CreateIssueAsync(_tempDir, "Parent Issue", IssueType.Feature);
+        var child1 = await _service.CreateIssueAsync(_tempDir, "Child 1", IssueType.Task);
+        var child2 = await _service.CreateIssueAsync(_tempDir, "Child 2", IssueType.Task);
+        var child3 = await _service.CreateIssueAsync(_tempDir, "Child 3", IssueType.Task);
+
+        await _service.AddParentAsync(_tempDir, child1.Id, parent.Id, sortOrder: "a");
+        await _service.AddParentAsync(_tempDir, child2.Id, parent.Id, sortOrder: "b");
+        await _service.AddParentAsync(_tempDir, child3.Id, parent.Id, sortOrder: "c");
+
+        // Act - get the prior sibling of child3
+        var result = await _service.GetPriorSiblingAsync(_tempDir, child3.Id);
+
+        // Assert - should return child2 (the immediate prior sibling)
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.Id, Is.EqualTo(child2.Id));
+    }
+
+    [Test]
+    public async Task GetPriorSiblingAsync_WithOnlyLaterSiblings_ReturnsNull()
+    {
+        // Arrange - create a parent with two children, query the first one
+        var parent = await _service.CreateIssueAsync(_tempDir, "Parent Issue", IssueType.Feature);
+        var child1 = await _service.CreateIssueAsync(_tempDir, "Child 1", IssueType.Task);
+        var child2 = await _service.CreateIssueAsync(_tempDir, "Child 2", IssueType.Task);
+
+        await _service.AddParentAsync(_tempDir, child1.Id, parent.Id, sortOrder: "a");
+        await _service.AddParentAsync(_tempDir, child2.Id, parent.Id, sortOrder: "b");
+
+        // Act - get the prior sibling of child1 (which is first)
+        var result = await _service.GetPriorSiblingAsync(_tempDir, child1.Id);
+
+        // Assert - should return null because child1 has no prior sibling
+        Assert.That(result, Is.Null);
+    }
+
+    [Test]
+    public async Task GetPriorSiblingAsync_IssueWithNoParent_ReturnsNull()
+    {
+        // Arrange - create an issue without a parent
+        var orphan = await _service.CreateIssueAsync(_tempDir, "Orphan Issue", IssueType.Task);
+
+        // Act
+        var result = await _service.GetPriorSiblingAsync(_tempDir, orphan.Id);
+
+        // Assert
+        Assert.That(result, Is.Null);
+    }
+
+    [Test]
+    public async Task GetPriorSiblingAsync_NonExistentIssue_ReturnsNull()
+    {
+        // Act
+        var result = await _service.GetPriorSiblingAsync(_tempDir, "non-existent-id");
+
+        // Assert
+        Assert.That(result, Is.Null);
+    }
+
+    #endregion
+
+    #region GetChildrenAsync Tests
+
+    [Test]
+    public async Task GetChildrenAsync_WithNoChildren_ReturnsEmpty()
+    {
+        // Arrange - create a parent issue with no children
+        var parent = await _service.CreateIssueAsync(_tempDir, "Parent Issue", IssueType.Feature);
+
+        // Act
+        var result = await _service.GetChildrenAsync(_tempDir, parent.Id);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result, Is.Empty);
+    }
+
+    [Test]
+    public async Task GetChildrenAsync_WithChildren_ReturnsSortedList()
+    {
+        // Arrange - create a parent with three children in reverse sort order
+        var parent = await _service.CreateIssueAsync(_tempDir, "Parent Issue", IssueType.Feature);
+        var child1 = await _service.CreateIssueAsync(_tempDir, "Child 1", IssueType.Task);
+        var child2 = await _service.CreateIssueAsync(_tempDir, "Child 2", IssueType.Task);
+        var child3 = await _service.CreateIssueAsync(_tempDir, "Child 3", IssueType.Task);
+
+        // Add in reverse order to test sorting
+        await _service.AddParentAsync(_tempDir, child3.Id, parent.Id, sortOrder: "c");
+        await _service.AddParentAsync(_tempDir, child1.Id, parent.Id, sortOrder: "a");
+        await _service.AddParentAsync(_tempDir, child2.Id, parent.Id, sortOrder: "b");
+
+        // Act
+        var result = await _service.GetChildrenAsync(_tempDir, parent.Id);
+
+        // Assert - should be sorted by sortOrder
+        Assert.That(result, Has.Count.EqualTo(3));
+        Assert.That(result[0].Id, Is.EqualTo(child1.Id));
+        Assert.That(result[1].Id, Is.EqualTo(child2.Id));
+        Assert.That(result[2].Id, Is.EqualTo(child3.Id));
+    }
+
+    [Test]
+    public async Task GetChildrenAsync_NonExistentParent_ReturnsEmpty()
+    {
+        // Act
+        var result = await _service.GetChildrenAsync(_tempDir, "non-existent-id");
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result, Is.Empty);
+    }
+
+    #endregion
+
+    #region GetBlockingIssuesAsync Tests
+
+    [Test]
+    public async Task GetBlockingIssuesAsync_WithNoBlockers_IsBlockedFalse()
+    {
+        // Arrange - create an issue with no children and no parent (no siblings)
+        var issue = await _service.CreateIssueAsync(_tempDir, "Standalone Issue", IssueType.Task);
+
+        // Act
+        var result = await _service.GetBlockingIssuesAsync(_tempDir, issue.Id);
+
+        // Assert
+        Assert.That(result.IsBlocked, Is.False);
+        Assert.That(result.OpenChildren, Is.Empty);
+        Assert.That(result.OpenPriorSiblings, Is.Empty);
+    }
+
+    [Test]
+    public async Task GetBlockingIssuesAsync_WithOpenChildren_ReturnsOpenChildren()
+    {
+        // Arrange - create a parent with open children
+        var parent = await _service.CreateIssueAsync(_tempDir, "Parent Issue", IssueType.Feature);
+        var child1 = await _service.CreateIssueAsync(_tempDir, "Child 1 (Open)", IssueType.Task);
+        var child2 = await _service.CreateIssueAsync(_tempDir, "Child 2 (Progress)", IssueType.Task);
+
+        await _service.AddParentAsync(_tempDir, child1.Id, parent.Id, sortOrder: "a");
+        await _service.AddParentAsync(_tempDir, child2.Id, parent.Id, sortOrder: "b");
+
+        // Set child2 to Progress status
+        await _service.UpdateIssueAsync(_tempDir, child2.Id, status: IssueStatus.Progress);
+
+        // Act
+        var result = await _service.GetBlockingIssuesAsync(_tempDir, parent.Id);
+
+        // Assert
+        Assert.That(result.IsBlocked, Is.True);
+        Assert.That(result.OpenChildren, Has.Count.EqualTo(2));
+        Assert.That(result.OpenChildren.Select(c => c.Id), Contains.Item(child1.Id));
+        Assert.That(result.OpenChildren.Select(c => c.Id), Contains.Item(child2.Id));
+    }
+
+    [Test]
+    public async Task GetBlockingIssuesAsync_WithOpenPriorSiblings_ReturnsOpenPriorSiblings()
+    {
+        // Arrange - create a parent with siblings in series
+        var parent = await _service.CreateIssueAsync(_tempDir, "Parent Issue", IssueType.Feature);
+        var child1 = await _service.CreateIssueAsync(_tempDir, "Child 1 (Open)", IssueType.Task);
+        var child2 = await _service.CreateIssueAsync(_tempDir, "Child 2 (Open)", IssueType.Task);
+        var child3 = await _service.CreateIssueAsync(_tempDir, "Child 3 (Query)", IssueType.Task);
+
+        await _service.AddParentAsync(_tempDir, child1.Id, parent.Id, sortOrder: "a");
+        await _service.AddParentAsync(_tempDir, child2.Id, parent.Id, sortOrder: "b");
+        await _service.AddParentAsync(_tempDir, child3.Id, parent.Id, sortOrder: "c");
+
+        // Act - check blocking issues for child3
+        var result = await _service.GetBlockingIssuesAsync(_tempDir, child3.Id);
+
+        // Assert - child1 and child2 are open prior siblings
+        Assert.That(result.IsBlocked, Is.True);
+        Assert.That(result.OpenPriorSiblings, Has.Count.EqualTo(2));
+        Assert.That(result.OpenPriorSiblings.Select(s => s.Id), Contains.Item(child1.Id));
+        Assert.That(result.OpenPriorSiblings.Select(s => s.Id), Contains.Item(child2.Id));
+    }
+
+    [Test]
+    public async Task GetBlockingIssuesAsync_WithCompletedSiblings_NotBlocked()
+    {
+        // Arrange - create a parent with siblings where prior siblings are complete
+        var parent = await _service.CreateIssueAsync(_tempDir, "Parent Issue", IssueType.Feature);
+        var child1 = await _service.CreateIssueAsync(_tempDir, "Child 1 (Complete)", IssueType.Task);
+        var child2 = await _service.CreateIssueAsync(_tempDir, "Child 2 (Query)", IssueType.Task);
+
+        await _service.AddParentAsync(_tempDir, child1.Id, parent.Id, sortOrder: "a");
+        await _service.AddParentAsync(_tempDir, child2.Id, parent.Id, sortOrder: "b");
+
+        // Complete child1
+        await _service.UpdateIssueAsync(_tempDir, child1.Id, status: IssueStatus.Complete);
+
+        // Act - check blocking issues for child2
+        var result = await _service.GetBlockingIssuesAsync(_tempDir, child2.Id);
+
+        // Assert - no blocking siblings because child1 is complete
+        Assert.That(result.IsBlocked, Is.False);
+        Assert.That(result.OpenPriorSiblings, Is.Empty);
+    }
+
+    [Test]
+    public async Task GetBlockingIssuesAsync_WithCompletedChildren_NotBlockedByThem()
+    {
+        // Arrange - create a parent with completed children
+        var parent = await _service.CreateIssueAsync(_tempDir, "Parent Issue", IssueType.Feature);
+        var child1 = await _service.CreateIssueAsync(_tempDir, "Child 1 (Complete)", IssueType.Task);
+        var child2 = await _service.CreateIssueAsync(_tempDir, "Child 2 (Closed)", IssueType.Task);
+
+        await _service.AddParentAsync(_tempDir, child1.Id, parent.Id, sortOrder: "a");
+        await _service.AddParentAsync(_tempDir, child2.Id, parent.Id, sortOrder: "b");
+
+        // Complete/close the children
+        await _service.UpdateIssueAsync(_tempDir, child1.Id, status: IssueStatus.Complete);
+        await _service.UpdateIssueAsync(_tempDir, child2.Id, status: IssueStatus.Closed);
+
+        // Act
+        var result = await _service.GetBlockingIssuesAsync(_tempDir, parent.Id);
+
+        // Assert - no blocking children because they are complete/closed
+        Assert.That(result.IsBlocked, Is.False);
+        Assert.That(result.OpenChildren, Is.Empty);
+    }
+
+    [Test]
+    public async Task GetBlockingIssuesAsync_WithReviewStatusSiblings_IsBlocked()
+    {
+        // Arrange - create siblings where prior sibling is in Review status
+        var parent = await _service.CreateIssueAsync(_tempDir, "Parent Issue", IssueType.Feature);
+        var child1 = await _service.CreateIssueAsync(_tempDir, "Child 1 (Review)", IssueType.Task);
+        var child2 = await _service.CreateIssueAsync(_tempDir, "Child 2 (Query)", IssueType.Task);
+
+        await _service.AddParentAsync(_tempDir, child1.Id, parent.Id, sortOrder: "a");
+        await _service.AddParentAsync(_tempDir, child2.Id, parent.Id, sortOrder: "b");
+
+        // Set child1 to Review status
+        await _service.UpdateIssueAsync(_tempDir, child1.Id, status: IssueStatus.Review);
+
+        // Act
+        var result = await _service.GetBlockingIssuesAsync(_tempDir, child2.Id);
+
+        // Assert - should be blocked by child1 in Review
+        Assert.That(result.IsBlocked, Is.True);
+        Assert.That(result.OpenPriorSiblings, Has.Count.EqualTo(1));
+        Assert.That(result.OpenPriorSiblings[0].Id, Is.EqualTo(child1.Id));
+    }
+
+    [Test]
+    public async Task GetBlockingIssuesAsync_NonExistentIssue_ReturnsEmptyResult()
+    {
+        // Act
+        var result = await _service.GetBlockingIssuesAsync(_tempDir, "non-existent-id");
+
+        // Assert
+        Assert.That(result.IsBlocked, Is.False);
+        Assert.That(result.OpenChildren, Is.Empty);
+        Assert.That(result.OpenPriorSiblings, Is.Empty);
+    }
+
+    [Test]
+    public async Task GetBlockingIssuesAsync_BothOpenChildrenAndSiblings_ReturnsAll()
+    {
+        // Arrange - create a structure with both blocking children and blocking prior siblings
+        var grandparent = await _service.CreateIssueAsync(_tempDir, "Grandparent", IssueType.Feature);
+        var parent1 = await _service.CreateIssueAsync(_tempDir, "Parent 1", IssueType.Task);
+        var parent2 = await _service.CreateIssueAsync(_tempDir, "Parent 2 (Query)", IssueType.Task);
+        var child1 = await _service.CreateIssueAsync(_tempDir, "Child of Parent2", IssueType.Task);
+
+        // Set up hierarchy: grandparent -> [parent1, parent2], parent2 -> child1
+        await _service.AddParentAsync(_tempDir, parent1.Id, grandparent.Id, sortOrder: "a");
+        await _service.AddParentAsync(_tempDir, parent2.Id, grandparent.Id, sortOrder: "b");
+        await _service.AddParentAsync(_tempDir, child1.Id, parent2.Id, sortOrder: "a");
+
+        // Act - check blocking issues for parent2
+        var result = await _service.GetBlockingIssuesAsync(_tempDir, parent2.Id);
+
+        // Assert - should be blocked by both open prior sibling (parent1) and open child (child1)
+        Assert.That(result.IsBlocked, Is.True);
+        Assert.That(result.OpenPriorSiblings, Has.Count.EqualTo(1));
+        Assert.That(result.OpenPriorSiblings[0].Id, Is.EqualTo(parent1.Id));
+        Assert.That(result.OpenChildren, Has.Count.EqualTo(1));
+        Assert.That(result.OpenChildren[0].Id, Is.EqualTo(child1.Id));
+    }
+
+    #endregion
+}
