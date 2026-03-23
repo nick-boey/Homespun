@@ -236,4 +236,114 @@ describe('PromptsCodeEditor', () => {
     const textarea = screen.getByRole('textbox') as HTMLTextAreaElement
     expect(textarea.value).toBe('[]')
   })
+
+  it('shows error when trying to delete global prompts on project page', async () => {
+    const user = userEvent.setup()
+    const onApply = vi.fn().mockResolvedValue(undefined)
+
+    const promptsWithGlobal: AgentPrompt[] = [
+      {
+        id: 'global-1',
+        name: 'Global Prompt',
+        initialMessage: 'Global message',
+        mode: SessionMode.BUILD,
+        projectId: null,
+      },
+      {
+        id: 'project-1',
+        name: 'Project Prompt',
+        initialMessage: 'Project message',
+        mode: SessionMode.BUILD,
+        projectId: 'proj-1',
+      },
+    ]
+
+    render(
+      <PromptsCodeEditor
+        prompts={promptsWithGlobal}
+        onApply={onApply}
+        isApplying={false}
+        globalPromptIds={['global-1']}
+      />
+    )
+
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement
+    // Remove global prompt, keep only project prompt
+    setTextareaValue(
+      textarea,
+      '[{"id": "project-1", "name": "Project Prompt", "initialMessage": "Project message", "mode": "build"}]'
+    )
+
+    await user.click(screen.getByRole('button', { name: /apply/i }))
+
+    // Should show error about global prompts
+    await waitFor(() => {
+      expect(screen.getByText(/cannot delete global prompts/i)).toBeInTheDocument()
+    })
+
+    // onApply should NOT have been called
+    expect(onApply).not.toHaveBeenCalled()
+  })
+
+  it('allows deleting project prompts on project page', async () => {
+    const user = userEvent.setup()
+    const onApply = vi.fn().mockResolvedValue(undefined)
+
+    const promptsWithGlobal: AgentPrompt[] = [
+      {
+        id: 'global-1',
+        name: 'Global Prompt',
+        initialMessage: 'Global message',
+        mode: SessionMode.BUILD,
+        projectId: null,
+      },
+      {
+        id: 'project-1',
+        name: 'Project Prompt',
+        initialMessage: 'Project message',
+        mode: SessionMode.BUILD,
+        projectId: 'proj-1',
+      },
+    ]
+
+    render(
+      <PromptsCodeEditor
+        prompts={promptsWithGlobal}
+        onApply={onApply}
+        isApplying={false}
+        globalPromptIds={['global-1']}
+      />
+    )
+
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement
+    // Remove project prompt, keep global prompt
+    setTextareaValue(
+      textarea,
+      '[{"id": "global-1", "name": "Global Prompt", "initialMessage": "Global message", "mode": "build"}]'
+    )
+
+    await user.click(screen.getByRole('button', { name: /apply/i }))
+
+    // Should show delete confirmation (for project prompt)
+    await waitFor(() => {
+      expect(screen.getByText(/confirm deletion/i)).toBeInTheDocument()
+    })
+  })
+
+  it('allows deleting any prompt when globalPromptIds is not provided', async () => {
+    const user = userEvent.setup()
+    const onApply = vi.fn().mockResolvedValue(undefined)
+
+    render(<PromptsCodeEditor prompts={mockPrompts} onApply={onApply} isApplying={false} />)
+
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement
+    setTextareaValue(textarea, '[]')
+
+    await user.click(screen.getByRole('button', { name: /apply/i }))
+
+    // Should show confirmation dialog (no restriction on global page)
+    await waitFor(() => {
+      expect(screen.getByText(/confirm deletion/i)).toBeInTheDocument()
+    })
+  })
 })

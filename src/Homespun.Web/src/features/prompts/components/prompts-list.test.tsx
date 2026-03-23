@@ -11,6 +11,7 @@ vi.mock('@/api', async (importOriginal) => {
   return {
     ...actual,
     AgentPrompts: {
+      getApiAgentPrompts: vi.fn(),
       getApiAgentPromptsProjectByProjectId: vi.fn(),
       postApiAgentPrompts: vi.fn(),
       putApiAgentPromptsById: vi.fn(),
@@ -219,6 +220,95 @@ describe('PromptsList', () => {
     await waitFor(() => {
       expect(screen.getByText('Create Project Override')).toBeInTheDocument()
     })
+  })
+
+  it('hides delete option for global prompts on project page', async () => {
+    const user = userEvent.setup()
+
+    vi.mocked(AgentPrompts.getApiAgentPromptsProjectByProjectId).mockResolvedValue({
+      data: [
+        {
+          id: 'global-build',
+          name: 'Global Build Prompt',
+          initialMessage: 'Global build message',
+          mode: SessionMode.BUILD,
+          projectId: null,
+          isOverride: false,
+        },
+      ],
+    } as never)
+
+    render(<PromptsList projectId="proj-1" />, { wrapper: createWrapper() })
+
+    await waitFor(() => {
+      expect(screen.getByText('Global Build Prompt')).toBeInTheDocument()
+    })
+
+    // Open dropdown menu
+    await user.click(screen.getByRole('button', { name: /actions/i }))
+
+    // Delete option should NOT be visible for global prompts on project page
+    expect(screen.queryByText('Delete')).not.toBeInTheDocument()
+    // Edit should still be visible
+    expect(screen.getByText('Edit')).toBeInTheDocument()
+  })
+
+  it('shows delete option for project prompts on project page', async () => {
+    const user = userEvent.setup()
+
+    vi.mocked(AgentPrompts.getApiAgentPromptsProjectByProjectId).mockResolvedValue({
+      data: [
+        {
+          id: 'proj-build',
+          name: 'Project Build Prompt',
+          initialMessage: 'Project build message',
+          mode: SessionMode.BUILD,
+          projectId: 'proj-1',
+          isOverride: false,
+        },
+      ],
+    } as never)
+
+    render(<PromptsList projectId="proj-1" />, { wrapper: createWrapper() })
+
+    await waitFor(() => {
+      expect(screen.getByText('Project Build Prompt')).toBeInTheDocument()
+    })
+
+    // Open dropdown menu
+    await user.click(screen.getByRole('button', { name: /actions/i }))
+
+    // Delete option should be visible for project prompts
+    expect(screen.getByText('Delete')).toBeInTheDocument()
+  })
+
+  it('shows delete option for all prompts on global page', async () => {
+    const user = userEvent.setup()
+
+    vi.mocked(AgentPrompts.getApiAgentPrompts).mockResolvedValue({
+      data: [
+        {
+          id: 'global-build',
+          name: 'Global Build Prompt',
+          initialMessage: 'Global build message',
+          mode: SessionMode.BUILD,
+          projectId: null,
+          isOverride: false,
+        },
+      ],
+    } as never)
+
+    render(<PromptsList isGlobal />, { wrapper: createWrapper() })
+
+    await waitFor(() => {
+      expect(screen.getByText('Global Build Prompt')).toBeInTheDocument()
+    })
+
+    // Open dropdown menu
+    await user.click(screen.getByRole('button', { name: /actions/i }))
+
+    // Delete option should be visible on global page
+    expect(screen.getByText('Delete')).toBeInTheDocument()
   })
 
   it('shows Edit Prompt title when editing project-specific prompt', async () => {
