@@ -123,6 +123,13 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
     /// </summary>
     private readonly ConcurrentDictionary<string, string> _agentSessionIds = new();
 
+    /// <summary>
+    /// Maps session ID -> the turn ID of the currently-active SendMessageAsync invocation.
+    /// Used to prevent stale post-loop status transitions and event handlers from
+    /// overriding state set by a newer SendMessageAsync call.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, Guid> _currentMessageTurnIds = new();
+
 
     public ClaudeSessionService(
         IClaudeSessionStore sessionStore,
@@ -406,6 +413,12 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         session.Status = ClaudeSessionStatus.Running;
         await _hubContext.BroadcastSessionStatusChanged(sessionId, session.Status);
 
+        // Generate a turn ID that identifies this SendMessageAsync invocation as the
+        // currently-active one. Any previously-running invocation for this session is
+        // now superseded and its post-loop status transitions will be skipped.
+        var turnId = Guid.NewGuid();
+        _currentMessageTurnIds[sessionId] = turnId;
+
         // Cache the user message
         await _messageCache.AppendMessageAsync(sessionId, userMessage, cancellationToken);
 
@@ -426,7 +439,8 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             };
             var messageContext = new MessageProcessingContext
             {
-                CurrentAssistantMessage = currentAssistantMessage
+                CurrentAssistantMessage = currentAssistantMessage,
+                TurnId = turnId
             };
 
             // Determine if we need to start a new agent session or send a message to existing one
@@ -498,11 +512,12 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                 await _messageCache.AppendMessageAsync(sessionId, messageContext.CurrentAssistantMessage, linkedCts.Token);
             }
 
-            // Only transition to WaitingForInput if currently Running.
-            // This prevents race conditions where special states (WaitingForPlanExecution,
-            // WaitingForQuestionAnswer) were set during processing — those flows handle
-            // their own state transitions.
-            if (session.Status == ClaudeSessionStatus.Running)
+            // Only transition to WaitingForInput if currently Running AND this is still
+            // the active turn. A newer SendMessageAsync may have started (e.g. via
+            // ExecutePlanAsync), making this invocation's post-loop transition stale.
+            if (session.Status == ClaudeSessionStatus.Running &&
+                _currentMessageTurnIds.TryGetValue(sessionId, out var currentTurn) &&
+                currentTurn == turnId)
             {
                 session.Status = ClaudeSessionStatus.WaitingForInput;
                 await _hubContext.BroadcastSessionStatusChanged(sessionId, session.Status);
@@ -515,8 +530,12 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             // Don't unconditionally set Stopped here.
             // If this was an interrupt, InterruptSessionAsync already set WaitingForInput.
             // If this was a full stop, StopSessionAsync will set Stopped and remove from store.
-            // Only set WaitingForInput as a fallback if the session is still active.
-            if (_sessionStore.GetById(sessionId) != null && session.Status != ClaudeSessionStatus.Stopped)
+            // Only set WaitingForInput as a fallback if the session is still active
+            // and this is still the active message turn.
+            if (_sessionStore.GetById(sessionId) != null &&
+                session.Status != ClaudeSessionStatus.Stopped &&
+                _currentMessageTurnIds.TryGetValue(sessionId, out var cancelTurn) &&
+                cancelTurn == turnId)
             {
                 session.Status = ClaudeSessionStatus.WaitingForInput;
                 await _hubContext.BroadcastSessionStatusChanged(sessionId, session.Status);
@@ -539,6 +558,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         public ClaudeMessage CurrentAssistantMessage { get; set; } = null!;
         public bool HasCachedCurrentMessage { get; set; }
         public ContentBlockAssembler Assembler { get; } = new();
+        public Guid TurnId { get; init; }
     }
 
     /// <summary>
@@ -560,11 +580,11 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                 break;
 
             case SdkQuestionPendingMessage questionMsg:
-                await HandleQuestionPendingFromWorkerAsync(sessionId, session, questionMsg, cancellationToken);
+                await HandleQuestionPendingFromWorkerAsync(sessionId, session, questionMsg, context.TurnId, cancellationToken);
                 break;
 
             case SdkPlanPendingMessage planMsg:
-                await HandlePlanPendingFromWorkerAsync(sessionId, session, planMsg, cancellationToken);
+                await HandlePlanPendingFromWorkerAsync(sessionId, session, planMsg, context.TurnId, cancellationToken);
                 break;
 
             case SdkStreamEvent streamEvt:
@@ -1189,8 +1209,16 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         string sessionId,
         ClaudeSession session,
         SdkQuestionPendingMessage questionMsg,
+        Guid turnId,
         CancellationToken cancellationToken)
     {
+        // Guard: If this event is from a superseded message turn, ignore it
+        if (_currentMessageTurnIds.TryGetValue(sessionId, out var activeTurn) && activeTurn != turnId)
+        {
+            _logger.LogDebug("Ignoring question_pending for session {SessionId}: from superseded message turn", sessionId);
+            return;
+        }
+
         _logger.LogInformation("question_pending control event received for session {SessionId}", sessionId);
 
         try
@@ -1268,9 +1296,19 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         string sessionId,
         ClaudeSession session,
         SdkPlanPendingMessage planMsg,
+        Guid turnId,
         CancellationToken cancellationToken)
     {
         _logger.LogInformation("plan_pending control event received for session {SessionId}", sessionId);
+
+        // Guard: If this event is from a superseded message turn, ignore it.
+        // This prevents stale plan_pending events from an old SSE stream (e.g., after
+        // ClearPlanState resets PlanHasBeenApproved) from reverting status.
+        if (_currentMessageTurnIds.TryGetValue(sessionId, out var activeTurn) && activeTurn != turnId)
+        {
+            _logger.LogDebug("Ignoring plan_pending for session {SessionId}: from superseded message turn", sessionId);
+            return;
+        }
 
         // Guard: Don't process plan_pending if we're already waiting for plan execution
         // or if we've already approved a plan and are executing (Running with plan content but no pending approval)
@@ -1970,6 +2008,9 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         // Remove tool use tracking
         _sessionToolUses.TryRemove(sessionId, out _);
 
+        // Remove turn ID tracking
+        _currentMessageTurnIds.TryRemove(sessionId, out _);
+
         // Update session status and remove from store
         session.Status = ClaudeSessionStatus.Stopped;
         _sessionStore.Remove(sessionId);
@@ -2224,6 +2265,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         // Clear pending question/answer state
         _questionAnswerSources.TryRemove(sessionId, out _);
         _sessionToolUses.TryRemove(sessionId, out _);
+        _currentMessageTurnIds.TryRemove(sessionId, out _);
 
         // Update the session with the ConversationId for resumption
         session.ConversationId = restartResult.ConversationId;
@@ -2267,6 +2309,9 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
 
         // Clear agent session ID mappings
         _agentSessionIds.Clear();
+
+        // Clear turn ID tracking
+        _currentMessageTurnIds.Clear();
     }
 
     /// <summary>
