@@ -123,6 +123,7 @@ else
     builder.Services.AddScoped<ISearchablePrService, SearchablePrService>();
 
     // Fleece services (file-based issue tracking)
+    builder.Services.AddSingleton<Fleece.Core.Serialization.IJsonlSerializer, Fleece.Core.Serialization.JsonlSerializer>();
     builder.Services.AddSingleton<Fleece.Core.Services.Interfaces.IDiffService, Fleece.Core.Services.DiffService>();
     builder.Services.AddSingleton<IssueSerializationQueueService>();
     builder.Services.AddSingleton<IIssueSerializationQueue>(sp => sp.GetRequiredService<IssueSerializationQueueService>());
@@ -326,3 +327,6 @@ app.MapControllers();
 app.MapStaticAssets();
 
 app.Run();
+
+// Make the implicit Program class public so WebApplicationFactory<Program> can reference it
+public partial class Program { }
