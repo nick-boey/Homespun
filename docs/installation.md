@@ -1,374 +1,300 @@
-# Homespun installation guide
+# Installation and Setup Guide
 
-This guide covers deploying Homespun to Ubuntu virtual machines and Docker containers.
+This guide covers setting up Homespun from a fresh clone through a fully running deployment using Docker Compose.
 
 ## Table of contents
 
 - [Prerequisites](#prerequisites)
-- [VM deployment](#vm-deployment)
-- [Container deployment](#container-deployment)
-- [Post-deployment configuration](#post-deployment-configuration)
+- [Clone and initial setup](#clone-and-initial-setup)
+- [Docker Compose startup](#docker-compose-startup)
+- [Verification steps](#verification-steps)
+- [Optional: PLG logging stack](#optional-plg-logging-stack)
+- [Configuration reference](#configuration-reference)
 - [Troubleshooting](#troubleshooting)
 
 ## Prerequisites
 
-### Common requirements
+| Requirement | Version | Notes |
+|---|---|---|
+| **Docker** | 20.10+ | With BuildKit support (`DOCKER_BUILDKIT=1`) |
+| **Docker Compose** | v2+ | Included with Docker Desktop; Linux may need separate install |
+| **Git** | 2.x+ | For cloning the repository |
+| **GitHub PAT** | — | Personal access token with `repo` scope ([create one here](https://github.com/settings/tokens)) |
+| **Claude Code OAuth token** | — | Run `claude login` on your host, then copy the token from `~/.claude/.credentials.json` |
 
-- **GitHub personal access token**: Required for PR synchronization. Create one at [GitHub Settings > Developer settings > Personal access tokens](https://github.com/settings/tokens) with `repo` scope.
-- **Tailscale**: For secure remote access over your private network. Install from [tailscale.com/download](https://tailscale.com/download).
+### Optional
 
-### VM-specific requirements
+| Requirement | Notes |
+|---|---|
+| **Tailscale auth key** | For VPN-based remote access. [Generate a key](https://login.tailscale.com/admin/settings/keys). |
 
-- Ubuntu 20.04 LTS or later
-- .NET 10.0 runtime
-- `sudo` access
+> **Note:** You do not need .NET or Node.js installed on your host machine — all build tooling runs inside Docker containers.
 
-### Container-specific requirements
+## Clone and initial setup
 
-- Docker 20.10 or later
-- Docker Compose (optional, for easier management)
-
-## VM deployment
-
-Deploy Homespun as a systemd service on Ubuntu with nginx as a reverse proxy. The application binds to your Tailscale interface for secure access.
-
-### Step 1: Install prerequisites
+### 1. Clone the repository
 
 ```bash
-# Install .NET 10.0 runtime
-wget https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb -O packages-microsoft-prod.deb
-sudo dpkg -i packages-microsoft-prod.deb
-rm packages-microsoft-prod.deb
-sudo apt-get update
-sudo apt-get install -y dotnet-runtime-10.0
-
-# Install Tailscale
-curl -fsSL https://tailscale.com/install.sh | sh
-sudo tailscale up
-```
-
-### Step 2: Build and publish the application
-
-On your development machine:
-
-```bash
+git clone https://github.com/nick-boey/Homespun.git
 cd Homespun
-dotnet publish src/Homespun.Server -c Release -o ./publish
 ```
 
-Copy the `publish` folder to your VM:
+### 2. Configure environment
+
+Copy the environment template and fill in your values:
 
 ```bash
-scp -r ./publish user@your-vm:/tmp/homespun-publish
+cp .env.example .env
 ```
 
-### Step 3: Run the installation script
-
-On your VM:
+Edit `.env` and set at minimum:
 
 ```bash
-# Copy the install scripts
-sudo mkdir -p /opt/homespun
-sudo cp -r /tmp/homespun-publish/* /opt/homespun/
+# Required: GitHub personal access token (needs 'repo' scope)
+GITHUB_TOKEN=ghp_your_token_here
 
-# Copy and run the install script
-cd /path/to/Homespun/install/vm
-sudo ./install.sh
+# Required: Claude Code OAuth token
+# Run 'claude login' on the host, then copy from ~/.claude/.credentials.json
+CLAUDE_CODE_OAUTH_TOKEN=your_oauth_token_here
 ```
 
-The install script will:
-- Create a `homespun` system user
-- Configure a systemd service
-- Set up nginx as a reverse proxy
-- Bind to your Tailscale IP automatically
-
-### Step 4: Configure and start
-
-Set your GitHub token:
+**Alternative: credential file.** Instead of `.env`, you can place credentials in `~/.homespun/env`:
 
 ```bash
-sudo systemctl edit homespun
+mkdir -p ~/.homespun
+cat > ~/.homespun/env << 'EOF'
+export GITHUB_TOKEN=ghp_...
+export CLAUDE_CODE_OAUTH_TOKEN=...
+EOF
 ```
 
-Add the following (between the comment lines):
+The `run.sh` script sources this file automatically.
 
-```ini
-[Service]
-Environment=GITHUB_TOKEN=ghp_your_token_here
-```
+### 3. Create the Docker network
 
-Start the service:
+Homespun services communicate over a shared Docker network:
 
 ```bash
-sudo ./run.sh
+docker network create homespun-net
 ```
 
-### Step 5: Access Homespun
-
-Get your Tailscale IP:
+### 4. Create the data directory
 
 ```bash
-tailscale ip -4
+mkdir -p ~/.homespun-container/data
 ```
 
-Access Homespun at `http://<tailscale-ip>` from any device on your Tailscale network.
+## Docker Compose startup
 
-### Installation options
+### Quick start with `run.sh` (recommended)
 
-The install script accepts several options:
-
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--app-dir DIR` | Application directory | `/opt/homespun` |
-| `--data-dir DIR` | Data directory | `/var/lib/homespun` |
-| `--user USER` | Service user | `homespun` |
-| `--port PORT` | Internal Kestrel port | `5000` |
-
-Example:
+The `scripts/run.sh` script handles building, configuration, and startup:
 
 ```bash
-sudo ./install.sh --app-dir /home/deploy/homespun --port 8080
-```
+# Production: uses pre-built GHCR images with PLG logging
+./scripts/run.sh
 
-## Container deployment
+# Development: build images locally
+./scripts/run.sh --local
 
-Run Homespun as a Docker container with persistent storage.
+# Without PLG logging stack
+./scripts/run.sh --no-plg
 
-### Step 1: Build the image
+# Interactive mode (foreground, see logs directly)
+./scripts/run.sh -it
 
-From the repository root:
-
-```bash
-docker build -t homespun:local .
-```
-
-### Step 2: Run the container
-
-**Windows (Automated - Recommended):**
-
-Use the PowerShell script which automatically configures everything:
-
-```powershell
-.\scripts\run.ps1
-```
-
-This script will:
-- Read GitHub token from .NET user secrets
-- Mount `~/.homespun-container/data` for persistent storage
-- Mount SSH keys for git operations
-- Run in interactive mode on port 8080
-
-**Linux/macOS (Manual):**
-
-```bash
-docker run --rm -it \
-  --name homespun-local \
-  -p 8080:8080 \
-  -v ~/.homespun-container/data:/data \
-  -v ~/.ssh:/home/homespun/.ssh:ro \
-  -e GITHUB_TOKEN=ghp_your_token_here \
-  -e ASPNETCORE_ENVIRONMENT=Development \
-  homespun:local
-```
-
-**Production (Detached mode):**
-
-```bash
-docker run -d \
-  --name homespun \
-  -p 8080:8080 \
-  -v homespun-data:/data \
-  -e GITHUB_TOKEN=ghp_your_token_here \
-  -e ASPNETCORE_ENVIRONMENT=Production \
-  --restart unless-stopped \
-  homespun:local
-```
-
-**Production with pre-built image from GHCR:**
-
-Pre-built images are published to GitHub Container Registry on each release:
-
-```bash
-docker run -d \
-  --name homespun \
-  -p 8080:8080 \
-  -v homespun-data:/data \
-  -e GITHUB_TOKEN=ghp_your_token_here \
-  -e ASPNETCORE_ENVIRONMENT=Production \
-  --restart unless-stopped \
-  ghcr.io/nick-boey/homespun:latest
-```
-
-### Step 3: Verify the deployment
-
-**Interactive mode (Windows script):**
-- The application will start and display logs
-- Open http://localhost:8080 in your browser
-- Press Ctrl+C to stop
-
-**Detached mode:**
-
-```bash
-# Check container status
-docker ps
+# Stop all containers
+./scripts/run.sh --stop
 
 # View logs
-docker logs -f homespun
+./scripts/run.sh --logs
+```
 
-# Test health endpoint
+Run `./scripts/run.sh --help` for all options.
+
+**Windows users:** Use `scripts/run.ps1` instead.
+
+### Manual Docker Compose
+
+If you prefer to run Docker Compose directly:
+
+```bash
+# Build the base image first
+DOCKER_BUILDKIT=1 docker build -t homespun-base:local -f Dockerfile.base .
+
+# Build the application images
+docker compose build
+
+# Start core services (server, worker, web)
+docker compose up -d
+
+# Start with PLG logging stack
+docker compose --profile plg up -d
+```
+
+### Services overview
+
+Docker Compose runs the following services:
+
+| Service | Container | Port | Description |
+|---|---|---|---|
+| **homespun** | `homespun` | `8080` | ASP.NET backend — API, SignalR hubs, agent orchestration |
+| **worker** | `homespun-worker` | — | TypeScript sidecar for mini-prompts and lightweight AI tasks |
+| **web** | `homespun-web` | `3001` | React frontend (Vite production build served via nginx) |
+
+The **worker** container is an internal service (no host port exposed) that the server communicates with over the `homespun-net` Docker network.
+
+#### PLG logging stack (optional, `--profile plg`)
+
+| Service | Container | Port | Description |
+|---|---|---|---|
+| **loki** | `homespun-loki` | `3100` | Log aggregation backend |
+| **promtail** | `homespun-promtail` | — | Log collector (reads Docker container logs) |
+| **grafana** | `homespun-grafana` | `3000` | Log visualization dashboard (default login: `admin`/`admin`) |
+
+### Volume mounts
+
+The main `homespun` container mounts several host paths:
+
+| Mount | Purpose |
+|---|---|
+| `~/.homespun-container/data` → `/data` | Persistent data (JSON data file, Fleece issues, data protection keys) |
+| `~/.ssh` → `/home/homespun/.ssh` (read-only) | SSH keys for git operations |
+| `/var/run/docker.sock` → `/var/run/docker.sock` | Docker socket for spawning agent containers (DooD pattern) |
+
+## Verification steps
+
+### 1. Check container health
+
+```bash
+docker ps
+```
+
+All three core containers (`homespun`, `homespun-worker`, `homespun-web`) should show `Up` status. The `homespun` container should show `(healthy)` after the health check passes (~30 seconds).
+
+### 2. Confirm the server is running
+
+```bash
 curl http://localhost:8080/health
 ```
 
-### Docker Compose (recommended)
+Expected response: `Healthy` with HTTP 200.
 
-Create a `docker-compose.yml`:
+### 3. Confirm the frontend is accessible
 
-```yaml
-version: '3.8'
+Open [http://localhost:3001](http://localhost:3001) in your browser. You should see the Homespun UI.
 
-services:
-  homespun:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: homespun
-    ports:
-      - "8080:8080"
-    volumes:
-      - homespun-data:/data
-    environment:
-      - GITHUB_TOKEN=${GITHUB_TOKEN}
-      - ASPNETCORE_ENVIRONMENT=Production
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+### 4. Confirm the worker is connected
 
-volumes:
-  homespun-data:
-```
-
-Run with:
+The worker health check runs automatically. Verify it directly:
 
 ```bash
-GITHUB_TOKEN=ghp_your_token docker-compose up -d
+docker exec homespun-worker curl -s http://localhost:8080/api/health
 ```
 
-### Tailscale integration for containers
-
-To make your container accessible via Tailscale:
-
-**Option A: Host network mode (simplest)**
+You can also check that the server can reach the worker by looking at the server logs:
 
 ```bash
-docker run -d \
-  --name homespun \
-  --network host \
-  -v homespun-data:/data \
-  -e GITHUB_TOKEN=ghp_your_token_here \
-  -e ASPNETCORE_URLS=http://$(tailscale ip -4):8080 \
-  homespun:latest
+docker logs homespun 2>&1 | grep -i worker
 ```
 
-**Option B: Tailscale sidecar**
+### 5. Test GitHub connectivity
 
-Use a Tailscale container as a sidecar. See [Tailscale Docker documentation](https://tailscale.com/kb/1282/docker).
+Create a project in the UI and trigger a GitHub sync to verify your `GITHUB_TOKEN` is working correctly.
 
-## Post-deployment configuration
+## Optional: PLG logging stack
+
+To enable the Promtail-Loki-Grafana logging stack:
+
+```bash
+# Start with PLG profile
+docker compose --profile plg up -d
+
+# Or via run.sh (PLG is enabled by default)
+./scripts/run.sh
+```
+
+Access Grafana at [http://localhost:3000](http://localhost:3000) (default credentials: `admin`/`admin`). Loki is pre-configured as a data source.
+
+## Configuration reference
 
 ### Environment variables
 
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `GITHUB_TOKEN` | GitHub personal access token | Yes |
-| `HOMESPUN_DATA_PATH` | Path to data file | No (default: `~/.homespun/homespun-data.json`) |
-| `ASPNETCORE_ENVIRONMENT` | Environment name | No (default: `Production`) |
-| `ASPNETCORE_URLS` | URLs to bind to | No (default: `http://+:8080`) |
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `GITHUB_TOKEN` | Yes | — | GitHub PAT with `repo` scope |
+| `CLAUDE_CODE_OAUTH_TOKEN` | Yes | — | Claude Code OAuth token |
+| `HOST_PORT` | No | `8080` | Host port for the backend API |
+| `WEB_PORT` | No | `3001` | Host port for the React frontend |
+| `DATA_DIR` | No | `~/.homespun-container/data` | Persistent data directory |
+| `CONTAINER_NAME` | No | `homespun` | Main container name |
+| `ASPNETCORE_ENVIRONMENT` | No | `Production` | ASP.NET environment |
+| `HSP_EXTERNAL_HOSTNAME` | No | — | External hostname for agent URLs (e.g., `homespun.example.com`) |
+| `TAILSCALE_AUTH_KEY` | No | — | Tailscale auth key for VPN access |
+| `GRAFANA_PORT` | No | `3000` | Grafana dashboard port |
+| `GRAFANA_ADMIN_PASSWORD` | No | `admin` | Grafana admin password |
 
-### Health checks
+### VM secrets (Azure deployments)
 
-All deployments expose a health check endpoint:
+For Azure VM deployments, the following prefixed variables take priority:
 
-```bash
-curl http://<host>/health
-```
-
-Response: `Healthy` with HTTP 200 indicates the application is running correctly.
-
-### Persistent data
-
-Homespun stores data in the `.homespun` folder. Ensure this is persisted:
-
-| Deployment | Persistence method |
-|------------|-------------------|
-| VM | `/var/lib/homespun/.homespun` (default) |
-| Container | Volume mount to `/data` |
+| VM Secret | Overrides |
+|---|---|
+| `HSP_GITHUB_TOKEN` | `GITHUB_TOKEN` |
+| `HSP_CLAUDE_CODE_OAUTH_TOKEN` | `CLAUDE_CODE_OAUTH_TOKEN` |
+| `HSP_TAILSCALE_AUTH_KEY` | `TAILSCALE_AUTH_KEY` |
 
 ## Troubleshooting
 
-### VM deployment
-
-**Service fails to start:**
+### Container fails to start
 
 ```bash
-# Check service status
-sudo systemctl status homespun
-
-# View detailed logs
-sudo journalctl -u homespun -n 100 --no-pager
-
-# Common issues:
-# - Missing .NET runtime: Install dotnet-runtime-10.0
-# - Tailscale not connected: Run 'tailscale status'
-# - Permission issues: Check /var/lib/homespun ownership
-```
-
-**Nginx errors:**
-
-```bash
-# Test configuration
-sudo nginx -t
-
-# View nginx logs
-sudo tail -f /var/log/nginx/homespun_error.log
-```
-
-### Container deployment
-
-**Container exits immediately:**
-
-```bash
-# View logs
+# View logs for a specific container
 docker logs homespun
+docker logs homespun-worker
+docker logs homespun-web
 
 # Run interactively to debug
-docker run -it --rm homespun:latest /bin/bash
+docker run -it --rm --entrypoint /bin/bash homespun:local
 ```
 
-**Health check fails:**
+### Health check fails
 
 ```bash
-# Check if app is listening
-docker exec homespun curl localhost:8080/health
+# Check if the app is listening inside the container
+docker exec homespun curl -s http://localhost:8080/health
+
+# Check worker health
+docker exec homespun-worker curl -s http://localhost:8080/api/health
 ```
 
-### General issues
+### Docker socket permission denied
 
-**SignalR/WebSocket connection failures:**
+The `homespun` container needs access to the Docker socket for spawning agent containers. Ensure the `DOCKER_GID` matches your host's Docker group:
 
-- Ensure your reverse proxy (nginx) is configured for WebSocket upgrade
-- Check that `/hubs/` paths have extended timeouts
+```bash
+# Find your Docker group ID
+getent group docker | cut -d: -f3
 
-**GitHub sync not working:**
+# Pass it to Docker Compose
+DOCKER_GID=$(getent group docker | cut -d: -f3) docker compose up -d
+```
 
-- Verify `GITHUB_TOKEN` is set correctly
+### GitHub sync not working
+
+- Verify `GITHUB_TOKEN` is set: `docker exec homespun printenv GITHUB_TOKEN | head -c 10`
 - Ensure the token has `repo` scope
-- Check token hasn't expired
+- Check the token hasn't expired
 
-**Data not persisting:**
+### SignalR/WebSocket connection failures
 
-- Verify volume mounts are correct
-- Check directory permissions
-- Ensure `HOMESPUN_DATA_PATH` points to a mounted volume
+- Ensure no reverse proxy is stripping WebSocket upgrade headers
+- Check that `/hubs/` paths have extended timeouts in any proxy configuration
+
+### Network not found
+
+If you see `network homespun-net not found`:
+
+```bash
+docker network create homespun-net
+```
