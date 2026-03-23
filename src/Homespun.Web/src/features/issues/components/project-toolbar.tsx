@@ -80,6 +80,8 @@ export interface ProjectToolbarProps {
   filterInputRef?: React.RefObject<HTMLInputElement | null>
   /** Called when "My Tasks" button is clicked to apply default filters */
   onApplyDefaultFilter?: () => void
+  /** Whether the default filter (My Tasks) is currently active */
+  defaultFilterActive?: boolean
   /** Current view mode (next or tree) */
   viewMode?: ViewMode
   /** Called when view mode changes */
@@ -120,6 +122,7 @@ export function ProjectToolbar({
   filterMatchCount,
   filterInputRef,
   onApplyDefaultFilter,
+  defaultFilterActive = false,
   viewMode = ViewMode.Next,
   onViewModeChange,
   renderMode = RenderMode.Svg,
@@ -349,7 +352,9 @@ export function ProjectToolbar({
         onClick={onApplyDefaultFilter}
         aria-label="My Tasks"
         title="My Tasks - Apply default filters"
+        aria-pressed={defaultFilterActive}
         data-testid="toolbar-my-tasks-button"
+        className={cn(defaultFilterActive && 'ring-ring ring-2')}
       >
         <SquareUser className="h-4 w-4" />
       </Button>

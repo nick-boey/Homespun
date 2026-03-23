@@ -16,7 +16,7 @@ describe('useDefaultFilter', () => {
     vi.clearAllMocks()
   })
 
-  it('returns "is:next assigned:me" when user email is configured', () => {
+  it('returns "assigned:me" when user email is configured', () => {
     mockUseUserSettings.mockReturnValue({
       userEmail: 'test@example.com',
       isLoading: false,
@@ -27,11 +27,11 @@ describe('useDefaultFilter', () => {
 
     const { result } = renderHook(() => useDefaultFilter())
 
-    expect(result.current.defaultFilterQuery).toBe('is:next assigned:me')
+    expect(result.current.defaultFilterQuery).toBe('assigned:me')
     expect(result.current.userEmail).toBe('test@example.com')
   })
 
-  it('returns "is:next" only when user email is not configured', () => {
+  it('returns empty string when user email is not configured', () => {
     mockUseUserSettings.mockReturnValue({
       userEmail: null,
       isLoading: false,
@@ -42,11 +42,11 @@ describe('useDefaultFilter', () => {
 
     const { result } = renderHook(() => useDefaultFilter())
 
-    expect(result.current.defaultFilterQuery).toBe('is:next')
+    expect(result.current.defaultFilterQuery).toBe('')
     expect(result.current.userEmail).toBeNull()
   })
 
-  it('returns "is:next" when user email is undefined', () => {
+  it('returns empty string when user email is undefined', () => {
     mockUseUserSettings.mockReturnValue({
       userEmail: undefined,
       isLoading: false,
@@ -57,7 +57,7 @@ describe('useDefaultFilter', () => {
 
     const { result } = renderHook(() => useDefaultFilter())
 
-    expect(result.current.defaultFilterQuery).toBe('is:next')
+    expect(result.current.defaultFilterQuery).toBe('')
     expect(result.current.userEmail).toBeUndefined()
   })
 

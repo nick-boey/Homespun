@@ -76,27 +76,27 @@ export async function waitForStableStatus(page: Page, stabilityDuration = 6000) 
 }
 
 /**
- * Clear the filter on the issues page so all issues are visible.
- * This is needed because the page now has a default filter applied.
+ * Clear any active issue filter so all issues are visible.
+ * Checks if the My Tasks button is active (aria-pressed) and toggles it off,
+ * or clears the filter input if the filter panel is open.
  */
 export async function clearIssueFilter(page: Page) {
-  // Wait for the filter input to be visible (it's shown by default now)
-  const filterInput = page.locator('[data-testid="filter-input"]')
-
-  // Wait up to 5 seconds for filter input to appear
-  try {
-    await filterInput.waitFor({ state: 'visible', timeout: 5000 })
-  } catch {
-    // Filter panel might not be visible, press 'f' to open it
-    await page.keyboard.press('f')
+  // Check if My Tasks button is active and toggle it off
+  const myTasksButton = page.locator('[data-testid="toolbar-my-tasks-button"]')
+  const isMyTasksActive = await myTasksButton.getAttribute('aria-pressed')
+  if (isMyTasksActive === 'true') {
+    await myTasksButton.click()
     await page.waitForTimeout(500)
+    return
   }
 
-  // Now clear the filter - triple-click to select all and then type empty
-  await filterInput.click({ clickCount: 3 })
-  await page.keyboard.press('Backspace')
-  await filterInput.press('Enter')
-
-  // Wait for issues to load after filter is cleared
-  await page.waitForTimeout(500)
+  // Check if filter panel is open
+  const filterInput = page.locator('[data-testid="filter-input"]')
+  if (await filterInput.isVisible({ timeout: 1000 }).catch(() => false)) {
+    // Clear the filter input
+    await filterInput.click({ clickCount: 3 })
+    await page.keyboard.press('Backspace')
+    await filterInput.press('Enter')
+    await page.waitForTimeout(500)
+  }
 }
