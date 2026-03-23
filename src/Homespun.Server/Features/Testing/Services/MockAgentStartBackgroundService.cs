@@ -87,8 +87,9 @@ public class MockAgentStartBackgroundService(
                 });
             }
 
-            // Mark as successfully started
+            // Mark as successfully started and clear tracker entry
             startupTracker.MarkAsStarted(request.IssueId);
+            startupTracker.Clear(request.IssueId);
 
             logger.LogInformation(
                 "[Mock] Agent started successfully for issue {IssueId}, session {SessionId}",
@@ -98,6 +99,7 @@ public class MockAgentStartBackgroundService(
         {
             logger.LogError(ex, "[Mock] Error starting agent for issue {IssueId}", request.IssueId);
             startupTracker.MarkAsFailed(request.IssueId, ex.Message);
+            startupTracker.Clear(request.IssueId);
             await notificationHub.BroadcastAgentStartFailed(
                 request.IssueId, request.ProjectId, ex.Message);
         }
