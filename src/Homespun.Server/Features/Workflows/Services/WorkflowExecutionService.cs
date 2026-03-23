@@ -7,7 +7,7 @@ using Homespun.Shared.Models.Workflows;
 namespace Homespun.Features.Workflows.Services;
 
 /// <summary>
-/// Service for executing workflows with linear (non-parallel) execution.
+/// Service for executing workflows with sequential step execution.
 /// Handles the full lifecycle of workflow execution including starting, pausing,
 /// resuming, and cancelling executions.
 /// </summary>
@@ -28,7 +28,7 @@ public sealed class WorkflowExecutionService : IWorkflowExecutionService, IDispo
     private const string ExecutionsDirectory = ".workflows";
     private const string ExecutionsFilePrefix = "executions_";
     private const string ExecutionsFileExtension = ".jsonl";
-    private const int SchemaVersion = 1;
+    private const int SchemaVersion = 2;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -248,12 +248,13 @@ public sealed class WorkflowExecutionService : IWorkflowExecutionService, IDispo
             execution.Status = WorkflowExecutionStatus.Cancelled;
             execution.CompletedAt = DateTime.UtcNow;
 
-            // Cancel any running nodes
-            foreach (var nodeExecution in execution.NodeExecutions
-                .Where(n => n.Status == NodeExecutionStatus.Running))
+            // Cancel any running steps
+            foreach (var stepExecution in execution.StepExecutions
+                .Where(s => s.Status == StepExecutionStatus.Running))
             {
-                nodeExecution.Status = NodeExecutionStatus.Cancelled;
-                nodeExecution.CompletedAt = DateTime.UtcNow;
+                stepExecution.Status = StepExecutionStatus.Failed;
+                stepExecution.CompletedAt = DateTime.UtcNow;
+                stepExecution.ErrorMessage = "Execution cancelled";
             }
 
             await PersistExecutionsAsync(projectPath, cache, ct);
@@ -268,10 +269,10 @@ public sealed class WorkflowExecutionService : IWorkflowExecutionService, IDispo
     }
 
     /// <inheritdoc />
-    public async Task OnNodeCompletedAsync(
+    public async Task OnStepCompletedAsync(
         string projectPath,
         string executionId,
-        string nodeId,
+        string stepId,
         Dictionary<string, object>? output,
         CancellationToken ct = default)
     {
@@ -285,33 +286,33 @@ public sealed class WorkflowExecutionService : IWorkflowExecutionService, IDispo
             if (!cache.Executions.TryGetValue(executionId, out var execution))
             {
                 _logger.LogWarning(
-                    "Cannot complete node {NodeId}: Execution {ExecutionId} not found",
-                    nodeId,
+                    "Cannot complete step {StepId}: Execution {ExecutionId} not found",
+                    stepId,
                     executionId);
                 return;
             }
 
-            var nodeExecution = execution.NodeExecutions.FirstOrDefault(n => n.NodeId == nodeId);
-            if (nodeExecution == null)
+            var stepExecution = execution.StepExecutions.FirstOrDefault(s => s.StepId == stepId);
+            if (stepExecution == null)
             {
                 _logger.LogWarning(
-                    "Cannot complete node {NodeId}: Node not found in execution {ExecutionId}",
-                    nodeId,
+                    "Cannot complete step {StepId}: Step not found in execution {ExecutionId}",
+                    stepId,
                     executionId);
                 return;
             }
 
-            nodeExecution.Status = NodeExecutionStatus.Completed;
-            nodeExecution.CompletedAt = DateTime.UtcNow;
-            nodeExecution.Output = output;
+            stepExecution.Status = StepExecutionStatus.Completed;
+            stepExecution.CompletedAt = DateTime.UtcNow;
+            stepExecution.Output = output;
 
-            if (nodeExecution.StartedAt.HasValue)
+            if (stepExecution.StartedAt.HasValue)
             {
-                nodeExecution.DurationMs = (long)(DateTime.UtcNow - nodeExecution.StartedAt.Value).TotalMilliseconds;
+                stepExecution.DurationMs = (long)(DateTime.UtcNow - stepExecution.StartedAt.Value).TotalMilliseconds;
             }
 
             // Store output in context
-            execution.Context.NodeOutputs[nodeId] = new NodeOutput
+            execution.Context.NodeOutputs[stepId] = new NodeOutput
             {
                 Status = "completed",
                 Data = output,
@@ -321,8 +322,8 @@ public sealed class WorkflowExecutionService : IWorkflowExecutionService, IDispo
             await PersistExecutionsAsync(projectPath, cache, ct);
 
             _logger.LogDebug(
-                "Node {NodeId} completed in execution {ExecutionId}",
-                nodeId,
+                "Step {StepId} completed in execution {ExecutionId}",
+                stepId,
                 executionId);
         }
         finally
@@ -332,10 +333,10 @@ public sealed class WorkflowExecutionService : IWorkflowExecutionService, IDispo
     }
 
     /// <inheritdoc />
-    public async Task OnNodeFailedAsync(
+    public async Task OnStepFailedAsync(
         string projectPath,
         string executionId,
-        string nodeId,
+        string stepId,
         string errorMessage,
         CancellationToken ct = default)
     {
@@ -349,33 +350,33 @@ public sealed class WorkflowExecutionService : IWorkflowExecutionService, IDispo
             if (!cache.Executions.TryGetValue(executionId, out var execution))
             {
                 _logger.LogWarning(
-                    "Cannot fail node {NodeId}: Execution {ExecutionId} not found",
-                    nodeId,
+                    "Cannot fail step {StepId}: Execution {ExecutionId} not found",
+                    stepId,
                     executionId);
                 return;
             }
 
-            var nodeExecution = execution.NodeExecutions.FirstOrDefault(n => n.NodeId == nodeId);
-            if (nodeExecution == null)
+            var stepExecution = execution.StepExecutions.FirstOrDefault(s => s.StepId == stepId);
+            if (stepExecution == null)
             {
                 _logger.LogWarning(
-                    "Cannot fail node {NodeId}: Node not found in execution {ExecutionId}",
-                    nodeId,
+                    "Cannot fail step {StepId}: Step not found in execution {ExecutionId}",
+                    stepId,
                     executionId);
                 return;
             }
 
-            nodeExecution.Status = NodeExecutionStatus.Failed;
-            nodeExecution.CompletedAt = DateTime.UtcNow;
-            nodeExecution.ErrorMessage = errorMessage;
+            stepExecution.Status = StepExecutionStatus.Failed;
+            stepExecution.CompletedAt = DateTime.UtcNow;
+            stepExecution.ErrorMessage = errorMessage;
 
-            if (nodeExecution.StartedAt.HasValue)
+            if (stepExecution.StartedAt.HasValue)
             {
-                nodeExecution.DurationMs = (long)(DateTime.UtcNow - nodeExecution.StartedAt.Value).TotalMilliseconds;
+                stepExecution.DurationMs = (long)(DateTime.UtcNow - stepExecution.StartedAt.Value).TotalMilliseconds;
             }
 
             // Store error in context
-            execution.Context.NodeOutputs[nodeId] = new NodeOutput
+            execution.Context.NodeOutputs[stepId] = new NodeOutput
             {
                 Status = "failed",
                 Error = errorMessage,
@@ -390,7 +391,7 @@ public sealed class WorkflowExecutionService : IWorkflowExecutionService, IDispo
             {
                 execution.Status = WorkflowExecutionStatus.Failed;
                 execution.CompletedAt = DateTime.UtcNow;
-                execution.ErrorMessage = $"Node '{nodeId}' failed: {errorMessage}";
+                execution.ErrorMessage = $"Step '{stepId}' failed: {errorMessage}";
 
                 if (_executionCts.TryRemove(executionId, out var cts))
                 {
@@ -402,8 +403,8 @@ public sealed class WorkflowExecutionService : IWorkflowExecutionService, IDispo
             await PersistExecutionsAsync(projectPath, cache, ct);
 
             _logger.LogWarning(
-                "Node {NodeId} failed in execution {ExecutionId}: {Error}",
-                nodeId,
+                "Step {StepId} failed in execution {ExecutionId}: {Error}",
+                stepId,
                 executionId,
                 errorMessage);
         }
@@ -473,13 +474,15 @@ public sealed class WorkflowExecutionService : IWorkflowExecutionService, IDispo
             {
                 Input = new Dictionary<string, object>(triggerContext.Input)
             },
-            NodeExecutions = workflow.Nodes
-                .Select(n => new NodeExecution
+            StepExecutions = workflow.Steps
+                .Select((s, index) => new StepExecution
                 {
-                    NodeId = n.Id,
-                    Status = NodeExecutionStatus.Pending
+                    StepId = s.Id,
+                    StepIndex = index,
+                    Status = StepExecutionStatus.Pending
                 })
                 .ToList(),
+            CurrentStepIndex = 0,
             CreatedAt = DateTime.UtcNow,
             StartedAt = DateTime.UtcNow,
             TriggeredBy = triggerContext.TriggeredBy
@@ -496,10 +499,7 @@ public sealed class WorkflowExecutionService : IWorkflowExecutionService, IDispo
     {
         try
         {
-            // Get nodes in topological order
-            var sortedNodes = GetTopologicalOrder(workflow);
-
-            foreach (var node in sortedNodes)
+            for (var i = execution.CurrentStepIndex; i < workflow.Steps.Count; i++)
             {
                 ct.ThrowIfCancellationRequested();
 
@@ -513,15 +513,11 @@ public sealed class WorkflowExecutionService : IWorkflowExecutionService, IDispo
                     return;
                 }
 
-                // Skip disabled nodes
-                if (node.Disabled)
-                {
-                    await MarkNodeSkipped(projectPath, execution.Id, node.Id, ct);
-                    continue;
-                }
+                var step = workflow.Steps[i];
+                execution.CurrentStepIndex = i;
 
-                // Execute the node
-                await ExecuteNodeAsync(projectPath, execution, workflow, node, ct);
+                // Execute the step
+                await ExecuteStepAsync(projectPath, execution, workflow, step, ct);
 
                 // Check if execution failed
                 currentExecution = await GetExecutionAsync(projectPath, execution.Id, ct);
@@ -532,7 +528,7 @@ public sealed class WorkflowExecutionService : IWorkflowExecutionService, IDispo
                 }
             }
 
-            // All nodes completed, mark execution as completed
+            // All steps completed, mark execution as completed
             await CompleteExecutionAsync(projectPath, execution.Id, ct);
         }
         catch (OperationCanceledException)
@@ -546,58 +542,45 @@ public sealed class WorkflowExecutionService : IWorkflowExecutionService, IDispo
         }
     }
 
-    private async Task ExecuteNodeAsync(
+    private async Task ExecuteStepAsync(
         string projectPath,
         WorkflowExecution execution,
         WorkflowDefinition workflow,
-        WorkflowNode node,
+        WorkflowStep step,
         CancellationToken ct)
     {
-        // Mark node as running
-        await MarkNodeRunning(projectPath, execution.Id, node.Id, ct);
+        // Mark step as running
+        await MarkStepRunning(projectPath, execution.Id, step.Id, ct);
 
         try
         {
-            switch (node.Type)
+            switch (step.StepType)
             {
-                case WorkflowNodeType.Start:
-                    // Start node just passes through
-                    await OnNodeCompletedAsync(projectPath, execution.Id, node.Id, null, ct);
-                    break;
-
-                case WorkflowNodeType.End:
-                    // End node marks completion
-                    await OnNodeCompletedAsync(projectPath, execution.Id, node.Id, null, ct);
-                    break;
-
-                case WorkflowNodeType.Agent:
-                    // Agent nodes will be completed externally via callback
-                    // For now in MVP, we just mark them as waiting
-                    // The node will stay in Running state until OnNodeCompleted is called
+                case WorkflowStepType.Agent:
+                    // Agent steps will be completed externally via callback
                     _logger.LogInformation(
-                        "Agent node {NodeId} started, waiting for completion callback",
-                        node.Id);
+                        "Agent step {StepId} started, waiting for completion callback",
+                        step.Id);
                     break;
 
-                case WorkflowNodeType.Gate:
-                    // Gate nodes wait for approval
-                    await MarkNodeWaitingForInput(projectPath, execution.Id, node.Id, ct);
+                case WorkflowStepType.Gate:
+                    // Gate steps wait for approval
+                    await MarkStepWaitingForInput(projectPath, execution.Id, step.Id, ct);
                     break;
 
-                case WorkflowNodeType.Action:
-                case WorkflowNodeType.Transform:
-                    // These will be implemented in future phases
-                    await OnNodeCompletedAsync(projectPath, execution.Id, node.Id, null, ct);
+                case WorkflowStepType.ServerAction:
+                    // Server actions will be implemented in future phases
+                    await OnStepCompletedAsync(projectPath, execution.Id, step.Id, null, ct);
                     break;
             }
         }
         catch (Exception ex)
         {
-            await OnNodeFailedAsync(projectPath, execution.Id, node.Id, ex.Message, ct);
+            await OnStepFailedAsync(projectPath, execution.Id, step.Id, ex.Message, ct);
         }
     }
 
-    private async Task MarkNodeRunning(string projectPath, string executionId, string nodeId, CancellationToken ct)
+    private async Task MarkStepRunning(string projectPath, string executionId, string stepId, CancellationToken ct)
     {
         var semaphore = GetProjectSemaphore(projectPath);
         await semaphore.WaitAsync(ct);
@@ -607,11 +590,11 @@ public sealed class WorkflowExecutionService : IWorkflowExecutionService, IDispo
             var cache = await EnsureCacheLoadedAsync(projectPath, ct);
             if (cache.Executions.TryGetValue(executionId, out var execution))
             {
-                var nodeExecution = execution.NodeExecutions.FirstOrDefault(n => n.NodeId == nodeId);
-                if (nodeExecution != null)
+                var stepExecution = execution.StepExecutions.FirstOrDefault(s => s.StepId == stepId);
+                if (stepExecution != null)
                 {
-                    nodeExecution.Status = NodeExecutionStatus.Running;
-                    nodeExecution.StartedAt = DateTime.UtcNow;
+                    stepExecution.Status = StepExecutionStatus.Running;
+                    stepExecution.StartedAt = DateTime.UtcNow;
                     await PersistExecutionsAsync(projectPath, cache, ct);
                 }
             }
@@ -622,7 +605,7 @@ public sealed class WorkflowExecutionService : IWorkflowExecutionService, IDispo
         }
     }
 
-    private async Task MarkNodeSkipped(string projectPath, string executionId, string nodeId, CancellationToken ct)
+    private async Task MarkStepWaitingForInput(string projectPath, string executionId, string stepId, CancellationToken ct)
     {
         var semaphore = GetProjectSemaphore(projectPath);
         await semaphore.WaitAsync(ct);
@@ -632,34 +615,10 @@ public sealed class WorkflowExecutionService : IWorkflowExecutionService, IDispo
             var cache = await EnsureCacheLoadedAsync(projectPath, ct);
             if (cache.Executions.TryGetValue(executionId, out var execution))
             {
-                var nodeExecution = execution.NodeExecutions.FirstOrDefault(n => n.NodeId == nodeId);
-                if (nodeExecution != null)
+                var stepExecution = execution.StepExecutions.FirstOrDefault(s => s.StepId == stepId);
+                if (stepExecution != null)
                 {
-                    nodeExecution.Status = NodeExecutionStatus.Skipped;
-                    await PersistExecutionsAsync(projectPath, cache, ct);
-                }
-            }
-        }
-        finally
-        {
-            semaphore.Release();
-        }
-    }
-
-    private async Task MarkNodeWaitingForInput(string projectPath, string executionId, string nodeId, CancellationToken ct)
-    {
-        var semaphore = GetProjectSemaphore(projectPath);
-        await semaphore.WaitAsync(ct);
-
-        try
-        {
-            var cache = await EnsureCacheLoadedAsync(projectPath, ct);
-            if (cache.Executions.TryGetValue(executionId, out var execution))
-            {
-                var nodeExecution = execution.NodeExecutions.FirstOrDefault(n => n.NodeId == nodeId);
-                if (nodeExecution != null)
-                {
-                    nodeExecution.Status = NodeExecutionStatus.WaitingForInput;
+                    stepExecution.Status = StepExecutionStatus.WaitingForInput;
                     await PersistExecutionsAsync(projectPath, cache, ct);
                 }
 
@@ -734,48 +693,6 @@ public sealed class WorkflowExecutionService : IWorkflowExecutionService, IDispo
         {
             semaphore.Release();
         }
-    }
-
-    private static List<WorkflowNode> GetTopologicalOrder(WorkflowDefinition workflow)
-    {
-        var result = new List<WorkflowNode>();
-        var visited = new HashSet<string>();
-        var visiting = new HashSet<string>();
-
-        var nodeMap = workflow.Nodes.ToDictionary(n => n.Id);
-        var edges = workflow.Edges.ToLookup(e => e.Target);
-
-        void Visit(string nodeId)
-        {
-            if (visited.Contains(nodeId))
-                return;
-
-            if (visiting.Contains(nodeId))
-                throw new InvalidOperationException($"Cycle detected at node {nodeId}");
-
-            visiting.Add(nodeId);
-
-            // Visit all nodes that this node depends on (predecessors)
-            foreach (var edge in workflow.Edges.Where(e => e.Target == nodeId))
-            {
-                Visit(edge.Source);
-            }
-
-            visiting.Remove(nodeId);
-            visited.Add(nodeId);
-
-            if (nodeMap.TryGetValue(nodeId, out var node))
-            {
-                result.Add(node);
-            }
-        }
-
-        foreach (var node in workflow.Nodes)
-        {
-            Visit(node.Id);
-        }
-
-        return result;
     }
 
     private SemaphoreSlim GetProjectSemaphore(string projectPath)
