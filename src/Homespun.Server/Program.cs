@@ -248,6 +248,9 @@ else
     builder.Services.AddSingleton<IStepExecutor, GateStepExecutor>();
     builder.Services.AddSingleton<IWorkflowExecutionService, WorkflowExecutionService>();
     builder.Services.AddSingleton<IWorkflowContextStore, WorkflowContextStore>();
+    builder.Services.AddSingleton<IWorkflowSessionCallback, WorkflowSessionCallback>();
+    builder.Services.AddSingleton(sp =>
+        new Lazy<IWorkflowSessionCallback>(() => sp.GetRequiredService<IWorkflowSessionCallback>()));
 }
 
 // SignalR URL provider (uses internal URL in Docker, localhost in development)

@@ -17,6 +17,9 @@ import {
   WORKFLOW_COMPLETE_TOOL,
   isValidWorkflowCompleteInput,
   type WorkflowCompleteInput,
+  WORKFLOW_SIGNAL_TOOL,
+  isValidWorkflowSignalInput,
+  type WorkflowSignalInput,
 } from "../tools/workflow-tools.js";
 import { randomUUID } from "node:crypto";
 import { info, error, warn, debug } from "../utils/logger.js";
@@ -55,12 +58,23 @@ export interface WorkflowCompleteEventData {
   completion: WorkflowCompleteInput;
 }
 
+/**
+ * Data payload for workflow_signal control event.
+ */
+export interface WorkflowSignalEventData {
+  /** The workflow context from the session */
+  workflowContext: WorkflowSessionContext;
+  /** The signal data from the agent */
+  signal: WorkflowSignalInput;
+}
+
 export interface ControlEvent {
-  type: "question_pending" | "plan_pending" | "status_resumed" | "workflow_complete";
+  type: "question_pending" | "plan_pending" | "status_resumed" | "workflow_complete" | "workflow_signal";
   data:
     | { questions: UserQuestion[] }
     | { plan: string }
     | WorkflowCompleteEventData
+    | WorkflowSignalEventData
     | Record<string, never>;
 }
 
@@ -73,7 +87,8 @@ export function isControlEvent(event: OutputEvent): event is ControlEvent {
     t === "question_pending" ||
     t === "plan_pending" ||
     t === "status_resumed" ||
-    t === "workflow_complete"
+    t === "workflow_complete" ||
+    t === "workflow_signal"
   );
 }
 
@@ -641,10 +656,60 @@ export class SessionManager {
         });
 
         info(
-          `emitted workflow_complete for session '${sessionId}' - status='${completionInput.status}', nodeId='${ws.workflowContext.nodeId}'`,
+          `emitted workflow_complete for session '${sessionId}' - status='${completionInput.status}', stepId='${ws.workflowContext.stepId}'`,
         );
 
         // Allow the tool to execute - this signals session completion
+        return {
+          behavior: "allow",
+          updatedInput: input,
+        };
+      }
+
+      // Handle workflow_signal tool - only enabled when session has workflowContext
+      if (toolName === WORKFLOW_SIGNAL_TOOL) {
+        const ws = this.sessions.get(sessionId);
+
+        // Only allow workflow_signal when session has workflow context
+        if (!ws?.workflowContext) {
+          info(
+            `workflow_signal denied - no workflow context (sessionId: ${sessionId})`,
+          );
+          return {
+            behavior: "deny",
+            message:
+              "workflow_signal tool can only be used in workflow sessions",
+          };
+        }
+
+        // Validate the input
+        if (!isValidWorkflowSignalInput(input)) {
+          info(
+            `workflow_signal denied - invalid input (sessionId: ${sessionId})`,
+          );
+          return {
+            behavior: "deny",
+            message:
+              "Invalid workflow_signal input: requires status (success or fail)",
+          };
+        }
+
+        const signalInput = input as WorkflowSignalInput;
+
+        // Emit workflow_signal control event to SSE stream
+        ws.outputChannel.push({
+          type: "workflow_signal",
+          data: {
+            workflowContext: ws.workflowContext,
+            signal: signalInput,
+          },
+        });
+
+        info(
+          `emitted workflow_signal for session '${sessionId}' - status='${signalInput.status}', stepId='${ws.workflowContext.stepId}'`,
+        );
+
+        // Allow the tool to execute
         return {
           behavior: "allow",
           updatedInput: input,

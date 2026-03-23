@@ -1,9 +1,111 @@
 /**
- * WorkflowComplete tool definition for signaling workflow node completion.
+ * Workflow tool definitions for signaling workflow step completion/failure.
  *
- * This tool allows agents to signal that they have completed their work
- * as part of a workflow execution, providing output data and artifacts.
+ * This module provides two tools:
+ * - workflow_signal: The primary tool for agents to report step outcomes back to the workflow engine
+ * - WorkflowComplete: Legacy tool kept for backwards compatibility
  */
+
+/**
+ * Status of a workflow signal.
+ */
+export type WorkflowSignalStatus = "success" | "fail";
+
+/**
+ * Input schema for the workflow_signal tool.
+ */
+export interface WorkflowSignalInput {
+  /** Step outcome */
+  status: WorkflowSignalStatus;
+  /** Output data for workflow context */
+  data?: Record<string, unknown>;
+  /** Summary of what was done */
+  message?: string;
+}
+
+/**
+ * Context passed to a session when running as part of a workflow.
+ * This enables the workflow_signal tool and provides workflow metadata.
+ */
+export interface WorkflowSessionContext {
+  /** The workflow execution ID */
+  executionId: string;
+  /** The step ID being executed */
+  stepId: string;
+  /** The workflow definition ID */
+  workflowId: string;
+  /** The project path */
+  projectPath: string;
+}
+
+/**
+ * Tool name constant for the workflow_signal tool.
+ */
+export const WORKFLOW_SIGNAL_TOOL = "workflow_signal";
+
+/**
+ * MCP tool definition for workflow_signal.
+ * This follows the MCP tool schema format.
+ */
+export const workflowSignalToolDefinition = {
+  name: WORKFLOW_SIGNAL_TOOL,
+  description: "Signal workflow step completion with result data",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      status: {
+        type: "string" as const,
+        enum: ["success", "fail"],
+        description: "Step outcome",
+      },
+      data: {
+        type: "object" as const,
+        description: "Output data for workflow context",
+      },
+      message: {
+        type: "string" as const,
+        description: "Summary of what was done",
+      },
+    },
+    required: ["status"],
+  },
+};
+
+/**
+ * Validates that the input matches the workflow_signal schema.
+ */
+export function isValidWorkflowSignalInput(
+  input: unknown,
+): input is WorkflowSignalInput {
+  if (typeof input !== "object" || input === null) {
+    return false;
+  }
+
+  const obj = input as Record<string, unknown>;
+
+  // Check required field
+  if (typeof obj.status !== "string") {
+    return false;
+  }
+
+  if (!["success", "fail"].includes(obj.status)) {
+    return false;
+  }
+
+  // Check optional data field
+  if (obj.data !== undefined && (typeof obj.data !== "object" || obj.data === null)) {
+    return false;
+  }
+
+  // Check optional message field
+  if (obj.message !== undefined && typeof obj.message !== "string") {
+    return false;
+  }
+
+  return true;
+}
+
+// --- Legacy WorkflowComplete tool (kept for backwards compatibility) ---
 
 /**
  * Status of the workflow node completion.
@@ -34,21 +136,6 @@ export interface WorkflowCompleteInput {
   summary: string;
   /** Optional list of artifacts produced */
   artifacts?: WorkflowArtifact[];
-}
-
-/**
- * Context passed to a session when running as part of a workflow.
- * This enables the WorkflowComplete tool and provides workflow metadata.
- */
-export interface WorkflowSessionContext {
-  /** The workflow execution ID */
-  executionId: string;
-  /** The node ID being executed */
-  nodeId: string;
-  /** The workflow definition ID */
-  workflowId: string;
-  /** The project path */
-  projectPath: string;
 }
 
 /**
