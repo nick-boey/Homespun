@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Pencil, Trash2, MoreHorizontal } from 'lucide-react'
+import { Pencil, Trash2, MoreHorizontal, Undo2 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -30,6 +30,9 @@ export interface PromptCardProps {
   isDeleting?: boolean
   /** Whether to show the delete option (defaults to true) */
   showDelete?: boolean
+  /** Handler for remove override action - only shown when prompt.isOverride is true */
+  onRemoveOverride?: (promptId: string) => void
+  isRemovingOverride?: boolean
 }
 
 function getModeLabel(mode: SessionModeType | undefined): string {
@@ -72,14 +75,24 @@ export function PromptCard({
   onDelete,
   isDeleting,
   showDelete = true,
+  onRemoveOverride,
+  isRemovingOverride,
 }: PromptCardProps) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [showRemoveOverrideDialog, setShowRemoveOverrideDialog] = useState(false)
 
   const handleDelete = () => {
     if (prompt.id && onDelete) {
       onDelete(prompt.id)
     }
     setShowDeleteDialog(false)
+  }
+
+  const handleRemoveOverride = () => {
+    if (prompt.id && onRemoveOverride) {
+      onRemoveOverride(prompt.id)
+    }
+    setShowRemoveOverrideDialog(false)
   }
 
   return (
@@ -108,6 +121,12 @@ export function PromptCard({
                     <Pencil className="mr-2 h-4 w-4" />
                     Edit
                   </DropdownMenuItem>
+                  {prompt.isOverride && onRemoveOverride && (
+                    <DropdownMenuItem onClick={() => setShowRemoveOverrideDialog(true)}>
+                      <Undo2 className="mr-2 h-4 w-4" />
+                      Remove override
+                    </DropdownMenuItem>
+                  )}
                   {showDelete && (
                     <DropdownMenuItem
                       onClick={() => setShowDeleteDialog(true)}
@@ -146,6 +165,24 @@ export function PromptCard({
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction variant="destructive" onClick={handleDelete} disabled={isDeleting}>
               {isDeleting ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={showRemoveOverrideDialog} onOpenChange={setShowRemoveOverrideDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove Override</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove the project-specific prompt and revert to the global prompt.
+              Continue?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleRemoveOverride} disabled={isRemovingOverride}>
+              {isRemovingOverride ? 'Removing...' : 'Remove'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -1731,6 +1731,39 @@ export type PostApiAgentPromptsCreateOverrideResponses = {
 export type PostApiAgentPromptsCreateOverrideResponse =
   PostApiAgentPromptsCreateOverrideResponses[keyof PostApiAgentPromptsCreateOverrideResponses]
 
+export type DeleteApiAgentPromptsByIdOverrideData = {
+  body?: never
+  path: {
+    id: string
+  }
+  query?: never
+  url: '/api/agent-prompts/{id}/override'
+}
+
+export type DeleteApiAgentPromptsByIdOverrideErrors = {
+  /**
+   * Bad Request
+   */
+  400: ProblemDetails
+  /**
+   * Not Found
+   */
+  404: ProblemDetails
+}
+
+export type DeleteApiAgentPromptsByIdOverrideError =
+  DeleteApiAgentPromptsByIdOverrideErrors[keyof DeleteApiAgentPromptsByIdOverrideErrors]
+
+export type DeleteApiAgentPromptsByIdOverrideResponses = {
+  /**
+   * OK
+   */
+  200: AgentPrompt
+}
+
+export type DeleteApiAgentPromptsByIdOverrideResponse =
+  DeleteApiAgentPromptsByIdOverrideResponses[keyof DeleteApiAgentPromptsByIdOverrideResponses]
+
 export type PostApiClientTelemetryData = {
   body?: ClientTelemetryBatch
   path?: never

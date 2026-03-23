@@ -178,4 +178,123 @@ public class AgentPromptsApiTests
             Assert.That(overriddenBuild.InitialMessage, Is.EqualTo("Custom build message"));
         });
     }
+
+    [Test]
+    public async Task RemoveOverride_ReturnsOk_WhenOverrideExists()
+    {
+        // Arrange - Create an override first
+        var globalPromptsResponse = await _client.GetAsync("/api/agent-prompts");
+        var globalPrompts = await globalPromptsResponse.Content.ReadFromJsonAsync<List<AgentPrompt>>(JsonOptions);
+        var buildPrompt = globalPrompts!.First(p => p.Name == "Build");
+        var projectId = "remove-override-test-project";
+
+        var createRequest = new CreateOverrideRequest
+        {
+            GlobalPromptId = buildPrompt.Id,
+            ProjectId = projectId,
+            InitialMessage = "Custom message for removal test"
+        };
+        var createResponse = await _client.PostAsJsonAsync("/api/agent-prompts/create-override", createRequest, JsonOptions);
+        createResponse.EnsureSuccessStatusCode();
+        var overridePrompt = await createResponse.Content.ReadFromJsonAsync<AgentPrompt>(JsonOptions);
+
+        // Act
+        var response = await _client.DeleteAsync($"/api/agent-prompts/{overridePrompt!.Id}/override");
+
+        // Assert
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var globalPrompt = await response.Content.ReadFromJsonAsync<AgentPrompt>(JsonOptions);
+        Assert.Multiple(() =>
+        {
+            Assert.That(globalPrompt, Is.Not.Null);
+            Assert.That(globalPrompt!.Name, Is.EqualTo("Build"));
+            Assert.That(globalPrompt.ProjectId, Is.Null); // Should return the global prompt
+        });
+    }
+
+    [Test]
+    public async Task RemoveOverride_ReturnsNotFound_WhenPromptDoesNotExist()
+    {
+        // Act
+        var response = await _client.DeleteAsync("/api/agent-prompts/non-existent-id/override");
+
+        // Assert
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+    }
+
+    [Test]
+    public async Task RemoveOverride_ReturnsBadRequest_WhenPromptIsGlobal()
+    {
+        // Arrange - Get a global prompt
+        var globalPromptsResponse = await _client.GetAsync("/api/agent-prompts");
+        var globalPrompts = await globalPromptsResponse.Content.ReadFromJsonAsync<List<AgentPrompt>>(JsonOptions);
+        var globalPrompt = globalPrompts!.First();
+
+        // Act
+        var response = await _client.DeleteAsync($"/api/agent-prompts/{globalPrompt.Id}/override");
+
+        // Assert
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+    }
+
+    [Test]
+    public async Task RemoveOverride_ReturnsBadRequest_WhenNotActuallyAnOverride()
+    {
+        // Arrange - Create a project-only prompt (not an override of a global prompt)
+        var createRequest = new CreateAgentPromptRequest
+        {
+            Name = "UniqueProjectOnlyPrompt",
+            InitialMessage = "Test message",
+            Mode = SessionMode.Build,
+            ProjectId = "test-project-unique"
+        };
+        var createResponse = await _client.PostAsJsonAsync("/api/agent-prompts", createRequest, JsonOptions);
+        createResponse.EnsureSuccessStatusCode();
+        var projectPrompt = await createResponse.Content.ReadFromJsonAsync<AgentPrompt>(JsonOptions);
+
+        // Act
+        var response = await _client.DeleteAsync($"/api/agent-prompts/{projectPrompt!.Id}/override");
+
+        // Assert
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+    }
+
+    [Test]
+    public async Task RemoveOverride_GlobalPromptAppearsInProjectPrompts_AfterRemoval()
+    {
+        // Arrange - Create an override
+        var globalPromptsResponse = await _client.GetAsync("/api/agent-prompts");
+        var globalPrompts = await globalPromptsResponse.Content.ReadFromJsonAsync<List<AgentPrompt>>(JsonOptions);
+        var planPrompt = globalPrompts!.First(p => p.Name == "Plan");
+        var projectId = "remove-override-restore-test";
+
+        var createRequest = new CreateOverrideRequest
+        {
+            GlobalPromptId = planPrompt.Id,
+            ProjectId = projectId,
+            InitialMessage = "Custom Plan message"
+        };
+        var createResponse = await _client.PostAsJsonAsync("/api/agent-prompts/create-override", createRequest, JsonOptions);
+        var overridePrompt = await createResponse.Content.ReadFromJsonAsync<AgentPrompt>(JsonOptions);
+
+        // Verify the override exists
+        var projectPromptsBeforeResponse = await _client.GetAsync($"/api/agent-prompts/project/{projectId}");
+        var projectPromptsBefore = await projectPromptsBeforeResponse.Content.ReadFromJsonAsync<List<AgentPrompt>>(JsonOptions);
+        var planPromptBefore = projectPromptsBefore!.First(p => p.Name == "Plan");
+        Assert.That(planPromptBefore.IsOverride, Is.True);
+
+        // Act - Remove the override
+        await _client.DeleteAsync($"/api/agent-prompts/{overridePrompt!.Id}/override");
+
+        // Assert - Global prompt should now appear instead
+        var projectPromptsAfterResponse = await _client.GetAsync($"/api/agent-prompts/project/{projectId}");
+        var projectPromptsAfter = await projectPromptsAfterResponse.Content.ReadFromJsonAsync<List<AgentPrompt>>(JsonOptions);
+        var planPromptAfter = projectPromptsAfter!.First(p => p.Name == "Plan");
+        Assert.Multiple(() =>
+        {
+            Assert.That(planPromptAfter.ProjectId, Is.Null);
+            Assert.That(planPromptAfter.IsOverride, Is.False);
+            Assert.That(planPromptAfter.Id, Is.EqualTo(planPrompt.Id)); // Same as original global prompt
+        });
+    }
 }

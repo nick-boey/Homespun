@@ -136,6 +136,37 @@ public class AgentPromptsController(IAgentPromptService agentPromptService) : Co
 
         return CreatedAtAction(nameof(GetById), new { id = overridePrompt.Id }, overridePrompt);
     }
+
+    /// <summary>
+    /// Removes a project-scoped prompt override, reverting to the global prompt.
+    /// </summary>
+    [HttpDelete("{id}/override")]
+    [ProducesResponseType<AgentPrompt>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<AgentPrompt>> RemoveOverride(string id)
+    {
+        var prompt = agentPromptService.GetPrompt(id);
+        if (prompt == null)
+        {
+            return NotFound($"Prompt with ID '{id}' not found.");
+        }
+
+        if (prompt.ProjectId == null)
+        {
+            return BadRequest("Cannot remove override: prompt is not a project prompt.");
+        }
+
+        try
+        {
+            var globalPrompt = await agentPromptService.RemoveOverrideAsync(id);
+            return Ok(globalPrompt);
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("not an override"))
+        {
+            return BadRequest(ex.Message);
+        }
+    }
 }
 
 public class CreateAgentPromptRequest

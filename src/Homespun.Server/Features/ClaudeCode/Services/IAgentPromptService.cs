@@ -88,4 +88,11 @@ public interface IAgentPromptService
     /// <param name="initialMessage">Optional custom message. If null, copies from the global prompt.</param>
     /// <returns>The newly created project-scoped prompt.</returns>
     Task<AgentPrompt> CreateOverrideAsync(string globalPromptId, string projectId, string? initialMessage);
+
+    /// <summary>
+    /// Removes a project-scoped override prompt, reverting to the global prompt.
+    /// </summary>
+    /// <param name="promptId">The ID of the project prompt override to remove.</param>
+    /// <returns>The global prompt that will now take effect.</returns>
+    Task<AgentPrompt> RemoveOverrideAsync(string promptId);
 }

@@ -5,6 +5,9 @@ import { client } from './client.gen'
 import type {
   DeleteApiAgentPromptsByIdData,
   DeleteApiAgentPromptsByIdErrors,
+  DeleteApiAgentPromptsByIdOverrideData,
+  DeleteApiAgentPromptsByIdOverrideErrors,
+  DeleteApiAgentPromptsByIdOverrideResponses,
   DeleteApiAgentPromptsByIdResponses,
   DeleteApiClonesBulkData,
   DeleteApiClonesBulkErrors,
@@ -461,6 +464,16 @@ export class AgentPrompts {
         ...options?.headers,
       },
     })
+  }
+
+  public static deleteApiAgentPromptsByIdOverride<ThrowOnError extends boolean = false>(
+    options: Options<DeleteApiAgentPromptsByIdOverrideData, ThrowOnError>
+  ) {
+    return (options.client ?? client).delete<
+      DeleteApiAgentPromptsByIdOverrideResponses,
+      DeleteApiAgentPromptsByIdOverrideErrors,
+      ThrowOnError
+    >({ url: '/api/agent-prompts/{id}/override', ...options })
   }
 }
 

@@ -133,4 +133,148 @@ describe('PromptCard', () => {
     const suffix = screen.getByText('(project)')
     expect(suffix).toHaveClass('text-muted-foreground')
   })
+
+  it('shows Remove override menu item when isOverride is true', async () => {
+    const user = userEvent.setup()
+    const overridePrompt = { ...mockPrompt, isOverride: true }
+    render(
+      <PromptCard
+        prompt={overridePrompt}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onRemoveOverride={vi.fn()}
+      />
+    )
+
+    // Open dropdown menu
+    await user.click(screen.getByRole('button', { name: /actions/i }))
+
+    // Should show Remove override option
+    expect(screen.getByText('Remove override')).toBeInTheDocument()
+  })
+
+  it('does not show Remove override menu item when isOverride is false', async () => {
+    const user = userEvent.setup()
+    render(
+      <PromptCard
+        prompt={mockPrompt}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onRemoveOverride={vi.fn()}
+      />
+    )
+
+    // Open dropdown menu
+    await user.click(screen.getByRole('button', { name: /actions/i }))
+
+    // Should not show Remove override option
+    expect(screen.queryByText('Remove override')).not.toBeInTheDocument()
+  })
+
+  it('does not show Remove override menu item when onRemoveOverride is not provided', async () => {
+    const user = userEvent.setup()
+    const overridePrompt = { ...mockPrompt, isOverride: true }
+    render(<PromptCard prompt={overridePrompt} onEdit={vi.fn()} onDelete={vi.fn()} />)
+
+    // Open dropdown menu
+    await user.click(screen.getByRole('button', { name: /actions/i }))
+
+    // Should not show Remove override option
+    expect(screen.queryByText('Remove override')).not.toBeInTheDocument()
+  })
+
+  it('shows Remove override confirmation dialog', async () => {
+    const user = userEvent.setup()
+    const overridePrompt = { ...mockPrompt, isOverride: true }
+    render(
+      <PromptCard
+        prompt={overridePrompt}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onRemoveOverride={vi.fn()}
+      />
+    )
+
+    // Open dropdown menu
+    await user.click(screen.getByRole('button', { name: /actions/i }))
+    // Click Remove override
+    await user.click(screen.getByText('Remove override'))
+
+    // Should show confirmation dialog
+    expect(screen.getByText('Remove Override')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /This will remove the project-specific prompt and revert to the global prompt/
+      )
+    ).toBeInTheDocument()
+  })
+
+  it('calls onRemoveOverride when Remove override is confirmed', async () => {
+    const user = userEvent.setup()
+    const overridePrompt = { ...mockPrompt, isOverride: true }
+    const onRemoveOverride = vi.fn()
+    render(
+      <PromptCard
+        prompt={overridePrompt}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onRemoveOverride={onRemoveOverride}
+      />
+    )
+
+    // Open dropdown and click Remove override
+    await user.click(screen.getByRole('button', { name: /actions/i }))
+    await user.click(screen.getByText('Remove override'))
+
+    // Confirm removal
+    await user.click(screen.getByRole('button', { name: /^Remove$/i }))
+
+    expect(onRemoveOverride).toHaveBeenCalledWith('prompt-1')
+  })
+
+  it('closes Remove override dialog when cancelled', async () => {
+    const user = userEvent.setup()
+    const overridePrompt = { ...mockPrompt, isOverride: true }
+    const onRemoveOverride = vi.fn()
+    render(
+      <PromptCard
+        prompt={overridePrompt}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onRemoveOverride={onRemoveOverride}
+      />
+    )
+
+    // Open dropdown and click Remove override
+    await user.click(screen.getByRole('button', { name: /actions/i }))
+    await user.click(screen.getByText('Remove override'))
+
+    // Cancel
+    await user.click(screen.getByRole('button', { name: /Cancel/i }))
+
+    // Dialog should be closed and onRemoveOverride should not be called
+    expect(screen.queryByText('Remove Override')).not.toBeInTheDocument()
+    expect(onRemoveOverride).not.toHaveBeenCalled()
+  })
+
+  it('shows removing state when isRemovingOverride is true', async () => {
+    const user = userEvent.setup()
+    const overridePrompt = { ...mockPrompt, isOverride: true }
+    render(
+      <PromptCard
+        prompt={overridePrompt}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onRemoveOverride={vi.fn()}
+        isRemovingOverride={true}
+      />
+    )
+
+    // Open dropdown and click Remove override
+    await user.click(screen.getByRole('button', { name: /actions/i }))
+    await user.click(screen.getByText('Remove override'))
+
+    // Should show "Removing..." button text
+    expect(screen.getByRole('button', { name: /Removing/i })).toBeInTheDocument()
+  })
 })
