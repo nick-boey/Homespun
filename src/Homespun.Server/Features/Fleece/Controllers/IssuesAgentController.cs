@@ -99,8 +99,37 @@ public class IssuesAgentController(
         // Ensure default prompts exist
         await agentPromptService.EnsureDefaultPromptsAsync();
 
-        // Get the IssueAgentModification prompt for initial message
-        var modificationPrompt = agentPromptService.GetPromptBySessionType(SessionType.IssueAgentModification);
+        // Resolve the prompt to use for initial message and session mode
+        AgentPrompt? selectedPrompt;
+        SessionMode sessionMode;
+
+        if (!string.IsNullOrWhiteSpace(request.PromptId))
+        {
+            // Explicit prompt selection: validate it exists and has the correct category
+            selectedPrompt = agentPromptService.GetPrompt(request.PromptId);
+            if (selectedPrompt == null)
+            {
+                return NotFound("Prompt not found");
+            }
+
+            if (selectedPrompt.Category != PromptCategory.IssueAgent)
+            {
+                return BadRequest("Prompt must have Category = IssueAgent");
+            }
+
+            sessionMode = selectedPrompt.Mode;
+        }
+        else
+        {
+            // No prompt ID: fall back to first available IssueAgent prompt for the project
+            var availablePrompts = agentPromptService.GetIssueAgentPromptsForProject(request.ProjectId);
+            selectedPrompt = availablePrompts.FirstOrDefault();
+
+            // If no user-selectable prompt found, fall back to the IssueAgentModification session type prompt
+            selectedPrompt ??= agentPromptService.GetPromptBySessionType(SessionType.IssueAgentModification);
+
+            sessionMode = SessionMode.Build;
+        }
 
         // Get the IssueAgentSystem prompt for system prompt
         var systemPromptTemplate = agentPromptService.GetPromptBySessionType(SessionType.IssueAgentSystem);
@@ -108,20 +137,19 @@ public class IssuesAgentController(
         // Determine model
         var model = request.Model ?? project.DefaultModel ?? "sonnet";
 
-        // Create session with IssueAgentModification type and system prompt
-        // Use branch name as entity ID (like CreateBranchSession)
+        // Create session with resolved mode and system prompt
         var session = await sessionService.StartSessionAsync(
             branchName,
             request.ProjectId,
             clonePath,
-            SessionMode.Build,  // Build mode needed for Bash/fleece CLI
+            sessionMode,
             model,
             systemPrompt: systemPromptTemplate?.InitialMessage);
 
         // Set session type to IssueAgentModification
         session.SessionType = SessionType.IssueAgentModification;
 
-        // If user instructions are provided, render the IssueAgentModification prompt and send as initial message
+        // If user instructions are provided, render the selected prompt and send as initial message
         if (!string.IsNullOrWhiteSpace(request.UserInstructions))
         {
             var promptContext = new PromptContext
@@ -130,18 +158,19 @@ public class IssuesAgentController(
                 UserPrompt = request.UserInstructions
             };
 
-            var renderedPrompt = agentPromptService.RenderTemplate(modificationPrompt?.InitialMessage, promptContext);
+            var renderedPrompt = agentPromptService.RenderTemplate(selectedPrompt?.InitialMessage, promptContext);
 
             if (!string.IsNullOrWhiteSpace(renderedPrompt))
             {
                 logger.LogInformation("Sending initial message to Issues Agent session {SessionId}", session.Id);
 
                 // Send the initial message asynchronously (fire and forget)
+                var messageMode = sessionMode;
                 _ = Task.Run(async () =>
                 {
                     try
                     {
-                        await sessionService.SendMessageAsync(session.Id, renderedPrompt, SessionMode.Build);
+                        await sessionService.SendMessageAsync(session.Id, renderedPrompt, messageMode);
                     }
                     catch (Exception ex)
                     {
