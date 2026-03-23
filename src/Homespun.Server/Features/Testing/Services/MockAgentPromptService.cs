@@ -240,64 +240,29 @@ public partial class MockAgentPromptService : IAgentPromptService
     {
         _logger.LogDebug("[Mock] EnsureDefaultPromptsAsync");
 
-        var existingPrompts = GetAllPrompts();
+        var definitions = AgentPromptService.LoadDefaultPromptDefinitions();
+        var allExistingPrompts = _dataStore.AgentPrompts;
 
-        // Check if Plan prompt exists
-        if (!existingPrompts.Any(p => p.Name == "Plan"))
+        foreach (var def in definitions)
         {
-            await _dataStore.AddAgentPromptAsync(new AgentPrompt
+            var exists = allExistingPrompts.Any(p =>
+                p.Name.Equals(def.Name, StringComparison.OrdinalIgnoreCase));
+
+            if (!exists)
             {
-                Id = "plan",
-                Name = "Plan",
-                InitialMessage = """
-                    ## Issue: {{title}}
+                var sessionType = AgentPromptService.ParseSessionType(def.SessionType);
+                var mode = AgentPromptService.ParseSessionMode(def.Mode);
 
-                    **ID:** {{id}}
-                    **Type:** {{type}}
-                    **Branch:** {{branch}}
-
-                    ### Description
-                    {{description}}
-
-                    ---
-
-                    Please analyze this issue and create a detailed implementation plan. Consider:
-                    - What files need to be modified or created
-                    - The approach and architecture
-                    - Any potential challenges or risks
-                    - Test requirements
-                    """,
-                Mode = SessionMode.Plan,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            });
-        }
-
-        // Check if Build prompt exists
-        if (!existingPrompts.Any(p => p.Name == "Build"))
-        {
-            await _dataStore.AddAgentPromptAsync(new AgentPrompt
-            {
-                Id = "build",
-                Name = "Build",
-                InitialMessage = """
-                    ## Issue: {{title}}
-
-                    **ID:** {{id}}
-                    **Type:** {{type}}
-                    **Branch:** {{branch}}
-
-                    ### Description
-                    {{description}}
-
-                    ---
-
-                    Please implement this issue. Write the code, create tests as needed, and ensure the implementation is complete and working.
-                    """,
-                Mode = SessionMode.Build,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            });
+                await _dataStore.AddAgentPromptAsync(new AgentPrompt
+                {
+                    Name = def.Name,
+                    InitialMessage = def.InitialMessage,
+                    Mode = mode,
+                    SessionType = sessionType,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                });
+            }
         }
     }
 

@@ -28,4 +28,10 @@
         <ProjectReference Include="..\Homespun.Shared\Homespun.Shared.csproj" />
     </ItemGroup>
 
+    <ItemGroup>
+        <Content Update="Features\ClaudeCode\Resources\default-prompts.json">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </Content>
+    </ItemGroup>
+
 </Project>
