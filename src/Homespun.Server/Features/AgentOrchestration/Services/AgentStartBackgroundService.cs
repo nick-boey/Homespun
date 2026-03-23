@@ -27,12 +27,17 @@ public class AgentStartBackgroundService(
         // Check if already starting for this issue
         if (_pendingStartups.ContainsKey(request.IssueId))
         {
-            logger.LogDebug("Agent startup already pending for issue {IssueId}", request.IssueId);
+            logger.LogDebug(
+                "Agent startup already pending for issue {IssueId}. Pending count: {PendingCount}, Pending IDs: [{PendingIds}]",
+                request.IssueId, _pendingStartups.Count, string.Join(", ", _pendingStartups.Keys));
             return Task.CompletedTask;
         }
 
         // Mark as pending
         _pendingStartups[request.IssueId] = DateTime.UtcNow;
+        logger.LogInformation(
+            "Queued agent start for issue {IssueId}. Pending count: {PendingCount}, Pending IDs: [{PendingIds}]",
+            request.IssueId, _pendingStartups.Count, string.Join(", ", _pendingStartups.Keys));
 
         // Fire and forget with proper error handling
         _ = Task.Run(async () =>
@@ -48,6 +53,9 @@ public class AgentStartBackgroundService(
             finally
             {
                 _pendingStartups.TryRemove(request.IssueId, out _);
+                logger.LogDebug(
+                    "Removed issue {IssueId} from pending startups. Remaining count: {PendingCount}",
+                    request.IssueId, _pendingStartups.Count);
             }
         });
 
@@ -78,6 +86,7 @@ public class AgentStartBackgroundService(
                     "Agent start blocked for issue {IssueId}: {Error}",
                     request.IssueId, resolution.Error);
                 startupTracker.MarkAsFailed(request.IssueId, resolution.Error);
+                startupTracker.Clear(request.IssueId);
                 await hubContext.BroadcastAgentStartFailed(
                     request.IssueId, request.ProjectId, resolution.Error);
                 return;
@@ -205,8 +214,9 @@ public class AgentStartBackgroundService(
                 });
             }
 
-            // Mark as successfully started
+            // Mark as successfully started and clear tracker entry
             startupTracker.MarkAsStarted(request.IssueId);
+            startupTracker.Clear(request.IssueId);
 
             logger.LogInformation(
                 "Agent started successfully for issue {IssueId}, session {SessionId}",
@@ -216,6 +226,7 @@ public class AgentStartBackgroundService(
         {
             logger.LogWarning("Agent startup timed out for issue {IssueId}", request.IssueId);
             startupTracker.MarkAsFailed(request.IssueId, "Agent startup timed out");
+            startupTracker.Clear(request.IssueId);
             await hubContext.BroadcastAgentStartFailed(
                 request.IssueId, request.ProjectId, "Agent startup timed out");
         }
@@ -223,6 +234,7 @@ public class AgentStartBackgroundService(
         {
             logger.LogError(ex, "Error starting agent for issue {IssueId}", request.IssueId);
             startupTracker.MarkAsFailed(request.IssueId, ex.Message);
+            startupTracker.Clear(request.IssueId);
             await hubContext.BroadcastAgentStartFailed(
                 request.IssueId, request.ProjectId, ex.Message);
         }
