@@ -13,18 +13,17 @@ export interface UseDefaultFilterResult {
 /**
  * Hook that provides the default filter query for the issue graph.
  *
- * Returns "is:next assigned:me" when user email is configured,
- * or just "is:next" when no user email is set.
+ * Returns "assigned:me" when user email is configured,
+ * or an empty string when no user email is set.
  */
 export function useDefaultFilter(): UseDefaultFilterResult {
   const { userEmail, isLoading } = useUserSettings()
 
   const defaultFilterQuery = useMemo(() => {
-    const parts = ['is:next']
     if (userEmail) {
-      parts.push('assigned:me')
+      return 'assigned:me'
     }
-    return parts.join(' ')
+    return ''
   }, [userEmail])
 
   return {

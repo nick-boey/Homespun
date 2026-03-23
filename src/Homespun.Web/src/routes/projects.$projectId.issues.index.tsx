@@ -321,11 +321,18 @@ function IssuesList() {
   }, [filterQuery])
 
   const handleApplyDefaultFilter = useCallback(() => {
-    setFilterActive(true)
-    setFilterQuery(defaultFilterQuery)
-    setAppliedFilterQuery(defaultFilterQuery)
-    setTimeout(() => filterInputRef.current?.focus(), 0)
-  }, [defaultFilterQuery])
+    // Toggle: if the default filter is already applied, clear it
+    if (filterActive && appliedFilterQuery === defaultFilterQuery) {
+      setFilterActive(false)
+      setFilterQuery('')
+      setAppliedFilterQuery('')
+    } else {
+      setFilterActive(true)
+      setFilterQuery(defaultFilterQuery)
+      setAppliedFilterQuery(defaultFilterQuery)
+      setTimeout(() => filterInputRef.current?.focus(), 0)
+    }
+  }, [defaultFilterQuery, filterActive, appliedFilterQuery])
 
   // Focus filter input with cursor at end (for 'f' key when filter is already active)
   const handleFocusFilterAtEnd = useCallback(() => {
@@ -357,6 +364,9 @@ function IssuesList() {
     isFilterActive: filterActive,
     onFocusFilterAtEnd: handleFocusFilterAtEnd,
   })
+
+  const isDefaultFilterActive =
+    filterActive && appliedFilterQuery === defaultFilterQuery && defaultFilterQuery !== ''
 
   return (
     <div className="flex h-full flex-col">
@@ -394,6 +404,7 @@ function IssuesList() {
         filterMatchCount={filterMatchCount}
         filterInputRef={filterInputRef}
         onApplyDefaultFilter={handleApplyDefaultFilter}
+        defaultFilterActive={isDefaultFilterActive}
         viewMode={issuesViewMode}
         onViewModeChange={setIssuesViewMode}
         renderMode={issuesRenderMode}

@@ -524,6 +524,20 @@ describe('ProjectToolbar', () => {
       await user.click(screen.getByTestId('toolbar-my-tasks-button'))
       expect(onApplyDefaultFilter).toHaveBeenCalled()
     })
+
+    it('shows active ring and aria-pressed when defaultFilterActive is true', () => {
+      renderToolbar({ defaultFilterActive: true })
+      const button = screen.getByTestId('toolbar-my-tasks-button')
+      expect(button).toHaveClass('ring-2')
+      expect(button).toHaveAttribute('aria-pressed', 'true')
+    })
+
+    it('shows no ring and aria-pressed false when defaultFilterActive is false', () => {
+      renderToolbar({ defaultFilterActive: false })
+      const button = screen.getByTestId('toolbar-my-tasks-button')
+      expect(button).not.toHaveClass('ring-2')
+      expect(button).toHaveAttribute('aria-pressed', 'false')
+    })
   })
 
   describe('Filter panel', () => {
