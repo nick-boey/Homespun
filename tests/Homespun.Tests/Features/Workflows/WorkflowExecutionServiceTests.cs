@@ -1523,7 +1523,7 @@ public class WorkflowExecutionServiceTests
         return
         [
             new AgentStepExecutor(new Mock<ILogger<AgentStepExecutor>>().Object),
-            new ServerActionStepExecutor(new Mock<ILogger<ServerActionStepExecutor>>().Object),
+            new ServerActionStepExecutor([], new Mock<ILogger<ServerActionStepExecutor>>().Object),
             new GateStepExecutor(new Mock<ILogger<GateStepExecutor>>().Object)
         ];
     }
