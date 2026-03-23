@@ -640,8 +640,8 @@ public class WorkflowExecutionServiceTests
         var triggerContext = new TriggerContext { TriggerType = WorkflowTriggerType.Manual };
         var startResult = await _service.StartWorkflowAsync(_testProjectPath, "workflow-1", triggerContext);
 
-        // Wait for execution to start
-        await Task.Delay(50);
+        // Wait for background execution to process the Start node
+        await Task.Delay(100);
 
         // Act
         var output = new Dictionary<string, object> { ["result"] = "success" };

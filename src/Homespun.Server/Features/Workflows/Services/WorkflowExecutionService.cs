@@ -426,7 +426,7 @@ public sealed class WorkflowExecutionService : IWorkflowExecutionService, IDispo
             }
             catch (ObjectDisposedException)
             {
-                // CTS was already disposed, ignore
+                // CTS was already disposed by execution completing
             }
 
             try
@@ -435,7 +435,7 @@ public sealed class WorkflowExecutionService : IWorkflowExecutionService, IDispo
             }
             catch (ObjectDisposedException)
             {
-                // CTS was already disposed, ignore
+                // Already disposed
             }
         }
 
