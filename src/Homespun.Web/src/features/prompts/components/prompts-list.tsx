@@ -277,17 +277,22 @@ export function PromptsList({ projectId, isGlobal = false }: PromptsListProps) {
         <TabsContent value="cards">
           {hasPrompts ? (
             <div className="grid gap-4">
-              {prompts.map((prompt) => (
-                <PromptCard
-                  key={prompt.id}
-                  prompt={prompt}
-                  onEdit={handleEdit}
-                  onDelete={handleDelete}
-                  isDeleting={deletingPromptId === prompt.id}
-                  onRemoveOverride={!isGlobal && projectId ? handleRemoveOverride : undefined}
-                  isRemovingOverride={removingOverrideId === prompt.id}
-                />
-              ))}
+              {prompts.map((prompt) => {
+                // On project page, hide delete for global prompts (they must be deleted from global page)
+                const canDelete = isGlobal || !!prompt.projectId || !!prompt.isOverride
+                return (
+                  <PromptCard
+                    key={prompt.id}
+                    prompt={prompt}
+                    onEdit={handleEdit}
+                    onDelete={handleDelete}
+                    isDeleting={deletingPromptId === prompt.id}
+                    showDelete={canDelete}
+                    onRemoveOverride={!isGlobal && projectId ? handleRemoveOverride : undefined}
+                    isRemovingOverride={removingOverrideId === prompt.id}
+                  />
+                )
+              })}
             </div>
           ) : (
             <PromptsEmptyState />
@@ -306,6 +311,11 @@ export function PromptsList({ projectId, isGlobal = false }: PromptsListProps) {
             prompts={allPromptsForCodeEditor}
             onApply={applyPromptChanges.mutateAsync}
             isApplying={applyPromptChanges.isPending}
+            globalPromptIds={
+              !isGlobal && projectId
+                ? (prompts ?? []).filter((p) => !p.projectId && !p.isOverride).map((p) => p.id!)
+                : undefined
+            }
           />
         </TabsContent>
       </Tabs>
