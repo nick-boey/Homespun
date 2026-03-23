@@ -13,6 +13,10 @@ export interface ToolbarShortcutCallbacks {
   onNextMatch: () => void
   onPreviousMatch: () => void
   onEmbedSearch: () => void
+  onMoveUp?: () => void
+  onMoveDown?: () => void
+  canMoveUp?: boolean
+  canMoveDown?: boolean
   onToggleFilter?: () => void
   /** Whether the filter panel is currently active/visible */
   isFilterActive?: boolean
@@ -34,6 +38,10 @@ export function useToolbarShortcuts(callbacks: ToolbarShortcutCallbacks) {
     onFocusSearch,
     onNextMatch,
     onPreviousMatch,
+    onMoveUp,
+    onMoveDown,
+    canMoveUp = false,
+    canMoveDown = false,
     onToggleFilter,
     isFilterActive = false,
     onFocusFilterAtEnd,
@@ -49,6 +57,24 @@ export function useToolbarShortcuts(callbacks: ToolbarShortcutCallbacks) {
       }
 
       const { key, shiftKey, ctrlKey, metaKey } = event
+
+      // Move up: Ctrl+Shift+ArrowUp or Cmd+Shift+ArrowUp
+      if ((ctrlKey || metaKey) && shiftKey && key === 'ArrowUp') {
+        if (canMoveUp && onMoveUp) {
+          event.preventDefault()
+          onMoveUp()
+        }
+        return
+      }
+
+      // Move down: Ctrl+Shift+ArrowDown or Cmd+Shift+ArrowDown
+      if ((ctrlKey || metaKey) && shiftKey && key === 'ArrowDown') {
+        if (canMoveDown && onMoveDown) {
+          event.preventDefault()
+          onMoveDown()
+        }
+        return
+      }
 
       // Redo: Ctrl+Shift+Z or Cmd+Shift+Z
       if ((ctrlKey || metaKey) && shiftKey && key.toLowerCase() === 'z') {
@@ -87,6 +113,24 @@ export function useToolbarShortcuts(callbacks: ToolbarShortcutCallbacks) {
         if (canUndo) {
           event.preventDefault()
           onUndo()
+        }
+        return
+      }
+
+      // Move up: K
+      if (!shiftKey && !ctrlKey && !metaKey && key === 'k') {
+        if (canMoveUp && onMoveUp) {
+          event.preventDefault()
+          onMoveUp()
+        }
+        return
+      }
+
+      // Move down: J
+      if (!shiftKey && !ctrlKey && !metaKey && key === 'j') {
+        if (canMoveDown && onMoveDown) {
+          event.preventDefault()
+          onMoveDown()
         }
         return
       }
@@ -150,6 +194,10 @@ export function useToolbarShortcuts(callbacks: ToolbarShortcutCallbacks) {
       onCreateBelow,
       onUndo,
       onRedo,
+      onMoveUp,
+      onMoveDown,
+      canMoveUp,
+      canMoveDown,
       onOpenAgentLauncher,
       onDecreaseDepth,
       onIncreaseDepth,

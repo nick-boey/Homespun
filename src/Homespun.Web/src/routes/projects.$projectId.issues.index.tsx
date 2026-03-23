@@ -5,6 +5,7 @@ import {
   TaskGraphView,
   ProjectToolbar,
   useToolbarShortcuts,
+  useTaskGraph,
   taskGraphQueryKey,
   useDefaultFilter,
   type TaskGraphViewRef,
@@ -14,6 +15,7 @@ import {
   type TaskGraphKonvaViewRef,
 } from '@/features/issues/components/task-graph-konva'
 import { MoveOperationType, RenderMode } from '@/features/issues/types'
+import { MoveDirection } from '@/api/generated/types.gen'
 import { useAppStore } from '@/stores/app-store'
 import { parseFilterQuery, type ParsedFilter } from '@/features/issues/services'
 import { AgentLauncherDialog } from '@/features/agents'
@@ -84,6 +86,52 @@ function IssuesList() {
   const [moveOperation, setMoveOperation] = useState<MoveOperationType | null>(null)
   const [moveSourceIssueId, setMoveSourceIssueId] = useState<string | null>(null)
 
+  // Task graph data for computing sibling positions
+  const { taskGraph } = useTaskGraph(projectId)
+
+  // Compute canMoveUp/canMoveDown based on selected issue's position among siblings
+  const { canMoveUp, canMoveDown } = useMemo(() => {
+    if (!selectedIssueId || !taskGraph?.nodes) return { canMoveUp: false, canMoveDown: false }
+
+    const selectedNode = taskGraph.nodes.find((n) => n.issue?.id === selectedIssueId)
+    if (!selectedNode?.issue?.parentIssues?.length) return { canMoveUp: false, canMoveDown: false }
+    if (selectedNode.issue.parentIssues.length > 1) return { canMoveUp: false, canMoveDown: false }
+
+    const parentId = selectedNode.issue.parentIssues[0].parentIssue
+    if (!parentId) return { canMoveUp: false, canMoveDown: false }
+
+    // Find all siblings under the same parent
+    const siblings = taskGraph.nodes
+      .filter((n) => n.issue?.parentIssues?.some((p) => p.parentIssue === parentId))
+      .sort((a, b) => {
+        const aOrder =
+          a.issue?.parentIssues?.find((p) => p.parentIssue === parentId)?.sortOrder ?? ''
+        const bOrder =
+          b.issue?.parentIssues?.find((p) => p.parentIssue === parentId)?.sortOrder ?? ''
+        return aOrder.localeCompare(bOrder)
+      })
+
+    const index = siblings.findIndex((s) => s.issue?.id === selectedIssueId)
+    if (index < 0) return { canMoveUp: false, canMoveDown: false }
+
+    return {
+      canMoveUp: index > 0,
+      canMoveDown: index < siblings.length - 1,
+    }
+  }, [selectedIssueId, taskGraph])
+
+  // Move sibling mutation
+  const moveSiblingMutation = useMutation({
+    mutationFn: ({ issueId, direction }: { issueId: string; direction: MoveDirection }) =>
+      Issues.postApiIssuesByIssueIdMoveSibling({
+        path: { issueId },
+        body: { projectId, direction },
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: taskGraphQueryKey(projectId) })
+    },
+  })
+
   // Set parent mutation for move operations
   const setParentMutation = useMutation({
     mutationFn: ({ childId, parentIssueId }: { childId: string; parentIssueId: string | null }) =>
@@ -125,6 +173,18 @@ function IssuesList() {
       taskGraphRef.current?.createBelow()
     }
   }, [issuesRenderMode])
+
+  const handleMoveUp = useCallback(() => {
+    if (selectedIssueId && canMoveUp) {
+      moveSiblingMutation.mutate({ issueId: selectedIssueId, direction: MoveDirection.UP })
+    }
+  }, [selectedIssueId, canMoveUp, moveSiblingMutation])
+
+  const handleMoveDown = useCallback(() => {
+    if (selectedIssueId && canMoveDown) {
+      moveSiblingMutation.mutate({ issueId: selectedIssueId, direction: MoveDirection.DOWN })
+    }
+  }, [selectedIssueId, canMoveDown, moveSiblingMutation])
 
   const handleMakeChild = useCallback(() => {
     if (!selectedIssueId) return
@@ -289,6 +349,10 @@ function IssuesList() {
     onNextMatch: handleNextMatch,
     onPreviousMatch: handlePreviousMatch,
     onEmbedSearch: handleEmbedSearch,
+    onMoveUp: handleMoveUp,
+    onMoveDown: handleMoveDown,
+    canMoveUp,
+    canMoveDown,
     onToggleFilter: handleToggleFilter,
     isFilterActive: filterActive,
     onFocusFilterAtEnd: handleFocusFilterAtEnd,
@@ -306,6 +370,10 @@ function IssuesList() {
         onMakeParent={handleMakeParent}
         childOfActive={moveOperation === MoveOperationType.AsChildOf}
         parentOfActive={moveOperation === MoveOperationType.AsParentOf}
+        onMoveUp={handleMoveUp}
+        onMoveDown={handleMoveDown}
+        canMoveUp={canMoveUp}
+        canMoveDown={canMoveDown}
         onEditIssue={() => handleEditIssue()}
         onOpenAgentLauncher={handleOpenAgentLauncher}
         onOpenIssuesAgent={handleOpenIssuesAgent}
