@@ -5,6 +5,7 @@ using Fleece.Core.Serialization;
 using Fleece.Core.Services;
 using Fleece.Core.Services.Interfaces;
 using Homespun.Shared.Requests;
+using Homespun.Shared.Utilities;
 
 namespace Homespun.Features.Fleece.Services;
 
@@ -759,10 +760,44 @@ public sealed class FleeceService : IFleeceService, IDisposable
             .Select(i => new
             {
                 Issue = i,
-                SortOrder = i.ParentIssues.First(p => p.ParentIssue == parentId).SortOrder ?? "0"
+                SortOrder = i.ParentIssues.First(p => p.ParentIssue == parentId).SortOrder
             })
-            .OrderBy(s => s.SortOrder, StringComparer.Ordinal)
+            .OrderBy(s => s.SortOrder ?? "", StringComparer.Ordinal)
             .ToList();
+
+        // If siblings lack distinct sort orders (all null/empty or all the same default),
+        // assign lexical ordering to all siblings preserving the current display order
+        var distinctOrders = siblings.Select(s => s.SortOrder ?? "").Distinct().Count();
+        if (distinctOrders < siblings.Count)
+        {
+            var service2 = GetOrCreateIssueService(projectPath);
+            string? prev = null;
+            for (var i = 0; i < siblings.Count; i++)
+            {
+                var newOrder = LexOrderUtils.ComputeMidpoint(prev, null);
+                var sib = siblings[i];
+                var updatedParents = sib.Issue.ParentIssues
+                    .Select(p => p.ParentIssue == parentId
+                        ? new ParentIssueRef { ParentIssue = p.ParentIssue, SortOrder = newOrder }
+                        : p)
+                    .ToList();
+
+                var updated = await service2.UpdateAsync(sib.Issue.Id, parentIssues: updatedParents, cancellationToken: ct);
+                cache[sib.Issue.Id] = updated;
+                prev = newOrder;
+            }
+
+            // Re-fetch siblings with updated sort orders
+            siblings = cache.Values
+                .Where(i2 => i2.ParentIssues.Any(p => p.ParentIssue == parentId))
+                .Select(i2 => new
+                {
+                    Issue = i2,
+                    SortOrder = i2.ParentIssues.First(p => p.ParentIssue == parentId).SortOrder
+                })
+                .OrderBy(s => s.SortOrder ?? "", StringComparer.Ordinal)
+                .ToList();
+        }
 
         // Find the current issue's position
         var currentIndex = siblings.FindIndex(s => s.Issue.Id == issueId);

@@ -51,6 +51,10 @@ const defaultProps = {
   onPreviousMatch: vi.fn(),
   onEmbedSearch: vi.fn(),
   onApplyDefaultFilter: vi.fn(),
+  onMoveUp: vi.fn(),
+  onMoveDown: vi.fn(),
+  canMoveUp: false,
+  canMoveDown: false,
 }
 
 function renderToolbar(props = {}) {
@@ -136,6 +140,56 @@ describe('ProjectToolbar', () => {
 
       await user.click(screen.getByRole('button', { name: /make parent/i }))
       expect(onMakeParent).toHaveBeenCalled()
+    })
+  })
+
+  describe('Move Up/Down buttons', () => {
+    it('renders move up button', () => {
+      renderToolbar()
+      expect(screen.getByTestId('toolbar-move-up')).toBeInTheDocument()
+    })
+
+    it('renders move down button', () => {
+      renderToolbar()
+      expect(screen.getByTestId('toolbar-move-down')).toBeInTheDocument()
+    })
+
+    it('disables move up button when canMoveUp is false', () => {
+      renderToolbar({ canMoveUp: false })
+      expect(screen.getByTestId('toolbar-move-up')).toBeDisabled()
+    })
+
+    it('disables move down button when canMoveDown is false', () => {
+      renderToolbar({ canMoveDown: false })
+      expect(screen.getByTestId('toolbar-move-down')).toBeDisabled()
+    })
+
+    it('enables move up button when canMoveUp is true', () => {
+      renderToolbar({ canMoveUp: true })
+      expect(screen.getByTestId('toolbar-move-up')).not.toBeDisabled()
+    })
+
+    it('enables move down button when canMoveDown is true', () => {
+      renderToolbar({ canMoveDown: true })
+      expect(screen.getByTestId('toolbar-move-down')).not.toBeDisabled()
+    })
+
+    it('calls onMoveUp when move up button is clicked', async () => {
+      const user = userEvent.setup()
+      const onMoveUp = vi.fn()
+      renderToolbar({ onMoveUp, canMoveUp: true })
+
+      await user.click(screen.getByTestId('toolbar-move-up'))
+      expect(onMoveUp).toHaveBeenCalled()
+    })
+
+    it('calls onMoveDown when move down button is clicked', async () => {
+      const user = userEvent.setup()
+      const onMoveDown = vi.fn()
+      renderToolbar({ onMoveDown, canMoveDown: true })
+
+      await user.click(screen.getByTestId('toolbar-move-down'))
+      expect(onMoveDown).toHaveBeenCalled()
     })
   })
 

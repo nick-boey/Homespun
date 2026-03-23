@@ -831,5 +831,75 @@ public class FleeceServiceTests
         Assert.That(string.Compare(child2SortOrder, child1SortOrder, StringComparison.Ordinal), Is.LessThan(0));
     }
 
+    [Test]
+    public async Task MoveSeriesSiblingAsync_Up_AssignsOrdersWhenSiblingsHaveNoSortOrder()
+    {
+        // Arrange - create a parent with two children, none with sort orders
+        var parent = await _service.CreateIssueAsync(_tempDir, "Parent Issue", IssueType.Feature);
+        var child1 = await _service.CreateIssueAsync(_tempDir, "Child 1", IssueType.Task);
+        var child2 = await _service.CreateIssueAsync(_tempDir, "Child 2", IssueType.Task);
+
+        // Add children without sort orders (null)
+        await _service.AddParentAsync(_tempDir, child1.Id, parent.Id);
+        await _service.AddParentAsync(_tempDir, child2.Id, parent.Id);
+
+        // Determine which child is last after lexical ordering is assigned
+        // (since both have null sort order, the initial order depends on cache iteration)
+        // We need to find which child ends up last so we can move it up
+        // First, get the initial ordering by reading sort orders
+        var c1Before = await _service.GetIssueAsync(_tempDir, child1.Id);
+        var c2Before = await _service.GetIssueAsync(_tempDir, child2.Id);
+
+        // Both should have the same default sort order before the move
+        Assert.That(c1Before!.ParentIssues[0].SortOrder, Is.EqualTo(c2Before!.ParentIssues[0].SortOrder));
+
+        // Move child2 up - this should assign distinct sort orders first, then perform the swap
+        var updated = await _service.MoveSeriesSiblingAsync(_tempDir, child2.Id, MoveDirection.Up);
+
+        // Assert - both siblings should now have sort orders
+        Assert.That(updated, Is.Not.Null);
+        var updatedChild1 = await _service.GetIssueAsync(_tempDir, child1.Id);
+        var updatedChild2 = await _service.GetIssueAsync(_tempDir, child2.Id);
+
+        Assert.That(updatedChild1!.ParentIssues[0].SortOrder, Is.Not.Null.And.Not.Empty);
+        Assert.That(updatedChild2!.ParentIssues[0].SortOrder, Is.Not.Null.And.Not.Empty);
+
+        // Sort orders should be different
+        Assert.That(updatedChild1!.ParentIssues[0].SortOrder,
+            Is.Not.EqualTo(updatedChild2!.ParentIssues[0].SortOrder));
+    }
+
+    [Test]
+    public async Task MoveSeriesSiblingAsync_Down_AssignsOrdersWhenSiblingsHaveNoSortOrder()
+    {
+        // Arrange - create a parent with two children, none with sort orders
+        var parent = await _service.CreateIssueAsync(_tempDir, "Parent Issue", IssueType.Feature);
+        var child1 = await _service.CreateIssueAsync(_tempDir, "Child 1", IssueType.Task);
+        var child2 = await _service.CreateIssueAsync(_tempDir, "Child 2", IssueType.Task);
+
+        await _service.AddParentAsync(_tempDir, child1.Id, parent.Id);
+        await _service.AddParentAsync(_tempDir, child2.Id, parent.Id);
+
+        // Both should have the same default sort order before the move
+        var c1Before = await _service.GetIssueAsync(_tempDir, child1.Id);
+        var c2Before = await _service.GetIssueAsync(_tempDir, child2.Id);
+        Assert.That(c1Before!.ParentIssues[0].SortOrder, Is.EqualTo(c2Before!.ParentIssues[0].SortOrder));
+
+        // Move child1 down - this should assign distinct sort orders first, then perform the swap
+        var updated = await _service.MoveSeriesSiblingAsync(_tempDir, child1.Id, MoveDirection.Down);
+
+        // Assert - both siblings should now have sort orders
+        Assert.That(updated, Is.Not.Null);
+        var updatedChild1 = await _service.GetIssueAsync(_tempDir, child1.Id);
+        var updatedChild2 = await _service.GetIssueAsync(_tempDir, child2.Id);
+
+        Assert.That(updatedChild1!.ParentIssues[0].SortOrder, Is.Not.Null.And.Not.Empty);
+        Assert.That(updatedChild2!.ParentIssues[0].SortOrder, Is.Not.Null.And.Not.Empty);
+
+        // Sort orders should be different
+        Assert.That(updatedChild1!.ParentIssues[0].SortOrder,
+            Is.Not.EqualTo(updatedChild2!.ParentIssues[0].SortOrder));
+    }
+
     #endregion
 }

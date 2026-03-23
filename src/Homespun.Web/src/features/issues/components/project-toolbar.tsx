@@ -2,6 +2,8 @@ import { useRef } from 'react'
 import {
   ArrowUpFromLine,
   ArrowDownFromLine,
+  ChevronUp,
+  ChevronDown,
   CornerRightUp,
   CornerLeftDown,
   Undo2,
@@ -42,6 +44,14 @@ export interface ProjectToolbarProps {
   childOfActive?: boolean
   /** Whether the "Make Parent Of" button is in active selection mode */
   parentOfActive?: boolean
+  /** Callback when Move Up is clicked */
+  onMoveUp?: () => void
+  /** Callback when Move Down is clicked */
+  onMoveDown?: () => void
+  /** Whether the selected issue can move up among its siblings */
+  canMoveUp?: boolean
+  /** Whether the selected issue can move down among its siblings */
+  canMoveDown?: boolean
   onEditIssue: () => void
   onOpenAgentLauncher: () => void
   onOpenIssuesAgent: () => void
@@ -89,6 +99,10 @@ export function ProjectToolbar({
   onMakeParent,
   childOfActive = false,
   parentOfActive = false,
+  onMoveUp,
+  onMoveDown,
+  canMoveUp = false,
+  canMoveDown = false,
   onEditIssue,
   onOpenAgentLauncher,
   onOpenIssuesAgent,
@@ -192,6 +206,34 @@ export function ProjectToolbar({
           className={cn(parentOfActive && 'ring-ring ring-2')}
         >
           <CornerLeftDown className="h-4 w-4" />
+        </Button>
+      </ButtonGroup>
+
+      <Separator orientation="vertical" className="mx-1 h-6" />
+
+      {/* Move Up/Down buttons group */}
+      <ButtonGroup>
+        <Button
+          variant="outline"
+          size={buttonSize}
+          onClick={onMoveUp}
+          disabled={!canMoveUp}
+          aria-label="Move up (Ctrl+Shift+Up)"
+          title="Move up (Ctrl+Shift+Up)"
+          data-testid="toolbar-move-up"
+        >
+          <ChevronUp className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="outline"
+          size={buttonSize}
+          onClick={onMoveDown}
+          disabled={!canMoveDown}
+          aria-label="Move down (Ctrl+Shift+Down)"
+          title="Move down (Ctrl+Shift+Down)"
+          data-testid="toolbar-move-down"
+        >
+          <ChevronDown className="h-4 w-4" />
         </Button>
       </ButtonGroup>
 
