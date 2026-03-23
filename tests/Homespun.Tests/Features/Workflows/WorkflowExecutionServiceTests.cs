@@ -18,7 +18,10 @@ public class WorkflowExecutionServiceTests
     {
         _mockStorageService = new Mock<IWorkflowStorageService>();
         _mockLogger = new Mock<ILogger<WorkflowExecutionService>>();
-        _service = new WorkflowExecutionService(_mockStorageService.Object, _mockLogger.Object);
+
+        var stepExecutors = CreateDefaultStepExecutors();
+        _service = new WorkflowExecutionService(_mockStorageService.Object, stepExecutors, _mockLogger.Object);
+
         _testProjectPath = Path.Combine(Path.GetTempPath(), $"workflow-exec-test-{Guid.NewGuid():N}");
         Directory.CreateDirectory(_testProjectPath);
     }
@@ -843,7 +846,7 @@ public class WorkflowExecutionServiceTests
 
     #endregion
 
-    #region StepTransition Validation Tests
+    #region StepTransition Tests
 
     [Test]
     public async Task StepTransition_GoToStep_TargetStepIdIsPreserved()
@@ -886,9 +889,644 @@ public class WorkflowExecutionServiceTests
         Assert.That(workflow.Steps[0].OnFailure.TargetStepId, Is.EqualTo("step-3"));
     }
 
+    [Test]
+    public async Task StepTransition_OnSuccess_GoToStep_JumpsToTargetStep()
+    {
+        // Arrange - step-1 on success jumps to step-3, skipping step-2
+        var workflow = new WorkflowDefinition
+        {
+            Id = "workflow-1",
+            ProjectId = "project-1",
+            Title = "GoToStep Success Test",
+            Enabled = true,
+            Steps =
+            [
+                new WorkflowStep
+                {
+                    Id = "step-1",
+                    Name = "First",
+                    StepType = WorkflowStepType.ServerAction,
+                    OnSuccess = new StepTransition { Type = StepTransitionType.GoToStep, TargetStepId = "step-3" }
+                },
+                new WorkflowStep { Id = "step-2", Name = "Second", StepType = WorkflowStepType.ServerAction },
+                new WorkflowStep { Id = "step-3", Name = "Third", StepType = WorkflowStepType.ServerAction }
+            ],
+            Settings = new WorkflowSettings()
+        };
+
+        _mockStorageService.Setup(s => s.GetWorkflowAsync(_testProjectPath, "workflow-1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(workflow);
+
+        var triggerContext = new TriggerContext { TriggerType = WorkflowTriggerType.Manual };
+
+        // Act
+        var result = await _service.StartWorkflowAsync(_testProjectPath, "workflow-1", triggerContext);
+        await Task.Delay(200);
+
+        // Assert - step-2 should be skipped (still Pending), step-1 and step-3 should be Completed
+        var execution = await _service.GetExecutionAsync(_testProjectPath, result.Execution!.Id);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(execution!.Status, Is.EqualTo(WorkflowExecutionStatus.Completed));
+            Assert.That(execution.StepExecutions.First(s => s.StepId == "step-1").Status, Is.EqualTo(StepExecutionStatus.Completed));
+            Assert.That(execution.StepExecutions.First(s => s.StepId == "step-2").Status, Is.EqualTo(StepExecutionStatus.Pending));
+            Assert.That(execution.StepExecutions.First(s => s.StepId == "step-3").Status, Is.EqualTo(StepExecutionStatus.Completed));
+        });
+    }
+
+    [Test]
+    public async Task StepTransition_OnSuccess_Exit_TerminatesWorkflowSuccessfully()
+    {
+        // Arrange - step-1 on success exits immediately
+        var workflow = new WorkflowDefinition
+        {
+            Id = "workflow-1",
+            ProjectId = "project-1",
+            Title = "Exit Test",
+            Enabled = true,
+            Steps =
+            [
+                new WorkflowStep
+                {
+                    Id = "step-1",
+                    Name = "First",
+                    StepType = WorkflowStepType.ServerAction,
+                    OnSuccess = new StepTransition { Type = StepTransitionType.Exit }
+                },
+                new WorkflowStep { Id = "step-2", Name = "Second", StepType = WorkflowStepType.ServerAction }
+            ],
+            Settings = new WorkflowSettings()
+        };
+
+        _mockStorageService.Setup(s => s.GetWorkflowAsync(_testProjectPath, "workflow-1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(workflow);
+
+        var triggerContext = new TriggerContext { TriggerType = WorkflowTriggerType.Manual };
+
+        // Act
+        var result = await _service.StartWorkflowAsync(_testProjectPath, "workflow-1", triggerContext);
+        await Task.Delay(200);
+
+        // Assert - workflow should be completed, step-2 should not have run
+        var execution = await _service.GetExecutionAsync(_testProjectPath, result.Execution!.Id);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(execution!.Status, Is.EqualTo(WorkflowExecutionStatus.Completed));
+            Assert.That(execution.StepExecutions.First(s => s.StepId == "step-1").Status, Is.EqualTo(StepExecutionStatus.Completed));
+            Assert.That(execution.StepExecutions.First(s => s.StepId == "step-2").Status, Is.EqualTo(StepExecutionStatus.Pending));
+        });
+    }
+
+    [Test]
+    public async Task StepTransition_OnFailure_GoToStep_JumpsToTargetOnFailure()
+    {
+        // Arrange - Use a mock executor that fails for step-1
+        var mockExecutor = new Mock<IStepExecutor>();
+        mockExecutor.Setup(e => e.StepType).Returns(WorkflowStepType.ServerAction);
+        mockExecutor.SetupSequence(e => e.ExecuteAsync(It.IsAny<WorkflowStep>(), It.IsAny<WorkflowContext>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(StepResult.Failed("Step failed")) // step-1 fails
+            .ReturnsAsync(StepResult.Completed())           // step-3 succeeds
+            .ReturnsAsync(StepResult.Completed());          // fallback
+
+        var executors = new List<IStepExecutor>
+        {
+            mockExecutor.Object,
+            new AgentStepExecutor(new Mock<ILogger<AgentStepExecutor>>().Object),
+            new GateStepExecutor(new Mock<ILogger<GateStepExecutor>>().Object)
+        };
+
+        var service = new WorkflowExecutionService(_mockStorageService.Object, executors, _mockLogger.Object);
+
+        var workflow = new WorkflowDefinition
+        {
+            Id = "workflow-1",
+            ProjectId = "project-1",
+            Title = "OnFailure GoTo Test",
+            Enabled = true,
+            Steps =
+            [
+                new WorkflowStep
+                {
+                    Id = "step-1",
+                    Name = "First",
+                    StepType = WorkflowStepType.ServerAction,
+                    OnFailure = new StepTransition { Type = StepTransitionType.GoToStep, TargetStepId = "step-3" }
+                },
+                new WorkflowStep { Id = "step-2", Name = "Second", StepType = WorkflowStepType.ServerAction },
+                new WorkflowStep { Id = "step-3", Name = "Third", StepType = WorkflowStepType.ServerAction }
+            ],
+            Settings = new WorkflowSettings { ContinueOnFailure = true }
+        };
+
+        _mockStorageService.Setup(s => s.GetWorkflowAsync(It.IsAny<string>(), "workflow-1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(workflow);
+
+        var triggerContext = new TriggerContext { TriggerType = WorkflowTriggerType.Manual };
+
+        // Act
+        var result = await service.StartWorkflowAsync(_testProjectPath, "workflow-1", triggerContext);
+        await Task.Delay(200);
+
+        // Assert - step-1 failed, jumped to step-3, step-2 was skipped
+        var execution = await service.GetExecutionAsync(_testProjectPath, result.Execution!.Id);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(execution!.Status, Is.EqualTo(WorkflowExecutionStatus.Completed));
+            Assert.That(execution.StepExecutions.First(s => s.StepId == "step-1").Status, Is.EqualTo(StepExecutionStatus.Failed));
+            Assert.That(execution.StepExecutions.First(s => s.StepId == "step-2").Status, Is.EqualTo(StepExecutionStatus.Pending));
+            Assert.That(execution.StepExecutions.First(s => s.StepId == "step-3").Status, Is.EqualTo(StepExecutionStatus.Completed));
+        });
+
+        service.Dispose();
+    }
+
+    [Test]
+    public async Task StepTransition_OnFailure_Exit_TerminatesWorkflowWithFailure()
+    {
+        // Arrange - Use a mock executor that fails
+        var mockExecutor = new Mock<IStepExecutor>();
+        mockExecutor.Setup(e => e.StepType).Returns(WorkflowStepType.ServerAction);
+        mockExecutor.Setup(e => e.ExecuteAsync(It.IsAny<WorkflowStep>(), It.IsAny<WorkflowContext>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(StepResult.Failed("Boom"));
+
+        var executors = new List<IStepExecutor>
+        {
+            mockExecutor.Object,
+            new AgentStepExecutor(new Mock<ILogger<AgentStepExecutor>>().Object),
+            new GateStepExecutor(new Mock<ILogger<GateStepExecutor>>().Object)
+        };
+
+        var service = new WorkflowExecutionService(_mockStorageService.Object, executors, _mockLogger.Object);
+
+        var workflow = new WorkflowDefinition
+        {
+            Id = "workflow-1",
+            ProjectId = "project-1",
+            Title = "Exit on Failure Test",
+            Enabled = true,
+            Steps =
+            [
+                new WorkflowStep
+                {
+                    Id = "step-1",
+                    Name = "First",
+                    StepType = WorkflowStepType.ServerAction,
+                    OnFailure = new StepTransition { Type = StepTransitionType.Exit }
+                },
+                new WorkflowStep { Id = "step-2", Name = "Second", StepType = WorkflowStepType.ServerAction }
+            ],
+            Settings = new WorkflowSettings()
+        };
+
+        _mockStorageService.Setup(s => s.GetWorkflowAsync(It.IsAny<string>(), "workflow-1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(workflow);
+
+        var triggerContext = new TriggerContext { TriggerType = WorkflowTriggerType.Manual };
+
+        // Act
+        var result = await service.StartWorkflowAsync(_testProjectPath, "workflow-1", triggerContext);
+        await Task.Delay(200);
+
+        // Assert
+        var execution = await service.GetExecutionAsync(_testProjectPath, result.Execution!.Id);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(execution!.Status, Is.EqualTo(WorkflowExecutionStatus.Failed));
+            Assert.That(execution.StepExecutions.First(s => s.StepId == "step-1").Status, Is.EqualTo(StepExecutionStatus.Failed));
+            Assert.That(execution.StepExecutions.First(s => s.StepId == "step-2").Status, Is.EqualTo(StepExecutionStatus.Pending));
+        });
+
+        service.Dispose();
+    }
+
+    #endregion
+
+    #region Retry Logic Tests
+
+    [Test]
+    public async Task Retry_RetriesUpToMaxRetries_ThenFollowsOnFailure()
+    {
+        // Arrange - executor always fails, step has retry with max 2 retries and 0 delay
+        var callCount = 0;
+        var mockExecutor = new Mock<IStepExecutor>();
+        mockExecutor.Setup(e => e.StepType).Returns(WorkflowStepType.ServerAction);
+        mockExecutor.Setup(e => e.ExecuteAsync(It.IsAny<WorkflowStep>(), It.IsAny<WorkflowContext>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() =>
+            {
+                callCount++;
+                return StepResult.Failed("fail");
+            });
+
+        var executors = new List<IStepExecutor>
+        {
+            mockExecutor.Object,
+            new AgentStepExecutor(new Mock<ILogger<AgentStepExecutor>>().Object),
+            new GateStepExecutor(new Mock<ILogger<GateStepExecutor>>().Object)
+        };
+
+        var service = new WorkflowExecutionService(_mockStorageService.Object, executors, _mockLogger.Object);
+
+        var workflow = new WorkflowDefinition
+        {
+            Id = "workflow-1",
+            ProjectId = "project-1",
+            Title = "Retry Test",
+            Enabled = true,
+            Steps =
+            [
+                new WorkflowStep
+                {
+                    Id = "step-1",
+                    Name = "Retryable",
+                    StepType = WorkflowStepType.ServerAction,
+                    OnFailure = new StepTransition { Type = StepTransitionType.Retry },
+                    MaxRetries = 2,
+                    RetryDelaySeconds = 0
+                }
+            ],
+            Settings = new WorkflowSettings()
+        };
+
+        _mockStorageService.Setup(s => s.GetWorkflowAsync(It.IsAny<string>(), "workflow-1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(workflow);
+
+        var triggerContext = new TriggerContext { TriggerType = WorkflowTriggerType.Manual };
+
+        // Act
+        var result = await service.StartWorkflowAsync(_testProjectPath, "workflow-1", triggerContext);
+        await Task.Delay(300);
+
+        // Assert - should have been called 3 times (initial + 2 retries)
+        var execution = await service.GetExecutionAsync(_testProjectPath, result.Execution!.Id);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(callCount, Is.EqualTo(3));
+            Assert.That(execution!.Status, Is.EqualTo(WorkflowExecutionStatus.Failed));
+            Assert.That(execution.StepExecutions.First(s => s.StepId == "step-1").RetryCount, Is.EqualTo(2));
+        });
+
+        service.Dispose();
+    }
+
+    [Test]
+    public async Task Retry_SucceedsOnSecondAttempt_ContinuesWorkflow()
+    {
+        // Arrange - executor fails first, then succeeds
+        var mockExecutor = new Mock<IStepExecutor>();
+        mockExecutor.Setup(e => e.StepType).Returns(WorkflowStepType.ServerAction);
+        mockExecutor.SetupSequence(e => e.ExecuteAsync(It.IsAny<WorkflowStep>(), It.IsAny<WorkflowContext>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(StepResult.Failed("first try failed"))  // step-1 first attempt
+            .ReturnsAsync(StepResult.Completed())                 // step-1 retry succeeds
+            .ReturnsAsync(StepResult.Completed());                // step-2 succeeds
+
+        var executors = new List<IStepExecutor>
+        {
+            mockExecutor.Object,
+            new AgentStepExecutor(new Mock<ILogger<AgentStepExecutor>>().Object),
+            new GateStepExecutor(new Mock<ILogger<GateStepExecutor>>().Object)
+        };
+
+        var service = new WorkflowExecutionService(_mockStorageService.Object, executors, _mockLogger.Object);
+
+        var workflow = new WorkflowDefinition
+        {
+            Id = "workflow-1",
+            ProjectId = "project-1",
+            Title = "Retry Success Test",
+            Enabled = true,
+            Steps =
+            [
+                new WorkflowStep
+                {
+                    Id = "step-1",
+                    Name = "Retryable",
+                    StepType = WorkflowStepType.ServerAction,
+                    OnFailure = new StepTransition { Type = StepTransitionType.Retry },
+                    MaxRetries = 2,
+                    RetryDelaySeconds = 0
+                },
+                new WorkflowStep { Id = "step-2", Name = "Second", StepType = WorkflowStepType.ServerAction }
+            ],
+            Settings = new WorkflowSettings()
+        };
+
+        _mockStorageService.Setup(s => s.GetWorkflowAsync(It.IsAny<string>(), "workflow-1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(workflow);
+
+        var triggerContext = new TriggerContext { TriggerType = WorkflowTriggerType.Manual };
+
+        // Act
+        var result = await service.StartWorkflowAsync(_testProjectPath, "workflow-1", triggerContext);
+        await Task.Delay(300);
+
+        // Assert
+        var execution = await service.GetExecutionAsync(_testProjectPath, result.Execution!.Id);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(execution!.Status, Is.EqualTo(WorkflowExecutionStatus.Completed));
+            Assert.That(execution.StepExecutions.First(s => s.StepId == "step-1").Status, Is.EqualTo(StepExecutionStatus.Completed));
+            Assert.That(execution.StepExecutions.First(s => s.StepId == "step-1").RetryCount, Is.EqualTo(1));
+            Assert.That(execution.StepExecutions.First(s => s.StepId == "step-2").Status, Is.EqualTo(StepExecutionStatus.Completed));
+        });
+
+        service.Dispose();
+    }
+
+    #endregion
+
+    #region Condition Evaluation Tests
+
+    [Test]
+    public async Task Condition_StepSkippedWhenConditionIsFalse()
+    {
+        // Arrange - step-2 has a condition that evaluates to false
+        var workflow = new WorkflowDefinition
+        {
+            Id = "workflow-1",
+            ProjectId = "project-1",
+            Title = "Condition Test",
+            Enabled = true,
+            Steps =
+            [
+                new WorkflowStep { Id = "step-1", Name = "First", StepType = WorkflowStepType.ServerAction },
+                new WorkflowStep
+                {
+                    Id = "step-2",
+                    Name = "Conditional",
+                    StepType = WorkflowStepType.ServerAction,
+                    Condition = "steps.step-1.output.skipNext == true"
+                },
+                new WorkflowStep { Id = "step-3", Name = "Third", StepType = WorkflowStepType.ServerAction }
+            ],
+            Settings = new WorkflowSettings()
+        };
+
+        _mockStorageService.Setup(s => s.GetWorkflowAsync(_testProjectPath, "workflow-1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(workflow);
+
+        var triggerContext = new TriggerContext { TriggerType = WorkflowTriggerType.Manual };
+
+        // Act
+        var result = await _service.StartWorkflowAsync(_testProjectPath, "workflow-1", triggerContext);
+        await Task.Delay(200);
+
+        // Assert - step-2 should be skipped, step-1 and step-3 completed
+        var execution = await _service.GetExecutionAsync(_testProjectPath, result.Execution!.Id);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(execution!.Status, Is.EqualTo(WorkflowExecutionStatus.Completed));
+            Assert.That(execution.StepExecutions.First(s => s.StepId == "step-1").Status, Is.EqualTo(StepExecutionStatus.Completed));
+            Assert.That(execution.StepExecutions.First(s => s.StepId == "step-2").Status, Is.EqualTo(StepExecutionStatus.Skipped));
+            Assert.That(execution.StepExecutions.First(s => s.StepId == "step-3").Status, Is.EqualTo(StepExecutionStatus.Completed));
+        });
+    }
+
+    [Test]
+    public void EvaluateCondition_EqualityTrue_ReturnsTrue()
+    {
+        var context = new WorkflowContext();
+        context.NodeOutputs["verify"] = new NodeOutput
+        {
+            Status = "completed",
+            Data = new Dictionary<string, object> { ["approved"] = true }
+        };
+
+        var result = WorkflowExecutionService.EvaluateCondition("steps.verify.output.approved == true", context);
+
+        Assert.That(result, Is.True);
+    }
+
+    [Test]
+    public void EvaluateCondition_EqualityFalse_ReturnsFalse()
+    {
+        var context = new WorkflowContext();
+        context.NodeOutputs["verify"] = new NodeOutput
+        {
+            Status = "completed",
+            Data = new Dictionary<string, object> { ["approved"] = false }
+        };
+
+        var result = WorkflowExecutionService.EvaluateCondition("steps.verify.output.approved == true", context);
+
+        Assert.That(result, Is.False);
+    }
+
+    [Test]
+    public void EvaluateCondition_NotEquals_ReturnsCorrectResult()
+    {
+        var context = new WorkflowContext();
+        context.NodeOutputs["verify"] = new NodeOutput
+        {
+            Status = "completed",
+            Data = new Dictionary<string, object> { ["approved"] = false }
+        };
+
+        var result = WorkflowExecutionService.EvaluateCondition("steps.verify.output.approved != true", context);
+
+        Assert.That(result, Is.True);
+    }
+
+    [Test]
+    public void EvaluateCondition_MissingPath_ReturnsFalse()
+    {
+        var context = new WorkflowContext();
+
+        var result = WorkflowExecutionService.EvaluateCondition("steps.verify.output.approved == true", context);
+
+        Assert.That(result, Is.False);
+    }
+
+    [Test]
+    public void EvaluateCondition_EmptyCondition_ReturnsTrue()
+    {
+        var context = new WorkflowContext();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(WorkflowExecutionService.EvaluateCondition("", context), Is.True);
+            Assert.That(WorkflowExecutionService.EvaluateCondition("  ", context), Is.True);
+        });
+    }
+
+    [Test]
+    public void EvaluateCondition_BooleanPath_ReturnsTruthiness()
+    {
+        var context = new WorkflowContext();
+        context.Variables["enabled"] = true;
+
+        var result = WorkflowExecutionService.EvaluateCondition("variables.enabled", context);
+
+        Assert.That(result, Is.True);
+    }
+
+    [Test]
+    public void EvaluateCondition_StringEquality_ReturnsTrue()
+    {
+        var context = new WorkflowContext();
+        context.NodeOutputs["build"] = new NodeOutput
+        {
+            Status = "completed",
+            Data = new Dictionary<string, object> { ["result"] = "success" }
+        };
+
+        var result = WorkflowExecutionService.EvaluateCondition("steps.build.output.result == \"success\"", context);
+
+        Assert.That(result, Is.True);
+    }
+
+    #endregion
+
+    #region Crash Recovery Tests
+
+    [Test]
+    public async Task CrashRecovery_ResumesFromPersistedCurrentStepIndex()
+    {
+        // Arrange - Create a workflow with a gate step in the middle
+        var workflow = new WorkflowDefinition
+        {
+            Id = "workflow-1",
+            ProjectId = "project-1",
+            Title = "Recovery Test",
+            Enabled = true,
+            Steps =
+            [
+                new WorkflowStep { Id = "step-1", Name = "Action", StepType = WorkflowStepType.ServerAction },
+                new WorkflowStep { Id = "step-2", Name = "Gate", StepType = WorkflowStepType.Gate },
+                new WorkflowStep { Id = "step-3", Name = "Final", StepType = WorkflowStepType.ServerAction }
+            ],
+            Settings = new WorkflowSettings()
+        };
+
+        _mockStorageService.Setup(s => s.GetWorkflowAsync(_testProjectPath, "workflow-1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(workflow);
+
+        var triggerContext = new TriggerContext { TriggerType = WorkflowTriggerType.Manual };
+
+        // Start and let it reach the gate
+        var result = await _service.StartWorkflowAsync(_testProjectPath, "workflow-1", triggerContext);
+        await Task.Delay(200);
+
+        var execution = await _service.GetExecutionAsync(_testProjectPath, result.Execution!.Id);
+        Assert.That(execution!.Status, Is.EqualTo(WorkflowExecutionStatus.Paused));
+        Assert.That(execution.CurrentStepIndex, Is.EqualTo(1)); // Paused at gate
+
+        // Simulate crash recovery: create a new service instance that loads from disk
+        _service.Dispose();
+        var stepExecutors = CreateDefaultStepExecutors();
+        _service = new WorkflowExecutionService(_mockStorageService.Object, stepExecutors, _mockLogger.Object);
+
+        // The execution should be loadable from disk
+        var recoveredExecution = await _service.GetExecutionAsync(_testProjectPath, result.Execution.Id);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(recoveredExecution, Is.Not.Null);
+            Assert.That(recoveredExecution!.Status, Is.EqualTo(WorkflowExecutionStatus.Paused));
+            Assert.That(recoveredExecution.CurrentStepIndex, Is.EqualTo(1));
+        });
+    }
+
+    #endregion
+
+    #region Gate Step Tests
+
+    [Test]
+    public async Task GateStep_PausesExecutionAndWaitsForInput()
+    {
+        // Arrange
+        var workflow = new WorkflowDefinition
+        {
+            Id = "workflow-1",
+            ProjectId = "project-1",
+            Title = "Gate Test",
+            Enabled = true,
+            Steps =
+            [
+                new WorkflowStep { Id = "step-1", Name = "Action", StepType = WorkflowStepType.ServerAction },
+                new WorkflowStep { Id = "step-2", Name = "Gate", StepType = WorkflowStepType.Gate }
+            ],
+            Settings = new WorkflowSettings()
+        };
+
+        _mockStorageService.Setup(s => s.GetWorkflowAsync(_testProjectPath, "workflow-1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(workflow);
+
+        var triggerContext = new TriggerContext { TriggerType = WorkflowTriggerType.Manual };
+
+        // Act
+        var result = await _service.StartWorkflowAsync(_testProjectPath, "workflow-1", triggerContext);
+        await Task.Delay(200);
+
+        // Assert
+        var execution = await _service.GetExecutionAsync(_testProjectPath, result.Execution!.Id);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(execution!.Status, Is.EqualTo(WorkflowExecutionStatus.Paused));
+            Assert.That(execution.StepExecutions.First(s => s.StepId == "step-2").Status, Is.EqualTo(StepExecutionStatus.WaitingForInput));
+        });
+    }
+
+    #endregion
+
+    #region Agent Step Tests
+
+    [Test]
+    public async Task AgentStep_PausesExecutionWaitingForCallback()
+    {
+        // Arrange
+        var workflow = new WorkflowDefinition
+        {
+            Id = "workflow-1",
+            ProjectId = "project-1",
+            Title = "Agent Test",
+            Enabled = true,
+            Steps =
+            [
+                new WorkflowStep { Id = "agent-1", Name = "Agent", StepType = WorkflowStepType.Agent, Prompt = "Do something" }
+            ],
+            Settings = new WorkflowSettings()
+        };
+
+        _mockStorageService.Setup(s => s.GetWorkflowAsync(_testProjectPath, "workflow-1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(workflow);
+
+        var triggerContext = new TriggerContext { TriggerType = WorkflowTriggerType.Manual };
+
+        // Act
+        var result = await _service.StartWorkflowAsync(_testProjectPath, "workflow-1", triggerContext);
+        await Task.Delay(200);
+
+        // Assert - execution should still be running (not paused), but waiting for callback
+        var execution = await _service.GetExecutionAsync(_testProjectPath, result.Execution!.Id);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(execution!.Status, Is.EqualTo(WorkflowExecutionStatus.Running));
+            Assert.That(execution.StepExecutions.First(s => s.StepId == "agent-1").Status, Is.EqualTo(StepExecutionStatus.Running));
+        });
+    }
+
     #endregion
 
     #region Helper Methods
+
+    private static IEnumerable<IStepExecutor> CreateDefaultStepExecutors()
+    {
+        return
+        [
+            new AgentStepExecutor(new Mock<ILogger<AgentStepExecutor>>().Object),
+            new ServerActionStepExecutor(new Mock<ILogger<ServerActionStepExecutor>>().Object),
+            new GateStepExecutor(new Mock<ILogger<GateStepExecutor>>().Object)
+        ];
+    }
 
     private static WorkflowDefinition CreateTestWorkflow(string id, bool enabled)
     {

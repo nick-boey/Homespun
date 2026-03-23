@@ -156,6 +156,9 @@ public static class MockServiceExtensions
 
         // Workflow services
         services.AddSingleton<IWorkflowStorageService, WorkflowStorageService>();
+        services.AddSingleton<IStepExecutor, AgentStepExecutor>();
+        services.AddSingleton<IStepExecutor, ServerActionStepExecutor>();
+        services.AddSingleton<IStepExecutor, GateStepExecutor>();
         services.AddSingleton<IWorkflowExecutionService, WorkflowExecutionService>();
         services.AddSingleton<IWorkflowContextStore, WorkflowContextStore>();
 
