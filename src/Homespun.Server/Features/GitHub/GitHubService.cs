@@ -500,6 +500,12 @@ public class GitHubService(
         }
     }
 
+    public Task<PullRequest?> GetPullRequestForIssueAsync(string projectId, string issueId)
+    {
+        var prs = dataStore.GetPullRequestsByProject(projectId);
+        return Task.FromResult(prs.FirstOrDefault(pr => pr.BeadsIssueId == issueId));
+    }
+
     private void ConfigureClient()
     {
         var token = GetGitHubToken();

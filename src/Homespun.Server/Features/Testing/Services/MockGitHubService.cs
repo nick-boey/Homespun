@@ -232,6 +232,14 @@ public class MockGitHubService : IGitHubService
         return true;
     }
 
+    public Task<PullRequest?> GetPullRequestForIssueAsync(string projectId, string issueId)
+    {
+        _logger.LogDebug("[Mock] GetPullRequestForIssue {IssueId} in project {ProjectId}", issueId, projectId);
+
+        var prs = _dataStore.GetPullRequestsByProject(projectId);
+        return Task.FromResult(prs.FirstOrDefault(pr => pr.BeadsIssueId == issueId));
+    }
+
     private static PullRequestInfo ConvertToPullRequestInfo(PullRequest pr)
     {
         return new PullRequestInfo
