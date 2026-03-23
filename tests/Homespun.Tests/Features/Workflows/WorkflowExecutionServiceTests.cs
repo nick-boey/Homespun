@@ -1,5 +1,7 @@
+using Homespun.Features.Workflows.Hubs;
 using Homespun.Features.Workflows.Services;
 using Homespun.Shared.Models.Workflows;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 using Moq;
 
@@ -10,6 +12,7 @@ public class WorkflowExecutionServiceTests
 {
     private WorkflowExecutionService _service = null!;
     private Mock<IWorkflowStorageService> _mockStorageService = null!;
+    private Mock<IHubContext<WorkflowHub>> _mockHubContext = null!;
     private Mock<ILogger<WorkflowExecutionService>> _mockLogger = null!;
     private string _testProjectPath = null!;
 
@@ -18,9 +21,15 @@ public class WorkflowExecutionServiceTests
     {
         _mockStorageService = new Mock<IWorkflowStorageService>();
         _mockLogger = new Mock<ILogger<WorkflowExecutionService>>();
+        _mockHubContext = new Mock<IHubContext<WorkflowHub>>();
+        var mockClients = new Mock<IHubClients>();
+        var mockClientProxy = new Mock<IClientProxy>();
+        mockClients.Setup(c => c.All).Returns(mockClientProxy.Object);
+        mockClients.Setup(c => c.Group(It.IsAny<string>())).Returns(mockClientProxy.Object);
+        _mockHubContext.Setup(h => h.Clients).Returns(mockClients.Object);
 
         var stepExecutors = CreateDefaultStepExecutors();
-        _service = new WorkflowExecutionService(_mockStorageService.Object, stepExecutors, _mockLogger.Object);
+        _service = new WorkflowExecutionService(_mockStorageService.Object, stepExecutors, _mockHubContext.Object, _mockLogger.Object);
 
         _testProjectPath = Path.Combine(Path.GetTempPath(), $"workflow-exec-test-{Guid.NewGuid():N}");
         Directory.CreateDirectory(_testProjectPath);
@@ -997,7 +1006,7 @@ public class WorkflowExecutionServiceTests
             new GateStepExecutor(new Mock<ILogger<GateStepExecutor>>().Object)
         };
 
-        var service = new WorkflowExecutionService(_mockStorageService.Object, executors, _mockLogger.Object);
+        var service = new WorkflowExecutionService(_mockStorageService.Object, executors, _mockHubContext.Object, _mockLogger.Object);
 
         var workflow = new WorkflowDefinition
         {
@@ -1059,7 +1068,7 @@ public class WorkflowExecutionServiceTests
             new GateStepExecutor(new Mock<ILogger<GateStepExecutor>>().Object)
         };
 
-        var service = new WorkflowExecutionService(_mockStorageService.Object, executors, _mockLogger.Object);
+        var service = new WorkflowExecutionService(_mockStorageService.Object, executors, _mockHubContext.Object, _mockLogger.Object);
 
         var workflow = new WorkflowDefinition
         {
@@ -1128,7 +1137,7 @@ public class WorkflowExecutionServiceTests
             new GateStepExecutor(new Mock<ILogger<GateStepExecutor>>().Object)
         };
 
-        var service = new WorkflowExecutionService(_mockStorageService.Object, executors, _mockLogger.Object);
+        var service = new WorkflowExecutionService(_mockStorageService.Object, executors, _mockHubContext.Object, _mockLogger.Object);
 
         var workflow = new WorkflowDefinition
         {
@@ -1191,7 +1200,7 @@ public class WorkflowExecutionServiceTests
             new GateStepExecutor(new Mock<ILogger<GateStepExecutor>>().Object)
         };
 
-        var service = new WorkflowExecutionService(_mockStorageService.Object, executors, _mockLogger.Object);
+        var service = new WorkflowExecutionService(_mockStorageService.Object, executors, _mockHubContext.Object, _mockLogger.Object);
 
         var workflow = new WorkflowDefinition
         {
@@ -1420,7 +1429,7 @@ public class WorkflowExecutionServiceTests
         // Simulate crash recovery: create a new service instance that loads from disk
         _service.Dispose();
         var stepExecutors = CreateDefaultStepExecutors();
-        _service = new WorkflowExecutionService(_mockStorageService.Object, stepExecutors, _mockLogger.Object);
+        _service = new WorkflowExecutionService(_mockStorageService.Object, stepExecutors, _mockHubContext.Object, _mockLogger.Object);
 
         // The execution should be loadable from disk
         var recoveredExecution = await _service.GetExecutionAsync(_testProjectPath, result.Execution.Id);

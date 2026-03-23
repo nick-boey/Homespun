@@ -3,7 +3,9 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Homespun.Features.Workflows.Hubs;
 using Homespun.Shared.Models.Workflows;
+using Microsoft.AspNetCore.SignalR;
 
 namespace Homespun.Features.Workflows.Services;
 
@@ -17,6 +19,7 @@ public sealed class WorkflowExecutionService : IWorkflowExecutionService, IDispo
     private readonly IWorkflowStorageService _storageService;
     private readonly ILogger<WorkflowExecutionService> _logger;
     private readonly Dictionary<WorkflowStepType, IStepExecutor> _stepExecutors;
+    private readonly IHubContext<WorkflowHub> _hubContext;
 
     // Cache of executions per project, keyed by project path
     private readonly ConcurrentDictionary<string, ProjectExecutionCache> _projectCaches = new();
@@ -41,10 +44,12 @@ public sealed class WorkflowExecutionService : IWorkflowExecutionService, IDispo
     public WorkflowExecutionService(
         IWorkflowStorageService storageService,
         IEnumerable<IStepExecutor> stepExecutors,
+        IHubContext<WorkflowHub> hubContext,
         ILogger<WorkflowExecutionService> logger)
     {
         _storageService = storageService;
         _logger = logger;
+        _hubContext = hubContext;
         _stepExecutors = stepExecutors.ToDictionary(e => e.StepType);
     }
 
@@ -283,6 +288,8 @@ public sealed class WorkflowExecutionService : IWorkflowExecutionService, IDispo
         var semaphore = GetProjectSemaphore(projectPath);
         await semaphore.WaitAsync(ct);
 
+        string? projectId = null;
+
         try
         {
             var cache = await EnsureCacheLoadedAsync(projectPath, ct);
@@ -323,6 +330,8 @@ public sealed class WorkflowExecutionService : IWorkflowExecutionService, IDispo
                 CompletedAt = DateTime.UtcNow
             };
 
+            projectId = execution.ProjectId;
+
             await PersistExecutionsAsync(projectPath, cache, ct);
 
             _logger.LogDebug(
@@ -334,6 +343,8 @@ public sealed class WorkflowExecutionService : IWorkflowExecutionService, IDispo
         {
             semaphore.Release();
         }
+
+        await _hubContext.BroadcastStepCompleted(executionId, stepId, StepExecutionStatus.Completed, output, projectId);
     }
 
     /// <inheritdoc />
@@ -346,6 +357,9 @@ public sealed class WorkflowExecutionService : IWorkflowExecutionService, IDispo
     {
         var semaphore = GetProjectSemaphore(projectPath);
         await semaphore.WaitAsync(ct);
+
+        string? projectId = null;
+        bool executionFailed = false;
 
         try
         {
@@ -387,6 +401,8 @@ public sealed class WorkflowExecutionService : IWorkflowExecutionService, IDispo
                 CompletedAt = DateTime.UtcNow
             };
 
+            projectId = execution.ProjectId;
+
             // Get the workflow to check settings
             var workflow = await _storageService.GetWorkflowAsync(projectPath, execution.WorkflowId, ct);
 
@@ -396,6 +412,7 @@ public sealed class WorkflowExecutionService : IWorkflowExecutionService, IDispo
                 execution.Status = WorkflowExecutionStatus.Failed;
                 execution.CompletedAt = DateTime.UtcNow;
                 execution.ErrorMessage = $"Step '{stepId}' failed: {errorMessage}";
+                executionFailed = true;
 
                 if (_executionCts.TryRemove(executionId, out var cts))
                 {
@@ -415,6 +432,13 @@ public sealed class WorkflowExecutionService : IWorkflowExecutionService, IDispo
         finally
         {
             semaphore.Release();
+        }
+
+        await _hubContext.BroadcastStepFailed(executionId, stepId, errorMessage, projectId);
+
+        if (executionFailed)
+        {
+            await _hubContext.BroadcastWorkflowFailed(executionId, $"Step '{stepId}' failed: {errorMessage}", projectId);
         }
     }
 
@@ -555,6 +579,7 @@ public sealed class WorkflowExecutionService : IWorkflowExecutionService, IDispo
                 if (result.RequiresInput)
                 {
                     await MarkStepWaitingForInput(projectPath, execution.Id, step.Id, ct);
+                    await _hubContext.BroadcastGatePending(execution.Id, step.Id, step.Name, execution.ProjectId);
                     return;
                 }
 
@@ -660,6 +685,8 @@ public sealed class WorkflowExecutionService : IWorkflowExecutionService, IDispo
                     retryCount + 1,
                     step.MaxRetries,
                     step.RetryDelaySeconds);
+
+                await _hubContext.BroadcastStepRetrying(execution.Id, step.Id, retryCount + 1, step.MaxRetries, execution.ProjectId);
 
                 // Wait before retrying
                 if (step.RetryDelaySeconds > 0)
@@ -824,6 +851,10 @@ public sealed class WorkflowExecutionService : IWorkflowExecutionService, IDispo
         var semaphore = GetProjectSemaphore(projectPath);
         await semaphore.WaitAsync(ct);
 
+        string? projectId = null;
+        int stepIndex = 0;
+        bool found = false;
+
         try
         {
             var cache = await EnsureCacheLoadedAsync(projectPath, ct);
@@ -835,12 +866,20 @@ public sealed class WorkflowExecutionService : IWorkflowExecutionService, IDispo
                     stepExecution.Status = StepExecutionStatus.Running;
                     stepExecution.StartedAt = DateTime.UtcNow;
                     await PersistExecutionsAsync(projectPath, cache, ct);
+                    projectId = execution.ProjectId;
+                    stepIndex = stepExecution.StepIndex;
+                    found = true;
                 }
             }
         }
         finally
         {
             semaphore.Release();
+        }
+
+        if (found)
+        {
+            await _hubContext.BroadcastStepStarted(executionId, stepId, stepIndex, projectId);
         }
     }
 
@@ -958,6 +997,8 @@ public sealed class WorkflowExecutionService : IWorkflowExecutionService, IDispo
         var semaphore = GetProjectSemaphore(projectPath);
         await semaphore.WaitAsync(ct);
 
+        string? projectId = null;
+
         try
         {
             var cache = await EnsureCacheLoadedAsync(projectPath, ct);
@@ -965,6 +1006,7 @@ public sealed class WorkflowExecutionService : IWorkflowExecutionService, IDispo
             {
                 execution.Status = WorkflowExecutionStatus.Completed;
                 execution.CompletedAt = DateTime.UtcNow;
+                projectId = execution.ProjectId;
                 await PersistExecutionsAsync(projectPath, cache, ct);
 
                 _logger.LogInformation(
@@ -976,6 +1018,8 @@ public sealed class WorkflowExecutionService : IWorkflowExecutionService, IDispo
         {
             semaphore.Release();
         }
+
+        await _hubContext.BroadcastWorkflowCompleted(executionId, WorkflowExecutionStatus.Completed, projectId);
     }
 
     private async Task FailExecutionAsync(string projectPath, string executionId, string error, CancellationToken ct)
@@ -988,6 +1032,8 @@ public sealed class WorkflowExecutionService : IWorkflowExecutionService, IDispo
         var semaphore = GetProjectSemaphore(projectPath);
         await semaphore.WaitAsync(ct);
 
+        string? projectId = null;
+
         try
         {
             var cache = await EnsureCacheLoadedAsync(projectPath, ct);
@@ -996,6 +1042,7 @@ public sealed class WorkflowExecutionService : IWorkflowExecutionService, IDispo
                 execution.Status = WorkflowExecutionStatus.Failed;
                 execution.CompletedAt = DateTime.UtcNow;
                 execution.ErrorMessage = error;
+                projectId = execution.ProjectId;
                 await PersistExecutionsAsync(projectPath, cache, ct);
 
                 _logger.LogError(
@@ -1008,6 +1055,8 @@ public sealed class WorkflowExecutionService : IWorkflowExecutionService, IDispo
         {
             semaphore.Release();
         }
+
+        await _hubContext.BroadcastWorkflowFailed(executionId, error, projectId);
     }
 
     private SemaphoreSlim GetProjectSemaphore(string projectPath)
