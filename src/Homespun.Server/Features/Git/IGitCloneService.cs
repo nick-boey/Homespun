@@ -193,4 +193,11 @@ public interface IGitCloneService
     /// <param name="clonePath">Path to the clone/working directory</param>
     /// <returns>Session branch info, or null if the path is not a valid git repository</returns>
     Task<SessionBranchInfo?> GetSessionBranchInfoAsync(string clonePath);
+
+    /// <summary>
+    /// Ensures a branch is available locally, fetching from remote if needed.
+    /// </summary>
+    /// <param name="repoPath">Path to the repository</param>
+    /// <param name="branchName">Name of the branch to ensure is available</param>
+    Task EnsureBranchAvailableAsync(string repoPath, string branchName);
 }
