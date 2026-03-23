@@ -241,6 +241,7 @@ else
     builder.Services.AddHostedService<GitHubSyncPollingService>();
 
     // Workflow services
+    builder.Services.AddSingleton<IWorkflowTemplateService, WorkflowTemplateService>();
     builder.Services.AddScoped<IWorkflowService, WorkflowService>();
     builder.Services.AddSingleton<IWorkflowStorageService, WorkflowStorageService>();
     builder.Services.AddSingleton(TimeProvider.System);
