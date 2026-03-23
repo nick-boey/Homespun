@@ -1,3 +1,4 @@
+using Fleece.Core.Models;
 using Homespun.Features.Fleece.Services;
 using Homespun.Features.Git;
 using Homespun.Features.PullRequests.Data;
@@ -13,6 +14,7 @@ public class IssueBranchResolverServiceTests
 {
     private Mock<IDataStore> _mockDataStore = null!;
     private Mock<IGitCloneService> _mockGitCloneService = null!;
+    private Mock<IFleeceService> _mockFleeceService = null!;
     private Mock<ILogger<IssueBranchResolverService>> _mockLogger = null!;
     private IssueBranchResolverService _service = null!;
 
@@ -25,6 +27,7 @@ public class IssueBranchResolverServiceTests
     {
         _mockDataStore = new Mock<IDataStore>();
         _mockGitCloneService = new Mock<IGitCloneService>();
+        _mockFleeceService = new Mock<IFleeceService>();
         _mockLogger = new Mock<ILogger<IssueBranchResolverService>>();
 
         // Setup default project
@@ -37,9 +40,14 @@ public class IssueBranchResolverServiceTests
         };
         _mockDataStore.Setup(d => d.GetProject(ProjectId)).Returns(project);
 
+        // Default: no issue found (tests that need it will override)
+        _mockFleeceService.Setup(f => f.GetIssueAsync(RepoPath, IssueId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Issue?)null);
+
         _service = new IssueBranchResolverService(
             _mockDataStore.Object,
             _mockGitCloneService.Object,
+            _mockFleeceService.Object,
             _mockLogger.Object);
     }
 
@@ -314,5 +322,107 @@ public class IssueBranchResolverServiceTests
 
         // Assert
         Assert.That(result, Is.Null);
+    }
+
+    [Test]
+    public async Task ResolveIssueBranchAsync_WithWorkingBranchId_ReturnsBranchName()
+    {
+        // Arrange - no linked PRs, issue has WorkingBranchId set
+        _mockDataStore.Setup(d => d.GetPullRequestsByProject(ProjectId))
+            .Returns(new List<PullRequest>());
+
+        var issue = new Issue
+        {
+            Id = IssueId,
+            Title = "Add user auth",
+            Type = IssueType.Task,
+            Status = IssueStatus.Open,
+            WorkingBranchId = "add-user-auth",
+            LastUpdate = DateTimeOffset.UtcNow
+        };
+        _mockFleeceService.Setup(f => f.GetIssueAsync(RepoPath, IssueId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(issue);
+
+        // Act
+        var result = await _service.ResolveIssueBranchAsync(ProjectId, IssueId);
+
+        // Assert - should return branch name generated from WorkingBranchId
+        Assert.That(result, Is.EqualTo("task/add-user-auth+abc123"));
+        // Should not need to check clones since WorkingBranchId was found
+        _mockGitCloneService.Verify(g => g.ListClonesAsync(It.IsAny<string>()), Times.Never);
+    }
+
+    [Test]
+    public async Task ResolveIssueBranchAsync_PrefersLinkedPR_OverWorkingBranchId()
+    {
+        // Arrange - both PR and WorkingBranchId exist
+        var prBranch = "feature/pr-branch+abc123";
+        var linkedPr = new PullRequest
+        {
+            Id = "pr-1",
+            ProjectId = ProjectId,
+            Title = "PR",
+            BranchName = prBranch,
+            BeadsIssueId = IssueId
+        };
+        _mockDataStore.Setup(d => d.GetPullRequestsByProject(ProjectId))
+            .Returns(new List<PullRequest> { linkedPr });
+
+        var issue = new Issue
+        {
+            Id = IssueId,
+            Title = "Add user auth",
+            Type = IssueType.Task,
+            Status = IssueStatus.Open,
+            WorkingBranchId = "add-user-auth",
+            LastUpdate = DateTimeOffset.UtcNow
+        };
+        _mockFleeceService.Setup(f => f.GetIssueAsync(RepoPath, IssueId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(issue);
+
+        // Act
+        var result = await _service.ResolveIssueBranchAsync(ProjectId, IssueId);
+
+        // Assert - PR should take priority over WorkingBranchId
+        Assert.That(result, Is.EqualTo(prBranch));
+    }
+
+    [Test]
+    public async Task ResolveIssueBranchAsync_WithNullWorkingBranchId_FallsBackToClones()
+    {
+        // Arrange - no PRs, issue exists but has null WorkingBranchId
+        _mockDataStore.Setup(d => d.GetPullRequestsByProject(ProjectId))
+            .Returns(new List<PullRequest>());
+
+        var issue = new Issue
+        {
+            Id = IssueId,
+            Title = "Add user auth",
+            Type = IssueType.Task,
+            Status = IssueStatus.Open,
+            WorkingBranchId = null,
+            LastUpdate = DateTimeOffset.UtcNow
+        };
+        _mockFleeceService.Setup(f => f.GetIssueAsync(RepoPath, IssueId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(issue);
+
+        var expectedBranch = "task/clone-branch+abc123";
+        var clones = new List<CloneInfo>
+        {
+            new()
+            {
+                Path = "/home/user/.homespun/src/repo/.clones/task+clone-branch+abc123",
+                Branch = $"refs/heads/{expectedBranch}",
+                HeadCommit = "def5678"
+            }
+        };
+        _mockGitCloneService.Setup(g => g.ListClonesAsync(RepoPath))
+            .ReturnsAsync(clones);
+
+        // Act
+        var result = await _service.ResolveIssueBranchAsync(ProjectId, IssueId);
+
+        // Assert - should fall back to clone since WorkingBranchId is null
+        Assert.That(result, Is.EqualTo(expectedBranch));
     }
 }

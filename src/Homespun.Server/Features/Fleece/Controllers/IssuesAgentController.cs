@@ -5,6 +5,7 @@ using Homespun.Features.Git;
 using Homespun.Features.Gitgraph.Services;
 using Homespun.Features.Notifications;
 using Homespun.Features.Projects;
+using Homespun.Features.PullRequests.Data;
 using Homespun.Shared.Models.Fleece;
 using Homespun.Shared.Models.Issues;
 using Homespun.Shared.Models.Sessions;
@@ -27,6 +28,8 @@ public class IssuesAgentController(
     IFleeceIssuesSyncService fleeceIssuesSyncService,
     IFleeceChangeDetectionService changeDetectionService,
     IFleeceChangeApplicationService changeApplicationService,
+    IFleecePostMergeService postMergeService,
+    IDataStore dataStore,
     IGitCloneService cloneService,
     IClaudeSessionService sessionService,
     IAgentPromptService agentPromptService,
@@ -279,6 +282,11 @@ public class IssuesAgentController(
                 Message = result.Message
             });
         }
+
+        // Post-merge processing: assign unassigned issues and trigger branch ID generation
+        await postMergeService.PostMergeProcessAsync(
+            project.LocalPath, session.ProjectId, result.Changes, dataStore.UserEmail,
+            HttpContext.RequestAborted);
 
         // Stop the session
         await sessionService.StopSessionAsync(sessionId, HttpContext.RequestAborted);

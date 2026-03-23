@@ -137,6 +137,7 @@ else
     builder.Services.AddScoped<IFleeceChangeDetectionService, FleeceChangeDetectionService>();
     builder.Services.AddScoped<IFleeceConflictDetectionService, FleeceConflictDetectionService>();
     builder.Services.AddScoped<IFleeceChangeApplicationService, FleeceChangeApplicationService>();
+    builder.Services.AddScoped<IFleecePostMergeService, FleecePostMergeService>();
 
     // Markdown rendering service
     builder.Services.AddSingleton<IMarkdownRenderingService, MarkdownRenderingService>();
