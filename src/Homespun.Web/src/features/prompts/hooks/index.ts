@@ -1,4 +1,5 @@
 export { useProjectPrompts, projectPromptsQueryKey } from './use-project-prompts'
+export { useMergedProjectPrompts, mergedProjectPromptsQueryKey } from './use-merged-project-prompts'
 export { useGlobalPrompts, globalPromptsQueryKey } from './use-global-prompts'
 export { useIssueAgentPrompts, issueAgentPromptsQueryKey } from './use-issue-agent-prompts'
 export { useCreatePrompt } from './use-create-prompt'

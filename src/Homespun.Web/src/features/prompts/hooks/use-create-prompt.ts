@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { AgentPrompts, type CreateAgentPromptRequest, type AgentPrompt } from '@/api'
 import { projectPromptsQueryKey } from './use-project-prompts'
+import { mergedProjectPromptsQueryKey } from './use-merged-project-prompts'
 import { agentPromptsQueryKey } from '@/features/agents/hooks/use-agent-prompts'
 
 interface UseCreatePromptOptions {
@@ -29,6 +30,9 @@ export function useCreatePrompt(options: UseCreatePromptOptions) {
         // Invalidate project prompts list
         queryClient.invalidateQueries({
           queryKey: projectPromptsQueryKey(options.projectId),
+        })
+        queryClient.invalidateQueries({
+          queryKey: mergedProjectPromptsQueryKey(options.projectId),
         })
         // Also invalidate available prompts for agent launcher
         queryClient.invalidateQueries({
